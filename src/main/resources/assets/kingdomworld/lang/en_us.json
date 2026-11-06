@@ -1,0 +1,20 @@
+{
+  "commands.kingdomworld.debug.create.success": "Created kingdom %s (id %s)",
+  "commands.kingdomworld.debug.list.empty": "There are no kingdoms yet",
+  "commands.kingdomworld.debug.list.header": "Kingdoms (%s):",
+  "commands.kingdomworld.debug.list.entry": " - %s (id %s)",
+  "commands.kingdomworld.debug.info.header": "Kingdom %s",
+  "commands.kingdomworld.debug.info.id": "  Id: %s",
+  "commands.kingdomworld.debug.info.color": "  Color: %s",
+  "commands.kingdomworld.debug.info.ruler": "  Ruler: %s",
+  "commands.kingdomworld.debug.info.ruler.none": "none",
+  "commands.kingdomworld.debug.info.created": "  Founded at game time: %s",
+  "commands.kingdomworld.debug.remove.success": "Removed kingdom %s",
+  "commands.kingdomworld.debug.not_found": "There is no kingdom named %s",
+  "kingdomworld.kingdom.error.name_empty": "A kingdom needs a name",
+  "kingdomworld.kingdom.error.name_too_short": "The name %1$s is too short: use %2$s-%3$s characters",
+  "kingdomworld.kingdom.error.name_too_long": "The name %1$s is too long: use %2$s-%3$s characters",
+  "kingdomworld.kingdom.error.name_invalid_characters": "The name %1$s may contain only letters, digits, spaces, hyphens, apostrophes and underscores, and must start with a letter or digit",
+  "kingdomworld.kingdom.error.name_taken": "A kingdom named %1$s already exists",
+  "kingdomworld.kingdom.error.id_taken": "Could not found kingdom %1$s because of an id collision, please try again"
+}

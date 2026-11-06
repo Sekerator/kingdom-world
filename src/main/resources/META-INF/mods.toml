@@ -1,0 +1,31 @@
+# Mod metadata read by Forge. Placeholders are filled in from gradle.properties during the build.
+modLoader="javafml"
+loaderVersion="${loader_version_range}"
+license="${mod_license}"
+issueTrackerURL="https://github.com/Sekerator/kingdom-world/issues"
+
+[[mods]]
+modId="${mod_id}"
+version="${mod_version}"
+displayName="${mod_name}"
+displayURL="https://github.com/Sekerator/kingdom-world"
+authors="${mod_authors}"
+# The mod has content and a network channel on both sides, so client and server must run the same version.
+displayTest="MATCH_VERSION"
+description='''${mod_description}'''
+
+# Only Forge and Minecraft are required. Integrations with other mods are optional and are switched on
+# at runtime when those mods are present, so they are not declared here.
+[[dependencies.${mod_id}]]
+    modId="forge"
+    mandatory=true
+    versionRange="${forge_version_range}"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="${minecraft_version_range}"
+    ordering="NONE"
+    side="BOTH"

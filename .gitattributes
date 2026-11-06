@@ -1,0 +1,14 @@
+* text=auto
+
+gradlew text eol=lf
+*.sh text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+*.jar binary
+*.nbt binary
+*.png binary
+
+src/generated/**/.cache/cache text eol=lf
+src/generated/**/*.json text eol=lf

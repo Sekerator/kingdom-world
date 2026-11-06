@@ -1,0 +1,20 @@
+{
+  "commands.kingdomworld.debug.create.success": "Королевство %s основано (id %s)",
+  "commands.kingdomworld.debug.list.empty": "Королевств пока нет",
+  "commands.kingdomworld.debug.list.header": "Королевства (%s):",
+  "commands.kingdomworld.debug.list.entry": " - %s (id %s)",
+  "commands.kingdomworld.debug.info.header": "Королевство %s",
+  "commands.kingdomworld.debug.info.id": "  Id: %s",
+  "commands.kingdomworld.debug.info.color": "  Цвет: %s",
+  "commands.kingdomworld.debug.info.ruler": "  Правитель: %s",
+  "commands.kingdomworld.debug.info.ruler.none": "нет",
+  "commands.kingdomworld.debug.info.created": "  Основано на игровом времени: %s",
+  "commands.kingdomworld.debug.remove.success": "Королевство %s удалено",
+  "commands.kingdomworld.debug.not_found": "Королевства с названием %s нет",
+  "kingdomworld.kingdom.error.name_empty": "У королевства должно быть название",
+  "kingdomworld.kingdom.error.name_too_short": "Название %1$s слишком короткое: нужно %2$s-%3$s символов",
+  "kingdomworld.kingdom.error.name_too_long": "Название %1$s слишком длинное: нужно %2$s-%3$s символов",
+  "kingdomworld.kingdom.error.name_invalid_characters": "Название %1$s может содержать только буквы, цифры, пробелы, дефисы, апострофы и подчёркивания и должно начинаться с буквы или цифры",
+  "kingdomworld.kingdom.error.name_taken": "Королевство с названием %1$s уже существует",
+  "kingdomworld.kingdom.error.id_taken": "Не удалось основать королевство %1$s из-за совпадения id, попробуйте ещё раз"
+}
