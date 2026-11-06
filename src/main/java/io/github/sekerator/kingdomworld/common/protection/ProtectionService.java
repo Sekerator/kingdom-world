@@ -42,6 +42,8 @@ public final class ProtectionService {
     private static final Map<UUID, Long> LAST_MESSAGE = new ConcurrentHashMap<>();
     private static final long MESSAGE_INTERVAL_MILLIS = 1_000L;
     public static final int BYPASS_PERMISSION_LEVEL = 2;
+    /** Longest kingdom name shown above the hotbar; the line is not wrapped and must fit the narrowest screen. */
+    public static final int ACTIONBAR_NAME_LENGTH = 16;
 
     private ProtectionService() {
     }
@@ -156,9 +158,16 @@ public final class ProtectionService {
         UUID owner = KingdomWorldApi.ownerAt(level, pos);
         Optional<Kingdom> kingdom = owner == null ? Optional.empty() : KingdomWorldApi.kingdom(player.server, owner);
         Component message = kingdom.<Component>map(k -> Component.translatable("kingdomworld.protection.denied",
-                        Component.literal(k.name()).withStyle(style -> style.withColor(TextColor.fromRgb(k.color())))))
+                        Component.literal(shortName(k.name())).withStyle(style -> style.withColor(TextColor.fromRgb(k.color())))))
                 .orElseGet(() -> Component.translatable("kingdomworld.protection.denied_unknown"));
         player.displayClientMessage(message, true);
+    }
+
+    /**
+     * A kingdom name short enough for a line above the hotbar.
+     */
+    public static String shortName(String name) {
+        return name.length() <= ACTIONBAR_NAME_LENGTH ? name : name.substring(0, ACTIONBAR_NAME_LENGTH) + "\u2026";
     }
 
     /**

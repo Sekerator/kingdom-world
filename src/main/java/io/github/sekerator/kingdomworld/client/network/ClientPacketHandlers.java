@@ -15,6 +15,7 @@ import io.github.sekerator.kingdomworld.common.network.packet.OpenFoundingScreen
 import io.github.sekerator.kingdomworld.common.network.packet.TerritoryDeltaPacket;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TextColor;
 import org.slf4j.Logger;
@@ -69,9 +70,22 @@ public final class ClientPacketHandlers {
         if (minecraft.player == null || !KingdomWorldConfig.CLIENT.showBorderMessages.get()) {
             return;
         }
-        Component name = Component.literal(packet.kingdomName())
-                .withStyle(style -> style.withColor(TextColor.fromRgb(packet.color())));
-        minecraft.player.displayClientMessage(Component.translatable(packet.entered()
-                ? "kingdomworld.border.entered" : "kingdomworld.border.left", name), true);
+        minecraft.player.displayClientMessage(borderMessage(minecraft.font, minecraft.getWindow().getGuiScaledWidth(),
+                packet.entered(), packet.kingdomName(), packet.color()), true);
+    }
+
+    /**
+     * The border message with the kingdom name shortened so that the line fits the screen; lines above the hotbar
+     * are never wrapped.
+     */
+    public static Component borderMessage(Font font, int screenWidth, boolean entered, String kingdomName, int color) {
+        String key = entered ? "kingdomworld.border.entered" : "kingdomworld.border.left";
+        int available = screenWidth - 24 - font.width(Component.translatable(key, ""));
+        String shown = kingdomName;
+        if (font.width(shown) > available) {
+            shown = font.plainSubstrByWidth(kingdomName, Math.max(0, available - font.width("\u2026"))) + "\u2026";
+        }
+        Component name = Component.literal(shown).withStyle(style -> style.withColor(TextColor.fromRgb(color)));
+        return Component.translatable(key, name);
     }
 }

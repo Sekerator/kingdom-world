@@ -21,15 +21,18 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.Blocks;
 import org.slf4j.Logger;
 
+import java.nio.file.Path;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
  * Development check of the client, switched on with the system property {@code kingdomworld.clientSelfTest}
- * ({@code gradlew runClient -PclientSelfTest=title|world}); without it nothing here runs.
+ * ({@code gradlew runClient -PclientSelfTest=title|layout|world}); without it nothing here runs.
  *
  * <ul>
  *   <li>{@code title}: quits as soon as the title screen opens, proving the client starts with the mod.</li>
+ *   <li>{@code layout}: checks the layout of every screen in English and Russian at several window sizes and GUI
+ *       scales and saves screenshots (see {@link ClientLayoutCheck}); a problem ends the client with exit code 1.</li>
  *   <li>{@code world}: in a singleplayer world, founds a kingdom next to the player, opens the map, the throne
  *       screen (through the real server packet) with all tabs, the territory editor with a claim request and
  *       the founding screen, dissolves the kingdom again and quits. Every step is logged; rendering problems
@@ -43,6 +46,7 @@ public final class ClientSelfTest {
 
     private static int ticks;
     private static boolean quit;
+    private static ClientLayoutCheck layout;
     private static volatile BlockPos throne;
     private static volatile UUID kingdomId;
 
@@ -54,10 +58,29 @@ public final class ClientSelfTest {
             LOGGER.info(PREFIX + "title screen reached");
             quit = true;
         }
+        if ("layout".equals(MODE) && layout == null) {
+            String folder = System.getProperty("kingdomworld.clientSelfTest.screenshots");
+            Path screenshots = folder != null && !folder.isEmpty() ? Path.of(folder)
+                    : Minecraft.getInstance().gameDirectory.toPath().resolve("kingdomworld-layout");
+            LOGGER.info(PREFIX + "layout check started, screenshots go to {}", screenshots);
+            layout = new ClientLayoutCheck(screenshots);
+        }
     }
 
     static void onClientTick() {
         Minecraft minecraft = Minecraft.getInstance();
+        if (layout != null && !quit) {
+            layout.tick();
+            if (layout.finished()) {
+                if (layout.failed()) {
+                    // A failed check must fail the run that started it.
+                    LOGGER.error(PREFIX + "layout check failed, exiting with code 1");
+                    System.exit(1);
+                }
+                quit = true;
+            }
+            return;
+        }
         if (quit) {
             LOGGER.info(PREFIX + "quitting");
             quit = false;

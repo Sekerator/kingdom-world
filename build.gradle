@@ -44,9 +44,12 @@ minecraft {
             if (project.hasProperty('quickPlayWorld')) {
                 args '--quickPlaySingleplayer', project.property('quickPlayWorld')
             }
-            // "gradlew runClient -PclientSelfTest=title|world" runs the client self-test (see ClientSelfTest).
+            // "gradlew runClient -PclientSelfTest=title|layout|world" runs the client self-test (see ClientSelfTest).
             if (project.hasProperty('clientSelfTest')) {
                 property 'kingdomworld.clientSelfTest', project.property('clientSelfTest')
+            }
+            if (project.hasProperty('clientSelfTestScreenshots')) {
+                property 'kingdomworld.clientSelfTest.screenshots', project.property('clientSelfTestScreenshots')
             }
         }
 
