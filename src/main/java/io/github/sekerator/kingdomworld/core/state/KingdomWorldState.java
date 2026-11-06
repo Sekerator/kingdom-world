@@ -1,0 +1,280 @@
+package io.github.sekerator.kingdomworld.core.state;
+
+import io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult;
+import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
+import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
+import io.github.sekerator.kingdomworld.core.kingdom.KingdomRegistry;
+import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
+import io.github.sekerator.kingdomworld.core.membership.KingdomMembers;
+import io.github.sekerator.kingdomworld.core.membership.Member;
+import io.github.sekerator.kingdomworld.core.membership.MembershipRegistry;
+import io.github.sekerator.kingdomworld.core.membership.Permission;
+import io.github.sekerator.kingdomworld.core.membership.Role;
+import io.github.sekerator.kingdomworld.core.membership.RolePermissions;
+import io.github.sekerator.kingdomworld.core.territory.Capital;
+import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
+import io.github.sekerator.kingdomworld.core.territory.ClaimRules;
+import io.github.sekerator.kingdomworld.core.territory.KingdomStats;
+import io.github.sekerator.kingdomworld.core.territory.Territory;
+import io.github.sekerator.kingdomworld.core.territory.TerritoryIndex;
+
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+
+/**
+ * All kingdom state of one world: the kingdoms, their members and their land. Operations that touch more
+ * than one part (founding, dissolving, claiming, changes of ruler) go through this class so the parts stay
+ * consistent; single-part reads go to the parts directly.
+ *
+ * <p>Not thread safe; the server uses it from the server thread only.
+ */
+public final class KingdomWorldState {
+    private final KingdomRegistry kingdoms = new KingdomRegistry();
+    private final MembershipRegistry membership = new MembershipRegistry();
+    private final TerritoryIndex territory = new TerritoryIndex();
+
+    /**
+     * Called after every change of any part, used to mark the data for saving.
+     */
+    public void setChangeListener(Runnable listener) {
+        Objects.requireNonNull(listener, "listener");
+        kingdoms.setChangeListener(listener);
+        membership.setChangeListener(listener);
+        territory.setChangeListener(listener);
+    }
+
+    public KingdomRegistry kingdoms() {
+        return kingdoms;
+    }
+
+    public MembershipRegistry membership() {
+        return membership;
+    }
+
+    public TerritoryIndex territory() {
+        return territory;
+    }
+
+    // ---------------------------------------------------------------- queries
+
+    public Optional<Kingdom> kingdomOf(UUID playerId) {
+        return membership.kingdomOf(playerId).flatMap(kingdoms::get);
+    }
+
+    public Optional<Kingdom> kingdomAt(String dimension, long chunk) {
+        UUID owner = territory.ownerOf(dimension, chunk);
+        return owner == null ? Optional.empty() : kingdoms.get(owner);
+    }
+
+    /**
+     * The kingdom whose throne stands exactly at the given block.
+     */
+    public Optional<Kingdom> kingdomWithThroneAt(String dimension, int x, int y, int z) {
+        UUID owner = territory.ownerOf(dimension, ChunkKey.of(x >> 4, z >> 4));
+        if (owner == null) {
+            return Optional.empty();
+        }
+        Optional<Territory> land = territory.territory(owner);
+        if (land.isEmpty() || !land.get().capital().isAt(dimension, x, y, z)) {
+            return Optional.empty();
+        }
+        return kingdoms.get(owner);
+    }
+
+    public KingdomStats stats(UUID kingdomId) {
+        int members = membership.kingdom(kingdomId).map(KingdomMembers::size).orElse(0);
+        boolean rulerIsMember = membership.kingdom(kingdomId).flatMap(KingdomMembers::king).isPresent();
+        int chunks = territory.territory(kingdomId).map(Territory::size).orElse(0);
+        return new KingdomStats(kingdomId, members, members - (rulerIsMember ? 1 : 0), chunks);
+    }
+
+    public int chunkLimit(UUID kingdomId, KingdomRules rules) {
+        return rules.chunkLimit().maxChunks(stats(kingdomId));
+    }
+
+    // ---------------------------------------------------------------- founding and dissolving
+
+    /**
+     * Founds a kingdom.
+     *
+     * @param founder  the player who becomes king, or {@code null} for a kingdom without a ruler
+     * @param capital  where the throne stands, or {@code null} for a kingdom without land
+     * @param gameTime current game time in ticks
+     */
+    public CreateKingdomResult found(UUID id, String rawName, int color, UUID founder, Capital capital, long gameTime,
+                                     KingdomRules rules) {
+        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(rules, "rules");
+        if (founder != null && membership.kingdomOf(founder).isPresent()) {
+            return new CreateKingdomResult.Rejected(CreateKingdomResult.Error.ALREADY_IN_KINGDOM);
+        }
+        Set<Long> initialChunks = Set.of();
+        if (capital != null) {
+            String dimension = capital.dimension();
+            long chunk = capital.chunk();
+            if (!rules.allowedDimensions().contains(dimension)) {
+                return new CreateKingdomResult.Rejected(CreateKingdomResult.Error.DIMENSION_NOT_ALLOWED);
+            }
+            if (territory.ownerOf(dimension, chunk) != null) {
+                return new CreateKingdomResult.Rejected(CreateKingdomResult.Error.INSIDE_OTHER_KINGDOM);
+            }
+            if (territory.hasForeignLandWithin(dimension, chunk, rules.minChunksFromOtherKingdom(), null)) {
+                return new CreateKingdomResult.Rejected(CreateKingdomResult.Error.TOO_CLOSE_TO_OTHER_KINGDOM);
+            }
+            initialChunks = ClaimRules.initialClaim(territory, dimension, chunk, rules.initialClaimRadius(), rules.claimBufferChunks());
+        }
+        CreateKingdomResult result = kingdoms.create(id, rawName, color, founder, gameTime);
+        if (result instanceof CreateKingdomResult.Created) {
+            membership.register(id, founder, gameTime);
+            if (capital != null) {
+                territory.establish(id, capital, initialChunks);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Removes a kingdom with its members, pending requests and land.
+     */
+    public Optional<Kingdom> dissolve(UUID kingdomId) {
+        Optional<Kingdom> kingdom = kingdoms.get(kingdomId);
+        if (kingdom.isEmpty()) {
+            return Optional.empty();
+        }
+        territory.remove(kingdomId);
+        membership.unregister(kingdomId);
+        kingdoms.remove(kingdomId);
+        return kingdom;
+    }
+
+    // ---------------------------------------------------------------- territory
+
+    /**
+     * Claims a chunk for a kingdom.
+     *
+     * @param actor the claiming player, who needs {@link Permission#TERRITORY}; {@code null} for an
+     *              administrator, who ignores rights and the chunk limit but not the other rules
+     */
+    public Outcome claim(UUID actor, UUID kingdomId, String dimension, long chunk, KingdomRules rules) {
+        if (kingdoms.get(kingdomId).isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (actor != null && !membership.hasPermission(actor, kingdomId, Permission.TERRITORY)) {
+            return Outcome.fail(KingdomError.NO_PERMISSION);
+        }
+        int limit = actor == null ? Integer.MAX_VALUE : chunkLimit(kingdomId, rules);
+        Optional<KingdomError> error = ClaimRules.checkClaim(territory, kingdomId, dimension, chunk, limit, rules.claimBufferChunks());
+        if (error.isPresent()) {
+            return Outcome.fail(error.get());
+        }
+        territory.assign(kingdomId, chunk);
+        return Outcome.DONE;
+    }
+
+    /**
+     * Gives up a chunk of a kingdom.
+     *
+     * @param actor the player, who needs {@link Permission#TERRITORY}; {@code null} for an administrator
+     */
+    public Outcome unclaim(UUID actor, UUID kingdomId, String dimension, long chunk) {
+        if (kingdoms.get(kingdomId).isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (actor != null && !membership.hasPermission(actor, kingdomId, Permission.TERRITORY)) {
+            return Outcome.fail(KingdomError.NO_PERMISSION);
+        }
+        Optional<KingdomError> error = ClaimRules.checkUnclaim(territory, kingdomId, dimension, chunk);
+        if (error.isPresent()) {
+            return Outcome.fail(error.get());
+        }
+        territory.release(kingdomId, chunk);
+        return Outcome.DONE;
+    }
+
+    // ---------------------------------------------------------------- changes of ruler
+
+    /**
+     * The king hands the crown to another member.
+     */
+    public Outcome abdicate(UUID kingId, UUID heirId) {
+        Outcome outcome = membership.abdicate(kingId, heirId);
+        if (outcome.ok()) {
+            syncRuler(heirId);
+        }
+        return outcome;
+    }
+
+    /**
+     * Administrative change of ruler.
+     */
+    public Outcome crown(UUID kingdomId, UUID playerId, long gameTime) {
+        if (kingdoms.get(kingdomId).isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        Outcome outcome = membership.crown(kingdomId, playerId, gameTime);
+        if (outcome.ok()) {
+            syncRuler(playerId);
+        }
+        return outcome;
+    }
+
+    private void syncRuler(UUID newKing) {
+        membership.kingdomOf(newKing).flatMap(kingdoms::get)
+                .ifPresent(kingdom -> kingdoms.update(kingdom.withRuler(newKing)));
+    }
+
+    // ---------------------------------------------------------------- persistence
+
+    /**
+     * Restores one kingdom from saved data. Either the whole kingdom is restored or nothing changes.
+     *
+     * @param capital where its throne stands, or {@code null} for a kingdom without land
+     * @param chunks  owned chunks in the capital's dimension
+     * @throws IllegalArgumentException if the data is inconsistent or conflicts with kingdoms restored before
+     */
+    public void restore(Kingdom kingdom, Capital capital, Collection<Long> chunks, RolePermissions permissions,
+                        List<Member> members, Map<UUID, Long> applications, Map<UUID, Long> invitations) {
+        KingdomRegistry.AddResult addable = kingdoms.canAdd(kingdom);
+        if (addable != KingdomRegistry.AddResult.ADDED) {
+            throw new IllegalArgumentException("Kingdom " + kingdom.name() + " (" + kingdom.id() + "): " + addable);
+        }
+        UUID king = null;
+        for (Member member : members) {
+            if (member.role() == Role.KING) {
+                if (king != null) {
+                    throw new IllegalArgumentException("Kingdom " + kingdom.name() + " has more than one king");
+                }
+                king = member.playerId();
+            }
+        }
+        if (!Objects.equals(king, kingdom.rulerId())) {
+            throw new IllegalArgumentException("Ruler of " + kingdom.name() + " is " + kingdom.rulerId()
+                    + " but the member with the king's position is " + king);
+        }
+        Set<Long> land = new LinkedHashSet<>();
+        if (capital != null) {
+            land.add(capital.chunk());
+            land.addAll(chunks);
+            for (long chunk : land) {
+                UUID owner = territory.ownerOf(capital.dimension(), chunk);
+                if (owner != null) {
+                    throw new IllegalArgumentException("Chunk " + ChunkKey.format(chunk) + " of " + kingdom.name()
+                            + " is also owned by " + owner);
+                }
+            }
+        } else if (!chunks.isEmpty()) {
+            throw new IllegalArgumentException("Kingdom " + kingdom.name() + " owns chunks but has no capital");
+        }
+        membership.restore(kingdom.id(), permissions, members, applications, invitations);
+        if (capital != null) {
+            territory.establish(kingdom.id(), capital, land);
+        }
+        kingdoms.add(kingdom);
+    }
+}

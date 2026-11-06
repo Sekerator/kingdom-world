@@ -75,6 +75,42 @@ public final class KingdomRegistry {
         return AddResult.ADDED;
     }
 
+    /**
+     * Replaces a kingdom with a changed version of itself, for example after a change of ruler or color.
+     * A changed name must still be unique.
+     *
+     * @return {@code false} if no kingdom has the id of {@code updated} or its new name is taken
+     */
+    public boolean update(Kingdom updated) {
+        Objects.requireNonNull(updated, "updated");
+        Kingdom current = byId.get(updated.id());
+        if (current == null) {
+            return false;
+        }
+        if (current.equals(updated)) {
+            return true;
+        }
+        String oldKey = KingdomNames.key(current.name());
+        String newKey = KingdomNames.key(updated.name());
+        if (!oldKey.equals(newKey) && idsByNameKey.containsKey(newKey)) {
+            return false;
+        }
+        idsByNameKey.remove(oldKey);
+        put(updated);
+        changeListener.run();
+        return true;
+    }
+
+    /**
+     * Whether {@link #add(Kingdom)} would accept the kingdom.
+     */
+    public AddResult canAdd(Kingdom kingdom) {
+        if (byId.containsKey(kingdom.id())) {
+            return AddResult.DUPLICATE_ID;
+        }
+        return isNameTaken(kingdom.name()) ? AddResult.DUPLICATE_NAME : AddResult.ADDED;
+    }
+
     public Optional<Kingdom> remove(UUID id) {
         Kingdom removed = byId.remove(id);
         if (removed == null) {
