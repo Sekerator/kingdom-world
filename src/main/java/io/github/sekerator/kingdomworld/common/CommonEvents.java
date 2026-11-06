@@ -1,15 +1,26 @@
 package io.github.sekerator.kingdomworld.common;
 
 import com.mojang.logging.LogUtils;
+import io.github.sekerator.kingdomworld.common.command.KingdomCommand;
 import io.github.sekerator.kingdomworld.common.command.KingdomWorldCommand;
 import io.github.sekerator.kingdomworld.common.config.KingdomWorldConfig;
 import io.github.sekerator.kingdomworld.common.data.KingdomSavedData;
+import io.github.sekerator.kingdomworld.common.kingdom.KingdomActions;
+import io.github.sekerator.kingdomworld.common.kingdom.TerritorySync;
 import io.github.sekerator.kingdomworld.common.network.ServerRequestGuard;
+import io.github.sekerator.kingdomworld.common.protection.FireProtectionHook;
+import io.github.sekerator.kingdomworld.common.protection.ProtectionEvents;
+import io.github.sekerator.kingdomworld.common.protection.ProtectionService;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.event.RegisterCommandsEvent;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
+import net.minecraftforge.fml.LogicalSide;
 import org.slf4j.Logger;
 
 /**
@@ -25,11 +36,16 @@ public final class CommonEvents {
         MinecraftForge.EVENT_BUS.addListener(CommonEvents::onRegisterCommands);
         MinecraftForge.EVENT_BUS.addListener(CommonEvents::onServerStarted);
         MinecraftForge.EVENT_BUS.addListener(CommonEvents::onServerStopped);
+        MinecraftForge.EVENT_BUS.addListener(CommonEvents::onServerTick);
+        MinecraftForge.EVENT_BUS.addListener(CommonEvents::onPlayerTick);
+        MinecraftForge.EVENT_BUS.addListener(CommonEvents::onPlayerLoggedIn);
         MinecraftForge.EVENT_BUS.addListener(CommonEvents::onPlayerLoggedOut);
+        ProtectionEvents.register();
     }
 
     private static void onRegisterCommands(RegisterCommandsEvent event) {
         KingdomWorldCommand.register(event.getDispatcher());
+        KingdomCommand.register(event.getDispatcher());
     }
 
     private static void onServerStarted(ServerStartedEvent event) {
@@ -37,16 +53,55 @@ public final class CommonEvents {
         LOGGER.info("KingdomWorld server config: maxActiveNpcs={}, simulationIntervalTicks={}, afkTimeoutSeconds={}, combatTagSeconds={}",
                 config.maxActiveNpcs.get(), config.simulationIntervalTicks.get(),
                 config.afkTimeoutSeconds.get(), config.combatTagSeconds.get());
+        LOGGER.info("KingdomWorld kingdom rules: allowedDimensions={}, minChunksFromOtherKingdom={}, initialClaimRadius={}, "
+                        + "baseMaxChunks={}, chunksPerMember={}, claimBufferChunks={}",
+                config.allowedDimensions.get(), config.minChunksFromOtherKingdom.get(), config.initialClaimRadius.get(),
+                config.baseMaxChunks.get(), config.chunksPerMember.get(), config.claimBufferChunks.get());
+        LOGGER.info("KingdomWorld protection: interactions={}, explosions={}, fire={}, fakePlayers={}",
+                config.protectInteractions.get(), config.protectFromExplosions.get(), config.protectFromFire.get(),
+                config.allowFakePlayers.get());
+        // The fire block carries a marker interface when the fire hook was applied.
+        Object fire = Blocks.FIRE;
+        if (fire instanceof FireProtectionHook) {
+            LOGGER.info("KingdomWorld fire protection: active");
+        } else {
+            LOGGER.error("KingdomWorld fire protection: the fire hook is missing, fire can spread into kingdom land");
+        }
         // Load the data eagerly so that problems with it show up at startup rather than on first use.
-        int kingdoms = KingdomSavedData.get(event.getServer()).registry().size();
-        LOGGER.info("KingdomWorld loaded {} kingdom(s), data format {}", kingdoms, KingdomSavedData.FORMAT_VERSION);
+        KingdomSavedData data = KingdomSavedData.get(event.getServer());
+        LOGGER.info("KingdomWorld loaded {} kingdom(s), data format {}{}", data.registry().size(), KingdomSavedData.FORMAT_VERSION,
+                data.isReadOnly() ? " (READ-ONLY: " + data.readOnlyReason().orElse("?") + ")" : "");
     }
 
     private static void onServerStopped(ServerStoppedEvent event) {
         ServerRequestGuard.reset();
+        ProtectionService.reset();
+        TerritorySync.reset();
+    }
+
+    private static void onServerTick(TickEvent.ServerTickEvent event) {
+        if (event.phase == TickEvent.Phase.END) {
+            TerritorySync.flush(event.getServer());
+        }
+    }
+
+    private static void onPlayerTick(TickEvent.PlayerTickEvent event) {
+        if (event.phase == TickEvent.Phase.END && event.side == LogicalSide.SERVER
+                && event.player instanceof ServerPlayer player && !(player instanceof FakePlayer)) {
+            TerritorySync.checkBorder(player);
+        }
+    }
+
+    private static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player && !(player instanceof FakePlayer)) {
+            KingdomActions.greet(player);
+        }
     }
 
     private static void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         ServerRequestGuard.forget(event.getEntity().getUUID());
+        ProtectionService.forget(event.getEntity().getUUID());
+        TerritorySync.forget(event.getEntity().getUUID());
+        KingdomCommand.forget(event.getEntity().getUUID());
     }
 }

@@ -10,7 +10,24 @@ import io.github.sekerator.kingdomworld.common.network.packet.KingdomListRequest
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomListResponsePacket;
 import io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
+import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomSummary;
+import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
+import io.github.sekerator.kingdomworld.core.membership.Permission;
+import io.github.sekerator.kingdomworld.core.membership.Role;
+import io.github.sekerator.kingdomworld.core.state.KingdomRules;
+import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
+import io.github.sekerator.kingdomworld.core.territory.Capital;
+import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
+import io.github.sekerator.kingdomworld.common.network.data.KingdomView;
+import io.github.sekerator.kingdomworld.common.network.packet.KingdomActionPacket;
+import io.github.sekerator.kingdomworld.common.protection.FireProtectionHook;
+import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.IntTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.storage.DimensionDataStorage;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.DecoderException;
 import net.minecraft.gametest.framework.GameTest;
@@ -23,6 +40,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -89,8 +108,8 @@ public final class KingdomGameTests {
     }
 
     @GameTest(template = EMPTY)
-    public static void corruptSavedEntriesAreSkipped(GameTestHelper helper) {
-        Kingdom valid = new Kingdom(UUID.randomUUID(), "Valid Realm", 0x112233, UUID.randomUUID(), 10L);
+    public static void unreadableEntriesKeepDataReadOnly(GameTestHelper helper) {
+        Kingdom valid = new Kingdom(UUID.randomUUID(), "Valid Realm", 0x112233, null, 10L);
         CompoundTag missingId = new CompoundTag();
         missingId.putString("name", "No Id Realm");
         CompoundTag badName = KingdomNbt.write(new Kingdom(UUID.randomUUID(), "Bad Name Realm", 0, null, 0L));
@@ -107,7 +126,129 @@ public final class KingdomGameTests {
         root.put("kingdoms", list);
 
         KingdomSavedData loaded = KingdomSavedData.load(root);
-        helper.assertTrue(loaded.registry().all().equals(List.of(valid)), "Expected only the valid kingdom, got " + loaded.registry().all());
+        helper.assertTrue(loaded.isReadOnly(), "Unreadable entries did not switch the data to read-only");
+        helper.assertTrue(loaded.registry().all().equals(List.of(valid)), "Expected the readable kingdom to stay visible, got " + loaded.registry().all());
+        helper.assertTrue(loaded.save(new CompoundTag()).equals(root), "Read-only data does not save the original tag");
+        loaded.setDirty();
+        helper.assertTrue(!loaded.isDirty(), "Read-only data was marked for saving");
+        helper.succeed();
+    }
+
+    /**
+     * Data of a newer mod version: kept exactly as it was, changes refused through the API.
+     */
+    @GameTest(template = EMPTY)
+    public static void newerFormatIsKeptReadOnly(GameTestHelper helper) {
+        Kingdom known = new Kingdom(UUID.randomUUID(), "Future Realm", 0x445566, null, 5L);
+        CompoundTag kingdom = KingdomNbt.write(known);
+        kingdom.putString("treasury", "unknown to this version");
+        ListTag list = new ListTag();
+        list.add(kingdom);
+        CompoundTag root = new CompoundTag();
+        root.putInt("formatVersion", KingdomSavedData.FORMAT_VERSION + 7);
+        root.put("kingdoms", list);
+        root.putString("futureSection", "unknown to this version");
+
+        KingdomSavedData loaded = KingdomSavedData.load(root);
+        helper.assertTrue(loaded.isReadOnly(), "Newer data was not made read-only");
+        helper.assertTrue(loaded.registry().get(known.id()).isPresent(), "Understood parts of newer data are not visible");
+        helper.assertTrue(loaded.save(new CompoundTag()).equals(root), "Unknown fields of newer data would be lost");
+        assertChangesRefused(helper, loaded);
+        helper.succeed();
+    }
+
+    /**
+     * Data with a damaged format version: loading does not throw, the data is kept and changes are refused.
+     */
+    @GameTest(template = EMPTY)
+    public static void damagedFormatVersionIsKeptReadOnly(GameTestHelper helper) {
+        for (Tag damaged : List.<Tag>of(StringTag.valueOf("two"), IntTag.valueOf(-3), IntTag.valueOf(0))) {
+            CompoundTag root = new CompoundTag();
+            root.put("formatVersion", damaged);
+            ListTag list = new ListTag();
+            list.add(KingdomNbt.write(new Kingdom(UUID.randomUUID(), "Damaged Realm", 0, null, 0L)));
+            root.put("kingdoms", list);
+            KingdomSavedData loaded;
+            try {
+                loaded = KingdomSavedData.load(root);
+            } catch (RuntimeException e) {
+                helper.fail("Loading data with format version " + damaged + " threw " + e);
+                return;
+            }
+            helper.assertTrue(loaded.isReadOnly(), "Format version " + damaged + " did not make the data read-only");
+            helper.assertTrue(loaded.save(new CompoundTag()).equals(root), "Data with format version " + damaged + " would be overwritten");
+            assertChangesRefused(helper, loaded);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Swaps read-only data into the server for a moment and checks that the API refuses every change.
+     */
+    private static void assertChangesRefused(GameTestHelper helper, KingdomSavedData readOnly) {
+        MinecraftServer server = helper.getLevel().getServer();
+        DimensionDataStorage storage = server.overworld().getDataStorage();
+        KingdomSavedData live = KingdomSavedData.get(server);
+        storage.set(KingdomSavedData.DATA_NAME, readOnly);
+        try {
+            CreateKingdomResult created = KingdomWorldApi.createKingdom(server, "GameTest Refused", null);
+            helper.assertTrue(created.equals(new CreateKingdomResult.Rejected(CreateKingdomResult.Error.READ_ONLY)),
+                    "Read-only data accepted a new kingdom: " + created);
+            Outcome change = KingdomWorldApi.change(server, "test", state -> Outcome.DONE);
+            helper.assertTrue(change.failure().equals(Optional.of(KingdomError.READ_ONLY)), "Read-only data accepted a change");
+            helper.assertTrue(!readOnly.isDirty(), "Read-only data was marked for saving");
+        } finally {
+            storage.set(KingdomSavedData.DATA_NAME, live);
+        }
+    }
+
+    @GameTest(template = EMPTY)
+    public static void formatOneIsUpgraded(GameTestHelper helper) {
+        UUID ruler = UUID.randomUUID();
+        Kingdom old = new Kingdom(UUID.randomUUID(), "Old Realm", 0x123456, ruler, 77L);
+        ListTag list = new ListTag();
+        list.add(KingdomNbt.write(old));
+        CompoundTag root = new CompoundTag();
+        root.putInt("formatVersion", 1);
+        root.put("kingdoms", list);
+
+        KingdomSavedData loaded = KingdomSavedData.load(root);
+        helper.assertTrue(!loaded.isReadOnly(), "Format 1 data became read-only: " + loaded.readOnlyReason());
+        helper.assertTrue(loaded.isDirty(), "Upgraded data is not marked for saving");
+        helper.assertTrue(loaded.state().membership().memberOf(ruler).map(m -> m.role() == Role.KING).orElse(false),
+                "The ruler of a format 1 kingdom did not become its king");
+        CompoundTag saved = loaded.save(new CompoundTag());
+        helper.assertTrue(saved.getInt("formatVersion") == KingdomSavedData.FORMAT_VERSION, "Upgraded data saved in the old format");
+        helper.assertTrue(KingdomSavedData.load(saved).registry().get(old.id()).equals(Optional.of(old)), "Kingdom lost in the upgrade");
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY)
+    public static void fullKingdomSurvivesSaving(GameTestHelper helper) {
+        KingdomSavedData data = new KingdomSavedData();
+        UUID king = UUID.randomUUID();
+        UUID subject = UUID.randomUUID();
+        UUID applicant = UUID.randomUUID();
+        CreateKingdomResult result = data.state().found(UUID.randomUUID(), "Saved Realm", 0x654321, king,
+                new Capital("minecraft:overworld", 100, 64, -100), 9L, KingdomRules.DEFAULT);
+        Kingdom kingdom = ((CreateKingdomResult.Created) result).kingdom();
+        data.state().membership().invite(king, subject, 10L);
+        data.state().membership().acceptInvitation(subject, kingdom.id(), 11L);
+        data.state().membership().setRole(king, subject, Role.STEWARD);
+        data.state().membership().setRolePermission(king, Role.SUBJECT, Permission.CONTAINERS, true);
+        data.state().membership().apply(applicant, kingdom.id(), 12L);
+        data.state().claim(subject, kingdom.id(), "minecraft:overworld", ChunkKey.of(8, -7), KingdomRules.DEFAULT);
+
+        KingdomSavedData reloaded = KingdomSavedData.load(data.save(new CompoundTag()));
+        helper.assertTrue(!reloaded.isReadOnly(), "Saved data could not be read back: " + reloaded.readOnlyReason());
+        KingdomWorldState state = reloaded.state();
+        helper.assertTrue(state.kingdoms().get(kingdom.id()).equals(Optional.of(kingdom)), "Kingdom changed");
+        helper.assertTrue(state.membership().memberOf(subject).orElseThrow().role() == Role.STEWARD, "Position lost");
+        helper.assertTrue(state.membership().hasPermission(subject, kingdom.id(), Permission.CONTAINERS), "Rights lost");
+        helper.assertTrue(state.membership().applicationsOf(applicant).contains(kingdom.id()), "Application lost");
+        helper.assertTrue(state.territory().territory(kingdom.id()).orElseThrow().size() == 10, "Land lost");
+        helper.assertTrue(kingdom.id().equals(state.territory().ownerOf("minecraft:overworld", ChunkKey.of(8, -7))), "Claim lost");
+        helper.assertTrue(state.kingdomWithThroneAt("minecraft:overworld", 100, 64, -100).isPresent(), "Capital lost");
         helper.succeed();
     }
 
@@ -173,6 +314,44 @@ public final class KingdomGameTests {
         helper.assertTrue(config.simulationIntervalTicks.get() == 1200, "simulationIntervalTicks default");
         helper.assertTrue(config.afkTimeoutSeconds.get() == 300, "afkTimeoutSeconds default");
         helper.assertTrue(config.combatTagSeconds.get() == 120, "combatTagSeconds default");
+        helper.assertTrue(config.allowedDimensions.get().equals(List.of("minecraft:overworld")), "allowedDimensions default");
+        helper.assertTrue(config.minChunksFromOtherKingdom.get() == 4, "minChunksFromOtherKingdom default");
+        helper.assertTrue(config.initialClaimRadius.get() == 1, "initialClaimRadius default");
+        helper.assertTrue(config.baseMaxChunks.get() == 25, "baseMaxChunks default");
+        helper.assertTrue(config.chunksPerMember.get() == 4, "chunksPerMember default");
+        helper.assertTrue(config.protectInteractions.get() && config.protectFromExplosions.get()
+                && config.protectFromFire.get() && config.allowFakePlayers.get(), "protection defaults");
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY)
+    public static void fireProtectionHookIsInstalled(GameTestHelper helper) {
+        Object fire = Blocks.FIRE;
+        helper.assertTrue(fire instanceof FireProtectionHook, "The fire block was not hooked");
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY)
+    public static void kingdomViewSurvivesEncoding(GameTestHelper helper) {
+        EnumMap<Role, EnumSet<Permission>> rights = new EnumMap<>(Role.class);
+        rights.put(Role.SUBJECT, EnumSet.of(Permission.BUILD));
+        rights.put(Role.MARSHAL, EnumSet.noneOf(Permission.class));
+        KingdomView view = new KingdomView(UUID.randomUUID(), "Северный Предел", 0xABCDEF, "kw-king", 2, 10, 29,
+                new BlockPos(1, -2, 3), KingdomView.Relation.MEMBER, Role.KING, EnumSet.allOf(Permission.class),
+                List.of(new KingdomView.MemberEntry(UUID.randomUUID(), "kw-king", Role.KING, true)),
+                List.of(new KingdomView.PendingEntry(UUID.randomUUID(), "kw-applicant")), rights);
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        view.encode(buf);
+        helper.assertTrue(KingdomView.decode(buf).equals(view), "Kingdom view changed in transit");
+
+        FriendlyByteBuf hostile = new FriendlyByteBuf(Unpooled.buffer());
+        hostile.writeVarInt(KingdomActionPacket.Action.values().length + 3);
+        try {
+            KingdomActionPacket.decode(hostile);
+            helper.fail("An action with an unknown ordinal was decoded");
+        } catch (DecoderException expected) {
+            // Unknown actions are refused while decoding.
+        }
         helper.succeed();
     }
 }

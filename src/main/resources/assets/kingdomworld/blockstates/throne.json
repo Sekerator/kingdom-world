@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "kingdomworld:block/throne"
+    },
+    "facing=east": {
+      "model": "kingdomworld:block/throne",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "kingdomworld:block/throne",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "kingdomworld:block/throne",
+      "y": 270
+    }
+  }
+}

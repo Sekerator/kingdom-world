@@ -1,14 +1,30 @@
 package io.github.sekerator.kingdomworld.common.network;
 
 import io.github.sekerator.kingdomworld.KingdomWorld;
+import io.github.sekerator.kingdomworld.common.network.packet.ActionResultPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.BorderCrossingPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.ClaimChunkPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.FoundKingdomPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.KingdomActionPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomListRequestPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomListResponsePacket;
+import io.github.sekerator.kingdomworld.common.network.packet.KingdomViewPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.MapAreaPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.MapAreaRequestPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.OpenFoundingScreenPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.TerritoryDeltaPacket;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkDirection;
+import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
+
+import java.util.function.BiConsumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * The mod's network channel.
@@ -20,7 +36,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "1";
+    public static final String PROTOCOL_VERSION = "2";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -40,15 +56,26 @@ public final class KingdomWorldNetwork {
         }
         registered = true;
         int id = 0;
-        CHANNEL.messageBuilder(KingdomListRequestPacket.class, id++, NetworkDirection.PLAY_TO_SERVER)
-                .encoder(KingdomListRequestPacket::encode)
-                .decoder(KingdomListRequestPacket::decode)
-                .consumerMainThread(KingdomListRequestPacket::handle)
-                .add();
-        CHANNEL.messageBuilder(KingdomListResponsePacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
-                .encoder(KingdomListResponsePacket::encode)
-                .decoder(KingdomListResponsePacket::decode)
-                .consumerMainThread(KingdomListResponsePacket::handle)
+        add(id++, KingdomListRequestPacket.class, NetworkDirection.PLAY_TO_SERVER, KingdomListRequestPacket::encode, KingdomListRequestPacket::decode, KingdomListRequestPacket::handle);
+        add(id++, KingdomListResponsePacket.class, NetworkDirection.PLAY_TO_CLIENT, KingdomListResponsePacket::encode, KingdomListResponsePacket::decode, KingdomListResponsePacket::handle);
+        add(id++, FoundKingdomPacket.class, NetworkDirection.PLAY_TO_SERVER, FoundKingdomPacket::encode, FoundKingdomPacket::decode, FoundKingdomPacket::handle);
+        add(id++, KingdomActionPacket.class, NetworkDirection.PLAY_TO_SERVER, KingdomActionPacket::encode, KingdomActionPacket::decode, KingdomActionPacket::handle);
+        add(id++, ClaimChunkPacket.class, NetworkDirection.PLAY_TO_SERVER, ClaimChunkPacket::encode, ClaimChunkPacket::decode, ClaimChunkPacket::handle);
+        add(id++, MapAreaRequestPacket.class, NetworkDirection.PLAY_TO_SERVER, MapAreaRequestPacket::encode, MapAreaRequestPacket::decode, MapAreaRequestPacket::handle);
+        add(id++, OpenFoundingScreenPacket.class, NetworkDirection.PLAY_TO_CLIENT, OpenFoundingScreenPacket::encode, OpenFoundingScreenPacket::decode, OpenFoundingScreenPacket::handle);
+        add(id++, KingdomViewPacket.class, NetworkDirection.PLAY_TO_CLIENT, KingdomViewPacket::encode, KingdomViewPacket::decode, KingdomViewPacket::handle);
+        add(id++, ActionResultPacket.class, NetworkDirection.PLAY_TO_CLIENT, ActionResultPacket::encode, ActionResultPacket::decode, ActionResultPacket::handle);
+        add(id++, MapAreaPacket.class, NetworkDirection.PLAY_TO_CLIENT, MapAreaPacket::encode, MapAreaPacket::decode, MapAreaPacket::handle);
+        add(id++, TerritoryDeltaPacket.class, NetworkDirection.PLAY_TO_CLIENT, TerritoryDeltaPacket::encode, TerritoryDeltaPacket::decode, TerritoryDeltaPacket::handle);
+        add(id++, BorderCrossingPacket.class, NetworkDirection.PLAY_TO_CLIENT, BorderCrossingPacket::encode, BorderCrossingPacket::decode, BorderCrossingPacket::handle);
+    }
+
+    private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,
+                                Function<FriendlyByteBuf, T> decoder, BiConsumer<T, Supplier<NetworkEvent.Context>> handler) {
+        CHANNEL.messageBuilder(type, id, direction)
+                .encoder(encoder)
+                .decoder(decoder)
+                .consumerMainThread(handler)
                 .add();
     }
 
@@ -57,6 +84,13 @@ public final class KingdomWorldNetwork {
     }
 
     public static void sendToPlayer(ServerPlayer player, Object message) {
-        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), message);
+        // Players created for tests have no connection.
+        if (player.connection != null) {
+            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), message);
+        }
+    }
+
+    public static void sendToAll(Object message) {
+        CHANNEL.send(PacketDistributor.ALL.noArg(), message);
     }
 }

@@ -2,6 +2,8 @@ plugins {
     id 'eclipse'
     id 'idea'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+    // Hooks into vanilla code where Forge offers no event (fire spreading); Mixin itself ships with Forge.
+    id 'org.spongepowered.mixin' version '0.7.+'
 }
 
 version = mod_version
@@ -63,6 +65,11 @@ minecraft {
     }
 }
 
+mixin {
+    add sourceSets.main, "${mod_id}.refmap.json"
+    config "${mod_id}.mixins.json"
+}
+
 // Resources produced by data generators.
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
@@ -72,6 +79,7 @@ repositories {
 
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
 
     // Soft compatibility modules must never add compile or runtime dependencies on other mods here.
     // They are activated at runtime only when ModList reports the mod as loaded.

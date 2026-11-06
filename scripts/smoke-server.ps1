@@ -6,11 +6,14 @@
     Installs a Forge 1.20.1-47.4.10 dedicated server outside the repository, puts the freshly built mod jar
     into it, accepts the EULA and runs two server sessions on a fresh world:
 
-      1. start, wait for "Done", run "kingdomworld debug create SmokeTest", then "stop";
-      2. start again, run "kingdomworld debug list" and "kingdomworld debug info SmokeTest", then "stop".
+      1. start, wait for "Done", found the kingdom SmokeTest with a throne at 8 70 8
+         ("kingdomworld admin found"), claim chunk [2, 0] for it ("kingdomworld admin claim"), then "stop";
+      2. start again, check with "kingdomworld debug list", "kingdomworld admin owner" and "kingdom info" that
+         the kingdom, its id and all 10 chunks survived the restart, then "stop".
 
-    The test passes when both sessions start and stop cleanly, the kingdom created in session 1 is listed with
-    the same id in session 2, and the logs contain no errors or exceptions related to kingdomworld. The JVM
+    The test passes when both sessions start and stop cleanly, the kingdom and its land created in session 1
+    are found unchanged in session 2, the fire protection hook is active, and the logs contain no errors or
+    exceptions related to kingdomworld. The JVM
     class loading log is also checked to prove that no class of the mod's client package is loaded on the
     dedicated server.
 
@@ -87,6 +90,7 @@ $StartTimeout = if ($Pack) { 1500 } else { 420 }
 $StopTimeout = if ($Pack) { 600 } else { 180 }
 $CommandTimeout = 90
 
+$script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $script:Failures = New-Object System.Collections.Generic.List[string]
 $script:Warnings = New-Object System.Collections.Generic.List[string]
 
@@ -268,11 +272,31 @@ function Start-Server([string]$Phase) {
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
     $startInfo.CreateNoWindow = $true
-    $process = [System.Diagnostics.Process]::Start($startInfo)
+    # Windows PowerShell creates the stdin writer with the console input encoding and flushes it right away.
+    # Under code page 65001 that encoding carries a byte order mark, which would reach the server in front of
+    # the first command ("?kingdomworld ..."). Switch to UTF-8 without a BOM while the process starts.
+    $savedInputEncoding = $null
+    try {
+        if ([Console]::InputEncoding.GetPreamble().Length -gt 0) {
+            $savedInputEncoding = [Console]::InputEncoding
+            [Console]::InputEncoding = $script:Utf8NoBom
+        }
+    } catch {
+        Add-Warning "could not change the console input encoding: $($_.Exception.Message)"
+    }
+    try {
+        $process = [System.Diagnostics.Process]::Start($startInfo)
+    } finally {
+        if ($savedInputEncoding) { try { [Console]::InputEncoding = $savedInputEncoding } catch { } }
+    }
+    # Commands go through our own writer: UTF-8 without a BOM, flushed after every line.
+    $stdin = New-Object System.IO.StreamWriter($process.StandardInput.BaseStream, $script:Utf8NoBom)
+    $stdin.AutoFlush = $true
+    $stdin.NewLine = "`n"
     # Drain the console streams so the server never blocks on a full pipe; latest.log is used for checks.
     $stdout = $process.StandardOutput.ReadToEndAsync()
     $stderr = $process.StandardError.ReadToEndAsync()
-    return [pscustomobject]@{ Process = $process; Stdout = $stdout; Stderr = $stderr; Phase = $Phase; Started = Get-Date }
+    return [pscustomobject]@{ Process = $process; Stdin = $stdin; Stdout = $stdout; Stderr = $stderr; Phase = $Phase; Started = Get-Date }
 }
 
 function Get-LatestLog { Read-SharedText (Join-Path $ServerDir 'logs\latest.log') }
@@ -292,8 +316,7 @@ function Wait-ForLog([object]$Server, [string]$Pattern, [int]$TimeoutSeconds, [s
 
 function Send-ServerCommand([object]$Server, [string]$Command) {
     Write-Host "    > $Command"
-    $Server.Process.StandardInput.WriteLine($Command)
-    $Server.Process.StandardInput.Flush()
+    $Server.Stdin.WriteLine($Command)
 }
 
 function Stop-Server([object]$Server) {
@@ -424,20 +447,42 @@ if ($WithoutMod) {
 }
 
 $script:CreatedId = $null
-$IdPattern = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+$ConsoleFailPattern = 'Unknown or incomplete command|Incorrect argument|already exists|There is no kingdom|read-only'
+$IdPattern ='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 
 Invoke-Phase 'session1' {
     param($server)
     if (-not (Wait-ForLog $server 'KingdomWorld loaded 0 kingdom\(s\)' 10)) {
         Add-Failure '[session1] expected a fresh world with 0 kingdoms'
     }
-    Send-ServerCommand $server "kingdomworld debug create $KingdomName"
-    $created = Wait-ForLog $server "Created kingdom $KingdomName \(id ($IdPattern)\)" $CommandTimeout 'Unknown or incomplete command|already exists|There is no kingdom'
+    if (Wait-ForLog $server 'KingdomWorld fire protection: active' 10) {
+        Write-Ok '[session1] fire protection hook is active'
+    } else {
+        Add-Failure '[session1] the fire protection hook did not report itself active'
+    }
+    Send-ServerCommand $server "kingdomworld admin found $KingdomName 8 70 8"
+    $created = Wait-ForLog $server "Founded kingdom $KingdomName \(id ($IdPattern)\) with (\d+) chunk\(s\)" $CommandTimeout $ConsoleFailPattern
     if ($created) {
         $script:CreatedId = $created.Groups[1].Value
-        Write-Ok "[session1] kingdom created with id $($script:CreatedId)"
+        if ($created.Groups[2].Value -eq '9') {
+            Write-Ok "[session1] kingdom founded with id $($script:CreatedId) and 9 chunks"
+        } else {
+            Add-Failure "[session1] expected 9 initial chunks, got $($created.Groups[2].Value)"
+        }
     } else {
-        Add-Failure "[session1] 'kingdomworld debug create $KingdomName' did not report success"
+        Add-Failure "[session1] 'kingdomworld admin found $KingdomName' did not report success"
+    }
+    Send-ServerCommand $server "kingdomworld admin claim $KingdomName 2 0"
+    if (Wait-ForLog $server "Chunk \[2, 0\] now belongs to $KingdomName" $CommandTimeout $ConsoleFailPattern) {
+        Write-Ok '[session1] chunk [2, 0] claimed'
+    } else {
+        Add-Failure "[session1] 'kingdomworld admin claim $KingdomName 2 0' did not report success"
+    }
+    Send-ServerCommand $server 'kingdomworld admin claim SmokeTest 9 9'
+    if (Wait-ForLog $server 'Chunk \[9, 9\] cannot be claimed' $CommandTimeout $ConsoleFailPattern) {
+        Write-Ok '[session1] a chunk that does not touch the land is refused'
+    } else {
+        Add-Failure '[session1] claiming a detached chunk was not refused'
     }
 }
 
@@ -467,6 +512,22 @@ Invoke-Phase 'session2' {
         Write-Ok "[session2] 'kingdomworld debug info $KingdomName' works"
     } else {
         Add-Failure "[session2] 'kingdomworld debug info $KingdomName' did not show the kingdom"
+    }
+    foreach ($check in @(@('2 0', 'belongs to SmokeTest'), @('0 0', 'belongs to SmokeTest'), @('-1 -1', 'belongs to SmokeTest'), @('3 0', 'is unclaimed'))) {
+        $coords = $check[0]
+        $label = "[$($coords -replace ' ', ', ')]"
+        Send-ServerCommand $server "kingdomworld admin owner $coords"
+        if (Wait-ForLog $server "Chunk $([regex]::Escape($label)) in minecraft:overworld $($check[1])" $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok "[session2] chunk $label $($check[1])"
+        } else {
+            Add-Failure "[session2] chunk ${label}: expected '$($check[1])' after restart"
+        }
+    }
+    Send-ServerCommand $server "kingdom info $KingdomName"
+    if (Wait-ForLog $server 'Chunks: 10 of \d+' $CommandTimeout $ConsoleFailPattern) {
+        Write-Ok "[session2] 'kingdom info' reports all 10 chunks after restart"
+    } else {
+        Add-Failure "[session2] 'kingdom info $KingdomName' did not report 10 chunks"
     }
 }
 
