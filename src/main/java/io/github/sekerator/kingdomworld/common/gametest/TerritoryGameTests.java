@@ -286,6 +286,8 @@ public final class TerritoryGameTests {
             helper.assertTrue(KingdomWorldApi.ownerAt(level, inside) != null && KingdomWorldApi.ownerAt(level, block) == null,
                     "Test layout: the border is not where expected");
             level.setBlockAndUpdate(block, Blocks.STONE.defaultBlockState());
+            // The game test world is kept between runs; a block left behind would stop the push before the check.
+            level.setBlockAndUpdate(inside, Blocks.AIR.defaultBlockState());
             PistonEvent.Pre push = new PistonEvent.Pre(level, piston, Direction.EAST, PistonEvent.PistonMoveType.EXTEND);
             MinecraftForge.EVENT_BUS.post(push);
             helper.assertTrue(push.isCanceled(), "A piston outside pushed a block into kingdom land");

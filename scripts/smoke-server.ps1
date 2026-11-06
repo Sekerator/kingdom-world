@@ -7,12 +7,15 @@
     into it, accepts the EULA and runs two server sessions on a fresh world:
 
       1. start, wait for "Done", found the kingdom SmokeTest with a throne at 8 70 8
-         ("kingdomworld admin found"), claim chunk [2, 0] for it ("kingdomworld admin claim"), then "stop";
+         ("kingdomworld admin found"), claim chunk [2, 0] for it ("kingdomworld admin claim"), add three
+         citizens ("kingdomworld admin citizens spawn"), list them, let one die ("kingdomworld admin citizens
+         kill") and check that two remain and none has a body without players, then "stop";
       2. start again, check with "kingdomworld debug list", "kingdomworld admin owner" and "kingdom info" that
-         the kingdom, its id and all 10 chunks survived the restart, then "stop".
+         the kingdom, its id and all 10 chunks survived the restart, and with "kingdomworld admin citizens list"
+         and "info" that exactly the same two citizens are there (nothing lost, nothing doubled), then "stop".
 
-    The test passes when both sessions start and stop cleanly, the kingdom and its land created in session 1
-    are found unchanged in session 2, the fire protection hook is active, and the logs contain no errors or
+    The test passes when both sessions start and stop cleanly, the kingdom, its land and its citizens created in
+    session 1 are found unchanged in session 2, the fire protection hook is active, and the logs contain no errors or
     exceptions related to kingdomworld. The JVM
     class loading log is also checked to prove that no class of the mod's client package is loaded on the
     dedicated server.
@@ -447,8 +450,39 @@ if ($WithoutMod) {
 }
 
 $script:CreatedId = $null
+$script:CitizenIds = @()
 $ConsoleFailPattern = 'Unknown or incomplete command|Incorrect argument|already exists|There is no kingdom|read-only'
 $IdPattern ='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+
+# Lists the citizens of the smoke kingdom and returns their short ids, or $null if the list did not appear.
+function Get-CitizenList([object]$Server, [int]$Expected, [string]$Phase) {
+    $before = (Get-LatestLog).Length
+    Send-ServerCommand $Server "kingdomworld admin citizens list $KingdomName"
+    $header = Wait-ForLog $Server "Citizens of ${KingdomName}: $Expected \((\d+) present in the world\)" $CommandTimeout $ConsoleFailPattern
+    if (-not $header) {
+        Add-Failure "[$Phase] 'kingdomworld admin citizens list' did not report $Expected citizen(s)"
+        return $null
+    }
+    if ($header.Groups[1].Value -ne '0') {
+        Add-Failure "[$Phase] $($header.Groups[1].Value) citizen bodies exist on a server without players"
+    }
+    # The entries follow the header; give the server a moment to print them all.
+    $deadline = (Get-Date).AddSeconds(10)
+    do {
+        $log = (Get-LatestLog).Substring($before)
+        $ids = @([regex]::Matches($log, '(?m) - ([0-9a-f]{8}) \S+: ') | ForEach-Object { $_.Groups[1].Value })
+        if ($ids.Count -ge $Expected) { break }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+    if ($ids.Count -ne $Expected) {
+        Add-Failure "[$Phase] expected $Expected citizen entries, found $($ids.Count)"
+        return $null
+    }
+    if (@($ids | Select-Object -Unique).Count -ne $ids.Count) {
+        Add-Failure "[$Phase] a citizen is listed twice: $($ids -join ', ')"
+    }
+    return $ids
+}
 
 Invoke-Phase 'session1' {
     param($server)
@@ -484,6 +518,30 @@ Invoke-Phase 'session1' {
     } else {
         Add-Failure '[session1] claiming a detached chunk was not refused'
     }
+
+    Send-ServerCommand $server "kingdomworld admin citizens spawn 3 $KingdomName"
+    if (Wait-ForLog $server "Spawned 3 citizen\(s\) in $KingdomName" $CommandTimeout $ConsoleFailPattern) {
+        Write-Ok '[session1] 3 citizens added'
+    } else {
+        Add-Failure "[session1] 'kingdomworld admin citizens spawn 3 $KingdomName' did not report success"
+    }
+    $ids = Get-CitizenList $server 3 'session1'
+    if ($ids) {
+        Write-Ok "[session1] citizens listed: $($ids -join ', '), no bodies without players"
+        $victim = $ids[0]
+        Send-ServerCommand $server "kingdomworld admin citizens kill $victim"
+        if (Wait-ForLog $server "Citizen \S+ \($victim\) is dead" $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok "[session1] citizen $victim died by command"
+        } else {
+            Add-Failure "[session1] 'kingdomworld admin citizens kill $victim' did not report the death"
+        }
+        $left = Get-CitizenList $server 2 'session1'
+        if ($left) {
+            if ($left -contains $victim) { Add-Failure "[session1] the dead citizen $victim is still listed" }
+            $script:CitizenIds = @($left)
+            Write-Ok "[session1] 2 citizens remain: $($left -join ', ')"
+        }
+    }
 }
 
 $dataFile = Join-Path $ServerDir 'world\data\kingdomworld_kingdoms.dat'
@@ -495,8 +553,8 @@ if (-not $script:CreatedId) { Stop-Smoke 'kingdom was not created, skipping the 
 
 Invoke-Phase 'session2' {
     param($server)
-    if (-not (Wait-ForLog $server 'KingdomWorld loaded 1 kingdom\(s\)' 10)) {
-        Add-Failure '[session2] expected 1 kingdom to be loaded after restart'
+    if (-not (Wait-ForLog $server 'KingdomWorld loaded 1 kingdom\(s\) with 2 citizen\(s\)' 10)) {
+        Add-Failure '[session2] expected 1 kingdom with 2 citizens to be loaded after restart'
     }
     Send-ServerCommand $server 'kingdomworld debug list'
     $listed = Wait-ForLog $server " - $KingdomName \(id ($IdPattern)\)" $CommandTimeout 'Unknown or incomplete command|There are no kingdoms yet'
@@ -528,6 +586,23 @@ Invoke-Phase 'session2' {
         Write-Ok "[session2] 'kingdom info' reports all 10 chunks after restart"
     } else {
         Add-Failure "[session2] 'kingdom info $KingdomName' did not report 10 chunks"
+    }
+    $ids = Get-CitizenList $server 2 'session2'
+    if ($ids) {
+        $expected = @($script:CitizenIds | Sort-Object)
+        $actual = @($ids | Sort-Object)
+        if (($expected -join ',') -eq ($actual -join ',')) {
+            Write-Ok "[session2] the same 2 citizens survived the restart: $($actual -join ', ')"
+        } else {
+            Add-Failure "[session2] citizens after restart are $($actual -join ', '), expected $($expected -join ', ')"
+        }
+        $first = $ids[0]
+        Send-ServerCommand $server "kingdomworld admin citizens info $first"
+        if (Wait-ForLog $server "Kingdom: $KingdomName" $CommandTimeout 'No citizen has an id') {
+            Write-Ok "[session2] 'kingdomworld admin citizens info $first' works"
+        } else {
+            Add-Failure "[session2] 'kingdomworld admin citizens info $first' did not show the citizen"
+        }
     }
 }
 

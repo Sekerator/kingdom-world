@@ -6,6 +6,10 @@ import io.github.sekerator.kingdomworld.client.screen.FoundKingdomScreen;
 import io.github.sekerator.kingdomworld.client.screen.KingdomMapScreen;
 import io.github.sekerator.kingdomworld.client.screen.ThroneScreen;
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
+import io.github.sekerator.kingdomworld.common.citizen.CitizenEntity;
+import io.github.sekerator.kingdomworld.common.citizen.CitizenLife;
+import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
+import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.common.kingdom.KingdomActions;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.packet.ClaimChunkPacket;
@@ -33,9 +37,9 @@ import java.util.UUID;
  *   <li>{@code title}: quits as soon as the title screen opens, proving the client starts with the mod.</li>
  *   <li>{@code layout}: checks the layout of every screen in English and Russian at several window sizes and GUI
  *       scales and saves screenshots (see {@link ClientLayoutCheck}); a problem ends the client with exit code 1.</li>
- *   <li>{@code world}: in a singleplayer world, founds a kingdom next to the player, opens the map, the throne
- *       screen (through the real server packet) with all tabs, the territory editor with a claim request and
- *       the founding screen, dissolves the kingdom again and quits. Every step is logged; rendering problems
+ *   <li>{@code world}: in a singleplayer world, founds a kingdom next to the player with three citizens, opens
+ *       the map, the throne screen (through the real server packet) with all tabs including the citizens, the
+ *       territory editor with a claim request and the founding screen, dissolves the kingdom again and quits. Every step is logged; rendering problems
  *       show up as errors in the log.</li>
  * </ul>
  */
@@ -101,13 +105,20 @@ public final class ClientSelfTest {
             quit = true;
             return;
         }
-        if (ticks == 155 || ticks == 225 || ticks == 255 || ticks == 315 || ticks == 355) {
+        if (ticks == 95 || ticks == 155 || ticks == 225 || ticks == 255 || ticks == 315 || ticks == 355) {
             // The last rendered frame shows the screen under test.
             Screenshot.grab(minecraft.gameDirectory, "kingdomworld-selftest-" + ticks + ".png",
                     minecraft.getMainRenderTarget(), message -> LOGGER.info(PREFIX + "screenshot {}", message.getString()));
         }
         switch (ticks) {
             case 60 -> server.execute(() -> found(server, playerId));
+            case 80 -> {
+                // Face the throne, where the newcomers stand.
+                minecraft.player.setYRot(-90.0f);
+                minecraft.player.setXRot(10.0f);
+                long bodies = minecraft.level.getEntitiesOfClass(CitizenEntity.class, minecraft.player.getBoundingBox().inflate(32)).size();
+                LOGGER.info(PREFIX + "citizen bodies near the player: {}", bodies);
+            }
             case 100 -> {
                 ClientHooks.openKingdomMap();
                 LOGGER.info(PREFIX + "map opened: {}", minecraft.screen instanceof KingdomMapScreen);
@@ -133,8 +144,18 @@ public final class ClientSelfTest {
             case 230 -> {
                 if (minecraft.screen instanceof ThroneScreen screen) {
                     screen.selectTab("rights");
+                }
+            }
+            case 240 -> {
+                if (minecraft.screen instanceof ThroneScreen screen) {
+                    screen.selectTab("citizens");
                     LOGGER.info(PREFIX + "throne tabs shown");
                 }
+            }
+            case 250 -> {
+                boolean loaded = minecraft.screen instanceof ThroneScreen screen && screen.citizensShown() >= 0;
+                LOGGER.info(PREFIX + "citizens tab answered by the server: {} ({} citizen(s))", loaded,
+                        minecraft.screen instanceof ThroneScreen screen ? screen.citizensShown() : -1);
             }
             case 260 -> {
                 if (minecraft.screen instanceof ThroneScreen screen) {
@@ -178,6 +199,11 @@ public final class ClientSelfTest {
         if (result instanceof CreateKingdomResult.Created created) {
             kingdomId = created.kingdom().id();
             LOGGER.info(PREFIX + "kingdom founded at {}", throne.toShortString());
+            WorldPos place = new WorldPos(Dimensions.id(level), throne.getX() + 1, throne.getY(), throne.getZ());
+            for (int i = 0; i < 3; i++) {
+                CitizenLife.arrive(server, kingdomId, place, false);
+            }
+            LOGGER.info(PREFIX + "3 citizens arrived");
         } else {
             LOGGER.error(PREFIX + "founding failed: {}", result);
         }
