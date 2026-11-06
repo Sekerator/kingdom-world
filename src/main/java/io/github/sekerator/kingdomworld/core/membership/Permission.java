@@ -17,6 +17,8 @@ public enum Permission {
     RECRUIT,
     /** Claim and abandon chunks. */
     TERRITORY,
+    /** Give citizens their professions. */
+    MANAGE_CITIZENS,
     /** Appoint members to positions and change the rights of positions. Only the king holds it. */
     APPOINT;
 

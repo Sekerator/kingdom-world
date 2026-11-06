@@ -37,7 +37,10 @@ public enum KingdomError {
     LIMIT_REACHED,
     NOT_OWNED,
     CAPITAL_CHUNK,
-    WOULD_DISCONNECT;
+    WOULD_DISCONNECT,
+
+    UNKNOWN_CITIZEN,
+    UNKNOWN_PROFESSION;
 
     /**
      * Lower case identifier, used for translation keys.

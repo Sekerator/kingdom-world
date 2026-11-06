@@ -77,6 +77,18 @@ class AccessPolicyTest {
     }
 
     @Test
+    void onlyMembersMayHurtTheirCitizensInPeacetime() {
+        assertTrue(allowed(AccessSubject.player(king), ProtectedAction.ATTACK_CITIZEN));
+        assertTrue(allowed(AccessSubject.player(subject), ProtectedAction.ATTACK_CITIZEN), "every member, no right needed");
+        assertFalse(allowed(AccessSubject.player(stranger), ProtectedAction.ATTACK_CITIZEN));
+        assertTrue(allowed(AccessSubject.bypass(stranger), ProtectedAction.ATTACK_CITIZEN));
+        AccessPolicy.Exemption war = (who, owner, action, dimension, chunk) -> action == ProtectedAction.ATTACK_CITIZEN;
+        policy.addExemption(war);
+        assertTrue(allowed(AccessSubject.player(stranger), ProtectedAction.ATTACK_CITIZEN), "war allows attacks");
+        policy.removeExemption(war);
+    }
+
+    @Test
     void settingsControlInteractionsAndFakePlayers() {
         AccessPolicy.Settings open = new AccessPolicy.Settings(false, false);
         assertTrue(allowed(AccessSubject.player(stranger), ProtectedAction.INTERACT, open));

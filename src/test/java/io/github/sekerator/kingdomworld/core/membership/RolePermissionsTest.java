@@ -36,6 +36,9 @@ class RolePermissionsTest {
         assertTrue(table.has(Role.MARSHAL, Permission.RECRUIT));
         assertTrue(table.has(Role.MARSHAL, Permission.TERRITORY));
         assertTrue(table.has(Role.STEWARD, Permission.TERRITORY));
+        assertTrue(table.has(Role.STEWARD, Permission.MANAGE_CITIZENS));
+        assertFalse(table.has(Role.MARSHAL, Permission.MANAGE_CITIZENS));
+        assertTrue(table.has(Role.KING, Permission.MANAGE_CITIZENS));
         assertFalse(table.has(Role.TREASURER, Permission.TERRITORY));
         assertTrue(table.has(Role.CHANCELLOR, Permission.RECRUIT));
         for (Role role : Role.values()) {

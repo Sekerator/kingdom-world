@@ -3,6 +3,11 @@ package io.github.sekerator.kingdomworld.architecture;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import io.github.sekerator.kingdomworld.core.citizen.CauseOfDeath;
+import io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds;
+import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
+import io.github.sekerator.kingdomworld.core.citizen.Profession;
+import io.github.sekerator.kingdomworld.core.citizen.Professions;
 import io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
 import io.github.sekerator.kingdomworld.core.kingdom.NameProblem;
@@ -44,6 +49,11 @@ class TranslationKeysTest {
     private static final Pattern PREFIX_CONSTANT = Pattern.compile(
             "static final String (\\w+) = \"((?:kingdomworld|commands\\.kingdomworld)\\.[a-z0-9_.]*\\.)\";");
     private static final Pattern PREFIX_USE = Pattern.compile("\\b(\\w+) \\+ \"([a-z0-9_.]*[a-z0-9_])\"");
+    /**
+     * Keys that pick one of their arguments per language on purpose: a citizen name comes with its Latin and its
+     * Cyrillic spelling, English shows the first and Russian the second.
+     */
+    private static final Set<String> LANGUAGE_PICKS = Set.of("kingdomworld.citizen.name");
 
     private static Map<String, String> english;
     private static Map<String, String> russian;
@@ -99,7 +109,7 @@ class TranslationKeysTest {
         List<String> problems = new ArrayList<>();
         english.forEach((key, value) -> {
             String other = russian.get(key);
-            if (other != null && argumentCount(value) != argumentCount(other)) {
+            if (other != null && !LANGUAGE_PICKS.contains(key) && argumentCount(value) != argumentCount(other)) {
                 problems.add(key + ": en takes " + argumentCount(value) + ", ru takes " + argumentCount(other));
             }
         });
@@ -161,6 +171,18 @@ class TranslationKeysTest {
         for (Permission permission : Permission.values()) {
             used.add("kingdomworld.permission." + permission.id());
             used.add("kingdomworld.permission." + permission.id() + ".short");
+        }
+        for (CitizenState state : CitizenState.values()) {
+            used.add("kingdomworld.citizen.state." + state.id());
+        }
+        for (CauseOfDeath cause : CauseOfDeath.values()) {
+            used.add("kingdomworld.death." + cause.id());
+        }
+        for (CitizenNeeds.GrowthCheck check : CitizenNeeds.GrowthCheck.values()) {
+            used.add("kingdomworld.screen.citizens.growth." + check.name().toLowerCase(Locale.ROOT));
+        }
+        for (Profession profession : Professions.REGISTRY.all()) {
+            used.add("kingdomworld.profession." + profession.id());
         }
         for (NameProblem problem : NameProblem.values()) {
             used.add("kingdomworld.screen.found.problem." + problem.name().toLowerCase(Locale.ROOT));

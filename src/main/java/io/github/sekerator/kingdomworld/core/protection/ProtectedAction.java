@@ -13,7 +13,12 @@ public enum ProtectedAction {
     /** Open a block with an inventory. */
     CONTAINER(Permission.CONTAINERS),
     /** Doors, buttons, levers, item frames, armor stands. */
-    INTERACT(Permission.INTERACT);
+    INTERACT(Permission.INTERACT),
+    /**
+     * Hurting a citizen of the kingdom. In peacetime only members of that kingdom may; war adds an exemption.
+     * Monsters are not asked: the rule is about players and machines acting for them.
+     */
+    ATTACK_CITIZEN(null);
 
     private final Permission permission;
 
@@ -21,6 +26,9 @@ public enum ProtectedAction {
         this.permission = permission;
     }
 
+    /**
+     * The right a member needs, or {@code null} if every member of the kingdom may.
+     */
     public Permission permission() {
         return permission;
     }

@@ -1,5 +1,8 @@
 package io.github.sekerator.kingdomworld.core.state;
 
+import io.github.sekerator.kingdomworld.core.citizen.Citizen;
+import io.github.sekerator.kingdomworld.core.citizen.Citizens;
+import io.github.sekerator.kingdomworld.core.citizen.Professions;
 import io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
@@ -28,7 +31,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * All kingdom state of one world: the kingdoms, their members and their land. Operations that touch more
+ * All kingdom state of one world: the kingdoms, their members, their land and their citizens. Operations that touch more
  * than one part (founding, dissolving, claiming, changes of ruler) go through this class so the parts stay
  * consistent; single-part reads go to the parts directly.
  *
@@ -38,6 +41,7 @@ public final class KingdomWorldState {
     private final KingdomRegistry kingdoms = new KingdomRegistry();
     private final MembershipRegistry membership = new MembershipRegistry();
     private final TerritoryIndex territory = new TerritoryIndex();
+    private final Citizens citizens = new Citizens();
 
     /**
      * Called after every change of any part, used to mark the data for saving.
@@ -47,6 +51,7 @@ public final class KingdomWorldState {
         kingdoms.setChangeListener(listener);
         membership.setChangeListener(listener);
         territory.setChangeListener(listener);
+        citizens.setChangeListener(listener);
     }
 
     public KingdomRegistry kingdoms() {
@@ -59,6 +64,10 @@ public final class KingdomWorldState {
 
     public TerritoryIndex territory() {
         return territory;
+    }
+
+    public Citizens citizens() {
+        return citizens;
     }
 
     // ---------------------------------------------------------------- queries
@@ -140,13 +149,14 @@ public final class KingdomWorldState {
     }
 
     /**
-     * Removes a kingdom with its members, pending requests and land.
+     * Removes a kingdom with its members, pending requests, land and citizens.
      */
     public Optional<Kingdom> dissolve(UUID kingdomId) {
         Optional<Kingdom> kingdom = kingdoms.get(kingdomId);
         if (kingdom.isEmpty()) {
             return Optional.empty();
         }
+        citizens.removeKingdom(kingdomId);
         territory.remove(kingdomId);
         membership.unregister(kingdomId);
         kingdoms.remove(kingdomId);
@@ -194,6 +204,34 @@ public final class KingdomWorldState {
             return Outcome.fail(error.get());
         }
         territory.release(kingdomId, chunk);
+        // Beds and workplaces on land the kingdom gave up are no longer its own.
+        citizens.removeSitesInChunk(kingdomId, dimension, chunk);
+        return Outcome.DONE;
+    }
+
+    // ---------------------------------------------------------------- citizens
+
+    /**
+     * Gives a citizen a profession.
+     *
+     * @param actor the player, who needs {@link Permission#MANAGE_CITIZENS} in the citizen's kingdom; {@code null}
+     *              for an administrator
+     */
+    public Outcome setProfession(UUID actor, UUID citizenId, String professionId) {
+        Optional<Citizen> citizen = citizens.get(citizenId);
+        if (citizen.isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_CITIZEN);
+        }
+        if (actor != null && !membership.hasPermission(actor, citizen.get().kingdomId(), Permission.MANAGE_CITIZENS)) {
+            return Outcome.fail(KingdomError.NO_PERMISSION);
+        }
+        if (!Professions.REGISTRY.isKnown(professionId)) {
+            return Outcome.fail(KingdomError.UNKNOWN_PROFESSION);
+        }
+        if (citizen.get().professionId().equals(professionId)) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        citizens.setProfession(citizen.get(), professionId);
         return Outcome.DONE;
     }
 

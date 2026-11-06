@@ -65,7 +65,10 @@ public final class AccessPolicy {
                 }
             }
             case PLAYER -> {
-                if (membership.hasPermission(subject.playerId(), ownerKingdom, action.permission())) {
+                boolean allowed = action.permission() == null
+                        ? membership.isMember(subject.playerId(), ownerKingdom)
+                        : membership.hasPermission(subject.playerId(), ownerKingdom, action.permission());
+                if (allowed) {
                     return true;
                 }
             }
