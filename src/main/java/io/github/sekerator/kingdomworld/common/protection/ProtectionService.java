@@ -155,9 +155,10 @@ public final class ProtectionService {
         LAST_MESSAGE.put(player.getUUID(), now);
         UUID owner = KingdomWorldApi.ownerAt(level, pos);
         Optional<Kingdom> kingdom = owner == null ? Optional.empty() : KingdomWorldApi.kingdom(player.server, owner);
-        Component name = kingdom.<Component>map(k -> Component.literal(k.name())
-                .withStyle(style -> style.withColor(TextColor.fromRgb(k.color())))).orElse(Component.literal("?"));
-        player.displayClientMessage(Component.translatable("kingdomworld.protection.denied", name), true);
+        Component message = kingdom.<Component>map(k -> Component.translatable("kingdomworld.protection.denied",
+                        Component.literal(k.name()).withStyle(style -> style.withColor(TextColor.fromRgb(k.color())))))
+                .orElseGet(() -> Component.translatable("kingdomworld.protection.denied_unknown"));
+        player.displayClientMessage(message, true);
     }
 
     /**

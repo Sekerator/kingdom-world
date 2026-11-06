@@ -4,6 +4,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import io.github.sekerator.kingdomworld.client.KingdomWorldClient;
 import io.github.sekerator.kingdomworld.client.map.ClientTerritoryCache;
+import io.github.sekerator.kingdomworld.common.kingdom.PlayerNames;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.KingdomMapInfo;
 import io.github.sekerator.kingdomworld.common.network.data.KingdomView;
@@ -442,7 +443,7 @@ public class KingdomMapScreen extends Screen implements ResultListener {
         graphics.fill(x, y, x + w, y + h, 0xE0201810);
         graphics.renderOutline(x, y, w, h, 0xFF000000 | info.color());
         graphics.drawString(font, info.name(), x + 6, y + 5, 0xFF000000 | brighten(info.color()));
-        graphics.drawString(font, Component.translatable("kingdomworld.screen.map.card.ruler", info.rulerName()), x + 6, y + 17, 0xFFE0E0E0);
+        graphics.drawString(font, Component.translatable("kingdomworld.screen.map.card.ruler", PlayerNames.display(info.rulerName())), x + 6, y + 17, 0xFFE0E0E0);
         graphics.drawString(font, Component.translatable("kingdomworld.screen.map.card.members", info.members()), x + 6, y + 28, 0xFFE0E0E0);
         graphics.drawString(font, Component.translatable("kingdomworld.screen.map.card.chunks", info.chunks()), x + 6, y + 39, 0xFFE0E0E0);
     }

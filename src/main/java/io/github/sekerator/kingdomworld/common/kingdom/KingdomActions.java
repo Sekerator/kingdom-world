@@ -95,13 +95,20 @@ public final class KingdomActions {
         return Component.translatable("kingdomworld.permission." + permission.id());
     }
 
-    public static String chunkText(ChunkPos chunk) {
-        return "[" + chunk.x + ", " + chunk.z + "]";
+    public static Component chunkText(ChunkPos chunk) {
+        return Component.translatable("kingdomworld.chunk", chunk.x, chunk.z);
+    }
+
+    /**
+     * A command shown in chat that runs (or is put into the chat line) when clicked.
+     */
+    public static Component commandButton(String command, ChatFormatting color, ClickEvent.Action action) {
+        return Component.translatable("kingdomworld.chat.command", command).withStyle(style -> style.withColor(color)
+                .withClickEvent(new ClickEvent(action, command)));
     }
 
     private static Component command(String text) {
-        return Component.literal("[" + text + "]").withStyle(style -> style.withColor(ChatFormatting.GREEN)
-                .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, text)));
+        return commandButton(text, ChatFormatting.GREEN, ClickEvent.Action.RUN_COMMAND);
     }
 
     // ---------------------------------------------------------------- throne and founding

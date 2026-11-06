@@ -1,6 +1,7 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
 import io.github.sekerator.kingdomworld.client.ClientHooks;
+import io.github.sekerator.kingdomworld.common.kingdom.PlayerNames;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.KingdomView;
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomActionPacket;
@@ -251,7 +252,8 @@ public class ThroneScreen extends Screen implements ResultListener {
                 Permission permission = EDITABLE_RIGHTS.get(column);
                 boolean has = granted.contains(permission);
                 Button button = addRenderableWidget(Button.builder(
-                                Component.literal(has ? "✔" : "✘").withStyle(has ? ChatFormatting.GREEN : ChatFormatting.DARK_GRAY),
+                                Component.translatable(has ? "kingdomworld.screen.throne.right_on" : "kingdomworld.screen.throne.right_off")
+                                        .withStyle(has ? ChatFormatting.GREEN : ChatFormatting.DARK_GRAY),
                                 b -> KingdomWorldNetwork.sendToServer(KingdomActionPacket.setPermission(role, permission, !has)))
                         .bounds(left + 112 + column * 42, y, 40, RIGHTS_ROW - 1).build());
                 button.active = view.can(Permission.APPOINT);
@@ -322,7 +324,7 @@ public class ThroneScreen extends Screen implements ResultListener {
         int x = left + 12;
         int y = top + CONTENT_TOP + 4;
         int color = 0xFFE0E0E0;
-        graphics.drawString(font, Component.translatable("kingdomworld.screen.throne.ruler", view.rulerName()), x, y, color);
+        graphics.drawString(font, Component.translatable("kingdomworld.screen.throne.ruler", PlayerNames.display(view.rulerName())), x, y, color);
         graphics.drawString(font, Component.translatable("kingdomworld.screen.throne.members", view.memberCount()), x, y + 14, color);
         graphics.drawString(font, Component.translatable("kingdomworld.screen.throne.chunks", view.chunks(), view.chunkLimit()), x, y + 28, color);
         if (view.capital() != null) {
@@ -361,7 +363,8 @@ public class ThroneScreen extends Screen implements ResultListener {
             }
         }
         if (rows.size() > visibleRows()) {
-            graphics.drawString(font, (scroll + 1) + "-" + Math.min(rows.size(), scroll + visibleRows()) + " / " + rows.size(),
+            graphics.drawString(font, Component.translatable("kingdomworld.screen.throne.page", scroll + 1,
+                            Math.min(rows.size(), scroll + visibleRows()), rows.size()),
                     left + PANEL_WIDTH - 70, top + CONTENT_TOP - 10, 0xFF808080);
         }
     }

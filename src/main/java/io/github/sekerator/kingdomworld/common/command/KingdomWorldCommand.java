@@ -246,7 +246,7 @@ public final class KingdomWorldCommand {
         Outcome outcome = claim
                 ? KingdomWorldApi.claimChunk(source.getLevel(), chunk, kingdom.id(), null)
                 : KingdomWorldApi.unclaimChunk(source.getLevel(), chunk, kingdom.id(), null);
-        String chunkText = KingdomActions.chunkText(chunk);
+        Component chunkText = KingdomActions.chunkText(chunk);
         if (!outcome.ok()) {
             source.sendFailure(Component.translatable(ADMIN + (claim ? "claim.failed" : "unclaim.failed"), chunkText,
                     KingdomActions.errorMessage(outcome.error())));
@@ -262,7 +262,7 @@ public final class KingdomWorldCommand {
         ChunkPos chunk = new ChunkPos(IntegerArgumentType.getInteger(context, "chunkX"), IntegerArgumentType.getInteger(context, "chunkZ"));
         ServerLevel level = source.getLevel();
         UUID owner = KingdomWorldApi.ownerOfChunk(level, chunk.x, chunk.z);
-        String chunkText = KingdomActions.chunkText(chunk);
+        Component chunkText = KingdomActions.chunkText(chunk);
         String dimension = Dimensions.id(level);
         Optional<Kingdom> kingdom = owner == null ? Optional.empty() : KingdomWorldApi.kingdom(source.getServer(), owner);
         if (kingdom.isEmpty()) {
@@ -283,7 +283,7 @@ public final class KingdomWorldCommand {
 
     private static int dataStatus(CommandSourceStack source) {
         KingdomSavedData data = KingdomSavedData.get(source.getServer());
-        Optional<String> reason = data.readOnlyReason();
+        Optional<Component> reason = data.readOnlyMessage();
         if (reason.isPresent()) {
             source.sendFailure(Component.translatable(ADMIN + "data.read_only", reason.get()));
             return 0;
@@ -324,6 +324,7 @@ public final class KingdomWorldCommand {
         if (kingdom.rulerId() == null) {
             return Component.translatable(KEY + "info.ruler.none");
         }
-        return Component.literal(PlayerNames.name(server, kingdom.rulerId()) + " (" + kingdom.rulerId() + ")");
+        return Component.translatable(KEY + "info.ruler.named", PlayerNames.name(server, kingdom.rulerId()),
+                kingdom.rulerId().toString());
     }
 }

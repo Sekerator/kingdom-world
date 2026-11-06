@@ -82,7 +82,7 @@ gradlew build
 | Smoke-тест на чистом выделенном сервере | `powershell -ExecutionPolicy Bypass -File scripts/smoke-server.ps1` |
 | Smoke-тест с модами сборки | `powershell -ExecutionPolicy Bypass -File scripts/smoke-server.ps1 -Pack` |
 
-Юнит-тесты ядра покрывают присоединение и отказ от чанков (связность, лимиты, расстояние до чужих земель), права должностей, переходы подданства и политику доступа. Архитектурные тесты проверяют, что пакет `core` не зависит от Minecraft, Forge и Mojang, что клиентский код вызывается только через защищённые точки входа и что модули совместимости не используются напрямую.
+Юнит-тесты ядра покрывают присоединение и отказ от чанков (связность, лимиты, расстояние до чужих земель), права должностей, переходы подданства и политику доступа. Тест переводов проверяет, что `en_us.json` и `ru_ru.json` содержат одинаковые ключи с непустыми значениями и одинаковым числом аргументов, что русские значения написаны по-русски и что каждый ключ, который использует код, есть в файлах. Весь текст, который видит игрок, идёт через ключи перевода. Архитектурные тесты проверяют, что пакет `core` не зависит от Minecraft, Forge и Mojang, что клиентский код вызывается только через защищённые точки входа и что модули совместимости не используются напрямую.
 
 `runGameTestServer` запускает игровые тесты в отдельном мире (`run-gametest/`) и завершается с ненулевым кодом, если хотя бы один тест упал. Среди них: основание через API, защита (чужак не ломает блоки и не открывает сундук, член с правом может), взрыв в землях королевства, присоединение и отказ от чанков, режим только чтения для данных новой версии и для повреждённой версии формата.
 
@@ -240,7 +240,7 @@ The jar ends up in `build/libs/kingdomworld-<version>.jar`. JDK 17 is required; 
 | Smoke test on a clean dedicated server | `powershell -ExecutionPolicy Bypass -File scripts/smoke-server.ps1` |
 | Smoke test with the modpack's mods | `powershell -ExecutionPolicy Bypass -File scripts/smoke-server.ps1 -Pack` |
 
-Core unit tests cover claiming and giving up chunks (connectivity, limits, distance to other kingdoms), rights of positions, membership transitions and the access policy. The architecture tests check that the `core` package does not depend on Minecraft, Forge or Mojang, that client code is only reached through guarded entry points and that compat modules are not referenced directly.
+Core unit tests cover claiming and giving up chunks (connectivity, limits, distance to other kingdoms), rights of positions, membership transitions and the access policy. The translation test checks that `en_us.json` and `ru_ru.json` hold the same keys with non-empty values and the same number of arguments, that Russian values are written in Russian, and that every key the code uses exists. All text a player sees goes through translation keys. The architecture tests check that the `core` package does not depend on Minecraft, Forge or Mojang, that client code is only reached through guarded entry points and that compat modules are not referenced directly.
 
 `runGameTestServer` runs the game tests in a separate world (`run-gametest/`) and exits with a non-zero code if any test fails. They include founding through the API, protection (an outsider cannot break blocks or open a chest, a member with the right can), an explosion in kingdom land, claiming and giving up chunks, and read-only mode for data of a newer version and for a damaged format version.
 

@@ -28,7 +28,6 @@ import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.ChunkPos;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -216,7 +215,7 @@ public final class KingdomCommand {
         int chunks = territory.map(Territory::size).orElse(0);
         int limit = KingdomWorldApi.chunkLimit(server, kingdom.id());
         source.sendSuccess(() -> Component.translatable(KEY + "info.header", KingdomActions.kingdomName(kingdom)), false);
-        source.sendSuccess(() -> Component.translatable(KEY + "info.ruler", PlayerNames.name(server, kingdom.rulerId())), false);
+        source.sendSuccess(() -> Component.translatable(KEY + "info.ruler", PlayerNames.display(server, kingdom.rulerId())), false);
         source.sendSuccess(() -> Component.translatable(KEY + "info.members", members), false);
         source.sendSuccess(() -> Component.translatable(KEY + "info.chunks", chunks, limit), false);
         if (territory.isPresent()) {
@@ -247,7 +246,7 @@ public final class KingdomCommand {
             int members = state.membership().kingdom(kingdom.id()).map(KingdomMembers::size).orElse(0);
             int chunks = state.territory().territory(kingdom.id()).map(Territory::size).orElse(0);
             source.sendSuccess(() -> Component.translatable(KEY + "list.entry", KingdomActions.kingdomName(kingdom),
-                    PlayerNames.name(source.getServer(), kingdom.rulerId()), members, chunks), false);
+                    PlayerNames.display(source.getServer(), kingdom.rulerId()), members, chunks), false);
         }
         return kingdoms.size();
     }
@@ -312,9 +311,8 @@ public final class KingdomCommand {
             return 0;
         }
         DISSOLVE_REQUESTS.put(player.getUUID(), Util.getMillis());
-        Component confirm = Component.literal("[/kingdom dissolve confirm]").withStyle(style -> style
-                .withColor(net.minecraft.ChatFormatting.RED)
-                .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/kingdom dissolve confirm")));
+        Component confirm = KingdomActions.commandButton("/kingdom dissolve confirm", net.minecraft.ChatFormatting.RED,
+                ClickEvent.Action.SUGGEST_COMMAND);
         source.sendSuccess(() -> Component.translatable(KEY + "dissolve.confirm", KingdomActions.kingdomName(kingdom.get()),
                 CONFIRM_WINDOW_MILLIS / 1000, confirm), false);
         return 1;
@@ -332,13 +330,5 @@ public final class KingdomCommand {
 
     public static void forget(UUID playerId) {
         DISSOLVE_REQUESTS.remove(playerId);
-    }
-
-    /**
-     * The chunk a player stands in, for messages.
-     */
-    static String chunkOf(ServerPlayer player) {
-        ChunkPos chunk = player.chunkPosition();
-        return KingdomActions.chunkText(chunk);
     }
 }

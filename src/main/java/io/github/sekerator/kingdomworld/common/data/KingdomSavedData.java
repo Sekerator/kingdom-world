@@ -11,6 +11,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.storage.LevelResource;
@@ -55,6 +56,9 @@ public final class KingdomSavedData extends SavedData {
     private CompoundTag preserved;
     /** Why the data is read-only, or {@code null} if it may be changed. */
     private String readOnlyReason;
+    /** Translation key suffix and arguments describing {@link #readOnlyReason} to operators. */
+    private String readOnlyKey;
+    private Object[] readOnlyArgs = new Object[0];
     /** Whether map updates of this instance are sent to players; true only for the live data of a server. */
     private boolean synced;
 
@@ -82,7 +86,7 @@ public final class KingdomSavedData extends SavedData {
         KingdomSavedData data = new KingdomSavedData();
         Path file = dataFile(server);
         if (Files.exists(file)) {
-            data.lock(null, "the file " + file + " exists but the game could not read it");
+            data.lock(null, "the file " + file + " exists but the game could not read it", "unreadable_file");
         }
         return data;
     }
@@ -99,8 +103,19 @@ public final class KingdomSavedData extends SavedData {
         return readOnlyReason != null;
     }
 
+    /**
+     * Why the data is read-only, in English for logs; the details stay in the log.
+     */
     public Optional<String> readOnlyReason() {
         return Optional.ofNullable(readOnlyReason);
+    }
+
+    /**
+     * Why the data is read-only, translated for operators.
+     */
+    public Optional<Component> readOnlyMessage() {
+        return readOnlyKey == null ? Optional.empty()
+                : Optional.of(Component.translatable("kingdomworld.data.read_only." + readOnlyKey, readOnlyArgs));
     }
 
     @Override
@@ -115,25 +130,26 @@ public final class KingdomSavedData extends SavedData {
             result.read(tag);
         } catch (RuntimeException e) {
             LOGGER.error("Unexpected problem while loading kingdom data", e);
-            result.lock(tag, "loading failed: " + e);
+            result.lock(tag, "loading failed: " + e, "load_failed");
         }
         return result;
     }
 
     private void read(CompoundTag tag) {
         if (tag.contains(TAG_FORMAT_VERSION) && !tag.contains(TAG_FORMAT_VERSION, Tag.TAG_INT)) {
-            lock(tag, "the format version is damaged (tag type " + tag.getTagType(TAG_FORMAT_VERSION) + ")");
+            lock(tag, "the format version is damaged (tag type " + tag.getTagType(TAG_FORMAT_VERSION) + ")", "damaged_version");
             readBestEffort(tag);
             return;
         }
         int version = tag.contains(TAG_FORMAT_VERSION) ? tag.getInt(TAG_FORMAT_VERSION) : FIRST_FORMAT_VERSION;
         if (version > FORMAT_VERSION) {
-            lock(tag, "format " + version + " comes from a newer KingdomWorld, this version understands " + FORMAT_VERSION);
+            lock(tag, "format " + version + " comes from a newer KingdomWorld, this version understands " + FORMAT_VERSION,
+                    "newer_format", version, FORMAT_VERSION);
             readBestEffort(tag);
             return;
         }
         if (version < FIRST_FORMAT_VERSION) {
-            lock(tag, "the format version " + version + " is invalid");
+            lock(tag, "the format version " + version + " is invalid", "invalid_version", version);
             readBestEffort(tag);
             return;
         }
@@ -143,13 +159,13 @@ public final class KingdomSavedData extends SavedData {
             try {
                 data = KingdomDataMigrations.upgrade(tag.copy(), version);
             } catch (RuntimeException e) {
-                lock(tag, "the upgrade from format " + version + " failed: " + e.getMessage());
+                lock(tag, "the upgrade from format " + version + " failed: " + e.getMessage(), "migration_failed", version);
                 return;
             }
         }
         List<String> problems = readKingdoms(data);
         if (!problems.isEmpty()) {
-            lock(tag, problems.size() + " unreadable part(s): " + String.join("; ", problems));
+            lock(tag, problems.size() + " unreadable part(s): " + String.join("; ", problems), "unreadable_parts", problems.size());
             return;
         }
         // Freshly loaded data only needs saving if it was converted from another format.
@@ -194,8 +210,10 @@ public final class KingdomSavedData extends SavedData {
         }
     }
 
-    private void lock(CompoundTag original, String reason) {
+    private void lock(CompoundTag original, String reason, String key, Object... args) {
         readOnlyReason = reason;
+        readOnlyKey = key;
+        readOnlyArgs = args;
         preserved = original == null ? null : original.copy();
         super.setDirty(false);
         LOGGER.error("Kingdom data is read-only: {}. Changes to kingdoms are refused and the file will not be "
@@ -228,6 +246,8 @@ public final class KingdomSavedData extends SavedData {
         LOGGER.warn("Kingdom data unlocked by an operator; the original was backed up to {} (reason it was read-only: {})",
                 backup, readOnlyReason);
         readOnlyReason = null;
+        readOnlyKey = null;
+        readOnlyArgs = new Object[0];
         preserved = null;
         setDirty(true);
         return Optional.of(backup);

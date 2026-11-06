@@ -2,6 +2,7 @@ package io.github.sekerator.kingdomworld.common.registry;
 
 import io.github.sekerator.kingdomworld.KingdomWorld;
 import io.github.sekerator.kingdomworld.common.block.ThroneBlock;
+import io.github.sekerator.kingdomworld.common.item.DescribedItem;
 import io.github.sekerator.kingdomworld.common.item.KingdomAtlasItem;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.BlockItem;
@@ -42,7 +43,8 @@ public final class ModRegistries {
             () -> new BlockItem(THRONE.get(), new Item.Properties()));
     /** Founds a kingdom on an empty throne and is used up doing so. */
     public static final RegistryObject<Item> FOUNDER_CROWN = ITEMS.register("founder_crown",
-            () -> new Item(new Item.Properties().stacksTo(1).rarity(Rarity.EPIC).fireResistant()));
+            () -> new DescribedItem(new Item.Properties().stacksTo(1).rarity(Rarity.EPIC).fireResistant(),
+                    "item.kingdomworld.founder_crown.tooltip"));
     /** Opens the political map of kingdoms. */
     public static final RegistryObject<Item> KINGDOM_ATLAS = ITEMS.register("kingdom_atlas",
             () -> new KingdomAtlasItem(new Item.Properties().stacksTo(1)));

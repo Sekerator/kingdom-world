@@ -1,6 +1,7 @@
 package io.github.sekerator.kingdomworld.common.kingdom;
 
 import com.mojang.authlib.GameProfile;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -15,9 +16,12 @@ public final class PlayerNames {
     private PlayerNames() {
     }
 
+    /**
+     * @return the player's name, or an empty string for {@code null} (no player)
+     */
     public static String name(MinecraftServer server, UUID playerId) {
         if (playerId == null) {
-            return "-";
+            return "";
         }
         ServerPlayer online = server.getPlayerList().getPlayer(playerId);
         if (online != null) {
@@ -30,6 +34,20 @@ public final class PlayerNames {
             }
         }
         return playerId.toString().substring(0, 8);
+    }
+
+    /**
+     * The player's name for display, or a translated "nobody" for {@code null}.
+     */
+    public static Component display(MinecraftServer server, UUID playerId) {
+        return playerId == null ? Component.translatable("kingdomworld.ruler.none") : Component.literal(name(server, playerId));
+    }
+
+    /**
+     * A name received from the server, or a translated "nobody" for an empty one.
+     */
+    public static Component display(String name) {
+        return name == null || name.isEmpty() ? Component.translatable("kingdomworld.ruler.none") : Component.literal(name);
     }
 
     public static boolean isOnline(MinecraftServer server, UUID playerId) {
