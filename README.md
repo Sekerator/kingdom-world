@@ -8,7 +8,7 @@ KingdomWorld: мод для Minecraft 1.20.1 (Forge) о королевствах
 
 ### Состояние
 
-Этап 1: основание королевства, территория по чанкам с защитой, подданство и должности, окно трона и политическая карта королевств. Каркас этапа 0 (хранение в мире с версией формата, сетевой канал с проверкой запросов на сервере, конфиги, тесты, smoke-проверка на настоящем сервере) сохранён.
+Этап 2а: жители королевств (записи в данных мира и тела рядом с игроками, жильё, склады, еда, рост, настроение, ранения и лазарет, летопись смертей, профессии с фермером). Этап 1: основание королевства, территория по чанкам с защитой, подданство и должности, окно трона и политическая карта королевств. Каркас этапа 0 (хранение в мире с версией формата, сетевой канал с проверкой запросов на сервере, конфиги, тесты, smoke-проверка на настоящем сервере) сохранён.
 
 ### Как играть
 
@@ -27,6 +27,8 @@ KingdomWorld: мод для Minecraft 1.20.1 (Forge) о королевствах
 | Корона основателя | алмазный блок, звезда Незера, алмазный блок над тремя золотыми блоками |
 | Трон | золотые слитки, красная шерсть и доски в форме кресла |
 | Атлас королевств | книга, компас и пустая карта (без формы) |
+| Склад | бревна по углам, доски сверху и снизу, два сундука по бокам от бочки |
+| Лазарет | белая шерсть сверху, сверкающий ломтик арбуза между досками, доски снизу |
 
 ### Территория и защита
 
@@ -45,8 +47,24 @@ KingdomWorld: мод для Minecraft 1.20.1 (Forge) о королевствах
 
 - Вступление: заявка (кнопка в окне трона или `/kingdom join <название>`) и приглашение от королевства (`/kingdom invite <игрок>`, принять `/kingdom accept`). Если встречаются заявка и приглашение, игрок вступает сразу. Заявки и приглашения хранятся, пока на них не ответят, и показываются адресату при входе в игру.
 - Должности: король, маршал, казначей, канцлер, глава разведки, придворный маг, управляющий, подданный.
-- Права: стройка, контейнеры, взаимодействие, приём людей, территория, назначение должностей (последнее только у короля). Набор прав должностей король меняет во вкладке «Права». По умолчанию: маршал всё кроме назначений, канцлер с приёмом людей, управляющий с территорией, казначей, глава разведки и придворный маг со стройкой, контейнерами и взаимодействием, подданный со стройкой и взаимодействием.
+- Права: стройка, контейнеры, взаимодействие, приём людей, территория, жители (назначение профессий), назначение должностей (последнее только у короля). Набор прав должностей король меняет во вкладке «Права». По умолчанию: маршал всё кроме назначений и жителей, канцлер с приёмом людей, управляющий с территорией и жителями, казначей, глава разведки и придворный маг со стройкой, контейнерами и взаимодействием, подданный со стройкой и взаимодействием.
 - Изгонять может обладатель права приёма людей; не король изгоняет только простых подданных. Король не может уйти, он отрекается в пользу другого члена или распускает королевство.
+
+### Жители
+
+- Житель хранится как запись в данных мира: имя, пол и внешность, возраст в днях, здоровье и состояние (здоров, ранен), профессия, дом, место работы, сытость, настроение и опыт. Запись главная; человек в мире только её «тело».
+- Тело появляется, пока игрок находится в `citizenActivationChunks` чанках (по умолчанию 6) от дома или места работы жителя, и исчезает, когда игроки уходят; его состояние каждую секунду переписывается в запись. Тела не сохраняются в чанках, поэтому выгрузка чанков, перезаход, телепорт, смена измерения и перезапуск сервера не создают дублей; чужие копии тела (например, из модов, которые ловят мобов) не пускаются в мир. Не больше `maxActiveNpcs` тел на сервер, ближайшие к игрокам в приоритете. Пути и осмотр полей распределены по тикам.
+- Далеко от игроков житель живёт по формулам: раз в `simulationIntervalTicks` голодает и ест, лечится, меняет настроение, работает.
+- Имя складывается из слогов: русский игрок видит его кириллицей (Радомир), остальные латиницей (Radomir).
+- Дом: кровать на землях королевства, одна на жителя. Сломанная кровать или кровать на отданной земле освобождает жителя.
+- **Склад** (блок): большой сундук, содержимое которого хранится в данных королевства, поэтому жители едят с него и приносят урожай даже вдали от игроков. Королевство видит сумму всех складов на своей земле. Воронки, воронки и жёлоба Create, трубы других модов кладут и забирают предметы через Forge capability. Открывать склад могут члены с правом контейнеров, как любой сундук.
+- Еда: любой предмет со свойствами еды (так подхватывается еда модов), кроме вредной (гнилая плоть и т.п.) и оставляющей тару. Житель съедает `dailyNutrition` очков в игровой день. Без еды падает настроение, затем здоровье; до смерти только если `starvationCanKill`.
+- Новый житель приходит к трону, если есть свободная кровать, еды на складах хватит всем на `growthFoodDays` дней и с прошлого прихода прошло `growthIntervalMinutes` минут (довольные жители ускоряют приход, недовольные замедляют).
+- Настроение 0-100 зависит от сытости, жилья, ранения и недавних смертей соседей; пока влияет на скорость роста.
+- Жители смертны: монстры (зомби и разбойники на них охотятся), падение, лава, огонь, игроки. Чужакам в мирное время бить жителей нельзя (правило в общей политике доступа, война позже добавит исключение). Раненый житель идёт в **лазарет** (блок), где лечится гораздо быстрее (`infirmaryCapacity` мест), или домой. Смерть окончательна: запись уходит в летопись королевства (кто, когда, причина, где), король и члены с правом «Жители» получают сообщение.
+- Профессии: безработный и фермер; реестр расширяется (`ProfessionBehaviors.register`). Фермер работает у компостера на землях королевства: рядом с игроками собирает спелые культуры в радиусе `farmRadius`, пересаживает их и относит урожай на ближайший склад; культуры других модов тоже подходят (CropBlock или тег `minecraft:crops` со свойством возраста). Вдали от игроков фермер приносит урожай по формуле от числа грядок, увиденных в последний раз.
+- Вкладка «Жители» в окне трона: численность, кровати, запас еды в днях, настроение, почему не приходят новые жители; список жителей с профессией, состоянием и домом, фильтр и прокрутка; смена профессии (право «Жители»); летопись смертей. В карточке королевства на карте видно население.
+- Склады, поиск, взятие и добавление предметов для будущих механик собраны в одном сервисе `KingdomStorage`.
 
 ### Требования
 
@@ -82,11 +100,11 @@ gradlew build
 | Smoke-тест на чистом выделенном сервере | `powershell -ExecutionPolicy Bypass -File scripts/smoke-server.ps1` |
 | Smoke-тест с модами сборки | `powershell -ExecutionPolicy Bypass -File scripts/smoke-server.ps1 -Pack` |
 
-Юнит-тесты ядра покрывают присоединение и отказ от чанков (связность, лимиты, расстояние до чужих земель), права должностей, переходы подданства и политику доступа. Тест переводов проверяет, что `en_us.json` и `ru_ru.json` содержат одинаковые ключи с непустыми значениями и одинаковым числом аргументов, что русские значения написаны по-русски и что каждый ключ, который использует код, есть в файлах. Весь текст, который видит игрок, идёт через ключи перевода. Архитектурные тесты проверяют, что пакет `core` не зависит от Minecraft, Forge и Mojang, что клиентский код вызывается только через защищённые точки входа и что модули совместимости не используются напрямую.
+Юнит-тесты ядра покрывают присоединение и отказ от чанков (связность, лимиты, расстояние до чужих земель), права должностей, переходы подданства и политику доступа, а также жителей: имена в обоих алфавитах, кровати и места работы, смерть и летопись, рост, еду, настроение, реестр профессий и выбор жителей с телом. Тест переводов проверяет, что `en_us.json` и `ru_ru.json` содержат одинаковые ключи с непустыми значениями и одинаковым числом аргументов, что русские значения написаны по-русски и что каждый ключ, который использует код, есть в файлах. Весь текст, который видит игрок, идёт через ключи перевода. Архитектурные тесты проверяют, что пакет `core` не зависит от Minecraft, Forge и Mojang, что клиентский код вызывается только через защищённые точки входа и что модули совместимости не используются напрямую.
 
-`runGameTestServer` запускает игровые тесты в отдельном мире (`run-gametest/`) и завершается с ненулевым кодом, если хотя бы один тест упал. Среди них: основание через API, защита (чужак не ломает блоки и не открывает сундук, член с правом может), взрыв в землях королевства, присоединение и отказ от чанков, режим только чтения для данных новой версии и для повреждённой версии формата.
+`runGameTestServer` запускает игровые тесты в отдельном мире (`run-gametest/`) и завершается с ненулевым кодом, если хотя бы один тест упал. Среди них: основание через API, защита (чужак не ломает блоки и не открывает сундук, член с правом может), взрыв в землях королевства, присоединение и отказ от чанков, режим только чтения для данных новой версии и для повреждённой версии формата; тело жителя появляется из записи и исчезает без дублей, смерть меняет запись и пишет летопись, еда берётся со склада, новый житель приходит при кровати и еде, фермер собирает, пересаживает и сдаёт урожай, воронки кладут и забирают со склада, жители и склады переживают сохранение, данные формата 2 обновляются без потерь.
 
-Smoke-скрипт ставит настоящий сервер Forge 1.20.1-47.4.10 в `D:\Projects\kingdom-world-testenv` (вне репозитория), кладёт туда собранный jar, принимает EULA и дважды запускает сервер на свежем мире. В первый раз он основывает королевство `SmokeTest` с троном в 8 70 8 (`kingdomworld admin found`), присоединяет чанк [2, 0] и проверяет, что оторванный чанк не присоединяется. Во второй раз проверяет, что королевство, его id и все 10 чанков сохранились. Скрипт завершается с кодом 1, если сервер не запустился или не остановился, если в логах есть ошибки или исключения, связанные с `kingdomworld`, если не активна защита от огня, если на сервере загрузился клиентский класс мода или если данные не пережили перезапуск. Логи каждого запуска лежат в `smoke-logs` внутри папки сервера. Команды в консоль сервера пишутся в UTF-8 без BOM, поэтому скрипт работает и под кодовой страницей 65001.
+Smoke-скрипт ставит настоящий сервер Forge 1.20.1-47.4.10 в `D:\Projects\kingdom-world-testenv` (вне репозитория), кладёт туда собранный jar, принимает EULA и дважды запускает сервер на свежем мире. В первый раз он основывает королевство `SmokeTest` с троном в 8 70 8 (`kingdomworld admin found`), присоединяет чанк [2, 0], проверяет, что оторванный чанк не присоединяется, добавляет трёх жителей, одного убивает командой и проверяет, что осталось двое и без игроков ни у кого нет тела. Во второй раз проверяет, что королевство, его id, все 10 чанков и те же двое жителей сохранились без потерь и дублей. Скрипт завершается с кодом 1, если сервер не запустился или не остановился, если в логах есть ошибки или исключения, связанные с `kingdomworld`, если не активна защита от огня, если на сервере загрузился клиентский класс мода или если данные не пережили перезапуск. Логи каждого запуска лежат в `smoke-logs` внутри папки сервера. Команды в консоль сервера пишутся в UTF-8 без BOM, поэтому скрипт работает и под кодовой страницей 65001.
 
 Параметры скрипта:
 
@@ -115,6 +133,7 @@ Smoke-скрипт ставит настоящий сервер Forge 1.20.1-47.
 - `role <игрок> <должность>`: назначить должность (`marshal`, `treasurer`, `chancellor`, `spymaster`, `court_mage`, `steward`, `subject`), только король.
 - `abdicate <игрок>`: передать корону.
 - `claim`, `unclaim`: присоединить чанк, в котором вы стоите, или отказаться от него (право территории).
+- `citizens`: жители вашего королевства (или того, на чьей земле вы стоите): численность, кровати, еда, настроение.
 - `dissolve`, затем `dissolve confirm` в течение 30 секунд: распустить королевство (только король).
 
 Операторы (уровень прав 2, `/kingdomworld`):
@@ -126,6 +145,9 @@ Smoke-скрипт ставит настоящий сервер Forge 1.20.1-47.
 - `admin owner <чанкX> <чанкZ>`: чей чанк.
 - `admin bypass`: переключить обход защиты.
 - `admin data status`: состояние данных; `admin data unlock`: выйти из режима только чтения (сначала делается резервная копия, затем остаётся только то, что удалось прочитать).
+- `admin citizens list [королевство]`: жители (короткий id, имя, профессия, состояние, здоровье, дом) и сколько из них сейчас в мире.
+- `admin citizens spawn <число> [королевство]`: добавить жителей без условий роста (рядом с вами, с консоли у трона).
+- `admin citizens kill <id>`: житель умирает (запись в летописи); `admin citizens info <id>`: всё о жителе. Достаточно начала id.
 - `debug create|list|info|remove`: отладочные команды этапа 0.
 
 Названия из нескольких слов в админских командах берите в кавычки: `"Old Valoria"`.
@@ -133,7 +155,10 @@ Smoke-скрипт ставит настоящий сервер Forge 1.20.1-47.
 ### Конфиги
 
 - `<мир>/serverconfig/kingdomworld-server.toml` (на мир):
-  - `npc`, `simulation`, `player`: `maxActiveNpcs`, `simulationIntervalTicks`, `afkTimeoutSeconds`, `combatTagSeconds` (заготовки для следующих этапов);
+  - `npc`: `maxActiveNpcs` (300, тел жителей на сервер), `citizenActivationChunks` (6);
+  - `simulation`: `simulationIntervalTicks` (1200, шаг абстрактной симуляции жителей);
+  - `citizens`: `growthFoodDays` (3), `growthIntervalMinutes` (10), `starvationCanKill` (`false`), `dailyNutrition` (6), `infirmaryCapacity` (4), `woundedHealthPercent` (50), `maxCitizensPerKingdom` (200), `farmRadius` (8);
+  - `player`: `afkTimeoutSeconds`, `combatTagSeconds` (заготовки для следующих этапов);
   - `kingdom`: `allowedDimensions` (`["minecraft:overworld"]`), `minChunksFromOtherKingdom` (4), `initialClaimRadius` (1);
   - `territory`: `baseMaxChunks` (25), `chunksPerMember` (4), `claimBufferChunks` (1, 0 разрешает соприкасаться границам);
   - `protection`: `protectInteractions`, `protectFromExplosions`, `protectFromFire`, `allowFakePlayers` (все `true`).
@@ -142,9 +167,9 @@ Smoke-скрипт ставит настоящий сервер Forge 1.20.1-47.
 
 ### Данные и безопасность данных
 
-Данные королевств хранятся в `<мир>/data/kingdomworld_kingdoms.dat`, формат 2 (королевства с землями, подданными, правами, заявками и приглашениями). Данные формата 1 обновляются автоматически.
+Данные королевств хранятся в `<мир>/data/kingdomworld_kingdoms.dat`, формат 3 (королевства с землями, подданными, правами, заявками и приглашениями, жителями, их кроватями и местами работы, летописью, а также содержимое всех складов). Данные форматов 1 и 2 обновляются автоматически; при обновлении с формата 2 управляющий получает право «Жители», остальное не меняется.
 
-Если данные не удаётся прочитать полностью (формат новее, чем понимает эта версия мода, повреждённая версия формата, неудачная миграция, нечитаемая запись или нечитаемый файл), мод не бросает исключений и переходит в режим только чтения: прочитанное доступно и защищает земли, но любые изменения отклоняются с ошибкой в логе (уровень ERROR), а файл не перезаписывается. Выйти из режима можно, исправив файл, или командой `/kingdomworld admin data unlock`.
+Если данные не удаётся прочитать полностью (формат новее, чем понимает эта версия мода, повреждённая версия формата, неудачная миграция, нечитаемая запись королевства, жителя или склада, нечитаемый файл), мод не бросает исключений и переходит в режим только чтения: прочитанное доступно и защищает земли, но любые изменения отклоняются с ошибкой в логе (уровень ERROR), симуляция жителей стоит, склады закрыты, а файл не перезаписывается. Выйти из режима можно, исправив файл, или командой `/kingdomworld admin data unlock`.
 
 ### Для интеграций с модами карт
 
@@ -158,11 +183,11 @@ Smoke-скрипт ставит настоящий сервер Forge 1.20.1-47.
 Пакет `io.github.sekerator.kingdomworld`:
 
 - `core`: чистая Java-логика без Minecraft (королевства, территория и правила присоединения, подданство и права, политика доступа, проверка запросов). Быстро тестируется юнит-тестами.
-- `common`: всё, что работает на обеих сторонах: регистрации, хранение (`SavedData` с версией формата, миграциями и режимом только чтения), сеть, команды, конфиг, серверный API, защита, игровые тесты. В `common.mixin` один mixin для огня: у Forge нет события распространения огня.
+- `common`: всё, что работает на обеих сторонах: регистрации, хранение (`SavedData` с версией формата, миграциями и режимом только чтения), сеть, команды, конфиг, серверный API, защита, игровые тесты; `common.citizen` (тела, симуляция, места, профессии) и `common.storage` (склады и `KingdomStorage`). В `common.mixin` один mixin для огня: у Forge нет события распространения огня.
 - `client`: только клиентский код (экраны основания, трона и карты, клавиша, кэш территории). Подключается лишь на клиенте, выделенный сервер эти классы не загружает.
 - `compat`: мягкая совместимость с другими модами. Модуль включается только если мод установлен.
 
-Текстуры и модели короны, трона и атласа временные.
+Текстуры и модели короны, трона, атласа, склада, лазарета и жителей временные.
 
 ### Лицензия
 
@@ -174,7 +199,7 @@ KingdomWorld is a Minecraft 1.20.1 (Forge) mod about kingdoms that grow across t
 
 ### Status
 
-Stage 1: founding a kingdom, chunk-based territory with protection, membership and positions, the throne screen and a political map of kingdoms. The stage 0 skeleton (versioned world storage, a network channel with server-side request validation, configs, tests, a smoke test on a real server) is kept.
+Stage 2a: the citizens of kingdoms (records in the world data and bodies near players, homes, storehouses, food, growth, mood, wounds and the infirmary, a chronicle of deaths, professions with the farmer). Stage 1: founding a kingdom, chunk-based territory with protection, membership and positions, the throne screen and a political map of kingdoms. The stage 0 skeleton (versioned world storage, a network channel with server-side request validation, configs, tests, a smoke test on a real server) is kept.
 
 ### How to play
 
@@ -193,6 +218,8 @@ Recipes (data pack, replaceable):
 | Founder's Crown | diamond block, nether star, diamond block above three gold blocks |
 | Throne | gold ingots, red wool and planks shaped like a chair |
 | Kingdom Atlas | book, compass and an empty map (shapeless) |
+| Storehouse | logs in the corners, planks above and below, two chests beside a barrel |
+| Infirmary | white wool on top, a glistering melon slice between planks, planks below |
 
 ### Territory and protection
 
@@ -211,8 +238,24 @@ Recipes (data pack, replaceable):
 
 - Joining: an application (throne screen button or `/kingdom join <name>`) and an invitation from the kingdom (`/kingdom invite <player>`, accepted with `/kingdom accept`). When an application meets an invitation the player joins at once. Applications and invitations are kept until answered and are shown to the player on the next login.
 - Positions: king, marshal, treasurer, chancellor, spymaster, court mage, steward, subject.
-- Rights: building, containers, interaction, recruiting, territory, appointments (the last one belongs to the king alone). The king edits the rights of positions in the "Rights" tab. Defaults: the marshal has everything but appointments, the chancellor recruits, the steward manages territory, the treasurer, spymaster and court mage build, open containers and interact, a subject builds and interacts.
+- Rights: building, containers, interaction, recruiting, territory, citizens (giving professions), appointments (the last one belongs to the king alone). The king edits the rights of positions in the "Rights" tab. Defaults: the marshal has everything but appointments and citizens, the chancellor recruits, the steward manages territory and citizens, the treasurer, spymaster and court mage build, open containers and interact, a subject builds and interacts.
 - Members with the recruiting right expel; anyone but the king can only expel plain subjects. The king cannot leave; they abdicate in favour of another member or dissolve the kingdom.
+
+### Citizens
+
+- A citizen is a record in the world data: name, gender and looks, age in days, health and state (healthy, wounded), profession, home, workplace, satiety, mood and experience. The record is authoritative; the person in the world is only its body.
+- A body exists while a player is within `citizenActivationChunks` chunks (6 by default) of the citizen's home or workplace and goes away when the players leave; its state is copied into the record every second. Bodies are never saved with chunks, so unloading, relogging, teleports, changes of dimension and restarts cannot duplicate them, and foreign copies of a body (from mob capturing mods, for instance) are refused. At most `maxActiveNpcs` bodies per server, those nearest to players first. Paths and farm scans are spread over ticks.
+- Far from players a citizen lives by formulas: every `simulationIntervalTicks` it gets hungry and eats, heals, changes its mood and works.
+- Names are built from syllables: a Russian player reads them in Cyrillic (Радомир), everybody else in Latin (Radomir).
+- Home: a bed on the kingdom's land, one per citizen. A broken bed, or a bed on land the kingdom gave up, frees its resident.
+- **Storehouse** (block): a large chest whose contents live in the kingdom data, so citizens eat from it and bring their harvest even far from players. A kingdom counts every storehouse on its land. Hoppers, Create funnels and chutes, and pipes of other mods put items in and take them out through the Forge capability. Members with the containers right open it like any chest.
+- Food: any item with food properties (so food of other mods counts) except harmful food (rotten flesh and the like) and food that leaves a container. A citizen eats `dailyNutrition` points per game day. Without food the mood drops, then health; hunger kills only with `starvationCanKill`.
+- A newcomer arrives at the throne if there is a free bed, the storehouses feed everybody for `growthFoodDays` days and `growthIntervalMinutes` minutes have passed since the last arrival (content citizens make it faster, unhappy ones slower).
+- Mood 0-100 depends on food, a home, wounds and recent deaths of neighbours; for now it changes the speed of growth.
+- Citizens are mortal: monsters (zombies and illagers hunt them), falls, lava, fire, players. Outsiders may not hurt citizens in peacetime (a rule of the common access policy; war will add an exemption). A wounded citizen goes to an **infirmary** (block), where it heals much faster (`infirmaryCapacity` places), or home. Death is final: the record goes to the kingdom's chronicle (who, when, why, where) and the king and members with the citizens right are told.
+- Professions: unemployed and farmer; the registry is extensible (`ProfessionBehaviors.register`). A farmer works at a composter on the kingdom's land: near players it harvests ripe crops within `farmRadius`, replants them and carries the harvest to the nearest storehouse; crops of other mods work too (CropBlock, or the `minecraft:crops` tag with an age property). Far from players it brings in a harvest by formula from the number of plots seen last time.
+- The "Citizens" tab of the throne screen: population, beds, food in days, mood and why newcomers do not arrive; the list of citizens with profession, state and home, a filter and scrolling; changing professions (citizens right); the chronicle of deaths. The kingdom card on the map shows the population.
+- Storehouses and searching, taking and putting items for later mechanics go through one service, `KingdomStorage`.
 
 ### Requirements
 
@@ -241,11 +284,11 @@ The jar ends up in `build/libs/kingdomworld-<version>.jar`. JDK 17 is required; 
 | Smoke test on a clean dedicated server | `powershell -ExecutionPolicy Bypass -File scripts/smoke-server.ps1` |
 | Smoke test with the modpack's mods | `powershell -ExecutionPolicy Bypass -File scripts/smoke-server.ps1 -Pack` |
 
-Core unit tests cover claiming and giving up chunks (connectivity, limits, distance to other kingdoms), rights of positions, membership transitions and the access policy. The translation test checks that `en_us.json` and `ru_ru.json` hold the same keys with non-empty values and the same number of arguments, that Russian values are written in Russian, and that every key the code uses exists. All text a player sees goes through translation keys. The architecture tests check that the `core` package does not depend on Minecraft, Forge or Mojang, that client code is only reached through guarded entry points and that compat modules are not referenced directly.
+Core unit tests cover claiming and giving up chunks (connectivity, limits, distance to other kingdoms), rights of positions, membership transitions and the access policy, and citizens: names in both alphabets, beds and workplaces, death and the chronicle, growth, food, mood, the profession registry and the choice of citizens with a body. The translation test checks that `en_us.json` and `ru_ru.json` hold the same keys with non-empty values and the same number of arguments, that Russian values are written in Russian, and that every key the code uses exists. All text a player sees goes through translation keys. The architecture tests check that the `core` package does not depend on Minecraft, Forge or Mojang, that client code is only reached through guarded entry points and that compat modules are not referenced directly.
 
-`runGameTestServer` runs the game tests in a separate world (`run-gametest/`) and exits with a non-zero code if any test fails. They include founding through the API, protection (an outsider cannot break blocks or open a chest, a member with the right can), an explosion in kingdom land, claiming and giving up chunks, and read-only mode for data of a newer version and for a damaged format version.
+`runGameTestServer` runs the game tests in a separate world (`run-gametest/`) and exits with a non-zero code if any test fails. They include founding through the API, protection (an outsider cannot break blocks or open a chest, a member with the right can), an explosion in kingdom land, claiming and giving up chunks, and read-only mode for data of a newer version and for a damaged format version; a citizen's body comes from its record and leaves without duplicates, death changes the record and writes the chronicle, food is taken from a storehouse, a newcomer arrives with a bed and food, the farmer harvests, replants and stores, hoppers put into and take from a storehouse, citizens and storehouses survive saving, and format 2 data is upgraded without loss.
 
-The smoke script installs a real Forge 1.20.1-47.4.10 server into `D:\Projects\kingdom-world-testenv` (outside the repository), adds the built jar, accepts the EULA and starts the server twice on a fresh world. The first session founds the kingdom `SmokeTest` with a throne at 8 70 8 (`kingdomworld admin found`), claims chunk [2, 0] and checks that a detached chunk is refused. The second session checks that the kingdom, its id and all 10 chunks survived. The script exits with code 1 if the server fails to start or stop, if the logs contain errors or exceptions related to `kingdomworld`, if fire protection is not active, if a client class of the mod is loaded on the server, or if the data does not survive the restart. Logs of each session are kept in `smoke-logs` inside the server folder. Commands are written to the server console as UTF-8 without a BOM, so the script also works under code page 65001.
+The smoke script installs a real Forge 1.20.1-47.4.10 server into `D:\Projects\kingdom-world-testenv` (outside the repository), adds the built jar, accepts the EULA and starts the server twice on a fresh world. The first session founds the kingdom `SmokeTest` with a throne at 8 70 8 (`kingdomworld admin found`), claims chunk [2, 0], checks that a detached chunk is refused, adds three citizens, kills one by command and checks that two remain and none has a body without players. The second session checks that the kingdom, its id, all 10 chunks and the same two citizens survived, with nothing lost or doubled. The script exits with code 1 if the server fails to start or stop, if the logs contain errors or exceptions related to `kingdomworld`, if fire protection is not active, if a client class of the mod is loaded on the server, or if the data does not survive the restart. Logs of each session are kept in `smoke-logs` inside the server folder. Commands are written to the server console as UTF-8 without a BOM, so the script also works under code page 65001.
 
 Script options:
 
@@ -274,6 +317,7 @@ For every player (`/kingdom`):
 - `role <player> <position>`: appoint (`marshal`, `treasurer`, `chancellor`, `spymaster`, `court_mage`, `steward`, `subject`), king only.
 - `abdicate <player>`: hand over the crown.
 - `claim`, `unclaim`: claim or give up the chunk you stand in (territory right).
+- `citizens`: the citizens of your kingdom (or of the land you stand on): population, beds, food, mood.
 - `dissolve`, then `dissolve confirm` within 30 seconds: dissolve the kingdom (king only).
 
 Operators (permission level 2, `/kingdomworld`):
@@ -285,6 +329,9 @@ Operators (permission level 2, `/kingdomworld`):
 - `admin owner <chunkX> <chunkZ>`: who owns a chunk.
 - `admin bypass`: toggle protection bypass.
 - `admin data status`: state of the data; `admin data unlock`: leave read-only mode (a backup is made first, then only what could be read is kept).
+- `admin citizens list [kingdom]`: citizens (short id, name, profession, state, health, home) and how many are in the world now.
+- `admin citizens spawn <count> [kingdom]`: add citizens regardless of the growth rules (next to you, or at the throne from the console).
+- `admin citizens kill <id>`: the citizen dies (with a chronicle entry); `admin citizens info <id>`: everything about a citizen. The start of the id is enough.
 - `debug create|list|info|remove`: the stage 0 debug commands.
 
 Quote kingdom names with spaces in admin commands: `"Old Valoria"`.
@@ -292,7 +339,10 @@ Quote kingdom names with spaces in admin commands: `"Old Valoria"`.
 ### Configuration
 
 - `<world>/serverconfig/kingdomworld-server.toml` (per world):
-  - `npc`, `simulation`, `player`: `maxActiveNpcs`, `simulationIntervalTicks`, `afkTimeoutSeconds`, `combatTagSeconds` (placeholders for later stages);
+  - `npc`: `maxActiveNpcs` (300, citizen bodies per server), `citizenActivationChunks` (6);
+  - `simulation`: `simulationIntervalTicks` (1200, the step of the abstract citizen simulation);
+  - `citizens`: `growthFoodDays` (3), `growthIntervalMinutes` (10), `starvationCanKill` (`false`), `dailyNutrition` (6), `infirmaryCapacity` (4), `woundedHealthPercent` (50), `maxCitizensPerKingdom` (200), `farmRadius` (8);
+  - `player`: `afkTimeoutSeconds`, `combatTagSeconds` (placeholders for later stages);
   - `kingdom`: `allowedDimensions` (`["minecraft:overworld"]`), `minChunksFromOtherKingdom` (4), `initialClaimRadius` (1);
   - `territory`: `baseMaxChunks` (25), `chunksPerMember` (4), `claimBufferChunks` (1; 0 lets borders touch);
   - `protection`: `protectInteractions`, `protectFromExplosions`, `protectFromFire`, `allowFakePlayers` (all `true`).
@@ -301,9 +351,9 @@ Quote kingdom names with spaces in admin commands: `"Old Valoria"`.
 
 ### Data and data safety
 
-Kingdom data is stored in `<world>/data/kingdomworld_kingdoms.dat`, format 2 (kingdoms with land, members, rights, applications and invitations). Format 1 data is upgraded automatically.
+Kingdom data is stored in `<world>/data/kingdomworld_kingdoms.dat`, format 3 (kingdoms with land, members, rights, applications and invitations, citizens with their beds and workplaces, the chronicle, and the contents of every storehouse). Format 1 and 2 data is upgraded automatically; the upgrade from format 2 gives the steward the citizens right and changes nothing else.
 
-If the data cannot be fully read (a format newer than this version understands, a damaged format version, a failed migration, an unreadable entry or an unreadable file), loading does not throw: the data becomes read-only. What could be read stays available and keeps protecting land, but every change is refused with an ERROR in the log, and the file is never overwritten. Fix the file or run `/kingdomworld admin data unlock` to leave read-only mode.
+If the data cannot be fully read (a format newer than this version understands, a damaged format version, a failed migration, an unreadable kingdom, citizen or storehouse, or an unreadable file), loading does not throw: the data becomes read-only. What could be read stays available and keeps protecting land, but every change is refused with an ERROR in the log, the citizen simulation stops, storehouses stay closed, and the file is never overwritten. Fix the file or run `/kingdomworld admin data unlock` to leave read-only mode.
 
 ### For map mod integrations
 
@@ -317,11 +367,11 @@ The data is laid out so it can easily be handed to JourneyMap, Xaero or BlueMap:
 Package `io.github.sekerator.kingdomworld`:
 
 - `core`: plain Java domain logic without Minecraft (kingdoms, territory and claim rules, membership and rights, the access policy, request validation). Fast to unit test.
-- `common`: everything that runs on both sides: registries, persistence (`SavedData` with a format version, migrations and read-only mode), networking, commands, config, the server API, protection and game tests. `common.mixin` holds one mixin for fire, because Forge has no event for fire spreading.
+- `common`: everything that runs on both sides: registries, persistence (`SavedData` with a format version, migrations and read-only mode), networking, commands, config, the server API, protection and game tests; `common.citizen` (bodies, simulation, places, professions) and `common.storage` (storehouses and `KingdomStorage`). `common.mixin` holds one mixin for fire, because Forge has no event for fire spreading.
 - `client`: client-only code (founding, throne and map screens, the key binding, the territory cache). Wired in on the client only; a dedicated server never loads these classes.
 - `compat`: soft integrations with other mods. A module is activated only when its mod is installed.
 
-Textures and models of the crown, the throne and the atlas are placeholders.
+Textures and models of the crown, the throne, the atlas, the storehouse, the infirmary and the citizens are placeholders.
 
 ### License
 
