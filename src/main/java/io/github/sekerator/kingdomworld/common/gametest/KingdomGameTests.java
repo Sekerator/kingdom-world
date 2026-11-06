@@ -336,7 +336,7 @@ public final class KingdomGameTests {
         EnumMap<Role, EnumSet<Permission>> rights = new EnumMap<>(Role.class);
         rights.put(Role.SUBJECT, EnumSet.of(Permission.BUILD));
         rights.put(Role.MARSHAL, EnumSet.noneOf(Permission.class));
-        KingdomView view = new KingdomView(UUID.randomUUID(), "Северный Предел", 0xABCDEF, "kw-king", 2, 10, 29,
+        KingdomView view = new KingdomView(UUID.randomUUID(), "Северный Предел", 0xABCDEF, "kw-king", 2, 10, 29, 14,
                 new BlockPos(1, -2, 3), KingdomView.Relation.MEMBER, Role.KING, EnumSet.allOf(Permission.class),
                 List.of(new KingdomView.MemberEntry(UUID.randomUUID(), "kw-king", Role.KING, true)),
                 List.of(new KingdomView.PendingEntry(UUID.randomUUID(), "kw-applicant")), rights);

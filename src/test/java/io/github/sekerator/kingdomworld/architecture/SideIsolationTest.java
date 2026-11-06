@@ -26,6 +26,7 @@ class SideIsolationTest {
             "io/github/sekerator/kingdomworld/common/item/KingdomAtlasItem.java",
             "io/github/sekerator/kingdomworld/common/network/packet/ActionResultPacket.java",
             "io/github/sekerator/kingdomworld/common/network/packet/BorderCrossingPacket.java",
+            "io/github/sekerator/kingdomworld/common/network/packet/CitizenViewPacket.java",
             "io/github/sekerator/kingdomworld/common/network/packet/KingdomListResponsePacket.java",
             "io/github/sekerator/kingdomworld/common/network/packet/KingdomViewPacket.java",
             "io/github/sekerator/kingdomworld/common/network/packet/MapAreaPacket.java",

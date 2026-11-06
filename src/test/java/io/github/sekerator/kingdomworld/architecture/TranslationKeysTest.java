@@ -172,17 +172,25 @@ class TranslationKeysTest {
             used.add("kingdomworld.permission." + permission.id());
             used.add("kingdomworld.permission." + permission.id() + ".short");
         }
+        // Words that agree with a citizen have a form for women.
+        List<String> gendered = new ArrayList<>(List.of("kingdomworld.death.player_named", "kingdomworld.profession.unknown",
+                "kingdomworld.citizen.arrived", "kingdomworld.citizen.died", "commands.kingdomworld.admin.citizens.kill.success",
+                "commands.kingdomworld.admin.citizens.info.header"));
         for (CitizenState state : CitizenState.values()) {
-            used.add("kingdomworld.citizen.state." + state.id());
+            gendered.add("kingdomworld.citizen.state." + state.id());
         }
         for (CauseOfDeath cause : CauseOfDeath.values()) {
-            used.add("kingdomworld.death." + cause.id());
+            gendered.add("kingdomworld.death." + cause.id());
         }
         for (CitizenNeeds.GrowthCheck check : CitizenNeeds.GrowthCheck.values()) {
             used.add("kingdomworld.screen.citizens.growth." + check.name().toLowerCase(Locale.ROOT));
         }
         for (Profession profession : Professions.REGISTRY.all()) {
-            used.add("kingdomworld.profession." + profession.id());
+            gendered.add("kingdomworld.profession." + profession.id());
+        }
+        for (String key : gendered) {
+            used.add(key);
+            used.add(key + ".female");
         }
         for (NameProblem problem : NameProblem.values()) {
             used.add("kingdomworld.screen.found.problem." + problem.name().toLowerCase(Locale.ROOT));

@@ -2,6 +2,7 @@ package io.github.sekerator.kingdomworld.common.data;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 
 /**
@@ -29,6 +30,7 @@ final class KingdomDataMigrations {
         for (int version = fromVersion; version < KingdomSavedData.FORMAT_VERSION; version++) {
             switch (version) {
                 case 1 -> current = upgradeFrom1To2(current);
+                case 2 -> current = upgradeFrom2To3(current);
                 default -> throw new IllegalArgumentException("No migration from kingdom data format " + version);
             }
         }
@@ -54,6 +56,35 @@ final class KingdomDataMigrations {
             }
         }
         tag.putInt(KingdomSavedData.TAG_FORMAT_VERSION, 2);
+        return tag;
+    }
+
+    /**
+     * Format 3 adds citizens, their places, the chronicle and storehouses; a format 2 kingdom has none of them.
+     * The new right to manage citizens goes to the steward, as it does in new kingdoms; rights tables the king
+     * edited stay as they are otherwise.
+     */
+    private static CompoundTag upgradeFrom2To3(CompoundTag tag) {
+        ListTag kingdoms = tag.getList(KingdomSavedData.TAG_KINGDOMS, Tag.TAG_COMPOUND);
+        for (int i = 0; i < kingdoms.size(); i++) {
+            CompoundTag kingdom = kingdoms.getCompound(i);
+            if (!kingdom.contains(KingdomNbt.PERMISSIONS, Tag.TAG_COMPOUND)) {
+                continue;
+            }
+            CompoundTag rights = kingdom.getCompound(KingdomNbt.PERMISSIONS);
+            if (!rights.contains("steward", Tag.TAG_LIST)) {
+                continue;
+            }
+            ListTag steward = rights.getList("steward", Tag.TAG_STRING);
+            boolean present = false;
+            for (int j = 0; j < steward.size(); j++) {
+                present |= "manage_citizens".equals(steward.getString(j));
+            }
+            if (!present) {
+                steward.add(StringTag.valueOf("manage_citizens"));
+            }
+        }
+        tag.putInt(KingdomSavedData.TAG_FORMAT_VERSION, 3);
         return tag;
     }
 }

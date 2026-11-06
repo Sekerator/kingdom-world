@@ -1,6 +1,7 @@
 package io.github.sekerator.kingdomworld.common.protection;
 
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
+import io.github.sekerator.kingdomworld.common.citizen.CitizenEntity;
 import io.github.sekerator.kingdomworld.common.config.KingdomWorldConfig;
 import io.github.sekerator.kingdomworld.common.data.KingdomSavedData;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
@@ -66,6 +67,21 @@ public final class ProtectionService {
         }
         return KingdomWorldApi.accessPolicy().isAllowed(data.state().membership(), owner, subjectOf(actor), action,
                 dimension, chunk, settings());
+    }
+
+    /**
+     * Whether a player (or a machine acting as one) may hurt a citizen: in peacetime only members of the citizen's
+     * kingdom may; exemptions of the access policy (war) allow more. Monsters are never asked.
+     */
+    public static boolean mayHurtCitizen(Player attacker, CitizenEntity citizen) {
+        if (!(citizen.level() instanceof ServerLevel level) || citizen.kingdomId() == null) {
+            return true;
+        }
+        KingdomSavedData data = KingdomSavedData.get(level.getServer());
+        String dimension = Dimensions.id(level);
+        long chunk = ChunkKey.of(citizen.blockPosition().getX() >> 4, citizen.blockPosition().getZ() >> 4);
+        return KingdomWorldApi.accessPolicy().isAllowed(data.state().membership(), citizen.kingdomId(), subjectOf(attacker),
+                ProtectedAction.ATTACK_CITIZEN, dimension, chunk, settings());
     }
 
     public static AccessSubject subjectOf(@Nullable Entity actor) {

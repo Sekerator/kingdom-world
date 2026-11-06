@@ -1,6 +1,8 @@
 {
   "replace": false,
   "values": [
-    "kingdomworld:throne"
+    "kingdomworld:throne",
+    "kingdomworld:storehouse",
+    "kingdomworld:infirmary"
   ]
 }

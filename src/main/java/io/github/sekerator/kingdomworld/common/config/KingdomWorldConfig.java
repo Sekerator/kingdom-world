@@ -63,6 +63,15 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.BooleanValue protectFromExplosions;
         public final ForgeConfigSpec.BooleanValue protectFromFire;
         public final ForgeConfigSpec.BooleanValue allowFakePlayers;
+        public final ForgeConfigSpec.IntValue citizenActivationChunks;
+        public final ForgeConfigSpec.IntValue growthFoodDays;
+        public final ForgeConfigSpec.IntValue growthIntervalMinutes;
+        public final ForgeConfigSpec.BooleanValue starvationCanKill;
+        public final ForgeConfigSpec.IntValue dailyNutrition;
+        public final ForgeConfigSpec.IntValue infirmaryCapacity;
+        public final ForgeConfigSpec.IntValue woundedHealthPercent;
+        public final ForgeConfigSpec.IntValue maxCitizensPerKingdom;
+        public final ForgeConfigSpec.IntValue farmRadius;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -70,6 +79,39 @@ public final class KingdomWorldConfig {
                     .comment("Upper limit of kingdom NPCs present in the world at the same time, across all dimensions.",
                             "Kingdoms beyond this budget are simulated abstractly.")
                     .defineInRange("maxActiveNpcs", 300, 0, 10_000);
+            citizenActivationChunks = builder
+                    .comment("A citizen is present in the world while a player is within this many chunks of its home or workplace;",
+                            "otherwise it is simulated abstractly. When more citizens qualify than maxActiveNpcs, those nearest to",
+                            "players win.")
+                    .defineInRange("citizenActivationChunks", 6, 1, 32);
+            builder.pop();
+
+            builder.comment("Citizens: food, growth, health and work.").push("citizens");
+            growthFoodDays = builder
+                    .comment("A newcomer arrives only if the kingdom's storehouses hold food for this many days for everybody.")
+                    .defineInRange("growthFoodDays", 3, 0, 365);
+            growthIntervalMinutes = builder
+                    .comment("Least time between two arrivals in one kingdom, in minutes, at neutral mood.",
+                            "Happy citizens shorten it to three quarters, miserable ones make it up to twice as long.")
+                    .defineInRange("growthIntervalMinutes", 10, 0, 10_080);
+            starvationCanKill = builder
+                    .comment("Whether hunger may kill a citizen. If false, hunger stops at one point of health.")
+                    .define("starvationCanKill", false);
+            dailyNutrition = builder
+                    .comment("Food points a citizen eats per game day (a loaf of bread gives 5).")
+                    .defineInRange("dailyNutrition", 6, 0, 100);
+            infirmaryCapacity = builder
+                    .comment("Wounded citizens one infirmary treats at the same time.")
+                    .defineInRange("infirmaryCapacity", 4, 0, 64);
+            woundedHealthPercent = builder
+                    .comment("Below this share of their health, in percent, citizens are wounded and seek the infirmary or home.")
+                    .defineInRange("woundedHealthPercent", 50, 1, 99);
+            maxCitizensPerKingdom = builder
+                    .comment("Newcomers stop arriving in a kingdom with this many citizens.")
+                    .defineInRange("maxCitizensPerKingdom", 200, 0, 10_000);
+            farmRadius = builder
+                    .comment("How far, in blocks, a farmer works around its composter.")
+                    .defineInRange("farmRadius", 8, 1, 32);
             builder.pop();
 
             builder.comment("Abstract simulation of kingdoms far from players.").push("simulation");

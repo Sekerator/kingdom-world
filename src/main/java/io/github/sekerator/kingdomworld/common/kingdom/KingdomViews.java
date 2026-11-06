@@ -89,7 +89,8 @@ public final class KingdomViews {
         BlockPos capital = territory.map(t -> new BlockPos(t.capital().x(), t.capital().y(), t.capital().z())).orElse(null);
         return new KingdomView(kingdom.id(), kingdom.name(), kingdom.color(), PlayerNames.name(server, kingdom.rulerId()),
                 members.map(KingdomMembers::size).orElse(0), territory.map(Territory::size).orElse(0),
-                state.chunkLimit(kingdom.id(), KingdomWorldApi.rules()), capital, relation, viewerRole, viewerPermissions,
+                state.chunkLimit(kingdom.id(), KingdomWorldApi.rules()), state.citizens().registry().count(kingdom.id()),
+                capital, relation, viewerRole, viewerPermissions,
                 memberEntries, applications, rightsTable);
     }
 
@@ -111,7 +112,7 @@ public final class KingdomViews {
         boolean hasCapital = territory.isPresent() && territory.get().dimension().equals(dimension);
         Capital capital = territory.map(Territory::capital).orElse(null);
         return new KingdomMapInfo(kingdom.id(), kingdom.name(), kingdom.color(), PlayerNames.name(server, kingdom.rulerId()),
-                members, territory.map(Territory::size).orElse(0), hasCapital,
+                members, territory.map(Territory::size).orElse(0), state.citizens().registry().count(kingdom.id()), hasCapital,
                 hasCapital ? capital.chunkX() : 0, hasCapital ? capital.chunkZ() : 0);
     }
 

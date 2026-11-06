@@ -3,6 +3,9 @@ package io.github.sekerator.kingdomworld.common.network;
 import io.github.sekerator.kingdomworld.KingdomWorld;
 import io.github.sekerator.kingdomworld.common.network.packet.ActionResultPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.BorderCrossingPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.CitizenActionPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.CitizenRequestPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.CitizenViewPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.ClaimChunkPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.FoundKingdomPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomActionPacket;
@@ -36,7 +39,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "2";
+    public static final String PROTOCOL_VERSION = "3";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -68,6 +71,9 @@ public final class KingdomWorldNetwork {
         add(id++, MapAreaPacket.class, NetworkDirection.PLAY_TO_CLIENT, MapAreaPacket::encode, MapAreaPacket::decode, MapAreaPacket::handle);
         add(id++, TerritoryDeltaPacket.class, NetworkDirection.PLAY_TO_CLIENT, TerritoryDeltaPacket::encode, TerritoryDeltaPacket::decode, TerritoryDeltaPacket::handle);
         add(id++, BorderCrossingPacket.class, NetworkDirection.PLAY_TO_CLIENT, BorderCrossingPacket::encode, BorderCrossingPacket::decode, BorderCrossingPacket::handle);
+        add(id++, CitizenRequestPacket.class, NetworkDirection.PLAY_TO_SERVER, CitizenRequestPacket::encode, CitizenRequestPacket::decode, CitizenRequestPacket::handle);
+        add(id++, CitizenActionPacket.class, NetworkDirection.PLAY_TO_SERVER, CitizenActionPacket::encode, CitizenActionPacket::decode, CitizenActionPacket::handle);
+        add(id++, CitizenViewPacket.class, NetworkDirection.PLAY_TO_CLIENT, CitizenViewPacket::encode, CitizenViewPacket::decode, CitizenViewPacket::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

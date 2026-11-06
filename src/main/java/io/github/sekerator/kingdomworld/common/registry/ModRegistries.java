@@ -1,20 +1,27 @@
 package io.github.sekerator.kingdomworld.common.registry;
 
 import io.github.sekerator.kingdomworld.KingdomWorld;
+import io.github.sekerator.kingdomworld.common.block.InfirmaryBlock;
 import io.github.sekerator.kingdomworld.common.block.ThroneBlock;
+import io.github.sekerator.kingdomworld.common.citizen.CitizenEntity;
 import io.github.sekerator.kingdomworld.common.item.DescribedItem;
 import io.github.sekerator.kingdomworld.common.item.KingdomAtlasItem;
+import io.github.sekerator.kingdomworld.common.storage.StorehouseBlock;
+import io.github.sekerator.kingdomworld.common.storage.StorehouseBlockEntity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Rarity;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.level.material.PushReaction;
 import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
+import net.minecraftforge.event.entity.EntityAttributeCreationEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -27,6 +34,7 @@ public final class ModRegistries {
     public static final DeferredRegister<Block> BLOCKS = DeferredRegister.create(ForgeRegistries.BLOCKS, KingdomWorld.MOD_ID);
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, KingdomWorld.MOD_ID);
     public static final DeferredRegister<EntityType<?>> ENTITY_TYPES = DeferredRegister.create(ForgeRegistries.ENTITY_TYPES, KingdomWorld.MOD_ID);
+    public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITY_TYPES = DeferredRegister.create(ForgeRegistries.BLOCK_ENTITY_TYPES, KingdomWorld.MOD_ID);
 
     /**
      * Decorative seat that becomes the heart of a kingdom when one is founded on it. Immune to explosions and
@@ -49,6 +57,36 @@ public final class ModRegistries {
     public static final RegistryObject<Item> KINGDOM_ATLAS = ITEMS.register("kingdom_atlas",
             () -> new KingdomAtlasItem(new Item.Properties().stacksTo(1)));
 
+    /** Storehouse of a kingdom: a large chest whose contents the kingdom's citizens use. */
+    public static final RegistryObject<Block> STOREHOUSE = BLOCKS.register("storehouse", () -> new StorehouseBlock(
+            BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.WOOD)
+                    .strength(2.5f)
+                    .sound(SoundType.WOOD)
+                    .pushReaction(PushReaction.BLOCK)));
+    public static final RegistryObject<Item> STOREHOUSE_ITEM = ITEMS.register("storehouse",
+            () -> new BlockItem(STOREHOUSE.get(), new Item.Properties()));
+    public static final RegistryObject<BlockEntityType<StorehouseBlockEntity>> STOREHOUSE_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register(
+            "storehouse", () -> BlockEntityType.Builder.of(StorehouseBlockEntity::new, STOREHOUSE.get()).build(null));
+    /** Wounded citizens heal faster here. */
+    public static final RegistryObject<Block> INFIRMARY = BLOCKS.register("infirmary", () -> new InfirmaryBlock(
+            BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.SNOW)
+                    .strength(1.5f)
+                    .sound(SoundType.WOOD)));
+    public static final RegistryObject<Item> INFIRMARY_ITEM = ITEMS.register("infirmary",
+            () -> new BlockItem(INFIRMARY.get(), new Item.Properties()));
+
+    /**
+     * The body of a citizen. Never saved with chunks: the citizen records in the kingdom data are what persists.
+     */
+    public static final RegistryObject<EntityType<CitizenEntity>> CITIZEN = ENTITY_TYPES.register("citizen",
+            () -> EntityType.Builder.<CitizenEntity>of(CitizenEntity::new, MobCategory.MISC)
+                    .sized(0.6f, 1.8f)
+                    .clientTrackingRange(10)
+                    .noSave()
+                    .build(KingdomWorld.MOD_ID + ":citizen"));
+
     private ModRegistries() {
     }
 
@@ -56,12 +94,20 @@ public final class ModRegistries {
         BLOCKS.register(modBus);
         ITEMS.register(modBus);
         ENTITY_TYPES.register(modBus);
+        BLOCK_ENTITY_TYPES.register(modBus);
         modBus.addListener(ModRegistries::onBuildCreativeTabs);
+        modBus.addListener(ModRegistries::onEntityAttributes);
+    }
+
+    private static void onEntityAttributes(EntityAttributeCreationEvent event) {
+        event.put(CITIZEN.get(), CitizenEntity.createAttributes().build());
     }
 
     private static void onBuildCreativeTabs(BuildCreativeModeTabContentsEvent event) {
         if (event.getTabKey() == CreativeModeTabs.FUNCTIONAL_BLOCKS) {
             event.accept(THRONE_ITEM);
+            event.accept(STOREHOUSE_ITEM);
+            event.accept(INFIRMARY_ITEM);
         } else if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) {
             event.accept(FOUNDER_CROWN);
             event.accept(KINGDOM_ATLAS);

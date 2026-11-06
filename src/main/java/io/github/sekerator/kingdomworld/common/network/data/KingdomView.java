@@ -25,7 +25,7 @@ import java.util.UUID;
  * @param viewerRole the viewer's position, or {@code null} if the viewer is not a member
  */
 public record KingdomView(UUID id, String name, int color, String rulerName, int memberCount, int chunks,
-                          int chunkLimit, @Nullable BlockPos capital, Relation relation, @Nullable Role viewerRole,
+                          int chunkLimit, int population, @Nullable BlockPos capital, Relation relation, @Nullable Role viewerRole,
                           EnumSet<Permission> viewerPermissions, List<MemberEntry> members,
                           List<PendingEntry> applications, Map<Role, EnumSet<Permission>> rights) {
     public static final int MAX_MEMBERS = 1000;
@@ -77,6 +77,7 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
         buf.writeVarInt(memberCount);
         buf.writeVarInt(chunks);
         buf.writeVarInt(chunkLimit);
+        buf.writeVarInt(population);
         buf.writeBoolean(capital != null);
         if (capital != null) {
             buf.writeBlockPos(capital);
@@ -114,6 +115,7 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
         int memberCount = buf.readVarInt();
         int chunks = buf.readVarInt();
         int chunkLimit = buf.readVarInt();
+        int population = buf.readVarInt();
         BlockPos capital = buf.readBoolean() ? buf.readBlockPos() : null;
         Relation relation = readEnum(buf, Relation.class);
         Role role = buf.readBoolean() ? readEnum(buf, Role.class) : null;
@@ -134,7 +136,7 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
             Role key = readEnum(buf, Role.class);
             rights.put(key, buf.readEnumSet(Permission.class));
         }
-        return new KingdomView(id, name, color, ruler, memberCount, chunks, chunkLimit, capital, relation, role,
+        return new KingdomView(id, name, color, ruler, memberCount, chunks, chunkLimit, population, capital, relation, role,
                 permissions, members, applications, rights);
     }
 

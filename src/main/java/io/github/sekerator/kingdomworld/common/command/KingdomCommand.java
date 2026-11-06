@@ -50,6 +50,7 @@ import java.util.stream.Stream;
  * /kingdom role &lt;player&gt; &lt;role&gt;  /kingdom abdicate &lt;player&gt;
  * /kingdom claim                  /kingdom unclaim
  * /kingdom dissolve [confirm]
+ * /kingdom citizens
  * </pre>
  */
 public final class KingdomCommand {
@@ -89,6 +90,7 @@ public final class KingdomCommand {
                         .then(Commands.argument("name", StringArgumentType.greedyString()).suggests(KINGDOM_NAMES)
                                 .executes(context -> info(context.getSource(), StringArgumentType.getString(context, "name")))))
                 .then(Commands.literal("list").executes(context -> list(context.getSource())))
+                .then(CitizenCommands.playerCommand())
                 .then(Commands.literal("join")
                         .then(Commands.argument("name", StringArgumentType.greedyString()).suggests(KINGDOM_NAMES)
                                 .executes(context -> join(context.getSource(), StringArgumentType.getString(context, "name")))))

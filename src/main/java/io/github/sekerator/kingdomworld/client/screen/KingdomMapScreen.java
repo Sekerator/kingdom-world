@@ -501,6 +501,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         List<Component> lines = List.of(
                 Component.translatable("kingdomworld.screen.map.card.ruler", PlayerNames.display(fit(info.rulerName(), MAX_CARD_NAME))),
                 Component.translatable("kingdomworld.screen.map.card.members", info.members()),
+                Component.translatable("kingdomworld.screen.map.card.population", info.population()),
                 Component.translatable("kingdomworld.screen.map.card.chunks", info.chunks()));
         int maxWidth = mapRight() - mapLeft() - 12;
         int inner = font.width(fit(info.name(), Math.min(MAX_CARD_NAME, maxWidth - 12)));

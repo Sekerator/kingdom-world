@@ -13,7 +13,14 @@ import io.github.sekerator.kingdomworld.client.screen.FoundKingdomScreen;
 import io.github.sekerator.kingdomworld.client.screen.KingdomMapScreen;
 import io.github.sekerator.kingdomworld.client.screen.LayoutCheck;
 import io.github.sekerator.kingdomworld.client.screen.ThroneScreen;
+import io.github.sekerator.kingdomworld.common.citizen.CitizenTexts;
 import io.github.sekerator.kingdomworld.common.kingdom.KingdomActions;
+import io.github.sekerator.kingdomworld.common.network.data.CitizenView;
+import io.github.sekerator.kingdomworld.core.citizen.CauseOfDeath;
+import io.github.sekerator.kingdomworld.core.citizen.CitizenNames;
+import io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds;
+import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
+import io.github.sekerator.kingdomworld.core.citizen.Gender;
 import io.github.sekerator.kingdomworld.common.network.data.KingdomMapInfo;
 import io.github.sekerator.kingdomworld.common.network.data.KingdomView;
 import io.github.sekerator.kingdomworld.common.network.packet.MapAreaPacket;
@@ -133,6 +140,14 @@ final class ClientLayoutCheck {
         LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.protection.throne"), NARROWEST_SCREEN);
         LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.protection.throne_king"), NARROWEST_SCREEN);
         LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.throne.needs_crown"), NARROWEST_SCREEN);
+        LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.protection.citizen",
+                ProtectionService.shortName(LONG_KINGDOM)), NARROWEST_SCREEN);
+        LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.storehouse.read_only"), NARROWEST_SCREEN);
+        for (Gender gender : Gender.values()) {
+            LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.citizen.describe",
+                    CitizenTexts.name(longestNameSeed(gender), gender), CitizenTexts.profession("unemployed", gender),
+                    CitizenTexts.state(CitizenState.WOUNDED, gender)), NARROWEST_SCREEN);
+        }
         for (boolean entered : new boolean[]{true, false}) {
             LayoutCheck.actionbar(minecraft.font, ClientPacketHandlers.borderMessage(minecraft.font, NARROWEST_SCREEN, entered,
                     LONG_KINGDOM, color), NARROWEST_SCREEN);
@@ -250,7 +265,7 @@ final class ClientLayoutCheck {
                 applications.add(new KingdomView.PendingEntry(UUID.randomUUID(), "Yaroslav_Mudry"));
             }
         }
-        return new KingdomView(UUID.randomUUID(), LONG_KINGDOM, 0x6C3483, LONG_PLAYER, 8, 10, 53,
+        return new KingdomView(UUID.randomUUID(), LONG_KINGDOM, 0x6C3483, LONG_PLAYER, 8, 10, 53, 187,
                 new BlockPos(-30_000_000, 319, 29_999_999), relation, member ? role : null, permissions, members, applications,
                 member ? defaultRights() : Map.of());
     }
@@ -264,12 +279,64 @@ final class ClientLayoutCheck {
         return screen;
     }
 
+    /**
+     * A seed that gives one of the longest names in the current language.
+     */
+    private static int longestNameSeed(Gender gender) {
+        CitizenNames.Alphabet alphabet = CitizenNames.alphabetFor(Minecraft.getInstance().getLanguageManager().getSelected());
+        int best = 0;
+        int bestWidth = -1;
+        for (int seed = 0; seed < 20_000; seed++) {
+            int width = Minecraft.getInstance().font.width(CitizenNames.render(seed, gender, alphabet));
+            if (width > bestWidth) {
+                best = seed;
+                bestWidth = width;
+            }
+        }
+        return best;
+    }
+
+    private static CitizenView citizenView(boolean canManage, boolean empty, CitizenNeeds.GrowthCheck growth) {
+        List<CitizenView.Entry> entries = new ArrayList<>();
+        List<CitizenView.Death> deaths = new ArrayList<>();
+        if (!empty) {
+            BlockPos far = new BlockPos(-30_000_000, 319, 29_999_999);
+            String[] professions = {"farmer", "unemployed", "dragon_tamer"};
+            for (int i = 0; i < 24; i++) {
+                Gender gender = i % 2 == 0 ? Gender.FEMALE : Gender.MALE;
+                int seed = i < 2 ? longestNameSeed(gender) : i * 7919;
+                entries.add(new CitizenView.Entry(UUID.nameUUIDFromBytes(("citizen" + i).getBytes(StandardCharsets.UTF_8)), seed,
+                        gender == Gender.FEMALE, professions[i % professions.length],
+                        i % 3 == 1 ? CitizenState.WOUNDED : CitizenState.HEALTHY, i % 4 == 3 ? null : far, 20 - i % 15, 50 + i));
+            }
+            CauseOfDeath[] causes = CauseOfDeath.values();
+            for (int i = 0; i < causes.length + 2; i++) {
+                Gender gender = i % 2 == 0 ? Gender.MALE : Gender.FEMALE;
+                int seed = i < 2 ? longestNameSeed(gender) : i * 104_729;
+                CauseOfDeath cause = i < 2 ? CauseOfDeath.PLAYER : causes[i - 2];
+                deaths.add(new CitizenView.Death(seed, gender == Gender.FEMALE, i % 2 == 0 ? "unemployed" : "farmer", cause,
+                        i == 0 ? LONG_PLAYER : "", 99_999L - i, far));
+            }
+        }
+        return new CitizenView(UUID.randomUUID(), canManage, empty ? 0 : 187, empty ? 0 : 180, empty ? 0 : 200,
+                empty ? 0 : CitizenView.MAX_FOOD_DAYS, empty ? 50 : 100, empty ? 0 : 999, growth, entries, deaths);
+    }
+
+    private static ThroneScreen citizens(KingdomView view, CitizenView citizens, boolean chronicle, Component status) {
+        ThroneScreen screen = throne(view, "citizens", status);
+        screen.updateCitizens(new CitizenView(view.id(), citizens.canManage(), citizens.population(), citizens.bedsUsed(),
+                citizens.bedsTotal(), citizens.foodDays(), citizens.mood(), citizens.storehouses(), citizens.growth(),
+                citizens.citizens(), citizens.chronicle()));
+        screen.showChronicle(chronicle);
+        return screen;
+    }
+
     private static void fillMapData() {
         UUID first = UUID.nameUUIDFromBytes("first".getBytes(StandardCharsets.UTF_8));
         UUID second = UUID.nameUUIDFromBytes("second".getBytes(StandardCharsets.UTF_8));
         List<KingdomMapInfo> palette = List.of(
-                new KingdomMapInfo(first, LONG_KINGDOM, 0x6C3483, LONG_PLAYER, 8, 20, true, 0, 0),
-                new KingdomMapInfo(second, "Valoria", 0xB7950B, "", 1, 9, true, 7, 1));
+                new KingdomMapInfo(first, LONG_KINGDOM, 0x6C3483, LONG_PLAYER, 8, 20, 187, true, 0, 0),
+                new KingdomMapInfo(second, "Valoria", 0xB7950B, "", 1, 9, 0, true, 7, 1));
         int width = 20;
         int height = 12;
         int[] cells = new int[width * height];
@@ -314,6 +381,20 @@ final class ClientLayoutCheck {
         cases.add(new Case("throne-subject-overview", () -> throne(view(KingdomView.Relation.MEMBER, Role.SUBJECT), "overview", Component.empty())));
         cases.add(new Case("throne-marshal-members", () -> throne(view(KingdomView.Relation.MEMBER, Role.MARSHAL), "members", Component.empty())));
         cases.add(new Case("throne-subject-rights", () -> throne(view(KingdomView.Relation.MEMBER, Role.SUBJECT), "rights", Component.empty())));
+        cases.add(new Case("throne-king-citizens", () -> citizens(view(KingdomView.Relation.MEMBER, Role.KING),
+                citizenView(true, false, CitizenNeeds.GrowthCheck.NOT_ENOUGH_FOOD), false, Component.empty())));
+        cases.add(new Case("throne-king-citizens-error", () -> citizens(view(KingdomView.Relation.MEMBER, Role.KING),
+                citizenView(true, false, CitizenNeeds.GrowthCheck.READY), false, longError)));
+        cases.add(new Case("throne-steward-chronicle", () -> citizens(view(KingdomView.Relation.MEMBER, Role.STEWARD),
+                citizenView(true, false, CitizenNeeds.GrowthCheck.NO_FREE_BED), true, Component.empty())));
+        cases.add(new Case("throne-subject-citizens", () -> citizens(view(KingdomView.Relation.MEMBER, Role.SUBJECT),
+                citizenView(false, false, CitizenNeeds.GrowthCheck.TOO_SOON), false, Component.empty())));
+        cases.add(new Case("throne-citizens-empty", () -> citizens(view(KingdomView.Relation.MEMBER, Role.SUBJECT),
+                citizenView(false, true, CitizenNeeds.GrowthCheck.FULL), false, Component.empty())));
+        cases.add(new Case("throne-chronicle-empty", () -> citizens(view(KingdomView.Relation.MEMBER, Role.SUBJECT),
+                citizenView(false, true, CitizenNeeds.GrowthCheck.NO_FREE_BED), true, Component.empty())));
+        cases.add(new Case("throne-citizens-loading", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "citizens",
+                Component.empty())));
         cases.add(new Case("throne-outsider", () -> throne(view(KingdomView.Relation.OUTSIDER, null), "overview", Component.empty())));
         cases.add(new Case("throne-invited", () -> throne(view(KingdomView.Relation.INVITED, null), "overview", Component.empty())));
         cases.add(new Case("throne-applied", () -> throne(view(KingdomView.Relation.APPLIED, null), "overview", Component.empty())));

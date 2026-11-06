@@ -14,11 +14,12 @@ import java.util.UUID;
  * Public facts about a kingdom shown on the map: its color, its capital and the card a player sees after
  * clicking its land.
  *
+ * @param population    number of citizens
  * @param hasCapital    whether the capital lies in the dimension the map shows
  * @param capitalChunkX chunk x of the throne, meaningful only if {@code hasCapital}
  * @param capitalChunkZ chunk z of the throne, meaningful only if {@code hasCapital}
  */
-public record KingdomMapInfo(UUID id, String name, int color, String rulerName, int members, int chunks,
+public record KingdomMapInfo(UUID id, String name, int color, String rulerName, int members, int chunks, int population,
                              boolean hasCapital, int capitalChunkX, int capitalChunkZ) {
     public static final int MAX_PLAYER_NAME = 64;
 
@@ -36,6 +37,7 @@ public record KingdomMapInfo(UUID id, String name, int color, String rulerName, 
         buf.writeUtf(rulerName, MAX_PLAYER_NAME);
         buf.writeVarInt(members);
         buf.writeVarInt(chunks);
+        buf.writeVarInt(population);
         buf.writeBoolean(hasCapital);
         if (hasCapital) {
             buf.writeInt(capitalChunkX);
@@ -50,10 +52,11 @@ public record KingdomMapInfo(UUID id, String name, int color, String rulerName, 
         String ruler = buf.readUtf(MAX_PLAYER_NAME);
         int members = buf.readVarInt();
         int chunks = buf.readVarInt();
+        int population = buf.readVarInt();
         boolean hasCapital = buf.readBoolean();
         int x = hasCapital ? buf.readInt() : 0;
         int z = hasCapital ? buf.readInt() : 0;
-        return new KingdomMapInfo(id, name, color, ruler, members, chunks, hasCapital, x, z);
+        return new KingdomMapInfo(id, name, color, ruler, members, chunks, population, hasCapital, x, z);
     }
 
     public static void writeList(FriendlyByteBuf buf, List<KingdomMapInfo> list) {

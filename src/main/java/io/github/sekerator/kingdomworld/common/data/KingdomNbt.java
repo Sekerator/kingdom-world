@@ -23,14 +23,15 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * NBT form of a kingdom with its land, members, rights and pending requests (format 2).
+ * NBT form of a kingdom with its land, members, rights, pending requests and population (format 3).
  *
  * <pre>
  * { id, name, color, ruler?, createdGameTime,
  *   capital?: { dimension, x, y, z }, chunks: long[],
  *   members: [ { player, role, joined } ],
  *   permissions?: { &lt;role&gt;: [ &lt;permission&gt;, ... ] },
- *   applications: [ { player, time } ], invitations: [ { player, time } ] }
+ *   applications: [ { player, time } ], invitations: [ { player, time } ],
+ *   population?: see {@link CitizenNbt} }
  * </pre>
  *
  * <p>Reading is strict: anything that cannot be understood throws {@link IllegalArgumentException}, so the
@@ -115,6 +116,7 @@ public final class KingdomNbt {
             tag.put(APPLICATIONS, writePending(members.get().applications()));
             tag.put(INVITATIONS, writePending(members.get().invitations()));
         }
+        tag.put(CitizenNbt.POPULATION, CitizenNbt.write(state.citizens(), kingdom.id()));
         return tag;
     }
 
@@ -205,7 +207,16 @@ public final class KingdomNbt {
 
         Map<UUID, Long> applications = readPending(tag, APPLICATIONS, kingdom);
         Map<UUID, Long> invitations = readPending(tag, INVITATIONS, kingdom);
+        CitizenNbt.Population population = CitizenNbt.read(tag, kingdom.id(), kingdom.name());
         state.restore(kingdom, capital, chunks, rights, members, applications, invitations);
+        try {
+            state.citizens().restore(kingdom.id(), population.sites(), population.citizens(), population.lastArrival(),
+                    population.chronicle());
+        } catch (IllegalArgumentException e) {
+            // All or nothing: a kingdom whose people cannot be restored is not restored either.
+            state.dissolve(kingdom.id());
+            throw e;
+        }
         return kingdom;
     }
 

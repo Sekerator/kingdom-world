@@ -8,6 +8,7 @@ import io.github.sekerator.kingdomworld.client.screen.ThroneScreen;
 import io.github.sekerator.kingdomworld.common.config.KingdomWorldConfig;
 import io.github.sekerator.kingdomworld.common.network.packet.ActionResultPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.BorderCrossingPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.CitizenViewPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomListResponsePacket;
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomViewPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.MapAreaPacket;
@@ -44,6 +45,12 @@ public final class ClientPacketHandlers {
             throne.update(packet.view());
         } else if (packet.open()) {
             ClientHooks.openThrone(packet.view());
+        }
+    }
+
+    public static void handleCitizenView(CitizenViewPacket packet) {
+        if (Minecraft.getInstance().screen instanceof ThroneScreen throne) {
+            throne.updateCitizens(packet.view());
         }
     }
 

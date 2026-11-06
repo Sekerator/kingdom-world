@@ -1,6 +1,7 @@
 package io.github.sekerator.kingdomworld.common;
 
 import com.mojang.logging.LogUtils;
+import io.github.sekerator.kingdomworld.common.citizen.CitizenEvents;
 import io.github.sekerator.kingdomworld.common.command.KingdomCommand;
 import io.github.sekerator.kingdomworld.common.command.KingdomWorldCommand;
 import io.github.sekerator.kingdomworld.common.config.KingdomWorldConfig;
@@ -41,6 +42,7 @@ public final class CommonEvents {
         MinecraftForge.EVENT_BUS.addListener(CommonEvents::onPlayerLoggedIn);
         MinecraftForge.EVENT_BUS.addListener(CommonEvents::onPlayerLoggedOut);
         ProtectionEvents.register();
+        CitizenEvents.register();
     }
 
     private static void onRegisterCommands(RegisterCommandsEvent event) {
@@ -69,7 +71,14 @@ public final class CommonEvents {
         }
         // Load the data eagerly so that problems with it show up at startup rather than on first use.
         KingdomSavedData data = KingdomSavedData.get(event.getServer());
-        LOGGER.info("KingdomWorld loaded {} kingdom(s), data format {}{}", data.registry().size(), KingdomSavedData.FORMAT_VERSION,
+        LOGGER.info("KingdomWorld citizens: activationChunks={}, growthFoodDays={}, growthIntervalMinutes={}, starvationCanKill={}, "
+                        + "dailyNutrition={}, infirmaryCapacity={}, woundedHealthPercent={}, maxCitizensPerKingdom={}, farmRadius={}",
+                config.citizenActivationChunks.get(), config.growthFoodDays.get(), config.growthIntervalMinutes.get(),
+                config.starvationCanKill.get(), config.dailyNutrition.get(), config.infirmaryCapacity.get(),
+                config.woundedHealthPercent.get(), config.maxCitizensPerKingdom.get(), config.farmRadius.get());
+        LOGGER.info("KingdomWorld loaded {} kingdom(s) with {} citizen(s) and {} storehouse(s), data format {}{}",
+                data.registry().size(), data.state().citizens().registry().size(), data.storehouses().size(),
+                KingdomSavedData.FORMAT_VERSION,
                 data.isReadOnly() ? " (READ-ONLY: " + data.readOnlyReason().orElse("?") + ")" : "");
     }
 
@@ -77,6 +86,7 @@ public final class CommonEvents {
         ServerRequestGuard.reset();
         ProtectionService.reset();
         TerritorySync.reset();
+        CitizenEvents.reset();
     }
 
     private static void onServerTick(TickEvent.ServerTickEvent event) {

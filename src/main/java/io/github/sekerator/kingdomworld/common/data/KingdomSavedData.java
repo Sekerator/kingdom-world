@@ -2,7 +2,9 @@ package io.github.sekerator.kingdomworld.common.data;
 
 import com.mojang.logging.LogUtils;
 import io.github.sekerator.kingdomworld.KingdomWorld;
+import io.github.sekerator.kingdomworld.common.citizen.CitizenEvents;
 import io.github.sekerator.kingdomworld.common.kingdom.TerritorySync;
+import io.github.sekerator.kingdomworld.common.storage.StorehouseRegistry;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomRegistry;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
@@ -42,16 +44,18 @@ import java.util.Optional;
 public final class KingdomSavedData extends SavedData {
     public static final String DATA_NAME = KingdomWorld.MOD_ID + "_kingdoms";
     /** Current layout of the saved data. Increase it together with a migration step. */
-    public static final int FORMAT_VERSION = 2;
+    public static final int FORMAT_VERSION = 3;
     /** Format assumed for data without a version field. */
     static final int FIRST_FORMAT_VERSION = 1;
 
     static final String TAG_FORMAT_VERSION = "formatVersion";
     static final String TAG_KINGDOMS = "kingdoms";
+    static final String TAG_STOREHOUSES = "storehouses";
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
     private final KingdomWorldState state = new KingdomWorldState();
+    private final StorehouseRegistry storehouses = new StorehouseRegistry();
     /** The tag as it was loaded, kept while read-only; {@code null} if the file itself was unreadable. */
     private CompoundTag preserved;
     /** Why the data is read-only, or {@code null} if it may be changed. */
@@ -64,6 +68,7 @@ public final class KingdomSavedData extends SavedData {
 
     public KingdomSavedData() {
         state.setChangeListener(this::setDirty);
+        storehouses.setChangeListener(this::setDirty);
     }
 
     /**
@@ -75,6 +80,7 @@ public final class KingdomSavedData extends SavedData {
         if (!data.synced) {
             data.synced = true;
             data.state.territory().addListener(TerritorySync.LISTENER);
+            data.state.territory().addListener(CitizenEvents.TERRITORY_LISTENER);
         }
         return data;
     }
@@ -97,6 +103,13 @@ public final class KingdomSavedData extends SavedData {
 
     public KingdomRegistry registry() {
         return state.kingdoms();
+    }
+
+    /**
+     * Contents of every storehouse of the world.
+     */
+    public StorehouseRegistry storehouses() {
+        return storehouses;
     }
 
     public boolean isReadOnly() {
@@ -164,6 +177,7 @@ public final class KingdomSavedData extends SavedData {
             }
         }
         List<String> problems = readKingdoms(data);
+        problems.addAll(readStorehouses(data));
         if (!problems.isEmpty()) {
             lock(tag, problems.size() + " unreadable part(s): " + String.join("; ", problems), "unreadable_parts", problems.size());
             return;
@@ -199,9 +213,17 @@ public final class KingdomSavedData extends SavedData {
         return problems;
     }
 
+    private List<String> readStorehouses(CompoundTag data) {
+        if (!data.contains(TAG_STOREHOUSES)) {
+            return List.of();
+        }
+        return storehouses.load(data.get(TAG_STOREHOUSES));
+    }
+
     private void readBestEffort(CompoundTag tag) {
         try {
             List<String> problems = readKingdoms(tag);
+            problems.addAll(readStorehouses(tag));
             if (!problems.isEmpty()) {
                 LOGGER.warn("Kingdom data parts not understood: {}", String.join("; ", problems));
             }
@@ -277,6 +299,7 @@ public final class KingdomSavedData extends SavedData {
             kingdoms.add(KingdomNbt.write(state, kingdom));
         }
         tag.put(TAG_KINGDOMS, kingdoms);
+        tag.put(TAG_STOREHOUSES, storehouses.save());
         return tag;
     }
 }

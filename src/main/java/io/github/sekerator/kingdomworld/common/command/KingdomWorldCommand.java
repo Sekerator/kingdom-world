@@ -58,6 +58,7 @@ import java.util.UUID;
  * /kingdomworld admin owner &lt;chunkX&gt; &lt;chunkZ&gt;
  * /kingdomworld admin bypass
  * /kingdomworld admin data status|unlock
+ * /kingdomworld admin citizens list [kingdom]|spawn &lt;count&gt; [kingdom]|kill &lt;id&gt;|info &lt;id&gt;
  * </pre>
  *
  * <p>Kingdom names in the admin commands are single words or quoted ("Old Valoria").
@@ -130,6 +131,7 @@ public final class KingdomWorldCommand {
                                                 .executes(KingdomWorldCommand::owner))))
                         .then(Commands.literal("bypass")
                                 .executes(context -> bypass(context.getSource())))
+                        .then(CitizenCommands.adminCommand())
                         .then(Commands.literal("data")
                                 .then(Commands.literal("status").executes(context -> dataStatus(context.getSource())))
                                 .then(Commands.literal("unlock").executes(context -> dataUnlock(context.getSource()))))));
