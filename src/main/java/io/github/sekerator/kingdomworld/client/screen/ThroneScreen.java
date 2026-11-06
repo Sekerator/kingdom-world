@@ -26,7 +26,8 @@ import java.util.UUID;
  */
 public class ThroneScreen extends Screen implements ResultListener {
     private static final int PANEL_WIDTH = 330;
-    private static final int PANEL_HEIGHT = 246;
+    private static final int MAX_PANEL_HEIGHT = 246;
+    private static final int RIGHTS_ROW = 17;
     private static final int ROW_HEIGHT = 20;
     private static final int CONTENT_TOP = 48;
     private static final int BOTTOM_AREA = 52;
@@ -58,6 +59,23 @@ public class ThroneScreen extends Screen implements ResultListener {
         return view.id();
     }
 
+    public KingdomView view() {
+        return view;
+    }
+
+    /**
+     * Switches to a tab by name ({@code overview}, {@code members}, {@code rights}); unknown names are ignored.
+     */
+    public void selectTab(String name) {
+        for (Tab candidate : Tab.values()) {
+            if (candidate.name().equalsIgnoreCase(name) && (candidate == Tab.OVERVIEW || isMember())) {
+                tab = candidate;
+                scroll = 0;
+                rebuildWidgets();
+            }
+        }
+    }
+
     public void update(KingdomView newView) {
         this.view = newView;
         if (newView.relation() != KingdomView.Relation.MEMBER) {
@@ -71,7 +89,14 @@ public class ThroneScreen extends Screen implements ResultListener {
     }
 
     private int top() {
-        return (height - PANEL_HEIGHT) / 2;
+        return (height - panelHeight()) / 2;
+    }
+
+    /**
+     * The panel shrinks on small windows so that the buttons at its bottom stay visible.
+     */
+    private int panelHeight() {
+        return Math.max(200, Math.min(MAX_PANEL_HEIGHT, height - 4));
     }
 
     private boolean isMember() {
@@ -114,7 +139,7 @@ public class ThroneScreen extends Screen implements ResultListener {
             case RIGHTS -> initRights(left, top);
         }
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), button -> onClose())
-                .bounds(left + PANEL_WIDTH - 68, top + PANEL_HEIGHT - 26, 60, 20).build());
+                .bounds(left + PANEL_WIDTH - 68, top + panelHeight() - 26, 60, 20).build());
     }
 
     private int tabButton(Tab target, String key, int x, int y) {
@@ -128,7 +153,7 @@ public class ThroneScreen extends Screen implements ResultListener {
     }
 
     private void initOverview(int left, int top) {
-        int y = top + PANEL_HEIGHT - 26;
+        int y = top + panelHeight() - 26;
         int x = left + 8;
         switch (view.relation()) {
             case OUTSIDER -> addRenderableWidget(Button.builder(Component.translatable("kingdomworld.screen.throne.apply"),
@@ -173,7 +198,7 @@ public class ThroneScreen extends Screen implements ResultListener {
     }
 
     private int visibleRows() {
-        return (PANEL_HEIGHT - CONTENT_TOP - BOTTOM_AREA) / ROW_HEIGHT;
+        return (panelHeight() - CONTENT_TOP - BOTTOM_AREA) / ROW_HEIGHT;
     }
 
     private void initMembers(int left, int top) {
@@ -220,7 +245,7 @@ public class ThroneScreen extends Screen implements ResultListener {
             if (!role.isAssignable()) {
                 continue;
             }
-            int y = top + CONTENT_TOP + 12 + row * 19;
+            int y = top + CONTENT_TOP + 12 + row * RIGHTS_ROW;
             EnumSet<Permission> granted = view.rights().getOrDefault(role, EnumSet.noneOf(Permission.class));
             for (int column = 0; column < EDITABLE_RIGHTS.size(); column++) {
                 Permission permission = EDITABLE_RIGHTS.get(column);
@@ -228,7 +253,7 @@ public class ThroneScreen extends Screen implements ResultListener {
                 Button button = addRenderableWidget(Button.builder(
                                 Component.literal(has ? "✔" : "✘").withStyle(has ? ChatFormatting.GREEN : ChatFormatting.DARK_GRAY),
                                 b -> KingdomWorldNetwork.sendToServer(KingdomActionPacket.setPermission(role, permission, !has)))
-                        .bounds(left + 112 + column * 42, y, 40, 17).build());
+                        .bounds(left + 112 + column * 42, y, 40, RIGHTS_ROW - 1).build());
                 button.active = view.can(Permission.APPOINT);
             }
             row++;
@@ -274,17 +299,17 @@ public class ThroneScreen extends Screen implements ResultListener {
         renderBackground(graphics);
         int left = left();
         int top = top();
-        graphics.fill(left, top, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xE0201810);
-        graphics.renderOutline(left, top, PANEL_WIDTH, PANEL_HEIGHT, 0xFF000000 | view.color());
+        graphics.fill(left, top, left + PANEL_WIDTH, top + panelHeight(), 0xE0201810);
+        graphics.renderOutline(left, top, PANEL_WIDTH, panelHeight(), 0xFF000000 | view.color());
         graphics.drawCenteredString(font, Component.literal(view.name()), width / 2, top + 8, 0xFF000000 | brighten(view.color()));
         switch (tab) {
             case OVERVIEW -> renderOverview(graphics, left, top);
             case MEMBERS -> renderMembers(graphics, left, top);
             case RIGHTS -> renderRights(graphics, left, top);
         }
-        int lineY = top + PANEL_HEIGHT - 46;
+        int lineY = top + panelHeight() - 46;
         for (FormattedCharSequence line : font.split(status, PANEL_WIDTH - 16)) {
-            if (lineY > top + PANEL_HEIGHT - 30) {
+            if (lineY > top + panelHeight() - 30) {
                 break;
             }
             graphics.drawString(font, line, left + 8, lineY, statusIsError ? 0xFFFF7070 : 0xFFA0E0A0);
@@ -351,12 +376,12 @@ public class ThroneScreen extends Screen implements ResultListener {
             if (!role.isAssignable()) {
                 continue;
             }
-            graphics.drawString(font, roleName(role), left + 10, top + CONTENT_TOP + 17 + row * 19, 0xFFE0E0E0);
+            graphics.drawString(font, roleName(role), left + 10, top + CONTENT_TOP + 16 + row * RIGHTS_ROW, 0xFFE0E0E0);
             row++;
         }
         if (!view.can(Permission.APPOINT)) {
             graphics.drawString(font, Component.translatable("kingdomworld.screen.throne.rights_read_only"),
-                    left + 10, top + CONTENT_TOP + 17 + row * 19, 0xFF909090);
+                    left + 10, top + CONTENT_TOP + 16 + row * RIGHTS_ROW, 0xFF909090);
         }
     }
 

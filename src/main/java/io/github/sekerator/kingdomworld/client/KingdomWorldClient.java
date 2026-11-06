@@ -55,6 +55,7 @@ public final class KingdomWorldClient {
         if (event.phase != TickEvent.Phase.END) {
             return;
         }
+        ClientSelfTest.onClientTick();
         Minecraft minecraft = Minecraft.getInstance();
         while (MAP_KEY.consumeClick()) {
             if (minecraft.player != null && minecraft.screen == null) {
@@ -80,6 +81,9 @@ public final class KingdomWorldClient {
         if (!titleScreenSeen && event.getNewScreen() instanceof TitleScreen) {
             titleScreenSeen = true;
             LOGGER.debug("KingdomWorld client reached the title screen");
+        }
+        if (event.getNewScreen() instanceof TitleScreen) {
+            ClientSelfTest.onTitleScreen();
         }
     }
 }

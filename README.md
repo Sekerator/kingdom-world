@@ -35,6 +35,7 @@ KingdomWorld: мод для Minecraft 1.20.1 (Forge) о королевствах
 - Лимит чанков: `baseMaxChunks` плюс `chunksPerMember` за каждого подданного-игрока (кроме правителя). Расчёт лимита вынесен в `ChunkLimitPolicy`, его можно заменить через `KingdomWorldApi.setChunkLimitPolicy`.
 - В землях королевства чужим и членам без нужного права запрещено ломать и ставить блоки, пользоваться вёдрами и предметами на блоках, открывать блоки с инвентарём. С `protectInteractions` также двери, люки, калитки, кнопки, рычаги, повторители, компараторы, рамки и стойки для брони.
 - Взрывы не разрушают блоки в землях (`protectFromExplosions`), огонь туда не распространяется и не сжигает блоки (`protectFromFire`).
+- Поршни не двигают блоки через границу: поршень снаружи не вталкивает блоки в земли королевства и не вытягивает их оттуда.
 - Машины модов, действующие через FakePlayer (например, Create), разрешены настройкой `allowFakePlayers`.
 - Операторы обходят защиту командой `/kingdomworld admin bypass` (переключатель, сбрасывается при перезапуске сервера).
 - Все проверки идут через один сервис прав (`ProtectionService` и `AccessPolicy` в ядре); будущие механики (война) добавляют исключения через `KingdomWorldApi.accessPolicy().addExemption(...)`.
@@ -99,6 +100,7 @@ Smoke-скрипт ставит настоящий сервер Forge 1.20.1-47.
 
 - `gradlew runClient`: клиент с модом (папка `run/`). `gradlew runClient -PquickPlayWorld=<папка мира>` сразу открывает одиночный мир.
 - `gradlew runServer`: выделенный сервер с модом (папка `run/`, EULA нужно принять в `run/eula.txt`).
+- Самопроверка клиента: `gradlew runClient -PclientSelfTest=title` доходит до главного меню и выходит; `gradlew runClient -PclientSelfTest=world -PquickPlayWorld=<папка мира>` в одиночном мире основывает рядом с игроком королевство, открывает карту, окно трона (через настоящий пакет сервера) со всеми вкладками, карту территории с присоединением чанка и окно основания, затем распускает королевство и выходит. Шаги пишутся в лог с префиксом `KingdomWorld client self-test`. Без свойства `clientSelfTest` этот код не работает.
 
 ### Команды
 
@@ -198,6 +200,7 @@ Recipes (data pack, replaceable):
 - Chunk limit: `baseMaxChunks` plus `chunksPerMember` for every player subject (the ruler excluded). The limit is computed by a `ChunkLimitPolicy`, which `KingdomWorldApi.setChunkLimitPolicy` can replace.
 - In kingdom land, outsiders and members without the matching right cannot break or place blocks, use buckets or items on blocks, or open blocks with an inventory. With `protectInteractions`, doors, trapdoors, gates, buttons, levers, repeaters, comparators, item frames and armor stands are protected as well.
 - Explosions do not destroy blocks in kingdom land (`protectFromExplosions`); fire neither spreads into it nor burns its blocks (`protectFromFire`).
+- Pistons do not move blocks across a border: a piston outside cannot push blocks into a kingdom's land or pull them out of it.
 - Machines of other mods acting as fake players (Create and the like) are allowed by `allowFakePlayers`.
 - Operators bypass protection with `/kingdomworld admin bypass` (a toggle, reset when the server restarts).
 - Every check goes through one service (`ProtectionService` and the core `AccessPolicy`); later mechanics (war) add exemptions with `KingdomWorldApi.accessPolicy().addExemption(...)`.
@@ -255,6 +258,7 @@ Script options:
 
 - `gradlew runClient`: client with the mod (folder `run/`). `gradlew runClient -PquickPlayWorld=<world folder>` opens a singleplayer world right away.
 - `gradlew runServer`: dedicated server with the mod (folder `run/`; accept the EULA in `run/eula.txt`).
+- Client self-check: `gradlew runClient -PclientSelfTest=title` reaches the title screen and quits; `gradlew runClient -PclientSelfTest=world -PquickPlayWorld=<world folder>` founds a kingdom next to the player in a singleplayer world, opens the map, the throne screen (through the real server packet) with all tabs, the territory editor with a claim and the founding screen, then dissolves the kingdom and quits. Steps are logged with the prefix `KingdomWorld client self-test`. Without the `clientSelfTest` property this code does nothing.
 
 ### Commands
 

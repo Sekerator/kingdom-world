@@ -32,7 +32,7 @@ import java.util.UUID;
 public class KingdomMapScreen extends Screen implements ResultListener {
     private static final int MARGIN = 8;
     private static final int HEADER = 22;
-    private static final int FOOTER = 34;
+    private static final int FOOTER = 44;
     private static final double MAX_CELL = 32.0;
     private static final int MAX_VISIBLE = MapAreaRequestPacket.MAX_SIDE - 8;
     private static final long REQUEST_INTERVAL_MILLIS = 300L;
@@ -45,7 +45,7 @@ public class KingdomMapScreen extends Screen implements ResultListener {
     private final KingdomView editing;
     private double centerX;
     private double centerZ;
-    private double cell = 8.0;
+    private double cell = 12.0;
     private boolean centered;
     private boolean dragging;
     private double dragDistance;
@@ -250,6 +250,13 @@ public class KingdomMapScreen extends Screen implements ResultListener {
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
+    /**
+     * The last answer of the server shown in the status line.
+     */
+    public String statusText() {
+        return status.getString();
+    }
+
     @Override
     public void onResult(boolean success, Component message) {
         status = message;
@@ -410,14 +417,16 @@ public class KingdomMapScreen extends Screen implements ResultListener {
         Component hint = editing != null
                 ? Component.translatable("kingdomworld.screen.map.hint_edit")
                 : Component.translatable("kingdomworld.screen.map.hint", KingdomWorldClient.MAP_KEY.getTranslatedKeyMessage());
-        int lineY = y + 12;
-        if (!status.getString().isEmpty()) {
-            for (FormattedCharSequence line : font.split(status, width - 190)) {
-                graphics.drawString(font, line, MARGIN, lineY, statusIsError ? 0xFFFF7070 : 0xFFA0E0A0);
+        int lineY = y + 11;
+        Component text = status.getString().isEmpty() ? hint : status;
+        int color = status.getString().isEmpty() ? 0xFF909090 : statusIsError ? 0xFFFF7070 : 0xFFA0E0A0;
+        int lines = 0;
+        for (FormattedCharSequence line : font.split(text, width - 2 * MARGIN - 176)) {
+            if (lines++ == 2) {
                 break;
             }
-        } else {
-            graphics.drawString(font, hint, MARGIN, lineY, 0xFF909090);
+            graphics.drawString(font, line, MARGIN, lineY, color);
+            lineY += 10;
         }
     }
 

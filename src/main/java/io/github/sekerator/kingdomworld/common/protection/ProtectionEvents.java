@@ -30,6 +30,7 @@ import net.minecraft.world.level.block.LeverBlock;
 import net.minecraft.world.level.block.NoteBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.piston.PistonStructureResolver;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -41,9 +42,12 @@ import net.minecraftforge.event.entity.player.FillBucketEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.event.level.ExplosionEvent;
+import net.minecraftforge.event.level.PistonEvent;
 import net.minecraftforge.eventbus.api.Event;
 import net.minecraftforge.eventbus.api.EventPriority;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -68,6 +72,7 @@ public final class ProtectionEvents {
         MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGH, ProtectionEvents::onTrample);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGH, ProtectionEvents::onExplosion);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGH, ProtectionEvents::onFluidPlace);
+        MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGH, ProtectionEvents::onPiston);
     }
 
     private static void onBreak(BlockEvent.BreakEvent event) {
@@ -255,6 +260,53 @@ public final class ProtectionEvents {
     private static boolean isClaimed(TerritoryIndex territory, String dimension, BlockPos pos) {
         UUID owner = territory.ownerOf(dimension, ChunkKey.of(pos.getX() >> 4, pos.getZ() >> 4));
         return owner != null;
+    }
+
+    /**
+     * A piston may only move blocks within land of its own owner (or within unclaimed land), so pistons cannot
+     * push blocks into a kingdom or pull them out of it from outside.
+     */
+    private static void onPiston(PistonEvent.Pre event) {
+        if (!(event.getLevel() instanceof Level level) || level.isClientSide) {
+            return;
+        }
+        TerritoryIndex territory = ProtectionService.territory(level);
+        String dimension = Dimensions.id(level);
+        if (territory == null || territory.claimsIn(dimension).isEmpty()) {
+            return;
+        }
+        if (movesForeignBlocks(territory, dimension, event)) {
+            event.setCanceled(true);
+        }
+    }
+
+    public static boolean movesForeignBlocks(TerritoryIndex territory, String dimension, PistonEvent event) {
+        UUID pistonOwner = ownerOf(territory, dimension, event.getPos());
+        List<BlockPos> touched = new ArrayList<>();
+        boolean extend = event.getPistonMoveType().isExtend;
+        if (extend) {
+            touched.add(event.getFaceOffsetPos());
+        }
+        PistonStructureResolver resolver = event.getStructureHelper();
+        if (resolver != null && resolver.resolve()) {
+            Direction movement = extend ? event.getDirection() : event.getDirection().getOpposite();
+            for (BlockPos pos : resolver.getToPush()) {
+                touched.add(pos);
+                touched.add(pos.relative(movement));
+            }
+            touched.addAll(resolver.getToDestroy());
+        }
+        for (BlockPos pos : touched) {
+            UUID owner = ownerOf(territory, dimension, pos);
+            if (owner != null && !owner.equals(pistonOwner)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static UUID ownerOf(TerritoryIndex territory, String dimension, BlockPos pos) {
+        return territory.ownerOf(dimension, ChunkKey.of(pos.getX() >> 4, pos.getZ() >> 4));
     }
 
     private static void onFluidPlace(BlockEvent.FluidPlaceBlockEvent event) {

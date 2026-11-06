@@ -37,6 +37,7 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.util.FakePlayerFactory;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.level.BlockEvent;
+import net.minecraftforge.event.level.PistonEvent;
 import net.minecraftforge.eventbus.api.Event;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
@@ -264,6 +265,39 @@ public final class TerritoryGameTests {
             helper.assertTrue(released.success(), "Giving up a chunk failed: " + released.message().getString());
             helper.assertTrue(KingdomWorldApi.ownerOfChunk(level, east.x, east.z) == null, "Chunk still owned after giving it up");
         } finally {
+            KingdomWorldApi.dissolveKingdom(server, kingdom.id());
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_piston")
+    public static void pistonsCannotMoveBlocksAcrossTheBorder(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos origin = helper.absolutePos(new BlockPos(1, 1, 1));
+        ChunkPos outside = new ChunkPos(origin);
+        // The kingdom's land starts in the chunk east of the test chunk.
+        BlockPos throne = new BlockPos(outside.getMinBlockX() + 32 + 8, origin.getY(), outside.getMinBlockZ() + 8);
+        Kingdom kingdom = found(helper, throne, "GameTest Border", UUID.randomUUID());
+        BlockPos piston = new BlockPos(outside.getMaxBlockX() - 1, origin.getY() + 6, origin.getZ());
+        BlockPos block = piston.east();
+        BlockPos inside = block.east();
+        try {
+            helper.assertTrue(KingdomWorldApi.ownerAt(level, inside) != null && KingdomWorldApi.ownerAt(level, block) == null,
+                    "Test layout: the border is not where expected");
+            level.setBlockAndUpdate(block, Blocks.STONE.defaultBlockState());
+            PistonEvent.Pre push = new PistonEvent.Pre(level, piston, Direction.EAST, PistonEvent.PistonMoveType.EXTEND);
+            MinecraftForge.EVENT_BUS.post(push);
+            helper.assertTrue(push.isCanceled(), "A piston outside pushed a block into kingdom land");
+
+            BlockPos away = piston.west(4);
+            level.setBlockAndUpdate(away.west(), Blocks.STONE.defaultBlockState());
+            PistonEvent.Pre free = new PistonEvent.Pre(level, away, Direction.WEST, PistonEvent.PistonMoveType.EXTEND);
+            MinecraftForge.EVENT_BUS.post(free);
+            helper.assertTrue(!free.isCanceled(), "A piston in unclaimed land was stopped");
+            level.setBlockAndUpdate(away.west(), Blocks.AIR.defaultBlockState());
+        } finally {
+            level.setBlockAndUpdate(block, Blocks.AIR.defaultBlockState());
             KingdomWorldApi.dissolveKingdom(server, kingdom.id());
         }
         helper.succeed();
