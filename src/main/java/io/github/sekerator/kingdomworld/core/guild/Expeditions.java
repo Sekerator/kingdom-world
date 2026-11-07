@@ -2,6 +2,9 @@ package io.github.sekerator.kingdomworld.core.guild;
 
 import io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds;
 import io.github.sekerator.kingdomworld.core.citizen.TaskRisks;
+import io.github.sekerator.kingdomworld.core.combat.Battle;
+import io.github.sekerator.kingdomworld.core.combat.CombatPower;
+import io.github.sekerator.kingdomworld.core.combat.Fighter;
 
 import java.util.List;
 import java.util.Objects;
@@ -10,11 +13,12 @@ import java.util.UUID;
 /**
  * Expeditions of squads to contracts far away, by formula: how strong a squad is (ranks, weapons, armor, experience), how
  * hard a contract is, how long it takes and how it ends. The dangers on the way go through {@link TaskRisks}, like the
- * accidents of other work far from players, so armor and experience protect here as well.
+ * accidents of other work far from players, so armor and experience protect here as well. Strength, the chance to win and
+ * the risk of a fight come from the model of battles the army uses too ({@link CombatPower}, {@link Battle}).
  */
 public final class Expeditions {
     /** Strength of an adventurer of rank F with bare hands, no armor and no experience. */
-    public static final double BASE_POWER = 10.0;
+    public static final double BASE_POWER = CombatPower.BASE;
     /** Strength of an F contract for one monster. */
     public static final double BASE_DIFFICULTY = 10.0;
 
@@ -42,6 +46,13 @@ public final class Expeditions {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(rank, "rank");
         }
+
+        /**
+         * The member as a fighter of the model of battles: the rank is its level.
+         */
+        public Fighter fighter() {
+            return Fighter.of(id, rank.ordinal(), weapon, armor, experience);
+        }
     }
 
     /**
@@ -65,10 +76,7 @@ public final class Expeditions {
      * The strength of one adventurer.
      */
     public static double power(Member member) {
-        double weapon = 1.0 + Math.max(0.0, member.weapon()) / 8.0;
-        double armor = 1.0 + Math.max(0.0f, member.armor()) / 20.0;
-        double skill = 1.0 + Math.min(1.0, Math.max(0, member.experience()) / (double) TaskRisks.VETERAN_EXPERIENCE) * 0.5;
-        return BASE_POWER * (member.rank().ordinal() + 1) * weapon * armor * skill;
+        return CombatPower.of(member.fighter());
     }
 
     /**
@@ -116,11 +124,7 @@ public final class Expeditions {
      * The chance of a squad to finish a contract: one half for an even fight, more for a stronger squad.
      */
     public static double successChance(double power, double difficulty) {
-        if (difficulty <= 0) {
-            return 1.0;
-        }
-        double ratio = Math.max(0.0, power) / difficulty;
-        return ratio * ratio / (ratio * ratio + 1.0);
+        return Battle.winChance(power, difficulty);
     }
 
     /**
@@ -152,9 +156,7 @@ public final class Expeditions {
             case PARTIAL -> 1.5;
             case FAILURE -> 2.0;
         };
-        double injury = Math.min(0.9, rules.expeditionInjury * hardship / ratio);
-        double death = Math.min(0.5, rules.expeditionDeath * hardship / (ratio * ratio));
-        TaskRisks.Risk risk = new TaskRisks.Risk(injury, death);
+        TaskRisks.Risk risk = Battle.casualtyRisk(ratio, hardship, rules.expeditionInjury, rules.expeditionDeath);
         List<Fate> fates = new java.util.ArrayList<>();
         for (int i = 0; i < members.size(); i++) {
             Member member = members.get(i);
