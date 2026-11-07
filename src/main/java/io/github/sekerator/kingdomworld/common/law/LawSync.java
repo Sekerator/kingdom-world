@@ -4,7 +4,6 @@ import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.LawViews;
 import io.github.sekerator.kingdomworld.common.network.packet.LawPackets;
-import io.github.sekerator.kingdomworld.common.protection.ProtectionService;
 import io.github.sekerator.kingdomworld.core.economy.CurrencyUnits;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.law.Wanted;
@@ -25,6 +24,8 @@ import java.util.UUID;
 final class LawSync {
     private static final Map<UUID, LawViews.WantedLine> SENT = new HashMap<>();
     private static final Set<UUID> DIRTY = new HashSet<>();
+    /** Longest kingdom name on the line of the wanted. */
+    static final int NAME_LENGTH = 12;
 
     private LawSync() {
     }
@@ -59,8 +60,15 @@ final class LawSync {
         }
         CurrencyUnits units = LawTexts.units(server, owner);
         long fine = wanted.get().fine(LawSettings.rules(), LawWork.state(server).law(owner).fineMultiplierPermille());
-        return new LawViews.WantedLine(true, ProtectionService.shortName(kingdom.get().name()), kingdom.get().color(), wanted.get().executable(),
+        return new LawViews.WantedLine(true, shortName(kingdom.get().name()), kingdom.get().color(), wanted.get().executable(),
                 fine, units.silver(), units.gold());
+    }
+
+    /**
+     * A kingdom name short enough for the line of the wanted, which also carries the fine and must fit the narrowest screen.
+     */
+    static String shortName(String name) {
+        return name.length() <= NAME_LENGTH ? name : name.substring(0, NAME_LENGTH) + "…";
     }
 
     static void tick(MinecraftServer server) {

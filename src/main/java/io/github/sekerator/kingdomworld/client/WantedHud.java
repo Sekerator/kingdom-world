@@ -41,7 +41,7 @@ public final class WantedHud {
         Component kingdom = Component.literal(shown.kingdomName()).withStyle(style -> style.withColor(TextColor.fromRgb(shown.color() & 0xFFFFFF)));
         CurrencyUnits units = CurrencyUnits.valid(shown.silver(), shown.gold()) ? new CurrencyUnits(shown.silver(), shown.gold())
                 : CurrencyUnits.DEFAULT;
-        return Component.translatable("kingdomworld.law.hud", kingdom, LawTexts.punishment(shown.execution(), shown.fine(), units));
+        return Component.translatable("kingdomworld.law.hud", kingdom, LawTexts.punishmentShort(shown.execution(), shown.fine(), units));
     }
 
     /**

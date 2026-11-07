@@ -381,7 +381,7 @@ public final class ClientSelfTest {
                 KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.LawPackets.PlayerAction(
                         io.github.sekerator.kingdomworld.common.network.packet.LawPackets.PlayerAction.Action.OPEN, null, 0));
             }
-            case 372 -> {
+            case 388 -> {
                 LOGGER.info(PREFIX + "law window opened by the server: {}, line of the wanted shown: {}",
                         minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.LawScreen, WantedHud.line().shown());
                 minecraft.setScreen(null);

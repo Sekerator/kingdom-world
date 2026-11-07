@@ -3,7 +3,6 @@ package io.github.sekerator.kingdomworld.common.law;
 import com.mojang.logging.LogUtils;
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.economy.CoinStacks;
-import io.github.sekerator.kingdomworld.common.economy.MoneyTexts;
 import io.github.sekerator.kingdomworld.common.economy.TreasuryActions;
 import io.github.sekerator.kingdomworld.common.trade.Purses;
 import io.github.sekerator.kingdomworld.core.economy.CoinPayment;
@@ -89,7 +88,7 @@ public final class LawEntry {
                 return false;
             }
             default -> {
-                player.displayClientMessage(Component.translatable(LawWork.KEY + "entry_price", MoneyTexts.amount(fee,
+                player.displayClientMessage(Component.translatable(LawWork.KEY + "entry_price", LawTexts.shortAmount(fee,
                         LawTexts.units(server, city.kingdomId()))).withStyle(ChatFormatting.GOLD), true);
                 LawActions.openEntry(player, city, fee);
                 return false;
@@ -152,7 +151,7 @@ public final class LawEntry {
         LawState state = LawWork.state(server);
         state.grantPass(kingdomId, player.getUUID(), LawWork.now(server), rules);
         state.changeReputation(kingdomId, player.getUUID(), rules.taxReputation);
-        player.displayClientMessage(Component.translatable(LawWork.KEY + "entry_paid", MoneyTexts.amount(fee, LawTexts.units(server, kingdomId)))
+        player.displayClientMessage(Component.translatable(LawWork.KEY + "entry_paid", LawTexts.shortAmount(fee, LawTexts.units(server, kingdomId)))
                 .withStyle(ChatFormatting.GREEN), true);
         LOGGER.debug("{} paid {} to enter the cities of {}", player.getGameProfile().getName(), fee, kingdomId);
         return Outcome.DONE;

@@ -3,7 +3,6 @@ package io.github.sekerator.kingdomworld.common.law;
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.army.ArmyWork;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenEntity;
-import io.github.sekerator.kingdomworld.common.economy.MoneyTexts;
 import io.github.sekerator.kingdomworld.core.army.Order;
 import io.github.sekerator.kingdomworld.core.law.LawRules;
 import io.github.sekerator.kingdomworld.core.law.Wanted;
@@ -113,7 +112,7 @@ final class LawGuards {
             return;
         }
         Component message = wanted.get().executable() ? Component.translatable(LawWork.KEY + "hail_murder")
-                : Component.translatable(LawWork.KEY + "hail", MoneyTexts.amount(wanted.get().fine(LawSettings.rules(),
+                : Component.translatable(LawWork.KEY + "hail", LawTexts.shortAmount(wanted.get().fine(LawSettings.rules(),
                 LawWork.state(server).law(kingdom).fineMultiplierPermille()), LawTexts.units(server, kingdom)));
         player.displayClientMessage(message.copy().withStyle(ChatFormatting.RED), true);
         if (guard != null) {

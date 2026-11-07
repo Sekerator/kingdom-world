@@ -661,6 +661,10 @@ class TranslationKeysTest {
             used.add("kingdomworld.law." + reason);
             used.add("kingdomworld.law." + reason + "_empty");
         }
+        for (io.github.sekerator.kingdomworld.core.economy.Denomination denomination
+                : io.github.sekerator.kingdomworld.core.economy.Denomination.values()) {
+            used.add("kingdomworld.law.short." + denomination.id());
+        }
         used.add("kingdomworld.law.slave_freed");
         used.add("kingdomworld.law.slave_freed.female");
         for (String key : List.of("wanted_forgotten", "wanted_cleared", "pardoned", "record.theft", "record.assault", "record.murder",

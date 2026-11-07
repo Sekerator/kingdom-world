@@ -64,6 +64,33 @@ public final class LawTexts {
                 : Component.translatable(KEY + "punishment.fine", MoneyTexts.amount(fine, units));
     }
 
+    /**
+     * An amount in a few letters for a line above the hotbar: «12з 5с 3м», "12g 5s 3c".
+     */
+    public static MutableComponent shortAmount(long amount, CurrencyUnits units) {
+        io.github.sekerator.kingdomworld.core.economy.Coins coins = io.github.sekerator.kingdomworld.core.economy.Coins.countOut(Math.max(0, amount),
+                units, io.github.sekerator.kingdomworld.core.economy.Denomination.GOLD);
+        MutableComponent text = null;
+        for (io.github.sekerator.kingdomworld.core.economy.Denomination denomination
+                : io.github.sekerator.kingdomworld.core.economy.Denomination.largestFirst()) {
+            long count = coins.count(denomination);
+            if (count == 0) {
+                continue;
+            }
+            MutableComponent part = Component.translatable(KEY + "short." + denomination.id(), count);
+            text = text == null ? part : text.append(" ").append(part);
+        }
+        return text == null ? Component.translatable(KEY + "short.copper", 0) : text;
+    }
+
+    /**
+     * What awaits the player, in a few words for a line above the hotbar.
+     */
+    public static MutableComponent punishmentShort(boolean execution, long fine, CurrencyUnits units) {
+        return execution ? Component.translatable(KEY + "punishment.execution")
+                : Component.translatable(KEY + "punishment.fine", shortAmount(fine, units));
+    }
+
     public static MutableComponent punishment(MinecraftServer server, Wanted wanted) {
         var state = LawWork.state(server);
         long fine = wanted.fine(LawSettings.rules(), state.law(wanted.kingdomId()).fineMultiplierPermille());

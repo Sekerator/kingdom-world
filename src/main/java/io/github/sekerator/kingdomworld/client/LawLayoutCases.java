@@ -8,6 +8,7 @@ import io.github.sekerator.kingdomworld.client.screen.ThroneScreen;
 import io.github.sekerator.kingdomworld.client.screen.WantedHudPreview;
 import io.github.sekerator.kingdomworld.common.economy.MoneyTexts;
 import io.github.sekerator.kingdomworld.common.kingdom.KingdomActions;
+import io.github.sekerator.kingdomworld.common.law.LawTexts;
 import io.github.sekerator.kingdomworld.common.network.data.KingdomView;
 import io.github.sekerator.kingdomworld.common.network.data.LawViews;
 import io.github.sekerator.kingdomworld.common.network.data.TradeViews;
@@ -42,6 +43,7 @@ final class LawLayoutCases {
     private static final String LONG_PLAYER = "WWWWWWWWWWWWWWWW";
     private static final String LONG_CITY = "Новый Великий Северный Город Щит";
     private static final long MUCH = 999_999_999_999L;
+    private static final long HOTBAR_MONEY = 99_999_999L;
     private static final UUID KINGDOM = UUID.nameUUIDFromBytes("law".getBytes(StandardCharsets.UTF_8));
 
     private LawLayoutCases() {
@@ -62,22 +64,26 @@ final class LawLayoutCases {
      * wanted itself.
      */
     static void actionbars(Font font, int narrowest) {
-        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.law.hail", money()), narrowest);
+        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.law.hail", hotbarMoney()), narrowest);
         LayoutCheck.actionbar(font, Component.translatable("kingdomworld.law.hail_murder"), narrowest);
         LayoutCheck.actionbar(font, Component.translatable("kingdomworld.law.witness_ran"), narrowest);
-        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.law.entry_price", money()), narrowest);
-        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.law.entry_paid", money()), narrowest);
+        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.law.entry_price", hotbarMoney()), narrowest);
+        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.law.entry_paid", hotbarMoney()), narrowest);
         LayoutCheck.actionbar(font, WantedHud.text(line(false)), narrowest);
         LayoutCheck.actionbar(font, WantedHud.text(line(true)), narrowest);
-        for (KingdomError error : new KingdomError[]{KingdomError.NOT_AT_RANSOM_PLACE, KingdomError.DEBT_TOO_HIGH, KingdomError.GUARD_FAR,
-                KingdomError.FINE_TOO_HIGH, KingdomError.NOT_WANTED}) {
-            LayoutCheck.actionbar(font, KingdomActions.errorMessage(error), narrowest);
-        }
+    }
+
+    /**
+     * The largest amount the lines above the hotbar are checked with: fines and fees of the defaults stay far below it, and
+     * eight digits of copper are checked.
+     */
+    private static Component hotbarMoney() {
+        return LawTexts.shortAmount(HOTBAR_MONEY, currency().units());
     }
 
     private static LawViews.WantedLine line(boolean execution) {
-        // Kingdom names on the line are cut to 16 letters by the server.
-        return new LawViews.WantedLine(true, "ЩЩЩЩЩЩЩЩЩЩЩЩЩЩЩЩ…", 0x922B21, execution, MUCH, 10, 100);
+        // Kingdom names on the line are cut to 12 letters by the server.
+        return new LawViews.WantedLine(true, "ЩЩЩЩЩЩЩЩЩЩЩЩ…", 0x922B21, execution, HOTBAR_MONEY, 10, 100);
     }
 
     // ---------------------------------------------------------------- views
@@ -214,11 +220,11 @@ final class LawLayoutCases {
         add.accept("law-ransom", () -> ransom(false, true, 64, Component.empty()));
         add.accept("law-ransom-far", () -> ransom(false, false, 12, KingdomActions.errorMessage(KingdomError.NOT_AT_RANSOM_PLACE)));
         add.accept("law-ransom-gone", () -> ransom(true, false, 3, Component.empty()));
-        add.accept("law-hud", () -> new WantedHudPreview("fine", line(false), Component.translatable("kingdomworld.law.hail", money()),
+        add.accept("law-hud", () -> new WantedHudPreview("fine", line(false), Component.translatable("kingdomworld.law.hail", hotbarMoney()),
                 new ItemStack(Items.NETHERITE_SWORD).getHoverName()));
         add.accept("law-hud-murder", () -> new WantedHudPreview("murder", line(true), Component.translatable("kingdomworld.law.hail_murder"),
                 Component.literal(LONG_PLAYER)));
         add.accept("law-hud-messages", () -> new WantedHudPreview("messages", line(false), Component.translatable("kingdomworld.law.entry_price",
-                money()), TradeTexts.items(MUCH)));
+                hotbarMoney()), TradeTexts.items(MUCH)));
     }
 }

@@ -54,7 +54,7 @@ public class LawDialogScreen extends KingdomScreen implements ResultListener {
     private Component firstLabel() {
         if (view.dialog() == LawViews.Dialog.SURRENDER) {
             return view.execution() ? Component.translatable(KEY + "accept_death")
-                    : Component.translatable(KEY + "give_up", MoneyTexts.amount(view.amount(), units()));
+                    : Component.translatable(KEY + "give_up", LawTexts.shortAmount(view.amount(), units()));
         }
         return Component.translatable(KEY + "pay_coins");
     }
@@ -89,6 +89,9 @@ public class LawDialogScreen extends KingdomScreen implements ResultListener {
         }
         panelWidth = Math.min(Math.max(MIN_PANEL_WIDTH, inner + 2 * PAD), width - 8);
         panelHeight = Math.min(MAX_PANEL_HEIGHT, height - 8);
+        // The first button gives way so that the buttons never cover each other on a narrow screen.
+        int room = panelWidth - 2 * PAD - cancelWidth - GAP - (secondWidth > 0 ? secondWidth + GAP : 0);
+        firstWidth = Math.max(20, Math.min(firstWidth, room));
     }
 
     private int left() {

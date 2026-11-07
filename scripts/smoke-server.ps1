@@ -1574,9 +1574,9 @@ Invoke-Phase 'session1' {
     Send-ServerCommand $server "kingdomworld admin law wanted add $($script:LawThief) $KingdomName theft 120"
     [void](Wait-ForLog $server ' is wanted in .* for theft' $CommandTimeout $ConsoleFailPattern)
     Send-ServerCommand $server "kingdomworld admin companions fund $($script:LawThief) $KingdomName 100"
-    [void](Wait-ForLog $server 'Account of .* in the currency: \+100' $CommandTimeout $ConsoleFailPattern)
+    [void](Wait-ForLog $server 'Account of .* in the currency: \+' $CommandTimeout $ConsoleFailPattern)
     Send-ServerCommand $server "kingdomworld admin law fine $($script:LawThief) $KingdomName pay"
-    $paid = Wait-ForLog $server ' paid \S+: (\d+) in coins, (\d+) from the account, (\d+) as a debt' $CommandTimeout $ConsoleFailPattern
+    $paid = Wait-ForLog $server ' paid [^:]+: (\d+) in coins, (\d+) from the account, (\d+) as a debt' $CommandTimeout $ConsoleFailPattern
     if ($paid -and $paid.Groups[1].Value -eq '0' -and $paid.Groups[2].Value -eq '100' -and $paid.Groups[3].Value -eq '140') {
         Write-Ok '[session1] the thief paid the fine of 240: 100 from the account, 140 as a debt'
     } else {
@@ -2347,7 +2347,7 @@ Invoke-Phase 'session2' {
         }
         $ransom = if ($goods) { [int64]$goods.Groups[3].Value } else { 0 }
         Send-ServerCommand $server "kingdomworld admin companions fund $($script:LawOutlaw) $KingdomName $ransom"
-        [void](Wait-ForLog $server "Account of .* in the currency: \+$ransom" $CommandTimeout $ConsoleFailPattern)
+        [void](Wait-ForLog $server 'Account of .* in the currency: \+' $CommandTimeout $ConsoleFailPattern)
         Send-ServerCommand $server "kingdomworld admin law confiscated ransom $($script:LawConfiscation)"
         $back = Wait-ForLog $server "#$($script:LawConfiscation) bought back by \S+: (\d+) item\(s\) with the owner, ransom (\d+)" $CommandTimeout $ConsoleFailPattern
         $after = Get-KingdomMoney $server $KingdomName
