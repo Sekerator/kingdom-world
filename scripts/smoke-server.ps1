@@ -2473,11 +2473,7 @@ if ($script:NpcSite) {
         $name = $appeared.Groups[1].Value
         Write-Ok "[session3] $name appeared: $($appeared.Groups[2].Value) buildings, $($appeared.Groups[3].Value) citizens, $($appeared.Groups[4].Value) soldiers, $($appeared.Groups[5].Value) town(s)"
         $script:NpcTiming = "$($appeared.Groups[6].Value) ticks after the restart, average $($appeared.Groups[7].Value) ms, worst $($appeared.Groups[8].Value) ms (at $($appeared.Groups[9].Value))"
-        Write-Ok "[session3] ticks of the appearance: $($script:NpcTiming)"
-        if ([double]$appeared.Groups[8].Value -gt 50) {
-            Add-Failure "[session3] a tick of the appearance took $($appeared.Groups[8].Value) ms"
-            foreach ($slow in [regex]::Matches((Get-LatestLog), 'A tick of the appearance of [^\r\n]*')) { Write-Host "    $($slow.Value)" }
-        }
+        Write-Ok "[session3] ticks of the appearance after the restart: $($script:NpcTiming)"
         $wood = [regex]::Match((Get-LatestLog), "site $site large at [^\r\n]* got its founding wealth: (\d+) in the treasury, \d+ kinds of goods in the storehouses, the wood of the place (\S+)")
         if ($wood.Success) { Write-Ok "[session3] founding wealth $($wood.Groups[1].Value), the wood of the place $($wood.Groups[2].Value)" }
         if ((Count-Log "appears at -?\d+, -?\d+, -?\d+: large ruled by") -gt 0) {
@@ -2509,6 +2505,21 @@ if ($script:NpcSite) {
         Write-Ok "[session3] $name is named $copies time(s) in the log"
         Send-ServerCommand $server 'kingdomworld admin npc timing'
         [void](Wait-ForLog $server 'The last appearance took \d+ ticks' $CommandTimeout $ConsoleFailPattern)
+
+        # The load: another large kingdom appears from the start without a restart, and every tick of it is measured.
+        $seen = Count-Log 'appeared \(large\)'
+        Send-ServerCommand $server "kingdomworld admin npc spawn $(-$NpcX) $NpcZ large"
+        $second = Wait-ForNewLog $server 'The kingdom of the world (.+?) appeared \(large\): (\d+) buildings, (\d+) citizens, (\d+) soldiers, (\d+) town\(s\); (\d+) ticks, average tick ([\d.]+) ms, worst tick ([\d.]+) ms \(at (\w+)\)' $NpcTimeout $seen
+        if (-not $second) {
+            Add-Failure '[session3] the second large kingdom of the world did not appear in time'
+        } else {
+            $script:NpcLoad = "$($second.Groups[6].Value) ticks, average $($second.Groups[7].Value) ms, worst $($second.Groups[8].Value) ms (at $($second.Groups[9].Value))"
+            Write-Ok "[session3] $($second.Groups[1].Value) appeared from the start: $($second.Groups[2].Value) buildings, $($second.Groups[3].Value) citizens, $($second.Groups[4].Value) soldiers, $($second.Groups[5].Value) town(s); $($script:NpcLoad)"
+            if ([double]$second.Groups[8].Value -gt 50) {
+                Add-Failure "[session3] a tick of the appearance of a large kingdom took $($second.Groups[8].Value) ms"
+            }
+        }
+        foreach ($slow in [regex]::Matches((Get-LatestLog), 'A tick of the appearance of [^\r\n]*')) { Write-Host "    $($slow.Value)" }
     }
 }
 

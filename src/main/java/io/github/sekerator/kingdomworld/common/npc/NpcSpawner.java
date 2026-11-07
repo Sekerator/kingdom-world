@@ -112,6 +112,8 @@ public final class NpcSpawner {
     private static final int MIN_WALL_RADIUS = 24;
     /** Ticks longer than this while a kingdom appears are written to the log with their stage. */
     private static final long SLOW_TICK_NANOS = 50_000_000L;
+    /** Chunks of land claimed in a tick for every chunk the rules let an appearance look through. */
+    private static final int CLAIMS_PER_CHUNK_BUDGET = 8;
     /** Blocks of a building done in a tick at least, so that a small budget still moves on. */
     private static final int BLOCKS_PER_PART = 64;
     /** Blocks of the wall paid in a tick at most: the roads place the paid columns once a second, all at once. */
@@ -133,6 +135,9 @@ public final class NpcSpawner {
         final NpcComposition composition;
         final List<ChunkPos> chunks = new ArrayList<>();
         final Set<Long> ticketed = new LinkedHashSet<>();
+        /** Chunks with a ticket that are not loaded yet. */
+        final List<ChunkPos> pending = new ArrayList<>();
+        int next;
         int waited;
         long ticks;
         long sumNanos;
@@ -141,6 +146,10 @@ public final class NpcSpawner {
         SpawnStage lastStage = SpawnStage.LOAD;
         boolean searching;
         boolean loaded;
+        List<Long> land;
+        int claimIndex;
+        boolean claimedInPass;
+        int claimed;
 
         Job(int siteId, NpcComposition composition) {
             this.siteId = siteId;
@@ -370,27 +379,26 @@ public final class NpcSpawner {
         if (job.loaded) {
             return true;
         }
-        int budget = Math.max(1, NpcSettings.rules().chunksPerTick());
-        for (ChunkPos chunk : job.chunks) {
-            if (budget <= 0) {
-                break;
-            }
+        // Tickets go out as the chunks before them come in, a few at a time, so that the server loads or generates them at its
+        // own pace instead of finishing many in one tick.
+        job.pending.removeIf(chunk -> level.hasChunk(chunk.x, chunk.z));
+        int waiting = Math.max(1, NpcSettings.rules().chunksPerTick());
+        while (job.next < job.chunks.size() && job.pending.size() < waiting) {
+            ChunkPos chunk = job.chunks.get(job.next++);
             if (job.ticketed.add(chunk.toLong())) {
                 level.getChunkSource().addRegionTicket(TICKET, chunk, 0, chunk);
-                budget--;
             }
-        }
-        if (job.ticketed.size() < job.chunks.size()) {
-            return false;
-        }
-        for (ChunkPos chunk : job.chunks) {
             if (!level.hasChunk(chunk.x, chunk.z)) {
-                job.waited++;
-                if (job.waited == LOAD_WARN_TICKS) {
-                    LOGGER.warn("The appearance of {} is still waiting for {} chunks to load", site, job.chunks.size());
-                }
-                return false;
+                job.pending.add(chunk);
             }
+        }
+        if (job.next < job.chunks.size() || !job.pending.isEmpty()) {
+            job.waited++;
+            if (job.waited == LOAD_WARN_TICKS) {
+                LOGGER.warn("The appearance of {} is still waiting for its chunks: {} of {} asked for, {} loading", site, job.next,
+                        job.chunks.size(), job.pending.size());
+            }
+            return false;
         }
         job.loaded = true;
         return true;
@@ -457,6 +465,8 @@ public final class NpcSpawner {
             level.getChunkSource().removeRegionTicket(TICKET, chunk, 0, chunk);
         }
         job.ticketed.clear();
+        job.pending.clear();
+        job.next = 0;
     }
 
     // ---------------------------------------------------------------- the kingdom and its land
@@ -505,8 +515,9 @@ public final class NpcSpawner {
             npc.putKingdom(NpcKingdom.create(id, site, name, List.of(), KingdomWorldApi.gameTime(server), TreasuryActions.day(server)));
             site.setKingdomId(id);
         }
-        claimLand(level, site, id);
-        site.advance(SpawnStage.GROUND);
+        if (claimLand(level, site, id, job)) {
+            site.advance(SpawnStage.GROUND);
+        }
     }
 
     /**
@@ -533,23 +544,50 @@ public final class NpcSpawner {
     }
 
     /**
-     * Claims the land of the capital ring by ring, the way to every town and the land of the towns, so that it stays connected.
+     * Claims the land of the capital ring by ring, the way to every town and the land of the towns, so that it stays connected:
+     * a chunk is claimed only next to land already held, so the list is gone through again until nothing more comes, a few
+     * claims a tick.
+     *
+     * @return whether the land is all claimed
      */
-    private static void claimLand(ServerLevel level, NpcSite site, UUID id) {
+    private static boolean claimLand(ServerLevel level, NpcSite site, UUID id, Job job) {
+        if (job.land == null) {
+            job.land = landChunks(site);
+        }
+        int budget = Math.max(1, NpcSettings.rules().chunksPerTick()) * CLAIMS_PER_CHUNK_BUDGET;
+        while (budget > 0) {
+            if (job.claimIndex >= job.land.size()) {
+                if (!job.claimedInPass) {
+                    LOGGER.info("{} chunks claimed for {}", job.claimed, site);
+                    return true;
+                }
+                job.claimIndex = 0;
+                job.claimedInPass = false;
+            }
+            long chunk = job.land.get(job.claimIndex++);
+            if (claim(level, ChunkPos.getX(chunk), ChunkPos.getZ(chunk), id)) {
+                job.claimed++;
+                job.claimedInPass = true;
+                budget--;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The chunks of the land of a kingdom in the order they are claimed: the capital ring by ring, then for every town the way to
+     * it and its square.
+     */
+    static List<Long> landChunks(NpcSite site) {
+        Set<Long> keys = new LinkedHashSet<>();
         int cx = site.x() >> 4;
         int cz = site.z() >> 4;
         int r = NpcSettings.rules().landRadius(site.level());
-        int claimed = 0;
-        // A chunk is claimed only next to land already held, so a corner waits for its sides: passes until nothing more comes.
-        for (boolean more = true; more; ) {
-            more = false;
-            for (int ring = 1; ring <= r; ring++) {
-                for (int dx = -ring; dx <= ring; dx++) {
-                    for (int dz = -ring; dz <= ring; dz++) {
-                        if (Math.max(Math.abs(dx), Math.abs(dz)) == ring && claim(level, cx + dx, cz + dz, id)) {
-                            claimed++;
-                            more = true;
-                        }
+        for (int ring = 1; ring <= r; ring++) {
+            for (int dx = -ring; dx <= ring; dx++) {
+                for (int dz = -ring; dz <= ring; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) == ring) {
+                        keys.add(ChunkPos.asLong(cx + dx, cz + dz));
                     }
                 }
             }
@@ -557,22 +595,14 @@ public final class NpcSpawner {
         for (NpcSite.Town town : site.towns()) {
             int tx = town.x() >> 4;
             int tz = town.z() >> 4;
-            for (long chunk : corridor(cx, cz, tx, tz)) {
-                if (claim(level, ChunkPos.getX(chunk), ChunkPos.getZ(chunk), id)) {
-                    claimed++;
-                }
-            }
-            for (int pass = 0; pass < 3; pass++) {
-                for (int dx = -1; dx <= 1; dx++) {
-                    for (int dz = -1; dz <= 1; dz++) {
-                        if (claim(level, tx + dx, tz + dz, id)) {
-                            claimed++;
-                        }
-                    }
+            keys.addAll(corridor(cx, cz, tx, tz));
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    keys.add(ChunkPos.asLong(tx + dx, tz + dz));
                 }
             }
         }
-        LOGGER.info("{} chunks claimed for {}", claimed, site);
+        return new ArrayList<>(keys);
     }
 
     private static boolean claim(ServerLevel level, int x, int z, UUID id) {

@@ -177,10 +177,13 @@ public final class SitePlanner {
         double base = random.nextDouble() * Math.PI * 2;
         int[] order = {0, 4, 2, 6, 1, 5, 3, 7};
         List<int[]> list = new ArrayList<>();
-        for (int step : order) {
-            double angle = base + step * Math.PI / 4;
-            int reach = distance + random.nextInt(Math.max(1, distance / 5));
-            list.add(new int[]{x + (int) Math.round(Math.cos(angle) * reach), z + (int) Math.round(Math.sin(angle) * reach)});
+        // Two rings: the distance of the rules first, then a third further out where the nearer land does not suit.
+        for (double ring : new double[]{1.0, 1.35}) {
+            for (int step : order) {
+                double angle = base + step * Math.PI / 4 + (ring > 1 ? Math.PI / 8 : 0);
+                int reach = (int) Math.round(distance * ring) + random.nextInt(Math.max(1, distance / 5));
+                list.add(new int[]{x + (int) Math.round(Math.cos(angle) * reach), z + (int) Math.round(Math.sin(angle) * reach)});
+            }
         }
         return list;
     }

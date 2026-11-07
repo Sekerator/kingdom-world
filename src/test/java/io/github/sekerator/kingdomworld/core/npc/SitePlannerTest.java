@@ -108,10 +108,11 @@ class SitePlannerTest {
     @Test
     void townsStandApartOnLandThatSuitsThem() {
         List<int[]> candidates = SitePlanner.townCandidates(0, 0, 5L, 200);
-        assertEquals(8, candidates.size());
-        for (int[] town : candidates) {
-            double distance = Math.hypot(town[0], town[1]);
-            assertTrue(distance >= 199 && distance <= 241, "distance " + distance);
+        assertEquals(16, candidates.size());
+        for (int i = 0; i < candidates.size(); i++) {
+            double distance = Math.hypot(candidates.get(i)[0], candidates.get(i)[1]);
+            double least = i < 8 ? 199 : 269;
+            assertTrue(distance >= least && distance <= least + 42, "distance " + distance);
         }
         List<int[]> chosen = SitePlanner.chooseTowns(candidates, point -> point != candidates.get(0), 3, 160);
         assertEquals(3, chosen.size());
