@@ -445,6 +445,25 @@ public final class ProductionGameTests {
         helper.succeed();
     }
 
+    /**
+     * The catalog of the orders tab names the workshop of each item, and the client knows the name of that
+     * profession: a sword is the smith's, not an unknown work.
+     */
+    @GameTest(template = EMPTY)
+    public static void theCatalogNamesTheWorkshopOfASword(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        io.github.sekerator.kingdomworld.common.network.data.CatalogView catalog = io.github.sekerator.kingdomworld.common.production.OrderActions
+                .catalog(server, UUID.randomUUID(), "iron_sword", 0, 16, List.of());
+        String profession = catalog.entries().stream().filter(entry -> entry.sample().is(Items.IRON_SWORD))
+                .map(io.github.sekerator.kingdomworld.common.network.data.CatalogView.Entry::profession).findFirst().orElse("");
+        helper.assertTrue(profession.equals("smith"), "The catalog names '" + profession + "' for the iron sword");
+        for (String workshop : List.of("smelter", "cook", "crafter", "smith")) {
+            helper.assertTrue(io.github.sekerator.kingdomworld.core.citizen.Professions.REGISTRY.isKnown(workshop),
+                    "The profession " + workshop + " is unknown without the server's behaviours");
+        }
+        helper.succeed();
+    }
+
     // ---------------------------------------------------------------- saved data
 
     @GameTest(template = EMPTY)

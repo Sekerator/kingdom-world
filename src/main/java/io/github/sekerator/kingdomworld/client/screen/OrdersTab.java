@@ -117,6 +117,15 @@ final class OrdersTab {
         selectedProfession = profession;
         if (value == Mode.EDIT) {
             editing = 1;
+            if (view != null) {
+                for (OrdersView.Entry entry : view.orders()) {
+                    if (!entry.isSubOrder()) {
+                        editing = entry.id();
+                        selected = entry.sample();
+                        break;
+                    }
+                }
+            }
         }
         amount = "100000";
     }
@@ -232,6 +241,33 @@ final class OrdersTab {
         return top + panelHeight - ThroneScreen.BOTTOM_AREA - ROW;
     }
 
+    /**
+     * Where the controls of the form that changes an order stand: right under the order, with its progress and status.
+     */
+    private static int editControlsY(int top) {
+        return listTop(top) + ITEM_ROW + 2 * (LINE + 2) + 6;
+    }
+
+    private int formControlsY(int top, int panelHeight) {
+        return mode == Mode.EDIT ? Math.min(editControlsY(top), controlsY(top, panelHeight)) : controlsY(top, panelHeight);
+    }
+
+    /**
+     * The order the form changes, if the list still has it.
+     */
+    @Nullable
+    private OrdersView.Entry edited() {
+        if (view == null) {
+            return null;
+        }
+        for (OrdersView.Entry entry : view.orders()) {
+            if (entry.id() == editing) {
+                return entry;
+            }
+        }
+        return null;
+    }
+
     private static int chosenY(int top, int panelHeight) {
         return controlsY(top, panelHeight) - ITEM_ROW;
     }
@@ -322,7 +358,7 @@ final class OrdersTab {
      */
     private void initControls(int left, int top, int panelWidth, int panelHeight) {
         int x = left + KingdomScreen.PAD;
-        int y = controlsY(top, panelHeight);
+        int y = formControlsY(top, panelHeight);
         screen.add(Button.builder(Component.literal("-"), b -> stepAmount(-1)).bounds(x, y, SMALL, ITEM_ROW - 2).build());
         EditBox box = new EditBox(screen.font(), x + SMALL + GAP + 1, y + 1, AMOUNT_WIDTH - 2, ITEM_ROW - 4,
                 Component.translatable(KEY + "amount"));
@@ -590,6 +626,37 @@ final class OrdersTab {
         }
     }
 
+    /**
+     * The form that changes an order: the order with its progress and status on top, the controls right under it
+     * and what keep and make mean below.
+     */
+    private void renderEdit(GuiGraphics graphics, Font font, int top, int panelHeight, int x, int right, int y) {
+        screen.label(graphics, Component.translatable(KEY + "editing"), x, y + 4, 0xFFF0D070, right);
+        int itemY = listTop(top);
+        OrdersView.Entry entry = edited();
+        if (selected != null) {
+            graphics.renderItem(selected, x, itemY);
+            int nameRight = right;
+            if (entry != null) {
+                Component amountText = progress(entry);
+                int amountX = right - font.width(amountText);
+                screen.label(graphics, amountText, amountX, itemY + 5, entry.paused() ? 0xFF9A9A9A : 0xFFFFFFFF, right);
+                nameRight = amountX - 6;
+            }
+            screen.name(graphics, itemName(selected).getString(), x + 20, itemY + 5, 0xFFF0D070, nameRight - x - 20);
+        }
+        if (entry != null) {
+            screen.name(graphics, status(entry).getString(), x + 20, itemY + ITEM_ROW + 2, statusColor(entry.status()), right - x - 20);
+        }
+        int hintY = formControlsY(top, panelHeight) + ROW + 4;
+        int lines = Math.max(0, (top + panelHeight - ThroneScreen.BOTTOM_AREA - hintY) / LINE);
+        Component hint = Component.translatable(KEY + "edit_hint");
+        // The hint only helps; where the panel is too low for all of it, it is left out rather than cut off.
+        if (lines > 0 && font.split(hint, right - x).size() <= lines) {
+            screen.paragraph(graphics, hint, x, hintY, right - x, lines, 0xFFB8B8B8);
+        }
+    }
+
     private void renderCreate(GuiGraphics graphics, Font font, int top, int panelHeight, int x, int right, int y) {
         int listTop = listTop(top);
         if (mode == Mode.CREATE) {
@@ -620,7 +687,8 @@ final class OrdersTab {
                 }
             }
         } else {
-            screen.label(graphics, Component.translatable(KEY + "editing"), x, y + 4, 0xFFF0D070, right);
+            renderEdit(graphics, font, top, panelHeight, x, right, y);
+            return;
         }
         int chosenY = chosenY(top, panelHeight);
         if (selected == null) {

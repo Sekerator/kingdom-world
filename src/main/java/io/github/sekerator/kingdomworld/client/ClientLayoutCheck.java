@@ -476,7 +476,7 @@ final class ClientLayoutCheck {
     private static CatalogView catalogView(UUID kingdom, boolean empty) {
         List<CatalogView.Entry> entries = new ArrayList<>();
         if (!empty) {
-            String[] professions = {"smith", "cook", "crafter", "smelter", "dragon_tamer"};
+            String[] professions = {"smith", "cook", "crafter", "smelter", "crafter"};
             ItemStack[] samples = {longNamed(Items.NETHERITE_SWORD), new ItemStack(Items.BREAD), new ItemStack(Items.LIGHT_BLUE_GLAZED_TERRACOTTA),
                     new ItemStack(Items.IRON_INGOT), new ItemStack(Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE), new ItemStack(Items.STICK),
                     new ItemStack(Items.ENCHANTED_GOLDEN_APPLE), new ItemStack(Items.CHAINMAIL_CHESTPLATE), new ItemStack(Items.TORCH),
@@ -495,7 +495,7 @@ final class ClientLayoutCheck {
         if (!mode.equals("list")) {
             screen.showCatalog(catalogView(view.id(), empty));
             screen.showOrders(mode, "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz", empty ? null : longNamed(Items.NETHERITE_SWORD),
-                    empty ? null : "dragon_tamer");
+                    empty ? null : "smith");
         }
         return screen;
     }
