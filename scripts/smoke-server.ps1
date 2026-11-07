@@ -785,10 +785,11 @@ Invoke-Phase 'session1' {
                 $vault = [int64]$raw.Groups[2].Value + 10 * [int64]$raw.Groups[3].Value + 100 * [int64]$raw.Groups[4].Value
                 $funds = [int64]$raw.Groups[5].Value
             }
-            if ($raw -and [int64]$raw.Groups[1].Value -eq 1000 -and [int64]$raw.Groups[3].Value -eq 10 -and $funds -eq 1000 + $vault) {
-                Write-Ok "[session1] the minter struck 10 silver coins from 5 iron ingots into the vault: $($raw.Value)"
+            # With the mods of the pack the smelter may have made more iron ingots: the minter strikes them too, two silver coins each.
+            if ($raw -and [int64]$raw.Groups[1].Value -eq 1000 -and [int64]$raw.Groups[3].Value -ge 10 -and [int64]$raw.Groups[3].Value % 2 -eq 0 -and $funds -eq 1000 + $vault) {
+                Write-Ok "[session1] the minter struck at least 10 silver coins from the iron ingots into the vault: $($raw.Value)"
             } else {
-                Add-Failure "[session1] expected 10 silver coins in the vault and 1000 on the books, got '$(if ($raw) { $raw.Value })'"
+                Add-Failure "[session1] expected at least 10 silver coins in the vault and 1000 on the books, got '$(if ($raw) { $raw.Value })'"
             }
             Send-ServerCommand $server "kingdomworld admin economy payday $KingdomName"
             $pay = Wait-ForLog $server "Payday of $KingdomName on day (\d+): tax payers (\d+), taxes (\d+), wages (\d+) of (\d+), citizens (\d+)" $CommandTimeout $ConsoleFailPattern
