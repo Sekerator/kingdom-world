@@ -105,7 +105,7 @@ public final class CarrierBehavior implements ProfessionBehavior {
                 continue;
             }
             ProfessionBehavior behavior = ProfessionBehaviors.get(post.professionId()).orElse(null);
-            Predicate<ItemStack> keep = behavior == null ? stack -> false : behavior::isInput;
+            Predicate<ItemStack> keep = behavior == null ? stack -> false : stack -> behavior.isInput(post, stack);
             sources.add(new Source(post, container, keep));
         }
         return sources;

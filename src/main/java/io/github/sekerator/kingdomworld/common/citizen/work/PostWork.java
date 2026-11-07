@@ -309,8 +309,8 @@ public final class PostWork {
     /**
      * A worker far from players may be wounded or die at work; armor and experience make it less likely.
      */
-    private static void accident(MinecraftServer server, Citizen citizen, WorkPost post, ProfessionBehavior behavior,
-                                 Equipment.Hands hands, int interval, RandomSource random) {
+    public static void accident(MinecraftServer server, Citizen citizen, WorkPost post, ProfessionBehavior behavior,
+                                Equipment.Hands hands, int interval, RandomSource random) {
         GatheringRules rules = GatheringSettings.rules();
         TaskRisks.Accident accident = TaskRisks.roll(rules.risk(citizen.professionId()), rules.riskMultiplier(), interval,
                 Equipment.armorPoints(hands), citizen.experience(), random.nextDouble(), random.nextDouble());

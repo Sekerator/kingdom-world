@@ -23,7 +23,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * NBT form of a kingdom with its land, members, rights, pending requests and population (format 4).
+ * NBT form of a kingdom with its land, members, rights, pending requests, population and orders (format 5).
  *
  * <pre>
  * { id, name, color, ruler?, createdGameTime,
@@ -31,7 +31,7 @@ import java.util.UUID;
  *   members: [ { player, role, joined } ],
  *   permissions?: { &lt;role&gt;: [ &lt;permission&gt;, ... ] },
  *   applications: [ { player, time } ], invitations: [ { player, time } ],
- *   population?: see {@link CitizenNbt} }
+ *   population?: see {@link CitizenNbt}, orders?: see {@link OrderNbt} }
  * </pre>
  *
  * <p>Reading is strict: anything that cannot be understood throws {@link IllegalArgumentException}, so the
@@ -117,6 +117,7 @@ public final class KingdomNbt {
             tag.put(INVITATIONS, writePending(members.get().invitations()));
         }
         tag.put(CitizenNbt.POPULATION, CitizenNbt.write(state.citizens(), kingdom.id()));
+        tag.put(OrderNbt.ORDERS, OrderNbt.write(state.orders(), kingdom.id()));
         return tag;
     }
 
@@ -208,10 +209,12 @@ public final class KingdomNbt {
         Map<UUID, Long> applications = readPending(tag, APPLICATIONS, kingdom);
         Map<UUID, Long> invitations = readPending(tag, INVITATIONS, kingdom);
         CitizenNbt.Population population = CitizenNbt.read(tag, kingdom.id(), kingdom.name());
+        OrderNbt.Orders orders = OrderNbt.read(tag, kingdom.name());
         state.restore(kingdom, capital, chunks, rights, members, applications, invitations);
         try {
             state.citizens().restore(kingdom.id(), population.sites(), population.posts(), population.citizens(),
                     population.lastArrival(), population.chronicle(), population.production());
+            state.orders().restore(kingdom.id(), orders.orders(), orders.next());
         } catch (IllegalArgumentException e) {
             // All or nothing: a kingdom whose people cannot be restored is not restored either.
             state.dissolve(kingdom.id());

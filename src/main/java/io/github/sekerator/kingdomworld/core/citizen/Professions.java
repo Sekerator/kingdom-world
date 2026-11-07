@@ -18,6 +18,14 @@ public final class Professions {
     public static final Profession HERDER = new Profession("herder", SiteKinds.WORK_POST);
     /** Carries goods from the containers of work posts to storehouses, and between storehouses. */
     public static final Profession CARRIER = new Profession("carrier", SiteKinds.WORK_POST);
+    /** Smelts ore and raw materials in the furnaces of the zone of a work post. */
+    public static final Profession SMELTER = new Profession("smelter", SiteKinds.WORK_POST);
+    /** Cooks food in smokers, furnaces and on campfires and bakes at the crafting table. */
+    public static final Profession COOK = new Profession("cook", SiteKinds.WORK_POST);
+    /** Makes things at the crafting table and the stonecutter. */
+    public static final Profession CRAFTER = new Profession("crafter", SiteKinds.WORK_POST);
+    /** Makes tools, weapons and armor at the crafting table and upgrades them at the smithing table. */
+    public static final Profession SMITH = new Profession("smith", SiteKinds.WORK_POST);
 
     /** The registry of the running game; more professions are registered here. */
     public static final ProfessionRegistry REGISTRY = ProfessionRegistry.withDefaults();
@@ -31,6 +39,21 @@ public final class Professions {
      */
     public static boolean worksAtPosts(String professionId) {
         return REGISTRY.byId(professionId).map(Profession::needsWorkplace).orElse(false);
+    }
+
+    /**
+     * Whether the profession makes things at workstations from what is in the storehouses.
+     */
+    public static boolean isWorkshop(String professionId) {
+        return SMELTER.id().equals(professionId) || COOK.id().equals(professionId) || CRAFTER.id().equals(professionId)
+                || SMITH.id().equals(professionId);
+    }
+
+    /**
+     * Whether a workshop of the profession has an auto mode: work of its own when no order needs it.
+     */
+    public static boolean hasAutoMode(String professionId) {
+        return SMELTER.id().equals(professionId) || COOK.id().equals(professionId);
     }
 
     /**

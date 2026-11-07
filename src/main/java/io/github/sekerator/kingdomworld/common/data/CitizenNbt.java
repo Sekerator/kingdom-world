@@ -25,7 +25,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * NBT form of the population of one kingdom (format 4), stored inside the kingdom's compound.
+ * NBT form of the population of one kingdom (format 5), stored inside the kingdom's compound.
  *
  * <pre>
  * population: { lastArrival?, citizens: [ citizen ], chronicle: [ death ], sites: [ { kind, pos } ],
@@ -33,7 +33,7 @@ import java.util.UUID;
  * citizen: { id, seed, gender, skin, born, health, state, profession, pos, home?, workplace?, food, mood, xp,
  *            workCapacity, workProduct, workProgress, workStatus }
  * post:    { pos, profession, radius, seats, animal, herd, status, yield: { out: { item: rate }, in: { item: rate },
- *            actions, measured }, progress: { item: amount }, day, produced, container }
+ *            actions, measured }, progress: { item: amount }, day, produced, container, auto, stations: { kind: count } }
  * death:   { citizen, seed, gender, profession, cause, killer, time, pos }
  * pos:     { dimension, x, y, z }
  * </pre>
@@ -89,6 +89,8 @@ public final class CitizenNbt {
     private static final String PRODUCED = "produced";
     private static final String COUNTS = "counts";
     private static final String CONTAINER = "container";
+    private static final String AUTO = "auto";
+    private static final String STATIONS = "stations";
 
     /**
      * What was read for one kingdom, not yet restored.
@@ -169,6 +171,10 @@ public final class CitizenNbt {
         tag.putLong(DAY, post.counterDay());
         tag.putLong(PRODUCED, post.counter());
         tag.putBoolean(CONTAINER, post.hasContainer());
+        tag.putBoolean(AUTO, post.auto());
+        CompoundTag stations = new CompoundTag();
+        post.stations().forEach(stations::putInt);
+        tag.put(STATIONS, stations);
         return tag;
     }
 
@@ -291,6 +297,20 @@ public final class CitizenNbt {
         post.restore(profession, tag.getInt(SEATS), animal, WorkStatus.byId(tag.getString(STATUS)), yield,
                 readRates(tag, PROGRESS, where), tag.contains(DAY, Tag.TAG_LONG) ? tag.getLong(DAY) : -1L, tag.getLong(PRODUCED),
                 tag.getBoolean(CONTAINER));
+        Map<String, Integer> stations = new LinkedHashMap<>();
+        if (tag.contains(STATIONS)) {
+            if (!tag.contains(STATIONS, Tag.TAG_COMPOUND)) {
+                throw new IllegalArgumentException(where + " has workstations that are not a compound");
+            }
+            CompoundTag stationTag = tag.getCompound(STATIONS);
+            for (String kind : stationTag.getAllKeys()) {
+                if (!stationTag.contains(kind, Tag.TAG_INT) || stationTag.getInt(kind) < 0) {
+                    throw new IllegalArgumentException(where + " has an invalid number of workstations");
+                }
+                stations.put(kind, stationTag.getInt(kind));
+            }
+        }
+        post.restoreProduction(!tag.contains(AUTO) || tag.getBoolean(AUTO), stations);
         return post;
     }
 

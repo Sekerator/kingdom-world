@@ -12,15 +12,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ProfessionRegistryTest {
 
     @Test
-    void defaultsAreUnemployedFarmerAndTheGatherers() {
+    void defaultsAreUnemployedFarmerTheGatherersAndTheWorkshops() {
         ProfessionRegistry registry = ProfessionRegistry.withDefaults();
         assertEquals(List.of(Professions.UNEMPLOYED, Professions.FARMER, Professions.LUMBERJACK, Professions.MINER,
-                Professions.FISHER, Professions.HERDER, Professions.CARRIER), registry.all());
+                Professions.FISHER, Professions.HERDER, Professions.CARRIER, Professions.SMELTER, Professions.COOK,
+                Professions.CRAFTER, Professions.SMITH), registry.all());
         assertEquals(SiteKinds.WORK_POST, Professions.MINER.workplaceKind());
         assertTrue(Professions.worksAtPosts("farmer"));
         assertTrue(Professions.worksAtPosts("carrier"));
         assertFalse(Professions.worksAtPosts("unemployed"));
-        assertEquals(6, Professions.postProfessions().size());
+        assertEquals(10, Professions.postProfessions().size());
+        assertTrue(Professions.isWorkshop("smith") && Professions.isWorkshop("cook"));
+        assertFalse(Professions.isWorkshop("miner"));
+        assertTrue(Professions.hasAutoMode("smelter") && Professions.hasAutoMode("cook"));
+        assertFalse(Professions.hasAutoMode("crafter") || Professions.hasAutoMode("smith"));
         assertFalse(Professions.UNEMPLOYED.needsWorkplace());
         assertEquals(SiteKinds.COMPOSTER, Professions.FARMER.workplaceKind());
         assertTrue(Professions.REGISTRY.isKnown("farmer"));
@@ -32,7 +37,7 @@ class ProfessionRegistryTest {
         Profession miller = new Profession("miller", "mill");
         registry.register(miller);
         assertEquals(miller, registry.byId("miller").orElseThrow());
-        assertEquals(8, registry.all().size());
+        assertEquals(12, registry.all().size());
         assertThrows(IllegalArgumentException.class, () -> registry.register(new Profession("farmer", null)));
     }
 
@@ -41,7 +46,8 @@ class ProfessionRegistryTest {
         ProfessionRegistry registry = ProfessionRegistry.withDefaults();
         assertEquals(Professions.FARMER, registry.next("unemployed"));
         assertEquals(Professions.LUMBERJACK, registry.next("farmer"));
-        assertEquals(Professions.UNEMPLOYED, registry.next("carrier"));
+        assertEquals(Professions.SMELTER, registry.next("carrier"));
+        assertEquals(Professions.UNEMPLOYED, registry.next("smith"));
         assertEquals(Professions.UNEMPLOYED, registry.next("no_such_profession"));
     }
 

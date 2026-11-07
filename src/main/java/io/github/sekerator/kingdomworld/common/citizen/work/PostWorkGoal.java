@@ -391,8 +391,11 @@ public abstract class PostWorkGoal extends Goal {
         }
     }
 
+    /**
+     * The nearest loaded storehouse of the kingdom within reach, or {@code null}.
+     */
     @Nullable
-    private BlockPos nearestStorehouse(ServerLevel level) {
+    protected BlockPos nearestStorehouse(ServerLevel level) {
         BlockPos here = body.blockPosition();
         WorldPos near = new WorldPos(Dimensions.id(level), here.getX(), here.getY(), here.getZ());
         for (StorehouseInventory inventory : KingdomStorage.storehouses(level.getServer(), post.kingdomId(), near)) {

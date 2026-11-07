@@ -119,11 +119,13 @@ public final class ZoneSurveys {
     private static void start(MinecraftServer server, WorldPos pos) {
         Optional<WorkPost> post = PostWork.post(server, pos);
         ServerLevel level = PostWork.level(server, pos);
-        if (post.isEmpty() || level == null || !level.isLoaded(new BlockPos(pos.x(), pos.y(), pos.z()))
-                || post.get().yield().measured()) {
+        if (post.isEmpty() || level == null || !level.isLoaded(new BlockPos(pos.x(), pos.y(), pos.z()))) {
             return;
         }
         ProfessionBehavior behavior = ProfessionBehaviors.get(post.get().professionId()).orElse(null);
+        if (post.get().yield().measured() && (behavior == null || !behavior.resurveys())) {
+            return;
+        }
         current = behavior == null ? null : behavior.surveyZone(level, post.get());
         currentPos = current == null ? null : pos;
     }

@@ -19,6 +19,8 @@ public enum Permission {
     TERRITORY,
     /** Give citizens their professions. */
     MANAGE_CITIZENS,
+    /** Give, change and cancel orders for the workshops. */
+    MANAGE_PRODUCTION,
     /** Appoint members to positions and change the rights of positions. Only the king holds it. */
     APPOINT;
 

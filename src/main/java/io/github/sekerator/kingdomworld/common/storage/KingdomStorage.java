@@ -11,9 +11,12 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Predicate;
+import java.util.function.ToIntFunction;
 
 /**
  * The storehouses of a kingdom as one store: every storehouse standing on the kingdom's land counts, wherever it
@@ -160,6 +163,149 @@ public final class KingdomStorage {
             return ItemStack.EMPTY;
         }
         return found.inventory().extractItem(found.slot(), amount, false);
+    }
+
+    // ---------------------------------------------------------------- taking several things at once
+
+    /**
+     * Part of a stack to take.
+     */
+    public record Take(Found found, int count) {
+    }
+
+    /**
+     * Counts of every kind of item in the kingdom's storehouses, by item id, in one pass.
+     */
+    public static Map<String, Long> countsById(MinecraftServer server, UUID kingdomId) {
+        Map<String, Long> counts = new HashMap<>();
+        for (StorehouseInventory inventory : storehouses(server, kingdomId, null)) {
+            for (int slot = 0; slot < inventory.getSlots(); slot++) {
+                ItemStack stack = inventory.getStackInSlot(slot);
+                if (!stack.isEmpty()) {
+                    counts.merge(itemId(stack), (long) stack.getCount(), Long::sum);
+                }
+            }
+        }
+        return counts;
+    }
+
+    /**
+     * Plans to take items of several kinds, by item id, without taking anything yet: the storehouses nearest to
+     * {@code near} first. Items others set aside stay: of every kind at least {@code reserved} must be left.
+     *
+     * @return what to take, or {@code null} if not all of it is there (nothing is changed either way)
+     */
+    @Nullable
+    public static List<Take> plan(MinecraftServer server, UUID kingdomId, Map<String, Integer> wanted, ToIntFunction<String> reserved,
+                                  @Nullable WorldPos near) {
+        Map<String, Integer> left = new HashMap<>();
+        wanted.forEach((item, count) -> {
+            if (count > 0) {
+                left.merge(item, count, Integer::sum);
+            }
+        });
+        Map<String, Long> counts = countsById(server, kingdomId);
+        for (Map.Entry<String, Integer> entry : left.entrySet()) {
+            if (counts.getOrDefault(entry.getKey(), 0L) - Math.max(0, reserved.applyAsInt(entry.getKey())) < entry.getValue()) {
+                return null;
+            }
+        }
+        List<Take> takes = new ArrayList<>();
+        for (Found found : find(server, kingdomId, stack -> left.getOrDefault(itemId(stack), 0) > 0, near)) {
+            String id = itemId(found.stack());
+            int still = left.getOrDefault(id, 0);
+            if (still <= 0) {
+                continue;
+            }
+            int count = Math.min(still, found.stack().getCount());
+            takes.add(new Take(found, count));
+            left.put(id, still - count);
+        }
+        for (int still : left.values()) {
+            if (still > 0) {
+                return null;
+            }
+        }
+        return takes;
+    }
+
+    /**
+     * Takes what a plan says, right after it was made (in the same tick), so that nothing changed in between.
+     *
+     * @return the stacks taken, or {@code null} if the storehouses no longer hold what was planned; then everything
+     * taken so far went back
+     */
+    @Nullable
+    public static List<ItemStack> takePlanned(MinecraftServer server, List<Take> takes) {
+        if (KingdomSavedData.get(server).isReadOnly()) {
+            return null;
+        }
+        List<ItemStack> taken = new ArrayList<>();
+        for (Take take : takes) {
+            ItemStack expected = take.found().stack();
+            ItemStack inSlot = take.found().inventory().getStackInSlot(take.found().slot());
+            ItemStack stack = inSlot.getCount() >= take.count() && ItemStack.isSameItemSameTags(inSlot, expected)
+                    ? take.found().inventory().extractItem(take.found().slot(), take.count(), false) : ItemStack.EMPTY;
+            if (stack.getCount() != take.count()) {
+                // Something changed: everything goes back where it came from, or anywhere else.
+                if (!stack.isEmpty()) {
+                    taken.add(stack);
+                }
+                for (ItemStack back : taken) {
+                    ItemStack rest = net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(take.found().inventory(), back, false);
+                    if (!rest.isEmpty()) {
+                        insert(server, take.found().inventory().pos(), rest);
+                    }
+                }
+                return null;
+            }
+            taken.add(stack);
+        }
+        return taken;
+    }
+
+    private static void insert(MinecraftServer server, WorldPos at, ItemStack stack) {
+        UUID owner = KingdomSavedData.get(server).state().territory().ownerOf(at.dimension(), at.chunk());
+        if (owner != null) {
+            insert(server, owner, stack, at);
+        }
+    }
+
+    /**
+     * Whether all the stacks would fit into the kingdom's storehouses together.
+     */
+    public static boolean fits(MinecraftServer server, UUID kingdomId, List<ItemStack> stacks) {
+        List<StorehouseInventory> inventories = storehouses(server, kingdomId, null);
+        if (inventories.isEmpty()) {
+            return stacks.stream().allMatch(ItemStack::isEmpty);
+        }
+        // Copies stand in for the storehouses, so that the stacks are tried one after another.
+        List<net.minecraftforge.items.ItemStackHandler> copies = new ArrayList<>();
+        for (StorehouseInventory inventory : inventories) {
+            net.minecraftforge.items.ItemStackHandler copy = new net.minecraftforge.items.ItemStackHandler(inventory.getSlots());
+            for (int slot = 0; slot < inventory.getSlots(); slot++) {
+                copy.setStackInSlot(slot, inventory.getStackInSlot(slot).copy());
+            }
+            copies.add(copy);
+        }
+        for (ItemStack stack : stacks) {
+            ItemStack rest = stack.copy();
+            for (net.minecraftforge.items.ItemStackHandler copy : copies) {
+                rest = net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(copy, rest, false);
+                if (rest.isEmpty()) {
+                    break;
+                }
+            }
+            if (!rest.isEmpty()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static String itemId(ItemStack stack) {
+        net.minecraft.resources.ResourceLocation id = net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.getItem());
+        return id == null ? "" : id.toString();
     }
 
     /**

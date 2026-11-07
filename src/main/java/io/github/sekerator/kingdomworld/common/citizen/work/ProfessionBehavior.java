@@ -103,4 +103,20 @@ public interface ProfessionBehavior {
     default boolean isInput(ItemStack stack) {
         return false;
     }
+
+    /**
+     * Whether an item in the container of a particular post is an input of its work; by default the same for every
+     * post of the profession.
+     */
+    default boolean isInput(WorkPost post, ItemStack stack) {
+        return isInput(stack);
+    }
+
+    /**
+     * Whether the zone of a post is looked at again from time to time even after its work was measured, because
+     * what stands there matters to the work (the workstations of a workshop).
+     */
+    default boolean resurveys() {
+        return false;
+    }
 }

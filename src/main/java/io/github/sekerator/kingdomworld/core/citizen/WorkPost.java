@@ -35,6 +35,10 @@ public final class WorkPost {
     private long day = -1;
     private long producedToday;
     private boolean container;
+    private boolean auto = true;
+    private final Map<String, Integer> stations = new LinkedHashMap<>();
+    private String current = "";
+    private double currentProgress;
 
     private Runnable changeListener = () -> {
     };
@@ -81,6 +85,8 @@ public final class WorkPost {
             professionId = value;
             yield = PostYield.NONE;
             progress.clear();
+            current = "";
+            currentProgress = 0.0;
             changed();
         }
     }
@@ -231,6 +237,80 @@ public final class WorkPost {
             container = value;
             changed();
         }
+    }
+
+    // ---------------------------------------------------------------- production
+
+    /**
+     * Whether a workshop works on its own when no order needs it (a smelter smelts raw ore, a cook keeps food in
+     * stock); otherwise it makes only what is ordered.
+     */
+    public boolean auto() {
+        return auto;
+    }
+
+    public void setAuto(boolean value) {
+        if (value != auto) {
+            auto = value;
+            changed();
+        }
+    }
+
+    /**
+     * Workstations in the zone the last time it was looked at, by kind with their number.
+     */
+    public Map<String, Integer> stations() {
+        return Collections.unmodifiableMap(stations);
+    }
+
+    public boolean hasStation(String kind) {
+        return stations.getOrDefault(kind, 0) > 0;
+    }
+
+    public void setStations(Map<String, Integer> value) {
+        Map<String, Integer> next = new LinkedHashMap<>();
+        value.forEach((kind, count) -> {
+            if (kind != null && count != null && count > 0) {
+                next.put(kind, count);
+            }
+        });
+        if (!next.equals(stations)) {
+            stations.clear();
+            stations.putAll(next);
+            changed();
+        }
+    }
+
+    /**
+     * Item id of what the workshop makes now, empty if nothing; shown on the post's screen, not saved.
+     */
+    public String current() {
+        return current;
+    }
+
+    /**
+     * How far the current item is, from 0 to 1.
+     */
+    public double currentProgress() {
+        return currentProgress;
+    }
+
+    public void setCurrent(String item, double progress) {
+        current = item == null ? "" : item;
+        currentProgress = Double.isFinite(progress) ? Math.max(0.0, Math.min(1.0, progress)) : 0.0;
+    }
+
+    /**
+     * Restores the settings of a workshop from saved data. Does not notify.
+     */
+    public void restoreProduction(boolean auto, Map<String, Integer> stations) {
+        this.auto = auto;
+        this.stations.clear();
+        stations.forEach((kind, count) -> {
+            if (kind != null && count != null && count > 0) {
+                this.stations.put(kind, count);
+            }
+        });
     }
 
     /**

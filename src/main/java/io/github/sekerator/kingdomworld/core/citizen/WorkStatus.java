@@ -43,6 +43,14 @@ public enum WorkStatus {
     NOTHING_TO_CARRY(false),
     /** Waiting for the zone to yield again (saplings growing, the herd at its size). */
     WAITING(false),
+    /** A workshop without the workstation its work needs in the zone (a furnace, a crafting table). */
+    NO_WORKSTATION(true),
+    /** A workshop that has work but not the ingredients for it. */
+    NO_INGREDIENTS(true),
+    /** Furnace work without anything to burn in the storehouses. */
+    NO_FUEL(true),
+    /** A workshop with nothing ordered and nothing to do on its own. */
+    NO_ORDERS(false),
     /** The work has gone wrong in a way that does not fit the other reasons (an unknown profession). */
     UNKNOWN(true);
 

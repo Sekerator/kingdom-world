@@ -17,6 +17,8 @@ import io.github.sekerator.kingdomworld.core.membership.MembershipRegistry;
 import io.github.sekerator.kingdomworld.core.membership.Permission;
 import io.github.sekerator.kingdomworld.core.membership.Role;
 import io.github.sekerator.kingdomworld.core.membership.RolePermissions;
+import io.github.sekerator.kingdomworld.core.production.Order;
+import io.github.sekerator.kingdomworld.core.production.OrderBook;
 import io.github.sekerator.kingdomworld.core.territory.Capital;
 import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
 import io.github.sekerator.kingdomworld.core.territory.ClaimRules;
@@ -32,6 +34,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 /**
  * All kingdom state of one world: the kingdoms, their members, their land and their citizens. Operations that touch more
@@ -45,6 +48,7 @@ public final class KingdomWorldState {
     private final MembershipRegistry membership = new MembershipRegistry();
     private final TerritoryIndex territory = new TerritoryIndex();
     private final Citizens citizens = new Citizens();
+    private final OrderBook orders = new OrderBook();
 
     /**
      * Called after every change of any part, used to mark the data for saving.
@@ -55,6 +59,7 @@ public final class KingdomWorldState {
         membership.setChangeListener(listener);
         territory.setChangeListener(listener);
         citizens.setChangeListener(listener);
+        orders.setChangeListener(listener);
     }
 
     public KingdomRegistry kingdoms() {
@@ -71,6 +76,13 @@ public final class KingdomWorldState {
 
     public Citizens citizens() {
         return citizens;
+    }
+
+    /**
+     * The orders of the king of every kingdom.
+     */
+    public OrderBook orders() {
+        return orders;
     }
 
     // ---------------------------------------------------------------- queries
@@ -160,6 +172,7 @@ public final class KingdomWorldState {
             return Optional.empty();
         }
         citizens.removeKingdom(kingdomId);
+        orders.removeKingdom(kingdomId);
         territory.remove(kingdomId);
         membership.unregister(kingdomId);
         kingdoms.remove(kingdomId);
@@ -420,6 +433,147 @@ public final class KingdomWorldState {
             return Outcome.fail(KingdomError.NOT_A_WORKER);
         }
         citizens.setProfession(citizen.get(), Professions.UNEMPLOYED.id());
+        return Outcome.DONE;
+    }
+
+    // ---------------------------------------------------------------- orders
+
+    /**
+     * The result of giving an order.
+     */
+    public record Ordering(Outcome outcome, Optional<Order> order) {
+        static Ordering failed(KingdomError error) {
+            return new Ordering(Outcome.fail(error), Optional.empty());
+        }
+    }
+
+    /**
+     * Gives an order of the king.
+     *
+     * @param actor     the player, who needs {@link Permission#MANAGE_PRODUCTION}; {@code null} for an administrator
+     * @param orderable whether citizens can make an item
+     * @param maxOrders orders the kingdom may have at most
+     */
+    public Ordering order(UUID actor, UUID kingdomId, String item, Order.Kind kind, int amount, Order.Priority priority, long gameTime,
+                          int maxOrders, Predicate<String> orderable) {
+        if (kingdoms.get(kingdomId).isEmpty()) {
+            return Ordering.failed(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (actor != null && !membership.hasPermission(actor, kingdomId, Permission.MANAGE_PRODUCTION)) {
+            return Ordering.failed(KingdomError.NO_PERMISSION);
+        }
+        if (amount < 1 || amount > Order.MAX_AMOUNT) {
+            return Ordering.failed(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (!orderable.test(item)) {
+            return Ordering.failed(KingdomError.NOT_ORDERABLE);
+        }
+        if (orders.count(kingdomId) >= maxOrders) {
+            return Ordering.failed(KingdomError.TOO_MANY_ORDERS);
+        }
+        return new Ordering(Outcome.DONE, Optional.of(orders.add(kingdomId, item, kind, amount, priority, gameTime)));
+    }
+
+    /**
+     * An order of the king the actor may change; sub-orders follow their parent and are not changed by hand.
+     */
+    private Outcome checkOrder(UUID actor, UUID kingdomId, long id) {
+        if (kingdoms.get(kingdomId).isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (actor != null && !membership.hasPermission(actor, kingdomId, Permission.MANAGE_PRODUCTION)) {
+            return Outcome.fail(KingdomError.NO_PERMISSION);
+        }
+        Optional<Order> order = orders.get(kingdomId, id);
+        if (order.isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_ORDER);
+        }
+        if (order.get().isSubOrder()) {
+            return Outcome.fail(KingdomError.SUB_ORDER);
+        }
+        return Outcome.DONE;
+    }
+
+    /**
+     * Cancels an order with its sub-orders.
+     */
+    public Outcome cancelOrder(UUID actor, UUID kingdomId, long id) {
+        Outcome check = checkOrder(actor, kingdomId, id);
+        if (check.ok()) {
+            orders.remove(kingdomId, id);
+        }
+        return check;
+    }
+
+    public Outcome pauseOrder(UUID actor, UUID kingdomId, long id, boolean paused) {
+        Outcome check = checkOrder(actor, kingdomId, id);
+        if (!check.ok()) {
+            return check;
+        }
+        Order order = orders.get(kingdomId, id).orElseThrow();
+        if (order.paused() == paused) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        orders.setPaused(order, paused);
+        return Outcome.DONE;
+    }
+
+    public Outcome setOrderPriority(UUID actor, UUID kingdomId, long id, Order.Priority priority) {
+        Outcome check = checkOrder(actor, kingdomId, id);
+        if (!check.ok()) {
+            return check;
+        }
+        Order order = orders.get(kingdomId, id).orElseThrow();
+        if (order.priority() == priority) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        orders.setPriority(order, priority);
+        for (Order sub : orders.ordersOf(kingdomId)) {
+            if (sub.isSubOrder()) {
+                orders.setPriority(sub, rootOf(kingdomId, sub).priority());
+            }
+        }
+        return Outcome.DONE;
+    }
+
+    private Order rootOf(UUID kingdomId, Order order) {
+        Order current = order;
+        for (int i = 0; i < OrderBook.MAX_SUB_ORDERS && current.isSubOrder(); i++) {
+            Optional<Order> parent = orders.get(kingdomId, current.parent());
+            if (parent.isEmpty()) {
+                break;
+            }
+            current = parent.get();
+        }
+        return current;
+    }
+
+    public Outcome setOrderAmount(UUID actor, UUID kingdomId, long id, int amount) {
+        Outcome check = checkOrder(actor, kingdomId, id);
+        if (!check.ok()) {
+            return check;
+        }
+        if (amount < 1 || amount > Order.MAX_AMOUNT) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        Order order = orders.get(kingdomId, id).orElseThrow();
+        if (order.amount() == amount) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        orders.setAmount(order, amount);
+        return Outcome.DONE;
+    }
+
+    public Outcome setOrderKind(UUID actor, UUID kingdomId, long id, Order.Kind kind) {
+        Outcome check = checkOrder(actor, kingdomId, id);
+        if (!check.ok()) {
+            return check;
+        }
+        Order order = orders.get(kingdomId, id).orElseThrow();
+        if (order.kind() == kind) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        orders.setKind(order, kind);
         return Outcome.DONE;
     }
 

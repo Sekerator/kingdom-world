@@ -7,6 +7,7 @@ import io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehavior;
 import io.github.sekerator.kingdomworld.common.citizen.work.ZoneSurveys;
 import io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehaviors;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
+import io.github.sekerator.kingdomworld.common.production.Production;
 import io.github.sekerator.kingdomworld.common.storage.KingdomStorage;
 import io.github.sekerator.kingdomworld.core.citizen.CauseOfDeath;
 import io.github.sekerator.kingdomworld.core.citizen.Citizen;
@@ -101,10 +102,14 @@ public final class CitizenSimulation {
         int treated = 0;
         float hunger = CitizenNeeds.hunger(rules.dailyNutrition(), interval);
 
+        Production.plan(server, kingdomId);
         for (Citizen citizen : citizens.registry().citizensOf(kingdomId)) {
             CitizenEntity body = CitizenBodies.body(citizen.id());
             if (body != null) {
                 CitizenBodies.syncBack(server, body, citizen);
+            } else {
+                // Only a body sets things aside; whatever a citizen without one held is free again.
+                Production.release(citizen.id());
             }
             citizen.setFood(citizen.food() - hunger);
             int wanted = CitizenNeeds.nutritionWanted(citizen.food());
@@ -133,7 +138,9 @@ public final class CitizenSimulation {
         CarrierBehavior.stepAbstractly(server, kingdomId, interval);
         for (WorkPost post : citizens.posts().postsOf(kingdomId)) {
             PostWork.refreshStatus(server, post);
-            if (post.hasProfession() && post.yield().isEmpty() && !ZoneSurveys.pending(post.pos())) {
+            boolean workshop = Professions.isWorkshop(post.professionId());
+            // Workshops are looked at every step: workstations come and go.
+            if (post.hasProfession() && (post.yield().isEmpty() || workshop) && !ZoneSurveys.pending(post.pos())) {
                 ZoneSurveys.request(post.pos());
             }
         }

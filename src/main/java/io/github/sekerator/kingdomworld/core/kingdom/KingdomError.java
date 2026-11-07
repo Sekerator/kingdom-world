@@ -56,7 +56,15 @@ public enum KingdomError {
     /** The citizen does not work at that post. */
     NOT_A_WORKER,
     /** The animal is not one that lives in the zone of the post. */
-    UNKNOWN_ANIMAL;
+    UNKNOWN_ANIMAL,
+
+    UNKNOWN_ORDER,
+    /** The kingdom has as many orders as it may. */
+    TOO_MANY_ORDERS,
+    /** No citizen can make the item. */
+    NOT_ORDERABLE,
+    /** Orders the planner added for ingredients follow their parent and are not changed by hand. */
+    SUB_ORDER;
 
     /**
      * Lower case identifier, used for translation keys.

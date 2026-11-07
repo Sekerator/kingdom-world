@@ -18,8 +18,8 @@ public final class ProfessionRegistry {
     private final Map<String, Profession> byId = new LinkedHashMap<>();
 
     /**
-     * A registry with the professions of the base game: unemployed, farmer and the gathering professions
-     * (lumberjack, miner, fisher, herder) with the carrier.
+     * A registry with the professions of the base game: unemployed, farmer, the gathering professions
+     * (lumberjack, miner, fisher, herder) with the carrier, and the workshops (smelter, cook, crafter, smith).
      */
     public static ProfessionRegistry withDefaults() {
         ProfessionRegistry registry = new ProfessionRegistry();
@@ -30,6 +30,10 @@ public final class ProfessionRegistry {
         registry.register(Professions.FISHER);
         registry.register(Professions.HERDER);
         registry.register(Professions.CARRIER);
+        registry.register(Professions.SMELTER);
+        registry.register(Professions.COOK);
+        registry.register(Professions.CRAFTER);
+        registry.register(Professions.SMITH);
         return registry;
     }
 

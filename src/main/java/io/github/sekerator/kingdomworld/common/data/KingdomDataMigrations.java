@@ -32,6 +32,7 @@ final class KingdomDataMigrations {
                 case 1 -> current = upgradeFrom1To2(current);
                 case 2 -> current = upgradeFrom2To3(current);
                 case 3 -> current = upgradeFrom3To4(current);
+                case 4 -> current = upgradeFrom4To5(current);
                 default -> throw new IllegalArgumentException("No migration from kingdom data format " + version);
             }
         }
@@ -121,5 +122,49 @@ final class KingdomDataMigrations {
         }
         tag.putInt(KingdomSavedData.TAG_FORMAT_VERSION, 4);
         return tag;
+    }
+
+    /**
+     * Format 5 adds the king's orders to every kingdom and the auto mode and workstations to every work post; a
+     * format 4 kingdom has no orders and its posts work on their own as before. The new right to manage production
+     * goes to the steward, as it does in new kingdoms.
+     */
+    private static CompoundTag upgradeFrom4To5(CompoundTag tag) {
+        ListTag kingdoms = tag.getList(KingdomSavedData.TAG_KINGDOMS, Tag.TAG_COMPOUND);
+        for (int i = 0; i < kingdoms.size(); i++) {
+            CompoundTag kingdom = kingdoms.getCompound(i);
+            grant(kingdom, "steward", "manage_production");
+            if (kingdom.contains(CitizenNbt.POPULATION, Tag.TAG_COMPOUND)) {
+                ListTag posts = kingdom.getCompound(CitizenNbt.POPULATION).getList(CitizenNbt.POSTS, Tag.TAG_COMPOUND);
+                for (int j = 0; j < posts.size(); j++) {
+                    CompoundTag post = posts.getCompound(j);
+                    if (!post.contains("auto")) {
+                        post.putBoolean("auto", true);
+                    }
+                }
+            }
+        }
+        tag.putInt(KingdomSavedData.TAG_FORMAT_VERSION, 5);
+        return tag;
+    }
+
+    /**
+     * Adds a right to a position whose rights the kingdom saved, unless it holds it already.
+     */
+    private static void grant(CompoundTag kingdom, String role, String right) {
+        if (!kingdom.contains(KingdomNbt.PERMISSIONS, Tag.TAG_COMPOUND)) {
+            return;
+        }
+        CompoundTag rights = kingdom.getCompound(KingdomNbt.PERMISSIONS);
+        if (!rights.contains(role, Tag.TAG_LIST)) {
+            return;
+        }
+        ListTag list = rights.getList(role, Tag.TAG_STRING);
+        for (int j = 0; j < list.size(); j++) {
+            if (right.equals(list.getString(j))) {
+                return;
+            }
+        }
+        list.add(StringTag.valueOf(right));
     }
 }

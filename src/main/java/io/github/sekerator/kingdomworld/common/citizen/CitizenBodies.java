@@ -297,6 +297,7 @@ public final class CitizenBodies {
             return;
         }
         ACTIVE.remove(id);
+        io.github.sekerator.kingdomworld.common.production.Production.release(id);
         ServerLevel level = body.serverLevel();
         if (level == null) {
             return;

@@ -50,6 +50,15 @@ public final class CitizenEvents {
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOW, CitizenEvents::onBreak);
         MinecraftForge.EVENT_BUS.addListener(CitizenEvents::onChunkLoad);
         MinecraftForge.EVENT_BUS.addListener(io.github.sekerator.kingdomworld.common.citizen.work.HerderBehavior::onDrops);
+        MinecraftForge.EVENT_BUS.addListener(CitizenEvents::onReload);
+    }
+
+    /**
+     * Data packs reload: the recipes citizens make are read again on next use.
+     */
+    private static void onReload(net.minecraftforge.event.AddReloadListenerEvent event) {
+        event.addListener((net.minecraft.server.packs.resources.ResourceManagerReloadListener) manager ->
+                io.github.sekerator.kingdomworld.common.production.Recipes.invalidate());
     }
 
     private static void onServerTick(TickEvent.ServerTickEvent event) {
@@ -63,6 +72,7 @@ public final class CitizenEvents {
         if (tick % CitizenBodies.UPDATE_INTERVAL == 0) {
             CitizenSettings.refresh();
             GatheringSettings.refresh();
+            io.github.sekerator.kingdomworld.common.production.ProductionSettings.refresh();
             var rules = GatheringSettings.rules();
             KingdomWorldApi.state(server).citizens().setPostDefaults(rules.defaultRadius(), Math.max(2, rules.maxHerd() / 2));
             CitizenBodies.update(server);
@@ -151,5 +161,9 @@ public final class CitizenEvents {
         GatheringSettings.reset();
         PostWork.reset();
         ZoneSurveys.reset();
+        io.github.sekerator.kingdomworld.common.production.ProductionSettings.reset();
+        io.github.sekerator.kingdomworld.common.production.Production.reset();
+        io.github.sekerator.kingdomworld.common.production.WorkshopBehavior.reset();
+        io.github.sekerator.kingdomworld.common.production.Recipes.invalidate();
     }
 }

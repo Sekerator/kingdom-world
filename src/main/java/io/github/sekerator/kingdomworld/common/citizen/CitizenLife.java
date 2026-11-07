@@ -95,6 +95,7 @@ public final class CitizenLife {
             return Optional.empty();
         }
         CitizenBodies.force(citizenId, false);
+        io.github.sekerator.kingdomworld.common.production.Production.release(citizenId);
         CitizenEntity body = CitizenBodies.body(citizenId);
         if (body != null && body.isAlive()) {
             body.storeGear(io.github.sekerator.kingdomworld.common.data.KingdomSavedData.get(server).gear());

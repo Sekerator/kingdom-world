@@ -82,6 +82,10 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue carrierItemsPerMinute;
         public final ForgeConfigSpec.DoubleValue taskRiskMultiplier;
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> professionRisks;
+        public final ForgeConfigSpec.IntValue craftSeconds;
+        public final ForgeConfigSpec.IntValue cookFoodDaysTarget;
+        public final ForgeConfigSpec.IntValue orderChainDepth;
+        public final ForgeConfigSpec.IntValue maxOrdersPerKingdom;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -158,6 +162,23 @@ public final class KingdomWorldConfig {
                             "Armor (up to 75 percent less) and experience (up to 50 percent less) lower it.")
                     .defineListAllowEmpty("professionRisks", io.github.sekerator.kingdomworld.core.citizen.TaskRisks.defaultSettings(),
                             value -> value instanceof String text && io.github.sekerator.kingdomworld.core.citizen.TaskRisks.parse(text).isPresent());
+            builder.pop();
+
+            builder.comment("Workshops and the king's orders: smelter, cook, crafter and smith.").push("production");
+            craftSeconds = builder
+                    .comment("Seconds a beginner needs to make one thing by hand (crafting table, stonecutter, smithing table);",
+                            "experience makes it up to twice as fast. Cooking takes the time of its recipe.")
+                    .defineInRange("craftSeconds", 10, 1, 600);
+            cookFoodDaysTarget = builder
+                    .comment("A cook in auto mode cooks while the storehouses hold food for fewer than this many days for everybody.",
+                            "0 stops cooking on its own.")
+                    .defineInRange("cookFoodDaysTarget", 5, 0, 60);
+            orderChainDepth = builder
+                    .comment("How many steps of sub-orders an order may start for missing ingredients (sword, ingots, smelting).")
+                    .defineInRange("orderChainDepth", 3, 0, 8);
+            maxOrdersPerKingdom = builder
+                    .comment("Orders of the king one kingdom may have at the same time (sub-orders not counted).")
+                    .defineInRange("maxOrdersPerKingdom", 32, 1, 256);
             builder.pop();
 
             builder.comment("Abstract simulation of kingdoms far from players.").push("simulation");

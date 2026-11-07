@@ -58,6 +58,10 @@ public final class TaskRisks {
         risks.put(Professions.FISHER.id(), new Risk(0.001, 0.0001));
         risks.put(Professions.FARMER.id(), new Risk(0.0005, 0.0));
         risks.put(Professions.CARRIER.id(), new Risk(0.0005, 0.0));
+        risks.put(Professions.SMELTER.id(), new Risk(0.0005, 0.0));
+        risks.put(Professions.SMITH.id(), new Risk(0.0004, 0.0));
+        risks.put(Professions.COOK.id(), new Risk(0.0003, 0.0));
+        risks.put(Professions.CRAFTER.id(), new Risk(0.0002, 0.0));
         return java.util.Collections.unmodifiableMap(risks);
     }
 

@@ -24,6 +24,10 @@ public final class ProfessionBehaviors {
         register(Professions.FISHER, new FisherBehavior());
         register(Professions.HERDER, new HerderBehavior());
         register(Professions.CARRIER, new CarrierBehavior());
+        register(Professions.SMELTER, new io.github.sekerator.kingdomworld.common.production.WorkshopBehavior(Professions.SMELTER.id()));
+        register(Professions.COOK, new io.github.sekerator.kingdomworld.common.production.WorkshopBehavior(Professions.COOK.id()));
+        register(Professions.CRAFTER, new io.github.sekerator.kingdomworld.common.production.WorkshopBehavior(Professions.CRAFTER.id()));
+        register(Professions.SMITH, new io.github.sekerator.kingdomworld.common.production.WorkshopBehavior(Professions.SMITH.id()));
     }
 
     private ProfessionBehaviors() {
