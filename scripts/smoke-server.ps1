@@ -1366,6 +1366,87 @@ Invoke-Phase 'session1' {
             Add-Failure '[session1] the builder could not be appointed'
         }
     }
+    # Buildings on chunk [-1, 1], away from the posts of the other checks: a well of birch plays its role, loses blocks, is
+    # repaired by the builder with materials from the storehouse before the house is laid out, and then demolished, its
+    # materials going back with a loss.
+    Send-ServerCommand $server 'forceload add -16 16 -1 31'
+    Send-ServerCommand $server 'fill -16 69 16 -1 69 31 minecraft:stone'
+    Send-ServerCommand $server 'fill -16 70 16 -1 80 31 minecraft:air'
+    Start-Sleep -Seconds 2
+    $wellId = $null
+    Send-ServerCommand $server "kingdomworld admin build place $KingdomName kingdomworld:well -12 70 29 0 false `"minecraft:birch`""
+    $well = Wait-ForLog $server 'Construction #(\d+) laid out: .* at -12 70 29, (\d+) steps' $CommandTimeout $ConsoleFailPattern
+    if ($well) {
+        Send-ServerCommand $server "kingdomworld admin build finish $($well.Groups[1].Value)"
+        $wellBuilt = Wait-ForLog $server "Construction #$($well.Groups[1].Value) finished at once; building #(\d+) is in the register" $CommandTimeout $ConsoleFailPattern
+        if ($wellBuilt) { $wellId = $wellBuilt.Groups[1].Value }
+    }
+    if (-not $wellId) {
+        Add-Failure '[session1] the well of birch could not be built'
+    } else {
+        Send-ServerCommand $server "kingdomworld admin build role $wellId"
+        if (Wait-ForLog $server "Building #$wellId \(kingdomworld:well\): role well, state active, level 1, .* wood minecraft:birch" $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok "[session1] the well #$wellId plays its role and is built of birch"
+        } else {
+            Add-Failure '[session1] the well does not play its role or is not of birch'
+        }
+        Send-ServerCommand $server "kingdomworld admin build damage $wellId 40"
+        [void](Wait-ForLog $server "Building #$wellId lost \d+ blocks" $CommandTimeout $ConsoleFailPattern)
+        Send-ServerCommand $server "kingdomworld admin build check $wellId"
+        $checked = Wait-ForLog $server "Building #$wellId looked at: (\d+)% stands" $CommandTimeout $ConsoleFailPattern
+        Send-ServerCommand $server "kingdomworld admin build role $wellId"
+        if ($checked -and [int]$checked.Groups[1].Value -lt 70 -and
+                (Wait-ForLog $server "Building #$wellId \(kingdomworld:well\): role well, state damaged" $CommandTimeout $ConsoleFailPattern)) {
+            Write-Ok "[session1] the damaged well ($($checked.Groups[1].Value)%) rests"
+        } else {
+            Add-Failure '[session1] the damaged well still plays its role'
+        }
+        Send-ServerCommand $server "kingdomworld admin build repair $wellId"
+        $repair = Wait-ForLog $server 'The builders will repair .* \(construction #(\d+)\)' $CommandTimeout $ConsoleFailPattern
+        if ($repair) {
+            $rid = $repair.Groups[1].Value
+            # The house still sets its materials aside while the repair goes first.
+            Send-ServerCommand $server "kingdomworld admin build priority $rid high"
+            [void](Wait-ForLog $server 'Priority of ' $CommandTimeout $ConsoleFailPattern)
+            Send-ServerCommand $server "kingdomworld admin build stock $rid"
+            [void](Wait-ForLog $server "Materials for construction #$rid put into the storehouses: \d+, did not fit: 0" $CommandTimeout $ConsoleFailPattern)
+            Send-ServerCommand $server "kingdomworld admin simulate $KingdomName 3"
+            [void](Wait-ForLog $server "Ran 3 simulation step\(s\) of $KingdomName" $CommandTimeout $ConsoleFailPattern)
+            Send-ServerCommand $server 'kingdomworld admin build tick'
+            [void](Wait-ForLog $server 'Constructions moved on: \d+' $CommandTimeout $ConsoleFailPattern)
+            $seen = Count-Log "Building #$wellId looked at: (\d+)% stands"
+            Send-ServerCommand $server "kingdomworld admin build check $wellId"
+            $whole = Wait-ForNewLog $server "Building #$wellId looked at: (\d+)% stands" $CommandTimeout $seen
+            $seen = Count-Log "Building #$wellId \(kingdomworld:well\): role well, state active"
+            Send-ServerCommand $server "kingdomworld admin build role $wellId"
+            $active = Wait-ForNewLog $server "Building #$wellId \(kingdomworld:well\): role well, state active" $CommandTimeout $seen
+            if ($whole -and $whole.Groups[1].Value -eq '100' -and $active) {
+                Write-Ok '[session1] the builder repaired the well from the storehouse and its role came back'
+            } else {
+                Add-Failure "[session1] the well was not repaired: $(if ($whole) { $whole.Value } else { 'no check' })"
+            }
+        } else {
+            Add-Failure '[session1] the repair of the well could not be ordered'
+        }
+        Send-ServerCommand $server "kingdomworld admin build demolish $wellId"
+        $demolition = Wait-ForLog $server 'The builders will take .* down \(construction #(\d+)\)' $CommandTimeout $ConsoleFailPattern
+        if ($demolition) {
+            Send-ServerCommand $server "kingdomworld admin build finish $($demolition.Groups[1].Value)"
+            [void](Wait-ForLog $server "Construction #$($demolition.Groups[1].Value) finished at once" $CommandTimeout $ConsoleFailPattern)
+            $before = (Get-LatestLog).Length
+            Send-ServerCommand $server "kingdomworld admin build buildings $KingdomName"
+            Send-ServerCommand $server "kingdomworld admin storage list $KingdomName"
+            Start-Sleep -Seconds 3
+            $listed = (Get-LatestLog).Substring($before)
+            if ($listed -notmatch 'kingdomworld:well \(well\)' -and $listed -match 'minecraft:birch_slab: \d+' -and $listed -match 'minecraft:cobblestone: \d+') {
+                Write-Ok '[session1] the well was demolished: it left the register and its birch and stone went to the storehouses'
+            } else {
+                Add-Failure '[session1] the demolition of the well left it in the register or gave nothing back'
+            }
+        } else {
+            Add-Failure '[session1] the demolition of the well could not be ordered'
+        }
+    }
     Send-ServerCommand $server "kingdomworld admin build place $KingdomName kingdomworld:small_house 39 70 15"
     $laid = Wait-ForLog $server 'Construction #(\d+) laid out: .* at 39 70 15, (\d+) steps' $CommandTimeout $ConsoleFailPattern
     if ($laid) {
@@ -1426,85 +1507,8 @@ Invoke-Phase 'session1' {
         }
     }
 
-    # Buildings on chunk [-1, 1], away from the posts of the other checks: a well of birch plays its role, loses blocks, is repaired by the builder with materials
-    # from the storehouse and then demolished, its materials going back with a loss; a hut that stands there is saved as a
-    # blueprint of the kingdom, and a construction from it waits paused over the restart. With -Pack a house is built of a
-    # wood of a mod of the pack.
-    Send-ServerCommand $server 'forceload add -16 16 -1 31'
-    Send-ServerCommand $server 'fill -16 69 16 -1 69 31 minecraft:stone'
-    Send-ServerCommand $server 'fill -16 70 16 -1 80 31 minecraft:air'
-    Start-Sleep -Seconds 2
-    $wellId = $null
-    Send-ServerCommand $server "kingdomworld admin build place $KingdomName kingdomworld:well -12 70 29 0 false `"minecraft:birch`""
-    $well = Wait-ForLog $server 'Construction #(\d+) laid out: .* at -12 70 29, (\d+) steps' $CommandTimeout $ConsoleFailPattern
-    if ($well) {
-        Send-ServerCommand $server "kingdomworld admin build finish $($well.Groups[1].Value)"
-        $wellBuilt = Wait-ForLog $server "Construction #$($well.Groups[1].Value) finished at once; building #(\d+) is in the register" $CommandTimeout $ConsoleFailPattern
-        if ($wellBuilt) { $wellId = $wellBuilt.Groups[1].Value }
-    }
-    if (-not $wellId) {
-        Add-Failure '[session1] the well of birch could not be built'
-    } else {
-        Send-ServerCommand $server "kingdomworld admin build role $wellId"
-        if (Wait-ForLog $server "Building #$wellId \(kingdomworld:well\): role well, state active, level 1, .* wood minecraft:birch" $CommandTimeout $ConsoleFailPattern) {
-            Write-Ok "[session1] the well #$wellId plays its role and is built of birch"
-        } else {
-            Add-Failure '[session1] the well does not play its role or is not of birch'
-        }
-        Send-ServerCommand $server "kingdomworld admin build damage $wellId 40"
-        [void](Wait-ForLog $server "Building #$wellId lost \d+ blocks" $CommandTimeout $ConsoleFailPattern)
-        Send-ServerCommand $server "kingdomworld admin build check $wellId"
-        $checked = Wait-ForLog $server "Building #$wellId looked at: (\d+)% stands" $CommandTimeout $ConsoleFailPattern
-        Send-ServerCommand $server "kingdomworld admin build role $wellId"
-        if ($checked -and [int]$checked.Groups[1].Value -lt 70 -and
-                (Wait-ForLog $server "Building #$wellId \(kingdomworld:well\): role well, state damaged" $CommandTimeout $ConsoleFailPattern)) {
-            Write-Ok "[session1] the damaged well ($($checked.Groups[1].Value)%) rests"
-        } else {
-            Add-Failure '[session1] the damaged well still plays its role'
-        }
-        Send-ServerCommand $server "kingdomworld admin build repair $wellId"
-        $repair = Wait-ForLog $server 'The builders will repair .* \(construction #(\d+)\)' $CommandTimeout $ConsoleFailPattern
-        if ($repair) {
-            $rid = $repair.Groups[1].Value
-            Send-ServerCommand $server "kingdomworld admin build stock $rid"
-            [void](Wait-ForLog $server "Materials for construction #$rid put into the storehouses: \d+, did not fit: 0" $CommandTimeout $ConsoleFailPattern)
-            Send-ServerCommand $server "kingdomworld admin simulate $KingdomName 3"
-            [void](Wait-ForLog $server "Ran 3 simulation step\(s\) of $KingdomName" $CommandTimeout $ConsoleFailPattern)
-            Send-ServerCommand $server 'kingdomworld admin build tick'
-            [void](Wait-ForLog $server 'Constructions moved on: \d+' $CommandTimeout $ConsoleFailPattern)
-            $seen = Count-Log "Building #$wellId looked at: (\d+)% stands"
-            Send-ServerCommand $server "kingdomworld admin build check $wellId"
-            $whole = Wait-ForNewLog $server "Building #$wellId looked at: (\d+)% stands" $CommandTimeout $seen
-            $seen = Count-Log "Building #$wellId \(kingdomworld:well\): role well, state active"
-            Send-ServerCommand $server "kingdomworld admin build role $wellId"
-            $active = Wait-ForNewLog $server "Building #$wellId \(kingdomworld:well\): role well, state active" $CommandTimeout $seen
-            if ($whole -and $whole.Groups[1].Value -eq '100' -and $active) {
-                Write-Ok '[session1] the builder repaired the well from the storehouse and its role came back'
-            } else {
-                Add-Failure "[session1] the well was not repaired: $(if ($whole) { $whole.Value } else { 'no check' })"
-            }
-        } else {
-            Add-Failure '[session1] the repair of the well could not be ordered'
-        }
-        Send-ServerCommand $server "kingdomworld admin build demolish $wellId"
-        $demolition = Wait-ForLog $server 'The builders will take .* down \(construction #(\d+)\)' $CommandTimeout $ConsoleFailPattern
-        if ($demolition) {
-            Send-ServerCommand $server "kingdomworld admin build finish $($demolition.Groups[1].Value)"
-            [void](Wait-ForLog $server "Construction #$($demolition.Groups[1].Value) finished at once" $CommandTimeout $ConsoleFailPattern)
-            $before = (Get-LatestLog).Length
-            Send-ServerCommand $server "kingdomworld admin build buildings $KingdomName"
-            Send-ServerCommand $server "kingdomworld admin storage list $KingdomName"
-            Start-Sleep -Seconds 3
-            $listed = (Get-LatestLog).Substring($before)
-            if ($listed -notmatch 'kingdomworld:well \(well\)' -and $listed -match 'minecraft:birch_slab: \d+' -and $listed -match 'minecraft:cobblestone: \d+') {
-                Write-Ok '[session1] the well was demolished: it left the register and its birch and stone went to the storehouses'
-            } else {
-                Add-Failure '[session1] the demolition of the well left it in the register or gave nothing back'
-            }
-        } else {
-            Add-Failure '[session1] the demolition of the well could not be ordered'
-        }
-    }
+    # A hut that stands on chunk [-1, 1] is saved as a blueprint of the kingdom, and a construction from it waits paused
+    # over the restart. With -Pack a house is built of a wood of a mod of the pack.
     Send-ServerCommand $server 'fill -15 70 17 -13 70 19 minecraft:cobblestone'
     Send-ServerCommand $server 'setblock -14 71 19 minecraft:red_bed[facing=north,part=foot]'
     Send-ServerCommand $server 'setblock -14 71 18 minecraft:red_bed[facing=north,part=head]'

@@ -126,6 +126,12 @@ public final class ConstructionCommands {
                                 .then(Commands.argument("blocks", IntegerArgumentType.integer(1, 100_000))
                                         .executes(context -> damage(context.getSource(), building(context),
                                                 IntegerArgumentType.getInteger(context, "blocks"))))))
+                .then(Commands.literal("priority")
+                        .then(Commands.argument("id", LongArgumentType.longArg(1))
+                                .then(Commands.argument("priority", StringArgumentType.word())
+                                        .suggests((context, builder) -> SharedSuggestionProvider.suggest(List.of("low", "normal", "high"), builder))
+                                        .executes(context -> priority(context.getSource(), construction(context),
+                                                StringArgumentType.getString(context, "priority"))))))
                 .then(Commands.literal("materials").executes(context -> materials(context.getSource())))
                 .then(Commands.literal("blueprints")
                         .executes(context -> blueprints(context.getSource(), null))
@@ -360,6 +366,20 @@ public final class ConstructionCommands {
         int removed = io.github.sekerator.kingdomworld.common.construction.BuildingWork.damage(source.getServer(), building, blocks);
         source.sendSuccess(() -> Component.translatable(KEY + "damaged", building.id(), removed), true);
         return removed;
+    }
+
+    private static int priority(CommandSourceStack source, Construction construction, String value) {
+        Construction.Priority priority = Construction.Priority.byId(value);
+        KingdomActions.Feedback feedback = io.github.sekerator.kingdomworld.common.construction.ConstructionActions.apply(source.getServer(), null,
+                new io.github.sekerator.kingdomworld.common.network.packet.ConstructionPackets.Change(construction.kingdomId(),
+                        io.github.sekerator.kingdomworld.common.network.packet.ConstructionPackets.Change.Action.PRIORITY, construction.id(),
+                        priority.ordinal()));
+        if (!feedback.success()) {
+            source.sendFailure(feedback.message());
+            return 0;
+        }
+        source.sendSuccess(feedback::message, true);
+        return 1;
     }
 
     /**
