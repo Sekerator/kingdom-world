@@ -178,7 +178,7 @@ final class KingdomHighlights implements ClientMapModel.Listener {
         int rgb = info == null ? 0x808080 : info.color();
         int fill = (int) Math.round(Math.max(0.0, Math.min(1.0, KingdomWorldConfig.CLIENT.mapFillOpacity.get())) * 255);
         Long capital = capitals.get(owner);
-        if (capital != null && capital == ChunkKey.of(chunkX, chunkZ)) {
+        if (capital != null && capital == ChunkKey.of(chunkX, chunkZ) || city(askedDimension, chunkX, chunkZ) != null) {
             fill = Math.min(0xC0, fill * 2 + 0x30);
         }
         int center = color(rgb, fill);
@@ -205,7 +205,24 @@ final class KingdomHighlights implements ClientMapModel.Listener {
             return null;
         }
         Long capital = capitals.get(owner);
-        return capital != null && capital == ChunkKey.of(chunkX, chunkZ) ? MapLabels.capital(info) : Component.literal(info.name());
+        if (capital != null && capital == ChunkKey.of(chunkX, chunkZ)) {
+            return MapLabels.capital(info);
+        }
+        io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city = city(askedDimension, chunkX, chunkZ);
+        return city != null ? Component.translatable("kingdomworld.screen.map.city", city.name()) : Component.literal(info.name());
+    }
+
+    /**
+     * The city whose town hall stands in a chunk, if any; Xaero's maps show it like a capital.
+     */
+    private static io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city(String askedDimension, int chunkX, int chunkZ) {
+        for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city
+                : io.github.sekerator.kingdomworld.client.map.ClientRoadCache.data().cities()) {
+            if (city.dimension().equals(askedDimension) && city.x() >> 4 == chunkX && city.z() >> 4 == chunkZ) {
+                return city;
+            }
+        }
+        return null;
     }
 
     /**

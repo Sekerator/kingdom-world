@@ -164,6 +164,8 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue maxBlueprintsPerKingdom;
         /** Companions of players, the slave market and parties. */
         public final Companions companions;
+        /** Cities, roads, caravans on the roads and robbers. */
+        public final Roads roads;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -461,6 +463,7 @@ public final class KingdomWorldConfig {
             army = new Army(builder);
             magic = new Magic(builder);
             companions = new Companions(builder);
+            roads = new Roads(builder);
 
             builder.comment("Abstract simulation of kingdoms far from players.").push("simulation");
             simulationIntervalTicks = builder
@@ -1091,6 +1094,141 @@ public final class KingdomWorldConfig {
                     1_000_000L);
             bodyRange = builder.comment("A companion told to stand or guard a place is in the world while its owner is this near, in blocks.")
                     .defineInRange("bodyRange", d.bodyRange, 16, 512);
+            builder.pop();
+        }
+    }
+
+    /**
+     * Cities, roads, caravans on the roads and robbers.
+     */
+    public static final class Roads {
+        public final ForgeConfigSpec.IntValue maxCities;
+        public final ForgeConfigSpec.IntValue minCityDistance;
+        public final ForgeConfigSpec.IntValue maxRoads;
+        public final ForgeConfigSpec.IntValue maxRouteLength;
+        public final ForgeConfigSpec.IntValue searchStepsPerTick;
+        public final ForgeConfigSpec.IntValue maxSearchSteps;
+        public final ForgeConfigSpec.IntValue searchChunksPerTick;
+        public final ForgeConfigSpec.IntValue maxBridge;
+        public final ForgeConfigSpec.IntValue maxFill;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Double>> secondsPerBlock;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Double>> wearPerDay;
+        public final ForgeConfigSpec.DoubleValue repairShare;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Double>> caravanSpeed;
+        public final ForgeConfigSpec.BooleanValue speedOnRoads;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Double>> playerSpeed;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Double>> horseSpeed;
+        public final ForgeConfigSpec.IntValue crossingDays;
+        public final ForgeConfigSpec.BooleanValue physicalCaravans;
+        public final ForgeConfigSpec.BooleanValue bandits;
+        public final ForgeConfigSpec.IntValue maxCamps;
+        public final ForgeConfigSpec.IntValue campMinDistance;
+        public final ForgeConfigSpec.DoubleValue campSpawnChance;
+        public final ForgeConfigSpec.IntValue campStartBandits;
+        public final ForgeConfigSpec.IntValue campMaxBandits;
+        public final ForgeConfigSpec.DoubleValue campGrowthChance;
+        public final ForgeConfigSpec.DoubleValue banditStrength;
+        public final ForgeConfigSpec.DoubleValue leaderStrength;
+        public final ForgeConfigSpec.DoubleValue ambushChance;
+        public final ForgeConfigSpec.IntValue campReach;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Double>> ambushByClass;
+        public final ForgeConfigSpec.DoubleValue garrisonFactor;
+        public final ForgeConfigSpec.DoubleValue patrolFactor;
+        public final ForgeConfigSpec.DoubleValue ownLandFactor;
+        public final ForgeConfigSpec.IntValue protectRadius;
+        public final ForgeConfigSpec.IntValue raidParty;
+        public final ForgeConfigSpec.DoubleValue unguardedLoot;
+        public final ForgeConfigSpec.DoubleValue merchantDeath;
+        public final ForgeConfigSpec.IntValue maxPhysicalBandits;
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> banditWeapons;
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> banditArmor;
+
+        Roads(ForgeConfigSpec.Builder builder) {
+            io.github.sekerator.kingdomworld.core.road.RoadRules.Builder r = new io.github.sekerator.kingdomworld.core.road.RoadRules.Builder();
+            io.github.sekerator.kingdomworld.core.road.BanditRules.Builder b = new io.github.sekerator.kingdomworld.core.road.BanditRules.Builder();
+            builder.comment("Cities, roads between them, caravans on the roads and robbers.",
+                    "Values given by class of road are in the order path, gravel, paved.").push("roads");
+            maxCities = builder.comment("Cities one kingdom founds at most with town halls, besides its capital.")
+                    .defineInRange("maxCities", r.maxCities, 0, 256);
+            minCityDistance = builder.comment("Blocks between two cities, or a city and a capital, at least.")
+                    .defineInRange("minCityDistance", r.minCityDistance, 0, 10_000);
+            maxRoads = builder.comment("Roads one kingdom keeps at most.").defineInRange("maxRoads", r.maxRoads, 0, 1_024);
+            maxRouteLength = builder.comment("The longest road, in blocks along its way.")
+                    .defineInRange("maxRouteLength", r.maxRouteLength, 16, 8_192);
+            searchStepsPerTick = builder.comment("Steps of the search for the way of a road the server makes in one tick.")
+                    .defineInRange("searchStepsPerTick", r.nodesPerTick, 1, 100_000);
+            maxSearchSteps = builder.comment("Steps one search makes at most before it gives up.")
+                    .defineInRange("maxSearchSteps", r.maxNodes, 1_000, 10_000_000);
+            searchChunksPerTick = builder.comment("Chunks the search may load or read for the first time in one tick.")
+                    .defineInRange("searchChunksPerTick", r.chunksPerTick, 1, 256);
+            maxBridge = builder.comment("The longest bridge or embankment, in blocks.").defineInRange("maxBridge", r.maxBridge, 0, 64);
+            maxFill = builder.comment("The highest embankment, in blocks; a deeper gap gets a bridge.").defineInRange("maxFill", r.maxFill, 0, 16);
+            secondsPerBlock = builder.comment("Seconds a builder takes for a block of road, by class.")
+                    .defineList("secondsPerBlock", List.of(r.secondsPerBlock[0], r.secondsPerBlock[1], r.secondsPerBlock[2]),
+                            value -> value instanceof Double number && number >= 0.05 && number <= 600.0);
+            wearPerDay = builder.comment("Share of its condition a built section of road loses a game day, by class.")
+                    .defineList("wearPerDay", List.of(r.wearPerDay[0], r.wearPerDay[1], r.wearPerDay[2]),
+                            value -> value instanceof Double number && number >= 0.0 && number <= 1.0);
+            repairShare = builder.comment("Share of the materials of a section a repair takes.")
+                    .defineInRange("repairShare", r.repairShare, 0.0, 1.0);
+            caravanSpeed = builder.comment("How many times faster than across country (caravanBlocksPerMinute) caravans go on a road,",
+                            "by class.")
+                    .defineList("caravanSpeed", List.of(r.caravanSpeed[0], r.caravanSpeed[1], r.caravanSpeed[2]),
+                            value -> value instanceof Double number && number >= 1.0 && number <= 20.0);
+            speedOnRoads = builder.comment("Whether players and horses are faster on roads.").define("speedOnRoads", r.speedOnRoads);
+            playerSpeed = builder.comment("Extra speed of players on a road, by class (0.2 is a fifth faster).")
+                    .defineList("playerSpeed", List.of(r.playerSpeed[0], r.playerSpeed[1], r.playerSpeed[2]),
+                            value -> value instanceof Double number && number >= 0.0 && number <= 2.0);
+            horseSpeed = builder.comment("Extra speed of horses and other mounts on a road, by class.")
+                    .defineList("horseSpeed", List.of(r.horseSpeed[0], r.horseSpeed[1], r.horseSpeed[2]),
+                            value -> value instanceof Double number && number >= 0.0 && number <= 2.0);
+            crossingDays = builder.comment("Game days a request to build a road across the land of another kingdom waits for an answer.")
+                    .defineInRange("crossingDays", r.crossingDays, 1, 60);
+            physicalCaravans = builder.comment("Whether caravans near players walk the roads as a merchant with pack llamas.")
+                    .define("physicalCaravans", true);
+            bandits = builder.comment("Whether camps of robbers appear in the wild and fall upon caravans.").define("bandits", b.enabled);
+            maxCamps = builder.comment("Camps of robbers in a world at most.").defineInRange("maxCamps", b.maxCamps, 0, 256);
+            campMinDistance = builder.comment("Blocks between a camp and the land of any kingdom at least.")
+                    .defineInRange("campMinDistance", b.minDistance, 0, 10_000);
+            campSpawnChance = builder.comment("Chance a game day that a new camp appears, while there are fewer than the most.")
+                    .defineInRange("campSpawnChance", b.spawnChance, 0.0, 1.0);
+            campStartBandits = builder.comment("Robbers of a new camp, besides its leader.")
+                    .defineInRange("campStartBandits", b.startBandits, 1, 64);
+            campMaxBandits = builder.comment("Robbers a camp grows to at most, besides its leader.")
+                    .defineInRange("campMaxBandits", b.maxBandits, 1, 64);
+            campGrowthChance = builder.comment("Chance a game day that a camp nobody disturbs gains a robber.")
+                    .defineInRange("campGrowthChance", b.growthChance, 0.0, 1.0);
+            banditStrength = builder.comment("Strength of a robber in a fight far from players (a recruit with bare hands has 10).")
+                    .defineInRange("banditStrength", b.banditStrength, 0.1, 100_000.0);
+            leaderStrength = builder.comment("Strength of the leader of a camp.").defineInRange("leaderStrength", b.leaderStrength, 0.1, 100_000.0);
+            ambushChance = builder.comment("Chance of an ambush on a hundred blocks of way across country next to a full camp; it falls",
+                            "with the distance to the camp, with fewer robbers, on roads, on the land of a kingdom and near its squads.",
+                            "Robbers replace caravanLossChance: without camps nearby caravans are not lost.")
+                    .defineInRange("ambushChance", b.ambushChance, 0.0, 1.0);
+            campReach = builder.comment("Blocks around a camp in which its robbers lie in wait.").defineInRange("campReach", b.campReach, 1, 10_000);
+            ambushByClass = builder.comment("How much a road lowers the chance of an ambush, by class (across country it is 1).")
+                    .defineList("ambushByClass", List.of(b.classFactor[0], b.classFactor[1], b.classFactor[2]),
+                            value -> value instanceof Double number && number >= 0.0 && number <= 1.0);
+            garrisonFactor = builder.comment("How much a squad that holds a point or guards land nearby lowers the chance of an ambush.")
+                    .defineInRange("garrisonFactor", b.garrisonFactor, 0.0, 1.0);
+            patrolFactor = builder.comment("How much a squad patrolling nearby lowers it.").defineInRange("patrolFactor", b.patrolFactor, 0.0, 1.0);
+            ownLandFactor = builder.comment("How much the land of a kingdom lowers it.").defineInRange("ownLandFactor", b.ownLandFactor, 0.0, 1.0);
+            protectRadius = builder.comment("Blocks around a squad in which it protects the way.")
+                    .defineInRange("protectRadius", b.protectRadius, 0, 10_000);
+            raidParty = builder.comment("Robbers of one ambush at most, besides the leader.").defineInRange("raidParty", b.raidParty, 1, 64);
+            unguardedLoot = builder.comment("Share of the goods robbers take from a caravan without guards.")
+                    .defineInRange("unguardedLoot", b.unguardedLoot, 0.0, 1.0);
+            merchantDeath = builder.comment("Chance that a merchant of the seller dies when robbers take a caravan.")
+                    .defineInRange("merchantDeath", b.merchantDeath, 0.0, 1.0);
+            maxPhysicalBandits = builder.comment("Robbers of a camp that walk about it near players at most.")
+                    .defineInRange("maxPhysicalBandits", b.maxPhysical, 0, 64);
+            banditWeapons = builder.comment("Weapons of robbers: items and tags of any mod with a weight, e.g. \"#minecraft:swords=4\".",
+                            "The leader takes the best of a few picks. Robbers never drop them.")
+                    .defineListAllowEmpty("banditWeapons", List.of("#minecraft:swords=4", "#minecraft:axes=2", "#forge:tools/bows=2",
+                            "#forge:tools/crossbows=1"), value -> value instanceof String);
+            banditArmor = builder.comment("Armor of robbers: items and tags of any mod with a weight, for any of the four slots.")
+                    .defineListAllowEmpty("banditArmor", List.of("#forge:armors/helmets=2", "#forge:armors/chestplates=2",
+                            "minecraft:leather_leggings=2", "minecraft:leather_boots=2"), value -> value instanceof String);
             builder.pop();
         }
     }

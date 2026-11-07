@@ -522,14 +522,16 @@ public final class ArmyWork {
     }
 
     /**
-     * Whether a soldier is away with a caravan and has no body until it is back.
+     * Whether a soldier is away with a caravan and has no body until it is back; near players the caravan walks the road
+     * and its guards walk beside it.
      */
     public static boolean isAwayFromHome(MinecraftServer server, UUID citizenId) {
         ArmyState army = state(server);
         if (army.soldier(citizenId).isEmpty()) {
             return false;
         }
-        return army.squadOf(citizenId).map(squad -> onTheRoad(server, squad)).orElse(false);
+        return army.squadOf(citizenId).map(squad -> onTheRoad(server, squad)
+                && io.github.sekerator.kingdomworld.common.road.RoadCaravans.merchantOfDeal(server, squad.order().deal()).isEmpty()).orElse(false);
     }
 
     /**
@@ -552,6 +554,12 @@ public final class ArmyWork {
                 return List.of();
             }
             return List.of(new WorldPos(Dimensions.id(player.level()), player.getBlockX(), player.getBlockY(), player.getBlockZ()));
+        }
+        if (order.kind() == Order.Kind.ESCORT) {
+            // Guards of a caravan walking near players are beside its merchant.
+            return io.github.sekerator.kingdomworld.common.road.RoadCaravans.merchantOfDeal(server, order.deal())
+                    .map(merchant -> List.of(new WorldPos(Dimensions.id(merchant.level()), merchant.getBlockX(), merchant.getBlockY(),
+                            merchant.getBlockZ()))).orElse(List.of());
         }
         return order.points();
     }

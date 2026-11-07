@@ -261,6 +261,12 @@ public final class ClientSelfTest {
             case 279 -> {
                 LOGGER.info(PREFIX + "magic tab answered by the server: {}", minecraft.screen instanceof ThroneScreen screen && screen.magicShown());
                 if (minecraft.screen instanceof ThroneScreen screen) {
+                    screen.selectTab("roads");
+                }
+            }
+            case 282 -> {
+                LOGGER.info(PREFIX + "roads tab answered by the server: {}", minecraft.screen instanceof ThroneScreen screen && screen.roadsShown());
+                if (minecraft.screen instanceof ThroneScreen screen) {
                     ClientHooks.openTerritoryEditor(screen.view());
                 }
                 KingdomWorldNetwork.sendToServer(new ClaimChunkPacket((throne.getX() >> 4) + 2, throne.getZ() >> 4, true));

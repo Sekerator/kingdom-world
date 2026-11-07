@@ -54,9 +54,50 @@ public final class WebMapModel {
      * A caravan where it is now.
      *
      * @param color RGB of the selling kingdom
+     * @param way   points of its way through the roads, packed as {@code x << 32 | z}; empty for a straight way
      */
     public record Caravan(long id, String dimension, int color, double x, double z, int fromX, int fromZ, int toX, int toZ,
-                          String label) {
+                          String label, List<Long> way) {
+        public Caravan {
+            way = List.copyOf(way);
+        }
+
+        public Caravan(long id, String dimension, int color, double x, double z, int fromX, int fromZ, int toX, int toZ, String label) {
+            this(id, dimension, color, x, z, fromX, fromZ, toX, toZ, label, List.of());
+        }
+
+        /**
+         * The x of every point of the way, from the start to the goal.
+         */
+        public double[] wayX() {
+            if (way.size() < 2) {
+                return new double[]{fromX + 0.5, toX + 0.5};
+            }
+            return way.stream().mapToDouble(point -> (int) (point >> 32) + 0.5).toArray();
+        }
+
+        public double[] wayZ() {
+            if (way.size() < 2) {
+                return new double[]{fromZ + 0.5, toZ + 0.5};
+            }
+            return way.stream().mapToDouble(point -> (int) point.longValue() + 0.5).toArray();
+        }
+    }
+
+    /**
+     * A city of a kingdom.
+     *
+     * @param color RGB of its kingdom
+     */
+    public record City(long id, String dimension, String name, String kingdom, int color, int x, int z, String label) {
+    }
+
+    /**
+     * A road as a line of points.
+     *
+     * @param color RGB of its class
+     */
+    public record Road(long id, String dimension, int color, String label, double[] xs, double[] zs) {
     }
 
     /**
@@ -81,12 +122,18 @@ public final class WebMapModel {
      * @param shown     how many kingdoms the web maps show after this update
      */
     public record Update(boolean full, List<Kingdom> kingdoms, Set<UUID> removed, List<Caravan> caravans, List<Zone> zones,
-                         int shown) {
+                         int shown, List<City> cities, List<Road> roads) {
         public Update {
             kingdoms = List.copyOf(kingdoms);
             removed = Set.copyOf(removed);
             caravans = List.copyOf(caravans);
             zones = List.copyOf(zones);
+            cities = List.copyOf(cities);
+            roads = List.copyOf(roads);
+        }
+
+        public Update(boolean full, List<Kingdom> kingdoms, Set<UUID> removed, List<Caravan> caravans, List<Zone> zones, int shown) {
+            this(full, kingdoms, removed, caravans, zones, shown, List.of(), List.of());
         }
 
         public boolean isEmpty() {

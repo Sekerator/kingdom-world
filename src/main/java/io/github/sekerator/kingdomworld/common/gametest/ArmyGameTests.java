@@ -289,6 +289,7 @@ public final class ArmyGameTests {
         storehouse.insertItem(3, new ItemStack(Items.DIAMOND_SWORD), false);
         CitizenGameTests.storehouse(helper, TradeGameTests.SECOND, 0, 4);
         Citizen[] guards = new Citizen[3];
+        io.github.sekerator.kingdomworld.core.road.BanditCamp camp = null;
         try {
             for (int i = 0; i < guards.length; i++) {
                 guards[i] = soldier(helper, seller, 1 + i, Professions.WARRIOR.id());
@@ -303,7 +304,10 @@ public final class ArmyGameTests {
             helper.assertTrue(ArmyWork.isAwayFromHome(server, guards[0].id()), "The guards did not go with the caravan");
             double guarded = ArmyCaravans.lossChance(server, caravan, 0.5);
             helper.assertTrue(guarded < 0.5, "Guards did not lower the chance of a loss: " + guarded);
-            // Something lies in wait (0.0), the guards win (0.0), and nobody of them is hurt (0.99).
+            // Robbers of a camp by the way lie in wait (0.0), the guards win (0.0), and nobody of them is hurt (0.99).
+            BlockPos campAt = helper.absolutePos(new BlockPos(TradeGameTests.SECOND / 2, 0, 30));
+            camp = io.github.sekerator.kingdomworld.common.road.BanditWork.found(server, helper.getLevel().dimension().location().toString(),
+                    campAt.getX(), campAt.getZ(), 3);
             TradeWork.overrideRoll(rolls(0.0, 0.0, 0.99));
             TradeWork.arrive(server, caravan, KingdomWorldApi.gameTime(server));
             helper.assertTrue(KingdomStorage.count(server, buyer.id(), stack -> stack.is(Items.WHEAT)) == 16, "The guarded caravan did not arrive");
@@ -311,8 +315,12 @@ public final class ArmyGameTests {
             Soldier record = ArmyWork.state(server).soldier(guards[0].id()).orElseThrow();
             helper.assertTrue(record.battles() == 1, "The guards did not fight");
             helper.assertTrue(!ArmyWork.isAwayFromHome(server, guards[0].id()), "The guards did not come back");
+            helper.assertTrue(camp.bandits() < 3 || !camp.leader() || camp.raids() == 1, "The robbers did not fight");
         } finally {
             TradeWork.overrideRoll(null);
+            if (camp != null) {
+                io.github.sekerator.kingdomworld.common.road.RoadWork.state(server).removeCamp(camp.id());
+            }
             ArmyWork.state(server).forgetKingdom(seller.id());
             KingdomWorldApi.dissolveKingdom(server, buyer.id());
             end(helper, seller, from(helper), to(helper), guards[0] == null ? new Citizen[0] : java.util.Arrays.stream(guards)

@@ -518,8 +518,42 @@ public final class TradeViews {
     /**
      * A caravan on the map: where it left, where it goes and when.
      */
+    /**
+     * A caravan on its way, for the maps.
+     *
+     * @param way      points of its way through the roads, packed as {@code x << 32 | z}; empty for a straight way
+     * @param wayTicks game times it passes them
+     */
     public record CaravanInfo(long id, UUID seller, UUID buyer, int color, String dimension, int fromX, int fromZ, int toX, int toZ,
-                              long departTime, long arriveTime) {
+                              long departTime, long arriveTime, List<Long> way, List<Long> wayTicks) {
+        /** Most points of a way sent. */
+        public static final int MAX_WAY = 512;
+
+        public CaravanInfo {
+            way = List.copyOf(way);
+            wayTicks = List.copyOf(wayTicks);
+            if (way.size() != wayTicks.size()) {
+                throw new IllegalArgumentException("A way needs a time for every point");
+            }
+        }
+
+        public CaravanInfo(long id, UUID seller, UUID buyer, int color, String dimension, int fromX, int fromZ, int toX, int toZ, long departTime,
+                           long arriveTime) {
+            this(id, seller, buyer, color, dimension, fromX, fromZ, toX, toZ, departTime, arriveTime, List.of(), List.of());
+        }
+
+        public static long pack(int x, int z) {
+            return ((long) x << 32) | (z & 0xFFFF_FFFFL);
+        }
+
+        public static int x(long packed) {
+            return (int) (packed >> 32);
+        }
+
+        public static int z(long packed) {
+            return (int) packed;
+        }
+
         public void encode(FriendlyByteBuf buf) {
             buf.writeVarLong(id);
             buf.writeUUID(seller);
@@ -532,11 +566,36 @@ public final class TradeViews {
             buf.writeInt(toZ);
             buf.writeLong(departTime);
             buf.writeLong(arriveTime);
+            buf.writeVarInt(way.size());
+            for (int i = 0; i < way.size(); i++) {
+                buf.writeLong(way.get(i));
+                buf.writeLong(wayTicks.get(i));
+            }
         }
 
         public static CaravanInfo decode(FriendlyByteBuf buf) {
-            return new CaravanInfo(buf.readVarLong(), buf.readUUID(), buf.readUUID(), buf.readInt(), buf.readUtf(256), buf.readInt(), buf.readInt(),
-                    buf.readInt(), buf.readInt(), buf.readLong(), buf.readLong());
+            long id = buf.readVarLong();
+            UUID seller = buf.readUUID();
+            UUID buyer = buf.readUUID();
+            int color = buf.readInt();
+            String dimension = buf.readUtf(256);
+            int fromX = buf.readInt();
+            int fromZ = buf.readInt();
+            int toX = buf.readInt();
+            int toZ = buf.readInt();
+            long depart = buf.readLong();
+            long arrive = buf.readLong();
+            int size = buf.readVarInt();
+            if (size < 0 || size > MAX_WAY) {
+                throw new IllegalArgumentException("Too many points of a way: " + size);
+            }
+            List<Long> way = new ArrayList<>(size);
+            List<Long> ticks = new ArrayList<>(size);
+            for (int i = 0; i < size; i++) {
+                way.add(buf.readLong());
+                ticks.add(buf.readLong());
+            }
+            return new CaravanInfo(id, seller, buyer, color, dimension, fromX, fromZ, toX, toZ, depart, arrive, way, ticks);
         }
 
         /**
@@ -544,6 +603,31 @@ public final class TradeViews {
          */
         public double progress(long gameTime) {
             return arriveTime <= departTime ? 1.0 : Math.max(0.0, Math.min(1.0, (gameTime - departTime) / (double) (arriveTime - departTime)));
+        }
+
+        /**
+         * Where it is at a game time: along its way through the roads, or on the straight line.
+         */
+        public double[] position(long gameTime) {
+            if (way.size() < 2) {
+                double progress = progress(gameTime);
+                return new double[]{fromX + (toX - fromX) * progress, fromZ + (toZ - fromZ) * progress};
+            }
+            if (gameTime <= wayTicks.get(0)) {
+                return new double[]{x(way.get(0)), z(way.get(0))};
+            }
+            for (int i = 1; i < way.size(); i++) {
+                long until = wayTicks.get(i);
+                if (gameTime <= until) {
+                    long since = wayTicks.get(i - 1);
+                    double t = until <= since ? 1.0 : (gameTime - since) / (double) (until - since);
+                    long a = way.get(i - 1);
+                    long b = way.get(i);
+                    return new double[]{x(a) + (x(b) - x(a)) * t, z(a) + (z(b) - z(a)) * t};
+                }
+            }
+            long last = way.get(way.size() - 1);
+            return new double[]{x(last), z(last)};
         }
     }
 

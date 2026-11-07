@@ -65,6 +65,7 @@ final class JourneyMapLayer implements ClientMapModel.Listener {
     private final IClientAPI jm;
     private final Map<UUID, List<Overlay>> kingdoms = new HashMap<>();
     private final Map<Long, MarkerOverlay> caravans = new HashMap<>();
+    private final Map<Long, MarkerOverlay> cities = new HashMap<>();
     private final List<Overlay> zones = new ArrayList<>();
     private String dimension;
     private int zonesVersion = -1;
@@ -288,6 +289,7 @@ final class JourneyMapLayer implements ClientMapModel.Listener {
             return;
         }
         updateCaravans(minecraft.level.getGameTime());
+        updateCities();
         if (zonesVersion != ClientMapZones.version()) {
             zonesVersion = ClientMapZones.version();
             updateZones();
@@ -302,9 +304,9 @@ final class JourneyMapLayer implements ClientMapModel.Listener {
                 if (!caravan.dimension().equals(dimension)) {
                     continue;
                 }
-                double progress = caravan.progress(gameTime);
-                BlockPos pos = BlockPos.containing(caravan.fromX() + (caravan.toX() - caravan.fromX()) * progress, 64,
-                        caravan.fromZ() + (caravan.toZ() - caravan.fromZ()) * progress);
+                // Along its way through the roads, where the time says it is.
+                double[] at = caravan.position(gameTime);
+                BlockPos pos = BlockPos.containing(at[0], 64, at[1]);
                 MarkerOverlay marker = caravans.get(caravan.id());
                 if (marker == null) {
                     marker = new MarkerOverlay(KingdomWorld.MOD_ID, pos, icon(CARAVAN, 16));
@@ -323,6 +325,38 @@ final class JourneyMapLayer implements ClientMapModel.Listener {
             }
         }
         caravans.entrySet().removeIf(entry -> {
+            if (present.contains(entry.getKey())) {
+                return false;
+            }
+            hide(entry.getValue());
+            return true;
+        });
+    }
+
+    /**
+     * Cities as small crowns with their name.
+     */
+    private void updateCities() {
+        Set<Long> present = new HashSet<>();
+        ResourceKey<Level> key = dimensionKey();
+        for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city
+                : io.github.sekerator.kingdomworld.client.map.ClientRoadCache.data().cities()) {
+            if (!city.dimension().equals(dimension)) {
+                continue;
+            }
+            MarkerOverlay marker = cities.get(city.id());
+            if (marker == null) {
+                marker = new MarkerOverlay(KingdomWorld.MOD_ID, new BlockPos(city.x(), 64, city.z()), icon(CAPITAL, 12));
+                marker.setDimension(key);
+                marker.setOverlayGroupName(GROUP);
+                marker.setDisplayOrder(1050);
+                cities.put(city.id(), marker);
+            }
+            marker.setTitle(Component.translatable("kingdomworld.screen.map.city", city.name()).getString());
+            show(marker);
+            present.add(city.id());
+        }
+        cities.entrySet().removeIf(entry -> {
             if (present.contains(entry.getKey())) {
                 return false;
             }

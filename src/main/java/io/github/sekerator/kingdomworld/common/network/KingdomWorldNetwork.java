@@ -23,6 +23,7 @@ import io.github.sekerator.kingdomworld.common.network.packet.MapAreaPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.MapAreaRequestPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.OrderPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.OpenFoundingScreenPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.RoadPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.StoragePackets;
 import io.github.sekerator.kingdomworld.common.network.packet.TerritoryDeltaPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.TerritorySnapshotPacket;
@@ -53,7 +54,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "14";
+    public static final String PROTOCOL_VERSION = "15";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -211,6 +212,20 @@ public final class KingdomWorldNetwork {
                 CompanionPackets.PartyAction::decode, CompanionPackets.PartyAction::handle);
         add(id++, CompanionPackets.PartyHud.class, NetworkDirection.PLAY_TO_CLIENT, CompanionPackets.PartyHud::encode,
                 CompanionPackets.PartyHud::decode, CompanionPackets.PartyHud::handle);
+        add(id++, RoadPackets.TabRequest.class, NetworkDirection.PLAY_TO_SERVER, RoadPackets.TabRequest::encode,
+                RoadPackets.TabRequest::decode, RoadPackets.TabRequest::handle);
+        add(id++, RoadPackets.TabResponse.class, NetworkDirection.PLAY_TO_CLIENT, RoadPackets.TabResponse::encode,
+                RoadPackets.TabResponse::decode, RoadPackets.TabResponse::handle);
+        add(id++, RoadPackets.TabChange.class, NetworkDirection.PLAY_TO_SERVER, RoadPackets.TabChange::encode,
+                RoadPackets.TabChange::decode, RoadPackets.TabChange::handle);
+        add(id++, RoadPackets.PlanRequest.class, NetworkDirection.PLAY_TO_SERVER, RoadPackets.PlanRequest::encode,
+                RoadPackets.PlanRequest::decode, RoadPackets.PlanRequest::handle);
+        add(id++, RoadPackets.PlanResponse.class, NetworkDirection.PLAY_TO_CLIENT, RoadPackets.PlanResponse::encode,
+                RoadPackets.PlanResponse::decode, RoadPackets.PlanResponse::handle);
+        add(id++, RoadPackets.PlanConfirm.class, NetworkDirection.PLAY_TO_SERVER, RoadPackets.PlanConfirm::encode,
+                RoadPackets.PlanConfirm::decode, RoadPackets.PlanConfirm::handle);
+        add(id++, RoadPackets.MapSync.class, NetworkDirection.PLAY_TO_CLIENT, RoadPackets.MapSync::encode,
+                RoadPackets.MapSync::decode, RoadPackets.MapSync::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

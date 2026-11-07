@@ -206,7 +206,9 @@ final class SoldierGoal extends Goal {
         double alarm = Math.max(SEARCH, ArmySettings.rules().alarmRadius());
         LivingEntity best = null;
         double bestDistance = Double.MAX_VALUE;
-        ServerPlayer followed = order.kind() == Order.Kind.FOLLOW ? server.getPlayerList().getPlayer(order.player()) : null;
+        LivingEntity followed = order.kind() == Order.Kind.FOLLOW ? server.getPlayerList().getPlayer(order.player())
+                : order.kind() == Order.Kind.ESCORT ? io.github.sekerator.kingdomworld.common.road.RoadCaravans.merchantOfDeal(server, order.deal())
+                .orElse(null) : null;
         List<Mob> mobs = level.getEntitiesOfClass(Mob.class, body.getBoundingBox().inflate(alarm, 8.0, alarm),
                 mob -> mob.isAlive() && mob instanceof Enemy && !(mob instanceof CitizenEntity));
         for (Mob mob : mobs) {
@@ -269,6 +271,22 @@ final class SoldierGoal extends Goal {
                     }
                 }
                 body.getLookControl().setLookAt(player, 10.0f, 10.0f);
+            }
+            case ESCORT -> {
+                // Beside the merchant of the caravan walking near players.
+                io.github.sekerator.kingdomworld.common.road.RoadCaravans.merchantOfDeal(server, order.deal()).ifPresent(merchant -> {
+                    if (merchant.level() != level) {
+                        return;
+                    }
+                    double distance = body.distanceToSqr(merchant);
+                    if (distance > 32.0 * 32.0) {
+                        body.moveTo(merchant.getX(), merchant.getY(), merchant.getZ(), body.getYRot(), body.getXRot());
+                        body.getNavigation().stop();
+                    } else if (distance > 4.0 * 4.0 && --pathCooldown <= 0) {
+                        pathCooldown = 10;
+                        body.getNavigation().moveTo(merchant, 0.8);
+                    }
+                });
             }
             default -> train(server, level);
         }

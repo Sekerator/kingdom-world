@@ -243,6 +243,9 @@ function Initialize-Server([string]$ModJar) {
     New-Item -ItemType Directory -Force -Path $defaults | Out-Null
     $utf8 = New-Object System.Text.UTF8Encoding($false)
     $serverDefaults = "[work]`n`ttaskRiskMultiplier = 0.0`n"
+    # Roads: a city next to the capital, a long way searched quickly, and no camps or growth by chance.
+    $serverDefaults += "[roads]`n`tminCityDistance = 16`n`tmaxBridge = 64`n`tmaxSearchSteps = 2000000`n`tsearchStepsPerTick = 20000`n"
+    $serverDefaults += "`tsearchChunksPerTick = 24`n`tcampSpawnChance = 0.0`n`tcampGrowthChance = 0.0`n"
     # With map mods the web maps are updated every second, so that the checks do not wait for the default 5 s.
     if ($MapModsDir) { $serverDefaults += "[maps]`n`twebMapUpdateSeconds = 1`n" }
     [System.IO.File]::WriteAllText((Join-Path $defaults 'kingdomworld-server.toml'), $serverDefaults, $utf8)
@@ -569,6 +572,10 @@ $script:ArmyBandSquad = $null
 $script:ArmyPaidUntil = $null
 $script:ArmyWeapons = @()
 $script:ArmySoldiers = 0
+$script:RoadId = $null
+$script:RoadPaid = $null
+$script:RoadUnits = $null
+$script:CaravanWay = $null
 $script:GuildHunt = $null
 $script:GuildBounty = $null
 $script:GuildMoney = -1
@@ -1154,20 +1161,81 @@ Invoke-Phase 'session1' {
 
     # Trade: a second kingdom far away buys wheat in a deal; its caravan leaves with the payment in escrow and is still on
     # the way when the server stops. A test buyer buys wheat at the market from the account. No money appears anywhere.
-    Send-ServerCommand $server "kingdomworld admin found $PartnerName 2000 70 2000"
+    Send-ServerCommand $server "kingdomworld admin found $PartnerName 640 70 640"
     if (Wait-ForLog $server "Founded kingdom $PartnerName \(id ($IdPattern)\) with (\d+) chunk\(s\)" $CommandTimeout $ConsoleFailPattern) {
         Write-Ok "[session1] the partner kingdom $PartnerName was founded"
     } else {
         Add-Failure "[session1] the partner kingdom $PartnerName was not founded"
     }
-    Send-ServerCommand $server 'forceload add 1984 1984 2015 2015'
+    Send-ServerCommand $server 'forceload add 624 624 655 655'
     Start-Sleep -Seconds 3
-    Send-ServerCommand $server 'setblock 2001 70 2001 kingdomworld:storehouse'
+    Send-ServerCommand $server 'setblock 641 70 641 kingdomworld:storehouse'
     Start-Sleep -Seconds 2
     Send-ServerCommand $server "kingdomworld admin economy treasury $PartnerName add 500"
     if (-not (Wait-ForLog $server "Added 500 to the treasury of $PartnerName, funds 500" $CommandTimeout $ConsoleFailPattern)) {
         Add-Failure "[session1] the treasury of $PartnerName got no money"
     }
+    # Roads: a city of SmokeTest, a path from its capital to the capital of the partner across the partner's land (with its
+    # consent, at the cost of SmokeTest) paid for from the storehouse, and a camp of robbers far from the way. The caravan of
+    # the deal below takes the road. All of it must survive the restart.
+    Send-ServerCommand $server 'kingdomworld admin roads status'
+    if (Wait-ForLog $server 'Roads: 0 cities, 0 roads, camps: 0, caravans on roads: 0, data format 1' $CommandTimeout $ConsoleFailPattern) {
+        Write-Ok '[session1] the road data is writable and empty'
+    } else {
+        Add-Failure '[session1] the road data is not writable or not empty'
+    }
+    Send-ServerCommand $server "kingdomworld admin roads city add $KingdomName 40 100 8 Smoke Hollow"
+    if (Wait-ForLog $server "A city of $KingdomName founded at 40 100 8" $CommandTimeout $ConsoleFailPattern) {
+        Write-Ok '[session1] the city Smoke Hollow was founded'
+    } else {
+        Add-Failure '[session1] the city Smoke Hollow was not founded'
+    }
+    Send-ServerCommand $server "kingdomworld admin storage put minecraft:oak_planks 640 $KingdomName"
+    [void](Wait-ForLog $server "Stored \d+ of minecraft:oak_planks in the storehouses of $KingdomName" $CommandTimeout $ConsoleFailPattern)
+    Send-ServerCommand $server "kingdomworld admin storage put minecraft:dirt 320 $KingdomName"
+    [void](Wait-ForLog $server "Stored \d+ of minecraft:dirt in the storehouses of $KingdomName" $CommandTimeout $ConsoleFailPattern)
+    Send-ServerCommand $server "kingdomworld admin roads road plan $KingdomName 8 70 8 640 70 640 path payer"
+    $planned = Wait-ForLog $server "Road (\d+) of $KingdomName planned: (\d+) blocks, path, (\d+) request\(s\) to cross land" 600 "No way for a road of $KingdomName|$ConsoleFailPattern"
+    if ($planned) {
+        $script:RoadId = $planned.Groups[1].Value
+        Write-Ok "[session1] road #$($script:RoadId) planned over the land: $($planned.Groups[2].Value) blocks, $($planned.Groups[3].Value) request(s) to cross land"
+        if ([int]$planned.Groups[3].Value -ge 1) {
+            Send-ServerCommand $server 'kingdomworld admin roads road answer 1 accept'
+            if (Wait-ForLog $server "Road #$($script:RoadId) may cross your land" $CommandTimeout $ConsoleFailPattern) {
+                Write-Ok "[session1] $PartnerName let the road cross its land"
+            } else {
+                Add-Failure "[session1] $PartnerName could not let the road cross its land"
+            }
+        } else {
+            Add-Failure '[session1] the road to the capital of the partner asked no consent'
+        }
+        Send-ServerCommand $server "kingdomworld admin roads road pay $($script:RoadId)"
+        $paid = Wait-ForLog $server "Road #$($script:RoadId): (\d+) blocks paid from the storehouses, (\d+) of (\d+) in all" $CommandTimeout $ConsoleFailPattern
+        if ($paid -and [int]$paid.Groups[2].Value -gt 0) {
+            $script:RoadPaid = $paid.Groups[2].Value
+            $script:RoadUnits = $paid.Groups[3].Value
+            Write-Ok "[session1] road #$($script:RoadId) paid from the storehouse: $($script:RoadPaid) of $($script:RoadUnits) blocks"
+        } else {
+            Add-Failure "[session1] road #$($script:RoadId) could not be paid: '$(if ($paid) { $paid.Value })'"
+        }
+    } else {
+        Add-Failure "[session1] no road was planned from $KingdomName to $PartnerName"
+    }
+    Send-ServerCommand $server 'kingdomworld admin roads camp add -3000 70 -3000 5'
+    if (Wait-ForLog $server 'Camp #1 at -3000 -3000: 5 robbers and a leader' $CommandTimeout $ConsoleFailPattern) {
+        Write-Ok '[session1] a camp of robbers with 5 robbers and a leader appeared far from the way'
+    } else {
+        Add-Failure '[session1] the camp of robbers was not made'
+    }
+    Send-ServerCommand $server 'kingdomworld admin roads gear'
+    $gear = Wait-ForLog $server 'Robbers armed: (\d+) of 64, items of (\d+) mods' $CommandTimeout $ConsoleFailPattern
+    if ($gear -and [int]$gear.Groups[1].Value -gt 0) {
+        Write-Ok "[session1] robbers took weapons and armor of $($gear.Groups[2].Value) mod(s), $($gear.Groups[1].Value) of 64 armed"
+        if ($Pack -and [int]$gear.Groups[2].Value -lt 2) { Add-Warning '[session1] robbers took no weapon or armor of a mod of the pack' }
+    } else {
+        Add-Failure '[session1] robbers could not be armed'
+    }
+
     Send-ServerCommand $server "kingdomworld admin storage put minecraft:wheat 64 $KingdomName"
     if (-not (Wait-ForLog $server "Stored 64 of minecraft:wheat in the storehouses of $KingdomName" $CommandTimeout $ConsoleFailPattern)) {
         Add-Failure '[session1] the wheat for the deal could not be stored'
@@ -1191,11 +1259,21 @@ Invoke-Phase 'session1' {
     }
     Send-ServerCommand $server 'kingdomworld admin trade caravans'
     $caravan = Wait-ForLog $server "#(\d+) $KingdomName -> ${PartnerName}: minecraft:wheat x32, payment 100, traveling, (\d+) ticks left" $CommandTimeout $ConsoleFailPattern
-    if ($caravan -and [int64]$caravan.Groups[2].Value -gt 6000) {
+    if ($caravan -and [int64]$caravan.Groups[2].Value -gt 1200) {
         $script:CaravanId = $caravan.Groups[1].Value
         Write-Ok "[session1] caravan #$($script:CaravanId) is on the way, $($caravan.Groups[2].Value) ticks left"
     } else {
         Add-Failure "[session1] no caravan on a long way: '$(if ($caravan) { $caravan.Value })'"
+    }
+    if ($script:CaravanId -and $script:RoadId) {
+        Send-ServerCommand $server 'kingdomworld admin roads caravans'
+        $way = Wait-ForLog $server "Caravan #$($script:CaravanId) \(deal #\d+\) traveling at -?\d+ -?\d+: (\d+) points, (\d+) roads, (\d+) of (\d+) blocks on roads, 32 items" $CommandTimeout $ConsoleFailPattern
+        if ($way -and [int]$way.Groups[2].Value -ge 1 -and [int]$way.Groups[3].Value -gt 0) {
+            $script:CaravanWay = "$($way.Groups[1].Value) points, $($way.Groups[2].Value) roads, $($way.Groups[3].Value) of $($way.Groups[4].Value) blocks on roads"
+            Write-Ok "[session1] the caravan takes the road: $($script:CaravanWay)"
+        } else {
+            Add-Failure "[session1] the caravan does not take the road: '$(if ($way) { $way.Value })'"
+        }
     }
     Send-ServerCommand $server "kingdomworld admin trade sell $KingdomName minecraft:wheat 5 0"
     if (-not (Wait-ForLog $server 'The kingdom sells Wheat' $CommandTimeout $ConsoleFailPattern)) {
@@ -1815,6 +1893,42 @@ Invoke-Phase 'session2' {
         }
     }
     if ($script:CaravanId) {
+        # Roads after the restart: the city, the road with the same blocks paid, the camp and the way of the caravan.
+        if ($script:RoadId) {
+            Send-ServerCommand $server 'kingdomworld admin roads status'
+            if (Wait-ForLog $server 'Roads: 1 city, 1 road, camps: 1, caravans on roads: 1, data format 1' $CommandTimeout $ConsoleFailPattern) {
+                Write-Ok '[session2] the city, the road, the camp and the way of the caravan survived the restart'
+            } else {
+                Add-Failure '[session2] the roads did not survive the restart'
+            }
+            Send-ServerCommand $server 'kingdomworld admin roads city list'
+            if (Wait-ForLog $server "#1 Smoke Hollow of $KingdomName at 40 100 8" $CommandTimeout $ConsoleFailPattern) {
+                Write-Ok '[session2] the city Smoke Hollow is in its place'
+            } else {
+                Add-Failure '[session2] the city Smoke Hollow was lost'
+            }
+            Send-ServerCommand $server 'kingdomworld admin roads road list'
+            if (Wait-ForLog $server "#$($script:RoadId) path, \w+, \d+ blocks, paid $($script:RoadPaid) of $($script:RoadUnits), condition [0-9.]+, $KingdomName, payer" $CommandTimeout $ConsoleFailPattern) {
+                Write-Ok "[session2] road #$($script:RoadId) kept $($script:RoadPaid) of $($script:RoadUnits) paid blocks"
+            } else {
+                Add-Failure "[session2] road #$($script:RoadId) changed in the restart"
+            }
+            Send-ServerCommand $server 'kingdomworld admin roads camp list'
+            if (Wait-ForLog $server '#1 at -3000 \d+ -3000: 5 robbers and a leader, loot 0, raids 0' $CommandTimeout $ConsoleFailPattern) {
+                Write-Ok '[session2] the camp of robbers is the same'
+            } else {
+                Add-Failure '[session2] the camp of robbers changed in the restart'
+            }
+            if ($script:CaravanWay) {
+                Send-ServerCommand $server 'kingdomworld admin roads caravans'
+                if (Wait-ForLog $server "Caravan #$($script:CaravanId) \(deal #\d+\) traveling at -?\d+ -?\d+: $([regex]::Escape($script:CaravanWay)), 32 items" $CommandTimeout $ConsoleFailPattern) {
+                    Write-Ok "[session2] the caravan keeps its way on the road: $($script:CaravanWay)"
+                } else {
+                    Add-Failure '[session2] the way of the caravan changed in the restart'
+                }
+            }
+        }
+
         # The caravan is still on its way after the restart, with the same cargo and payment; brought in now, it delivers
         # the wheat and pays the seller, and the money of both currencies stays what it was.
         Send-ServerCommand $server 'kingdomworld admin trade caravans'

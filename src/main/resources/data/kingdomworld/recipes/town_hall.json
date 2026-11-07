@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "pattern": [
+    "WBW",
+    "SGS",
+    "SSS"
+  ],
+  "key": {
+    "W": {
+      "tag": "minecraft:wool"
+    },
+    "B": {
+      "item": "minecraft:bell"
+    },
+    "G": {
+      "item": "minecraft:gold_ingot"
+    },
+    "S": {
+      "item": "minecraft:stone_bricks"
+    }
+  },
+  "result": {
+    "item": "kingdomworld:town_hall",
+    "count": 1
+  }
+}

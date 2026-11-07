@@ -106,6 +106,12 @@ public final class KingdomWorldClient {
                 io.github.sekerator.kingdomworld.client.render.CompanionRenderer::new);
         event.registerEntityRenderer(io.github.sekerator.kingdomworld.common.magic.MagicRegistries.SPELL_FIREBALL.get(),
                 context -> new net.minecraft.client.renderer.entity.ThrownItemRenderer<>(context, 0.75f, true));
+        event.registerEntityRenderer(io.github.sekerator.kingdomworld.common.road.RoadRegistries.BANDIT.get(),
+                io.github.sekerator.kingdomworld.client.render.RoadPeopleRenderer::new);
+        event.registerEntityRenderer(io.github.sekerator.kingdomworld.common.road.RoadRegistries.BANDIT_LEADER.get(),
+                io.github.sekerator.kingdomworld.client.render.RoadPeopleRenderer::new);
+        event.registerEntityRenderer(io.github.sekerator.kingdomworld.common.road.RoadRegistries.CARAVAN_MERCHANT.get(),
+                io.github.sekerator.kingdomworld.client.render.RoadPeopleRenderer::new);
     }
 
     private static void onClientTick(TickEvent.ClientTickEvent event) {
@@ -133,6 +139,7 @@ public final class KingdomWorldClient {
         ClientKingdomCache.clear();
         ClientTerritoryCache.clear();
         io.github.sekerator.kingdomworld.client.map.ClientTradeCache.clear();
+        io.github.sekerator.kingdomworld.client.map.ClientRoadCache.clear();
         io.github.sekerator.kingdomworld.client.map.ClientMapSync.reset();
         if (KingdomWorldConfig.CLIENT.requestKingdomListOnJoin.get()) {
             KingdomWorldNetwork.sendToServer(new KingdomListRequestPacket(0, KingdomListRequestPacket.MAX_PAGE_SIZE));

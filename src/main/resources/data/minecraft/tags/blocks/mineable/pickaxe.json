@@ -2,6 +2,7 @@
   "replace": false,
   "values": [
     "kingdomworld:bank",
-    "kingdomworld:mint"
+    "kingdomworld:mint",
+    "kingdomworld:town_hall"
   ]
 }

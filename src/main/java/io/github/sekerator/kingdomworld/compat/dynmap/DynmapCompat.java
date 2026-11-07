@@ -140,13 +140,40 @@ public final class DynmapCompat implements CompatModule, WebMapSink {
             }
             caravans.createMarker("caravan-" + caravan.id(), MapTexts.html(caravan.label()), true, world, caravan.x(), 64, caravan.z(),
                     caravanIcon, false);
+            double[] xs = caravan.wayX();
+            double[] ys = new double[xs.length];
+            java.util.Arrays.fill(ys, 64);
             PolyLineMarker route = caravans.createPolyLineMarker("route-" + caravan.id(), MapTexts.html(caravan.label()), true, world,
-                    new double[]{caravan.fromX() + 0.5, caravan.toX() + 0.5}, new double[]{64, 64},
-                    new double[]{caravan.fromZ() + 0.5, caravan.toZ() + 0.5}, false);
+                    xs, ys, caravan.wayZ(), false);
             if (route != null) {
                 route.setLineStyle(2, 0.6, caravan.color());
             }
             count += 2;
+        }
+
+        MarkerSet cities = set(api, KingdomWorld.MOD_ID + ".cities", texts.text("kingdomworld.map.layer.cities"), true);
+        for (WebMapModel.City city : update.cities()) {
+            String world = worlds.get(city.dimension());
+            if (world != null) {
+                cities.createMarker("city-" + city.id(), MapTexts.html(city.label()), true, world, city.x() + 0.5, 64, city.z() + 0.5,
+                        capitalIcon, false);
+                count++;
+            }
+        }
+        MarkerSet roads = set(api, KingdomWorld.MOD_ID + ".roads", texts.text("kingdomworld.map.layer.roads"), true);
+        for (WebMapModel.Road road : update.roads()) {
+            String world = worlds.get(road.dimension());
+            if (world == null || road.xs().length < 2) {
+                continue;
+            }
+            double[] ys = new double[road.xs().length];
+            java.util.Arrays.fill(ys, 64);
+            PolyLineMarker line = roads.createPolyLineMarker("road-" + road.id(), MapTexts.html(road.label()), true, world, road.xs(), ys,
+                    road.zs(), false);
+            if (line != null) {
+                line.setLineStyle(3, 0.9, road.color());
+            }
+            count++;
         }
 
         for (MapZone.Layer layer : MapZone.Layer.values()) {

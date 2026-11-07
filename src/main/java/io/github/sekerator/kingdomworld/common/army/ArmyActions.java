@@ -243,13 +243,12 @@ public final class ArmyActions {
      * The chance a caravan of a deal is lost with the guards it has now.
      */
     static double lossChance(MinecraftServer server, Deal deal) {
-        double base = io.github.sekerator.kingdomworld.common.trade.TradeSettings.rules().caravanLossChance();
         double guards = 0.0;
         for (ArmySquad squad : ArmyWork.state(server).escortsOf(deal.id())) {
             guards += ArmyWork.power(server, squad);
         }
-        return io.github.sekerator.kingdomworld.core.combat.CaravanRisk.lossChance(base, guards,
-                ArmyCaravans.threat(ArmySettings.rules()).power());
+        // Robbers of the camps near the way of its caravans, against the guards.
+        return io.github.sekerator.kingdomworld.common.road.RoadCaravans.robberyChance(server, deal, guards);
     }
 
     public static void handleTab(ServerPlayer player, ArmyPackets.TabChange change) {

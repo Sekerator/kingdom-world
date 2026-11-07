@@ -164,8 +164,11 @@ public final class WebMaps {
 
         List<WebMapModel.Caravan> caravans = KingdomWorldConfig.SERVER.webMapCaravans.get() ? caravans(state) : List.of();
         List<WebMapModel.Zone> zones = zones(state);
-        WebMapModel.Update incremental = new WebMapModel.Update(false, changed, removed, caravans, zones, SHOWN.size());
-        WebMapModel.Update full = new WebMapModel.Update(true, List.copyOf(SHOWN.values()), Set.of(), caravans, zones, SHOWN.size());
+        List<WebMapModel.City> cities = cities(state);
+        List<WebMapModel.Road> roads = roads();
+        WebMapModel.Update incremental = new WebMapModel.Update(false, changed, removed, caravans, zones, SHOWN.size(), cities, roads);
+        WebMapModel.Update full = new WebMapModel.Update(true, List.copyOf(SHOWN.values()), Set.of(), caravans, zones, SHOWN.size(), cities,
+                roads);
         for (WebMapSink sink : SINKS) {
             if (FAILED.contains(sink) || !sink.ready()) {
                 continue;
@@ -196,13 +199,51 @@ public final class WebMaps {
                 continue;
             }
             double progress = caravan.progress(now);
-            double x = caravan.fromX() + (caravan.toX() - caravan.fromX()) * progress;
-            double z = caravan.fromZ() + (caravan.toZ() - caravan.fromZ()) * progress;
+            double[] at = caravan.position(now);
             String from = state.kingdoms().get(caravan.seller()).map(Kingdom::name).orElse("?");
             String to = state.kingdoms().get(caravan.buyer()).map(Kingdom::name).orElse("?");
             String label = texts.text("kingdomworld.map.caravan", from, to, (int) Math.round(progress * 100));
-            list.add(new WebMapModel.Caravan(caravan.id(), caravan.dimension(), caravan.color(), x, z, caravan.fromX(), caravan.fromZ(),
-                    caravan.toX(), caravan.toZ(), label));
+            list.add(new WebMapModel.Caravan(caravan.id(), caravan.dimension(), caravan.color(), at[0], at[1], caravan.fromX(), caravan.fromZ(),
+                    caravan.toX(), caravan.toZ(), label, caravan.way()));
+        }
+        return list;
+    }
+
+    private static List<WebMapModel.City> cities(KingdomWorldState state) {
+        List<WebMapModel.City> list = new ArrayList<>();
+        for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city
+                : io.github.sekerator.kingdomworld.common.road.RoadSync.all(server).cities()) {
+            if (!TerritorySnapshots.canSee(null, city.kingdomId())) {
+                continue;
+            }
+            String kingdom = state.kingdoms().get(city.kingdomId()).map(Kingdom::name).orElse("?");
+            list.add(new WebMapModel.City(city.id(), city.dimension(), city.name(), kingdom, city.color(), city.x(), city.z(),
+                    texts.text("kingdomworld.map.city", city.name(), kingdom)));
+        }
+        return list;
+    }
+
+    private static List<WebMapModel.Road> roads() {
+        List<WebMapModel.Road> list = new ArrayList<>();
+        for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapRoad road
+                : io.github.sekerator.kingdomworld.common.road.RoadSync.all(server).roads()) {
+            if (!TerritorySnapshots.canSee(null, road.kingdomId())) {
+                continue;
+            }
+            double[] xs = new double[road.xs().length];
+            double[] zs = new double[road.zs().length];
+            for (int i = 0; i < xs.length; i++) {
+                xs[i] = road.xs()[i] + 0.5;
+                zs[i] = road.zs()[i] + 0.5;
+            }
+            int color = switch (road.roadClass()) {
+                case PATH -> 0x8B6B3A;
+                case GRAVEL -> 0x6E6E6E;
+                case PAVED -> 0xE0DCCF;
+            };
+            String label = texts.text("kingdomworld.map.road", road.id(), texts.resolve(
+                    io.github.sekerator.kingdomworld.common.road.RoadTexts.className(road.roadClass())));
+            list.add(new WebMapModel.Road(road.id(), road.dimension(), color, label, xs, zs));
         }
         return list;
     }

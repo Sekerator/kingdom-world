@@ -75,6 +75,13 @@ public final class TradeWork {
         roll = value == null ? RANDOM::nextDouble : value;
     }
 
+    /**
+     * The dice of trade: robbers on the roads take their numbers from it, so that game tests decide them.
+     */
+    public static DoubleSupplier dice() {
+        return roll;
+    }
+
     private static long day(MinecraftServer server) {
         return Math.floorDiv(KingdomWorldApi.gameTime(server), CitizenNeeds.TICKS_PER_DAY);
     }
@@ -122,14 +129,17 @@ public final class TradeWork {
         if (taken == null) {
             return Outcome.fail(KingdomError.NOT_ENOUGH_GOODS);
         }
-        TradeRules rules = TradeSettings.rules();
-        long ticks = Caravan.travelTicks(from.get().x(), from.get().z(), to.get().x(), to.get().z(), rules.caravanBlocksPerMinute());
+        // The caravan takes the fastest way through the roads; across country it goes straight.
+        io.github.sekerator.kingdomworld.core.road.TravelPlan plan = io.github.sekerator.kingdomworld.common.road.RoadCaravans.plan(server,
+                from.get().dimension(), from.get().x(), from.get().z(), to.get().x(), to.get().z());
+        long ticks = plan.ticks();
         Optional<Caravan> caravan = state.sendCaravan(deal, MarketStock.goods(taken), from.get().dimension(), from.get().x(), from.get().z(),
                 to.get().x(), to.get().z(), KingdomWorldApi.gameTime(server), ticks);
         if (caravan.isEmpty()) {
             MarketStock.putBack(server, deal.seller(), taken, near);
             return Outcome.fail(KingdomError.NOT_ENOUGH_MONEY);
         }
+        io.github.sekerator.kingdomworld.common.road.RoadCaravans.departed(server, caravan.get(), plan);
         LOGGER.info("A caravan left {} for {} with {} x{}, arriving in {} ticks", kingdomName(server, deal.seller()).getString(),
                 kingdomName(server, deal.buyer()).getString(), deal.item(), deal.count(), ticks);
         Component goods = Component.translatable(KEY + "goods", goodsName(Goods.of(deal.item(), 1)), TradeTexts.items(deal.count()));
@@ -232,21 +242,18 @@ public final class TradeWork {
      */
     public static void arrive(MinecraftServer server, Caravan caravan, long now) {
         KingdomWorldState state = KingdomWorldApi.state(server);
-        TradeRules rules = TradeSettings.rules();
         long day = day(server);
-        Component goods = cargoText(caravan);
-        if (caravan.state() == Caravan.State.TRAVELING
-                && io.github.sekerator.kingdomworld.common.army.ArmyCaravans.lost(server, caravan, rules.caravanLossChance(), roll)) {
-            state.economy().refundEscrow(caravan.escrowId(), day);
-            state.trade().removeCaravan(caravan.id());
-            LOGGER.info("A caravan from {} to {} was lost on the way", kingdomName(server, caravan.seller()).getString(),
-                    kingdomName(server, caravan.buyer()).getString());
-            notify(server, caravan.seller(), Component.translatable(KEY + "lost_seller", goods, kingdomName(server, caravan.buyer()))
-                    .withStyle(ChatFormatting.RED));
-            notify(server, caravan.buyer(), Component.translatable(KEY + "lost_buyer", goods, kingdomName(server, caravan.seller()))
-                    .withStyle(ChatFormatting.RED));
-            return;
+        if (caravan.state() == Caravan.State.TRAVELING) {
+            // Robbers on the pieces of way not reckoned with yet; what they took went into their camp.
+            Optional<Caravan> left = io.github.sekerator.kingdomworld.common.road.RoadCaravans.beforeArrival(server, caravan, roll);
+            if (left.isEmpty()) {
+                LOGGER.info("A caravan from {} to {} was robbed of everything on the way", kingdomName(server, caravan.seller()).getString(),
+                        kingdomName(server, caravan.buyer()).getString());
+                return;
+            }
+            caravan = left.get();
         }
+        Component goods = cargoText(caravan);
         List<ItemStack> stacks = MarketStock.stacks(caravan.cargo());
         if (state.kingdoms().get(caravan.buyer()).isEmpty()) {
             goBack(server, caravan.withState(Caravan.State.RETURNING));
@@ -512,8 +519,22 @@ public final class TradeWork {
                 continue;
             }
             int color = state.kingdoms().get(caravan.seller()).map(Kingdom::color).orElse(0x808080);
+            // The way through the roads, at most so many points of it.
+            List<io.github.sekerator.kingdomworld.core.road.TravelPlan.Point> points =
+                    io.github.sekerator.kingdomworld.common.road.RoadCaravans.points(server, caravan);
+            List<Long> way = new ArrayList<>();
+            List<Long> wayTicks = new ArrayList<>();
+            int step = Math.max(1, (points.size() + TradeViews.CaravanInfo.MAX_WAY - 2) / (TradeViews.CaravanInfo.MAX_WAY - 1));
+            for (int i = 0; i < points.size(); i += step) {
+                way.add(TradeViews.CaravanInfo.pack(points.get(i).x(), points.get(i).z()));
+                wayTicks.add(points.get(i).tick());
+            }
+            if (!points.isEmpty() && (points.size() - 1) % step != 0) {
+                way.add(TradeViews.CaravanInfo.pack(points.get(points.size() - 1).x(), points.get(points.size() - 1).z()));
+                wayTicks.add(points.get(points.size() - 1).tick());
+            }
             list.add(new TradeViews.CaravanInfo(caravan.id(), caravan.seller(), caravan.buyer(), color, caravan.dimension(), caravan.fromX(),
-                    caravan.fromZ(), caravan.toX(), caravan.toZ(), caravan.departTime(), caravan.arriveTime()));
+                    caravan.fromZ(), caravan.toX(), caravan.toZ(), caravan.departTime(), caravan.arriveTime(), way, wayTicks));
         }
         return list;
     }

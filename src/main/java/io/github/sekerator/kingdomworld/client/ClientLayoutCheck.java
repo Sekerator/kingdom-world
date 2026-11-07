@@ -1233,6 +1233,7 @@ final class ClientLayoutCheck {
         ArmyLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         MagicLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         CompanionLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)));
+        RoadLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         return cases;
     }
 }

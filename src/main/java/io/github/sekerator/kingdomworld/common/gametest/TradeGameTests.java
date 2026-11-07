@@ -516,12 +516,22 @@ public final class TradeGameTests {
         Kingdom buyer = second(helper, "GameTest Waiting Town", UUID.randomUUID());
         CitizenGameTests.storehouse(helper, 0, 0, 4).insertItem(0, new ItemStack(Items.WHEAT, 64), false);
         CitizenGameTests.storehouse(helper, SECOND, 0, 4);
+        io.github.sekerator.kingdomworld.core.road.BanditCamp camp = null;
         try {
             Economy economy = KingdomWorldApi.state(server).economy();
             economy.adminTreasury(buyer.id(), 500, 0);
             Deal deal = propose(server, seller, buyer, 16, 80);
             helper.assertTrue(TradeWork.accept(server, null, buyer.id(), deal.id()).ok(), "The buyer could not accept");
             Caravan caravan = KingdomWorldApi.state(server).trade().caravans().iterator().next();
+            // Robbers of a camp by the way take everything.
+            BlockPos campAt = helper.absolutePos(new BlockPos(SECOND / 2, 0, 30));
+            camp = io.github.sekerator.kingdomworld.common.road.BanditWork.found(server, level.dimension().location().toString(), campAt.getX(),
+                    campAt.getZ(), 12);
+            io.github.sekerator.kingdomworld.core.road.BanditRules.Builder bandits =
+                    io.github.sekerator.kingdomworld.common.road.RoadSettings.configuredBandits();
+            bandits.unguardedLoot = 1.0;
+            bandits.merchantDeath = 0.0;
+            io.github.sekerator.kingdomworld.common.road.RoadSettings.override(null, bandits.build());
             TradeWork.overrideRoll(() -> 0.0);
             TradeWork.arrive(server, caravan, KingdomWorldApi.gameTime(server));
             helper.assertTrue(treasury(server, buyer).funds() == 500, "The payment did not come back: " + treasury(server, buyer).funds());
@@ -529,8 +539,13 @@ public final class TradeGameTests {
             helper.assertTrue(KingdomStorage.count(server, buyer.id(), stack -> stack.is(Items.WHEAT)) == 0, "Lost goods arrived");
             helper.assertTrue(KingdomStorage.count(server, seller.id(), stack -> stack.is(Items.WHEAT)) == 48, "Lost goods came back");
             helper.assertTrue(KingdomWorldApi.state(server).trade().caravans().isEmpty() && economy.escrows().isEmpty(), "The caravan stayed");
+            helper.assertTrue(camp.lootItems() == 16, "The robbers did not keep the goods: " + camp.lootItems());
         } finally {
             TradeWork.overrideRoll(null);
+            io.github.sekerator.kingdomworld.common.road.RoadSettings.override(null, null);
+            if (camp != null) {
+                io.github.sekerator.kingdomworld.common.road.RoadWork.state(server).removeCamp(camp.id());
+            }
             KingdomWorldApi.dissolveKingdom(server, seller.id());
             KingdomWorldApi.dissolveKingdom(server, buyer.id());
             GatheringGameTests.clear(level, from, to);

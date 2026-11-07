@@ -267,6 +267,29 @@ class TranslationKeysTest {
         });
     }
 
+    /**
+     * Numbers of roads read right in both languages: «21 участок», «3 разбойника», «5 городов», «2 дороги», «11 строителей».
+     */
+    @Test
+    void countsOfRoadsHaveEveryPluralForm() {
+        Map<String, String> russianForms = Map.of("sections", "участок|участок|участка|участков", "bandits",
+                "разбойник|разбойник|разбойника|разбойников", "cities", "город|город|города|городов", "roads", "дорога|дорога|дороги|дорог",
+                "builders", "строитель|строитель|строителя|строителей");
+        Map<String, String[]> englishForms = Map.of("sections", new String[]{"section", "sections"}, "bandits", new String[]{"robber", "robbers"},
+                "cities", new String[]{"city", "cities"}, "roads", new String[]{"road", "roads"}, "builders", new String[]{"builder", "builders"});
+        russianForms.forEach((word, forms) -> {
+            String[] words = forms.split("[|]");
+            Plurals.Form[] all = Plurals.Form.values();
+            for (int i = 0; i < all.length; i++) {
+                String key = "kingdomworld.count." + word + "." + all[i].suffix();
+                assertEquals("%s " + words[i], russian.get(key), key);
+                assertEquals("%s " + englishForms.get(word)[all[i] == Plurals.Form.N1 ? 0 : 1], english.get(key), key);
+            }
+        });
+        assertEquals(Plurals.Form.N21, Plurals.form(121));
+        assertEquals(Plurals.Form.N5, Plurals.form(112));
+    }
+
     @Test
     void argumentCounting() {
         assertEquals(2, argumentCount("%s and %s"));
@@ -480,6 +503,52 @@ class TranslationKeysTest {
             for (Plurals.Form form : Plurals.Form.values()) {
                 used.add("kingdomworld.count." + word + "." + form.suffix());
             }
+        }
+        // Roads and robbers: the views of the tab, classes, modes and states, the planning on the atlas, counts in every form.
+        for (String mode : List.of("overview", "cities", "roads", "requests", "camps", "risks")) {
+            used.add("kingdomworld.screen.roads.mode." + mode);
+            used.add("kingdomworld.screen.roads.hint." + mode);
+        }
+        for (String action : List.of("repair", "pause", "patrol", "cancel")) {
+            used.add("kingdomworld.screen.roads.action." + action);
+            used.add("kingdomworld.screen.roads.action." + action + ".hint");
+        }
+        for (io.github.sekerator.kingdomworld.core.road.RoadClass roadClass : io.github.sekerator.kingdomworld.core.road.RoadClass.values()) {
+            used.add("kingdomworld.road.class." + roadClass.id());
+            used.add("kingdomworld.screen.map.road.cost." + roadClass.id());
+        }
+        for (io.github.sekerator.kingdomworld.core.road.Road.Mode mode : io.github.sekerator.kingdomworld.core.road.Road.Mode.values()) {
+            used.add("kingdomworld.road.mode." + mode.id());
+        }
+        for (String mode : List.of("joint", "payer")) {
+            used.add("kingdomworld.screen.map.road.mode." + mode);
+            used.add("kingdomworld.screen.map.road.mode." + mode + ".hint");
+        }
+        for (io.github.sekerator.kingdomworld.core.road.Road.Status status : io.github.sekerator.kingdomworld.core.road.Road.Status.values()) {
+            used.add("kingdomworld.road.status." + status.id());
+        }
+        for (io.github.sekerator.kingdomworld.core.road.Crossing.Status status : io.github.sekerator.kingdomworld.core.road.Crossing.Status.values()) {
+            used.add("kingdomworld.road.crossing." + status.id());
+        }
+        for (io.github.sekerator.kingdomworld.core.road.RoadLayout.Material material
+                : io.github.sekerator.kingdomworld.core.road.RoadLayout.Material.values()) {
+            used.add("kingdomworld.road.material." + material.id());
+        }
+        for (String word : List.of("sections", "bandits", "cities", "roads", "builders")) {
+            for (Plurals.Form form : Plurals.Form.values()) {
+                used.add("kingdomworld.count." + word + "." + form.suffix());
+            }
+        }
+        for (String entity : List.of("bandit", "bandit_leader", "caravan_merchant")) {
+            used.add("entity.kingdomworld." + entity);
+        }
+        used.add("kingdomworld.death.robbers");
+        used.add("kingdomworld.death.robbers.female");
+        for (String key : List.of("city_founded", "city_refused", "city_lost", "hall_empty", "hall_city", "place", "capital_of", "road_built",
+                "repaired", "road_planned", "crossing_asked", "road_dropped", "crossing_accepted", "crossing_declined", "road_starts", "ambush",
+                "beaten_off", "goods_taken", "robbed", "robbed_all", "merchant_name", "camp_fight", "camp_cleared", "camp_loot", "camp_found",
+                "leader_dead")) {
+            used.add("kingdomworld.road." + key);
         }
         for (ItemValues.Source source : ItemValues.Source.values()) {
             used.add("commands.kingdomworld.economy.value.source." + source.name().toLowerCase(Locale.ROOT));

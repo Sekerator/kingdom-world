@@ -161,6 +161,44 @@ public final class BlueMapCompat implements CompatModule, WebMapSink {
             sets.remove(CARAVANS);
         }
 
+        MarkerSet cities = set(sets, KingdomWorld.MOD_ID + "-cities", texts.text("kingdomworld.map.layer.cities"), 2, true);
+        for (WebMapModel.City city : update.cities()) {
+            if (city.dimension().equals(dimension)) {
+                cities.put("city-" + city.id(), POIMarker.builder()
+                        .label(city.label())
+                        .detail(MapTexts.html(city.label()))
+                        .position(city.x() + 0.5, 64, city.z() + 0.5)
+                        .icon(map.getAssetStorage().getAssetUrl(CAPITAL_ICON), MapIcons.SIZE / 2, MapIcons.SIZE / 2)
+                        .build());
+                markers++;
+            }
+        }
+        if (cities.getMarkers().isEmpty()) {
+            sets.remove(KingdomWorld.MOD_ID + "-cities");
+        }
+        MarkerSet roads = set(sets, KingdomWorld.MOD_ID + "-roads", texts.text("kingdomworld.map.layer.roads"), 3, true);
+        for (WebMapModel.Road road : update.roads()) {
+            if (!road.dimension().equals(dimension) || road.xs().length < 2) {
+                continue;
+            }
+            Vector3d[] points = new Vector3d[road.xs().length];
+            for (int i = 0; i < points.length; i++) {
+                points[i] = new Vector3d(road.xs()[i], 64, road.zs()[i]);
+            }
+            roads.put("road-" + road.id(), LineMarker.builder()
+                    .label(road.label())
+                    .line(new Line(points))
+                    .centerPosition()
+                    .depthTestEnabled(false)
+                    .lineWidth(3)
+                    .lineColor(color(road.color(), 0.9f))
+                    .build());
+            markers++;
+        }
+        if (roads.getMarkers().isEmpty()) {
+            sets.remove(KingdomWorld.MOD_ID + "-roads");
+        }
+
         for (MapZone.Layer layer : MapZone.Layer.values()) {
             List<WebMapModel.Zone> zones = update.zones().stream()
                     .filter(zone -> zone.layer() == layer && zone.dimension().equals(dimension)).toList();
@@ -272,10 +310,15 @@ public final class BlueMapCompat implements CompatModule, WebMapSink {
                 .position(caravan.x(), 64, caravan.z())
                 .icon(map.getAssetStorage().getAssetUrl(CARAVAN_ICON), MapIcons.SIZE / 2, MapIcons.SIZE / 2)
                 .build());
+        double[] xs = caravan.wayX();
+        double[] zs = caravan.wayZ();
+        Vector3d[] way = new Vector3d[xs.length];
+        for (int i = 0; i < way.length; i++) {
+            way[i] = new Vector3d(xs[i], 64, zs[i]);
+        }
         set.put("route-" + caravan.id(), LineMarker.builder()
                 .label(caravan.label())
-                .line(new Line(new Vector3d(caravan.fromX() + 0.5, 64, caravan.fromZ() + 0.5),
-                        new Vector3d(caravan.toX() + 0.5, 64, caravan.toZ() + 0.5)))
+                .line(new Line(way))
                 .centerPosition()
                 .depthTestEnabled(false)
                 .lineWidth(2)

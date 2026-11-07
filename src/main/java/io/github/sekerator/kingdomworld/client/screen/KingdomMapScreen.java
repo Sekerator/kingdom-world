@@ -48,6 +48,20 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
 
     @Nullable
     private final KingdomView editing;
+    /** The kingdom a road is planned for, or {@code null}. */
+    @Nullable
+    private final KingdomView planning;
+    /** The points of the road being planned, in blocks, or {@code null}. */
+    @Nullable
+    private int[] planFrom;
+    @Nullable
+    private int[] planTo;
+    @Nullable
+    private io.github.sekerator.kingdomworld.common.network.data.RoadViews.PlanView plan;
+    private io.github.sekerator.kingdomworld.core.road.RoadClass planClass = io.github.sekerator.kingdomworld.core.road.RoadClass.GRAVEL;
+    private io.github.sekerator.kingdomworld.core.road.Road.Mode planMode = io.github.sekerator.kingdomworld.core.road.Road.Mode.JOINT;
+    /** Places of the names drawn on the map this frame, so that later names do not cover earlier ones. */
+    private final List<int[]> labels = new java.util.ArrayList<>();
     private double centerX;
     private double centerZ;
     private double cell = 12.0;
@@ -65,13 +79,60 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
      * @param editing the kingdom whose land is edited, or {@code null} to only look
      */
     public KingdomMapScreen(@Nullable KingdomView editing) {
+        this(editing, null);
+    }
+
+    private KingdomMapScreen(@Nullable KingdomView editing, @Nullable KingdomView planning) {
         super(Component.translatable("kingdomworld.screen.map.title"));
         this.editing = editing != null && editing.can(Permission.TERRITORY) ? editing : null;
+        this.planning = planning;
+    }
+
+    /**
+     * The atlas for planning a road of a kingdom: two points, the way the server finds, its cost, and building it.
+     */
+    public static KingdomMapScreen forRoads(KingdomView view) {
+        return new KingdomMapScreen(null, view);
     }
 
     @Override
     public String checkName() {
+        if (planning != null) {
+            return plan != null ? "map/roads-plan" : "map/roads";
+        }
         return editing != null ? "map/edit" : "map/view";
+    }
+
+    /**
+     * Shows a plan of a road between two points, used by the client self-check.
+     */
+    public void showPlanForCheck(int fromX, int fromZ, int toX, int toZ,
+                                 @Nullable io.github.sekerator.kingdomworld.common.network.data.RoadViews.PlanView view) {
+        planFrom = new int[]{fromX, fromZ};
+        planTo = new int[]{toX, toZ};
+        plan = view;
+    }
+
+    /**
+     * The server found a way for the road being planned, or none.
+     */
+    public void planUpdated(io.github.sekerator.kingdomworld.common.network.data.RoadViews.PlanView view) {
+        if (planning == null || !view.kingdomId().equals(planning.id())) {
+            return;
+        }
+        plan = view;
+        if (!view.error().isEmpty()) {
+            status = Component.translatable("kingdomworld.error." + view.error());
+            statusIsError = true;
+        } else if (view.searching()) {
+            status = Component.translatable("kingdomworld.screen.map.road.searching");
+            statusIsError = false;
+        } else {
+            status = Component.empty();
+        }
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
     }
 
     private int mapLeft() {
@@ -117,7 +178,68 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             }
         }).bounds(centerButtonX, 3, centerWidth, 16).build());
         addRenderableWidget(Button.builder(done, button -> onClose()).bounds(doneX, 3, doneWidth, 16).build());
+        if (planning != null) {
+            initPlanning();
+        }
         requestVisibleArea(true);
+    }
+
+    private static Component classLabel(io.github.sekerator.kingdomworld.core.road.RoadClass value) {
+        return Component.translatable("kingdomworld.screen.map.road.class",
+                io.github.sekerator.kingdomworld.common.road.RoadTexts.className(value));
+    }
+
+    private static Component modeLabel(io.github.sekerator.kingdomworld.core.road.Road.Mode value) {
+        return Component.translatable("kingdomworld.screen.map.road.mode." + value.id());
+    }
+
+    /**
+     * The buttons of planning a road, along the bottom of the map.
+     */
+    private void initPlanning() {
+        int classWidth = 0;
+        for (io.github.sekerator.kingdomworld.core.road.RoadClass value : io.github.sekerator.kingdomworld.core.road.RoadClass.values()) {
+            classWidth = Math.max(classWidth, buttonWidth(classLabel(value)));
+        }
+        int modeWidth = Math.max(buttonWidth(modeLabel(io.github.sekerator.kingdomworld.core.road.Road.Mode.JOINT)),
+                buttonWidth(modeLabel(io.github.sekerator.kingdomworld.core.road.Road.Mode.PAYER)));
+        Component build = Component.translatable("kingdomworld.screen.map.road.build");
+        Component reset = Component.translatable("kingdomworld.screen.map.road.reset");
+        int y = mapBottom() - 20;
+        int x = mapLeft() + 4;
+        addRenderableWidget(Button.builder(classLabel(planClass), button -> {
+            planClass = planClass.next();
+            rebuildWidgets();
+        }).bounds(x, y, classWidth, 16).build());
+        x += classWidth + 2;
+        Button mode = addRenderableWidget(Button.builder(modeLabel(planMode), button -> {
+            planMode = planMode == io.github.sekerator.kingdomworld.core.road.Road.Mode.JOINT
+                    ? io.github.sekerator.kingdomworld.core.road.Road.Mode.PAYER : io.github.sekerator.kingdomworld.core.road.Road.Mode.JOINT;
+            rebuildWidgets();
+        }).bounds(x, y, modeWidth, 16).build());
+        mode.active = plan != null && !plan.crossed().isEmpty();
+        mode.setTooltip(net.minecraft.client.gui.components.Tooltip.create(
+                Component.translatable("kingdomworld.screen.map.road.mode." + planMode.id() + ".hint")));
+        x += modeWidth + 2;
+        Button go = addRenderableWidget(Button.builder(build, button -> {
+            if (plan != null && plan.planId() != 0 && minecraft != null && minecraft.getConnection() != null) {
+                KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.RoadPackets.PlanConfirm(planning.id(),
+                        plan.planId(), planClass, planMode));
+                resetPlan();
+            }
+        }).bounds(x, y, buttonWidth(build), 16).build());
+        go.active = plan != null && plan.planId() != 0 && planning.can(Permission.MANAGE_CONSTRUCTION);
+        x += buttonWidth(build) + 2;
+        addRenderableWidget(Button.builder(reset, button -> resetPlan()).bounds(x, y, buttonWidth(reset), 16).build());
+    }
+
+    private void resetPlan() {
+        planFrom = null;
+        planTo = null;
+        plan = null;
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
     }
 
     /**
@@ -246,7 +368,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (insideMap(mouseX, mouseY) && !dragging) {
+        if (insideMap(mouseX, mouseY) && !dragging && getChildAt(mouseX, mouseY).isEmpty()) {
             onMapClick(chunkAtX(mouseX), chunkAtZ(mouseY), button);
         }
         dragging = false;
@@ -256,6 +378,28 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
 
     private void onMapClick(int chunkX, int chunkZ, int button) {
         UUID owner = ClientTerritoryCache.ownerOf(chunkX, chunkZ);
+        if (planning != null) {
+            if (button == 1) {
+                resetPlan();
+                return;
+            }
+            int[] point = {chunkX * 16 + 8, chunkZ * 16 + 8};
+            if (planFrom == null || planTo != null) {
+                planFrom = point;
+                planTo = null;
+                plan = null;
+                rebuildWidgets();
+                return;
+            }
+            planTo = point;
+            plan = null;
+            if (minecraft != null && minecraft.getConnection() != null) {
+                KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.RoadPackets.PlanRequest(planning.id(),
+                        planFrom[0], planFrom[1], planTo[0], planTo[1]));
+            }
+            rebuildWidgets();
+            return;
+        }
         if (editing != null) {
             if (button == 0 && owner == null) {
                 KingdomWorldNetwork.sendToServer(new ClaimChunkPacket(chunkX, chunkZ, true));
@@ -331,8 +475,15 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         drawGrid(graphics, minX, maxX, minZ, maxZ);
         drawLand(graphics, minX, maxX, minZ, maxZ);
         drawBorders(graphics, minX, maxX, minZ, maxZ);
+        labels.clear();
+        drawRoads(graphics);
         drawCapitals(graphics, minX, maxX, minZ, maxZ);
+        drawCities(graphics);
+        drawCamps(graphics);
         drawCaravans(graphics);
+        if (planning != null) {
+            drawPlan(graphics);
+        }
         drawPlayer(graphics, partialTick);
         if (editing != null && insideMap(mouseX, mouseY)) {
             int x = screenX(chunkAtX(mouseX));
@@ -352,7 +503,10 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     private void drawHeader(GuiGraphics graphics) {
         int available = buttonsLeft - 6 - PAD;
         Component heading;
-        if (editing != null) {
+        if (planning != null) {
+            int prefix = font.width(Component.translatable("kingdomworld.screen.map.title_roads", ""));
+            heading = Component.translatable("kingdomworld.screen.map.title_roads", fit(planning.name(), available - prefix));
+        } else if (editing != null) {
             int prefix = font.width(Component.translatable("kingdomworld.screen.map.title_edit", ""));
             String shown = fit(editing.name(), available - prefix);
             heading = Component.translatable("kingdomworld.screen.map.title_edit", shown);
@@ -448,6 +602,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             }
             graphics.fill(nameX - 2, nameY - 2, nameX + nameWidth + 2, nameY + 9, 0xC0100C08);
             name(graphics, info.name(), nameX, nameY, 0xFF000000 | FoundKingdomScreen.readable(info.color()), maxName);
+            labels.add(new int[]{nameX - 2, nameY - 2, nameX + nameWidth + 2, nameY + 9});
         }
     }
 
@@ -466,8 +621,10 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
                 continue;
             }
             double progress = caravan.progress(now);
-            double blockX = caravan.fromX() + (caravan.toX() - caravan.fromX()) * progress;
-            double blockZ = caravan.fromZ() + (caravan.toZ() - caravan.fromZ()) * progress;
+            // Along its way through the roads, where the time says it is.
+            double[] at = caravan.position(now);
+            double blockX = at[0];
+            double blockZ = at[1];
             int x = screenX(blockX / 16.0);
             int y = screenZ(blockZ / 16.0);
             if (x - 4 < mapLeft() || x + 4 > mapRight() || y - 4 < mapTop() || y + 4 > mapBottom()) {
@@ -523,7 +680,9 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             }
             label(graphics, where, PAD, y, 0xFFE8E8E8, width - PAD);
         }
-        Component hint = editing != null
+        Component hint = planning != null
+                ? Component.translatable("kingdomworld.screen.map.hint_roads")
+                : editing != null
                 ? Component.translatable("kingdomworld.screen.map.hint_edit")
                 : Component.translatable("kingdomworld.screen.map.hint", KingdomWorldClient.MAP_KEY.getTranslatedKeyMessage());
         boolean showStatus = !status.getString().isEmpty();
@@ -531,7 +690,194 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
                 showStatus ? (statusIsError ? 0xFFFF8080 : 0xFFA0E0A0) : 0xFFA8A8A8);
     }
 
+    // ---------------------------------------------------------------- roads
+
+    private int blockScreenX(double blockX) {
+        return screenX(blockX / 16.0);
+    }
+
+    private int blockScreenZ(double blockZ) {
+        return screenZ(blockZ / 16.0);
+    }
+
+    /**
+     * A line on the map as a row of small squares, cut to the map; every other square for a dashed one.
+     */
+    private void line(GuiGraphics graphics, double x0, double z0, double x1, double z1, int size, int color, boolean dashed) {
+        int sx0 = blockScreenX(x0);
+        int sz0 = blockScreenZ(z0);
+        int sx1 = blockScreenX(x1);
+        int sz1 = blockScreenZ(z1);
+        int steps = Math.max(Math.abs(sx1 - sx0), Math.abs(sz1 - sz0));
+        if (steps > 4_000 || (Math.max(sx0, sx1) < mapLeft() || Math.min(sx0, sx1) > mapRight()
+                || Math.max(sz0, sz1) < mapTop() || Math.min(sz0, sz1) > mapBottom())) {
+            return;
+        }
+        int half = size / 2;
+        for (int i = 0; i <= steps; i += Math.max(1, size - 1)) {
+            if (dashed && (i / Math.max(2, size * 2)) % 2 == 1) {
+                continue;
+            }
+            double t = steps == 0 ? 0 : i / (double) steps;
+            int x = (int) Math.round(sx0 + (sx1 - sx0) * t);
+            int z = (int) Math.round(sz0 + (sz1 - sz0) * t);
+            mapFill(graphics, x - half, z - half, x - half + size, z - half + size, color);
+        }
+    }
+
+    static int roadColor(io.github.sekerator.kingdomworld.core.road.RoadClass roadClass) {
+        return switch (roadClass) {
+            case PATH -> 0xFF8B6B3A;
+            case GRAVEL -> 0xFF6E6E6E;
+            case PAVED -> 0xFFE0DCCF;
+        };
+    }
+
+    private void drawRoads(GuiGraphics graphics) {
+        String dimension = dimension();
+        if (dimension == null) {
+            return;
+        }
+        int size = cell >= 12 ? 3 : 2;
+        for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapRoad road
+                : io.github.sekerator.kingdomworld.client.map.ClientRoadCache.data().roads()) {
+            if (!road.dimension().equals(dimension) || road.xs().length < 2) {
+                continue;
+            }
+            int builtPoints = (int) Math.round((road.xs().length - 1) * road.built() / 1000.0);
+            for (int i = 1; i < road.xs().length; i++) {
+                boolean built = i <= builtPoints;
+                line(graphics, road.xs()[i - 1] + 0.5, road.zs()[i - 1] + 0.5, road.xs()[i] + 0.5, road.zs()[i] + 0.5, size + 1, 0xFF2B1D0E, !built);
+                line(graphics, road.xs()[i - 1] + 0.5, road.zs()[i - 1] + 0.5, road.xs()[i] + 0.5, road.zs()[i] + 0.5, size - 1,
+                        roadColor(road.roadClass()), !built);
+            }
+        }
+    }
+
+    private void drawCities(GuiGraphics graphics) {
+        String dimension = dimension();
+        if (dimension == null) {
+            return;
+        }
+        for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city
+                : io.github.sekerator.kingdomworld.client.map.ClientRoadCache.data().cities()) {
+            if (!city.dimension().equals(dimension)) {
+                continue;
+            }
+            int x = blockScreenX(city.x() + 0.5);
+            int y = blockScreenZ(city.z() + 0.5);
+            if (x - 5 < mapLeft() || x + 5 > mapRight() || y - 5 < mapTop() || y + 5 > mapBottom()) {
+                continue;
+            }
+            // A small house: dark outline, a wall in the color of the kingdom and a red roof.
+            graphics.fill(x - 4, y - 4, x + 5, y + 4, 0xFF2B1D0E);
+            graphics.fill(x - 3, y - 1, x + 4, y + 3, 0xFF000000 | city.color());
+            graphics.fill(x - 2, y - 3, x + 3, y - 1, 0xFFB03020);
+            hoverText(x - 4, y - 4, 9, Component.translatable("kingdomworld.screen.map.city", city.name()));
+            if (cell >= 6) {
+                int maxName = Math.min(MAX_CAPITAL_NAME, mapRight() - mapLeft() - 8);
+                int nameWidth = font.width(fit(city.name(), maxName));
+                int nameX = Mth.clamp(x - nameWidth / 2, mapLeft() + 3, mapRight() - 3 - nameWidth);
+                int nameY = y + 6;
+                if (nameY + 10 > mapBottom()) {
+                    nameY = y - 15;
+                }
+                int[] box = {nameX - 2, nameY - 1, nameX + nameWidth + 2, nameY + 9};
+                // A name that would cover another one is left out; the city shows its name on hover.
+                if (labels.stream().noneMatch(other -> box[0] < other[2] && other[0] < box[2] && box[1] < other[3] && other[1] < box[3])) {
+                    graphics.fill(box[0], box[1], box[2], box[3], 0xB0100C08);
+                    name(graphics, city.name(), nameX, nameY, 0xFFF0E0C0, maxName);
+                    labels.add(box);
+                }
+            }
+        }
+    }
+
+    private void drawCamps(GuiGraphics graphics) {
+        String dimension = dimension();
+        if (dimension == null) {
+            return;
+        }
+        for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCamp camp
+                : io.github.sekerator.kingdomworld.client.map.ClientRoadCache.data().camps()) {
+            if (!camp.dimension().equals(dimension)) {
+                continue;
+            }
+            int x = blockScreenX(camp.x() + 0.5);
+            int y = blockScreenZ(camp.z() + 0.5);
+            if (x - 4 < mapLeft() || x + 4 > mapRight() || y - 4 < mapTop() || y + 4 > mapBottom()) {
+                continue;
+            }
+            // Crossed swords in red.
+            for (int i = -3; i <= 3; i++) {
+                graphics.fill(x + i, y + i, x + i + 1, y + i + 1, 0xFFB01010);
+                graphics.fill(x + i, y - i, x + i + 1, y - i + 1, 0xFFB01010);
+            }
+            hoverText(x - 4, y - 4, 8, Component.translatable("kingdomworld.screen.map.camp", camp.size()));
+        }
+    }
+
+    private void drawPlan(GuiGraphics graphics) {
+        io.github.sekerator.kingdomworld.common.network.data.RoadViews.PlanView view = plan;
+        if (view != null && view.xs().length >= 2) {
+            for (int i = 1; i < view.xs().length; i++) {
+                line(graphics, view.xs()[i - 1] + 0.5, view.zs()[i - 1] + 0.5, view.xs()[i] + 0.5, view.zs()[i] + 0.5, 3, 0xFF2B1D0E, false);
+                line(graphics, view.xs()[i - 1] + 0.5, view.zs()[i - 1] + 0.5, view.xs()[i] + 0.5, view.zs()[i] + 0.5, 1, 0xFFFF8C1A, false);
+            }
+        } else if (planFrom != null && planTo != null) {
+            line(graphics, planFrom[0], planFrom[1], planTo[0], planTo[1], 1, 0xFFFF8C1A, true);
+        }
+        for (int[] point : new int[][]{planFrom, planTo}) {
+            if (point == null) {
+                continue;
+            }
+            int x = blockScreenX(point[0]);
+            int y = blockScreenZ(point[1]);
+            mapFill(graphics, x - 3, y - 3, x + 4, y + 4, 0xFF2B1D0E);
+            mapFill(graphics, x - 2, y - 2, x + 3, y + 3, 0xFFFF8C1A);
+        }
+        if (view == null || view.planId() == 0) {
+            return;
+        }
+        io.github.sekerator.kingdomworld.core.road.RoadClass roadClass = planClass;
+        List<Component> lines = new java.util.ArrayList<>();
+        lines.add(Component.translatable("kingdomworld.screen.map.road.way", view.from(), view.to()));
+        lines.add(Component.translatable("kingdomworld.screen.map.road.length", io.github.sekerator.kingdomworld.common.road.RoadTexts.blocks(view.length()),
+                view.bridges(), view.fills()));
+        lines.add(Component.translatable("kingdomworld.screen.map.road.cost." + roadClass.id(),
+                io.github.sekerator.kingdomworld.common.road.RoadTexts.items(view.material(roadClass, 0)),
+                io.github.sekerator.kingdomworld.common.road.RoadTexts.items(view.material(roadClass, 1)),
+                io.github.sekerator.kingdomworld.common.road.RoadTexts.items(view.material(roadClass, 2))));
+        int builders = Math.max(1, view.builders());
+        long minutes = Math.max(1, Math.round(view.seconds(roadClass) / 60.0 / builders));
+        lines.add(Component.translatable("kingdomworld.screen.map.road.time", io.github.sekerator.kingdomworld.common.road.RoadTexts.minutes(minutes),
+                io.github.sekerator.kingdomworld.common.road.RoadTexts.builders(view.builders())));
+        if (!view.crossed().isEmpty()) {
+            lines.add(Component.translatable("kingdomworld.screen.map.road.crossed", String.join(", ", view.crossed())));
+        }
+        int maxWidth = mapRight() - mapLeft() - 12;
+        int inner = 0;
+        for (Component line : lines) {
+            inner = Math.max(inner, font.width(line));
+        }
+        int cardWidth = Math.min(inner + 12, maxWidth);
+        int x = mapLeft() + 6;
+        int y = mapTop() + 6;
+        int cardHeight = 6 + lines.size() * 11;
+        graphics.fill(x, y, x + cardWidth, y + cardHeight, 0xF0201810);
+        graphics.renderOutline(x, y, cardWidth, cardHeight, 0xFFFF8C1A);
+        int lineY = y + 4;
+        for (Component line : lines) {
+            // Long names make long lines: shortened, with the whole line on hover.
+            name(graphics, line.getString(), x + 6, lineY, 0xFFE8E8E8, cardWidth - 12);
+            lineY += 11;
+        }
+    }
+
     private void drawCard(GuiGraphics graphics) {
+        if (planning != null) {
+            return;
+        }
         KingdomMapInfo info = ClientTerritoryCache.kingdom(selected);
         if (info == null) {
             return;

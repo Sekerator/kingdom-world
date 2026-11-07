@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "particle": "kingdomworld:block/town_hall_side",
+    "down": "kingdomworld:block/town_hall_top",
+    "up": "kingdomworld:block/town_hall_top",
+    "north": "kingdomworld:block/town_hall_front",
+    "south": "kingdomworld:block/town_hall_front",
+    "east": "kingdomworld:block/town_hall_side",
+    "west": "kingdomworld:block/town_hall_side"
+  }
+}

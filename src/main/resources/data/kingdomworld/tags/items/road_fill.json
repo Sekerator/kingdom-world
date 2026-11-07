@@ -1,0 +1,13 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:dirt",
+    "minecraft:coarse_dirt",
+    "minecraft:cobblestone",
+    "minecraft:cobbled_deepslate",
+    {
+      "id": "#forge:cobblestone/normal",
+      "required": false
+    }
+  ]
+}
