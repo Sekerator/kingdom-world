@@ -40,6 +40,8 @@ final class NpcPlanning {
     private static final Logger LOGGER = LogUtils.getLogger();
     /** Ground around the throne may differ by this many blocks at most. */
     private static final int MAX_ROUGHNESS = 7;
+    /** Ground of a town may differ more: its square is small and levelled. */
+    private static final int MAX_TOWN_ROUGHNESS = 12;
     /** Town candidates judged in a tick. */
     private static final int TOWNS_PER_TICK = 2;
 
@@ -215,7 +217,7 @@ final class NpcPlanning {
             }
             min = Math.min(min, floor);
             max = Math.max(max, floor);
-            if (max - min > MAX_ROUGHNESS) {
+            if (max - min > (thorough ? MAX_ROUGHNESS : MAX_TOWN_ROUGHNESS)) {
                 return false;
             }
         }

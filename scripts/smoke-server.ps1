@@ -1840,6 +1840,9 @@ Invoke-Phase 'session1' {
         $hut = Wait-ForLog $server 'Construction #(\d+) laid out: .* at -7 70 21, (\d+) steps' $CommandTimeout $ConsoleFailPattern
         if ($hut) {
             $script:HutId = $hut.Groups[1].Value
+            # Paused at once: builders would finish a hut of a dozen blocks before the restart, which waits for it.
+            Send-ServerCommand $server "kingdomworld admin build pause $($script:HutId)"
+            [void](Wait-ForLog $server "Construction #$($script:HutId) paused" $CommandTimeout $ConsoleFailPattern)
             Send-ServerCommand $server "kingdomworld admin build stock $($script:HutId)"
             [void](Wait-ForLog $server "Materials for construction #$($script:HutId) put into the storehouses: \d+, did not fit: 0" $CommandTimeout $ConsoleFailPattern)
         } else {
@@ -2470,6 +2473,7 @@ if ($script:NpcSite) {
         $name = $appeared.Groups[1].Value
         Write-Ok "[session3] $name appeared: $($appeared.Groups[2].Value) buildings, $($appeared.Groups[3].Value) citizens, $($appeared.Groups[4].Value) soldiers, $($appeared.Groups[5].Value) town(s)"
         $script:NpcTiming = "$($appeared.Groups[6].Value) ticks after the restart, average $($appeared.Groups[7].Value) ms, worst $($appeared.Groups[8].Value) ms"
+        Write-Ok "[session3] ticks of the appearance: $($script:NpcTiming)"
         if ([double]$appeared.Groups[8].Value -gt 50) { Add-Warning "[session3] a tick of the appearance took $($appeared.Groups[8].Value) ms" }
         $wood = [regex]::Match((Get-LatestLog), "site $site medium at [^\r\n]* got its founding wealth: (\d+) in the treasury, \d+ kinds of goods in the storehouses, the wood of the place (\S+)")
         if ($wood.Success) { Write-Ok "[session3] founding wealth $($wood.Groups[1].Value), the wood of the place $($wood.Groups[2].Value)" }

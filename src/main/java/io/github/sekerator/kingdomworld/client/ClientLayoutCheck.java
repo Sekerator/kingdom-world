@@ -1238,7 +1238,7 @@ final class ClientLayoutCheck {
         cases.add(new Case("map-view-npc-card", () -> {
             fillMapData();
             KingdomMapScreen screen = new KingdomMapScreen(null);
-            screen.showForCheck(6.0, 0.5, 14.0, UUID.nameUUIDFromBytes("second".getBytes(StandardCharsets.UTF_8)), Component.empty(), false);
+            screen.showForCheck(6.0, -5.0, 14.0, UUID.nameUUIDFromBytes("second".getBytes(StandardCharsets.UTF_8)), Component.empty(), false);
             return screen;
         }));
         cases.add(new Case("throne-npc-outsider", () -> throne(view(KingdomView.Relation.OUTSIDER, null).withNpc(LONG_NPC), "overview",
