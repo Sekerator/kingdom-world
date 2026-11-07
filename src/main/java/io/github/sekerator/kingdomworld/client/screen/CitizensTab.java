@@ -365,10 +365,14 @@ final class CitizensTab {
         }
         int rows = visibleRows(top, panelHeight);
         int count = rowCount();
+        // The button of the festival may leave no room for the page on a narrow screen; the rows still scroll.
+        int buttonsRight = x + filterWidth + GAP + modeWidth + (mode == Mode.LIFE && life != null && life.canManage() ? GAP + festivalWidth : 0);
         if (count > rows) {
             Component page = Component.translatable("kingdomworld.screen.throne.page", scroll + 1, Math.min(count, scroll + rows), count);
             int pageX = right - font.width(page);
-            screen.label(graphics, page, pageX, top + ThroneScreen.CONTENT_TOP + 2 * LINE + 6, 0xFF9A9A9A, right);
+            if (pageX >= buttonsRight + 4) {
+                screen.label(graphics, page, pageX, top + ThroneScreen.CONTENT_TOP + 2 * LINE + 6, 0xFF9A9A9A, right);
+            }
         }
         int listTop = listTop(top);
         switch (mode) {

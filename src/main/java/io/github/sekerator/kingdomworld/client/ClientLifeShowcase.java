@@ -54,7 +54,8 @@ import java.util.UUID;
  * The life of cities in the client self-check ({@code -PclientSelfTest=life}): in a copy of a test world it builds the tavern
  * of the mod with an innkeeper at the counter and guests, and beds in the open beside it; in the evening it saves screenshots of
  * the guests in the tavern and of the window of the tavern, at night of the citizens asleep in their beds, into the folder
- * {@code world} of the screenshot folder.
+ * {@code world} of the screenshot folder. Then it measures the time of a server tick with the 40 citizens of the showcase (the
+ * innkeeper and 39 with beds) in the evening and at night and writes the average and the worst into the log.
  */
 final class ClientLifeShowcase {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -73,6 +74,15 @@ final class ClientLifeShowcase {
     private boolean finished;
     private boolean failed;
     private float yaw = Float.NaN;
+    /** Ticks measured in each part of the day. */
+    private static final int SAMPLE = 600;
+    private int stage;
+    private int settle;
+    private int sampled;
+    private long sum;
+    private long worst;
+    private int lastTick;
+    private volatile int citizens;
     private float pitch = Float.NaN;
 
     ClientLifeShowcase(Path folder) {
@@ -114,9 +124,16 @@ final class ClientLifeShowcase {
         if (wait > 0) {
             hold(minecraft);
             wait--;
+            // At night the shot waits until every citizen with a bed has walked home from the tavern and lies in it.
+            if (index == 2 && wait > SETTLE && wait % 20 == 0 && asleep() >= citizens - 1) {
+                wait = SETTLE / 2;
+            }
             if (wait == 0) {
                 shoot(SHOTS[index]);
             }
+            return;
+        }
+        if (index >= SHOTS.length - 1 && measure(minecraft, server)) {
             return;
         }
         index++;
@@ -150,12 +167,69 @@ final class ClientLifeShowcase {
                 server.execute(() -> server.overworld().setDayTime(Math.floorDiv(server.overworld().getDayTime(), (long) LifeRules.DAY)
                         * LifeRules.DAY + 18_500));
                 BlockPos o = origin;
-                teleport(server, playerId, o.getX() + 4.5, o.getY() + 5.0, o.getZ() + 9.5, 180.0f, 45.0f);
-                wait = SETTLE * 4;
+                teleport(server, playerId, o.getX() + 14.5, o.getY() + 9.0, o.getZ() - 3.5, 0.0f, 42.0f);
+                wait = SETTLE * 12;
                 return;
             }
         }
         wait = SETTLE;
+    }
+
+    /**
+     * After the shots: the time of a server tick with the citizens of the showcase in the evening and at night, a while to
+     * settle and then {@link #SAMPLE} ticks each.
+     *
+     * @return whether the measuring goes on
+     */
+    private boolean measure(Minecraft minecraft, IntegratedServer server) {
+        if (stage == 4) {
+            return false;
+        }
+        if (stage == 0 || stage == 2) {
+            long time = stage == 0 ? 12_400 : 18_500;
+            server.execute(() -> server.overworld().setDayTime(Math.floorDiv(server.overworld().getDayTime(), (long) LifeRules.DAY)
+                    * LifeRules.DAY + time));
+            settle = 300;
+            sampled = 0;
+            sum = 0;
+            worst = 0;
+            lastTick = -1;
+            stage++;
+            return true;
+        }
+        hold(minecraft);
+        if (settle > 0) {
+            settle--;
+            lastTick = server.getTickCount();
+            return true;
+        }
+        int now = server.getTickCount();
+        for (int t = lastTick + 1; t <= now && now - t < 100; t++) {
+            long nanos = server.tickTimes[Math.floorMod(t, 100)];
+            sum += nanos;
+            worst = Math.max(worst, nanos);
+            sampled++;
+        }
+        lastTick = now;
+        if (sampled < SAMPLE) {
+            return true;
+        }
+        String part = stage == 1 ? "evening" : "night";
+        LOGGER.info(PREFIX + "life load in the {} with {} citizens ({} bodies): average {} ms, worst {} ms over {} ticks", part, citizens,
+                io.github.sekerator.kingdomworld.common.citizen.CitizenBodies.bodies().size(), String.format(java.util.Locale.ROOT, "%.2f",
+                        sum / (double) sampled / 1_000_000.0), String.format(java.util.Locale.ROOT, "%.2f", worst / 1_000_000.0), sampled);
+        stage++;
+        return true;
+    }
+
+    private static int asleep() {
+        int count = 0;
+        for (CitizenEntity body : io.github.sekerator.kingdomworld.common.citizen.CitizenBodies.bodies()) {
+            if (body.isSleeping()) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private void hold(Minecraft minecraft) {
@@ -191,7 +265,7 @@ final class ClientLifeShowcase {
         try (NativeImage image = Screenshot.takeScreenshot(minecraft.getMainRenderTarget())) {
             Files.createDirectories(file.getParent());
             image.writeToFile(file);
-            LOGGER.info(PREFIX + "screenshot of {} saved to {}", name, file);
+            LOGGER.info(PREFIX + "screenshot of {} saved to {} ({} citizens asleep)", name, file, asleep());
         } catch (IOException e) {
             LOGGER.error(PREFIX + "could not save the screenshot of {}", name, e);
             failed = true;
@@ -243,6 +317,14 @@ final class ClientLifeShowcase {
             LOGGER.error(PREFIX + "no kingdom for the tavern showcase: {}", result);
             return;
         }
+        // The whole showcase stands on the land of the kingdom: beds outside it are nobody's home.
+        for (int pass = 0; pass < 3; pass++) {
+            for (int x = -4; x < 44; x += 16) {
+                for (int z = -4; z < 44; z += 16) {
+                    KingdomWorldApi.claimChunk(level, new net.minecraft.world.level.ChunkPos(o.offset(x, 0, z)), kingdom, null);
+                }
+            }
+        }
         level.setBlockAndUpdate(o.offset(34, 1, 26), ModRegistries.STOREHOUSE.get().defaultBlockState());
         KingdomStorage.insert(server, kingdom, new ItemStack(Items.HONEY_BOTTLE, 16), null);
         KingdomStorage.insert(server, kingdom, new ItemStack(Items.BREAD, 64), null);
@@ -280,13 +362,13 @@ final class ClientLifeShowcase {
         // Guests in the tavern, and three beds in the open for the night.
         List<Citizen> guests = new ArrayList<>();
         int[][] seats = {{7, 2}, {9, 2}, {7, 5}, {9, 5}, {2, 6}, {4, 6}};
-        for (int[] seat : seats) {
-            Citizen guest = citizen(server, kingdom, new WorldPos(post.dimension(), min.getX() + seat[0], min.getY() + 1, min.getZ() + seat[1]));
-            guests.add(guest);
+        for (int i = 0; i < 39; i++) {
+            int[] seat = seats[i % seats.length];
+            guests.add(citizen(server, kingdom, new WorldPos(post.dimension(), min.getX() + seat[0], min.getY() + 1, min.getZ() + seat[1])));
         }
         BlockState bed = Blocks.RED_BED.defaultBlockState().setValue(BedBlock.FACING, Direction.NORTH);
-        for (int i = 0; i < 3; i++) {
-            BlockPos head = o.offset(2 + i * 2, 1, 6);
+        for (int i = 0; i < guests.size(); i++) {
+            BlockPos head = o.offset(2 + (i % 13) * 2, 1, 2 + (i / 13) * 3);
             level.setBlock(head.south(), bed.setValue(BedBlock.PART, BedPart.FOOT), 3);
             level.setBlock(head, bed.setValue(BedBlock.PART, BedPart.HEAD), 3);
             WorldPos pos = new WorldPos(post.dimension(), head.getX(), head.getY(), head.getZ());
@@ -295,9 +377,12 @@ final class ClientLifeShowcase {
         }
         for (int i = 0; i < guests.size(); i++) {
             CitizenBodies.force(guests.get(i).id(), true);
-            CitizenBodies.spawnAt(level, guests.get(i), min.offset(seats[i][0], 1, seats[i][1] + 1));
+            BlockPos spot = i < seats.length ? min.offset(seats[i][0], 1, seats[i][1] + 1) : o.offset(2 + (i % 13) * 2, 1, 4 + (i / 13) * 3);
+            CitizenBodies.spawnAt(level, guests.get(i), spot);
         }
+        citizens = guests.size() + 1;
         level.setBlockAndUpdate(o.offset(5, 1, 9), Blocks.LANTERN.defaultBlockState());
+        level.setBlockAndUpdate(o.offset(15, 1, 9), Blocks.LANTERN.defaultBlockState());
         level.setDayTime(Math.floorDiv(level.getDayTime(), (long) LifeRules.DAY) * LifeRules.DAY + 12_200);
         origin = o;
         tavernMin = min;
