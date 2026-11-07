@@ -1,10 +1,13 @@
 package io.github.sekerator.kingdomworld.common.network.data;
 
+import io.github.sekerator.kingdomworld.core.road.CityLevel;
 import io.github.sekerator.kingdomworld.core.road.Crossing;
 import io.github.sekerator.kingdomworld.core.road.Road;
 import io.github.sekerator.kingdomworld.core.road.RoadClass;
+import io.github.sekerator.kingdomworld.core.road.Wall;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -130,7 +133,17 @@ public final class RoadViews {
 
     // ---------------------------------------------------------------- the tab
 
-    public record CityRow(long id, String name, int x, int y, int z, boolean capital, int roads) {
+    /**
+     * A city of the kingdom, or its capital (id 0).
+     *
+     * @param level     the level of the city by its people and buildings
+     * @param wallId    its wall, 0 for none
+     * @param wallClass the class of the wall, {@code null} for none
+     * @param wallBuilt how much of the wall stands, in thousandths
+     * @param gates     gates in the wall
+     */
+    public record CityRow(long id, String name, int x, int y, int z, boolean capital, int roads, CityLevel level, int people, int buildings,
+                          long wallId, @Nullable Wall.WallClass wallClass, int wallBuilt, int gates) {
         void encode(FriendlyByteBuf buf) {
             buf.writeVarLong(id);
             buf.writeUtf(name, NAME);
@@ -139,10 +152,31 @@ public final class RoadViews {
             buf.writeInt(z);
             buf.writeBoolean(capital);
             buf.writeVarInt(roads);
+            buf.writeEnum(level);
+            buf.writeVarInt(people);
+            buf.writeVarInt(buildings);
+            buf.writeVarLong(wallId);
+            buf.writeVarInt(wallClass == null ? 0 : wallClass.ordinal() + 1);
+            buf.writeVarInt(wallBuilt);
+            buf.writeVarInt(gates);
         }
 
         static CityRow decode(FriendlyByteBuf buf) {
-            return new CityRow(buf.readVarLong(), buf.readUtf(NAME), buf.readInt(), buf.readInt(), buf.readInt(), buf.readBoolean(), buf.readVarInt());
+            long id = buf.readVarLong();
+            String name = buf.readUtf(NAME);
+            int x = buf.readInt();
+            int y = buf.readInt();
+            int z = buf.readInt();
+            boolean capital = buf.readBoolean();
+            int roads = buf.readVarInt();
+            CityLevel level = readEnum(buf, CityLevel.class);
+            int people = buf.readVarInt();
+            int buildings = buf.readVarInt();
+            long wallId = buf.readVarLong();
+            int wallClass = buf.readVarInt();
+            Wall.WallClass[] classes = Wall.WallClass.values();
+            return new CityRow(id, name, x, y, z, capital, roads, level, people, buildings, wallId,
+                    wallClass <= 0 || wallClass > classes.length ? null : classes[wallClass - 1], buf.readVarInt(), buf.readVarInt());
         }
     }
 
@@ -315,7 +349,10 @@ public final class RoadViews {
 
     // ---------------------------------------------------------------- the map
 
-    public record MapCity(long id, UUID kingdomId, String name, String dimension, int x, int z, int color) {
+    /**
+     * A city on the map; id 0 stands for a capital, which the maps draw from the kingdoms and only add the level to.
+     */
+    public record MapCity(long id, UUID kingdomId, String name, String dimension, int x, int z, int color, CityLevel level) {
         void encode(FriendlyByteBuf buf) {
             buf.writeVarLong(id);
             buf.writeUUID(kingdomId);
@@ -324,10 +361,48 @@ public final class RoadViews {
             buf.writeInt(x);
             buf.writeInt(z);
             buf.writeInt(color);
+            buf.writeEnum(level);
         }
 
         static MapCity decode(FriendlyByteBuf buf) {
-            return new MapCity(buf.readVarLong(), buf.readUUID(), buf.readUtf(NAME), buf.readUtf(NAME), buf.readInt(), buf.readInt(), buf.readInt());
+            return new MapCity(buf.readVarLong(), buf.readUUID(), buf.readUtf(NAME), buf.readUtf(NAME), buf.readInt(), buf.readInt(), buf.readInt(),
+                    readEnum(buf, CityLevel.class));
+        }
+    }
+
+    /**
+     * The wall of a city on the map: a square ring around its middle with its gates.
+     *
+     * @param built how much of it stands, in thousandths
+     */
+    public record MapWall(long id, String dimension, int x, int z, int radius, Wall.WallClass wallClass, int built, int[] gateXs, int[] gateZs) {
+        void encode(FriendlyByteBuf buf) {
+            buf.writeVarLong(id);
+            buf.writeUtf(dimension, NAME);
+            buf.writeInt(x);
+            buf.writeInt(z);
+            buf.writeVarInt(radius);
+            buf.writeEnum(wallClass);
+            buf.writeVarInt(built);
+            writeInts(buf, gateXs);
+            writeInts(buf, gateZs);
+        }
+
+        static MapWall decode(FriendlyByteBuf buf) {
+            return new MapWall(buf.readVarLong(), buf.readUtf(NAME), buf.readInt(), buf.readInt(), buf.readVarInt(), readEnum(buf, Wall.WallClass.class),
+                    buf.readVarInt(), readInts(buf, 64), readInts(buf, 64));
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof MapWall wall && id == wall.id && dimension.equals(wall.dimension) && x == wall.x && z == wall.z
+                    && radius == wall.radius && wallClass == wall.wallClass && built == wall.built && java.util.Arrays.equals(gateXs, wall.gateXs)
+                    && java.util.Arrays.equals(gateZs, wall.gateZs);
+        }
+
+        @Override
+        public int hashCode() {
+            return java.util.Objects.hash(id, dimension, x, z, radius, wallClass, built, java.util.Arrays.hashCode(gateXs), java.util.Arrays.hashCode(gateZs));
         }
     }
 
@@ -371,23 +446,30 @@ public final class RoadViews {
     /**
      * What the maps draw of cities, roads and the camps the viewer's kingdom knows of.
      */
-    public record MapData(List<MapCity> cities, List<MapRoad> roads, List<MapCamp> camps) {
-        public static final MapData EMPTY = new MapData(List.of(), List.of(), List.of());
+    public record MapData(List<MapCity> cities, List<MapRoad> roads, List<MapCamp> camps, List<MapWall> walls) {
+        public static final MapData EMPTY = new MapData(List.of(), List.of(), List.of(), List.of());
 
         public MapData {
             cities = List.copyOf(cities);
             roads = List.copyOf(roads);
             camps = List.copyOf(camps);
+            walls = List.copyOf(walls);
+        }
+
+        public MapData(List<MapCity> cities, List<MapRoad> roads, List<MapCamp> camps) {
+            this(cities, roads, camps, List.of());
         }
 
         public void encode(FriendlyByteBuf buf) {
             writeList(buf, cities, (b, row) -> row.encode(b));
             writeList(buf, roads, (b, row) -> row.encode(b));
             writeList(buf, camps, (b, row) -> row.encode(b));
+            writeList(buf, walls, (b, row) -> row.encode(b));
         }
 
         public static MapData decode(FriendlyByteBuf buf) {
-            return new MapData(readList(buf, 4_096, MapCity::decode), readList(buf, 4_096, MapRoad::decode), readList(buf, 1_024, MapCamp::decode));
+            return new MapData(readList(buf, 4_096, MapCity::decode), readList(buf, 4_096, MapRoad::decode), readList(buf, 1_024, MapCamp::decode),
+                    readList(buf, 1_024, MapWall::decode));
         }
     }
 }

@@ -140,6 +140,11 @@ public final class RoadBuilding {
                 }
             }
         }
+        for (io.github.sekerator.kingdomworld.core.road.Wall wall : roads.walls()) {
+            if (!wall.allPaid()) {
+                kingdoms.add(wall.kingdomId());
+            }
+        }
         for (UUID kingdom : kingdoms) {
             List<Citizen> builders = freeBuilders(server, kingdom);
             if (builders.isEmpty()) {
@@ -170,6 +175,9 @@ public final class RoadBuilding {
                     break;
                 }
             }
+            double beforeWalls = seconds;
+            seconds = CityWalls.work(server, kingdom, seconds);
+            blocks += (int) Math.round((beforeWalls - seconds) / rules.secondsPerBlock(RoadClass.PAVED));
             // A crew without materials does not save up work for later.
             CARRY.put(kingdom, Math.min(seconds, rules.secondsPerBlock(RoadClass.PAVED) * builders.size()));
             if (blocks > 0) {
@@ -372,11 +380,17 @@ public final class RoadBuilding {
         io.github.sekerator.kingdomworld.core.road.RoadState roads = RoadWork.state(server);
         RoadRules rules = RoadSettings.rules();
         boolean any = false;
+        roads.setRememberConsent(rules.rememberConsent());
         for (Road road : roads.roads()) {
             double wear = rules.wearPerDay(road.roadClass()) * (1.0 + Math.min(4.0, road.traffic() / 50.0));
             for (Road.Section section : road.sections()) {
                 if (section.done() && !section.repairing() && wear > 0) {
                     section.wear(wear);
+                    any = true;
+                }
+                // Builders keep their roads up by themselves unless that is turned off.
+                if (rules.autoRepair() && section.done() && !section.repairing() && section.condition() < rules.repairBelow()) {
+                    section.startRepair();
                     any = true;
                 }
             }

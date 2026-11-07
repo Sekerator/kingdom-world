@@ -17,6 +17,7 @@ import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
 import io.github.sekerator.kingdomworld.core.membership.Permission;
 import io.github.sekerator.kingdomworld.core.road.BanditCamp;
 import io.github.sekerator.kingdomworld.core.road.City;
+import io.github.sekerator.kingdomworld.core.road.CityLevel;
 import io.github.sekerator.kingdomworld.core.road.Crossing;
 import io.github.sekerator.kingdomworld.core.road.Endpoint;
 import io.github.sekerator.kingdomworld.core.road.Road;
@@ -24,6 +25,7 @@ import io.github.sekerator.kingdomworld.core.road.RoadRules;
 import io.github.sekerator.kingdomworld.core.road.RoadState;
 import io.github.sekerator.kingdomworld.core.road.RouteCell;
 import io.github.sekerator.kingdomworld.core.road.TravelPlan;
+import io.github.sekerator.kingdomworld.core.road.Wall;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import io.github.sekerator.kingdomworld.core.territory.Capital;
 import io.github.sekerator.kingdomworld.core.trade.Caravan;
@@ -60,6 +62,25 @@ public final class RoadActions {
                 .ifPresent(view -> KingdomWorldNetwork.sendToPlayer(player, new RoadPackets.TabResponse(view)));
     }
 
+    private static RoadViews.CityRow cityRow(MinecraftServer server, RoadState roads, UUID kingdomId, long cityId, String name, int x, int y, int z,
+                                             int roadCount) {
+        CityWalls.Place place = new CityWalls.Place(kingdomId, cityId, "", x, y, z, name);
+        int[] counts = CityWalls.place(server, kingdomId, cityId).map(found -> CityWalls.counts(server, found)).orElse(new int[2]);
+        CityLevel level = CityLevel.of(counts[0], counts[1], RoadSettings.rules());
+        Optional<Wall> wall = roads.wallOf(cityId, kingdomId);
+        int built = wall.map(w -> {
+            int units = 0;
+            int placed = 0;
+            for (Road.Section section : w.sections()) {
+                units += section.units();
+                placed += section.placed();
+            }
+            return units == 0 ? 1000 : (int) Math.round(1000.0 * placed / units);
+        }).orElse(0);
+        return new RoadViews.CityRow(cityId, place.name(), x, y, z, cityId == 0, roadCount, level, counts[0], counts[1], wall.map(Wall::id).orElse(0L),
+                wall.map(Wall::wallClass).orElse(null), built, wall.map(w -> w.gates().size()).orElse(0));
+    }
+
     static String endpointName(MinecraftServer server, Endpoint endpoint) {
         return RoadPlanning.name(server, endpoint).getString();
     }
@@ -81,10 +102,10 @@ public final class RoadActions {
         boolean canOrder = viewer == null || world.membership().hasPermission(viewer, kingdomId, Permission.MANAGE_ARMY);
         Optional<Capital> capital = RoadWork.capital(server, kingdomId);
         List<RoadViews.CityRow> cities = new ArrayList<>();
-        capital.ifPresent(c -> cities.add(new RoadViews.CityRow(0, kingdom.get().name(), c.x(), c.y(), c.z(), true,
+        capital.ifPresent(c -> cities.add(cityRow(server, roads, kingdomId, 0, kingdom.get().name(), c.x(), c.y(), c.z(),
                 countRoads(roads, Endpoint.Kind.CAPITAL, 0, kingdomId))));
         for (City city : roads.citiesOf(kingdomId)) {
-            cities.add(new RoadViews.CityRow(city.id(), city.name(), city.x(), city.y(), city.z(), false,
+            cities.add(cityRow(server, roads, kingdomId, city.id(), city.name(), city.x(), city.y(), city.z(),
                     countRoads(roads, Endpoint.Kind.CITY, city.id(), null)));
         }
         List<RoadViews.RoadRow> roadRows = new ArrayList<>();
@@ -208,6 +229,10 @@ public final class RoadActions {
             KingdomActions.reply(player, KingdomActions.Feedback.error(KingdomError.NOT_A_MEMBER));
             return;
         }
+        if (change.action() == RoadPackets.TabChange.Action.GATE_HERE) {
+            // The gate goes where the player stands, whatever the client says.
+            change = new RoadPackets.TabChange(change.kingdomId(), change.action(), change.first(), player.blockPosition().asLong(), "");
+        }
         KingdomActions.reply(player, applyTab(player.server, player.getUUID(), change));
         sendTab(player, change.kingdomId());
     }
@@ -294,6 +319,21 @@ public final class RoadActions {
                     RoadSync.changed();
                 }
                 yield result(outcome, "renamed", name);
+            }
+            case WALL_PALISADE, WALL_STONE -> {
+                Wall[] made = new Wall[1];
+                Outcome outcome = CityWalls.build(server, actor, kingdom, change.first(),
+                        change.action() == RoadPackets.TabChange.Action.WALL_STONE ? Wall.WallClass.STONE : Wall.WallClass.PALISADE, made);
+                yield outcome.ok() ? KingdomActions.Feedback.ok(KEY + "wall_ordered", RoadTexts.blocks(made[0].blocks().size()), RoadTexts.gates(made[0].gates().size()))
+                        : KingdomActions.Feedback.error(outcome.error());
+            }
+            case GATE_HERE -> {
+                Optional<Wall> wall = roads.wallOf(change.first(), kingdom);
+                if (wall.isEmpty()) {
+                    yield KingdomActions.Feedback.error(KingdomError.NO_WALL);
+                }
+                net.minecraft.core.BlockPos at = net.minecraft.core.BlockPos.of(change.second());
+                yield result(CityWalls.gateAt(server, actor, wall.get().id(), at.getX(), at.getZ()), "gate_cut", at.getX(), at.getZ());
             }
             default -> KingdomActions.Feedback.error(KingdomError.VALUE_OUT_OF_RANGE);
         };

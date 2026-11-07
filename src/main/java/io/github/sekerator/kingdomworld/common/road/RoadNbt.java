@@ -36,8 +36,11 @@ import java.util.UUID;
  * crossings: [ { id, road, requester, owner, mode, status, sections, created, expires } ]
  * camps: [ { id, dim, x, y, z, bandits, leader, founded, lastGrowth, built, raids, lastRaid, known: [uuid],
  *            loot: [ { item, count, data } ], structure: [pos], chest? } ]
- * routes: [ { caravan, dim, depart, checked, xs, zs, ticks, roads, sections, classes, lengths } ]
- * nextCity, nextRoad, nextCrossing, nextCamp
+ * routes: [ { caravan, dim, depart, checked, xs, zs, ticks, roads, sections, classes, lengths, exactLengths } ]
+ * walls: [ { id, city, kingdom, class, dim, cx, cz, cells: [x, y, z, ...], gates: [cell], created, building,
+ *           sections: [ { paid, placed, pool } ] } ]
+ * consents: ["owner>requester"]
+ * nextCity, nextRoad, nextCrossing, nextCamp, nextWall
  * </pre>
  */
 final class RoadNbt {
@@ -89,6 +92,17 @@ final class RoadNbt {
             routes.add(writeRoute(route));
         }
         tag.put("routes", routes);
+        ListTag walls = new ListTag();
+        for (io.github.sekerator.kingdomworld.core.road.Wall wall : state.walls()) {
+            walls.add(writeWall(wall));
+        }
+        tag.put("walls", walls);
+        ListTag consents = new ListTag();
+        for (String pair : state.consents()) {
+            consents.add(net.minecraft.nbt.StringTag.valueOf(pair));
+        }
+        tag.put("consents", consents);
+        tag.putLong("nextWall", state.counters()[4]);
         long[] counters = state.counters();
         tag.putLong("nextCity", counters[0]);
         tag.putLong("nextRoad", counters[1]);
@@ -202,6 +216,77 @@ final class RoadNbt {
         return road;
     }
 
+    private static CompoundTag writeWall(io.github.sekerator.kingdomworld.core.road.Wall wall) {
+        CompoundTag entry = new CompoundTag();
+        entry.putLong("id", wall.id());
+        entry.putLong("city", wall.cityId());
+        entry.putUUID("kingdom", wall.kingdomId());
+        entry.putString("class", wall.wallClass().id());
+        entry.putString("dim", wall.dimension());
+        entry.putInt("cx", wall.centerX());
+        entry.putInt("cz", wall.centerZ());
+        int[] cells = new int[wall.cells().size() * 3];
+        for (int i = 0; i < wall.cells().size(); i++) {
+            RouteCell cell = wall.cells().get(i);
+            cells[i * 3] = cell.x();
+            cells[i * 3 + 1] = cell.y();
+            cells[i * 3 + 2] = cell.z();
+        }
+        entry.putIntArray("cells", cells);
+        entry.putIntArray("gates", wall.gates().stream().mapToInt(Integer::intValue).toArray());
+        entry.putLong("created", wall.created());
+        entry.putLong("building", wall.buildingId());
+        ListTag sections = new ListTag();
+        for (Road.Section section : wall.sections()) {
+            CompoundTag s = new CompoundTag();
+            s.putInt("paid", section.paid());
+            s.putInt("placed", section.placed());
+            ListTag pool = new ListTag();
+            section.pool().forEach((item, count) -> {
+                CompoundTag p = new CompoundTag();
+                p.putString("item", item);
+                p.putInt("count", count);
+                pool.add(p);
+            });
+            s.put("pool", pool);
+            sections.add(s);
+        }
+        entry.put("sections", sections);
+        return entry;
+    }
+
+    private static io.github.sekerator.kingdomworld.core.road.Wall readWall(CompoundTag entry) {
+        int[] packed = entry.getIntArray("cells");
+        if (packed.length % 3 != 0) {
+            throw new IllegalArgumentException("blocks of a wall are damaged");
+        }
+        List<RouteCell> cells = new ArrayList<>();
+        for (int i = 0; i < packed.length; i += 3) {
+            cells.add(new RouteCell(packed[i], packed[i + 1], packed[i + 2], RouteCell.Kind.GROUND, 0, null));
+        }
+        List<Integer> gates = new ArrayList<>();
+        for (int gate : entry.getIntArray("gates")) {
+            gates.add(gate);
+        }
+        io.github.sekerator.kingdomworld.core.road.Wall wall = new io.github.sekerator.kingdomworld.core.road.Wall(entry.getLong("id"),
+                entry.getLong("city"), entry.getUUID("kingdom"),
+                io.github.sekerator.kingdomworld.core.road.Wall.WallClass.byId(entry.getString("class"))
+                        .orElseThrow(() -> new IllegalArgumentException("unknown class of wall")),
+                entry.getString("dim"), entry.getInt("cx"), entry.getInt("cz"), cells, gates, entry.getLong("created"));
+        wall.setBuildingId(entry.getLong("building"));
+        ListTag sections = entry.getList("sections", Tag.TAG_COMPOUND);
+        for (int i = 0; i < sections.size() && i < wall.sections().size(); i++) {
+            CompoundTag s = sections.getCompound(i);
+            Map<String, Integer> pool = new LinkedHashMap<>();
+            ListTag items = s.getList("pool", Tag.TAG_COMPOUND);
+            for (int j = 0; j < items.size(); j++) {
+                pool.merge(items.getCompound(j).getString("item"), Math.max(0, items.getCompound(j).getInt("count")), Integer::sum);
+            }
+            wall.sections().get(i).restore(s.getInt("paid"), s.getInt("placed"), 1.0, false, 0, pool);
+        }
+        return wall;
+    }
+
     private static CompoundTag writeCamp(BanditCamp camp) {
         CompoundTag entry = new CompoundTag();
         entry.putLong("id", camp.id());
@@ -297,17 +382,21 @@ final class RoadNbt {
         int[] sections = new int[pieces.size()];
         int[] classes = new int[pieces.size()];
         int[] lengths = new int[pieces.size()];
+        long[] exact = new long[pieces.size()];
         for (int i = 0; i < pieces.size(); i++) {
             TravelPlan.Piece piece = pieces.get(i);
             roads[i] = piece.roadId();
             sections[i] = piece.section();
             classes[i] = piece.roadClass() == null ? -1 : piece.roadClass().ordinal();
             lengths[i] = (int) Math.round(piece.length() * 16.0);
+            exact[i] = Double.doubleToLongBits(piece.length());
         }
         entry.put("roads", new LongArrayTag(roads));
         entry.putIntArray("sections", sections);
         entry.putIntArray("classes", classes);
         entry.putIntArray("lengths", lengths);
+        // The lengths as they are, so that the way reads back the same; "lengths" stays for data written before.
+        entry.put("exactLengths", new LongArrayTag(exact));
         return entry;
     }
 
@@ -319,6 +408,7 @@ final class RoadNbt {
         int[] sections = entry.getIntArray("sections");
         int[] classes = entry.getIntArray("classes");
         int[] lengths = entry.getIntArray("lengths");
+        long[] exact = entry.getLongArray("exactLengths");
         int pieces = xs.length - 1;
         if (zs.length != xs.length || ticks.length != xs.length || roads.length != pieces || sections.length != pieces
                 || classes.length != pieces || lengths.length != pieces) {
@@ -331,7 +421,11 @@ final class RoadNbt {
         List<TravelPlan.Piece> list = new ArrayList<>();
         for (int i = 0; i < pieces; i++) {
             RoadClass roadClass = classes[i] < 0 || classes[i] >= RoadClass.values().length ? null : RoadClass.values()[classes[i]];
-            list.add(new TravelPlan.Piece(roads[i], sections[i], roadClass, lengths[i] / 16.0));
+            double length = exact.length == pieces ? Double.longBitsToDouble(exact[i]) : lengths[i] / 16.0;
+            if (!Double.isFinite(length) || length < 0) {
+                throw new IllegalArgumentException("the way of a caravan is damaged");
+            }
+            list.add(new TravelPlan.Piece(roads[i], sections[i], roadClass, length));
         }
         return new CaravanRoute(entry.getLong("caravan"), entry.getString("dim"), entry.getLong("depart"), new TravelPlan(points, list),
                 entry.getInt("checked"));
@@ -390,6 +484,19 @@ final class RoadNbt {
                 problems.add("way of a caravan " + i + ": " + e.getMessage());
             }
         }
+        ListTag walls = tag.getList("walls", Tag.TAG_COMPOUND);
+        for (int i = 0; i < walls.size(); i++) {
+            try {
+                state.putWall(readWall(walls.getCompound(i)));
+            } catch (RuntimeException e) {
+                problems.add("wall " + i + ": " + e.getMessage());
+            }
+        }
+        ListTag consents = tag.getList("consents", Tag.TAG_STRING);
+        for (int i = 0; i < consents.size(); i++) {
+            state.restoreConsent(consents.getString(i));
+        }
+        state.restoreWallCounter(tag.getLong("nextWall"));
         state.restoreCounters(tag.getLong("nextCity"), tag.getLong("nextRoad"), tag.getLong("nextCrossing"), tag.getLong("nextCamp"));
         return problems;
     }

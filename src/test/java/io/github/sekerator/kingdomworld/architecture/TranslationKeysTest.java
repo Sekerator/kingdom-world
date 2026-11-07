@@ -534,7 +534,19 @@ class TranslationKeysTest {
                 : io.github.sekerator.kingdomworld.core.road.RoadLayout.Material.values()) {
             used.add("kingdomworld.road.material." + material.id());
         }
-        for (String word : List.of("sections", "bandits", "cities", "roads", "builders")) {
+        for (String action : List.of("wall_palisade", "wall_stone", "gate_here")) {
+            used.add("kingdomworld.screen.roads.city_action." + action);
+            used.add("kingdomworld.screen.roads.city_action." + action + ".hint");
+        }
+        used.add("kingdomworld.screen.roads.hint.city_actions");
+        for (io.github.sekerator.kingdomworld.core.road.CityLevel level : io.github.sekerator.kingdomworld.core.road.CityLevel.values()) {
+            used.add("kingdomworld.road.level." + level.id());
+        }
+        for (io.github.sekerator.kingdomworld.core.road.Wall.WallClass wallClass
+                : io.github.sekerator.kingdomworld.core.road.Wall.WallClass.values()) {
+            used.add("kingdomworld.road.wall." + wallClass.id());
+        }
+        for (String word : List.of("sections", "bandits", "cities", "roads", "builders", "gates")) {
             for (Plurals.Form form : Plurals.Form.values()) {
                 used.add("kingdomworld.count." + word + "." + form.suffix());
             }
@@ -547,7 +559,7 @@ class TranslationKeysTest {
         for (String key : List.of("city_founded", "city_refused", "city_lost", "hall_empty", "hall_city", "place", "capital_of", "road_built",
                 "repaired", "road_planned", "crossing_asked", "road_dropped", "crossing_accepted", "crossing_declined", "road_starts", "ambush",
                 "beaten_off", "goods_taken", "robbed", "robbed_all", "merchant_name", "camp_fight", "camp_cleared", "camp_loot", "camp_found",
-                "leader_dead")) {
+                "leader_dead", "wall_laid", "wall_built")) {
             used.add("kingdomworld.road." + key);
         }
         for (ItemValues.Source source : ItemValues.Source.values()) {

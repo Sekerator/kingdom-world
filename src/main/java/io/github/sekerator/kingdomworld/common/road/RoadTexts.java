@@ -1,10 +1,12 @@
 package io.github.sekerator.kingdomworld.common.road;
 
 import io.github.sekerator.kingdomworld.core.economy.Plurals;
+import io.github.sekerator.kingdomworld.core.road.CityLevel;
 import io.github.sekerator.kingdomworld.core.road.Crossing;
 import io.github.sekerator.kingdomworld.core.road.Road;
 import io.github.sekerator.kingdomworld.core.road.RoadClass;
 import io.github.sekerator.kingdomworld.core.road.RoadLayout;
+import io.github.sekerator.kingdomworld.core.road.Wall;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 
@@ -72,5 +74,17 @@ public final class RoadTexts {
 
     public static MutableComponent minutes(long count) {
         return count("minutes", count);
+    }
+
+    public static MutableComponent gates(long count) {
+        return count("gates", count);
+    }
+
+    public static Component level(CityLevel level) {
+        return Component.translatable(KEY + "level." + level.id());
+    }
+
+    public static Component wallClass(Wall.WallClass wallClass) {
+        return Component.translatable(KEY + "wall." + wallClass.id());
     }
 }

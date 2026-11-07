@@ -1119,6 +1119,14 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.ConfigValue<List<? extends Double>> playerSpeed;
         public final ForgeConfigSpec.ConfigValue<List<? extends Double>> horseSpeed;
         public final ForgeConfigSpec.IntValue crossingDays;
+        public final ForgeConfigSpec.BooleanValue autoRepair;
+        public final ForgeConfigSpec.DoubleValue repairBelow;
+        public final ForgeConfigSpec.BooleanValue rememberConsent;
+        public final ForgeConfigSpec.IntValue townPeople;
+        public final ForgeConfigSpec.IntValue townBuildings;
+        public final ForgeConfigSpec.IntValue cityPeople;
+        public final ForgeConfigSpec.IntValue cityBuildings;
+        public final ForgeConfigSpec.IntValue wallRadius;
         public final ForgeConfigSpec.BooleanValue physicalCaravans;
         public final ForgeConfigSpec.BooleanValue bandits;
         public final ForgeConfigSpec.IntValue maxCamps;
@@ -1184,6 +1192,20 @@ public final class KingdomWorldConfig {
                             value -> value instanceof Double number && number >= 0.0 && number <= 2.0);
             crossingDays = builder.comment("Game days a request to build a road across the land of another kingdom waits for an answer.")
                     .defineInRange("crossingDays", r.crossingDays, 1, 60);
+            autoRepair = builder.comment("Whether builders repair worn sections of roads by themselves.").define("autoRepair", r.autoRepair);
+            repairBelow = builder.comment("Condition below which a section of road is repaired by itself.")
+                    .defineInRange("repairBelow", r.repairBelow, 0.0, 1.0);
+            rememberConsent = builder.comment("Whether a kingdom that once let the roads of another cross its land lets the next ones",
+                            "cross without a new request.").define("rememberConsent", r.rememberConsent);
+            townPeople = builder.comment("Citizens around a city that make it a town (with townBuildings buildings).")
+                    .defineInRange("townPeople", r.townPeople, 0, 10_000);
+            townBuildings = builder.comment("Buildings around a city that make it a town.").defineInRange("townBuildings", r.townBuildings, 0, 10_000);
+            cityPeople = builder.comment("Citizens around a city that make it a large city (with cityBuildings buildings).")
+                    .defineInRange("cityPeople", r.cityPeople, 0, 10_000);
+            cityBuildings = builder.comment("Buildings around a city that make it a large city.")
+                    .defineInRange("cityBuildings", r.cityBuildings, 0, 10_000);
+            wallRadius = builder.comment("Radius of the walls of a village in blocks; a town gets half as much again, a large city twice.")
+                    .defineInRange("wallRadius", r.wallRadius, 4, 128);
             physicalCaravans = builder.comment("Whether caravans near players walk the roads as a merchant with pack llamas.")
                     .define("physicalCaravans", true);
             bandits = builder.comment("Whether camps of robbers appear in the wild and fall upon caravans.").define("bandits", b.enabled);

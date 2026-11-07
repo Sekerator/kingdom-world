@@ -10,9 +10,11 @@ import io.github.sekerator.kingdomworld.common.network.data.RoadViews;
 import io.github.sekerator.kingdomworld.common.road.RoadRegistries;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
 import io.github.sekerator.kingdomworld.core.membership.Role;
+import io.github.sekerator.kingdomworld.core.road.CityLevel;
 import io.github.sekerator.kingdomworld.core.road.Crossing;
 import io.github.sekerator.kingdomworld.core.road.Road;
 import io.github.sekerator.kingdomworld.core.road.RoadClass;
+import io.github.sekerator.kingdomworld.core.road.Wall;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -48,9 +50,12 @@ final class RoadLayoutCases {
         List<RoadViews.RiskRow> risks = new ArrayList<>();
         List<RoadViews.SquadRow> squads = new ArrayList<>();
         if (!empty) {
-            cities.add(new RoadViews.CityRow(0, LONG_KINGDOM, -29_999_999, 319, 29_999_999, true, 256));
+            cities.add(new RoadViews.CityRow(0, LONG_KINGDOM, -29_999_999, 319, 29_999_999, true, 256, CityLevel.CITY, 99_999, 99_999, MUCH,
+                    Wall.WallClass.STONE, 1000, 64));
+            CityLevel[] levels = CityLevel.values();
             for (int i = 0; i < 16; i++) {
-                cities.add(new RoadViews.CityRow(i + 1L, LONG_CITY, -29_999_999, -64, 29_999_999 - i, false, 256));
+                cities.add(new RoadViews.CityRow(i + 1L, LONG_CITY, -29_999_999, -64, 29_999_999 - i, false, 256, levels[i % levels.length], 99_999,
+                        99_999, i % 3 == 0 ? 0 : MUCH - i, i % 3 == 0 ? null : Wall.WallClass.values()[i % 2], i * 70, 64));
             }
             Road.Status[] statuses = Road.Status.values();
             for (int i = 0; i < 20; i++) {
@@ -104,13 +109,17 @@ final class RoadLayoutCases {
     private static void fillMapData() {
         String dimension = dimension();
         UUID kingdom = UUID.nameUUIDFromBytes("roads".getBytes(StandardCharsets.UTF_8));
-        List<RoadViews.MapCity> cities = List.of(new RoadViews.MapCity(1, kingdom, LONG_CITY, dimension, -40, -30, 0x6C3483),
-                new RoadViews.MapCity(2, kingdom, "Ostbrook", dimension, 60, -20, 0xB7950B));
+        List<RoadViews.MapCity> cities = List.of(new RoadViews.MapCity(1, kingdom, LONG_CITY, dimension, -40, -30, 0x6C3483, CityLevel.CITY),
+                new RoadViews.MapCity(2, kingdom, "Ostbrook", dimension, 60, -20, 0xB7950B, CityLevel.VILLAGE),
+                new RoadViews.MapCity(0, kingdom, LONG_KINGDOM, dimension, 8, 8, 0x6C3483, CityLevel.TOWN));
+        List<RoadViews.MapWall> walls = List.of(
+                new RoadViews.MapWall(1, dimension, -40, -30, 48, Wall.WallClass.STONE, 1000, new int[]{8, -88}, new int[]{-78, -30}),
+                new RoadViews.MapWall(2, dimension, 60, -20, 24, Wall.WallClass.PALISADE, 400, new int[]{36}, new int[]{-20}));
         List<RoadViews.MapRoad> roads = List.of(
                 new RoadViews.MapRoad(1, kingdom, dimension, RoadClass.PAVED, 0x6C3483, 1000, new int[]{-40, 0, 20, 60}, new int[]{-30, -28, -10, -20}),
                 new RoadViews.MapRoad(2, kingdom, dimension, RoadClass.GRAVEL, 0x6C3483, 400, new int[]{-40, -60, -90}, new int[]{-30, 10, 30}),
                 new RoadViews.MapRoad(3, kingdom, dimension, RoadClass.PATH, 0x6C3483, 0, new int[]{60, 90, 120}, new int[]{-20, -40, -60}));
-        ClientRoadCache.replace(new RoadViews.MapData(cities, roads, List.of(new RoadViews.MapCamp(1, dimension, 20, 40, 64))));
+        ClientRoadCache.replace(new RoadViews.MapData(cities, roads, List.of(new RoadViews.MapCamp(1, dimension, 20, 40, 64)), walls));
     }
 
     private static RoadViews.PlanView plan(UUID kingdom) {
@@ -150,6 +159,9 @@ final class RoadLayoutCases {
         add.accept("throne-roads-overview-subject", () -> roadsTab(member, Role.SUBJECT, false, false, "overview", 0, 0, Component.empty()));
         add.accept("throne-roads-overview-empty", () -> roadsTab(member, Role.KING, true, true, "overview", 0, 0, longError));
         add.accept("throne-roads-cities", () -> roadsTab(member, Role.KING, true, false, "cities", 0, 0, Component.empty()));
+        add.accept("throne-roads-cities-actions", () -> roadsTab(member, Role.KING, true, false, "cities", 2, 0, Component.empty()));
+        add.accept("throne-roads-cities-actions-capital", () -> roadsTab(member, Role.KING, true, false, "cities", 1, 0, Component.empty()));
+        add.accept("throne-roads-cities-subject", () -> roadsTab(member, Role.SUBJECT, false, false, "cities", 0, 0, Component.empty()));
         add.accept("throne-roads-cities-empty", () -> roadsTab(member, Role.SUBJECT, false, true, "cities", 0, 0, Component.empty()));
         add.accept("throne-roads-roads", () -> roadsTab(member, Role.KING, true, false, "roads", 0, 0, Component.empty()));
         add.accept("throne-roads-roads-subject", () -> roadsTab(member, Role.SUBJECT, false, false, "roads", 0, 0, longError));

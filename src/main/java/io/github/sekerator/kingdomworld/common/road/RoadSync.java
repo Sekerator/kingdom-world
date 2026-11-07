@@ -6,10 +6,11 @@ import io.github.sekerator.kingdomworld.common.network.data.RoadViews;
 import io.github.sekerator.kingdomworld.common.network.packet.RoadPackets;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.road.BanditCamp;
-import io.github.sekerator.kingdomworld.core.road.City;
+import io.github.sekerator.kingdomworld.core.road.CityLevel;
 import io.github.sekerator.kingdomworld.core.road.Road;
 import io.github.sekerator.kingdomworld.core.road.RoadState;
 import io.github.sekerator.kingdomworld.core.road.RouteCell;
+import io.github.sekerator.kingdomworld.core.road.Wall;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.common.util.FakePlayer;
@@ -31,6 +32,8 @@ public final class RoadSync {
     private static boolean dirty = true;
     private static List<RoadViews.MapCity> cities = List.of();
     private static List<RoadViews.MapRoad> roads = List.of();
+    private static List<RoadViews.MapWall> walls = List.of();
+    private static int seconds;
 
     private RoadSync() {
     }
@@ -55,6 +58,10 @@ public final class RoadSync {
     }
 
     static void tick(MinecraftServer server) {
+        // The levels of cities follow their people and buildings: they are looked at again every minute.
+        if (++seconds % 60 == 0) {
+            dirty = true;
+        }
         if (dirty) {
             dirty = false;
             rebuild(server);
@@ -76,15 +83,44 @@ public final class RoadSync {
     private static void rebuild(MinecraftServer server) {
         RoadState state = RoadWork.state(server);
         List<RoadViews.MapCity> cityList = new ArrayList<>();
-        for (City city : state.cities()) {
-            cityList.add(new RoadViews.MapCity(city.id(), city.kingdomId(), city.name(), city.dimension(), city.x(), city.z(), color(server, city.kingdomId())));
+        for (CityWalls.Place place : CityWalls.places(server)) {
+            int[] counts = CityWalls.counts(server, place);
+            cityList.add(new RoadViews.MapCity(place.cityId(), place.kingdomId(), place.name(), place.dimension(), place.x(), place.z(),
+                    color(server, place.kingdomId()), CityLevel.of(counts[0], counts[1], RoadSettings.rules())));
         }
         List<RoadViews.MapRoad> roadList = new ArrayList<>();
         for (Road road : state.roads()) {
             roadList.add(mapRoad(server, road));
         }
+        List<RoadViews.MapWall> wallList = new ArrayList<>();
+        for (Wall wall : state.walls()) {
+            wallList.add(mapWall(wall));
+        }
         cities = List.copyOf(cityList);
         roads = List.copyOf(roadList);
+        walls = List.copyOf(wallList);
+    }
+
+    /**
+     * A wall as the maps draw it.
+     */
+    public static RoadViews.MapWall mapWall(Wall wall) {
+        int units = 0;
+        int placed = 0;
+        for (Road.Section section : wall.sections()) {
+            units += section.units();
+            placed += section.placed();
+        }
+        List<RouteCell> gates = wall.gateCells();
+        int count = Math.min(64, gates.size());
+        int[] xs = new int[count];
+        int[] zs = new int[count];
+        for (int i = 0; i < count; i++) {
+            xs[i] = gates.get(i).x();
+            zs[i] = gates.get(i).z();
+        }
+        return new RoadViews.MapWall(wall.id(), wall.dimension(), wall.centerX(), wall.centerZ(), wall.radius(), wall.wallClass(),
+                units == 0 ? 1000 : (int) Math.round(1000.0 * placed / units), xs, zs);
     }
 
     static int color(MinecraftServer server, UUID kingdomId) {
@@ -120,7 +156,7 @@ public final class RoadSync {
                 }
             }
         }
-        return new RoadViews.MapData(cities, roads, camps);
+        return new RoadViews.MapData(cities, roads, camps, walls);
     }
 
     /**
@@ -137,6 +173,6 @@ public final class RoadSync {
                 camps.add(new RoadViews.MapCamp(camp.id(), camp.dimension(), camp.x(), camp.z(), camp.size()));
             }
         }
-        return new RoadViews.MapData(cities, roads, camps);
+        return new RoadViews.MapData(cities, roads, camps, walls);
     }
 }

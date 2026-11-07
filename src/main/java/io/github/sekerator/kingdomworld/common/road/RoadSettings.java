@@ -130,6 +130,14 @@ public final class RoadSettings {
             b.playerSpeed = three(c.playerSpeed.get(), b.playerSpeed);
             b.horseSpeed = three(c.horseSpeed.get(), b.horseSpeed);
             b.crossingDays = c.crossingDays.get();
+            b.autoRepair = c.autoRepair.get();
+            b.repairBelow = c.repairBelow.get();
+            b.rememberConsent = c.rememberConsent.get();
+            b.townPeople = c.townPeople.get();
+            b.townBuildings = c.townBuildings.get();
+            b.cityPeople = Math.max(c.cityPeople.get(), b.townPeople);
+            b.cityBuildings = Math.max(c.cityBuildings.get(), b.townBuildings);
+            b.wallRadius = c.wallRadius.get();
         } catch (IllegalStateException e) {
             // The config is not loaded yet: the defaults count.
         }

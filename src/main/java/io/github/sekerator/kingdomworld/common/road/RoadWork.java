@@ -79,6 +79,7 @@ public final class RoadWork {
         BanditWork.reset();
         RoadSync.reset();
         RoadSpeed.reset();
+        CityWalls.reset();
     }
 
     public static long day(MinecraftServer server) {
@@ -227,6 +228,8 @@ public final class RoadWork {
         }
         roads.prune(now - 7L * CitizenNeeds.TICKS_PER_DAY);
         RoadBuilding.tick(server);
+        CityWalls.tick(server);
+        CityWalls.watchEntries(server);
         long day = day(server);
         if (day != lastDay) {
             boolean first = lastDay == Long.MIN_VALUE;

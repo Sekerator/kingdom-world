@@ -341,7 +341,8 @@ final class JourneyMapLayer implements ClientMapModel.Listener {
         ResourceKey<Level> key = dimensionKey();
         for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city
                 : io.github.sekerator.kingdomworld.client.map.ClientRoadCache.data().cities()) {
-            if (!city.dimension().equals(dimension)) {
+            // Capitals (id 0) have their own marker.
+            if (!city.dimension().equals(dimension) || city.id() == 0) {
                 continue;
             }
             MarkerOverlay marker = cities.get(city.id());

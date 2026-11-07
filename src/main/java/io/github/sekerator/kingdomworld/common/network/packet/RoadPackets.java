@@ -83,7 +83,10 @@ public final class RoadPackets {
             ACCEPT,
             DECLINE,
             PATROL,
-            RENAME_CITY
+            RENAME_CITY,
+            WALL_PALISADE,
+            WALL_STONE,
+            GATE_HERE
         }
 
         public TabChange {

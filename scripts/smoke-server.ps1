@@ -244,7 +244,8 @@ function Initialize-Server([string]$ModJar) {
     $utf8 = New-Object System.Text.UTF8Encoding($false)
     $serverDefaults = "[work]`n`ttaskRiskMultiplier = 0.0`n"
     # Roads: a city next to the capital, a long way searched quickly, and no camps or growth by chance.
-    $serverDefaults += "[roads]`n`tminCityDistance = 16`n`tcampSpawnChance = 0.0`n`tcampGrowthChance = 0.0`n"
+    # A small wall around the city: a ring of radius 4 takes at most 128 logs and keeps off the building site of the shed.
+    $serverDefaults += "[roads]`n`tminCityDistance = 16`n`tcampSpawnChance = 0.0`n`tcampGrowthChance = 0.0`n`twallRadius = 4`n"
     # Slow caravans: the caravan of the deal is still on the road when the server restarts.
     $serverDefaults += "[trade]`n`tcaravanBlocksPerMinute = 20.0`n"
     # With map mods the web maps are updated every second, so that the checks do not wait for the default 5 s.
@@ -574,6 +575,8 @@ $script:ArmyPaidUntil = $null
 $script:ArmyWeapons = @()
 $script:ArmySoldiers = 0
 $script:RoadId = $null
+$script:WallId = $null
+$script:WallRow = $null
 $script:RoadPaid = $null
 $script:RoadUnits = $null
 $script:CaravanWay = $null
@@ -1236,6 +1239,70 @@ Invoke-Phase 'session1' {
         # The world is new every time: where its land (water running into the strip, say) leaves no way, the road checks
         # are skipped; the game tests cover the search.
         Add-Warning "[session1] no road was planned between $KingdomName and $PartnerName in this world; road checks skipped"
+    }
+    # A palisade around Smoke Hollow, a village: laid out on the lay of the land with a gate where the road leaves the city,
+    # paid from logs put into the storehouses, placed and entered into the register of buildings, and a gate cut by hand on
+    # its north side. It must survive the restart.
+    Send-ServerCommand $server "kingdomworld admin roads city level $KingdomName 1"
+    if (Wait-ForLog $server 'Smoke Hollow: village, citizens \d+, buildings \d+, 0 gates' $CommandTimeout $ConsoleFailPattern) {
+        Write-Ok '[session1] Smoke Hollow is a village without gates'
+    } else {
+        Add-Failure '[session1] the level of Smoke Hollow is wrong'
+    }
+    Send-ServerCommand $server "kingdomworld admin storage put minecraft:oak_log 128 $KingdomName"
+    $logs = Wait-ForLog $server "Stored (\d+) of minecraft:oak_log in the storehouses of $KingdomName" $CommandTimeout $ConsoleFailPattern
+    Send-ServerCommand $server "kingdomworld admin roads wall build $KingdomName 1 palisade"
+    $wall = Wait-ForLog $server 'Wall #(\d+) laid out: (\d+) columns, gates (\d+)|There is no ground around the city for a wall' $CommandTimeout $ConsoleFailPattern
+    if ($wall -and -not $wall.Groups[1].Success) {
+        # The world is new every time: a city in the sea leaves no ground for a ring; the game tests cover walls.
+        Add-Warning '[session1] no ground around Smoke Hollow for a wall in this world; wall checks skipped'
+    } elseif ($wall) {
+        $script:WallId = $wall.Groups[1].Value
+        $columns = [int]$wall.Groups[2].Value
+        $gates = [int]$wall.Groups[3].Value
+        Write-Ok "[session1] wall #$($script:WallId) laid out around Smoke Hollow: $columns columns, $gates gate(s)"
+        if ($script:RoadId) {
+            if ($gates -ge 1) {
+                Write-Ok '[session1] the road that leaves Smoke Hollow got a gate in the wall by itself'
+            } else {
+                Add-Failure '[session1] the road that leaves Smoke Hollow got no gate in the wall'
+            }
+        }
+        if (-not $logs -or [int]$logs.Groups[1].Value -lt $columns * 4) {
+            Add-Warning "[session1] the storehouses took too few logs for the wall: '$(if ($logs) { $logs.Value })'; wall checks skipped"
+            $script:WallId = $null
+        }
+    } else {
+        Add-Failure '[session1] no wall was laid out around Smoke Hollow'
+    }
+    if ($script:WallId) {
+        Send-ServerCommand $server "kingdomworld admin roads wall pay $($script:WallId)"
+        $wallPaid = Wait-ForLog $server "Wall #$($script:WallId): (\d+) more columns paid, (\d+) in all" $CommandTimeout $ConsoleFailPattern
+        if ($wallPaid -and $wallPaid.Groups[1].Value -eq $wallPaid.Groups[2].Value) {
+            Write-Ok "[session1] wall #$($script:WallId) paid from the storehouses: $($wallPaid.Groups[1].Value) columns"
+        } else {
+            Add-Failure "[session1] wall #$($script:WallId) was not paid in full: '$(if ($wallPaid) { $wallPaid.Value })'"
+        }
+        Send-ServerCommand $server "kingdomworld admin roads wall place $($script:WallId)"
+        if (Wait-ForLog $server "Wall $($script:WallId) is built and entered into the register as building \d+" $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok "[session1] wall #$($script:WallId) stands and is a fortification in the register"
+        } else {
+            Add-Failure "[session1] wall #$($script:WallId) was not placed or not registered"
+        }
+        Send-ServerCommand $server "kingdomworld admin roads wall gate $($script:WallId) 40 70 2"
+        if (Wait-ForLog $server "Wall #$($script:WallId) now has gates: $($gates + 1)" $CommandTimeout "Stand by the wall|$ConsoleFailPattern") {
+            Write-Ok "[session1] a gate was cut in the north side of wall #$($script:WallId)"
+        } else {
+            # Water may leave a gap in the ring there.
+            Add-Warning "[session1] no gate could be cut in wall #$($script:WallId) at 40 2 in this world"
+        }
+        Send-ServerCommand $server 'kingdomworld admin roads wall list'
+        $wallRow = Wait-ForLog $server "#$($script:WallId) of city 1 \($KingdomName\): palisade, (\d+) of (\d+) columns stand, gates (\d+), register (\d+)" $CommandTimeout $ConsoleFailPattern
+        if ($wallRow) {
+            $script:WallRow = $wallRow.Value
+        } else {
+            Add-Failure "[session1] wall #$($script:WallId) is not in the list of walls"
+        }
     }
     Send-ServerCommand $server 'kingdomworld admin roads camp add -3000 70 -3000 5'
     if (Wait-ForLog $server 'Camp #1 at -3000 -3000: 5 robbers and a leader' $CommandTimeout $ConsoleFailPattern) {
@@ -1906,6 +1973,15 @@ Invoke-Phase 'session2' {
             Write-Ok '[session2] the mint post kept its minter after restart'
         } else {
             Add-Failure '[session2] the mint post lost its minter after restart'
+        }
+    }
+    if ($script:WallRow) {
+        # The wall after the restart: the same columns, gates and number in the register.
+        Send-ServerCommand $server 'kingdomworld admin roads wall list'
+        if (Wait-ForLog $server ([regex]::Escape($script:WallRow)) $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok "[session2] wall #$($script:WallId) survived the restart: $($script:WallRow)"
+        } else {
+            Add-Failure "[session2] wall #$($script:WallId) changed in the restart"
         }
     }
     if ($script:CaravanId) {

@@ -54,6 +54,19 @@ final class RoadsTab {
         CANCEL
     }
 
+    /**
+     * What can be done with the city being looked at.
+     */
+    private enum CityChoice {
+        WALL_PALISADE,
+        WALL_STONE,
+        GATE_HERE;
+
+        String id() {
+            return name().toLowerCase(Locale.ROOT);
+        }
+    }
+
     private final ThroneScreen screen;
     private RoadViews.RoadTabView view;
     private Mode mode = Mode.OVERVIEW;
@@ -62,6 +75,8 @@ final class RoadsTab {
     private long acting;
     /** The road a squad is being chosen for, 0 for none. */
     private long patrolling;
+    /** The city whose actions are shown (0 for the capital), -1 for none. */
+    private long actingCity = -1;
 
     private int modeWidth;
     private int actionsWidth;
@@ -87,6 +102,9 @@ final class RoadsTab {
         if (patrolling != 0 && road(patrolling) == null) {
             patrolling = 0;
         }
+        if (actingCity >= 0 && city(actingCity) == null) {
+            actingCity = -1;
+        }
     }
 
     void setMode(Mode value) {
@@ -94,6 +112,7 @@ final class RoadsTab {
         scroll = 0;
         acting = 0;
         patrolling = 0;
+        actingCity = -1;
     }
 
     /**
@@ -101,12 +120,34 @@ final class RoadsTab {
      */
     void showForCheck(Mode value, long actingRoad, long patrollingRoad) {
         setMode(value);
-        acting = actingRoad;
+        if (value == Mode.CITIES) {
+            // In the list of cities the number is the city whose actions are shown, counted from 1.
+            actingCity = actingRoad - 1;
+        } else {
+            acting = actingRoad;
+        }
         patrolling = patrollingRoad;
     }
 
     String checkName() {
-        return "roads-" + mode.id() + (acting != 0 ? "-actions" : "") + (patrolling != 0 ? "-patrol" : "");
+        return "roads-" + mode.id() + (acting != 0 || actingCity >= 0 ? "-actions" : "") + (patrolling != 0 ? "-patrol" : "");
+    }
+
+    @Nullable
+    private RoadViews.CityRow city(long id) {
+        if (view == null) {
+            return null;
+        }
+        for (RoadViews.CityRow row : view.cities()) {
+            if (row.id() == id) {
+                return row;
+            }
+        }
+        return null;
+    }
+
+    private static Component cityChoiceLabel(CityChoice choice) {
+        return Component.translatable(KEY + "city_action." + choice.id());
     }
 
     @Nullable
@@ -152,6 +193,9 @@ final class RoadsTab {
             choices = Math.max(choices, screen.buttonWidth(choiceLabel(choice, null)));
         }
         choices = Math.max(choices, screen.buttonWidth(Component.translatable(KEY + "action.resume")));
+        for (CityChoice choice : CityChoice.values()) {
+            choices = Math.max(choices, screen.buttonWidth(cityChoiceLabel(choice)));
+        }
         int rows = 150 + Math.max(actionsWidth, Math.max(acceptWidth + GAP + declineWidth, sendWidth));
         int messages = 0;
         for (String key : List.of("loading", "no_cities", "no_roads", "no_requests", "no_camps", "no_risks", "no_squads")) {
@@ -203,6 +247,9 @@ final class RoadsTab {
         if (acting != 0) {
             return choices().size();
         }
+        if (actingCity >= 0) {
+            return CityChoice.values().length;
+        }
         return switch (mode) {
             case OVERVIEW -> 0;
             case CITIES -> view.cities().size();
@@ -228,10 +275,11 @@ final class RoadsTab {
         }).bounds(x, buttonsY(top), modeWidth, ROW - 2).build());
         int rows = visibleRows(top, panelHeight);
         scroll = Math.max(0, Math.min(scroll, rowCount() - rows));
-        if (acting != 0 || patrolling != 0) {
+        if (acting != 0 || patrolling != 0 || actingCity >= 0) {
             screen.add(Button.builder(Component.translatable(KEY + "back"), b -> {
                 acting = 0;
                 patrolling = 0;
+                actingCity = -1;
                 scroll = 0;
                 screen.rebuild();
             }).bounds(right - backWidth, buttonsY(top), backWidth, ROW - 2).build());
@@ -260,6 +308,22 @@ final class RoadsTab {
             }
             return;
         }
+        if (actingCity >= 0) {
+            RoadViews.CityRow row = city(actingCity);
+            long cityId = actingCity;
+            CityChoice[] choices = CityChoice.values();
+            for (int i = 0; i < rows && scroll + i < choices.length; i++) {
+                CityChoice choice = choices[scroll + i];
+                Button button = screen.add(Button.builder(cityChoiceLabel(choice), b -> {
+                    send(RoadPackets.TabChange.Action.valueOf(choice.name()), cityId, 0);
+                    actingCity = -1;
+                    screen.rebuild();
+                }).bounds(x, listTop(top) + i * ROW, right - x, ROW - 2).build());
+                button.setTooltip(Tooltip.create(Component.translatable(KEY + "city_action." + choice.id() + ".hint")));
+                button.active = view.canManage() && (choice != CityChoice.GATE_HERE || row != null && row.wallId() != 0);
+            }
+            return;
+        }
         switch (mode) {
             case OVERVIEW -> {
                 Button plan = screen.add(Button.builder(Component.translatable(KEY + "plan"),
@@ -277,6 +341,16 @@ final class RoadsTab {
                         screen.rebuild();
                     }).bounds(right - actionsWidth, listTop(top) + i * ROW, actionsWidth, ROW - 2).build())
                             .active = view.canManage() || view.canOrder();
+                }
+            }
+            case CITIES -> {
+                for (int i = 0; i < rows && scroll + i < view.cities().size(); i++) {
+                    RoadViews.CityRow row = view.cities().get(scroll + i);
+                    screen.add(Button.builder(Component.translatable(KEY + "actions"), b -> {
+                        actingCity = row.id();
+                        scroll = 0;
+                        screen.rebuild();
+                    }).bounds(right - actionsWidth, listTop(top) + i * ROW, actionsWidth, ROW - 2).build()).active = view.canManage();
                 }
             }
             case REQUESTS -> {
@@ -364,6 +438,11 @@ final class RoadsTab {
                     row == null ? "" : row.from(), row == null ? "" : row.to());
             int headX = x + modeWidth + 6;
             text(graphics, head, headX, buttonsY(top) + 4, 0xFFF0D070, right - backWidth - 4 - headX, null);
+        } else if (actingCity >= 0) {
+            RoadViews.CityRow row = city(actingCity);
+            Component head = Component.translatable(KEY + "city_actions", row == null ? "" : row.name());
+            int headX = x + modeWidth + 6;
+            text(graphics, head, headX, buttonsY(top) + 4, 0xFFF0D070, right - backWidth - 4 - headX, null);
         }
         if (mode == Mode.OVERVIEW && acting == 0 && patrolling == 0) {
             renderOverview(graphics, x, right, top);
@@ -383,7 +462,7 @@ final class RoadsTab {
             text(graphics, Component.translatable(KEY + key), x, listTop + 5, 0xFFB8B8B8, right - x, null);
             return;
         }
-        for (int i = 0; i < rows && scroll + i < count && acting == 0; i++) {
+        for (int i = 0; i < rows && scroll + i < count && acting == 0 && actingCity < 0; i++) {
             int y = listTop + i * ROW;
             if (patrolling != 0) {
                 RoadViews.SquadRow squad = view.squads().get(scroll + i);
@@ -391,7 +470,7 @@ final class RoadsTab {
                 continue;
             }
             switch (mode) {
-                case CITIES -> renderCity(graphics, x, right, y, view.cities().get(scroll + i));
+                case CITIES -> renderCity(graphics, x, right - actionsWidth - 4, y, view.cities().get(scroll + i));
                 case ROADS -> renderRoad(graphics, x, right - actionsWidth - 4, y, view.roads().get(scroll + i));
                 case REQUESTS -> {
                     RoadViews.CrossingRow row = view.crossings().get(scroll + i);
@@ -436,9 +515,17 @@ final class RoadsTab {
 
     private void renderCity(GuiGraphics graphics, int x, int right, int y, RoadViews.CityRow row) {
         Component where = Component.translatable(KEY + "city_where", row.x(), row.y(), row.z(), RoadTexts.roads(row.roads()));
-        int whereWidth = Math.min(screen.font().width(where), (right - x) / 2);
+        Component wall = row.wallClass() == null ? Component.translatable(KEY + "no_wall")
+                : row.wallBuilt() >= 1000 ? RoadTexts.wallClass(row.wallClass())
+                : Component.translatable(KEY + "wall_building", RoadTexts.wallClass(row.wallClass()), TradeTexts.percent(permille(row.wallBuilt())));
+        Component state = Component.translatable(KEY + "city_state", RoadTexts.level(row.level()), wall);
+        Component hint = Component.translatable(KEY + "city_hint", row.name(), RoadTexts.level(row.level()), row.people(), row.buildings(), wall,
+                RoadTexts.gates(row.gates()), where);
+        int whereWidth = Math.min(screen.font().width(where), Math.max(0, (right - x) / 4));
+        int stateWidth = Math.min(screen.font().width(state), Math.max(0, (right - x - whereWidth) / 2));
         Component name = row.capital() ? Component.translatable(KEY + "capital", row.name()) : Component.literal(row.name());
-        text(graphics, name, x, y + 4, row.capital() ? 0xFFF0D070 : 0xFFFFFFFF, right - x - whereWidth - 6, null);
+        text(graphics, name, x, y + 4, row.capital() ? 0xFFF0D070 : 0xFFFFFFFF, right - x - whereWidth - stateWidth - 12, hint);
+        text(graphics, state, right - whereWidth - stateWidth - 6, y + 4, row.wallClass() == null ? 0xFFB8B8B8 : 0xFFA0E0A0, stateWidth, hint);
         text(graphics, where, right - whereWidth, y + 4, 0xFFB8B8B8, whereWidth, null);
     }
 
@@ -526,6 +613,9 @@ final class RoadsTab {
         }
         if (acting != 0) {
             return Component.translatable(KEY + "hint.actions");
+        }
+        if (actingCity >= 0) {
+            return Component.translatable(KEY + "hint.city_actions");
         }
         if (!view.canManage()) {
             return Component.translatable(KEY + "read_only_hint");

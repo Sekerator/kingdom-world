@@ -9,6 +9,8 @@ import io.github.sekerator.kingdomworld.common.kingdom.KingdomActions;
 import io.github.sekerator.kingdomworld.common.network.packet.RoadPackets;
 import io.github.sekerator.kingdomworld.common.road.BanditEntity;
 import io.github.sekerator.kingdomworld.common.road.BanditWork;
+import io.github.sekerator.kingdomworld.common.road.CityEntryEvent;
+import io.github.sekerator.kingdomworld.common.road.CityWalls;
 import io.github.sekerator.kingdomworld.common.road.RoadActions;
 import io.github.sekerator.kingdomworld.common.road.RoadBuilding;
 import io.github.sekerator.kingdomworld.common.road.RoadCaravans;
@@ -24,12 +26,16 @@ import io.github.sekerator.kingdomworld.common.trade.TradeSettings;
 import io.github.sekerator.kingdomworld.common.trade.TradeWork;
 import io.github.sekerator.kingdomworld.core.citizen.Citizen;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
+import io.github.sekerator.kingdomworld.core.construction.Building;
 import io.github.sekerator.kingdomworld.core.economy.Economy;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
 import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
 import io.github.sekerator.kingdomworld.core.road.BanditCamp;
 import io.github.sekerator.kingdomworld.core.road.BanditRules;
+import io.github.sekerator.kingdomworld.core.road.CaravanRoute;
+import io.github.sekerator.kingdomworld.core.road.City;
+import io.github.sekerator.kingdomworld.core.road.CityLevel;
 import io.github.sekerator.kingdomworld.core.road.Crossing;
 import io.github.sekerator.kingdomworld.core.road.Endpoint;
 import io.github.sekerator.kingdomworld.core.road.Road;
@@ -38,6 +44,7 @@ import io.github.sekerator.kingdomworld.core.road.RoadRules;
 import io.github.sekerator.kingdomworld.core.road.RoadState;
 import io.github.sekerator.kingdomworld.core.road.RouteCell;
 import io.github.sekerator.kingdomworld.core.road.TravelPlan;
+import io.github.sekerator.kingdomworld.core.road.Wall;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import io.github.sekerator.kingdomworld.core.territory.Capital;
 import io.github.sekerator.kingdomworld.core.trade.Caravan;
@@ -78,6 +85,8 @@ import java.util.UUID;
 @PrefixGameTestTemplate(false)
 public final class RoadGameTests {
     private static final String EMPTY = "empty";
+    /** A caravan number no real caravan of the test world gets. */
+    private static final long SAVED_ROUTE = 987_654_321L;
 
     private RoadGameTests() {
     }
@@ -582,6 +591,124 @@ public final class RoadGameTests {
         helper.succeed();
     }
 
+    // ---------------------------------------------------------------- walls
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_roads_wall")
+    public static void buildersPutUpAWallWithGatesForTheRoad(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos to = helper.absolutePos(new BlockPos(13, 7, 13));
+        GatheringGameTests.clear(level, from, to);
+        // The ring stands on the top of each column: nothing left by earlier tests may stay above it.
+        GatheringGameTests.clear(level, helper.absolutePos(new BlockPos(1, 8, 1)),
+                new BlockPos(helper.absolutePos(new BlockPos(11, 0, 11)).getX(), level.getMaxBuildHeight() - 1,
+                        helper.absolutePos(new BlockPos(11, 0, 11)).getZ()));
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Wallwrights", UUID.randomUUID());
+        Citizen worker = null;
+        Road road = null;
+        Object listener = null;
+        try {
+            StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 12);
+            store.insertItem(0, new ItemStack(Items.OAK_LOG, 64), false);
+            store.insertItem(1, new ItemStack(Items.OAK_LOG, 64), false);
+            ground(helper, 1, 11, 1, 11);
+            worker = builder(helper, kingdom, GatheringGameTests.post(helper, new BlockPos(12, 0, 0), "builder"));
+            RoadRules.Builder rules = RoadSettings.configuredRoads();
+            rules.secondsPerBlock = new double[]{0.05, 0.05, 0.05};
+            rules.wallRadius = 4;
+            rules.townPeople = 50;
+            rules.cityPeople = 100;
+            RoadSettings.override(rules.build(), null);
+            BlockPos middle = helper.absolutePos(new BlockPos(6, 0, 6));
+            City city = RoadWork.state(server).addCity(kingdom.id(), "GameTest Burg", dimension(helper), middle.getX(), middle.getY(),
+                    middle.getZ(), 1);
+            // A road from west to east through the middle: the wall gets a gate on each side.
+            road = road(helper, kingdom, RoadClass.PATH, way(helper, 0, 12, 6), Road.Mode.OWN, new ArrayList<>());
+            road.setPaused(true);
+            helper.assertTrue(CityWalls.level(server, kingdom.id(), city.id()) == CityLevel.VILLAGE, "A city of one builder is not a village");
+            Wall[] made = new Wall[1];
+            Outcome laid = CityWalls.build(server, null, kingdom.id(), city.id(), Wall.WallClass.PALISADE, made);
+            helper.assertTrue(laid.ok(), "The wall was not laid out: " + laid.error());
+            Wall wall = made[0];
+            helper.assertTrue(wall.cells().size() == 32, "A ring of radius 4 is not 32 blocks: " + wall.cells().size());
+            for (RouteCell cell : wall.cells()) {
+                helper.assertTrue(cell.y() == middle.getY(), "The ring left the ground at " + cell.x() + " " + cell.z() + ": " + cell.y());
+            }
+            List<WorldPos> gates = CityWalls.gates(server, kingdom.id(), city.id());
+            BlockPos west = helper.absolutePos(new BlockPos(2, 0, 6));
+            BlockPos east = helper.absolutePos(new BlockPos(10, 0, 6));
+            helper.assertTrue(gates.size() == 2 && gates.stream().anyMatch(g -> g.x() == west.getX() && g.z() == west.getZ())
+                    && gates.stream().anyMatch(g -> g.x() == east.getX() && g.z() == east.getZ()), "The gates are not where the road crosses: " + gates);
+            int items = wall.items();
+            helper.assertTrue(items == (32 - 6) * 4, "A palisade of 26 columns does not take 104 logs: " + items);
+            for (int i = 0; i < 10 && !wall.allPaid(); i++) {
+                RoadBuilding.tick(server);
+            }
+            helper.assertTrue(wall.allPaid(), "The builders did not pay for the wall: " + wall.paid() + " of " + wall.blocks().size());
+            long left = KingdomStorage.count(server, kingdom.id(), stack -> stack.is(Items.OAK_LOG));
+            helper.assertTrue(left == 128 - items, "The wall took other than its logs: " + left);
+            CityWalls.placeNow(server, wall);
+            helper.assertTrue(wall.built(), "The wall was not placed");
+            int logs = countIn(level, helper.absolutePos(new BlockPos(2, 1, 2)), helper.absolutePos(new BlockPos(10, 4, 10)), Blocks.OAK_LOG);
+            helper.assertTrue(logs == items, "Logs in the world: " + logs);
+            helper.assertTrue(level.getBlockState(west.above()).isAir() && level.getBlockState(east.above()).isAir(), "A gate is closed");
+            Building registered = KingdomWorldApi.state(server).construction().building(wall.buildingId()).orElse(null);
+            helper.assertTrue(registered != null && registered.type().equals("fortification") && registered.integrity() == 100,
+                    "The wall is not in the register as a fortification: " + registered);
+            long gateBuildings = KingdomWorldApi.state(server).construction().buildingsOf(kingdom.id()).stream()
+                    .filter(b -> b.templateId().equals(CityWalls.GATE_TEMPLATE) && b.type().equals("gate")).count();
+            helper.assertTrue(gateBuildings == 2, "The gates are not in the register: " + gateBuildings);
+            // A broken wall loses integrity.
+            for (int y = 1; y <= 4; y++) {
+                level.removeBlock(helper.absolutePos(new BlockPos(6, y, 2)), false);
+            }
+            CityWalls.integrity(server, level, wall);
+            int integrity = KingdomWorldApi.state(server).construction().building(wall.buildingId()).orElseThrow().integrity();
+            helper.assertTrue(integrity < 100 && integrity > 90, "A wall with a hole kept its integrity: " + integrity);
+            // Players coming in through a gate and over the wall.
+            List<CityEntryEvent> entries = new ArrayList<>();
+            UUID walker = UUID.randomUUID();
+            java.util.function.Consumer<CityEntryEvent> watch = event -> {
+                if (event.getPlayer().getUUID().equals(walker)) {
+                    entries.add(event);
+                }
+            };
+            listener = watch;
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(watch);
+            ServerPlayer player = player(helper, walker, "Walker", 0, 1, 6);
+            // Only this city counts: capitals of other tests may stand near.
+            List<CityWalls.Place> places = CityWalls.places(server).stream().filter(place -> place.cityId() == city.id()).toList();
+            CityWalls.watch(server, player, places);
+            helper.assertTrue(entries.isEmpty(), "A player outside came in");
+            BlockPos gateway = helper.absolutePos(new BlockPos(3, 1, 6));
+            player.setPos(gateway.getX() + 0.5, gateway.getY(), gateway.getZ() + 0.5);
+            CityWalls.watch(server, player, places);
+            CityWalls.watch(server, player, places);
+            helper.assertTrue(entries.size() == 1 && entries.get(0).throughGate() && entries.get(0).getCityId() == city.id()
+                    && entries.get(0).getKingdomId().equals(kingdom.id()), "Coming in through the gate was not seen once");
+            BlockPos outside = helper.absolutePos(new BlockPos(6, 1, 0));
+            player.setPos(outside.getX() + 0.5, outside.getY(), outside.getZ() + 0.5);
+            CityWalls.watch(server, player, places);
+            BlockPos overTheWall = helper.absolutePos(new BlockPos(6, 1, 3));
+            player.setPos(overTheWall.getX() + 0.5, overTheWall.getY(), overTheWall.getZ() + 0.5);
+            CityWalls.watch(server, player, places);
+            helper.assertTrue(entries.size() == 2 && !entries.get(1).throughGate(), "Coming in past the gates was not seen");
+            Outcome removed = CityWalls.remove(server, wall.id());
+            helper.assertTrue(removed.ok() && RoadWork.state(server).wallOf(city.id(), kingdom.id()).isEmpty()
+                    && KingdomWorldApi.state(server).construction().building(wall.buildingId()).isEmpty(), "The wall was not given up");
+        } finally {
+            if (listener != null) {
+                net.minecraftforge.common.MinecraftForge.EVENT_BUS.unregister(listener);
+            }
+            if (road != null) {
+                forget(server, road);
+            }
+            end(helper, kingdom, from, to, worker == null ? new Citizen[0] : new Citizen[]{worker});
+        }
+        helper.succeed();
+    }
+
     @GameTest(template = EMPTY, batch = "kingdomworld_roads_saving")
     public static void roadsAndCampsSurviveSaving(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -592,6 +719,7 @@ public final class RoadGameTests {
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Keepers of Ways", UUID.randomUUID());
         BanditCamp camp = null;
         Road road = null;
+        Wall wall = null;
         try {
             road = road(helper, kingdom, RoadClass.PAVED, way(helper, 1, 40, 5), Road.Mode.OWN, new ArrayList<>());
             road.section(0).markPaid(Map.of("minecraft:cobblestone", 1));
@@ -603,6 +731,19 @@ public final class RoadGameTests {
             camp.addLoot(List.of(Goods.of("minecraft:wheat", 12)));
             camp.learn(kingdom.id());
             RoadWork.state(server).addCity(kingdom.id(), "Keep", dimension(helper), 0, 64, 0, 1);
+            List<RouteCell> ring = new ArrayList<>();
+            for (int i = 0; i < 8; i++) {
+                ring.add(new RouteCell(i < 4 ? i : 7 - i, 64 + i, i < 4 ? 0 : 1, RouteCell.Kind.GROUND, 0, null));
+            }
+            wall = new Wall(RoadWork.state(server).nextWallId(), 0, kingdom.id(), Wall.WallClass.STONE, dimension(helper), 2, 0, ring, List.of(1), 5);
+            wall.sections().get(0).markPaid(Map.of("minecraft:cobblestone", 6));
+            wall.setBuildingId(77);
+            RoadWork.state(server).putWall(wall);
+            RoadWork.state(server).restoreConsent(kingdom.id() + ">" + new UUID(5, 5));
+            // A way whose pieces are not whole blocks long reads back to the same length.
+            TravelPlan way = new TravelPlan(List.of(new TravelPlan.Point(0, 0, 0), new TravelPlan.Point(3, 1, 40), new TravelPlan.Point(9, 4, 90)),
+                    List.of(new TravelPlan.Piece(road.id(), 0, RoadClass.PAVED, Math.sqrt(10)), new TravelPlan.Piece(0, -1, null, Math.sqrt(45))));
+            RoadWork.state(server).putRoute(new CaravanRoute(SAVED_ROUTE, dimension(helper), 7, way, 1));
             RoadSavedData loaded = RoadSavedData.load(RoadSavedData.get(server).save(new CompoundTag()));
             helper.assertTrue(!loaded.isReadOnly(), "Saved roads became read-only: " + loaded.readOnlyReason());
             Road back = loaded.state().road(road.id()).orElseThrow();
@@ -613,6 +754,14 @@ public final class RoadGameTests {
             BanditCamp savedCamp = loaded.state().camp(camp.id()).orElseThrow();
             helper.assertTrue(savedCamp.lootItems() == 12 && savedCamp.size() == 6 && savedCamp.knownTo(kingdom.id()), "The camp changed in saving");
             helper.assertTrue(loaded.state().citiesOf(kingdom.id()).size() == 1, "The city was lost in saving");
+            Wall savedWall = loaded.state().wallOf(0, kingdom.id()).orElseThrow();
+            helper.assertTrue(savedWall.cells().equals(wall.cells()) && savedWall.gates().equals(wall.gates()) && savedWall.buildingId() == 77
+                    && savedWall.wallClass() == Wall.WallClass.STONE && savedWall.sections().get(0).paid() == 1
+                    && savedWall.sections().get(0).pool().equals(wall.sections().get(0).pool()), "The wall changed in saving");
+            helper.assertTrue(loaded.state().consented(kingdom.id(), new UUID(5, 5)), "The remembered consent was lost in saving");
+            TravelPlan savedWay = loaded.state().route(SAVED_ROUTE).orElseThrow().plan();
+            helper.assertTrue(savedWay.length() == way.length() && savedWay.onRoads() == way.onRoads(),
+                    "The length of the way of a caravan changed in saving: " + savedWay.length() + " for " + way.length());
             CompoundTag newer = RoadSavedData.get(server).save(new CompoundTag());
             newer.putInt("formatVersion", RoadSavedData.FORMAT_VERSION + 1);
             RoadSavedData future = RoadSavedData.load(newer);
@@ -620,6 +769,7 @@ public final class RoadGameTests {
             CompoundTag kept = future.save(new CompoundTag());
             helper.assertTrue(kept.getInt("formatVersion") == RoadSavedData.FORMAT_VERSION + 1, "Read-only data was overwritten");
         } finally {
+            RoadWork.state(server).removeRoute(SAVED_ROUTE);
             if (camp != null) {
                 RoadWork.state(server).removeCamp(camp.id());
             }

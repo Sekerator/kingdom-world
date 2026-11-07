@@ -477,6 +477,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         drawBorders(graphics, minX, maxX, minZ, maxZ);
         labels.clear();
         drawRoads(graphics);
+        drawWalls(graphics);
         drawCapitals(graphics, minX, maxX, minZ, maxZ);
         drawCities(graphics);
         drawCamps(graphics);
@@ -754,6 +755,54 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         }
     }
 
+    /**
+     * City walls: a square ring in the color of stone or wood, dashed while it is being built, with the gates in gold.
+     */
+    private void drawWalls(GuiGraphics graphics) {
+        String dimension = dimension();
+        if (dimension == null) {
+            return;
+        }
+        for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapWall wall
+                : io.github.sekerator.kingdomworld.client.map.ClientRoadCache.data().walls()) {
+            if (!wall.dimension().equals(dimension) || wall.radius() <= 0) {
+                continue;
+            }
+            double west = wall.x() - wall.radius() + 0.5;
+            double east = wall.x() + wall.radius() + 0.5;
+            double north = wall.z() - wall.radius() + 0.5;
+            double south = wall.z() + wall.radius() + 0.5;
+            int color = wall.wallClass() == io.github.sekerator.kingdomworld.core.road.Wall.WallClass.STONE ? 0xFF6E6E6E : 0xFF7A5230;
+            boolean dashed = wall.built() < 1000;
+            double[][] sides = {{west, north, east, north}, {east, north, east, south}, {east, south, west, south}, {west, south, west, north}};
+            for (double[] side : sides) {
+                line(graphics, side[0], side[1], side[2], side[3], 3, 0xFF2B1D0E, dashed);
+                line(graphics, side[0], side[1], side[2], side[3], 1, color, dashed);
+            }
+            for (int i = 0; i < wall.gateXs().length && i < wall.gateZs().length; i++) {
+                int x = blockScreenX(wall.gateXs()[i] + 0.5);
+                int y = blockScreenZ(wall.gateZs()[i] + 0.5);
+                if (x - 2 < mapLeft() || x + 3 > mapRight() || y - 2 < mapTop() || y + 3 > mapBottom()) {
+                    continue;
+                }
+                graphics.fill(x - 2, y - 2, x + 3, y + 3, 0xFF2B1D0E);
+                graphics.fill(x - 1, y - 1, x + 2, y + 2, 0xFFF0C030);
+            }
+        }
+    }
+
+    /**
+     * The level of a city as one to three gold marks in a column beside its sign.
+     */
+    private void drawLevel(GuiGraphics graphics, int x, int y, io.github.sekerator.kingdomworld.core.road.CityLevel level, Component hover) {
+        int marks = level.ordinal() + 1;
+        graphics.fill(x - 1, y - 1, x + 3, y + marks * 3, 0xFF2B1D0E);
+        for (int i = 0; i < marks; i++) {
+            graphics.fill(x, y + i * 3, x + 2, y + i * 3 + 2, 0xFFF0C030);
+        }
+        hoverText(x - 1, y - 1, 4, hover);
+    }
+
     private void drawCities(GuiGraphics graphics) {
         String dimension = dimension();
         if (dimension == null) {
@@ -764,16 +813,29 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             if (!city.dimension().equals(dimension)) {
                 continue;
             }
+            Component level = io.github.sekerator.kingdomworld.common.road.RoadTexts.level(city.level());
+            if (city.id() == 0) {
+                // A capital: the crown stands for it already, the level goes beside the crown.
+                int x = screenX(Math.floorDiv(city.x(), 16) + 0.5);
+                int y = screenZ(Math.floorDiv(city.z(), 16) + 0.5);
+                if (x - 6 < mapLeft() || x + 11 > mapRight() || y - 5 < mapTop() || y + 5 > mapBottom()) {
+                    continue;
+                }
+                drawLevel(graphics, x + 8, y - 3, city.level(), Component.translatable("kingdomworld.screen.map.capital_level", city.name(), level));
+                continue;
+            }
             int x = blockScreenX(city.x() + 0.5);
             int y = blockScreenZ(city.z() + 0.5);
-            if (x - 5 < mapLeft() || x + 5 > mapRight() || y - 5 < mapTop() || y + 5 > mapBottom()) {
+            if (x - 5 < mapLeft() || x + 10 > mapRight() || y - 5 < mapTop() || y + 5 > mapBottom()) {
                 continue;
             }
             // A small house: dark outline, a wall in the color of the kingdom and a red roof.
             graphics.fill(x - 4, y - 4, x + 5, y + 4, 0xFF2B1D0E);
             graphics.fill(x - 3, y - 1, x + 4, y + 3, 0xFF000000 | city.color());
             graphics.fill(x - 2, y - 3, x + 3, y - 1, 0xFFB03020);
-            hoverText(x - 4, y - 4, 9, Component.translatable("kingdomworld.screen.map.city", city.name()));
+            Component hover = Component.translatable("kingdomworld.screen.map.city_level", city.name(), level);
+            hoverText(x - 4, y - 4, 9, hover);
+            drawLevel(graphics, x + 7, y - 3, city.level(), hover);
             if (cell >= 6) {
                 int maxName = Math.min(MAX_CAPITAL_NAME, mapRight() - mapLeft() - 8);
                 int nameWidth = font.width(fit(city.name(), maxName));

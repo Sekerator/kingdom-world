@@ -1,0 +1,17 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:cobblestone",
+    "minecraft:stone_bricks",
+    "minecraft:stone",
+    "minecraft:cobbled_deepslate",
+    "minecraft:deepslate_bricks",
+    "minecraft:bricks",
+    "minecraft:mud_bricks",
+    "minecraft:sandstone",
+    {
+      "id": "#forge:cobblestone/normal",
+      "required": false
+    }
+  ]
+}

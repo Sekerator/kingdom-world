@@ -13,6 +13,7 @@ import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
 import io.github.sekerator.kingdomworld.common.kingdom.KingdomActions;
 import io.github.sekerator.kingdomworld.common.road.BanditWork;
+import io.github.sekerator.kingdomworld.common.road.CityWalls;
 import io.github.sekerator.kingdomworld.common.road.RoadActions;
 import io.github.sekerator.kingdomworld.common.road.RoadBuilding;
 import io.github.sekerator.kingdomworld.common.road.RoadCaravans;
@@ -24,15 +25,18 @@ import io.github.sekerator.kingdomworld.common.road.RoadSync;
 import io.github.sekerator.kingdomworld.common.road.RoadTexts;
 import io.github.sekerator.kingdomworld.common.road.RoadWork;
 import io.github.sekerator.kingdomworld.common.trade.TradeWork;
+import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomNames;
 import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
 import io.github.sekerator.kingdomworld.core.road.BanditCamp;
 import io.github.sekerator.kingdomworld.core.road.CaravanRoute;
 import io.github.sekerator.kingdomworld.core.road.City;
+import io.github.sekerator.kingdomworld.core.road.CityLevel;
 import io.github.sekerator.kingdomworld.core.road.Road;
 import io.github.sekerator.kingdomworld.core.road.RoadClass;
 import io.github.sekerator.kingdomworld.core.road.RoadState;
+import io.github.sekerator.kingdomworld.core.road.Wall;
 import io.github.sekerator.kingdomworld.core.trade.Caravan;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -62,6 +66,8 @@ public final class RoadCommands {
             SharedSuggestionProvider.suggest(List.of("path", "gravel", "paved"), builder);
     private static final SuggestionProvider<CommandSourceStack> MODES = (context, builder) ->
             SharedSuggestionProvider.suggest(List.of("joint", "payer"), builder);
+    private static final SuggestionProvider<CommandSourceStack> WALLS = (context, builder) ->
+            SharedSuggestionProvider.suggest(List.of("palisade", "stone"), builder);
 
     private RoadCommands() {
     }
@@ -79,7 +85,26 @@ public final class RoadCommands {
                                                 .then(Commands.argument("name", StringArgumentType.greedyString())
                                                         .executes(context -> addCity(context, StringArgumentType.getString(context, "name")))))))
                         .then(Commands.literal("remove")
-                                .then(Commands.argument("id", LongArgumentType.longArg(1)).executes(RoadCommands::removeCity))))
+                                .then(Commands.argument("id", LongArgumentType.longArg(1)).executes(RoadCommands::removeCity)))
+                        .then(Commands.literal("level")
+                                .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
+                                        .then(Commands.argument("city", LongArgumentType.longArg(0)).executes(RoadCommands::cityLevel)))))
+                .then(Commands.literal("wall")
+                        .then(Commands.literal("list").executes(context -> walls(context.getSource())))
+                        .then(Commands.literal("build")
+                                .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
+                                        .then(Commands.argument("city", LongArgumentType.longArg(0))
+                                                .then(Commands.argument("class", StringArgumentType.word()).suggests(WALLS)
+                                                        .executes(RoadCommands::buildWall)))))
+                        .then(Commands.literal("gate")
+                                .then(Commands.argument("id", LongArgumentType.longArg(1))
+                                        .then(Commands.argument("pos", BlockPosArgument.blockPos()).executes(RoadCommands::gate))))
+                        .then(Commands.literal("pay")
+                                .then(Commands.argument("id", LongArgumentType.longArg(1)).executes(RoadCommands::payWall)))
+                        .then(Commands.literal("place")
+                                .then(Commands.argument("id", LongArgumentType.longArg(1)).executes(RoadCommands::placeWall)))
+                        .then(Commands.literal("remove")
+                                .then(Commands.argument("id", LongArgumentType.longArg(1)).executes(RoadCommands::removeWall))))
                 .then(Commands.literal("road")
                         .then(Commands.literal("list").executes(context -> roads(context.getSource())))
                         .then(Commands.literal("plan")
@@ -206,6 +231,134 @@ public final class RoadCommands {
         }
         RoadSync.changed();
         source.sendSuccess(() -> Component.translatable(ADMIN + "city_removed", id), true);
+        return 1;
+    }
+
+    private static int cityLevel(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        Kingdom kingdom = kingdom(context);
+        long cityId = LongArgumentType.getLong(context, "city");
+        Optional<CityWalls.Place> place = CityWalls.place(source.getServer(), kingdom.id(), cityId);
+        if (place.isEmpty()) {
+            source.sendFailure(KingdomActions.errorMessage(io.github.sekerator.kingdomworld.core.kingdom.KingdomError.UNKNOWN_CITY));
+            return 0;
+        }
+        int[] counts = CityWalls.counts(source.getServer(), place.get());
+        CityLevel level = CityWalls.level(source.getServer(), kingdom.id(), cityId);
+        List<WorldPos> gates = CityWalls.gates(source.getServer(), kingdom.id(), cityId);
+        source.sendSuccess(() -> Component.translatable(ADMIN + "city_level", place.get().name(), RoadTexts.level(level), counts[0], counts[1],
+                RoadTexts.gates(gates.size())), false);
+        return level.ordinal() + 1;
+    }
+
+    // ---------------------------------------------------------------- walls
+
+    private static Optional<Wall> wall(CommandContext<CommandSourceStack> context) {
+        long id = LongArgumentType.getLong(context, "id");
+        Optional<Wall> wall = RoadWork.state(context.getSource().getServer()).wall(id);
+        if (wall.isEmpty()) {
+            context.getSource().sendFailure(Component.translatable(ADMIN + "no_wall", id));
+        }
+        return wall;
+    }
+
+    private static int walls(CommandSourceStack source) {
+        MinecraftServer server = source.getServer();
+        RoadState roads = RoadWork.state(server);
+        source.sendSuccess(() -> Component.translatable(ADMIN + "walls", roads.walls().size()), false);
+        for (Wall wall : roads.walls()) {
+            int units = 0;
+            int placed = 0;
+            for (Road.Section section : wall.sections()) {
+                units += section.units();
+                placed += section.placed();
+            }
+            int built = placed;
+            int all = units;
+            source.sendSuccess(() -> Component.translatable(ADMIN + "wall", wall.id(), wall.cityId(),
+                    KingdomWorldApi.kingdom(server, wall.kingdomId()).map(Kingdom::name).orElse("?"), wall.wallClass().id(), built, all,
+                    wall.gates().size(), wall.buildingId()), false);
+        }
+        return roads.walls().size();
+    }
+
+    private static int buildWall(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        Kingdom kingdom = kingdom(context);
+        Optional<Wall.WallClass> wallClass = Wall.WallClass.byId(StringArgumentType.getString(context, "class"));
+        if (wallClass.isEmpty()) {
+            source.sendFailure(Component.translatable(ADMIN + "no_class", StringArgumentType.getString(context, "class")));
+            return 0;
+        }
+        Wall[] made = new Wall[1];
+        Outcome outcome = CityWalls.build(source.getServer(), null, kingdom.id(), LongArgumentType.getLong(context, "city"), wallClass.get(), made);
+        if (!outcome.ok()) {
+            return refused(source, outcome);
+        }
+        source.sendSuccess(() -> Component.translatable(ADMIN + "wall_laid", made[0].id(), made[0].blocks().size(), made[0].gates().size()), true);
+        return (int) made[0].id();
+    }
+
+    private static int gate(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        Optional<Wall> wall = wall(context);
+        if (wall.isEmpty()) {
+            return 0;
+        }
+        BlockPos pos = BlockPosArgument.getBlockPos(context, "pos");
+        Outcome outcome = CityWalls.gateAt(source.getServer(), null, wall.get().id(), pos.getX(), pos.getZ());
+        if (!outcome.ok()) {
+            return refused(source, outcome);
+        }
+        source.sendSuccess(() -> Component.translatable(ADMIN + "gate_cut", wall.get().id(), wall.get().gates().size()), true);
+        return wall.get().gates().size();
+    }
+
+    /**
+     * Pays for every column of a wall from the storehouses of its kingdom, as its builders would.
+     */
+    private static int payWall(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        Optional<Wall> wall = wall(context);
+        if (wall.isEmpty()) {
+            return 0;
+        }
+        int[] paid = new int[1];
+        Outcome outcome = RoadWork.change(source.getServer(), "pay for a wall", roads -> {
+            for (Road.Section section : wall.get().sections()) {
+                while (!section.done() && CityWalls.payColumn(source.getServer(), wall.get(), section)) {
+                    paid[0]++;
+                }
+            }
+            roads.changed();
+            return Outcome.DONE;
+        });
+        if (!outcome.ok()) {
+            return refused(source, outcome);
+        }
+        source.sendSuccess(() -> Component.translatable(ADMIN + "wall_paid", wall.get().id(), paid[0], wall.get().blocks().size()), true);
+        return paid[0];
+    }
+
+    private static int placeWall(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        Optional<Wall> wall = wall(context);
+        if (wall.isEmpty()) {
+            return 0;
+        }
+        int placed = CityWalls.placeNow(source.getServer(), wall.get());
+        source.sendSuccess(() -> Component.translatable(ADMIN + "wall_placed", wall.get().id(), placed), true);
+        return placed;
+    }
+
+    private static int removeWall(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        long id = LongArgumentType.getLong(context, "id");
+        Outcome outcome = CityWalls.remove(source.getServer(), id);
+        if (!outcome.ok()) {
+            return refused(source, outcome);
+        }
+        source.sendSuccess(() -> Component.translatable(ADMIN + "wall_removed", id), true);
         return 1;
     }
 

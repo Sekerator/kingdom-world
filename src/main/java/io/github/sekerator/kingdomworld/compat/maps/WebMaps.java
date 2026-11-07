@@ -213,7 +213,8 @@ public final class WebMaps {
         List<WebMapModel.City> list = new ArrayList<>();
         for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city
                 : io.github.sekerator.kingdomworld.common.road.RoadSync.all(server).cities()) {
-            if (!TerritorySnapshots.canSee(null, city.kingdomId())) {
+            // Capitals (id 0) have their own marker.
+            if (city.id() == 0 || !TerritorySnapshots.canSee(null, city.kingdomId())) {
                 continue;
             }
             String kingdom = state.kingdoms().get(city.kingdomId()).map(Kingdom::name).orElse("?");
