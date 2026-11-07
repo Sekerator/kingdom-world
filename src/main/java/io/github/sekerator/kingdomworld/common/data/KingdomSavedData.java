@@ -45,7 +45,7 @@ import java.util.Optional;
 public final class KingdomSavedData extends SavedData {
     public static final String DATA_NAME = KingdomWorld.MOD_ID + "_kingdoms";
     /** Current layout of the saved data. Increase it together with a migration step. */
-    public static final int FORMAT_VERSION = 6;
+    public static final int FORMAT_VERSION = 7;
     /** Format assumed for data without a version field. */
     static final int FIRST_FORMAT_VERSION = 1;
 
@@ -54,6 +54,7 @@ public final class KingdomSavedData extends SavedData {
     static final String TAG_STOREHOUSES = "storehouses";
     static final String TAG_GEAR = "gear";
     static final String TAG_ECONOMY = EconomyNbt.ECONOMY;
+    static final String TAG_TRADE = TradeNbt.TRADE;
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
@@ -192,6 +193,7 @@ public final class KingdomSavedData extends SavedData {
         problems.addAll(readStorehouses(data));
         problems.addAll(readGear(data));
         problems.addAll(readEconomy(data));
+        problems.addAll(readTrade(data));
         if (!problems.isEmpty()) {
             lock(tag, problems.size() + " unreadable part(s): " + String.join("; ", problems), "unreadable_parts", problems.size());
             return;
@@ -248,12 +250,20 @@ public final class KingdomSavedData extends SavedData {
         return EconomyNbt.readWorld(data.get(TAG_ECONOMY), state.economy());
     }
 
+    private List<String> readTrade(CompoundTag data) {
+        if (!data.contains(TAG_TRADE)) {
+            return List.of();
+        }
+        return TradeNbt.read(data.get(TAG_TRADE), state);
+    }
+
     private void readBestEffort(CompoundTag tag) {
         try {
             List<String> problems = readKingdoms(tag);
             problems.addAll(readStorehouses(tag));
             problems.addAll(readGear(tag));
             problems.addAll(readEconomy(tag));
+            problems.addAll(readTrade(tag));
             if (!problems.isEmpty()) {
                 LOGGER.warn("Kingdom data parts not understood: {}", String.join("; ", problems));
             }
@@ -332,6 +342,7 @@ public final class KingdomSavedData extends SavedData {
         tag.put(TAG_STOREHOUSES, storehouses.save());
         tag.put(TAG_GEAR, gear.save());
         tag.put(TAG_ECONOMY, EconomyNbt.writeWorld(state.economy()));
+        tag.put(TAG_TRADE, TradeNbt.write(state.trade()));
         return tag;
     }
 }

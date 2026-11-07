@@ -34,6 +34,7 @@ final class KingdomDataMigrations {
                 case 3 -> current = upgradeFrom3To4(current);
                 case 4 -> current = upgradeFrom4To5(current);
                 case 5 -> current = upgradeFrom5To6(current);
+                case 6 -> current = upgradeFrom6To7(current);
                 default -> throw new IllegalArgumentException("No migration from kingdom data format " + version);
             }
         }
@@ -161,6 +162,26 @@ final class KingdomDataMigrations {
             grant(kingdoms.getCompound(i), "treasurer", "manage_treasury");
         }
         tag.putInt(KingdomSavedData.TAG_FORMAT_VERSION, 6);
+        return tag;
+    }
+
+    /**
+     * Format 7 adds trade: markets, deals, caravans and goods going back to players at the root, reserves of other
+     * currencies in every treasury, exchange rates, payments in escrow and the coins in hands. A format 6 world has no
+     * market yet, no deals and no reserves, and every currency starts at the rate of one; nothing else changes. The new
+     * right to manage the market goes to the treasurer and the steward, the right to make deals with other kingdoms to the
+     * treasurer and the chancellor, as in new kingdoms.
+     */
+    private static CompoundTag upgradeFrom6To7(CompoundTag tag) {
+        ListTag kingdoms = tag.getList(KingdomSavedData.TAG_KINGDOMS, Tag.TAG_COMPOUND);
+        for (int i = 0; i < kingdoms.size(); i++) {
+            CompoundTag kingdom = kingdoms.getCompound(i);
+            grant(kingdom, "treasurer", "manage_market");
+            grant(kingdom, "steward", "manage_market");
+            grant(kingdom, "treasurer", "manage_trade");
+            grant(kingdom, "chancellor", "manage_trade");
+        }
+        tag.putInt(KingdomSavedData.TAG_FORMAT_VERSION, 7);
         return tag;
     }
 

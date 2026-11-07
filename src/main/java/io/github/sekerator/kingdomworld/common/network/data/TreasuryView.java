@@ -31,15 +31,34 @@ import java.util.UUID;
  * @param debtorCount    every subject who owes something
  * @param debtTotal      what all of them owe together
  * @param mint           the mint of the kingdom
+ * @param rate           the exchange rate of the kingdom's currency
+ * @param reserves       money of other currencies the treasury holds
  */
 public record TreasuryView(UUID kingdomId, boolean canManage, boolean canTakeCoins, boolean isKing, String kingdomName, String currencyName, long silver, long gold,
                            long balance, Coins vault, List<JournalRow> journal, long pollTax, long maxPollTax, int taxpayers,
                            long untilPayday, Payroll lastPayroll, List<Wage> wages, long maxWage, List<Debtor> debtors, int debtorCount,
-                           long debtTotal, Mint mint) {
+                           long debtTotal, Mint mint, long rate, List<Reserve> reserves) {
     public static final int MAX_DEBTORS = 64;
     public static final int MAX_WAGES = 64;
     public static final int MAX_JOURNAL = 64;
     public static final int MAX_NAME = 64;
+    public static final int MAX_RESERVES = 256;
+
+    /**
+     * Money of another currency in the treasury.
+     *
+     * @param worth what it is worth in the treasury's own currency by the rates
+     */
+    public record Reserve(String name, String kingdomName, int color, long amount, long silver, long gold, long worth) {
+        public Reserve {
+            Objects.requireNonNull(name, "name");
+            Objects.requireNonNull(kingdomName, "kingdomName");
+        }
+
+        public CurrencyUnits units() {
+            return CurrencyUnits.valid(silver, gold) ? new CurrencyUnits(silver, gold) : CurrencyUnits.DEFAULT;
+        }
+    }
 
     /**
      * Money in and out of one category over one period.
@@ -95,7 +114,8 @@ public record TreasuryView(UUID kingdomId, boolean canManage, boolean canTakeCoi
         journal = List.copyOf(journal);
         wages = List.copyOf(wages);
         debtors = List.copyOf(debtors);
-        if (journal.size() > MAX_JOURNAL || wages.size() > MAX_WAGES || debtors.size() > MAX_DEBTORS) {
+        reserves = List.copyOf(reserves);
+        if (journal.size() > MAX_JOURNAL || wages.size() > MAX_WAGES || debtors.size() > MAX_DEBTORS || reserves.size() > MAX_RESERVES) {
             throw new IllegalArgumentException("Treasury view too large");
         }
     }
@@ -158,6 +178,17 @@ public record TreasuryView(UUID kingdomId, boolean canManage, boolean canTakeCoi
         buf.writeVarLong(mint.today());
         buf.writeVarLong(mint.week());
         buf.writeBoolean(mint.toVault());
+        buf.writeVarLong(rate);
+        buf.writeVarInt(reserves.size());
+        for (Reserve reserve : reserves) {
+            buf.writeUtf(reserve.name(), KingdomNames.MAX_LENGTH);
+            buf.writeUtf(reserve.kingdomName(), KingdomNames.MAX_LENGTH);
+            buf.writeInt(reserve.color());
+            buf.writeVarLong(reserve.amount());
+            buf.writeVarLong(reserve.silver());
+            buf.writeVarLong(reserve.gold());
+            buf.writeVarLong(reserve.worth());
+        }
     }
 
     public static TreasuryView decode(FriendlyByteBuf buf) {
@@ -197,8 +228,15 @@ public record TreasuryView(UUID kingdomId, boolean canManage, boolean canTakeCoi
         long debtTotal = amount(buf);
         Mint mint = new Mint(buf.readVarInt(), buf.readVarInt(), KingdomView.readEnum(buf, WorkStatus.class), amount(buf), amount(buf),
                 buf.readBoolean());
+        long rate = buf.readVarLong();
+        int reserveCount = size(buf, MAX_RESERVES);
+        List<Reserve> reserves = new ArrayList<>(reserveCount);
+        for (int i = 0; i < reserveCount; i++) {
+            reserves.add(new Reserve(buf.readUtf(KingdomNames.MAX_LENGTH), buf.readUtf(KingdomNames.MAX_LENGTH), buf.readInt(), amount(buf),
+                    buf.readVarLong(), buf.readVarLong(), amount(buf)));
+        }
         return new TreasuryView(kingdomId, canManage, canTakeCoins, isKing, kingdomName, currencyName, silver, gold, balance, vault, journal, pollTax,
-                maxPollTax, taxpayers, untilPayday, payroll, wages, maxWage, debtors, allDebtors, debtTotal, mint);
+                maxPollTax, taxpayers, untilPayday, payroll, wages, maxWage, debtors, allDebtors, debtTotal, mint, rate, reserves);
     }
 
     static long amount(FriendlyByteBuf buf) {

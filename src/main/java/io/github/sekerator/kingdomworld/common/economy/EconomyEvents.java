@@ -71,11 +71,15 @@ public final class EconomyEvents {
     }
 
     private static void onReload(AddReloadListenerEvent event) {
-        event.addListener((net.minecraft.server.packs.resources.ResourceManagerReloadListener) manager -> ItemPrices.invalidate());
+        event.addListener((net.minecraft.server.packs.resources.ResourceManagerReloadListener) manager -> {
+            ItemPrices.invalidate();
+            io.github.sekerator.kingdomworld.common.trade.MarketActions.invalidate();
+        });
     }
 
     private static void onTags(TagsUpdatedEvent event) {
         ItemPrices.invalidate();
+        io.github.sekerator.kingdomworld.common.trade.MarketActions.invalidate();
     }
 
     private static void onServerTick(TickEvent.ServerTickEvent event) {
@@ -140,7 +144,8 @@ public final class EconomyEvents {
         KingdomWorldState state = KingdomWorldApi.state(server);
         List<CurrencyInfo> list = new ArrayList<>();
         for (Kingdom kingdom : state.kingdoms().all()) {
-            state.economy().treasury(kingdom.id()).ifPresent(treasury -> list.add(CurrencyInfo.of(kingdom, treasury)));
+            state.economy().treasury(kingdom.id()).ifPresent(treasury -> list.add(CurrencyInfo.of(kingdom, treasury,
+                    state.economy().rate(kingdom.id()))));
         }
         for (RetiredCurrency old : state.economy().retired().values()) {
             if (list.size() >= CurrencyInfo.MAX_LIST) {

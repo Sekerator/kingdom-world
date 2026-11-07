@@ -21,7 +21,7 @@ import java.util.UUID;
  * @param color       the color of its kingdom
  * @param old         whether its kingdom was dissolved
  */
-public record CurrencyInfo(UUID id, String name, String kingdomName, int color, boolean old, long silver, long gold) {
+public record CurrencyInfo(UUID id, String name, String kingdomName, int color, boolean old, long silver, long gold, long rate) {
     /** Most currencies one list carries. */
     public static final int MAX_LIST = 4_096;
 
@@ -32,14 +32,14 @@ public record CurrencyInfo(UUID id, String name, String kingdomName, int color, 
         color &= Kingdom.MAX_COLOR;
     }
 
-    public static CurrencyInfo of(Kingdom kingdom, Treasury treasury) {
+    public static CurrencyInfo of(Kingdom kingdom, Treasury treasury, long rate) {
         return new CurrencyInfo(kingdom.id(), treasury.currencyName(), kingdom.name(), kingdom.color(), false, treasury.units().silver(),
-                treasury.units().gold());
+                treasury.units().gold(), rate);
     }
 
     public static CurrencyInfo of(RetiredCurrency currency) {
         return new CurrencyInfo(currency.id(), currency.name(), currency.kingdomName(), currency.color(), true, currency.units().silver(),
-                currency.units().gold());
+                currency.units().gold(), 0);
     }
 
     public CurrencyUnits units() {
@@ -54,11 +54,12 @@ public record CurrencyInfo(UUID id, String name, String kingdomName, int color, 
         buf.writeBoolean(old);
         buf.writeVarLong(silver);
         buf.writeVarLong(gold);
+        buf.writeVarLong(rate);
     }
 
     public static CurrencyInfo decode(FriendlyByteBuf buf) {
         return new CurrencyInfo(buf.readUUID(), buf.readUtf(KingdomNames.MAX_LENGTH), buf.readUtf(KingdomNames.MAX_LENGTH), buf.readInt(),
-                buf.readBoolean(), buf.readVarLong(), buf.readVarLong());
+                buf.readBoolean(), buf.readVarLong(), buf.readVarLong(), buf.readVarLong());
     }
 
     public static void writeList(FriendlyByteBuf buf, List<CurrencyInfo> list) {

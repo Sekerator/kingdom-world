@@ -109,6 +109,14 @@ public final class ModRegistries {
                     .sound(SoundType.METAL)));
     public static final RegistryObject<Item> MINT_ITEM = ITEMS.register("mint",
             () -> new BlockItem(MINT.get(), new Item.Properties()));
+    /** A market stall: the market of the kingdom whose land it stands on, open while a merchant keeps it. */
+    public static final RegistryObject<Block> MARKET_STALL = BLOCKS.register("market_stall",
+            () -> new io.github.sekerator.kingdomworld.common.trade.MarketStallBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.WOOD)
+                    .strength(2.0f)
+                    .sound(SoundType.WOOD)));
+    public static final RegistryObject<Item> MARKET_STALL_ITEM = ITEMS.register("market_stall",
+            () -> new BlockItem(MARKET_STALL.get(), new Item.Properties()));
 
     /**
      * The body of a citizen. Never saved with chunks: the citizen records in the kingdom data are what persists.
@@ -144,6 +152,7 @@ public final class ModRegistries {
             event.accept(WORK_POST_ITEM);
             event.accept(BANK_ITEM);
             event.accept(MINT_ITEM);
+            event.accept(MARKET_STALL_ITEM);
         } else if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) {
             event.accept(FOUNDER_CROWN);
             event.accept(KINGDOM_ATLAS);

@@ -47,6 +47,7 @@ final class TreasuryTab {
         JOURNAL,
         SETTINGS,
         PAYMENTS,
+        RESERVES,
         DEBTORS;
 
         String id() {
@@ -152,6 +153,7 @@ final class TreasuryTab {
         List<Component> lines = new ArrayList<>();
         CurrencyUnits units = units();
         lines.add(Component.translatable(KEY + "currency", currencyName()));
+        lines.add(Component.translatable(KEY + "rate", io.github.sekerator.kingdomworld.common.trade.TradeTexts.rate(view.rate())));
         lines.add(Component.translatable(KEY + "coin_values", MoneyTexts.coins(Denomination.GOLD, 1),
                 MoneyTexts.coins(Denomination.COPPER, units.gold()), MoneyTexts.coins(Denomination.SILVER, 1),
                 MoneyTexts.coins(Denomination.COPPER, units.silver())));
@@ -228,7 +230,7 @@ final class TreasuryTab {
         int wages = professionWidth + 90 + 2 * (stepWidth + GAP);
         int messages = 0;
         for (String key : List.of("loading", "journal_empty", "debtors_none", "read_only", "payroll_none", "mint_none", "debts_none",
-                "payments_read_only", "coins_read_only")) {
+                "payments_read_only", "coins_read_only", "reserves_none")) {
             messages = Math.max(messages, Math.min(320, font.width(Component.translatable(KEY + key))));
         }
         return Math.max(Math.max(buttons, settings), Math.max(wages, messages));
@@ -260,6 +262,7 @@ final class TreasuryTab {
         return switch (mode) {
             case SETTINGS -> view.wages().size();
             case DEBTORS -> view.debtors().size();
+            case RESERVES -> view.reserves().size();
             default -> 0;
         };
     }
@@ -461,6 +464,7 @@ final class TreasuryTab {
             case SETTINGS -> renderSettings(graphics, font, x, right, top, rows);
             case PAYMENTS -> renderPayments(graphics, x, right, top);
             case DEBTORS -> renderDebtors(graphics, font, x, right, listTop, rows);
+            case RESERVES -> renderReserves(graphics, x, right, listTop, rows);
         }
     }
 
@@ -573,6 +577,25 @@ final class TreasuryTab {
             screen.name(graphics, Component.translatable(KEY + "payments_read_only").getString(), x, noteY, 0xFFB8B8B8, right - x);
         } else if (!view.canTakeCoins()) {
             screen.name(graphics, Component.translatable(KEY + "coins_read_only").getString(), x, noteY, 0xFFB8B8B8, right - x);
+        }
+    }
+
+    private void renderReserves(GuiGraphics graphics, int x, int right, int listTop, int rows) {
+        List<TreasuryView.Reserve> reserves = view.reserves();
+        if (reserves.isEmpty()) {
+            screen.name(graphics, Component.translatable(KEY + "reserves_none").getString(), x, listTop + 5, 0xFFB8B8B8, right - x);
+            return;
+        }
+        int nameWidth = Math.min(130, (right - x) / 3);
+        for (int i = 0; i < rows && scroll + i < reserves.size(); i++) {
+            TreasuryView.Reserve reserve = reserves.get(scroll + i);
+            int y = listTop + i * ROW + 4;
+            String shortName = reserve.name().isEmpty() ? reserve.kingdomName() : reserve.name();
+            int drawn = screen.name(graphics, shortName, x, y, 0xFF000000 | FoundKingdomScreen.readable(reserve.color()), nameWidth - 4);
+            screen.hoverText(x, y, drawn, MoneyTexts.currency(reserve.name(), reserve.kingdomName()));
+            String amount = Component.translatable(KEY + "reserve", MoneyTexts.amount(reserve.amount(), reserve.units()), money(reserve.worth()))
+                    .getString();
+            screen.name(graphics, amount, x + nameWidth, y, 0xFFD0D0D0, right - x - nameWidth);
         }
     }
 

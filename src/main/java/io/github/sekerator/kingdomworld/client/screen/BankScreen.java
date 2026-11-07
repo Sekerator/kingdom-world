@@ -126,8 +126,9 @@ public class BankScreen extends KingdomScreen implements ResultListener {
         }
         takeWidth = buttonWidth(Component.translatable(KEY + "take"));
         doneWidth = Math.max(50, buttonWidth(Component.translatable("gui.done")));
+        int bottomButtons = buttonWidth(Component.translatable(KEY + "exchange")) + 8 + doneWidth;
         int withdraw = labels + BOX_WIDTH + GAP + coinWidth + GAP + takeWidth;
-        int inner = Math.max(labels + deposits, withdraw);
+        int inner = Math.max(Math.max(labels + deposits, withdraw), bottomButtons);
         inner = Math.max(inner, Math.min(360, font.width(title())));
         // The coins on the player may be many: the line gets the room it needs, as far as the screen allows.
         inner = Math.max(inner, Math.min(width - 8 - 2 * PAD, font.width(Component.translatable(KEY + "carried", MoneyTexts.coins(view.carried())))));
@@ -207,6 +208,13 @@ public class BankScreen extends KingdomScreen implements ResultListener {
 
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose())
                 .bounds(left + panelWidth - PAD - doneWidth, top() + panelHeight - 26, doneWidth, 20).build());
+        Component exchange = Component.translatable(KEY + "exchange");
+        addRenderableWidget(Button.builder(exchange, b -> {
+            if (Minecraft.getInstance().getConnection() != null) {
+                KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.TradePackets.ExchangeRequest(view.pos()));
+            }
+        }).bounds(left + PAD, top() + panelHeight - 26, buttonWidth(exchange), 20).build())
+                .setTooltip(Tooltip.create(Component.translatable(KEY + "exchange_hint")));
     }
 
     private void send(EconomyPackets.BankChange.Action action, Denomination coin, long value) {

@@ -84,6 +84,40 @@ public final class ClientPacketHandlers {
         }
     }
 
+    public static void handleStall(io.github.sekerator.kingdomworld.common.network.data.TradeViews.StallView view, boolean open) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.StallScreen stall && stall.pos().equals(view.pos())) {
+            stall.update(view);
+        } else if (open) {
+            ClientHooks.openStall(view);
+        }
+    }
+
+    public static void handleMarketView(io.github.sekerator.kingdomworld.common.network.data.TradeViews.MarketView view) {
+        if (Minecraft.getInstance().screen instanceof ThroneScreen throne) {
+            throne.updateMarket(view);
+        }
+    }
+
+    public static void handleTradeView(io.github.sekerator.kingdomworld.common.network.data.TradeViews.TradeView view) {
+        if (Minecraft.getInstance().screen instanceof ThroneScreen throne) {
+            throne.updateTrade(view);
+        }
+    }
+
+    public static void handleExchange(io.github.sekerator.kingdomworld.common.network.data.TradeViews.ExchangeView view, boolean open) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.ExchangeScreen exchange && exchange.pos().equals(view.pos())) {
+            exchange.update(view);
+        } else if (open) {
+            ClientHooks.openExchange(view);
+        }
+    }
+
+    public static void handleCaravans(java.util.List<io.github.sekerator.kingdomworld.common.network.data.TradeViews.CaravanInfo> caravans) {
+        io.github.sekerator.kingdomworld.client.map.ClientTradeCache.replace(caravans);
+    }
+
     public static void handleCurrencies(java.util.List<io.github.sekerator.kingdomworld.common.network.data.CurrencyInfo> currencies) {
         io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.replace(currencies);
     }

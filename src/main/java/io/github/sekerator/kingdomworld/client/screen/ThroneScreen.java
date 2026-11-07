@@ -53,7 +53,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private static final int GAP = 2;
     private static final List<Permission> EDITABLE_RIGHTS = List.of(Permission.BUILD, Permission.CONTAINERS,
             Permission.INTERACT, Permission.RECRUIT, Permission.TERRITORY, Permission.MANAGE_CITIZENS, Permission.MANAGE_PRODUCTION,
-            Permission.MANAGE_TREASURY);
+            Permission.MANAGE_TREASURY, Permission.MANAGE_MARKET, Permission.MANAGE_TRADE);
 
     private enum Tab {
         OVERVIEW("kingdomworld.screen.throne.tab.overview"),
@@ -62,7 +62,16 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         STORAGE("kingdomworld.screen.throne.tab.storage"),
         ORDERS("kingdomworld.screen.throne.tab.orders"),
         TREASURY("kingdomworld.screen.throne.tab.treasury"),
+        MARKET("kingdomworld.screen.throne.tab.market"),
+        TRADE("kingdomworld.screen.throne.tab.trade"),
         RIGHTS("kingdomworld.screen.throne.tab.rights");
+
+        /**
+         * Tabs with long lists that take the height the screen has.
+         */
+        boolean tall() {
+            return this == CITIZENS || this == STORAGE || this == ORDERS || this == TREASURY || this == MARKET || this == TRADE;
+        }
 
         private final String key;
 
@@ -79,6 +88,8 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private final StorageTab storage = new StorageTab(this);
     private final OrdersTab orders = new OrdersTab(this);
     private final TreasuryTab treasury = new TreasuryTab(this);
+    private final MarketTab market = new MarketTab(this);
+    private final TradeTab trade = new TradeTab(this);
     private Tab tab = Tab.OVERVIEW;
     private int scroll;
     private Component status = Component.empty();
@@ -97,6 +108,14 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private int rightsCellWidth;
     /** Whether the tabs are drawn narrower, because the row of usual ones does not fit the screen. */
     private boolean compactTabs;
+    /** The tab each row of tabs starts with; a second row when even narrow tabs do not fit one. */
+    private int secondRowStart = Integer.MAX_VALUE;
+    /** How much lower the content starts because of a second row of tabs. */
+    private int contentOffset;
+    /** The first column of rights shown, when not all of them fit. */
+    private int rightsColumn;
+    private int rightsVisible;
+    private int arrowWidth;
 
     public ThroneScreen(KingdomView view) {
         super(Component.literal(view.name()));
@@ -105,8 +124,15 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
 
     @Override
     public String checkName() {
-        String name = tab == Tab.CITIZENS ? citizens.checkName() : tab == Tab.STORAGE ? storage.checkName()
-                : tab == Tab.ORDERS ? orders.checkName() : tab == Tab.TREASURY ? treasury.checkName() : tab.name().toLowerCase(Locale.ROOT);
+        String name = switch (tab) {
+            case CITIZENS -> citizens.checkName();
+            case STORAGE -> storage.checkName();
+            case ORDERS -> orders.checkName();
+            case TREASURY -> treasury.checkName();
+            case MARKET -> market.checkName();
+            case TRADE -> trade.checkName();
+            default -> tab.name().toLowerCase(Locale.ROOT);
+        };
         return "throne/" + name + "/" + view.relation().name().toLowerCase(Locale.ROOT);
     }
 
@@ -192,6 +218,66 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     public void showTreasury(String mode, String period) {
         treasury.setMode(TreasuryTab.Mode.valueOf(mode.toUpperCase(Locale.ROOT)));
         treasury.setPeriod(io.github.sekerator.kingdomworld.core.economy.TreasuryJournal.Period.valueOf(period.toUpperCase(Locale.ROOT)));
+    }
+
+    /**
+     * Shows the market the server sent, if it belongs to the kingdom on screen.
+     */
+    public void updateMarket(io.github.sekerator.kingdomworld.common.network.data.TradeViews.MarketView marketView) {
+        if (!marketView.kingdomId().equals(view.id())) {
+            return;
+        }
+        market.setView(marketView);
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
+    }
+
+    /**
+     * Shows the deals the server sent, if they belong to the kingdom on screen.
+     */
+    public void updateTrade(io.github.sekerator.kingdomworld.common.network.data.TradeViews.TradeView tradeView) {
+        if (!tradeView.kingdomId().equals(view.id())) {
+            return;
+        }
+        trade.setView(tradeView);
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
+    }
+
+    /**
+     * Whether the market and trade tabs got their views, for the self-check.
+     */
+    public boolean marketShown() {
+        return market.view() != null;
+    }
+
+    public boolean tradeShown() {
+        return trade.view() != null;
+    }
+
+    /**
+     * Shows a view of the market tab ({@code sell}, {@code buy}, {@code lots}, {@code export}, {@code import}, {@code settings}),
+     * with its form or the search of items; for the layout check.
+     */
+    public void showMarket(String mode, boolean form, ItemStack item, String price, String first, String second, String search) {
+        market.showForCheck(MarketTab.Mode.valueOf(mode.toUpperCase(Locale.ROOT)), form, item, price, first, second, search);
+    }
+
+    /**
+     * Shows a view of the trade tab ({@code deals}, {@code caravans}, {@code propose}); for the layout check.
+     */
+    public void showTrade(String mode, ItemStack item, String count, String price, String period, String search) {
+        trade.showForCheck(TradeTab.Mode.valueOf(mode.toUpperCase(Locale.ROOT)), item, count, price, period, search);
+    }
+
+    void focus(GuiEventListener widget) {
+        setInitialFocus(widget);
+    }
+
+    String fitName(String name, int maxWidth) {
+        return fit(name, maxWidth);
     }
 
     /**
@@ -326,6 +412,12 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         if (target == Tab.TREASURY && Minecraft.getInstance().getConnection() != null) {
             KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.EconomyPackets.TreasuryRequest(view.id()));
         }
+        if (target == Tab.MARKET && Minecraft.getInstance().getConnection() != null) {
+            KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.TradePackets.MarketRequest(view.id()));
+        }
+        if (target == Tab.TRADE && Minecraft.getInstance().getConnection() != null) {
+            KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.TradePackets.TradeRequest(view.id()));
+        }
         if (minecraft != null) {
             rebuildWidgets();
         }
@@ -413,6 +505,8 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             labels.add(Component.translatable(Tab.STORAGE.key));
             labels.add(Component.translatable(Tab.ORDERS.key));
             labels.add(Component.translatable(Tab.TREASURY.key));
+            labels.add(Component.translatable(Tab.MARKET.key));
+            labels.add(Component.translatable(Tab.TRADE.key));
             labels.add(Component.translatable(Tab.RIGHTS.key));
         }
         return labels;
@@ -441,17 +535,38 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
 
         int tabs = 0;
         int compact = 0;
-        for (Component label : tabLabels()) {
+        List<Component> labels = tabLabels();
+        for (Component label : labels) {
             tabs += buttonWidth(label) + GAP;
             compact += compactTabWidth(label) + GAP;
         }
         compactTabs = tabs + 2 * PAD > width - 8;
+        secondRowStart = Integer.MAX_VALUE;
         if (compactTabs) {
             tabs = compact;
+            if (compact + 2 * PAD > width - 8) {
+                // Even narrow tabs do not fit one row: the rest go to a second row.
+                int room = width - 8 - 2 * PAD;
+                int used = 0;
+                int widest = 0;
+                for (int i = 0; i < labels.size(); i++) {
+                    int next = compactTabWidth(labels.get(i)) + GAP;
+                    if (used + next > room && secondRowStart == Integer.MAX_VALUE) {
+                        secondRowStart = i;
+                        widest = used;
+                        used = 0;
+                    }
+                    used += next;
+                }
+                tabs = Math.max(widest, used);
+            }
         }
+        contentOffset = secondRowStart == Integer.MAX_VALUE ? 0 : TAB_HEIGHT + 1;
         int members = MIN_NAME_COLUMN + 12 + roleWidth + kickWidth + crownWidth + 2 * GAP;
         int applications = MIN_NAME_COLUMN + 12 + approveWidth + rejectWidth + GAP;
-        int rights = rightsLabelWidth + EDITABLE_RIGHTS.size() * (rightsCellWidth + GAP);
+        arrowWidth = buttonWidth(Component.literal("<"), Component.literal(">"));
+        // The rights show as many columns as fit; the rest are reached with arrows.
+        int rights = rightsLabelWidth + 4 * (rightsCellWidth + GAP) + 2 * (arrowWidth + GAP);
         int overview = font.width(relationText());
         for (Component line : overviewLines()) {
             overview = Math.max(overview, font.width(line));
@@ -467,11 +582,16 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         if (isMember()) {
             inner = Math.max(inner, Math.max(Math.max(citizens.measure(font), storage.measure(font)),
                     Math.max(orders.measure(font), treasury.measure(font))));
+            inner = Math.max(inner, Math.max(market.measure(font), trade.measure(font)));
         }
         panelWidth = Math.min(Math.max(MIN_PANEL_WIDTH, inner + 2 * PAD), width - 8);
-        panelHeight = Math.min(tab == Tab.CITIZENS || tab == Tab.STORAGE || tab == Tab.ORDERS || tab == Tab.TREASURY
-                        ? MAX_CITIZENS_PANEL_HEIGHT : MAX_PANEL_HEIGHT,
-                height - 8);
+        panelHeight = Math.min(tab.tall() ? MAX_CITIZENS_PANEL_HEIGHT : MAX_PANEL_HEIGHT, height - 8);
+        int available = panelWidth - 2 * PAD - rightsLabelWidth;
+        rightsVisible = EDITABLE_RIGHTS.size();
+        if (rightsVisible * (rightsCellWidth + GAP) > available) {
+            rightsVisible = Math.max(1, (available - 2 * (arrowWidth + GAP)) / (rightsCellWidth + GAP));
+        }
+        rightsColumn = Math.max(0, Math.min(rightsColumn, EDITABLE_RIGHTS.size() - rightsVisible));
     }
 
     // ---------------------------------------------------------------- widgets
@@ -482,23 +602,30 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         int left = left();
         int top = top();
         int x = left + PAD;
-        x = tabButton(Tab.OVERVIEW, x, top + TAB_TOP);
+        int y = top + TAB_TOP;
+        List<Tab> shown = new ArrayList<>(List.of(Tab.OVERVIEW));
         if (isMember()) {
-            x = tabButton(Tab.MEMBERS, x, top + TAB_TOP);
-            x = tabButton(Tab.CITIZENS, x, top + TAB_TOP);
-            x = tabButton(Tab.STORAGE, x, top + TAB_TOP);
-            x = tabButton(Tab.ORDERS, x, top + TAB_TOP);
-            x = tabButton(Tab.TREASURY, x, top + TAB_TOP);
-            tabButton(Tab.RIGHTS, x, top + TAB_TOP);
+            shown.addAll(List.of(Tab.MEMBERS, Tab.CITIZENS, Tab.STORAGE, Tab.ORDERS, Tab.TREASURY, Tab.MARKET, Tab.TRADE, Tab.RIGHTS));
         }
+        for (int i = 0; i < shown.size(); i++) {
+            if (i == secondRowStart) {
+                x = left + PAD;
+                y += TAB_HEIGHT + 1;
+            }
+            x = tabButton(shown.get(i), x, y);
+        }
+        int inner = top + contentOffset;
+        int innerHeight = panelHeight - contentOffset;
         switch (tab) {
             case OVERVIEW -> initOverview(left, top);
-            case MEMBERS -> initMembers(top);
-            case CITIZENS -> citizens.init(left, top, panelWidth, panelHeight);
-            case STORAGE -> storage.init(left, top, panelWidth, panelHeight);
-            case ORDERS -> orders.init(left, top, panelWidth, panelHeight);
-            case TREASURY -> treasury.init(left, top, panelWidth, panelHeight);
-            case RIGHTS -> initRights(top);
+            case MEMBERS -> initMembers(inner);
+            case CITIZENS -> citizens.init(left, inner, panelWidth, innerHeight);
+            case STORAGE -> storage.init(left, inner, panelWidth, innerHeight);
+            case ORDERS -> orders.init(left, inner, panelWidth, innerHeight);
+            case TREASURY -> treasury.init(left, inner, panelWidth, innerHeight);
+            case MARKET -> market.init(left, inner, panelWidth, innerHeight);
+            case TRADE -> trade.init(left, inner, panelWidth, innerHeight);
+            case RIGHTS -> initRights(inner);
         }
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), button -> onClose())
                 .bounds(left + panelWidth - PAD - doneWidth, top + panelHeight - 26, doneWidth, 20).build());
@@ -580,7 +707,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
      * Rows that fit the list; one row less when a page counter is needed.
      */
     private int visibleRows() {
-        int fit = Math.max(1, (panelHeight - CONTENT_TOP - BOTTOM_AREA) / ROW_HEIGHT);
+        int fit = Math.max(1, (panelHeight - contentOffset - CONTENT_TOP - BOTTOM_AREA) / ROW_HEIGHT);
         return rows().size() > fit ? Math.max(1, fit - 1) : fit;
     }
 
@@ -644,7 +771,28 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         return left() + PAD + rightsLabelWidth;
     }
 
+    private boolean rightsPaged() {
+        return rightsVisible < EDITABLE_RIGHTS.size();
+    }
+
+    private int rightsCellsLeft() {
+        return rightsLeft() + (rightsPaged() ? arrowWidth + GAP : 0);
+    }
+
     private void initRights(int top) {
+        if (rightsPaged()) {
+            int arrowY = top + CONTENT_TOP - 2;
+            Button back = addRenderableWidget(Button.builder(Component.literal("<"), b -> {
+                rightsColumn = Math.max(0, rightsColumn - rightsVisible);
+                rebuildWidgets();
+            }).bounds(rightsLeft(), arrowY, arrowWidth, 12).build());
+            back.active = rightsColumn > 0;
+            Button forward = addRenderableWidget(Button.builder(Component.literal(">"), b -> {
+                rightsColumn = Math.min(EDITABLE_RIGHTS.size() - rightsVisible, rightsColumn + rightsVisible);
+                rebuildWidgets();
+            }).bounds(rightsCellsLeft() + rightsVisible * (rightsCellWidth + GAP), arrowY, arrowWidth, 12).build());
+            forward.active = rightsColumn + rightsVisible < EDITABLE_RIGHTS.size();
+        }
         int row = 0;
         for (Role role : Role.values()) {
             if (!role.isAssignable()) {
@@ -652,15 +800,16 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             }
             int y = top + CONTENT_TOP + 12 + row * RIGHTS_ROW;
             EnumSet<Permission> granted = view.rights().getOrDefault(role, EnumSet.noneOf(Permission.class));
-            for (int column = 0; column < EDITABLE_RIGHTS.size(); column++) {
-                Permission permission = EDITABLE_RIGHTS.get(column);
+            for (int shown = 0; shown < rightsVisible && rightsColumn + shown < EDITABLE_RIGHTS.size(); shown++) {
+                Permission permission = EDITABLE_RIGHTS.get(rightsColumn + shown);
                 boolean has = granted.contains(permission);
                 Button button = addRenderableWidget(Button.builder(
                                 Component.translatable(has ? "kingdomworld.screen.throne.right_on" : "kingdomworld.screen.throne.right_off")
                                         .withStyle(has ? ChatFormatting.GREEN : ChatFormatting.RED),
                                 b -> KingdomWorldNetwork.sendToServer(KingdomActionPacket.setPermission(role, permission, !has)))
-                        .bounds(rightsLeft() + column * (rightsCellWidth + GAP), y, rightsCellWidth, RIGHTS_ROW - 1).build());
+                        .bounds(rightsCellsLeft() + shown * (rightsCellWidth + GAP), y, rightsCellWidth, RIGHTS_ROW - 1).build());
                 button.active = view.can(Permission.APPOINT);
+                button.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomworld.permission." + permission.id())));
             }
             row++;
         }
@@ -669,25 +818,37 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
         if (tab == Tab.CITIZENS) {
-            if (citizens.scroll(top(), panelHeight, delta)) {
+            if (citizens.scroll(top() + contentOffset, panelHeight - contentOffset, delta)) {
                 rebuildWidgets();
             }
             return true;
         }
         if (tab == Tab.STORAGE) {
-            if (storage.scroll(top(), panelHeight, delta)) {
+            if (storage.scroll(top() + contentOffset, panelHeight - contentOffset, delta)) {
                 rebuildWidgets();
             }
             return true;
         }
         if (tab == Tab.ORDERS) {
-            if (orders.scroll(top(), panelHeight, delta)) {
+            if (orders.scroll(top() + contentOffset, panelHeight - contentOffset, delta)) {
                 rebuildWidgets();
             }
             return true;
         }
         if (tab == Tab.TREASURY) {
-            if (treasury.scroll(top(), panelHeight, delta)) {
+            if (treasury.scroll(top() + contentOffset, panelHeight - contentOffset, delta)) {
+                rebuildWidgets();
+            }
+            return true;
+        }
+        if (tab == Tab.MARKET) {
+            if (market.scroll(top() + contentOffset, panelHeight - contentOffset, delta)) {
+                rebuildWidgets();
+            }
+            return true;
+        }
+        if (tab == Tab.TRADE) {
+            if (trade.scroll(top() + contentOffset, panelHeight - contentOffset, delta)) {
                 rebuildWidgets();
             }
             return true;
@@ -729,14 +890,18 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         graphics.fill(left, top, right, top + panelHeight, 0xF0201810);
         graphics.renderOutline(left, top, panelWidth, panelHeight, 0xFF000000 | view.color());
         centeredName(graphics, view.name(), width / 2, top + 7, 0xFF000000 | FoundKingdomScreen.readable(view.color()), panelWidth - 2 * PAD);
+        int inner = top + contentOffset;
+        int innerHeight = panelHeight - contentOffset;
         switch (tab) {
-            case OVERVIEW -> renderOverview(graphics, left, top, right);
-            case MEMBERS -> renderMembers(graphics, left, top);
-            case CITIZENS -> citizens.render(graphics, font, left, top, panelWidth, panelHeight);
-            case STORAGE -> storage.render(graphics, font, left, top, panelWidth, panelHeight);
-            case ORDERS -> orders.render(graphics, font, left, top, panelWidth, panelHeight);
-            case TREASURY -> treasury.render(graphics, font, left, top, panelWidth, panelHeight);
-            case RIGHTS -> renderRights(graphics, left, top);
+            case OVERVIEW -> renderOverview(graphics, left, inner, right);
+            case MEMBERS -> renderMembers(graphics, left, inner);
+            case CITIZENS -> citizens.render(graphics, font, left, inner, panelWidth, innerHeight);
+            case STORAGE -> storage.render(graphics, font, left, inner, panelWidth, innerHeight);
+            case ORDERS -> orders.render(graphics, font, left, inner, panelWidth, innerHeight);
+            case TREASURY -> treasury.render(graphics, font, left, inner, panelWidth, innerHeight);
+            case MARKET -> market.render(graphics, font, left, inner, panelWidth, innerHeight);
+            case TRADE -> trade.render(graphics, font, left, inner, panelWidth, innerHeight);
+            case RIGHTS -> renderRights(graphics, left, inner);
         }
         Component bottomText = status;
         int color = statusIsError ? 0xFFFF8080 : 0xFFA0E0A0;
@@ -750,6 +915,14 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         }
         if (bottomText.getString().isEmpty() && tab == Tab.TREASURY) {
             bottomText = treasury.hint();
+            color = 0xFFB8B8B8;
+        }
+        if (bottomText.getString().isEmpty() && tab == Tab.MARKET) {
+            bottomText = market.hint();
+            color = 0xFFB8B8B8;
+        }
+        if (bottomText.getString().isEmpty() && tab == Tab.TRADE) {
+            bottomText = trade.hint();
             color = 0xFFB8B8B8;
         }
         paragraph(graphics, bottomText, left + PAD, top + panelHeight - BOTTOM_AREA + 2, panelWidth - 2 * PAD, STATUS_LINES, color);
@@ -797,10 +970,12 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     }
 
     private void renderRights(GuiGraphics graphics, int left, int top) {
-        for (int column = 0; column < EDITABLE_RIGHTS.size(); column++) {
-            int cellLeft = rightsLeft() + column * (rightsCellWidth + GAP);
-            centeredLabel(graphics, shortName(EDITABLE_RIGHTS.get(column)), cellLeft + rightsCellWidth / 2, top + CONTENT_TOP,
-                    0xFFF0D070, cellLeft, cellLeft + rightsCellWidth);
+        for (int shown = 0; shown < rightsVisible && rightsColumn + shown < EDITABLE_RIGHTS.size(); shown++) {
+            int cellLeft = rightsCellsLeft() + shown * (rightsCellWidth + GAP);
+            Permission permission = EDITABLE_RIGHTS.get(rightsColumn + shown);
+            Component header = shortName(permission);
+            centeredLabel(graphics, header, cellLeft + rightsCellWidth / 2, top + CONTENT_TOP, 0xFFF0D070, cellLeft, cellLeft + rightsCellWidth);
+            hoverText(cellLeft, top + CONTENT_TOP, rightsCellWidth, Component.translatable("kingdomworld.permission." + permission.id()));
         }
         int row = 0;
         for (Role role : Role.values()) {
@@ -825,7 +1000,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         if (super.mouseClicked(mouseX, mouseY, button)) {
             return true;
         }
-        return tab == Tab.ORDERS && button == 0 && orders.click(left(), top(), panelWidth, panelHeight, mouseX, mouseY);
+        return tab == Tab.ORDERS && button == 0 && orders.click(left(), top() + contentOffset, panelWidth, panelHeight - contentOffset, mouseX, mouseY);
     }
 
     @Override

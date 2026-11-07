@@ -332,6 +332,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         drawLand(graphics, minX, maxX, minZ, maxZ);
         drawBorders(graphics, minX, maxX, minZ, maxZ);
         drawCapitals(graphics, minX, maxX, minZ, maxZ);
+        drawCaravans(graphics);
         drawPlayer(graphics, partialTick);
         if (editing != null && insideMap(mouseX, mouseY)) {
             int x = screenX(chunkAtX(mouseX));
@@ -446,6 +447,39 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         }
     }
 
+    /**
+     * Caravans on the way between capitals: a small cart in the color of the seller where the time says it is.
+     */
+    private void drawCaravans(GuiGraphics graphics) {
+        String dimension = dimension();
+        if (dimension == null || minecraft == null || minecraft.level == null) {
+            return;
+        }
+        long now = minecraft.level.getGameTime();
+        for (io.github.sekerator.kingdomworld.common.network.data.TradeViews.CaravanInfo caravan
+                : io.github.sekerator.kingdomworld.client.map.ClientTradeCache.caravans()) {
+            if (!caravan.dimension().equals(dimension)) {
+                continue;
+            }
+            double progress = caravan.progress(now);
+            double blockX = caravan.fromX() + (caravan.toX() - caravan.fromX()) * progress;
+            double blockZ = caravan.fromZ() + (caravan.toZ() - caravan.fromZ()) * progress;
+            int x = screenX(blockX / 16.0);
+            int y = screenZ(blockZ / 16.0);
+            if (x - 4 < mapLeft() || x + 4 > mapRight() || y - 4 < mapTop() || y + 4 > mapBottom()) {
+                continue;
+            }
+            graphics.fill(x - 4, y - 3, x + 4, y + 2, 0xFF2B1D0E);
+            graphics.fill(x - 3, y - 2, x + 3, y + 1, 0xFF000000 | caravan.color());
+            graphics.fill(x - 3, y + 2, x - 1, y + 4, 0xFF2B1D0E);
+            graphics.fill(x + 1, y + 2, x + 3, y + 4, 0xFF2B1D0E);
+            KingdomMapInfo from = ClientTerritoryCache.kingdom(caravan.seller());
+            KingdomMapInfo to = ClientTerritoryCache.kingdom(caravan.buyer());
+            hoverText(x - 4, y - 4, 8, Component.translatable("kingdomworld.screen.map.caravan", from == null ? "?" : from.name(),
+                    to == null ? "?" : to.name(), (int) Math.round(progress * 100)));
+        }
+    }
+
     private void drawPlayer(GuiGraphics graphics, float partialTick) {
         if (minecraft == null || minecraft.player == null) {
             return;
@@ -504,16 +538,23 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
                 Component.translatable("kingdomworld.screen.map.card.population", info.population()),
                 Component.translatable("kingdomworld.screen.map.card.chunks", info.chunks()));
         String currency = Component.translatable("kingdomworld.screen.map.card.currency", currencyName(info)).getString();
+        long rate = io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.get(info.id())
+                .map(io.github.sekerator.kingdomworld.common.network.data.CurrencyInfo::rate).orElse(0L);
+        Component rateLine = rate > 0 ? Component.translatable("kingdomworld.screen.map.card.rate",
+                io.github.sekerator.kingdomworld.common.trade.TradeTexts.rate(rate)) : null;
         int maxWidth = mapRight() - mapLeft() - 12;
         int inner = font.width(fit(info.name(), Math.min(MAX_CARD_NAME, maxWidth - 12)));
         for (Component line : lines) {
             inner = Math.max(inner, font.width(line));
         }
         inner = Math.max(inner, Math.min(font.width(currency), MAX_CARD_NAME + 60));
+        if (rateLine != null) {
+            inner = Math.max(inner, font.width(rateLine));
+        }
         int cardWidth = Math.min(inner + 12, maxWidth);
         int x = mapLeft() + 6;
         int y = mapTop() + 6;
-        int cardHeight = 16 + (lines.size() + 1) * 11;
+        int cardHeight = 16 + (lines.size() + (rateLine != null ? 2 : 1)) * 11;
         graphics.fill(x, y, x + cardWidth, y + cardHeight, 0xF0201810);
         graphics.renderOutline(x, y, cardWidth, cardHeight, 0xFF000000 | info.color());
         name(graphics, info.name(), x + 6, y + 5, 0xFF000000 | FoundKingdomScreen.readable(info.color()),
@@ -525,6 +566,9 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         }
         // The name of a currency is chosen by a king and may be long: it is shortened like the names of kingdoms.
         name(graphics, currency, x + 6, lineY, 0xFFE8E8E8, cardWidth - 12);
+        if (rateLine != null) {
+            label(graphics, rateLine, x + 6, lineY + 11, 0xFFE8E8E8, x + cardWidth - 6);
+        }
     }
 
     /**

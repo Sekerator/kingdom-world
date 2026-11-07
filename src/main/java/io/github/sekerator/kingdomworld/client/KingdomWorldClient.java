@@ -97,6 +97,7 @@ public final class KingdomWorldClient {
         io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.clear();
         ClientKingdomCache.clear();
         ClientTerritoryCache.clear();
+        io.github.sekerator.kingdomworld.client.map.ClientTradeCache.clear();
         if (KingdomWorldConfig.CLIENT.requestKingdomListOnJoin.get()) {
             KingdomWorldNetwork.sendToServer(new KingdomListRequestPacket(0, KingdomListRequestPacket.MAX_PAGE_SIZE));
         }
@@ -106,6 +107,7 @@ public final class KingdomWorldClient {
         io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.clear();
         ClientKingdomCache.clear();
         ClientTerritoryCache.clear();
+        io.github.sekerator.kingdomworld.client.map.ClientTradeCache.clear();
     }
 
     private static void onScreenOpening(ScreenEvent.Opening event) {

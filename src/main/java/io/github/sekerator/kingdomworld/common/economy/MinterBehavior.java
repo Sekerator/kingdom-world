@@ -142,6 +142,10 @@ public final class MinterBehavior implements ProfessionBehavior {
      */
     @Nullable
     public static ItemStack nextMetal(MinecraftServer server, UUID kingdom) {
+        ItemStack old = nextOldCoin(server, kingdom);
+        if (old != null) {
+            return old;
+        }
         MintRates rates = EconomySettings.mintRates();
         List<ItemStack> seen = new ArrayList<>();
         for (KingdomStorage.Total total : KingdomStorage.totals(server, kingdom)) {
@@ -161,7 +165,71 @@ public final class MinterBehavior implements ProfessionBehavior {
     }
 
     /**
-     * Strikes the coins of one item of metal for the treasury of the post's kingdom.
+     * Old coins of a dissolved kingdom in the storehouses, enough of one kind to melt into an item of metal; {@code null}
+     * if there are none.
+     */
+    @Nullable
+    static ItemStack nextOldCoin(MinecraftServer server, UUID kingdom) {
+        Economy economy = KingdomWorldApi.state(server).economy();
+        if (economy.retired().isEmpty()) {
+            return null;
+        }
+        MintRates rates = EconomySettings.mintRates();
+        for (KingdomStorage.Total total : KingdomStorage.totals(server, kingdom)) {
+            ItemStack sample = total.sample();
+            Optional<UUID> currency = CoinItem.currency(sample);
+            Optional<io.github.sekerator.kingdomworld.core.economy.Denomination> coin = CoinItem.denomination(sample);
+            if (currency.isEmpty() || coin.isEmpty() || !economy.retired().containsKey(currency.get())) {
+                continue;
+            }
+            MintRates.Rate rate = rates.firstFor(coin.get());
+            if (rate != null && total.count() >= rate.count()) {
+                return sample.copyWithCount(1);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Melts old coins back into the metal they were struck from, at the rate of the mint: the coins of one item of metal
+     * give that item back. They become metal, never money. Coins leave the storehouses and the metal comes in at the same
+     * moment, or nothing happens.
+     */
+    static Struck melt(MinecraftServer server, WorkPost post, ItemStack coin, boolean watched) {
+        UUID kingdom = post.kingdomId();
+        UUID currency = CoinItem.currency(coin).orElseThrow();
+        io.github.sekerator.kingdomworld.core.economy.Denomination denomination = CoinItem.denomination(coin).orElseThrow();
+        MintRates rates = EconomySettings.mintRates();
+        MintRates.Rate rate = rates.firstFor(denomination);
+        net.minecraft.world.item.Item metal = rate == null ? null : rates.metal(rate);
+        if (metal == null) {
+            return Struck.NO_METAL;
+        }
+        ItemStack ingot = new ItemStack(metal);
+        if (!KingdomStorage.fits(server, kingdom, List.of(ingot))) {
+            return Struck.TREASURY_FULL;
+        }
+        List<ItemStack> taken = KingdomStorage.take(server, kingdom, stack -> CoinItem.is(stack, currency, denomination), rate.count(), post.pos());
+        int count = taken.stream().mapToInt(ItemStack::getCount).sum();
+        if (count != rate.count()) {
+            taken.forEach(stack -> KingdomStorage.insert(server, kingdom, stack, post.pos()));
+            return Struck.NO_METAL;
+        }
+        ItemStack rest = KingdomStorage.insert(server, kingdom, ingot, post.pos());
+        if (!rest.isEmpty()) {
+            taken.forEach(stack -> KingdomStorage.insert(server, kingdom, stack, post.pos()));
+            return Struck.TREASURY_FULL;
+        }
+        PostWork.record(server, post, KingdomStorage.itemId(ingot), 1);
+        if (watched) {
+            PostWork.acted(post, 1);
+        }
+        return Struck.DONE;
+    }
+
+    /**
+     * Strikes the coins of one item of metal for the treasury of the post's kingdom; old coins of dissolved kingdoms in
+     * the storehouses are melted back into metal first.
      */
     public static Struck strike(MinecraftServer server, WorkPost post, boolean watched) {
         UUID kingdom = post.kingdomId();
@@ -173,6 +241,9 @@ public final class MinterBehavior implements ProfessionBehavior {
         ItemStack metal = nextMetal(server, kingdom);
         if (metal == null) {
             return Struck.NO_METAL;
+        }
+        if (metal.is(ModRegistries.COIN.get())) {
+            return melt(server, post, metal, watched);
         }
         MintRates.Rate rate = EconomySettings.mintRates().rateOf(metal);
         CurrencyUnits units = treasury.get().units();

@@ -23,7 +23,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * NBT form of a kingdom with its land, members, rights, pending requests, population, orders and treasury (format 6).
+ * NBT form of a kingdom with its land, members, rights, pending requests, population, orders and treasury (format 7; trade is kept at the root).
  *
  * <pre>
  * { id, name, color, ruler?, createdGameTime,

@@ -1,0 +1,30 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "pattern": [
+    "RWR",
+    "F F",
+    "PCP"
+  ],
+  "key": {
+    "R": {
+      "item": "minecraft:red_wool"
+    },
+    "W": {
+      "item": "minecraft:white_wool"
+    },
+    "F": {
+      "tag": "minecraft:wooden_fences"
+    },
+    "P": {
+      "tag": "minecraft:planks"
+    },
+    "C": {
+      "tag": "forge:chests/wooden"
+    }
+  },
+  "result": {
+    "item": "kingdomworld:market_stall",
+    "count": 1
+  }
+}

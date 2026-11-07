@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "top": "kingdomworld:block/market_stall_top",
+    "bottom": "minecraft:block/oak_planks",
+    "side": "kingdomworld:block/market_stall_side"
+  }
+}

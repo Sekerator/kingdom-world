@@ -166,6 +166,7 @@ public final class BankActions {
         if (credited == 0) {
             return KingdomActions.Feedback.error(KingdomError.NO_COINS);
         }
+        economy.coinsIssued(currency, -credited);
         LOGGER.debug("{} handed in {} of {} at a bank", player.getGameProfile().getName(), credited, kingdom.name());
         return KingdomActions.Feedback.ok(KEY + "deposited", MoneyTexts.amount(credited, units),
                 MoneyTexts.amount(economy.accounts().balance(player.getUUID(), currency), units));
@@ -204,6 +205,7 @@ public final class BankActions {
             economy.deposit(player.getUUID(), currency, refund);
         }
         long paid = worth - refund;
+        economy.coinsIssued(currency, paid);
         if (paid <= 0) {
             return KingdomActions.Feedback.error(KingdomError.NO_ROOM);
         }

@@ -23,15 +23,17 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * NBT form of the money of the world (format 6): the treasury inside each kingdom's compound, the accounts of the
- * players and the old currencies at the root.
+ * NBT form of the money of the world (format 7): the treasury inside each kingdom's compound, the accounts of the
+ * players, the old currencies, the exchange rates, payments in escrow and the coins in hands at the root.
  *
  * <pre>
  * treasury: { name, silver, gold, balance, vault: { copper, silver, gold }, pollTax, salesTax, wages: { profession: amount },
  *             debts: [ { player, amount } ], lastPayday, payroll: { day, due, paid, citizens, underpaid },
- *             journal: [ { day, entries: { category: { in, out } } } ] }
+ *             journal: [ { day, entries: { category: { in, out } } } ], reserves: [ { currency, amount } ] }
  * economy:  { accounts: [ { player, currency, balance } ],
- *             retired: [ { id, name, kingdom, color, silver, gold, time } ] }
+ *             retired: [ { id, name, kingdom, color, silver, gold, time } ],
+ *             rates: [ { currency, rate } ], rateDay, escrows: [ { id, payer, payee, currency, amount } ], nextEscrow,
+ *             coinsOut: [ { currency, amount } ] }
  * </pre>
  *
  * <p>Reading is strict like {@link KingdomNbt}: what cannot be understood throws {@link IllegalArgumentException}, so the
@@ -124,6 +126,14 @@ public final class EconomyNbt {
             journal.add(dayTag);
         });
         tag.put(JOURNAL, journal);
+        ListTag reserves = new ListTag();
+        treasury.reserves().forEach((currency, amount) -> {
+            CompoundTag entry = new CompoundTag();
+            entry.putUUID(CURRENCY, currency);
+            entry.putLong(AMOUNT, amount);
+            reserves.add(entry);
+        });
+        tag.put("reserves", reserves);
         return tag;
     }
 
@@ -201,6 +211,14 @@ public final class EconomyNbt {
             }
             treasury.journal().restore(dayTag.getLong(DAY), entries);
         }
+        Map<UUID, Long> reserves = new LinkedHashMap<>();
+        for (CompoundTag entry : compounds(tag, "reserves", where)) {
+            if (!entry.hasUUID(CURRENCY) || !Money.isAmount(entry.getLong(AMOUNT))) {
+                throw new IllegalArgumentException(where + " has a reserve that cannot be read");
+            }
+            reserves.put(entry.getUUID(CURRENCY), entry.getLong(AMOUNT));
+        }
+        treasury.restoreReserves(reserves);
         return treasury;
     }
 
@@ -232,6 +250,35 @@ public final class EconomyNbt {
             retired.add(entry);
         }
         tag.put(RETIRED, retired);
+        ListTag rates = new ListTag();
+        economy.rates().forEach((currency, rate) -> {
+            CompoundTag entry = new CompoundTag();
+            entry.putUUID(CURRENCY, currency);
+            entry.putLong("rate", rate);
+            rates.add(entry);
+        });
+        tag.put("rates", rates);
+        tag.putLong("rateDay", economy.rateDay());
+        ListTag escrows = new ListTag();
+        for (Economy.Escrow escrow : economy.escrows().values()) {
+            CompoundTag entry = new CompoundTag();
+            entry.putLong(ID, escrow.id());
+            entry.putUUID("payer", escrow.payer());
+            entry.putUUID("payee", escrow.payee());
+            entry.putUUID(CURRENCY, escrow.currency());
+            entry.putLong(AMOUNT, escrow.amount());
+            escrows.add(entry);
+        }
+        tag.put("escrows", escrows);
+        tag.putLong("nextEscrow", economy.nextEscrowId());
+        ListTag coins = new ListTag();
+        economy.coinsOut().forEach((currency, amount) -> {
+            CompoundTag entry = new CompoundTag();
+            entry.putUUID(CURRENCY, currency);
+            entry.putLong(AMOUNT, amount);
+            coins.add(entry);
+        });
+        tag.put("coinsOut", coins);
         return tag;
     }
 
@@ -267,6 +314,33 @@ public final class EconomyNbt {
                 }
                 economy.restoreRetired(new RetiredCurrency(entry.getUUID(ID), entry.getString(NAME), entry.getString(KINGDOM),
                         entry.getInt(COLOR), new CurrencyUnits(silver, gold), entry.getLong(TIME)));
+            }
+        } catch (IllegalArgumentException e) {
+            problems.add(e.getMessage());
+        }
+        try {
+            for (CompoundTag entry : compounds(tag, "rates", "exchange rates")) {
+                if (!entry.hasUUID(CURRENCY) || entry.getLong("rate") < 1) {
+                    problems.add("an exchange rate cannot be read");
+                    continue;
+                }
+                economy.restoreRate(entry.getUUID(CURRENCY), entry.getLong("rate"));
+            }
+            economy.restoreRateDay(tag.contains("rateDay") ? tag.getLong("rateDay") : -1);
+            for (CompoundTag entry : compounds(tag, "escrows", "escrows")) {
+                if (!entry.hasUUID("payer") || !entry.hasUUID("payee") || !entry.hasUUID(CURRENCY)) {
+                    problems.add("a payment in escrow cannot be read");
+                    continue;
+                }
+                economy.restoreEscrow(new Economy.Escrow(entry.getLong(ID), entry.getUUID("payer"), entry.getUUID("payee"),
+                        entry.getUUID(CURRENCY), entry.getLong(AMOUNT)));
+            }
+            for (CompoundTag entry : compounds(tag, "coinsOut", "coins in hands")) {
+                if (!entry.hasUUID(CURRENCY)) {
+                    problems.add("coins in hands cannot be read");
+                    continue;
+                }
+                economy.restoreCoinsOut(entry.getUUID(CURRENCY), entry.getLong(AMOUNT));
             }
         } catch (IllegalArgumentException e) {
             problems.add(e.getMessage());

@@ -40,4 +40,12 @@ public final class ClientHooks {
     public static void openBank(io.github.sekerator.kingdomworld.common.network.data.BankView view) {
         Minecraft.getInstance().setScreen(new io.github.sekerator.kingdomworld.client.screen.BankScreen(view));
     }
+
+    public static void openStall(io.github.sekerator.kingdomworld.common.network.data.TradeViews.StallView view) {
+        Minecraft.getInstance().setScreen(new io.github.sekerator.kingdomworld.client.screen.StallScreen(view));
+    }
+
+    public static void openExchange(io.github.sekerator.kingdomworld.common.network.data.TradeViews.ExchangeView view) {
+        Minecraft.getInstance().setScreen(new io.github.sekerator.kingdomworld.client.screen.ExchangeScreen(view));
+    }
 }

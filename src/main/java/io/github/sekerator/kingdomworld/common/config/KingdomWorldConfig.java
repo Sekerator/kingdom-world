@@ -100,6 +100,35 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> itemValues;
         public final ForgeConfigSpec.DoubleValue defaultItemValue;
         public final ForgeConfigSpec.DoubleValue laborMarkup;
+        public final ForgeConfigSpec.DoubleValue exportFactor;
+        public final ForgeConfigSpec.DoubleValue importFactor;
+        public final ForgeConfigSpec.IntValue exportPerMerchant;
+        public final ForgeConfigSpec.DoubleValue exportExperienceBonus;
+        public final ForgeConfigSpec.LongValue exportMaxIncomePerDay;
+        public final ForgeConfigSpec.IntValue importMaxPerDay;
+        public final ForgeConfigSpec.IntValue importDelayMinutes;
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> importDenied;
+        public final ForgeConfigSpec.DoubleValue demandElasticity;
+        public final ForgeConfigSpec.IntValue minPricePercent;
+        public final ForgeConfigSpec.IntValue maxPricePercent;
+        public final ForgeConfigSpec.IntValue priceStockTarget;
+        public final ForgeConfigSpec.IntValue spreadPercent;
+        public final ForgeConfigSpec.IntValue defaultSalesTaxPercent;
+        public final ForgeConfigSpec.IntValue maxSalesTaxPercent;
+        public final ForgeConfigSpec.IntValue maxLotsPerPlayer;
+        public final ForgeConfigSpec.IntValue maxMarketEntries;
+        public final ForgeConfigSpec.IntValue defaultExchangeFeePercent;
+        public final ForgeConfigSpec.IntValue maxExchangeFeePercent;
+        public final ForgeConfigSpec.DoubleValue minRate;
+        public final ForgeConfigSpec.DoubleValue maxRate;
+        public final ForgeConfigSpec.IntValue rateSmoothingPercent;
+        public final ForgeConfigSpec.IntValue rateProductionDays;
+        public final ForgeConfigSpec.LongValue rateMinSupply;
+        public final ForgeConfigSpec.DoubleValue caravanBlocksPerMinute;
+        public final ForgeConfigSpec.DoubleValue caravanLossChance;
+        public final ForgeConfigSpec.IntValue proposalDays;
+        public final ForgeConfigSpec.IntValue maxDealsPerKingdom;
+        public final ForgeConfigSpec.IntValue maxDealPeriodDays;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -247,6 +276,101 @@ public final class KingdomWorldConfig {
             laborMarkup = builder
                     .comment("Share added to the worth of the ingredients of a made item for the work; 0.1 is ten percent.")
                     .defineInRange("laborMarkup", 0.1, 0.0, 10.0);
+            builder.pop();
+
+            builder.comment("Trade: the market and its prices, trade abroad, exchange rates and caravans between kingdoms.",
+                    "Prices and amounts are whole numbers of the smallest coin (a copper coin).").push("trade");
+            exportFactor = builder
+                    .comment("Share of an item's worth the external market pays merchants for it; must stay below importFactor.")
+                    .defineInRange("exportFactor", 0.6, 0.0, 10.0);
+            importFactor = builder
+                    .comment("Share of an item's worth the external market asks for it when a king orders it.")
+                    .defineInRange("importFactor", 1.5, 0.01, 100.0);
+            exportPerMerchant = builder
+                    .comment("Items one beginner merchant sells abroad in a game day.")
+                    .defineInRange("exportPerMerchant", 64, 0, 100_000);
+            exportExperienceBonus = builder
+                    .comment("How much more an experienced merchant sells: 1.0 doubles the amount at 1000 experience.")
+                    .defineInRange("exportExperienceBonus", 1.0, 0.0, 10.0);
+            exportMaxIncomePerDay = builder
+                    .comment("Most money one kingdom earns abroad in a game day.")
+                    .defineInRange("exportMaxIncomePerDay", 2_000L, 0L, 1_000_000_000_000L);
+            importMaxPerDay = builder
+                    .comment("Most items one kingdom orders from abroad in a game day.")
+                    .defineInRange("importMaxPerDay", 256, 0, 1_000_000);
+            importDelayMinutes = builder
+                    .comment("Minutes an order from abroad takes to arrive.")
+                    .defineInRange("importDelayMinutes", 5, 0, 10_080);
+            importDenied = builder
+                    .comment("Items that never come from abroad, as item ids or #tags. Only items with a worth in itemValues come at",
+                            "all; spawn eggs and coins never do.")
+                    .defineListAllowEmpty("importDenied", io.github.sekerator.kingdomworld.common.trade.TradeSettings.DEFAULT_DENIED,
+                            value -> value instanceof String text && net.minecraft.resources.ResourceLocation.tryParse(
+                                    text.startsWith("#") ? text.substring(1) : text) != null);
+            demandElasticity = builder
+                    .comment("How strongly the auto price follows the stock in the storehouses: 0 keeps the worth, 1 follows the",
+                            "ratio of the target to the stock.")
+                    .defineInRange("demandElasticity", 0.5, 0.0, 4.0);
+            minPricePercent = builder
+                    .comment("The auto price never falls below this share of the worth, in percent.")
+                    .defineInRange("minPricePercent", 50, 1, 10_000);
+            maxPricePercent = builder
+                    .comment("The auto price never rises above this share of the worth, in percent.")
+                    .defineInRange("maxPricePercent", 300, 1, 10_000);
+            priceStockTarget = builder
+                    .comment("The stock of an item at which its auto price equals its worth.")
+                    .defineInRange("priceStockTarget", 64, 1, 1_000_000);
+            spreadPercent = builder
+                    .comment("How much less a kingdom pays for an item than it asks for it, in percent.")
+                    .defineInRange("spreadPercent", 30, 0, 95);
+            defaultSalesTaxPercent = builder
+                    .comment("Tax on the sales of players' lots in a new market, in percent.")
+                    .defineInRange("defaultSalesTaxPercent", 5, 0, 100);
+            maxSalesTaxPercent = builder
+                    .comment("Highest tax on the sales of players' lots a king may set, in percent.")
+                    .defineInRange("maxSalesTaxPercent", 25, 0, 100);
+            maxLotsPerPlayer = builder
+                    .comment("Lots one player may have on one market.")
+                    .defineInRange("maxLotsPerPlayer", 8, 0, 256);
+            maxMarketEntries = builder
+                    .comment("Items in each list of a market: what it sells, buys and exports.")
+                    .defineInRange("maxMarketEntries", 32, 1, 256);
+            defaultExchangeFeePercent = builder
+                    .comment("Fee of a new bank for exchanging currencies, in percent.")
+                    .defineInRange("defaultExchangeFeePercent", 2, 0, 90);
+            maxExchangeFeePercent = builder
+                    .comment("Highest exchange fee a king may set, in percent.")
+                    .defineInRange("maxExchangeFeePercent", 10, 0, 90);
+            minRate = builder
+                    .comment("Lowest exchange rate: what a copper coin is worth at least, in units of item worth.")
+                    .defineInRange("minRate", 0.1, 0.000001, 1_000_000.0);
+            maxRate = builder
+                    .comment("Highest exchange rate, in units of item worth per copper coin.")
+                    .defineInRange("maxRate", 10.0, 0.000001, 1_000_000.0);
+            rateSmoothingPercent = builder
+                    .comment("How far a rate moves towards the wealth of its kingdom over its money in a game day, in percent.")
+                    .defineInRange("rateSmoothingPercent", 25, 1, 100);
+            rateProductionDays = builder
+                    .comment("Days of production the wealth of a kingdom counts.")
+                    .defineInRange("rateProductionDays", 7, 0, 365);
+            rateMinSupply = builder
+                    .comment("Money of a currency the rate counts at least, so that a new currency is not worth a fortune.")
+                    .defineInRange("rateMinSupply", 1_000L, 1L, 1_000_000_000_000L);
+            caravanBlocksPerMinute = builder
+                    .comment("How fast caravans travel between capitals, in blocks per minute.")
+                    .defineInRange("caravanBlocksPerMinute", 200.0, 1.0, 100_000.0);
+            caravanLossChance = builder
+                    .comment("Chance that a caravan is lost on the way, from 0 to 1. The goods are lost, the payment goes back.")
+                    .defineInRange("caravanLossChance", 0.02, 0.0, 1.0);
+            proposalDays = builder
+                    .comment("Game days a proposal of a deal waits for an answer.")
+                    .defineInRange("proposalDays", 3, 1, 365);
+            maxDealsPerKingdom = builder
+                    .comment("Deals and proposals one kingdom may have open at the same time.")
+                    .defineInRange("maxDealsPerKingdom", 16, 1, 256);
+            maxDealPeriodDays = builder
+                    .comment("Longest period of a regular deal, in game days.")
+                    .defineInRange("maxDealPeriodDays", 30, 1, 365);
             builder.pop();
 
             builder.comment("Abstract simulation of kingdoms far from players.").push("simulation");

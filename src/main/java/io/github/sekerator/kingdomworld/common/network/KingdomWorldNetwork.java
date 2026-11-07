@@ -19,6 +19,7 @@ import io.github.sekerator.kingdomworld.common.network.packet.OrderPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.OpenFoundingScreenPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.StoragePackets;
 import io.github.sekerator.kingdomworld.common.network.packet.TerritoryDeltaPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.TradePackets;
 import io.github.sekerator.kingdomworld.common.network.packet.WorkPostActionPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.WorkPostViewPacket;
 import net.minecraft.network.FriendlyByteBuf;
@@ -44,7 +45,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "6";
+    public static final String PROTOCOL_VERSION = "7";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -100,6 +101,30 @@ public final class KingdomWorldNetwork {
                 EconomyPackets.BankChange::decode, EconomyPackets.BankChange::handle);
         add(id++, EconomyPackets.Currencies.class, NetworkDirection.PLAY_TO_CLIENT, EconomyPackets.Currencies::encode,
                 EconomyPackets.Currencies::decode, EconomyPackets.Currencies::handle);
+        add(id++, TradePackets.StallOpen.class, NetworkDirection.PLAY_TO_CLIENT, TradePackets.StallOpen::encode,
+                TradePackets.StallOpen::decode, TradePackets.StallOpen::handle);
+        add(id++, TradePackets.StallAction.class, NetworkDirection.PLAY_TO_SERVER, TradePackets.StallAction::encode,
+                TradePackets.StallAction::decode, TradePackets.StallAction::handle);
+        add(id++, TradePackets.MarketRequest.class, NetworkDirection.PLAY_TO_SERVER, TradePackets.MarketRequest::encode,
+                TradePackets.MarketRequest::decode, TradePackets.MarketRequest::handle);
+        add(id++, TradePackets.MarketResponse.class, NetworkDirection.PLAY_TO_CLIENT, TradePackets.MarketResponse::encode,
+                TradePackets.MarketResponse::decode, TradePackets.MarketResponse::handle);
+        add(id++, TradePackets.MarketChange.class, NetworkDirection.PLAY_TO_SERVER, TradePackets.MarketChange::encode,
+                TradePackets.MarketChange::decode, TradePackets.MarketChange::handle);
+        add(id++, TradePackets.TradeRequest.class, NetworkDirection.PLAY_TO_SERVER, TradePackets.TradeRequest::encode,
+                TradePackets.TradeRequest::decode, TradePackets.TradeRequest::handle);
+        add(id++, TradePackets.TradeResponse.class, NetworkDirection.PLAY_TO_CLIENT, TradePackets.TradeResponse::encode,
+                TradePackets.TradeResponse::decode, TradePackets.TradeResponse::handle);
+        add(id++, TradePackets.TradeChange.class, NetworkDirection.PLAY_TO_SERVER, TradePackets.TradeChange::encode,
+                TradePackets.TradeChange::decode, TradePackets.TradeChange::handle);
+        add(id++, TradePackets.ExchangeRequest.class, NetworkDirection.PLAY_TO_SERVER, TradePackets.ExchangeRequest::encode,
+                TradePackets.ExchangeRequest::decode, TradePackets.ExchangeRequest::handle);
+        add(id++, TradePackets.ExchangeOpen.class, NetworkDirection.PLAY_TO_CLIENT, TradePackets.ExchangeOpen::encode,
+                TradePackets.ExchangeOpen::decode, TradePackets.ExchangeOpen::handle);
+        add(id++, TradePackets.ExchangeAction.class, NetworkDirection.PLAY_TO_SERVER, TradePackets.ExchangeAction::encode,
+                TradePackets.ExchangeAction::decode, TradePackets.ExchangeAction::handle);
+        add(id++, TradePackets.Caravans.class, NetworkDirection.PLAY_TO_CLIENT, TradePackets.Caravans::encode,
+                TradePackets.Caravans::decode, TradePackets.Caravans::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

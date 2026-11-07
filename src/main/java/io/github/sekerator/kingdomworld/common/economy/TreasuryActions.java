@@ -113,7 +113,28 @@ public final class TreasuryActions {
                 viewer.equals(kingdom.get().rulerId()), kingdom.get().name(), treasury.currencyName(), treasury.units().silver(),
                 treasury.units().gold(), treasury.balance(), treasury.vault(), journal, treasury.pollTax(), rules.maxPollTax(), taxpayers,
                 untilPayday, new TreasuryView.Payroll(payroll.day(), payroll.due(), payroll.paid(), payroll.citizens(), payroll.underpaid()),
-                wages, rules.maxWage(), debtors, debts.size(), debtTotal, mint(server, state, kingdomId, treasury, today)));
+                wages, rules.maxWage(), debtors, debts.size(), debtTotal, mint(server, state, kingdomId, treasury, today),
+                state.economy().rate(kingdomId), reserves(state, treasury)));
+    }
+
+    private static List<TreasuryView.Reserve> reserves(KingdomWorldState state, Treasury treasury) {
+        List<TreasuryView.Reserve> reserves = new ArrayList<>();
+        var economy = state.economy();
+        for (Map.Entry<UUID, Long> entry : treasury.reserves().entrySet()) {
+            if (reserves.size() >= TreasuryView.MAX_RESERVES) {
+                break;
+            }
+            Optional<Treasury> other = economy.treasury(entry.getKey());
+            Optional<Kingdom> kingdom = state.kingdoms().get(entry.getKey());
+            if (other.isEmpty() || kingdom.isEmpty()) {
+                continue;
+            }
+            long worth = io.github.sekerator.kingdomworld.core.trade.ExchangeRates.convert(entry.getValue(), economy.rate(entry.getKey()),
+                    economy.rate(treasury.kingdomId()), 0);
+            reserves.add(new TreasuryView.Reserve(other.get().currencyName(), kingdom.get().name(), kingdom.get().color(), entry.getValue(),
+                    other.get().units().silver(), other.get().units().gold(), worth));
+        }
+        return reserves;
     }
 
     private static TreasuryView.Mint mint(MinecraftServer server, KingdomWorldState state, UUID kingdomId, Treasury treasury, long today) {
@@ -269,6 +290,7 @@ public final class TreasuryActions {
             KingdomWorldApi.state(server).economy().returnToVault(kingdom, coin.get(), back, day);
         }
         long given = taken - back;
+        KingdomWorldApi.state(server).economy().coinsIssued(kingdom, io.github.sekerator.kingdomworld.core.economy.Money.multiplyCapped(given, treasury.get().units().value(coin.get())));
         LOGGER.info("{} took {} {} coin(s) from the vault of {}", actor.getGameProfile().getName(), given, coin.get().id(),
                 KingdomWorldApi.kingdom(server, kingdom).map(Kingdom::name).orElse("?"));
         Component coins = MoneyTexts.coins(coin.get(), given);

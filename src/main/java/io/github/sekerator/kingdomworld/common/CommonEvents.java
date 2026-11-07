@@ -44,6 +44,7 @@ public final class CommonEvents {
         ProtectionEvents.register();
         CitizenEvents.register();
         io.github.sekerator.kingdomworld.common.economy.EconomyEvents.register();
+        io.github.sekerator.kingdomworld.common.trade.TradeEvents.register();
     }
 
     private static void onRegisterCommands(RegisterCommandsEvent event) {
@@ -78,9 +79,10 @@ public final class CommonEvents {
                 config.starvationCanKill.get(), config.dailyNutrition.get(), config.infirmaryCapacity.get(),
                 config.woundedHealthPercent.get(), config.maxCitizensPerKingdom.get(), config.farmRadius.get());
         LOGGER.info("KingdomWorld loaded {} kingdom(s) with {} citizen(s), {} work post(s), {} storehouse(s), {} treasury(ies), "
-                        + "{} player(s) with accounts, data format {}{}",
+                        + "{} player(s) with accounts, {} market(s), {} deal(s), {} caravan(s) on the way, data format {}{}",
                 data.registry().size(), data.state().citizens().registry().size(), data.state().citizens().posts().size(),
                 data.storehouses().size(), data.state().economy().treasuries().size(), data.state().economy().accounts().players().size(),
+                data.state().trade().markets().size(), data.state().trade().deals().size(), data.state().trade().caravans().size(),
                 KingdomSavedData.FORMAT_VERSION,
                 data.isReadOnly() ? " (READ-ONLY: " + data.readOnlyReason().orElse("?") + ")" : "");
     }
@@ -91,6 +93,7 @@ public final class CommonEvents {
         TerritorySync.reset();
         CitizenEvents.reset();
         io.github.sekerator.kingdomworld.common.economy.EconomyEvents.reset();
+        io.github.sekerator.kingdomworld.common.trade.TradeEvents.reset();
     }
 
     private static void onServerTick(TickEvent.ServerTickEvent event) {

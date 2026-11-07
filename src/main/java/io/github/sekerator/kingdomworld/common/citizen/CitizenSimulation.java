@@ -136,6 +136,7 @@ public final class CitizenSimulation {
             }
         }
         CarrierBehavior.stepAbstractly(server, kingdomId, interval);
+        io.github.sekerator.kingdomworld.common.trade.TradeWork.exportStep(server, kingdomId, interval);
         for (WorkPost post : citizens.posts().postsOf(kingdomId)) {
             PostWork.refreshStatus(server, post);
             boolean workshop = Professions.usesStations(post.professionId());

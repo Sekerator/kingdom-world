@@ -155,6 +155,27 @@ class TranslationKeysTest {
         }
     }
 
+    /**
+     * Numbers of items, days and minutes read right in both languages: «21 предмет», «3 дня», «через 5 минут».
+     */
+    @Test
+    void countsOfTradeHaveEveryPluralForm() {
+        Map<String, String> russianForms = Map.of("items", "предмет|предмет|предмета|предметов", "days", "день|день|дня|дней",
+                "minutes", "минуту|минуту|минуты|минут");
+        russianForms.forEach((word, forms) -> {
+            String[] words = forms.split("[|]");
+            Plurals.Form[] all = Plurals.Form.values();
+            for (int i = 0; i < all.length; i++) {
+                String key = "kingdomworld.count." + word + "." + all[i].suffix();
+                assertEquals("%s " + words[i], russian.get(key), key);
+                assertEquals(all[i] == Plurals.Form.N1, !english.get(key).endsWith("s"), key + ": English is singular only for exactly one");
+            }
+        });
+        assertEquals(Plurals.Form.N21, Plurals.form(21));
+        assertEquals(Plurals.Form.N2, Plurals.form(64 - 60));
+        assertEquals(Plurals.Form.N5, Plurals.form(111));
+    }
+
     @Test
     void argumentCounting() {
         assertEquals(2, argumentCount("%s and %s"));
@@ -239,8 +260,31 @@ class TranslationKeysTest {
         for (TreasuryJournal.Period period : TreasuryJournal.Period.values()) {
             used.add("kingdomworld.screen.treasury.period." + period.id());
         }
-        for (String mode : List.of("overview", "journal", "settings", "debtors")) {
+        for (String mode : List.of("overview", "journal", "settings", "payments", "reserves", "debtors")) {
             used.add("kingdomworld.screen.treasury.mode." + mode);
+        }
+        // Trade: the views of the tabs and the stall, counts in every plural form.
+        for (String mode : List.of("sell", "buy", "lots", "export", "import", "settings")) {
+            used.add("kingdomworld.screen.market.mode." + mode);
+        }
+        for (String mode : List.of("deals", "caravans", "propose")) {
+            used.add("kingdomworld.screen.trade.mode." + mode);
+        }
+        for (String mode : List.of("buy", "sell", "lots", "mine")) {
+            used.add("kingdomworld.screen.stall.tab." + mode);
+            used.add("kingdomworld.screen.stall.empty." + mode);
+            used.add("kingdomworld.screen.stall.hint." + mode);
+        }
+        for (String status : List.of("done", "declined", "expired", "cancelled")) {
+            used.add("kingdomworld.screen.trade.status." + status);
+        }
+        for (String word : List.of("items", "days", "minutes")) {
+            for (Plurals.Form form : Plurals.Form.values()) {
+                used.add("kingdomworld.count." + word + "." + form.suffix());
+            }
+        }
+        for (Denomination denomination : Denomination.values()) {
+            used.add("kingdomworld.screen.treasury.coin_choice." + denomination.id());
         }
         for (ItemValues.Source source : ItemValues.Source.values()) {
             used.add("commands.kingdomworld.economy.value.source." + source.name().toLowerCase(Locale.ROOT));

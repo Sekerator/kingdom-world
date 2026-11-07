@@ -415,9 +415,12 @@ final class ClientLayoutCheck {
                 // A minter works at mints only and strikes from ingots.
                 stations.add(new WorkPostView.Station(io.github.sekerator.kingdomworld.core.production.Stations.MINT, 16));
                 current = new ItemStack(Items.IRON_INGOT);
+            } else if (profession.equals("merchant")) {
+                stations.add(new WorkPostView.Station(io.github.sekerator.kingdomworld.core.production.Stations.MARKET_STALL, 16));
             } else {
                 for (String kind : io.github.sekerator.kingdomworld.core.production.Stations.ALL) {
-                    if (!kind.equals(io.github.sekerator.kingdomworld.core.production.Stations.MINT)) {
+                    if (!kind.equals(io.github.sekerator.kingdomworld.core.production.Stations.MINT)
+                            && !kind.equals(io.github.sekerator.kingdomworld.core.production.Stations.MARKET_STALL)) {
                         stations.add(new WorkPostView.Station(kind, 16));
                     }
                 }
@@ -557,7 +560,18 @@ final class ClientLayoutCheck {
                 new io.github.sekerator.kingdomworld.common.network.data.TreasuryView.Payroll(empty ? -1 : 5, MUCH, MUCH / 3, 9_999, 9_999),
                 wages, 200, debtors, empty ? 0 : 9_999, empty ? 0 : MUCH,
                 new io.github.sekerator.kingdomworld.common.network.data.TreasuryView.Mint(empty ? 0 : 99, 999, WorkStatus.NO_INGREDIENTS, MUCH,
-                        MUCH, true));
+                        MUCH, true), 9_990_000L, reserves(empty));
+    }
+
+    private static List<io.github.sekerator.kingdomworld.common.network.data.TreasuryView.Reserve> reserves(boolean empty) {
+        List<io.github.sekerator.kingdomworld.common.network.data.TreasuryView.Reserve> reserves = new ArrayList<>();
+        if (!empty) {
+            for (int i = 0; i < 12; i++) {
+                reserves.add(new io.github.sekerator.kingdomworld.common.network.data.TreasuryView.Reserve(i % 2 == 0 ? LONG_CURRENCY : "",
+                        i == 1 ? LONG_KINGDOM : "Valoria " + i, 0x1F618D + i * 4000, MUCH - i, 10, 100, MUCH / 3));
+            }
+        }
+        return reserves;
     }
 
     private static ThroneScreen treasury(KingdomView view, boolean canManage, boolean empty, String mode, String period, Component status) {
@@ -645,10 +659,11 @@ final class ClientLayoutCheck {
         }
         ClientTerritoryCache.applyArea(new MapAreaPacket("kingdomworld:layout_check", -6, -6, width, height, palette, cells));
         io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.replace(List.of(
-                new io.github.sekerator.kingdomworld.common.network.data.CurrencyInfo(first, LONG_CURRENCY, LONG_KINGDOM, 0x6C3483, false, 10, 100),
-                new io.github.sekerator.kingdomworld.common.network.data.CurrencyInfo(second, "", "Valoria", 0xB7950B, false, 10, 100),
+                new io.github.sekerator.kingdomworld.common.network.data.CurrencyInfo(first, LONG_CURRENCY, LONG_KINGDOM, 0x6C3483, false, 10, 100,
+                        9_990_000L),
+                new io.github.sekerator.kingdomworld.common.network.data.CurrencyInfo(second, "", "Valoria", 0xB7950B, false, 10, 100, 1_250_000L),
                 new io.github.sekerator.kingdomworld.common.network.data.CurrencyInfo(UUID.nameUUIDFromBytes("old".getBytes(StandardCharsets.UTF_8)),
-                        "", LONG_KINGDOM, 0x1F618D, true, 10, 100)));
+                        "", LONG_KINGDOM, 0x1F618D, true, 10, 100, 0)));
     }
 
     private static List<Case> cases() {

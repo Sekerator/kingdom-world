@@ -112,6 +112,38 @@ public final class MintRates {
         return null;
     }
 
+    /**
+     * The first rate that strikes a kind of coin; old coins of that kind melt back at it.
+     */
+    @Nullable
+    public Rate firstFor(Denomination coin) {
+        for (Rate rate : rates) {
+            if (rate.coin() == coin && metal(rate) != null) {
+                return rate;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The metal of a rate: its item, or the first item of its tag; {@code null} if there is none.
+     */
+    @Nullable
+    @SuppressWarnings("unchecked")
+    public Item metal(Rate rate) {
+        Object matcher = matchers.get(rates.indexOf(rate));
+        if (matcher instanceof Item item) {
+            return item == net.minecraft.world.item.Items.AIR ? null : item;
+        }
+        if (matcher instanceof TagKey<?> tag) {
+            var tags = ForgeRegistries.ITEMS.tags();
+            if (tags != null) {
+                return tags.getTag((TagKey<Item>) tag).stream().findFirst().orElse(null);
+            }
+        }
+        return null;
+    }
+
     public boolean takes(ItemStack stack) {
         return rateOf(stack) != null;
     }

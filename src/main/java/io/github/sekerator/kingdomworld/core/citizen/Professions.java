@@ -28,6 +28,8 @@ public final class Professions {
     public static final Profession SMITH = new Profession("smith", SiteKinds.WORK_POST);
     /** Strikes coins of the kingdom from metal of the storehouses at a mint in the zone of a work post. */
     public static final Profession MINTER = new Profession("minter", SiteKinds.WORK_POST);
+    /** Keeps the market stalls in the zone of a work post open and sells surplus goods abroad. */
+    public static final Profession MERCHANT = new Profession("merchant", SiteKinds.WORK_POST);
 
     /** The registry of the running game; more professions are registered here. */
     public static final ProfessionRegistry REGISTRY = ProfessionRegistry.withDefaults();
@@ -56,7 +58,7 @@ public final class Professions {
      * at its zone again and again, and its screen shows the workstations.
      */
     public static boolean usesStations(String professionId) {
-        return isWorkshop(professionId) || MINTER.id().equals(professionId);
+        return isWorkshop(professionId) || MINTER.id().equals(professionId) || MERCHANT.id().equals(professionId);
     }
 
     /**

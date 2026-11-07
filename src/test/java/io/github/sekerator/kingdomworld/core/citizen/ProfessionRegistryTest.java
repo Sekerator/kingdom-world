@@ -16,12 +16,12 @@ class ProfessionRegistryTest {
         ProfessionRegistry registry = ProfessionRegistry.withDefaults();
         assertEquals(List.of(Professions.UNEMPLOYED, Professions.FARMER, Professions.LUMBERJACK, Professions.MINER,
                 Professions.FISHER, Professions.HERDER, Professions.CARRIER, Professions.SMELTER, Professions.COOK,
-                Professions.CRAFTER, Professions.SMITH, Professions.MINTER), registry.all());
+                Professions.CRAFTER, Professions.SMITH, Professions.MINTER, Professions.MERCHANT), registry.all());
         assertEquals(SiteKinds.WORK_POST, Professions.MINER.workplaceKind());
         assertTrue(Professions.worksAtPosts("farmer"));
         assertTrue(Professions.worksAtPosts("carrier"));
         assertFalse(Professions.worksAtPosts("unemployed"));
-        assertEquals(11, Professions.postProfessions().size());
+        assertEquals(12, Professions.postProfessions().size());
         assertTrue(Professions.isWorkshop("smith") && Professions.isWorkshop("cook"));
         assertFalse(Professions.isWorkshop("miner"));
         assertTrue(Professions.hasAutoMode("smelter") && Professions.hasAutoMode("cook"));
@@ -37,7 +37,7 @@ class ProfessionRegistryTest {
         Profession miller = new Profession("miller", "mill");
         registry.register(miller);
         assertEquals(miller, registry.byId("miller").orElseThrow());
-        assertEquals(13, registry.all().size());
+        assertEquals(14, registry.all().size());
         assertThrows(IllegalArgumentException.class, () -> registry.register(new Profession("farmer", null)));
     }
 
@@ -48,7 +48,8 @@ class ProfessionRegistryTest {
         assertEquals(Professions.LUMBERJACK, registry.next("farmer"));
         assertEquals(Professions.SMELTER, registry.next("carrier"));
         assertEquals(Professions.MINTER, registry.next("smith"));
-        assertEquals(Professions.UNEMPLOYED, registry.next("minter"));
+        assertEquals(Professions.MERCHANT, registry.next("minter"));
+        assertEquals(Professions.UNEMPLOYED, registry.next("merchant"));
         assertEquals(Professions.UNEMPLOYED, registry.next("no_such_profession"));
     }
 
