@@ -106,12 +106,12 @@ public final class CompanionBodies {
      * Brings the bodies in line with the records and the owners: creates the missing ones, removes those of owners who left
      * or went far, moves followers to their owner's world, copies health and place back.
      */
-    static void update(MinecraftServer server) {
+    public static void update(MinecraftServer server) {
         CompanionRules rules = CompanionSettings.rules();
         java.util.Set<UUID> known = new java.util.HashSet<>();
         for (Companion companion : List.copyOf(CompanionWork.state(server).companions())) {
             known.add(companion.id());
-            ServerPlayer owner = server.getPlayerList().getPlayer(companion.owner());
+            ServerPlayer owner = CompanionWork.owner(server, companion.owner());
             CompanionEntity body = ACTIVE.get(companion.id());
             if (body != null && (body.isRemoved() || !body.isAlive())) {
                 ACTIVE.remove(companion.id(), body);
@@ -189,7 +189,7 @@ public final class CompanionBodies {
     /**
      * Removes every body of a player's companions, for a player who leaves.
      */
-    static void despawnAll(MinecraftServer server, UUID owner) {
+    public static void despawnAll(MinecraftServer server, UUID owner) {
         for (Companion companion : CompanionWork.state(server).ownedBy(owner)) {
             CompanionEntity body = ACTIVE.get(companion.id());
             if (body != null) {
@@ -243,7 +243,7 @@ public final class CompanionBodies {
     }
 
     @Nullable
-    static CompanionEntity spawnAt(ServerLevel level, Companion companion, BlockPos spot) {
+    public static CompanionEntity spawnAt(ServerLevel level, Companion companion, BlockPos spot) {
         CompanionEntity body = CompanionRegistries.COMPANION.get().create(level);
         if (body == null) {
             return null;

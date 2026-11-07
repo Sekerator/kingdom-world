@@ -104,7 +104,7 @@ final class CompanionGoal extends Goal {
             return;
         }
         CompanionOrder order = record.get().order();
-        ServerPlayer owner = server.getPlayerList().getPlayer(body.owner());
+        ServerPlayer owner = CompanionWork.owner(server, body.owner());
         if (target != null && (!target.isAlive() || !mayAttack(target) || body.distanceToSqr(target) > SEARCH * SEARCH * 4)) {
             disengage();
         }

@@ -113,7 +113,7 @@ public final class CompanionEvents {
         if (victim instanceof CompanionEntity companion && !from.equals(to) && !together) {
             // Somebody else's companion is not fair game.
             event.setCanceled(true);
-            if (attacker instanceof ServerPlayer player) {
+            if (attacker instanceof ServerPlayer player && player.connection != null) {
                 player.displayClientMessage(Component.translatable(companion.isFemale() ? "kingdomworld.companion.protected.female"
                         : "kingdomworld.companion.protected", companion.getDisplayName(),
                         PlayerNames.name(server, to)), true);

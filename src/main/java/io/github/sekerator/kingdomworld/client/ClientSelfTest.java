@@ -324,14 +324,26 @@ public final class ClientSelfTest {
             case 358 -> {
                 LOGGER.info(PREFIX + "magic focus screen opened by the server: {}",
                         minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.MagicFocusScreen);
+                minecraft.setScreen(null);
+                server.execute(() -> companion(server, playerId));
+            }
+            case 361 -> {
+                LOGGER.info(PREFIX + "companion window opened by the server: {}",
+                        minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.CompanionScreen);
+                minecraft.setScreen(null);
+                KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.CompanionPackets.PartyRequest());
+            }
+            case 364 -> {
+                LOGGER.info(PREFIX + "party window opened by the server: {}, lines in the corner: {}",
+                        minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.PartyScreen, PartyHud.lines().size());
                 minecraft.setScreen(new FoundKingdomScreen(throne, 0x336699));
             }
-            case 362 -> {
+            case 367 -> {
                 LOGGER.info(PREFIX + "founding screen shown: {}", minecraft.screen instanceof FoundKingdomScreen);
                 minecraft.setScreen(null);
                 server.execute(() -> cleanUp(server));
             }
-            case 380 -> {
+            case 385 -> {
                 LOGGER.info(PREFIX + "finished");
                 quit = true;
             }
@@ -374,7 +386,37 @@ public final class ClientSelfTest {
         }
     }
 
+    /**
+     * Gives the player a companion next to it and opens its window, through the real server packet.
+     */
+    private static void companion(IntegratedServer server, UUID playerId) {
+        ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+        if (player == null || kingdomId == null) {
+            return;
+        }
+        io.github.sekerator.kingdomworld.core.companion.CompanionState state = io.github.sekerator.kingdomworld.common.companion.CompanionWork.state(server);
+        io.github.sekerator.kingdomworld.core.companion.Companion companion = state.give(playerId, UUID.randomUUID(), 4242,
+                io.github.sekerator.kingdomworld.core.citizen.Gender.FEMALE, 1, 3, new io.github.sekerator.kingdomworld.core.companion.Skills(3, 4, 2),
+                kingdomId, KingdomWorldApi.gameTime(server), io.github.sekerator.kingdomworld.common.economy.TreasuryActions.day(server),
+                io.github.sekerator.kingdomworld.common.companion.CompanionSettings.rules());
+        io.github.sekerator.kingdomworld.common.companion.CompanionSavedData.get(server).pack(companion.id())
+                .setItem(0, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.IRON_SWORD));
+        LOGGER.info(PREFIX + "companion given, body: {}",
+                io.github.sekerator.kingdomworld.common.companion.CompanionBodies.spawn(server, companion, player) != null);
+        io.github.sekerator.kingdomworld.common.companion.CompanionActions.openMenu(player, companion);
+    }
+
     private static void cleanUp(IntegratedServer server) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            io.github.sekerator.kingdomworld.common.companion.CompanionBodies.despawnAll(server, player.getUUID());
+            io.github.sekerator.kingdomworld.core.companion.CompanionState state =
+                    io.github.sekerator.kingdomworld.common.companion.CompanionWork.state(server);
+            for (io.github.sekerator.kingdomworld.core.companion.Companion companion : state.ownedBy(player.getUUID())) {
+                state.remove(companion.id());
+                io.github.sekerator.kingdomworld.common.companion.CompanionSavedData.get(server).takePack(companion.id());
+            }
+            LOGGER.info(PREFIX + "companions removed");
+        }
         if (kingdomId != null) {
             Optional<Kingdom> removed = KingdomWorldApi.dissolveKingdom(server, kingdomId);
             LOGGER.info(PREFIX + "kingdom dissolved: {}", removed.isPresent());

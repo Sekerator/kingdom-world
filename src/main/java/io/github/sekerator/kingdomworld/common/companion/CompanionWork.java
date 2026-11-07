@@ -69,8 +69,30 @@ public final class CompanionWork {
     }
 
     private static EscapeRoute escapeRoute = EscapeRoute.VANISH;
+    /** Players of game tests, who are in no list of players, but count as online while a test runs. */
+    private static final java.util.Map<UUID, ServerPlayer> PRESENT = new java.util.HashMap<>();
 
     private CompanionWork() {
+    }
+
+    /**
+     * An owner who is online, or {@code null}.
+     */
+    @Nullable
+    static ServerPlayer owner(MinecraftServer server, UUID player) {
+        ServerPlayer online = server.getPlayerList().getPlayer(player);
+        return online != null ? online : PRESENT.get(player);
+    }
+
+    /**
+     * Makes a player of a game test count as online, or not any more.
+     */
+    public static void present(ServerPlayer player, boolean here) {
+        if (here) {
+            PRESENT.put(player.getUUID(), player);
+        } else {
+            PRESENT.remove(player.getUUID());
+        }
     }
 
     // ---------------------------------------------------------------- access
@@ -133,7 +155,7 @@ public final class CompanionWork {
         state.parties().forgetContracts((id, holder) -> guild.contract(id).map(contract -> contract.takenBy(holder)).orElse(false));
         state.parties().keepOnly(player -> guild.member(player).isPresent());
         for (Companion companion : List.copyOf(state.companions())) {
-            ServerPlayer owner = server.getPlayerList().getPlayer(companion.owner());
+            ServerPlayer owner = owner(server, companion.owner());
             if (owner == null) {
                 continue;
             }
@@ -395,7 +417,8 @@ public final class CompanionWork {
     // ---------------------------------------------------------------- messages
 
     static void tell(@Nullable ServerPlayer player, Component message) {
-        if (player != null) {
+        // Players made by game tests have no connection.
+        if (player != null && player.connection != null) {
             player.sendSystemMessage(message);
         }
     }
@@ -405,6 +428,7 @@ public final class CompanionWork {
     }
 
     static void reset() {
+        PRESENT.clear();
         CompanionBodies.reset();
         CompanionSync.reset();
         escapeRoute = EscapeRoute.VANISH;
