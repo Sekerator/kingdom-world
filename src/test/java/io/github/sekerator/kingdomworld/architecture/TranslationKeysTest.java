@@ -225,6 +225,28 @@ class TranslationKeysTest {
     }
 
     /**
+     * Numbers of the life of cities read right in both languages: «1 день», «3 жителя», «5 гостей», «21 час», «из 2 королевств».
+     */
+    @Test
+    void countsOfTheLifeOfCitiesHaveEveryPluralForm() {
+        Map<String, String> russianForms = Map.of("days", "день|день|дня|дней", "citizens", "житель|житель|жителя|жителей",
+                "guests", "гость|гость|гостя|гостей", "hours", "час|час|часа|часов", "kingdoms", "королевства|королевства|королевств|королевств");
+        Map<String, String> englishSingular = Map.of("days", "day", "citizens", "citizen", "guests", "guest", "hours", "hour", "kingdoms", "kingdom");
+        russianForms.forEach((word, forms) -> {
+            String[] words = forms.split("[|]");
+            Plurals.Form[] all = Plurals.Form.values();
+            for (int i = 0; i < all.length; i++) {
+                String key = "kingdomworld.life.count." + word + "." + all[i].suffix();
+                assertEquals("%s " + words[i], russian.get(key), key);
+                assertEquals("%s " + (all[i] == Plurals.Form.N1 ? englishSingular.get(word) : word), english.get(key), key);
+            }
+        });
+        assertEquals(Plurals.Form.N21, Plurals.form(21));
+        assertEquals(Plurals.Form.N2, Plurals.form(3));
+        assertEquals(Plurals.Form.N5, Plurals.form(14));
+    }
+
+    /**
      * Numbers of the army read right in both languages: «21 солдат», «3 наёмника», «5 бойцов», «2 врага», «11 отрядов».
      */
     @Test

@@ -252,6 +252,8 @@ function Initialize-Server([string]$ModJar) {
     $serverDefaults += "[roads]`n`tminCityDistance = 16`n`tcampSpawnChance = 0.0`n`tcampGrowthChance = 0.0`n`twallRadius = 4`n"
     # Slow caravans: the caravan of the deal is still on the road when the server restarts.
     $serverDefaults += "[trade]`n`tcaravanBlocksPerMinute = 20.0`n"
+    # The life of cities: nobody falls ill by chance and fairs open only when the smoke test opens one.
+    $serverDefaults += "[life]`n`tsickChance = 0`n`tfairEveryDays = 0`n"
     # With map mods the web maps are updated every second, so that the checks do not wait for the default 5 s.
     if ($MapModsDir) { $serverDefaults += "[maps]`n`twebMapUpdateSeconds = 1`n" }
     [System.IO.File]::WriteAllText((Join-Path $defaults 'kingdomworld-server.toml'), $serverDefaults, $utf8)
@@ -602,6 +604,10 @@ $script:LawGoods = $null
 $script:LawDebt = -1
 $script:LawReputation = $null
 $script:LawMoney = -1
+# The life of cities: the tavern, its innkeeper, an ill citizen and the money after the festival.
+$script:TavernId = $null
+$script:InnkeeperId = $null
+$script:SickId = $null
 $script:EconomyRaw = $null
 $script:TradeMoney = $null
 $script:MinerId = $null
@@ -1639,6 +1645,98 @@ Invoke-Phase 'session1' {
         Add-Failure "[session1] the law changed the money: $lawBefore -> $lawAfter (100 was given)"
     }
 
+    # The life of cities: a tavern on flat ground of chunk [-1, -1] with an innkeeper at its counter is open; its innkeeper
+    # tells rumors; a citizen falls ill; the king's festival costs the treasury exactly its price and takes its treat; a fair
+    # opens. The food and drink of the tavern come from tags (with the mods of the pack, their tags too).
+    Send-ServerCommand $server 'kingdomworld admin life status'
+    if (Wait-ForLog $server 'Day time \d+ \(\w+\), ill 0, rooms 0, goods of fairs 0' $CommandTimeout $ConsoleFailPattern) {
+        Write-Ok '[session1] the life of cities is writable and empty'
+    } else {
+        Add-Failure '[session1] the life of cities is not writable or not empty'
+    }
+    Send-ServerCommand $server 'forceload add -16 -16 -1 -1'
+    Send-ServerCommand $server 'fill -16 69 -16 -1 69 -1 minecraft:stone'
+    Send-ServerCommand $server 'fill -16 70 -16 -1 86 -1 minecraft:air'
+    Start-Sleep -Seconds 2
+    Send-ServerCommand $server "kingdomworld admin build place $KingdomName kingdomworld:tavern -9 70 -6"
+    $tavern = Wait-ForLog $server 'Construction #(\d+) laid out: .* at -9 70 -6, (\d+) steps' $CommandTimeout $ConsoleFailPattern
+    if ($tavern) {
+        Send-ServerCommand $server "kingdomworld admin build finish $($tavern.Groups[1].Value)"
+        $tavernBuilt = Wait-ForLog $server "Construction #$($tavern.Groups[1].Value) finished at once; building #(\d+) is in the register" $CommandTimeout $ConsoleFailPattern
+        if ($tavernBuilt) { $script:TavernId = $tavernBuilt.Groups[1].Value }
+    }
+    if (-not $script:TavernId) {
+        Add-Failure '[session1] the tavern could not be built'
+    } else {
+        Send-ServerCommand $server "kingdomworld admin build role $($script:TavernId)"
+        if (Wait-ForLog $server "Building #$($script:TavernId) \(kingdomworld:tavern\): role tavern, state active, level 1" $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok "[session1] the tavern #$($script:TavernId) plays its role"
+        } else {
+            Add-Failure '[session1] the tavern does not play its role'
+        }
+        $count = $script:CitizenIds.Count + 1
+        Send-ServerCommand $server "kingdomworld admin citizens spawn 1 $KingdomName"
+        [void](Wait-ForLog $server "Spawned 1 citizen\(s\) in $KingdomName" $CommandTimeout $ConsoleFailPattern)
+        $all = Get-CitizenList $server $count 'session1'
+        if ($all) {
+            $new = @($all | Where-Object { $script:CitizenIds -notcontains $_ })
+            $script:CitizenIds = @($all)
+            $script:InnkeeperId = $new[0]
+            Send-ServerCommand $server 'kingdomworld admin posts set -12 71 -14 profession innkeeper'
+            if (-not (Wait-ForLog $server 'Work post at -12 71 -14: Innkeeper, radius \d+' $CommandTimeout 'No work post at -12 71 -14|Unknown or incomplete command')) {
+                Add-Failure '[session1] the post at the counter of the tavern was not registered or could not be set'
+            }
+            Send-ServerCommand $server "kingdomworld admin citizens profession $($script:InnkeeperId) innkeeper"
+            if (Wait-ForLog $server '\S+ is now: Innkeeper' $CommandTimeout $ConsoleFailPattern) {
+                Write-Ok "[session1] citizen $($script:InnkeeperId) became the innkeeper"
+            } else {
+                Add-Failure '[session1] the innkeeper could not be appointed'
+            }
+            $runs = Count-Log "Ran 1 simulation step\(s\) of $KingdomName"
+            Send-ServerCommand $server "kingdomworld admin simulate $KingdomName 1"
+            [void](Wait-ForNewLog $server "Ran 1 simulation step\(s\) of $KingdomName" $CommandTimeout $runs)
+            Send-ServerCommand $server "kingdomworld admin life tavern $KingdomName"
+            if (Wait-ForLog $server "Tavern $($script:TavernId) at -?\d+ -?\d+ -?\d+: open" $CommandTimeout $ConsoleFailPattern) {
+                Write-Ok '[session1] the tavern is open with its innkeeper at the counter'
+            } else {
+                Add-Failure '[session1] the tavern is not open'
+            }
+            Send-ServerCommand $server "kingdomworld admin life rumors $KingdomName"
+            $rumor = Wait-ForLog $server '(\(camp \d+\)|tell nothing today|blocks|guild pays|guards are looking|cheap|ask a lot|new kingdom|fair in|festival in)' $CommandTimeout $ConsoleFailPattern
+            if ($rumor) {
+                Write-Ok "[session1] the innkeeper talks: $($rumor.Value)"
+            } else {
+                Add-Failure '[session1] the rumors of the tavern did not answer'
+            }
+            $sick = $script:CitizenIds | Where-Object { $_ -ne $script:InnkeeperId } | Select-Object -First 1
+            Send-ServerCommand $server "kingdomworld admin life sick $sick"
+            if (Wait-ForLog $server ' fell ill' $CommandTimeout $ConsoleFailPattern) {
+                $script:SickId = $sick
+                Write-Ok "[session1] citizen $sick fell ill"
+            } else {
+                Add-Failure '[session1] the citizen did not fall ill'
+            }
+        }
+    }
+    Send-ServerCommand $server "kingdomworld admin storage put minecraft:bread 32 $KingdomName"
+    [void](Wait-ForLog $server "Stored 32 of minecraft:bread in the storehouses of $KingdomName" $CommandTimeout $ConsoleFailPattern)
+    $festivalBefore = Get-KingdomMoney $server $KingdomName
+    Send-ServerCommand $server "kingdomworld admin life festival $KingdomName"
+    $festival = Wait-ForLog $server "$KingdomName holds a festival: (\d+) paid, (\d+) of (\d+) food points of treat" $CommandTimeout $ConsoleFailPattern
+    $festivalAfter = Get-KingdomMoney $server $KingdomName
+    if ($festival -and $festivalBefore -ge 0 -and $festivalAfter -eq $festivalBefore - [int64]$festival.Groups[1].Value -and
+            [int]$festival.Groups[2].Value -ge [int]$festival.Groups[3].Value) {
+        Write-Ok "[session1] the festival cost the treasury $($festival.Groups[1].Value) and took its treat; the money adds up"
+    } else {
+        Add-Failure "[session1] the festival went wrong: $(if ($festival) { $festival.Value } else { 'no answer' }), money $festivalBefore -> $festivalAfter"
+    }
+    Send-ServerCommand $server "kingdomworld admin life fair $KingdomName"
+    if (Wait-ForLog $server 'The fair in \S+ is open' $CommandTimeout $ConsoleFailPattern) {
+        Write-Ok '[session1] the fair of the capital opened'
+    } else {
+        Add-Failure '[session1] the fair did not open'
+    }
+
     # Construction: the templates load, the data pack template needs Create; a builder far from players builds a small
     # house from the storehouse on a flat place of chunk [2, 0], and the restart comes half way.
     Send-ServerCommand $server 'kingdomworld admin build templates'
@@ -2360,6 +2458,39 @@ Invoke-Phase 'session2' {
         } else {
             Add-Failure "[session2] the ransom went wrong: $(if ($back) { $back.Value } else { 'no answer' }), money $before -> $after"
         }
+    }
+
+    # The life of cities survived the restart: the ill citizen is still ill, the tavern is open, and a second festival the same
+    # day is refused without touching the money.
+    if (Wait-ForLog $server 'KingdomWorld life of cities: (\d+) ill, \d+ room\(s\), (\d+) kingdom\(s\) with festivals, data format 1' 10) {
+        Write-Ok '[session2] the life of cities was loaded after the restart'
+    } else {
+        Add-Failure '[session2] the life of cities was not loaded'
+    }
+    if ($script:SickId) {
+        Send-ServerCommand $server "kingdomworld admin life sick list $KingdomName"
+        if (Wait-ForLog $server "Ill in ${KingdomName}: 1" $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok "[session2] citizen $($script:SickId) is still ill"
+        } else {
+            Add-Failure '[session2] the illness was lost in the restart'
+        }
+    }
+    if ($script:TavernId) {
+        Send-ServerCommand $server "kingdomworld admin life tavern $KingdomName"
+        if (Wait-ForLog $server "Tavern $($script:TavernId) at -?\d+ -?\d+ -?\d+: open" $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok '[session2] the tavern is still open'
+        } else {
+            Add-Failure '[session2] the tavern is not open after the restart'
+        }
+    }
+    $before = Get-KingdomMoney $server $KingdomName
+    Send-ServerCommand $server "kingdomworld admin life festival $KingdomName"
+    $refused = Wait-ForLog $server 'Too soon for another festival' $CommandTimeout $ConsoleFailPattern
+    $after = Get-KingdomMoney $server $KingdomName
+    if ($refused -and $before -ge 0 -and $after -eq $before) {
+        Write-Ok '[session2] the festival of the day before the restart is remembered: a second one is refused, the money is the same'
+    } else {
+        Add-Failure "[session2] the festival was forgotten or the refusal changed the money: $before -> $after"
     }
 
     # The construction survived the restart exactly; the builder finishes it and nothing of its materials is left over.
