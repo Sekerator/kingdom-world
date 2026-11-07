@@ -297,7 +297,13 @@ public enum KingdomError {
     CROSSING_CLOSED,
     UNKNOWN_CAMP,
     /** The road crosses the land of another kingdom that did not agree. */
-    NO_CONSENT;
+    NO_CONSENT,
+    /** The city has no wall. */
+    NO_WALL,
+    /** The place is too far from the wall for a gate, or a gate is there already. */
+    NOT_AT_WALL,
+    /** Around the city there is too little ground for a wall: water, danger or the land of others. */
+    NO_GROUND_FOR_WALL;
 
     /**
      * Lower case identifier, used for translation keys.

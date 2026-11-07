@@ -160,4 +160,26 @@ class RoadStateTest {
         assertEquals(1.0, section.condition(), 1e-9);
         assertFalse(section.repairing());
     }
+
+    @Test
+    void aConsentGivenOnceIsRememberedForTheNextRoads() {
+        RoadState state = new RoadState();
+        List<Crossing> sent = new ArrayList<>();
+        Road first = add(state, way(THEM, null), Road.Mode.JOINT, sent);
+        assertEquals(1, sent.size());
+        assertFalse(state.consented(THEM, US));
+        assertTrue(state.answer(sent.get(0).id(), THEM, true).started().isPresent());
+        assertEquals(Road.Status.BUILDING, first.status());
+        assertTrue(state.consented(THEM, US));
+        assertFalse(state.consented(US, THEM), "a consent goes one way");
+        sent.clear();
+        Road second = add(state, way(THEM, null), Road.Mode.JOINT, sent);
+        assertTrue(sent.isEmpty(), "no new request for land that let roads through before");
+        assertEquals(Road.Status.BUILDING, second.status());
+        // Without remembering, each road asks again.
+        state.setRememberConsent(false);
+        Road third = add(state, way(THEM, null), Road.Mode.JOINT, sent);
+        assertEquals(1, sent.size());
+        assertEquals(Road.Status.WAITING_CONSENT, third.status());
+    }
 }

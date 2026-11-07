@@ -64,13 +64,13 @@ public record BanditRules(boolean enabled, int maxCamps, int minDistance, double
         public boolean enabled = true;
         public int maxCamps = 8;
         public int minDistance = 192;
-        public double spawnChance = 0.5;
+        public double spawnChance = 0.2;
         public int startBandits = 3;
         public int maxBandits = 12;
         public double growthChance = 0.35;
         public double banditStrength = 18.0;
         public double leaderStrength = 60.0;
-        public double ambushChance = 0.08;
+        public double ambushChance = 0.03;
         public int campReach = 320;
         public double[] classFactor = {0.8, 0.6, 0.45};
         public double garrisonFactor = 0.35;

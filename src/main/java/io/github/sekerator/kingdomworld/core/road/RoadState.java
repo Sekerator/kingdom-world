@@ -26,6 +26,10 @@ public final class RoadState {
     private final Map<Long, Crossing> crossings = new LinkedHashMap<>();
     private final Map<Long, BanditCamp> camps = new LinkedHashMap<>();
     private final Map<Long, CaravanRoute> routes = new LinkedHashMap<>();
+    private final Map<Long, Wall> walls = new LinkedHashMap<>();
+    /** Kingdoms that let the roads of another cross their land, as owner and requester. */
+    private final java.util.Set<String> consents = new java.util.LinkedHashSet<>();
+    private long nextWall = 1;
     private long nextCity = 1;
     private long nextRoad = 1;
     private long nextCrossing = 1;
@@ -44,6 +48,70 @@ public final class RoadState {
         static Answer fail(KingdomError error) {
             return new Answer(Outcome.fail(error), Optional.empty(), Optional.empty());
         }
+    }
+
+    private boolean rememberConsent = true;
+
+    /**
+     * Whether consent to cross land is remembered for the next roads of the same kingdom.
+     */
+    public void setRememberConsent(boolean value) {
+        rememberConsent = value;
+    }
+
+    /**
+     * Whether an owner of land let the roads of a kingdom cross it before, and that is remembered.
+     */
+    public boolean consented(UUID owner, UUID requester) {
+        return rememberConsent && consents.contains(owner + ">" + requester);
+    }
+
+    public java.util.Set<String> consents() {
+        return java.util.Collections.unmodifiableSet(consents);
+    }
+
+    public void restoreConsent(String pair) {
+        consents.add(pair);
+    }
+
+    // ---------------------------------------------------------------- walls
+
+    public Collection<Wall> walls() {
+        return Collections.unmodifiableCollection(walls.values());
+    }
+
+    public Optional<Wall> wall(long id) {
+        return Optional.ofNullable(walls.get(id));
+    }
+
+    /**
+     * The wall of a city; for a capital the city id is 0 and the kingdom tells it.
+     */
+    public Optional<Wall> wallOf(long cityId, UUID kingdomId) {
+        for (Wall wall : walls.values()) {
+            if (wall.cityId() == cityId && (cityId != 0 || wall.kingdomId().equals(kingdomId))) {
+                return Optional.of(wall);
+            }
+        }
+        return Optional.empty();
+    }
+
+    public long nextWallId() {
+        return nextWall++;
+    }
+
+    public void putWall(Wall wall) {
+        walls.put(wall.id(), wall);
+        nextWall = Math.max(nextWall, wall.id() + 1);
+        changed();
+    }
+
+    public Optional<Wall> removeWall(long id) {
+        Wall removed = walls.remove(id);
+        if (removed != null) {
+            changed();
+        }
+        return Optional.ofNullable(removed);
     }
 
     public void setChangeListener(Runnable value) {
@@ -179,14 +247,22 @@ public final class RoadState {
             boolean other = owner != null && !owner.equals(kingdomId) && foreign.containsKey(owner);
             builders.add(other && actual == Road.Mode.JOINT ? owner : kingdomId);
         }
+        boolean waiting = false;
+        for (UUID owner : foreign.keySet()) {
+            waiting |= !consented(owner, kingdomId);
+        }
         Road road = new Road(nextRoad++, kingdomId, roadClass, dimension, from, to, cells, actual, now,
-                foreign.isEmpty() ? Road.Status.BUILDING : Road.Status.WAITING_CONSENT, builders);
+                waiting ? Road.Status.WAITING_CONSENT : Road.Status.BUILDING, builders);
         roads.put(road.id(), road);
         for (Map.Entry<UUID, Integer> entry : foreign.entrySet()) {
-            Crossing crossing = new Crossing(nextCrossing++, road.id(), kingdomId, entry.getKey(), actual, Crossing.Status.PROPOSED,
-                    entry.getValue(), now, Math.max(now, expires));
+            // A kingdom that let the roads of this one cross its land before is not asked again.
+            boolean known = consented(entry.getKey(), kingdomId);
+            Crossing crossing = new Crossing(nextCrossing++, road.id(), kingdomId, entry.getKey(), actual,
+                    known ? Crossing.Status.ACCEPTED : Crossing.Status.PROPOSED, entry.getValue(), now, Math.max(now, expires));
             crossings.put(crossing.id(), crossing);
-            sent.add(crossing);
+            if (!known) {
+                sent.add(crossing);
+            }
         }
         changed();
         return road;
@@ -310,6 +386,9 @@ public final class RoadState {
             return Answer.fail(KingdomError.CROSSING_CLOSED);
         }
         crossings.put(crossing.id(), crossing.withStatus(accept ? Crossing.Status.ACCEPTED : Crossing.Status.DECLINED));
+        if (accept && rememberConsent) {
+            consents.add(crossing.owner() + ">" + crossing.requester());
+        }
         return settle(crossing.roadId());
     }
 
@@ -452,6 +531,8 @@ public final class RoadState {
      */
     public List<Road> forgetKingdom(UUID kingdomId) {
         cities.values().removeIf(city -> city.kingdomId().equals(kingdomId));
+        walls.values().removeIf(wall -> wall.kingdomId().equals(kingdomId));
+        consents.removeIf(pair -> pair.contains(kingdomId.toString()));
         List<Road> removed = new ArrayList<>();
         for (Road road : new ArrayList<>(roads.values())) {
             if (road.kingdomId().equals(kingdomId)) {
@@ -493,7 +574,11 @@ public final class RoadState {
     }
 
     public long[] counters() {
-        return new long[]{nextCity, nextRoad, nextCrossing, nextCamp};
+        return new long[]{nextCity, nextRoad, nextCrossing, nextCamp, nextWall};
+    }
+
+    public void restoreWallCounter(long wall) {
+        nextWall = Math.max(nextWall, wall);
     }
 
     public void restoreCounters(long city, long road, long crossing, long camp) {

@@ -24,11 +24,19 @@ package io.github.sekerator.kingdomworld.core.road;
  * @param horseSpeed         extra speed of horses on a road, by class
  * @param speedOnRoads       whether players and horses are faster on roads
  * @param crossingDays       days a request to build across the land of another kingdom waits for an answer
+ * @param autoRepair         whether builders repair worn sections by themselves
+ * @param repairBelow        condition below which a section is repaired by itself
+ * @param rememberConsent    whether a kingdom that once let the roads of another cross its land lets the next ones too
+ * @param townPeople         citizens around a city that make it a town, with {@code townBuildings} buildings
+ * @param cityPeople         citizens that make it a large city, with {@code cityBuildings} buildings
+ * @param wallRadius         the radius of the walls of a village; a town gets half as much again, a large city twice
  */
 public record RoadRules(int maxCities, int minCityDistance, int maxRoads, int maxRouteLength, int nodesPerTick, int maxNodes,
                         int chunksPerTick, int maxBridge, int maxFill, double slopeCost, double bridgeCost, double fillCost,
                         double foreignCost, double[] secondsPerBlock, double[] wearPerDay, double repairShare, double[] caravanSpeed,
-                        double[] playerSpeed, double[] horseSpeed, boolean speedOnRoads, int crossingDays) {
+                        double[] playerSpeed, double[] horseSpeed, boolean speedOnRoads, int crossingDays, boolean autoRepair,
+                        double repairBelow, boolean rememberConsent, int townPeople, int townBuildings, int cityPeople, int cityBuildings,
+                        int wallRadius) {
     public static final RoadRules DEFAULT = new Builder().build();
 
     public RoadRules {
@@ -39,7 +47,9 @@ public record RoadRules(int maxCities, int minCityDistance, int maxRoads, int ma
         horseSpeed = byClass(horseSpeed, 0.0, 2.0);
         if (maxCities < 0 || minCityDistance < 0 || maxRoads < 0 || maxRouteLength < 16 || nodesPerTick < 1 || maxNodes < nodesPerTick
                 || chunksPerTick < 1 || maxBridge < 0 || maxFill < 0 || !finite(slopeCost, 0) || !finite(bridgeCost, 1) || !finite(fillCost, 1)
-                || !finite(foreignCost, 0) || !(repairShare >= 0 && repairShare <= 1) || crossingDays < 1) {
+                || !finite(foreignCost, 0) || !(repairShare >= 0 && repairShare <= 1) || crossingDays < 1
+                || !(repairBelow >= 0 && repairBelow <= 1) || townPeople < 0 || townBuildings < 0 || cityPeople < townPeople
+                || cityBuildings < townBuildings || wallRadius < 4 || wallRadius > 128) {
             throw new IllegalArgumentException("Road rules out of range");
         }
     }
@@ -99,18 +109,27 @@ public record RoadRules(int maxCities, int minCityDistance, int maxRoads, int ma
         public double fillCost = 2.5;
         public double foreignCost = 2.0;
         public double[] secondsPerBlock = {1.0, 3.0, 5.0};
-        public double[] wearPerDay = {0.04, 0.02, 0.008};
+        public double[] wearPerDay = {0.004, 0.002, 0.001};
         public double repairShare = 0.25;
         public double[] caravanSpeed = {1.6, 2.5, 3.5};
         public double[] playerSpeed = {0.10, 0.20, 0.30};
         public double[] horseSpeed = {0.10, 0.20, 0.30};
         public boolean speedOnRoads = true;
         public int crossingDays = 3;
+        public boolean autoRepair = true;
+        public double repairBelow = 0.5;
+        public boolean rememberConsent = true;
+        public int townPeople = 12;
+        public int townBuildings = 6;
+        public int cityPeople = 40;
+        public int cityBuildings = 20;
+        public int wallRadius = 24;
 
         public RoadRules build() {
             return new RoadRules(maxCities, minCityDistance, maxRoads, maxRouteLength, nodesPerTick, maxNodes, chunksPerTick, maxBridge, maxFill,
                     slopeCost, bridgeCost, fillCost, foreignCost, secondsPerBlock, wearPerDay, repairShare, caravanSpeed, playerSpeed, horseSpeed,
-                    speedOnRoads, crossingDays);
+                    speedOnRoads, crossingDays, autoRepair, repairBelow, rememberConsent, townPeople, townBuildings, cityPeople, cityBuildings,
+                    wallRadius);
         }
     }
 }
