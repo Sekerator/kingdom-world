@@ -20,7 +20,6 @@ import io.github.sekerator.kingdomworld.common.trade.Purses;
 import io.github.sekerator.kingdomworld.core.army.GearChoice;
 import io.github.sekerator.kingdomworld.core.citizen.Citizen;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds;
-import io.github.sekerator.kingdomworld.core.citizen.SiteKinds;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.companion.Companion;
 import io.github.sekerator.kingdomworld.core.companion.CompanionOrder;
@@ -292,7 +291,9 @@ public final class CompanionActions {
             }
             state.citizens().add(citizen);
             state.citizens().registry().markArrival(kingdom.get(), now);
-            state.citizens().sites().nearestFree(kingdom.get(), SiteKinds.BED, place).ifPresent(bed -> state.citizens().assignHome(citizen, bed.pos()));
+            // A bed in a working house comes first, as for every newcomer; beds in houses whose role rests are not offered.
+            io.github.sekerator.kingdomworld.common.construction.BuildingEffects.freeBed(server, kingdom.get(), place)
+                    .ifPresent(bed -> state.citizens().assignHome(citizen, bed.pos()));
             return Outcome.DONE;
         });
         if (!added.ok()) {
