@@ -77,6 +77,7 @@ public final class LawEvents {
 
     public static void register() {
         MinecraftForge.EVENT_BUS.addListener(LawEvents::onServerTick);
+        LawCities.register();
         MinecraftForge.EVENT_BUS.addListener(LawEvents::onServerStarted);
         MinecraftForge.EVENT_BUS.addListener(LawEvents::onServerStopped);
         MinecraftForge.EVENT_BUS.addListener(LawEvents::onLoggedIn);
@@ -167,6 +168,8 @@ public final class LawEvents {
         LawState state = data.state();
         // The ban of slavery of each kingdom is the law the companions obey.
         CompanionWork.state(server).setLaw(kingdomId -> !LawSavedData.get(server).state().slaveryBanned(kingdomId));
+        // The cities of the roads with their gates.
+        LawWork.setGates(LawCities.gates(server));
         LOGGER.info("KingdomWorld law: {} wanted, {} confiscation(s), {} court(s), data format {}{}", state.allWanted().size(),
                 state.confiscations().size(), state.laws().size(), LawSavedData.FORMAT_VERSION,
                 data.isReadOnly() ? " (READ-ONLY: " + data.readOnlyReason().orElse("?") + ")" : "");
@@ -175,6 +178,7 @@ public final class LawEvents {
     private static void onServerStopped(ServerStoppedEvent event) {
         LawSettings.reset();
         LawWork.reset();
+        LawWork.setGates(null);
         LawSync.reset();
         LawPunish.resetSentences();
     }

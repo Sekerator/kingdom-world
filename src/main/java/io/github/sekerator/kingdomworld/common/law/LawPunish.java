@@ -294,8 +294,8 @@ public final class LawPunish {
     // ---------------------------------------------------------------- ransom
 
     /**
-     * Whether a player stands where a kingdom gives confiscated goods back: by its throne, by a barracks block, or in or near a
-     * working watchtower or barracks building of the kingdom.
+     * Whether a player stands where a kingdom gives confiscated goods back: by its throne, the town hall of one of its cities, a
+     * barracks block, or in or near a working watchtower or barracks building of the kingdom.
      */
     public static boolean atRansomPlace(ServerPlayer player, UUID kingdomId) {
         MinecraftServer server = player.server;
@@ -304,6 +304,14 @@ public final class LawPunish {
         if (capital.isPresent() && capital.get().dimension().equals(dimension) && player.distanceToSqr(capital.get().x() + 0.5,
                 capital.get().y() + 0.5, capital.get().z() + 0.5) <= PLACE_REACH * PLACE_REACH) {
             return true;
+        }
+        // The town halls of the cities of the kingdom.
+        for (io.github.sekerator.kingdomworld.core.road.City city : io.github.sekerator.kingdomworld.common.road.RoadWork.state(server)
+                .citiesOf(kingdomId)) {
+            if (city.dimension().equals(dimension)
+                    && player.distanceToSqr(city.x() + 0.5, city.y() + 0.5, city.z() + 0.5) <= PLACE_REACH * PLACE_REACH) {
+                return true;
+            }
         }
         if (!ArmyWork.isReadOnly(server)) {
             for (WorldPos barracks : ArmyWork.state(server).barracksOf(kingdomId)) {

@@ -484,6 +484,106 @@ public final class LawGameTests {
         helper.succeed();
     }
 
+    // ---------------------------------------------------------------- gates of cities
+
+    private static io.github.sekerator.kingdomworld.core.law.CityGates.City burg(Kingdom kingdom) {
+        return new io.github.sekerator.kingdomworld.core.law.CityGates.City(UUID.randomUUID(), kingdom.id(), "GameTest Burg", true);
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_law_gate_pass")
+    public static void aLargeCityTakesItsFeeAtTheGateAndThePassHoldsADay(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        UUID kingId = UUID.randomUUID();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Law Gate", kingId);
+        ServerPlayer stranger = player(helper, "kw-traveller", 2, 6);
+        ServerPlayer subject = player(helper, "kw-burgher", 2, 5);
+        try {
+            var world = KingdomWorldApi.state(server);
+            world.membership().invite(kingId, subject.getUUID(), 1L);
+            world.membership().acceptInvitation(subject.getUUID(), kingdom.id(), 1L);
+            helper.assertTrue(LawWork.state(server).setEntryFee(null, kingdom.id(), 50, LawSettings.rules(), world).ok(), "No entry fee");
+            world.economy().adminAccount(stranger.getUUID(), kingdom.id(), 200);
+            LawWork.state(server).setAutoPay(stranger.getUUID(), true);
+            long treasury = funds(server, kingdom);
+            List<io.github.sekerator.kingdomworld.core.citizen.WorldPos> gates = List.of(CitizenGameTests.at(helper, 2, 1, 6));
+            var center = CitizenGameTests.at(helper, 6, 1, 6);
+            var city = burg(kingdom);
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.law.LawCities.enter(stranger, city, true, gates, center),
+                    "A traveller who pays by himself was kept out");
+            helper.assertTrue(world.economy().accounts().balance(stranger.getUUID(), kingdom.id()) == 150, "The fee was not taken");
+            helper.assertTrue(funds(server, kingdom) == treasury + 50, "The fee did not reach the treasury");
+            helper.assertTrue(LawWork.state(server).hasPass(kingdom.id(), stranger.getUUID(), LawWork.now(server)), "No pass after paying");
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.law.LawCities.enter(stranger, burg(kingdom), true, gates, center),
+                    "A traveller with a pass was kept out of another city of the kingdom");
+            helper.assertTrue(world.economy().accounts().balance(stranger.getUUID(), kingdom.id()) == 150, "A pass was paid twice");
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.law.LawCities.enter(subject, city, true, gates, center),
+                    "A subject was kept out");
+            helper.assertTrue(world.economy().accounts().balance(subject.getUUID(), kingdom.id()) == 0, "A subject paid");
+            // A village asks nothing.
+            ServerPlayer walker = player(helper, "kw-walker", 3, 6);
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.law.LawCities.enter(walker, new io.github.sekerator.kingdomworld.core.law
+                    .CityGates.City(UUID.randomUUID(), kingdom.id(), "Hamlet", false), true, gates, center), "A village kept a walker out");
+        } finally {
+            end(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_law_gate_refused")
+    public static void aTravellerWhoDoesNotPayIsPutBackOutsideTheGate(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Law Refused", UUID.randomUUID());
+        ServerPlayer stranger = player(helper, "kw-poor-traveller", 3, 6);
+        try {
+            var world = KingdomWorldApi.state(server);
+            helper.assertTrue(LawWork.state(server).setEntryFee(null, kingdom.id(), 50, LawSettings.rules(), world).ok(), "No entry fee");
+            var gate = CitizenGameTests.at(helper, 2, 1, 6);
+            var center = CitizenGameTests.at(helper, 6, 1, 6);
+            double before = stranger.distanceToSqr(center.x() + 0.5, stranger.getY(), center.z() + 0.5);
+            helper.assertTrue(!io.github.sekerator.kingdomworld.common.law.LawCities.enter(stranger, burg(kingdom), true, List.of(gate), center),
+                    "A traveller who did not pay came in");
+            double after = stranger.distanceToSqr(center.x() + 0.5, stranger.getY(), center.z() + 0.5);
+            helper.assertTrue(after > before && stranger.getX() < gate.x(), "The traveller was not put back outside the gate: " + stranger.getX());
+            helper.assertTrue(!LawWork.state(server).hasPass(kingdom.id(), stranger.getUUID(), LawWork.now(server)), "A pass without paying");
+            // Paying at the window of the gate lets the traveller in for a day.
+            world.economy().adminAccount(stranger.getUUID(), kingdom.id(), 50);
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.law.LawEntry.pay(stranger, kingdom.id(), 50, true).ok(), "The window could not take the fee");
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.law.LawCities.enter(stranger, burg(kingdom), true, List.of(gate), center),
+                    "A traveller who paid at the window was kept out");
+        } finally {
+            end(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_law_trespass")
+    public static void gettingInOverTheWallIsATrespassWhenSeen(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        UUID kingId = UUID.randomUUID();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Law Trespass", kingId);
+        slowReports();
+        Citizen witness = witness(helper, kingdom, 4, 4);
+        ServerPlayer climber = player(helper, "kw-climber", 3, 4);
+        ServerPlayer subject = player(helper, "kw-local", 3, 5);
+        try {
+            var world = KingdomWorldApi.state(server);
+            world.membership().invite(kingId, subject.getUUID(), 1L);
+            world.membership().acceptInvitation(subject.getUUID(), kingdom.id(), 1L);
+            helper.assertTrue(LawWork.state(server).setEntryFee(null, kingdom.id(), 50, LawSettings.rules(), world).ok(), "No entry fee");
+            var gates = List.of(CitizenGameTests.at(helper, 2, 1, 6));
+            var center = CitizenGameTests.at(helper, 6, 1, 6);
+            io.github.sekerator.kingdomworld.common.law.LawCities.enter(subject, burg(kingdom), false, gates, center);
+            io.github.sekerator.kingdomworld.common.law.LawCities.enter(climber, burg(kingdom), false, gates, center);
+            LawWork.deliverNow(server);
+            Optional<Wanted> wanted = LawWork.state(server).wanted(kingdom.id(), climber.getUUID());
+            helper.assertTrue(wanted.isPresent() && wanted.get().crimes().get(0).kind() == CrimeKind.TRESPASS, "Climbing the wall was no trespass");
+            helper.assertTrue(LawWork.state(server).wanted(kingdom.id(), subject.getUUID()).isEmpty(), "A subject trespassed in his own city");
+        } finally {
+            end(helper, kingdom, witness);
+        }
+        helper.succeed();
+    }
+
     // ---------------------------------------------------------------- what the law does not judge
 
     private static net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickBlock click(ServerPlayer player, BlockPos pos) {
