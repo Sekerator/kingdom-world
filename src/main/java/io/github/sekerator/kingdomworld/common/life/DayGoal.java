@@ -44,6 +44,7 @@ public final class DayGoal extends Goal {
     private BuildingEffects.Effect tavern;
     private int thinking;
     private int pathCooldown;
+    /** Ticks until the body moves about again; the tavern serves it at the first of them. */
     private int wander;
 
     public DayGoal(CitizenEntity body) {
@@ -139,8 +140,7 @@ public final class DayGoal extends Goal {
         }
         double distance = body.blockPosition().distSqr(target);
         if (plan == Plan.SLEEP) {
-            if (distance <= SLEEP_REACH_SQR && body.level().getBlockState(target).getBlock() instanceof BedBlock
-                    && !body.level().getBlockState(target).getValue(BedBlock.OCCUPIED)) {
+            if (distance <= SLEEP_REACH_SQR && body.level().getBlockState(target).getBlock() instanceof BedBlock && free(target)) {
                 body.getNavigation().stop();
                 body.startSleeping(target);
                 return;
@@ -152,14 +152,26 @@ public final class DayGoal extends Goal {
         walkTo(target);
     }
 
+    /**
+     * Whether a bed is free: not taken, or taken by nobody lying in it (a body that went away asleep where its chunk was
+     * no longer loaded leaves the bed marked).
+     */
+    private boolean free(BlockPos bed) {
+        if (!body.level().getBlockState(bed).getValue(BedBlock.OCCUPIED)) {
+            return true;
+        }
+        return body.level().getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class, new net.minecraft.world.phys.AABB(bed).inflate(1.0),
+                net.minecraft.world.entity.LivingEntity::isSleeping).isEmpty();
+    }
+
     private void arrived() {
         MinecraftServer server = body.getServer();
-        if (plan == Plan.TAVERN && server != null && tavern != null && body.citizenId() != null) {
-            Optional<Citizen> citizen = KingdomWorldApi.state(server).citizens().get(body.citizenId());
-            citizen.ifPresent(value -> LifeWork.enjoyTavern(server, value, tavern));
-        }
         // Inside the tavern or in the crowd of the festival the body moves about now and then.
         if (--wander <= 0 && body.getNavigation().isDone() && target != null) {
+            if (plan == Plan.TAVERN && server != null && tavern != null && body.citizenId() != null) {
+                Optional<Citizen> citizen = KingdomWorldApi.state(server).citizens().get(body.citizenId());
+                citizen.ifPresent(value -> LifeWork.enjoyTavern(server, value, tavern));
+            }
             wander = 60 + body.getRandom().nextInt(120);
             int spread = plan == Plan.FESTIVAL ? CROWD : tavernSpread();
             BlockPos spot = target.offset(body.getRandom().nextInt(2 * spread + 1) - spread, 0, body.getRandom().nextInt(2 * spread + 1) - spread);
