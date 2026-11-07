@@ -5,12 +5,15 @@ import io.github.sekerator.kingdomworld.common.kingdom.PlayerNames;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.CitizenView;
 import io.github.sekerator.kingdomworld.common.network.data.KingdomView;
+import io.github.sekerator.kingdomworld.common.network.data.StorageView;
+import io.github.sekerator.kingdomworld.common.network.packet.StoragePackets;
 import io.github.sekerator.kingdomworld.common.network.packet.CitizenRequestPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomActionPacket;
 import io.github.sekerator.kingdomworld.core.membership.Permission;
 import io.github.sekerator.kingdomworld.core.membership.Role;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Renderable;
@@ -51,6 +54,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         OVERVIEW("kingdomworld.screen.throne.tab.overview"),
         MEMBERS("kingdomworld.screen.throne.tab.members"),
         CITIZENS("kingdomworld.screen.throne.tab.citizens"),
+        STORAGE("kingdomworld.screen.throne.tab.storage"),
         RIGHTS("kingdomworld.screen.throne.tab.rights");
 
         private final String key;
@@ -65,6 +69,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
 
     private KingdomView view;
     private final CitizensTab citizens = new CitizensTab(this);
+    private final StorageTab storage = new StorageTab(this);
     private Tab tab = Tab.OVERVIEW;
     private int scroll;
     private Component status = Component.empty();
@@ -89,7 +94,8 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
 
     @Override
     public String checkName() {
-        String name = tab == Tab.CITIZENS ? citizens.checkName() : tab.name().toLowerCase(Locale.ROOT);
+        String name = tab == Tab.CITIZENS ? citizens.checkName() : tab == Tab.STORAGE ? storage.checkName()
+                : tab.name().toLowerCase(Locale.ROOT);
         return "throne/" + name + "/" + view.relation().name().toLowerCase(Locale.ROOT);
     }
 
@@ -123,6 +129,38 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
+     * Shows what the storehouses hold, if it belongs to the kingdom on screen.
+     */
+    public void updateStorage(StorageView storageView) {
+        if (!storageView.kingdomId().equals(view.id())) {
+            return;
+        }
+        storage.setView(storageView);
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
+    }
+
+    /**
+     * Kinds of items the storehouses tab shows, or -1 while the server has not answered; for the self-check.
+     */
+    public int storageShown() {
+        return storage.view() == null ? -1 : storage.view().items().size();
+    }
+
+    /**
+     * Shows the list of storehouses instead of the items, and a search; for the layout check.
+     */
+    public void showStorehouses(boolean storehouses, String search) {
+        storage.showStorehouses(storehouses);
+        storage.setSearch(search);
+    }
+
+    Font font() {
+        return font;
+    }
+
+    /**
      * Number of citizens the citizens tab shows, or -1 while the server has not answered; for the self-check.
      */
     public int citizensShown() {
@@ -134,6 +172,14 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
      */
     public void showChronicle(boolean chronicle) {
         citizens.setChronicle(chronicle);
+    }
+
+    /**
+     * Shows a view of the citizens tab by name ({@code citizens}, {@code work}, {@code production},
+     * {@code chronicle}); for the layout check.
+     */
+    public void showCitizens(String mode) {
+        citizens.setMode(CitizensTab.Mode.valueOf(mode.toUpperCase(Locale.ROOT)));
     }
 
     private void requestCitizens() {
@@ -152,7 +198,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
-     * Switches to a tab by name ({@code overview}, {@code members}, {@code citizens}, {@code rights}); unknown names
+     * Switches to a tab by name ({@code overview}, {@code members}, {@code citizens}, {@code storage}, {@code rights}); unknown names
      * are ignored.
      */
     public void selectTab(String name) {
@@ -168,6 +214,9 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         scroll = 0;
         if (target == Tab.CITIZENS) {
             requestCitizens();
+        }
+        if (target == Tab.STORAGE && Minecraft.getInstance().getConnection() != null) {
+            KingdomWorldNetwork.sendToServer(new StoragePackets.Request(view.id()));
         }
         if (minecraft != null) {
             rebuildWidgets();
@@ -253,6 +302,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         if (isMember()) {
             labels.add(Component.translatable(Tab.MEMBERS.key));
             labels.add(Component.translatable(Tab.CITIZENS.key));
+            labels.add(Component.translatable(Tab.STORAGE.key));
             labels.add(Component.translatable(Tab.RIGHTS.key));
             labels.add(Component.translatable("kingdomworld.screen.throne.tab.territory"));
         }
@@ -297,10 +347,10 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         }
         int inner = Math.max(Math.max(tabs, members), Math.max(Math.max(applications, rights), Math.max(overview + 4, bottom)));
         if (isMember()) {
-            inner = Math.max(inner, citizens.measure(font));
+            inner = Math.max(inner, Math.max(citizens.measure(font), storage.measure(font)));
         }
         panelWidth = Math.min(Math.max(MIN_PANEL_WIDTH, inner + 2 * PAD), width - 8);
-        panelHeight = Math.min(tab == Tab.CITIZENS ? MAX_CITIZENS_PANEL_HEIGHT : MAX_PANEL_HEIGHT, height - 8);
+        panelHeight = Math.min(tab == Tab.CITIZENS || tab == Tab.STORAGE ? MAX_CITIZENS_PANEL_HEIGHT : MAX_PANEL_HEIGHT, height - 8);
     }
 
     // ---------------------------------------------------------------- widgets
@@ -315,6 +365,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         if (isMember()) {
             x = tabButton(Tab.MEMBERS, x, top + TAB_TOP);
             x = tabButton(Tab.CITIZENS, x, top + TAB_TOP);
+            x = tabButton(Tab.STORAGE, x, top + TAB_TOP);
             x = tabButton(Tab.RIGHTS, x, top + TAB_TOP);
             Component territory = Component.translatable("kingdomworld.screen.throne.tab.territory");
             addRenderableWidget(Button.builder(territory, button -> ClientHooks.openTerritoryEditor(view))
@@ -324,6 +375,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             case OVERVIEW -> initOverview(left, top);
             case MEMBERS -> initMembers(top);
             case CITIZENS -> citizens.init(left, top, panelWidth, panelHeight);
+            case STORAGE -> storage.init(left, top, panelWidth, panelHeight);
             case RIGHTS -> initRights(top);
         }
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), button -> onClose())
@@ -485,6 +537,12 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             }
             return true;
         }
+        if (tab == Tab.STORAGE) {
+            if (storage.scroll(top(), panelHeight, delta)) {
+                rebuildWidgets();
+            }
+            return true;
+        }
         if (tab == Tab.MEMBERS) {
             int max = Math.max(0, rows().size() - visibleRows());
             int next = Math.max(0, Math.min(max, scroll - (int) Math.signum(delta)));
@@ -526,6 +584,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             case OVERVIEW -> renderOverview(graphics, left, top, right);
             case MEMBERS -> renderMembers(graphics, left, top);
             case CITIZENS -> citizens.render(graphics, font, left, top, panelWidth, panelHeight);
+            case STORAGE -> storage.render(graphics, font, left, top, panelWidth, panelHeight);
             case RIGHTS -> renderRights(graphics, left, top);
         }
         Component bottomText = status;

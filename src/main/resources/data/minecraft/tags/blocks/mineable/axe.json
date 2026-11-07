@@ -3,6 +3,7 @@
   "values": [
     "kingdomworld:throne",
     "kingdomworld:storehouse",
-    "kingdomworld:infirmary"
+    "kingdomworld:infirmary",
+    "kingdomworld:work_post"
   ]
 }

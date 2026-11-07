@@ -5,6 +5,7 @@ import io.github.sekerator.kingdomworld.client.ClientHooks;
 import io.github.sekerator.kingdomworld.client.map.ClientTerritoryCache;
 import io.github.sekerator.kingdomworld.client.screen.ResultListener;
 import io.github.sekerator.kingdomworld.client.screen.ThroneScreen;
+import io.github.sekerator.kingdomworld.client.screen.WorkPostScreen;
 import io.github.sekerator.kingdomworld.common.config.KingdomWorldConfig;
 import io.github.sekerator.kingdomworld.common.network.packet.ActionResultPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.BorderCrossingPacket;
@@ -14,6 +15,8 @@ import io.github.sekerator.kingdomworld.common.network.packet.KingdomViewPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.MapAreaPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.OpenFoundingScreenPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.TerritoryDeltaPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.WorkPostViewPacket;
+import io.github.sekerator.kingdomworld.common.network.data.StorageView;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -51,6 +54,21 @@ public final class ClientPacketHandlers {
     public static void handleCitizenView(CitizenViewPacket packet) {
         if (Minecraft.getInstance().screen instanceof ThroneScreen throne) {
             throne.updateCitizens(packet.view());
+        }
+    }
+
+    public static void handleStorageView(StorageView view) {
+        if (Minecraft.getInstance().screen instanceof ThroneScreen throne) {
+            throne.updateStorage(view);
+        }
+    }
+
+    public static void handleWorkPostView(WorkPostViewPacket packet) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.screen instanceof WorkPostScreen screen && screen.pos().equals(packet.view().pos())) {
+            screen.update(packet.view());
+        } else if (packet.open()) {
+            ClientHooks.openWorkPost(packet.view());
         }
     }
 

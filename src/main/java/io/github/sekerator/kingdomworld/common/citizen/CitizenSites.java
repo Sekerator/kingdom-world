@@ -2,6 +2,8 @@ package io.github.sekerator.kingdomworld.common.citizen;
 
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehaviors;
+import io.github.sekerator.kingdomworld.common.citizen.work.WorkPostActions;
+import io.github.sekerator.kingdomworld.common.citizen.work.ZoneSurveys;
 import io.github.sekerator.kingdomworld.common.data.KingdomSavedData;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
 import io.github.sekerator.kingdomworld.common.registry.ModRegistries;
@@ -70,12 +72,16 @@ public final class CitizenSites {
         if (state.is(ModRegistries.INFIRMARY.get())) {
             return SiteKinds.INFIRMARY;
         }
+        if (state.is(ModRegistries.WORK_POST.get())) {
+            return SiteKinds.WORK_POST;
+        }
         return ProfessionBehaviors.workplaceKind(state);
     }
 
     private static boolean mayBePlace(BlockState state) {
         return state.getBlock() instanceof BedBlock || state.is(ModRegistries.INFIRMARY.get())
-                || state.is(ModRegistries.STOREHOUSE.get()) || ProfessionBehaviors.isAnyWorkplace(state);
+                || state.is(ModRegistries.STOREHOUSE.get()) || state.is(ModRegistries.WORK_POST.get())
+                || ProfessionBehaviors.isAnyWorkplace(state);
     }
 
     /**
@@ -213,7 +219,10 @@ public final class CitizenSites {
                         String kind = kindOf(state1);
                         if (kind != null) {
                             pos.set(chunk.getPos().getMinBlockX() + x, baseY + y, chunk.getPos().getMinBlockZ() + z);
-                            citizens.addSite(new WorldPos(dimension, pos.getX(), pos.getY(), pos.getZ()), kind, owner);
+                            WorldPos at = new WorldPos(dimension, pos.getX(), pos.getY(), pos.getZ());
+                            if (citizens.addSite(at, kind, owner) && kind.equals(SiteKinds.WORK_POST)) {
+                                WorkPostActions.onPostFound(level, at);
+                            }
                         }
                     }
                 }
@@ -231,8 +240,10 @@ public final class CitizenSites {
         }
         UUID owner = KingdomWorldApi.ownerAt(level, pos);
         if (owner != null) {
-            KingdomWorldApi.state(level.getServer()).citizens()
-                    .addSite(new WorldPos(Dimensions.id(level), pos.getX(), pos.getY(), pos.getZ()), kind, owner);
+            WorldPos at = new WorldPos(Dimensions.id(level), pos.getX(), pos.getY(), pos.getZ());
+            if (KingdomWorldApi.state(level.getServer()).citizens().addSite(at, kind, owner) && kind.equals(SiteKinds.WORK_POST)) {
+                WorkPostActions.onPostFound(level, at);
+            }
         }
     }
 
@@ -247,6 +258,7 @@ public final class CitizenSites {
         Citizens citizens = KingdomWorldApi.state(level.getServer()).citizens();
         if (citizens.sites().get(at).isPresent()) {
             citizens.removeSite(at);
+            ZoneSurveys.forget(at);
         }
     }
 
@@ -269,6 +281,7 @@ public final class CitizenSites {
         Citizens citizens = KingdomWorldApi.state(server).citizens();
         return Map.of(SiteKinds.BED, citizens.sites().count(kingdomId, SiteKinds.BED),
                 SiteKinds.INFIRMARY, citizens.sites().count(kingdomId, SiteKinds.INFIRMARY),
-                SiteKinds.COMPOSTER, citizens.sites().count(kingdomId, SiteKinds.COMPOSTER));
+                SiteKinds.COMPOSTER, citizens.sites().count(kingdomId, SiteKinds.COMPOSTER),
+                SiteKinds.WORK_POST, citizens.sites().count(kingdomId, SiteKinds.WORK_POST));
     }
 }

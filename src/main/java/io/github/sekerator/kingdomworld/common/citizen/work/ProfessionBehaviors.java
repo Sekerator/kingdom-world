@@ -19,6 +19,11 @@ public final class ProfessionBehaviors {
 
     static {
         register(Professions.FARMER, new FarmerBehavior());
+        register(Professions.LUMBERJACK, new LumberjackBehavior());
+        register(Professions.MINER, new MinerBehavior());
+        register(Professions.FISHER, new FisherBehavior());
+        register(Professions.HERDER, new HerderBehavior());
+        register(Professions.CARRIER, new CarrierBehavior());
     }
 
     private ProfessionBehaviors() {

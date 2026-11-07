@@ -11,6 +11,8 @@ import net.minecraft.world.level.block.AttachedStemBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.StemBlock;
+import net.minecraft.world.level.block.SugarCaneBlock;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -27,7 +29,8 @@ import java.util.List;
 /**
  * Crops in general: vanilla crops and crops of other mods are recognised by {@link CropBlock} or the
  * {@code minecraft:crops} tag and an age property; seeds are taken from what the crop drops, so modded crops are
- * replanted with their own seeds.
+ * replanted with their own seeds. Stems (melons, pumpkins and the like of other mods) give their fruit and stay,
+ * two block crops are harvested by their lower half, sugar cane is cut above its lowest block.
  */
 public final class FarmCrops {
 
@@ -40,17 +43,56 @@ public final class FarmCrops {
      */
     public static boolean isCrop(BlockState state) {
         Block block = state.getBlock();
-        if (block instanceof StemBlock || block instanceof AttachedStemBlock || state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) {
-            return false;
+        if (block instanceof StemBlock || block instanceof AttachedStemBlock || block instanceof SugarCaneBlock) {
+            return true;
+        }
+        if (state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) {
+            return state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.LOWER
+                    && (block instanceof CropBlock || state.is(BlockTags.CROPS)) && ageProperty(state) != null;
         }
         return block instanceof CropBlock || (state.is(BlockTags.CROPS) && ageProperty(state) != null);
+    }
+
+    /**
+     * Whether a crop in the world is ready: a stem with its fruit grown, sugar cane taller than one block, any
+     * other crop at its last age.
+     */
+    public static boolean isMature(ServerLevel level, BlockPos pos, BlockState state) {
+        Block block = state.getBlock();
+        if (block instanceof AttachedStemBlock) {
+            return true;
+        }
+        if (block instanceof StemBlock) {
+            return false;
+        }
+        if (block instanceof SugarCaneBlock) {
+            return level.getBlockState(pos.below()).getBlock() != block && level.getBlockState(pos.above()).is(block);
+        }
+        return isMature(state);
+    }
+
+    /**
+     * The fruit a stem grows, as a block in its ripe state; {@code null} for other crops.
+     */
+    @Nullable
+    public static BlockState fruitOf(BlockState state) {
+        if (state.getBlock() instanceof StemBlock stem) {
+            return stem.getFruit().defaultBlockState();
+        }
+        if (state.getBlock() instanceof AttachedStemBlock attached) {
+            BlockState planted = attached.getCloneItemStack(null, BlockPos.ZERO, state).getItem() instanceof BlockItem item
+                    && item.getBlock() instanceof StemBlock stem ? stem.getFruit().defaultBlockState() : null;
+            return planted;
+        }
+        return null;
     }
 
     /**
      * Whether a crop is ripe.
      */
     public static boolean isMature(BlockState state) {
-        if (!isCrop(state)) {
+        if (!isCrop(state) || state.getBlock() instanceof StemBlock || state.getBlock() instanceof AttachedStemBlock
+                || state.getBlock() instanceof SugarCaneBlock) {
             return false;
         }
         if (state.getBlock() instanceof CropBlock crop) {

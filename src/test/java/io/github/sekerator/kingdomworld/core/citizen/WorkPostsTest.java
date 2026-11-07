@@ -180,7 +180,7 @@ class WorkPostsTest {
     void postsAndWorkersAreRestored() {
         WorkPost post = new WorkPost(pos(8, 8), realm, 5, 6);
         post.restore("miner", 2, "", WorkStatus.NO_TOOL, new PostYield(Map.of("minecraft:cobblestone", 100.0), Map.of(), 100.0, true),
-                Map.of("minecraft:cobblestone", 0.5), 3L, 17L);
+                Map.of("minecraft:cobblestone", 0.5), 3L, 17L, true);
         Citizen worker = new Citizen(UUID.randomUUID(), realm, 1, Gender.MALE, 0, 0L, pos(1, 1));
         worker.restore(20.0f, CitizenState.HEALTHY, "miner", null, pos(8, 8), 20.0f, 50, 0, 0, "", 0.0, WorkStatus.NO_TOOL);
         Citizen wrong = new Citizen(UUID.randomUUID(), realm, 2, Gender.MALE, 0, 0L, pos(1, 1));
@@ -192,6 +192,7 @@ class WorkPostsTest {
         assertEquals(List.of(worker.id()), List.copyOf(back.workers()));
         assertNull(wrong.workplace(), "a worker of another profession loses the seat");
         assertEquals(17L, back.producedOn(3L));
+        assertTrue(back.hasContainer());
         assertEquals(0L, back.producedOn(4L));
         assertEquals(40L, restored.ledger().today(realm, 3L).total("miner"));
         assertEquals(40L, restored.ledger().yesterday(realm, 4L).total("miner"));

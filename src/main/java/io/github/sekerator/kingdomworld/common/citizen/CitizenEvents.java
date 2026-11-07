@@ -2,6 +2,10 @@ package io.github.sekerator.kingdomworld.common.citizen;
 
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.citizen.goal.PathBudget;
+import io.github.sekerator.kingdomworld.common.citizen.goal.ScanBudget;
+import io.github.sekerator.kingdomworld.common.citizen.work.GatheringSettings;
+import io.github.sekerator.kingdomworld.common.citizen.work.PostWork;
+import io.github.sekerator.kingdomworld.common.citizen.work.ZoneSurveys;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
 import io.github.sekerator.kingdomworld.common.protection.ProtectionService;
 import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
@@ -50,16 +54,21 @@ public final class CitizenEvents {
     private static void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase == TickEvent.Phase.START) {
             PathBudget.reset();
+            ScanBudget.reset();
             return;
         }
         var server = event.getServer();
         long tick = server.getTickCount();
         if (tick % CitizenBodies.UPDATE_INTERVAL == 0) {
             CitizenSettings.refresh();
+            GatheringSettings.refresh();
+            var rules = GatheringSettings.rules();
+            KingdomWorldApi.state(server).citizens().setPostDefaults(rules.defaultRadius(), Math.max(2, rules.maxHerd() / 2));
             CitizenBodies.update(server);
             CitizenCare.update(server);
         }
         CitizenSites.tick(server);
+        ZoneSurveys.tick(server);
         CitizenSimulation.tick(server, tick);
     }
 
@@ -138,5 +147,8 @@ public final class CitizenEvents {
         CitizenCare.reset();
         CitizenSites.reset();
         CitizenSettings.reset();
+        GatheringSettings.reset();
+        PostWork.reset();
+        ZoneSurveys.reset();
     }
 }

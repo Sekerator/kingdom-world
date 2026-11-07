@@ -33,7 +33,7 @@ import java.util.UUID;
  * citizen: { id, seed, gender, skin, born, health, state, profession, pos, home?, workplace?, food, mood, xp,
  *            workCapacity, workProduct, workProgress, workStatus }
  * post:    { pos, profession, radius, seats, animal, herd, status, yield: { out: { item: rate }, in: { item: rate },
- *            actions, measured }, progress: { item: amount }, day, produced }
+ *            actions, measured }, progress: { item: amount }, day, produced, container }
  * death:   { citizen, seed, gender, profession, cause, killer, time, pos }
  * pos:     { dimension, x, y, z }
  * </pre>
@@ -88,6 +88,7 @@ public final class CitizenNbt {
     private static final String DAY = "day";
     private static final String PRODUCED = "produced";
     private static final String COUNTS = "counts";
+    private static final String CONTAINER = "container";
 
     /**
      * What was read for one kingdom, not yet restored.
@@ -167,6 +168,7 @@ public final class CitizenNbt {
         tag.put(PROGRESS, writeRates(post.progress()));
         tag.putLong(DAY, post.counterDay());
         tag.putLong(PRODUCED, post.counter());
+        tag.putBoolean(CONTAINER, post.hasContainer());
         return tag;
     }
 
@@ -287,7 +289,8 @@ public final class CitizenNbt {
                 yieldTag.getBoolean(MEASURED));
         WorkPost post = new WorkPost(pos, kingdomId, tag.getInt(RADIUS), Math.max(2, tag.getInt(HERD)));
         post.restore(profession, tag.getInt(SEATS), animal, WorkStatus.byId(tag.getString(STATUS)), yield,
-                readRates(tag, PROGRESS, where), tag.contains(DAY, Tag.TAG_LONG) ? tag.getLong(DAY) : -1L, tag.getLong(PRODUCED));
+                readRates(tag, PROGRESS, where), tag.contains(DAY, Tag.TAG_LONG) ? tag.getLong(DAY) : -1L, tag.getLong(PRODUCED),
+                tag.getBoolean(CONTAINER));
         return post;
     }
 

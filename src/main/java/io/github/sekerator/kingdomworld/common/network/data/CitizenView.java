@@ -4,6 +4,7 @@ import io.github.sekerator.kingdomworld.core.citizen.CauseOfDeath;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
 import io.github.sekerator.kingdomworld.core.citizen.Profession;
+import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
 import io.netty.handler.codec.DecoderException;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -25,25 +26,42 @@ import java.util.UUID;
  */
 public record CitizenView(UUID kingdomId, boolean canManage, int population, int bedsUsed, int bedsTotal, int foodDays,
                           int mood, int storehouses, CitizenNeeds.GrowthCheck growth, List<Entry> citizens,
-                          List<Death> chronicle) {
+                          List<Death> chronicle, List<Production> production) {
     public static final int MAX_CITIZENS = 500;
+    public static final int MAX_PRODUCTION = 32;
     public static final int MAX_CHRONICLE = 50;
     public static final int UNLIMITED_FOOD = -1;
     /** Food days are shown up to this number. */
     public static final int MAX_FOOD_DAYS = 9_999;
     private static final int MAX_KILLER = 64;
+    private static final int MAX_ITEM_ID = 256;
 
     /**
      * One citizen.
      *
-     * @param home where its bed is, or {@code null} if it has none
+     * @param home      where its bed is, or {@code null} if it has none
+     * @param workplace where it works, or {@code null} if it has no workplace
+     * @param work      what its work looks like, and if it stands still, why
      */
     public record Entry(UUID id, int seed, boolean female, String profession, CitizenState state, @Nullable BlockPos home,
-                        int health, int mood) {
+                        int health, int mood, @Nullable BlockPos workplace, WorkStatus work) {
         public Entry {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(profession, "profession");
             Objects.requireNonNull(state, "state");
+            Objects.requireNonNull(work, "work");
+        }
+    }
+
+    /**
+     * What a profession produced today and the day before.
+     *
+     * @param top item id of what it produced most of today (or yesterday), empty if nothing
+     */
+    public record Production(String profession, long today, long yesterday, String top) {
+        public Production {
+            Objects.requireNonNull(profession, "profession");
+            top = top == null ? "" : top;
         }
     }
 
@@ -68,7 +86,8 @@ public record CitizenView(UUID kingdomId, boolean canManage, int population, int
         Objects.requireNonNull(growth, "growth");
         citizens = List.copyOf(citizens);
         chronicle = List.copyOf(chronicle);
-        if (citizens.size() > MAX_CITIZENS || chronicle.size() > MAX_CHRONICLE) {
+        production = List.copyOf(production);
+        if (citizens.size() > MAX_CITIZENS || chronicle.size() > MAX_CHRONICLE || production.size() > MAX_PRODUCTION) {
             throw new IllegalArgumentException("Citizen view too large");
         }
     }
@@ -96,6 +115,11 @@ public record CitizenView(UUID kingdomId, boolean canManage, int population, int
             }
             buf.writeVarInt(entry.health());
             buf.writeVarInt(entry.mood());
+            buf.writeBoolean(entry.workplace() != null);
+            if (entry.workplace() != null) {
+                buf.writeBlockPos(entry.workplace());
+            }
+            buf.writeEnum(entry.work());
         }
         buf.writeVarInt(chronicle.size());
         for (Death death : chronicle) {
@@ -106,6 +130,13 @@ public record CitizenView(UUID kingdomId, boolean canManage, int population, int
             buf.writeUtf(death.killer(), MAX_KILLER);
             buf.writeVarLong(death.day());
             buf.writeBlockPos(death.place());
+        }
+        buf.writeVarInt(production.size());
+        for (Production entry : production) {
+            buf.writeUtf(entry.profession(), Profession.MAX_ID_LENGTH);
+            buf.writeVarLong(entry.today());
+            buf.writeVarLong(entry.yesterday());
+            buf.writeUtf(entry.top(), MAX_ITEM_ID);
         }
     }
 
@@ -128,7 +159,11 @@ public record CitizenView(UUID kingdomId, boolean canManage, int population, int
             String profession = readProfession(buf);
             CitizenState state = KingdomView.readEnum(buf, CitizenState.class);
             BlockPos home = buf.readBoolean() ? buf.readBlockPos() : null;
-            citizens.add(new Entry(id, seed, female, profession, state, home, buf.readVarInt(), buf.readVarInt()));
+            int citizenHealth = buf.readVarInt();
+            int citizenMood = buf.readVarInt();
+            BlockPos workplace = buf.readBoolean() ? buf.readBlockPos() : null;
+            citizens.add(new Entry(id, seed, female, profession, state, home, citizenHealth, citizenMood, workplace,
+                    KingdomView.readEnum(buf, WorkStatus.class)));
         }
         int deaths = KingdomView.readSize(buf, MAX_CHRONICLE);
         List<Death> chronicle = new ArrayList<>(deaths);
@@ -136,8 +171,13 @@ public record CitizenView(UUID kingdomId, boolean canManage, int population, int
             chronicle.add(new Death(buf.readInt(), buf.readBoolean(), readProfession(buf), KingdomView.readEnum(buf, CauseOfDeath.class),
                     buf.readUtf(MAX_KILLER), buf.readVarLong(), buf.readBlockPos()));
         }
+        int produced = KingdomView.readSize(buf, MAX_PRODUCTION);
+        List<Production> production = new ArrayList<>(produced);
+        for (int i = 0; i < produced; i++) {
+            production.add(new Production(readProfession(buf), buf.readVarLong(), buf.readVarLong(), buf.readUtf(MAX_ITEM_ID)));
+        }
         return new CitizenView(kingdomId, canManage, population, bedsUsed, bedsTotal, foodDays, mood, storehouses, growth,
-                citizens, chronicle);
+                citizens, chronicle, production);
     }
 
     static String readProfession(FriendlyByteBuf buf) {

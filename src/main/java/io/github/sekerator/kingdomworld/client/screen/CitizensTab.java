@@ -8,20 +8,28 @@ import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
 import io.github.sekerator.kingdomworld.core.citizen.Gender;
 import io.github.sekerator.kingdomworld.core.citizen.Profession;
 import io.github.sekerator.kingdomworld.core.citizen.Professions;
+import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
 /**
- * The "Citizens" tab of the throne screen: the numbers of the population, the list of citizens with their
- * professions (which members with the right can change), a filter, and the chronicle of deaths. Widths come from
- * the translated texts like everywhere in the throne screen.
+ * The "Citizens" tab of the throne screen: the numbers of the population and four views: the citizens with their
+ * professions (which members with the right can change) and homes, the same citizens with their work (post and
+ * why the work stands still), what each profession produced today and yesterday, and the chronicle of deaths.
+ * Widths come from the translated texts like everywhere in the throne screen; long texts are shortened and shown
+ * in full on hover.
  */
 final class CitizensTab {
     static final int ROW = 18;
@@ -32,18 +40,33 @@ final class CitizensTab {
     private static final int MIN_PLACE_COLUMN = 64;
     private static final String KEY = "kingdomworld.screen.citizens.";
 
+    /**
+     * What the tab shows.
+     */
+    enum Mode {
+        CITIZENS,
+        WORK,
+        PRODUCTION,
+        CHRONICLE;
+
+        String id() {
+            return name().toLowerCase(Locale.ROOT);
+        }
+    }
+
     private final ThroneScreen screen;
     private CitizenView view;
     private int filter;
-    private boolean chronicle;
+    private Mode mode = Mode.CITIZENS;
     private int scroll;
 
     private int professionWidth;
     private int stateWidth;
     private int filterWidth;
-    private int toggleWidth;
+    private int modeWidth;
     private int pageWidth;
     private int dayWidth;
+    private int countWidth;
 
     CitizensTab(ThroneScreen screen) {
         this.screen = screen;
@@ -58,17 +81,25 @@ final class CitizensTab {
     }
 
     boolean isChronicle() {
-        return chronicle;
+        return mode == Mode.CHRONICLE;
     }
 
     void setChronicle(boolean chronicle) {
-        this.chronicle = chronicle;
+        setMode(chronicle ? Mode.CHRONICLE : Mode.CITIZENS);
+    }
+
+    void setMode(Mode value) {
+        this.mode = value;
         this.scroll = 0;
     }
 
     void setFilter(int filter) {
         this.filter = Math.floorMod(filter, filterCount());
         this.scroll = 0;
+    }
+
+    private boolean listsCitizens() {
+        return mode == Mode.CITIZENS || mode == Mode.WORK;
     }
 
     // ---------------------------------------------------------------- texts
@@ -107,8 +138,8 @@ final class CitizensTab {
         return Component.translatable(KEY + "filter", filterOption(index));
     }
 
-    private Component toggleLabel(boolean showingChronicle) {
-        return Component.translatable(showingChronicle ? KEY + "show_list" : KEY + "show_chronicle");
+    private static Component modeLabel(Mode value) {
+        return Component.translatable(KEY + "mode", Component.translatable(KEY + "mode." + value.id()));
     }
 
     private List<Component> summaryLines() {
@@ -145,6 +176,23 @@ final class CitizensTab {
         return CitizenTexts.name(seed, female ? Gender.FEMALE : Gender.MALE).getString();
     }
 
+    private static Component work(WorkStatus status) {
+        return Component.translatable("kingdomworld.work.status." + status.id());
+    }
+
+    private static int workColor(WorkStatus status) {
+        if (status == WorkStatus.WORKING) {
+            return 0xFFA0E0A0;
+        }
+        return status.isProblem() ? 0xFFFF9070 : 0xFFD0D0D0;
+    }
+
+    private static ItemStack item(String id) {
+        ResourceLocation key = ResourceLocation.tryParse(id);
+        Item item = key == null ? null : ForgeRegistries.ITEMS.getValue(key);
+        return item == null || item == Items.AIR ? ItemStack.EMPTY : new ItemStack(item);
+    }
+
     // ---------------------------------------------------------------- layout
 
     /**
@@ -166,18 +214,24 @@ final class CitizensTab {
         for (int i = 0; i < filterCount(); i++) {
             filterWidth = Math.max(filterWidth, screen.buttonWidth(filterLabel(i)));
         }
-        toggleWidth = Math.max(screen.buttonWidth(toggleLabel(true)), screen.buttonWidth(toggleLabel(false)));
+        modeWidth = 0;
+        for (Mode value : Mode.values()) {
+            modeWidth = Math.max(modeWidth, screen.buttonWidth(modeLabel(value)));
+        }
         pageWidth = font.width(Component.translatable("kingdomworld.screen.throne.page", 500, 500, 500));
         dayWidth = font.width(Component.translatable(KEY + "day", 99_999));
+        countWidth = Math.max(font.width(Component.translatable(KEY + "production.today", 9_999_999L)),
+                font.width(Component.translatable(KEY + "production.yesterday", 9_999_999L)));
 
-        int buttons = filterWidth + GAP + toggleWidth + 8 + pageWidth;
+        int buttons = filterWidth + GAP + modeWidth + 8 + pageWidth;
         int list = NAME_COLUMN + professionWidth + 6 + stateWidth + 6 + MIN_PLACE_COLUMN;
         int deaths = NAME_COLUMN + 120 + 6 + dayWidth;
+        int production = professionWidth + 2 * (countWidth + 6) + 60;
         int summary = 0;
         CitizenView saved = view;
         // The longest numbers a summary can show.
         view = new CitizenView(new java.util.UUID(0, 0), false, 10_000, 10_000, 10_000, CitizenView.MAX_FOOD_DAYS, 100, 999,
-                io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds.GrowthCheck.READY, List.of(), List.of());
+                io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds.GrowthCheck.READY, List.of(), List.of(), List.of());
         for (Component line : summaryLines()) {
             summary = Math.max(summary, font.width(line));
         }
@@ -185,7 +239,8 @@ final class CitizensTab {
         int messages = Math.max(font.width(Component.translatable(KEY + "loading")),
                 font.width(Component.translatable(KEY + "chronicle_empty")));
         messages = Math.max(messages, font.width(Component.translatable(KEY + "none_match")));
-        return Math.max(Math.max(buttons, list), Math.max(Math.max(deaths, summary), messages));
+        messages = Math.max(messages, font.width(Component.translatable(KEY + "production.none")));
+        return Math.max(Math.max(Math.max(buttons, list), production), Math.max(Math.max(deaths, summary), messages));
     }
 
     private int listTop(int top) {
@@ -212,7 +267,11 @@ final class CitizensTab {
         if (view == null) {
             return 0;
         }
-        return chronicle ? view.chronicle().size() : rows().size();
+        return switch (mode) {
+            case CHRONICLE -> view.chronicle().size();
+            case PRODUCTION -> view.production().size();
+            default -> rows().size();
+        };
     }
 
     void init(int left, int top, int panelWidth, int panelHeight) {
@@ -224,15 +283,16 @@ final class CitizensTab {
             setFilter(filter + 1);
             screen.rebuild();
         }).bounds(left + KingdomScreen.PAD, buttonsY, filterWidth, ROW - 2).build());
-        filterButton.active = !chronicle;
-        screen.add(Button.builder(toggleLabel(chronicle), b -> {
-            setChronicle(!chronicle);
+        filterButton.active = listsCitizens();
+        Mode next = Mode.values()[(mode.ordinal() + 1) % Mode.values().length];
+        screen.add(Button.builder(modeLabel(mode), b -> {
+            setMode(next);
             screen.rebuild();
-        }).bounds(left + KingdomScreen.PAD + filterWidth + GAP, buttonsY, toggleWidth, ROW - 2).build());
+        }).bounds(left + KingdomScreen.PAD + filterWidth + GAP, buttonsY, modeWidth, ROW - 2).build());
 
         int rows = visibleRows(top, panelHeight);
         scroll = Math.max(0, Math.min(scroll, rowCount() - rows));
-        if (chronicle || !view.canManage()) {
+        if (!listsCitizens() || !view.canManage()) {
             return;
         }
         List<CitizenView.Entry> entries = rows();
@@ -240,9 +300,9 @@ final class CitizensTab {
         for (int i = 0; i < rows && scroll + i < entries.size(); i++) {
             CitizenView.Entry entry = entries.get(scroll + i);
             int y = listTop(top) + i * ROW;
-            String next = Professions.REGISTRY.next(entry.profession()).id();
+            String nextProfession = Professions.REGISTRY.next(entry.profession()).id();
             screen.add(Button.builder(CitizenTexts.profession(entry.profession(), gender(entry.female())),
-                            b -> KingdomWorldNetwork.sendToServer(new CitizenActionPacket(entry.id(), next)))
+                            b -> KingdomWorldNetwork.sendToServer(new CitizenActionPacket(entry.id(), nextProfession)))
                     .bounds(professionX, y, professionWidth, ROW - 2).build());
         }
     }
@@ -279,10 +339,10 @@ final class CitizensTab {
             screen.label(graphics, page, pageX, top + ThroneScreen.CONTENT_TOP + 2 * LINE + 6, 0xFF9A9A9A, right);
         }
         int listTop = listTop(top);
-        if (chronicle) {
-            renderChronicle(graphics, font, x, right, listTop, rows);
-        } else {
-            renderList(graphics, x, right, listTop, rows);
+        switch (mode) {
+            case CHRONICLE -> renderChronicle(graphics, font, x, right, listTop, rows);
+            case PRODUCTION -> renderProduction(graphics, font, x, right, listTop, rows);
+            default -> renderList(graphics, x, right, listTop, rows);
         }
     }
 
@@ -295,7 +355,7 @@ final class CitizensTab {
         }
         int professionX = x + NAME_COLUMN;
         int stateX = professionX + professionWidth + 6;
-        int placeX = stateX + stateWidth + 6;
+        int placeX = mode == Mode.WORK ? right - MIN_PLACE_COLUMN : stateX + stateWidth + 6;
         for (int i = 0; i < rows && scroll + i < entries.size(); i++) {
             CitizenView.Entry entry = entries.get(scroll + i);
             int y = listTop + i * ROW + 4;
@@ -304,6 +364,17 @@ final class CitizensTab {
                 screen.label(graphics, CitizenTexts.profession(entry.profession(), gender(entry.female())), professionX + 4, y,
                         0xFFD0D0D0, stateX - 2);
             }
+            if (mode == Mode.WORK) {
+                WorkStatus work = entry.work();
+                screen.name(graphics, work(work).getString(), stateX, y, workColor(work), placeX - 6 - stateX);
+                BlockPos place = entry.workplace();
+                if (place == null) {
+                    screen.name(graphics, Component.translatable(KEY + "no_workplace").getString(), placeX, y, 0xFFB8B8B8, right - placeX);
+                } else {
+                    screen.name(graphics, place.getX() + " " + place.getY() + " " + place.getZ(), placeX, y, 0xFFD0D0D0, right - placeX);
+                }
+                continue;
+            }
             int stateColor = entry.state() == CitizenState.WOUNDED ? 0xFFFF8080 : 0xFFA0E0A0;
             screen.label(graphics, state(entry.state(), entry.female()), stateX, y, stateColor, placeX - 2);
             BlockPos home = entry.home();
@@ -311,6 +382,31 @@ final class CitizensTab {
                 screen.label(graphics, Component.translatable(KEY + "no_home"), placeX, y, 0xFFB8B8B8, right);
             } else {
                 screen.name(graphics, home.getX() + " " + home.getY() + " " + home.getZ(), placeX, y, 0xFFD0D0D0, right - placeX);
+            }
+        }
+    }
+
+    private void renderProduction(GuiGraphics graphics, Font font, int x, int right, int listTop, int rows) {
+        List<CitizenView.Production> production = view.production();
+        if (production.isEmpty()) {
+            screen.paragraph(graphics, Component.translatable(KEY + "production.none"), x, listTop + 5, right - x, 3, 0xFFB8B8B8);
+            return;
+        }
+        int todayX = x + professionWidth;
+        int yesterdayX = todayX + countWidth + 6;
+        int itemX = yesterdayX + countWidth + 6;
+        for (int i = 0; i < rows && scroll + i < production.size(); i++) {
+            CitizenView.Production entry = production.get(scroll + i);
+            int y = listTop + i * ROW;
+            screen.label(graphics, CitizenTexts.profession(entry.profession()), x, y + 5, 0xFFFFFFFF, todayX - 4);
+            screen.label(graphics, Component.translatable(KEY + "production.today", entry.today()), todayX, y + 5, 0xFFA0E0A0,
+                    yesterdayX - 4);
+            screen.label(graphics, Component.translatable(KEY + "production.yesterday", entry.yesterday()), yesterdayX, y + 5,
+                    0xFFD0D0D0, itemX - 4);
+            ItemStack top = item(entry.top());
+            if (!top.isEmpty() && itemX + 18 < right) {
+                graphics.renderItem(top, itemX, y);
+                screen.name(graphics, top.getHoverName().getString(), itemX + 18, y + 5, 0xFFD0D0D0, right - itemX - 18);
             }
         }
     }
@@ -340,6 +436,6 @@ final class CitizensTab {
      * Name of the current state for layout check messages.
      */
     String checkName() {
-        return chronicle ? "chronicle" : "citizens";
+        return mode == Mode.CITIZENS ? "citizens" : mode.id();
     }
 }

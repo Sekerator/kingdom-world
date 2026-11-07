@@ -15,7 +15,10 @@ import io.github.sekerator.kingdomworld.common.network.packet.KingdomViewPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.MapAreaPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.MapAreaRequestPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.OpenFoundingScreenPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.StoragePackets;
 import io.github.sekerator.kingdomworld.common.network.packet.TerritoryDeltaPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.WorkPostActionPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.WorkPostViewPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -39,7 +42,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "3";
+    public static final String PROTOCOL_VERSION = "4";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -74,6 +77,10 @@ public final class KingdomWorldNetwork {
         add(id++, CitizenRequestPacket.class, NetworkDirection.PLAY_TO_SERVER, CitizenRequestPacket::encode, CitizenRequestPacket::decode, CitizenRequestPacket::handle);
         add(id++, CitizenActionPacket.class, NetworkDirection.PLAY_TO_SERVER, CitizenActionPacket::encode, CitizenActionPacket::decode, CitizenActionPacket::handle);
         add(id++, CitizenViewPacket.class, NetworkDirection.PLAY_TO_CLIENT, CitizenViewPacket::encode, CitizenViewPacket::decode, CitizenViewPacket::handle);
+        add(id++, WorkPostViewPacket.class, NetworkDirection.PLAY_TO_CLIENT, WorkPostViewPacket::encode, WorkPostViewPacket::decode, WorkPostViewPacket::handle);
+        add(id++, WorkPostActionPacket.class, NetworkDirection.PLAY_TO_SERVER, WorkPostActionPacket::encode, WorkPostActionPacket::decode, WorkPostActionPacket::handle);
+        add(id++, StoragePackets.Request.class, NetworkDirection.PLAY_TO_SERVER, StoragePackets.Request::encode, StoragePackets.Request::decode, StoragePackets.Request::handle);
+        add(id++, StoragePackets.Response.class, NetworkDirection.PLAY_TO_CLIENT, StoragePackets.Response::encode, StoragePackets.Response::decode, StoragePackets.Response::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

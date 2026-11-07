@@ -48,7 +48,12 @@ public final class FarmerBehavior implements ProfessionBehavior {
 
     @Override
     public void workAbstractly(MinecraftServer server, Citizen citizen, int intervalTicks) {
-        if (citizen.workplace() == null || citizen.workCapacity() <= 0 || citizen.workProduct().isEmpty()) {
+        if (citizen.workplace() == null) {
+            citizen.setWorkStatus(io.github.sekerator.kingdomworld.core.citizen.WorkStatus.NO_WORKPLACE);
+            return;
+        }
+        if (citizen.workCapacity() <= 0 || citizen.workProduct().isEmpty()) {
+            PostWork.setStatus(server, citizen, io.github.sekerator.kingdomworld.core.citizen.WorkStatus.NO_CROPS);
             return;
         }
         ResourceLocation id = ResourceLocation.tryParse(citizen.workProduct());
@@ -60,13 +65,27 @@ public final class FarmerBehavior implements ProfessionBehavior {
         int whole = (int) Math.min(Math.floor(progress), 64.0 * 9);
         citizen.setWorkProgress(progress - whole);
         int left = whole;
+        var post = PostWork.postOf(server, citizen);
         while (left > 0) {
             int count = Math.min(left, item.getMaxStackSize(new ItemStack(item)));
             // What the storehouses cannot take rots in the fields.
-            KingdomStorage.insert(server, citizen.kingdomId(), new ItemStack(item, count), citizen.workplace());
+            if (post.isPresent()) {
+                PostWork.deliver(server, post.get(), new ItemStack(item, count));
+            } else {
+                KingdomStorage.insert(server, citizen.kingdomId(), new ItemStack(item, count), citizen.workplace());
+            }
             left -= count;
         }
+        if (whole > 0) {
+            if (post.isPresent()) {
+                PostWork.record(server, post.get(), citizen.workProduct(), whole);
+            } else {
+                io.github.sekerator.kingdomworld.common.api.KingdomWorldApi.state(server).citizens().ledger()
+                        .record(citizen.kingdomId(), PostWork.gameDay(server), citizen.professionId(), citizen.workProduct(), whole);
+            }
+        }
         citizen.addExperience(whole);
+        PostWork.setStatus(server, citizen, io.github.sekerator.kingdomworld.core.citizen.WorkStatus.WORKING);
     }
 
     @Override
@@ -75,8 +94,9 @@ public final class FarmerBehavior implements ProfessionBehavior {
         if (workplace == null || !workplace.dimension().equals(Dimensions.id(level))) {
             return;
         }
-        Survey survey = survey(level, citizen.kingdomId(), new BlockPos(workplace.x(), workplace.y(), workplace.z()),
-                CitizenSettings.rules().farmRadius());
+        int radius = PostWork.post(level.getServer(), workplace).map(post -> post.radius())
+                .orElse(CitizenSettings.rules().farmRadius());
+        Survey survey = survey(level, citizen.kingdomId(), new BlockPos(workplace.x(), workplace.y(), workplace.z()), radius);
         if (survey.plots() > 0) {
             citizen.rememberWork(survey.plots(), survey.product());
         }
@@ -115,8 +135,14 @@ public final class FarmerBehavior implements ProfessionBehavior {
                     if (!FarmCrops.isCrop(state)) {
                         continue;
                     }
+                    if (state.getBlock() instanceof net.minecraft.world.level.block.SugarCaneBlock
+                            && level.getBlockState(pos.below()).is(state.getBlock())) {
+                        continue;
+                    }
                     plots++;
-                    BlockState ripe = state.getBlock() instanceof CropBlock crop ? crop.getStateForAge(crop.getMaxAge()) : state;
+                    BlockState fruit = FarmCrops.fruitOf(state);
+                    BlockState ripe = fruit != null ? fruit
+                            : state.getBlock() instanceof CropBlock crop ? crop.getStateForAge(crop.getMaxAge()) : state;
                     // A sample of the crops is enough to know what the farm gives.
                     if (plots <= 16) {
                         List<ItemStack> drops = FarmCrops.drops(level, pos.immutable(), ripe, null);

@@ -31,7 +31,9 @@ class SideIsolationTest {
             "io/github/sekerator/kingdomworld/common/network/packet/KingdomViewPacket.java",
             "io/github/sekerator/kingdomworld/common/network/packet/MapAreaPacket.java",
             "io/github/sekerator/kingdomworld/common/network/packet/OpenFoundingScreenPacket.java",
-            "io/github/sekerator/kingdomworld/common/network/packet/TerritoryDeltaPacket.java");
+            "io/github/sekerator/kingdomworld/common/network/packet/StoragePackets.java",
+            "io/github/sekerator/kingdomworld/common/network/packet/TerritoryDeltaPacket.java",
+            "io/github/sekerator/kingdomworld/common/network/packet/WorkPostViewPacket.java");
 
     /**
      * The only file outside a compat module allowed to name compat module classes.

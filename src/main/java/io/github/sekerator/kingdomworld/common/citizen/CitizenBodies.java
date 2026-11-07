@@ -172,6 +172,7 @@ public final class CitizenBodies {
         BlockPos pos = body.blockPosition();
         citizen.setLastPos(new WorldPos(Dimensions.id(body.level()), pos.getX(), pos.getY(), pos.getZ()));
         citizen.setHealth(body.getHealth(), CitizenSettings.rules().woundedFraction());
+        body.storeGear(io.github.sekerator.kingdomworld.common.data.KingdomSavedData.get(server).gear());
         body.refresh(citizen, kingdomColor(server, citizen.kingdomId()));
     }
 
@@ -219,6 +220,7 @@ public final class CitizenBodies {
         }
         body.moveTo(spot.getX() + 0.5, spot.getY(), spot.getZ() + 0.5, level.getRandom().nextFloat() * 360.0f, 0.0f);
         body.bind(citizen, kingdomColor(level.getServer(), citizen.kingdomId()));
+        body.equip(io.github.sekerator.kingdomworld.common.data.KingdomSavedData.get(level.getServer()).gear());
         ACTIVE.put(citizen.id(), body);
         if (!level.addFreshEntity(body)) {
             ACTIVE.remove(citizen.id(), body);
@@ -309,6 +311,7 @@ public final class CitizenBodies {
             BlockPos pos = body.blockPosition();
             citizen.get().setLastPos(new WorldPos(Dimensions.id(level), pos.getX(), pos.getY(), pos.getZ()));
             citizen.get().setHealth(body.getHealth(), CitizenSettings.rules().woundedFraction());
+            body.storeGear(io.github.sekerator.kingdomworld.common.data.KingdomSavedData.get(server).gear());
         }
         for (int slot = 0; slot < body.carried().getContainerSize(); slot++) {
             ItemStack stack = body.carried().removeItemNoUpdate(slot);
@@ -330,6 +333,8 @@ public final class CitizenBodies {
         }
         ACTIVE.remove(id);
         Containers.dropContents(level, body.blockPosition(), body.carried());
+        // The body drops what it held and wore itself; the stored copy of the gear goes with it.
+        io.github.sekerator.kingdomworld.common.data.KingdomSavedData.get(level.getServer()).gear().takeAll(id);
         BlockPos pos = body.blockPosition();
         CitizenLife.die(level.getServer(), id, CitizenLife.causeOf(source), CitizenLife.killerOf(source),
                 new WorldPos(Dimensions.id(level), pos.getX(), pos.getY(), pos.getZ()));

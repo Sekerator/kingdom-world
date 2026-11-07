@@ -114,13 +114,14 @@ final class CitizenCommands {
                                 .executes(CitizenCommands::kill)))
                 .then(Commands.literal("info")
                         .then(Commands.argument("id", StringArgumentType.word()).suggests(CITIZEN_IDS)
-                                .executes(CitizenCommands::info)));
+                                .executes(CitizenCommands::info)))
+                .then(WorkCommands.profession());
     }
 
     /**
      * The named kingdom, or the source player's kingdom, or the kingdom whose land the source stands on.
      */
-    private static Kingdom kingdom(CommandSourceStack source, String name) throws CommandSyntaxException {
+    static Kingdom kingdom(CommandSourceStack source, String name) throws CommandSyntaxException {
         MinecraftServer server = source.getServer();
         if (name != null) {
             return KingdomWorldApi.findKingdom(server, name).orElseThrow(() -> NO_KINGDOM.create(KingdomNames.normalize(name)));
@@ -186,6 +187,10 @@ final class CitizenCommands {
         int done = spawned;
         source.sendSuccess(() -> Component.translatable(ADMIN + "spawn.success", done, KingdomActions.kingdomName(kingdom)), true);
         return spawned;
+    }
+
+    static Citizen citizen(CommandSourceStack source, String id) throws CommandSyntaxException {
+        return find(source, id);
     }
 
     private static Citizen find(CommandSourceStack source, String id) throws CommandSyntaxException {

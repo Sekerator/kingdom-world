@@ -27,6 +27,7 @@ import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
@@ -75,7 +76,8 @@ public class CitizenEntity extends PathfinderMob {
         return PathfinderMob.createMobAttributes()
                 .add(Attributes.MAX_HEALTH, Citizen.MAX_HEALTH)
                 .add(Attributes.MOVEMENT_SPEED, 0.5)
-                .add(Attributes.FOLLOW_RANGE, 48.0);
+                .add(Attributes.FOLLOW_RANGE, 48.0)
+                .add(Attributes.ATTACK_DAMAGE, 1.0);
     }
 
     @Override
@@ -116,6 +118,31 @@ public class CitizenEntity extends PathfinderMob {
         getAttribute(Attributes.MAX_HEALTH).setBaseValue(Citizen.MAX_HEALTH);
         setHealth(Math.max(1.0f, citizen.health()));
         refresh(citizen, kingdomColor);
+    }
+
+    /**
+     * Puts the citizen's tools and armor on the body; what the body carries falls where it dies.
+     */
+    void equip(GearRegistry gear) {
+        for (net.minecraft.world.entity.EquipmentSlot slot : GearRegistry.SLOTS) {
+            setItemSlot(slot, gear.get(citizenId, slot).copy());
+            setDropChance(slot, 2.0f);
+        }
+    }
+
+    /**
+     * Writes what the body holds and wears back into the citizen's gear.
+     */
+    void storeGear(GearRegistry gear) {
+        if (citizenId == null) {
+            return;
+        }
+        for (net.minecraft.world.entity.EquipmentSlot slot : GearRegistry.SLOTS) {
+            ItemStack stack = getItemBySlot(slot);
+            if (!ItemStack.matches(stack, gear.get(citizenId, slot))) {
+                gear.set(citizenId, slot, stack.copy());
+            }
+        }
     }
 
     /**

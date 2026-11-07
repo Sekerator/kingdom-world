@@ -3,6 +3,7 @@ package io.github.sekerator.kingdomworld.common.registry;
 import io.github.sekerator.kingdomworld.KingdomWorld;
 import io.github.sekerator.kingdomworld.common.block.InfirmaryBlock;
 import io.github.sekerator.kingdomworld.common.block.ThroneBlock;
+import io.github.sekerator.kingdomworld.common.block.WorkPostBlock;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenEntity;
 import io.github.sekerator.kingdomworld.common.item.DescribedItem;
 import io.github.sekerator.kingdomworld.common.item.KingdomAtlasItem;
@@ -76,6 +77,14 @@ public final class ModRegistries {
                     .sound(SoundType.WOOD)));
     public static final RegistryObject<Item> INFIRMARY_ITEM = ITEMS.register("infirmary",
             () -> new BlockItem(INFIRMARY.get(), new Item.Properties()));
+    /** Workplace of the gathering professions. */
+    public static final RegistryObject<Block> WORK_POST = BLOCKS.register("work_post", () -> new WorkPostBlock(
+            BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.WOOD)
+                    .strength(2.0f)
+                    .sound(SoundType.WOOD)));
+    public static final RegistryObject<Item> WORK_POST_ITEM = ITEMS.register("work_post",
+            () -> new BlockItem(WORK_POST.get(), new Item.Properties()));
 
     /**
      * The body of a citizen. Never saved with chunks: the citizen records in the kingdom data are what persists.
@@ -108,6 +117,7 @@ public final class ModRegistries {
             event.accept(THRONE_ITEM);
             event.accept(STOREHOUSE_ITEM);
             event.accept(INFIRMARY_ITEM);
+            event.accept(WORK_POST_ITEM);
         } else if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) {
             event.accept(FOUNDER_CROWN);
             event.accept(KINGDOM_ATLAS);

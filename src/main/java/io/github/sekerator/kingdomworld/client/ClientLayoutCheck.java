@@ -21,6 +21,7 @@ import io.github.sekerator.kingdomworld.core.citizen.CitizenNames;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
 import io.github.sekerator.kingdomworld.core.citizen.Gender;
+import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
 import io.github.sekerator.kingdomworld.common.network.data.KingdomMapInfo;
 import io.github.sekerator.kingdomworld.common.network.data.KingdomView;
 import io.github.sekerator.kingdomworld.common.network.packet.MapAreaPacket;
@@ -301,13 +302,15 @@ final class ClientLayoutCheck {
         List<CitizenView.Death> deaths = new ArrayList<>();
         if (!empty) {
             BlockPos far = new BlockPos(-30_000_000, 319, 29_999_999);
-            String[] professions = {"farmer", "unemployed", "dragon_tamer"};
+            String[] professions = {"farmer", "unemployed", "dragon_tamer", "lumberjack", "miner", "fisher", "herder", "carrier"};
+            WorkStatus[] statuses = WorkStatus.values();
             for (int i = 0; i < 24; i++) {
                 Gender gender = i % 2 == 0 ? Gender.FEMALE : Gender.MALE;
                 int seed = i < 2 ? longestNameSeed(gender) : i * 7919;
                 entries.add(new CitizenView.Entry(UUID.nameUUIDFromBytes(("citizen" + i).getBytes(StandardCharsets.UTF_8)), seed,
                         gender == Gender.FEMALE, professions[i % professions.length],
-                        i % 3 == 1 ? CitizenState.WOUNDED : CitizenState.HEALTHY, i % 4 == 3 ? null : far, 20 - i % 15, 50 + i));
+                        i % 3 == 1 ? CitizenState.WOUNDED : CitizenState.HEALTHY, i % 4 == 3 ? null : far, 20 - i % 15, 50 + i,
+                        i % 5 == 4 ? null : far, statuses[i % statuses.length]));
             }
             CauseOfDeath[] causes = CauseOfDeath.values();
             for (int i = 0; i < causes.length + 2; i++) {
@@ -318,15 +321,24 @@ final class ClientLayoutCheck {
                         i == 0 ? LONG_PLAYER : "", 99_999L - i, far));
             }
         }
+        List<CitizenView.Production> production = new ArrayList<>();
+        if (!empty) {
+            String[] items = {"minecraft:wheat", "minecraft:oak_log", "minecraft:cobblestone", "minecraft:cod", "minecraft:beef",
+                    "minecraft:carved_pumpkin", "minecraft:enchanted_golden_apple", "mod:missing_item"};
+            String[] professions = {"farmer", "lumberjack", "miner", "fisher", "herder", "carrier", "dragon_tamer", "unemployed"};
+            for (int i = 0; i < professions.length; i++) {
+                production.add(new CitizenView.Production(professions[i], 9_999_999L - i, 9_999_999L - 2 * i, items[i]));
+            }
+        }
         return new CitizenView(UUID.randomUUID(), canManage, empty ? 0 : 187, empty ? 0 : 180, empty ? 0 : 200,
-                empty ? 0 : CitizenView.MAX_FOOD_DAYS, empty ? 50 : 100, empty ? 0 : 999, growth, entries, deaths);
+                empty ? 0 : CitizenView.MAX_FOOD_DAYS, empty ? 50 : 100, empty ? 0 : 999, growth, entries, deaths, production);
     }
 
     private static ThroneScreen citizens(KingdomView view, CitizenView citizens, boolean chronicle, Component status) {
         ThroneScreen screen = throne(view, "citizens", status);
         screen.updateCitizens(new CitizenView(view.id(), citizens.canManage(), citizens.population(), citizens.bedsUsed(),
                 citizens.bedsTotal(), citizens.foodDays(), citizens.mood(), citizens.storehouses(), citizens.growth(),
-                citizens.citizens(), citizens.chronicle()));
+                citizens.citizens(), citizens.chronicle(), citizens.production()));
         screen.showChronicle(chronicle);
         return screen;
     }

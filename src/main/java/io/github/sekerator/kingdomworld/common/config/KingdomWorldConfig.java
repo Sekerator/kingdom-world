@@ -72,6 +72,16 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue woundedHealthPercent;
         public final ForgeConfigSpec.IntValue maxCitizensPerKingdom;
         public final ForgeConfigSpec.IntValue farmRadius;
+        public final ForgeConfigSpec.IntValue workPostDefaultRadius;
+        public final ForgeConfigSpec.IntValue workPostMaxRadius;
+        public final ForgeConfigSpec.IntValue workPostMaxSeats;
+        public final ForgeConfigSpec.IntValue maxTreeBlocks;
+        public final ForgeConfigSpec.IntValue mineLevels;
+        public final ForgeConfigSpec.IntValue maxHerdSize;
+        public final ForgeConfigSpec.IntValue carrierRange;
+        public final ForgeConfigSpec.IntValue carrierItemsPerMinute;
+        public final ForgeConfigSpec.DoubleValue taskRiskMultiplier;
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> professionRisks;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -112,6 +122,42 @@ public final class KingdomWorldConfig {
             farmRadius = builder
                     .comment("How far, in blocks, a farmer works around its composter.")
                     .defineInRange("farmRadius", 8, 1, 32);
+            builder.pop();
+
+            builder.comment("Work posts and the gathering professions: lumberjack, miner, fisher, herder and carrier.").push("work");
+            workPostDefaultRadius = builder
+                    .comment("Radius of the zone of a new work post, in blocks (smaller if the kingdom's land around it is smaller).")
+                    .defineInRange("workPostDefaultRadius", 8, 1, 64);
+            workPostMaxRadius = builder
+                    .comment("Largest radius of the zone of a work post, in blocks. A zone never reaches beyond the kingdom's land.")
+                    .defineInRange("workPostMaxRadius", 16, 1, 64);
+            workPostMaxSeats = builder
+                    .comment("Most workers one work post takes.")
+                    .defineInRange("workPostMaxSeats", 4, 1, 16);
+            maxTreeBlocks = builder
+                    .comment("Most logs of one tree a lumberjack fells; larger trees are left standing.")
+                    .defineInRange("maxTreeBlocks", 160, 8, 2_048);
+            mineLevels = builder
+                    .comment("Most levels a miner digs below its post, one every 3 blocks (as many as the radius allows).")
+                    .defineInRange("mineLevels", 4, 1, 32);
+            maxHerdSize = builder
+                    .comment("Largest herd a herder keeps.")
+                    .defineInRange("maxHerdSize", 12, 2, 64);
+            carrierRange = builder
+                    .comment("How far from its post a carrier fetches and brings goods, in blocks.")
+                    .defineInRange("carrierRange", 48, 8, 256);
+            carrierItemsPerMinute = builder
+                    .comment("Items one carrier far from players moves from the containers of work posts to storehouses per minute.")
+                    .defineInRange("carrierItemsPerMinute", 64, 0, 10_000);
+            taskRiskMultiplier = builder
+                    .comment("Multiplies the risk of accidents at work far from players (near players the dangers are real).",
+                            "0 turns them off, 2 doubles them.")
+                    .defineInRange("taskRiskMultiplier", 1.0, 0.0, 100.0);
+            professionRisks = builder
+                    .comment("Risk of each profession per minute of work far from players, as profession:injury:death.",
+                            "Armor (up to 75 percent less) and experience (up to 50 percent less) lower it.")
+                    .defineListAllowEmpty("professionRisks", io.github.sekerator.kingdomworld.core.citizen.TaskRisks.defaultSettings(),
+                            value -> value instanceof String text && io.github.sekerator.kingdomworld.core.citizen.TaskRisks.parse(text).isPresent());
             builder.pop();
 
             builder.comment("Abstract simulation of kingdoms far from players.").push("simulation");

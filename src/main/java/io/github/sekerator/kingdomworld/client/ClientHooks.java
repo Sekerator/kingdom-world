@@ -3,7 +3,9 @@ package io.github.sekerator.kingdomworld.client;
 import io.github.sekerator.kingdomworld.client.screen.FoundKingdomScreen;
 import io.github.sekerator.kingdomworld.client.screen.KingdomMapScreen;
 import io.github.sekerator.kingdomworld.client.screen.ThroneScreen;
+import io.github.sekerator.kingdomworld.client.screen.WorkPostScreen;
 import io.github.sekerator.kingdomworld.common.network.data.KingdomView;
+import io.github.sekerator.kingdomworld.common.network.data.WorkPostView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 
@@ -29,5 +31,9 @@ public final class ClientHooks {
 
     public static void openThrone(KingdomView view) {
         Minecraft.getInstance().setScreen(new ThroneScreen(view));
+    }
+
+    public static void openWorkPost(WorkPostView view) {
+        Minecraft.getInstance().setScreen(new WorkPostScreen(view));
     }
 }

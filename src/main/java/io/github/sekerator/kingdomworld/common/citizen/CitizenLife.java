@@ -97,7 +97,13 @@ public final class CitizenLife {
         CitizenBodies.force(citizenId, false);
         CitizenEntity body = CitizenBodies.body(citizenId);
         if (body != null && body.isAlive()) {
+            body.storeGear(io.github.sekerator.kingdomworld.common.data.KingdomSavedData.get(server).gear());
             body.discard();
+        }
+        // Tools and armor of a citizen who died without a body go back to the storehouses.
+        for (net.minecraft.world.item.ItemStack stack : io.github.sekerator.kingdomworld.common.data.KingdomSavedData.get(server)
+                .gear().takeAll(citizenId)) {
+            io.github.sekerator.kingdomworld.common.storage.KingdomStorage.insert(server, citizen.get().kingdomId(), stack, place);
         }
         LOGGER.info("Citizen {} ({}) of kingdom {} died: {} at {} in {}", citizen.get().name(CitizenNames.Alphabet.LATIN),
                 citizen.get().shortId(), citizen.get().kingdomId(), cause.id(), record[0].place().coordinates(),

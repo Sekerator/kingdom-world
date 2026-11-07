@@ -71,8 +71,11 @@ public final class CitizenActions {
                 break;
             }
             BlockPos home = citizen.home() == null ? null : new BlockPos(citizen.home().x(), citizen.home().y(), citizen.home().z());
+            BlockPos work = citizen.workplace() == null ? null
+                    : new BlockPos(citizen.workplace().x(), citizen.workplace().y(), citizen.workplace().z());
             entries.add(new CitizenView.Entry(citizen.id(), citizen.nameSeed(), citizen.gender() == Gender.FEMALE,
-                    citizen.professionId(), citizen.state(), home, Math.round(citizen.health()), citizen.mood()));
+                    citizen.professionId(), citizen.state(), home, Math.round(citizen.health()), citizen.mood(), work,
+                    citizen.workStatus()));
         }
         List<CitizenView.Death> chronicle = new ArrayList<>();
         for (DeathRecord record : state.citizens().registry().chronicle(kingdomId)) {
@@ -85,7 +88,31 @@ public final class CitizenActions {
         }
         return Optional.of(new CitizenView(kingdomId, state.membership().hasPermission(viewer, kingdomId, Permission.MANAGE_CITIZENS),
                 summary.population(), summary.bedsUsed(), summary.bedsTotal(), summary.foodDays(), summary.mood(),
-                summary.storehouses(), summary.growth(), entries, chronicle));
+                summary.storehouses(), summary.growth(), entries, chronicle, production(server, kingdomId)));
+    }
+
+    /**
+     * What each profession produced today and yesterday, from the kingdom's record of production.
+     */
+    public static List<CitizenView.Production> production(MinecraftServer server, UUID kingdomId) {
+        long day = io.github.sekerator.kingdomworld.common.citizen.work.PostWork.gameDay(server);
+        var ledger = KingdomWorldApi.state(server).citizens().ledger();
+        var today = ledger.today(kingdomId, day);
+        var yesterday = ledger.yesterday(kingdomId, day);
+        java.util.Set<String> professions = new java.util.TreeSet<>(today.counts().keySet());
+        professions.addAll(yesterday.counts().keySet());
+        List<CitizenView.Production> result = new ArrayList<>();
+        for (String profession : professions) {
+            if (result.size() >= CitizenView.MAX_PRODUCTION) {
+                break;
+            }
+            var items = today.counts().getOrDefault(profession, yesterday.counts().getOrDefault(profession, java.util.Map.of()));
+            String top = items.entrySet().stream().filter(entry -> !entry.getKey().equals(
+                            io.github.sekerator.kingdomworld.core.citizen.ProductionLedger.OTHER))
+                    .max(java.util.Map.Entry.comparingByValue()).map(java.util.Map.Entry::getKey).orElse("");
+            result.add(new CitizenView.Production(profession, today.total(profession), yesterday.total(profession), top));
+        }
+        return result;
     }
 
     public static void sendView(ServerPlayer player, UUID kingdomId) {
@@ -108,13 +135,32 @@ public final class CitizenActions {
         if (citizen.isEmpty()) {
             return KingdomActions.Feedback.error(KingdomError.UNKNOWN_CITIZEN);
         }
-        CitizenSimulation.findPlaces(server, KingdomWorldApi.state(server).citizens(), citizen.get());
-        CitizenEntity body = CitizenBodies.body(citizenId);
-        if (body != null) {
-            CitizenBodies.syncBack(server, body, citizen.get());
-        }
+        afterProfessionChange(server, citizen.get());
         return KingdomActions.Feedback.ok("kingdomworld.citizen.profession_set", CitizenTexts.name(citizen.get()),
                 CitizenTexts.profession(professionId, citizen.get().gender()));
+    }
+
+    /**
+     * After a citizen got another profession: it looks for a workplace of the new one right away, puts tools that
+     * do not suit the new work back into the storehouses, and its body follows.
+     */
+    public static void afterProfessionChange(MinecraftServer server, Citizen citizen) {
+        CitizenSimulation.findPlaces(server, KingdomWorldApi.state(server).citizens(), citizen);
+        CitizenEntity body = CitizenBodies.body(citizen.id());
+        io.github.sekerator.kingdomworld.common.citizen.work.Equipment.Hands hands = body != null
+                ? io.github.sekerator.kingdomworld.common.citizen.work.Equipment.of(body)
+                : io.github.sekerator.kingdomworld.common.citizen.work.Equipment.of(server, citizen.id());
+        io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehavior behavior =
+                io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehaviors.get(citizen.professionId()).orElse(null);
+        var need = behavior == null ? io.github.sekerator.kingdomworld.common.citizen.work.Equipment.ToolNeed.NONE : behavior.tool();
+        var second = behavior == null ? io.github.sekerator.kingdomworld.common.citizen.work.Equipment.ToolNeed.NONE : behavior.secondTool();
+        io.github.sekerator.kingdomworld.common.citizen.work.Equipment.stowUnsuitable(server, citizen.kingdomId(), hands,
+                net.minecraft.world.entity.EquipmentSlot.MAINHAND, need, citizen.lastPos());
+        io.github.sekerator.kingdomworld.common.citizen.work.Equipment.stowUnsuitable(server, citizen.kingdomId(), hands,
+                net.minecraft.world.entity.EquipmentSlot.OFFHAND, second, citizen.lastPos());
+        if (body != null) {
+            CitizenBodies.syncBack(server, body, citizen);
+        }
     }
 
     /**

@@ -9,6 +9,8 @@ import io.github.sekerator.kingdomworld.common.registry.ModRegistries;
 import io.github.sekerator.kingdomworld.common.storage.KingdomStorage;
 import io.github.sekerator.kingdomworld.common.storage.StorehouseInventory;
 import io.github.sekerator.kingdomworld.core.citizen.Citizen;
+import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
+import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
 import net.minecraft.core.BlockPos;
@@ -17,7 +19,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.AttachedStemBlock;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.SugarCaneBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.items.ItemHandlerHelper;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -69,6 +73,9 @@ final class FarmerWorkGoal extends Goal {
     private BlockPos storehouse;
     private int ticksOnTarget;
     private int pathCooldown;
+    /** The work post the farmer works at, or {@code null} at a composter. */
+    @Nullable
+    private WorkPost post;
 
     FarmerWorkGoal(CitizenEntity body) {
         this.body = body;
@@ -104,6 +111,14 @@ final class FarmerWorkGoal extends Goal {
     public void start() {
         center = body.workplace();
         radius = CitizenSettings.rules().farmRadius();
+        post = null;
+        if (center != null && body.getServer() != null) {
+            post = PostWork.post(body.getServer(), new WorldPos(Dimensions.id(body.level()), center.getX(), center.getY(), center.getZ()))
+                    .orElse(null);
+            if (post != null) {
+                radius = post.radius();
+            }
+        }
         scanIndex = 0;
         plots = 0;
         targets.clear();
@@ -162,9 +177,9 @@ final class FarmerWorkGoal extends Goal {
                 continue;
             }
             BlockState state = level.getBlockState(pos);
-            if (FarmCrops.isCrop(state)) {
+            if (FarmCrops.isCrop(state) && !(state.getBlock() instanceof SugarCaneBlock && level.getBlockState(pos.below()).is(state.getBlock()))) {
                 plots++;
-                if (FarmCrops.isMature(state) && targets.size() < MAX_TARGETS) {
+                if (FarmCrops.isMature(level, pos, state) && targets.size() < MAX_TARGETS) {
                     targets.add(pos.immutable());
                 }
             }
@@ -175,6 +190,7 @@ final class FarmerWorkGoal extends Goal {
         if (plots > 0) {
             record(plots, null);
         }
+        report(plots > 0 ? WorkStatus.WORKING : WorkStatus.NO_CROPS);
         if (!targets.isEmpty() && !isCarryingFull()) {
             phase = Phase.HARVEST;
         } else if (!body.carried().isEmpty()) {
@@ -200,7 +216,7 @@ final class FarmerWorkGoal extends Goal {
             }
         }
         BlockState state = level.getBlockState(target);
-        if (!FarmCrops.isMature(state)) {
+        if (!FarmCrops.isMature(level, target, state)) {
             target = null;
             return;
         }
@@ -242,6 +258,23 @@ final class FarmerWorkGoal extends Goal {
      */
     static void harvestAt(ServerLevel level, BlockPos pos, BlockState state, @Nullable CitizenEntity farmer,
                           Map<Item, Integer> harvested) {
+        if (state.getBlock() instanceof AttachedStemBlock) {
+            // The fruit is picked; the stem stays and grows a new one.
+            BlockPos fruit = pos.relative(state.getValue(AttachedStemBlock.FACING));
+            takeWhole(level, fruit, level.getBlockState(fruit), farmer, harvested);
+            return;
+        }
+        if (state.getBlock() instanceof SugarCaneBlock) {
+            // Cut from the top down to the lowest block, which grows again.
+            BlockPos top = pos.above();
+            while (level.getBlockState(top.above()).is(state.getBlock())) {
+                top = top.above();
+            }
+            for (BlockPos at = top; at.getY() > pos.getY(); at = at.below()) {
+                takeWhole(level, at, level.getBlockState(at), farmer, harvested);
+            }
+            return;
+        }
         List<ItemStack> drops = FarmCrops.drops(level, pos, state, farmer);
         Item product = FarmCrops.product(drops, state, level, pos);
         boolean seed = FarmCrops.takeSeed(drops, state, level, pos)
@@ -264,9 +297,44 @@ final class FarmerWorkGoal extends Goal {
         }
     }
 
+    /**
+     * Breaks a block whole (a fruit, a piece of cane) and keeps what it drops.
+     */
+    private static void takeWhole(ServerLevel level, BlockPos pos, BlockState state, @Nullable CitizenEntity farmer,
+                                  Map<Item, Integer> harvested) {
+        if (state.isAir() || level.getBlockEntity(pos) != null) {
+            return;
+        }
+        List<ItemStack> drops = FarmCrops.drops(level, pos, state, farmer);
+        level.destroyBlock(pos, false, farmer);
+        for (ItemStack drop : drops) {
+            harvested.merge(drop.getItem(), 1, Integer::sum);
+            ItemStack rest = farmer == null ? drop : farmer.carried().addItem(drop);
+            if (!rest.isEmpty()) {
+                Block.popResource(level, pos, rest);
+            }
+        }
+    }
+
     private void harvestAt(ServerLevel level, BlockPos pos, BlockState state) {
+        Map<Item, Integer> before = new HashMap<>(harvested);
         harvestAt(level, pos, state, body, harvested);
         citizen().ifPresent(citizen -> citizen.addExperience(1));
+        if (body.getServer() != null) {
+            UUID kingdom = body.kingdomId();
+            long day = PostWork.gameDay(body.getServer());
+            for (Map.Entry<Item, Integer> entry : harvested.entrySet()) {
+                int gained = entry.getValue() - before.getOrDefault(entry.getKey(), 0);
+                if (gained > 0 && kingdom != null) {
+                    String id = PostWork.itemId(new ItemStack(entry.getKey()));
+                    if (post != null) {
+                        PostWork.record(body.getServer(), post, id, gained);
+                    } else {
+                        KingdomWorldApi.state(body.getServer()).citizens().ledger().record(kingdom, day, body.professionId(), id, gained);
+                    }
+                }
+            }
+        }
     }
 
     // ---------------------------------------------------------------- delivering
@@ -277,10 +345,14 @@ final class FarmerWorkGoal extends Goal {
             return;
         }
         ServerLevel level = (ServerLevel) body.level();
+        if (storehouse == null && post != null && deliverToPost(level)) {
+            return;
+        }
         if (storehouse == null) {
             storehouse = nearestStorehouse(level);
             ticksOnTarget = 0;
             if (storehouse == null) {
+                report(WorkStatus.NO_STOREHOUSE);
                 finish(400);
                 return;
             }
@@ -307,6 +379,48 @@ final class FarmerWorkGoal extends Goal {
         }
         storehouse = null;
         finish(body.carried().isEmpty() ? 20 : 400);
+    }
+
+    /**
+     * A farmer at a work post brings the harvest to the post's container, if it has one.
+     *
+     * @return whether the farmer is busy with that (walking there or done)
+     */
+    private boolean deliverToPost(ServerLevel level) {
+        PostContainers.Container container = PostContainers.find(level, center);
+        post.setHasContainer(container != null);
+        if (container == null) {
+            return false;
+        }
+        if (body.distanceToSqr(center.getX() + 0.5, center.getY(), center.getZ() + 0.5) > STOREHOUSE_REACH_SQR) {
+            moveTo(center);
+            if (++ticksOnTarget > GIVE_UP_TICKS * 2) {
+                ticksOnTarget = 0;
+                finish(100);
+            }
+            return true;
+        }
+        ticksOnTarget = 0;
+        for (int slot = 0; slot < body.carried().getContainerSize(); slot++) {
+            ItemStack stack = body.carried().getItem(slot);
+            if (!stack.isEmpty()) {
+                body.carried().setItem(slot, ItemHandlerHelper.insertItemStacked(container.handler(), stack, false));
+            }
+        }
+        // What the full container cannot take goes on to a storehouse.
+        if (body.carried().isEmpty()) {
+            finish(20);
+            return true;
+        }
+        return false;
+    }
+
+    private void report(WorkStatus status) {
+        citizen().ifPresent(citizen -> {
+            if (body.getServer() != null) {
+                PostWork.setStatus(body.getServer(), citizen, status);
+            }
+        });
     }
 
     @Nullable

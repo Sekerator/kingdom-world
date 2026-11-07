@@ -127,6 +127,112 @@ public final class KingdomStorage {
         return rest;
     }
 
+    /**
+     * A stack in a storehouse.
+     */
+    public record Found(StorehouseInventory inventory, int slot, ItemStack stack) {
+    }
+
+    /**
+     * Every stack matching the filter, from the storehouses nearest to {@code near} first. The stacks are the
+     * stored ones; take items with {@link #extract}.
+     */
+    public static List<Found> find(MinecraftServer server, UUID kingdomId, Predicate<ItemStack> filter, @Nullable WorldPos near) {
+        List<Found> result = new ArrayList<>();
+        for (StorehouseInventory inventory : storehouses(server, kingdomId, near)) {
+            for (int slot = 0; slot < inventory.getSlots(); slot++) {
+                ItemStack stack = inventory.getStackInSlot(slot);
+                if (!stack.isEmpty() && filter.test(stack)) {
+                    result.add(new Found(inventory, slot, stack));
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Takes up to {@code amount} items of a found stack.
+     *
+     * @return what was taken; empty if the data is read-only
+     */
+    public static ItemStack extract(MinecraftServer server, Found found, int amount) {
+        if (amount <= 0 || KingdomSavedData.get(server).isReadOnly()) {
+            return ItemStack.EMPTY;
+        }
+        return found.inventory().extractItem(found.slot(), amount, false);
+    }
+
+    /**
+     * Empty slots of a storehouse.
+     */
+    public static int freeSlots(StorehouseInventory inventory) {
+        int free = 0;
+        for (int slot = 0; slot < inventory.getSlots(); slot++) {
+            if (inventory.getStackInSlot(slot).isEmpty()) {
+                free++;
+            }
+        }
+        return free;
+    }
+
+    /**
+     * Items in a storehouse.
+     */
+    public static int itemCount(StorehouseInventory inventory) {
+        int count = 0;
+        for (int slot = 0; slot < inventory.getSlots(); slot++) {
+            count += inventory.getStackInSlot(slot).getCount();
+        }
+        return count;
+    }
+
+    /**
+     * One kind of item and how many of it all storehouses of a kingdom hold.
+     *
+     * @param sample one item of the kind, with its tag
+     */
+    public record Total(ItemStack sample, long count) {
+    }
+
+    /**
+     * What all storehouses of a kingdom hold, by kind of item (items with different tags are different kinds), most
+     * first.
+     */
+    public static List<Total> totals(MinecraftServer server, UUID kingdomId) {
+        List<ItemStack> samples = new ArrayList<>();
+        List<long[]> counts = new ArrayList<>();
+        java.util.Map<net.minecraft.world.item.Item, List<Integer>> byItem = new java.util.HashMap<>();
+        for (StorehouseInventory inventory : storehouses(server, kingdomId, null)) {
+            for (int slot = 0; slot < inventory.getSlots(); slot++) {
+                ItemStack stack = inventory.getStackInSlot(slot);
+                if (stack.isEmpty()) {
+                    continue;
+                }
+                List<Integer> candidates = byItem.computeIfAbsent(stack.getItem(), item -> new ArrayList<>());
+                int index = -1;
+                for (int candidate : candidates) {
+                    if (ItemStack.isSameItemSameTags(samples.get(candidate), stack)) {
+                        index = candidate;
+                        break;
+                    }
+                }
+                if (index < 0) {
+                    index = samples.size();
+                    samples.add(stack.copyWithCount(1));
+                    counts.add(new long[1]);
+                    candidates.add(index);
+                }
+                counts.get(index)[0] += stack.getCount();
+            }
+        }
+        List<Total> totals = new ArrayList<>(samples.size());
+        for (int i = 0; i < samples.size(); i++) {
+            totals.add(new Total(samples.get(i), counts.get(i)[0]));
+        }
+        totals.sort(Comparator.comparingLong(Total::count).reversed());
+        return totals;
+    }
+
     // ---------------------------------------------------------------- food
 
     /**

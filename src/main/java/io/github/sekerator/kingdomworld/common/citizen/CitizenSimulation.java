@@ -1,7 +1,10 @@
 package io.github.sekerator.kingdomworld.common.citizen;
 
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
+import io.github.sekerator.kingdomworld.common.citizen.work.CarrierBehavior;
+import io.github.sekerator.kingdomworld.common.citizen.work.PostWork;
 import io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehavior;
+import io.github.sekerator.kingdomworld.common.citizen.work.ZoneSurveys;
 import io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehaviors;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
 import io.github.sekerator.kingdomworld.common.storage.KingdomStorage;
@@ -15,6 +18,8 @@ import io.github.sekerator.kingdomworld.core.citizen.Citizens;
 import io.github.sekerator.kingdomworld.core.citizen.Profession;
 import io.github.sekerator.kingdomworld.core.citizen.Professions;
 import io.github.sekerator.kingdomworld.core.citizen.SiteKinds;
+import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
+import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
@@ -39,7 +44,23 @@ import java.util.UUID;
  */
 public final class CitizenSimulation {
 
+    /** How often the gear of citizens who are gone (a kingdom was dissolved) is forgotten. */
+    private static final int GEAR_CLEANUP_TICKS = 6_000;
+
     private CitizenSimulation() {
+    }
+
+    /**
+     * Forgets the tools and armor of citizens that no longer exist.
+     */
+    static void forgetLostGear(MinecraftServer server) {
+        var gear = io.github.sekerator.kingdomworld.common.data.KingdomSavedData.get(server).gear();
+        Citizens citizens = KingdomWorldApi.state(server).citizens();
+        for (UUID id : gear.citizens()) {
+            if (citizens.get(id).isEmpty()) {
+                gear.takeAll(id);
+            }
+        }
     }
 
     /**
@@ -50,6 +71,9 @@ public final class CitizenSimulation {
             return;
         }
         int interval = CitizenSettings.rules().simulationInterval();
+        if (tick % GEAR_CLEANUP_TICKS == 0) {
+            forgetLostGear(server);
+        }
         for (Kingdom kingdom : KingdomWorldApi.kingdoms(server)) {
             if (Math.floorMod(tick + kingdom.id().hashCode(), interval) == 0) {
                 step(server, kingdom.id());
@@ -102,6 +126,15 @@ public final class CitizenSimulation {
             if (body == null) {
                 ProfessionBehaviors.get(citizen.professionId())
                         .ifPresent(behavior -> behavior.workAbstractly(server, citizen, interval));
+            } else if (citizen.state() == CitizenState.WOUNDED && Professions.worksAtPosts(citizen.professionId())) {
+                PostWork.setStatus(server, citizen, WorkStatus.WOUNDED);
+            }
+        }
+        CarrierBehavior.stepAbstractly(server, kingdomId, interval);
+        for (WorkPost post : citizens.posts().postsOf(kingdomId)) {
+            PostWork.refreshStatus(server, post);
+            if (post.hasProfession() && post.yield().isEmpty() && !ZoneSurveys.pending(post.pos())) {
+                ZoneSurveys.request(post.pos());
             }
         }
         grow(server, state, kingdomId, rules, now);
@@ -150,12 +183,14 @@ public final class CitizenSimulation {
         Optional<Profession> profession = Professions.REGISTRY.byId(citizen.professionId());
         if (profession.isPresent() && profession.get().needsWorkplace() && citizen.workplace() == null) {
             WorldPos near = citizen.home() != null ? citizen.home() : citizen.lastPos();
-            citizens.sites().nearestFree(citizen.kingdomId(), profession.get().workplaceKind(), near)
-                    .ifPresent(site -> {
-                        if (citizens.assignWorkplace(citizen, site.pos())) {
-                            survey(server, citizen);
-                        }
-                    });
+            citizens.nearestFreeWorkplace(citizen, near).ifPresent(workplace -> {
+                if (citizens.assignWorkplace(citizen, workplace)) {
+                    survey(server, citizen);
+                }
+            });
+            if (citizen.workplace() == null) {
+                citizen.setWorkStatus(WorkStatus.NO_WORKPLACE);
+            }
         }
     }
 

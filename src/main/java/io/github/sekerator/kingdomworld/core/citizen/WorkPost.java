@@ -34,6 +34,7 @@ public final class WorkPost {
     private final Map<String, Double> progress = new LinkedHashMap<>();
     private long day = -1;
     private long producedToday;
+    private boolean container;
 
     private Runnable changeListener = () -> {
     };
@@ -218,6 +219,21 @@ public final class WorkPost {
     }
 
     /**
+     * Whether a container stood next to the post the last time it was looked at; without one the workers carry
+     * what they gather to a storehouse themselves.
+     */
+    public boolean hasContainer() {
+        return container;
+    }
+
+    public void setHasContainer(boolean value) {
+        if (value != container) {
+            container = value;
+            changed();
+        }
+    }
+
+    /**
      * Items gathered at this post on the given game day.
      */
     public long producedOn(long gameDay) {
@@ -241,7 +257,7 @@ public final class WorkPost {
      * Does not notify.
      */
     public void restore(String professionId, int seats, String animal, WorkStatus status, PostYield yield,
-                        Map<String, Double> progress, long day, long producedToday) {
+                        Map<String, Double> progress, long day, long producedToday, boolean container) {
         this.professionId = Objects.requireNonNull(professionId, "professionId");
         this.seats = Math.max(1, seats);
         this.animal = animal == null ? NO_ANIMAL : animal;
@@ -255,6 +271,7 @@ public final class WorkPost {
         });
         this.day = day;
         this.producedToday = Math.max(0L, producedToday);
+        this.container = container;
     }
 
     /**
