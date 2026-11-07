@@ -551,6 +551,10 @@ if ($WithoutMod) {
 
 $script:CreatedId = $null
 $script:CitizenIds = @()
+$script:GuildSquad = $null
+$script:GuildHunt = $null
+$script:GuildBounty = $null
+$script:GuildMoney = -1
 $script:MinerId = $null
 $script:Mined = 0
 $ConsoleFailPattern = 'Unknown or incomplete command|Incorrect argument|already exists|There is no kingdom|read-only'
@@ -584,6 +588,26 @@ function Get-CitizenList([object]$Server, [int]$Expected, [string]$Phase) {
         Add-Failure "[$Phase] a citizen is listed twice: $($ids -join ', ')"
     }
     return $ids
+}
+
+# The money of a kingdom's currency as 'admin trade rates' counts it (escrow of deals and of the guild included), or -1.
+function Get-KingdomMoney([object]$Server, [string]$Kingdom) {
+    $ratePattern = '(\S+): rate (\d+), money (\d+), coins in hands (\d+), treasury (\d+), reserves (\d+), exported today (\d+)'
+    $seen = Count-Log $ratePattern
+    Send-ServerCommand $Server 'kingdomworld admin trade rates'
+    [void](Wait-ForNewLog $Server $ratePattern $CommandTimeout $seen)
+    Start-Sleep -Seconds 1
+    $found = [regex]::Matches((Get-LatestLog), "${Kingdom}: rate \d+, money (\d+),")
+    if ($found.Count -eq 0) { return -1 }
+    return [int64]$found[$found.Count - 1].Groups[1].Value
+}
+
+# Crystals of monsters in a kingdom's storehouses and their energy, as 'admin guild energy' tells them, or $null.
+function Get-KingdomCrystals([object]$Server, [string]$Kingdom) {
+    $pattern = "Crystals of ${Kingdom}: (\d+), energy (\d+)"
+    $seen = Count-Log $pattern
+    Send-ServerCommand $Server "kingdomworld admin guild energy $Kingdom"
+    return Wait-ForNewLog $Server $pattern $CommandTimeout $seen
 }
 
 Invoke-Phase 'session1' {
@@ -985,6 +1009,89 @@ Invoke-Phase 'session1' {
     } else {
         Add-Failure "[session1] money changed in trade: $KingdomName $moneyBefore -> $moneyAfter (expected +100), $PartnerName $partnerMoney (expected 500)"
     }
+    # The guild: adventurers form a squad, the kingdom posts two contracts paid from its treasury into escrow, the squad
+    # leaves for one of them. Nothing of it may make money or crystals, and all of it must survive the restart.
+    if ($script:CitizenIds.Count -gt 0) {
+        Send-ServerCommand $server 'kingdomworld admin guild status'
+        if (Wait-ForLog $server 'Guild data is writable, format 1' $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok '[session1] the guild data is writable'
+        } else {
+            Add-Failure '[session1] the guild data is not writable'
+        }
+        $count = $script:CitizenIds.Count + 2
+        Send-ServerCommand $server "kingdomworld admin citizens spawn 2 $KingdomName"
+        [void](Wait-ForLog $server "Spawned 2 citizen\(s\) in $KingdomName" $CommandTimeout $ConsoleFailPattern)
+        $all = Get-CitizenList $server $count 'session1'
+        if ($all) { $script:CitizenIds = @($all) }
+        Send-ServerCommand $server "kingdomworld admin guild hire $KingdomName 2"
+        if (-not (Wait-ForLog $server "Adventurers made: 2 in $KingdomName" $CommandTimeout $ConsoleFailPattern)) {
+            Add-Failure '[session1] two citizens did not become adventurers'
+        }
+        Send-ServerCommand $server "kingdomworld admin guild squad form $KingdomName 2"
+        $squad = Wait-ForLog $server "Formed squad #(\d+) of $KingdomName, members: 2" $CommandTimeout $ConsoleFailPattern
+        $guildMoney = Get-KingdomMoney $server $KingdomName
+        $seen = Count-Log 'Posted contract #(\d+) at '
+        Send-ServerCommand $server "kingdomworld admin guild contract post $KingdomName hunt minecraft:zombie 3 100 2"
+        $hunt = Wait-ForNewLog $server 'Posted contract #(\d+) at ' $CommandTimeout $seen
+        Send-ServerCommand $server "kingdomworld admin guild contract post $KingdomName bounty minecraft:ravager 1 50 3"
+        $bounty = Wait-ForNewLog $server 'Posted contract #(\d+) at ' $CommandTimeout ($seen + 1)
+        if ($squad -and $hunt -and $bounty) {
+            $script:GuildSquad = $squad.Groups[1].Value
+            $script:GuildHunt = $hunt.Groups[1].Value
+            $script:GuildBounty = $bounty.Groups[1].Value
+            Send-ServerCommand $server "kingdomworld admin guild squad send $($script:GuildSquad) $($script:GuildHunt)"
+            if (Wait-ForLog $server "Squad #$($script:GuildSquad) left for contract #$($script:GuildHunt), back in (\d+) ticks" $CommandTimeout $ConsoleFailPattern) {
+                Write-Ok "[session1] squad #$($script:GuildSquad) left for hunt #$($script:GuildHunt), bounty #$($script:GuildBounty) waits on the board"
+            } else {
+                Add-Failure '[session1] the squad did not leave'
+            }
+            Send-ServerCommand $server 'kingdomworld admin guild money'
+            if (Wait-ForLog $server "Held by the guild in the currency of ${KingdomName}: 150, money of the currency in all: (\d+)" $CommandTimeout $ConsoleFailPattern) {
+                Write-Ok '[session1] the rewards of both contracts (150) are in escrow'
+            } else {
+                Add-Failure '[session1] the guild does not hold 150 in escrow'
+            }
+            $moneyNow = Get-KingdomMoney $server $KingdomName
+            if ($guildMoney -ge 0 -and $moneyNow -eq $guildMoney) {
+                $script:GuildMoney = $moneyNow
+                Write-Ok "[session1] posting into escrow made no money: $guildMoney before, $moneyNow after"
+            } else {
+                Add-Failure "[session1] posting into escrow changed the money: $guildMoney -> $moneyNow"
+            }
+            $crystals = Get-KingdomCrystals $server $KingdomName
+            if ($crystals -and $crystals.Groups[1].Value -eq '0') {
+                Write-Ok '[session1] no crystals before any monster died'
+            } else {
+                Add-Failure "[session1] crystals appeared from nothing: $($crystals.Value)"
+            }
+        } else {
+            Add-Failure '[session1] the squad or the contracts of the guild were not made'
+        }
+        # Ranks of monsters: vanilla always, the bosses of the mods of the pack with -Pack.
+        $seen = Count-Log 'Monster ranks: (\d+)'
+        Send-ServerCommand $server 'kingdomworld admin guild monsters'
+        $ranks = Wait-ForNewLog $server 'Monster ranks: (\d+)' $CommandTimeout $seen
+        Start-Sleep -Seconds 2
+        $log = Get-LatestLog
+        if ($ranks -and $log -match 'minecraft:zombie: rank E' -and $log -match 'minecraft:wither: rank SS') {
+            Write-Ok "[session1] $($ranks.Groups[1].Value) kinds of monsters ranked, the zombie E and the wither SS"
+        } else {
+            Add-Failure '[session1] monsters were not ranked as expected'
+        }
+        if ($log -match 'Could not rank ') {
+            Add-Failure "[session1] some monsters could not be ranked: $([regex]::Matches($log, 'Could not rank [^\r\n]+') | Select-Object -First 3)"
+        }
+        if ($Pack) {
+            $bosses = @([regex]::Matches($log, '(?m)(\w+:[\w/]+): rank (\w+), strength (\d+), boss') | ForEach-Object { $_.Value } | Select-Object -Unique)
+            $modded = @($bosses | Where-Object { $_ -notmatch '^minecraft:' })
+            if ($modded.Count -gt 0) {
+                Write-Ok "[session1] bosses of the mods of the pack: $($modded.Count)"
+                foreach ($boss in ($modded | Select-Object -First 12)) { Write-Host "      $boss" }
+            } else {
+                Add-Warning '[session1] no boss of a mod was found in the pack'
+            }
+        }
+    }
     if ($script:EconomyRaw) {
         $seen = Count-Log 'Raw: balance (\d+), copper (\d+), silver (\d+), gold (\d+), funds (\d+), supply (\d+)'
         Send-ServerCommand $server "kingdomworld admin economy info $KingdomName"
@@ -1152,6 +1259,57 @@ Invoke-Phase 'session2' {
             Write-Ok "[session2] the delivery made no money: $now, the seller holds the buyer's currency in its reserves"
         } else {
             Add-Failure "[session2] money changed in the delivery: '$now', expected '$($script:TradeMoney)' and a reserve"
+        }
+    }
+
+    # The guild after the restart: the squad is still away on its contract, both contracts and their escrow are there.
+    # Back home, the squad finishes or brings the contract back; either way no money and no more crystals than monsters appear.
+    if ($script:GuildSquad) {
+        Send-ServerCommand $server "kingdomworld admin guild squad list $KingdomName"
+        if (Wait-ForLog $server "#$($script:GuildSquad) of ${KingdomName}: members 2, rank \w+, away, contract #$($script:GuildHunt)," $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok "[session2] squad #$($script:GuildSquad) is still away on contract #$($script:GuildHunt)"
+        } else {
+            Add-Failure '[session2] the squad on its expedition did not survive the restart'
+        }
+        Send-ServerCommand $server "kingdomworld admin guild contract list $KingdomName"
+        $huntLine = Wait-ForLog $server "#$($script:GuildHunt) hunt at ${KingdomName}: minecraft:zombie 0/3, reward 100, status taken, taker squad $($script:GuildSquad)" $CommandTimeout $ConsoleFailPattern
+        $bountyLine = Wait-ForLog $server "#$($script:GuildBounty) bounty at ${KingdomName}: minecraft:ravager 0/1, reward 50, status open" $CommandTimeout $ConsoleFailPattern
+        if ($huntLine -and $bountyLine) {
+            Write-Ok '[session2] both contracts survived the restart'
+        } else {
+            Add-Failure '[session2] the contracts of the guild did not survive the restart'
+        }
+        $seen = Count-Log 'Held by the guild in the currency of'
+        Send-ServerCommand $server 'kingdomworld admin guild money'
+        $held = Wait-ForNewLog $server "Held by the guild in the currency of ${KingdomName}: (\d+)," $CommandTimeout $seen
+        if ($held -and $held.Groups[1].Value -eq '150') {
+            Write-Ok '[session2] the escrow of 150 survived the restart'
+        } else {
+            Add-Failure "[session2] the escrow changed in the restart: $($held.Value)"
+        }
+        $before = Get-KingdomMoney $server $KingdomName
+        if ($before -eq $script:GuildMoney) {
+            Write-Ok "[session2] the money of $KingdomName is the same after the restart: $before"
+        } else {
+            Add-Failure "[session2] the money of $KingdomName changed in the restart: $($script:GuildMoney) -> $before"
+        }
+        Send-ServerCommand $server 'kingdomworld admin guild squad return'
+        if (Wait-ForLog $server 'Squads back: 1' $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok '[session2] the squad came back'
+        } else {
+            Add-Failure '[session2] the squad did not come back'
+        }
+        $after = Get-KingdomMoney $server $KingdomName
+        if ($after -eq $before) {
+            Write-Ok "[session2] the expedition made no money: $after"
+        } else {
+            Add-Failure "[session2] the expedition changed the money: $before -> $after"
+        }
+        $crystals = Get-KingdomCrystals $server $KingdomName
+        if ($crystals -and [int]$crystals.Groups[1].Value -le 3) {
+            Write-Ok "[session2] crystals from the expedition: $($crystals.Groups[1].Value) of at most 3 monsters, energy $($crystals.Groups[2].Value)"
+        } else {
+            Add-Failure "[session2] more crystals than monsters killed: $($crystals.Value)"
         }
     }
 }
