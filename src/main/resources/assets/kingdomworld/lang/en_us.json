@@ -1262,5 +1262,7 @@
   "commands.kingdomworld.admin.guild.status.read_only": "Guild data is read-only: %s",
   "commands.kingdomworld.admin.guild.unlocked": "Guild data unlocked, the original is backed up at %s",
   "commands.kingdomworld.admin.guild.unlock.not_needed": "Guild data was not read-only",
-  "commands.kingdomworld.admin.guild.unlock.failed": "Could not back up the guild data: %s"
+  "commands.kingdomworld.admin.guild.unlock.failed": "Could not back up the guild data: %s",
+  "kingdomworld.guild.contract.short_rank": "rank %s or above",
+  "kingdomworld.guild.desk.read_only": "The guild is read-only now"
 }

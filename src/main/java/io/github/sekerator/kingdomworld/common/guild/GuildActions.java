@@ -81,7 +81,7 @@ public final class GuildActions {
         if (kingdom.isEmpty()) {
             refusal = Component.translatable(KEY + "desk.outside");
         } else if (GuildWork.isReadOnly(player.server)) {
-            refusal = KingdomActions.errorMessage(KingdomError.READ_ONLY);
+            refusal = Component.translatable(KEY + "desk.read_only");
         } else if (!RegistrarBehavior.keepsOpen(player.server, kingdom.get().id(), new WorldPos(Dimensions.id(level), pos.getX(), pos.getY(),
                 pos.getZ()))) {
             refusal = KingdomActions.errorMessage(KingdomError.BRANCH_CLOSED);

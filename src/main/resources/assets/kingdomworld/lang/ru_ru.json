@@ -1044,7 +1044,7 @@
   "kingdomworld.death.expedition.female": "погибла в походе",
   "kingdomworld.station.guild_desk": "стойка гильдии",
   "block.kingdomworld.guild_desk": "Стойка гильдии",
-  "block.kingdomworld.guild_desk.tooltip": "Гильдия авантюристов королевства: работает, пока за стойкой есть регистратор",
+  "block.kingdomworld.guild_desk.tooltip": "Гильдия авантюристов королевства, работает при регистраторе",
   "item.kingdomworld.monster_crystal": "Кристалл монстра",
   "item.kingdomworld.monster_crystal.ranked": "Кристалл монстра (%s)",
   "item.kingdomworld.monster_crystal.unknown": "Кристалл без ранга",
@@ -1262,5 +1262,7 @@
   "commands.kingdomworld.admin.guild.status.read_only": "Данные гильдии только для чтения: %s",
   "commands.kingdomworld.admin.guild.unlocked": "Данные гильдии разблокированы, копия исходных данных в %s",
   "commands.kingdomworld.admin.guild.unlock.not_needed": "Данные гильдии не были только для чтения",
-  "commands.kingdomworld.admin.guild.unlock.failed": "Не удалось сохранить копию данных гильдии: %s"
+  "commands.kingdomworld.admin.guild.unlock.failed": "Не удалось сохранить копию данных гильдии: %s",
+  "kingdomworld.guild.contract.short_rank": "ранг %s и выше",
+  "kingdomworld.guild.desk.read_only": "Гильдия сейчас только для чтения"
 }

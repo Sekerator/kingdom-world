@@ -125,6 +125,20 @@ public final class GuildTexts {
         };
     }
 
+    /**
+     * What a contract counts, in a few words for the line above the hotbar: the monster, the rank, or the item.
+     */
+    public static MutableComponent shortTarget(Contract contract) {
+        if (contract.kind() == Contract.Kind.GATHER) {
+            Item found = item(contract.target());
+            return found == null ? Component.literal(contract.target()) : new ItemStack(found).getHoverName().copy();
+        }
+        if (contract.target().isEmpty()) {
+            return Component.translatable(CONTRACT + "short_rank", rank(contract.targetRank()));
+        }
+        return monsterName(contract.target()).copy();
+    }
+
     public static MutableComponent task(Contract contract) {
         return task(contract.kind(), contract.target(), contract.targetRank(), contract.boss(), contract.count());
     }

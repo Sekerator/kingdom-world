@@ -229,7 +229,7 @@ public final class GuildWork {
         ServerPlayer online = server.getPlayerList().getPlayer(player);
         if (!progress.finished()) {
             if (online != null) {
-                online.displayClientMessage(Component.translatable(KEY + "progress", GuildTexts.task(contract), contract.progress(),
+                online.displayClientMessage(Component.translatable(KEY + "progress", GuildTexts.shortTarget(contract), contract.progress(),
                         contract.count()), true);
             }
             return;

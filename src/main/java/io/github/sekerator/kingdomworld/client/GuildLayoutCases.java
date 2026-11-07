@@ -60,17 +60,20 @@ final class GuildLayoutCases {
      * Lines above the hotbar: progress of a contract with the longest task, and the desk refusing.
      */
     static void actionbars(Font font, int narrowest) {
+        Rank[] ranks = Rank.values();
         for (String monster : MONSTERS) {
-            LayoutCheck.actionbar(font, Component.translatable("kingdomworld.guild.progress", GuildTexts.task(Contract.Kind.HUNT, monster, Rank.SSS,
-                    false, 4_096), 4_095, 4_096), narrowest);
+            Contract hunt = new Contract(1, Contract.Kind.HUNT, BRANCH, Contract.Poster.GUILD, BRANCH, Rank.F, monster, Rank.SSS, false, 4_096, 4_095,
+                    BRANCH, 0, 0, 0, 0, 1, Contract.Status.OPEN, null, 0, true);
+            LayoutCheck.actionbar(font, Component.translatable("kingdomworld.guild.progress", GuildTexts.shortTarget(hunt), 4_095, 4_096), narrowest);
         }
-        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.guild.progress", GuildTexts.task(Contract.Kind.EXAM, "", Rank.SSS, true,
-                4_096), 4_095, 4_096), narrowest);
-        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.guild.progress", GuildTexts.task(Contract.Kind.HUNT, "", Rank.SSS, false,
-                4_096), 4_095, 4_096), narrowest);
+        for (Rank rank : ranks) {
+            Contract exam = new Contract(1, Contract.Kind.EXAM, BRANCH, Contract.Poster.GUILD, BRANCH, Rank.F, "", rank, rank.atLeast(Rank.S), 4_096,
+                    4_095, BRANCH, 0, 0, 0, 0, 1, Contract.Status.OPEN, null, 0, false);
+            LayoutCheck.actionbar(font, Component.translatable("kingdomworld.guild.progress", GuildTexts.shortTarget(exam), 4_095, 4_096), narrowest);
+        }
         LayoutCheck.actionbar(font, Component.translatable("kingdomworld.guild.desk.outside"), narrowest);
+        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.guild.desk.read_only"), narrowest);
         LayoutCheck.actionbar(font, KingdomActions.errorMessage(KingdomError.BRANCH_CLOSED), narrowest);
-        LayoutCheck.actionbar(font, KingdomActions.errorMessage(KingdomError.READ_ONLY), narrowest);
     }
 
     private static List<GuildViews.ContractRow> contracts(boolean mine, int count) {
@@ -185,14 +188,18 @@ final class GuildLayoutCases {
     /**
      * The tooltips of crystals of every rank, one and a stack.
      */
-    private static ItemTooltipScreen crystalTooltips() {
+    private static ItemTooltipScreen crystalTooltips(int part) {
         List<ItemStack> stacks = new ArrayList<>();
         for (Rank rank : Rank.values()) {
-            stacks.add(MonsterCrystalItem.stack(rank, rank.ordinal() % 2 == 0 ? 64 : 1));
+            if (rank.ordinal() / 3 == part) {
+                stacks.add(MonsterCrystalItem.stack(rank, rank.ordinal() % 2 == 0 ? 64 : 1));
+            }
         }
-        stacks.add(new ItemStack(io.github.sekerator.kingdomworld.common.guild.GuildRegistries.MONSTER_CRYSTAL.get()));
-        stacks.add(new ItemStack(io.github.sekerator.kingdomworld.common.guild.GuildRegistries.GUILD_DESK_ITEM.get()));
-        return new ItemTooltipScreen("crystals", stacks);
+        if (part == 3) {
+            stacks.add(new ItemStack(io.github.sekerator.kingdomworld.common.guild.GuildRegistries.MONSTER_CRYSTAL.get()));
+            stacks.add(new ItemStack(io.github.sekerator.kingdomworld.common.guild.GuildRegistries.GUILD_DESK_ITEM.get()));
+        }
+        return new ItemTooltipScreen("crystals-" + part, stacks);
     }
 
     /**
@@ -223,7 +230,10 @@ final class GuildLayoutCases {
         add.accept("guild-desk-post-search-monsters", () -> form(false, false, "zomb"));
         add.accept("guild-desk-post-search-items", () -> form(false, true, "ingot"));
         add.accept("guild-desk-post-search-none", () -> form(false, false, "no such monster at all"));
-        add.accept("crystal-tooltip", GuildLayoutCases::crystalTooltips);
+        for (int part = 0; part < 4; part++) {
+            int shown = part;
+            add.accept("crystal-tooltip-" + part, () -> crystalTooltips(shown));
+        }
         add.accept("throne-guild-loading", () -> {
             ThroneScreen screen = new ThroneScreen(member.apply(Role.KING));
             screen.selectTab("guild");

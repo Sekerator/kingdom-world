@@ -37,6 +37,8 @@ final class GuildTab {
     static final int ROW = 18;
     private static final int GAP = 2;
     private static final int BOX = 64;
+    /** Height of a line of crystals. */
+    private static final int CELL = 11;
     private static final String KEY = "kingdomworld.screen.guild_tab.";
 
     enum Mode {
@@ -288,7 +290,7 @@ final class GuildTab {
 
     private void initBranch(int x, int top) {
         int fieldX = x + labelWidth;
-        box(fieldX, branchY(top, 1), commissionText, value -> commissionText = value, Component.translatable(KEY + "commission_label"))
+        box(fieldX, branchY(top, 0), commissionText, value -> commissionText = value, Component.translatable(KEY + "commission_label"))
                 .setTooltip(Tooltip.create(Component.translatable(KEY + "commission_hint", TradeTexts.percent(view.minCommission()),
                         TradeTexts.percent(view.maxCommission()))));
         screen.add(Button.builder(Component.translatable(KEY + "set"), b -> {
@@ -298,8 +300,8 @@ final class GuildTab {
             } catch (NumberFormatException e) {
                 screen.onResult(false, Component.translatable(KEY + "bad_number"));
             }
-        }).bounds(fieldX + BOX + GAP, branchY(top, 1), setWidth, ROW - 2).build()).active = view.canManage();
-        box(fieldX, branchY(top, 2), budgetText, value -> budgetText = value, Component.translatable(KEY + "budget_label"))
+        }).bounds(fieldX + BOX + GAP, branchY(top, 0), setWidth, ROW - 2).build()).active = view.canManage();
+        box(fieldX, branchY(top, 1), budgetText, value -> budgetText = value, Component.translatable(KEY + "budget_label"))
                 .setTooltip(Tooltip.create(Component.translatable(KEY + "budget_hint", money(view.maxBudget()))));
         screen.add(Button.builder(Component.translatable(KEY + "set"), b -> {
             java.util.Optional<Long> amount = Money.parse(budgetText, view.currency().units());
@@ -308,7 +310,7 @@ final class GuildTab {
             }
             amount.ifPresentOrElse(value -> send(GuildPackets.TabChange.Action.SET_BUDGET, value, 0, List.of()),
                     () -> screen.onResult(false, Component.translatable(KEY + "bad_number")));
-        }).bounds(fieldX + BOX + GAP, branchY(top, 2), setWidth, ROW - 2).build()).active = view.canManage();
+        }).bounds(fieldX + BOX + GAP, branchY(top, 1), setWidth, ROW - 2).build()).active = view.canManage();
     }
 
     private void send(GuildPackets.TabChange.Action action, long first, long second, List<UUID> citizens) {
@@ -343,7 +345,7 @@ final class GuildTab {
             return;
         }
         if (mode == Mode.BRANCH) {
-            renderBranch(graphics, font, x, right, top);
+            renderBranch(graphics, font, x, right, top, panelHeight);
             return;
         }
         int rows = visibleRows(top, panelHeight);
@@ -381,34 +383,36 @@ final class GuildTab {
         }
     }
 
-    private void renderBranch(GuiGraphics graphics, Font font, int x, int right, int top) {
+    private void renderBranch(GuiGraphics graphics, Font font, int x, int right, int top, int panelHeight) {
         Component state = view.registrars() > 0
                 ? Component.translatable(KEY + "branch_open", view.registrars(), view.desks())
                 : Component.translatable(KEY + "branch_closed");
-        screen.name(graphics, state.getString(), x, branchY(top, 0) + 5, view.registrars() > 0 ? 0xFFA0E0A0 : 0xFFFF9070, right - x);
+        // The state of the branch shares the row of the view button, to leave the height to the crystals.
+        int stateX = x + modeWidth + 6;
+        screen.name(graphics, state.getString(), stateX, buttonsY(top) + 4, view.registrars() > 0 ? 0xFFA0E0A0 : 0xFFFF9070, right - stateX);
         int labelRight = x + labelWidth - 2;
         int valueX = x + labelWidth + BOX + GAP + setWidth + 6;
-        screen.label(graphics, Component.translatable(KEY + "commission_label"), x, branchY(top, 1) + 5, 0xFFE8E8E8, labelRight);
+        screen.label(graphics, Component.translatable(KEY + "commission_label"), x, branchY(top, 0) + 5, 0xFFE8E8E8, labelRight);
         if (valueX + 8 < right) {
-            screen.name(graphics, TradeTexts.percent(view.commissionPermille()).getString(), valueX, branchY(top, 1) + 5, 0xFFF0D070, right - valueX);
+            screen.name(graphics, TradeTexts.percent(view.commissionPermille()).getString(), valueX, branchY(top, 0) + 5, 0xFFF0D070, right - valueX);
         }
-        screen.label(graphics, Component.translatable(KEY + "budget_label"), x, branchY(top, 2) + 5, 0xFFE8E8E8, labelRight);
+        screen.label(graphics, Component.translatable(KEY + "budget_label"), x, branchY(top, 1) + 5, 0xFFE8E8E8, labelRight);
         if (valueX + 8 < right) {
             screen.name(graphics, Component.translatable(KEY + "budget_value", money(view.dailyBudget()), money(view.spentToday())).getString(),
-                    valueX, branchY(top, 2) + 5, 0xFFF0D070, right - valueX);
+                    valueX, branchY(top, 1) + 5, 0xFFF0D070, right - valueX);
         }
-        int y = branchY(top, 3) + 4;
+        int y = branchY(top, 2) + 4;
         screen.name(graphics, Component.translatable(KEY + "crystals", view.totalEnergy()).getString(), x, y, 0xFFE8E8E8, right - x);
-        int columns = 3;
+        // Nine ranks in three rows where the height allows, else in two or in one.
+        int room = bottom(top, panelHeight) - 2 - (y + CELL);
+        int columns = room >= 3 * CELL ? 3 : room >= 2 * CELL ? 5 : Rank.COUNT;
         int columnWidth = (right - x) / columns;
         for (Rank rank : Rank.values()) {
-            int column = rank.ordinal() % columns;
-            int line = rank.ordinal() / columns;
-            int cellX = x + column * columnWidth;
-            int cellY = y + 12 + line * ROW;
-            graphics.renderItem(MonsterCrystalItem.stack(rank, 1), cellX, cellY - 4);
-            screen.name(graphics, Component.translatable(KEY + "crystal_cell", rank.label(), view.crystals()[rank.ordinal()],
-                    view.energy()[rank.ordinal()]).getString(), cellX + 18, cellY, 0xFFD0D0D0, columnWidth - 20);
+            int cellX = x + rank.ordinal() % columns * columnWidth;
+            int cellY = y + CELL + rank.ordinal() / columns * CELL;
+            Component cell = columns == Rank.COUNT ? Component.literal(rank.label() + " " + view.crystals()[rank.ordinal()])
+                    : Component.translatable(KEY + "crystal_cell", rank.label(), view.crystals()[rank.ordinal()], view.energy()[rank.ordinal()]);
+            screen.name(graphics, cell.getString(), cellX, cellY, 0xFF000000 | MonsterCrystalItem.color(rank), columnWidth - 4);
         }
     }
 
