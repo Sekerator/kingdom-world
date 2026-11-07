@@ -71,7 +71,7 @@ final class MintGoal extends PostWorkGoal {
             }
         }
         if (metal == null) {
-            metal = MinterBehavior.nextMetal(server, post.kingdomId());
+            metal = MinterBehavior.nextMetal(server, post);
             if (metal == null) {
                 return WorkStatus.NO_INGREDIENTS;
             }

@@ -15,6 +15,7 @@ import io.github.sekerator.kingdomworld.common.economy.CoinStacks;
 import io.github.sekerator.kingdomworld.common.economy.EconomyEvents;
 import io.github.sekerator.kingdomworld.common.economy.EconomySettings;
 import io.github.sekerator.kingdomworld.common.economy.ItemPrices;
+import io.github.sekerator.kingdomworld.common.economy.MinterBehavior;
 import io.github.sekerator.kingdomworld.common.economy.TreasuryActions;
 import io.github.sekerator.kingdomworld.common.network.data.TreasuryView;
 import io.github.sekerator.kingdomworld.common.network.packet.EconomyPackets;
@@ -157,6 +158,39 @@ public final class EconomyGameTests {
         } finally {
             EconomySettings.overrideMintTicks(0);
             CitizenGameTests.finish(helper, kingdom, minter);
+            GatheringGameTests.clear(level, from, to);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_economy_mint_choice")
+    public static void plentyOfCopperDoesNotKeepTheMintFromIron(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos to = helper.absolutePos(new BlockPos(8, 3, 8));
+        GatheringGameTests.clear(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Copper Town", UUID.randomUUID());
+        StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 4);
+        store.insertItem(0, new ItemStack(Items.COPPER_INGOT, 64), false);
+        store.insertItem(1, new ItemStack(Items.IRON_INGOT, 2), false);
+        helper.setBlock(new BlockPos(6, 0, 1), ModRegistries.MINT.get());
+        WorldPos postPos = GatheringGameTests.post(helper, new BlockPos(5, 0, 1), "minter");
+        WorkPost post = PostWork.post(server, postPos).orElseThrow();
+        try {
+            // Into the vault: copper first, then silver, then copper until the copper coins are worth more than the
+            // silver ones, then silver again. Seven strikings use up both iron ingots out of 66.
+            for (int i = 0; i < 7; i++) {
+                helper.assertTrue(MinterBehavior.strike(server, post, false) == MinterBehavior.Struck.DONE, "Striking " + i + " failed");
+            }
+            long iron = KingdomStorage.count(server, kingdom.id(), stack -> stack.is(Items.IRON_INGOT));
+            long copper = KingdomStorage.count(server, kingdom.id(), stack -> stack.is(Items.COPPER_INGOT));
+            Treasury treasury = treasury(server, kingdom);
+            helper.assertTrue(iron == 0, "The iron waited behind the copper: " + iron + " left, vault " + treasury.vault());
+            helper.assertTrue(copper == 59, "Expected 59 copper ingots left, got " + copper);
+            helper.assertTrue(treasury.vault().equals(new Coins(25, 4, 0)), "The vault holds " + treasury.vault());
+        } finally {
+            CitizenGameTests.finish(helper, kingdom);
             GatheringGameTests.clear(level, from, to);
         }
         helper.succeed();

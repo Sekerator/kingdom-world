@@ -19,7 +19,9 @@ import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
 import io.github.sekerator.kingdomworld.core.citizen.WorkZone;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.economy.CurrencyUnits;
+import io.github.sekerator.kingdomworld.core.economy.Denomination;
 import io.github.sekerator.kingdomworld.core.economy.Economy;
+import io.github.sekerator.kingdomworld.core.economy.MintChoice;
 import io.github.sekerator.kingdomworld.core.economy.Money;
 import io.github.sekerator.kingdomworld.core.economy.Treasury;
 import io.github.sekerator.kingdomworld.core.production.Order;
@@ -47,12 +49,17 @@ import java.util.UUID;
  * coins). The coins go into the treasury: into its vault, or onto its balance. One striking takes one item from the
  * storehouses and gives the treasury its coins in the same moment, or does nothing at all, so no coin appears without
  * its metal and no metal vanishes without its coins. Metal a keep order holds or a workshop set aside is left alone.
+ * With metal for more than one kind of coin, the minter strikes the kind the vault holds the least worth of, or, when
+ * coins go straight onto the balance, the kinds take turns ({@link MintChoice}), so a steady flow of one metal does not
+ * leave the others waiting.
  */
 public final class MinterBehavior implements ProfessionBehavior {
     /** Item id the record of production counts struck coins under. */
     public static final String COIN_ID = "kingdomworld:coin";
     /** Key of the work time a minter carries over between simulation steps, as the workshops do. */
     private static final String WORK_BANK = "#work";
+    /** Key of the kind of coin a minter struck last, when the kinds take turns. */
+    private static final String LAST_COIN = "#coin";
     /** Strikings one minter does in one simulation step at most. */
     private static final int MAX_PER_STEP = 64;
     /** Where the mints of each post were seen last. */
@@ -137,11 +144,13 @@ public final class MinterBehavior implements ProfessionBehavior {
     }
 
     /**
-     * The metal the minter would strike next, or {@code null} if the storehouses hold none it may use: the first rate of
-     * the config that has metal.
+     * The metal the post's minter would strike next, or {@code null} if the storehouses hold none it may use. Of the
+     * kinds of coin there is metal for, the one {@link MintChoice} picks; of the metal for that kind, the first rate of
+     * the config that has some.
      */
     @Nullable
-    public static ItemStack nextMetal(MinecraftServer server, UUID kingdom) {
+    public static ItemStack nextMetal(MinecraftServer server, WorkPost post) {
+        UUID kingdom = post.kingdomId();
         ItemStack old = nextOldCoin(server, kingdom);
         if (old != null) {
             return old;
@@ -154,14 +163,42 @@ public final class MinterBehavior implements ProfessionBehavior {
                 seen.add(sample);
             }
         }
+        // The first metal of every kind of coin, in the order of the rates.
+        Map<Denomination, ItemStack> first = new LinkedHashMap<>();
         for (MintRates.Rate rate : rates.rates()) {
+            if (first.containsKey(rate.coin())) {
+                continue;
+            }
             for (ItemStack sample : seen) {
                 if (rates.rateOf(sample) == rate && free(server, kingdom, sample) > 0) {
-                    return sample.copyWithCount(1);
+                    first.put(rate.coin(), sample.copyWithCount(1));
+                    break;
                 }
             }
         }
-        return null;
+        if (first.isEmpty()) {
+            return null;
+        }
+        List<Denomination> available = List.copyOf(first.keySet());
+        Optional<Treasury> treasury = KingdomWorldApi.state(server).economy().treasury(kingdom);
+        Optional<Denomination> coin = EconomySettings.rules().mintToVault() && treasury.isPresent()
+                ? MintChoice.forVault(available, treasury.get().vault(), treasury.get().units())
+                : MintChoice.inTurn(available, lastCoin(post));
+        return first.get(coin.orElse(available.get(0)));
+    }
+
+    /**
+     * The kind of coin the post's minter struck last, or {@code null}.
+     */
+    @Nullable
+    private static Denomination lastCoin(WorkPost post) {
+        Double last = post.progress().get(LAST_COIN);
+        if (last == null) {
+            return null;
+        }
+        int ordinal = (int) Math.round(last);
+        Denomination[] all = Denomination.values();
+        return ordinal >= 0 && ordinal < all.length ? all[ordinal] : null;
     }
 
     /**
@@ -238,7 +275,7 @@ public final class MinterBehavior implements ProfessionBehavior {
         if (treasury.isEmpty() || KingdomWorldApi.isReadOnly(server)) {
             return Struck.NO_TREASURY;
         }
-        ItemStack metal = nextMetal(server, kingdom);
+        ItemStack metal = nextMetal(server, post);
         if (metal == null) {
             return Struck.NO_METAL;
         }
@@ -265,6 +302,11 @@ public final class MinterBehavior implements ProfessionBehavior {
             return Struck.TREASURY_FULL;
         }
         PostWork.record(server, post, COIN_ID, rate.count());
+        if (!toVault) {
+            Map<String, Double> progress = new LinkedHashMap<>(post.progress());
+            progress.put(LAST_COIN, (double) rate.coin().ordinal());
+            post.setProgress(progress);
+        }
         if (watched) {
             PostWork.acted(post, 1);
         }
@@ -328,7 +370,7 @@ public final class MinterBehavior implements ProfessionBehavior {
         post.setProgress(progress);
         if (struck > 0) {
             citizen.addExperience(struck);
-            ItemStack next = nextMetal(server, post.kingdomId());
+            ItemStack next = nextMetal(server, post);
             if (next != null) {
                 post.setCurrent(KingdomStorage.itemId(next), 1.0);
             }
