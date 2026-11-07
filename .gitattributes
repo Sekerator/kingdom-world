@@ -12,3 +12,8 @@ gradlew text eol=lf
 
 src/generated/**/.cache/cache text eol=lf
 src/generated/**/*.json text eol=lf
+
+# Written by the building generator and compared with its output byte for byte.
+src/main/resources/data/kingdomworld/kingdomworld_buildings/*.json text eol=lf
+scripts/smoke-datapack/**/*.json text eol=lf
+scripts/smoke-datapack/pack.mcmeta text eol=lf
