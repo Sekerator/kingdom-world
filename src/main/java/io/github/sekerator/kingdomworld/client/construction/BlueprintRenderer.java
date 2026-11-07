@@ -49,12 +49,15 @@ public final class BlueprintRenderer {
             return;
         }
         Minecraft minecraft = Minecraft.getInstance();
+        renderRuler(event, minecraft);
         String held = ClientBlueprint.heldTemplate();
         BlockPos anchor = ClientBlueprint.anchor();
         ClientBlueprint.Template template = held.isEmpty() ? null : ClientBlueprint.template(held);
         if (template == null || anchor == null || minecraft.level == null) {
             return;
         }
+        // The outline shows the wood and stone of the blueprint; the wood of the place by the biome under it.
+        io.github.sekerator.kingdomworld.core.construction.Materials materials = ClientBlueprint.materials(minecraft.level, anchor);
         Placement placement = ClientBlueprint.placement();
         ClientBlueprint.Check check = ClientBlueprint.check();
         PoseStack pose = event.getPoseStack();
@@ -66,7 +69,8 @@ public final class BlueprintRenderer {
         int drawn = 0;
         for (int i = 0; i < template.positions().size(); i++) {
             BlockPos at = place(template, anchor, placement, template.positions().get(i));
-            BlockState state = TemplateBlocks.transform(template.states().get(i), placement);
+            BlockState state = TemplateBlocks.transform(
+                    io.github.sekerator.kingdomworld.common.construction.TemplateMaterials.substitute(template.states().get(i), materials), placement);
             BlockState there = minecraft.level.getBlockState(at);
             if (!there.isAir() && !there.canBeReplaced() && !there.equals(state)) {
                 obstacles.add(at);
@@ -105,6 +109,34 @@ public final class BlueprintRenderer {
     }
 
     private static int lastObstacles;
+
+    /**
+     * The box between the corners of the architect's ruler in hand, yellow while only one corner is marked.
+     */
+    private static void renderRuler(RenderLevelStageEvent event, Minecraft minecraft) {
+        if (minecraft.player == null) {
+            return;
+        }
+        net.minecraft.world.item.ItemStack held = minecraft.player.getMainHandItem();
+        if (!held.is(io.github.sekerator.kingdomworld.common.registry.ModRegistries.ARCHITECT_RULER.get())) {
+            return;
+        }
+        var corners = io.github.sekerator.kingdomworld.common.construction.ArchitectRulerItem.corners(held);
+        if (corners.first() == null) {
+            return;
+        }
+        BlockPos first = corners.first();
+        BlockPos second = corners.second() != null ? corners.second() : first;
+        Vec3 camera = event.getCamera().getPosition();
+        MultiBufferSource.BufferSource buffers = minecraft.renderBuffers().bufferSource();
+        VertexConsumer lines = buffers.getBuffer(RenderType.lines());
+        AABB box = new AABB(Math.min(first.getX(), second.getX()), Math.min(first.getY(), second.getY()), Math.min(first.getZ(), second.getZ()),
+                Math.max(first.getX(), second.getX()) + 1, Math.max(first.getY(), second.getY()) + 1, Math.max(first.getZ(), second.getZ()) + 1);
+        float green = corners.complete() ? 1.0f : 0.85f;
+        LevelRenderer.renderLineBox(event.getPoseStack(), lines, box.move(-camera.x, -camera.y, -camera.z), corners.complete() ? 0.3f : 1.0f,
+                green, 0.3f, 1.0f);
+        buffers.endBatch(RenderType.lines());
+    }
 
     private static BlockPos place(ClientBlueprint.Template template, BlockPos anchor, Placement placement, BlockPos pos) {
         int[] p = placement.apply(pos.getX() - template.anchor().getX(), pos.getY() - template.anchor().getY(), pos.getZ() - template.anchor().getZ());
@@ -181,7 +213,7 @@ public final class BlueprintRenderer {
     public static List<Line> lines() {
         String held = ClientBlueprint.heldTemplate();
         if (held.isEmpty()) {
-            return List.of();
+            return rulerLines();
         }
         ClientBlueprint.Template template = ClientBlueprint.template(held);
         Minecraft minecraft = Minecraft.getInstance();
@@ -220,6 +252,40 @@ public final class BlueprintRenderer {
         lines.add(new Line(status, statusColor));
         if (obstacles > 0) {
             lines.add(new Line(Component.translatable("kingdomworld.blueprint.hud.obstacles", blocks(obstacles)), 0xFFFFB070));
+        }
+        return lines;
+    }
+
+    /**
+     * The hints for the architect's ruler in hand, or none without one.
+     */
+    public static List<Line> rulerLines() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player == null) {
+            return List.of();
+        }
+        net.minecraft.world.item.ItemStack held = minecraft.player.getMainHandItem();
+        if (!held.is(io.github.sekerator.kingdomworld.common.registry.ModRegistries.ARCHITECT_RULER.get())) {
+            return List.of();
+        }
+        var corners = io.github.sekerator.kingdomworld.common.construction.ArchitectRulerItem.corners(held);
+        return rulerLines(minecraft.options.keyUse.getTranslatedKeyMessage(), minecraft.options.keyShift.getTranslatedKeyMessage(),
+                corners.first() == null ? 0 : corners.complete() ? 2 : 1, corners.size());
+    }
+
+    /**
+     * The hints of the ruler for given keys and corners; the layout check draws them with the longest texts.
+     *
+     * @param marked corners marked, 0 to 2
+     */
+    public static List<Line> rulerLines(Component use, Component sneak, int marked, int[] size) {
+        List<Line> lines = new ArrayList<>();
+        lines.add(new Line(Component.translatable("kingdomworld.ruler.hud.title"), 0xFFF0D070));
+        lines.add(new Line(Component.translatable(marked == 0 ? "kingdomworld.ruler.hud.first" : marked == 1 ? "kingdomworld.ruler.hud.second"
+                : "kingdomworld.ruler.hud.again", use), 0xFFE8E8E8));
+        if (marked == 2) {
+            lines.add(new Line(Component.translatable("kingdomworld.ruler.hud.size", size[0], size[1], size[2]), 0xFFA0E0A0));
+            lines.add(new Line(Component.translatable("kingdomworld.ruler.hud.save", sneak, use), 0xFFE8E8E8));
         }
         return lines;
     }

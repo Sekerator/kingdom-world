@@ -372,6 +372,10 @@ public final class BuildingWork {
             return ConstructionWork.StepResult.OUTSIDE_LAND;
         }
         List<ItemStack> held = empty(level, mainAt);
+        forget(level, mainAt);
+        if (!mainAt.equals(at)) {
+            forget(level, at);
+        }
         level.setBlock(mainAt, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
         if (!mainAt.equals(at) && level.getBlockState(at).getBlock() == block.state().getBlock()) {
             level.setBlock(at, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
@@ -388,6 +392,19 @@ public final class BuildingWork {
             ConstructionWork.giveBack(server, construction, back);
         }
         return ConstructionWork.StepResult.DONE;
+    }
+
+    /**
+     * Citizens no longer use a block that goes: a bed is forgotten with both its halves.
+     */
+    private static void forget(ServerLevel level, BlockPos pos) {
+        io.github.sekerator.kingdomworld.common.citizen.CitizenSites.onRemoved(level, pos);
+        BlockState state = level.getBlockState(pos);
+        if (state.getBlock() instanceof net.minecraft.world.level.block.BedBlock) {
+            net.minecraft.core.Direction facing = state.getValue(net.minecraft.world.level.block.BedBlock.FACING);
+            boolean head = state.getValue(net.minecraft.world.level.block.BedBlock.PART) == net.minecraft.world.level.block.state.properties.BedPart.HEAD;
+            io.github.sekerator.kingdomworld.common.citizen.CitizenSites.onRemoved(level, head ? pos.relative(facing.getOpposite()) : pos.relative(facing));
+        }
     }
 
     /**
@@ -421,6 +438,43 @@ public final class BuildingWork {
             }
         }
         return result;
+    }
+
+    /**
+     * Takes blocks of a building away from the top down without drops, as a war or a griefer would: for operators and
+     * tests. Blocks that hold items stay.
+     *
+     * @return blocks taken away
+     */
+    public static int damage(MinecraftServer server, Building building, int count) {
+        Optional<BuildingTemplate> template = currentTemplate(building);
+        ServerLevel level = ConstructionWork.level(server, building.dimension());
+        if (template.isEmpty() || level == null) {
+            return 0;
+        }
+        BlockPos anchor = ConstructionWork.blockPos(building.anchor());
+        List<Integer> order = new ArrayList<>();
+        for (int i = 0; i < template.get().blocks().size(); i++) {
+            if (template.get().costs().get(i).placed()) {
+                order.add(i);
+            }
+        }
+        order.sort((a, b) -> Integer.compare(template.get().blocks().get(b).pos().getY(), template.get().blocks().get(a).pos().getY()));
+        int removed = 0;
+        for (int index : order) {
+            if (removed >= count) {
+                break;
+            }
+            BuildingTemplate.Block block = template.get().blocks().get(index);
+            BlockPos at = template.get().place(block.pos(), anchor, building.placement());
+            BlockState there = level.getBlockState(at);
+            if (there.getBlock() != block.state().getBlock() || ConstructionWork.holdsItems(level, at) || there.getDestroySpeed(level, at) < 0) {
+                continue;
+            }
+            level.setBlock(at, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+            removed++;
+        }
+        return removed;
     }
 
     // ---------------------------------------------------------------- repairs by themselves

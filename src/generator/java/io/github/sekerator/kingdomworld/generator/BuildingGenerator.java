@@ -42,7 +42,11 @@ public final class BuildingGenerator {
     /**
      * A template with its description.
      */
-    record Building(String name, String category, String type, String icon, int anchorX, int anchorY, int anchorZ, Structure structure) {
+    record Building(String name, String category, String type, String icon, int anchorX, int anchorY, int anchorZ, Structure structure,
+                    String role, int level, String upgradesTo) {
+        Building(String name, String category, String type, String icon, int anchorX, int anchorY, int anchorZ, Structure structure) {
+            this(name, category, type, icon, anchorX, anchorY, anchorZ, structure, type, 1, "");
+        }
     }
 
     private BuildingGenerator() {
@@ -63,9 +67,13 @@ public final class BuildingGenerator {
 
     static List<Building> buildings() {
         List<Building> list = new ArrayList<>();
-        list.add(new Building("small_house", "housing", "house", "minecraft:oak_door", 4, 0, 8, smallHouse()));
+        list.add(new Building("small_house", "housing", "house", "minecraft:oak_door", 4, 0, 8, smallHouse(), "house", 1,
+                "kingdomworld:small_house_2"));
+        list.add(new Building("small_house_2", "housing", "house", "minecraft:oak_door", 4, 0, 8, smallHouse2(), "house", 2, ""));
         list.add(new Building("large_house", "housing", "house", "minecraft:red_bed", 5, 0, 10, largeHouse()));
-        list.add(new Building("storehouse", "farming", "warehouse", "kingdomworld:storehouse", 5, 0, 8, storehouse()));
+        list.add(new Building("storehouse", "farming", "warehouse", "kingdomworld:storehouse", 5, 0, 8, storehouse(), "warehouse", 1,
+                "kingdomworld:storehouse_2"));
+        list.add(new Building("storehouse_2", "farming", "warehouse", "kingdomworld:storehouse", 5, 0, 8, storehouse2(), "warehouse", 2, ""));
         list.add(new Building("workshop", "production", "workshop", "minecraft:crafting_table", 5, 0, 8, workshop()));
         list.add(new Building("market_square", "trade", "market", "kingdomworld:market_stall", 5, 0, 10, marketSquare()));
         list.add(new Building("watchtower", "defense", "tower", "minecraft:stone_bricks", 3, 0, 7, watchtower()));
@@ -86,6 +94,9 @@ public final class BuildingGenerator {
                 + "  \"name\": \"kingdomworld.building." + building.name() + "\",\n"
                 + "  \"category\": \"" + building.category() + "\",\n"
                 + "  \"type\": \"" + building.type() + "\",\n"
+                + "  \"role\": \"" + building.role() + "\",\n"
+                + "  \"level\": " + building.level() + ",\n"
+                + (building.upgradesTo().isEmpty() ? "" : "  \"upgrades_to\": \"" + building.upgradesTo() + "\",\n")
                 + "  \"icon\": \"" + building.icon() + "\",\n"
                 + "  \"anchor\": [" + building.anchorX() + ", " + building.anchorY() + ", " + building.anchorZ() + "],\n"
                 + "  \"entrance\": \"south\"\n"
@@ -120,6 +131,32 @@ public final class BuildingGenerator {
         s.set(6, 1, 2, BARREL).set(6, 1, 3, "minecraft:crafting_table");
         s.set(2, 3, 5, wallTorch("east")).set(6, 3, 5, wallTorch("west"));
         s.set(3, 3, 8, wallTorch("south")).set(5, 3, 8, wallTorch("south"));
+        return s;
+    }
+
+    /**
+     * The small house a level higher: a stone plinth under the timber walls, a second bed, a bookshelf, a lantern, flower
+     * pots and shutters at the back windows. It stands on the same ground with the same door, so that an
+     * upgrade changes only what differs.
+     */
+    static Structure smallHouse2() {
+        Structure s = smallHouse();
+        // A plinth of stone bricks around the house, the oak frame and the door stay.
+        for (int x = 2; x <= 6; x++) {
+            if (x != 4) {
+                s.set(x, 1, 1, STONE_BRICKS).set(x, 1, 7, STONE_BRICKS);
+            }
+        }
+        for (int z = 2; z <= 6; z++) {
+            s.set(1, 1, z, STONE_BRICKS).set(7, 1, z, STONE_BRICKS);
+        }
+        s.bed(3, 1, 3, BED, "north", 0, -1);
+        s.set(5, 1, 6, "minecraft:bookshelf");
+        s.set(6, 2, 3, LANTERN);
+        s.set(2, 1, 6, "minecraft:flower_pot").set(6, 1, 6, "minecraft:flower_pot");
+        for (int[] window : new int[][]{{2, 0}, {6, 0}}) {
+            s.set(window[0], 2, window[1], "minecraft:spruce_trapdoor[facing=north,half=top,open=true,powered=false,waterlogged=false]");
+        }
         return s;
     }
 
@@ -182,6 +219,27 @@ public final class BuildingGenerator {
         s.set(2, 1, 6, "minecraft:hay_block[axis=y]").set(8, 1, 6, "minecraft:hay_block[axis=y]").set(2, 2, 6, "minecraft:hay_block[axis=x]");
         s.set(2, 3, 3, wallTorch("east")).set(8, 3, 3, wallTorch("west"));
         s.set(4, 3, 8, wallTorch("south")).set(6, 3, 8, wallTorch("south"));
+        return s;
+    }
+
+    /**
+     * The storehouse a level higher: walls of stone bricks below, chests along the side walls and more barrels, so that the
+     * warehouse holds more containers.
+     */
+    static Structure storehouse2() {
+        Structure s = storehouse();
+        for (int x = 2; x <= 8; x++) {
+            if (x != 5) {
+                s.set(x, 1, 1, STONE_BRICKS).set(x, 2, 1, STONE_BRICKS);
+            }
+        }
+        for (int z = 2; z <= 6; z++) {
+            s.set(1, 1, z, STONE_BRICKS).set(1, 2, z, STONE_BRICKS).set(9, 1, z, STONE_BRICKS).set(9, 2, z, STONE_BRICKS);
+        }
+        s.set(2, 1, 4, "minecraft:chest[facing=east,type=single,waterlogged=false]");
+        s.set(8, 1, 4, "minecraft:chest[facing=west,type=single,waterlogged=false]");
+        s.set(4, 1, 2, BARREL).set(6, 1, 2, BARREL);
+        s.set(2, 1, 5, BARREL).set(8, 1, 5, BARREL);
         return s;
     }
 

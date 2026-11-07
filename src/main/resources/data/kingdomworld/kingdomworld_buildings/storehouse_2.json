@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.storehouse_2",
+  "category": "farming",
+  "type": "warehouse",
+  "role": "warehouse",
+  "level": 2,
+  "icon": "kingdomworld:storehouse",
+  "anchor": [5, 0, 8],
+  "entrance": "south"
+}

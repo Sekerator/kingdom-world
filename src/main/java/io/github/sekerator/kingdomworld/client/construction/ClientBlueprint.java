@@ -121,6 +121,21 @@ public final class ClientBlueprint {
         return stack.is(ModRegistries.BLUEPRINT.get()) ? BlueprintItem.templateId(stack) : "";
     }
 
+    /**
+     * The wood and stone of the blueprint in the main hand, the wood of the place decided by the biome at the anchor.
+     */
+    public static io.github.sekerator.kingdomworld.core.construction.Materials materials(net.minecraft.world.level.Level level, BlockPos at) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player == null) {
+            return io.github.sekerator.kingdomworld.core.construction.Materials.NONE;
+        }
+        ItemStack stack = minecraft.player.getMainHandItem();
+        if (!stack.is(ModRegistries.BLUEPRINT.get())) {
+            return io.github.sekerator.kingdomworld.core.construction.Materials.NONE;
+        }
+        return io.github.sekerator.kingdomworld.common.construction.TemplateMaterials.resolve(BlueprintItem.materials(stack), level, at);
+    }
+
     @Nullable
     public static Template template(String id) {
         return TEMPLATES.get(id);

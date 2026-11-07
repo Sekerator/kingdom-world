@@ -87,7 +87,10 @@ public final class BuildingEffects {
         dirty = true;
     }
 
-    static void tick(MinecraftServer server, long tick) {
+    /**
+     * Every few seconds the states are worked out again and the containers of warehouses looked for.
+     */
+    public static void tick(MinecraftServer server, long tick) {
         if (tick % 200 == 0) {
             dirty = true;
             surveyWarehouses(server);

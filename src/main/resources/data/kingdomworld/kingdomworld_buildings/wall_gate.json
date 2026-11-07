@@ -2,6 +2,8 @@
   "name": "kingdomworld.building.wall_gate",
   "category": "defense",
   "type": "wall",
+  "role": "wall",
+  "level": 1,
   "icon": "minecraft:stone_brick_wall",
   "anchor": [5, 0, 3],
   "entrance": "south"

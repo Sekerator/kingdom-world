@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.small_house_2",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 2,
+  "icon": "minecraft:oak_door",
+  "anchor": [4, 0, 8],
+  "entrance": "south"
+}

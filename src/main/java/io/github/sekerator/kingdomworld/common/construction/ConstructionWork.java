@@ -573,6 +573,12 @@ public final class ConstructionWork {
         BlockState placed = level.getBlockState(pos);
         if (placed.getBlock() == state.getBlock()) {
             placed.getBlock().setPlacedBy(level, pos, placed, FakePlayerFactory.get(level, PLACER), new ItemStack(item));
+            // Beds and other places of citizens count at once, as when a player places them.
+            io.github.sekerator.kingdomworld.common.citizen.CitizenSites.onPlaced(level, pos, placed);
+            if (placed.getBlock() instanceof net.minecraft.world.level.block.BedBlock) {
+                BlockPos head = pos.relative(placed.getValue(net.minecraft.world.level.block.BedBlock.FACING));
+                io.github.sekerator.kingdomworld.common.citizen.CitizenSites.onPlaced(level, head, level.getBlockState(head));
+            }
         }
     }
 
@@ -648,6 +654,7 @@ public final class ConstructionWork {
             BlockState there = level.getBlockState(at);
             if (!there.equals(wanted) && (there.isAir() || there.canBeReplaced())) {
                 level.setBlock(at, wanted, Block.UPDATE_ALL);
+                io.github.sekerator.kingdomworld.common.citizen.CitizenSites.onPlaced(level, at, wanted);
             }
         }
     }
@@ -1128,7 +1135,7 @@ public final class ConstructionWork {
             }
             store(server, construction.kingdomId(), level, blockPos(construction.anchor()), drops);
         }
-        return Optional.of(complete(server, construction, true));
+        return Optional.ofNullable(complete(server, construction, true));
     }
 
     private static void forget(MinecraftServer server, Construction construction) {
@@ -1140,6 +1147,47 @@ public final class ConstructionWork {
     }
 
     // ---------------------------------------------------------------- integrity of buildings
+
+    /**
+     * Looks at a whole building at once, for operators and tests.
+     *
+     * @return the share of its blocks in place, or -1 if its place is not loaded or its template is gone
+     */
+    public static int checkNow(MinecraftServer server, long buildingId) {
+        Optional<Building> found = KingdomWorldApi.state(server).construction().building(buildingId);
+        if (found.isEmpty()) {
+            return -1;
+        }
+        Building building = found.get();
+        Optional<BuildingTemplate> template = template(building);
+        ServerLevel level = level(server, building.dimension());
+        if (template.isEmpty() || template.get().fingerprint() != building.fingerprint() || level == null || !loaded(level, building.box())) {
+            return -1;
+        }
+        java.util.BitSet missing = new java.util.BitSet();
+        int counted = 0;
+        int standing = 0;
+        BlockPos anchor = blockPos(building.anchor());
+        for (int index = 0; index < template.get().blocks().size(); index++) {
+            BlockCost cost = template.get().costs().get(index);
+            if (cost.kind() == BlockCost.Kind.NOTHING || cost.kind() == BlockCost.Kind.LIQUID) {
+                continue;
+            }
+            BuildingTemplate.Block block = template.get().blocks().get(index);
+            counted++;
+            if (level.getBlockState(template.get().place(block.pos(), anchor, building.placement())).getBlock() == block.state().getBlock()) {
+                standing++;
+            } else {
+                missing.set(index);
+            }
+        }
+        int percent = counted == 0 ? 100 : (int) (standing * 100L / counted);
+        KingdomWorldApi.state(server).construction().putBuilding(building.withIntegrity(percent, KingdomWorldApi.gameTime(server), missing));
+        INTEGRITY.remove(building.id());
+        MISSING.remove(building.id());
+        BuildingEffects.changed();
+        return percent;
+    }
 
     /**
      * Looks at part of a building whose place is loaded and counts the blocks of its template still standing there; a

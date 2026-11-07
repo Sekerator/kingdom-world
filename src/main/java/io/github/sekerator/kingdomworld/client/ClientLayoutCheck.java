@@ -807,7 +807,15 @@ final class ClientLayoutCheck {
                         "create, immersiveengineering, mekanism, thermal_expansion") : Component.empty();
                 templates.add(new io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Template("kingdomworld:" + names[i % names.length]
                         + i, name, categories[i % categories.length], new ItemStack(i % 2 == 0 ? Items.OAK_DOOR : Items.STONE_BRICKS), 48, 32, 48, cost,
-                        73_728, i == 2 ? 9 : 0, problem));
+                        73_728, i == 2 ? 9 : 0, problem, i % 3 == 0 ? Component.translatable("kingdomworld.building.role.warehouse") : Component.empty(),
+                        16, i % 2 == 0 ? Component.literal(LONG_KINGDOM) : Component.empty(), 0));
+            }
+            // The kingdom's own blueprints with long names, one that cannot be built any more.
+            for (int i = 0; i < 9; i++) {
+                templates.add(new io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Template("kingdomworld:custom/" + (i + 1),
+                        Component.literal(i == 0 ? "Щ".repeat(32) : "Мой дом " + i), categories[i % categories.length], new ItemStack(Items.PAPER),
+                        48, 32, 48, cost, 73_728, 0, i == 1 ? Component.translatable("kingdomworld.template.problem.missing_block", "create:shaft")
+                        : Component.empty(), Component.translatable("kingdomworld.building.role.house"), 1, Component.empty(), i + 1));
             }
             List<io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Missing> missing = new ArrayList<>();
             String[] gatherers = {"miner", "", "lumberjack", ""};
@@ -825,15 +833,57 @@ final class ClientLayoutCheck {
                 sites.add(new io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Site(100 + i, i == 0
                         ? Component.literal(LONG_KINGDOM + " " + LONG_KINGDOM) : Component.translatable("kingdomworld.building." + names[i % names.length]),
                         new ItemStack(Items.OAK_DOOR), far, io.github.sekerator.kingdomworld.core.construction.Construction.Priority.values()[i % 3],
-                        i % 4 == 1, i % 2 == 0, status, at ? far : null, 100 - i, 73_728 - i, 73_728, 16, i == 1 ? List.of() : missing));
+                        i % 4 == 1, i % 2 == 0, status, at ? far : null, 100 - i, 73_728 - i, 73_728, 16, i == 1 ? List.of() : missing,
+                        io.github.sekerator.kingdomworld.core.construction.Construction.Kind.values()[i % 4]));
             }
+            io.github.sekerator.kingdomworld.core.construction.BuildingRoles.Status[] roleStatuses =
+                    io.github.sekerator.kingdomworld.core.construction.BuildingRoles.Status.values();
+            String[] roles = {"house", "warehouse", "workshop", "market", "tower", "wall", "well"};
             for (int i = 0; i < 30; i++) {
+                io.github.sekerator.kingdomworld.core.construction.BuildingRoles.Status roleStatus = roleStatuses[i % roleStatuses.length];
+                Component reason = roleStatus == io.github.sekerator.kingdomworld.core.construction.BuildingRoles.Status.DAMAGED
+                        ? Component.translatable("kingdomworld.construction.role_status.damaged", 9, 70)
+                        : roleStatus == io.github.sekerator.kingdomworld.core.construction.BuildingRoles.Status.LACKING
+                        ? Component.translatable("kingdomworld.construction.role_status.lacking.container")
+                        : Component.translatable("kingdomworld.construction.role_status." + roleStatus.id());
+                List<Component> effects = List.of(Component.translatable("kingdomworld.construction.effect.beds", 99, 99),
+                        Component.translatable("kingdomworld.construction.effect.comfort", 99),
+                        Component.translatable("kingdomworld.construction.effect.well", 99, Component.translatable("kingdomworld.count.blocks.n5", 99_999)),
+                        Component.translatable("kingdomworld.construction.effect.merchants", 16),
+                        Component.translatable("kingdomworld.construction.effect.lots", 64),
+                        Component.translatable("kingdomworld.construction.effect.sight", Component.translatable("kingdomworld.count.blocks.n5", 99_999)));
+                Component materials = i % 2 == 0 ? Component.translatable("kingdomworld.construction.materials.both", longNamed(Items.DARK_OAK_PLANKS)
+                        .getHoverName(), longNamed(Items.DEEPSLATE_BRICKS).getHoverName()) : Component.empty();
                 buildings.add(new io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Building(i + 1, i == 0
                         ? Component.literal(LONG_KINGDOM + " " + LONG_KINGDOM) : Component.translatable("kingdomworld.building." + names[i % names.length]),
-                        "house", categories[i % categories.length], far, i % 5 == 4 ? -1 : 100 - i * 3, 99_999, i % 7 == 3));
+                        "house", categories[i % categories.length], far, i % 5 == 4 ? -1 : 100 - i * 3, 99_999, i % 7 == 3,
+                        Component.translatable("kingdomworld.building.role." + roles[i % roles.length]), roleStatus, reason, 1 + i % 16,
+                        i % 3 == 0 ? Component.literal(LONG_KINGDOM) : Component.empty(), effects, materials, 73_728 - i, i % 2 == 1,
+                        i == 2 ? io.github.sekerator.kingdomworld.core.construction.Construction.Kind.REPAIR : null, cost, cost, cost));
             }
         }
-        return new io.github.sekerator.kingdomworld.common.network.data.ConstructionView(kingdom, canManage, 64, templates, sites, buildings);
+        return new io.github.sekerator.kingdomworld.common.network.data.ConstructionView(kingdom, canManage, 64, templates, sites, buildings, 256, 9_999_999L);
+    }
+
+    private static ThroneScreen constructionBuilding(KingdomView view, boolean canManage, long building, String work, Component status) {
+        ThroneScreen screen = throne(view, "construction", status);
+        screen.updateConstruction(constructionView(view.id(), canManage, false));
+        screen.showConstructionBuilding(building, work, 0, 0);
+        return screen;
+    }
+
+    private static ThroneScreen constructionTemplate(KingdomView view, String mode, String template, int wood, int stone) {
+        ThroneScreen screen = construction(view, true, false, mode, template, 0, Component.empty());
+        screen.chooseConstructionMaterials(wood, stone);
+        return screen;
+    }
+
+    private static io.github.sekerator.kingdomworld.client.screen.CaptureScreen capture(String name, int role, Component message, boolean error) {
+        io.github.sekerator.kingdomworld.client.screen.CaptureScreen screen = new io.github.sekerator.kingdomworld.client.screen.CaptureScreen(
+                new io.github.sekerator.kingdomworld.common.construction.ArchitectRulerItem.Corners(new BlockPos(-30_000_000, -64, -30_000_000),
+                        new BlockPos(-29_999_745, 191, -29_999_745), "minecraft:overworld"));
+        screen.fillForCheck(name, role, message, error);
+        return screen;
     }
 
     private static ThroneScreen construction(KingdomView view, boolean canManage, boolean empty, String mode, String template, long site,
@@ -1101,6 +1151,51 @@ final class ClientLayoutCheck {
                 0, Component.empty())));
         cases.add(new Case("throne-construction-catalog-empty", () -> construction(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, true,
                 "catalog", "", 0, Component.empty())));
+        cases.add(new Case("throne-construction-own", () -> construction(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "own", "", 0,
+                Component.empty())));
+        cases.add(new Case("throne-construction-own-template", () -> construction(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "own",
+                "kingdomworld:custom/1", 0, Component.translatable("kingdomworld.construction.blueprint_renamed", "Щ".repeat(32), "Щ".repeat(32)))));
+        cases.add(new Case("throne-construction-own-unavailable", () -> construction(view(KingdomView.Relation.MEMBER, Role.STEWARD), true, false,
+                "own", "kingdomworld:custom/2", 0, longError)));
+        cases.add(new Case("throne-construction-own-empty", () -> construction(view(KingdomView.Relation.MEMBER, Role.KING), true, true, "own", "",
+                0, Component.empty())));
+        cases.add(new Case("throne-construction-template-wood", () -> constructionTemplate(view(KingdomView.Relation.MEMBER, Role.KING), "catalog",
+                "kingdomworld:small_house0", 9, 5)));
+        cases.add(new Case("throne-construction-template-wood-auto", () -> constructionTemplate(view(KingdomView.Relation.MEMBER, Role.KING),
+                "catalog", "kingdomworld:storehouse2", 0, 0)));
+        cases.add(new Case("throne-construction-building", () -> constructionBuilding(view(KingdomView.Relation.MEMBER, Role.KING), true, 1, "",
+                longError)));
+        cases.add(new Case("throne-construction-building-damaged", () -> constructionBuilding(view(KingdomView.Relation.MEMBER, Role.KING), true, 3,
+                "", Component.empty())));
+        cases.add(new Case("throne-construction-building-busy", () -> constructionBuilding(view(KingdomView.Relation.MEMBER, Role.STEWARD), true, 3,
+                "", Component.empty())));
+        cases.add(new Case("throne-subject-construction-building", () -> constructionBuilding(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false,
+                1, "", Component.empty())));
+        cases.add(new Case("throne-construction-building-upgrade", () -> constructionBuilding(view(KingdomView.Relation.MEMBER, Role.KING), true, 1,
+                "upgrade", Component.empty())));
+        cases.add(new Case("throne-construction-building-repair", () -> constructionBuilding(view(KingdomView.Relation.MEMBER, Role.KING), true, 4,
+                "repair", longError)));
+        cases.add(new Case("throne-construction-building-demolish", () -> constructionBuilding(view(KingdomView.Relation.MEMBER, Role.KING), true, 7,
+                "demolish", Component.translatable("kingdomworld.construction.ordered.demolish", Component.literal(LONG_KINGDOM)))));
+        cases.add(new Case("capture", () -> capture("", 0, Component.empty(), false)));
+        cases.add(new Case("capture-problem", () -> capture("Щ".repeat(32), 2, Component.translatable("kingdomworld.capture.problem.too_big", 256, 256,
+                256, 48, 32, 48), true)));
+        cases.add(new Case("capture-saved", () -> capture("Мой дом", 1, Component.translatable("kingdomworld.capture.saved", "Щ".repeat(32), 256, 256,
+                256), false)));
+        cases.add(new Case("rename-blueprint", () -> new io.github.sekerator.kingdomworld.client.screen.RenameBlueprintScreen(null, UUID.randomUUID(),
+                1, "Щ".repeat(32))));
+        cases.add(new Case("confirm-delete-blueprint", () -> new ConfirmScreen(yes -> {
+        }, Component.translatable("kingdomworld.screen.throne.confirm_title"),
+                Component.translatable("kingdomworld.screen.construction.delete_question", "Щ".repeat(32)))));
+        cases.add(new Case("ruler-hint-first", () -> new io.github.sekerator.kingdomworld.client.screen.BlueprintHintScreen("ruler-first",
+                io.github.sekerator.kingdomworld.client.construction.BlueprintRenderer.rulerLines(Component.literal("Right Button"),
+                        Component.literal("Left Shift"), 0, new int[3]))));
+        cases.add(new Case("ruler-hint-second", () -> new io.github.sekerator.kingdomworld.client.screen.BlueprintHintScreen("ruler-second",
+                io.github.sekerator.kingdomworld.client.construction.BlueprintRenderer.rulerLines(Component.literal("Right Button"),
+                        Component.literal("Left Shift"), 1, new int[3]))));
+        cases.add(new Case("ruler-hint-save", () -> new io.github.sekerator.kingdomworld.client.screen.BlueprintHintScreen("ruler-save",
+                io.github.sekerator.kingdomworld.client.construction.BlueprintRenderer.rulerLines(Component.literal("Right Button"),
+                        Component.literal("Left Shift"), 2, new int[]{256, 256, 256}))));
         cases.add(new Case("throne-construction-buildings-empty", () -> construction(view(KingdomView.Relation.MEMBER, Role.KING), true, true,
                 "buildings", "", 0, Component.empty())));
         cases.add(new Case("throne-construction-loading", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "construction",

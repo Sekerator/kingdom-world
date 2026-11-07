@@ -124,7 +124,8 @@ final class ClientBuildingShowcase {
                 if (player != null) {
                     BuildingTemplates.get(built.get(0)).ifPresent(template -> player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,
                             io.github.sekerator.kingdomworld.common.construction.BlueprintItem.describe(
-                                    new net.minecraft.world.item.ItemStack(ModRegistries.BLUEPRINT.get()), template)));
+                                    new net.minecraft.world.item.ItemStack(ModRegistries.BLUEPRINT.get()), template,
+                                    new io.github.sekerator.kingdomworld.core.construction.Materials("minecraft:spruce", ""))));
                 }
             });
             teleport(server, playerId, spot.getX() + 0.5, ground + 4.0, spot.getZ() + 9.5, 180.0f, 30.0f);
@@ -175,10 +176,22 @@ final class ClientBuildingShowcase {
         KingdomWorldApi.kingdomOf(server, playerId).ifPresent(old -> KingdomWorldApi.dissolveKingdom(server, old.id()));
         KingdomWorldApi.findKingdom(server, "Building Test").ifPresent(old -> KingdomWorldApi.dissolveKingdom(server, old.id()));
         List<BuildingTemplate> templates = new ArrayList<>();
+        List<io.github.sekerator.kingdomworld.core.construction.Materials> materials = new ArrayList<>();
         for (BuildingTemplate template : BuildingTemplates.sorted()) {
             if (template.id().getNamespace().equals(io.github.sekerator.kingdomworld.KingdomWorld.MOD_ID) && template.available()) {
                 templates.add(template);
+                materials.add(io.github.sekerator.kingdomworld.core.construction.Materials.NONE);
             }
+        }
+        // Some of them again of other wood and stone.
+        String[][] others = {{"kingdomworld:small_house", "minecraft:spruce", ""}, {"kingdomworld:small_house_2", "minecraft:dark_oak", ""},
+                {"kingdomworld:large_house", "minecraft:birch", "minecraft:deepslate_bricks"}, {"kingdomworld:storehouse_2", "minecraft:mangrove",
+                "minecraft:cobbled_deepslate"}, {"kingdomworld:watchtower", "minecraft:spruce", "minecraft:polished_blackstone_bricks"}};
+        for (String[] other : others) {
+            BuildingTemplates.get(other[0]).filter(BuildingTemplate::available).ifPresent(template -> {
+                templates.add(template);
+                materials.add(new io.github.sekerator.kingdomworld.core.construction.Materials(other[1], other[2]));
+            });
         }
         BlockPos start = player.blockPosition();
         int y = start.getY();
@@ -214,7 +227,7 @@ final class ClientBuildingShowcase {
         for (int i = 0; i < templates.size(); i++) {
             BuildingTemplate template = templates.get(i);
             KingdomWorldState.ConstructionChange change = ConstructionWork.lay(level, null, kingdom, template, start.offset(i * SPACING, 0, 0),
-                    Placement.NONE);
+                    Placement.NONE, materials.get(i));
             if (change.construction().isEmpty()) {
                 LOGGER.error(PREFIX + "{} was not laid out: {}", template.id(), change.outcome());
                 failed = true;
@@ -226,7 +239,9 @@ final class ClientBuildingShowcase {
                 failed = true;
                 continue;
             }
-            names.add(template.id().toString());
+            var used = materials.get(i);
+            names.add(template.id().toString() + (used.none() ? "" : "+" + (used.stone().isEmpty() ? used.wood()
+                    : used.wood() + "+" + used.stone()).replace("minecraft:", "")));
             LOGGER.info(PREFIX + "built {} at {}", template.id(), start.offset(i * SPACING, 0, 0).toShortString());
         }
         LOGGER.info(PREFIX + "{} building(s) in the register", state.construction().buildingsOf(kingdom).size());

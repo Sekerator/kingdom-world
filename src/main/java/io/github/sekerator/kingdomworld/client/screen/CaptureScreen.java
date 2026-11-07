@@ -23,8 +23,8 @@ import java.util.List;
  */
 public class CaptureScreen extends KingdomScreen implements ResultListener {
     private static final int MIN_PANEL_WIDTH = 240;
-    private static final int PANEL_HEIGHT = 168;
-    private static final int STATUS_LINES = 3;
+    private static final int PANEL_HEIGHT = 192;
+    private static final int STATUS_LINES = 4;
     private static final String KEY = "kingdomworld.screen.capture.";
 
     private final ArchitectRulerItem.Corners corners;

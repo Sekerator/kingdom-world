@@ -2,6 +2,8 @@
   "name": "kingdomworld.building.workshop",
   "category": "production",
   "type": "workshop",
+  "role": "workshop",
+  "level": 1,
   "icon": "minecraft:crafting_table",
   "anchor": [5, 0, 8],
   "entrance": "south"

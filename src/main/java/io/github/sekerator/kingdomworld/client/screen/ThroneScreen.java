@@ -373,6 +373,23 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
+     * Shows a building of the construction tab in detail, with the work on it waiting for confirmation when given
+     * ({@code upgrade}, {@code repair}, {@code demolish}), and chooses wood and stone by position; for the layout check.
+     */
+    public void showConstructionBuilding(long building, String work, int wood, int stone) {
+        construction.showForCheck(ConstructionTab.Mode.BUILDINGS, "", 0, building, work.isEmpty() ? null
+                : io.github.sekerator.kingdomworld.common.network.packet.BuildingPackets.Change.Action.valueOf(work.toUpperCase(Locale.ROOT)));
+        construction.chooseForCheck(wood, stone);
+    }
+
+    /**
+     * Chooses the wood and stone of blueprints by position in their lists; for the layout check.
+     */
+    public void chooseConstructionMaterials(int wood, int stone) {
+        construction.chooseForCheck(wood, stone);
+    }
+
+    /**
      * Whether the market and trade tabs got their views, for the self-check.
      */
     public boolean marketShown() {

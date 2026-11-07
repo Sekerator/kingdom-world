@@ -54,6 +54,8 @@ public final class ConstructionCommands {
             name -> Component.translatable("commands.kingdomworld.economy.no_kingdom", name));
     private static final DynamicCommandExceptionType NO_CONSTRUCTION = new DynamicCommandExceptionType(
             id -> Component.translatable(KEY + "unknown", id));
+    private static final DynamicCommandExceptionType NO_BUILDING = new DynamicCommandExceptionType(
+            id -> Component.translatable(KEY + "unknown_building", id));
     private static final DynamicCommandExceptionType NO_TEMPLATE = new DynamicCommandExceptionType(
             id -> Component.translatable(KEY + "unknown_template", id));
     private static final SuggestionProvider<CommandSourceStack> KINGDOMS = (context, builder) ->
@@ -85,7 +87,62 @@ public final class ConstructionCommands {
                                                         .executes(context -> place(context, IntegerArgumentType.getInteger(context, "rotation"), false))
                                                         .then(Commands.argument("mirror", BoolArgumentType.bool())
                                                                 .executes(context -> place(context, IntegerArgumentType.getInteger(context, "rotation"),
-                                                                        BoolArgumentType.getBool(context, "mirror")))))))))
+                                                                        BoolArgumentType.getBool(context, "mirror")))
+                                                                .then(Commands.argument("wood", StringArgumentType.string())
+                                                                        .executes(context -> place(context, IntegerArgumentType.getInteger(context,
+                                                                                "rotation"), BoolArgumentType.getBool(context, "mirror"),
+                                                                                StringArgumentType.getString(context, "wood"), ""))
+                                                                        .then(Commands.argument("stone", StringArgumentType.string())
+                                                                                .executes(context -> place(context, IntegerArgumentType.getInteger(context,
+                                                                                        "rotation"), BoolArgumentType.getBool(context, "mirror"),
+                                                                                        StringArgumentType.getString(context, "wood"),
+                                                                                        StringArgumentType.getString(context, "stone")))))))))))
+                .then(Commands.literal("role")
+                        .then(Commands.argument("building", LongArgumentType.longArg(1))
+                                .executes(context -> role(context.getSource(), building(context)))))
+                .then(Commands.literal("upgrade")
+                        .then(Commands.argument("building", LongArgumentType.longArg(1))
+                                .executes(context -> work(context.getSource(), building(context),
+                                        io.github.sekerator.kingdomworld.common.network.packet.BuildingPackets.Change.Action.UPGRADE))))
+                .then(Commands.literal("repair")
+                        .then(Commands.argument("building", LongArgumentType.longArg(1))
+                                .executes(context -> work(context.getSource(), building(context),
+                                        io.github.sekerator.kingdomworld.common.network.packet.BuildingPackets.Change.Action.REPAIR))))
+                .then(Commands.literal("demolish")
+                        .then(Commands.argument("building", LongArgumentType.longArg(1))
+                                .executes(context -> work(context.getSource(), building(context),
+                                        io.github.sekerator.kingdomworld.common.network.packet.BuildingPackets.Change.Action.DEMOLISH))))
+                .then(Commands.literal("autorepair")
+                        .then(Commands.argument("building", LongArgumentType.longArg(1))
+                                .then(Commands.argument("on", BoolArgumentType.bool())
+                                        .executes(context -> work(context.getSource(), building(context), BoolArgumentType.getBool(context, "on")
+                                                ? io.github.sekerator.kingdomworld.common.network.packet.BuildingPackets.Change.Action.AUTO_REPAIR_ON
+                                                : io.github.sekerator.kingdomworld.common.network.packet.BuildingPackets.Change.Action.AUTO_REPAIR_OFF)))))
+                .then(Commands.literal("check")
+                        .then(Commands.argument("building", LongArgumentType.longArg(1))
+                                .executes(context -> check(context.getSource(), building(context)))))
+                .then(Commands.literal("damage")
+                        .then(Commands.argument("building", LongArgumentType.longArg(1))
+                                .then(Commands.argument("blocks", IntegerArgumentType.integer(1, 100_000))
+                                        .executes(context -> damage(context.getSource(), building(context),
+                                                IntegerArgumentType.getInteger(context, "blocks"))))))
+                .then(Commands.literal("materials").executes(context -> materials(context.getSource())))
+                .then(Commands.literal("blueprints")
+                        .executes(context -> blueprints(context.getSource(), null))
+                        .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
+                                .executes(context -> blueprints(context.getSource(), kingdom(context)))))
+                .then(Commands.literal("capture")
+                        .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
+                                .then(Commands.argument("from", BlockPosArgument.blockPos())
+                                        .then(Commands.argument("to", BlockPosArgument.blockPos())
+                                                .then(Commands.argument("name", StringArgumentType.string())
+                                                        .executes(context -> capture(context, "", "decoration"))
+                                                        .then(Commands.argument("role", StringArgumentType.string())
+                                                                .executes(context -> capture(context, StringArgumentType.getString(context, "role"),
+                                                                        "decoration"))
+                                                                .then(Commands.argument("category", StringArgumentType.string())
+                                                                        .executes(context -> capture(context, StringArgumentType.getString(context, "role"),
+                                                                                StringArgumentType.getString(context, "category"))))))))))
                 .then(Commands.literal("finish")
                         .then(Commands.argument("id", LongArgumentType.longArg(1))
                                 .executes(context -> finish(context.getSource(), construction(context)))))
@@ -111,6 +168,11 @@ public final class ConstructionCommands {
         String name = StringArgumentType.getString(context, "kingdom").strip();
         return KingdomWorldApi.findKingdom(context.getSource().getServer(), name)
                 .orElseThrow(() -> NO_KINGDOM.create(KingdomNames.normalize(name)));
+    }
+
+    private static Building building(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        long id = LongArgumentType.getLong(context, "building");
+        return KingdomWorldApi.state(context.getSource().getServer()).construction().building(id).orElseThrow(() -> NO_BUILDING.create(id));
     }
 
     private static Construction construction(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
@@ -211,13 +273,27 @@ public final class ConstructionCommands {
     // ---------------------------------------------------------------- changing
 
     private static int place(CommandContext<CommandSourceStack> context, int rotation, boolean mirror) throws CommandSyntaxException {
+        return place(context, rotation, mirror, "", "");
+    }
+
+    /**
+     * Lays a construction out; {@code wood} {@code auto} takes the wood of the place, {@code none} or empty the template's own.
+     */
+    private static int place(CommandContext<CommandSourceStack> context, int rotation, boolean mirror, String wood, String stone)
+            throws CommandSyntaxException {
         CommandSourceStack source = context.getSource();
         Kingdom kingdom = kingdom(context);
         String id = ResourceLocationArgument.getId(context, "template").toString();
         BuildingTemplate template = BuildingTemplates.get(id).orElseThrow(() -> NO_TEMPLATE.create(id));
         BlockPos pos = BlockPosArgument.getLoadedBlockPos(context, "pos");
+        io.github.sekerator.kingdomworld.core.construction.Materials materials = new io.github.sekerator.kingdomworld.core.construction.Materials(
+                "none".equals(wood) ? "" : wood, "none".equals(stone) ? "" : stone);
+        if (!io.github.sekerator.kingdomworld.common.construction.TemplateMaterials.known(materials)) {
+            source.sendFailure(Component.translatable("kingdomworld.construction.unknown_material"));
+            return 0;
+        }
         KingdomWorldState.ConstructionChange change = ConstructionWork.lay(source.getLevel(), null, kingdom.id(), template, pos,
-                new Placement(rotation, mirror));
+                new Placement(rotation, mirror), materials);
         if (!change.outcome().ok()) {
             source.sendFailure(KingdomActions.errorMessage(change.outcome().error()));
             return 0;
@@ -225,6 +301,107 @@ public final class ConstructionCommands {
         Construction construction = change.construction().orElseThrow();
         source.sendSuccess(() -> Component.translatable(KEY + "placed", construction.id(), template.name(), construction.anchor().coordinates(),
                 construction.steps()), true);
+        return 1;
+    }
+
+    // ---------------------------------------------------------------- buildings of the register
+
+    /**
+     * The role of a building: its state and why, its level and numbers, what it costs to upgrade and repair.
+     */
+    private static int role(CommandSourceStack source, Building building) {
+        MinecraftServer server = source.getServer();
+        var effect = io.github.sekerator.kingdomworld.common.construction.BuildingEffects.of(server, building).orElse(null);
+        if (effect == null) {
+            source.sendFailure(Component.translatable(KEY + "unknown_building", building.id()));
+            return 0;
+        }
+        Map<String, Integer> upgrade = new TreeMap<>(io.github.sekerator.kingdomworld.common.construction.BuildingWork.upgradeDiff(building)
+                .map(io.github.sekerator.kingdomworld.core.construction.TemplateDiff.Result::cost).orElse(Map.of()));
+        Map<String, Integer> repair = new TreeMap<>(io.github.sekerator.kingdomworld.common.construction.BuildingWork.repairCost(building));
+        source.sendSuccess(() -> Component.translatable(KEY + "role", building.id(), building.templateId(), building.role().isEmpty() ? "-"
+                        : building.role(), effect.status().id(), building.level(), building.integrity(), building.damagedCount(), effect.beds(),
+                effect.residents(), effect.params().toString(), building.materials().wood().isEmpty() ? "-" : building.materials().wood(),
+                building.materials().stone().isEmpty() ? "-" : building.materials().stone(), building.autoRepair()), false);
+        source.sendSuccess(() -> Component.translatable(KEY + "role.costs", text(upgrade), text(repair)), false);
+        return effect.works() ? 1 : 0;
+    }
+
+    private static int work(CommandSourceStack source, Building building,
+                            io.github.sekerator.kingdomworld.common.network.packet.BuildingPackets.Change.Action action) {
+        KingdomActions.Feedback feedback = io.github.sekerator.kingdomworld.common.construction.ConstructionActions.applyBuilding(source.getServer(),
+                null, building.kingdomId(), action, building.id());
+        if (!feedback.success()) {
+            source.sendFailure(feedback.message());
+            return 0;
+        }
+        long construction = KingdomWorldApi.state(source.getServer()).construction().forBuilding(building.id()).map(Construction::id).orElse(0L);
+        source.sendSuccess(() -> Component.translatable(KEY + "work", feedback.message(), construction), true);
+        return 1;
+    }
+
+    /**
+     * Looks at a whole building now, when its place is loaded.
+     */
+    private static int check(CommandSourceStack source, Building building) {
+        int integrity = io.github.sekerator.kingdomworld.common.construction.ConstructionWork.checkNow(source.getServer(), building.id());
+        if (integrity < 0) {
+            source.sendFailure(KingdomActions.errorMessage(KingdomError.AREA_NOT_LOADED));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.translatable(KEY + "checked", building.id(), integrity), false);
+        return integrity;
+    }
+
+    /**
+     * Takes away blocks of a building from the top down, as a war or a griefer would, for tests: they are gone, nothing drops.
+     */
+    private static int damage(CommandSourceStack source, Building building, int blocks) {
+        int removed = io.github.sekerator.kingdomworld.common.construction.BuildingWork.damage(source.getServer(), building, blocks);
+        source.sendSuccess(() -> Component.translatable(KEY + "damaged", building.id(), removed), true);
+        return removed;
+    }
+
+    /**
+     * The woods and stones templates can be built of, from the blocks of the game and its mods.
+     */
+    private static int materials(CommandSourceStack source) {
+        var table = io.github.sekerator.kingdomworld.common.construction.TemplateMaterials.table();
+        source.sendSuccess(() -> Component.translatable(KEY + "materials", table.woods().size(), String.join(", ", table.woods()),
+                table.stones().size(), String.join(", ", table.stones())), false);
+        return table.woods().size();
+    }
+
+    private static int blueprints(CommandSourceStack source, Kingdom only) {
+        MinecraftServer server = source.getServer();
+        int count = 0;
+        for (var blueprint : KingdomWorldApi.state(server).construction().blueprints()) {
+            if (only != null && !blueprint.kingdomId().equals(only.id())) {
+                continue;
+            }
+            count++;
+            source.sendSuccess(() -> Component.translatable(KEY + "blueprints.entry", blueprint.templateId(), name(server, blueprint.kingdomId()),
+                    blueprint.name(), blueprint.role().isEmpty() ? "-" : blueprint.role(), blueprint.sizeX(), blueprint.sizeY(), blueprint.sizeZ()),
+                    false);
+        }
+        int shown = count;
+        source.sendSuccess(() -> Component.translatable(KEY + "blueprints", shown), false);
+        return count;
+    }
+
+    private static int capture(CommandContext<CommandSourceStack> context, String role, String category) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        Kingdom kingdom = kingdom(context);
+        BlockPos from = BlockPosArgument.getLoadedBlockPos(context, "from");
+        BlockPos to = BlockPosArgument.getLoadedBlockPos(context, "to");
+        KingdomActions.Feedback feedback = io.github.sekerator.kingdomworld.common.construction.BlueprintCapture.capture(source.getLevel(), null,
+                kingdom.id(), from, to, StringArgumentType.getString(context, "name"), category, role,
+                io.github.sekerator.kingdomworld.core.construction.Facing.SOUTH);
+        if (!feedback.success()) {
+            source.sendFailure(feedback.message());
+            return 0;
+        }
+        source.sendSuccess(feedback::message, true);
         return 1;
     }
 

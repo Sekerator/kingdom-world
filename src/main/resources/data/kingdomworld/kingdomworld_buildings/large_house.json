@@ -2,6 +2,8 @@
   "name": "kingdomworld.building.large_house",
   "category": "housing",
   "type": "house",
+  "role": "house",
+  "level": 1,
   "icon": "minecraft:red_bed",
   "anchor": [5, 0, 10],
   "entrance": "south"
