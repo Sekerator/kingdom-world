@@ -130,13 +130,14 @@ public final class ProtectionEvents {
         ProtectedAction blockAction = classify(level, pos, level.getBlockState(pos));
         boolean denied = false;
         if (blockAction != null && !ProtectionService.isAllowed(player, level, pos, blockAction)) {
-            if (blockAction == ProtectedAction.CONTAINER && !(player instanceof net.minecraftforge.common.util.FakePlayer)) {
-                // Another's container opens: what is taken from it is a theft, judged by the law.
+            if (blockAction == ProtectedAction.CONTAINER && io.github.sekerator.kingdomworld.common.law.LawEvents.judges(player, level)) {
+                // Another's container opens: what is taken from it is a theft, judged by the law. The item in hand is still
+                // checked below, so that a sneaking click cannot light a fire or place a thing next to the container.
                 io.github.sekerator.kingdomworld.common.law.LawEvents.containerUse(player, level, pos);
-                return;
+            } else {
+                event.setUseBlock(Event.Result.DENY);
+                denied = true;
             }
-            event.setUseBlock(Event.Result.DENY);
-            denied = true;
         }
         if (!event.getItemStack().isEmpty()) {
             Direction face = event.getFace() != null ? event.getFace() : event.getHitVec().getDirection();
@@ -204,7 +205,7 @@ public final class ProtectionEvents {
             return;
         }
         ProtectedAction action = classify(target);
-        if (action == ProtectedAction.CONTAINER && !(event.getEntity() instanceof net.minecraftforge.common.util.FakePlayer)
+        if (action == ProtectedAction.CONTAINER && io.github.sekerator.kingdomworld.common.law.LawEvents.judges(event.getEntity(), level)
                 && !ProtectionService.isAllowed(event.getEntity(), level, target.blockPosition(), action)) {
             // A cart with a chest opens like a chest: what is taken is a theft.
             io.github.sekerator.kingdomworld.common.law.LawEvents.containerUse(event.getEntity(), level, target.blockPosition());

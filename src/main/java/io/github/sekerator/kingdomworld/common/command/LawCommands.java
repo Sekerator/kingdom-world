@@ -371,6 +371,7 @@ public final class LawCommands {
         long before = LawWork.state(server).nextConfiscationId();
         LawPunish.sentence(player, kingdom.id());
         player.hurt(player.damageSources().genericKill(), Float.MAX_VALUE);
+        LawPunish.forgetSentence(player.getUUID());
         Optional<Confiscation> made = LawWork.state(server).confiscation(before);
         int left = 0;
         for (int i = 0; i < player.getInventory().getContainerSize(); i++) {

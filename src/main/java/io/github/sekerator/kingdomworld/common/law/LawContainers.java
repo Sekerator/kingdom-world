@@ -60,9 +60,15 @@ final class LawContainers {
         OPEN.clear();
     }
 
-    static void forget(UUID player) {
-        PENDING.remove(player);
-        OPEN.remove(player);
+    /**
+     * The player leaves: one last look at a watched window, so that what was taken just before is a theft all the same.
+     */
+    static void forget(ServerPlayer player) {
+        PENDING.remove(player.getUUID());
+        Open open = OPEN.remove(player.getUUID());
+        if (open != null) {
+            check(player, open);
+        }
     }
 
     /**
@@ -125,6 +131,10 @@ final class LawContainers {
             ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
             if (player == null || player.containerMenu != entry.getValue().menu) {
                 OPEN.remove(entry.getKey());
+                if (player != null) {
+                    // The window closed without an event (a death, another window): one last look.
+                    check(player, entry.getValue());
+                }
                 continue;
             }
             check(player, entry.getValue());

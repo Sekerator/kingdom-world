@@ -2545,6 +2545,7 @@
   "kingdomworld.law.executed_surrender": "You accepted the sentence of %s. Your goods (%s) are confiscated; buy them back for %s at a watchtower, a barracks or the throne.",
   "kingdomworld.law.executed_surrender_empty": "You accepted the sentence of %s.",
   "kingdomworld.law.coins_taken": "Your coins of %s went to the treasury.",
+  "kingdomworld.law.head_no_reward": "You killed %s, but the guild pays nothing for the head of your partner (one party or one address).",
   "kingdomworld.law.head_collected": "You collected the head of %s: %s for the contract.",
   "kingdomworld.law.slave_freed": "The law of %s forbids slaves: %s is free now and serves you for pay. Fine: %s.",
   "kingdomworld.law.slave_freed.female": "The law of %s forbids slaves: %s is free now and serves you for pay. Fine: %s.",

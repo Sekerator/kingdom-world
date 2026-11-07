@@ -2545,6 +2545,7 @@
   "kingdomworld.law.executed_surrender": "Вы приняли приговор королевства %s. Ваши вещи (%s) в конфискате; выкуп %s у сторожевой башни, казармы или трона.",
   "kingdomworld.law.executed_surrender_empty": "Вы приняли приговор королевства %s.",
   "kingdomworld.law.coins_taken": "Ваши монеты на %s ушли в казну.",
+  "kingdomworld.law.head_no_reward": "Вы убили %s, но гильдия не платит за голову напарника (один отряд или один адрес).",
   "kingdomworld.law.head_collected": "Вы добыли голову %s: %s по контракту.",
   "kingdomworld.law.slave_freed": "Закон королевства %s запрещает рабство: %s теперь свободен и служит вам за плату. Штраф: %s.",
   "kingdomworld.law.slave_freed.female": "Закон королевства %s запрещает рабство: %s теперь свободна и служит вам за плату. Штраф: %s.",

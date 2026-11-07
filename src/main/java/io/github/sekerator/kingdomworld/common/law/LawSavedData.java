@@ -102,6 +102,15 @@ public final class LawSavedData extends SavedData {
         return taken == null ? List.of() : taken;
     }
 
+    /**
+     * Makes the law read-only or writable again without touching the file, for game tests.
+     */
+    public void setReadOnlyForCheck(boolean readOnly) {
+        readOnlyReason = readOnly ? "read-only for a game test" : null;
+        preserved = null;
+        super.setDirty(false);
+    }
+
     public boolean isReadOnly() {
         return readOnlyReason != null;
     }

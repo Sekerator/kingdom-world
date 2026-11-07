@@ -306,6 +306,7 @@ public final class LawActions {
         if (wanted.get().executable()) {
             LawPunish.sentence(player, kingdomId);
             player.hurt(player.damageSources().genericKill(), Float.MAX_VALUE);
+            LawPunish.forgetSentence(player.getUUID());
             return KingdomActions.Feedback.ok(KEY + "surrendered_murder");
         }
         Optional<LawPunish.Paid> paid = LawPunish.settle(player, kingdomId);

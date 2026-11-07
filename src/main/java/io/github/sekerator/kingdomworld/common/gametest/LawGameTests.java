@@ -103,8 +103,12 @@ public final class LawGameTests {
     private static Citizen witness(GameTestHelper helper, Kingdom kingdom, int x, int z) {
         Citizen citizen = CitizenGameTests.newcomer(helper, kingdom, x, z);
         CitizenBodies.force(citizen.id(), true);
-        CitizenBodies.update(helper.getLevel().getServer());
-        CitizenEntity body = CitizenBodies.body(citizen.id());
+        CitizenEntity body = null;
+        for (int i = 0; i < 5 && body == null; i++) {
+            // A body may wait for its turn among the bodies of other tests.
+            CitizenBodies.update(helper.getLevel().getServer());
+            body = CitizenBodies.body(citizen.id());
+        }
         helper.assertTrue(body != null, "The witness has no body");
         BlockPos at = helper.absolutePos(new BlockPos(x, 1, z));
         body.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0.0f, 0.0f);
@@ -476,6 +480,87 @@ public final class LawGameTests {
             CompanionBodies.despawnAll(server, owner.getUUID());
             CompanionWork.state(server).remove(slave.id());
             end(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
+    // ---------------------------------------------------------------- what the law does not judge
+
+    private static net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickBlock click(ServerPlayer player, BlockPos pos) {
+        var event = new net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickBlock(player,
+                net.minecraft.world.InteractionHand.MAIN_HAND, pos, new net.minecraft.world.phys.BlockHitResult(
+                net.minecraft.world.phys.Vec3.atCenterOf(pos), net.minecraft.core.Direction.UP, pos, false));
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(event);
+        return event;
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_law_sneaking_item")
+    public static void aSneakingStrangerStillCannotUseAnItemAtAForeignChest(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Law Sneak", UUID.randomUUID());
+        BlockPos chest = helper.absolutePos(new BlockPos(1, 1, 1));
+        ServerPlayer stranger = player(helper, "kw-sneak", 2, 2);
+        try {
+            level.setBlockAndUpdate(chest, net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+            stranger.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, new ItemStack(Items.FLINT_AND_STEEL));
+            stranger.setShiftKeyDown(true);
+            var event = click(stranger, chest);
+            helper.assertTrue(event.getUseItem() == net.minecraftforge.eventbus.api.Event.Result.DENY,
+                    "A sneaking stranger may use flint and steel at a foreign chest");
+            helper.assertTrue(event.getUseBlock() != net.minecraftforge.eventbus.api.Event.Result.DENY, "The chest itself was refused");
+        } finally {
+            end(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_law_read_only")
+    public static void aReadOnlyLawKeepsTheOldRefusals(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Law Locked", UUID.randomUUID());
+        Citizen citizen = witness(helper, kingdom, 4, 4);
+        BlockPos chest = helper.absolutePos(new BlockPos(1, 1, 1));
+        ServerPlayer stranger = player(helper, "kw-locked", 2, 2);
+        LawSavedData data = LawSavedData.get(server);
+        try {
+            level.setBlockAndUpdate(chest, net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+            helper.assertTrue(click(stranger, chest).getUseBlock() != net.minecraftforge.eventbus.api.Event.Result.DENY,
+                    "A writable law refused the chest");
+            data.setReadOnlyForCheck(true);
+            helper.assertTrue(click(stranger, chest).getUseBlock() == net.minecraftforge.eventbus.api.Event.Result.DENY,
+                    "A read-only law let a stranger open a chest");
+            CitizenEntity body = CitizenBodies.body(citizen.id());
+            float before = body.getHealth();
+            body.hurt(level.damageSources().playerAttack(stranger), 4.0f);
+            helper.assertTrue(body.getHealth() == before, "A read-only law let a stranger strike a citizen");
+        } finally {
+            data.setReadOnlyForCheck(false);
+            end(helper, kingdom, citizen);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_law_machines")
+    public static void machinesStillCannotHurtCitizens(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Law Machines", UUID.randomUUID());
+        Citizen citizen = witness(helper, kingdom, 4, 4);
+        var allow = io.github.sekerator.kingdomworld.common.config.KingdomWorldConfig.SERVER.allowFakePlayers;
+        boolean allowed = allow.get();
+        try {
+            // Machines answer to the protection as before: with allowFakePlayers off they may not strike citizens.
+            allow.set(false);
+            net.minecraftforge.common.util.FakePlayer machine = net.minecraftforge.common.util.FakePlayerFactory.get(level,
+                    new GameProfile(UUID.randomUUID(), "[kw-machine]"));
+            CitizenEntity body = CitizenBodies.body(citizen.id());
+            float before = body.getHealth();
+            body.hurt(level.damageSources().playerAttack(machine), 4.0f);
+            helper.assertTrue(body.getHealth() == before, "A machine struck a citizen");
+            helper.assertTrue(LawWork.state(level.getServer()).wantedIn(kingdom.id()).isEmpty(), "A machine became wanted");
+        } finally {
+            allow.set(allowed);
+            end(helper, kingdom, citizen);
         }
         helper.succeed();
     }

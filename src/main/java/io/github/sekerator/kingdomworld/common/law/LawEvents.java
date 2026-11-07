@@ -89,6 +89,54 @@ public final class LawEvents {
         MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGHEST, false, LivingDeathEvent.class, LawEvents::onDeath);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOW, false, LivingDropsEvent.class, LawEvents::onDrops);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGH, false, PlayerInteractEvent.EntityInteract.class, LawEvents::onInteract);
+        MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGH, false, net.minecraftforge.event.entity.living.LivingAttackEvent.class,
+                LawEvents::onAttackCitizen);
+        MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGH, false, net.minecraftforge.event.entity.player.AttackEntityEvent.class,
+                LawEvents::onStrikeCitizen);
+    }
+
+    /**
+     * Whether the law judges what a player does on the land of a kingdom instead of the protection refusing it: a real player
+     * on the server while the law is writable. Machines of mods and anybody while the law is read-only meet the old refusals.
+     */
+    public static boolean judges(Player player, Level level) {
+        return player instanceof ServerPlayer && !(player instanceof FakePlayer) && level instanceof ServerLevel server
+                && !LawWork.isReadOnly(server.getServer());
+    }
+
+    /**
+     * Blows the law cannot judge are refused as before: those of machines, and of anybody while the law is read-only.
+     */
+    static boolean refused(Player attacker, CitizenEntity citizen) {
+        if (io.github.sekerator.kingdomworld.common.protection.ProtectionService.mayHurtCitizen(attacker, citizen)) {
+            return false;
+        }
+        return !judges(attacker, citizen.level());
+    }
+
+    private static void refuse(Player attacker, CitizenEntity citizen) {
+        if (citizen.getServer() == null || citizen.kingdomId() == null) {
+            return;
+        }
+        KingdomWorldApi.kingdom(citizen.getServer(), citizen.kingdomId()).ifPresent(kingdom -> io.github.sekerator.kingdomworld.common.protection
+                .ProtectionService.notify(attacker, Component.translatable("kingdomworld.protection.citizen",
+                        Component.literal(io.github.sekerator.kingdomworld.common.protection.ProtectionService.shortName(kingdom.name()))
+                                .withStyle(style -> style.withColor(net.minecraft.network.chat.TextColor.fromRgb(kingdom.color()))))));
+    }
+
+    private static void onAttackCitizen(net.minecraftforge.event.entity.living.LivingAttackEvent event) {
+        if (event.getEntity() instanceof CitizenEntity citizen && !citizen.level().isClientSide
+                && event.getSource().getEntity() instanceof Player attacker && refused(attacker, citizen)) {
+            event.setCanceled(true);
+            refuse(attacker, citizen);
+        }
+    }
+
+    private static void onStrikeCitizen(net.minecraftforge.event.entity.player.AttackEntityEvent event) {
+        if (event.getTarget() instanceof CitizenEntity citizen && !citizen.level().isClientSide && refused(event.getEntity(), citizen)) {
+            event.setCanceled(true);
+            refuse(event.getEntity(), citizen);
+        }
     }
 
     // ---------------------------------------------------------------- the server
@@ -128,6 +176,7 @@ public final class LawEvents {
         LawSettings.reset();
         LawWork.reset();
         LawSync.reset();
+        LawPunish.resetSentences();
     }
 
     private static void onLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
@@ -138,7 +187,11 @@ public final class LawEvents {
 
     private static void onLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         UUID player = event.getEntity().getUUID();
-        LawContainers.forget(player);
+        if (event.getEntity() instanceof ServerPlayer leaving) {
+            // What was taken before leaving is a theft all the same.
+            LawContainers.forget(leaving);
+        }
+        LawPunish.forgetSentence(player);
         LawSync.forget(player);
         LawGuards.forget(player);
     }
@@ -395,6 +448,23 @@ public final class LawEvents {
      *
      * @return whether the death was such an execution
      */
+    /**
+     * Whether a hunter and the wanted are partners: in one party of the guild, or playing from one address.
+     */
+    static boolean related(MinecraftServer server, ServerPlayer hunter, ServerPlayer outlaw) {
+        boolean party = CompanionWork.state(server).parties().partyOf(hunter.getUUID())
+                .map(found -> found.has(outlaw.getUUID())).orElse(false);
+        if (party) {
+            return true;
+        }
+        // Only real network addresses count: a stand-in of a check has none, and players on the host's own machine share
+        // the loopback address.
+        java.net.SocketAddress first = hunter.connection == null ? null : hunter.connection.getRemoteAddress();
+        java.net.SocketAddress second = outlaw.connection == null ? null : outlaw.connection.getRemoteAddress();
+        return first instanceof java.net.InetSocketAddress a && second instanceof java.net.InetSocketAddress b && a.getAddress() != null
+                && !a.getAddress().isLoopbackAddress() && a.getAddress().equals(b.getAddress());
+    }
+
     static boolean headCollected(MinecraftServer server, ServerPlayer hunter, ServerPlayer outlaw) {
         if (GuildWork.isReadOnly(server) || GuildWork.state(server).member(hunter.getUUID()).isEmpty() || outlaw.hasDisconnected()
                 || LawWork.isAway(outlaw)) {
@@ -408,6 +478,16 @@ public final class LawEvents {
             Optional<Contract> contract = LawWork.bountyFor(server, wanted.kingdomId(), outlaw.getUUID());
             if (contract.isEmpty()) {
                 continue;
+            }
+            if (related(server, hunter, outlaw)) {
+                // Two of a kind do not empty the treasury: the head of a partner pays nothing, the reward goes back.
+                LawWork.withdrawBounty(server, wanted);
+                LawPunish.execute(outlaw, wanted.kingdomId(), "executed_hunter");
+                hunter.sendSystemMessage(Component.translatable(KEY + "head_no_reward", outlaw.getGameProfile().getName())
+                        .withStyle(ChatFormatting.GOLD));
+                LOGGER.info("{} killed {}, who is in the same party or plays from the same address: no reward", hunter.getGameProfile().getName(),
+                        outlaw.getGameProfile().getName());
+                return true;
             }
             Optional<GuildState.Progress> done = GuildWork.state(server).claimOutlaw(contract.get().id(), hunter.getUUID(),
                     TreasuryActions.day(server), KingdomWorldApi.state(server), CompanionWork.sharing(server));

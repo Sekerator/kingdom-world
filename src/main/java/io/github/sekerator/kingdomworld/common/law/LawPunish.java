@@ -174,7 +174,9 @@ public final class LawPunish {
      */
     static void beaten(ServerPlayer player, UUID kingdomId) {
         LawRules rules = LawSettings.rules();
-        player.setHealth(Math.min(player.getMaxHealth(), Math.max(1.0f, rules.beatenHealth)));
+        float floor = Math.min(player.getMaxHealth(), Math.max(1.0f, rules.beatenHealth));
+        // The beating never heals: a player already weaker keeps what is left (a cancelled death keeps the floor).
+        player.setHealth(player.getHealth() <= 0.0f ? floor : Math.min(player.getHealth(), floor));
         if (rules.beatenWeaknessTicks > 0) {
             player.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, rules.beatenWeaknessTicks, 1));
             player.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, Math.min(rules.beatenWeaknessTicks, 100), 1));
@@ -185,22 +187,39 @@ public final class LawPunish {
 
     // ---------------------------------------------------------------- execution
 
+    /** Ticks a sentence waits for the death it orders; a later death is no execution. */
+    private static final long SENTENCE_TICKS = 40;
+
+    private record Sentence(UUID kingdom, long at) {
+    }
+
     /** Players who accepted the death a murder costs, by the kingdom whose law kills them at their next death. */
-    private static final java.util.Map<UUID, UUID> SENTENCED = new java.util.HashMap<>();
+    private static final java.util.Map<UUID, Sentence> SENTENCED = new java.util.HashMap<>();
 
     /**
      * The next death of the player is an execution by the law of the kingdom (the player gave up, or an operator ordered
      * it); the goods go into the record before anything falls.
      */
     public static void sentence(ServerPlayer player, UUID kingdomId) {
-        SENTENCED.put(player.getUUID(), kingdomId);
+        SENTENCED.put(player.getUUID(), new Sentence(kingdomId, LawWork.now(player.server)));
+    }
+
+    /**
+     * The sentence is over, whether the death came or not.
+     */
+    public static void forgetSentence(UUID player) {
+        SENTENCED.remove(player);
     }
 
     /**
      * The kingdom that executes the player now, if the player was sentenced.
      */
     static Optional<UUID> takeSentence(ServerPlayer player) {
-        return Optional.ofNullable(SENTENCED.remove(player.getUUID()));
+        Sentence sentence = SENTENCED.remove(player.getUUID());
+        if (sentence == null || LawWork.now(player.server) - sentence.at() > SENTENCE_TICKS) {
+            return Optional.empty();
+        }
+        return Optional.of(sentence.kingdom());
     }
 
     static void resetSentences() {
