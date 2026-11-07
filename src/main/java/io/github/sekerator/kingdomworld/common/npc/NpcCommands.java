@@ -31,7 +31,7 @@ import java.util.Optional;
 public final class NpcCommands {
     private static final String ADMIN = "commands.kingdomworld.admin.npc.";
     /** How far from the given place {@code spawn} looks for land that suits a capital, in blocks. */
-    private static final int SEARCH = 512;
+    private static final int SEARCH = 256;
     private static final SuggestionProvider<CommandSourceStack> SIZES = (context, builder) ->
             SharedSuggestionProvider.suggest(Arrays.stream(NpcLevel.values()).map(NpcLevel::id), builder);
 

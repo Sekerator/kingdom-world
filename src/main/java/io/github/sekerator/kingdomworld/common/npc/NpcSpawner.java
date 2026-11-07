@@ -223,7 +223,8 @@ public final class NpcSpawner {
             job = new Job(site.id(), composition(site));
             job.chunks.addAll(chunks(site, job.composition));
         }
-        if (job.ticks > 0) {
+        // The tick an appearance starts in belongs to what started it (a player coming near, a command looking for land).
+        if (job.ticks > 1) {
             long nanos = server.tickTimes[Math.floorMod(server.getTickCount() - 1, server.tickTimes.length)];
             job.sumNanos += nanos;
             if (nanos > job.maxNanos) {
@@ -1497,7 +1498,7 @@ public final class NpcSpawner {
         }
         releaseTickets(level);
         site.setStatus(NpcSite.Status.SPAWNED);
-        double average = job.ticks > 1 ? job.sumNanos / 1e6 / (job.ticks - 1) : 0;
+        double average = job.ticks > 2 ? job.sumNanos / 1e6 / (job.ticks - 2) : 0;
         lastTiming = new Timing(job.ticks, average, job.maxNanos / 1e6);
         KingdomWorldState state = KingdomWorldApi.state(server);
         LOGGER.info("The kingdom of the world {} appeared ({}): {} buildings, {} citizens, {} soldiers, {} town(s); {} ticks, average tick "

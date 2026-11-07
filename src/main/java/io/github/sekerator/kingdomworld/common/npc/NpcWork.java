@@ -30,6 +30,8 @@ import java.util.function.Function;
  */
 public final class NpcWork {
     private static final Logger LOGGER = LogUtils.getLogger();
+    /** Blocks between two places the search for land of an operator's kingdom looks at. */
+    private static final int SEARCH_STEP = 64;
     /** Ticks between two looks for players near planned places. */
     private static final int TRIGGER_TICKS = 20;
     /** Names of the kingdoms of the world in both alphabets, for texts made without the server at hand. */
@@ -261,11 +263,11 @@ public final class NpcWork {
         if (NpcPlanning.suitable(level, x, z, 40, true)) {
             return new int[]{x, z};
         }
-        for (int ring = 1; ring * 48 <= maxDistance; ring++) {
+        for (int ring = 1; ring * SEARCH_STEP <= maxDistance; ring++) {
             for (int i = 0; i < 8 * ring; i++) {
                 double angle = i * Math.PI * 2 / (8 * ring);
-                int cx = x + (int) Math.round(Math.cos(angle) * ring * 48);
-                int cz = z + (int) Math.round(Math.sin(angle) * ring * 48);
+                int cx = x + (int) Math.round(Math.cos(angle) * ring * SEARCH_STEP);
+                int cz = z + (int) Math.round(Math.sin(angle) * ring * SEARCH_STEP);
                 if (!NpcPlanning.nearKingdom(server, cx, cz, 128) && NpcPlanning.suitable(level, cx, cz, 40, true)) {
                     return new int[]{cx, cz};
                 }
