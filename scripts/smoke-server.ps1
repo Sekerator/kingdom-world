@@ -1648,6 +1648,12 @@ Invoke-Phase 'session1' {
     # The life of cities: a tavern on flat ground of chunk [-1, -1] with an innkeeper at its counter is open; its innkeeper
     # tells rumors; a citizen falls ill; the king's festival costs the treasury exactly its price and takes its treat; a fair
     # opens. The food and drink of the tavern come from tags (with the mods of the pack, their tags too).
+    $served = Wait-ForLog $server 'KingdomWorld taverns serve (\d+) kind\(s\) of food and (\d+) of drink from the tags, of the mods \[([^\]]*)\]' 10
+    if ($served -and [int]$served.Groups[1].Value -ge 14 -and [int]$served.Groups[2].Value -ge 1) {
+        Write-Ok "[session1] taverns serve $($served.Groups[1].Value) kinds of food and $($served.Groups[2].Value) of drink from the tags (mods: $($served.Groups[3].Value))"
+    } else {
+        Add-Failure '[session1] the tags of the food and drink of taverns did not load'
+    }
     Send-ServerCommand $server 'kingdomworld admin life status'
     if (Wait-ForLog $server 'Day time \d+ \(\w+\), ill 0, rooms 0, goods of fairs 0' $CommandTimeout $ConsoleFailPattern) {
         Write-Ok '[session1] the life of cities is writable and empty'
@@ -1674,9 +1680,10 @@ Invoke-Phase 'session1' {
         } else {
             Add-Failure '[session1] the tavern does not play its role'
         }
-        $count = $script:CitizenIds.Count + 1
-        Send-ServerCommand $server "kingdomworld admin citizens spawn 1 $KingdomName"
-        [void](Wait-ForLog $server "Spawned 1 citizen\(s\) in $KingdomName" $CommandTimeout $ConsoleFailPattern)
+        # Two newcomers: the innkeeper, and a citizen who falls ill, so that no worker other checks count on is slowed down.
+        $count = $script:CitizenIds.Count + 2
+        Send-ServerCommand $server "kingdomworld admin citizens spawn 2 $KingdomName"
+        [void](Wait-ForLog $server "Spawned 2 citizen\(s\) in $KingdomName" $CommandTimeout $ConsoleFailPattern)
         $all = Get-CitizenList $server $count 'session1'
         if ($all) {
             $new = @($all | Where-Object { $script:CitizenIds -notcontains $_ })
@@ -1708,7 +1715,7 @@ Invoke-Phase 'session1' {
             } else {
                 Add-Failure '[session1] the rumors of the tavern did not answer'
             }
-            $sick = $script:CitizenIds | Where-Object { $_ -ne $script:InnkeeperId } | Select-Object -First 1
+            $sick = $new[1]
             Send-ServerCommand $server "kingdomworld admin life sick $sick"
             if (Wait-ForLog $server ' fell ill' $CommandTimeout $ConsoleFailPattern) {
                 $script:SickId = $sick

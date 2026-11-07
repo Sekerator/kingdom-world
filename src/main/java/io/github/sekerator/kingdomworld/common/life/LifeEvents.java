@@ -74,6 +74,20 @@ public final class LifeEvents {
         LifeSavedData data = LifeSavedData.get(server);
         LifeState state = data.state();
         LifeWork.loaded(server);
+        int food = 0;
+        int drink = 0;
+        java.util.Set<String> mods = new java.util.TreeSet<>();
+        for (net.minecraft.world.item.Item item : net.minecraft.core.registries.BuiltInRegistries.ITEM) {
+            net.minecraft.world.item.ItemStack stack = new net.minecraft.world.item.ItemStack(item);
+            boolean isFood = stack.is(LifeWork.TAVERN_FOOD);
+            boolean isDrink = stack.is(LifeWork.TAVERN_DRINK);
+            food += isFood ? 1 : 0;
+            drink += isDrink ? 1 : 0;
+            if (isFood || isDrink) {
+                mods.add(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item).getNamespace());
+            }
+        }
+        LOGGER.info("KingdomWorld taverns serve {} kind(s) of food and {} of drink from the tags, of the mods {}", food, drink, mods);
         LOGGER.info("KingdomWorld life of cities: {} ill, {} room(s), {} kingdom(s) with festivals, data format {}{}", state.allSick().size(),
                 state.rooms().size(), state.kingdoms().size(), LifeSavedData.FORMAT_VERSION,
                 data.isReadOnly() ? " (READ-ONLY: " + data.readOnlyReason().orElse("?") + ")" : "");
