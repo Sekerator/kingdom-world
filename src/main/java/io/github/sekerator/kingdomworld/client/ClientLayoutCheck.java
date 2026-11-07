@@ -88,6 +88,14 @@ final class ClientLayoutCheck {
     private static final int NARROWEST_SCREEN = 320;
     private static final String LONG_KINGDOM = "Великое Северное Королевство Щит";
     private static final String LONG_PLAYER = "WWWWWWWWWWWWWWWW";
+    /** A kingdom of the world with the longest names, leaning and traits there are. */
+    private static final io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo LONG_NPC =
+            new io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo("Serebrozemye XIV", "Сереброземье XIV", "Dobroslaslava",
+                    "Доброславслава", io.github.sekerator.kingdomworld.core.citizen.Gender.FEMALE,
+                    io.github.sekerator.kingdomworld.core.npc.RulerCharacter.BUILDER,
+                    List.of(io.github.sekerator.kingdomworld.core.npc.RulerCharacter.Trait.JUST,
+                            io.github.sekerator.kingdomworld.core.npc.RulerCharacter.Trait.THRIFTY),
+                    io.github.sekerator.kingdomworld.core.npc.NpcLevel.MEDIUM, 3);
 
     private record Case(String name, Supplier<Screen> screen) {
     }
@@ -921,7 +929,7 @@ final class ClientLayoutCheck {
         UUID second = UUID.nameUUIDFromBytes("second".getBytes(StandardCharsets.UTF_8));
         List<KingdomMapInfo> palette = List.of(
                 new KingdomMapInfo(first, LONG_KINGDOM, 0x6C3483, LONG_PLAYER, 8, 20, 187, true, 0, 0),
-                new KingdomMapInfo(second, "Valoria", 0xB7950B, "", 1, 9, 0, true, 7, 1));
+                new KingdomMapInfo(second, "Valoria", 0xB7950B, "", 1, 9, 0, true, 7, 1, LONG_NPC));
         int width = 20;
         int height = 12;
         int[] cells = new int[width * height];
@@ -1227,6 +1235,16 @@ final class ClientLayoutCheck {
             screen.showForCheck(1.0, -0.5, 14.0, UUID.nameUUIDFromBytes("first".getBytes(StandardCharsets.UTF_8)), Component.empty(), false);
             return screen;
         }));
+        cases.add(new Case("map-view-npc-card", () -> {
+            fillMapData();
+            KingdomMapScreen screen = new KingdomMapScreen(null);
+            screen.showForCheck(6.0, 0.5, 14.0, UUID.nameUUIDFromBytes("second".getBytes(StandardCharsets.UTF_8)), Component.empty(), false);
+            return screen;
+        }));
+        cases.add(new Case("throne-npc-outsider", () -> throne(view(KingdomView.Relation.OUTSIDER, null).withNpc(LONG_NPC), "overview",
+                Component.empty())));
+        cases.add(new Case("throne-npc-subject", () -> throne(view(KingdomView.Relation.MEMBER, Role.SUBJECT).withNpc(LONG_NPC), "overview",
+                Component.empty())));
         cases.add(new Case("map-edit-status", () -> {
             fillMapData();
             KingdomView editing = view(KingdomView.Relation.MEMBER, Role.KING);

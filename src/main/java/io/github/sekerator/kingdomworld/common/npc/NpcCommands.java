@@ -30,6 +30,8 @@ import java.util.Optional;
  */
 public final class NpcCommands {
     private static final String ADMIN = "commands.kingdomworld.admin.npc.";
+    /** How far from the given place {@code spawn} looks for land that suits a capital, in blocks. */
+    private static final int SEARCH = 512;
     private static final SuggestionProvider<CommandSourceStack> SIZES = (context, builder) ->
             SharedSuggestionProvider.suggest(Arrays.stream(NpcLevel.values()).map(NpcLevel::id), builder);
 
@@ -112,6 +114,20 @@ public final class NpcCommands {
             source.sendSuccess(() -> Component.translatable(ADMIN + "site", site.id(), NpcTexts.level(site.level()), site.x(), site.z(),
                     site.towns().size(), Component.translatable(ADMIN + "status." + site.status().id()), site.stage().id(), kingdom, ruler,
                     site.reason()), false);
+            site.kingdomId().filter(id -> KingdomWorldApi.kingdom(server, id).isPresent()).ifPresent(id -> {
+                var world = KingdomWorldApi.state(server);
+                long balance = KingdomWorldApi.treasury(server, id).map(io.github.sekerator.kingdomworld.core.economy.Treasury::balance).orElse(0L);
+                long founding = NpcSpawner.founded(world, id, io.github.sekerator.kingdomworld.common.economy.TreasuryActions.day(server))
+                        ? KingdomWorldApi.treasury(server, id).orElseThrow().journal().totals(
+                                io.github.sekerator.kingdomworld.common.economy.TreasuryActions.day(server),
+                                io.github.sekerator.kingdomworld.core.economy.TreasuryJournal.Period.WEEK)
+                        .get(io.github.sekerator.kingdomworld.core.economy.LedgerCategory.FOUNDING).income() : 0;
+                source.sendSuccess(() -> Component.translatable(ADMIN + "site_state", site.id(), balance, founding,
+                        world.citizens().registry().citizensOf(id).size(),
+                        io.github.sekerator.kingdomworld.common.army.ArmyWork.state(server).soldiersOf(id).size(),
+                        world.construction().buildingsOf(id).size(), io.github.sekerator.kingdomworld.common.road.RoadWork.state(server)
+                                .citiesOf(id).size()), false);
+            });
         }
         return state.sites().size();
     }
@@ -156,12 +172,13 @@ public final class NpcCommands {
             source.sendFailure(Component.translatable(ADMIN + "busy"));
             return 0;
         }
-        Optional<NpcSite> site = NpcWork.plant(server, x, z, level, true);
+        int[] land = NpcWork.nearestSuitable(server, x, z, SEARCH);
+        Optional<NpcSite> site = NpcWork.plant(server, land[0], land[1], level, true);
         if (site.isEmpty()) {
             source.sendFailure(Component.translatable("commands.kingdomworld.admin.read_only"));
             return 0;
         }
-        source.sendSuccess(() -> Component.translatable(ADMIN + "spawning", site.get().id(), NpcTexts.level(level), x, z,
+        source.sendSuccess(() -> Component.translatable(ADMIN + "spawning", site.get().id(), NpcTexts.level(level), land[0], land[1],
                 site.get().towns().size()), true);
         return site.get().id();
     }

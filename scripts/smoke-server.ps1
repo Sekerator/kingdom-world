@@ -90,6 +90,9 @@ $ForgeVersion = '1.20.1-47.4.10'
 $InstallerUrl = "https://maven.minecraftforge.net/net/minecraftforge/forge/$ForgeVersion/forge-$ForgeVersion-installer.jar"
 $KingdomName = 'SmokeTest'
 $PartnerName = 'SmokePartner'
+# Where the kingdom of the world of the smoke check appears (the server looks for flat land around it), and how long it may take.
+$NpcX = -700
+$NpcZ = -700
 
 # Mods that only make sense on a client. Mods that declare clientSideOnly=true are skipped as well.
 $ClientOnlyModIds = @(
@@ -107,6 +110,7 @@ if (-not $Memory) { $Memory = if ($Pack) { '6G' } else { '2G' } }
 $StartTimeout = if ($Pack) { 1500 } elseif ($MapModsDir) { 900 } else { 420 }
 $StopTimeout = if ($Pack) { 600 } else { 180 }
 $CommandTimeout = 90
+$NpcTimeout = if ($Pack) { 1200 } else { 600 }
 # Mod ids of the server-side map mods taken from -MapModsDir, and the time they may take to show markers.
 $ServerMapModIds = @('bluemap', 'dynmap')
 $MapTimeout = 240
@@ -2424,6 +2428,80 @@ Invoke-Phase 'session2' {
         Write-Ok '[session2] the materials add up: nothing the house needed is left over and nothing was missing'
     } else {
         Add-Failure "[session2] materials of the house are left over in the storehouse: $($left -join ', ')"
+    }
+
+    # Kingdoms of the world: one appears at the word of an operator away from the other kingdoms, and the server stops in the
+    # middle of its appearance; the third session checks that it ends without copies and that its money adds up.
+    Send-ServerCommand $server 'kingdomworld admin npc status'
+    if (Wait-ForLog $server 'Kingdoms of the world: \d+ places? in the plan, \d+ kingdoms?, generation on, data format 1' $CommandTimeout $ConsoleFailPattern) {
+        Write-Ok '[session2] the kingdoms of the world are planned (data format 1)'
+    } else {
+        Add-Failure '[session2] admin npc status did not answer'
+    }
+    Send-ServerCommand $server "kingdomworld admin npc spawn $NpcX $NpcZ medium"
+    $spawning = Wait-ForLog $server 'Place #(\d+): a kingdom of the world \(medium\) appears at (-?\d+), (-?\d+) with towns: (\d+)' $CommandTimeout $ConsoleFailPattern
+    if ($spawning) {
+        $script:NpcSite = $spawning.Groups[1].Value
+        Write-Ok "[session2] a medium kingdom of the world appears at $($spawning.Groups[2].Value) $($spawning.Groups[3].Value) with $($spawning.Groups[4].Value) town(s)"
+        if (Wait-ForLog $server "\d+ chunks claimed for site $($script:NpcSite) " $NpcTimeout) {
+            Write-Ok '[session2] the kingdom of the world has its land; the server stops in the middle of its appearance'
+        } else {
+            Add-Failure '[session2] the kingdom of the world got no land in time'
+        }
+    } else {
+        Add-Failure '[session2] admin npc spawn did not start a kingdom of the world'
+    }
+}
+
+if ($script:NpcSite) {
+    Invoke-Phase 'session3' {
+        param($server)
+        $site = $script:NpcSite
+        if (Wait-ForLog $server "KingdomWorld kingdoms of the world: \d+ place\(s\) planned \(\d+ waiting, \d+ appeared, 1 appearing at \w+\)" 10) {
+            Write-Ok '[session3] the appearance goes on after the restart'
+        } else {
+            Add-Failure '[session3] the appearance was not loaded as going on'
+        }
+        $appeared = Wait-ForLog $server 'The kingdom of the world (.+?) appeared \(medium\): (\d+) buildings, (\d+) citizens, (\d+) soldiers, (\d+) town\(s\); (\d+) ticks, average tick ([\d.]+) ms, worst tick ([\d.]+) ms' $NpcTimeout
+        if (-not $appeared) {
+            Add-Failure '[session3] the kingdom of the world did not finish appearing after the restart'
+            return
+        }
+        $name = $appeared.Groups[1].Value
+        Write-Ok "[session3] $name appeared: $($appeared.Groups[2].Value) buildings, $($appeared.Groups[3].Value) citizens, $($appeared.Groups[4].Value) soldiers, $($appeared.Groups[5].Value) town(s)"
+        $script:NpcTiming = "$($appeared.Groups[6].Value) ticks after the restart, average $($appeared.Groups[7].Value) ms, worst $($appeared.Groups[8].Value) ms"
+        if ([double]$appeared.Groups[8].Value -gt 50) { Add-Warning "[session3] a tick of the appearance took $($appeared.Groups[8].Value) ms" }
+        $wood = [regex]::Match((Get-LatestLog), "site $site medium at [^\r\n]* got its founding wealth: (\d+) in the treasury, \d+ kinds of goods in the storehouses, the wood of the place (\S+)")
+        if ($wood.Success) { Write-Ok "[session3] founding wealth $($wood.Groups[1].Value), the wood of the place $($wood.Groups[2].Value)" }
+        if ((Count-Log "appears at -?\d+, -?\d+, -?\d+: medium ruled by") -gt 0) {
+            Add-Failure '[session3] the kingdom of the world was founded again after the restart'
+        }
+        Send-ServerCommand $server 'kingdomworld admin npc list'
+        $state = Wait-ForLog $server "  #${site}: treasury (\d+), founding (\d+), citizens (\d+), soldiers (\d+), buildings (\d+), towns (\d+)" $CommandTimeout $ConsoleFailPattern
+        if (-not $state) {
+            Add-Failure '[session3] admin npc list did not show the kingdom of the world'
+        } else {
+            $treasury = [int64]$state.Groups[1].Value
+            $founding = [int64]$state.Groups[2].Value
+            if ($founding -eq 4000 -and $treasury -le $founding -and $treasury -gt 0) {
+                Write-Ok "[session3] the money adds up: the founding gave 4000 once, the treasury holds $treasury"
+            } else {
+                Add-Failure "[session3] the money does not add up: founding $founding, treasury $treasury"
+            }
+            if ([int]$state.Groups[3].Value -eq [int]$appeared.Groups[3].Value) {
+                Write-Ok "[session3] no citizen came twice ($($state.Groups[3].Value))"
+            } else {
+                Add-Failure "[session3] citizens $($state.Groups[3].Value), the appearance made $($appeared.Groups[3].Value)"
+            }
+        }
+        $sites = [regex]::Matches((Get-LatestLog), "#$site medium at")
+        if ($sites.Count -eq 1) { Write-Ok '[session3] the place is listed once' } else { Add-Failure "[session3] the place is listed $($sites.Count) times" }
+        Send-ServerCommand $server 'kingdom list'
+        Start-Sleep -Seconds 2
+        $copies = [regex]::Matches((Get-LatestLog), [regex]::Escape($name)).Count
+        Write-Ok "[session3] $name is named $copies time(s) in the log"
+        Send-ServerCommand $server 'kingdomworld admin npc timing'
+        [void](Wait-ForLog $server 'The last appearance took \d+ ticks' $CommandTimeout $ConsoleFailPattern)
     }
 }
 

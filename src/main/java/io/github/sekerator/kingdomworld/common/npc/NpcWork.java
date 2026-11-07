@@ -253,6 +253,34 @@ public final class NpcWork {
         return Outcome.DONE;
     }
 
+    /**
+     * The nearest point to a place whose land suits a capital, looking in rings up to a distance; the place itself if none does.
+     */
+    public static int[] nearestSuitable(MinecraftServer server, int x, int z, int maxDistance) {
+        ServerLevel level = server.overworld();
+        if (NpcPlanning.suitable(level, x, z, 40, true)) {
+            return new int[]{x, z};
+        }
+        for (int ring = 1; ring * 48 <= maxDistance; ring++) {
+            for (int i = 0; i < 8 * ring; i++) {
+                double angle = i * Math.PI * 2 / (8 * ring);
+                int cx = x + (int) Math.round(Math.cos(angle) * ring * 48);
+                int cz = z + (int) Math.round(Math.sin(angle) * ring * 48);
+                if (!NpcPlanning.nearKingdom(server, cx, cz, 128) && NpcPlanning.suitable(level, cx, cz, 40, true)) {
+                    return new int[]{cx, cz};
+                }
+            }
+        }
+        return new int[]{x, z};
+    }
+
+    /**
+     * Whether the land around a point suits a capital, judged as the plan judges it; for the showcase of the client.
+     */
+    public static boolean suitableLand(ServerLevel level, int x, int z) {
+        return NpcPlanning.suitable(level, x, z, 40, true);
+    }
+
     // ---------------------------------------------------------------- texts
 
     /**

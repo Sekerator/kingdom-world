@@ -2808,5 +2808,6 @@
   "commands.kingdomworld.admin.npc.no_site": "Такого места нет или королевство на нём уже появилось: %s",
   "commands.kingdomworld.admin.npc.removed": "Место №%s убрано вместе с королевством %s",
   "commands.kingdomworld.admin.npc.removed_buildings": "Место №%s убрано вместе с королевством %s и его постройками",
-  "commands.kingdomworld.admin.npc.throne_taken": "%s: королевство мира, его трон берут только войной"
+  "commands.kingdomworld.admin.npc.throne_taken": "%s: королевство мира, его трон берут только войной",
+  "commands.kingdomworld.admin.npc.site_state": "  №%s: казна %s, основание %s, жителей %s, солдат %s, зданий %s, городов %s"
 }

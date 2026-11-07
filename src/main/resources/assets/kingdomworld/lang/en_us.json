@@ -2808,5 +2808,6 @@
   "commands.kingdomworld.admin.npc.no_site": "There is no such place, or its kingdom appeared already: %s",
   "commands.kingdomworld.admin.npc.removed": "Place #%s removed with the kingdom %s",
   "commands.kingdomworld.admin.npc.removed_buildings": "Place #%s removed with the kingdom %s and its buildings",
-  "commands.kingdomworld.admin.npc.throne_taken": "%s is a kingdom of the world: its throne is taken only by war"
+  "commands.kingdomworld.admin.npc.throne_taken": "%s is a kingdom of the world: its throne is taken only by war",
+  "commands.kingdomworld.admin.npc.site_state": "  #%s: treasury %s, founding %s, citizens %s, soldiers %s, buildings %s, towns %s"
 }

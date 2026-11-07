@@ -108,6 +108,8 @@ public final class NpcSpawner {
     private static final int LOAD_WARN_TICKS = 6_000;
     /** Ticks it waits for its roads and wall to stand before it lets the chunks go anyway. */
     private static final int PLACE_WAIT_TICKS = 2_400;
+    /** The least radius of the walls of a village the capital is laid out for. */
+    private static final int MIN_WALL_RADIUS = 24;
     /** Citizens added in a tick at most. */
     private static final int CITIZENS_PER_TICK = 4;
     /** Positions of the town plots around the town hall: x, z and where the front looks. */
@@ -151,6 +153,13 @@ public final class NpcSpawner {
         job = null;
     }
 
+    /**
+     * Forgets what the running appearance keeps in memory, as a restart of the server does; for game tests.
+     */
+    public static void resetForTests() {
+        job = null;
+    }
+
     public static Timing lastTiming() {
         return lastTiming;
     }
@@ -158,7 +167,7 @@ public final class NpcSpawner {
     /**
      * Starts the appearance of a planned place.
      */
-    static void start(MinecraftServer server, NpcSite site) {
+    public static void start(MinecraftServer server, NpcSite site) {
         site.setStatus(NpcSite.Status.SPAWNING);
         job = null;
     }
@@ -168,8 +177,9 @@ public final class NpcSpawner {
      */
     public static NpcComposition composition(NpcSite site) {
         RoadRules roads = RoadSettings.rules();
+        // The capital is laid out for walls of at least the default radius; a wall of a smaller one leaves out what stands in its way.
         return NpcComposition.of(site.level(), site.seed(), NpcSettings.rules(), roads.townPeople(), roads.townBuildings(), roads.cityPeople(),
-                roads.cityBuildings(), roads.wallRadius());
+                roads.cityBuildings(), Math.max(roads.wallRadius(), MIN_WALL_RADIUS));
     }
 
     /**
@@ -227,6 +237,16 @@ public final class NpcSpawner {
             }
             if (site.stage() == SpawnStage.ROADS && job.searching) {
                 RoadPlanning.tickSearch(server);
+            }
+            if (site.stage() == SpawnStage.DONE) {
+                site.kingdomId().ifPresent(id -> {
+                    for (Road road : RoadWork.state(server).roads()) {
+                        if (road.kingdomId().equals(id)) {
+                            io.github.sekerator.kingdomworld.common.road.RoadBuilding.placeNow(server, road);
+                        }
+                    }
+                    RoadWork.state(server).wallOf(0, id).ifPresent(wall -> CityWalls.placeNow(server, wall));
+                });
             }
             step(server, server.overworld(), site, job);
         }
@@ -483,11 +503,16 @@ public final class NpcSpawner {
         int cz = site.z() >> 4;
         int r = NpcSettings.rules().landRadius(site.level());
         int claimed = 0;
-        for (int ring = 1; ring <= r; ring++) {
-            for (int dx = -ring; dx <= ring; dx++) {
-                for (int dz = -ring; dz <= ring; dz++) {
-                    if (Math.max(Math.abs(dx), Math.abs(dz)) == ring && claim(level, cx + dx, cz + dz, id)) {
-                        claimed++;
+        // A chunk is claimed only next to land already held, so a corner waits for its sides: passes until nothing more comes.
+        for (boolean more = true; more; ) {
+            more = false;
+            for (int ring = 1; ring <= r; ring++) {
+                for (int dx = -ring; dx <= ring; dx++) {
+                    for (int dz = -ring; dz <= ring; dz++) {
+                        if (Math.max(Math.abs(dx), Math.abs(dz)) == ring && claim(level, cx + dx, cz + dz, id)) {
+                            claimed++;
+                            more = true;
+                        }
                     }
                 }
             }
@@ -500,9 +525,9 @@ public final class NpcSpawner {
                     claimed++;
                 }
             }
-            for (int ring = 1; ring <= 1; ring++) {
-                for (int dx = -ring; dx <= ring; dx++) {
-                    for (int dz = -ring; dz <= ring; dz++) {
+            for (int pass = 0; pass < 3; pass++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int dz = -1; dz <= 1; dz++) {
                         if (claim(level, tx + dx, tz + dz, id)) {
                             claimed++;
                         }
@@ -978,6 +1003,11 @@ public final class NpcSpawner {
         NpcWealth wealth = NpcWealth.of(job.composition, NpcSettings.rules(), wood + "_log", wood + "_planks",
                 CitizenSettings.rules().dailyNutrition());
         long day = TreasuryActions.day(server);
+        if (founded(state, id, day)) {
+            // The founding was given already (the appearance runs again after a restart): nothing comes from nothing twice.
+            site.advance(SpawnStage.PEOPLE);
+            return;
+        }
         if (wealth.money() > 0) {
             Outcome granted = state.economy().foundingGrant(id, wealth.money(), day);
             if (!granted.ok()) {
@@ -1015,9 +1045,19 @@ public final class NpcSpawner {
         }
         state.trade().setOpenToOutsiders(id, true, rules);
         state.trade().setForeignCurrency(id, true, rules);
-        LOGGER.info("{} got its founding wealth: {} in the treasury, {} kinds of goods in the storehouses", site, wealth.money(),
-                wealth.items().size());
+        LOGGER.info("{} got its founding wealth: {} in the treasury, {} kinds of goods in the storehouses, the wood of the place {}", site,
+                wealth.money(), wealth.items().size(), wood);
         site.advance(SpawnStage.PEOPLE);
+    }
+
+    /**
+     * Whether the treasury of a kingdom got its founding money already (the journal keeps a week).
+     */
+    static boolean founded(KingdomWorldState state, UUID id, long day) {
+        return state.economy().treasury(id).map(treasury -> treasury.journal()
+                .totals(day, io.github.sekerator.kingdomworld.core.economy.TreasuryJournal.Period.WEEK)
+                .getOrDefault(io.github.sekerator.kingdomworld.core.economy.LedgerCategory.FOUNDING,
+                        io.github.sekerator.kingdomworld.core.economy.TreasuryJournal.Totals.ZERO).income() > 0).orElse(false);
     }
 
     /**
@@ -1040,13 +1080,17 @@ public final class NpcSpawner {
         UUID id = site.kingdomId().orElseThrow();
         KingdomWorldState state = KingdomWorldApi.state(server);
         int have = state.citizens().registry().citizensOf(id).size();
-        int want = job.composition.citizens();
+        int capital = 0;
+        for (NpcComposition.Plot plot : job.composition.buildings()) {
+            capital += NpcComposition.beds(plot.template());
+        }
+        int townBeds = 0;
+        for (String building : NpcComposition.townBuildings(job.composition.townHouses())) {
+            townBeds += NpcComposition.beds(building);
+        }
+        int want = capital + townBeds * Math.min(site.towns().size(), job.composition.towns());
         if (have < want) {
             String dimension = Dimensions.id(level);
-            int capital = 0;
-            for (NpcComposition.Plot plot : job.composition.buildings()) {
-                capital += NpcComposition.beds(plot.template());
-            }
             for (int i = 0; i < CITIZENS_PER_TICK && have < want; i++, have++) {
                 WorldPos place;
                 if (have < capital || site.towns().isEmpty()) {
@@ -1140,7 +1184,8 @@ public final class NpcSpawner {
                     : soldiers.size())));
             List<UUID> patrol = new ArrayList<>(soldiers.subList(guards.size(), Math.min(soldiers.size(), guards.size() + maxSize)));
             int reach = job.composition.reach();
-            formAndOrder(server, id, guards, Order.guard(center, Math.max(16, reach)));
+            // The radius of a guarded area is counted in chunks.
+            formAndOrder(server, id, guards, Order.guard(center, Math.min(Order.MAX_RADIUS, Math.max(1, (reach + 15) / 16))));
             if (!patrol.isEmpty()) {
                 List<WorldPos> route = new ArrayList<>();
                 int r = Math.max(10, reach - 2);
