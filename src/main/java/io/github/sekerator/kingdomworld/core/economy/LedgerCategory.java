@@ -24,7 +24,8 @@ public enum LedgerCategory {
     /** Rewards of guild contracts, the guild's commission and its fees. */
     GUILD,
     /** Pay of mercenaries. */
-    ARMY;
+    ARMY,
+    MAGIC;
 
     public String id() {
         return name().toLowerCase(Locale.ROOT);

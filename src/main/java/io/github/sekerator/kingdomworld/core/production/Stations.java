@@ -20,10 +20,12 @@ public final class Stations {
     public static final String MARKET_STALL = "market_stall";
     /** The desk of the guild, kept by the registrar. */
     public static final String GUILD_DESK = "guild_desk";
+    /** The magic focus of the mage, the heart of the mage tower. */
+    public static final String MAGIC_FOCUS = "magic_focus";
 
     /** Every kind, in the order the post screen lists them. */
     public static final List<String> ALL = List.of(FURNACE, BLAST_FURNACE, SMOKER, CAMPFIRE, CRAFTING_TABLE, STONECUTTER, SMITHING_TABLE, MINT,
-            MARKET_STALL, GUILD_DESK);
+            MARKET_STALL, GUILD_DESK, MAGIC_FOCUS);
 
     private Stations() {
     }

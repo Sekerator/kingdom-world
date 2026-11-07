@@ -17,17 +17,19 @@ class ProfessionRegistryTest {
         assertEquals(List.of(Professions.UNEMPLOYED, Professions.FARMER, Professions.LUMBERJACK, Professions.MINER,
                 Professions.FISHER, Professions.HERDER, Professions.CARRIER, Professions.SMELTER, Professions.COOK,
                 Professions.CRAFTER, Professions.SMITH, Professions.MINTER, Professions.MERCHANT, Professions.REGISTRAR,
-                Professions.ADVENTURER, Professions.BUILDER, Professions.WARRIOR, Professions.ARCHER), registry.all());
+                Professions.ADVENTURER, Professions.BUILDER, Professions.WARRIOR, Professions.ARCHER, Professions.MAGE), registry.all());
         assertEquals(SiteKinds.WORK_POST, Professions.MINER.workplaceKind());
         assertTrue(Professions.worksAtPosts("farmer"));
         assertTrue(Professions.worksAtPosts("carrier"));
         assertFalse(Professions.worksAtPosts("unemployed"));
-        assertEquals(14, Professions.postProfessions().size());
+        assertEquals(15, Professions.postProfessions().size());
         assertFalse(Professions.worksAtPosts("adventurer"), "adventurers need no workplace");
         assertFalse(Professions.worksAtPosts("warrior") || Professions.worksAtPosts("archer"), "soldiers need no workplace");
         assertTrue(Professions.isMilitary("warrior") && Professions.isMilitary("archer") && !Professions.isMilitary("adventurer"));
-        assertEquals(Professions.UNEMPLOYED, Professions.nextCivilian("builder"), "the citizens tab skips the soldiers");
+        assertEquals(Professions.MAGE, Professions.nextCivilian("builder"), "the citizens tab skips the soldiers");
+        assertEquals(Professions.UNEMPLOYED, Professions.nextCivilian("mage"));
         assertTrue(Professions.usesStations("registrar"));
+        assertTrue(Professions.usesStations("mage"));
         assertTrue(Professions.isWorkshop("smith") && Professions.isWorkshop("cook"));
         assertFalse(Professions.isWorkshop("miner"));
         assertTrue(Professions.hasAutoMode("smelter") && Professions.hasAutoMode("cook"));
@@ -43,7 +45,7 @@ class ProfessionRegistryTest {
         Profession miller = new Profession("miller", "mill");
         registry.register(miller);
         assertEquals(miller, registry.byId("miller").orElseThrow());
-        assertEquals(19, registry.all().size());
+        assertEquals(20, registry.all().size());
         assertThrows(IllegalArgumentException.class, () -> registry.register(new Profession("farmer", null)));
     }
 
@@ -60,7 +62,8 @@ class ProfessionRegistryTest {
         assertEquals(Professions.BUILDER, registry.next("adventurer"));
         assertEquals(Professions.WARRIOR, registry.next("builder"));
         assertEquals(Professions.ARCHER, registry.next("warrior"));
-        assertEquals(Professions.UNEMPLOYED, registry.next("archer"));
+        assertEquals(Professions.MAGE, registry.next("archer"));
+        assertEquals(Professions.UNEMPLOYED, registry.next("mage"));
         assertEquals(Professions.UNEMPLOYED, registry.next("no_such_profession"));
     }
 

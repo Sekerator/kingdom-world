@@ -40,6 +40,8 @@ public final class Professions {
     public static final Profession WARRIOR = new Profession("warrior", null);
     /** A soldier who shoots with a bow or a crossbow of the storehouses; recruited in the army tab. */
     public static final Profession ARCHER = new Profession("archer", null);
+    /** Dissolves crystals into energy at a magic focus in the zone of a work post, researches, and defends the land nearby. */
+    public static final Profession MAGE = new Profession("mage", SiteKinds.WORK_POST);
 
     /** The registry of the running game; more professions are registered here. */
     public static final ProfessionRegistry REGISTRY = ProfessionRegistry.withDefaults();
@@ -69,7 +71,7 @@ public final class Professions {
      */
     public static boolean usesStations(String professionId) {
         return isWorkshop(professionId) || MINTER.id().equals(professionId) || MERCHANT.id().equals(professionId)
-                || REGISTRAR.id().equals(professionId);
+                || REGISTRAR.id().equals(professionId) || MAGE.id().equals(professionId);
     }
 
     /**

@@ -208,7 +208,29 @@ public enum KingdomError {
     /** The squad is on the road with a caravan. */
     SQUAD_ON_THE_ROAD,
     /** The citizen is on an expedition of the guild. */
-    ON_EXPEDITION;
+    ON_EXPEDITION,
+
+    /** The kingdom's store holds too little energy. */
+    NOT_ENOUGH_ENERGY,
+    /** The kingdom's store has no room for more energy. */
+    ENERGY_FULL,
+    /** The tower researches something else already. */
+    RESEARCH_UNDER_WAY,
+    ALREADY_RESEARCHED,
+    /** Another research must be finished first. */
+    RESEARCH_NEEDED,
+    /** The tower of the kingdom is not high enough to teach the spell. */
+    TOWER_TOO_LOW,
+    ALREADY_LEARNED,
+    /** The player has not learned the spell. */
+    NOT_LEARNED,
+    /** The spell of the kingdom is switched off. */
+    SPELL_OFF,
+    UNKNOWN_GATE,
+    /** The crystals the player carries hold too little energy. */
+    NO_CRYSTALS,
+    /** The spell is still recharging. */
+    COOLDOWN;
 
     /**
      * Lower case identifier, used for translation keys.

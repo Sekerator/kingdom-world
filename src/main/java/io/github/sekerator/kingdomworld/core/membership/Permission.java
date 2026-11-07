@@ -33,6 +33,8 @@ public enum Permission {
     MANAGE_CONSTRUCTION,
     /** Recruit and dismiss soldiers, form squads and give them orders, hire mercenaries. */
     MANAGE_ARMY,
+    /** Run the mage tower: research, the spells of the kingdom, the ward, gates and generators. */
+    MANAGE_MAGIC,
     /** Appoint members to positions and change the rights of positions. Only the king holds it. */
     APPOINT;
 
