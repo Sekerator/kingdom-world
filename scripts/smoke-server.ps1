@@ -1491,20 +1491,6 @@ Invoke-Phase 'session1' {
                 Add-Failure '[session1] the shed with blocks of Create could not be laid out'
             }
         }
-        # The builder would go on while the server runs, and a simulation step may come between a reading and the stop:
-        # the house is paused and its paid blocks placed, so the numbers taken last stay as they are until the restart.
-        Send-ServerCommand $server "kingdomworld admin build pause $id"
-        if (-not (Wait-ForLog $server "Construction #$id paused" $CommandTimeout $ConsoleFailPattern)) {
-            Add-Failure '[session1] the house could not be paused before the restart'
-        }
-        Send-ServerCommand $server 'kingdomworld admin build tick'
-        [void](Wait-ForLog $server 'Constructions moved on: \d+' $CommandTimeout $ConsoleFailPattern)
-        $seen = Count-Log $infoPattern
-        Send-ServerCommand $server "kingdomworld admin build info $id"
-        $last = Wait-ForNewLog $server $infoPattern $CommandTimeout $seen
-        if ($last) {
-            $script:ConstructionInfo = "$($last.Groups[1].Value)/$($last.Groups[2].Value)/$($last.Groups[3].Value)/$($last.Groups[4].Value)/$($last.Groups[5].Value)"
-        }
     }
 
     # A hut that stands on chunk [-1, 1] is saved as a blueprint of the kingdom, and a construction from it waits paused
@@ -1531,20 +1517,6 @@ Invoke-Phase 'session1' {
             $script:HutId = $hut.Groups[1].Value
             Send-ServerCommand $server "kingdomworld admin build stock $($script:HutId)"
             [void](Wait-ForLog $server "Materials for construction #$($script:HutId) put into the storehouses: \d+, did not fit: 0" $CommandTimeout $ConsoleFailPattern)
-            Send-ServerCommand $server "kingdomworld admin build pause $($script:HutId)"
-            [void](Wait-ForLog $server "Construction #$($script:HutId) paused" $CommandTimeout $ConsoleFailPattern)
-            Send-ServerCommand $server 'kingdomworld admin build tick'
-            [void](Wait-ForLog $server 'Constructions moved on: \d+' $CommandTimeout $ConsoleFailPattern)
-            $hutPattern = "#$($script:HutId) $([regex]::Escape($script:HutTemplate)) at -7 70 21: steps done (\d+) of (\d+), blocks placed (\d+) of (\d+), paid and waiting (\d+)"
-            $seen = Count-Log $hutPattern
-            Send-ServerCommand $server "kingdomworld admin build info $($script:HutId)"
-            $hutInfo = Wait-ForNewLog $server $hutPattern $CommandTimeout $seen
-            if ($hutInfo) {
-                $script:HutInfo = "$($hutInfo.Groups[1].Value)/$($hutInfo.Groups[2].Value)/$($hutInfo.Groups[3].Value)/$($hutInfo.Groups[4].Value)/$($hutInfo.Groups[5].Value)"
-                Write-Ok "[session1] a construction #$($script:HutId) from the saved blueprint waits over the restart: $($script:HutInfo)"
-            } else {
-                Add-Failure '[session1] the construction from the saved blueprint shows no numbers'
-            }
         } else {
             Add-Failure '[session1] no construction could be laid out from the saved blueprint'
         }
@@ -1579,6 +1551,42 @@ Invoke-Phase 'session1' {
             }
         } else {
             Add-Warning '[session1] the pack has no wood of a mod named the usual way; the wood of mods was not checked'
+        }
+    }
+
+    # The builder would go on while the server runs, and a simulation step may come between a reading and the stop: the
+    # house and the hut are paused together right before the stop and their paid blocks placed, so the numbers taken last
+    # stay as they are until the restart, and nothing they need is free for the workshops for long.
+    if ($script:ConstructionId) {
+        $id = $script:ConstructionId
+        $infoPattern = "#$id kingdomworld:small_house at 39 70 15: steps done (\d+) of (\d+), blocks placed (\d+) of (\d+), paid and waiting (\d+)"
+        Send-ServerCommand $server "kingdomworld admin build pause $id"
+        if (-not (Wait-ForLog $server "Construction #$id paused" $CommandTimeout $ConsoleFailPattern)) {
+            Add-Failure '[session1] the house could not be paused before the restart'
+        }
+        Send-ServerCommand $server 'kingdomworld admin build tick'
+        [void](Wait-ForLog $server 'Constructions moved on: \d+' $CommandTimeout $ConsoleFailPattern)
+        $seen = Count-Log $infoPattern
+        Send-ServerCommand $server "kingdomworld admin build info $id"
+        $last = Wait-ForNewLog $server $infoPattern $CommandTimeout $seen
+        if ($last) {
+            $script:ConstructionInfo = "$($last.Groups[1].Value)/$($last.Groups[2].Value)/$($last.Groups[3].Value)/$($last.Groups[4].Value)/$($last.Groups[5].Value)"
+        }
+    }
+    if ($script:HutId) {
+        Send-ServerCommand $server "kingdomworld admin build pause $($script:HutId)"
+        [void](Wait-ForLog $server "Construction #$($script:HutId) paused" $CommandTimeout $ConsoleFailPattern)
+        Send-ServerCommand $server 'kingdomworld admin build tick'
+        [void](Wait-ForLog $server 'Constructions moved on: \d+' $CommandTimeout $ConsoleFailPattern)
+        $hutPattern = "#$($script:HutId) $([regex]::Escape($script:HutTemplate)) at -7 70 21: steps done (\d+) of (\d+), blocks placed (\d+) of (\d+), paid and waiting (\d+)"
+        $seen = Count-Log $hutPattern
+        Send-ServerCommand $server "kingdomworld admin build info $($script:HutId)"
+        $hutInfo = Wait-ForNewLog $server $hutPattern $CommandTimeout $seen
+        if ($hutInfo) {
+            $script:HutInfo = "$($hutInfo.Groups[1].Value)/$($hutInfo.Groups[2].Value)/$($hutInfo.Groups[3].Value)/$($hutInfo.Groups[4].Value)/$($hutInfo.Groups[5].Value)"
+            Write-Ok "[session1] a construction #$($script:HutId) from the saved blueprint waits over the restart: $($script:HutInfo)"
+        } else {
+            Add-Failure '[session1] the construction from the saved blueprint shows no numbers'
         }
     }
 
