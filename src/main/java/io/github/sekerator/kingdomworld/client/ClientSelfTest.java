@@ -44,6 +44,8 @@ import java.util.UUID;
  *       and the storehouses, the territory editor with a claim request, the screen of the work post (through the real
  *       server packet) and the founding screen, dissolves the kingdom again and quits. Every step is logged; rendering
  *       problems show up as errors in the log.</li>
+ *   <li>{@code maps}: in a singleplayer world with map mods ({@code -PwithMaps}), shows kingdoms and a caravan on them
+ *       and saves screenshots in English and Russian (see {@link ClientMapsSelfTest}).</li>
  * </ul>
  */
 public final class ClientSelfTest {
@@ -58,6 +60,7 @@ public final class ClientSelfTest {
     private static volatile UUID kingdomId;
     private static volatile BlockPos post;
     private static volatile BlockPos bank;
+    private static ClientMapsSelfTest maps;
 
     private ClientSelfTest() {
     }
@@ -94,6 +97,16 @@ public final class ClientSelfTest {
             LOGGER.info(PREFIX + "quitting");
             quit = false;
             minecraft.stop();
+            return;
+        }
+        if ("maps".equals(MODE)) {
+            if (maps == null) {
+                String folder = System.getProperty("kingdomworld.clientSelfTest.screenshots");
+                maps = new ClientMapsSelfTest(folder != null && !folder.isEmpty() ? Path.of(folder)
+                        : minecraft.gameDirectory.toPath().resolve("kingdomworld-maps"));
+            }
+            maps.tick();
+            quit = maps.finished();
             return;
         }
         if (!"world".equals(MODE) || minecraft.player == null || minecraft.level == null) {

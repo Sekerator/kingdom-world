@@ -155,6 +155,11 @@ public final class ClientPacketHandlers {
         ClientTerritoryCache.applyDelta(packet);
     }
 
+    public static void handleTerritorySnapshot(io.github.sekerator.kingdomworld.common.network.packet.TerritorySnapshotPacket packet) {
+        ClientTerritoryCache.applySnapshot(packet);
+        io.github.sekerator.kingdomworld.client.map.ClientMapSync.onSnapshot(packet);
+    }
+
     public static void handleBorderCrossing(BorderCrossingPacket packet) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null || !KingdomWorldConfig.CLIENT.showBorderMessages.get()) {

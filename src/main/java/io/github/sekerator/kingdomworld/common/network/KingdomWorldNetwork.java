@@ -19,6 +19,8 @@ import io.github.sekerator.kingdomworld.common.network.packet.OrderPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.OpenFoundingScreenPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.StoragePackets;
 import io.github.sekerator.kingdomworld.common.network.packet.TerritoryDeltaPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.TerritorySnapshotPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.TerritorySnapshotRequestPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.TradePackets;
 import io.github.sekerator.kingdomworld.common.network.packet.WorkPostActionPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.WorkPostViewPacket;
@@ -45,7 +47,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "7";
+    public static final String PROTOCOL_VERSION = "8";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -125,6 +127,10 @@ public final class KingdomWorldNetwork {
                 TradePackets.ExchangeAction::decode, TradePackets.ExchangeAction::handle);
         add(id++, TradePackets.Caravans.class, NetworkDirection.PLAY_TO_CLIENT, TradePackets.Caravans::encode,
                 TradePackets.Caravans::decode, TradePackets.Caravans::handle);
+        add(id++, TerritorySnapshotRequestPacket.class, NetworkDirection.PLAY_TO_SERVER, TerritorySnapshotRequestPacket::encode,
+                TerritorySnapshotRequestPacket::decode, TerritorySnapshotRequestPacket::handle);
+        add(id++, TerritorySnapshotPacket.class, NetworkDirection.PLAY_TO_CLIENT, TerritorySnapshotPacket::encode,
+                TerritorySnapshotPacket::decode, TerritorySnapshotPacket::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

@@ -154,6 +154,14 @@ public final class KingdomWorldApi {
     }
 
     /**
+     * Decides which kingdoms players see on maps (the atlas and map mods); {@code null} restores the public map.
+     * Web maps of the server ask it with no viewer.
+     */
+    public static void setMapVisibility(@Nullable io.github.sekerator.kingdomworld.core.territory.MapVisibility visibility) {
+        io.github.sekerator.kingdomworld.common.kingdom.TerritorySnapshots.setVisibility(visibility);
+    }
+
+    /**
      * The policy behind all protection checks; other mechanics register exemptions on it.
      */
     public static AccessPolicy accessPolicy() {

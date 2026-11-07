@@ -3,6 +3,7 @@ package io.github.sekerator.kingdomworld.client.map;
 import io.github.sekerator.kingdomworld.common.network.data.KingdomMapInfo;
 import io.github.sekerator.kingdomworld.common.network.packet.MapAreaPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.TerritoryDeltaPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.TerritorySnapshotPacket;
 import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
 import io.github.sekerator.kingdomworld.core.territory.TerritoryListener;
 
@@ -29,6 +30,7 @@ public final class ClientTerritoryCache {
     private static int areaMinZ;
     private static int areaMaxX;
     private static int areaMaxZ;
+    private static int generation;
 
     private ClientTerritoryCache() {
     }
@@ -46,6 +48,14 @@ public final class ClientTerritoryCache {
         KINGDOMS.clear();
         dimension = null;
         hasArea = false;
+        generation++;
+    }
+
+    /**
+     * Changes whenever the cache starts over (a new world or dimension) without reporting single chunks.
+     */
+    public static int generation() {
+        return generation;
     }
 
     public static String dimension() {
@@ -93,6 +103,35 @@ public final class ClientTerritoryCache {
         areaMaxZ = packet.minChunkZ() + packet.height() - 1;
     }
 
+    /**
+     * Land of the dimension for map integrations: all of it, or the square the packet covers. Chunks the snapshot
+     * covers but does not list become unclaimed.
+     */
+    public static void applySnapshot(TerritorySnapshotPacket packet) {
+        switchDimension(packet.dimension());
+        Map<Long, UUID> next = new HashMap<>();
+        for (int i = 0; i < packet.palette().size(); i++) {
+            KingdomMapInfo info = packet.palette().get(i);
+            KINGDOMS.put(info.id(), info);
+            for (long chunk : packet.chunks().get(i)) {
+                next.put(chunk, info.id());
+            }
+        }
+        for (Long chunk : List.copyOf(OWNERS.keySet())) {
+            if (!next.containsKey(chunk) && packet.covers(ChunkKey.x(chunk), ChunkKey.z(chunk))) {
+                set(ChunkKey.x(chunk), ChunkKey.z(chunk), null);
+            }
+        }
+        next.forEach((chunk, owner) -> set(ChunkKey.x(chunk), ChunkKey.z(chunk), owner));
+    }
+
+    /**
+     * Every chunk with a known owner in the current dimension, read-only.
+     */
+    public static Map<Long, UUID> owners() {
+        return Collections.unmodifiableMap(OWNERS);
+    }
+
     public static void applyDelta(TerritoryDeltaPacket packet) {
         for (KingdomMapInfo info : packet.palette()) {
             KINGDOMS.put(info.id(), info);
@@ -113,6 +152,7 @@ public final class ClientTerritoryCache {
             OWNERS.clear();
             hasArea = false;
             dimension = newDimension;
+            generation++;
         }
     }
 

@@ -82,6 +82,56 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 repositories {
     // ForgeGradle adds the Forge maven and Maven Central automatically.
+    // Map mods for the soft integrations in the compat package: their APIs at compile time only, the mods themselves
+    // only in the development runs started with -PwithMaps. Nothing of them goes into the jar.
+    maven {
+        name = 'BlueMap'
+        url = 'https://repo.bluecolored.de/releases'
+        content { includeGroup 'de.bluecolored.bluemap' }
+    }
+    maven {
+        name = 'Dynmap'
+        url = 'https://repo.mikeprimm.com/'
+        content { includeGroup 'us.dynmap' }
+    }
+    // Not exclusive: ForgeGradle serves the remapped copies of these mods under the same group from its own repository.
+    maven {
+        name = 'Modrinth'
+        url = 'https://api.modrinth.com/maven'
+        content { includeGroup 'maven.modrinth' }
+    }
+    flatDir {
+        name = 'NestedMapLibraries'
+        dirs layout.buildDirectory.dir('map-libs')
+    }
+}
+
+// Versions of the map mods the integrations are built and checked against (Modrinth version ids for Forge 1.20.1):
+// JourneyMap 1.20.1-6.0.7 (its API 2.0.0 comes inside the mod), Xaero's World Map 1.47.0, Xaero's Minimap 26.6.0,
+// Common Network 1.0.6 (needed by JourneyMap).
+def mapMods = [
+        journeymap      : 'maven.modrinth:journeymap:HWDC99DO',
+        xaeroWorldMap   : 'maven.modrinth:xaeros-world-map:KtEupJvB',
+        xaeroMinimap    : 'maven.modrinth:xaeros-minimap:dB6E0CY9',
+        commonNetworking: 'maven.modrinth:common-network:TkOARDQh',
+]
+// -PwithMaps=journeymap,xaero (or "all") adds the client map mods to the development runs.
+def withMaps = project.hasProperty('withMaps') ? project.property('withMaps').toString().split(',')*.trim() : []
+
+configurations {
+    mapModJars { transitive = false }
+}
+
+// The JourneyMap API and the library of Xaero's maps are only published inside the mods (as nested jars), so they
+// are taken out of the downloaded mods.
+def mapLibs = layout.buildDirectory.dir('map-libs')
+tasks.register('extractMapLibraries', Copy) {
+    from({ configurations.mapModJars.collect { zipTree(it) } }) {
+        include 'META-INF/jarjar/journeymap-api-*.jar', 'META-INF/jarjar/xaerolib-*.jar'
+        eachFile { path = name }
+    }
+    includeEmptyDirs = false
+    into mapLibs
 }
 
 dependencies {
@@ -90,6 +140,25 @@ dependencies {
 
     // Soft compatibility modules must never add compile or runtime dependencies on other mods here.
     // They are activated at runtime only when ModList reports the mod as loaded.
+    // Map mods: compile only (see the repositories above); the jar has no dependency on them.
+    compileOnly 'de.bluecolored.bluemap:BlueMapAPI:2.7.2'
+    compileOnly 'us.dynmap:DynmapCoreAPI:3.7-beta-6'
+    compileOnly fg.deobf(mapMods.xaeroWorldMap)
+    compileOnly fg.deobf(mapMods.xaeroMinimap)
+    mapModJars mapMods.journeymap
+    mapModJars mapMods.xaeroWorldMap
+    compileOnly files(mapLibs.map { it.file('journeymap-api-forge-1.20.1-2.0.0.jar') }) {
+        builtBy 'extractMapLibraries'
+    }
+    if ('journeymap' in withMaps || 'all' in withMaps) {
+        runtimeOnly fg.deobf(mapMods.journeymap)
+        runtimeOnly fg.deobf(mapMods.commonNetworking)
+    }
+    if ('xaero' in withMaps || 'all' in withMaps) {
+        runtimeOnly fg.deobf(mapMods.xaeroWorldMap)
+        runtimeOnly fg.deobf(mapMods.xaeroMinimap)
+        runtimeOnly fg.deobf('local:xaerolib-forge-1.20.1:1.7.3')
+    }
 
     testImplementation platform("org.junit:junit-bom:${junit_version}")
     testImplementation 'org.junit.jupiter:junit-jupiter'

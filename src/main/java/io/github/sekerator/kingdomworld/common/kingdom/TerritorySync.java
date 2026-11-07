@@ -5,9 +5,12 @@ import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.KingdomMapInfo;
 import io.github.sekerator.kingdomworld.common.network.packet.BorderCrossingPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.TerritoryDeltaPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.TerritorySnapshotPacket;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
+import io.github.sekerator.kingdomworld.core.territory.MapVisibility;
+import io.github.sekerator.kingdomworld.core.territory.Territory;
 import io.github.sekerator.kingdomworld.core.territory.TerritoryListener;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -26,8 +29,11 @@ import java.util.UUID;
  *   <li>chunk ownership changes are collected during a tick and sent to all online players as one delta per
  *       dimension at the end of the tick;</li>
  *   <li>every half second each player's chunk is checked, and crossing into or out of a kingdom's land is
- *       reported to that player.</li>
+ *       reported to that player;</li>
+ *   <li>every five seconds the map facts of kingdoms (name, color, ruler, capital) are compared with what was sent,
+ *       and changed ones go to all players as a delta without chunks, so maps rename and recolor land.</li>
  * </ul>
+ * Players only receive kingdoms the {@link TerritorySnapshots#visibility() map visibility} lets them see.
  * Used on the server thread only.
  */
 public final class TerritorySync {
@@ -38,6 +44,9 @@ public final class TerritorySync {
     private static final int BORDER_CHECK_INTERVAL_TICKS = 10;
     private static final Map<String, Map<Long, UUID>> PENDING = new LinkedHashMap<>();
     private static final Map<UUID, UUID> LAST_OWNER = new HashMap<>();
+    private static final int INFO_CHECK_INTERVAL_TICKS = 100;
+    private static final Map<UUID, List<Object>> LAST_INFO = new HashMap<>();
+    private static int infoTicks;
 
     private TerritorySync() {
     }
@@ -50,6 +59,10 @@ public final class TerritorySync {
      * Sends the changes of this tick. Called at the end of every server tick.
      */
     public static void flush(MinecraftServer server) {
+        if (++infoTicks >= INFO_CHECK_INTERVAL_TICKS) {
+            infoTicks = 0;
+            sendChangedInfo(server);
+        }
         if (PENDING.isEmpty()) {
             return;
         }
@@ -82,7 +95,7 @@ public final class TerritorySync {
                         owners[i - start] = known;
                     }
                 }
-                KingdomWorldNetwork.sendToAll(new TerritoryDeltaPacket(dimension, List.copyOf(palette), keys, owners));
+                send(server, new TerritoryDeltaPacket(dimension, List.copyOf(palette), keys, owners));
             }
         }
         PENDING.clear();
@@ -118,6 +131,69 @@ public final class TerritorySync {
     public static void reset() {
         PENDING.clear();
         LAST_OWNER.clear();
+        LAST_INFO.clear();
+        infoTicks = 0;
+    }
+
+    /**
+     * Sends a delta to every player, leaving out the kingdoms a player may not see: their chunks reach that player as
+     * unclaimed.
+     */
+    private static void send(MinecraftServer server, TerritoryDeltaPacket packet) {
+        MapVisibility visibility = TerritorySnapshots.visibility();
+        if (visibility == MapVisibility.PUBLIC) {
+            KingdomWorldNetwork.sendToAll(packet);
+            return;
+        }
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            List<KingdomMapInfo> palette = new ArrayList<>();
+            int[] remap = new int[packet.palette().size() + 1];
+            for (int i = 0; i < packet.palette().size(); i++) {
+                if (visibility.canSee(player.getUUID(), packet.palette().get(i).id())) {
+                    palette.add(packet.palette().get(i));
+                    remap[i + 1] = palette.size();
+                }
+            }
+            int[] owners = new int[packet.owners().length];
+            for (int i = 0; i < owners.length; i++) {
+                owners[i] = remap[packet.owners()[i]];
+            }
+            KingdomWorldNetwork.sendToPlayer(player, new TerritoryDeltaPacket(packet.dimension(), palette, packet.chunks(), owners));
+        }
+    }
+
+    /**
+     * Sends the map facts of kingdoms whose name, color, ruler or capital changed since the last check.
+     */
+    private static void sendChangedInfo(MinecraftServer server) {
+        if (server.getPlayerList().getPlayerCount() == 0 && LAST_INFO.isEmpty()) {
+            return;
+        }
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        Map<String, List<KingdomMapInfo>> changed = new LinkedHashMap<>();
+        java.util.Set<UUID> present = new java.util.HashSet<>();
+        for (Kingdom kingdom : state.kingdoms().all()) {
+            Optional<Territory> territory = state.territory().territory(kingdom.id());
+            if (territory.isEmpty()) {
+                continue;
+            }
+            present.add(kingdom.id());
+            String dimension = territory.get().dimension();
+            KingdomMapInfo info = KingdomViews.mapInfo(server, state, kingdom, dimension);
+            List<Object> key = List.of(info.name(), info.color(), info.rulerName(), info.hasCapital(), info.capitalChunkX(),
+                    info.capitalChunkZ(), dimension);
+            List<Object> old = LAST_INFO.put(kingdom.id(), key);
+            if (old != null && !old.equals(key)) {
+                changed.computeIfAbsent(dimension, d -> new ArrayList<>()).add(info);
+            }
+        }
+        LAST_INFO.keySet().retainAll(present);
+        changed.forEach((dimension, infos) -> {
+            for (int start = 0; start < infos.size(); start += TerritorySnapshotPacket.MAX_KINGDOMS) {
+                List<KingdomMapInfo> part = infos.subList(start, Math.min(infos.size(), start + TerritorySnapshotPacket.MAX_KINGDOMS));
+                send(server, new TerritoryDeltaPacket(dimension, List.copyOf(part), new long[0], new int[0]));
+            }
+        });
     }
 
     /**

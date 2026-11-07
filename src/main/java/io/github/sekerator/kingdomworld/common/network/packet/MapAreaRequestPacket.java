@@ -50,6 +50,6 @@ public record MapAreaRequestPacket(int minChunkX, int minChunkZ, int width, int 
                 || !ServerRequestGuard.requireRange(sender, POLICY, "minChunkZ", minChunkZ, -limit, limit)) {
             return Optional.empty();
         }
-        return Optional.of(KingdomViews.mapArea(sender.serverLevel(), minChunkX, minChunkZ, width, height));
+        return Optional.of(KingdomViews.mapArea(sender.serverLevel(), sender.getUUID(), minChunkX, minChunkZ, width, height));
     }
 }

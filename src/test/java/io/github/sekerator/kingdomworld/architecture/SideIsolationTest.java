@@ -35,8 +35,17 @@ class SideIsolationTest {
             "io/github/sekerator/kingdomworld/common/network/packet/EconomyPackets.java",
             "io/github/sekerator/kingdomworld/common/network/packet/StoragePackets.java",
             "io/github/sekerator/kingdomworld/common/network/packet/TerritoryDeltaPacket.java",
+            "io/github/sekerator/kingdomworld/common/network/packet/TerritorySnapshotPacket.java",
             "io/github/sekerator/kingdomworld/common/network/packet/TradePackets.java",
             "io/github/sekerator/kingdomworld/common/network/packet/WorkPostViewPacket.java");
+
+    /**
+     * Compat modules of client-only mods. They are client code: they may use client classes, and the compat loader
+     * creates them on the physical client only.
+     */
+    private static final Set<String> CLIENT_COMPAT_PACKAGES = Set.of(
+            "io/github/sekerator/kingdomworld/compat/journeymap/",
+            "io/github/sekerator/kingdomworld/compat/xaero/");
 
     /**
      * The only file outside a compat module allowed to name compat module classes.
@@ -58,12 +67,32 @@ class SideIsolationTest {
                 continue;
             }
             String relative = SourceTree.relative(file);
+            if (CLIENT_COMPAT_PACKAGES.stream().anyMatch(relative::startsWith)) {
+                continue;
+            }
             String code = SourceTree.code(file);
             if (CLIENT_ONLY_GAME_CODE.matcher(code).find()) {
                 violations.add(relative + " uses client-only Minecraft classes");
             }
             if (OWN_CLIENT_CODE.matcher(code).find() && !CLIENT_BOOTSTRAP_FILES.contains(relative)) {
                 violations.add(relative + " references " + CLIENT_PACKAGE);
+            }
+        }
+        assertTrue(violations.isEmpty(), String.join("\n", violations));
+    }
+
+    @Test
+    void clientCompatModulesAreCreatedOnTheClientOnly() {
+        String loader = SourceTree.code(SourceTree.packageDir(COMPAT_PACKAGE).resolve("CompatModules.java"));
+        List<String> violations = new ArrayList<>();
+        for (String packagePath : CLIENT_COMPAT_PACKAGES) {
+            String packageName = packagePath.substring(0, packagePath.length() - 1).replace('/', '.');
+            java.util.regex.Matcher imports = Pattern.compile("import " + Pattern.quote(packageName) + "\\.(\\w+);").matcher(loader);
+            while (imports.find()) {
+                Pattern entry = Pattern.compile("new Entry\\(\"[a-z0-9_]+\", Dist\\.CLIENT, \\(\\) -> " + imports.group(1) + "::new\\)");
+                if (!entry.matcher(loader).find()) {
+                    violations.add(imports.group(1) + " is not created for Dist.CLIENT only");
+                }
             }
         }
         assertTrue(violations.isEmpty(), String.join("\n", violations));

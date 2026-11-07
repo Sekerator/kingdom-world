@@ -129,6 +129,15 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue proposalDays;
         public final ForgeConfigSpec.IntValue maxDealsPerKingdom;
         public final ForgeConfigSpec.IntValue maxDealPeriodDays;
+        public final ForgeConfigSpec.IntValue snapshotMaxChunks;
+        public final ForgeConfigSpec.IntValue snapshotRadiusChunks;
+        public final ForgeConfigSpec.BooleanValue blueMap;
+        public final ForgeConfigSpec.BooleanValue dynmap;
+        public final ForgeConfigSpec.BooleanValue webMapCaravans;
+        public final ForgeConfigSpec.DoubleValue webMapFillOpacity;
+        public final ForgeConfigSpec.IntValue webMapBorderWidth;
+        public final ForgeConfigSpec.ConfigValue<String> webMapLanguage;
+        public final ForgeConfigSpec.IntValue webMapUpdateSeconds;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -428,6 +437,47 @@ public final class KingdomWorldConfig {
                     .comment("Machines of other mods that act as fake players (Create deployers and the like) may act in kingdom land.")
                     .define("allowFakePlayers", true);
             builder.pop();
+
+            builder.comment("Map mods: land for client maps (JourneyMap, Xaero's maps) and web maps of the server (BlueMap, Dynmap).")
+                    .push("maps");
+            snapshotMaxChunks = builder
+                    .comment("Most chunks of land a client map receives at once. When a dimension has more, the client gets the square",
+                            "of snapshotRadiusChunks around the player and asks again as the player moves.")
+                    .translation("kingdomworld.config.maps.snapshot_max_chunks")
+                    .defineInRange("snapshotMaxChunks", 32_768, 64, 65_536);
+            snapshotRadiusChunks = builder
+                    .comment("Half side, in chunks, of the square of land sent around the player when the whole map is too large.")
+                    .translation("kingdomworld.config.maps.snapshot_radius_chunks")
+                    .defineInRange("snapshotRadiusChunks", 64, 8, 127);
+            blueMap = builder
+                    .comment("Show kingdoms, capitals and caravans on BlueMap when it is installed on the server.")
+                    .translation("kingdomworld.config.maps.bluemap")
+                    .define("blueMap", true);
+            dynmap = builder
+                    .comment("Show kingdoms, capitals and caravans on Dynmap when it is installed on the server.")
+                    .translation("kingdomworld.config.maps.dynmap")
+                    .define("dynmap", true);
+            webMapCaravans = builder
+                    .comment("Show caravans on the way on the web maps.")
+                    .translation("kingdomworld.config.maps.caravans")
+                    .define("webMapCaravans", true);
+            webMapFillOpacity = builder
+                    .comment("Opacity of the land fill on the web maps, from 0 (only borders) to 1.")
+                    .translation("kingdomworld.config.maps.fill_opacity")
+                    .defineInRange("webMapFillOpacity", 0.3, 0.0, 1.0);
+            webMapBorderWidth = builder
+                    .comment("Width of borders on the web maps, in pixels.")
+                    .translation("kingdomworld.config.maps.border_width")
+                    .defineInRange("webMapBorderWidth", 2, 1, 10);
+            webMapLanguage = builder
+                    .comment("Language of names and labels on the web maps, e.g. en_us or ru_ru (texts come from the mod's language files).")
+                    .translation("kingdomworld.config.maps.language")
+                    .define("webMapLanguage", "en_us", value -> value instanceof String text && text.matches("[a-z]{2,3}_[a-z]{2,3}"));
+            webMapUpdateSeconds = builder
+                    .comment("At most one update of the web maps per this many seconds; changes in between are collected.")
+                    .translation("kingdomworld.config.maps.update_seconds")
+                    .defineInRange("webMapUpdateSeconds", 5, 1, 300);
+            builder.pop();
         }
     }
 
@@ -446,6 +496,11 @@ public final class KingdomWorldConfig {
     public static final class Client {
         public final ForgeConfigSpec.BooleanValue requestKingdomListOnJoin;
         public final ForgeConfigSpec.BooleanValue showBorderMessages;
+        public final ForgeConfigSpec.BooleanValue journeyMap;
+        public final ForgeConfigSpec.BooleanValue xaeroMaps;
+        public final ForgeConfigSpec.BooleanValue mapCaravans;
+        public final ForgeConfigSpec.DoubleValue mapFillOpacity;
+        public final ForgeConfigSpec.DoubleValue mapBorderWidth;
 
         Client(ForgeConfigSpec.Builder builder) {
             builder.comment("Client side behaviour.").push("client");
@@ -455,6 +510,29 @@ public final class KingdomWorldConfig {
             showBorderMessages = builder
                     .comment("Show a message above the hotbar when entering or leaving the land of a kingdom.")
                     .define("showBorderMessages", true);
+            builder.pop();
+
+            builder.comment("Kingdoms on the maps of other mods, when they are installed.").push("maps");
+            journeyMap = builder
+                    .comment("Show kingdoms, capitals and caravans on JourneyMap.")
+                    .translation("kingdomworld.config.maps.journeymap")
+                    .define("journeyMap", true);
+            xaeroMaps = builder
+                    .comment("Show kingdoms and capitals on Xaero's World Map and Xaero's Minimap.")
+                    .translation("kingdomworld.config.maps.xaero")
+                    .define("xaeroMaps", true);
+            mapCaravans = builder
+                    .comment("Show caravans on the way on JourneyMap.")
+                    .translation("kingdomworld.config.maps.caravans")
+                    .define("mapCaravans", true);
+            mapFillOpacity = builder
+                    .comment("Opacity of the land fill, from 0 (only borders) to 1.")
+                    .translation("kingdomworld.config.maps.fill_opacity")
+                    .defineInRange("mapFillOpacity", 0.25, 0.0, 1.0);
+            mapBorderWidth = builder
+                    .comment("Width of borders on JourneyMap, in pixels.")
+                    .translation("kingdomworld.config.maps.border_width")
+                    .defineInRange("mapBorderWidth", 2.0, 0.5, 8.0);
             builder.pop();
         }
     }

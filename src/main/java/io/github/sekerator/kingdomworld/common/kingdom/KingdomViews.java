@@ -120,6 +120,15 @@ public final class KingdomViews {
      * Owners of a rectangle of chunks in compact form.
      */
     public static MapAreaPacket mapArea(ServerLevel level, int minX, int minZ, int width, int height) {
+        return mapArea(level, null, minX, minZ, width, height);
+    }
+
+    /**
+     * Owners of a rectangle of chunks as {@code viewer} may see them: land of kingdoms hidden from the viewer by the
+     * {@link TerritorySnapshots#visibility() map visibility} looks unclaimed.
+     */
+    public static MapAreaPacket mapArea(ServerLevel level, @org.jetbrains.annotations.Nullable UUID viewer, int minX, int minZ,
+                                        int width, int height) {
         MinecraftServer server = level.getServer();
         KingdomWorldState state = KingdomWorldApi.state(server);
         String dimension = Dimensions.id(level);
@@ -132,7 +141,7 @@ public final class KingdomViews {
                 for (Map.Entry<Long, UUID> entry : claims.entrySet()) {
                     int x = ChunkKey.x(entry.getKey()) - minX;
                     int z = ChunkKey.z(entry.getKey()) - minZ;
-                    if (x >= 0 && z >= 0 && x < width && z < height) {
+                    if (x >= 0 && z >= 0 && x < width && z < height && TerritorySnapshots.canSee(viewer, entry.getValue())) {
                         cells[z * width + x] = indexOf(server, state, entry.getValue(), dimension, paletteIndex, palette);
                     }
                 }
@@ -140,7 +149,7 @@ public final class KingdomViews {
                 for (int z = 0; z < height; z++) {
                     for (int x = 0; x < width; x++) {
                         UUID owner = claims.get(ChunkKey.of(minX + x, minZ + z));
-                        if (owner != null) {
+                        if (owner != null && TerritorySnapshots.canSee(viewer, owner)) {
                             cells[z * width + x] = indexOf(server, state, owner, dimension, paletteIndex, palette);
                         }
                     }
