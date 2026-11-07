@@ -145,6 +145,12 @@ final class ClientBuildingShowcase {
         server.execute(() -> {
             ServerPlayer player = server.getPlayerList().getPlayer(playerId);
             if (player != null) {
+                // Hovering where it is put, whatever the world it was saved in remembers of flying.
+                player.setGameMode(net.minecraft.world.level.GameType.CREATIVE);
+                player.getAbilities().flying = true;
+                player.onUpdateAbilities();
+                player.setNoGravity(true);
+                player.serverLevel().setDayTime(6_000L);
                 player.teleportTo(player.serverLevel(), x, y, z, yaw, pitch);
                 player.setDeltaMovement(0, 0, 0);
             }
@@ -173,6 +179,12 @@ final class ClientBuildingShowcase {
             return;
         }
         ServerLevel level = player.serverLevel();
+        // A blueprint left in hand by an earlier run would draw its outline over the buildings.
+        for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
+            if (player.getInventory().getItem(slot).is(ModRegistries.BLUEPRINT.get())) {
+                player.getInventory().setItem(slot, net.minecraft.world.item.ItemStack.EMPTY);
+            }
+        }
         KingdomWorldApi.kingdomOf(server, playerId).ifPresent(old -> KingdomWorldApi.dissolveKingdom(server, old.id()));
         KingdomWorldApi.findKingdom(server, "Building Test").ifPresent(old -> KingdomWorldApi.dissolveKingdom(server, old.id()));
         List<BuildingTemplate> templates = new ArrayList<>();
