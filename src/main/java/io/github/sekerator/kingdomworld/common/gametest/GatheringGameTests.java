@@ -371,7 +371,8 @@ public final class GatheringGameTests {
         level.setDayTime(1_000L);
         BlockPos from = helper.absolutePos(new BlockPos(-2, 0, -2));
         BlockPos to = helper.absolutePos(new BlockPos(8, 3, 8));
-        clear(level, from, to);
+        // The pen and the storehouse reach beyond the space the framework clears: walled off the caves of the world.
+        enclose(level, from, to);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Pastures", UUID.randomUUID());
         pen(helper);
         Cow baby = cow(helper, 5, 5, true, null);
@@ -489,7 +490,8 @@ public final class GatheringGameTests {
         level.setDayTime(1_000L);
         BlockPos from = helper.absolutePos(new BlockPos(-2, 0, -2));
         BlockPos to = helper.absolutePos(new BlockPos(8, 3, 8));
-        clear(level, from, to);
+        // The pen and the storehouse reach beyond the space the framework clears: walled off the caves of the world.
+        enclose(level, from, to);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Cowsheds", UUID.randomUUID());
         pen(helper);
         Cow first = cow(helper, 3, 3, false, null);
