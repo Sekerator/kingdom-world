@@ -51,6 +51,9 @@ import java.util.stream.Stream;
  * /kingdom claim                  /kingdom unclaim
  * /kingdom dissolve [confirm]
  * /kingdom citizens
+ * /kingdom balance                /kingdom pay &lt;player&gt; &lt;amount&gt; [kingdom]   /kingdom pay confirm
+ * /kingdom treasury [pay &lt;player&gt; &lt;amount&gt; | deposit &lt;amount&gt; [kingdom]]
+ * /kingdom value [item]
  * </pre>
  */
 public final class KingdomCommand {
@@ -84,7 +87,9 @@ public final class KingdomCommand {
     }
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        dispatcher.register(Commands.literal("kingdom")
+        com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("kingdom");
+        EconomyCommands.addPlayerCommands(root);
+        dispatcher.register(root
                 .then(Commands.literal("info")
                         .executes(context -> info(context.getSource(), null))
                         .then(Commands.argument("name", StringArgumentType.greedyString()).suggests(KINGDOM_NAMES)
@@ -332,5 +337,6 @@ public final class KingdomCommand {
 
     public static void forget(UUID playerId) {
         DISSOLVE_REQUESTS.remove(playerId);
+        EconomyCommands.forget(playerId);
     }
 }

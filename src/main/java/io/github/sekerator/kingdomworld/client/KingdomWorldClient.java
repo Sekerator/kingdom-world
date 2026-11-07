@@ -41,6 +41,7 @@ public final class KingdomWorldClient {
         modBus.addListener(KingdomWorldClient::onClientSetup);
         modBus.addListener(KingdomWorldClient::onRegisterKeys);
         modBus.addListener(KingdomWorldClient::onRegisterRenderers);
+        modBus.addListener(KingdomWorldClient::onItemColors);
         MinecraftForge.EVENT_BUS.addListener(KingdomWorldClient::onLoggingIn);
         MinecraftForge.EVENT_BUS.addListener(KingdomWorldClient::onLoggingOut);
         MinecraftForge.EVENT_BUS.addListener(KingdomWorldClient::onScreenOpening);
@@ -48,7 +49,27 @@ public final class KingdomWorldClient {
     }
 
     private static void onClientSetup(FMLClientSetupEvent event) {
+        // Coins show their kind through the model: copper 0, silver 0.5, gold 1.
+        event.enqueueWork(() -> net.minecraft.client.renderer.item.ItemProperties.register(ModRegistries.COIN.get(),
+                io.github.sekerator.kingdomworld.KingdomWorld.id("denomination"), (stack, level, entity, seed) ->
+                        io.github.sekerator.kingdomworld.common.economy.CoinItem.denomination(stack)
+                                .map(denomination -> denomination.ordinal() / 2.0f).orElse(0.0f)));
         LOGGER.debug("KingdomWorld client setup complete");
+    }
+
+    /**
+     * The face of a coin takes the color of its kingdom; coins of a dissolved kingdom turn grey.
+     */
+    private static void onItemColors(net.minecraftforge.client.event.RegisterColorHandlersEvent.Item event) {
+        event.register((stack, tint) -> {
+            if (tint != 1) {
+                return 0xFFFFFFFF;
+            }
+            return io.github.sekerator.kingdomworld.common.economy.CoinItem.currency(stack)
+                    .flatMap(io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory::get)
+                    .map(info -> info.old() ? 0xFF808080 : 0xFF000000 | info.color())
+                    .orElse(0xFFA0A0A0);
+        }, ModRegistries.COIN.get());
     }
 
     private static void onRegisterKeys(RegisterKeyMappingsEvent event) {
@@ -73,6 +94,7 @@ public final class KingdomWorldClient {
     }
 
     private static void onLoggingIn(ClientPlayerNetworkEvent.LoggingIn event) {
+        io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.clear();
         ClientKingdomCache.clear();
         ClientTerritoryCache.clear();
         if (KingdomWorldConfig.CLIENT.requestKingdomListOnJoin.get()) {
@@ -81,6 +103,7 @@ public final class KingdomWorldClient {
     }
 
     private static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+        io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.clear();
         ClientKingdomCache.clear();
         ClientTerritoryCache.clear();
     }

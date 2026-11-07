@@ -43,6 +43,7 @@ public final class CommonEvents {
         MinecraftForge.EVENT_BUS.addListener(CommonEvents::onPlayerLoggedOut);
         ProtectionEvents.register();
         CitizenEvents.register();
+        io.github.sekerator.kingdomworld.common.economy.EconomyEvents.register();
     }
 
     private static void onRegisterCommands(RegisterCommandsEvent event) {
@@ -76,9 +77,10 @@ public final class CommonEvents {
                 config.citizenActivationChunks.get(), config.growthFoodDays.get(), config.growthIntervalMinutes.get(),
                 config.starvationCanKill.get(), config.dailyNutrition.get(), config.infirmaryCapacity.get(),
                 config.woundedHealthPercent.get(), config.maxCitizensPerKingdom.get(), config.farmRadius.get());
-        LOGGER.info("KingdomWorld loaded {} kingdom(s) with {} citizen(s), {} work post(s) and {} storehouse(s), data format {}{}",
+        LOGGER.info("KingdomWorld loaded {} kingdom(s) with {} citizen(s), {} work post(s), {} storehouse(s), {} treasury(ies), "
+                        + "{} player(s) with accounts, data format {}{}",
                 data.registry().size(), data.state().citizens().registry().size(), data.state().citizens().posts().size(),
-                data.storehouses().size(),
+                data.storehouses().size(), data.state().economy().treasuries().size(), data.state().economy().accounts().players().size(),
                 KingdomSavedData.FORMAT_VERSION,
                 data.isReadOnly() ? " (READ-ONLY: " + data.readOnlyReason().orElse("?") + ")" : "");
     }
@@ -88,6 +90,7 @@ public final class CommonEvents {
         ProtectionService.reset();
         TerritorySync.reset();
         CitizenEvents.reset();
+        io.github.sekerator.kingdomworld.common.economy.EconomyEvents.reset();
     }
 
     private static void onServerTick(TickEvent.ServerTickEvent event) {

@@ -52,7 +52,8 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private static final int MIN_NAME_COLUMN = 64;
     private static final int GAP = 2;
     private static final List<Permission> EDITABLE_RIGHTS = List.of(Permission.BUILD, Permission.CONTAINERS,
-            Permission.INTERACT, Permission.RECRUIT, Permission.TERRITORY, Permission.MANAGE_CITIZENS, Permission.MANAGE_PRODUCTION);
+            Permission.INTERACT, Permission.RECRUIT, Permission.TERRITORY, Permission.MANAGE_CITIZENS, Permission.MANAGE_PRODUCTION,
+            Permission.MANAGE_TREASURY);
 
     private enum Tab {
         OVERVIEW("kingdomworld.screen.throne.tab.overview"),
@@ -60,6 +61,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         CITIZENS("kingdomworld.screen.throne.tab.citizens"),
         STORAGE("kingdomworld.screen.throne.tab.storage"),
         ORDERS("kingdomworld.screen.throne.tab.orders"),
+        TREASURY("kingdomworld.screen.throne.tab.treasury"),
         RIGHTS("kingdomworld.screen.throne.tab.rights");
 
         private final String key;
@@ -76,6 +78,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private final CitizensTab citizens = new CitizensTab(this);
     private final StorageTab storage = new StorageTab(this);
     private final OrdersTab orders = new OrdersTab(this);
+    private final TreasuryTab treasury = new TreasuryTab(this);
     private Tab tab = Tab.OVERVIEW;
     private int scroll;
     private Component status = Component.empty();
@@ -103,7 +106,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     @Override
     public String checkName() {
         String name = tab == Tab.CITIZENS ? citizens.checkName() : tab == Tab.STORAGE ? storage.checkName()
-                : tab == Tab.ORDERS ? orders.checkName() : tab.name().toLowerCase(Locale.ROOT);
+                : tab == Tab.ORDERS ? orders.checkName() : tab == Tab.TREASURY ? treasury.checkName() : tab.name().toLowerCase(Locale.ROOT);
         return "throne/" + name + "/" + view.relation().name().toLowerCase(Locale.ROOT);
     }
 
@@ -160,6 +163,35 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         if (minecraft != null) {
             rebuildWidgets();
         }
+    }
+
+    /**
+     * Shows the treasury the server sent, if it belongs to the kingdom on screen.
+     */
+    public void updateTreasury(io.github.sekerator.kingdomworld.common.network.data.TreasuryView treasuryView) {
+        if (!treasuryView.kingdomId().equals(view.id())) {
+            return;
+        }
+        treasury.setView(treasuryView);
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
+    }
+
+    /**
+     * Whether the treasury tab got its view, for the self-check.
+     */
+    public boolean treasuryShown() {
+        return treasury.view() != null;
+    }
+
+    /**
+     * Shows a view of the treasury tab ({@code overview}, {@code journal}, {@code settings}, {@code debtors}) and a period
+     * of the journal ({@code today}, {@code yesterday}, {@code week}); for the layout check.
+     */
+    public void showTreasury(String mode, String period) {
+        treasury.setMode(TreasuryTab.Mode.valueOf(mode.toUpperCase(Locale.ROOT)));
+        treasury.setPeriod(io.github.sekerator.kingdomworld.core.economy.TreasuryJournal.Period.valueOf(period.toUpperCase(Locale.ROOT)));
     }
 
     /**
@@ -284,6 +316,9 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         if (target == Tab.ORDERS && Minecraft.getInstance().getConnection() != null) {
             KingdomWorldNetwork.sendToServer(new OrderPackets.Request(view.id()));
         }
+        if (target == Tab.TREASURY && Minecraft.getInstance().getConnection() != null) {
+            KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.EconomyPackets.TreasuryRequest(view.id()));
+        }
         if (minecraft != null) {
             rebuildWidgets();
         }
@@ -370,6 +405,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             labels.add(Component.translatable(Tab.CITIZENS.key));
             labels.add(Component.translatable(Tab.STORAGE.key));
             labels.add(Component.translatable(Tab.ORDERS.key));
+            labels.add(Component.translatable(Tab.TREASURY.key));
             labels.add(Component.translatable(Tab.RIGHTS.key));
             labels.add(Component.translatable("kingdomworld.screen.throne.tab.territory"));
         }
@@ -420,10 +456,12 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         }
         int inner = Math.max(Math.max(tabs, members), Math.max(Math.max(applications, rights), Math.max(overview + 4, bottom)));
         if (isMember()) {
-            inner = Math.max(inner, Math.max(Math.max(citizens.measure(font), storage.measure(font)), orders.measure(font)));
+            inner = Math.max(inner, Math.max(Math.max(citizens.measure(font), storage.measure(font)),
+                    Math.max(orders.measure(font), treasury.measure(font))));
         }
         panelWidth = Math.min(Math.max(MIN_PANEL_WIDTH, inner + 2 * PAD), width - 8);
-        panelHeight = Math.min(tab == Tab.CITIZENS || tab == Tab.STORAGE || tab == Tab.ORDERS ? MAX_CITIZENS_PANEL_HEIGHT : MAX_PANEL_HEIGHT,
+        panelHeight = Math.min(tab == Tab.CITIZENS || tab == Tab.STORAGE || tab == Tab.ORDERS || tab == Tab.TREASURY
+                        ? MAX_CITIZENS_PANEL_HEIGHT : MAX_PANEL_HEIGHT,
                 height - 8);
     }
 
@@ -441,6 +479,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             x = tabButton(Tab.CITIZENS, x, top + TAB_TOP);
             x = tabButton(Tab.STORAGE, x, top + TAB_TOP);
             x = tabButton(Tab.ORDERS, x, top + TAB_TOP);
+            x = tabButton(Tab.TREASURY, x, top + TAB_TOP);
             x = tabButton(Tab.RIGHTS, x, top + TAB_TOP);
             Component territory = Component.translatable("kingdomworld.screen.throne.tab.territory");
             addRenderableWidget(Button.builder(territory, button -> ClientHooks.openTerritoryEditor(view))
@@ -452,6 +491,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             case CITIZENS -> citizens.init(left, top, panelWidth, panelHeight);
             case STORAGE -> storage.init(left, top, panelWidth, panelHeight);
             case ORDERS -> orders.init(left, top, panelWidth, panelHeight);
+            case TREASURY -> treasury.init(left, top, panelWidth, panelHeight);
             case RIGHTS -> initRights(top);
         }
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), button -> onClose())
@@ -636,6 +676,12 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             }
             return true;
         }
+        if (tab == Tab.TREASURY) {
+            if (treasury.scroll(top(), panelHeight, delta)) {
+                rebuildWidgets();
+            }
+            return true;
+        }
         if (tab == Tab.MEMBERS) {
             int max = Math.max(0, rows().size() - visibleRows());
             int next = Math.max(0, Math.min(max, scroll - (int) Math.signum(delta)));
@@ -679,6 +725,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             case CITIZENS -> citizens.render(graphics, font, left, top, panelWidth, panelHeight);
             case STORAGE -> storage.render(graphics, font, left, top, panelWidth, panelHeight);
             case ORDERS -> orders.render(graphics, font, left, top, panelWidth, panelHeight);
+            case TREASURY -> treasury.render(graphics, font, left, top, panelWidth, panelHeight);
             case RIGHTS -> renderRights(graphics, left, top);
         }
         Component bottomText = status;
@@ -689,6 +736,10 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         }
         if (bottomText.getString().isEmpty() && tab == Tab.CITIZENS) {
             bottomText = citizens.hint();
+            color = 0xFFB8B8B8;
+        }
+        if (bottomText.getString().isEmpty() && tab == Tab.TREASURY) {
+            bottomText = treasury.hint();
             color = 0xFFB8B8B8;
         }
         paragraph(graphics, bottomText, left + PAD, top + panelHeight - BOTTOM_AREA + 2, panelWidth - 2 * PAD, STATUS_LINES, color);

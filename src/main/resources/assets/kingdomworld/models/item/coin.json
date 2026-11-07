@@ -1,0 +1,21 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "kingdomworld:item/coin_copper",
+    "layer1": "kingdomworld:item/coin_face"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "kingdomworld:denomination": 0.5
+      },
+      "model": "kingdomworld:item/coin/silver"
+    },
+    {
+      "predicate": {
+        "kingdomworld:denomination": 1.0
+      },
+      "model": "kingdomworld:item/coin/gold"
+    }
+  ]
+}

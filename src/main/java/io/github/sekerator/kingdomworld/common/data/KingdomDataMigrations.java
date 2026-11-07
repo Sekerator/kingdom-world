@@ -33,6 +33,7 @@ final class KingdomDataMigrations {
                 case 2 -> current = upgradeFrom2To3(current);
                 case 3 -> current = upgradeFrom3To4(current);
                 case 4 -> current = upgradeFrom4To5(current);
+                case 5 -> current = upgradeFrom5To6(current);
                 default -> throw new IllegalArgumentException("No migration from kingdom data format " + version);
             }
         }
@@ -145,6 +146,21 @@ final class KingdomDataMigrations {
             }
         }
         tag.putInt(KingdomSavedData.TAG_FORMAT_VERSION, 5);
+        return tag;
+    }
+
+    /**
+     * Format 6 adds money: a treasury to every kingdom, the pay of every citizen, the accounts of the players and the
+     * old currencies. A format 5 kingdom gets an empty treasury with the default coin values when it is read, its first
+     * payday only starts the count, and its citizens expect no pay until then; nobody has an account yet. The new right
+     * to manage the treasury goes to the treasurer, as it does in new kingdoms.
+     */
+    private static CompoundTag upgradeFrom5To6(CompoundTag tag) {
+        ListTag kingdoms = tag.getList(KingdomSavedData.TAG_KINGDOMS, Tag.TAG_COMPOUND);
+        for (int i = 0; i < kingdoms.size(); i++) {
+            grant(kingdoms.getCompound(i), "treasurer", "manage_treasury");
+        }
+        tag.putInt(KingdomSavedData.TAG_FORMAT_VERSION, 6);
         return tag;
     }
 

@@ -235,7 +235,8 @@ public final class PostWork {
             setStatus(server, citizen, ZoneSurveys.zoneStatus(post.pos()));
             return;
         }
-        double factor = post.hasContainer() ? 1.0 : GatheringRules.SELF_CARRY_FACTOR;
+        double factor = (post.hasContainer() ? 1.0 : GatheringRules.SELF_CARRY_FACTOR)
+                * io.github.sekerator.kingdomworld.common.economy.EconomySettings.workSpeed(citizen.mood());
         Map<String, Integer> needed = GatheringRules.abstractInputs(rates, 1, interval, factor);
         if (!needed.isEmpty()) {
             Map<String, Integer> available = new LinkedHashMap<>();

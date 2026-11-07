@@ -61,7 +61,8 @@ public final class FarmerBehavior implements ProfessionBehavior {
         if (item == null || item == Items.AIR) {
             return;
         }
-        double progress = citizen.workProgress() + CitizenNeeds.farmOutput(citizen.workCapacity(), intervalTicks);
+        double progress = citizen.workProgress() + CitizenNeeds.farmOutput(citizen.workCapacity(), intervalTicks)
+                * io.github.sekerator.kingdomworld.common.economy.EconomySettings.workSpeed(citizen.mood());
         int whole = (int) Math.min(Math.floor(progress), 64.0 * 9);
         citizen.setWorkProgress(progress - whole);
         int left = whole;

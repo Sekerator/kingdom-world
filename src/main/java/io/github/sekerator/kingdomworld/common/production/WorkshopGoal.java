@@ -311,7 +311,9 @@ final class WorkshopGoal extends PostWorkGoal {
             return load(level);
         }
         int experience = citizen().map(Citizen::experience).orElse(0);
-        total = ProductionSettings.rules().ticks(job.recipe(), experience);
+        total = Math.max(1, (int) Math.round(ProductionSettings.rules().ticks(job.recipe(), experience)
+                / io.github.sekerator.kingdomworld.common.economy.EconomySettings.workSpeed(citizen().map(c -> c.mood())
+                .orElse(io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds.NEUTRAL_MOOD))));
         step = Step.WORK;
         return null;
     }

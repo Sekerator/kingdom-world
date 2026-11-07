@@ -1,0 +1,30 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "pattern": [
+    "GIG",
+    "PCP",
+    "SSS"
+  ],
+  "key": {
+    "G": {
+      "tag": "forge:ingots/gold"
+    },
+    "I": {
+      "tag": "forge:ingots/iron"
+    },
+    "P": {
+      "item": "minecraft:paper"
+    },
+    "C": {
+      "tag": "forge:chests/wooden"
+    },
+    "S": {
+      "item": "minecraft:smooth_stone"
+    }
+  },
+  "result": {
+    "item": "kingdomworld:bank",
+    "count": 1
+  }
+}

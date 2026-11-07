@@ -25,13 +25,13 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * NBT form of the population of one kingdom (format 5), stored inside the kingdom's compound.
+ * NBT form of the population of one kingdom (format 6), stored inside the kingdom's compound.
  *
  * <pre>
  * population: { lastArrival?, citizens: [ citizen ], chronicle: [ death ], sites: [ { kind, pos } ],
  *               posts: [ post ], production: [ { day, counts: { profession: { item: count } } } ] }
  * citizen: { id, seed, gender, skin, born, health, state, profession, pos, home?, workplace?, food, mood, xp,
- *            workCapacity, workProduct, workProgress, workStatus }
+ *            workCapacity, workProduct, workProgress, workStatus, pay? }
  * post:    { pos, profession, radius, seats, animal, herd, status, yield: { out: { item: rate }, in: { item: rate },
  *            actions, measured }, progress: { item: amount }, day, produced, container, auto, stations: { kind: count } }
  * death:   { citizen, seed, gender, profession, cause, killer, time, pos }
@@ -72,6 +72,7 @@ public final class CitizenNbt {
     private static final String TIME = "time";
     private static final String DIMENSION = "dimension";
     private static final String WORK_STATUS = "workStatus";
+    private static final String PAY = "pay";
     static final String POSTS = "posts";
     static final String PRODUCTION = "production";
     private static final String RADIUS = "radius";
@@ -208,6 +209,7 @@ public final class CitizenNbt {
         tag.putString(WORK_PRODUCT, citizen.workProduct());
         tag.putDouble(WORK_PROGRESS, citizen.workProgress());
         tag.putString(WORK_STATUS, citizen.workStatus().id());
+        tag.putInt(PAY, citizen.payPercent());
         return tag;
     }
 
@@ -376,6 +378,8 @@ public final class CitizenNbt {
         citizen.restore(tag.getFloat(HEALTH), state, profession, home, workplace, tag.getFloat(FOOD), tag.getInt(MOOD),
                 tag.getInt(XP), tag.getInt(WORK_CAPACITY), tag.getString(WORK_PRODUCT), tag.getDouble(WORK_PROGRESS),
                 WorkStatus.byId(tag.getString(WORK_STATUS)));
+        citizen.restorePay(tag.contains(PAY, Tag.TAG_INT) ? tag.getInt(PAY)
+                : io.github.sekerator.kingdomworld.core.economy.Payroll.NOTHING_EXPECTED);
         return citizen;
     }
 

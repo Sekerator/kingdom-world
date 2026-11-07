@@ -503,15 +503,17 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
                 Component.translatable("kingdomworld.screen.map.card.members", info.members()),
                 Component.translatable("kingdomworld.screen.map.card.population", info.population()),
                 Component.translatable("kingdomworld.screen.map.card.chunks", info.chunks()));
+        String currency = Component.translatable("kingdomworld.screen.map.card.currency", currencyName(info)).getString();
         int maxWidth = mapRight() - mapLeft() - 12;
         int inner = font.width(fit(info.name(), Math.min(MAX_CARD_NAME, maxWidth - 12)));
         for (Component line : lines) {
             inner = Math.max(inner, font.width(line));
         }
+        inner = Math.max(inner, Math.min(font.width(currency), MAX_CARD_NAME + 60));
         int cardWidth = Math.min(inner + 12, maxWidth);
         int x = mapLeft() + 6;
         int y = mapTop() + 6;
-        int cardHeight = 16 + lines.size() * 11;
+        int cardHeight = 16 + (lines.size() + 1) * 11;
         graphics.fill(x, y, x + cardWidth, y + cardHeight, 0xF0201810);
         graphics.renderOutline(x, y, cardWidth, cardHeight, 0xFF000000 | info.color());
         name(graphics, info.name(), x + 6, y + 5, 0xFF000000 | FoundKingdomScreen.readable(info.color()),
@@ -521,6 +523,17 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             label(graphics, line, x + 6, lineY, 0xFFE8E8E8, x + cardWidth - 6);
             lineY += 11;
         }
+        // The name of a currency is chosen by a king and may be long: it is shortened like the names of kingdoms.
+        name(graphics, currency, x + 6, lineY, 0xFFE8E8E8, cardWidth - 12);
+    }
+
+    /**
+     * The currency of a kingdom on the card, as the server last named it.
+     */
+    private static Component currencyName(KingdomMapInfo info) {
+        return io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.get(info.id())
+                .<Component>map(currency -> io.github.sekerator.kingdomworld.common.economy.MoneyTexts.currency(currency.name(), info.name()))
+                .orElseGet(() -> io.github.sekerator.kingdomworld.common.economy.MoneyTexts.currency("", info.name()));
     }
 
     @Override

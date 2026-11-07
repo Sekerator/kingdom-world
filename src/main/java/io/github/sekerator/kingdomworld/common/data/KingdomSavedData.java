@@ -45,7 +45,7 @@ import java.util.Optional;
 public final class KingdomSavedData extends SavedData {
     public static final String DATA_NAME = KingdomWorld.MOD_ID + "_kingdoms";
     /** Current layout of the saved data. Increase it together with a migration step. */
-    public static final int FORMAT_VERSION = 5;
+    public static final int FORMAT_VERSION = 6;
     /** Format assumed for data without a version field. */
     static final int FIRST_FORMAT_VERSION = 1;
 
@@ -53,6 +53,7 @@ public final class KingdomSavedData extends SavedData {
     static final String TAG_KINGDOMS = "kingdoms";
     static final String TAG_STOREHOUSES = "storehouses";
     static final String TAG_GEAR = "gear";
+    static final String TAG_ECONOMY = EconomyNbt.ECONOMY;
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
@@ -190,6 +191,7 @@ public final class KingdomSavedData extends SavedData {
         List<String> problems = readKingdoms(data);
         problems.addAll(readStorehouses(data));
         problems.addAll(readGear(data));
+        problems.addAll(readEconomy(data));
         if (!problems.isEmpty()) {
             lock(tag, problems.size() + " unreadable part(s): " + String.join("; ", problems), "unreadable_parts", problems.size());
             return;
@@ -239,11 +241,19 @@ public final class KingdomSavedData extends SavedData {
         return gear.load(data.get(TAG_GEAR));
     }
 
+    private List<String> readEconomy(CompoundTag data) {
+        if (!data.contains(TAG_ECONOMY)) {
+            return List.of();
+        }
+        return EconomyNbt.readWorld(data.get(TAG_ECONOMY), state.economy());
+    }
+
     private void readBestEffort(CompoundTag tag) {
         try {
             List<String> problems = readKingdoms(tag);
             problems.addAll(readStorehouses(tag));
             problems.addAll(readGear(tag));
+            problems.addAll(readEconomy(tag));
             if (!problems.isEmpty()) {
                 LOGGER.warn("Kingdom data parts not understood: {}", String.join("; ", problems));
             }
@@ -321,6 +331,7 @@ public final class KingdomSavedData extends SavedData {
         tag.put(TAG_KINGDOMS, kingdoms);
         tag.put(TAG_STOREHOUSES, storehouses.save());
         tag.put(TAG_GEAR, gear.save());
+        tag.put(TAG_ECONOMY, EconomyNbt.writeWorld(state.economy()));
         return tag;
     }
 }

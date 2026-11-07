@@ -1,0 +1,307 @@
+package io.github.sekerator.kingdomworld.common.economy;
+
+import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
+import io.github.sekerator.kingdomworld.common.citizen.CitizenEntity;
+import io.github.sekerator.kingdomworld.common.citizen.work.Equipment;
+import io.github.sekerator.kingdomworld.common.citizen.work.GatheringSettings;
+import io.github.sekerator.kingdomworld.common.citizen.work.PostWork;
+import io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehavior;
+import io.github.sekerator.kingdomworld.common.citizen.work.ZoneSurvey;
+import io.github.sekerator.kingdomworld.common.production.Production;
+import io.github.sekerator.kingdomworld.common.registry.ModRegistries;
+import io.github.sekerator.kingdomworld.common.storage.KingdomStorage;
+import io.github.sekerator.kingdomworld.core.citizen.Citizen;
+import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
+import io.github.sekerator.kingdomworld.core.citizen.GatheringRules;
+import io.github.sekerator.kingdomworld.core.citizen.PostYield;
+import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
+import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
+import io.github.sekerator.kingdomworld.core.citizen.WorkZone;
+import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
+import io.github.sekerator.kingdomworld.core.economy.CurrencyUnits;
+import io.github.sekerator.kingdomworld.core.economy.Economy;
+import io.github.sekerator.kingdomworld.core.economy.Money;
+import io.github.sekerator.kingdomworld.core.economy.Treasury;
+import io.github.sekerator.kingdomworld.core.production.Order;
+import io.github.sekerator.kingdomworld.core.production.ProductionRules;
+import io.github.sekerator.kingdomworld.core.production.Stations;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.state.BlockState;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+/**
+ * The minter: works at a work post with a mint in its zone and strikes coins of the kingdom from metal of the
+ * storehouses at the rates of the config (copper into copper coins, iron and silver into silver coins, gold into gold
+ * coins). The coins go into the treasury: into its vault, or onto its balance. One striking takes one item from the
+ * storehouses and gives the treasury its coins in the same moment, or does nothing at all, so no coin appears without
+ * its metal and no metal vanishes without its coins. Metal a keep order holds or a workshop set aside is left alone.
+ */
+public final class MinterBehavior implements ProfessionBehavior {
+    /** Item id the record of production counts struck coins under. */
+    public static final String COIN_ID = "kingdomworld:coin";
+    /** Key of the work time a minter carries over between simulation steps, as the workshops do. */
+    private static final String WORK_BANK = "#work";
+    /** Strikings one minter does in one simulation step at most. */
+    private static final int MAX_PER_STEP = 64;
+    /** Where the mints of each post were seen last. */
+    private static final Map<WorldPos, List<BlockPos>> KNOWN = new HashMap<>();
+
+    /**
+     * How a striking went.
+     */
+    public enum Struck {
+        DONE,
+        NO_METAL,
+        TREASURY_FULL,
+        NO_TREASURY
+    }
+
+    @Override
+    public boolean isWorkplace(BlockState state) {
+        return false;
+    }
+
+    @Override
+    public Goal createWork(CitizenEntity body) {
+        return new MintGoal(body, this);
+    }
+
+    @Override
+    public void survey(ServerLevel level, Citizen citizen) {
+    }
+
+    @Override
+    public boolean resurveys() {
+        return true;
+    }
+
+    @Override
+    public ZoneSurvey surveyZone(ServerLevel level, WorkPost post) {
+        return new MintSurvey(level, post);
+    }
+
+    @Override
+    public boolean isInput(ItemStack stack) {
+        return EconomySettings.mintRates().takes(stack);
+    }
+
+    public static List<BlockPos> knownMints(WorldPos post) {
+        return KNOWN.getOrDefault(post, List.of());
+    }
+
+    public static boolean surveyed(WorldPos post) {
+        return KNOWN.containsKey(post);
+    }
+
+    public static void reset() {
+        KNOWN.clear();
+    }
+
+    // ---------------------------------------------------------------- striking
+
+    /**
+     * Ticks one striking takes a minter: the config's time, up to twice as fast with experience, faster or slower with
+     * the mood.
+     */
+    public static int ticks(Citizen citizen) {
+        double speed = ProductionRules.speed(citizen.experience()) * EconomySettings.workSpeed(citizen.mood());
+        return Math.max(ProductionRules.MIN_TICKS, (int) Math.round(EconomySettings.mintTicks() / Math.max(0.1, speed)));
+    }
+
+    /**
+     * How many of an item the minter may use: what the storehouses hold, less what keep orders hold and what workers set
+     * aside.
+     */
+    private static long free(MinecraftServer server, UUID kingdom, ItemStack sample) {
+        String id = KingdomStorage.itemId(sample);
+        long stored = KingdomStorage.count(server, kingdom, stack -> ItemStack.isSameItemSameTags(stack, sample));
+        long kept = 0;
+        for (Order order : KingdomWorldApi.state(server).orders().ordersOf(kingdom)) {
+            if (order.kind() == Order.Kind.KEEP && order.item().equals(id) && !order.paused()) {
+                kept += order.amount();
+            }
+        }
+        return stored - kept - Production.reservedFor(kingdom, id, null);
+    }
+
+    /**
+     * The metal the minter would strike next, or {@code null} if the storehouses hold none it may use: the first rate of
+     * the config that has metal.
+     */
+    @Nullable
+    public static ItemStack nextMetal(MinecraftServer server, UUID kingdom) {
+        MintRates rates = EconomySettings.mintRates();
+        List<ItemStack> seen = new ArrayList<>();
+        for (KingdomStorage.Total total : KingdomStorage.totals(server, kingdom)) {
+            ItemStack sample = total.sample();
+            if (rates.takes(sample) && seen.stream().noneMatch(other -> ItemStack.isSameItemSameTags(other, sample))) {
+                seen.add(sample);
+            }
+        }
+        for (MintRates.Rate rate : rates.rates()) {
+            for (ItemStack sample : seen) {
+                if (rates.rateOf(sample) == rate && free(server, kingdom, sample) > 0) {
+                    return sample.copyWithCount(1);
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Strikes the coins of one item of metal for the treasury of the post's kingdom.
+     */
+    public static Struck strike(MinecraftServer server, WorkPost post, boolean watched) {
+        UUID kingdom = post.kingdomId();
+        Economy economy = KingdomWorldApi.state(server).economy();
+        Optional<Treasury> treasury = economy.treasury(kingdom);
+        if (treasury.isEmpty() || KingdomWorldApi.isReadOnly(server)) {
+            return Struck.NO_TREASURY;
+        }
+        ItemStack metal = nextMetal(server, kingdom);
+        if (metal == null) {
+            return Struck.NO_METAL;
+        }
+        MintRates.Rate rate = EconomySettings.mintRates().rateOf(metal);
+        CurrencyUnits units = treasury.get().units();
+        long worth = Money.multiplyCapped(rate.count(), units.value(rate.coin()));
+        if (!economy.canMint(kingdom, worth)) {
+            return Struck.TREASURY_FULL;
+        }
+        List<ItemStack> taken = KingdomStorage.take(server, kingdom, stack -> ItemStack.isSameItemSameTags(stack, metal), 1, post.pos());
+        int count = taken.stream().mapToInt(ItemStack::getCount).sum();
+        if (count != 1) {
+            // Nothing was taken after all: put back whatever came out and strike nothing.
+            taken.forEach(stack -> KingdomStorage.insert(server, kingdom, stack, post.pos()));
+            return Struck.NO_METAL;
+        }
+        long day = PostWork.gameDay(server);
+        boolean toVault = EconomySettings.rules().mintToVault();
+        if (!economy.mint(kingdom, rate.coin(), rate.count(), toVault, day).ok()) {
+            taken.forEach(stack -> KingdomStorage.insert(server, kingdom, stack, post.pos()));
+            return Struck.TREASURY_FULL;
+        }
+        PostWork.record(server, post, COIN_ID, rate.count());
+        if (watched) {
+            PostWork.acted(post, 1);
+        }
+        return Struck.DONE;
+    }
+
+    static WorkStatus status(Struck struck) {
+        return switch (struck) {
+            case DONE -> WorkStatus.WORKING;
+            case NO_METAL -> WorkStatus.NO_INGREDIENTS;
+            case TREASURY_FULL -> WorkStatus.STORAGE_FULL;
+            case NO_TREASURY -> WorkStatus.UNKNOWN;
+        };
+    }
+
+    // ---------------------------------------------------------------- far from players
+
+    @Override
+    public void workAbstractly(MinecraftServer server, Citizen citizen, int intervalTicks) {
+        Optional<WorkPost> found = PostWork.postOf(server, citizen);
+        if (found.isEmpty()) {
+            citizen.setWorkStatus(WorkStatus.NO_WORKPLACE);
+            return;
+        }
+        WorkPost post = found.get();
+        if (citizen.state() == CitizenState.WOUNDED) {
+            PostWork.setStatus(server, citizen, WorkStatus.WOUNDED);
+            return;
+        }
+        if (!PostWork.onOwnLand(server, post)) {
+            PostWork.setStatus(server, citizen, WorkStatus.OUTSIDE_TERRITORY);
+            return;
+        }
+        if (post.stations().getOrDefault(Stations.MINT, 0) <= 0) {
+            PostWork.setStatus(server, citizen, WorkStatus.NO_WORKSTATION);
+            return;
+        }
+        double estimated = GatheringRules.WORK_TICKS_PER_DAY / (double) EconomySettings.mintTicks();
+        double measured = post.yield().measured() ? post.yield().actions() : 0.0;
+        double slowdown = measured > 0.0 ? Math.max(1.0, Math.min(ProductionRules.MAX_SLOWDOWN, estimated / measured)) : 1.0;
+        double budget = post.progress().getOrDefault(WORK_BANK, 0.0) + ProductionRules.workTicks(intervalTicks, 1.0);
+        double cost = ticks(citizen) * slowdown;
+        double keep = 0.0;
+        int struck = 0;
+        WorkStatus status = WorkStatus.WORKING;
+        for (int i = 0; i < MAX_PER_STEP; i++) {
+            if (budget < cost) {
+                keep = budget;
+                break;
+            }
+            Struck result = strike(server, post, false);
+            if (result != Struck.DONE) {
+                status = struck > 0 ? WorkStatus.WORKING : status(result);
+                break;
+            }
+            budget -= cost;
+            struck++;
+        }
+        Map<String, Double> progress = new LinkedHashMap<>(post.progress());
+        progress.put(WORK_BANK, Math.min(cost, Math.max(0.0, keep)));
+        post.setProgress(progress);
+        if (struck > 0) {
+            citizen.addExperience(struck);
+            ItemStack next = nextMetal(server, post.kingdomId());
+            if (next != null) {
+                post.setCurrent(KingdomStorage.itemId(next), 1.0);
+            }
+        }
+        PostWork.setStatus(server, citizen, status);
+        if (struck > 0) {
+            PostWork.accident(server, citizen, post, this, Equipment.of(server, citizen.id()), intervalTicks, server.overworld().getRandom());
+        }
+    }
+
+    // ---------------------------------------------------------------- the zone
+
+    /**
+     * Looks for the mints of the zone.
+     */
+    private static final class MintSurvey extends ZoneSurvey {
+        private final List<BlockPos> mints = new ArrayList<>();
+
+        MintSurvey(ServerLevel level, WorkPost post) {
+            super(level, post, WorkZone.of(post.pos(), post.professionId(), post.radius(), GatheringSettings.rules().mineLevels()));
+        }
+
+        @Override
+        protected void visit(BlockPos pos, BlockState state) {
+            if (state.is(ModRegistries.MINT.get())) {
+                mints.add(pos.immutable());
+            }
+        }
+
+        @Override
+        protected void finish() {
+            post.setStations(mints.isEmpty() ? Map.of() : Map.of(Stations.MINT, mints.size()));
+            KNOWN.put(post.pos(), List.copyOf(mints));
+        }
+
+        @Override
+        public PostYield result() {
+            double perDay = GatheringRules.WORK_TICKS_PER_DAY / (double) EconomySettings.mintTicks();
+            return new PostYield(Map.of(COIN_ID, perDay), Map.of(), perDay, false);
+        }
+
+        @Override
+        public WorkStatus status() {
+            return mints.isEmpty() ? WorkStatus.NO_WORKSTATION : WorkStatus.WORKING;
+        }
+    }
+}

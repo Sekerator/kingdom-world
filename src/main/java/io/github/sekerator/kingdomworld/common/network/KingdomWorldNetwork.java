@@ -6,6 +6,7 @@ import io.github.sekerator.kingdomworld.common.network.packet.BorderCrossingPack
 import io.github.sekerator.kingdomworld.common.network.packet.CitizenActionPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.CitizenRequestPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.CitizenViewPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.EconomyPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.ClaimChunkPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.FoundKingdomPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomActionPacket;
@@ -43,7 +44,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "5";
+    public static final String PROTOCOL_VERSION = "6";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -87,6 +88,18 @@ public final class KingdomWorldNetwork {
         add(id++, OrderPackets.CatalogRequest.class, NetworkDirection.PLAY_TO_SERVER, OrderPackets.CatalogRequest::encode, OrderPackets.CatalogRequest::decode, OrderPackets.CatalogRequest::handle);
         add(id++, OrderPackets.Catalog.class, NetworkDirection.PLAY_TO_CLIENT, OrderPackets.Catalog::encode, OrderPackets.Catalog::decode, OrderPackets.Catalog::handle);
         add(id++, OrderPackets.Change.class, NetworkDirection.PLAY_TO_SERVER, OrderPackets.Change::encode, OrderPackets.Change::decode, OrderPackets.Change::handle);
+        add(id++, EconomyPackets.TreasuryRequest.class, NetworkDirection.PLAY_TO_SERVER, EconomyPackets.TreasuryRequest::encode,
+                EconomyPackets.TreasuryRequest::decode, EconomyPackets.TreasuryRequest::handle);
+        add(id++, EconomyPackets.TreasuryResponse.class, NetworkDirection.PLAY_TO_CLIENT, EconomyPackets.TreasuryResponse::encode,
+                EconomyPackets.TreasuryResponse::decode, EconomyPackets.TreasuryResponse::handle);
+        add(id++, EconomyPackets.TreasuryChange.class, NetworkDirection.PLAY_TO_SERVER, EconomyPackets.TreasuryChange::encode,
+                EconomyPackets.TreasuryChange::decode, EconomyPackets.TreasuryChange::handle);
+        add(id++, EconomyPackets.BankOpen.class, NetworkDirection.PLAY_TO_CLIENT, EconomyPackets.BankOpen::encode,
+                EconomyPackets.BankOpen::decode, EconomyPackets.BankOpen::handle);
+        add(id++, EconomyPackets.BankChange.class, NetworkDirection.PLAY_TO_SERVER, EconomyPackets.BankChange::encode,
+                EconomyPackets.BankChange::decode, EconomyPackets.BankChange::handle);
+        add(id++, EconomyPackets.Currencies.class, NetworkDirection.PLAY_TO_CLIENT, EconomyPackets.Currencies::encode,
+                EconomyPackets.Currencies::decode, EconomyPackets.Currencies::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

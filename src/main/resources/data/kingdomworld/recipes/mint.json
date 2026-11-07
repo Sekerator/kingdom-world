@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "pattern": [
+    "IHI",
+    "SFS",
+    "SSS"
+  ],
+  "key": {
+    "I": {
+      "tag": "forge:ingots/iron"
+    },
+    "H": {
+      "item": "minecraft:heavy_weighted_pressure_plate"
+    },
+    "F": {
+      "item": "minecraft:furnace"
+    },
+    "S": {
+      "item": "minecraft:stone_bricks"
+    }
+  },
+  "result": {
+    "item": "kingdomworld:mint",
+    "count": 1
+  }
+}

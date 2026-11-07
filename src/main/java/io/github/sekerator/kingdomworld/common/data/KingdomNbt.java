@@ -23,7 +23,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * NBT form of a kingdom with its land, members, rights, pending requests, population and orders (format 5).
+ * NBT form of a kingdom with its land, members, rights, pending requests, population, orders and treasury (format 6).
  *
  * <pre>
  * { id, name, color, ruler?, createdGameTime,
@@ -118,6 +118,7 @@ public final class KingdomNbt {
         }
         tag.put(CitizenNbt.POPULATION, CitizenNbt.write(state.citizens(), kingdom.id()));
         tag.put(OrderNbt.ORDERS, OrderNbt.write(state.orders(), kingdom.id()));
+        state.economy().treasury(kingdom.id()).ifPresent(treasury -> tag.put(EconomyNbt.TREASURY, EconomyNbt.write(treasury)));
         return tag;
     }
 
@@ -210,14 +211,18 @@ public final class KingdomNbt {
         Map<UUID, Long> invitations = readPending(tag, INVITATIONS, kingdom);
         CitizenNbt.Population population = CitizenNbt.read(tag, kingdom.id(), kingdom.name());
         OrderNbt.Orders orders = OrderNbt.read(tag, kingdom.name());
+        io.github.sekerator.kingdomworld.core.economy.Treasury treasury = EconomyNbt.read(tag, kingdom.id(), kingdom.name(),
+                io.github.sekerator.kingdomworld.core.economy.CurrencyUnits.DEFAULT,
+                io.github.sekerator.kingdomworld.core.economy.EconomyRules.DEFAULT.defaultPollTax());
         state.restore(kingdom, capital, chunks, rights, members, applications, invitations);
         try {
             state.citizens().restore(kingdom.id(), population.sites(), population.posts(), population.citizens(),
                     population.lastArrival(), population.chronicle(), population.production());
             state.orders().restore(kingdom.id(), orders.orders(), orders.next());
+            state.economy().restore(treasury);
         } catch (IllegalArgumentException e) {
-            // All or nothing: a kingdom whose people cannot be restored is not restored either.
-            state.dissolve(kingdom.id());
+            // All or nothing: a kingdom whose people or money cannot be restored is not restored either.
+            state.discard(kingdom.id());
             throw e;
         }
         return kingdom;

@@ -86,6 +86,20 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue cookFoodDaysTarget;
         public final ForgeConfigSpec.IntValue orderChainDepth;
         public final ForgeConfigSpec.IntValue maxOrdersPerKingdom;
+        public final ForgeConfigSpec.IntValue silverValue;
+        public final ForgeConfigSpec.IntValue goldValue;
+        public final ForgeConfigSpec.IntValue defaultPollTax;
+        public final ForgeConfigSpec.IntValue maxPollTax;
+        public final ForgeConfigSpec.IntValue maxWage;
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> wages;
+        public final ForgeConfigSpec.DoubleValue moodWorkEffect;
+        public final ForgeConfigSpec.LongValue payConfirmAbove;
+        public final ForgeConfigSpec.BooleanValue mintToVault;
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> mintRates;
+        public final ForgeConfigSpec.IntValue mintSeconds;
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> itemValues;
+        public final ForgeConfigSpec.DoubleValue defaultItemValue;
+        public final ForgeConfigSpec.DoubleValue laborMarkup;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -179,6 +193,60 @@ public final class KingdomWorldConfig {
             maxOrdersPerKingdom = builder
                     .comment("Orders of the king one kingdom may have at the same time (sub-orders not counted).")
                     .defineInRange("maxOrdersPerKingdom", 32, 1, 256);
+            builder.pop();
+
+            builder.comment("Money: currencies, the treasury, taxes, wages, the mint and the worth of items.",
+                    "Amounts are whole numbers of the smallest coin (a copper coin).").push("economy");
+            silverValue = builder
+                    .comment("Copper coins a silver coin of a new currency is worth. Existing currencies keep their values.")
+                    .defineInRange("silverValue", 10, 2, 1_000);
+            goldValue = builder
+                    .comment("Copper coins a gold coin of a new currency is worth; more than a silver coin.")
+                    .defineInRange("goldValue", 100, 3, 1_000_000);
+            defaultPollTax = builder
+                    .comment("Daily tax of every subject (the king pays none) in a new kingdom.")
+                    .defineInRange("defaultPollTax", 10, 0, 1_000_000);
+            maxPollTax = builder
+                    .comment("Highest daily tax a king may set.")
+                    .defineInRange("maxPollTax", 1_000, 0, 1_000_000);
+            maxWage = builder
+                    .comment("Highest daily wage a king may set for a profession.")
+                    .defineInRange("maxWage", 200, 0, 1_000_000);
+            wages = builder
+                    .comment("Usual daily wage of each profession, as profession:amount. Citizens measure their pay against it:",
+                            "less makes them unhappy, up to twice as much makes them happier. Kings change the wages within maxWage.")
+                    .defineListAllowEmpty("wages", io.github.sekerator.kingdomworld.core.economy.EconomyRules.DEFAULT_WAGES,
+                            value -> value instanceof String text && io.github.sekerator.kingdomworld.core.economy.EconomyRules.parseWage(text).isPresent());
+            moodWorkEffect = builder
+                    .comment("How much mood changes the pace of work: 0.2 lets happy citizens work up to 20 percent faster and",
+                            "miserable ones up to 20 percent slower. 0 turns it off.")
+                    .defineInRange("moodWorkEffect", 0.2, 0.0, 0.5);
+            payConfirmAbove = builder
+                    .comment("Payments between players above this amount ask the payer to confirm.")
+                    .defineInRange("payConfirmAbove", 1_000L, 0L, 1_000_000_000_000_000L);
+            mintToVault = builder
+                    .comment("Whether struck coins go into the vault of the treasury (true) or straight onto its balance (false).")
+                    .define("mintToVault", true);
+            mintRates = builder
+                    .comment("What the mint strikes from one item of the storehouses, as item=coin:count or #tag=coin:count,",
+                            "the coin being copper, silver or gold. The first entry an item matches counts.")
+                    .defineListAllowEmpty("mintRates", io.github.sekerator.kingdomworld.common.economy.MintRates.DEFAULTS,
+                            value -> value instanceof String text && io.github.sekerator.kingdomworld.common.economy.MintRates.parse(text).isPresent());
+            mintSeconds = builder
+                    .comment("Seconds a beginner minter needs to strike the coins of one item; experience makes it up to twice as fast.")
+                    .defineInRange("mintSeconds", 15, 1, 600);
+            itemValues = builder
+                    .comment("Worth of raw materials, as item=value or #tag=value. An item named by id wins over its tags; among tags",
+                            "the first one counts. Items without an entry get the cheapest recipe that makes them, the ingredients",
+                            "plus laborMarkup; items without either get defaultItemValue. Items of other mods are worked out the same way.")
+                    .defineListAllowEmpty("itemValues", io.github.sekerator.kingdomworld.common.economy.ItemPrices.DEFAULTS,
+                            value -> value instanceof String text && io.github.sekerator.kingdomworld.common.economy.ItemPrices.parse(text).isPresent());
+            defaultItemValue = builder
+                    .comment("Worth of an item nothing is known about.")
+                    .defineInRange("defaultItemValue", 5.0, 0.0, 1_000_000.0);
+            laborMarkup = builder
+                    .comment("Share added to the worth of the ingredients of a made item for the work; 0.1 is ten percent.")
+                    .defineInRange("laborMarkup", 0.1, 0.0, 10.0);
             builder.pop();
 
             builder.comment("Abstract simulation of kingdoms far from players.").push("simulation");

@@ -69,6 +69,25 @@ public final class ClientPacketHandlers {
         }
     }
 
+    public static void handleTreasuryView(io.github.sekerator.kingdomworld.common.network.data.TreasuryView view) {
+        if (Minecraft.getInstance().screen instanceof ThroneScreen throne) {
+            throne.updateTreasury(view);
+        }
+    }
+
+    public static void handleBank(io.github.sekerator.kingdomworld.common.network.data.BankView view, boolean open) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.BankScreen bank && bank.pos().equals(view.pos())) {
+            bank.update(view);
+        } else if (open) {
+            ClientHooks.openBank(view);
+        }
+    }
+
+    public static void handleCurrencies(java.util.List<io.github.sekerator.kingdomworld.common.network.data.CurrencyInfo> currencies) {
+        io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.replace(currencies);
+    }
+
     public static void handleStorageView(StorageView view) {
         if (Minecraft.getInstance().screen instanceof ThroneScreen throne) {
             throne.updateStorage(view);

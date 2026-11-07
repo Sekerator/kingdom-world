@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "kingdomworld:item/coin_silver",
+    "layer1": "kingdomworld:item/coin_face"
+  }
+}

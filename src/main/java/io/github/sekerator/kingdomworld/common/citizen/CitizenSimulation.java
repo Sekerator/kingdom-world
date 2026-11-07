@@ -126,7 +126,7 @@ public final class CitizenSimulation {
                 continue;
             }
             int target = CitizenNeeds.targetMood(new CitizenNeeds.MoodInputs(citizen.food(), citizen.home() != null,
-                    citizen.state() == CitizenState.WOUNDED, recentDeaths));
+                    citizen.state() == CitizenState.WOUNDED, recentDeaths, citizen.payPercent()));
             citizen.setMood(CitizenNeeds.nextMood(citizen.mood(), target));
             if (body == null) {
                 ProfessionBehaviors.get(citizen.professionId())
@@ -138,7 +138,7 @@ public final class CitizenSimulation {
         CarrierBehavior.stepAbstractly(server, kingdomId, interval);
         for (WorkPost post : citizens.posts().postsOf(kingdomId)) {
             PostWork.refreshStatus(server, post);
-            boolean workshop = Professions.isWorkshop(post.professionId());
+            boolean workshop = Professions.usesStations(post.professionId());
             // Workshops are looked at every step: workstations come and go.
             if (post.hasProfession() && (post.yield().isEmpty() || workshop) && !ZoneSurveys.pending(post.pos())) {
                 ZoneSurveys.request(post.pos());

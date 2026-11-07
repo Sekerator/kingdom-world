@@ -141,7 +141,7 @@ public final class KingdomGameTests {
     public static void newerFormatIsKeptReadOnly(GameTestHelper helper) {
         Kingdom known = new Kingdom(UUID.randomUUID(), "Future Realm", 0x445566, null, 5L);
         CompoundTag kingdom = KingdomNbt.write(known);
-        kingdom.putString("treasury", "unknown to this version");
+        kingdom.putString("warChest", "unknown to this version");
         ListTag list = new ListTag();
         list.add(kingdom);
         CompoundTag root = new CompoundTag();

@@ -92,7 +92,7 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
     }
 
     private boolean isWorkshop() {
-        return Professions.isWorkshop(view.profession());
+        return Professions.usesStations(view.profession());
     }
 
     private boolean hasAuto() {

@@ -126,7 +126,8 @@ public final class WorkshopBehavior implements ProfessionBehavior {
         }
         Set<String> stations = new LinkedHashSet<>(post.stations().keySet());
         ProductionRules rules = ProductionSettings.rules();
-        double factor = Production.suppliedByCarriers(server, post) ? 1.0 : GatheringRules.SELF_CARRY_FACTOR;
+        double factor = (Production.suppliedByCarriers(server, post) ? 1.0 : GatheringRules.SELF_CARRY_FACTOR)
+                * io.github.sekerator.kingdomworld.common.economy.EconomySettings.workSpeed(citizen.mood());
         double slowdown = rules.slowdown(post.yield().measured() ? post.yield().actions() : 0.0);
         double budget = post.progress().getOrDefault(Production.WORK_BANK, 0.0) + ProductionRules.workTicks(intervalTicks, factor);
         double keep = 0.0;

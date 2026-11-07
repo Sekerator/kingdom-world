@@ -5,6 +5,9 @@ import io.github.sekerator.kingdomworld.common.block.InfirmaryBlock;
 import io.github.sekerator.kingdomworld.common.block.ThroneBlock;
 import io.github.sekerator.kingdomworld.common.block.WorkPostBlock;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenEntity;
+import io.github.sekerator.kingdomworld.common.economy.BankBlock;
+import io.github.sekerator.kingdomworld.common.economy.CoinItem;
+import io.github.sekerator.kingdomworld.common.economy.MintBlock;
 import io.github.sekerator.kingdomworld.common.item.DescribedItem;
 import io.github.sekerator.kingdomworld.common.item.KingdomAtlasItem;
 import io.github.sekerator.kingdomworld.common.storage.StorehouseBlock;
@@ -86,6 +89,27 @@ public final class ModRegistries {
     public static final RegistryObject<Item> WORK_POST_ITEM = ITEMS.register("work_post",
             () -> new BlockItem(WORK_POST.get(), new Item.Properties()));
 
+    /** A coin of a kingdom's currency; the stack's data names the currency and the kind of coin. */
+    public static final RegistryObject<Item> COIN = ITEMS.register("coin", () -> new CoinItem(new Item.Properties()));
+    /** A bank: coins onto accounts and back, in the currency of the kingdom whose land it stands on. */
+    public static final RegistryObject<Block> BANK = BLOCKS.register("bank", () -> new BankBlock(
+            BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.STONE)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.STONE)));
+    public static final RegistryObject<Item> BANK_ITEM = ITEMS.register("bank",
+            () -> new BlockItem(BANK.get(), new Item.Properties()));
+    /** The mint, workstation of the minter. */
+    public static final RegistryObject<Block> MINT = BLOCKS.register("mint", () -> new MintBlock(
+            BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.5f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)));
+    public static final RegistryObject<Item> MINT_ITEM = ITEMS.register("mint",
+            () -> new BlockItem(MINT.get(), new Item.Properties()));
+
     /**
      * The body of a citizen. Never saved with chunks: the citizen records in the kingdom data are what persists.
      */
@@ -118,6 +142,8 @@ public final class ModRegistries {
             event.accept(STOREHOUSE_ITEM);
             event.accept(INFIRMARY_ITEM);
             event.accept(WORK_POST_ITEM);
+            event.accept(BANK_ITEM);
+            event.accept(MINT_ITEM);
         } else if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) {
             event.accept(FOUNDER_CROWN);
             event.accept(KINGDOM_ATLAS);

@@ -177,6 +177,7 @@ public final class KingdomWorldApi {
             return new CreateKingdomResult.Rejected(CreateKingdomResult.Error.READ_ONLY);
         }
         UUID id = newKingdomId(state.kingdoms());
+        economyDefaults(state);
         return state.found(id, name, KingdomColors.defaultFor(id), rulerId, null, gameTime(server), rules());
     }
 
@@ -194,6 +195,7 @@ public final class KingdomWorldApi {
             return new CreateKingdomResult.Rejected(CreateKingdomResult.Error.READ_ONLY);
         }
         UUID id = newKingdomId(state.kingdoms());
+        economyDefaults(state);
         Capital capital = new Capital(Dimensions.id(level), throne.getX(), throne.getY(), throne.getZ());
         return state.found(id, name, color & Kingdom.MAX_COLOR, founder, capital, gameTime(server), rules());
     }
@@ -203,7 +205,40 @@ public final class KingdomWorldApi {
      */
     public static Optional<Kingdom> dissolveKingdom(MinecraftServer server, UUID id) {
         KingdomWorldState state = writable(server, "dissolve kingdom " + id);
-        return state == null ? Optional.empty() : state.dissolve(id);
+        return state == null ? Optional.empty() : state.dissolve(id, gameTime(server));
+    }
+
+    /**
+     * New treasuries take the coin values and the tax of the config.
+     */
+    private static void economyDefaults(KingdomWorldState state) {
+        io.github.sekerator.kingdomworld.core.economy.EconomyRules economy =
+                io.github.sekerator.kingdomworld.common.economy.EconomySettings.rules();
+        state.economy().setDefaults(economy.units(), economy.defaultPollTax());
+    }
+
+    // ---------------------------------------------------------------- money
+
+    /**
+     * The treasury of a kingdom, for reading; change it through the economy's operations.
+     */
+    public static Optional<io.github.sekerator.kingdomworld.core.economy.Treasury> treasury(MinecraftServer server, UUID kingdomId) {
+        return state(server).economy().treasury(kingdomId);
+    }
+
+    /**
+     * What a player has on the account in a currency (a kingdom's id).
+     */
+    public static long balance(MinecraftServer server, UUID player, UUID currency) {
+        return state(server).economy().accounts().balance(player, currency);
+    }
+
+    /**
+     * What one item of the stack's kind is worth, in the smallest unit of money; the base of prices and wealth.
+     */
+    public static long itemValue(MinecraftServer server, net.minecraft.world.item.ItemStack stack) {
+        requireServerThread(server);
+        return io.github.sekerator.kingdomworld.common.economy.ItemPrices.value(server, stack).units();
     }
 
     /**
