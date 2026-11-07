@@ -589,6 +589,15 @@ $script:CompanionMember = '00000000-0000-4000-8000-00000000c0df'
 $script:CompanionEntry = $null
 $script:CompanionMoney = -1
 $script:CompanionWeapon = $null
+# The law: players who never log in, so that their records, goods and debts may only change by the law.
+$script:LawThief = '00000000-0000-4000-8000-00000000a001'
+$script:LawWanted = '00000000-0000-4000-8000-00000000a002'
+$script:LawOutlaw = '00000000-0000-4000-8000-00000000a003'
+$script:LawConfiscation = $null
+$script:LawGoods = $null
+$script:LawDebt = -1
+$script:LawReputation = $null
+$script:LawMoney = -1
 $script:EconomyRaw = $null
 $script:TradeMoney = $null
 $script:MinerId = $null
@@ -1551,6 +1560,81 @@ Invoke-Phase 'session1' {
         Add-Failure '[session1] the companion was not listed'
     }
 
+    # Law: a thief who is offline is wanted for a theft of 120, pays the fine of 240 from an account of 100 and owes the rest
+    # to the treasury; another stays wanted for a blow; a murderer is executed (a stand-in with a sword, bread and a
+    # chestplate): every item goes into the record of the kingdom, nothing stays with the body, and with -Pack Jack's
+    # Gravestones makes no grave. The money of the kingdom only grows by what an operator gave.
+    Send-ServerCommand $server 'kingdomworld admin law status'
+    if (Wait-ForLog $server 'Law data: 0 wanted, 0 confiscation\(s\), 0 court\(s\), 0 report\(s\) on the way, format 1' $CommandTimeout $ConsoleFailPattern) {
+        Write-Ok '[session1] the law data is writable and empty'
+    } else {
+        Add-Failure '[session1] the law data is not writable or not empty'
+    }
+    $lawBefore = Get-KingdomMoney $server $KingdomName
+    Send-ServerCommand $server "kingdomworld admin law wanted add $($script:LawThief) $KingdomName theft 120"
+    [void](Wait-ForLog $server ' is wanted in .* for theft' $CommandTimeout $ConsoleFailPattern)
+    Send-ServerCommand $server "kingdomworld admin companions fund $($script:LawThief) $KingdomName 100"
+    [void](Wait-ForLog $server 'Account of .* in the currency: \+100' $CommandTimeout $ConsoleFailPattern)
+    Send-ServerCommand $server "kingdomworld admin law fine $($script:LawThief) $KingdomName pay"
+    $paid = Wait-ForLog $server ' paid \S+: (\d+) in coins, (\d+) from the account, (\d+) as a debt' $CommandTimeout $ConsoleFailPattern
+    if ($paid -and $paid.Groups[1].Value -eq '0' -and $paid.Groups[2].Value -eq '100' -and $paid.Groups[3].Value -eq '140') {
+        Write-Ok '[session1] the thief paid the fine of 240: 100 from the account, 140 as a debt'
+    } else {
+        Add-Failure "[session1] the fine was not paid as expected: $(if ($paid) { $paid.Value } else { 'no answer' })"
+    }
+    $seen = Count-Log 'Debt of \S+ to \S+: .* \((\d+)\)'
+    Send-ServerCommand $server "kingdomworld admin law debt $($script:LawThief) $KingdomName"
+    $debt = Wait-ForNewLog $server 'Debt of \S+ to \S+: .* \((\d+)\)' $CommandTimeout $seen
+    if ($debt -and $debt.Groups[1].Value -eq '140') {
+        $script:LawDebt = 140
+        Write-Ok '[session1] the debt to the treasury is 140'
+    } else {
+        Add-Failure "[session1] the debt is not 140: $(if ($debt) { $debt.Value } else { 'no answer' })"
+    }
+    $seen = Count-Log 'Reputation of \S+ in \S+: (-?\d+)'
+    Send-ServerCommand $server "kingdomworld admin law reputation $($script:LawThief) $KingdomName"
+    $reputation = Wait-ForNewLog $server 'Reputation of \S+ in \S+: (-?\d+)' $CommandTimeout $seen
+    if ($reputation -and [int]$reputation.Groups[1].Value -lt 0) {
+        $script:LawReputation = $reputation.Groups[1].Value
+        Write-Ok "[session1] the theft cost reputation: $($script:LawReputation)"
+    } else {
+        Add-Failure '[session1] the theft did not lower the reputation'
+    }
+    Send-ServerCommand $server "kingdomworld admin law wanted add $($script:LawWanted) $KingdomName assault"
+    [void](Wait-ForLog $server ' is wanted in .* for assault' $CommandTimeout $ConsoleFailPattern)
+    Send-ServerCommand $server "kingdomworld admin law pass $($script:LawThief) $KingdomName grant"
+    [void](Wait-ForLog $server 'Pass of \S+ in \S+: \d+ tick' $CommandTimeout $ConsoleFailPattern)
+    Send-ServerCommand $server "kingdomworld admin law execute $($script:LawOutlaw) $KingdomName kit"
+    $executed = Wait-ForLog $server ' executed by the law of \S+: confiscation #(\d+), (\d+) item\(s\) worth (\d+), (\d+) item\(s\) left with the body' $CommandTimeout $ConsoleFailPattern
+    if ($executed -and $executed.Groups[2].Value -eq '18' -and $executed.Groups[4].Value -eq '0') {
+        $script:LawConfiscation = $executed.Groups[1].Value
+        $script:LawGoods = "$($executed.Groups[2].Value)/$($executed.Groups[3].Value)"
+        Write-Ok "[session1] the executed murderer lost 18 items into confiscation #$($script:LawConfiscation), none stayed with the body"
+    } else {
+        Add-Failure "[session1] the execution did not confiscate the 18 items: $(if ($executed) { $executed.Value } else { 'no answer' })"
+    }
+    if ($Pack) {
+        # The grave of a death appears a moment later; the throne lies at 8 70 8 and the stand-in stood next to it.
+        Start-Sleep -Seconds 3
+        $seen = Count-Log 'Successfully filled|No blocks were filled|Unknown block type'
+        Send-ServerCommand $server 'fill 4 66 4 12 76 12 minecraft:air replace jacksgravestones:gravestone'
+        $grave = Wait-ForNewLog $server 'Successfully filled (\d+)|No blocks were filled|Unknown block type' $CommandTimeout $seen
+        if ($grave -and $grave.Value -like 'No blocks were filled*') {
+            Write-Ok "[session1] Jack's Gravestones made no grave of the executed murderer"
+        } elseif ($grave -and $grave.Value -like 'Unknown block type*') {
+            Add-Warning "[session1] Jack's Gravestones is not in the pack"
+        } else {
+            Add-Failure "[session1] a grave appeared after the execution: $(if ($grave) { $grave.Value } else { 'no answer' })"
+        }
+    }
+    $lawAfter = Get-KingdomMoney $server $KingdomName
+    if ($lawBefore -ge 0 -and $lawAfter -eq $lawBefore + 100) {
+        $script:LawMoney = $lawAfter
+        Write-Ok "[session1] the law made no money: $lawBefore + 100 given = $lawAfter"
+    } else {
+        Add-Failure "[session1] the law changed the money: $lawBefore -> $lawAfter (100 was given)"
+    }
+
     # Construction: the templates load, the data pack template needs Create; a builder far from players builds a small
     # house from the storehouse on a flat place of chunk [2, 0], and the restart comes half way.
     Send-ServerCommand $server 'kingdomworld admin build templates'
@@ -2212,6 +2296,68 @@ Invoke-Phase 'session2' {
     }
 
     if (-not $script:ConstructionId) { return }
+    # The law survived the restart: the wanted, the confiscated goods, the debt, the reputation and the pass are the same, and
+    # the money adds up. Then the murderer buys the goods back at the throne for half their worth and gets all 18 items.
+    if ($script:LawConfiscation) {
+        if (Wait-ForLog $server 'KingdomWorld law: 1 wanted, 1 confiscation\(s\), \d+ court\(s\), data format 1' 10) {
+            Write-Ok '[session2] the law was loaded after the restart'
+        } else {
+            Add-Failure '[session2] the law was not loaded with one wanted and one confiscation'
+        }
+        $seen = Count-Log '#\d+ of \S+ in \S+: (\d+) item\(s\) worth (\d+), ransom (\d+)'
+        Send-ServerCommand $server 'kingdomworld admin law confiscated'
+        $goods = Wait-ForNewLog $server "#$($script:LawConfiscation) of \S+ in \S+: (\d+) item\(s\) worth (\d+), ransom (\d+)" $CommandTimeout $seen
+        if ($goods -and "$($goods.Groups[1].Value)/$($goods.Groups[2].Value)" -eq $script:LawGoods) {
+            Write-Ok "[session2] the confiscated goods are the same: $($script:LawGoods)"
+        } else {
+            Add-Failure "[session2] the confiscated goods changed: $(if ($goods) { $goods.Value } else { 'missing' }), expected $($script:LawGoods)"
+        }
+        $seen = Count-Log 'Debt of \S+ to \S+: .* \((\d+)\)'
+        Send-ServerCommand $server "kingdomworld admin law debt $($script:LawThief) $KingdomName"
+        $debt = Wait-ForNewLog $server 'Debt of \S+ to \S+: .* \((\d+)\)' $CommandTimeout $seen
+        if ($debt -and [int64]$debt.Groups[1].Value -eq $script:LawDebt) {
+            Write-Ok "[session2] the debt is still $($script:LawDebt)"
+        } else {
+            Add-Failure "[session2] the debt changed in the restart: $(if ($debt) { $debt.Value } else { 'no answer' })"
+        }
+        $seen = Count-Log 'Reputation of \S+ in \S+: (-?\d+)'
+        Send-ServerCommand $server "kingdomworld admin law reputation $($script:LawThief) $KingdomName"
+        $reputation = Wait-ForNewLog $server 'Reputation of \S+ in \S+: (-?\d+)' $CommandTimeout $seen
+        if ($reputation -and $reputation.Groups[1].Value -eq $script:LawReputation) {
+            Write-Ok "[session2] the reputation is still $($script:LawReputation)"
+        } else {
+            Add-Failure '[session2] the reputation changed in the restart'
+        }
+        Send-ServerCommand $server "kingdomworld admin law pass $($script:LawThief) $KingdomName"
+        $pass = Wait-ForLog $server 'Pass of \S+ in \S+: (\d+) tick' $CommandTimeout $ConsoleFailPattern
+        if ($pass -and [int64]$pass.Groups[1].Value -gt 0) {
+            Write-Ok '[session2] the pass into the cities still holds'
+        } else {
+            Add-Failure '[session2] the pass was lost in the restart'
+        }
+        Send-ServerCommand $server "kingdomworld admin law wanted $KingdomName"
+        if (Wait-ForLog $server ' in \S+: assault on a citizen; fine ' $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok '[session2] the record of the blow is still there'
+        } else {
+            Add-Failure '[session2] the record of the blow was lost in the restart'
+        }
+        $before = Get-KingdomMoney $server $KingdomName
+        if ($script:LawMoney -ge 0 -and $before -ne $script:LawMoney) {
+            Add-Failure "[session2] the money changed in the restart: $($script:LawMoney) -> $before"
+        }
+        $ransom = if ($goods) { [int64]$goods.Groups[3].Value } else { 0 }
+        Send-ServerCommand $server "kingdomworld admin companions fund $($script:LawOutlaw) $KingdomName $ransom"
+        [void](Wait-ForLog $server "Account of .* in the currency: \+$ransom" $CommandTimeout $ConsoleFailPattern)
+        Send-ServerCommand $server "kingdomworld admin law confiscated ransom $($script:LawConfiscation)"
+        $back = Wait-ForLog $server "#$($script:LawConfiscation) bought back by \S+: (\d+) item\(s\) with the owner, ransom (\d+)" $CommandTimeout $ConsoleFailPattern
+        $after = Get-KingdomMoney $server $KingdomName
+        if ($back -and $back.Groups[1].Value -eq '18' -and [int64]$back.Groups[2].Value -eq $ransom -and $after -eq $before + $ransom) {
+            Write-Ok "[session2] the murderer bought back exactly the 18 items for $ransom, half their worth; the money adds up"
+        } else {
+            Add-Failure "[session2] the ransom went wrong: $(if ($back) { $back.Value } else { 'no answer' }), money $before -> $after"
+        }
+    }
+
     # The construction survived the restart exactly; the builder finishes it and nothing of its materials is left over.
     $id = $script:ConstructionId
     $constructions = if ($script:HutId) { 2 } else { 1 }

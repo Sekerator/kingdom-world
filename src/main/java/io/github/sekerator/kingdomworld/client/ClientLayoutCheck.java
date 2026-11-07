@@ -178,6 +178,7 @@ final class ClientLayoutCheck {
         ArmyLayoutCases.actionbars(minecraft.font, NARROWEST_SCREEN);
         MagicLayoutCases.actionbars(minecraft.font, NARROWEST_SCREEN);
         CompanionLayoutCases.actionbars(minecraft.font, NARROWEST_SCREEN);
+        LawLayoutCases.actionbars(minecraft.font, NARROWEST_SCREEN);
         problems.addAll(LayoutCheck.end());
 
         for (int[] window : WINDOWS) {
@@ -1247,6 +1248,7 @@ final class ClientLayoutCheck {
         MagicLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         CompanionLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)));
         RoadLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
+        LawLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         return cases;
     }
 }

@@ -155,6 +155,22 @@ public final class LawEvents {
         }
     }
 
+    /**
+     * Watches a window as if the player had just opened the container at {@code pos}, for game tests (their players have no
+     * connection to open windows through).
+     */
+    public static void watchForCheck(ServerPlayer player, BlockPos pos, net.minecraft.world.inventory.AbstractContainerMenu menu) {
+        LawContainers.aboutToOpen(player, pos, LawContainers.ownerOf(player.level(), pos));
+        LawContainers.opened(player, menu);
+    }
+
+    /**
+     * Closes a watched window, for game tests.
+     */
+    public static void closedForCheck(ServerPlayer player, net.minecraft.world.inventory.AbstractContainerMenu menu) {
+        LawContainers.closed(player, menu);
+    }
+
     private static void onContainerOpen(PlayerContainerEvent.Open event) {
         if (event.getEntity() instanceof ServerPlayer player && !(player instanceof FakePlayer)) {
             LawContainers.opened(player, event.getContainer());

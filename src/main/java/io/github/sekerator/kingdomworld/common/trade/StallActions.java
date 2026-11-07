@@ -134,7 +134,7 @@ public final class StallActions {
             if (item == null || wanted.size() >= TradeViews.MAX_ROWS) {
                 continue;
             }
-            long price = buyPrice(server, kingdom.id(), entry, item);
+            long price = LawWork.payoutFor(server, kingdom.id(), player.getUUID(), buyPrice(server, kingdom.id(), entry, item));
             wanted.add(new TradeViews.Wanted(new ItemStack(item), price, wantedNow(server, kingdom.id(), market, entry, item, price, day),
                     GoodsStacks.countPlain(player.getInventory(), item)));
         }

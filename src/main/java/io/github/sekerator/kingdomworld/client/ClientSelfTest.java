@@ -289,6 +289,12 @@ public final class ClientSelfTest {
             case 282 -> {
                 LOGGER.info(PREFIX + "roads tab answered by the server: {}", minecraft.screen instanceof ThroneScreen screen && screen.roadsShown());
                 if (minecraft.screen instanceof ThroneScreen screen) {
+                    screen.selectTab("law");
+                }
+            }
+            case 285 -> {
+                LOGGER.info(PREFIX + "law tab answered by the server: {}", minecraft.screen instanceof ThroneScreen screen && screen.lawShown());
+                if (minecraft.screen instanceof ThroneScreen screen) {
                     ClientHooks.openTerritoryEditor(screen.view());
                 }
                 KingdomWorldNetwork.sendToServer(new ClaimChunkPacket((throne.getX() >> 4) + 2, throne.getZ() >> 4, true));
@@ -361,8 +367,30 @@ public final class ClientSelfTest {
                 minecraft.setScreen(null);
                 KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.CompanionPackets.PartyRequest());
             }
-            case 364 -> LOGGER.info(PREFIX + "party window opened by the server: {}",
-                    minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.PartyScreen);
+            case 364 -> {
+                LOGGER.info(PREFIX + "party window opened by the server: {}",
+                        minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.PartyScreen);
+                minecraft.setScreen(null);
+                // A small theft on record shows the line of the wanted and a row in the window of the law.
+                server.execute(() -> {
+                    if (kingdomId != null) {
+                        io.github.sekerator.kingdomworld.common.law.LawWork.commit(server, kingdomId, playerId, "self-test",
+                                io.github.sekerator.kingdomworld.core.law.CrimeKind.THEFT, 5, "");
+                    }
+                });
+                KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.LawPackets.PlayerAction(
+                        io.github.sekerator.kingdomworld.common.network.packet.LawPackets.PlayerAction.Action.OPEN, null, 0));
+            }
+            case 372 -> {
+                LOGGER.info(PREFIX + "law window opened by the server: {}, line of the wanted shown: {}",
+                        minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.LawScreen, WantedHud.line().shown());
+                minecraft.setScreen(null);
+                server.execute(() -> {
+                    if (kingdomId != null) {
+                        io.github.sekerator.kingdomworld.common.law.LawWork.state(server).clear(kingdomId, playerId);
+                    }
+                });
+            }
             case 390 -> {
                 // The list in the corner comes once a second.
                 LOGGER.info(PREFIX + "lines in the corner of the screen: {}", PartyHud.lines().size());

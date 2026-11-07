@@ -61,7 +61,9 @@ public final class ArmyEvents {
         }
         CitizenEntity attacker = soldier(event.getSource().getEntity());
         if (attacker != null && (victim instanceof Player || victim instanceof CitizenEntity)
-                && !ArmyWork.mayAttack(server, attacker.kingdomId(), victim)) {
+                && !ArmyWork.mayAttack(server, attacker.kingdomId(), victim)
+                && !(victim instanceof ServerPlayer wanted && io.github.sekerator.kingdomworld.common.law.LawWork.mayFight(server,
+                attacker.kingdomId(), wanted))) {
             // Soldiers do not hurt players or citizens in peace, by a blow or by a stray arrow.
             event.setCanceled(true);
             return;

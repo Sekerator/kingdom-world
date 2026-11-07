@@ -128,7 +128,7 @@ public final class LawCommands {
                 level = there;
             }
         }
-        ServerPlayer standIn = new ServerPlayer(server, level, new GameProfile(who.id(), who.name()));
+        ServerPlayer standIn = io.github.sekerator.kingdomworld.common.law.LawStandIn.create(server, level, new GameProfile(who.id(), who.name()));
         capital.ifPresent(c -> standIn.setPos(c.x() + 0.5, c.y() + 1, c.z() + 1.5));
         return standIn;
     }

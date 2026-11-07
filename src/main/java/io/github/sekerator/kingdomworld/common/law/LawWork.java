@@ -543,6 +543,37 @@ public final class LawWork {
     }
 
     /**
+     * Whether a guard of a kingdom may strike a player for the law now: the player can be stopped and was called out long
+     * enough ago.
+     */
+    public static boolean mayFight(MinecraftServer server, UUID kingdomId, ServerPlayer player) {
+        return LawGuards.catchable(server, player) && LawGuards.pursues(server, kingdomId, player);
+    }
+
+    /**
+     * Calls a player out as a guard of the kingdom would have done long enough ago to attack now, for game tests.
+     */
+    public static void hailForCheck(MinecraftServer server, ServerPlayer player, UUID kingdomId) {
+        LawGuards.hailNow(server, player, kingdomId, now(server) - LawSettings.rules().hailTicks);
+    }
+
+    /**
+     * Whether guards may stop a player at all: online, at the keyboard, alive, not in creative or spectator mode.
+     */
+    public static boolean catchable(MinecraftServer server, ServerPlayer player) {
+        return LawGuards.catchable(server, player);
+    }
+
+    /**
+     * Sets free the slaves of foreign owners on the land of kingdoms that forbid slaves now, for checks and commands.
+     *
+     * @return how many went free
+     */
+    public static int enforceSlaveryNow(MinecraftServer server) {
+        return isReadOnly(server) ? 0 : LawSlavery.freeForeignSlaves(server, state(server), LawSettings.rules());
+    }
+
+    /**
      * Whether a citizen body is a soldier, who reports what it sees at once.
      */
     static boolean isSoldier(CitizenEntity body) {

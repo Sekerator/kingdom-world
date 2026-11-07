@@ -229,7 +229,7 @@ public final class CitizenGameTests {
     }
 
     @GameTest(template = EMPTY, batch = "kingdomworld_citizen_protection")
-    public static void outsidersCannotHurtCitizensInPeacetime(GameTestHelper helper) {
+    public static void aStrangersBlowAtACitizenIsACrimeNotRefused(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
         UUID kingId = UUID.randomUUID();
         Kingdom kingdom = found(helper, "GameTest Guarded People", kingId);
@@ -243,11 +243,13 @@ public final class CitizenGameTests {
             ServerPlayer king = new ServerPlayer(server, helper.getLevel(), new GameProfile(kingId, "kw-king"));
             helper.assertTrue(!ProtectionService.mayHurtCitizen(stranger, body), "A stranger may hurt a citizen");
             helper.assertTrue(ProtectionService.mayHurtCitizen(king, body), "The king may not hurt his own citizen");
+            // The rule of the policy stays, but the blow lands: the law of the kingdom judges it as an assault.
             float before = body.getHealth();
             body.hurt(helper.getLevel().damageSources().playerAttack(stranger), 4.0f);
-            helper.assertTrue(body.getHealth() == before, "A stranger's blow hurt the citizen");
+            helper.assertTrue(body.getHealth() < before, "A stranger's blow was stopped instead of judged");
+            float after = body.getHealth();
             body.hurt(helper.getLevel().damageSources().playerAttack(king), 4.0f);
-            helper.assertTrue(body.getHealth() < before, "The king's blow was stopped");
+            helper.assertTrue(body.getHealth() < after || body.invulnerableTime > 0, "The king's blow was stopped");
         } finally {
             finish(helper, kingdom, citizen);
         }

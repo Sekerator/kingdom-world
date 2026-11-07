@@ -175,13 +175,14 @@ public final class TerritoryGameTests {
             ServerPlayer member = player(helper, memberId, "kw-member");
 
             helper.assertTrue(breakCancelled(level, stone, stranger), "A stranger broke a block");
-            helper.assertTrue(openDenied(chest, stranger), "A stranger opened a chest");
+            // Another's chest opens: what is taken from it is a theft the law judges (see the law tests).
+            helper.assertTrue(!openDenied(chest, stranger), "A stranger cannot even open a chest");
             helper.assertTrue(openDenied(gate, stranger), "A stranger opened a gate");
             helper.assertTrue(!ProtectionService.isAllowed(stranger, level, stone, ProtectedAction.PLACE), "A stranger may place blocks");
 
             helper.assertTrue(!breakCancelled(level, stone, member), "A subject with the building right cannot break");
             helper.assertTrue(!openDenied(gate, member), "A subject cannot open a gate");
-            helper.assertTrue(openDenied(chest, member), "A subject opened a chest without the containers right");
+            helper.assertTrue(!openDenied(chest, member), "A subject cannot even open a chest");
             Outcome granted = KingdomWorldApi.change(server, "test",
                     state -> state.membership().setRolePermission(king, Role.SUBJECT, Permission.CONTAINERS, true));
             helper.assertTrue(granted.ok(), "Could not grant the containers right: " + granted);
