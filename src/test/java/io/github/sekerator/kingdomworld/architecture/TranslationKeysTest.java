@@ -179,6 +179,33 @@ class TranslationKeysTest {
     /**
      * Numbers of the guild read right in both languages: «21 монстр», «3 очка», «5 кристаллов», «1 босс».
      */
+    /**
+     * Numbers of magic read right in both languages: «21 единица энергии», «3 чанка», «5 секунд», "1 energy", "2 chunks".
+     */
+    @Test
+    void countsOfMagicHaveEveryPluralForm() {
+        Map<String, String> russianForms = Map.of("energy", "единица энергии|единица энергии|единицы энергии|единиц энергии",
+                "chunks", "чанк|чанк|чанка|чанков", "seconds", "секунда|секунда|секунды|секунд");
+        Map<String, String> englishForms = Map.of("energy", "energy|energy", "chunks", "chunk|chunks", "seconds", "second|seconds");
+        russianForms.forEach((word, forms) -> {
+            String[] words = forms.split("[|]");
+            String[] english = englishForms.get(word).split("[|]");
+            Plurals.Form[] all = Plurals.Form.values();
+            for (int i = 0; i < all.length; i++) {
+                String key = "kingdomworld.count." + word + "." + all[i].suffix();
+                assertEquals("%s " + words[i], russian.get(key), key);
+                assertEquals("%s " + (all[i] == Plurals.Form.N1 ? english[0] : english[1]), TranslationKeysTest.english.get(key), key);
+            }
+        });
+        // The forms the texts of magic pick for typical numbers.
+        assertEquals(Plurals.Form.N1, Plurals.form(1));
+        assertEquals(Plurals.Form.N21, Plurals.form(31));
+        assertEquals(Plurals.Form.N2, Plurals.form(22));
+        assertEquals(Plurals.Form.N5, Plurals.form(5));
+        assertEquals(Plurals.Form.N5, Plurals.form(11));
+        assertEquals(Plurals.Form.N5, Plurals.form(0));
+    }
+
     @Test
     void countsOfTheGuildHaveEveryPluralForm() {
         Map<String, String> russianForms = Map.of("monsters", "монстр|монстр|монстра|монстров", "bosses", "босс|босс|босса|боссов",
@@ -383,6 +410,54 @@ class TranslationKeysTest {
             used.add("kingdomworld.army.baton.mode." + mode);
         }
         for (String word : List.of("soldiers", "mercenaries", "fighters", "enemies", "squads")) {
+            for (Plurals.Form form : Plurals.Form.values()) {
+                used.add("kingdomworld.count." + word + "." + form.suffix());
+            }
+        }
+        // Magic: spells of players and of kingdoms, research, the journal, the views of the tab, the focus and the staff.
+        for (io.github.sekerator.kingdomworld.core.magic.PlayerSpell spell : io.github.sekerator.kingdomworld.core.magic.PlayerSpell.values()) {
+            used.add("kingdomworld.magic.spell." + spell.id());
+            used.add("kingdomworld.magic.spell." + spell.id() + ".hint");
+        }
+        for (io.github.sekerator.kingdomworld.core.magic.KingdomSpell spell : io.github.sekerator.kingdomworld.core.magic.KingdomSpell.values()) {
+            for (String part : List.of("", ".hint", ".price")) {
+                used.add("kingdomworld.magic.kingdom_spell." + spell.id() + part);
+            }
+        }
+        for (io.github.sekerator.kingdomworld.core.magic.Research research : io.github.sekerator.kingdomworld.core.magic.Research.values()) {
+            used.add("kingdomworld.magic.research." + research.id());
+        }
+        for (String change : List.of("done", "undo", "start")) {
+            used.add("commands.kingdomworld.admin.magic.research." + change);
+        }
+        for (io.github.sekerator.kingdomworld.core.magic.EnergyCategory category
+                : io.github.sekerator.kingdomworld.core.magic.EnergyCategory.values()) {
+            used.add("kingdomworld.magic.category." + category.id());
+        }
+        for (String mode : List.of("energy", "journal", "mages", "research", "spells", "gates", "machines")) {
+            used.add("kingdomworld.screen.magic_tab.mode." + mode);
+            used.add("kingdomworld.screen.magic_tab.hint." + mode);
+        }
+        for (String period : List.of("today", "yesterday", "week")) {
+            used.add("kingdomworld.screen.magic_tab.period." + period);
+        }
+        for (String state : List.of("done", "current", "cost", "locked")) {
+            used.add("kingdomworld.screen.magic_tab.research." + state);
+        }
+        for (String mode : List.of("learn", "staff")) {
+            used.add("kingdomworld.screen.focus.tab." + mode);
+            used.add("kingdomworld.screen.focus.hint." + mode);
+        }
+        for (io.github.sekerator.kingdomworld.core.magic.MagicDevice.Kind kind : io.github.sekerator.kingdomworld.core.magic.MagicDevice.Kind.values()) {
+            String block = switch (kind) {
+                case FOCUS -> "magic_focus";
+                case ACCUMULATOR -> "crystal_accumulator";
+                case GENERATOR -> "crystal_generator";
+                case GATE -> "magic_gate";
+            };
+            used.add("block.kingdomworld." + block + ".tooltip");
+        }
+        for (String word : List.of("energy", "chunks", "seconds")) {
             for (Plurals.Form form : Plurals.Form.values()) {
                 used.add("kingdomworld.count." + word + "." + form.suffix());
             }

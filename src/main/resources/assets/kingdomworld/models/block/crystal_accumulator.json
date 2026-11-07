@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "top": "kingdomworld:block/crystal_accumulator_top",
+    "bottom": "kingdomworld:block/crystal_accumulator_top",
+    "side": "kingdomworld:block/crystal_accumulator_side"
+  }
+}

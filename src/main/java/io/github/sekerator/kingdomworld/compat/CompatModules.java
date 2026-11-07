@@ -2,9 +2,11 @@ package io.github.sekerator.kingdomworld.compat;
 
 import com.mojang.logging.LogUtils;
 import io.github.sekerator.kingdomworld.common.config.KingdomWorldConfig;
+import io.github.sekerator.kingdomworld.compat.arsnouveau.ArsNouveauCompat;
 import io.github.sekerator.kingdomworld.compat.bluemap.BlueMapCompat;
 import io.github.sekerator.kingdomworld.compat.create.CreateCompat;
 import io.github.sekerator.kingdomworld.compat.dynmap.DynmapCompat;
+import io.github.sekerator.kingdomworld.compat.irons.IronsSpellsCompat;
 import io.github.sekerator.kingdomworld.compat.journeymap.JourneyMapCompat;
 import io.github.sekerator.kingdomworld.compat.xaero.XaeroMinimapCompat;
 import io.github.sekerator.kingdomworld.compat.xaero.XaeroWorldMapCompat;
@@ -42,7 +44,9 @@ public final class CompatModules {
             new Entry("xaeroworldmap", Dist.CLIENT, () -> XaeroWorldMapCompat::new),
             new Entry("xaerominimap", Dist.CLIENT, () -> XaeroMinimapCompat::new),
             new Entry("bluemap", null, () -> BlueMapCompat::new),
-            new Entry("dynmap", null, () -> DynmapCompat::new));
+            new Entry("dynmap", null, () -> DynmapCompat::new),
+            new Entry("irons_spellbooks", null, () -> IronsSpellsCompat::new),
+            new Entry("ars_nouveau", null, () -> ArsNouveauCompat::new));
 
     private static final Set<String> ACTIVE = ConcurrentHashMap.newKeySet();
 

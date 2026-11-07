@@ -162,6 +162,14 @@ public final class KingdomWorldApi {
     }
 
     /**
+     * Decides who may travel through the gates of a kingdom; {@code null} restores the default (its own members only).
+     * Alliances replace it so that allies may use each other's gates.
+     */
+    public static void setGateAccess(@Nullable io.github.sekerator.kingdomworld.core.magic.GateAccess access) {
+        io.github.sekerator.kingdomworld.common.magic.MagicActions.setGateAccess(access);
+    }
+
+    /**
      * The policy behind all protection checks; other mechanics register exemptions on it.
      */
     public static AccessPolicy accessPolicy() {

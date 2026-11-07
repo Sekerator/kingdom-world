@@ -5,6 +5,7 @@ import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import io.github.sekerator.kingdomworld.core.guild.GuildRules;
 import io.github.sekerator.kingdomworld.core.guild.Rank;
+import io.github.sekerator.kingdomworld.core.magic.MagicRules;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.List;
@@ -155,6 +156,8 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue templateMaxLength;
         /** The army: soldiers, squads, mercenaries and battles. */
         public final Army army;
+        /** Energy of kingdoms and the mage tower. */
+        public final Magic magic;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -438,6 +441,7 @@ public final class KingdomWorldConfig {
                     .defineInRange("templateMaxLength", 48, 1, 256);
             builder.pop();
             army = new Army(builder);
+            magic = new Magic(builder);
 
             builder.comment("Abstract simulation of kingdoms far from players.").push("simulation");
             simulationIntervalTicks = builder
@@ -761,6 +765,210 @@ public final class KingdomWorldConfig {
                     .defineListAllowEmpty("rangedWeapons", List.of("#forge:tools/bows", "#forge:tools/crossbows"),
                             value -> value instanceof String);
             builder.pop();
+        }
+    }
+
+    /**
+     * Energy of kingdoms and the mage tower: the store of energy, mages, research, the spells of kingdoms and of players,
+     * crystal generators and the wells for the magic of other mods. Tables hold one number per research (ward, healing,
+     * fertility, fair wind, gates, arcana I, II and III), per spell of a kingdom (ward, healing, fertility, fair wind, gates)
+     * or per spell of players (fireball, heal, light, detect, shield, blink).
+     */
+    public static final class Magic {
+        public final ForgeConfigSpec.LongValue baseCapacity;
+        public final ForgeConfigSpec.LongValue accumulatorCapacity;
+        public final ForgeConfigSpec.IntValue dissolveTicks;
+        public final ForgeConfigSpec.IntValue crystalsAtPost;
+        public final ForgeConfigSpec.LongValue mageFireballCost;
+        public final ForgeConfigSpec.LongValue mageHealCost;
+        public final ForgeConfigSpec.IntValue mageCastTicks;
+        public final ForgeConfigSpec.ConfigValue<String> researchCost;
+        public final ForgeConfigSpec.ConfigValue<String> researchMinutes;
+        public final ForgeConfigSpec.ConfigValue<String> spellPrice;
+        public final ForgeConfigSpec.IntValue wardMaxChunks;
+        public final ForgeConfigSpec.DoubleValue wardReduction;
+        public final ForgeConfigSpec.DoubleValue healingPerSecond;
+        public final ForgeConfigSpec.IntValue fertilityRadius;
+        public final ForgeConfigSpec.IntValue fertilityGrowthPerSecond;
+        public final ForgeConfigSpec.DoubleValue tailwindShare;
+        public final ForgeConfigSpec.IntValue maxGates;
+        public final ForgeConfigSpec.ConfigValue<String> spellCost;
+        public final ForgeConfigSpec.ConfigValue<String> spellCooldownTicks;
+        public final ForgeConfigSpec.ConfigValue<String> spellRank;
+        public final ForgeConfigSpec.ConfigValue<String> spellTowerLevel;
+        public final ForgeConfigSpec.ConfigValue<String> lessonPrice;
+        public final ForgeConfigSpec.IntValue staffSlots;
+        public final ForgeConfigSpec.DoubleValue fireballDamage;
+        public final ForgeConfigSpec.DoubleValue healAmount;
+        public final ForgeConfigSpec.IntValue shieldSeconds;
+        public final ForgeConfigSpec.IntValue lightSeconds;
+        public final ForgeConfigSpec.IntValue detectRadius;
+        public final ForgeConfigSpec.IntValue blinkDistance;
+        public final ForgeConfigSpec.IntValue feRate;
+        public final ForgeConfigSpec.IntValue feMaxPerTick;
+        public final ForgeConfigSpec.BooleanValue ironsWell;
+        public final ForgeConfigSpec.IntValue ironsManaPerEnergy;
+        public final ForgeConfigSpec.BooleanValue arsWell;
+        public final ForgeConfigSpec.IntValue arsManaPerEnergy;
+        public final ForgeConfigSpec.IntValue arsSourcePerEnergy;
+        public final ForgeConfigSpec.IntValue wellRadius;
+        public final ForgeConfigSpec.IntValue wellIntervalTicks;
+        public final ForgeConfigSpec.LongValue wellMaxEnergy;
+
+        Magic(ForgeConfigSpec.Builder builder) {
+            MagicRules.Builder d = new MagicRules.Builder();
+            builder.comment("Energy of kingdoms and the mage tower. Energy only comes from monster crystals dissolved by mages.",
+                    "Tables hold one number per research (ward, healing, fertility, fair wind, gates, arcana I, II, III), per spell",
+                    "of a kingdom (ward, healing, fertility, fair wind, gates) or per spell of players (fireball, heal, light, detect,",
+                    "shield, blink). Money is in copper coins.").push("magic");
+            baseCapacity = builder.comment("Energy every kingdom may hold without accumulators.")
+                    .defineInRange("baseCapacity", d.baseCapacity, 0L, 1_000_000_000_000L);
+            accumulatorCapacity = builder.comment("Energy each crystal accumulator on the kingdom's land adds to its store.")
+                    .defineInRange("accumulatorCapacity", d.accumulatorCapacity, 0L, 1_000_000_000_000L);
+            dissolveTicks = builder.comment("Ticks a mage of usual speed takes to dissolve one crystal (experience makes mages faster).")
+                    .defineInRange("dissolveTicks", d.dissolveTicks, 1, 72_000);
+            crystalsAtPost = builder.comment("Crystals a mage post asks the carriers to keep in its container.")
+                    .defineInRange("crystalsAtPost", d.crystalsAtPost, 1, 1_024);
+            mageFireballCost = builder.comment("Energy a fireball of a mage defending the land costs.")
+                    .defineInRange("mageFireballCost", d.mageFireballCost, 0L, 1_000_000L);
+            mageHealCost = builder.comment("Energy a mage spends to heal a hurt neighbor.")
+                    .defineInRange("mageHealCost", d.mageHealCost, 0L, 1_000_000L);
+            mageCastTicks = builder.comment("Ticks between two spells of a mage defending the land.")
+                    .defineInRange("mageCastTicks", d.mageCastTicks, 1, 72_000);
+            researchCost = builder.comment("Energy each research costs when it starts.")
+                    .define("researchCost", numbers(d.researchCost), value -> isTable(value, 8));
+            researchMinutes = builder.comment("Minutes of work of one mage of usual speed each research takes.")
+                    .define("researchMinutes", numbers(d.researchMinutes), value -> isTable(value, 8));
+            spellPrice = builder.comment("Prices of the spells of kingdoms: ward per chunk and day, healing per wounded citizen,",
+                            "fertility per post and day, fair wind per caravan, gates per trip.")
+                    .define("spellPrice", numbers(d.spellPrice), value -> isTable(value, 5));
+            wardMaxChunks = builder.comment("Chunks one kingdom may keep under the ward.")
+                    .defineInRange("wardMaxChunks", d.wardMaxChunks, 0, 100_000);
+            wardReduction = builder.comment("Share of the natural spawns of hostile monsters the ward stops, from 0 to 1.")
+                    .defineInRange("wardReduction", d.wardReduction, 0.0, 1.0);
+            healingPerSecond = builder.comment("Health a wounded citizen in the infirmary gets each second besides the usual healing.")
+                    .defineInRange("healingPerSecond", (double) d.healingPerSecond, 0.0, 20.0);
+            fertilityRadius = builder.comment("Radius around farm and herd posts that fertility reaches, in blocks.")
+                    .defineInRange("fertilityRadius", d.fertilityRadius, 1, 64);
+            fertilityGrowthPerSecond = builder.comment("Extra growth steps of crops around each post per second.")
+                    .defineInRange("fertilityGrowthPerSecond", d.fertilityGrowthPerSecond, 0, 64);
+            tailwindShare = builder.comment("Share of the remaining way a caravan saves with the fair wind.")
+                    .defineInRange("tailwindShare", d.tailwindShare, 0.0, 0.95);
+            maxGates = builder.comment("Gates one kingdom may have.")
+                    .defineInRange("maxGates", d.maxGates, 0, 256);
+            spellCost = builder.comment("Energy one cast of each spell of players costs, taken from the crystals the player carries.")
+                    .define("spellCost", numbers(d.playerCost), value -> isTable(value, 6));
+            spellCooldownTicks = builder.comment("Ticks before each spell of players can be cast again.")
+                    .define("spellCooldownTicks", numbers(d.playerCooldown), value -> isTable(value, 6));
+            spellRank = builder.comment("Guild rank a player needs to learn each spell.")
+                    .define("spellRank", ranks(d.playerRank), value -> parseRanks(value).isPresent());
+            spellTowerLevel = builder.comment("Level of the tower (finished researches) a focus needs to teach each spell.")
+                    .define("spellTowerLevel", numbers(d.playerTowerLevel), value -> isTable(value, 6));
+            lessonPrice = builder.comment("What learning each spell costs, paid to the treasury of the focus's kingdom.")
+                    .define("lessonPrice", numbers(d.lessonPrice), value -> isTable(value, 6));
+            staffSlots = builder.comment("Spells a staff holds.")
+                    .defineInRange("staffSlots", d.staffSlots, 1, 9);
+            fireballDamage = builder.comment("Damage of the fireball of players and mages.")
+                    .defineInRange("fireballDamage", (double) d.fireballDamage, 0.0, 100.0);
+            healAmount = builder.comment("Health the healing spell gives.")
+                    .defineInRange("healAmount", (double) d.healAmount, 0.0, 100.0);
+            shieldSeconds = builder.comment("Seconds the shield (absorption) lasts.")
+                    .defineInRange("shieldSeconds", d.shieldSeconds, 1, 3_600);
+            lightSeconds = builder.comment("Seconds the light (night vision) lasts.")
+                    .defineInRange("lightSeconds", d.lightSeconds, 1, 3_600);
+            detectRadius = builder.comment("Radius of the spell that shows monsters, in blocks.")
+                    .defineInRange("detectRadius", d.detectRadius, 1, 128);
+            blinkDistance = builder.comment("Longest jump of the blink spell, in blocks.")
+                    .defineInRange("blinkDistance", d.blinkDistance, 1, 64);
+            feRate = builder.comment("Forge Energy a crystal generator gives for one unit of the kingdom's energy.",
+                            "Forge Energy never turns back into energy of a kingdom.")
+                    .defineInRange("feRate", d.feRate, 1, 1_000_000);
+            feMaxPerTick = builder.comment("Forge Energy one crystal generator gives at most per tick.")
+                    .defineInRange("feMaxPerTick", d.feMaxPerTick, 0, 1_000_000);
+            ironsWell = builder.comment("The well of a focus refills the mana of Iron's Spells 'n Spellbooks of subjects nearby.")
+                    .define("ironsWell", d.ironsWell);
+            ironsManaPerEnergy = builder.comment("Mana of Iron's Spells for one unit of energy.")
+                    .defineInRange("ironsManaPerEnergy", d.ironsManaPerEnergy, 1, 1_000_000);
+            arsWell = builder.comment("The focus fills source jars of Ars Nouveau nearby and refills the mana of Ars Nouveau of subjects nearby.")
+                    .define("arsWell", d.arsWell);
+            arsManaPerEnergy = builder.comment("Mana of Ars Nouveau for one unit of energy.")
+                    .defineInRange("arsManaPerEnergy", d.arsManaPerEnergy, 1, 1_000_000);
+            arsSourcePerEnergy = builder.comment("Source of Ars Nouveau for one unit of energy.")
+                    .defineInRange("arsSourcePerEnergy", d.arsSourcePerEnergy, 1, 1_000_000);
+            wellRadius = builder.comment("How far the well of a focus reaches, in blocks.")
+                    .defineInRange("wellRadius", d.wellRadius, 1, 64);
+            wellIntervalTicks = builder.comment("Ticks between two pulses of the well of a focus.")
+                    .defineInRange("wellIntervalTicks", d.wellIntervalTicks, 1, 72_000);
+            wellMaxEnergy = builder.comment("Energy the well spends at most per player or jar and pulse.")
+                    .defineInRange("wellMaxEnergy", d.wellMaxEnergy, 1L, 1_000_000L);
+            builder.pop();
+        }
+
+        static String numbers(long[] values) {
+            return GuildRules.formatTable(values);
+        }
+
+        static String numbers(int[] values) {
+            return GuildRules.formatTable(values);
+        }
+
+        static String ranks(Rank[] values) {
+            StringBuilder text = new StringBuilder();
+            for (Rank rank : values) {
+                text.append(text.isEmpty() ? "" : ", ").append(rank.id());
+            }
+            return text.toString();
+        }
+
+        /**
+         * Reads a table of {@code size} whole numbers separated by commas or spaces; empty if it does not hold that many.
+         */
+        public static java.util.Optional<long[]> parse(Object value, int size) {
+            if (!(value instanceof String text)) {
+                return java.util.Optional.empty();
+            }
+            String[] parts = text.strip().split("[,;\\s]+");
+            if (parts.length != size) {
+                return java.util.Optional.empty();
+            }
+            long[] result = new long[size];
+            try {
+                for (int i = 0; i < size; i++) {
+                    result[i] = Long.parseLong(parts[i]);
+                    if (result[i] < 0) {
+                        return java.util.Optional.empty();
+                    }
+                }
+            } catch (NumberFormatException e) {
+                return java.util.Optional.empty();
+            }
+            return java.util.Optional.of(result);
+        }
+
+        static boolean isTable(Object value, int size) {
+            return parse(value, size).isPresent();
+        }
+
+        /**
+         * Reads six ranks of the guild separated by commas or spaces.
+         */
+        public static java.util.Optional<Rank[]> parseRanks(Object value) {
+            if (!(value instanceof String text)) {
+                return java.util.Optional.empty();
+            }
+            String[] parts = text.strip().split("[,;\\s]+");
+            if (parts.length != 6) {
+                return java.util.Optional.empty();
+            }
+            Rank[] result = new Rank[parts.length];
+            for (int i = 0; i < parts.length; i++) {
+                java.util.Optional<Rank> rank = Rank.byId(parts[i]);
+                if (rank.isEmpty()) {
+                    return java.util.Optional.empty();
+                }
+                result[i] = rank.get();
+            }
+            return java.util.Optional.of(result);
         }
     }
 

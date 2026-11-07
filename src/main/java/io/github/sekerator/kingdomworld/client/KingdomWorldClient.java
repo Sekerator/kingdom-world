@@ -94,6 +94,8 @@ public final class KingdomWorldClient {
 
     private static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(ModRegistries.CITIZEN.get(), CitizenRenderer::new);
+        event.registerEntityRenderer(io.github.sekerator.kingdomworld.common.magic.MagicRegistries.SPELL_FIREBALL.get(),
+                context -> new net.minecraft.client.renderer.entity.ThrownItemRenderer<>(context, 0.75f, true));
     }
 
     private static void onClientTick(TickEvent.ClientTickEvent event) {

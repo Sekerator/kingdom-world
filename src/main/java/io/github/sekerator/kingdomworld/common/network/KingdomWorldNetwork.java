@@ -16,6 +16,7 @@ import io.github.sekerator.kingdomworld.common.network.packet.KingdomActionPacke
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomListRequestPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomListResponsePacket;
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomViewPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.MagicPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.MapAreaPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.MapAreaRequestPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.OrderPackets;
@@ -50,7 +51,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "11";
+    public static final String PROTOCOL_VERSION = "12";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -170,6 +171,20 @@ public final class KingdomWorldNetwork {
                 ArmyPackets.BarracksOpen::decode, ArmyPackets.BarracksOpen::handle);
         add(id++, ArmyPackets.BarracksAction.class, NetworkDirection.PLAY_TO_SERVER, ArmyPackets.BarracksAction::encode,
                 ArmyPackets.BarracksAction::decode, ArmyPackets.BarracksAction::handle);
+        add(id++, MagicPackets.TabRequest.class, NetworkDirection.PLAY_TO_SERVER, MagicPackets.TabRequest::encode,
+                MagicPackets.TabRequest::decode, MagicPackets.TabRequest::handle);
+        add(id++, MagicPackets.TabResponse.class, NetworkDirection.PLAY_TO_CLIENT, MagicPackets.TabResponse::encode,
+                MagicPackets.TabResponse::decode, MagicPackets.TabResponse::handle);
+        add(id++, MagicPackets.TabChange.class, NetworkDirection.PLAY_TO_SERVER, MagicPackets.TabChange::encode,
+                MagicPackets.TabChange::decode, MagicPackets.TabChange::handle);
+        add(id++, MagicPackets.FocusOpen.class, NetworkDirection.PLAY_TO_CLIENT, MagicPackets.FocusOpen::encode,
+                MagicPackets.FocusOpen::decode, MagicPackets.FocusOpen::handle);
+        add(id++, MagicPackets.FocusAction.class, NetworkDirection.PLAY_TO_SERVER, MagicPackets.FocusAction::encode,
+                MagicPackets.FocusAction::decode, MagicPackets.FocusAction::handle);
+        add(id++, MagicPackets.GateOpen.class, NetworkDirection.PLAY_TO_CLIENT, MagicPackets.GateOpen::encode,
+                MagicPackets.GateOpen::decode, MagicPackets.GateOpen::handle);
+        add(id++, MagicPackets.GateTravel.class, NetworkDirection.PLAY_TO_SERVER, MagicPackets.GateTravel::encode,
+                MagicPackets.GateTravel::decode, MagicPackets.GateTravel::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

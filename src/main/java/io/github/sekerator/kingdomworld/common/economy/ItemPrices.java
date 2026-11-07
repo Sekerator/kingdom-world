@@ -141,8 +141,13 @@ public final class ItemPrices {
         java.util.Optional<io.github.sekerator.kingdomworld.core.guild.Rank> crystal =
                 io.github.sekerator.kingdomworld.common.guild.MonsterCrystalItem.rank(stack);
         if (crystal.isPresent()) {
-            return new ItemValues.Value(io.github.sekerator.kingdomworld.common.guild.GuildSettings.rules().crystalValue(crystal.get()),
-                    ItemValues.Source.BASE);
+            // A crystal that gave part of its energy is worth the part it still holds, rounded down.
+            io.github.sekerator.kingdomworld.core.guild.GuildRules guild = io.github.sekerator.kingdomworld.common.guild.GuildSettings.rules();
+            long full = guild.crystalValue(crystal.get());
+            long fresh = guild.crystalEnergy(crystal.get());
+            long left = io.github.sekerator.kingdomworld.common.guild.MonsterCrystalItem.energy(stack);
+            long worth = fresh <= 0 || left >= fresh ? full : (long) Math.floor(full * (double) left / fresh);
+            return new ItemValues.Value(worth, ItemValues.Source.BASE);
         }
         return table(server).value(Recipes.itemId(stack.getItem()));
     }

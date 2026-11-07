@@ -17,11 +17,14 @@ import java.util.Optional;
 /**
  * A crystal left by a monster: its rank is in the stack's data, so crystals of one rank stack and crystals of different
  * ranks do not. It holds energy that grows steeply with the rank; the kingdom counts the energy of the crystals in its
- * storehouses, and later mechanics (the mage tower, machines) spend it. Crystals only come from monsters killed by players
+ * storehouses, and mages dissolve it into the kingdom's energy. A crystal whose energy a spell of a player partly used
+ * remembers what is left in its data. Crystals only come from monsters killed by players
  * and adventurers (and from operators); there is no recipe.
  */
 public class MonsterCrystalItem extends Item {
     public static final String RANK = "Rank";
+    /** Energy left in a crystal that gave part of it to a spell. */
+    public static final String ENERGY = "Energy";
     /** Colors of the crystal by rank, F first. */
     private static final int[] COLORS = {0x9E9E9E, 0x5CB85C, 0x3FB6B2, 0x4A7BE0, 0x9B59D0, 0xE0B040, 0xE0702A, 0xD03838, 0xFF60D0};
 
@@ -51,6 +54,41 @@ public class MonsterCrystalItem extends Item {
 
     public static boolean isCrystal(ItemStack stack) {
         return rank(stack).isPresent();
+    }
+
+    /**
+     * The energy each crystal of the stack holds: what is left in a crystal that gave part of its energy to a spell, the
+     * energy of its rank otherwise; 0 for anything else.
+     */
+    public static long energy(ItemStack stack) {
+        Optional<Rank> rank = rank(stack);
+        if (rank.isEmpty()) {
+            return 0;
+        }
+        long full = GuildSettings.rules().crystalEnergy(rank.get());
+        CompoundTag tag = stack.getTag();
+        if (tag != null && tag.contains(ENERGY, net.minecraft.nbt.Tag.TAG_LONG)) {
+            return Math.max(0, Math.min(full, tag.getLong(ENERGY)));
+        }
+        return full;
+    }
+
+    /**
+     * Whether the crystals of the stack already gave part of their energy.
+     */
+    public static boolean isStarted(ItemStack stack) {
+        CompoundTag tag = stack.getTag();
+        return isCrystal(stack) && tag != null && tag.contains(ENERGY, net.minecraft.nbt.Tag.TAG_LONG);
+    }
+
+    /**
+     * One crystal of a rank that holds only {@code left} of its energy; such crystals stack only with crystals that hold
+     * the same.
+     */
+    public static ItemStack started(Rank rank, long left) {
+        ItemStack stack = stack(rank, 1);
+        stack.getOrCreateTag().putLong(ENERGY, Math.max(0, left));
+        return stack;
     }
 
     /**
@@ -94,10 +132,13 @@ public class MonsterCrystalItem extends Item {
             tooltip.add(Component.translatable("item.kingdomworld.monster_crystal.unknown").withStyle(ChatFormatting.GRAY));
             return;
         }
-        long energy = GuildSettings.rules().crystalEnergy(rank.get());
+        long energy = energy(stack);
         tooltip.add(Component.translatable("item.kingdomworld.monster_crystal.rank", rank.get().label())
                 .withStyle(style -> style.withColor(color(rank.get()))));
-        if (stack.getCount() > 1) {
+        if (isStarted(stack)) {
+            tooltip.add(Component.translatable("item.kingdomworld.monster_crystal.energy_left", energy,
+                    GuildSettings.rules().crystalEnergy(rank.get())).withStyle(ChatFormatting.GRAY));
+        } else if (stack.getCount() > 1) {
             tooltip.add(Component.translatable("item.kingdomworld.monster_crystal.energy_stack", energy, energy * stack.getCount())
                     .withStyle(ChatFormatting.GRAY));
         } else {

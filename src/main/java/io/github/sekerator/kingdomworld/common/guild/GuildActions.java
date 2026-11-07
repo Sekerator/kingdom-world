@@ -437,14 +437,25 @@ public final class GuildActions {
      * The energy of the crystals in a kingdom's storehouses: what later mechanics of the kingdom will spend.
      */
     public static long energy(MinecraftServer server, UUID kingdomId) {
-        long[] counts = crystals(server, kingdomId);
-        GuildRules rules = GuildSettings.rules();
         long sum = 0;
-        for (Rank rank : Rank.values()) {
-            sum = io.github.sekerator.kingdomworld.core.economy.Money.addCapped(sum,
-                    io.github.sekerator.kingdomworld.core.economy.Money.multiplyCapped(counts[rank.ordinal()], rules.crystalEnergy(rank)));
+        for (long energy : crystalEnergy(server, kingdomId)) {
+            sum = io.github.sekerator.kingdomworld.core.economy.Money.addCapped(sum, energy);
         }
         return sum;
+    }
+
+    /**
+     * The energy of the crystals in a kingdom's storehouses by rank, F first; crystals a spell partly used count with what
+     * is left in them.
+     */
+    public static long[] crystalEnergy(MinecraftServer server, UUID kingdomId) {
+        long[] energy = new long[Rank.COUNT];
+        for (KingdomStorage.Found found : KingdomStorage.find(server, kingdomId, MonsterCrystalItem::isCrystal, null)) {
+            MonsterCrystalItem.rank(found.stack()).ifPresent(rank -> energy[rank.ordinal()] = io.github.sekerator.kingdomworld.core.economy.Money
+                    .addCapped(energy[rank.ordinal()], io.github.sekerator.kingdomworld.core.economy.Money.multiplyCapped(found.stack().getCount(),
+                            MonsterCrystalItem.energy(found.stack()))));
+        }
+        return energy;
     }
 
     /**
@@ -498,11 +509,7 @@ public final class GuildActions {
             }
         }
         long[] crystals = crystals(server, kingdomId);
-        long[] energy = new long[Rank.COUNT];
-        for (Rank rank : Rank.values()) {
-            energy[rank.ordinal()] = io.github.sekerator.kingdomworld.core.economy.Money.multiplyCapped(crystals[rank.ordinal()],
-                    rules.crystalEnergy(rank));
-        }
+        long[] energy = crystalEnergy(server, kingdomId);
         boolean canManage = viewer == null || world.membership().hasPermission(viewer, kingdomId, Permission.MANAGE_GUILD);
         return Optional.of(new GuildViews.GuildTabView(kingdomId, canManage, currency.get(), branch.commissionPermille(), branch.dailyBudget(),
                 branch.dailyBudget() - branch.budgetLeft(day), RegistrarBehavior.working(server, kingdomId), RegistrarBehavior.desks(server, kingdomId),

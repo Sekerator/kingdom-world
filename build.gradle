@@ -134,6 +134,19 @@ def mapMods = [
 // -PwithMaps=journeymap,xaero (or "all") adds the client map mods to the development runs.
 def withMaps = project.hasProperty('withMaps') ? project.property('withMaps').toString().split(',')*.trim() : []
 
+// Magic mods for the soft integrations of the mage tower (the versions of the user's pack): Iron's Spells 'n Spellbooks
+// 1.20.1-3.4.0.11 and Ars Nouveau 4.12.7, with what they need to run: GeckoLib 4.8.4, Curios 5.14.1, Caelus 3.2.0 and
+// playerAnimator 1.0.2-rc1. Compile only; -PwithMagic adds them to the development runs.
+def magicMods = [
+        irons         : 'maven.modrinth:irons-spells-n-spellbooks:K26TSnWZ',
+        arsNouveau    : 'maven.modrinth:ars-nouveau:Hw2aD01e',
+        geckolib      : 'maven.modrinth:geckolib:aC5KMoNg',
+        curios        : 'maven.modrinth:curios:IPQlZkz1',
+        caelus        : 'maven.modrinth:caelus:mRry0DgY',
+        playerAnimator: 'maven.modrinth:playeranimator:xe2EVE6q',
+]
+def withMagic = project.hasProperty('withMagic')
+
 configurations {
     mapModJars { transitive = false }
 }
@@ -178,6 +191,19 @@ dependencies {
 
     // The tests check that the committed building templates are exactly what the generator draws.
     testImplementation sourceSets.generator.output
+
+    // Magic mods: compile only, for the wells of the mage tower (compat.irons, compat.arsnouveau).
+    compileOnly fg.deobf(magicMods.irons) { transitive = false }
+    compileOnly fg.deobf(magicMods.arsNouveau) { transitive = false }
+    if (withMagic) {
+        runtimeOnly fg.deobf(magicMods.irons) { transitive = false }
+        runtimeOnly fg.deobf(magicMods.arsNouveau) { transitive = false }
+        runtimeOnly fg.deobf(magicMods.geckolib) { transitive = false }
+        runtimeOnly fg.deobf(magicMods.curios) { transitive = false }
+        runtimeOnly fg.deobf(magicMods.caelus) { transitive = false }
+        runtimeOnly fg.deobf(magicMods.playerAnimator) { transitive = false }
+    }
+
     testImplementation platform("org.junit:junit-bom:${junit_version}")
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

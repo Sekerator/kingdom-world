@@ -141,6 +141,7 @@ public final class ModRegistries {
         BLOCK_ENTITY_TYPES.register(modBus);
         io.github.sekerator.kingdomworld.common.guild.GuildRegistries.register(modBus);
         io.github.sekerator.kingdomworld.common.army.ArmyRegistries.register(modBus);
+        io.github.sekerator.kingdomworld.common.magic.MagicRegistries.register(modBus);
         modBus.addListener(ModRegistries::onBuildCreativeTabs);
         modBus.addListener(ModRegistries::onEntityAttributes);
     }

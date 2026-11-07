@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "top": "kingdomworld:block/magic_focus_top",
+    "bottom": "kingdomworld:block/magic_focus_top",
+    "side": "kingdomworld:block/magic_focus_side"
+  }
+}

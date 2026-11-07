@@ -54,7 +54,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private static final List<Permission> EDITABLE_RIGHTS = List.of(Permission.BUILD, Permission.CONTAINERS,
             Permission.INTERACT, Permission.RECRUIT, Permission.TERRITORY, Permission.MANAGE_CITIZENS, Permission.MANAGE_PRODUCTION,
             Permission.MANAGE_TREASURY, Permission.MANAGE_MARKET, Permission.MANAGE_TRADE, Permission.MANAGE_GUILD,
-            Permission.MANAGE_CONSTRUCTION, Permission.MANAGE_ARMY);
+            Permission.MANAGE_CONSTRUCTION, Permission.MANAGE_ARMY, Permission.MANAGE_MAGIC);
 
     private enum Tab {
         OVERVIEW("kingdomworld.screen.throne.tab.overview"),
@@ -68,6 +68,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         GUILD("kingdomworld.screen.throne.tab.guild"),
         CONSTRUCTION("kingdomworld.screen.throne.tab.construction"),
         ARMY("kingdomworld.screen.throne.tab.army"),
+        MAGIC("kingdomworld.screen.throne.tab.magic"),
         RIGHTS("kingdomworld.screen.throne.tab.rights");
 
         /**
@@ -75,7 +76,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
          */
         boolean tall() {
             return this == CITIZENS || this == STORAGE || this == ORDERS || this == TREASURY || this == MARKET || this == TRADE
-                    || this == GUILD || this == CONSTRUCTION || this == ARMY;
+                    || this == GUILD || this == CONSTRUCTION || this == ARMY || this == MAGIC;
         }
 
         private final String key;
@@ -98,6 +99,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private final ConstructionTab construction = new ConstructionTab(this);
     private final GuildTab guild = new GuildTab(this);
     private final ArmyTab army = new ArmyTab(this);
+    private final MagicTab magic = new MagicTab(this);
     private Tab tab = Tab.OVERVIEW;
     private int scroll;
     private Component status = Component.empty();
@@ -142,6 +144,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             case GUILD -> guild.checkName();
             case CONSTRUCTION -> construction.checkName();
             case ARMY -> army.checkName();
+            case MAGIC -> magic.checkName();
             default -> tab.name().toLowerCase(Locale.ROOT);
         };
         return "throne/" + name + "/" + view.relation().name().toLowerCase(Locale.ROOT);
@@ -342,6 +345,34 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
+     * Shows the magic tab the server sent, if it belongs to the kingdom on screen.
+     */
+    public void updateMagic(io.github.sekerator.kingdomworld.common.network.data.MagicViews.TabView magicView) {
+        if (!magicView.kingdomId().equals(view.id())) {
+            return;
+        }
+        magic.setView(magicView);
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
+    }
+
+    /**
+     * Whether the magic tab got its view, for the self-check.
+     */
+    public boolean magicShown() {
+        return magic.view() != null;
+    }
+
+    /**
+     * Shows a view of the magic tab ({@code energy}, {@code journal}, {@code tower}, {@code spells}, {@code gates},
+     * {@code machines}); for the layout check.
+     */
+    public void showMagic(String mode) {
+        magic.setMode(MagicTab.Mode.valueOf(mode.toUpperCase(Locale.ROOT)));
+    }
+
+    /**
      * Whether the market and trade tabs got their views, for the self-check.
      */
     public boolean marketShown() {
@@ -522,6 +553,9 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         if (target == Tab.ARMY && Minecraft.getInstance().getConnection() != null) {
             KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.ArmyPackets.TabRequest(view.id()));
         }
+        if (target == Tab.MAGIC && Minecraft.getInstance().getConnection() != null) {
+            KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.MagicPackets.TabRequest(view.id()));
+        }
         if (minecraft != null) {
             rebuildWidgets();
         }
@@ -614,6 +648,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             labels.add(Component.translatable(Tab.GUILD.key));
             labels.add(Component.translatable(Tab.CONSTRUCTION.key));
             labels.add(Component.translatable(Tab.ARMY.key));
+            labels.add(Component.translatable(Tab.MAGIC.key));
             labels.add(Component.translatable(Tab.RIGHTS.key));
         }
         return labels;
@@ -693,6 +728,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             inner = Math.max(inner, construction.measure(font));
             inner = Math.max(inner, guild.measure(font));
             inner = Math.max(inner, army.measure(font));
+            inner = Math.max(inner, magic.measure(font));
         }
         panelWidth = Math.min(Math.max(MIN_PANEL_WIDTH, inner + 2 * PAD), width - 8);
         panelHeight = Math.min(tab.tall() ? MAX_CITIZENS_PANEL_HEIGHT : MAX_PANEL_HEIGHT, height - 8);
@@ -716,7 +752,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         List<Tab> shown = new ArrayList<>(List.of(Tab.OVERVIEW));
         if (isMember()) {
             shown.addAll(List.of(Tab.MEMBERS, Tab.CITIZENS, Tab.STORAGE, Tab.ORDERS, Tab.TREASURY, Tab.MARKET, Tab.TRADE, Tab.GUILD,
-                    Tab.CONSTRUCTION, Tab.ARMY, Tab.RIGHTS));
+                    Tab.CONSTRUCTION, Tab.ARMY, Tab.MAGIC, Tab.RIGHTS));
         }
         for (int i = 0; i < shown.size(); i++) {
             if (i == secondRowStart) {
@@ -739,6 +775,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             case GUILD -> guild.init(left, inner, panelWidth, innerHeight);
             case CONSTRUCTION -> construction.init(left, inner, panelWidth, innerHeight);
             case ARMY -> army.init(left, inner, panelWidth, innerHeight);
+            case MAGIC -> magic.init(left, inner, panelWidth, innerHeight);
             case RIGHTS -> initRights(inner);
         }
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), button -> onClose())
@@ -999,6 +1036,12 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             }
             return true;
         }
+        if (tab == Tab.MAGIC) {
+            if (magic.scroll(top() + contentOffset, panelHeight - contentOffset, delta)) {
+                rebuildWidgets();
+            }
+            return true;
+        }
         if (tab == Tab.MEMBERS) {
             int max = Math.max(0, rows().size() - visibleRows());
             int next = Math.max(0, Math.min(max, scroll - (int) Math.signum(delta)));
@@ -1052,6 +1095,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             case GUILD -> guild.render(graphics, font, left, inner, panelWidth, innerHeight);
             case CONSTRUCTION -> construction.render(graphics, font, left, inner, panelWidth, innerHeight);
             case ARMY -> army.render(graphics, font, left, inner, panelWidth, innerHeight);
+            case MAGIC -> magic.render(graphics, font, left, inner, panelWidth, innerHeight);
             case RIGHTS -> renderRights(graphics, left, inner);
         }
         Component bottomText = status;
@@ -1086,6 +1130,10 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         }
         if (bottomText.getString().isEmpty() && tab == Tab.ARMY) {
             bottomText = army.hint();
+            color = 0xFFB8B8B8;
+        }
+        if (bottomText.getString().isEmpty() && tab == Tab.MAGIC) {
+            bottomText = magic.hint();
             color = 0xFFB8B8B8;
         }
         paragraph(graphics, bottomText, left + PAD, top + panelHeight - BOTTOM_AREA + 2, panelWidth - 2 * PAD, STATUS_LINES, color);
