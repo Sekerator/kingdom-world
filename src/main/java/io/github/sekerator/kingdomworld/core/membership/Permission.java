@@ -35,6 +35,8 @@ public enum Permission {
     MANAGE_ARMY,
     /** Run the mage tower: research, the spells of the kingdom, the ward, gates and generators. */
     MANAGE_MAGIC,
+    /** Hold the court: pardon, lower fines, spare murderers, set fines, the entry fee and the ban of slavery. */
+    MANAGE_LAW,
     /** Appoint members to positions and change the rights of positions. Only the king holds it. */
     APPOINT;
 

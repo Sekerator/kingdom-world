@@ -7,31 +7,25 @@ import io.github.sekerator.kingdomworld.common.citizen.work.GatheringSettings;
 import io.github.sekerator.kingdomworld.common.citizen.work.PostWork;
 import io.github.sekerator.kingdomworld.common.citizen.work.ZoneSurveys;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
-import io.github.sekerator.kingdomworld.common.protection.ProtectionService;
 import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
 import io.github.sekerator.kingdomworld.core.territory.TerritoryListener;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.TextColor;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.monster.AbstractIllager;
 import net.minecraft.world.entity.monster.Zombie;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
-import net.minecraftforge.event.entity.living.LivingAttackEvent;
-import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.event.level.ChunkEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 
 /**
  * Wires the citizens into the game: the server tick drives bodies, the simulation and the scan for places; block
- * and chunk events keep places current; monsters that hunt villagers hunt citizens too; and outsiders may not hurt
- * citizens in peacetime.
+ * and chunk events keep places current; monsters that hunt villagers hunt citizens too. Blows at citizens are no longer
+ * refused: the law of the kingdom judges them as crimes.
  */
 public final class CitizenEvents {
     /** Rescans chunks that change hands. */
@@ -44,8 +38,6 @@ public final class CitizenEvents {
     public static void register() {
         MinecraftForge.EVENT_BUS.addListener(CitizenEvents::onServerTick);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGH, CitizenEvents::onJoin);
-        MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGH, CitizenEvents::onAttack);
-        MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGH, CitizenEvents::onPlayerAttack);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOW, CitizenEvents::onPlace);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOW, CitizenEvents::onBreak);
         MinecraftForge.EVENT_BUS.addListener(CitizenEvents::onChunkLoad);
@@ -95,38 +87,6 @@ public final class CitizenEvents {
         } else if (entity instanceof AbstractIllager illager) {
             illager.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(illager, CitizenEntity.class, true));
         }
-    }
-
-    /**
-     * Players (and machines acting for them) may hurt a citizen only if the rules allow it: in peacetime only
-     * members of the citizen's kingdom. Covers melee, arrows, thrown potions and lit explosives.
-     */
-    private static void onAttack(LivingAttackEvent event) {
-        if (!(event.getEntity() instanceof CitizenEntity citizen) || citizen.level().isClientSide) {
-            return;
-        }
-        Entity attacker = event.getSource().getEntity();
-        if (attacker instanceof Player player && !ProtectionService.mayHurtCitizen(player, citizen)) {
-            event.setCanceled(true);
-            denied(player, citizen);
-        }
-    }
-
-    private static void onPlayerAttack(AttackEntityEvent event) {
-        if (event.getTarget() instanceof CitizenEntity citizen && !citizen.level().isClientSide
-                && !ProtectionService.mayHurtCitizen(event.getEntity(), citizen)) {
-            event.setCanceled(true);
-            denied(event.getEntity(), citizen);
-        }
-    }
-
-    private static void denied(Player player, CitizenEntity citizen) {
-        if (citizen.getServer() == null || citizen.kingdomId() == null) {
-            return;
-        }
-        KingdomWorldApi.kingdom(citizen.getServer(), citizen.kingdomId()).ifPresent(kingdom -> ProtectionService.notify(player,
-                Component.translatable("kingdomworld.protection.citizen", Component.literal(ProtectionService.shortName(kingdom.name()))
-                        .withStyle(style -> style.withColor(TextColor.fromRgb(kingdom.color()))))));
     }
 
     private static void onPlace(BlockEvent.EntityPlaceEvent event) {

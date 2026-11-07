@@ -35,6 +35,9 @@ public final class KingdomWorldClient {
     /** Opens the window of the party; P by default. */
     public static final KeyMapping PARTY_KEY = new KeyMapping("key.kingdomworld.party", KeyConflictContext.IN_GAME,
             InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_P, "key.categories.kingdomworld");
+    /** Opens the player's window of the law; J by default. */
+    public static final KeyMapping LAW_KEY = new KeyMapping("key.kingdomworld.law", KeyConflictContext.IN_GAME,
+            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_J, "key.categories.kingdomworld");
     private static boolean titleScreenSeen;
 
     private KingdomWorldClient() {
@@ -87,6 +90,7 @@ public final class KingdomWorldClient {
     private static void onRegisterKeys(RegisterKeyMappingsEvent event) {
         event.register(MAP_KEY);
         event.register(PARTY_KEY);
+        event.register(LAW_KEY);
         event.register(io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.ROTATE_KEY);
         event.register(io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.MIRROR_KEY);
     }
@@ -98,6 +102,7 @@ public final class KingdomWorldClient {
         event.registerAboveAll("blueprint", (gui, graphics, partialTick, width, height) ->
                 io.github.sekerator.kingdomworld.client.construction.BlueprintRenderer.drawHud(graphics, Minecraft.getInstance().font, width));
         event.registerAboveAll("party", (gui, graphics, partialTick, width, height) -> PartyHud.draw(graphics, width, height));
+        event.registerAboveAll("wanted", (gui, graphics, partialTick, width, height) -> WantedHud.draw(graphics, width, height));
     }
 
     private static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
@@ -132,6 +137,12 @@ public final class KingdomWorldClient {
                 KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.CompanionPackets.PartyRequest());
             }
         }
+        while (LAW_KEY.consumeClick()) {
+            if (minecraft.player != null && minecraft.screen == null && minecraft.getConnection() != null) {
+                KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.LawPackets.PlayerAction(
+                        io.github.sekerator.kingdomworld.common.network.packet.LawPackets.PlayerAction.Action.OPEN, null, 0));
+            }
+        }
     }
 
     private static void onLoggingIn(ClientPlayerNetworkEvent.LoggingIn event) {
@@ -149,6 +160,7 @@ public final class KingdomWorldClient {
     private static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.clear();
         PartyHud.clear();
+        WantedHud.clear();
         io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.clear();
         ClientKingdomCache.clear();
         ClientTerritoryCache.clear();

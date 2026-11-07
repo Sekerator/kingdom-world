@@ -305,7 +305,23 @@ public enum KingdomError {
     /** Around the city there is too little ground for a wall: water, danger or the land of others. */
     NO_GROUND_FOR_WALL,
     /** City walls and gates are built, kept and given up in the roads tab, not as buildings of templates. */
-    KEPT_BY_ROADS;
+    KEPT_BY_ROADS,
+    /** The player is not wanted by the kingdom. */
+    NOT_WANTED,
+    /** The court may only lower a fine. */
+    FINE_TOO_HIGH,
+    UNKNOWN_CONFISCATION,
+    NOT_YOUR_CONFISCATION,
+    /** Confiscated goods are bought back at a watchtower, a barracks or the throne of the kingdom that took them. */
+    NOT_AT_RANSOM_PLACE,
+    /** The debt to the treasury is too high: the market serves only for coins and takes no new lots. */
+    DEBT_TOO_HIGH,
+    /** The player owes the treasury nothing. */
+    NO_DEBT,
+    /** The city asks nothing for entry from this player. */
+    NO_ENTRY_FEE,
+    /** Too far from a guard of the kingdom. */
+    GUARD_FAR;
 
     /**
      * Lower case identifier, used for translation keys.

@@ -166,6 +166,8 @@ public final class KingdomWorldConfig {
         public final Companions companions;
         /** Cities, roads, caravans on the roads and robbers. */
         public final Roads roads;
+        /** Crimes, witnesses, guards, fines, confiscation, bounties, reputation, debts and the entry into cities. */
+        public final Law law;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -464,6 +466,7 @@ public final class KingdomWorldConfig {
             magic = new Magic(builder);
             companions = new Companions(builder);
             roads = new Roads(builder);
+            law = new Law(builder);
 
             builder.comment("Abstract simulation of kingdoms far from players.").push("simulation");
             simulationIntervalTicks = builder
@@ -1252,6 +1255,100 @@ public final class KingdomWorldConfig {
             banditArmor = builder.comment("Armor of robbers: items and tags of any mod with a weight, for any of the four slots.")
                     .defineListAllowEmpty("banditArmor", List.of("#forge:armors/helmets=2", "#forge:armors/chestplates=2",
                             "minecraft:leather_leggings=2", "minecraft:leather_boots=2"), value -> value instanceof String);
+            builder.pop();
+        }
+    }
+
+    public static final class Law {
+        public final ForgeConfigSpec.IntValue witnessRadius;
+        public final ForgeConfigSpec.IntValue reportMinSeconds;
+        public final ForgeConfigSpec.IntValue reportMaxSeconds;
+        public final ForgeConfigSpec.DoubleValue pettyDays;
+        public final ForgeConfigSpec.IntValue theftFinePercent;
+        public final ForgeConfigSpec.LongValue assaultFine;
+        public final ForgeConfigSpec.LongValue trespassFine;
+        public final ForgeConfigSpec.LongValue murderFine;
+        public final ForgeConfigSpec.IntValue mergeSeconds;
+        public final ForgeConfigSpec.LongValue bountyReward;
+        public final ForgeConfigSpec.IntValue bountyDays;
+        public final ForgeConfigSpec.IntValue ransomPercent;
+        public final ForgeConfigSpec.IntValue confiscationDays;
+        public final ForgeConfigSpec.LongValue debtLimit;
+        public final ForgeConfigSpec.IntValue hailSeconds;
+        public final ForgeConfigSpec.DoubleValue beatenHealth;
+        public final ForgeConfigSpec.IntValue beatenWeaknessSeconds;
+        public final ForgeConfigSpec.IntValue theftReputation;
+        public final ForgeConfigSpec.IntValue assaultReputation;
+        public final ForgeConfigSpec.IntValue murderReputation;
+        public final ForgeConfigSpec.IntValue trespassReputation;
+        public final ForgeConfigSpec.LongValue tradePerPoint;
+        public final ForgeConfigSpec.IntValue taxReputation;
+        public final ForgeConfigSpec.IntValue contractReputation;
+        public final ForgeConfigSpec.IntValue highReputation;
+        public final ForgeConfigSpec.IntValue priceEffectPercent;
+        public final ForgeConfigSpec.LongValue slaveryFine;
+        public final ForgeConfigSpec.LongValue maxEntryFee;
+        public final ForgeConfigSpec.LongValue maxBounty;
+        public final ForgeConfigSpec.IntValue slaveryWarnBlocks;
+
+        Law(ForgeConfigSpec.Builder builder) {
+            io.github.sekerator.kingdomworld.core.law.LawRules.Builder d = new io.github.sekerator.kingdomworld.core.law.LawRules.Builder();
+            builder.comment("The law of kingdoms: theft, blows and murder on their land become crimes when somebody sees them; guards",
+                    "beat a fine out of thieves and execute murderers. There is no prison. Money is in copper coins of the kingdom.").push("law");
+            witnessRadius = builder.comment("How far a citizen, a soldier or a subject sees a crime, in blocks (line of sight is needed too).")
+                    .defineInRange("witnessRadius", d.witnessRadius, 1, 64);
+            reportMinSeconds = builder.comment("Shortest time a citizen who saw a crime needs to tell the guards; soldiers report at once.")
+                    .defineInRange("reportMinSeconds", d.reportMinTicks / 20, 0, 600);
+            reportMaxSeconds = builder.comment("Longest time a citizen needs to tell the guards. If every witness dies first, nobody is wanted.")
+                    .defineInRange("reportMaxSeconds", d.reportMaxTicks / 20, 0, 600);
+            pettyDays = builder.comment("Game days after which a theft, a blow or a trespass is forgotten (sooner with a good reputation).",
+                    "A murder is never forgotten.").defineInRange("pettyDays", d.pettyDays, 0.05, 365.0);
+            theftFinePercent = builder.comment("Fine for a theft, in percent of the worth of what was stolen.")
+                    .defineInRange("theftFinePercent", d.theftFinePercent, 0, 10_000);
+            assaultFine = builder.comment("Fine for striking a citizen.").defineInRange("assaultFine", d.assaultFine, 0L, 1_000_000_000L);
+            trespassFine = builder.comment("Fine for getting into a city past its gates or without paying.")
+                    .defineInRange("trespassFine", d.trespassFine, 0L, 1_000_000_000L);
+            murderFine = builder.comment("Fine that replaces the death of a murderer when the king spares him.")
+                    .defineInRange("murderFine", d.murderFine, 0L, 1_000_000_000L);
+            mergeSeconds = builder.comment("Thefts closer together than this (and blows at one victim) make one crime.")
+                    .defineInRange("mergeSeconds", d.mergeTicks / 20, 0, 3_600);
+            bountyReward = builder.comment("Reward from the treasury of the guild contract for the head of a wanted murderer; 0 posts none.",
+                    "The king may set another in the law tab.").defineInRange("bountyReward", d.bountyReward, 0L, 1_000_000_000L);
+            bountyDays = builder.comment("Game days a contract for a head runs before it is posted anew.")
+                    .defineInRange("bountyDays", d.bountyDays, 1, 30);
+            ransomPercent = builder.comment("Share of their worth an owner pays to buy back confiscated goods, in percent.")
+                    .defineInRange("ransomPercent", d.ransomPercent, 0, 1_000);
+            confiscationDays = builder.comment("Game days confiscated goods wait for their owner before they go to the storehouses.")
+                    .defineInRange("confiscationDays", d.confiscationDays, 1, 365);
+            debtLimit = builder.comment("Debt to a treasury above which the market of the kingdom sells to the player only for coins and takes",
+                    "no new lots from them. Guards never attack for a debt.").defineInRange("debtLimit", d.debtLimit, 0L, 1_000_000_000_000L);
+            hailSeconds = builder.comment("Seconds a guard gives a wanted player to give up after calling out.")
+                    .defineInRange("hailSeconds", d.hailTicks / 20, 0, 120);
+            beatenHealth = builder.comment("Health a player beaten by guards for a petty crime keeps, in points (2 is a heart).")
+                    .defineInRange("beatenHealth", (double) d.beatenHealth, 1.0, 20.0);
+            beatenWeaknessSeconds = builder.comment("Seconds of weakness after the beating.")
+                    .defineInRange("beatenWeaknessSeconds", d.beatenWeaknessTicks / 20, 0, 600);
+            theftReputation = builder.comment("Reputation a theft costs in the kingdom (reputation goes from -100 to 100).")
+                    .defineInRange("theftReputation", d.theftReputation, -100, 0);
+            assaultReputation = builder.comment("Reputation a blow at a citizen costs.").defineInRange("assaultReputation", d.assaultReputation, -100, 0);
+            murderReputation = builder.comment("Reputation a murder costs.").defineInRange("murderReputation", d.murderReputation, -100, 0);
+            trespassReputation = builder.comment("Reputation a trespass costs.").defineInRange("trespassReputation", d.trespassReputation, -100, 0);
+            tradePerPoint = builder.comment("Money traded on the market of a kingdom that wins a point of reputation there.")
+                    .defineInRange("tradePerPoint", d.tradePerPoint, 1L, 1_000_000_000L);
+            taxReputation = builder.comment("Reputation a tax or an entry fee paid in full wins.").defineInRange("taxReputation", d.taxReputation, 0, 100);
+            contractReputation = builder.comment("Reputation a guild contract done at the branch of a kingdom wins there.")
+                    .defineInRange("contractReputation", d.contractReputation, 0, 100);
+            highReputation = builder.comment("Reputation from which cities let a player in for free.")
+                    .defineInRange("highReputation", d.highReputation, -100, 100);
+            priceEffectPercent = builder.comment("How much reputation moves the prices of the market at most, in percent.")
+                    .defineInRange("priceEffectPercent", d.priceEffectPercent, 0, 50);
+            slaveryFine = builder.comment("Fine of an owner whose slave is set free on the land of a kingdom that forbids slaves.")
+                    .defineInRange("slaveryFine", d.slaveryFine, 0L, 1_000_000_000L);
+            maxEntryFee = builder.comment("Highest entry fee of a large city a king may set.").defineInRange("maxEntryFee", d.maxEntryFee, 0L,
+                    1_000_000_000L);
+            maxBounty = builder.comment("Highest reward for a head a king may set.").defineInRange("maxBounty", d.maxBounty, 0L, 1_000_000_000_000L);
+            slaveryWarnBlocks = builder.comment("An owner with slaves is warned this many blocks before the land of a kingdom that forbids them.")
+                    .defineInRange("slaveryWarnBlocks", d.slaveryWarnBlocks, 0, 256);
             builder.pop();
         }
     }

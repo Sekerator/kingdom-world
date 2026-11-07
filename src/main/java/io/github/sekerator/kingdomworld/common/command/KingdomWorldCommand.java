@@ -145,6 +145,7 @@ public final class KingdomWorldCommand {
                         .then(MagicCommands.adminCommand())
                         .then(CompanionCommands.adminCommand())
                         .then(RoadCommands.adminCommand())
+                        .then(LawCommands.adminCommand())
                         .then(Commands.literal("data")
                                 .then(Commands.literal("status").executes(context -> dataStatus(context.getSource())))
                                 .then(Commands.literal("unlock").executes(context -> dataUnlock(context.getSource()))))));

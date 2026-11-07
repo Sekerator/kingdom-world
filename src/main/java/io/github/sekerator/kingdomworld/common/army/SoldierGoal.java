@@ -48,6 +48,9 @@ final class SoldierGoal extends Goal {
     private final MeleeAttackGoal melee;
     @Nullable
     private LivingEntity target;
+    /** A wanted player a guard called out and walks to while the player may still give up. */
+    @Nullable
+    private ServerPlayer approach;
     private boolean meleeRunning;
     private int searchCooldown;
     private int equipCooldown = 40;
@@ -131,6 +134,14 @@ final class SoldierGoal extends Goal {
             fight();
             return;
         }
+        if (approach != null && approach.isAlive() && approach.level() == level && body.distanceToSqr(approach) < 32.0 * 32.0) {
+            body.getLookControl().setLookAt(approach, 30.0f, 30.0f);
+            if (body.distanceToSqr(approach) > 3.0 * 3.0 && --pathCooldown <= 0) {
+                pathCooldown = 10;
+                body.getNavigation().moveTo(approach, 0.75);
+            }
+            return;
+        }
         follow(server, level, order);
     }
 
@@ -197,6 +208,15 @@ final class SoldierGoal extends Goal {
     @Nullable
     private LivingEntity findTarget(MinecraftServer server, ServerLevel level, Order order) {
         UUID kingdom = body.kingdomId();
+        // A guard deals with the wanted first: it calls out, then attacks whoever did not give up.
+        io.github.sekerator.kingdomworld.common.law.LawWork.Pursuit pursuit = io.github.sekerator.kingdomworld.common.law.LawWork.pursuit(server, body);
+        approach = null;
+        if (pursuit != null) {
+            if (pursuit.attack() && ArmyWork.mayAttack(server, kingdom, pursuit.player())) {
+                return pursuit.player();
+            }
+            approach = pursuit.player();
+        }
         LivingEntity attacker = body.getLastHurtByMob();
         if (attacker != null && body.tickCount - body.getLastHurtByMobTimestamp() < 200 && body.distanceToSqr(attacker) < SEARCH * SEARCH * 4
                 && ArmyWork.mayAttack(server, kingdom, attacker)) {

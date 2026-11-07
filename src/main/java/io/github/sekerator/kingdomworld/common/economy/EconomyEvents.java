@@ -114,6 +114,9 @@ public final class EconomyEvents {
         }
         CurrencyUnits units = state.economy().units(kingdom.id()).orElse(CurrencyUnits.DEFAULT);
         for (Economy.TaxPaid tax : payday.taxes()) {
+            if (tax.tax() > 0 && tax.paid() >= tax.tax() && tax.debt() == 0) {
+                io.github.sekerator.kingdomworld.common.law.LawWork.taxPaid(server, kingdom.id(), tax.player());
+            }
             Component message;
             if (tax.paid() == 0) {
                 message = Component.translatable(TAX + "unpaid", KingdomActions.kingdomName(kingdom), MoneyTexts.amount(tax.debt(), units));

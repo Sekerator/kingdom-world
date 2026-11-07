@@ -18,6 +18,7 @@ import io.github.sekerator.kingdomworld.common.network.packet.KingdomActionPacke
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomListRequestPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomListResponsePacket;
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomViewPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.LawPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.MagicPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.MapAreaPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.MapAreaRequestPacket;
@@ -54,7 +55,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "15";
+    public static final String PROTOCOL_VERSION = "16";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -226,6 +227,26 @@ public final class KingdomWorldNetwork {
                 RoadPackets.PlanConfirm::decode, RoadPackets.PlanConfirm::handle);
         add(id++, RoadPackets.MapSync.class, NetworkDirection.PLAY_TO_CLIENT, RoadPackets.MapSync::encode,
                 RoadPackets.MapSync::decode, RoadPackets.MapSync::handle);
+        add(id++, LawPackets.TabRequest.class, NetworkDirection.PLAY_TO_SERVER, LawPackets.TabRequest::encode,
+                LawPackets.TabRequest::decode, LawPackets.TabRequest::handle);
+        add(id++, LawPackets.TabResponse.class, NetworkDirection.PLAY_TO_CLIENT, LawPackets.TabResponse::encode,
+                LawPackets.TabResponse::decode, LawPackets.TabResponse::handle);
+        add(id++, LawPackets.TabChange.class, NetworkDirection.PLAY_TO_SERVER, LawPackets.TabChange::encode,
+                LawPackets.TabChange::decode, LawPackets.TabChange::handle);
+        add(id++, LawPackets.PlayerAction.class, NetworkDirection.PLAY_TO_SERVER, LawPackets.PlayerAction::encode,
+                LawPackets.PlayerAction::decode, LawPackets.PlayerAction::handle);
+        add(id++, LawPackets.PlayerOpen.class, NetworkDirection.PLAY_TO_CLIENT, LawPackets.PlayerOpen::encode,
+                LawPackets.PlayerOpen::decode, LawPackets.PlayerOpen::handle);
+        add(id++, LawPackets.DialogOpen.class, NetworkDirection.PLAY_TO_CLIENT, LawPackets.DialogOpen::encode,
+                LawPackets.DialogOpen::decode, LawPackets.DialogOpen::handle);
+        add(id++, LawPackets.DialogAction.class, NetworkDirection.PLAY_TO_SERVER, LawPackets.DialogAction::encode,
+                LawPackets.DialogAction::decode, LawPackets.DialogAction::handle);
+        add(id++, LawPackets.RansomOpen.class, NetworkDirection.PLAY_TO_CLIENT, LawPackets.RansomOpen::encode,
+                LawPackets.RansomOpen::decode, LawPackets.RansomOpen::handle);
+        add(id++, LawPackets.RansomAction.class, NetworkDirection.PLAY_TO_SERVER, LawPackets.RansomAction::encode,
+                LawPackets.RansomAction::decode, LawPackets.RansomAction::handle);
+        add(id++, LawPackets.WantedLinePacket.class, NetworkDirection.PLAY_TO_CLIENT, LawPackets.WantedLinePacket::encode,
+                LawPackets.WantedLinePacket::decode, LawPackets.WantedLinePacket::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

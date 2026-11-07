@@ -95,6 +95,8 @@ public final class ArmyWork {
     private static final Map<String, Long> FOREIGN_REPORTS = new HashMap<>();
     /** When each squad last had a chance of a skirmish. */
     private static final Map<Long, Long> LAST_SKIRMISH = new HashMap<>();
+    /** Players game tests mark as away from the keyboard, whatever they last did. */
+    private static final Set<UUID> MARKED_AWAY = new HashSet<>();
 
     /**
      * How a battle far from players went, for messages and checks.
@@ -139,6 +141,18 @@ public final class ArmyWork {
         ALARMS.clear();
         FOREIGN_REPORTS.clear();
         LAST_SKIRMISH.clear();
+        MARKED_AWAY.clear();
+    }
+
+    /**
+     * Marks a player as away from the keyboard or back, for game tests.
+     */
+    public static void markAway(UUID player, boolean away) {
+        if (away) {
+            MARKED_AWAY.add(player);
+        } else {
+            MARKED_AWAY.remove(player);
+        }
     }
 
     /**
@@ -175,6 +189,9 @@ public final class ArmyWork {
      * Whether a player is away from the keyboard: such players are never attacked, in war neither.
      */
     public static boolean isAway(ServerPlayer player) {
+        if (MARKED_AWAY.contains(player.getUUID())) {
+            return true;
+        }
         int timeout = KingdomWorldConfig.SERVER.afkTimeoutSeconds.get();
         return timeout > 0 && Util.getMillis() - player.getLastActionTime() > timeout * 1_000L;
     }
@@ -192,6 +209,10 @@ public final class ArmyWork {
                     || server.getPlayerList().getPlayer(player.getUUID()) == null || isAway(serverPlayer) || player.isCreative()
                     || player.isSpectator()) {
                 return false;
+            }
+            if (io.github.sekerator.kingdomworld.common.law.LawWork.pursued(server, kingdomId, player)) {
+                // The guards fight a wanted player who did not give up: subjects of the kingdom too.
+                return true;
             }
             UUID theirs = KingdomWorldApi.state(server).membership().kingdomOf(player.getUUID()).orElse(null);
             return !kingdomId.equals(theirs) && hostility.isEnemy(kingdomId, player.getUUID(), theirs);

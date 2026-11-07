@@ -93,6 +93,10 @@ public final class ProtectionEvents {
             }
         }
         if (!ProtectionService.isAllowed(player, level, pos, ProtectedAction.BREAK)) {
+            if (player != null && io.github.sekerator.kingdomworld.common.law.LawEvents.harvest(player, level, pos, event.getState())) {
+                // Taking a ripe crop is a theft now rather than refused; the field itself stays protected.
+                return;
+            }
             event.setCanceled(true);
             ProtectionService.notifyDenied(player, level, pos);
         }
@@ -126,6 +130,11 @@ public final class ProtectionEvents {
         ProtectedAction blockAction = classify(level, pos, level.getBlockState(pos));
         boolean denied = false;
         if (blockAction != null && !ProtectionService.isAllowed(player, level, pos, blockAction)) {
+            if (blockAction == ProtectedAction.CONTAINER && !(player instanceof net.minecraftforge.common.util.FakePlayer)) {
+                // Another's container opens: what is taken from it is a theft, judged by the law.
+                io.github.sekerator.kingdomworld.common.law.LawEvents.containerUse(player, level, pos);
+                return;
+            }
             event.setUseBlock(Event.Result.DENY);
             denied = true;
         }
@@ -195,6 +204,12 @@ public final class ProtectionEvents {
             return;
         }
         ProtectedAction action = classify(target);
+        if (action == ProtectedAction.CONTAINER && !(event.getEntity() instanceof net.minecraftforge.common.util.FakePlayer)
+                && !ProtectionService.isAllowed(event.getEntity(), level, target.blockPosition(), action)) {
+            // A cart with a chest opens like a chest: what is taken is a theft.
+            io.github.sekerator.kingdomworld.common.law.LawEvents.containerUse(event.getEntity(), level, target.blockPosition());
+            return;
+        }
         if (action != null && !ProtectionService.isAllowed(event.getEntity(), level, target.blockPosition(), action)) {
             event.setCanceled(true);
             event.setCancellationResult(InteractionResult.FAIL);

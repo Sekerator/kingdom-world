@@ -52,7 +52,12 @@ public record Contract(long id, Kind kind, UUID branch, Poster poster, UUID post
         /** Guard a caravan; comes with the roads and caravans of a later stage. */
         ESCORT,
         /** Fight in a war; comes with wars. */
-        WAR;
+        WAR,
+        /**
+         * The head of a criminal wanted for murder: posted by the law of a kingdom with a reward from its treasury, done by the
+         * member of the guild who kills the wanted player. The target is the player's id and name, {@code id|name}.
+         */
+        OUTLAW;
 
         public String id() {
             return name().toLowerCase(Locale.ROOT);
@@ -159,6 +164,29 @@ public record Contract(long id, Kind kind, UUID branch, Poster poster, UUID post
 
     public boolean isExam() {
         return kind == Kind.EXAM;
+    }
+
+    /**
+     * The wanted player of a contract for a head, or {@code null}.
+     */
+    public UUID outlaw() {
+        if (kind != Kind.OUTLAW) {
+            return null;
+        }
+        int bar = target.indexOf('|');
+        try {
+            return UUID.fromString(bar < 0 ? target : target.substring(0, bar));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    /**
+     * The name of the wanted player of a contract for a head, as it was when the contract was posted.
+     */
+    public static String outlawName(String target) {
+        int bar = target.indexOf('|');
+        return bar < 0 ? "" : target.substring(bar + 1);
     }
 
     public boolean takenBy(UUID who) {

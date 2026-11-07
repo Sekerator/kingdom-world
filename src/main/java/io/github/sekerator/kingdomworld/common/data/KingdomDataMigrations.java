@@ -191,7 +191,7 @@ final class KingdomDataMigrations {
      * Upgrades that do not need a format of their own, by name: new rights that positions get once. Data written by this
      * version lists every upgrade it has; data without one gets it on load. Applied after the format migrations.
      */
-    static final java.util.List<String> UPGRADES = java.util.List.of("guild_rights", "army_rights", "magic_rights");
+    static final java.util.List<String> UPGRADES = java.util.List.of("guild_rights", "army_rights", "magic_rights", "law_rights");
 
     /**
      * Applies the upgrades the data does not list yet.
@@ -226,6 +226,14 @@ final class KingdomDataMigrations {
             ListTag kingdoms = tag.getList(KingdomSavedData.TAG_KINGDOMS, Tag.TAG_COMPOUND);
             for (int i = 0; i < kingdoms.size(); i++) {
                 grant(kingdoms.getCompound(i), "court_mage", "manage_magic");
+            }
+            changed = true;
+        }
+        if (!applied.contains("law_rights")) {
+            // The court goes to the chancellor, as it does in new kingdoms.
+            ListTag kingdoms = tag.getList(KingdomSavedData.TAG_KINGDOMS, Tag.TAG_COMPOUND);
+            for (int i = 0; i < kingdoms.size(); i++) {
+                grant(kingdoms.getCompound(i), "chancellor", "manage_law");
             }
             changed = true;
         }

@@ -27,7 +27,9 @@ public enum LedgerCategory {
     ARMY,
     MAGIC,
     /** Slaves bought and sold back on the market of the guild, wages of free companions. */
-    COMPANIONS;
+    COMPANIONS,
+    /** Fines, debts paid back from income, ransoms of confiscated goods, entry fees of cities, coins of the executed. */
+    LAW;
 
     public String id() {
         return name().toLowerCase(Locale.ROOT);

@@ -54,7 +54,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private static final List<Permission> EDITABLE_RIGHTS = List.of(Permission.BUILD, Permission.CONTAINERS,
             Permission.INTERACT, Permission.RECRUIT, Permission.TERRITORY, Permission.MANAGE_CITIZENS, Permission.MANAGE_PRODUCTION,
             Permission.MANAGE_TREASURY, Permission.MANAGE_MARKET, Permission.MANAGE_TRADE, Permission.MANAGE_GUILD,
-            Permission.MANAGE_CONSTRUCTION, Permission.MANAGE_ARMY, Permission.MANAGE_MAGIC);
+            Permission.MANAGE_CONSTRUCTION, Permission.MANAGE_ARMY, Permission.MANAGE_MAGIC, Permission.MANAGE_LAW);
 
     private enum Tab {
         OVERVIEW("kingdomworld.screen.throne.tab.overview"),
@@ -70,6 +70,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         ARMY("kingdomworld.screen.throne.tab.army"),
         MAGIC("kingdomworld.screen.throne.tab.magic"),
         ROADS("kingdomworld.screen.throne.tab.roads"),
+        LAW("kingdomworld.screen.throne.tab.law"),
         RIGHTS("kingdomworld.screen.throne.tab.rights");
 
         /**
@@ -77,7 +78,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
          */
         boolean tall() {
             return this == CITIZENS || this == STORAGE || this == ORDERS || this == TREASURY || this == MARKET || this == TRADE
-                    || this == GUILD || this == CONSTRUCTION || this == ARMY || this == MAGIC || this == ROADS;
+                    || this == GUILD || this == CONSTRUCTION || this == ARMY || this == MAGIC || this == ROADS || this == LAW;
         }
 
         private final String key;
@@ -102,6 +103,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private final ArmyTab army = new ArmyTab(this);
     private final MagicTab magic = new MagicTab(this);
     private final RoadsTab roads = new RoadsTab(this);
+    private final LawTab law = new LawTab(this);
     private Tab tab = Tab.OVERVIEW;
     private int scroll;
     private Component status = Component.empty();
@@ -148,6 +150,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             case ARMY -> army.checkName();
             case MAGIC -> magic.checkName();
             case ROADS -> roads.checkName();
+            case LAW -> law.checkName();
             default -> tab.name().toLowerCase(Locale.ROOT);
         };
         return "throne/" + name + "/" + view.relation().name().toLowerCase(Locale.ROOT);
@@ -396,6 +399,37 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
+     * Shows the law tab the server sent, if it belongs to the kingdom on screen.
+     */
+    public void updateLaw(io.github.sekerator.kingdomworld.common.network.data.LawViews.TabView lawView) {
+        if (!lawView.kingdomId().equals(view.id())) {
+            return;
+        }
+        law.setView(lawView);
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
+    }
+
+    /**
+     * Whether the law tab got its view, for the self-check.
+     */
+    public boolean lawShown() {
+        return law.view() != null;
+    }
+
+    /**
+     * Shows a view of the law tab ({@code wanted}, {@code court}, {@code mine}), with the form of a fine open when asked; for
+     * the layout check.
+     */
+    public void showLaw(String mode, boolean fineForm) {
+        law.setMode(LawTab.Mode.valueOf(mode.toUpperCase(Locale.ROOT)));
+        if (fineForm) {
+            law.editFirstForCheck();
+        }
+    }
+
+    /**
      * Shows a view of the magic tab ({@code energy}, {@code journal}, {@code tower}, {@code spells}, {@code gates},
      * {@code machines}); for the layout check.
      */
@@ -607,6 +641,9 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         if (target == Tab.ROADS && Minecraft.getInstance().getConnection() != null) {
             KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.RoadPackets.TabRequest(view.id()));
         }
+        if (target == Tab.LAW && Minecraft.getInstance().getConnection() != null) {
+            KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.LawPackets.TabRequest(view.id()));
+        }
         if (minecraft != null) {
             rebuildWidgets();
         }
@@ -701,6 +738,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             labels.add(Component.translatable(Tab.ARMY.key));
             labels.add(Component.translatable(Tab.MAGIC.key));
             labels.add(Component.translatable(Tab.ROADS.key));
+            labels.add(Component.translatable(Tab.LAW.key));
             labels.add(Component.translatable(Tab.RIGHTS.key));
         }
         return labels;
@@ -782,6 +820,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             inner = Math.max(inner, army.measure(font));
             inner = Math.max(inner, magic.measure(font));
             inner = Math.max(inner, roads.measure(font));
+            inner = Math.max(inner, law.measure(font));
         }
         panelWidth = Math.min(Math.max(MIN_PANEL_WIDTH, inner + 2 * PAD), width - 8);
         panelHeight = Math.min(tab.tall() ? MAX_CITIZENS_PANEL_HEIGHT : MAX_PANEL_HEIGHT, height - 8);
@@ -805,7 +844,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         List<Tab> shown = new ArrayList<>(List.of(Tab.OVERVIEW));
         if (isMember()) {
             shown.addAll(List.of(Tab.MEMBERS, Tab.CITIZENS, Tab.STORAGE, Tab.ORDERS, Tab.TREASURY, Tab.MARKET, Tab.TRADE, Tab.GUILD,
-                    Tab.CONSTRUCTION, Tab.ARMY, Tab.MAGIC, Tab.ROADS, Tab.RIGHTS));
+                    Tab.CONSTRUCTION, Tab.ARMY, Tab.MAGIC, Tab.ROADS, Tab.LAW, Tab.RIGHTS));
         }
         for (int i = 0; i < shown.size(); i++) {
             if (i == secondRowStart) {
@@ -830,6 +869,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             case ARMY -> army.init(left, inner, panelWidth, innerHeight);
             case MAGIC -> magic.init(left, inner, panelWidth, innerHeight);
             case ROADS -> roads.init(left, inner, panelWidth, innerHeight);
+            case LAW -> law.init(left, inner, panelWidth, innerHeight);
             case RIGHTS -> initRights(inner);
         }
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), button -> onClose())
@@ -1102,6 +1142,12 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             }
             return true;
         }
+        if (tab == Tab.LAW) {
+            if (law.scroll(top() + contentOffset, panelHeight - contentOffset, delta)) {
+                rebuildWidgets();
+            }
+            return true;
+        }
         if (tab == Tab.MEMBERS) {
             int max = Math.max(0, rows().size() - visibleRows());
             int next = Math.max(0, Math.min(max, scroll - (int) Math.signum(delta)));
@@ -1157,6 +1203,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             case ARMY -> army.render(graphics, font, left, inner, panelWidth, innerHeight);
             case MAGIC -> magic.render(graphics, font, left, inner, panelWidth, innerHeight);
             case ROADS -> roads.render(graphics, font, left, inner, panelWidth, innerHeight);
+            case LAW -> law.render(graphics, font, left, inner, panelWidth, innerHeight);
             case RIGHTS -> renderRights(graphics, left, inner);
         }
         Component bottomText = status;
@@ -1199,6 +1246,10 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         }
         if (bottomText.getString().isEmpty() && tab == Tab.ROADS) {
             bottomText = roads.hint();
+            color = 0xFFB8B8B8;
+        }
+        if (bottomText.getString().isEmpty() && tab == Tab.LAW) {
+            bottomText = law.hint();
             color = 0xFFB8B8B8;
         }
         paragraph(graphics, bottomText, left + PAD, top + panelHeight - BOTTOM_AREA + 2, panelWidth - 2 * PAD, STATUS_LINES, color);

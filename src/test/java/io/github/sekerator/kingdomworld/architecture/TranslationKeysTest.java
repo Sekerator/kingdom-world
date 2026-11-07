@@ -290,6 +290,30 @@ class TranslationKeysTest {
         assertEquals(Plurals.Form.N5, Plurals.form(112));
     }
 
+    /**
+     * Counts of the law read right in both languages: «1 раз, 2 раза, 5 раз», «1 преступление, 3 преступления», "1 day, 2 days".
+     */
+    @Test
+    void countsOfTheLawHaveEveryPluralForm() {
+        Map<String, String> russianForms = Map.of("times", "раз|раз|раза|раз", "crimes", "преступление|преступление|преступления|преступлений",
+                "days", "день|день|дня|дней", "minutes", "минута|минута|минуты|минут");
+        Map<String, String> englishForms = Map.of("times", "time|times", "crimes", "crime|crimes", "days", "day|days", "minutes", "minute|minutes");
+        russianForms.forEach((word, forms) -> {
+            String[] words = forms.split("[|]");
+            String[] englishWords = englishForms.get(word).split("[|]");
+            Plurals.Form[] all = Plurals.Form.values();
+            for (int i = 0; i < all.length; i++) {
+                String key = "kingdomworld.law.count." + word + "." + all[i].suffix();
+                assertEquals("%s " + words[i], russian.get(key), key);
+                assertEquals("%s " + (all[i] == Plurals.Form.N1 ? englishWords[0] : englishWords[1]), english.get(key), key);
+            }
+        });
+        assertEquals(Plurals.Form.N1, Plurals.form(1));
+        assertEquals(Plurals.Form.N21, Plurals.form(21));
+        assertEquals(Plurals.Form.N2, Plurals.form(3));
+        assertEquals(Plurals.Form.N5, Plurals.form(11));
+    }
+
     @Test
     void argumentCounting() {
         assertEquals(2, argumentCount("%s and %s"));
@@ -618,6 +642,63 @@ class TranslationKeysTest {
         used.add("kingdomworld.profession.companion.female");
         used.add("entity.kingdomworld.companion");
         used.add("key.kingdomworld.party");
+        // The law: crimes, punishments, reputation, counts, the court, the screens and the messages built from parts.
+        for (io.github.sekerator.kingdomworld.core.law.CrimeKind kind : io.github.sekerator.kingdomworld.core.law.CrimeKind.values()) {
+            used.add("kingdomworld.law.crime." + kind.id());
+        }
+        for (String word : List.of("respected", "liked", "neutral", "disliked", "hated")) {
+            used.add("kingdomworld.law.reputation." + word);
+        }
+        for (String word : List.of("times", "crimes", "days", "minutes")) {
+            for (Plurals.Form form : Plurals.Form.values()) {
+                used.add("kingdomworld.law.count." + word + "." + form.suffix());
+            }
+        }
+        for (String action : List.of("pardon", "set_fine", "multiplier", "entry_fee", "bounty", "slavery")) {
+            used.add("kingdomworld.law.court." + action);
+        }
+        for (String reason : List.of("executed", "executed_hunter", "executed_surrender")) {
+            used.add("kingdomworld.law." + reason);
+            used.add("kingdomworld.law." + reason + "_empty");
+        }
+        used.add("kingdomworld.law.slave_freed");
+        used.add("kingdomworld.law.slave_freed.female");
+        for (String key : List.of("wanted_forgotten", "wanted_cleared", "pardoned", "record.theft", "record.assault", "record.murder",
+                "record.times", "punishment.execution", "punishment.fine", "hud")) {
+            used.add("kingdomworld.law." + key);
+        }
+        for (String mode : List.of("wanted", "court", "mine")) {
+            used.add("kingdomworld.screen.law_tab.mode." + mode);
+            used.add("kingdomworld.screen.law_tab.hint." + mode);
+        }
+        for (String key : List.of("multiplier_hint", "entry_fee_hint", "bounty_hint", "slavery_hint", "spare", "fine", "spare_for", "fine_for",
+                "spare_hint", "fine_hint", "spared", "fine_set", "allow", "ban", "slavery_banned", "slavery_allowed", "bounty", "bounty_default")) {
+            used.add("kingdomworld.screen.law_tab." + key);
+        }
+        for (String mode : List.of("kingdoms", "confiscated")) {
+            used.add("kingdomworld.screen.law.mode." + mode);
+            used.add("kingdomworld.screen.law.hint." + mode);
+        }
+        for (String key : List.of("auto_on", "auto_off", "ransom", "take", "ransom_hint", "take_hint", "no_kingdoms", "no_confiscated",
+                "place", "place_here", "place_gone")) {
+            used.add("kingdomworld.screen.law." + key);
+        }
+        for (String dialog : List.of("surrender", "entry")) {
+            used.add("kingdomworld.screen.law_dialog." + dialog);
+            used.add("kingdomworld.screen.law_dialog.hint." + dialog);
+        }
+        for (String key : List.of("take", "pay_coins", "place", "place_here", "place_gone", "gone", "days")) {
+            used.add("kingdomworld.screen.ransom." + key);
+        }
+        for (String key : List.of("executed", "executed_none", "stored", "not_stored", "gate.in", "gate.out")) {
+            used.add("commands.kingdomworld.admin.law." + key);
+        }
+        used.add("kingdomworld.guild.contract.kind.outlaw");
+        used.add("kingdomworld.ledger.law");
+        used.add("kingdomworld.permission.manage_law");
+        used.add("kingdomworld.permission.manage_law.short");
+        used.add("kingdomworld.screen.throne.tab.law");
+        used.add("key.kingdomworld.law");
 
         Set<String> missing = new TreeSet<>(used);
         missing.removeAll(english.keySet());

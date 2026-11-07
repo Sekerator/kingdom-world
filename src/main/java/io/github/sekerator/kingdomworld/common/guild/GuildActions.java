@@ -435,6 +435,7 @@ public final class GuildActions {
             GuildWork.tellProgress(server, contract.player(), done.get());
             return KingdomActions.Feedback.ok(KEY + "handed_in_party", GuildTexts.task(contract));
         }
+        io.github.sekerator.kingdomworld.common.law.LawWork.contractDone(server, contract.branch(), player.getUUID());
         return KingdomActions.Feedback.ok(KEY + "handed_in", GuildTexts.task(contract),
                 MoneyTexts.amount(done.get().paid(), Purses.units(server, contract.currency())), GuildTexts.points(contract.points()));
     }

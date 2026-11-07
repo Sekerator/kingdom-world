@@ -37,6 +37,8 @@ public final class Economy {
     /** Exchange rates by currency, see {@link ExchangeRates}. */
     private final Map<UUID, Long> rates = new LinkedHashMap<>();
     private long rateDay = -1;
+    /** The game day, for the journal of payments that do not name one. */
+    private long today;
     /** Payments of deals waiting for their caravans. */
     private final Map<Long, Escrow> escrows = new LinkedHashMap<>();
     private long nextEscrow = 1;
@@ -97,6 +99,36 @@ public final class Economy {
 
     private void changed() {
         changeListener.run();
+    }
+
+    /**
+     * The game day for the journal of payments that do not name one; the server sets it as days pass.
+     */
+    public void setToday(long day) {
+        today = Math.max(today, day);
+    }
+
+    /**
+     * Income of a player in the currency of a kingdom pays back what the player owes that treasury first, up to the income:
+     * sales to the market and of lots, rewards, payments from the treasury and from other players.
+     *
+     * @return what was paid back
+     */
+    public long repayFromIncome(UUID player, UUID currency, long income, long day) {
+        Treasury treasury = treasuries.get(currency);
+        if (treasury == null || income <= 0) {
+            return 0;
+        }
+        long debt = treasury.debt(player);
+        long repaid = Math.min(Math.min(debt, income), accounts.balance(player, currency));
+        if (repaid <= 0 || !treasury.canReceive(repaid)) {
+            return 0;
+        }
+        accounts.debit(player, currency, repaid);
+        treasury.receive(repaid, LedgerCategory.TAXES, Math.max(day, today));
+        treasury.setDebt(player, debt - repaid);
+        changed();
+        return repaid;
     }
 
     /**
@@ -363,6 +395,7 @@ public final class Economy {
         treasuries.get(kingdomId).spend(amount, category, day);
         if (payee != null) {
             accounts.credit(payee, kingdomId, amount);
+            repayFromIncome(payee, kingdomId, amount, day);
         }
         changed();
         return Outcome.DONE;
@@ -409,6 +442,7 @@ public final class Economy {
         if (toSeller > 0) {
             treasury.spend(toSeller, LedgerCategory.TRADE, day);
             accounts.credit(seller, kingdomId, toSeller);
+            repayFromIncome(seller, kingdomId, toSeller, day);
         }
         changed();
         return Outcome.DONE;
@@ -953,6 +987,7 @@ public final class Economy {
         }
         accounts.debit(from, currency, amount);
         accounts.credit(to, currency, amount);
+        repayFromIncome(to, currency, amount, today);
         changed();
         return Outcome.DONE;
     }
@@ -1021,6 +1056,7 @@ public final class Economy {
         }
         treasury.spend(amount, LedgerCategory.TRANSFERS, day);
         accounts.credit(player, kingdomId, amount);
+        repayFromIncome(player, kingdomId, amount, day);
         return Outcome.DONE;
     }
 
@@ -1051,6 +1087,45 @@ public final class Economy {
             return Outcome.fail(KingdomError.UNKNOWN_CURRENCY);
         }
         return treasury.store(denomination, count, LedgerCategory.TRANSFERS, day) ? Outcome.DONE : Outcome.fail(KingdomError.TOO_MUCH_MONEY);
+    }
+
+    /**
+     * A player owes a treasury more, for example the part of a fine the player could not pay.
+     */
+    public Outcome addDebt(UUID kingdomId, UUID player, long amount) {
+        Treasury treasury = treasuries.get(kingdomId);
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (!Money.isAmount(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (amount > 0) {
+            treasury.setDebt(player, Money.addCapped(treasury.debt(player), amount));
+            changed();
+        }
+        return Outcome.DONE;
+    }
+
+    /**
+     * A player pays back a debt with coins the caller took from the player in the same moment.
+     */
+    public Outcome repayDebt(UUID kingdomId, UUID player, long amount, long day) {
+        Treasury treasury = treasuries.get(kingdomId);
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        long debt = treasury.debt(player);
+        if (!Money.isPayment(amount) || amount > debt) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (!treasury.canReceive(amount)) {
+            return Outcome.fail(KingdomError.TOO_MUCH_MONEY);
+        }
+        treasury.receive(amount, LedgerCategory.TAXES, day);
+        treasury.setDebt(player, debt - amount);
+        changed();
+        return Outcome.DONE;
     }
 
     /**

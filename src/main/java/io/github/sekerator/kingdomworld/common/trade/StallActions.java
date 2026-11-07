@@ -7,6 +7,7 @@ import io.github.sekerator.kingdomworld.common.economy.MoneyTexts;
 import io.github.sekerator.kingdomworld.common.economy.TreasuryActions;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
 import io.github.sekerator.kingdomworld.common.kingdom.KingdomActions;
+import io.github.sekerator.kingdomworld.common.law.LawWork;
 import io.github.sekerator.kingdomworld.common.kingdom.PlayerNames;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.TradeViews;
@@ -123,7 +124,8 @@ public final class StallActions {
             if (item == null || offers.size() >= TradeViews.MAX_ROWS) {
                 continue;
             }
-            offers.add(new TradeViews.Offer(new ItemStack(item), sellPrice(server, kingdom.id(), entry, item),
+            offers.add(new TradeViews.Offer(new ItemStack(item), LawWork.priceFor(server, kingdom.id(), player.getUUID(),
+                    sellPrice(server, kingdom.id(), entry, item)),
                     Math.max(0, MarketStock.free(server, kingdom.id(), item) - entry.keep())));
         }
         List<TradeViews.Wanted> wanted = new ArrayList<>();
@@ -192,6 +194,15 @@ public final class StallActions {
     }
 
     // ---------------------------------------------------------------- prices
+
+    /**
+     * The price the market of a kingdom asks for an item now, if it sells it; for the worth of stolen goods.
+     */
+    public static java.util.OptionalLong marketPrice(MinecraftServer server, UUID kingdom, Item item) {
+        Market market = KingdomWorldApi.state(server).trade().market(kingdom, TradeSettings.rules());
+        Optional<Market.SellEntry> entry = market.sell(GoodsStacks.itemId(new ItemStack(item)));
+        return entry.isPresent() ? java.util.OptionalLong.of(sellPrice(server, kingdom, entry.get(), item)) : java.util.OptionalLong.empty();
+    }
 
     static long sellPrice(MinecraftServer server, UUID kingdom, Market.SellEntry entry, Item item) {
         if (entry.price() > 0) {
@@ -286,6 +297,10 @@ public final class StallActions {
 
     private static Object preparePayment(ServerPlayer player, UUID kingdom, UUID currency, long cost, boolean account) {
         Economy economy = KingdomWorldApi.state(player.server).economy();
+        if (account && LawWork.overDebtLimit(player.server, kingdom, player.getUUID())) {
+            // A debtor over the limit pays the market only in coins.
+            return KingdomActions.Feedback.error(KingdomError.DEBT_TOO_HIGH);
+        }
         if (account) {
             Outcome check = economy.checkPayKingdom(kingdom, currency, cost, player.getUUID());
             return check.ok() ? new Payment(currency, cost, player.getUUID(), Coins.NONE, 0) : KingdomActions.Feedback.error(check.error());
@@ -332,7 +347,7 @@ public final class StallActions {
         if (MarketStock.free(server, kingdom.id(), item) - entry.get().keep() < count) {
             return KingdomActions.Feedback.error(KingdomError.OUT_OF_STOCK);
         }
-        long price = Prices.total(sellPrice(server, kingdom.id(), entry.get(), item), count);
+        long price = Prices.total(LawWork.priceFor(server, kingdom.id(), player.getUUID(), sellPrice(server, kingdom.id(), entry.get(), item)), count);
         if (price < 1) {
             return KingdomActions.Feedback.error(price < 0 ? KingdomError.TOO_MUCH_MONEY : KingdomError.NOT_FOR_SALE);
         }
@@ -375,6 +390,7 @@ public final class StallActions {
             GoodsStacks.give(player, stack);
         }
         state.trade().recordSale(kingdom.id(), day, price, rules);
+        LawWork.traded(server, kingdom.id(), player.getUUID(), price);
         LOGGER.debug("{} bought {} x{} from {} for {}", player.getGameProfile().getName(), itemId, count, kingdom.name(), cost);
         KingdomActions.Feedback done = KingdomActions.Feedback.ok(KEY + "bought", sample.getHoverName(), TradeTexts.items(count),
                 money(server, currency, cost));
@@ -406,7 +422,7 @@ public final class StallActions {
             return KingdomActions.Feedback.error(KingdomError.NO_ITEMS);
         }
         long day = TreasuryActions.day(server);
-        long unit = buyPrice(server, kingdom.id(), entry.get(), item);
+        long unit = LawWork.payoutFor(server, kingdom.id(), player.getUUID(), buyPrice(server, kingdom.id(), entry.get(), item));
         if (unit < 1) {
             return KingdomActions.Feedback.error(KingdomError.NOT_BOUGHT);
         }
@@ -460,6 +476,7 @@ public final class StallActions {
         }
         long toAccount = account ? 0 : Purses.payOut(player, kingdom.id(), total);
         state.trade().recordPurchase(kingdom.id(), day, itemId, total, rules);
+        LawWork.traded(server, kingdom.id(), player.getUUID(), total);
         KingdomActions.Feedback done = KingdomActions.Feedback.ok(KEY + "sold", new ItemStack(item).getHoverName(), TradeTexts.items(count),
                 money(server, kingdom.id(), total));
         return toAccount > 0 ? withAccountNote(done, server, kingdom.id(), toAccount) : done;
@@ -490,6 +507,9 @@ public final class StallActions {
         if (!check.ok()) {
             return KingdomActions.Feedback.error(check.error());
         }
+        if (account && LawWork.overDebtLimit(server, kingdom.id(), player.getUUID())) {
+            return KingdomActions.Feedback.error(KingdomError.DEBT_TOO_HIGH);
+        }
         Optional<CoinPayment.Plan> plan = account ? Optional.empty() : Purses.plan(player, currency, cost);
         if (!account && (plan.isEmpty() || !Purses.take(player, currency, plan.get().coins()))) {
             return KingdomActions.Feedback.error(KingdomError.NOT_ENOUGH_MONEY);
@@ -510,6 +530,7 @@ public final class StallActions {
         KingdomActions.tell(server, sold.seller(), Component.translatable(KEY + "lot_sold", name, KingdomActions.kingdomName(kingdom),
                 money(server, kingdom.id(), sold.price()), money(server, kingdom.id(), split.seller()), money(server, kingdom.id(), split.tax())));
         LOGGER.debug("{} bought lot {} at the market of {} for {}", player.getGameProfile().getName(), lotId, kingdom.name(), cost);
+        LawWork.traded(server, kingdom.id(), player.getUUID(), sold.price());
         KingdomActions.Feedback done = KingdomActions.Feedback.ok(KEY + "lot_bought", name, money(server, currency, cost));
         return toAccount > 0 ? withAccountNote(done, server, currency, toAccount) : done;
     }
@@ -521,6 +542,9 @@ public final class StallActions {
         MinecraftServer server = player.server;
         KingdomWorldState state = KingdomWorldApi.state(server);
         TradeRules rules = rulesFor(server, kingdom.id());
+        if (LawWork.overDebtLimit(server, kingdom.id(), player.getUUID())) {
+            return KingdomActions.Feedback.error(KingdomError.DEBT_TOO_HIGH);
+        }
         ItemStack hand = player.getMainHandItem();
         if (hand.isEmpty() || GoodsStacks.untradeable(hand)) {
             return KingdomActions.Feedback.error(KingdomError.BAD_ITEM);

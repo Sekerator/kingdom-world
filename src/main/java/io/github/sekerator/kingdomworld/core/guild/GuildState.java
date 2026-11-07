@@ -355,6 +355,7 @@ public final class GuildState {
             case HUNT -> base * Math.max(1, count);
             case BOUNTY -> base * 3L * Math.max(1, count);
             case GATHER -> base * Math.max(1, (count + 15) / 16);
+            case OUTLAW -> base * 5L;
             default -> 0;
         };
         return (int) Math.min(Integer.MAX_VALUE, points);
@@ -486,6 +487,65 @@ public final class GuildState {
         contracts.put(contract.id(), contract);
         changed();
         return new Made(Outcome.DONE, Optional.of(contract));
+    }
+
+    // ---------------------------------------------------------------- heads of criminals
+
+    /**
+     * The law of a kingdom posts a contract for the head of a wanted murderer at the kingdom's branch: the reward goes from
+     * the treasury into escrow. Squads of citizens never take it; any member of the guild may.
+     *
+     * @param target the player's id and name, {@code id|name}
+     */
+    public Made postOutlaw(UUID branch, String target, long reward, int days, long now, long day, GuildRules rules, KingdomWorldState world) {
+        Economy economy = world.economy();
+        if (world.kingdoms().get(branch).isEmpty() || economy.treasury(branch).isEmpty()) {
+            return Made.failed(Outcome.fail(KingdomError.UNKNOWN_KINGDOM));
+        }
+        if (target == null || target.isEmpty() || target.length() > Contract.MAX_TARGET || !Money.isPayment(reward) || days < 1) {
+            return Made.failed(Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE));
+        }
+        Outcome held = economy.holdFromTreasury(branch, reward, LedgerCategory.GUILD, day);
+        if (!held.ok()) {
+            return Made.failed(held);
+        }
+        Branch office = branchOrDefault(branch, rules);
+        branches.put(branch, office);
+        Contract contract = new Contract(nextContract++, Contract.Kind.OUTLAW, branch, Contract.Poster.KINGDOM, branch, Rank.F, target, Rank.C,
+                false, 1, 0, branch, reward, pointsFor(Contract.Kind.OUTLAW, Rank.C, 1, rules), office.commissionPermille(), now,
+                now + days * io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds.TICKS_PER_DAY, Contract.Status.OPEN, null, 0, false);
+        contracts.put(contract.id(), contract);
+        changed();
+        return new Made(Outcome.DONE, Optional.of(contract));
+    }
+
+    /**
+     * A member of the guild killed the wanted player of a contract for a head: the contract is theirs, whoever held it, and
+     * done; the reward is paid as for any contract.
+     */
+    public Optional<Progress> claimOutlaw(long id, UUID killer, long day, KingdomWorldState world, Sharing sharing) {
+        Contract contract = contracts.get(id);
+        if (contract == null || contract.kind() != Contract.Kind.OUTLAW || !members.containsKey(killer)) {
+            return Optional.empty();
+        }
+        Contract taken = contract.takenByPlayer(killer);
+        contracts.put(id, taken);
+        return Optional.of(finishForPlayer(taken, day, world, sharing));
+    }
+
+    /**
+     * The law no longer wants the head (the player paid, was pardoned or executed by the guards): the reward goes back to
+     * the treasury.
+     */
+    public Optional<Contract> withdrawOutlaw(long id, long day, KingdomWorldState world) {
+        Contract contract = contracts.get(id);
+        if (contract == null || contract.kind() != Contract.Kind.OUTLAW) {
+            return Optional.empty();
+        }
+        contracts.remove(id);
+        refund(contract, day, world);
+        changed();
+        return Optional.of(contract.closed(Contract.Status.CANCELLED));
     }
 
     // ---------------------------------------------------------------- taking, abandoning, calling off
@@ -742,6 +802,7 @@ public final class GuildState {
             if (economy.canReleaseToAccount(player, contract.currency(), payout)) {
                 economy.releaseToAccount(player, contract.currency(), payout);
                 economy.releaseToTreasury(contract.branch(), contract.currency(), commission, LedgerCategory.GUILD, day);
+                economy.repayFromIncome(player, contract.currency(), payout, day);
             } else {
                 // An account that cannot take more: the money goes back to whoever posted the contract.
                 refund(contract, day, world);
@@ -769,6 +830,9 @@ public final class GuildState {
                 economy.releaseToAccount(people.get(i), contract.currency(), money[i]);
             }
             economy.releaseToTreasury(contract.branch(), contract.currency(), commission, LedgerCategory.GUILD, day);
+            for (int i = 0; i < money.length; i++) {
+                economy.repayFromIncome(people.get(i), contract.currency(), money[i], day);
+            }
         } else {
             refund(contract, day, world);
             java.util.Arrays.fill(money, 0);

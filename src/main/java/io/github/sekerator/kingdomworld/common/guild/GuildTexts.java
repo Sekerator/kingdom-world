@@ -89,6 +89,9 @@ public final class GuildTexts {
      * The icon of a contract: the item to gather, the spawn egg of the monster, or a crystal of the rank.
      */
     public static ItemStack icon(Contract.Kind kind, String target, Rank rank) {
+        if (kind == Contract.Kind.OUTLAW) {
+            return new ItemStack(Items.PLAYER_HEAD);
+        }
         if (kind == Contract.Kind.GATHER) {
             Item item = item(target);
             return item == null ? new ItemStack(Items.BARRIER) : new ItemStack(item);
@@ -122,6 +125,7 @@ public final class GuildTexts {
                     : Component.translatable(CONTRACT + "exam", rank(targetRank), monsters(count), rank(targetRank));
             case ESCORT -> Component.translatable(CONTRACT + "escort");
             case WAR -> Component.translatable(CONTRACT + "war");
+            case OUTLAW -> Component.translatable(CONTRACT + "outlaw", Contract.outlawName(target));
         };
     }
 
@@ -132,6 +136,9 @@ public final class GuildTexts {
         if (contract.kind() == Contract.Kind.GATHER) {
             Item found = item(contract.target());
             return found == null ? Component.literal(contract.target()) : new ItemStack(found).getHoverName().copy();
+        }
+        if (contract.kind() == Contract.Kind.OUTLAW) {
+            return Component.literal(Contract.outlawName(contract.target()));
         }
         if (contract.target().isEmpty()) {
             return Component.translatable(CONTRACT + "short_rank", rank(contract.targetRank()));

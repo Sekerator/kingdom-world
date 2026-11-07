@@ -234,6 +234,9 @@ public final class GuildWork {
 
     static void tellProgress(MinecraftServer server, UUID player, GuildState.Progress progress) {
         Contract contract = progress.contract();
+        if (progress.finished() && !contract.isExam()) {
+            io.github.sekerator.kingdomworld.common.law.LawWork.contractDone(server, contract.branch(), player);
+        }
         if (!progress.finished()) {
             java.util.Set<UUID> told = new java.util.LinkedHashSet<>();
             told.add(player);
