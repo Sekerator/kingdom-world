@@ -1426,17 +1426,17 @@ Invoke-Phase 'session1' {
         }
     }
 
-    # Buildings on chunk [1, 1]: a well of birch plays its role, loses blocks, is repaired by the builder with materials
+    # Buildings on chunk [-1, 1], away from the posts of the other checks: a well of birch plays its role, loses blocks, is repaired by the builder with materials
     # from the storehouse and then demolished, its materials going back with a loss; a hut that stands there is saved as a
     # blueprint of the kingdom, and a construction from it waits paused over the restart. With -Pack a house is built of a
     # wood of a mod of the pack.
-    Send-ServerCommand $server 'forceload add 16 16 31 31'
-    Send-ServerCommand $server 'fill 16 69 16 31 69 31 minecraft:stone'
-    Send-ServerCommand $server 'fill 16 70 16 31 80 31 minecraft:air'
+    Send-ServerCommand $server 'forceload add -16 16 -1 31'
+    Send-ServerCommand $server 'fill -16 69 16 -1 69 31 minecraft:stone'
+    Send-ServerCommand $server 'fill -16 70 16 -1 80 31 minecraft:air'
     Start-Sleep -Seconds 2
     $wellId = $null
-    Send-ServerCommand $server "kingdomworld admin build place $KingdomName kingdomworld:well 20 70 29 0 false `"minecraft:birch`""
-    $well = Wait-ForLog $server 'Construction #(\d+) laid out: .* at 20 70 29, (\d+) steps' $CommandTimeout $ConsoleFailPattern
+    Send-ServerCommand $server "kingdomworld admin build place $KingdomName kingdomworld:well -12 70 29 0 false `"minecraft:birch`""
+    $well = Wait-ForLog $server 'Construction #(\d+) laid out: .* at -12 70 29, (\d+) steps' $CommandTimeout $ConsoleFailPattern
     if ($well) {
         Send-ServerCommand $server "kingdomworld admin build finish $($well.Groups[1].Value)"
         $wellBuilt = Wait-ForLog $server "Construction #$($well.Groups[1].Value) finished at once; building #(\d+) is in the register" $CommandTimeout $ConsoleFailPattern
@@ -1505,13 +1505,13 @@ Invoke-Phase 'session1' {
             Add-Failure '[session1] the demolition of the well could not be ordered'
         }
     }
-    Send-ServerCommand $server 'fill 17 70 17 19 70 19 minecraft:cobblestone'
-    Send-ServerCommand $server 'setblock 18 71 19 minecraft:red_bed[facing=north,part=foot]'
-    Send-ServerCommand $server 'setblock 18 71 18 minecraft:red_bed[facing=north,part=head]'
-    Send-ServerCommand $server 'setblock 17 71 17 minecraft:oak_planks'
-    Send-ServerCommand $server 'setblock 19 71 17 minecraft:oak_planks'
+    Send-ServerCommand $server 'fill -15 70 17 -13 70 19 minecraft:cobblestone'
+    Send-ServerCommand $server 'setblock -14 71 19 minecraft:red_bed[facing=north,part=foot]'
+    Send-ServerCommand $server 'setblock -14 71 18 minecraft:red_bed[facing=north,part=head]'
+    Send-ServerCommand $server 'setblock -15 71 17 minecraft:oak_planks'
+    Send-ServerCommand $server 'setblock -13 71 17 minecraft:oak_planks'
     Start-Sleep -Seconds 1
-    Send-ServerCommand $server "kingdomworld admin build capture $KingdomName 17 70 17 19 72 19 `"Smoke hut`" house housing"
+    Send-ServerCommand $server "kingdomworld admin build capture $KingdomName -15 70 17 -13 72 19 `"Smoke hut`" house housing"
     if (Wait-ForLog $server 'Blueprint .Smoke hut. saved \(3 x 3 x 3\)' $CommandTimeout $ConsoleFailPattern) {
         Write-Ok '[session1] the hut was saved as a blueprint of the kingdom'
     } else {
@@ -1521,8 +1521,8 @@ Invoke-Phase 'session1' {
     $saved = Wait-ForLog $server "(kingdomworld:custom/\d+) of ${KingdomName}: Smoke hut, role house, 3 x 3 x 3" $CommandTimeout $ConsoleFailPattern
     if ($saved) {
         $script:HutTemplate = $saved.Groups[1].Value
-        Send-ServerCommand $server "kingdomworld admin build place $KingdomName $($script:HutTemplate) 25 70 21"
-        $hut = Wait-ForLog $server 'Construction #(\d+) laid out: .* at 25 70 21, (\d+) steps' $CommandTimeout $ConsoleFailPattern
+        Send-ServerCommand $server "kingdomworld admin build place $KingdomName $($script:HutTemplate) -7 70 21"
+        $hut = Wait-ForLog $server 'Construction #(\d+) laid out: .* at -7 70 21, (\d+) steps' $CommandTimeout $ConsoleFailPattern
         if ($hut) {
             $script:HutId = $hut.Groups[1].Value
             Send-ServerCommand $server "kingdomworld admin build stock $($script:HutId)"
@@ -1531,7 +1531,7 @@ Invoke-Phase 'session1' {
             [void](Wait-ForLog $server "Construction #$($script:HutId) paused" $CommandTimeout $ConsoleFailPattern)
             Send-ServerCommand $server 'kingdomworld admin build tick'
             [void](Wait-ForLog $server 'Constructions moved on: \d+' $CommandTimeout $ConsoleFailPattern)
-            $hutPattern = "#$($script:HutId) $([regex]::Escape($script:HutTemplate)) at 25 70 21: steps done (\d+) of (\d+), blocks placed (\d+) of (\d+), paid and waiting (\d+)"
+            $hutPattern = "#$($script:HutId) $([regex]::Escape($script:HutTemplate)) at -7 70 21: steps done (\d+) of (\d+), blocks placed (\d+) of (\d+), paid and waiting (\d+)"
             $seen = Count-Log $hutPattern
             Send-ServerCommand $server "kingdomworld admin build info $($script:HutId)"
             $hutInfo = Wait-ForNewLog $server $hutPattern $CommandTimeout $seen
@@ -1552,8 +1552,8 @@ Invoke-Phase 'session1' {
         $materials = Wait-ForLog $server 'Woods \((\d+)\): ([^;]*); stones' $CommandTimeout $ConsoleFailPattern
         $modWood = if ($materials) { @($materials.Groups[2].Value -split ', ' | Where-Object { $_ -and $_ -notlike 'minecraft:*' })[0] } else { $null }
         if ($modWood) {
-            Send-ServerCommand $server "kingdomworld admin build place $KingdomName kingdomworld:small_house 27 70 31 0 false `"$modWood`""
-            $woodHouse = Wait-ForLog $server 'Construction #(\d+) laid out: .* at 27 70 31, (\d+) steps' $CommandTimeout $ConsoleFailPattern
+            Send-ServerCommand $server "kingdomworld admin build place $KingdomName kingdomworld:small_house -5 70 31 0 false `"$modWood`""
+            $woodHouse = Wait-ForLog $server 'Construction #(\d+) laid out: .* at -5 70 31, (\d+) steps' $CommandTimeout $ConsoleFailPattern
             if ($woodHouse) {
                 $wid = $woodHouse.Groups[1].Value
                 Send-ServerCommand $server "kingdomworld admin build info $wid"
@@ -1898,7 +1898,7 @@ Invoke-Phase 'session2' {
         } else {
             Add-Failure '[session2] the saved blueprint was lost in the restart'
         }
-        $hutPattern = "#$($script:HutId) $([regex]::Escape($script:HutTemplate)) at 25 70 21: steps done (\d+) of (\d+), blocks placed (\d+) of (\d+), paid and waiting (\d+)"
+        $hutPattern = "#$($script:HutId) $([regex]::Escape($script:HutTemplate)) at -7 70 21: steps done (\d+) of (\d+), blocks placed (\d+) of (\d+), paid and waiting (\d+)"
         Send-ServerCommand $server "kingdomworld admin build info $($script:HutId)"
         $hutInfo = Wait-ForLog $server $hutPattern $CommandTimeout $ConsoleFailPattern
         $hutNow = if ($hutInfo) { "$($hutInfo.Groups[1].Value)/$($hutInfo.Groups[2].Value)/$($hutInfo.Groups[3].Value)/$($hutInfo.Groups[4].Value)/$($hutInfo.Groups[5].Value)" } else { '' }
@@ -1909,7 +1909,7 @@ Invoke-Phase 'session2' {
         }
         Send-ServerCommand $server "kingdomworld admin build resume $($script:HutId)"
         [void](Wait-ForLog $server "Construction #$($script:HutId) goes on" $CommandTimeout $ConsoleFailPattern)
-        Send-ServerCommand $server 'forceload add 16 16 31 31'
+        Send-ServerCommand $server 'forceload add -16 16 -1 31'
     }
     $infoPattern = "#$id kingdomworld:small_house at 39 70 15: steps done (\d+) of (\d+), blocks placed (\d+) of (\d+), paid and waiting (\d+)"
     Send-ServerCommand $server "kingdomworld admin build info $id"
@@ -1936,7 +1936,7 @@ Invoke-Phase 'session2' {
         Add-Failure '[session2] the house was not finished after the restart'
     }
     if ($script:HutId) {
-        if (Wait-ForLog $server "#\d+ ${KingdomName}: $([regex]::Escape($script:HutTemplate)) \(house\) at 25 70 21, intact \d+, by an operator false" $CommandTimeout $ConsoleFailPattern) {
+        if (Wait-ForLog $server "#\d+ ${KingdomName}: $([regex]::Escape($script:HutTemplate)) \(house\) at -7 70 21, intact \d+, by an operator false" $CommandTimeout $ConsoleFailPattern) {
             Write-Ok '[session2] the builder finished the hut of the saved blueprint after the restart; it is in the register as a house'
         } else {
             Add-Failure '[session2] the hut of the saved blueprint was not finished after the restart'
