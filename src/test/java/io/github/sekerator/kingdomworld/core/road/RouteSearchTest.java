@@ -102,6 +102,18 @@ class RouteSearchTest {
     }
 
     @Test
+    void aRoadFromAThroneStartsOnTheLandAroundIt() {
+        // The throne stands six blocks above the ground and is not to be broken.
+        RouteSearch search = run((x, z) -> x == 0 && z == 0 ? new Terrain.Column(70, Terrain.Surface.BLOCKED, null) : Terrain.Column.land(64),
+                0, 0, 30, 0);
+        assertEquals(RouteSearch.Status.FOUND, search.status());
+        RouteCell first = search.route().get(0);
+        assertTrue(Math.abs(first.x()) <= RouteSearch.START_RADIUS && first.y() == 64, "the road does not start beside the throne: " + first);
+        RouteSearch nowhere = run((x, z) -> new Terrain.Column(64, Terrain.Surface.DANGER, null), 0, 0, 30, 0);
+        assertEquals(RouteSearch.Failure.BAD_START, nowhere.failure());
+    }
+
+    @Test
     void dangerIsAvoided() {
         RouteSearch search = run((x, z) -> x >= 10 && x < 14 && z > -20 && z < 20 ? new Terrain.Column(64, Terrain.Surface.DANGER, null)
                 : Terrain.Column.land(64), 0, 0, 30, 0);

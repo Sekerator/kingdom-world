@@ -215,7 +215,7 @@ public final class RoadBuilding {
         if (items == null) {
             return false;
         }
-        if (!take(server, road, section.builder(), items, block)) {
+        if (!items.isEmpty() && !take(server, road, section.builder(), items, block)) {
             return false;
         }
         section.markPaid(items);

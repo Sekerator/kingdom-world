@@ -23,6 +23,8 @@ import java.util.UUID;
 public final class RouteSearch {
     /** How close to the goal the road must come, in blocks along each axis. */
     public static final int GOAL_RADIUS = 2;
+    /** How far from the start point the road may begin, in blocks along each axis. */
+    public static final int START_RADIUS = 3;
     private static final int[][] STEPS = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
     private static final double DIAGONAL = Math.sqrt(2.0);
 
@@ -173,20 +175,33 @@ public final class RouteSearch {
             return status;
         }
         if (!started) {
-            Terrain.Column start = terrain.column(fromX, fromZ);
-            if (start == null) {
-                return status;
+            // The ends of a road are often a throne or a town hall: the road starts on the free land around the point.
+            List<Node> starts = new ArrayList<>();
+            for (int dx = -START_RADIUS; dx <= START_RADIUS; dx++) {
+                for (int dz = -START_RADIUS; dz <= START_RADIUS; dz++) {
+                    Terrain.Column column = terrain.column(fromX + dx, fromZ + dz);
+                    if (column == null) {
+                        return status;
+                    }
+                    if (column.surface() != Terrain.Surface.LAND && column.surface() != Terrain.Surface.WATER) {
+                        continue;
+                    }
+                    boolean water = column.surface() == Terrain.Surface.WATER;
+                    int y = water ? column.y() + 1 : column.y();
+                    double g = octile(fromX, fromZ, fromX + dx, fromZ + dz);
+                    starts.add(new Node(fromX + dx, fromZ + dz, y, water ? 1 : 0, water ? RouteCell.Kind.BRIDGE : RouteCell.Kind.GROUND, 0, g,
+                            g + heuristic(fromX + dx, fromZ + dz), 1, null, -1));
+                }
             }
             started = true;
-            if (start.surface() == Terrain.Surface.DANGER) {
+            if (starts.isEmpty()) {
                 finish(Failure.BAD_START);
                 return status;
             }
-            int y = start.surface() == Terrain.Surface.WATER ? start.y() + 1 : start.y();
-            RouteCell.Kind kind = start.surface() == Terrain.Surface.WATER ? RouteCell.Kind.BRIDGE : RouteCell.Kind.GROUND;
-            Node first = new Node(fromX, fromZ, y, kind == RouteCell.Kind.GROUND ? 0 : 1, kind, 0, 0.0, heuristic(fromX, fromZ), 1, null, -1);
-            best.put(key(fromX, fromZ, y, first.run), first);
-            open.add(first);
+            for (Node first : starts) {
+                best.put(key(first.x, first.z, first.y, first.run), first);
+                open.add(first);
+            }
         }
         int done = 0;
         while (done < budget) {

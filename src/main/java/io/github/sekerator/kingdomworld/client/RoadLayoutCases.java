@@ -105,7 +105,7 @@ final class RoadLayoutCases {
         String dimension = dimension();
         UUID kingdom = UUID.nameUUIDFromBytes("roads".getBytes(StandardCharsets.UTF_8));
         List<RoadViews.MapCity> cities = List.of(new RoadViews.MapCity(1, kingdom, LONG_CITY, dimension, -40, -30, 0x6C3483),
-                new RoadViews.MapCity(2, kingdom, "Valoria", dimension, 60, -20, 0xB7950B));
+                new RoadViews.MapCity(2, kingdom, "Ostbrook", dimension, 60, -20, 0xB7950B));
         List<RoadViews.MapRoad> roads = List.of(
                 new RoadViews.MapRoad(1, kingdom, dimension, RoadClass.PAVED, 0x6C3483, 1000, new int[]{-40, 0, 20, 60}, new int[]{-30, -28, -10, -20}),
                 new RoadViews.MapRoad(2, kingdom, dimension, RoadClass.GRAVEL, 0x6C3483, 400, new int[]{-40, -60, -90}, new int[]{-30, 10, 30}),
@@ -129,7 +129,7 @@ final class RoadLayoutCases {
         fillMapData();
         KingdomView view = member.apply(Role.KING);
         KingdomMapScreen screen = KingdomMapScreen.forRoads(view);
-        screen.showForCheck(0.0, -1.0, 8.0, null, status, !status.getString().isEmpty());
+        screen.showForCheck(1.0, -0.5, 14.0, null, status, !status.getString().isEmpty());
         screen.showPlanForCheck(-40, -30, 160, -30, withPlan ? plan(view.id()) : null);
         return screen;
     }

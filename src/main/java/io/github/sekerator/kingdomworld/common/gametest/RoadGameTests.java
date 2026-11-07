@@ -451,6 +451,8 @@ public final class RoadGameTests {
         GatheringGameTests.clear(level, from, to);
         ground(helper, 0, 15, 0, 15);
         BlockPos center = helper.absolutePos(new BlockPos(7, 0, 7));
+        // Items left over by an earlier run of the test world would count as the chest's.
+        level.getEntitiesOfClass(ItemEntity.class, new AABB(center).inflate(24)).forEach(ItemEntity::discard);
         BanditCamp camp = BanditWork.found(server, dimension(helper), center.getX(), center.getZ(), 0);
         try {
             camp.addLoot(List.of(Goods.of("minecraft:wheat", 20), Goods.of("minecraft:iron_ingot", 3)));
@@ -484,15 +486,16 @@ public final class RoadGameTests {
             }
             helper.assertTrue(inChest == 23, "The chest holds " + inChest + " items instead of 23");
             BanditWork.breakCampBlock(level, chest, camp);
-            List<ItemEntity> drops = level.getEntitiesOfClass(ItemEntity.class, new AABB(chest).inflate(16));
+            // Only what fell just now: items of earlier runs of the test world may load around later.
+            List<ItemEntity> drops = level.getEntitiesOfClass(ItemEntity.class, new AABB(chest).inflate(16), item -> item.getAge() == 0);
             int wheat = drops.stream().filter(item -> item.getItem().is(Items.WHEAT)).mapToInt(item -> item.getItem().getCount()).sum();
             int iron = drops.stream().filter(item -> item.getItem().is(Items.IRON_INGOT)).mapToInt(item -> item.getItem().getCount()).sum();
             helper.assertTrue(wheat == 20 && iron == 3, "The chest did not give its goods: " + wheat + " wheat, " + iron + " iron");
             helper.assertTrue(drops.stream().noneMatch(item -> item.getItem().is(Items.CHEST) || item.getItem().is(Items.BROWN_WOOL)
                     || item.getItem().is(Items.CAMPFIRE)), "A block of the camp dropped itself (" + wool + " wool broken)");
             helper.assertTrue(!level.getBlockState(chest).is(Blocks.CHEST), "The chest stayed");
-            drops.forEach(ItemEntity::discard);
         } finally {
+            level.getEntitiesOfClass(ItemEntity.class, new AABB(center).inflate(24)).forEach(ItemEntity::discard);
             RoadWork.state(server).removeCamp(camp.id());
             GatheringGameTests.clear(level, from, to);
         }

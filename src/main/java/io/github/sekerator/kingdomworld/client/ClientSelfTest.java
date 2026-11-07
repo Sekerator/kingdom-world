@@ -41,6 +41,8 @@ import java.util.UUID;
  *       scales and saves screenshots (see {@link ClientLayoutCheck}); a problem ends the client with exit code 1.</li>
  *   <li>{@code buildings}: in a copy of a test world, builds every built-in building template and saves screenshots of
  *       them and of the outline of a blueprint (see {@link ClientBuildingShowcase}).</li>
+ *   <li>{@code roads}: in a copy of a test world, lays a road with a bridge, puts a caravan on it and a camp of robbers
+ *       beside it and saves screenshots of them (see {@link ClientRoadShowcase}).</li>
  *   <li>{@code world}: in a singleplayer world, founds a kingdom next to the player with three citizens and a work
  *       post, opens the map, the throne screen (through the real server packet) with all tabs including the citizens
  *       and the storehouses, the territory editor with a claim request, the screen of the work post (through the real
@@ -59,6 +61,7 @@ public final class ClientSelfTest {
     private static boolean quit;
     private static ClientLayoutCheck layout;
     private static ClientBuildingShowcase showcase;
+    private static ClientRoadShowcase roadShowcase;
     private static volatile BlockPos throne;
     private static volatile UUID kingdomId;
     private static volatile BlockPos post;
@@ -125,6 +128,25 @@ public final class ClientSelfTest {
             if (showcase.finished()) {
                 if (showcase.failed()) {
                     LOGGER.error(PREFIX + "building showcase failed, exiting with code 1");
+                    System.exit(1);
+                }
+                LOGGER.info(PREFIX + "finished");
+                quit = true;
+            }
+            return;
+        }
+        if ("roads".equals(MODE) && minecraft.player != null && minecraft.getSingleplayerServer() != null) {
+            if (roadShowcase == null) {
+                String folder = System.getProperty("kingdomworld.clientSelfTest.screenshots");
+                Path screenshots = folder != null && !folder.isEmpty() ? Path.of(folder)
+                        : minecraft.gameDirectory.toPath().resolve("kingdomworld-layout");
+                LOGGER.info(PREFIX + "road showcase started, screenshots go to {}", screenshots.resolve("world"));
+                roadShowcase = new ClientRoadShowcase(screenshots);
+            }
+            roadShowcase.tick();
+            if (roadShowcase.finished()) {
+                if (roadShowcase.failed()) {
+                    LOGGER.error(PREFIX + "road showcase failed, exiting with code 1");
                     System.exit(1);
                 }
                 LOGGER.info(PREFIX + "finished");

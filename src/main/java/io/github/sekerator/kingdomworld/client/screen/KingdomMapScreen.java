@@ -844,10 +844,8 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         lines.add(Component.translatable("kingdomworld.screen.map.road.way", view.from(), view.to()));
         lines.add(Component.translatable("kingdomworld.screen.map.road.length", io.github.sekerator.kingdomworld.common.road.RoadTexts.blocks(view.length()),
                 view.bridges(), view.fills()));
-        lines.add(Component.translatable("kingdomworld.screen.map.road.cost." + roadClass.id(),
-                io.github.sekerator.kingdomworld.common.road.RoadTexts.items(view.material(roadClass, 0)),
-                io.github.sekerator.kingdomworld.common.road.RoadTexts.items(view.material(roadClass, 1)),
-                io.github.sekerator.kingdomworld.common.road.RoadTexts.items(view.material(roadClass, 2))));
+        lines.add(Component.translatable("kingdomworld.screen.map.road.cost." + roadClass.id(), view.material(roadClass, 0),
+                view.material(roadClass, 1), view.material(roadClass, 2)));
         int builders = Math.max(1, view.builders());
         long minutes = Math.max(1, Math.round(view.seconds(roadClass) / 60.0 / builders));
         lines.add(Component.translatable("kingdomworld.screen.map.road.time", io.github.sekerator.kingdomworld.common.road.RoadTexts.minutes(minutes),

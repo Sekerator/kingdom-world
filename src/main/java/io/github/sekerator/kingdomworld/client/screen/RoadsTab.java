@@ -420,10 +420,10 @@ final class RoadsTab {
         long sent = view.crossings().stream().filter(row -> !row.incoming() && row.status() == Crossing.Status.PROPOSED).count();
         int cities = Math.max(0, view.cities().size() - (view.cities().stream().anyMatch(RoadViews.CityRow::capital) ? 1 : 0));
         List<Component> lines = List.of(
-                Component.translatable(KEY + "cities", RoadTexts.cities(cities), view.maxCities()),
-                Component.translatable(KEY + "roads", RoadTexts.roads(ours), view.maxRoads()),
-                Component.translatable(KEY + "built", RoadTexts.roads(built), RoadTexts.roads(view.roads().size())),
-                Component.translatable(KEY + "builders", RoadTexts.builders(view.builders())),
+                Component.translatable(KEY + "cities", cities, view.maxCities()),
+                Component.translatable(KEY + "roads", ours, view.maxRoads()),
+                Component.translatable(KEY + "built", built, view.roads().size()),
+                Component.translatable(KEY + "builders", view.builders()),
                 Component.translatable(KEY + "requests", asked, sent),
                 Component.translatable(KEY + "camps", view.camps().size()),
                 Component.translatable(KEY + "plan_hint"));
