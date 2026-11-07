@@ -71,6 +71,7 @@ public final class LifeEvents {
 
     private static void onServerStarted(ServerStartedEvent event) {
         MinecraftServer server = event.getServer();
+        LifeSettings.noChanceIllness(server instanceof net.minecraft.gametest.framework.GameTestServer);
         LifeSavedData data = LifeSavedData.get(server);
         LifeState state = data.state();
         LifeWork.loaded(server);

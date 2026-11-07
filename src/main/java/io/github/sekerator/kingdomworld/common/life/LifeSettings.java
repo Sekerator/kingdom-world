@@ -14,6 +14,8 @@ public final class LifeSettings {
     private static LifeRules override;
     private static LifeRules cached;
     private static boolean warned;
+    /** Whether illnesses by chance are off: on the game test server, where they would make the counts of other tests random. */
+    private static volatile boolean noChanceIllness;
 
     private LifeSettings() {
     }
@@ -38,6 +40,15 @@ public final class LifeSettings {
         cached = null;
         override = null;
         warned = false;
+        noChanceIllness = false;
+    }
+
+    /**
+     * Switches illnesses by chance off, for the game test server: the tests that need an illness make one.
+     */
+    public static void noChanceIllness(boolean value) {
+        noChanceIllness = value;
+        cached = null;
     }
 
     /**
@@ -58,7 +69,7 @@ public final class LifeSettings {
         b.tavernShare = c.tavernShare.get();
         b.tavernMood = c.tavernMood.get();
         b.tavernMoodDays = c.tavernMoodDays.get();
-        b.sickChance = c.sickChance.get();
+        b.sickChance = noChanceIllness ? 0 : c.sickChance.get();
         b.sickFactor = c.sickFactor.get();
         b.sickMood = c.sickMood.get();
         b.sickWorkPercent = c.sickWorkPercent.get();
