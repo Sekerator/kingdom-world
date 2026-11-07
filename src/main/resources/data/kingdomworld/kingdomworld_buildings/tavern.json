@@ -1,0 +1,11 @@
+{
+  "name": "kingdomworld.building.tavern",
+  "category": "trade",
+  "type": "tavern",
+  "role": "tavern",
+  "level": 1,
+  "upgrades_to": "kingdomworld:tavern_2",
+  "icon": "minecraft:barrel",
+  "anchor": [6, 0, 10],
+  "entrance": "south"
+}

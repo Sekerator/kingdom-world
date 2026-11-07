@@ -481,6 +481,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         drawCapitals(graphics, minX, maxX, minZ, maxZ);
         drawCities(graphics);
         drawCamps(graphics);
+        drawLifeEvents(graphics);
         drawCaravans(graphics);
         if (planning != null) {
             drawPlan(graphics);
@@ -876,6 +877,42 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
                 graphics.fill(x + i, y - i, x + i + 1, y - i + 1, 0xFFB01010);
             }
             hoverText(x - 4, y - 4, 8, Component.translatable("kingdomworld.screen.map.camp", camp.size()));
+        }
+    }
+
+    /**
+     * Festivals and fairs of today: a flag over the capital for a festival, an awning over the city for a fair.
+     */
+    private void drawLifeEvents(GuiGraphics graphics) {
+        String dimension = dimension();
+        if (dimension == null) {
+            return;
+        }
+        for (io.github.sekerator.kingdomworld.common.network.data.LifeViews.MapEvent event
+                : io.github.sekerator.kingdomworld.client.network.ClientLifeHandlers.events()) {
+            if (!event.dimension().equals(dimension)) {
+                continue;
+            }
+            int x = blockScreenX(event.x() + 0.5) + (event.fair() ? 7 : -7);
+            int y = blockScreenZ(event.z() + 0.5) - 9;
+            if (x - 4 < mapLeft() || x + 4 > mapRight() || y - 4 < mapTop() || y + 4 > mapBottom()) {
+                continue;
+            }
+            int color = 0xFF000000 | event.color();
+            if (event.fair()) {
+                // A striped awning on two posts.
+                for (int i = -4; i <= 3; i++) {
+                    graphics.fill(x + i, y - 3, x + i + 1, y, (i & 1) == 0 ? 0xFFE04040 : 0xFFF0F0F0);
+                }
+                graphics.fill(x - 4, y, x - 3, y + 4, 0xFF6B4A2B);
+                graphics.fill(x + 3, y, x + 4, y + 4, 0xFF6B4A2B);
+            } else {
+                // A flag in the colour of the kingdom on a pole.
+                graphics.fill(x - 3, y - 4, x - 2, y + 4, 0xFF6B4A2B);
+                graphics.fill(x - 2, y - 4, x + 4, y, color);
+                graphics.renderOutline(x - 2, y - 4, 6, 4, 0xFFF0D070);
+            }
+            hoverText(x - 4, y - 4, 9, Component.translatable(event.fair() ? "kingdomworld.screen.map.fair" : "kingdomworld.screen.map.festival"));
         }
     }
 

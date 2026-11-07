@@ -186,6 +186,19 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
+     * Shows the life of the kingdom the server sent, if it belongs to the kingdom on screen.
+     */
+    public void updateLife(io.github.sekerator.kingdomworld.common.network.data.LifeViews.TabView lifeView) {
+        if (!lifeView.kingdomId().equals(view.id())) {
+            return;
+        }
+        citizens.setLife(lifeView);
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
+    }
+
+    /**
      * Shows what the storehouses hold, if it belongs to the kingdom on screen.
      */
     public void updateStorage(StorageView storageView) {
@@ -582,6 +595,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         Minecraft client = Minecraft.getInstance();
         if (client.getConnection() != null) {
             KingdomWorldNetwork.sendToServer(new CitizenRequestPacket(view.id()));
+            KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.LifePackets.TabRequest(view.id()));
         }
     }
 

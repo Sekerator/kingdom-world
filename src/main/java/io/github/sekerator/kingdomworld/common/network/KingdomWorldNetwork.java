@@ -19,6 +19,7 @@ import io.github.sekerator.kingdomworld.common.network.packet.KingdomListRequest
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomListResponsePacket;
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomViewPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.LawPackets;
+import io.github.sekerator.kingdomworld.common.network.packet.LifePackets;
 import io.github.sekerator.kingdomworld.common.network.packet.MagicPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.MapAreaPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.MapAreaRequestPacket;
@@ -247,6 +248,18 @@ public final class KingdomWorldNetwork {
                 LawPackets.RansomAction::decode, LawPackets.RansomAction::handle);
         add(id++, LawPackets.WantedLinePacket.class, NetworkDirection.PLAY_TO_CLIENT, LawPackets.WantedLinePacket::encode,
                 LawPackets.WantedLinePacket::decode, LawPackets.WantedLinePacket::handle);
+        add(id++, LifePackets.TavernOpen.class, NetworkDirection.PLAY_TO_CLIENT, LifePackets.TavernOpen::encode,
+                LifePackets.TavernOpen::decode, LifePackets.TavernOpen::handle);
+        add(id++, LifePackets.TavernAction.class, NetworkDirection.PLAY_TO_SERVER, LifePackets.TavernAction::encode,
+                LifePackets.TavernAction::decode, LifePackets.TavernAction::handle);
+        add(id++, LifePackets.TabRequest.class, NetworkDirection.PLAY_TO_SERVER, LifePackets.TabRequest::encode,
+                LifePackets.TabRequest::decode, LifePackets.TabRequest::handle);
+        add(id++, LifePackets.TabResponse.class, NetworkDirection.PLAY_TO_CLIENT, LifePackets.TabResponse::encode,
+                LifePackets.TabResponse::decode, LifePackets.TabResponse::handle);
+        add(id++, LifePackets.CallFestival.class, NetworkDirection.PLAY_TO_SERVER, LifePackets.CallFestival::encode,
+                LifePackets.CallFestival::decode, LifePackets.CallFestival::handle);
+        add(id++, LifePackets.MapSync.class, NetworkDirection.PLAY_TO_CLIENT, LifePackets.MapSync::encode,
+                LifePackets.MapSync::decode, LifePackets.MapSync::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

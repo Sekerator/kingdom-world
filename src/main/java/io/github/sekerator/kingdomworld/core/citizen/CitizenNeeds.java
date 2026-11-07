@@ -35,15 +35,21 @@ public final class CitizenNeeds {
     }
 
     /**
-     * What the mood of a citizen depends on. More factors (festivals, unrest) are added here later.
+     * What the mood of a citizen depends on. More factors (unrest) are added here later.
      *
      * @param recentDeaths citizens of the same kingdom who died in the last {@link #RECENT_DEATH_DAYS} days
      * @param payPercent   how much of the usual wage the citizen got on the last payday, see
      *                     {@link io.github.sekerator.kingdomworld.core.economy.Payroll#percent}
      * @param comfort      mood the buildings around give: the comfort of the house the citizen lives in, a well nearby;
      *                     at most {@link #MAX_COMFORT} counts
+     * @param life         mood the life of the city gives: an evening in the tavern and a festival add, an illness takes;
+     *                     between {@link #MIN_LIFE} and {@link #MAX_LIFE} counts
      */
-    public record MoodInputs(float food, boolean hasHome, boolean wounded, int recentDeaths, int payPercent, int comfort) {
+    public record MoodInputs(float food, boolean hasHome, boolean wounded, int recentDeaths, int payPercent, int comfort, int life) {
+        public MoodInputs(float food, boolean hasHome, boolean wounded, int recentDeaths, int payPercent, int comfort) {
+            this(food, hasHome, wounded, recentDeaths, payPercent, comfort, 0);
+        }
+
         public MoodInputs(float food, boolean hasHome, boolean wounded, int recentDeaths, int payPercent) {
             this(food, hasHome, wounded, recentDeaths, payPercent, 0);
         }
@@ -55,6 +61,10 @@ public final class CitizenNeeds {
 
     /** Most mood the buildings around a citizen give. */
     public static final int MAX_COMFORT = 25;
+    /** Most mood the tavern and festivals give together. */
+    public static final int MAX_LIFE = 25;
+    /** Most mood an illness takes. */
+    public static final int MIN_LIFE = -25;
     /** How much sooner newcomers come while a house of the kingdom has a free bed. */
     public static final double HOUSE_GROWTH_FACTOR = 0.75;
 
@@ -127,6 +137,7 @@ public final class CitizenNeeds {
         mood -= Math.min(20, 5 * Math.max(0, inputs.recentDeaths()));
         mood += io.github.sekerator.kingdomworld.core.economy.Payroll.mood(inputs.payPercent());
         mood += Math.max(0, Math.min(MAX_COMFORT, inputs.comfort()));
+        mood += Math.max(MIN_LIFE, Math.min(MAX_LIFE, inputs.life()));
         return Math.max(0, Math.min(MAX_MOOD, mood));
     }
 

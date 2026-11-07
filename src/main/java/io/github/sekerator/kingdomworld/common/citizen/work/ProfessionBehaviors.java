@@ -36,6 +36,7 @@ public final class ProfessionBehaviors {
         register(Professions.WARRIOR, new io.github.sekerator.kingdomworld.common.army.SoldierBehavior(false));
         register(Professions.ARCHER, new io.github.sekerator.kingdomworld.common.army.SoldierBehavior(true));
         register(Professions.MAGE, new io.github.sekerator.kingdomworld.common.magic.MageBehavior());
+        register(io.github.sekerator.kingdomworld.common.life.InnkeeperBehavior.INNKEEPER, new io.github.sekerator.kingdomworld.common.life.InnkeeperBehavior());
     }
 
     private ProfessionBehaviors() {

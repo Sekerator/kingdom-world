@@ -86,7 +86,7 @@ public final class CitizenGoals {
     }
 
     /**
-     * A wounded citizen goes to an infirmary of its kingdom with room, or home if there is none.
+     * A wounded or ill citizen goes to an infirmary of its kingdom with room, or home if there is none.
      */
     public static final class SeekCareGoal extends GoToPlaceGoal {
         public SeekCareGoal(CitizenEntity body) {
@@ -95,12 +95,12 @@ public final class CitizenGoals {
 
         @Override
         protected boolean wanted() {
-            return body.isWounded();
+            return body.needsCare();
         }
 
         @Override
         protected BlockPos place() {
-            WorldPos infirmary = body.isWounded() ? CitizenCare.chooseInfirmary(body) : null;
+            WorldPos infirmary = body.needsCare() ? CitizenCare.chooseInfirmary(body) : null;
             if (infirmary != null) {
                 return new BlockPos(infirmary.x(), infirmary.y(), infirmary.z());
             }
@@ -109,27 +109,7 @@ public final class CitizenGoals {
     }
 
     /**
-     * At night a citizen goes home and stays by its bed.
-     */
-    public static final class GoHomeAtNightGoal extends GoToPlaceGoal {
-        public GoHomeAtNightGoal(CitizenEntity body) {
-            super(body);
-        }
-
-        @Override
-        protected boolean wanted() {
-            // Adventurers and soldiers keep watch at night, when the monsters come.
-            return !body.level().isDay() && !io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehaviors.fights(body);
-        }
-
-        @Override
-        protected BlockPos place() {
-            return body.home();
-        }
-    }
-
-    /**
-     * Wanders about near home during the day; at night it stays put.
+     * Wanders about near home in the morning, by day and in the evening of its own day; at night it sleeps.
      */
     public static final class StrollNearHomeGoal extends WaterAvoidingRandomStrollGoal {
         private final CitizenEntity body;
@@ -141,7 +121,9 @@ public final class CitizenGoals {
 
         @Override
         public boolean canUse() {
-            return body.level().isDay() && super.canUse();
+            return (body.citizenId() == null || body.getServer() == null
+                    || io.github.sekerator.kingdomworld.common.life.LifeWork.phase(body.getServer(), body.citizenId())
+                    != io.github.sekerator.kingdomworld.core.life.DaySchedule.Phase.NIGHT) && super.canUse();
         }
     }
 }

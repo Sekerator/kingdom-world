@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.tavern_2",
+  "category": "trade",
+  "type": "tavern",
+  "role": "tavern",
+  "level": 2,
+  "icon": "minecraft:barrel",
+  "anchor": [6, 0, 10],
+  "entrance": "south"
+}

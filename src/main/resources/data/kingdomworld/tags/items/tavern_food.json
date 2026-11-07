@@ -1,0 +1,27 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:bread",
+    "minecraft:cooked_beef",
+    "minecraft:cooked_porkchop",
+    "minecraft:cooked_chicken",
+    "minecraft:cooked_mutton",
+    "minecraft:cooked_rabbit",
+    "minecraft:cooked_cod",
+    "minecraft:cooked_salmon",
+    "minecraft:baked_potato",
+    "minecraft:pumpkin_pie",
+    "minecraft:cookie",
+    "minecraft:mushroom_stew",
+    "minecraft:rabbit_stew",
+    "minecraft:beetroot_soup",
+    {"id": "#forge:bread", "required": false},
+    {"id": "#forge:cooked_meats", "required": false},
+    {"id": "#forge:cooked_fishes", "required": false},
+    {"id": "#forge:pies", "required": false},
+    {"id": "#forge:soups", "required": false},
+    {"id": "#forge:stews", "required": false},
+    {"id": "#farmersdelight:meals", "required": false},
+    {"id": "#farmersdelight:comfort_foods", "required": false}
+  ]
+}

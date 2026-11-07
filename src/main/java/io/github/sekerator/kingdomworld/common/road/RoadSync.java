@@ -149,9 +149,11 @@ public final class RoadSync {
     private static RoadViews.MapData data(MinecraftServer server, RoadState state, UUID player, String language) {
         Optional<UUID> kingdom = KingdomWorldApi.state(server).membership().kingdomOf(player);
         List<RoadViews.MapCamp> camps = new ArrayList<>();
-        if (kingdom.isPresent()) {
+        // Camps an innkeeper told the player of and the player paid to have marked count as known too.
+        java.util.Set<Long> marked = io.github.sekerator.kingdomworld.common.life.LifeWork.state(server).marks(player);
+        if (kingdom.isPresent() || !marked.isEmpty()) {
             for (BanditCamp camp : state.camps()) {
-                if (camp.knownTo(kingdom.get()) && !camp.cleared()) {
+                if ((kingdom.isPresent() && camp.knownTo(kingdom.get()) || marked.contains(camp.id())) && !camp.cleared()) {
                     camps.add(new RoadViews.MapCamp(camp.id(), camp.dimension(), camp.x(), camp.z(), camp.size()));
                 }
             }

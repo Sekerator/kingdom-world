@@ -127,13 +127,20 @@ public final class CitizenSimulation {
             if (!changeHealth(server, citizen, body, inInfirmary, interval, rules)) {
                 continue;
             }
+            // The life of the city: illnesses, the evening in the tavern and sleep; an ill citizen takes a place in an infirmary too.
+            if (io.github.sekerator.kingdomworld.common.life.LifeWork.step(server, citizen, body, interval, treated < infirmaryRoom)) {
+                treated++;
+            }
             int comfort = io.github.sekerator.kingdomworld.common.construction.BuildingEffects.comfort(server, kingdomId, citizen.home());
             int target = CitizenNeeds.targetMood(new CitizenNeeds.MoodInputs(citizen.food(), citizen.home() != null,
-                    citizen.state() == CitizenState.WOUNDED, recentDeaths, citizen.payPercent(), comfort));
+                    citizen.state() == CitizenState.WOUNDED, recentDeaths, citizen.payPercent(), comfort,
+                    io.github.sekerator.kingdomworld.common.life.LifeWork.mood(server, citizen)));
             citizen.setMood(CitizenNeeds.nextMood(citizen.mood(), target));
             if (body == null) {
+                // An ill citizen gets less done.
+                int worked = (int) Math.round(interval * io.github.sekerator.kingdomworld.common.life.LifeWork.workFactor(citizen.id()));
                 ProfessionBehaviors.get(citizen.professionId())
-                        .ifPresent(behavior -> behavior.workAbstractly(server, citizen, interval));
+                        .ifPresent(behavior -> behavior.workAbstractly(server, citizen, worked));
             } else if (citizen.state() == CitizenState.WOUNDED && Professions.worksAtPosts(citizen.professionId())) {
                 PostWork.setStatus(server, citizen, WorkStatus.WOUNDED);
             }

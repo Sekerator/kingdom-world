@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * The open register of building roles. The mod registers its own (house, warehouse, workshop, market, tower, wall, well);
+ * The open register of building roles. The mod registers its own (house, warehouse, workshop, market, tower, wall, well, tavern);
  * other parts of the mod and other mods add theirs with {@link #register}, data packs with role files that are put in
  * place on every reload ({@link #replaceData}). A role of the code wins over a data role of the same id.
  *
@@ -27,6 +27,8 @@ public final class BuildingRoles {
     public static final String BARRACKS = "barracks";
     /** A mage tower: needs a magic focus inside. */
     public static final String MAGE_TOWER = "mage_tower";
+    /** A tavern: an innkeeper at a post inside serves food and drink in the evening; its beds are rooms for guests. */
+    public static final String TAVERN = "tavern";
 
     /** Mood a house gives the citizens who live in it. */
     public static final String COMFORT = "comfort";
@@ -48,6 +50,8 @@ public final class BuildingRoles {
     public static final String RADIUS = "radius";
     /** Soldiers more a barracks building lets train at the same time. */
     public static final String BUNKS = "bunks";
+    /** Citizens a tavern serves in an evening. */
+    public static final String GUESTS = "guests";
 
     private static final Map<String, BuildingRole> CODE = new LinkedHashMap<>();
     private static volatile Map<String, BuildingRole> data = Map.of();
@@ -62,6 +66,7 @@ public final class BuildingRoles {
         register(new BuildingRole(WELL, BuildingRole.Requirement.NONE, ordered(MOOD, 4.0, RADIUS, 24.0), ordered(MOOD, 2.0, RADIUS, 8.0)));
         register(new BuildingRole(BARRACKS, BuildingRole.Requirement.NONE, Map.of(BUNKS, 4.0), Map.of(BUNKS, 4.0)));
         register(new BuildingRole(MAGE_TOWER, BuildingRole.Requirement.NONE, Map.of(SPEED, 1.25), Map.of(SPEED, 0.15)));
+        register(new BuildingRole(TAVERN, BuildingRole.Requirement.NONE, Map.of(GUESTS, 12.0), Map.of(GUESTS, 8.0)));
     }
 
     private BuildingRoles() {

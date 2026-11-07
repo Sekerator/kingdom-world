@@ -31,7 +31,9 @@ public enum LedgerCategory {
     /** Fines, debts paid back from income, ransoms of confiscated goods, entry fees of cities, coins of the executed. */
     LAW,
     /** The money a kingdom of the world has when it appears, like the chests of villages. */
-    FOUNDING;
+    FOUNDING,
+    /** Taverns, rooms and rumors, festivals and the goods of fairs. */
+    LIFE;
 
     public String id() {
         return name().toLowerCase(Locale.ROOT);

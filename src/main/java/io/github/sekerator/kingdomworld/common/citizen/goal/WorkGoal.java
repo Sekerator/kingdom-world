@@ -8,12 +8,14 @@ import java.util.EnumSet;
 
 /**
  * The work of a body: runs the goal of the citizen's current profession and switches to a new one when the
- * profession changes.
+ * profession changes. Work happens in the morning and by day of the citizen's own day (see the life of cities); an ill
+ * citizen works slower.
  */
 public final class WorkGoal extends Goal {
     private final CitizenEntity body;
     private String profession = "";
     private Goal work;
+    private int sickTicks;
 
     public WorkGoal(CitizenEntity body) {
         this.body = body;
@@ -31,12 +33,13 @@ public final class WorkGoal extends Goal {
     @Override
     public boolean canUse() {
         Goal goal = current();
-        return goal != null && goal.canUse();
+        return goal != null && io.github.sekerator.kingdomworld.common.life.LifeWork.works(body) && goal.canUse();
     }
 
     @Override
     public boolean canContinueToUse() {
-        return work != null && profession.equals(body.professionId()) && work.canContinueToUse();
+        return work != null && profession.equals(body.professionId()) && io.github.sekerator.kingdomworld.common.life.LifeWork.works(body)
+                && work.canContinueToUse();
     }
 
     @Override
@@ -66,6 +69,11 @@ public final class WorkGoal extends Goal {
     @Override
     public void tick() {
         if (work != null) {
+            // An ill citizen works slower: its work goes on only in part of the ticks.
+            double factor = io.github.sekerator.kingdomworld.common.life.LifeWork.workFactor(body.citizenId());
+            if (factor < 1.0 && (sickTicks++ % 100) >= Math.round(factor * 100)) {
+                return;
+            }
             work.tick();
         }
     }

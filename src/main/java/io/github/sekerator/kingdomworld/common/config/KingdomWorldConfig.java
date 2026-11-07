@@ -170,6 +170,8 @@ public final class KingdomWorldConfig {
         public final Law law;
         /** Kingdoms of the world that appear on their own. */
         public final NpcKingdoms npcKingdoms;
+        /** The day of citizens, taverns, rumors, light illnesses, festivals and fairs. */
+        public final Life life;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -470,6 +472,7 @@ public final class KingdomWorldConfig {
             roads = new Roads(builder);
             law = new Law(builder);
             npcKingdoms = new NpcKingdoms(builder);
+            life = new Life(builder);
 
             builder.comment("Abstract simulation of kingdoms far from players.").push("simulation");
             simulationIntervalTicks = builder
@@ -1430,6 +1433,98 @@ public final class KingdomWorldConfig {
             maxBounty = builder.comment("Highest reward for a head a king may set.").defineInRange("maxBounty", d.maxBounty, 0L, 1_000_000_000_000L);
             slaveryWarnBlocks = builder.comment("An owner with slaves is warned this many blocks before the land of a kingdom that forbids them.")
                     .defineInRange("slaveryWarnBlocks", d.slaveryWarnBlocks, 0, 256);
+            builder.pop();
+        }
+    }
+
+    public static final class Life {
+        public final ForgeConfigSpec.IntValue workStart;
+        public final ForgeConfigSpec.IntValue eveningStart;
+        public final ForgeConfigSpec.IntValue sleepStart;
+        public final ForgeConfigSpec.IntValue wakeUp;
+        public final ForgeConfigSpec.IntValue spreadTicks;
+        public final ForgeConfigSpec.IntValue tavernShare;
+        public final ForgeConfigSpec.IntValue tavernMood;
+        public final ForgeConfigSpec.IntValue tavernMoodDays;
+        public final ForgeConfigSpec.IntValue sickChance;
+        public final ForgeConfigSpec.DoubleValue sickFactor;
+        public final ForgeConfigSpec.IntValue sickMood;
+        public final ForgeConfigSpec.IntValue sickWorkPercent;
+        public final ForgeConfigSpec.DoubleValue infirmaryDays;
+        public final ForgeConfigSpec.DoubleValue homeDays;
+        public final ForgeConfigSpec.LongValue festivalPerCitizen;
+        public final ForgeConfigSpec.IntValue festivalFood;
+        public final ForgeConfigSpec.IntValue festivalMood;
+        public final ForgeConfigSpec.IntValue festivalMoodDays;
+        public final ForgeConfigSpec.IntValue festivalEveryDays;
+        public final ForgeConfigSpec.IntValue daysPerYear;
+        public final ForgeConfigSpec.IntValue fairEveryDays;
+        public final ForgeConfigSpec.ConfigValue<String> fairLevel;
+        public final ForgeConfigSpec.IntValue fairSeats;
+        public final ForgeConfigSpec.IntValue fairDiscount;
+        public final ForgeConfigSpec.IntValue fairVisitorItems;
+        public final ForgeConfigSpec.LongValue roomPrice;
+        public final ForgeConfigSpec.LongValue rumorPrice;
+        public final ForgeConfigSpec.IntValue rumorsMin;
+        public final ForgeConfigSpec.IntValue rumorsMax;
+
+        Life(ForgeConfigSpec.Builder builder) {
+            io.github.sekerator.kingdomworld.core.life.LifeRules.Builder d = new io.github.sekerator.kingdomworld.core.life.LifeRules.Builder();
+            builder.comment("The life of cities: the day of citizens, taverns and innkeepers, rumors, light illnesses, festivals and fairs.",
+                    "Times are ticks of the day: 0 is six in the morning, 6000 noon, 12000 sunset, 18000 midnight. Money is in copper",
+                    "coins of the kingdom.").push("life");
+            workStart = builder.comment("When citizens begin to work; the morning before it is the way from home.")
+                    .defineInRange("workStart", d.workStart, 0, 23_999);
+            eveningStart = builder.comment("When work ends: some citizens go to the tavern of their city, the others walk near home.")
+                    .defineInRange("eveningStart", d.eveningStart, 0, 23_999);
+            sleepStart = builder.comment("When citizens go to bed. Guards and soldiers on duty do not sleep.")
+                    .defineInRange("sleepStart", d.sleepStart, 0, 23_999);
+            wakeUp = builder.comment("When citizens get up.").defineInRange("wakeUp", d.wakeUp, 0, 23_999);
+            spreadTicks = builder.comment("Each citizen keeps its day up to this many ticks earlier or later than the others.")
+                    .defineInRange("spreadTicks", d.spreadTicks, 0, 3_000);
+            tavernShare = builder.comment("Percent of the citizens who go to the tavern on an evening.")
+                    .defineInRange("tavernShare", d.tavernShare, 0, 100);
+            tavernMood = builder.comment("Mood an evening in a tavern with food and drink gives. A city without a tavern loses nothing.")
+                    .defineInRange("tavernMood", d.tavernMood, 0, 50);
+            tavernMoodDays = builder.comment("For how many days the mood of an evening in the tavern lasts.")
+                    .defineInRange("tavernMoodDays", d.tavernMoodDays, 1, 30);
+            sickChance = builder.comment("Chance per day that a healthy citizen falls ill, in permille; 0 switches illnesses off.")
+                    .defineInRange("sickChance", d.sickChance, 0, 1000);
+            sickFactor = builder.comment("How many times likelier a hungry, homeless or wounded citizen falls ill, for each of these.")
+                    .defineInRange("sickFactor", d.sickFactor, 1.0, 10.0);
+            sickMood = builder.comment("Mood an ill citizen loses.").defineInRange("sickMood", d.sickMood, 0, 50);
+            sickWorkPercent = builder.comment("How fast an ill citizen works, in percent.")
+                    .defineInRange("sickWorkPercent", d.sickWorkPercent, 0, 100);
+            infirmaryDays = builder.comment("Days an ill citizen needs to get well in an infirmary.")
+                    .defineInRange("infirmaryDays", d.infirmaryDays, 0.05, 30.0);
+            homeDays = builder.comment("Days an ill citizen needs to get well without an infirmary (not less than in one).")
+                    .defineInRange("homeDays", d.homeDays, 0.05, 60.0);
+            festivalPerCitizen = builder.comment("What a festival costs the treasury for every citizen.")
+                    .defineInRange("festivalPerCitizen", d.festivalPerCitizen, 0L, 1_000_000L);
+            festivalFood = builder.comment("Food points of treat a festival takes from the storehouses for every citizen.")
+                    .defineInRange("festivalFood", d.festivalFood, 0, 100);
+            festivalMood = builder.comment("Mood a festival gives (half without the treat).").defineInRange("festivalMood", d.festivalMood, 0, 50);
+            festivalMoodDays = builder.comment("For how many days the mood of a festival lasts.")
+                    .defineInRange("festivalMoodDays", d.festivalMoodDays, 1, 30);
+            festivalEveryDays = builder.comment("Least days between two festivals the king calls.")
+                    .defineInRange("festivalEveryDays", d.festivalEveryDays, 1, 365);
+            daysPerYear = builder.comment("Game days of a year; the day a kingdom was founded is a festival once a year.")
+                    .defineInRange("daysPerYear", d.daysPerYear, 8, 10_000);
+            fairEveryDays = builder.comment("Days between the fairs of a large city; 0 switches fairs off.")
+                    .defineInRange("fairEveryDays", d.fairEveryDays, 0, 365);
+            fairLevel = builder.comment("Least level of a city that holds fairs: village, town or city.")
+                    .define("fairLevel", d.fairLevel.id(), value -> value instanceof String text && java.util.Arrays.stream(
+                            io.github.sekerator.kingdomworld.core.road.CityLevel.values()).anyMatch(level -> level.id().equals(text)));
+            fairSeats = builder.comment("Seats more each merchant post of the city has during its fair.").defineInRange("fairSeats", d.fairSeats, 0, 8);
+            fairDiscount = builder.comment("How much cheaper the market of a fair sells, in permille.")
+                    .defineInRange("fairDiscount", d.fairDiscount, 0, 500);
+            fairVisitorItems = builder.comment("Most items the merchants of one other kingdom linked by road bring to a fair.")
+                    .defineInRange("fairVisitorItems", d.fairVisitorItems, 0, 4_096);
+            roomPrice = builder.comment("What a room in a tavern costs for a day.").defineInRange("roomPrice", d.roomPrice, 0L, 1_000_000L);
+            rumorPrice = builder.comment("What an innkeeper asks to mark a camp of robbers on the atlas.")
+                    .defineInRange("rumorPrice", d.rumorPrice, 0L, 1_000_000L);
+            rumorsMin = builder.comment("Least rumors an innkeeper knows a day.").defineInRange("rumorsMin", d.rumorsMin, 1, 8);
+            rumorsMax = builder.comment("Most rumors an innkeeper knows a day.").defineInRange("rumorsMax", d.rumorsMax, 1, 8);
             builder.pop();
         }
     }

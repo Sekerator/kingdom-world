@@ -94,7 +94,7 @@ public class CitizenEntity extends PathfinderMob {
         goalSelector.addGoal(1, CitizenGoals.fleeMonsters(this));
         goalSelector.addGoal(2, new CitizenGoals.SeekCareGoal(this));
         goalSelector.addGoal(3, new OpenDoorGoal(this, true));
-        goalSelector.addGoal(4, new CitizenGoals.GoHomeAtNightGoal(this));
+        goalSelector.addGoal(4, new io.github.sekerator.kingdomworld.common.life.DayGoal(this));
         goalSelector.addGoal(5, new WorkGoal(this));
         goalSelector.addGoal(7, new CitizenGoals.StrollNearHomeGoal(this));
         goalSelector.addGoal(8, new LookAtPlayerGoal(this, Player.class, 6.0f));
@@ -201,6 +201,13 @@ public class CitizenEntity extends PathfinderMob {
         return healthState == CitizenState.WOUNDED || getHealth() < getMaxHealth() * CitizenSettings.rules().woundedFraction();
     }
 
+    /**
+     * Whether the citizen should go to an infirmary: wounded or ill.
+     */
+    public boolean needsCare() {
+        return isWounded() || io.github.sekerator.kingdomworld.common.life.LifeWork.isSick(citizenId);
+    }
+
     public SimpleContainer carried() {
         return carried;
     }
@@ -222,9 +229,13 @@ public class CitizenEntity extends PathfinderMob {
     @Override
     public void aiStep() {
         super.aiStep();
+        if (!level().isClientSide && isSleeping() && tickCount % 20 == 0
+                && io.github.sekerator.kingdomworld.common.life.DayGoal.shouldWake(this)) {
+            stopSleeping();
+        }
         if (!level().isClientSide && isAlive() && getHealth() < getMaxHealth()) {
-            // Slow natural healing; much faster next to an infirmary with room.
-            int interval = CitizenCare.isInInfirmary(this) ? 40 : 200;
+            // Slow natural healing; faster asleep, much faster next to an infirmary with room.
+            int interval = CitizenCare.isInInfirmary(this) ? 40 : isSleeping() ? 100 : 200;
             if (++regenerationTimer >= interval) {
                 regenerationTimer = 0;
                 heal(1.0f);
@@ -241,7 +252,16 @@ public class CitizenEntity extends PathfinderMob {
     }
 
     @Override
+    protected boolean isImmobile() {
+        // A sleeping citizen lies still until it wakes up.
+        return super.isImmobile() || isSleeping();
+    }
+
+    @Override
     public void onRemovedFromWorld() {
+        if (!level().isClientSide && isSleeping() && getSleepingPos().map(pos -> level().isLoaded(pos)).orElse(false)) {
+            stopSleeping();
+        }
         if (!level().isClientSide && citizenId != null) {
             CitizenBodies.onBodyRemoved(this);
         }
@@ -254,6 +274,9 @@ public class CitizenEntity extends PathfinderMob {
             return InteractionResult.PASS;
         }
         if (!level().isClientSide && player instanceof ServerPlayer serverPlayer && citizenId != null) {
+            if (io.github.sekerator.kingdomworld.common.life.TavernActions.open(serverPlayer, this)) {
+                return InteractionResult.SUCCESS;
+            }
             CitizenTexts.describeTo(serverPlayer, this);
         }
         return InteractionResult.sidedSuccess(level().isClientSide);

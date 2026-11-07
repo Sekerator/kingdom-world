@@ -16,7 +16,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Infirmaries for bodies in the world: which infirmary a wounded citizen goes to, and who is being treated. An
+ * Infirmaries for bodies in the world: which infirmary a wounded or ill citizen goes to, and who is being treated. An
  * infirmary treats up to {@code infirmaryCapacity} citizens at a time; the others wait at home.
  */
 public final class CitizenCare {
@@ -40,8 +40,8 @@ public final class CitizenCare {
         for (CitizenEntity body : CitizenBodies.bodies()) {
             UUID id = body.citizenId();
             WorldPos chosen = id == null ? null : CHOSEN.get(id);
-            if (chosen == null || !body.isWounded()) {
-                if (id != null && !body.isWounded()) {
+            if (chosen == null || !body.needsCare()) {
+                if (id != null && !body.needsCare()) {
                     CHOSEN.remove(id);
                 }
                 continue;

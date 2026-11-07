@@ -33,6 +33,9 @@ final class LawWitnesses {
         }
     }
 
+    /** Blows this close wake sleeping citizens, in blocks. */
+    static final double WAKE_RADIUS = 8.0;
+
     private LawWitnesses() {
     }
 
@@ -43,7 +46,16 @@ final class LawWitnesses {
         List<CitizenEntity> bodies = new ArrayList<>();
         for (CitizenEntity body : level.getEntitiesOfClass(CitizenEntity.class, offender.getBoundingBox().inflate(radius),
                 body -> body.isAlive() && body != victim && kingdomId.equals(body.kingdomId()) && body.citizenId() != null)) {
-            if (body.distanceToSqr(offender) > radius * radius || !body.hasLineOfSight(offender)) {
+            if (body.isSleeping()) {
+                // A sleeper sees nothing; the noise of blows close by wakes it (and it may then see the offender), a theft does not.
+                if (victim == null || body.distanceToSqr(offender) > WAKE_RADIUS * WAKE_RADIUS) {
+                    continue;
+                }
+                body.stopSleeping();
+            }
+            // At night a theft is seen only from closer by, except by soldiers, who keep watch.
+            double sight = victim == null && !LawWork.isSoldier(body) && !level.isDay() ? radius / 2 : radius;
+            if (body.distanceToSqr(offender) > sight * sight || !body.hasLineOfSight(offender)) {
                 continue;
             }
             if (LawWork.isSoldier(body)) {

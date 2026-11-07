@@ -47,7 +47,8 @@ final class CitizensTab {
         CITIZENS,
         WORK,
         PRODUCTION,
-        CHRONICLE;
+        CHRONICLE,
+        LIFE;
 
         String id() {
             return name().toLowerCase(Locale.ROOT);
@@ -56,6 +57,8 @@ final class CitizensTab {
 
     private final ThroneScreen screen;
     private CitizenView view;
+    private io.github.sekerator.kingdomworld.common.network.data.LifeViews.TabView life;
+    private int festivalWidth;
     private int filter;
     private Mode mode = Mode.CITIZENS;
     private int scroll;
@@ -79,6 +82,14 @@ final class CitizensTab {
 
     void setView(CitizenView view) {
         this.view = view;
+    }
+
+    void setLife(io.github.sekerator.kingdomworld.common.network.data.LifeViews.TabView life) {
+        this.life = life;
+    }
+
+    io.github.sekerator.kingdomworld.common.network.data.LifeViews.TabView life() {
+        return life;
     }
 
     boolean isChronicle() {
@@ -220,6 +231,7 @@ final class CitizensTab {
             modeWidth = Math.max(modeWidth, screen.buttonWidth(modeLabel(value)));
         }
         pageWidth = font.width(Component.translatable("kingdomworld.screen.throne.page", 500, 500, 500));
+        festivalWidth = screen.buttonWidth(Component.translatable(KEY + "life.call"));
         dayWidth = font.width(Component.translatable(KEY + "day", 99_999));
         professionLabelWidth = 0;
         for (Profession profession : professions()) {
@@ -229,7 +241,7 @@ final class CitizensTab {
         countWidth = Math.max(font.width(Component.translatable(KEY + "production.today", 9_999_999L)),
                 font.width(Component.translatable(KEY + "production.yesterday", 9_999_999L)));
 
-        int buttons = filterWidth + GAP + modeWidth + 8 + pageWidth;
+        int buttons = filterWidth + GAP + modeWidth + GAP + festivalWidth + 8 + pageWidth;
         int list = NAME_COLUMN + professionWidth + 6 + stateWidth + 6 + MIN_PLACE_COLUMN;
         int deaths = NAME_COLUMN + 120 + 6 + dayWidth;
         int production = professionLabelWidth + 2 * (countWidth + 6) + 60;
@@ -276,6 +288,7 @@ final class CitizensTab {
         return switch (mode) {
             case CHRONICLE -> view.chronicle().size();
             case PRODUCTION -> view.production().size();
+            case LIFE -> LifeRows.rows(life).size();
             default -> rows().size();
         };
     }
@@ -295,6 +308,14 @@ final class CitizensTab {
             setMode(next);
             screen.rebuild();
         }).bounds(left + KingdomScreen.PAD + filterWidth + GAP, buttonsY, modeWidth, ROW - 2).build());
+        if (mode == Mode.LIFE && life != null && life.canManage()) {
+            // The king calls a festival; the server says why not when it cannot be.
+            net.minecraft.client.gui.components.Button festival = screen.add(Button.builder(Component.translatable(KEY + "life.call"),
+                    b -> KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.LifePackets.CallFestival(life.kingdomId())))
+                    .bounds(left + KingdomScreen.PAD + filterWidth + GAP + modeWidth + GAP, buttonsY, festivalWidth, ROW - 2).build());
+            festival.active = life.nextIn() == 0 && life.festival() != 0;
+            festival.setTooltip(net.minecraft.client.gui.components.Tooltip.create(LifeRows.festivalHint(life)));
+        }
 
         int rows = visibleRows(top, panelHeight);
         scroll = Math.max(0, Math.min(scroll, rowCount() - rows));
@@ -351,6 +372,7 @@ final class CitizensTab {
         }
         int listTop = listTop(top);
         switch (mode) {
+            case LIFE -> LifeRows.render(screen, graphics, life, x, right, listTop, rows, scroll, ROW);
             case CHRONICLE -> renderChronicle(graphics, font, x, right, listTop, rows);
             case PRODUCTION -> renderProduction(graphics, font, x, right, listTop, rows);
             default -> renderList(graphics, x, right, listTop, rows);

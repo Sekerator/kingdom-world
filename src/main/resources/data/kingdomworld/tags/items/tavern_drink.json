@@ -1,0 +1,12 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:honey_bottle",
+    {"id": "#forge:drinks", "required": false},
+    {"id": "#forge:beverages", "required": false},
+    {"id": "#forge:juice", "required": false},
+    {"id": "#forge:tea", "required": false},
+    {"id": "#farmersdelight:drinks", "required": false},
+    {"id": "#brewinandchewin:fermented_drinks", "required": false}
+  ]
+}

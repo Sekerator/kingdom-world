@@ -195,6 +195,8 @@ public final class ConstructionActions {
             case io.github.sekerator.kingdomworld.core.construction.BuildingRoles.WELL -> lines.add(Component.translatable(key + "well",
                     whole(effect.param(io.github.sekerator.kingdomworld.core.construction.BuildingRoles.MOOD)),
                     blocks(whole(effect.param(io.github.sekerator.kingdomworld.core.construction.BuildingRoles.RADIUS)))));
+            case io.github.sekerator.kingdomworld.core.construction.BuildingRoles.TAVERN -> lines.add(Component.translatable(key + "guests",
+                    whole(effect.param(io.github.sekerator.kingdomworld.core.construction.BuildingRoles.GUESTS))));
             default -> {
                 for (Map.Entry<String, Double> param : effect.params().entrySet()) {
                     if (lines.size() < ConstructionView.MAX_EFFECTS) {

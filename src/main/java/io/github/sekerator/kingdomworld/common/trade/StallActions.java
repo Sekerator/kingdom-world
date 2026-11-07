@@ -125,7 +125,7 @@ public final class StallActions {
                 continue;
             }
             offers.add(new TradeViews.Offer(new ItemStack(item), LawWork.priceFor(server, kingdom.id(), player.getUUID(),
-                    sellPrice(server, kingdom.id(), entry, item)),
+                    io.github.sekerator.kingdomworld.common.life.LifeFairs.price(server, kingdom.id(), at(player), sellPrice(server, kingdom.id(), entry, item))),
                     Math.max(0, MarketStock.free(server, kingdom.id(), item) - entry.keep())));
         }
         List<TradeViews.Wanted> wanted = new ArrayList<>();
@@ -186,7 +186,9 @@ public final class StallActions {
                 continue;
             }
             ItemStack shown = stacks.get(0).copyWithCount(Math.min(lot.goods().count(), stacks.get(0).getMaxStackSize()));
-            String seller = PlayerNames.name(server, lot.seller());
+            // Merchants of another kingdom at a fair show the name of their kingdom.
+            String seller = io.github.sekerator.kingdomworld.common.life.LifeFairs.sellerName(server, lot.seller())
+                    .orElseGet(() -> PlayerNames.name(server, lot.seller()));
             lots.add(new TradeViews.LotRow(lot.id(), shown, lot.price(), seller.length() > TradeViews.MAX_NAME
                     ? seller.substring(0, TradeViews.MAX_NAME) : seller, lot.seller().equals(viewer)));
         }
@@ -202,6 +204,10 @@ public final class StallActions {
         Market market = KingdomWorldApi.state(server).trade().market(kingdom, TradeSettings.rules());
         Optional<Market.SellEntry> entry = market.sell(GoodsStacks.itemId(new ItemStack(item)));
         return entry.isPresent() ? java.util.OptionalLong.of(sellPrice(server, kingdom, entry.get(), item)) : java.util.OptionalLong.empty();
+    }
+
+    private static WorldPos at(ServerPlayer player) {
+        return new WorldPos(Dimensions.id(player.level()), player.getBlockX(), player.getBlockY(), player.getBlockZ());
     }
 
     static long sellPrice(MinecraftServer server, UUID kingdom, Market.SellEntry entry, Item item) {
@@ -347,7 +353,8 @@ public final class StallActions {
         if (MarketStock.free(server, kingdom.id(), item) - entry.get().keep() < count) {
             return KingdomActions.Feedback.error(KingdomError.OUT_OF_STOCK);
         }
-        long price = Prices.total(LawWork.priceFor(server, kingdom.id(), player.getUUID(), sellPrice(server, kingdom.id(), entry.get(), item)), count);
+        long price = Prices.total(LawWork.priceFor(server, kingdom.id(), player.getUUID(), io.github.sekerator.kingdomworld.common.life.LifeFairs.price(
+                server, kingdom.id(), at(player), sellPrice(server, kingdom.id(), entry.get(), item))), count);
         if (price < 1) {
             return KingdomActions.Feedback.error(price < 0 ? KingdomError.TOO_MUCH_MONEY : KingdomError.NOT_FOR_SALE);
         }
@@ -395,6 +402,38 @@ public final class StallActions {
         KingdomActions.Feedback done = KingdomActions.Feedback.ok(KEY + "bought", sample.getHoverName(), TradeTexts.items(count),
                 money(server, currency, cost));
         return toAccount > 0 ? withAccountNote(done, server, currency, toAccount) : done;
+    }
+
+    /**
+     * A player pays a kingdom in its own currency, from the account or with coins (the change comes back as coins, onto the
+     * account where they do not fit); for the taverns of the life of cities.
+     *
+     * @return why the payment was refused, or empty when it was made
+     */
+    public static Optional<KingdomActions.Feedback> payKingdom(ServerPlayer player, UUID kingdom, long cost, boolean account,
+                                                               io.github.sekerator.kingdomworld.core.economy.LedgerCategory category) {
+        if (cost <= 0) {
+            return Optional.empty();
+        }
+        Object prepared = preparePayment(player, kingdom, kingdom, cost, account);
+        if (prepared instanceof KingdomActions.Feedback refused) {
+            return Optional.of(refused);
+        }
+        Payment payment = (Payment) prepared;
+        if (payment.payer() == null && !Purses.take(player, kingdom, payment.coins())) {
+            return Optional.of(KingdomActions.Feedback.error(KingdomError.NOT_ENOUGH_MONEY));
+        }
+        Outcome paid = KingdomWorldApi.state(player.server).economy().payKingdom(kingdom, kingdom, cost, payment.payer(), category,
+                TreasuryActions.day(player.server));
+        if (!paid.ok()) {
+            if (payment.payer() == null) {
+                Purses.giveBack(player, kingdom, payment.coins());
+            }
+            return Optional.of(KingdomActions.Feedback.error(paid.error()));
+        }
+        change(player, payment);
+        LawWork.traded(player.server, kingdom, player.getUUID(), cost);
+        return Optional.empty();
     }
 
     private static KingdomActions.Feedback withAccountNote(KingdomActions.Feedback done, MinecraftServer server, UUID currency, long amount) {

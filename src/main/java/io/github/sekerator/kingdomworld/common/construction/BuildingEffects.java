@@ -236,10 +236,14 @@ public final class BuildingEffects {
     }
 
     /**
-     * Whether a bed may be offered to a citizen: not inside a house whose role rests.
+     * Whether a bed may be offered to a citizen: not inside a house whose role rests, nor inside a tavern.
      */
     public static boolean bedUsable(MinecraftServer server, UUID kingdomId, WorldPos bed) {
         for (Effect effect : of(server, kingdomId)) {
+            if (BuildingRoles.TAVERN.equals(effect.building().role()) && inside(effect.building(), bed)) {
+                // The beds of a tavern are rooms for guests, nobody's home.
+                return false;
+            }
             if (BuildingRoles.HOUSE.equals(effect.building().role()) && inside(effect.building(), bed)) {
                 return effect.works() || effect.status() == BuildingRoles.Status.NONE;
             }
@@ -325,6 +329,7 @@ public final class BuildingEffects {
                 seats = Math.max(seats, (int) Math.round(effect.param(BuildingRoles.MERCHANTS)));
             }
         }
+        seats += io.github.sekerator.kingdomworld.common.life.LifeFairs.extraSeats(server, post);
         return Math.max(0, Math.min(16, seats));
     }
 
