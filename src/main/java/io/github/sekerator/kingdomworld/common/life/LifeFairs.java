@@ -178,7 +178,12 @@ public final class LifeFairs {
             if (other.id().equals(place.kingdomId()) || !trades(server, other.id(), place.kingdomId()) || !linked(server, other.id(), place)) {
                 continue;
             }
-            Market market = state.trade().market(other.id(), TradeSettings.rules());
+            // Only a kingdom that has a market exports; looking does not open one.
+            Optional<Market> found = state.trade().existing(other.id());
+            if (found.isEmpty()) {
+                continue;
+            }
+            Market market = found.get();
             int left = rules.fairVisitorItems();
             boolean any = false;
             for (Market.ExportRule rule : market.exports()) {

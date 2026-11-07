@@ -2045,6 +2045,7 @@ Invoke-Phase 'session2' {
     if ($script:SmithId) { $postCount += 2 }
     if ($script:MinterId) { $postCount += 1 }
     if ($script:BuilderId) { $postCount += 1 }
+    if ($script:InnkeeperId) { $postCount += 1 }
     if (-not (Wait-ForLog $server "KingdomWorld loaded 2 kingdom\(s\) with $citizenCount citizen\(s\), $postCount work post\(s\), 2 storehouse\(s\), 2 treasury\(ies\), \d+ player\(s\) with accounts, 1 market\(s\), 1 deal\(s\), 1 caravan\(s\) on the way" 10)) {
         Add-Failure "[session2] expected 2 kingdoms with $citizenCount citizens, $postCount work post(s), 2 storehouses, 2 treasuries, a market, a deal and a caravan on the way to be loaded after restart"
     }

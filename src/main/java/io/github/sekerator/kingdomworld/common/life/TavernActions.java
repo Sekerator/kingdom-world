@@ -51,7 +51,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalLong;
 import java.util.UUID;
 
 /**
@@ -166,8 +165,11 @@ public final class TavernActions {
      * does not sell it; a player's reputation moves it like at the market.
      */
     static long price(MinecraftServer server, UUID kingdomId, UUID player, Item item) {
-        OptionalLong market = StallActions.marketPrice(server, kingdomId, item);
-        long price = market.isPresent() ? market.getAsLong()
+        // The king's price where the market sells the item, the price of the market by worth and stock otherwise; looking
+        // does not open a market for the kingdom.
+        long manual = KingdomWorldApi.state(server).trade().existing(kingdomId)
+                .flatMap(market -> market.sell(GoodsStacks.itemId(new ItemStack(item)))).map(entry -> entry.price()).orElse(0L);
+        long price = manual > 0 ? manual
                 : Prices.autoSellPrice(MarketStock.worth(server, item).amount(), MarketStock.stock(server, kingdomId, item), TradeSettings.rules());
         return LawWork.priceFor(server, kingdomId, player, Math.max(1, price));
     }
