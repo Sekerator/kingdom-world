@@ -6,6 +6,7 @@ import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
 import io.netty.handler.codec.DecoderException;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,13 +26,28 @@ import java.util.UUID;
  * @param perDay         items one worker gathers in a game day, rounded
  * @param producedToday  items gathered at the post today
  * @param unemployed     citizens without work in the kingdom, who could be hired
+ * @param auto           for a workshop: whether it works on its own when nothing is ordered
+ * @param stations       for a workshop: the workstations in its zone, by kind with their number
+ * @param current        for a workshop: what it makes now, empty if nothing
+ * @param progress       how far the current item is, in percent
  */
 public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, String profession, int radius, int maxRadius,
                            int seats, int maxSeats, String animal, List<String> animals, int herdSize, int maxHerd,
                            WorkStatus status, boolean container, boolean measured, int perDay, long producedToday,
-                           List<Worker> workers, int unemployed) {
+                           List<Worker> workers, int unemployed, boolean auto, List<Station> stations, ItemStack current,
+                           int progress) {
     public static final int MAX_WORKERS = 16;
     public static final int MAX_ANIMALS = 16;
+    public static final int MAX_STATIONS = 16;
+
+    /**
+     * Workstations of one kind in the zone of a workshop.
+     */
+    public record Station(String kind, int count) {
+        public Station {
+            Objects.requireNonNull(kind, "kind");
+        }
+    }
 
     /**
      * A worker of the post.
@@ -51,7 +67,10 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
         Objects.requireNonNull(status, "status");
         animals = List.copyOf(animals);
         workers = List.copyOf(workers);
-        if (animals.size() > MAX_ANIMALS || workers.size() > MAX_WORKERS) {
+        stations = List.copyOf(stations);
+        Objects.requireNonNull(current, "current");
+        progress = Math.max(0, Math.min(100, progress));
+        if (animals.size() > MAX_ANIMALS || workers.size() > MAX_WORKERS || stations.size() > MAX_STATIONS) {
             throw new IllegalArgumentException("Work post view too large");
         }
     }
@@ -85,6 +104,14 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
             buf.writeEnum(worker.status());
         }
         buf.writeVarInt(unemployed);
+        buf.writeBoolean(auto);
+        buf.writeVarInt(stations.size());
+        for (Station station : stations) {
+            buf.writeUtf(station.kind(), Profession.MAX_ID_LENGTH);
+            buf.writeVarInt(station.count());
+        }
+        buf.writeItem(current);
+        buf.writeVarInt(progress);
     }
 
     public static WorkPostView decode(FriendlyByteBuf buf) {
@@ -118,7 +145,15 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
             workers.add(new Worker(buf.readUUID(), buf.readInt(), buf.readBoolean(), KingdomView.readEnum(buf, WorkStatus.class)));
         }
         int unemployed = buf.readVarInt();
+        boolean auto = buf.readBoolean();
+        int stationCount = KingdomView.readSize(buf, MAX_STATIONS);
+        List<Station> stations = new ArrayList<>(stationCount);
+        for (int i = 0; i < stationCount; i++) {
+            stations.add(new Station(buf.readUtf(Profession.MAX_ID_LENGTH), buf.readVarInt()));
+        }
+        ItemStack current = buf.readItem();
+        int progress = buf.readVarInt();
         return new WorkPostView(pos, kingdomId, canManage, profession, radius, maxRadius, seats, maxSeats, animal, animals, herdSize,
-                maxHerd, status, container, measured, perDay, produced, workers, unemployed);
+                maxHerd, status, container, measured, perDay, produced, workers, unemployed, auto, stations, current, progress);
     }
 }

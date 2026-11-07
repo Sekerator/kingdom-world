@@ -3,7 +3,10 @@ package io.github.sekerator.kingdomworld.client.screen;
 import io.github.sekerator.kingdomworld.client.ClientHooks;
 import io.github.sekerator.kingdomworld.common.kingdom.PlayerNames;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
+import io.github.sekerator.kingdomworld.common.network.data.CatalogView;
 import io.github.sekerator.kingdomworld.common.network.data.CitizenView;
+import io.github.sekerator.kingdomworld.common.network.data.OrdersView;
+import io.github.sekerator.kingdomworld.common.network.packet.OrderPackets;
 import io.github.sekerator.kingdomworld.common.network.data.KingdomView;
 import io.github.sekerator.kingdomworld.common.network.data.StorageView;
 import io.github.sekerator.kingdomworld.common.network.packet.StoragePackets;
@@ -21,6 +24,7 @@ import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.narration.NarratableEntry;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -48,13 +52,14 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private static final int MIN_NAME_COLUMN = 64;
     private static final int GAP = 2;
     private static final List<Permission> EDITABLE_RIGHTS = List.of(Permission.BUILD, Permission.CONTAINERS,
-            Permission.INTERACT, Permission.RECRUIT, Permission.TERRITORY, Permission.MANAGE_CITIZENS);
+            Permission.INTERACT, Permission.RECRUIT, Permission.TERRITORY, Permission.MANAGE_CITIZENS, Permission.MANAGE_PRODUCTION);
 
     private enum Tab {
         OVERVIEW("kingdomworld.screen.throne.tab.overview"),
         MEMBERS("kingdomworld.screen.throne.tab.members"),
         CITIZENS("kingdomworld.screen.throne.tab.citizens"),
         STORAGE("kingdomworld.screen.throne.tab.storage"),
+        ORDERS("kingdomworld.screen.throne.tab.orders"),
         RIGHTS("kingdomworld.screen.throne.tab.rights");
 
         private final String key;
@@ -70,6 +75,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private KingdomView view;
     private final CitizensTab citizens = new CitizensTab(this);
     private final StorageTab storage = new StorageTab(this);
+    private final OrdersTab orders = new OrdersTab(this);
     private Tab tab = Tab.OVERVIEW;
     private int scroll;
     private Component status = Component.empty();
@@ -86,6 +92,8 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private int doneWidth;
     private int rightsLabelWidth;
     private int rightsCellWidth;
+    /** Whether the tabs are drawn narrower, because the row of usual ones does not fit the screen. */
+    private boolean compactTabs;
 
     public ThroneScreen(KingdomView view) {
         super(Component.literal(view.name()));
@@ -95,7 +103,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     @Override
     public String checkName() {
         String name = tab == Tab.CITIZENS ? citizens.checkName() : tab == Tab.STORAGE ? storage.checkName()
-                : tab.name().toLowerCase(Locale.ROOT);
+                : tab == Tab.ORDERS ? orders.checkName() : tab.name().toLowerCase(Locale.ROOT);
         return "throne/" + name + "/" + view.relation().name().toLowerCase(Locale.ROOT);
     }
 
@@ -139,6 +147,61 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         if (minecraft != null) {
             rebuildWidgets();
         }
+    }
+
+    /**
+     * Shows the orders the server sent, if they belong to the kingdom on screen.
+     */
+    public void updateOrders(OrdersView ordersView) {
+        if (!ordersView.kingdomId().equals(view.id())) {
+            return;
+        }
+        orders.setView(ordersView);
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
+    }
+
+    /**
+     * Shows a page of the items that can be ordered.
+     */
+    public void updateCatalog(CatalogView catalogView) {
+        if (!catalogView.kingdomId().equals(view.id())) {
+            return;
+        }
+        orders.setCatalog(catalogView);
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
+    }
+
+    /**
+     * Orders the orders tab shows, or -1 while the server has not answered; for the self-check.
+     */
+    public int ordersShown() {
+        return orders.view() == null ? -1 : orders.view().orders().size();
+    }
+
+    /**
+     * Shows a mode of the orders tab ({@code list}, {@code create}, {@code edit}); for the layout check.
+     */
+    public void showOrders(String mode, String search, ItemStack chosen, String profession) {
+        orders.showForCheck(OrdersTab.Mode.valueOf(mode.toUpperCase(Locale.ROOT)), search, chosen, profession);
+    }
+
+    /**
+     * Shows a page of the catalog without asking the server; for the layout check.
+     */
+    public void showCatalog(CatalogView catalogView) {
+        orders.setCatalog(catalogView);
+    }
+
+    int panelTop() {
+        return top();
+    }
+
+    int panelHeight() {
+        return panelHeight;
     }
 
     /**
@@ -217,6 +280,9 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         }
         if (target == Tab.STORAGE && Minecraft.getInstance().getConnection() != null) {
             KingdomWorldNetwork.sendToServer(new StoragePackets.Request(view.id()));
+        }
+        if (target == Tab.ORDERS && Minecraft.getInstance().getConnection() != null) {
+            KingdomWorldNetwork.sendToServer(new OrderPackets.Request(view.id()));
         }
         if (minecraft != null) {
             rebuildWidgets();
@@ -303,6 +369,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             labels.add(Component.translatable(Tab.MEMBERS.key));
             labels.add(Component.translatable(Tab.CITIZENS.key));
             labels.add(Component.translatable(Tab.STORAGE.key));
+            labels.add(Component.translatable(Tab.ORDERS.key));
             labels.add(Component.translatable(Tab.RIGHTS.key));
             labels.add(Component.translatable("kingdomworld.screen.throne.tab.territory"));
         }
@@ -331,8 +398,14 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         }
 
         int tabs = 0;
+        int compact = 0;
         for (Component label : tabLabels()) {
             tabs += buttonWidth(label) + GAP;
+            compact += compactTabWidth(label) + GAP;
+        }
+        compactTabs = tabs + 2 * PAD > width - 8;
+        if (compactTabs) {
+            tabs = compact;
         }
         int members = MIN_NAME_COLUMN + 12 + roleWidth + kickWidth + crownWidth + 2 * GAP;
         int applications = MIN_NAME_COLUMN + 12 + approveWidth + rejectWidth + GAP;
@@ -347,10 +420,11 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         }
         int inner = Math.max(Math.max(tabs, members), Math.max(Math.max(applications, rights), Math.max(overview + 4, bottom)));
         if (isMember()) {
-            inner = Math.max(inner, Math.max(citizens.measure(font), storage.measure(font)));
+            inner = Math.max(inner, Math.max(Math.max(citizens.measure(font), storage.measure(font)), orders.measure(font)));
         }
         panelWidth = Math.min(Math.max(MIN_PANEL_WIDTH, inner + 2 * PAD), width - 8);
-        panelHeight = Math.min(tab == Tab.CITIZENS || tab == Tab.STORAGE ? MAX_CITIZENS_PANEL_HEIGHT : MAX_PANEL_HEIGHT, height - 8);
+        panelHeight = Math.min(tab == Tab.CITIZENS || tab == Tab.STORAGE || tab == Tab.ORDERS ? MAX_CITIZENS_PANEL_HEIGHT : MAX_PANEL_HEIGHT,
+                height - 8);
     }
 
     // ---------------------------------------------------------------- widgets
@@ -366,25 +440,38 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             x = tabButton(Tab.MEMBERS, x, top + TAB_TOP);
             x = tabButton(Tab.CITIZENS, x, top + TAB_TOP);
             x = tabButton(Tab.STORAGE, x, top + TAB_TOP);
+            x = tabButton(Tab.ORDERS, x, top + TAB_TOP);
             x = tabButton(Tab.RIGHTS, x, top + TAB_TOP);
             Component territory = Component.translatable("kingdomworld.screen.throne.tab.territory");
             addRenderableWidget(Button.builder(territory, button -> ClientHooks.openTerritoryEditor(view))
-                    .bounds(x, top + TAB_TOP, buttonWidth(territory), TAB_HEIGHT).build());
+                    .bounds(x, top + TAB_TOP, tabWidth(territory), TAB_HEIGHT).build());
         }
         switch (tab) {
             case OVERVIEW -> initOverview(left, top);
             case MEMBERS -> initMembers(top);
             case CITIZENS -> citizens.init(left, top, panelWidth, panelHeight);
             case STORAGE -> storage.init(left, top, panelWidth, panelHeight);
+            case ORDERS -> orders.init(left, top, panelWidth, panelHeight);
             case RIGHTS -> initRights(top);
         }
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), button -> onClose())
                 .bounds(left + panelWidth - PAD - doneWidth, top + panelHeight - 26, doneWidth, 20).build());
     }
 
+    /**
+     * A tab just wide enough for its text, for screens where the usual tabs do not fit in one row.
+     */
+    private int compactTabWidth(Component label) {
+        return font.width(label) + LayoutCheck.BUTTON_TEXT_MARGIN + 2;
+    }
+
+    private int tabWidth(Component label) {
+        return compactTabs ? compactTabWidth(label) : buttonWidth(label);
+    }
+
     private int tabButton(Tab target, int x, int y) {
         Component label = Component.translatable(target.key);
-        int buttonWidth = buttonWidth(label);
+        int buttonWidth = tabWidth(label);
         Button button = addRenderableWidget(Button.builder(label, b -> openTab(target))
                 .bounds(x, y, buttonWidth, TAB_HEIGHT).build());
         button.active = tab != target;
@@ -543,6 +630,12 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             }
             return true;
         }
+        if (tab == Tab.ORDERS) {
+            if (orders.scroll(top(), panelHeight, delta)) {
+                rebuildWidgets();
+            }
+            return true;
+        }
         if (tab == Tab.MEMBERS) {
             int max = Math.max(0, rows().size() - visibleRows());
             int next = Math.max(0, Math.min(max, scroll - (int) Math.signum(delta)));
@@ -585,6 +678,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             case MEMBERS -> renderMembers(graphics, left, top);
             case CITIZENS -> citizens.render(graphics, font, left, top, panelWidth, panelHeight);
             case STORAGE -> storage.render(graphics, font, left, top, panelWidth, panelHeight);
+            case ORDERS -> orders.render(graphics, font, left, top, panelWidth, panelHeight);
             case RIGHTS -> renderRights(graphics, left, top);
         }
         Component bottomText = status;
@@ -655,6 +749,22 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             label(graphics, roleName(role), left + PAD, top + CONTENT_TOP + 16 + row * RIGHTS_ROW, 0xFFE8E8E8, rightsLeft() - 2);
             row++;
         }
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (tab == Tab.ORDERS) {
+            orders.tick();
+        }
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (super.mouseClicked(mouseX, mouseY, button)) {
+            return true;
+        }
+        return tab == Tab.ORDERS && button == 0 && orders.click(left(), top(), panelWidth, panelHeight, mouseX, mouseY);
     }
 
     @Override

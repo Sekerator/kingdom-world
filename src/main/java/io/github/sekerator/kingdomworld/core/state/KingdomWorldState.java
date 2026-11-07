@@ -374,6 +374,25 @@ public final class KingdomWorldState {
     }
 
     /**
+     * Switches a workshop between working on its own when nothing is ordered and making only what is ordered.
+     */
+    public Outcome setPostAuto(UUID actor, WorldPos pos, boolean auto) {
+        Outcome check = checkPost(actor, pos);
+        if (!check.ok()) {
+            return check;
+        }
+        WorkPost post = citizens.posts().get(pos).orElseThrow();
+        if (!Professions.hasAutoMode(post.professionId())) {
+            return Outcome.fail(KingdomError.NOT_A_POST_PROFESSION);
+        }
+        if (post.auto() == auto) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        post.setAuto(auto);
+        return Outcome.DONE;
+    }
+
+    /**
      * The result of hiring a worker for a post.
      *
      * @param citizen the citizen who now works there, if any

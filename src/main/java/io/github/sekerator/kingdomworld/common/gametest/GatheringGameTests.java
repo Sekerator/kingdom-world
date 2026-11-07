@@ -70,7 +70,7 @@ public final class GatheringGameTests {
     /**
      * Places a work post and sets its profession.
      */
-    private static WorldPos post(GameTestHelper helper, BlockPos relative, String profession) {
+    static WorldPos post(GameTestHelper helper, BlockPos relative, String profession) {
         helper.setBlock(relative, ModRegistries.WORK_POST.get());
         WorldPos pos = CitizenGameTests.at(helper, relative.getX(), relative.getY(), relative.getZ());
         helper.assertTrue(PostWork.post(helper.getLevel().getServer(), pos).isPresent(), "The work post was not registered");
@@ -78,7 +78,7 @@ public final class GatheringGameTests {
         return pos;
     }
 
-    private static WorldPos post(ServerLevel level, BlockPos absolute, String profession) {
+    static WorldPos post(ServerLevel level, BlockPos absolute, String profession) {
         level.setBlockAndUpdate(absolute, ModRegistries.WORK_POST.get().defaultBlockState());
         WorldPos pos = new WorldPos(Dimensions.id(level), absolute.getX(), absolute.getY(), absolute.getZ());
         KingdomWorldApi.change(level.getServer(), "test", state -> state.setPostProfession(null, pos, profession));
@@ -88,7 +88,7 @@ public final class GatheringGameTests {
     /**
      * A citizen of the profession working at the post, with a body standing at {@code spot} (absolute).
      */
-    private static Citizen worker(GameTestHelper helper, Kingdom kingdom, String profession, WorldPos post, BlockPos spot) {
+    static Citizen worker(GameTestHelper helper, Kingdom kingdom, String profession, WorldPos post, BlockPos spot) {
         MinecraftServer server = helper.getLevel().getServer();
         Citizen citizen = CitizenGameTests.newcomer(helper, kingdom, 1, 1);
         KingdomWorldApi.change(server, "test", state -> state.setProfession(null, citizen.id(), profession));
@@ -99,7 +99,7 @@ public final class GatheringGameTests {
         return citizen;
     }
 
-    private static StorehouseInventory storehouse(ServerLevel level, BlockPos absolute) {
+    static StorehouseInventory storehouse(ServerLevel level, BlockPos absolute) {
         level.setBlockAndUpdate(absolute, ModRegistries.STOREHOUSE.get().defaultBlockState());
         return KingdomSavedData.get(level.getServer()).storehouses()
                 .get(new WorldPos(Dimensions.id(level), absolute.getX(), absolute.getY(), absolute.getZ()))
@@ -109,7 +109,7 @@ public final class GatheringGameTests {
     /**
      * Sets every block of a box (absolute, inclusive) to air: the test's own blocks are cleared before and after.
      */
-    private static void clear(ServerLevel level, BlockPos from, BlockPos to) {
+    static void clear(ServerLevel level, BlockPos from, BlockPos to) {
         for (BlockPos pos : BlockPos.betweenClosed(from, to)) {
             if (!level.getBlockState(pos).isAir()) {
                 level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2 | 16);
@@ -117,12 +117,12 @@ public final class GatheringGameTests {
         }
     }
 
-    private static long produced(MinecraftServer server, Kingdom kingdom, String profession, String item) {
+    static long produced(MinecraftServer server, Kingdom kingdom, String profession, String item) {
         return KingdomWorldApi.state(server).citizens().ledger().today(kingdom.id(), PostWork.gameDay(server)).counts()
                 .getOrDefault(profession, Map.of()).getOrDefault(item, 0L);
     }
 
-    private static void end(GameTestHelper helper, Kingdom kingdom, Citizen citizen, BlockPos from, BlockPos to) {
+    static void end(GameTestHelper helper, Kingdom kingdom, Citizen citizen, BlockPos from, BlockPos to) {
         CitizenGameTests.finish(helper, kingdom, citizen);
         clear(helper.getLevel(), from, to);
     }
@@ -520,7 +520,7 @@ public final class GatheringGameTests {
 
     // ---------------------------------------------------------------- work far from players
 
-    private static GatheringRules safeRules(double deathChance) {
+    static GatheringRules safeRules(double deathChance) {
         GatheringRules rules = GatheringRules.DEFAULT;
         return new GatheringRules(rules.defaultRadius(), rules.maxRadius(), rules.maxSeats(), rules.maxTreeBlocks(), rules.mineLevels(),
                 rules.maxHerd(), rules.carrierRange(), rules.carrierItemsPerMinute(), deathChance > 0 ? 1.0 : 0.0,

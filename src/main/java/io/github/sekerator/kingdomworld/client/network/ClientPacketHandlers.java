@@ -57,6 +57,18 @@ public final class ClientPacketHandlers {
         }
     }
 
+    public static void handleOrdersView(io.github.sekerator.kingdomworld.common.network.data.OrdersView view) {
+        if (Minecraft.getInstance().screen instanceof ThroneScreen throne) {
+            throne.updateOrders(view);
+        }
+    }
+
+    public static void handleCatalog(io.github.sekerator.kingdomworld.common.network.data.CatalogView view) {
+        if (Minecraft.getInstance().screen instanceof ThroneScreen throne) {
+            throne.updateCatalog(view);
+        }
+    }
+
     public static void handleStorageView(StorageView view) {
         if (Minecraft.getInstance().screen instanceof ThroneScreen throne) {
             throne.updateStorage(view);

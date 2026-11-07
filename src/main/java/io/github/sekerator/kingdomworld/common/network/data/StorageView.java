@@ -23,9 +23,10 @@ public record StorageView(UUID kingdomId, List<Entry> items, List<Storehouse> st
     /**
      * One kind of item.
      *
-     * @param sample one item of the kind, with its tag
+     * @param sample   one item of the kind, with its tag
+     * @param reserved items of the kind workers set aside for their work, part of {@code count}
      */
-    public record Entry(ItemStack sample, long count) {
+    public record Entry(ItemStack sample, long count, long reserved) {
         public Entry {
             Objects.requireNonNull(sample, "sample");
         }
@@ -57,6 +58,7 @@ public record StorageView(UUID kingdomId, List<Entry> items, List<Storehouse> st
         for (Entry entry : items) {
             buf.writeItem(entry.sample());
             buf.writeVarLong(entry.count());
+            buf.writeVarLong(entry.reserved());
         }
         buf.writeVarInt(storehouses.size());
         for (Storehouse storehouse : storehouses) {
@@ -73,7 +75,7 @@ public record StorageView(UUID kingdomId, List<Entry> items, List<Storehouse> st
         int size = KingdomView.readSize(buf, MAX_ITEMS);
         List<Entry> items = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
-            items.add(new Entry(buf.readItem(), buf.readVarLong()));
+            items.add(new Entry(buf.readItem(), buf.readVarLong(), buf.readVarLong()));
         }
         int count = KingdomView.readSize(buf, MAX_STOREHOUSES);
         List<Storehouse> storehouses = new ArrayList<>(count);

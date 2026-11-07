@@ -33,7 +33,8 @@ public record WorkPostActionPacket(BlockPos pos, Action action, int value, Strin
         ANIMAL,
         HERD,
         HIRE,
-        DISMISS
+        DISMISS,
+        AUTO
     }
 
     public WorkPostActionPacket {

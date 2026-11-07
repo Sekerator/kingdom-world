@@ -91,6 +91,10 @@ final class WorkCommands {
                                                 .executes(context -> set(context, pos -> KingdomWorldApi.state(context.getSource().getServer())
                                                         .setPostHerdSize(null, pos, IntegerArgumentType.getInteger(context, "value"),
                                                                 GatheringSettings.rules().maxHerd())))))
+                                .then(Commands.literal("auto")
+                                        .then(Commands.argument("value", com.mojang.brigadier.arguments.BoolArgumentType.bool())
+                                                .executes(context -> set(context, pos -> KingdomWorldApi.state(context.getSource().getServer())
+                                                        .setPostAuto(null, pos, com.mojang.brigadier.arguments.BoolArgumentType.getBool(context, "value"))))))
                                 .then(Commands.literal("animal")
                                         .then(Commands.argument("animal", ResourceLocationArgument.id())
                                                 .executes(context -> set(context, pos -> KingdomWorldApi.state(context.getSource().getServer())

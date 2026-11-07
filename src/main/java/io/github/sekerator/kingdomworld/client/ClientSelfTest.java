@@ -165,9 +165,17 @@ public final class ClientSelfTest {
                     screen.selectTab("storage");
                 }
             }
-            case 256 -> LOGGER.info(PREFIX + "storehouses tab answered by the server: {} ({} kind(s) of items)",
-                    minecraft.screen instanceof ThroneScreen screen && screen.storageShown() >= 0,
-                    minecraft.screen instanceof ThroneScreen screen ? screen.storageShown() : -1);
+            case 256 -> {
+                LOGGER.info(PREFIX + "storehouses tab answered by the server: {} ({} kind(s) of items)",
+                        minecraft.screen instanceof ThroneScreen screen && screen.storageShown() >= 0,
+                        minecraft.screen instanceof ThroneScreen screen ? screen.storageShown() : -1);
+                if (minecraft.screen instanceof ThroneScreen screen) {
+                    screen.selectTab("orders");
+                }
+            }
+            case 259 -> LOGGER.info(PREFIX + "orders tab answered by the server: {} ({} order(s))",
+                    minecraft.screen instanceof ThroneScreen screen && screen.ordersShown() >= 0,
+                    minecraft.screen instanceof ThroneScreen screen ? screen.ordersShown() : -1);
             case 260 -> {
                 if (minecraft.screen instanceof ThroneScreen screen) {
                     ClientHooks.openTerritoryEditor(screen.view());

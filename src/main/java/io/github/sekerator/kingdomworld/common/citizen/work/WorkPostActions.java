@@ -133,12 +133,22 @@ public final class WorkPostActions {
             }
         }
         GatheringRules rules = GatheringSettings.rules();
+        List<WorkPostView.Station> stations = new ArrayList<>();
+        for (String kind : io.github.sekerator.kingdomworld.core.production.Stations.ALL) {
+            int count = post.stations().getOrDefault(kind, 0);
+            if (count > 0) {
+                stations.add(new WorkPostView.Station(kind, count));
+            }
+        }
+        net.minecraft.world.item.Item current = PostWork.item(post.current());
         return new WorkPostView(new BlockPos(post.pos().x(), post.pos().y(), post.pos().z()), post.kingdomId(),
                 state.membership().hasPermission(player.getUUID(), post.kingdomId(), Permission.MANAGE_CITIZENS),
                 post.professionId(), post.radius(), Math.max(post.radius(), rules.maxRadius()), post.seats(),
                 Math.max(post.seats(), rules.maxSeats()), post.animal(), animals, post.herdSize(), Math.max(post.herdSize(), rules.maxHerd()),
                 post.status(), container, post.yield().measured(), (int) Math.min(1_000_000, Math.round(post.yield().total())),
-                post.producedOn(PostWork.gameDay(server)), workers, unemployed);
+                post.producedOn(PostWork.gameDay(server)), workers, unemployed, post.auto(), stations,
+                current == null ? net.minecraft.world.item.ItemStack.EMPTY : new net.minecraft.world.item.ItemStack(current),
+                (int) Math.round(post.currentProgress() * 100));
     }
 
     // ---------------------------------------------------------------- changes
@@ -172,6 +182,7 @@ public final class WorkPostActions {
             case HIRE -> hire(player, at);
             case DISMISS -> packet.target() == null ? KingdomActions.Feedback.error(KingdomError.NOT_A_WORKER)
                     : dismiss(player, at, packet.target());
+            case AUTO -> setAuto(player, at, packet.value() != 0);
         };
         if (feedback != null) {
             KingdomActions.reply(player, feedback);
@@ -228,6 +239,12 @@ public final class WorkPostActions {
         Outcome outcome = KingdomWorldApi.change(player.server, "set the herd of a work post",
                 state -> state.setPostHerdSize(player.getUUID(), pos, size, GatheringSettings.rules().maxHerd()));
         return result(outcome, KEY + "herd_set", size);
+    }
+
+    public static KingdomActions.Feedback setAuto(ServerPlayer player, WorldPos pos, boolean auto) {
+        Outcome outcome = KingdomWorldApi.change(player.server, "switch the auto mode of a workshop",
+                state -> state.setPostAuto(player.getUUID(), pos, auto));
+        return result(outcome, auto ? KEY + "auto_on" : KEY + "auto_off");
     }
 
     public static KingdomActions.Feedback hire(ServerPlayer player, WorldPos pos) {

@@ -433,6 +433,13 @@ public final class KingdomStorage {
             return 0;
         }
         int eaten = 0;
+        // Food a workshop set aside for cooking is not eaten raw.
+        Map<String, Integer> reserved = new HashMap<>(
+                io.github.sekerator.kingdomworld.common.production.Production.reservations().reserved(kingdomId));
+        Map<String, Long> spare = new HashMap<>();
+        if (!reserved.isEmpty()) {
+            countsById(server, kingdomId).forEach((item, count) -> spare.put(item, count - reserved.getOrDefault(item, 0)));
+        }
         for (StorehouseInventory inventory : storehouses(server, kingdomId, near)) {
             for (int slot = 0; slot < inventory.getSlots() && eaten < wanted; slot++) {
                 ItemStack stack = inventory.getStackInSlot(slot);
@@ -441,6 +448,15 @@ public final class KingdomStorage {
                     continue;
                 }
                 int items = Math.min(stack.getCount(), Math.max(1, (wanted - eaten + each - 1) / each));
+                if (!reserved.isEmpty()) {
+                    String id = itemId(stack);
+                    long free = spare.getOrDefault(id, (long) stack.getCount());
+                    items = (int) Math.min(items, Math.max(0, free));
+                    if (items <= 0) {
+                        continue;
+                    }
+                    spare.put(id, free - items);
+                }
                 ItemStack extracted = inventory.extractItem(slot, items, false);
                 eaten += each * extracted.getCount();
             }

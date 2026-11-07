@@ -80,11 +80,19 @@ public final class StoragePackets {
         }
         List<KingdomStorage.Total> totals = KingdomStorage.totals(server, kingdomId);
         List<StorageView.Entry> items = new ArrayList<>();
+        // What workers set aside is shown with the first kind of its item.
+        java.util.Map<String, Integer> reserved = new java.util.HashMap<>(
+                io.github.sekerator.kingdomworld.common.production.Production.reservations().reserved(kingdomId));
         long total = 0;
         for (KingdomStorage.Total entry : totals) {
             total += entry.count();
+            String id = KingdomStorage.itemId(entry.sample());
+            long held = Math.min(entry.count(), reserved.getOrDefault(id, 0));
+            if (held > 0) {
+                reserved.put(id, (int) (reserved.get(id) - held));
+            }
             if (items.size() < StorageView.MAX_ITEMS) {
-                items.add(new StorageView.Entry(entry.sample(), entry.count()));
+                items.add(new StorageView.Entry(entry.sample(), entry.count(), held));
             }
         }
         List<StorageView.Storehouse> storehouses = new ArrayList<>();

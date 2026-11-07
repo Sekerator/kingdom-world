@@ -135,6 +135,8 @@ public final class KingdomWorldCommand {
                         .then(WorkCommands.posts())
                         .then(WorkCommands.storage())
                         .then(WorkCommands.simulate())
+                        .then(OrderCommands.orders())
+                        .then(OrderCommands.recipes())
                         .then(Commands.literal("data")
                                 .then(Commands.literal("status").executes(context -> dataStatus(context.getSource())))
                                 .then(Commands.literal("unlock").executes(context -> dataUnlock(context.getSource()))))));

@@ -13,6 +13,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -55,6 +56,7 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
     private int professionWidth;
     private int animalWidth;
     private int hireWidth;
+    private int modeWidth;
     private int dismissWidth;
     private int stateWidth;
 
@@ -87,6 +89,52 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
 
     private boolean isHerder() {
         return view.profession().equals(Professions.HERDER.id());
+    }
+
+    private boolean isWorkshop() {
+        return Professions.isWorkshop(view.profession());
+    }
+
+    private boolean hasAuto() {
+        return Professions.hasAutoMode(view.profession());
+    }
+
+    private static Component modeName(boolean auto) {
+        return Component.translatable(auto ? KEY + "mode.auto" : KEY + "mode.orders");
+    }
+
+    /**
+     * The workstations in the zone: "Workstations: furnace x2, crafting table".
+     */
+    private Component stationsLine() {
+        if (view.stations().isEmpty()) {
+            return Component.translatable(KEY + "no_stations");
+        }
+        MutableComponent list = Component.empty();
+        for (int i = 0; i < view.stations().size(); i++) {
+            WorkPostView.Station station = view.stations().get(i);
+            if (i > 0) {
+                list.append(Component.translatable("kingdomworld.screen.orders.separator"));
+            }
+            Component name = Component.translatable("kingdomworld.station." + station.kind());
+            list.append(station.count() > 1 ? Component.translatable(KEY + "station_count", name, station.count()) : name);
+        }
+        return Component.translatable(KEY + "stations", list);
+    }
+
+    private Component currentLine() {
+        if (view.current().isEmpty()) {
+            return Component.translatable(KEY + "current_none");
+        }
+        return Component.translatable(KEY + "current", view.current().getHoverName(), view.progress());
+    }
+
+    private Component workshopYieldLine() {
+        if (view.perDay() <= 0) {
+            return Component.translatable(KEY + "made_today", view.producedToday());
+        }
+        return Component.translatable(view.measured() ? KEY + "workshop_measured" : KEY + "workshop_estimated", view.perDay(),
+                view.producedToday());
     }
 
     private static List<Profession> choices() {
@@ -125,7 +173,7 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
      */
     private List<Component> labels() {
         return List.of(Component.translatable(KEY + "profession"), Component.translatable(KEY + "radius"),
-                Component.translatable(KEY + "herd"));
+                Component.translatable(hasAuto() ? KEY + "mode" : KEY + "herd"));
     }
 
     /**
@@ -163,7 +211,19 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
     }
 
     private List<Component> infoLines() {
+        if (isWorkshop()) {
+            return List.of(Component.translatable(KEY + "status", statusText(view.status())), stationsLine(), currentLine(), containerLine(),
+                    workshopYieldLine());
+        }
         return List.of(Component.translatable(KEY + "status", statusText(view.status())), containerLine(), yieldLine(), todayLine());
+    }
+
+    /**
+     * Lines of the info block that name things from the world (workstations, items) and are shortened to fit
+     * rather than sizing the panel.
+     */
+    private boolean isNameLine(int index) {
+        return isWorkshop() && (index == 1 || index == 2);
     }
 
     private Component title() {
@@ -190,20 +250,21 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
             animalWidth = Math.max(animalWidth, buttonWidth(animalName(animal)));
         }
         hireWidth = buttonWidth(Component.translatable(KEY + "hire", 9_999));
+        modeWidth = Math.max(buttonWidth(modeName(true)), buttonWidth(modeName(false)));
         dismissWidth = buttonWidth(Component.translatable(KEY + "dismiss"));
         stateWidth = 0;
         for (WorkStatus value : WorkStatus.values()) {
             stateWidth = Math.max(stateWidth, font.width(statusText(value)));
         }
         // The animal button shortens its text when it has to; a few letters must show.
-        int controls = labelWidth + 6 + Math.max(professionWidth, stepperWidth() + 12 + secondLabelWidth + 6
+        int controls = labelWidth + 6 + Math.max(Math.max(professionWidth, modeWidth), stepperWidth() + 12 + secondLabelWidth + 6
                 + Math.max(stepperWidth(), Math.min(animalWidth, 80)));
         int info = font.width(title()) + 2 * PAD;
         WorkPostView saved = view;
         // The longest numbers the lines can show.
         view = new WorkPostView(new BlockPos(-30_000_000, 319, 29_999_999), saved.kingdomId(), saved.canManage(), saved.profession(),
                 64, 64, 16, 16, saved.animal(), saved.animals(), 64, 64, WorkStatus.ZONE_PARTLY_OUTSIDE, false, true,
-                999_999, 9_999_999L, List.of(), 9_999);
+                999_999, 9_999_999L, List.of(), 9_999, saved.auto(), saved.stations(), saved.current(), 100);
         info = Math.max(info, font.width(title()));
         for (WorkStatus value : WorkStatus.values()) {
             info = Math.max(info, font.width(Component.translatable(KEY + "status", statusText(value))));
@@ -214,6 +275,13 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         info = Math.max(info, Math.max(font.width(Component.translatable(KEY + "yield_measured", 999_999)),
                 font.width(Component.translatable(KEY + "yield_estimated", 999_999))));
         info = Math.max(info, Math.max(font.width(Component.translatable(KEY + "yield_unknown")), font.width(todayLine())));
+        if (isWorkshop()) {
+            info = Math.max(info, Math.max(font.width(Component.translatable(KEY + "workshop_measured", 999_999, 9_999_999L)),
+                    font.width(Component.translatable(KEY + "workshop_estimated", 999_999, 9_999_999L))));
+            info = Math.max(info, Math.max(font.width(Component.translatable(KEY + "made_today", 9_999_999L)),
+                    font.width(Component.translatable(KEY + "no_stations"))));
+            info = Math.max(info, font.width(Component.translatable(KEY + "current_none")));
+        }
         int header = font.width(Component.translatable(KEY + "workers", 16, 16)) + 8 + hireWidth + 4
                 + font.width(Component.translatable("kingdomworld.screen.throne.page", 16, 16, 16));
         view = saved;
@@ -233,7 +301,7 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
     }
 
     private int settingRows() {
-        return isHerder() ? 3 : 2;
+        return isHerder() || hasAuto() ? 3 : 2;
     }
 
     private int secondColumnX() {
@@ -300,6 +368,12 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
                             .bounds(secondControlsX(), y + 2 * ROW, buttonWidth, ROW - 2).build());
                     button.setTooltip(Tooltip.create(label));
                 }
+            }
+            if (hasAuto()) {
+                Button mode = addRenderableWidget(Button.builder(modeName(view.auto()),
+                        b -> send(WorkPostActionPacket.Action.AUTO, view.auto() ? 0 : 1, "", null))
+                        .bounds(x, y + 2 * ROW, modeWidth, ROW - 2).build());
+                mode.setTooltip(Tooltip.create(Component.translatable(KEY + "mode_hint")));
             }
             int right = left() + panelWidth - PAD;
             Button hire = addRenderableWidget(Button.builder(hireLabel(), b -> send(WorkPostActionPacket.Action.HIRE, 0, "", null))
@@ -375,7 +449,7 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         int secondControls = secondControlsX();
         for (int row = 0; row < settingRows(); row++) {
             label(graphics, labels.get(row), x, y + row * ROW + 5, 0xFFE8E8E8, controls - 2);
-            if (row > 0) {
+            if (row == 1 || row == 2 && isHerder()) {
                 label(graphics, second.get(row - 1), secondX, y + row * ROW + 5, 0xFFE8E8E8, secondControls - 2);
             }
         }
@@ -385,6 +459,9 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         }
         value(graphics, view.radius(), view.maxRadius(), controls, y + ROW, manage, secondX - 4);
         value(graphics, view.seats(), view.maxSeats(), secondControls, y + ROW, manage, right);
+        if (hasAuto() && !manage) {
+            label(graphics, modeName(view.auto()), controls, y + 2 * ROW + 5, 0xFFFFFFFF, right);
+        }
         if (isHerder()) {
             value(graphics, view.herdSize(), view.maxHerd(), controls, y + 2 * ROW, manage, secondX - 4);
             if (!manage || view.animals().isEmpty()) {
@@ -396,7 +473,11 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         List<Component> info = infoLines();
         for (int i = 0; i < info.size(); i++) {
             int color = i == 0 ? statusColor(view.status()) : 0xFFD0D0D0;
-            label(graphics, info.get(i), x, infoY + i * (LINE + 1), color, right);
+            if (isNameLine(i)) {
+                name(graphics, info.get(i).getString(), x, infoY + i * (LINE + 1), color, right - x);
+            } else {
+                label(graphics, info.get(i), x, infoY + i * (LINE + 1), color, right);
+            }
         }
 
         int rows = visibleWorkers();

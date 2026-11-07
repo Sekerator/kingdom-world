@@ -100,7 +100,8 @@ final class StorageTab {
 
     int measure(Font font) {
         toggleWidth = Math.max(screen.buttonWidth(toggleLabel(true)), screen.buttonWidth(toggleLabel(false)));
-        countWidth = font.width(Component.translatable(KEY + "count", 999_999_999L));
+        countWidth = Math.max(font.width(Component.translatable(KEY + "count", 999_999_999L)),
+                font.width(Component.translatable(KEY + "count_reserved", 999_999_999L, 999_999_999L)));
         int top = SEARCH_WIDTH + GAP + toggleWidth + 8 + font.width(Component.translatable("kingdomworld.screen.throne.page", 500, 500, 500));
         int list = 18 + 100 + 8 + countWidth;
         int storehouses = font.width(Component.translatable(KEY + "storehouse", -30_000_000, 319, 29_999_999, 54, 54));
@@ -195,7 +196,8 @@ final class StorageTab {
             StorageView.Entry entry = entries.get(scroll + i);
             int y = listTop + i * ROW;
             graphics.renderItem(entry.sample(), x, y);
-            Component amount = Component.translatable(KEY + "count", entry.count());
+            Component amount = entry.reserved() > 0 ? Component.translatable(KEY + "count_reserved", entry.count(), entry.reserved())
+                    : Component.translatable(KEY + "count", entry.count());
             int amountX = right - font.width(amount);
             screen.label(graphics, amount, amountX, y + 5, 0xFFFFFFFF, right);
             screen.name(graphics, name(entry.sample()), x + 20, y + 5, 0xFFE0E0E0, amountX - 6 - (x + 20));

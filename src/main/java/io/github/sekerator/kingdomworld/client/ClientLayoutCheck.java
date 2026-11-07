@@ -16,7 +16,10 @@ import io.github.sekerator.kingdomworld.client.screen.ThroneScreen;
 import io.github.sekerator.kingdomworld.client.screen.WorkPostScreen;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenTexts;
 import io.github.sekerator.kingdomworld.common.kingdom.KingdomActions;
+import io.github.sekerator.kingdomworld.common.network.data.CatalogView;
 import io.github.sekerator.kingdomworld.common.network.data.CitizenView;
+import io.github.sekerator.kingdomworld.common.network.data.OrdersView;
+import io.github.sekerator.kingdomworld.core.production.Order;
 import io.github.sekerator.kingdomworld.common.network.data.StorageView;
 import io.github.sekerator.kingdomworld.common.network.data.WorkPostView;
 import io.github.sekerator.kingdomworld.core.citizen.CauseOfDeath;
@@ -366,7 +369,7 @@ final class ClientLayoutCheck {
                     new ItemStack(Items.PUFFERFISH), new ItemStack(Items.MELON_SLICE), new ItemStack(Items.SUGAR_CANE),
                     new ItemStack(Items.PITCHER_PLANT), new ItemStack(Items.SHEARS), new ItemStack(Items.FISHING_ROD)};
             for (int i = 0; i < samples.length; i++) {
-                items.add(new StorageView.Entry(samples[i], 999_999_999L - i * 1_000L));
+                items.add(new StorageView.Entry(samples[i], 999_999_999L - i * 1_000L, i % 3 == 1 ? 999_999_999L - i * 1_000L : 0));
             }
             for (int i = 0; i < 20; i++) {
                 storehouses.add(new StorageView.Storehouse(new BlockPos(-30_000_000 + i, 319, 29_999_999), i == 0 ? 54 : i, 54));
@@ -401,9 +404,17 @@ final class ClientLayoutCheck {
         List<String> animals = profession.equals("herder")
                 ? List.of("minecraft:cow", "minecraft:sheep", "minecraft:mooshroom", "examplemod:very_long_named_highland_cattle")
                 : List.of();
+        List<WorkPostView.Station> stations = new ArrayList<>();
+        ItemStack current = ItemStack.EMPTY;
+        if (io.github.sekerator.kingdomworld.core.citizen.Professions.isWorkshop(profession)) {
+            for (String kind : io.github.sekerator.kingdomworld.core.production.Stations.ALL) {
+                stations.add(new WorkPostView.Station(kind, 16));
+            }
+            current = new ItemStack(Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE);
+        }
         return new WorkPostView(new BlockPos(-30_000_000, 319, 29_999_999), UUID.randomUUID(), canManage, profession, 16, 16,
                 Math.max(1, workers), 16, profession.equals("herder") ? "minecraft:mooshroom" : "", animals, 64, 64, status, container,
-                measured, measured ? 999_999 : 0, 9_999_999L, list, 9_999);
+                measured, measured ? 999_999 : 0, 9_999_999L, list, 9_999, !profession.equals("cook"), stations, current, 45);
     }
 
     private static WorkPostScreen post(WorkPostView view, Component status) {
@@ -417,6 +428,74 @@ final class ClientLayoutCheck {
         WorkPostScreen screen = new WorkPostScreen(view);
         if (!status.getString().isEmpty()) {
             screen.onResult(success, status);
+        }
+        return screen;
+    }
+
+    private static WorkPostView withoutStations(WorkPostView view) {
+        return new WorkPostView(view.pos(), view.kingdomId(), view.canManage(), view.profession(), view.radius(), view.maxRadius(), view.seats(),
+                view.maxSeats(), view.animal(), view.animals(), view.herdSize(), view.maxHerd(), view.status(), view.container(), view.measured(),
+                0, view.producedToday(), view.workers(), view.unemployed(), view.auto(), List.of(), ItemStack.EMPTY, 0);
+    }
+
+    private static ItemStack longNamed(net.minecraft.world.item.Item item) {
+        ItemStack stack = new ItemStack(item);
+        stack.setHoverName(Component.literal("Меч Великого Северного Королевства Щит и Меч"));
+        return stack;
+    }
+
+    /**
+     * Orders in every state, with sub-orders, long names and long lists of what is missing.
+     */
+    private static OrdersView ordersView(UUID kingdom, boolean canManage, boolean empty) {
+        List<OrdersView.Entry> entries = new ArrayList<>();
+        if (!empty) {
+            List<OrdersView.Missing> missing = List.of(new OrdersView.Missing(new ItemStack(Items.RAW_IRON), 99_999, "miner"),
+                    new OrdersView.Missing(new ItemStack(Items.OAK_LOG), 99_999, "lumberjack"),
+                    new OrdersView.Missing(longNamed(Items.DIAMOND), 99_999, ""));
+            Order.Status[] statuses = Order.Status.values();
+            for (int i = 0; i < statuses.length; i++) {
+                Order.Status status = statuses[i];
+                ItemStack sample = i == 0 ? longNamed(Items.IRON_SWORD) : new ItemStack(i % 2 == 0 ? Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE
+                        : Items.LIGHT_BLUE_GLAZED_TERRACOTTA);
+                boolean lacks = status == Order.Status.MISSING || status == Order.Status.WAITING_FOR_PARTS;
+                entries.add(new OrdersView.Entry(100 + i, 0, sample, i % 2 == 0 ? Order.Kind.MAKE : Order.Kind.KEEP, 100_000, 99_999L,
+                        Order.Priority.values()[i % 3], status == Order.Status.PAUSED, status, lacks ? missing : List.of(),
+                        status == Order.Status.NO_WORKSHOP ? "smith" : "", status == Order.Status.NO_WORKSHOP ? "smithing_table" : ""));
+                if (i == 1) {
+                    entries.add(new OrdersView.Entry(200, 1, new ItemStack(Items.IRON_INGOT), Order.Kind.KEEP, 100_000, 99_999L,
+                            Order.Priority.HIGH, false, Order.Status.WAITING_FOR_PARTS, missing, "", ""));
+                    entries.add(new OrdersView.Entry(201, 2, longNamed(Items.RAW_IRON), Order.Kind.KEEP, 100_000, 99_999L,
+                            Order.Priority.HIGH, false, Order.Status.MISSING, missing, "", ""));
+                }
+            }
+        }
+        return new OrdersView(kingdom, canManage, 256, entries);
+    }
+
+    private static CatalogView catalogView(UUID kingdom, boolean empty) {
+        List<CatalogView.Entry> entries = new ArrayList<>();
+        if (!empty) {
+            String[] professions = {"smith", "cook", "crafter", "smelter", "dragon_tamer"};
+            ItemStack[] samples = {longNamed(Items.NETHERITE_SWORD), new ItemStack(Items.BREAD), new ItemStack(Items.LIGHT_BLUE_GLAZED_TERRACOTTA),
+                    new ItemStack(Items.IRON_INGOT), new ItemStack(Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE), new ItemStack(Items.STICK),
+                    new ItemStack(Items.ENCHANTED_GOLDEN_APPLE), new ItemStack(Items.CHAINMAIL_CHESTPLATE), new ItemStack(Items.TORCH),
+                    new ItemStack(Items.COOKED_BEEF), new ItemStack(Items.STONE_BRICKS), new ItemStack(Items.OAK_PLANKS)};
+            for (int i = 0; i < samples.length; i++) {
+                entries.add(new CatalogView.Entry(samples[i], professions[i % professions.length]));
+            }
+        }
+        return new CatalogView(kingdom, "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz", 9_998, entries.size(),
+                empty ? 0 : 9_999 * Math.max(1, entries.size()), entries);
+    }
+
+    private static ThroneScreen orders(KingdomView view, boolean canManage, boolean empty, String mode, Component status) {
+        ThroneScreen screen = throne(view, "orders", status);
+        screen.updateOrders(ordersView(view.id(), canManage, empty));
+        if (!mode.equals("list")) {
+            screen.showCatalog(catalogView(view.id(), empty));
+            screen.showOrders(mode, "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz", empty ? null : longNamed(Items.NETHERITE_SWORD),
+                    empty ? null : "dragon_tamer");
         }
         return screen;
     }
@@ -517,6 +596,25 @@ final class ClientLayoutCheck {
         cases.add(new Case("post-hired", () -> post(postView("lumberjack", WorkStatus.WORKING, true, 1, true, true),
                 Component.translatable("kingdomworld.post.hired", CitizenTexts.name(longestNameSeed(Gender.FEMALE), Gender.FEMALE),
                         CitizenTexts.profession("lumberjack", Gender.FEMALE)), true)));
+        cases.add(new Case("post-smelter", () -> post(postView("smelter", WorkStatus.WORKING, true, 2, true, true), Component.empty())));
+        cases.add(new Case("post-cook-read-only", () -> post(postView("cook", WorkStatus.NO_FUEL, false, 1, false, false), Component.empty())));
+        cases.add(new Case("post-crafter-no-stations", () -> post(withoutStations(postView("crafter", WorkStatus.NO_WORKSTATION, true, 1, false,
+                false)), Component.empty())));
+        cases.add(new Case("post-smith", () -> post(postView("smith", WorkStatus.NO_INGREDIENTS, true, 16, true, false), longError)));
+        cases.add(new Case("post-auto-set", () -> post(postView("smelter", WorkStatus.NO_ORDERS, true, 1, true, true),
+                Component.translatable("kingdomworld.post.auto_off"), true)));
+        cases.add(new Case("throne-king-orders", () -> orders(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "list",
+                Component.empty())));
+        cases.add(new Case("throne-subject-orders", () -> orders(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, false, "list",
+                Component.empty())));
+        cases.add(new Case("throne-orders-empty", () -> orders(view(KingdomView.Relation.MEMBER, Role.STEWARD), true, true, "list",
+                Component.empty())));
+        cases.add(new Case("throne-orders-loading", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "orders", Component.empty())));
+        cases.add(new Case("throne-orders-create", () -> orders(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "create",
+                longError)));
+        cases.add(new Case("throne-orders-create-empty", () -> orders(view(KingdomView.Relation.MEMBER, Role.KING), true, true, "create",
+                Component.empty())));
+        cases.add(new Case("throne-orders-edit", () -> orders(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "edit", longError)));
         cases.add(new Case("throne-outsider", () -> throne(view(KingdomView.Relation.OUTSIDER, null), "overview", Component.empty())));
         cases.add(new Case("throne-invited", () -> throne(view(KingdomView.Relation.INVITED, null), "overview", Component.empty())));
         cases.add(new Case("throne-applied", () -> throne(view(KingdomView.Relation.APPLIED, null), "overview", Component.empty())));

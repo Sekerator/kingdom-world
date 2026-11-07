@@ -14,6 +14,7 @@ import io.github.sekerator.kingdomworld.common.network.packet.KingdomListRespons
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomViewPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.MapAreaPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.MapAreaRequestPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.OrderPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.OpenFoundingScreenPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.StoragePackets;
 import io.github.sekerator.kingdomworld.common.network.packet.TerritoryDeltaPacket;
@@ -42,7 +43,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "4";
+    public static final String PROTOCOL_VERSION = "5";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -81,6 +82,11 @@ public final class KingdomWorldNetwork {
         add(id++, WorkPostActionPacket.class, NetworkDirection.PLAY_TO_SERVER, WorkPostActionPacket::encode, WorkPostActionPacket::decode, WorkPostActionPacket::handle);
         add(id++, StoragePackets.Request.class, NetworkDirection.PLAY_TO_SERVER, StoragePackets.Request::encode, StoragePackets.Request::decode, StoragePackets.Request::handle);
         add(id++, StoragePackets.Response.class, NetworkDirection.PLAY_TO_CLIENT, StoragePackets.Response::encode, StoragePackets.Response::decode, StoragePackets.Response::handle);
+        add(id++, OrderPackets.Request.class, NetworkDirection.PLAY_TO_SERVER, OrderPackets.Request::encode, OrderPackets.Request::decode, OrderPackets.Request::handle);
+        add(id++, OrderPackets.Response.class, NetworkDirection.PLAY_TO_CLIENT, OrderPackets.Response::encode, OrderPackets.Response::decode, OrderPackets.Response::handle);
+        add(id++, OrderPackets.CatalogRequest.class, NetworkDirection.PLAY_TO_SERVER, OrderPackets.CatalogRequest::encode, OrderPackets.CatalogRequest::decode, OrderPackets.CatalogRequest::handle);
+        add(id++, OrderPackets.Catalog.class, NetworkDirection.PLAY_TO_CLIENT, OrderPackets.Catalog::encode, OrderPackets.Catalog::decode, OrderPackets.Catalog::handle);
+        add(id++, OrderPackets.Change.class, NetworkDirection.PLAY_TO_SERVER, OrderPackets.Change::encode, OrderPackets.Change::decode, OrderPackets.Change::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,
