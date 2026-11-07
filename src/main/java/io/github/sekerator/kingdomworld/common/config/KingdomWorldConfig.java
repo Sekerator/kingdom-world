@@ -158,6 +158,10 @@ public final class KingdomWorldConfig {
         public final Army army;
         /** Energy of kingdoms and the mage tower. */
         public final Magic magic;
+        public final ForgeConfigSpec.IntValue roleIntegrityPercent;
+        public final ForgeConfigSpec.IntValue autoRepairBelowPercent;
+        public final ForgeConfigSpec.IntValue demolitionLossPercent;
+        public final ForgeConfigSpec.IntValue maxBlueprintsPerKingdom;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -439,6 +443,18 @@ public final class KingdomWorldConfig {
             templateMaxLength = builder
                     .comment("Largest building template along z, in blocks.")
                     .defineInRange("templateMaxLength", 48, 1, 256);
+            roleIntegrityPercent = builder
+                    .comment("A building plays its role (home, storehouse, faster workshop and so on) while at least this share of it stands, in percent.")
+                    .defineInRange("roleIntegrityPercent", 70, 0, 100);
+            autoRepairBelowPercent = builder
+                    .comment("A building that repairs itself orders a repair when less than this share of it stands, in percent.")
+                    .defineInRange("autoRepairBelowPercent", 80, 1, 100);
+            demolitionLossPercent = builder
+                    .comment("Share of the materials of a demolished building that is lost; the rest goes to the storehouses, in percent.")
+                    .defineInRange("demolitionLossPercent", 25, 0, 100);
+            maxBlueprintsPerKingdom = builder
+                    .comment("Blueprints of its own a kingdom may keep.")
+                    .defineInRange("maxBlueprintsPerKingdom", 16, 0, 256);
             builder.pop();
             army = new Army(builder);
             magic = new Magic(builder);

@@ -40,12 +40,23 @@ public final class CitizenNeeds {
      * @param recentDeaths citizens of the same kingdom who died in the last {@link #RECENT_DEATH_DAYS} days
      * @param payPercent   how much of the usual wage the citizen got on the last payday, see
      *                     {@link io.github.sekerator.kingdomworld.core.economy.Payroll#percent}
+     * @param comfort      mood the buildings around give: the comfort of the house the citizen lives in, a well nearby;
+     *                     at most {@link #MAX_COMFORT} counts
      */
-    public record MoodInputs(float food, boolean hasHome, boolean wounded, int recentDeaths, int payPercent) {
+    public record MoodInputs(float food, boolean hasHome, boolean wounded, int recentDeaths, int payPercent, int comfort) {
+        public MoodInputs(float food, boolean hasHome, boolean wounded, int recentDeaths, int payPercent) {
+            this(food, hasHome, wounded, recentDeaths, payPercent, 0);
+        }
+
         public MoodInputs(float food, boolean hasHome, boolean wounded, int recentDeaths) {
             this(food, hasHome, wounded, recentDeaths, io.github.sekerator.kingdomworld.core.economy.Payroll.NOTHING_EXPECTED);
         }
     }
+
+    /** Most mood the buildings around a citizen give. */
+    public static final int MAX_COMFORT = 25;
+    /** How much sooner newcomers come while a house of the kingdom has a free bed. */
+    public static final double HOUSE_GROWTH_FACTOR = 0.75;
 
     private CitizenNeeds() {
     }
@@ -115,6 +126,7 @@ public final class CitizenNeeds {
         }
         mood -= Math.min(20, 5 * Math.max(0, inputs.recentDeaths()));
         mood += io.github.sekerator.kingdomworld.core.economy.Payroll.mood(inputs.payPercent());
+        mood += Math.max(0, Math.min(MAX_COMFORT, inputs.comfort()));
         return Math.max(0, Math.min(MAX_MOOD, mood));
     }
 
@@ -149,6 +161,18 @@ public final class CitizenNeeds {
      */
     public static GrowthCheck checkGrowth(int population, int freeBeds, long nutrition, long ticksSinceArrival,
                                           int averageMood, CitizenRules rules) {
+        return checkGrowth(population, freeBeds, 0, nutrition, ticksSinceArrival, averageMood, rules);
+    }
+
+    /**
+     * Whether a newcomer arrives now; free beds in houses (buildings with the role of a house that work) bring newcomers
+     * sooner, by {@link #HOUSE_GROWTH_FACTOR}.
+     *
+     * @param freeBeds      free beds the kingdom can offer, those in houses whose role is suspended left out
+     * @param freeHouseBeds of those, the beds in houses
+     */
+    public static GrowthCheck checkGrowth(int population, int freeBeds, int freeHouseBeds, long nutrition, long ticksSinceArrival,
+                                          int averageMood, CitizenRules rules) {
         if (population >= rules.maxPerKingdom()) {
             return GrowthCheck.FULL;
         }
@@ -159,7 +183,11 @@ public final class CitizenNeeds {
         if (foodDays(nutrition, population + 1, rules.dailyNutrition()) < rules.growthFoodDays()) {
             return GrowthCheck.NOT_ENOUGH_FOOD;
         }
-        if (ticksSinceArrival < growthInterval(rules.growthIntervalTicks(), averageMood)) {
+        long interval = growthInterval(rules.growthIntervalTicks(), averageMood);
+        if (freeHouseBeds > 0) {
+            interval = Math.round(interval * HOUSE_GROWTH_FACTOR);
+        }
+        if (ticksSinceArrival < interval) {
             return GrowthCheck.TOO_SOON;
         }
         return GrowthCheck.READY;

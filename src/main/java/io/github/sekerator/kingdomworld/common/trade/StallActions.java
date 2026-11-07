@@ -156,8 +156,18 @@ public final class StallActions {
         }
         Treasury treasury = economy.treasury(kingdom.id()).orElseThrow();
         return new TradeViews.StallView(pos, kingdom.id(), kingdom.name(), kingdom.color(), Purses.currency(server, kingdom.id()).orElseThrow(),
-                state.membership().isMember(player.getUUID(), kingdom.id()), treasury.salesTaxPermille(), rules.maxLotsPerPlayer(),
+                state.membership().isMember(player.getUUID(), kingdom.id()), treasury.salesTaxPermille(),
+                rulesFor(server, kingdom.id()).maxLotsPerPlayer(),
                 market.exchangeFeePermille(), offers, wanted, lots, purses);
+    }
+
+    /**
+     * The trade rules at the stalls of a kingdom: its working markets let players keep more lots.
+     */
+    static TradeRules rulesFor(MinecraftServer server, UUID kingdomId) {
+        TradeRules rules = TradeSettings.rules();
+        int extra = io.github.sekerator.kingdomworld.common.construction.BuildingEffects.extraLots(server, kingdomId);
+        return extra <= 0 ? rules : rules.withMaxLots(rules.maxLotsPerPlayer() + extra);
     }
 
     static List<TradeViews.LotRow> lotRows(MinecraftServer server, Market market, UUID viewer) {
@@ -510,7 +520,7 @@ public final class StallActions {
     public static KingdomActions.Feedback listLot(ServerPlayer player, Kingdom kingdom, int count, long price) {
         MinecraftServer server = player.server;
         KingdomWorldState state = KingdomWorldApi.state(server);
-        TradeRules rules = TradeSettings.rules();
+        TradeRules rules = rulesFor(server, kingdom.id());
         ItemStack hand = player.getMainHandItem();
         if (hand.isEmpty() || GoodsStacks.untradeable(hand)) {
             return KingdomActions.Feedback.error(KingdomError.BAD_ITEM);

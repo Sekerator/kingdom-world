@@ -120,6 +120,9 @@ public final class ModRegistries {
     /** A blueprint of a building template, taken in the construction tab of the throne; it lays out constructions. */
     public static final RegistryObject<Item> BLUEPRINT = ITEMS.register("blueprint",
             () -> new io.github.sekerator.kingdomworld.common.construction.BlueprintItem(new Item.Properties().stacksTo(1)));
+    /** The architect's ruler: marks a building in the world and saves it as a blueprint of the kingdom. */
+    public static final RegistryObject<Item> ARCHITECT_RULER = ITEMS.register("architect_ruler",
+            () -> new io.github.sekerator.kingdomworld.common.construction.ArchitectRulerItem(new Item.Properties().stacksTo(1)));
 
     /**
      * The body of a citizen. Never saved with chunks: the citizen records in the kingdom data are what persists.
@@ -162,6 +165,7 @@ public final class ModRegistries {
         } else if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) {
             event.accept(FOUNDER_CROWN);
             event.accept(KINGDOM_ATLAS);
+            event.accept(ARCHITECT_RULER);
         }
     }
 }

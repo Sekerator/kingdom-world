@@ -115,25 +115,37 @@ public final class ConstructionPackets {
     }
 
     /**
-     * Client to server: give me a blueprint of this template.
+     * Client to server: give me a blueprint of this template, built of this wood and stone.
+     *
+     * @param wood  a wood species, {@code auto} for the wood of the place, empty for the template's own
+     * @param stone a stone, empty for the template's own
      */
-    public record TakeBlueprint(UUID kingdomId, String template) {
+    public record TakeBlueprint(UUID kingdomId, String template, String wood, String stone) {
         public static final RequestPolicy POLICY = new RequestPolicy("construction_blueprint", 0, 10, 10_000L);
+
+        public TakeBlueprint(UUID kingdomId, String template) {
+            this(kingdomId, template, io.github.sekerator.kingdomworld.core.construction.Materials.AUTO, "");
+        }
 
         public void encode(FriendlyByteBuf buf) {
             buf.writeUUID(kingdomId);
             buf.writeUtf(template, MAX_TEMPLATE);
+            buf.writeUtf(wood, io.github.sekerator.kingdomworld.core.construction.Materials.MAX_ID);
+            buf.writeUtf(stone, io.github.sekerator.kingdomworld.core.construction.Materials.MAX_ID);
         }
 
         public static TakeBlueprint decode(FriendlyByteBuf buf) {
-            return new TakeBlueprint(buf.readUUID(), buf.readUtf(MAX_TEMPLATE));
+            return new TakeBlueprint(buf.readUUID(), buf.readUtf(MAX_TEMPLATE),
+                    buf.readUtf(io.github.sekerator.kingdomworld.core.construction.Materials.MAX_ID),
+                    buf.readUtf(io.github.sekerator.kingdomworld.core.construction.Materials.MAX_ID));
         }
 
         public static void handle(TakeBlueprint message, Supplier<NetworkEvent.Context> context) {
             ServerPlayer sender = context.get().getSender();
             if (ServerRequestGuard.admit(sender, POLICY)
                     && ServerRequestGuard.requireLength(sender, POLICY, "template", message.template(), MAX_TEMPLATE)) {
-                ConstructionActions.takeBlueprint(sender, message.kingdomId(), message.template());
+                ConstructionActions.takeBlueprint(sender, message.kingdomId(), message.template(),
+                        new io.github.sekerator.kingdomworld.core.construction.Materials(message.wood(), message.stone()));
             }
         }
     }

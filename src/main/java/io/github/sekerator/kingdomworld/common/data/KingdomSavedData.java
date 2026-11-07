@@ -45,7 +45,7 @@ import java.util.Optional;
 public final class KingdomSavedData extends SavedData {
     public static final String DATA_NAME = KingdomWorld.MOD_ID + "_kingdoms";
     /** Current layout of the saved data. Increase it together with a migration step. */
-    public static final int FORMAT_VERSION = 8;
+    public static final int FORMAT_VERSION = 9;
     /** Format assumed for data without a version field. */
     static final int FIRST_FORMAT_VERSION = 1;
 

@@ -93,7 +93,8 @@ public final class BuildingTemplates {
     }
 
     public static Optional<BuildingTemplate> get(ResourceLocation id) {
-        return Optional.ofNullable(finished().get(id));
+        BuildingTemplate found = finished().get(id);
+        return found != null ? Optional.of(found) : CustomTemplates.get(id.toString());
     }
 
     public static Optional<BuildingTemplate> get(String id) {
@@ -321,6 +322,10 @@ public final class BuildingTemplates {
         String fallback = cut(string(json, "fallback_name", ""));
         BuildingTemplate.Category category = BuildingTemplate.Category.byId(string(json, "category", "decoration"));
         String type = cut(string(json, "type", template.id().getPath()));
+        String role = role(json, type, template.id());
+        Map<String, Double> params = numbers(json, "role_params", template.id());
+        int level = Math.max(1, Math.min(io.github.sekerator.kingdomworld.core.construction.BuildingRole.MAX_LEVEL, integer(json, "level", 1)));
+        String upgradesTo = cut(string(json, "upgrades_to", ""));
         ResourceLocation iconId = ResourceLocation.tryParse(string(json, "icon", "minecraft:bricks"));
         ItemStack icon = iconId == null || !ForgeRegistries.ITEMS.containsKey(iconId) ? new ItemStack(Items.BRICKS)
                 : new ItemStack(ForgeRegistries.ITEMS.getValue(iconId));
@@ -339,8 +344,59 @@ public final class BuildingTemplates {
         if (problem == null && cost.blocks() == 0) {
             problem = Component.translatable(KEY + "empty");
         }
-        return new BuildingTemplate(template.id(), nameKey, fallback, category, type, icon, template.sizeX(), template.sizeY(), template.sizeZ(),
-                anchor, entrance, template.blocks(), costs, cost, fingerprint(template), problem);
+        return new BuildingTemplate(template.id(), nameKey, fallback, category, type, role, params, level, upgradesTo, null, icon,
+                template.sizeX(), template.sizeY(), template.sizeZ(), anchor, entrance, template.blocks(), costs, cost, fingerprint(template),
+                problem);
+    }
+
+    /**
+     * The role a description gives: {@code role} if it names one ({@code none} for no role), else the type when a role of
+     * that name exists. A role nobody registered is kept, so that a role of a data pack that loads later still counts.
+     */
+    static String role(JsonObject json, String type, ResourceLocation id) {
+        JsonElement element = json.get("role");
+        if (element != null && element.isJsonPrimitive()) {
+            String role = element.getAsString().toLowerCase(java.util.Locale.ROOT);
+            if (role.isEmpty() || "none".equals(role)) {
+                return "";
+            }
+            if (!io.github.sekerator.kingdomworld.core.construction.BuildingRoles.exists(role)) {
+                LOGGER.warn("Building template {} names the role {}, which is not registered", id, role);
+            }
+            return role.length() > io.github.sekerator.kingdomworld.core.construction.BuildingRole.MAX_ID ? "" : role;
+        }
+        return io.github.sekerator.kingdomworld.core.construction.BuildingRoles.exists(type) ? type : "";
+    }
+
+    /**
+     * The numbers of an object of the description, by name; what is not a finite number is left out.
+     */
+    static Map<String, Double> numbers(JsonObject json, String name, ResourceLocation id) {
+        Map<String, Double> result = new LinkedHashMap<>();
+        JsonElement element = json.get(name);
+        if (element == null || !element.isJsonObject()) {
+            return result;
+        }
+        for (Map.Entry<String, JsonElement> entry : element.getAsJsonObject().entrySet()) {
+            try {
+                double value = entry.getValue().getAsDouble();
+                if (Double.isFinite(value) && result.size() < 32) {
+                    result.put(entry.getKey(), value);
+                }
+            } catch (RuntimeException e) {
+                LOGGER.warn("Building template {}: {} of {} is not a number", id, entry.getKey(), name);
+            }
+        }
+        return result;
+    }
+
+    private static int integer(JsonObject json, String name, int fallback) {
+        JsonElement element = json.get(name);
+        try {
+            return element != null && element.isJsonPrimitive() ? element.getAsInt() : fallback;
+        } catch (RuntimeException e) {
+            return fallback;
+        }
     }
 
     private static BlockPos anchor(JsonObject json, Raw template) {

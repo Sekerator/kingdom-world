@@ -160,7 +160,8 @@ public final class WorkPostActions {
         return new WorkPostView(new BlockPos(post.pos().x(), post.pos().y(), post.pos().z()), post.kingdomId(),
                 state.membership().hasPermission(player.getUUID(), post.kingdomId(), Permission.MANAGE_CITIZENS),
                 post.professionId(), post.radius(), Math.max(post.radius(), rules.maxRadius()), post.seats(),
-                Math.max(post.seats(), rules.maxSeats()), post.animal(), animals, post.herdSize(), Math.max(post.herdSize(), rules.maxHerd()),
+                Math.max(post.seats(), rules.maxSeats() + io.github.sekerator.kingdomworld.common.construction.BuildingEffects.extraSeats(server,
+                        post.pos())), post.animal(), animals, post.herdSize(), Math.max(post.herdSize(), rules.maxHerd()),
                 post.status(), container, post.yield().measured(), (int) Math.min(1_000_000, Math.round(post.yield().total())),
                 post.producedOn(PostWork.gameDay(server)), workers, unemployed, post.auto(), stations,
                 current == null ? net.minecraft.world.item.ItemStack.EMPTY : new net.minecraft.world.item.ItemStack(current),
@@ -232,7 +233,8 @@ public final class WorkPostActions {
 
     public static KingdomActions.Feedback setSeats(ServerPlayer player, WorldPos pos, int seats) {
         Outcome outcome = KingdomWorldApi.change(player.server, "set the seats of a work post",
-                state -> state.setPostSeats(player.getUUID(), pos, seats, GatheringSettings.rules().maxSeats()));
+                state -> state.setPostSeats(player.getUUID(), pos, seats, GatheringSettings.rules().maxSeats()
+                        + io.github.sekerator.kingdomworld.common.construction.BuildingEffects.extraSeats(player.server, pos)));
         return result(outcome, KEY + "seats_set", seats);
     }
 

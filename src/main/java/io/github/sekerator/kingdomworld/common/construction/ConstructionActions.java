@@ -62,13 +62,18 @@ public final class ConstructionActions {
         }
         ConstructionRules rules = ConstructionSettings.rules();
         List<ConstructionView.Template> templates = new ArrayList<>();
-        for (BuildingTemplate template : BuildingTemplates.sorted()) {
-            List<ConstructionView.Cost> cost = new ArrayList<>();
-            template.items().forEach((item, count) -> cost.add(new ConstructionView.Cost(OrderActions.sample(item), count)));
+        List<BuildingTemplate> catalog = new ArrayList<>(BuildingTemplates.sorted());
+        catalog.addAll(CustomTemplates.of(kingdomId));
+        for (BuildingTemplate template : catalog) {
             Component problem = BuildingTemplates.problem(template, rules);
+            Component next = template.upgradesTo().isEmpty() ? Component.empty()
+                    : BuildingTemplates.get(template.upgradesTo()).map(BuildingTemplate::name).orElse(Component.literal(template.upgradesTo()));
+            long blueprint = template.owner() == null ? 0
+                    : io.github.sekerator.kingdomworld.core.construction.CustomBlueprint.number(template.id().toString()).orElse(0L);
             templates.add(new ConstructionView.Template(template.id().toString(), template.name(), template.category().id(), template.icon(),
-                    template.sizeX(), template.sizeY(), template.sizeZ(), cost, template.cost().blocks(), template.cost().liquids(),
-                    problem == null ? Component.empty() : problem));
+                    template.sizeX(), template.sizeY(), template.sizeZ(), costs(template.items()), template.cost().blocks(),
+                    template.cost().liquids(), problem == null ? Component.empty() : problem, roleName(template.role()), template.level(), next,
+                    blueprint));
         }
         long now = KingdomWorldApi.gameTime(server);
         List<ConstructionView.Site> sites = new ArrayList<>();
@@ -93,18 +98,215 @@ public final class ConstructionActions {
             sites.add(new ConstructionView.Site(construction.id(), template.map(BuildingTemplate::name).orElse(Component.literal(construction.templateId())),
                     template.map(BuildingTemplate::icon).orElse(ItemStack.EMPTY), ConstructionWork.blockPos(construction.anchor()),
                     construction.priority(), construction.paused(), construction.orderMissing(), construction.status(), statusPos, percent, placed,
-                    total, ConstructionWork.builders(construction, now), missing));
+                    total, ConstructionWork.builders(construction, now), missing, construction.kind()));
         }
         List<ConstructionView.Building> buildings = new ArrayList<>();
-        for (Building building : state.construction().buildingsOf(kingdomId)) {
-            Component name = BuildingTemplates.get(building.templateId()).map(BuildingTemplate::name)
-                    .orElse(Component.literal(building.templateId()));
-            buildings.add(new ConstructionView.Building(building.id(), name, building.type(), building.category(),
-                    ConstructionWork.blockPos(building.anchor()), building.integrity(), Math.floorDiv(building.builtTime(), CitizenNeeds.TICKS_PER_DAY),
-                    building.admin()));
+        for (BuildingEffects.Effect effect : BuildingEffects.of(server, kingdomId)) {
+            buildings.add(building(server, effect));
         }
         return Optional.of(new ConstructionView(kingdomId, state.membership().hasPermission(viewer, kingdomId, Permission.MANAGE_CONSTRUCTION),
-                rules.maxConstructions(), templates, sites, buildings));
+                rules.maxConstructions(), templates, sites, buildings, ConstructionSettings.buildings().maxBlueprints(),
+                BuildingEffects.fortification(server, kingdomId)));
+    }
+
+    /**
+     * A building of the register for the tab: its role and how it works, its level, what an upgrade, a repair and a
+     * demolition would take or give.
+     */
+    static ConstructionView.Building building(MinecraftServer server, BuildingEffects.Effect effect) {
+        Building building = effect.building();
+        Component name = BuildingTemplates.get(building.templateId()).map(BuildingTemplate::name).orElse(Component.literal(building.templateId()));
+        Component next = BuildingWork.nextTemplate(building).map(BuildingTemplate::name).orElse(Component.empty());
+        Construction busy = KingdomWorldApi.state(server).construction().forBuilding(building.id()).orElse(null);
+        Map<String, Integer> upgrade = BuildingWork.upgradeDiff(building).map(io.github.sekerator.kingdomworld.core.construction.TemplateDiff.Result::cost)
+                .orElse(Map.of());
+        return new ConstructionView.Building(building.id(), name, building.type(), building.category(), ConstructionWork.blockPos(building.anchor()),
+                building.integrity(), Math.floorDiv(building.builtTime(), CitizenNeeds.TICKS_PER_DAY), building.admin(), roleName(building.role()),
+                effect.status(), roleReason(effect), building.level(), next, effects(effect), materials(building), building.damagedCount(),
+                building.autoRepair(), busy == null ? null : busy.kind(), costs(upgrade), costs(BuildingWork.repairCost(building)),
+                costs(BuildingWork.demolitionReturn(building)));
+    }
+
+    private static List<ConstructionView.Cost> costs(Map<String, Integer> items) {
+        List<ConstructionView.Cost> result = new ArrayList<>();
+        items.forEach((item, count) -> result.add(new ConstructionView.Cost(OrderActions.sample(item), count)));
+        return result;
+    }
+
+    /**
+     * The name of a role, empty for none.
+     */
+    public static Component roleName(String role) {
+        return role.isEmpty() ? Component.empty() : BuildingRoleLoader.name(role);
+    }
+
+    /**
+     * Why the role of a building works or rests, in words.
+     */
+    static Component roleReason(BuildingEffects.Effect effect) {
+        String key = KEY + "role_status." + effect.status().id();
+        return switch (effect.status()) {
+            case DAMAGED -> Component.translatable(key, effect.building().integrity(), ConstructionSettings.buildings().roleThreshold());
+            case LACKING -> Component.translatable(key + "." + (io.github.sekerator.kingdomworld.core.construction.BuildingRoles.WAREHOUSE
+                    .equals(effect.building().role()) ? "container" : "bed"));
+            default -> Component.translatable(key);
+        };
+    }
+
+    /**
+     * What the role of a building does, a line for each of its numbers.
+     */
+    static List<Component> effects(BuildingEffects.Effect effect) {
+        List<Component> lines = new ArrayList<>();
+        String role = effect.building().role();
+        String key = KEY + "effect.";
+        switch (role) {
+            case io.github.sekerator.kingdomworld.core.construction.BuildingRoles.HOUSE -> {
+                lines.add(Component.translatable(key + "beds", effect.beds(), effect.residents()));
+                lines.add(Component.translatable(key + "comfort", whole(effect.param(io.github.sekerator.kingdomworld.core.construction.BuildingRoles.COMFORT))));
+            }
+            case io.github.sekerator.kingdomworld.core.construction.BuildingRoles.WAREHOUSE ->
+                    lines.add(Component.translatable(key + "containers", whole(effect.param(io.github.sekerator.kingdomworld.core.construction.BuildingRoles.CONTAINERS))));
+            case io.github.sekerator.kingdomworld.core.construction.BuildingRoles.WORKSHOP -> lines.add(Component.translatable(key + "speed",
+                    Math.round((effect.param(io.github.sekerator.kingdomworld.core.construction.BuildingRoles.SPEED) - 1.0) * 100)));
+            case io.github.sekerator.kingdomworld.core.construction.BuildingRoles.MARKET -> {
+                lines.add(Component.translatable(key + "merchants", whole(effect.param(io.github.sekerator.kingdomworld.core.construction.BuildingRoles.MERCHANTS))));
+                lines.add(Component.translatable(key + "lots", whole(effect.param(io.github.sekerator.kingdomworld.core.construction.BuildingRoles.LOTS))));
+            }
+            case io.github.sekerator.kingdomworld.core.construction.BuildingRoles.TOWER -> lines.add(Component.translatable(key + "sight",
+                    blocks(whole(effect.param(io.github.sekerator.kingdomworld.core.construction.BuildingRoles.SIGHT)))));
+            case io.github.sekerator.kingdomworld.core.construction.BuildingRoles.WALL -> lines.add(Component.translatable(key + "fortification",
+                    whole(effect.param(io.github.sekerator.kingdomworld.core.construction.BuildingRoles.FORTIFICATION))));
+            case io.github.sekerator.kingdomworld.core.construction.BuildingRoles.WELL -> lines.add(Component.translatable(key + "well",
+                    whole(effect.param(io.github.sekerator.kingdomworld.core.construction.BuildingRoles.MOOD)),
+                    blocks(whole(effect.param(io.github.sekerator.kingdomworld.core.construction.BuildingRoles.RADIUS)))));
+            default -> {
+                for (Map.Entry<String, Double> param : effect.params().entrySet()) {
+                    if (lines.size() < ConstructionView.MAX_EFFECTS) {
+                        lines.add(Component.translatable(key + "param", param.getKey(), BigDecimalText.of(param.getValue())));
+                    }
+                }
+            }
+        }
+        return lines;
+    }
+
+    private static long whole(double value) {
+        return Math.round(value);
+    }
+
+    /**
+     * A number of blocks with the right form of the word.
+     */
+    static Component blocks(long count) {
+        return Component.translatable("kingdomworld.count.blocks." + io.github.sekerator.kingdomworld.core.economy.Plurals.form(count).suffix(),
+                count);
+    }
+
+    /**
+     * The wood and stone a building is built of, empty for the template's own.
+     */
+    static Component materials(Building building) {
+        var materials = building.materials();
+        if (materials.wood().isEmpty() && materials.stone().isEmpty()) {
+            return Component.empty();
+        }
+        if (materials.stone().isEmpty()) {
+            return Component.translatable(KEY + "materials.wood", TemplateMaterials.woodName(materials.wood()));
+        }
+        if (materials.wood().isEmpty()) {
+            return Component.translatable(KEY + "materials.stone", TemplateMaterials.stoneName(materials.stone()));
+        }
+        return Component.translatable(KEY + "materials.both", TemplateMaterials.woodName(materials.wood()),
+                TemplateMaterials.stoneName(materials.stone()));
+    }
+
+    /**
+     * Numbers of roles of data packs as short text.
+     */
+    private static final class BigDecimalText {
+        static String of(double value) {
+            return value == Math.rint(value) ? Long.toString((long) value) : String.format(java.util.Locale.ROOT, "%.2f", value);
+        }
+    }
+
+    // ---------------------------------------------------------------- buildings and blueprints
+
+    public static void handleBuilding(ServerPlayer player, io.github.sekerator.kingdomworld.common.network.packet.BuildingPackets.Change change) {
+        KingdomActions.Feedback feedback = applyBuilding(player.server, player.getUUID(), change.kingdomId(), change.action(), change.building());
+        KingdomWorldNetwork.sendToPlayer(player, new ActionResultPacket(feedback.success(), feedback.message()));
+        sendView(player, change.kingdomId());
+    }
+
+    /**
+     * Applies a decision about a building of the register.
+     *
+     * @param actor the player; {@code null} for an operator
+     */
+    public static KingdomActions.Feedback applyBuilding(MinecraftServer server, UUID actor, UUID kingdom,
+                                                        io.github.sekerator.kingdomworld.common.network.packet.BuildingPackets.Change.Action action,
+                                                        long buildingId) {
+        if (KingdomWorldApi.isReadOnly(server)) {
+            return KingdomActions.Feedback.error(KingdomError.READ_ONLY);
+        }
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        Component name = state.construction().building(buildingId).map(Building::templateId).flatMap(BuildingTemplates::get).map(BuildingTemplate::name)
+                .orElse(Component.literal("#" + buildingId));
+        switch (action) {
+            case AUTO_REPAIR_ON, AUTO_REPAIR_OFF -> {
+                boolean on = action == io.github.sekerator.kingdomworld.common.network.packet.BuildingPackets.Change.Action.AUTO_REPAIR_ON;
+                var outcome = state.setAutoRepair(actor, kingdom, buildingId, on);
+                if (!outcome.ok()) {
+                    return KingdomActions.Feedback.error(outcome.error());
+                }
+                BuildingEffects.changed();
+                return KingdomActions.Feedback.ok(KEY + (on ? "auto_repair_on" : "auto_repair_off"), name);
+            }
+            default -> {
+                KingdomWorldState.ConstructionChange change = switch (action) {
+                    case UPGRADE -> BuildingWork.orderUpgrade(server, actor, kingdom, buildingId);
+                    case REPAIR -> BuildingWork.orderRepair(server, actor, kingdom, buildingId);
+                    default -> BuildingWork.orderDemolition(server, actor, kingdom, buildingId);
+                };
+                if (!change.outcome().ok()) {
+                    return KingdomActions.Feedback.error(change.outcome().error());
+                }
+                return KingdomActions.Feedback.ok(KEY + "ordered." + change.construction().orElseThrow().kind().id(), name);
+            }
+        }
+    }
+
+    public static void handleBlueprint(ServerPlayer player,
+                                       io.github.sekerator.kingdomworld.common.network.packet.BuildingPackets.BlueprintChange change) {
+        KingdomActions.Feedback feedback = applyBlueprint(player.server, player.getUUID(), change.kingdomId(), change.action(), change.blueprint(),
+                change.text());
+        KingdomWorldNetwork.sendToPlayer(player, new ActionResultPacket(feedback.success(), feedback.message()));
+        sendView(player, change.kingdomId());
+    }
+
+    public static KingdomActions.Feedback applyBlueprint(MinecraftServer server, UUID actor, UUID kingdom,
+                                                         io.github.sekerator.kingdomworld.common.network.packet.BuildingPackets.BlueprintChange.Action action,
+                                                         long blueprint, String text) {
+        if (KingdomWorldApi.isReadOnly(server)) {
+            return KingdomActions.Feedback.error(KingdomError.READ_ONLY);
+        }
+        String old = KingdomWorldApi.state(server).construction().blueprint(blueprint).map(found -> found.name()).orElse("#" + blueprint);
+        var outcome = KingdomWorldApi.change(server, "change a blueprint", state -> switch (action) {
+            case RENAME -> state.renameBlueprint(actor, kingdom, blueprint, text);
+            case DELETE -> state.deleteBlueprint(actor, kingdom, blueprint);
+        });
+        if (!outcome.ok()) {
+            return KingdomActions.Feedback.error(outcome.error());
+        }
+        return action == io.github.sekerator.kingdomworld.common.network.packet.BuildingPackets.BlueprintChange.Action.RENAME
+                ? KingdomActions.Feedback.ok(KEY + "blueprint_renamed", old, text.strip())
+                : KingdomActions.Feedback.ok(KEY + "blueprint_deleted", old);
+    }
+
+    public static void capture(ServerPlayer player, io.github.sekerator.kingdomworld.common.network.packet.BuildingPackets.Capture request) {
+        KingdomActions.Feedback feedback = BlueprintCapture.capture(player, request.name(), request.category(), request.role());
+        KingdomWorldNetwork.sendToPlayer(player, new ActionResultPacket(feedback.success(), feedback.message()));
+        player.displayClientMessage(feedback.message(), false);
     }
 
     // ---------------------------------------------------------------- decisions
@@ -165,16 +367,30 @@ public final class ConstructionActions {
      * Gives the player a blueprint of a template; blueprints the player had are replaced, so that there is only one.
      */
     public static void takeBlueprint(ServerPlayer player, UUID kingdomId, String templateId) {
-        KingdomActions.Feedback feedback = blueprint(player, kingdomId, templateId);
+        takeBlueprint(player, kingdomId, templateId, io.github.sekerator.kingdomworld.core.construction.Materials.NONE);
+    }
+
+    public static void takeBlueprint(ServerPlayer player, UUID kingdomId, String templateId,
+                                     io.github.sekerator.kingdomworld.core.construction.Materials materials) {
+        KingdomActions.Feedback feedback = blueprint(player, kingdomId, templateId, materials);
         KingdomWorldNetwork.sendToPlayer(player, new ActionResultPacket(feedback.success(), feedback.message()));
     }
 
     static KingdomActions.Feedback blueprint(ServerPlayer player, UUID kingdomId, String templateId) {
+        return blueprint(player, kingdomId, templateId, io.github.sekerator.kingdomworld.core.construction.Materials.NONE);
+    }
+
+    static KingdomActions.Feedback blueprint(ServerPlayer player, UUID kingdomId, String templateId,
+                                             io.github.sekerator.kingdomworld.core.construction.Materials materials) {
+        if (!TemplateMaterials.known(materials)) {
+            return KingdomActions.Feedback.fail(KEY + "unknown_material");
+        }
         KingdomWorldState state = KingdomWorldApi.state(player.server);
         if (!state.membership().hasPermission(player.getUUID(), kingdomId, Permission.MANAGE_CONSTRUCTION)) {
             return KingdomActions.Feedback.error(KingdomError.NO_PERMISSION);
         }
-        Optional<BuildingTemplate> template = BuildingTemplates.get(templateId);
+        Optional<BuildingTemplate> template = BuildingTemplates.get(templateId)
+                .filter(found -> found.owner() == null || found.owner().equals(kingdomId));
         if (template.isEmpty()) {
             return KingdomActions.Feedback.error(KingdomError.UNKNOWN_TEMPLATE);
         }
@@ -188,7 +404,7 @@ public final class ConstructionActions {
                 inventory.setItem(slot, ItemStack.EMPTY);
             }
         }
-        ItemStack blueprint = BlueprintItem.describe(new ItemStack(ModRegistries.BLUEPRINT.get()), template.get());
+        ItemStack blueprint = BlueprintItem.describe(new ItemStack(ModRegistries.BLUEPRINT.get()), template.get(), materials);
         if (player.getMainHandItem().isEmpty()) {
             player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, blueprint);
         } else if (!inventory.add(blueprint)) {
@@ -252,13 +468,24 @@ public final class ConstructionActions {
         Kingdom kingdom = KingdomWorldApi.state(server).kingdomOf(player.getUUID()).orElseThrow();
         BuildingTemplate template = BuildingTemplates.get(request.template()).orElseThrow();
         KingdomWorldState.ConstructionChange change = ConstructionWork.lay(player.serverLevel(), player.getUUID(), kingdom.id(), template,
-                request.pos(), placement);
+                request.pos(), placement, heldMaterials(player, request.template()));
         Component message = change.outcome().ok()
                 ? Component.translatable(KEY + "laid", template.name(), request.pos().getX() + " " + request.pos().getY() + " " + request.pos().getZ())
                 .withStyle(ChatFormatting.GREEN)
                 : KingdomActions.errorMessage(change.outcome().error());
         player.displayClientMessage(message, false);
         KingdomWorldNetwork.sendToPlayer(player, check(player, request.template(), request.pos(), placement));
+    }
+
+    /**
+     * The wood and stone of the blueprint of a template in the player's hand; the template's own without one.
+     */
+    static io.github.sekerator.kingdomworld.core.construction.Materials heldMaterials(ServerPlayer player, String templateId) {
+        ItemStack held = player.getMainHandItem();
+        if (held.is(ModRegistries.BLUEPRINT.get()) && BlueprintItem.templateId(held).equals(templateId)) {
+            return BlueprintItem.materials(held);
+        }
+        return io.github.sekerator.kingdomworld.core.construction.Materials.NONE;
     }
 
     /**
@@ -280,8 +507,12 @@ public final class ConstructionActions {
             error = KingdomError.NO_PERMISSION;
         } else if (template.isEmpty()) {
             error = KingdomError.UNKNOWN_TEMPLATE;
+        } else if (template.get().owner() != null && !template.get().owner().equals(kingdom.get().id())) {
+            error = KingdomError.UNKNOWN_TEMPLATE;
         } else if ((problem = BuildingTemplates.problem(template.get(), ConstructionSettings.rules())) == null) {
-            ConstructionWork.Survey survey = ConstructionWork.survey(player.serverLevel(), template.get(), pos, placement);
+            BuildingTemplate built = TemplateMaterials.apply(template.get(),
+                    TemplateMaterials.resolve(heldMaterials(player, templateId), player.serverLevel(), pos));
+            ConstructionWork.Survey survey = ConstructionWork.survey(player.serverLevel(), built, pos, placement);
             conflicts = survey.conflicts();
             error = survey.error();
             if (error == null) {

@@ -19,8 +19,12 @@ import java.util.UUID;
 public final class ConstructionBook {
     private final Map<Long, Construction> constructions = new LinkedHashMap<>();
     private final Map<Long, Building> buildings = new LinkedHashMap<>();
+    private final Map<Long, CustomBlueprint> blueprints = new LinkedHashMap<>();
     private long nextConstruction = 1;
     private long nextBuilding = 1;
+    private long nextBlueprint = 1;
+    /** Counts changes of the saved blueprints, so that the templates made of them are made again. */
+    private int blueprintRevision;
     private Runnable changeListener = () -> {
     };
 
@@ -78,8 +82,18 @@ public final class ConstructionBook {
      */
     public Construction add(UUID kingdomId, String templateId, long fingerprint, io.github.sekerator.kingdomworld.core.citizen.WorldPos anchor,
                             Placement placement, Box box, long created, List<int[]> clear, int steps) {
+        return add(kingdomId, templateId, fingerprint, anchor, placement, box, created, clear, steps, Construction.Kind.BUILD, 0,
+                Materials.NONE, new java.util.BitSet());
+    }
+
+    /**
+     * Adds a construction of any kind with the next free number.
+     */
+    public Construction add(UUID kingdomId, String templateId, long fingerprint, io.github.sekerator.kingdomworld.core.citizen.WorldPos anchor,
+                            Placement placement, Box box, long created, List<int[]> clear, int steps, Construction.Kind kind, long building,
+                            Materials materials, java.util.BitSet skip) {
         Construction construction = new Construction(nextConstruction++, kingdomId, templateId, fingerprint, anchor, placement, box, created,
-                clear, steps);
+                clear, steps, kind, building, materials, skip);
         construction.setChangeListener(changeListener);
         constructions.put(construction.id(), construction);
         changed();
@@ -121,11 +135,34 @@ public final class ConstructionBook {
      * Enters a finished construction into the register.
      */
     public Building register(Construction construction, String type, String category, long builtTime, boolean admin) {
+        return register(construction, type, category, "", 1, builtTime, admin);
+    }
+
+    /**
+     * Enters a finished construction into the register with its role and level.
+     */
+    public Building register(Construction construction, String type, String category, String role, int level, long builtTime, boolean admin) {
         Building building = new Building(nextBuilding++, construction.kingdomId(), construction.templateId(), cut(type), cut(category),
-                construction.anchor(), construction.placement(), construction.box(), construction.fingerprint(), builtTime, admin, 100, builtTime);
+                cut(role), level, construction.materials(), construction.anchor(), construction.placement(), construction.box(),
+                construction.fingerprint(), builtTime, admin, 100, builtTime, false, new java.util.BitSet());
         buildings.put(building.id(), building);
         changed();
         return building;
+    }
+
+    /**
+     * The construction that works on a building of the register (an upgrade, a repair, a demolition), if any.
+     */
+    public Optional<Construction> forBuilding(long buildingId) {
+        if (buildingId <= 0) {
+            return Optional.empty();
+        }
+        for (Construction construction : constructions.values()) {
+            if (construction.building() == buildingId) {
+                return Optional.of(construction);
+            }
+        }
+        return Optional.empty();
     }
 
     private static String cut(String text) {
@@ -153,13 +190,21 @@ public final class ConstructionBook {
      * A construction or building of any kingdom whose box meets the given one, other than the construction {@code except}.
      */
     public Optional<Object> overlapping(String dimension, Box box, long except) {
+        return overlapping(dimension, box, except, 0);
+    }
+
+    /**
+     * A construction or building of any kingdom whose box meets the given one, other than the construction {@code except}
+     * and the building {@code exceptBuilding} (the one an upgrade works on).
+     */
+    public Optional<Object> overlapping(String dimension, Box box, long except, long exceptBuilding) {
         for (Construction construction : constructions.values()) {
             if (construction.id() != except && construction.dimension().equals(dimension) && construction.box().intersects(box)) {
                 return Optional.of(construction);
             }
         }
         for (Building building : buildings.values()) {
-            if (building.dimension().equals(dimension) && building.box().intersects(box)) {
+            if (building.id() != exceptBuilding && building.dimension().equals(dimension) && building.box().intersects(box)) {
                 return Optional.of(building);
             }
         }
@@ -195,6 +240,10 @@ public final class ConstructionBook {
             return false;
         });
         boolean any = !removed.isEmpty() | buildings.values().removeIf(building -> building.kingdomId().equals(kingdomId));
+        if (blueprints.values().removeIf(blueprint -> blueprint.kingdomId().equals(kingdomId))) {
+            any = true;
+            blueprintRevision++;
+        }
         if (any) {
             changed();
         }
@@ -235,5 +284,84 @@ public final class ConstructionBook {
 
     public long nextBuildingId() {
         return nextBuilding;
+    }
+
+    // ---------------------------------------------------------------- saved blueprints
+
+    public Optional<CustomBlueprint> blueprint(long id) {
+        return Optional.ofNullable(blueprints.get(id));
+    }
+
+    public Collection<CustomBlueprint> blueprints() {
+        return List.copyOf(blueprints.values());
+    }
+
+    public List<CustomBlueprint> blueprintsOf(UUID kingdomId) {
+        List<CustomBlueprint> result = new ArrayList<>();
+        for (CustomBlueprint blueprint : blueprints.values()) {
+            if (blueprint.kingdomId().equals(kingdomId)) {
+                result.add(blueprint);
+            }
+        }
+        return result;
+    }
+
+    public long nextBlueprintId() {
+        return nextBlueprint;
+    }
+
+    /**
+     * Counts changes of the saved blueprints.
+     */
+    public int blueprintRevision() {
+        return blueprintRevision;
+    }
+
+    /**
+     * Saves a blueprint under the next free number, which the blueprint given must carry.
+     *
+     * @throws IllegalArgumentException if it carries another number
+     */
+    public CustomBlueprint addBlueprint(CustomBlueprint blueprint) {
+        if (blueprint.id() != nextBlueprint) {
+            throw new IllegalArgumentException("Blueprint " + blueprint.id() + " is not the next one, " + nextBlueprint);
+        }
+        nextBlueprint++;
+        blueprints.put(blueprint.id(), blueprint);
+        blueprintRevision++;
+        changed();
+        return blueprint;
+    }
+
+    public void putBlueprint(CustomBlueprint blueprint) {
+        if (!blueprint.equals(blueprints.put(blueprint.id(), blueprint))) {
+            blueprintRevision++;
+            changed();
+        }
+    }
+
+    public Optional<CustomBlueprint> removeBlueprint(long id) {
+        CustomBlueprint removed = blueprints.remove(id);
+        if (removed != null) {
+            blueprintRevision++;
+            changed();
+        }
+        return Optional.ofNullable(removed);
+    }
+
+    /**
+     * @throws IllegalArgumentException if the number is taken
+     */
+    public void restore(CustomBlueprint blueprint) {
+        if (blueprints.containsKey(blueprint.id())) {
+            throw new IllegalArgumentException("Two blueprints with number " + blueprint.id());
+        }
+        blueprints.put(blueprint.id(), blueprint);
+        nextBlueprint = Math.max(nextBlueprint, blueprint.id() + 1);
+        blueprintRevision++;
+    }
+
+    public void restoreBlueprintCounter(long next) {
+        nextBlueprint = Math.max(nextBlueprint, next);
     }
 }

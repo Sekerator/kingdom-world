@@ -9,6 +9,7 @@ import io.github.sekerator.kingdomworld.common.network.packet.CitizenRequestPack
 import io.github.sekerator.kingdomworld.common.network.packet.CitizenViewPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.EconomyPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.ClaimChunkPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.BuildingPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.ConstructionPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.FoundKingdomPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.GuildPackets;
@@ -51,7 +52,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "12";
+    public static final String PROTOCOL_VERSION = "13";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -185,6 +186,12 @@ public final class KingdomWorldNetwork {
                 MagicPackets.GateOpen::decode, MagicPackets.GateOpen::handle);
         add(id++, MagicPackets.GateTravel.class, NetworkDirection.PLAY_TO_SERVER, MagicPackets.GateTravel::encode,
                 MagicPackets.GateTravel::decode, MagicPackets.GateTravel::handle);
+        add(id++, BuildingPackets.Change.class, NetworkDirection.PLAY_TO_SERVER, BuildingPackets.Change::encode,
+                BuildingPackets.Change::decode, BuildingPackets.Change::handle);
+        add(id++, BuildingPackets.BlueprintChange.class, NetworkDirection.PLAY_TO_SERVER, BuildingPackets.BlueprintChange::encode,
+                BuildingPackets.BlueprintChange::decode, BuildingPackets.BlueprintChange::handle);
+        add(id++, BuildingPackets.Capture.class, NetworkDirection.PLAY_TO_SERVER, BuildingPackets.Capture::encode,
+                BuildingPackets.Capture::decode, BuildingPackets.Capture::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

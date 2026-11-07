@@ -45,6 +45,13 @@ public final class ClientHooks {
         Minecraft.getInstance().setScreen(new io.github.sekerator.kingdomworld.client.screen.StallScreen(view));
     }
 
+    /**
+     * The screen that saves the building between the corners of the ruler as a blueprint of the kingdom.
+     */
+    public static void openCapture(io.github.sekerator.kingdomworld.common.construction.ArchitectRulerItem.Corners corners) {
+        Minecraft.getInstance().setScreen(new io.github.sekerator.kingdomworld.client.screen.CaptureScreen(corners));
+    }
+
     public static void openExchange(io.github.sekerator.kingdomworld.common.network.data.TradeViews.ExchangeView view) {
         Minecraft.getInstance().setScreen(new io.github.sekerator.kingdomworld.client.screen.ExchangeScreen(view));
     }

@@ -1,0 +1,516 @@
+package io.github.sekerator.kingdomworld.common.construction;
+
+import io.github.sekerator.kingdomworld.KingdomWorld;
+import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
+import io.github.sekerator.kingdomworld.common.storage.StorehouseInventory;
+import io.github.sekerator.kingdomworld.core.citizen.Site;
+import io.github.sekerator.kingdomworld.core.citizen.SiteKinds;
+import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
+import io.github.sekerator.kingdomworld.core.construction.Building;
+import io.github.sekerator.kingdomworld.core.construction.BuildingRole;
+import io.github.sekerator.kingdomworld.core.construction.BuildingRoles;
+import io.github.sekerator.kingdomworld.core.construction.Construction;
+import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
+import net.minecraftforge.items.IItemHandler;
+import net.minecraftforge.registries.ForgeRegistries;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+/**
+ * What the roles of the buildings of the register do in the world while they work: houses give homes and comfort and
+ * bring newcomers sooner, warehouses make the containers in them storehouses of the kingdom, workshops speed up the posts
+ * in them, markets take more merchants and lots, towers let guards see farther, walls count for the wars to come, wells
+ * cheer the citizens around them. A role works while its building stands on its kingdom's land, is not being taken down
+ * and is whole enough (see {@link BuildingRoles#status}); below the threshold it rests until a repair.
+ *
+ * <p>The state of every building is worked out every few seconds and whenever the register changes. Server thread only.
+ */
+public final class BuildingEffects {
+    /** Containers that count as storehouses inside a warehouse. Data packs add their own. */
+    public static final TagKey<Block> WAREHOUSE_CONTAINERS = TagKey.create(Registries.BLOCK, KingdomWorld.id("warehouse_containers"));
+    /** How far a tower lends its sight, in blocks. */
+    public static final int TOWER_REACH = 64;
+
+    /**
+     * A building of the register with the state and the numbers of its role.
+     *
+     * @param beds      beds inside, for a house
+     * @param residents citizens who live in those beds
+     */
+    public record Effect(Building building, BuildingRoles.Status status, Map<String, Double> params, int beds, int residents) {
+        public boolean works() {
+            return status.works();
+        }
+
+        public double param(String name) {
+            return BuildingRole.param(params, name, 0.0);
+        }
+    }
+
+    private static Map<UUID, List<Effect>> effects = Map.of();
+    private static boolean dirty = true;
+    private static long madeAt = -1;
+    private static MinecraftServer madeFor;
+    /** Positions of the containers of each warehouse, as last seen. */
+    private static final Map<Long, List<BlockPos>> CONTAINERS = new HashMap<>();
+
+    private BuildingEffects() {
+    }
+
+    public static void reset() {
+        effects = Map.of();
+        dirty = true;
+        madeAt = -1;
+        madeFor = null;
+        CONTAINERS.clear();
+    }
+
+    /**
+     * The register changed: the states are worked out again on next use.
+     */
+    public static void changed() {
+        dirty = true;
+    }
+
+    static void tick(MinecraftServer server, long tick) {
+        if (tick % 200 == 0) {
+            dirty = true;
+            surveyWarehouses(server);
+        }
+    }
+
+    // ---------------------------------------------------------------- states
+
+    /**
+     * The buildings of a kingdom with their roles.
+     */
+    public static List<Effect> of(MinecraftServer server, UUID kingdomId) {
+        return all(server).getOrDefault(kingdomId, List.of());
+    }
+
+    /**
+     * The working buildings of a kingdom with a role.
+     */
+    public static List<Effect> working(MinecraftServer server, UUID kingdomId, String role) {
+        List<Effect> result = new ArrayList<>();
+        for (Effect effect : of(server, kingdomId)) {
+            if (effect.works() && effect.building().role().equals(role)) {
+                result.add(effect);
+            }
+        }
+        return result;
+    }
+
+    public static Optional<Effect> of(MinecraftServer server, Building building) {
+        for (Effect effect : of(server, building.kingdomId())) {
+            if (effect.building().id() == building.id()) {
+                return Optional.of(effect);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static Map<UUID, List<Effect>> all(MinecraftServer server) {
+        long now = server.getTickCount();
+        if (dirty || server != madeFor || now - madeAt > 100 || now < madeAt) {
+            effects = make(server);
+            dirty = false;
+            madeAt = now;
+            madeFor = server;
+        }
+        return effects;
+    }
+
+    private static Map<UUID, List<Effect>> make(MinecraftServer server) {
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        int threshold = ConstructionSettings.buildings().roleThreshold();
+        Map<UUID, List<Effect>> result = new HashMap<>();
+        Map<UUID, List<Site>> beds = new HashMap<>();
+        for (Building building : state.construction().buildings()) {
+            boolean demolishing = state.construction().forBuilding(building.id()).map(c -> c.kind() == Construction.Kind.DEMOLISH).orElse(false);
+            boolean onLand = onLand(state, building);
+            BuildingRoles.Status status = BuildingRoles.status(building, threshold, demolishing, onLand);
+            int bedCount = 0;
+            int residents = 0;
+            if (BuildingRoles.HOUSE.equals(building.role())) {
+                for (Site bed : beds.computeIfAbsent(building.kingdomId(), id -> state.citizens().sites().sitesOf(id, SiteKinds.BED))) {
+                    if (inside(building, bed.pos())) {
+                        bedCount++;
+                        if (!bed.isFree()) {
+                            residents++;
+                        }
+                    }
+                }
+                if (bedCount == 0 && status == BuildingRoles.Status.ACTIVE) {
+                    status = BuildingRoles.Status.LACKING;
+                }
+            }
+            if (BuildingRoles.WAREHOUSE.equals(building.role()) && status == BuildingRoles.Status.ACTIVE) {
+                List<BlockPos> seen = CONTAINERS.get(building.id());
+                if (seen != null && seen.isEmpty()) {
+                    status = BuildingRoles.Status.LACKING;
+                }
+            }
+            result.computeIfAbsent(building.kingdomId(), id -> new ArrayList<>())
+                    .add(new Effect(building, status, params(building), bedCount, residents));
+        }
+        return result;
+    }
+
+    private static boolean onLand(KingdomWorldState state, Building building) {
+        for (long chunk : building.box().chunks()) {
+            if (!building.kingdomId().equals(state.territory().ownerOf(building.dimension(), chunk))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * The numbers of the role of a building: those of its template at its level, else the role's own for the level.
+     */
+    public static Map<String, Double> params(Building building) {
+        Optional<BuildingTemplate> template = BuildingTemplates.get(building.templateId())
+                .filter(found -> found.fingerprint() == building.fingerprint() && found.role().equals(building.role()));
+        if (template.isPresent()) {
+            return template.get().params();
+        }
+        return BuildingRoles.get(building.role()).map(role -> role.params(building.level(), Map.of())).orElse(Map.of());
+    }
+
+    static boolean inside(Building building, WorldPos pos) {
+        return building.dimension().equals(pos.dimension()) && building.box().contains(pos.x(), pos.y(), pos.z());
+    }
+
+    // ---------------------------------------------------------------- houses and wells
+
+    /**
+     * The mood the buildings around a citizen's home give: the comfort of the working house it lives in and the best well
+     * within reach.
+     */
+    public static int comfort(MinecraftServer server, UUID kingdomId, WorldPos home) {
+        if (home == null) {
+            return 0;
+        }
+        double house = 0;
+        double well = 0;
+        for (Effect effect : of(server, kingdomId)) {
+            if (!effect.works()) {
+                continue;
+            }
+            String role = effect.building().role();
+            if (BuildingRoles.HOUSE.equals(role) && inside(effect.building(), home)) {
+                house = Math.max(house, effect.param(BuildingRoles.COMFORT));
+            } else if (BuildingRoles.WELL.equals(role) && effect.building().dimension().equals(home.dimension())) {
+                double radius = effect.param(BuildingRoles.RADIUS);
+                if (ConstructionWork.distanceSqr(effect.building().box(), home) <= radius * radius) {
+                    well = Math.max(well, effect.param(BuildingRoles.MOOD));
+                }
+            }
+        }
+        return (int) Math.round(Math.max(0, house) + Math.max(0, well));
+    }
+
+    /**
+     * Whether a bed may be offered to a citizen: not inside a house whose role rests.
+     */
+    public static boolean bedUsable(MinecraftServer server, UUID kingdomId, WorldPos bed) {
+        for (Effect effect : of(server, kingdomId)) {
+            if (BuildingRoles.HOUSE.equals(effect.building().role()) && inside(effect.building(), bed)) {
+                return effect.works() || effect.status() == BuildingRoles.Status.NONE;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Whether a bed lies inside a working house.
+     */
+    public static boolean inHouse(MinecraftServer server, UUID kingdomId, WorldPos bed) {
+        for (Effect effect : of(server, kingdomId)) {
+            if (effect.works() && BuildingRoles.HOUSE.equals(effect.building().role()) && inside(effect.building(), bed)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The free bed a homeless citizen gets: the nearest one in a working house, else the nearest one outside a house
+     * whose role rests.
+     */
+    public static Optional<Site> freeBed(MinecraftServer server, UUID kingdomId, WorldPos near) {
+        Site best = null;
+        double bestDistance = Double.MAX_VALUE;
+        boolean bestInHouse = false;
+        for (Site bed : KingdomWorldApi.state(server).citizens().sites().sitesOf(kingdomId, SiteKinds.BED)) {
+            if (!bed.isFree() || !bedUsable(server, kingdomId, bed.pos())) {
+                continue;
+            }
+            boolean house = inHouse(server, kingdomId, bed.pos());
+            double distance = near == null || !near.dimension().equals(bed.pos().dimension()) ? Double.MAX_VALUE / 2 : near.distanceSqr(bed.pos());
+            if (best == null || (house && !bestInHouse) || (house == bestInHouse && distance < bestDistance)) {
+                best = bed;
+                bestDistance = distance;
+                bestInHouse = house;
+            }
+        }
+        return Optional.ofNullable(best);
+    }
+
+    /**
+     * Free beds for newcomers: {free beds that may be offered, of those the beds in working houses}.
+     */
+    public static int[] freeBeds(MinecraftServer server, UUID kingdomId) {
+        int free = 0;
+        int inHouses = 0;
+        for (Site bed : KingdomWorldApi.state(server).citizens().sites().sitesOf(kingdomId, SiteKinds.BED)) {
+            if (!bed.isFree() || !bedUsable(server, kingdomId, bed.pos())) {
+                continue;
+            }
+            free++;
+            if (inHouse(server, kingdomId, bed.pos())) {
+                inHouses++;
+            }
+        }
+        return new int[]{free, inHouses};
+    }
+
+    // ---------------------------------------------------------------- workshops and markets
+
+    /**
+     * How much faster a post works: the speed of the best working workshop around it, 1 elsewhere.
+     */
+    public static double workshopSpeed(MinecraftServer server, WorldPos post) {
+        double speed = 1.0;
+        for (Effect effect : of(server, ownerOf(server, post))) {
+            if (effect.works() && BuildingRoles.WORKSHOP.equals(effect.building().role()) && inside(effect.building(), post)) {
+                speed = Math.max(speed, effect.param(BuildingRoles.SPEED));
+            }
+        }
+        return Math.max(1.0, Math.min(4.0, speed));
+    }
+
+    /**
+     * Seats a working market adds to a merchant post inside it.
+     */
+    public static int extraSeats(MinecraftServer server, WorldPos post) {
+        int seats = 0;
+        for (Effect effect : of(server, ownerOf(server, post))) {
+            if (effect.works() && BuildingRoles.MARKET.equals(effect.building().role()) && inside(effect.building(), post)) {
+                seats = Math.max(seats, (int) Math.round(effect.param(BuildingRoles.MERCHANTS)));
+            }
+        }
+        return Math.max(0, Math.min(16, seats));
+    }
+
+    /**
+     * Lots the working markets of a kingdom add for every player.
+     */
+    public static int extraLots(MinecraftServer server, UUID kingdomId) {
+        long lots = 0;
+        for (Effect effect : working(server, kingdomId, BuildingRoles.MARKET)) {
+            lots += Math.max(0, Math.round(effect.param(BuildingRoles.LOTS)));
+        }
+        return (int) Math.min(64, lots);
+    }
+
+    private static UUID ownerOf(MinecraftServer server, WorldPos pos) {
+        UUID owner = KingdomWorldApi.state(server).territory().ownerOf(pos.dimension(), pos.chunk());
+        return owner == null ? new UUID(0, 0) : owner;
+    }
+
+    // ---------------------------------------------------------------- towers and walls
+
+    /**
+     * How much farther guards and garrisons near a position see: the best working tower of the kingdom within
+     * {@link #TOWER_REACH} blocks. The army reads it.
+     */
+    public static double sight(MinecraftServer server, UUID kingdomId, WorldPos pos) {
+        double sight = 0;
+        for (Effect effect : working(server, kingdomId, BuildingRoles.TOWER)) {
+            if (effect.building().dimension().equals(pos.dimension())
+                    && ConstructionWork.distanceSqr(effect.building().box(), pos) <= (double) TOWER_REACH * TOWER_REACH) {
+                sight = Math.max(sight, effect.param(BuildingRoles.SIGHT));
+            }
+        }
+        return sight;
+    }
+
+    /**
+     * The strength of the working walls of a kingdom, for the wars to come.
+     */
+    public static long fortification(MinecraftServer server, UUID kingdomId) {
+        long total = 0;
+        for (Effect effect : working(server, kingdomId, BuildingRoles.WALL)) {
+            total += Math.max(0, Math.round(effect.param(BuildingRoles.FORTIFICATION)));
+        }
+        return total;
+    }
+
+    // ---------------------------------------------------------------- warehouses
+
+    /**
+     * Whether a block counts as a container of a warehouse: tagged so, or named like a chest, barrel or crate, with an
+     * inventory, and not a block of the mod (a storehouse counts anyway).
+     */
+    public static boolean isContainer(ServerLevel level, BlockPos pos, BlockState state) {
+        ResourceLocation id = ForgeRegistries.BLOCKS.getKey(state.getBlock());
+        if (id == null || KingdomWorld.MOD_ID.equals(id.getNamespace())) {
+            return false;
+        }
+        String path = id.getPath();
+        boolean named = path.endsWith("chest") || path.endsWith("barrel") || path.endsWith("crate") || path.endsWith("shulker_box");
+        if (!state.is(WAREHOUSE_CONTAINERS) && !named) {
+            return false;
+        }
+        BlockEntity entity = level.getBlockEntity(pos);
+        return entity != null && entity.getCapability(ForgeCapabilities.ITEM_HANDLER, null).isPresent();
+    }
+
+    /**
+     * Looks for the containers of the working warehouses whose place is loaded.
+     */
+    static void surveyWarehouses(MinecraftServer server) {
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        java.util.Set<Long> live = new java.util.HashSet<>();
+        for (Building building : state.construction().buildings()) {
+            if (!BuildingRoles.WAREHOUSE.equals(building.role())) {
+                continue;
+            }
+            live.add(building.id());
+            ServerLevel level = ConstructionWork.level(server, building.dimension());
+            if (level == null || !ConstructionWork.loaded(level, building.box())) {
+                continue;
+            }
+            CONTAINERS.put(building.id(), scan(level, building));
+        }
+        CONTAINERS.keySet().retainAll(live);
+    }
+
+    static List<BlockPos> scan(ServerLevel level, Building building) {
+        List<BlockPos> found = new ArrayList<>();
+        var box = building.box();
+        for (int x = box.minX(); x <= box.maxX(); x++) {
+            for (int y = box.minY(); y <= box.maxY(); y++) {
+                for (int z = box.minZ(); z <= box.maxZ(); z++) {
+                    BlockPos pos = new BlockPos(x, y, z);
+                    BlockState state = level.getBlockState(pos);
+                    if (state.hasBlockEntity() && isContainer(level, pos, state)) {
+                        found.add(pos);
+                    }
+                }
+            }
+        }
+        return found;
+    }
+
+    /**
+     * The containers of the working warehouses of a kingdom whose place is loaded, as storehouses: at most as many per
+     * warehouse as its role allows.
+     */
+    public static List<StorehouseInventory> containers(MinecraftServer server, UUID kingdomId) {
+        List<StorehouseInventory> result = new ArrayList<>();
+        if (CONTAINERS.isEmpty()) {
+            return result;
+        }
+        for (Effect effect : working(server, kingdomId, BuildingRoles.WAREHOUSE)) {
+            List<BlockPos> positions = CONTAINERS.get(effect.building().id());
+            ServerLevel level = ConstructionWork.level(server, effect.building().dimension());
+            if (positions == null || level == null) {
+                continue;
+            }
+            int limit = (int) Math.max(0, Math.round(effect.param(BuildingRoles.CONTAINERS)));
+            for (BlockPos pos : positions) {
+                if (result.size() >= 4_096 || limit-- <= 0) {
+                    break;
+                }
+                if (!level.isLoaded(pos)) {
+                    continue;
+                }
+                BlockEntity entity = level.getBlockEntity(pos);
+                IItemHandler handler = entity == null ? null : entity.getCapability(ForgeCapabilities.ITEM_HANDLER, null).orElse(null);
+                if (handler != null && handler.getSlots() > 0) {
+                    result.add(new ContainerStorehouse(ConstructionWork.worldPos(level, pos), level, pos, entity, handler));
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * A container of a warehouse seen as a storehouse: every action goes to the container itself, and nothing goes
+     * anywhere once the container is gone or its place unloaded.
+     */
+    static final class ContainerStorehouse extends StorehouseInventory {
+        private final ServerLevel level;
+        private final BlockPos at;
+        private final BlockEntity entity;
+        private final IItemHandler handler;
+
+        ContainerStorehouse(WorldPos pos, ServerLevel level, BlockPos at, BlockEntity entity, IItemHandler handler) {
+            super(pos);
+            this.level = level;
+            this.at = at;
+            this.entity = entity;
+            this.handler = handler;
+        }
+
+        private boolean live() {
+            return !entity.isRemoved() && level.isLoaded(at) && level.getBlockEntity(at) == entity;
+        }
+
+        @Override
+        public int getSlots() {
+            return live() ? handler.getSlots() : 0;
+        }
+
+        @Override
+        public net.minecraft.world.item.ItemStack getStackInSlot(int slot) {
+            return live() && slot >= 0 && slot < handler.getSlots() ? handler.getStackInSlot(slot) : net.minecraft.world.item.ItemStack.EMPTY;
+        }
+
+        @Override
+        public net.minecraft.world.item.ItemStack insertItem(int slot, net.minecraft.world.item.ItemStack stack, boolean simulate) {
+            return live() && slot >= 0 && slot < handler.getSlots() ? handler.insertItem(slot, stack, simulate) : stack;
+        }
+
+        @Override
+        public net.minecraft.world.item.ItemStack extractItem(int slot, int amount, boolean simulate) {
+            return live() && slot >= 0 && slot < handler.getSlots() ? handler.extractItem(slot, amount, simulate)
+                    : net.minecraft.world.item.ItemStack.EMPTY;
+        }
+
+        @Override
+        public void setStackInSlot(int slot, net.minecraft.world.item.ItemStack stack) {
+            if (live() && handler instanceof net.minecraftforge.items.IItemHandlerModifiable modifiable && slot >= 0 && slot < handler.getSlots()) {
+                modifiable.setStackInSlot(slot, stack);
+            }
+        }
+
+        @Override
+        public int getSlotLimit(int slot) {
+            return live() && slot >= 0 && slot < handler.getSlots() ? handler.getSlotLimit(slot) : 0;
+        }
+
+        @Override
+        public boolean isItemValid(int slot, net.minecraft.world.item.ItemStack stack) {
+            return live() && slot >= 0 && slot < handler.getSlots() && handler.isItemValid(slot, stack);
+        }
+    }
+}

@@ -11,7 +11,7 @@ import java.util.Objects;
  * simulation of citizens far from players can take food from and bring harvest to storehouses in unloaded
  * chunks. The block entity only offers this inventory to players, hoppers and pipes.
  */
-public final class StorehouseInventory extends ItemStackHandler {
+public class StorehouseInventory extends ItemStackHandler {
     /** Slots of a storehouse, as many as a large chest. */
     public static final int SLOTS = 54;
 

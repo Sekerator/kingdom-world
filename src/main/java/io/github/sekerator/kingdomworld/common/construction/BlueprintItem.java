@@ -21,6 +21,8 @@ public class BlueprintItem extends Item {
     private static final String TEMPLATE = "template";
     private static final String NAME = "name";
     private static final String FALLBACK = "fallback";
+    private static final String WOOD = "wood";
+    private static final String STONE = "stone";
 
     public BlueprintItem(Properties properties) {
         super(properties);
@@ -30,11 +32,29 @@ public class BlueprintItem extends Item {
      * Writes the template into a blueprint.
      */
     public static ItemStack describe(ItemStack stack, BuildingTemplate template) {
+        return describe(stack, template, io.github.sekerator.kingdomworld.core.construction.Materials.NONE);
+    }
+
+    /**
+     * Writes the template and the wood and stone to build it of into a blueprint.
+     */
+    public static ItemStack describe(ItemStack stack, BuildingTemplate template, io.github.sekerator.kingdomworld.core.construction.Materials materials) {
         CompoundTag tag = stack.getOrCreateTag();
         tag.putString(TEMPLATE, template.id().toString());
         tag.putString(NAME, template.nameKey());
         tag.putString(FALLBACK, template.fallbackName());
+        tag.putString(WOOD, materials.wood());
+        tag.putString(STONE, materials.stone());
         return stack;
+    }
+
+    /**
+     * The wood and stone a blueprint builds of.
+     */
+    public static io.github.sekerator.kingdomworld.core.construction.Materials materials(ItemStack stack) {
+        CompoundTag tag = stack.getTag();
+        return tag == null ? io.github.sekerator.kingdomworld.core.construction.Materials.NONE
+                : new io.github.sekerator.kingdomworld.core.construction.Materials(tag.getString(WOOD), tag.getString(STONE));
     }
 
     /**
@@ -57,6 +77,17 @@ public class BlueprintItem extends Item {
     @Override
     public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
         tooltip.add(Component.translatable("item.kingdomworld.blueprint.tooltip").withStyle(ChatFormatting.GRAY));
+        io.github.sekerator.kingdomworld.core.construction.Materials materials = materials(stack);
+        if (io.github.sekerator.kingdomworld.core.construction.Materials.AUTO.equals(materials.wood())) {
+            tooltip.add(Component.translatable("item.kingdomworld.blueprint.wood_auto").withStyle(ChatFormatting.GRAY));
+        } else if (!materials.wood().isEmpty()) {
+            tooltip.add(Component.translatable("item.kingdomworld.blueprint.wood", TemplateMaterials.woodName(materials.wood()))
+                    .withStyle(ChatFormatting.GRAY));
+        }
+        if (!materials.stone().isEmpty()) {
+            tooltip.add(Component.translatable("item.kingdomworld.blueprint.stone", TemplateMaterials.stoneName(materials.stone()))
+                    .withStyle(ChatFormatting.GRAY));
+        }
     }
 
     @Override

@@ -63,6 +63,24 @@ public final class BuildPlan {
         return new BuildPlan(steps, clears);
     }
 
+    /**
+     * A plan that takes a building down: blocks that lean on others first, from the top down, then the standing ones from
+     * the top down, so that nothing falls off and drops on its own.
+     *
+     * @param leaning  positions {x, y, z} of leaning blocks
+     * @param standing positions of standing blocks
+     */
+    public static BuildPlan demolition(List<int[]> leaning, List<int[]> standing) {
+        List<Step> steps = new ArrayList<>();
+        for (int[] pos : PlacementOrder.clearing(leaning)) {
+            steps.add(new Step(steps.size(), Kind.CLEAR, pos[0], pos[1], pos[2], -1, Map.of()));
+        }
+        for (int[] pos : PlacementOrder.clearing(standing)) {
+            steps.add(new Step(steps.size(), Kind.CLEAR, pos[0], pos[1], pos[2], -1, Map.of()));
+        }
+        return new BuildPlan(steps, steps.size());
+    }
+
     public List<Step> steps() {
         return steps;
     }
@@ -187,7 +205,11 @@ public final class BuildPlan {
     public int percent(Construction construction) {
         int places = places();
         if (places == 0) {
-            return finished(construction) ? 100 : 0;
+            // A demolition: the share of blocks taken down.
+            if (steps.isEmpty()) {
+                return finished(construction) ? 100 : 0;
+            }
+            return (int) Math.min(100, construction.doneCount() * 100L / steps.size());
         }
         int placed = 0;
         for (int i = clears; i < steps.size(); i++) {

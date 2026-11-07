@@ -36,6 +36,7 @@ final class KingdomDataMigrations {
                 case 5 -> current = upgradeFrom5To6(current);
                 case 6 -> current = upgradeFrom6To7(current);
                 case 7 -> current = upgradeFrom7To8(current);
+                case 8 -> current = upgradeFrom8To9(current);
                 default -> throw new IllegalArgumentException("No migration from kingdom data format " + version);
             }
         }
@@ -244,6 +245,24 @@ final class KingdomDataMigrations {
             tag.put(KingdomSavedData.TAG_CONSTRUCTION, ConstructionNbt.empty());
         }
         tag.putInt(KingdomSavedData.TAG_FORMAT_VERSION, 8);
+        return tag;
+    }
+
+    /**
+     * Format 9 adds the roles and levels of buildings, repairs by themselves, what was found damaged, the kinds of
+     * constructions (upgrades, repairs, demolitions), the wood and stone they are built of, and the blueprints kingdoms
+     * saved. A building of format 8 plays the role its type names, at level 1; constructions build new buildings; no
+     * kingdom has saved blueprints. Saving blueprints needs the right to manage construction, so no right changes.
+     */
+    private static CompoundTag upgradeFrom8To9(CompoundTag tag) {
+        if (!tag.contains(KingdomSavedData.TAG_CONSTRUCTION)) {
+            tag.put(KingdomSavedData.TAG_CONSTRUCTION, ConstructionNbt.empty());
+        } else if (tag.get(KingdomSavedData.TAG_CONSTRUCTION) instanceof CompoundTag construction) {
+            ConstructionNbt.upgradeFrom8(construction);
+        } else {
+            throw new IllegalArgumentException("'" + KingdomSavedData.TAG_CONSTRUCTION + "' is not a compound");
+        }
+        tag.putInt(KingdomSavedData.TAG_FORMAT_VERSION, 9);
         return tag;
     }
 

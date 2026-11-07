@@ -26,6 +26,30 @@ public final class Construction {
     /** Most kinds of materials kept at one site. */
     public static final int MAX_DELIVERED_KINDS = 512;
 
+    /**
+     * What the builders do: put up a new building, change a building to the next level of its template, put back what
+     * is missing or changed in it, or take it down.
+     */
+    public enum Kind {
+        BUILD,
+        UPGRADE,
+        REPAIR,
+        DEMOLISH;
+
+        public String id() {
+            return name().toLowerCase(Locale.ROOT);
+        }
+
+        public static Kind byId(String id) {
+            for (Kind kind : values()) {
+                if (kind.id().equals(id)) {
+                    return kind;
+                }
+            }
+            return BUILD;
+        }
+    }
+
     public enum Priority {
         LOW,
         NORMAL,
@@ -73,6 +97,8 @@ public final class Construction {
         TEMPLATE_CHANGED(true),
         /** Part of the site is no longer land of the kingdom. */
         OUTSIDE_LAND(true),
+        /** The building an upgrade, repair or demolition works on is no longer in the register. */
+        BUILDING_GONE(true),
         /** Every block is in place. */
         DONE(false);
 
@@ -110,6 +136,11 @@ public final class Construction {
     private final long created;
     private final List<int[]> clear;
     private final int steps;
+    private final Kind kind;
+    private final long building;
+    private final Materials materials;
+    private final BitSet skip;
+    private final Map<String, Integer> removed = new LinkedHashMap<>();
     private Priority priority = Priority.NORMAL;
     private boolean paused;
     private boolean orderMissing;
@@ -131,6 +162,23 @@ public final class Construction {
      */
     public Construction(long id, UUID kingdomId, String templateId, long fingerprint, WorldPos anchor, Placement placement, Box box,
                         long created, List<int[]> clear, int steps) {
+        this(id, kingdomId, templateId, fingerprint, anchor, placement, box, created, clear, steps, Kind.BUILD, 0, Materials.NONE,
+                new BitSet());
+    }
+
+    /**
+     * @param kind      what the builders do
+     * @param building  the building of the register an upgrade, repair or demolition works on, 0 for a new building
+     * @param materials wood and stone instead of the template's own
+     * @param skip      indices of template blocks the builders leave as they are: those an upgrade does not change, those a
+     *                  repair finds in place
+     */
+    public Construction(long id, UUID kingdomId, String templateId, long fingerprint, WorldPos anchor, Placement placement, Box box,
+                        long created, List<int[]> clear, int steps, Kind kind, long building, Materials materials, BitSet skip) {
+        this.kind = Objects.requireNonNull(kind, "kind");
+        this.building = building;
+        this.materials = Objects.requireNonNull(materials, "materials");
+        this.skip = (BitSet) skip.clone();
         this.id = id;
         this.kingdomId = Objects.requireNonNull(kingdomId, "kingdomId");
         this.templateId = Objects.requireNonNull(templateId, "templateId");
@@ -196,6 +244,70 @@ public final class Construction {
 
     public int steps() {
         return steps;
+    }
+
+    public Kind kind() {
+        return kind;
+    }
+
+    /**
+     * The building of the register the construction works on, 0 for a new building.
+     */
+    public long building() {
+        return building;
+    }
+
+    public Materials materials() {
+        return materials;
+    }
+
+    /**
+     * Indices of the template blocks the builders leave as they are; a copy.
+     */
+    public BitSet skip() {
+        return (BitSet) skip.clone();
+    }
+
+    public boolean skips(int block) {
+        return block >= 0 && skip.get(block);
+    }
+
+    // ---------------------------------------------------------------- what a demolition took down
+
+    /**
+     * Items of the blocks a demolition took down so far, before the loss: the share that goes back to the storehouses is
+     * worked out from these (see {@link Salvage}).
+     */
+    public Map<String, Integer> removed() {
+        return Collections.unmodifiableMap(removed);
+    }
+
+    /**
+     * A demolition took down blocks worth these items.
+     *
+     * @return the items that go back to the storehouses for them, after the loss
+     */
+    public Map<String, Integer> salvage(Map<String, Integer> items, int lossPercent) {
+        Map<String, Integer> back = new LinkedHashMap<>();
+        items.forEach((item, count) -> {
+            if (count == null || count <= 0 || item == null || item.isEmpty()) {
+                return;
+            }
+            int before = removed.getOrDefault(item, 0);
+            if (!removed.containsKey(item) && removed.size() >= MAX_DELIVERED_KINDS) {
+                return;
+            }
+            int after = (int) Math.min(Integer.MAX_VALUE, (long) before + count);
+            removed.put(item, after);
+            int returned = Salvage.returned(before, after, lossPercent);
+            if (returned > 0) {
+                back.put(item, returned);
+            }
+        });
+        if (!back.isEmpty() || !items.isEmpty()) {
+            changed();
+        }
+        return back;
     }
 
     // ---------------------------------------------------------------- settings
@@ -424,6 +536,18 @@ public final class Construction {
      * Restores the state of the construction from saved data. Does not notify.
      */
     public void restore(Priority priority, boolean paused, boolean orderMissing, BitSet done, List<Integer> pending,
+                        Map<String, Integer> delivered, Map<String, Long> orders, Status status, WorldPos statusPos, double carry,
+                        Map<String, Integer> removed) {
+        restore(priority, paused, orderMissing, done, pending, delivered, orders, status, statusPos, carry);
+        this.removed.clear();
+        removed.forEach((item, count) -> {
+            if (item != null && !item.isEmpty() && count != null && count > 0 && this.removed.size() < MAX_DELIVERED_KINDS) {
+                this.removed.put(item, count);
+            }
+        });
+    }
+
+    public void restore(Priority priority, boolean paused, boolean orderMissing, BitSet done, List<Integer> pending,
                         Map<String, Integer> delivered, Map<String, Long> orders, Status status, WorldPos statusPos, double carry) {
         this.priority = Objects.requireNonNull(priority, "priority");
         this.paused = paused;
@@ -454,6 +578,6 @@ public final class Construction {
 
     @Override
     public String toString() {
-        return "Construction[" + id + " " + templateId + " at " + anchor.coordinates() + ", " + done.cardinality() + "/" + steps + "]";
+        return "Construction[" + id + " " + kind.id() + " " + templateId + " at " + anchor.coordinates() + ", " + done.cardinality() + "/" + steps + "]";
     }
 }

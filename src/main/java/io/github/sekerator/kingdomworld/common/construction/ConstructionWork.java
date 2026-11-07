@@ -93,6 +93,8 @@ public final class ConstructionWork {
     private static final Map<Long, Map<UUID, Long>> WORKERS = new HashMap<>();
     /** Progress of the integrity check of a building: next block, blocks in place, blocks counted. */
     private static final Map<Long, int[]> INTEGRITY = new HashMap<>();
+    /** Blocks found missing or changed so far by the integrity check of a building. */
+    private static final Map<Long, java.util.BitSet> MISSING = new HashMap<>();
     private static long integrityTurn;
 
     private ConstructionWork() {
@@ -104,14 +106,28 @@ public final class ConstructionWork {
         DEFERRED.clear();
         WORKERS.clear();
         INTEGRITY.clear();
+        MISSING.clear();
         KEYS.clear();
+        BuildingWork.reset();
+        BuildingEffects.reset();
+        CustomTemplates.reset();
         integrityTurn = 0;
     }
 
     // ---------------------------------------------------------------- lookups
 
+    /**
+     * The template of a construction, built of the construction's materials.
+     */
     public static Optional<BuildingTemplate> template(Construction construction) {
-        return BuildingTemplates.get(construction.templateId());
+        return BuildingTemplates.get(construction.templateId()).map(template -> TemplateMaterials.apply(template, construction.materials()));
+    }
+
+    /**
+     * The template of a building of the register, built of the building's materials.
+     */
+    public static Optional<BuildingTemplate> template(Building building) {
+        return BuildingTemplates.get(building.templateId()).map(template -> TemplateMaterials.apply(template, building.materials()));
     }
 
     @Nullable
@@ -148,10 +164,20 @@ public final class ConstructionWork {
             construction.setStatus(Construction.Status.TEMPLATE_CHANGED);
             return Optional.empty();
         }
+        if (construction.building() > 0) {
+            MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+            Optional<Building> building = server == null ? Optional.empty()
+                    : KingdomWorldApi.state(server).construction().building(construction.building());
+            if (building.isEmpty()) {
+                construction.setStatus(Construction.Status.BUILDING_GONE);
+                return Optional.empty();
+            }
+        }
         if (cached != null && cached.size() == construction.steps()) {
             return Optional.of(cached);
         }
-        BuildPlan plan = plan(template.get(), blockPos(construction.anchor()), construction.placement(), construction.clear());
+        BuildPlan plan = plan(template.get(), blockPos(construction.anchor()), construction.placement(), construction.clear(),
+                construction.skip(), construction.kind());
         if (plan.size() != construction.steps()) {
             construction.setStatus(Construction.Status.TEMPLATE_CHANGED);
             return Optional.empty();
@@ -164,13 +190,25 @@ public final class ConstructionWork {
      * The plan of a template laid at a place, with the positions to clear.
      */
     public static BuildPlan plan(BuildingTemplate template, BlockPos anchor, Placement placement, List<int[]> clear) {
+        return plan(template, anchor, placement, clear, new java.util.BitSet(), Construction.Kind.BUILD);
+    }
+
+    /**
+     * The plan of any kind of construction: a demolition takes down the positions given, the others clear them and place
+     * the template blocks not skipped.
+     */
+    public static BuildPlan plan(BuildingTemplate template, BlockPos anchor, Placement placement, List<int[]> clear, java.util.BitSet skip,
+                                 Construction.Kind kind) {
+        if (kind == Construction.Kind.DEMOLISH) {
+            return BuildingWork.demolitionPlan(template, anchor, placement, clear);
+        }
         List<PlacementOrder.Block> blocks = new ArrayList<>();
         List<Map<String, Integer>> costs = new ArrayList<>(template.blocks().size());
         for (int i = 0; i < template.blocks().size(); i++) {
             BuildingTemplate.Block block = template.blocks().get(i);
             BlockCost cost = template.costs().get(i);
             costs.add(cost.asMap());
-            if (cost.placed()) {
+            if (cost.placed() && !skip.get(i)) {
                 BlockPos at = template.place(block.pos(), anchor, placement);
                 blocks.add(new PlacementOrder.Block(i, at.getX(), at.getY(), at.getZ(), TemplateBlocks.phase(block.state())));
             }
@@ -258,7 +296,21 @@ public final class ConstructionWork {
      */
     public static KingdomWorldState.ConstructionChange lay(ServerLevel level, @Nullable UUID actor, UUID kingdomId, BuildingTemplate template,
                                                            BlockPos anchor, Placement placement) {
+        return lay(level, actor, kingdomId, template, anchor, placement, io.github.sekerator.kingdomworld.core.construction.Materials.NONE);
+    }
+
+    /**
+     * Lays out a construction of a template built of other wood and stone; the wood of the place is chosen by the biome.
+     */
+    public static KingdomWorldState.ConstructionChange lay(ServerLevel level, @Nullable UUID actor, UUID kingdomId, BuildingTemplate base,
+                                                           BlockPos anchor, Placement placement,
+                                                           io.github.sekerator.kingdomworld.core.construction.Materials chosen) {
+        io.github.sekerator.kingdomworld.core.construction.Materials materials = TemplateMaterials.resolve(chosen, level, anchor);
+        BuildingTemplate template = TemplateMaterials.apply(base, materials);
         MinecraftServer server = level.getServer();
+        if (template.owner() != null && !template.owner().equals(kingdomId)) {
+            return new KingdomWorldState.ConstructionChange(Outcome.fail(KingdomError.UNKNOWN_TEMPLATE), Optional.empty());
+        }
         if (KingdomWorldApi.isReadOnly(server)) {
             return new KingdomWorldState.ConstructionChange(Outcome.fail(KingdomError.READ_ONLY), Optional.empty());
         }
@@ -279,7 +331,7 @@ public final class ConstructionWork {
         BuildPlan plan = plan(template, anchor, placement, survey.clear());
         KingdomWorldState.ConstructionChange change = KingdomWorldApi.state(server).layConstruction(actor, kingdomId, template.id().toString(),
                 template.fingerprint(), worldPos(level, anchor), placement, template.box(anchor, placement), survey.clear(), plan.size(),
-                KingdomWorldApi.gameTime(server), rules);
+                KingdomWorldApi.gameTime(server), rules, Construction.Kind.BUILD, 0, materials, new java.util.BitSet());
         change.construction().ifPresent(construction -> {
             PLANS.put(construction.id(), plan);
             refreshReservations(server);
@@ -537,6 +589,13 @@ public final class ConstructionWork {
         }
         BuildPlan.Step step = plan.step(index);
         BlockPos at = new BlockPos(step.x(), step.y(), step.z());
+        if (construction.kind() == Construction.Kind.DEMOLISH) {
+            StepResult result = BuildingWork.takeDown(level, construction, template, at);
+            if (result == StepResult.DONE) {
+                construction.markDone(index);
+            }
+            return result;
+        }
         if (step.kind() == BuildPlan.Kind.CLEAR) {
             StepResult result = clear(level, at, builder, tool, drops);
             if (result == StepResult.DONE) {
@@ -670,6 +729,7 @@ public final class ConstructionWork {
             Construction.Status status = construction.status();
             if (construction.paused() || status == Construction.Status.TEMPLATE_MISSING || status == Construction.Status.TEMPLATE_CHANGED
                     || status == Construction.Status.OUTSIDE_LAND || status == Construction.Status.DONE
+                    || status == Construction.Status.BUILDING_GONE
                     || !construction.dimension().equals(post.pos().dimension())) {
                 continue;
             }
@@ -761,8 +821,10 @@ public final class ConstructionWork {
         }
         if (tick % 200 == 0) {
             orderMissing(server);
+            BuildingWork.autoRepair(server);
         }
         checkIntegrity(server, now);
+        BuildingEffects.tick(server, tick);
     }
 
     /**
@@ -971,17 +1033,26 @@ public final class ConstructionWork {
     public static Building complete(MinecraftServer server, Construction construction, boolean admin) {
         KingdomWorldState state = KingdomWorldApi.state(server);
         BuildingTemplate template = template(construction).orElse(null);
-        String type = template == null ? "" : template.type();
-        String category = template == null ? BuildingTemplate.Category.DECORATION.id() : template.category().id();
-        Building building = state.construction().register(construction, type, category, KingdomWorldApi.gameTime(server), admin);
+        long now = KingdomWorldApi.gameTime(server);
+        Building building = switch (construction.kind()) {
+            case BUILD -> {
+                String type = template == null ? "" : template.type();
+                String category = template == null ? BuildingTemplate.Category.DECORATION.id() : template.category().id();
+                yield state.construction().register(construction, type, category, template == null ? "" : template.role(),
+                        template == null ? 1 : template.level(), now, admin);
+            }
+            case UPGRADE, REPAIR, DEMOLISH -> BuildingWork.finish(server, construction, template, now);
+        };
         forget(server, construction);
         state.construction().remove(construction.id());
         giveBack(server, construction, construction.takeAllDelivered());
-        LOGGER.info("Construction {} of {} finished at {}{}", construction.id(), construction.templateId(), construction.anchor().coordinates(),
-                admin ? " by an operator" : "");
+        BuildingEffects.changed();
+        LOGGER.info("Construction {} ({}) of {} finished at {}{}", construction.id(), construction.kind().id(), construction.templateId(),
+                construction.anchor().coordinates(), admin ? " by an operator" : "");
         Component name = template == null ? Component.literal(construction.templateId()) : template.name();
+        String key = construction.kind() == Construction.Kind.BUILD ? "finished" : "finished." + construction.kind().id();
         state.kingdoms().get(construction.kingdomId()).ifPresent(kingdom -> KingdomActions.notifyMembers(server, kingdom,
-                Permission.MANAGE_CONSTRUCTION, Component.translatable(KEY + "finished", name, construction.anchor().coordinates())
+                Permission.MANAGE_CONSTRUCTION, Component.translatable(KEY + key, name, construction.anchor().coordinates())
                         .withStyle(net.minecraft.ChatFormatting.GREEN)));
         return building;
     }
@@ -1048,6 +1119,8 @@ public final class ConstructionWork {
                             placeParts(level, construction, template.get(), step.block());
                         }
                     }
+                } else if (construction.kind() == Construction.Kind.DEMOLISH) {
+                    BuildingWork.takeDown(level, construction, template.get(), at);
                 } else {
                     clear(level, at, null, ItemStack.EMPTY, drops);
                 }
@@ -1078,14 +1151,16 @@ public final class ConstructionWork {
             return;
         }
         Building building = buildings.get((int) Math.floorMod(integrityTurn, buildings.size()));
-        Optional<BuildingTemplate> template = BuildingTemplates.get(building.templateId());
+        Optional<BuildingTemplate> template = template(building);
         ServerLevel level = level(server, building.dimension());
         if (template.isEmpty() || template.get().fingerprint() != building.fingerprint() || level == null || !loaded(level, building.box())) {
             INTEGRITY.remove(building.id());
+            MISSING.remove(building.id());
             integrityTurn++;
             return;
         }
         int[] progress = INTEGRITY.computeIfAbsent(building.id(), id -> new int[3]);
+        java.util.BitSet missing = MISSING.computeIfAbsent(building.id(), id -> new java.util.BitSet());
         List<BuildingTemplate.Block> blocks = template.get().blocks();
         BlockPos anchor = blockPos(building.anchor());
         int budget = INTEGRITY_PER_SECOND;
@@ -1100,13 +1175,18 @@ public final class ConstructionWork {
             progress[2]++;
             if (there.getBlock() == block.state().getBlock()) {
                 progress[1]++;
+            } else {
+                missing.set(index);
             }
         }
         if (progress[0] >= blocks.size()) {
             int percent = progress[2] == 0 ? 100 : (int) (progress[1] * 100L / progress[2]);
-            KingdomWorldApi.state(server).construction().putBuilding(building.withIntegrity(percent, now));
+            Building current = KingdomWorldApi.state(server).construction().building(building.id()).orElse(building);
+            KingdomWorldApi.state(server).construction().putBuilding(current.withIntegrity(percent, now, missing));
             INTEGRITY.remove(building.id());
+            MISSING.remove(building.id());
             integrityTurn++;
+            BuildingEffects.changed();
         }
     }
 }

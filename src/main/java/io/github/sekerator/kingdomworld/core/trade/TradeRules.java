@@ -42,6 +42,17 @@ public record TradeRules(double exportFactor, double importFactor, int exportPer
     /** Experience at which a merchant gets the whole bonus. */
     public static final int FULL_EXPERIENCE = 1_000;
 
+    /**
+     * The same rules with another number of lots a player may keep at a market, for a kingdom whose markets give more.
+     */
+    public TradeRules withMaxLots(int lots) {
+        return new TradeRules(exportFactor, importFactor, exportPerMerchant, exportExperienceBonus, exportMaxIncomePerDay, importMaxPerDay,
+                importDelayTicks, demandElasticity, minPricePercent, maxPricePercent, stockTarget, spreadPercent, defaultSalesTaxPercent,
+                maxSalesTaxPercent, Math.max(0, lots), maxEntries, defaultExchangeFeePercent, maxExchangeFeePercent, minRate, maxRate,
+                rateSmoothingPercent, productionDays, minSupply, caravanBlocksPerMinute, caravanLossChance, proposalDays, maxDealsPerKingdom,
+                maxPeriodDays);
+    }
+
     public static final TradeRules DEFAULT = new TradeRules(0.6, 1.5, 64, 1.0, 2_000, 256, 6_000, 0.5, 50, 300, 64, 30, 5, 25,
             8, 32, 2, 10, ExchangeRates.ONE / 10, ExchangeRates.ONE * 10, 25, 7, 1_000, 200.0, 0.02, 3, 16, 30);
 

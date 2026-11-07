@@ -127,8 +127,9 @@ public final class CitizenSimulation {
             if (!changeHealth(server, citizen, body, inInfirmary, interval, rules)) {
                 continue;
             }
+            int comfort = io.github.sekerator.kingdomworld.common.construction.BuildingEffects.comfort(server, kingdomId, citizen.home());
             int target = CitizenNeeds.targetMood(new CitizenNeeds.MoodInputs(citizen.food(), citizen.home() != null,
-                    citizen.state() == CitizenState.WOUNDED, recentDeaths, citizen.payPercent()));
+                    citizen.state() == CitizenState.WOUNDED, recentDeaths, citizen.payPercent(), comfort));
             citizen.setMood(CitizenNeeds.nextMood(citizen.mood(), target));
             if (body == null) {
                 ProfessionBehaviors.get(citizen.professionId())
@@ -187,7 +188,8 @@ public final class CitizenSimulation {
      */
     static void findPlaces(MinecraftServer server, Citizens citizens, Citizen citizen) {
         if (citizen.home() == null) {
-            citizens.sites().nearestFree(citizen.kingdomId(), SiteKinds.BED, citizen.lastPos())
+            // A bed in a house comes first; beds in houses whose role rests are not offered.
+            io.github.sekerator.kingdomworld.common.construction.BuildingEffects.freeBed(server, citizen.kingdomId(), citizen.lastPos())
                     .ifPresent(bed -> citizens.assignHome(citizen, bed.pos()));
         }
         Optional<Profession> profession = Professions.REGISTRY.byId(citizen.professionId());
@@ -229,11 +231,10 @@ public final class CitizenSimulation {
         }
         CitizenRegistry registry = state.citizens().registry();
         List<Citizen> people = registry.citizensOf(kingdomId);
-        int freeBeds = state.citizens().sites().count(kingdomId, SiteKinds.BED)
-                - state.citizens().sites().occupied(kingdomId, SiteKinds.BED);
+        int[] freeBeds = io.github.sekerator.kingdomworld.common.construction.BuildingEffects.freeBeds(server, kingdomId);
         long last = registry.lastArrival(kingdomId);
         long since = last == CitizenRegistry.NEVER ? Long.MAX_VALUE : now - last;
-        CitizenNeeds.GrowthCheck check = CitizenNeeds.checkGrowth(people.size(), freeBeds,
+        CitizenNeeds.GrowthCheck check = CitizenNeeds.checkGrowth(people.size(), freeBeds[0], freeBeds[1],
                 KingdomStorage.totalNutrition(server, kingdomId), since, averageMood(people), rules);
         if (check == CitizenNeeds.GrowthCheck.READY) {
             Capital capital = territory.get().capital();
@@ -262,11 +263,10 @@ public final class CitizenSimulation {
         KingdomWorldState state = KingdomWorldApi.state(server);
         CitizenRegistry registry = state.citizens().registry();
         List<Citizen> people = registry.citizensOf(kingdomId);
-        int freeBeds = state.citizens().sites().count(kingdomId, SiteKinds.BED)
-                - state.citizens().sites().occupied(kingdomId, SiteKinds.BED);
+        int[] freeBeds = io.github.sekerator.kingdomworld.common.construction.BuildingEffects.freeBeds(server, kingdomId);
         long last = registry.lastArrival(kingdomId);
         long since = last == CitizenRegistry.NEVER ? Long.MAX_VALUE : KingdomWorldApi.gameTime(server) - last;
-        return CitizenNeeds.checkGrowth(people.size(), freeBeds, KingdomStorage.totalNutrition(server, kingdomId), since,
+        return CitizenNeeds.checkGrowth(people.size(), freeBeds[0], freeBeds[1], KingdomStorage.totalNutrition(server, kingdomId), since,
                 averageMood(people), CitizenSettings.rules());
     }
 }

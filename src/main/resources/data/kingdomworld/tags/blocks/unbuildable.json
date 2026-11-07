@@ -21,6 +21,8 @@
     "minecraft:infested_cracked_stone_bricks",
     "minecraft:infested_chiseled_stone_bricks",
     "minecraft:infested_deepslate",
-    "minecraft:frogspawn"
+    "minecraft:frogspawn",
+    "kingdomworld:throne",
+    "kingdomworld:bank"
   ]
 }

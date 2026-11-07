@@ -289,6 +289,41 @@ public final class KingdomWorldApi {
      * Runs a change of the kingdom state, refusing it while the data is read-only. Membership changes use this,
      * for example {@code change(server, "invite", s -> s.membership().invite(actor, target, time))}.
      */
+    // ---------------------------------------------------------------- roles of buildings
+
+    /**
+     * Adds a role of buildings (the barracks of the army, the tower of the mages, roles of other mods). Templates name it
+     * in their {@code role}; the register keeps its state.
+     */
+    public static void registerBuildingRole(io.github.sekerator.kingdomworld.core.construction.BuildingRole role) {
+        io.github.sekerator.kingdomworld.core.construction.BuildingRoles.register(role);
+    }
+
+    /**
+     * The buildings of a kingdom with a role whose role works now, with the numbers of the role at their level.
+     */
+    public static List<io.github.sekerator.kingdomworld.common.construction.BuildingEffects.Effect> workingBuildings(MinecraftServer server,
+                                                                                                                  UUID kingdomId, String role) {
+        requireServerThread(server);
+        return io.github.sekerator.kingdomworld.common.construction.BuildingEffects.working(server, kingdomId, role);
+    }
+
+    /**
+     * How much farther guards and garrisons of a kingdom see near a position thanks to its towers, in blocks.
+     */
+    public static double towerSight(MinecraftServer server, UUID kingdomId, io.github.sekerator.kingdomworld.core.citizen.WorldPos pos) {
+        requireServerThread(server);
+        return io.github.sekerator.kingdomworld.common.construction.BuildingEffects.sight(server, kingdomId, pos);
+    }
+
+    /**
+     * The strength of the walls of a kingdom, for wars.
+     */
+    public static long fortification(MinecraftServer server, UUID kingdomId) {
+        requireServerThread(server);
+        return io.github.sekerator.kingdomworld.common.construction.BuildingEffects.fortification(server, kingdomId);
+    }
+
     public static Outcome change(MinecraftServer server, String what, Function<KingdomWorldState, Outcome> change) {
         KingdomWorldState state = writable(server, what);
         return state == null ? Outcome.fail(KingdomError.READ_ONLY) : change.apply(state);

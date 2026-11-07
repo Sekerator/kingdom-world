@@ -7,7 +7,10 @@ import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
 import io.github.sekerator.kingdomworld.core.citizen.WorkZone;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.construction.Box;
+import io.github.sekerator.kingdomworld.core.construction.Building;
 import io.github.sekerator.kingdomworld.core.construction.Construction;
+import io.github.sekerator.kingdomworld.core.construction.CustomBlueprint;
+import io.github.sekerator.kingdomworld.core.construction.Materials;
 import io.github.sekerator.kingdomworld.core.construction.ConstructionBook;
 import io.github.sekerator.kingdomworld.core.construction.ConstructionRules;
 import io.github.sekerator.kingdomworld.core.construction.Placement;
@@ -1163,6 +1166,14 @@ public final class KingdomWorldState {
      * @param actor the player laying it, or {@code null} for an operator
      */
     public Outcome checkLay(UUID actor, UUID kingdomId, String dimension, Box box, ConstructionRules rules) {
+        return checkLay(actor, kingdomId, dimension, box, rules, 0);
+    }
+
+    /**
+     * Whether a construction may be laid out, with the box of the building {@code building} (the one an upgrade, repair or
+     * demolition works on) left out of the check of overlaps.
+     */
+    public Outcome checkLay(UUID actor, UUID kingdomId, String dimension, Box box, ConstructionRules rules, long building) {
         if (kingdoms.get(kingdomId).isEmpty()) {
             return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
         }
@@ -1174,12 +1185,139 @@ public final class KingdomWorldState {
                 return Outcome.fail(KingdomError.CONSTRUCTION_OUTSIDE_LAND);
             }
         }
-        if (construction.overlapping(dimension, box, -1).isPresent()) {
+        if (construction.overlapping(dimension, box, -1, building).isPresent()) {
             return Outcome.fail(KingdomError.CONSTRUCTION_OVERLAPS);
         }
         if (construction.count(kingdomId) >= rules.maxConstructions()) {
             return Outcome.fail(KingdomError.TOO_MANY_CONSTRUCTIONS);
         }
+        return Outcome.DONE;
+    }
+
+    /**
+     * Lays out a construction of any kind: a new building of other materials, or an upgrade, repair or demolition of a
+     * building of the register, which must belong to the kingdom and have no construction at work on it yet.
+     *
+     * @param building the building of the register, 0 for a new one
+     * @param skip     template blocks the builders leave as they are
+     */
+    public ConstructionChange layConstruction(UUID actor, UUID kingdomId, String templateId, long fingerprint, WorldPos anchor,
+                                              Placement placement, Box box, List<int[]> clear, int steps, long now, ConstructionRules rules,
+                                              Construction.Kind kind, long building, Materials materials, java.util.BitSet skip) {
+        if (building > 0) {
+            Outcome check = checkBuilding(actor, kingdomId, building);
+            if (!check.ok()) {
+                return ConstructionChange.failed(check.error());
+            }
+        }
+        Outcome allowed = checkLay(actor, kingdomId, anchor.dimension(), box, rules, building);
+        if (!allowed.ok()) {
+            return ConstructionChange.failed(allowed.error());
+        }
+        return new ConstructionChange(Outcome.DONE, Optional.of(construction.add(kingdomId, templateId, fingerprint, anchor, placement, box,
+                now, clear, steps, kind, building, materials, skip)));
+    }
+
+    /**
+     * Whether the actor may have builders work on a building: the kingdom exists, the actor has the right, the building
+     * belongs to the kingdom and no construction works on it yet.
+     *
+     * @param actor the player, or {@code null} for an operator or the kingdom itself
+     */
+    public Outcome checkBuilding(UUID actor, UUID kingdomId, long buildingId) {
+        if (kingdoms.get(kingdomId).isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (actor != null && !membership.hasPermission(actor, kingdomId, Permission.MANAGE_CONSTRUCTION)) {
+            return Outcome.fail(KingdomError.NO_PERMISSION);
+        }
+        Optional<Building> found = construction.building(buildingId);
+        if (found.isEmpty() || !found.get().kingdomId().equals(kingdomId)) {
+            return Outcome.fail(KingdomError.UNKNOWN_BUILDING);
+        }
+        if (construction.forBuilding(buildingId).isPresent()) {
+            return Outcome.fail(KingdomError.BUILDING_BUSY);
+        }
+        return Outcome.DONE;
+    }
+
+    /**
+     * Switches whether a building orders its repair by itself.
+     */
+    public Outcome setAutoRepair(UUID actor, UUID kingdomId, long buildingId, boolean value) {
+        if (actor != null && !membership.hasPermission(actor, kingdomId, Permission.MANAGE_CONSTRUCTION)) {
+            return Outcome.fail(KingdomError.NO_PERMISSION);
+        }
+        Optional<Building> found = construction.building(buildingId);
+        if (found.isEmpty() || !found.get().kingdomId().equals(kingdomId)) {
+            return Outcome.fail(KingdomError.UNKNOWN_BUILDING);
+        }
+        if (found.get().autoRepair() == value) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        construction.putBuilding(found.get().withAutoRepair(value));
+        return Outcome.DONE;
+    }
+
+    /**
+     * Saves a blueprint of the kingdom; the caller checked its blocks and gave it the next number of the book.
+     */
+    public Outcome saveBlueprint(UUID actor, CustomBlueprint blueprint) {
+        if (kingdoms.get(blueprint.kingdomId()).isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (actor != null && !membership.hasPermission(actor, blueprint.kingdomId(), Permission.MANAGE_CONSTRUCTION)) {
+            return Outcome.fail(KingdomError.NO_PERMISSION);
+        }
+        construction.addBlueprint(blueprint);
+        return Outcome.DONE;
+    }
+
+    /**
+     * Why the actor may not change a saved blueprint of the kingdom, or {@code null} if it may.
+     */
+    private KingdomError blueprintProblem(UUID actor, UUID kingdomId, long id) {
+        if (actor != null && !membership.hasPermission(actor, kingdomId, Permission.MANAGE_CONSTRUCTION)) {
+            return KingdomError.NO_PERMISSION;
+        }
+        if (construction.blueprint(id).filter(blueprint -> blueprint.kingdomId().equals(kingdomId)).isEmpty()) {
+            return KingdomError.UNKNOWN_BLUEPRINT;
+        }
+        return null;
+    }
+
+    public Outcome renameBlueprint(UUID actor, UUID kingdomId, long id, String name) {
+        KingdomError problem = blueprintProblem(actor, kingdomId, id);
+        if (problem != null) {
+            return Outcome.fail(problem);
+        }
+        CustomBlueprint found = construction.blueprint(id).orElseThrow();
+        String trimmed = name == null ? "" : name.strip();
+        if (trimmed.isEmpty() || trimmed.length() > CustomBlueprint.MAX_NAME) {
+            return Outcome.fail(KingdomError.BAD_BLUEPRINT_NAME);
+        }
+        if (trimmed.equals(found.name())) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        construction.putBlueprint(found.renamed(trimmed));
+        return Outcome.DONE;
+    }
+
+    /**
+     * Deletes a saved blueprint; not while a construction is built from it. Buildings built from it keep their role.
+     */
+    public Outcome deleteBlueprint(UUID actor, UUID kingdomId, long id) {
+        KingdomError problem = blueprintProblem(actor, kingdomId, id);
+        if (problem != null) {
+            return Outcome.fail(problem);
+        }
+        String template = construction.blueprint(id).orElseThrow().templateId();
+        for (Construction under : construction.all()) {
+            if (under.templateId().equals(template)) {
+                return Outcome.fail(KingdomError.BLUEPRINT_IN_USE);
+            }
+        }
+        construction.removeBlueprint(id);
         return Outcome.DONE;
     }
 

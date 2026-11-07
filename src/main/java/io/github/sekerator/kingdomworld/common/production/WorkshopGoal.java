@@ -313,7 +313,9 @@ final class WorkshopGoal extends PostWorkGoal {
         int experience = citizen().map(Citizen::experience).orElse(0);
         total = Math.max(1, (int) Math.round(ProductionSettings.rules().ticks(job.recipe(), experience)
                 / io.github.sekerator.kingdomworld.common.economy.EconomySettings.workSpeed(citizen().map(c -> c.mood())
-                .orElse(io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds.NEUTRAL_MOOD))));
+                .orElse(io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds.NEUTRAL_MOOD))
+                / io.github.sekerator.kingdomworld.common.construction.BuildingEffects.workshopSpeed(level.getServer(),
+                io.github.sekerator.kingdomworld.common.construction.ConstructionWork.worldPos(level, postPos))));
         step = Step.WORK;
         return null;
     }

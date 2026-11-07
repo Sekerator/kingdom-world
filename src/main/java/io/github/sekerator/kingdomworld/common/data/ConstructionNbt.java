@@ -3,12 +3,17 @@ package io.github.sekerator.kingdomworld.common.data;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.construction.Box;
 import io.github.sekerator.kingdomworld.core.construction.Building;
+import io.github.sekerator.kingdomworld.core.construction.BuildingRoles;
 import io.github.sekerator.kingdomworld.core.construction.Construction;
 import io.github.sekerator.kingdomworld.core.construction.ConstructionBook;
+import io.github.sekerator.kingdomworld.core.construction.CustomBlueprint;
+import io.github.sekerator.kingdomworld.core.construction.Facing;
+import io.github.sekerator.kingdomworld.core.construction.Materials;
 import io.github.sekerator.kingdomworld.core.construction.Placement;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 
 import java.util.ArrayList;
@@ -22,12 +27,15 @@ import java.util.Map;
  *
  * <pre>
  * construction: {
- *   nextConstruction, nextBuilding,
+ *   nextConstruction, nextBuilding, nextBlueprint,
  *   constructions: [ { id, kingdom, template, fingerprint, dimension, x, y, z, rotation, mirror, box: [6 ints], created,
  *                      clear: [x, y, z, ...], steps, priority, paused, orderMissing, done: [longs], pending: [ints],
- *                      delivered: [ { item, count } ], orders: [ { item, order } ], status, statusPos?: [x, y, z], carry } ],
- *   buildings: [ { id, kingdom, template, type, category, dimension, x, y, z, rotation, mirror, box, fingerprint, built,
- *                  admin, integrity, checked } ]
+ *                      delivered: [ { item, count } ], orders: [ { item, order } ], status, statusPos?: [x, y, z], carry,
+ *                      kind, building, wood, stone, skip: [longs], removed: [ { item, count } ] } ],
+ *   buildings: [ { id, kingdom, template, type, category, role, level, wood, stone, dimension, x, y, z, rotation, mirror,
+ *                  box, fingerprint, built, admin, integrity, checked, autoRepair, damaged: [longs] } ],
+ *   blueprints: [ { id, kingdom, name, category, role, size: [3 ints], palette: [state strings], blocks: [ints],
+ *                   anchor: [3 ints], entrance, created, author } ]
  * }
  * </pre>
  *
@@ -45,6 +53,7 @@ public final class ConstructionNbt {
         CompoundTag tag = new CompoundTag();
         tag.putLong("nextConstruction", book.nextConstructionId());
         tag.putLong("nextBuilding", book.nextBuildingId());
+        tag.putLong("nextBlueprint", book.nextBlueprintId());
         ListTag constructions = new ListTag();
         for (Construction construction : book.all()) {
             constructions.add(write(construction));
@@ -55,7 +64,86 @@ public final class ConstructionNbt {
             buildings.add(write(building));
         }
         tag.put("buildings", buildings);
+        ListTag blueprints = new ListTag();
+        for (CustomBlueprint blueprint : book.blueprints()) {
+            blueprints.add(write(blueprint));
+        }
+        tag.put("blueprints", blueprints);
         return tag;
+    }
+
+    private static void writeItems(CompoundTag tag, String key, Map<String, Integer> items) {
+        ListTag list = new ListTag();
+        items.forEach((item, count) -> {
+            CompoundTag entry = new CompoundTag();
+            entry.putString("item", item);
+            entry.putInt("count", count);
+            list.add(entry);
+        });
+        tag.put(key, list);
+    }
+
+    private static Map<String, Integer> readItems(CompoundTag tag, String key) {
+        Map<String, Integer> items = new LinkedHashMap<>();
+        ListTag list = tag.getList(key, Tag.TAG_COMPOUND);
+        for (int i = 0; i < list.size(); i++) {
+            CompoundTag entry = list.getCompound(i);
+            int count = entry.getInt("count");
+            if (count < 0) {
+                throw new IllegalArgumentException("negative count in '" + key + "'");
+            }
+            items.merge(entry.getString("item"), count, Integer::sum);
+        }
+        return items;
+    }
+
+    static CompoundTag write(CustomBlueprint blueprint) {
+        CompoundTag tag = new CompoundTag();
+        tag.putLong("id", blueprint.id());
+        tag.putUUID("kingdom", blueprint.kingdomId());
+        tag.putString("name", blueprint.name());
+        tag.putString("category", blueprint.category());
+        tag.putString("role", blueprint.role());
+        tag.putIntArray("size", new int[]{blueprint.sizeX(), blueprint.sizeY(), blueprint.sizeZ()});
+        ListTag palette = new ListTag();
+        for (String state : blueprint.palette()) {
+            palette.add(StringTag.valueOf(state));
+        }
+        tag.put("palette", palette);
+        tag.putIntArray("blocks", blueprint.blocks());
+        tag.putIntArray("anchor", new int[]{blueprint.anchorX(), blueprint.anchorY(), blueprint.anchorZ()});
+        tag.putString("entrance", blueprint.entrance().id());
+        tag.putLong("created", blueprint.created());
+        tag.putUUID("author", blueprint.author());
+        return tag;
+    }
+
+    static CustomBlueprint readBlueprint(CompoundTag tag) {
+        require(tag, "id", "kingdom", "name", "size", "palette", "blocks", "anchor", "author");
+        if (!tag.hasUUID("kingdom") || !tag.hasUUID("author")) {
+            throw new IllegalArgumentException("the kingdom or the author is not a UUID");
+        }
+        int[] size = tag.getIntArray("size");
+        int[] anchor = tag.getIntArray("anchor");
+        if (size.length != 3 || anchor.length != 3) {
+            throw new IllegalArgumentException("the size or the anchor is not three numbers");
+        }
+        ListTag paletteTag = tag.getList("palette", Tag.TAG_STRING);
+        List<String> palette = new ArrayList<>(paletteTag.size());
+        for (int i = 0; i < paletteTag.size(); i++) {
+            palette.add(paletteTag.getString(i));
+        }
+        String name = tag.getString("name");
+        if (name.isBlank() || name.length() > CustomBlueprint.MAX_NAME) {
+            throw new IllegalArgumentException("bad name of a blueprint");
+        }
+        return new CustomBlueprint(tag.getLong("id"), tag.getUUID("kingdom"), name, tag.getString("category"),
+                cut(tag.getString("role")), size[0], size[1], size[2], palette, tag.getIntArray("blocks"), anchor[0], anchor[1], anchor[2],
+                Facing.byId(tag.getString("entrance")).orElse(Facing.SOUTH), tag.getLong("created"), tag.getUUID("author"));
+    }
+
+    private static String cut(String text) {
+        return text.length() > Building.MAX_NAME ? text.substring(0, Building.MAX_NAME) : text;
     }
 
     private static void writePlace(CompoundTag tag, WorldPos anchor, Placement placement, Box box) {
@@ -111,6 +199,12 @@ public final class ConstructionNbt {
             tag.putIntArray("statusPos", new int[]{construction.statusPos().x(), construction.statusPos().y(), construction.statusPos().z()});
         }
         tag.putDouble("carry", construction.carry());
+        tag.putString("kind", construction.kind().id());
+        tag.putLong("building", construction.building());
+        tag.putString("wood", construction.materials().wood());
+        tag.putString("stone", construction.materials().stone());
+        tag.putLongArray("skip", construction.skip().toLongArray());
+        writeItems(tag, "removed", construction.removed());
         return tag;
     }
 
@@ -121,12 +215,18 @@ public final class ConstructionNbt {
         tag.putString("template", building.templateId());
         tag.putString("type", building.type());
         tag.putString("category", building.category());
+        tag.putString("role", building.role());
+        tag.putInt("level", building.level());
+        tag.putString("wood", building.materials().wood());
+        tag.putString("stone", building.materials().stone());
         writePlace(tag, building.anchor(), building.placement(), building.box());
         tag.putLong("fingerprint", building.fingerprint());
         tag.putLong("built", building.builtTime());
         tag.putBoolean("admin", building.admin());
         tag.putInt("integrity", building.integrity());
         tag.putLong("checked", building.checked());
+        tag.putBoolean("autoRepair", building.autoRepair());
+        tag.putLongArray("damaged", building.damaged().toLongArray());
         return tag;
     }
 
@@ -168,7 +268,20 @@ public final class ConstructionNbt {
                 problems.add("building #" + i + ": " + e.getMessage());
             }
         }
+        ListTag blueprints = tag.getList("blueprints", Tag.TAG_COMPOUND);
+        for (int i = 0; i < blueprints.size(); i++) {
+            try {
+                CustomBlueprint blueprint = readBlueprint(blueprints.getCompound(i));
+                if (state.kingdoms().get(blueprint.kingdomId()).isEmpty()) {
+                    throw new IllegalArgumentException("unknown kingdom " + blueprint.kingdomId());
+                }
+                book.restore(blueprint);
+            } catch (RuntimeException e) {
+                problems.add("blueprint #" + i + ": " + e.getMessage());
+            }
+        }
         book.restoreCounters(tag.getLong("nextConstruction"), tag.getLong("nextBuilding"));
+        book.restoreBlueprintCounter(tag.getLong("nextBlueprint"));
         return problems;
     }
 
@@ -213,18 +326,15 @@ public final class ConstructionNbt {
         if (steps < 0) {
             throw new IllegalArgumentException("negative number of steps");
         }
-        Construction construction = new Construction(id, tag.getUUID("kingdom"), tag.getString("template"), tag.getLong("fingerprint"),
-                anchor(tag), new Placement(tag.getInt("rotation"), tag.getBoolean("mirror")), box(tag), tag.getLong("created"), clear, steps);
-        Map<String, Integer> delivered = new LinkedHashMap<>();
-        ListTag deliveredTag = tag.getList("delivered", Tag.TAG_COMPOUND);
-        for (int i = 0; i < deliveredTag.size(); i++) {
-            CompoundTag entry = deliveredTag.getCompound(i);
-            int count = entry.getInt("count");
-            if (count < 0) {
-                throw new IllegalArgumentException("negative count of materials");
-            }
-            delivered.merge(entry.getString("item"), count, Integer::sum);
+        long building = tag.getLong("building");
+        if (building < 0) {
+            throw new IllegalArgumentException("invalid building " + building);
         }
+        Construction construction = new Construction(id, tag.getUUID("kingdom"), tag.getString("template"), tag.getLong("fingerprint"),
+                anchor(tag), new Placement(tag.getInt("rotation"), tag.getBoolean("mirror")), box(tag), tag.getLong("created"), clear, steps,
+                Construction.Kind.byId(tag.getString("kind")), building, new Materials(tag.getString("wood"), tag.getString("stone")),
+                BitSet.valueOf(tag.getLongArray("skip")));
+        Map<String, Integer> delivered = readItems(tag, "delivered");
         Map<String, Long> orders = new LinkedHashMap<>();
         ListTag ordersTag = tag.getList("orders", Tag.TAG_COMPOUND);
         for (int i = 0; i < ordersTag.size(); i++) {
@@ -239,7 +349,7 @@ public final class ConstructionNbt {
         WorldPos at = statusPos.length == 3 ? new WorldPos(tag.getString("dimension"), statusPos[0], statusPos[1], statusPos[2]) : null;
         construction.restore(Construction.Priority.byId(tag.getString("priority")), tag.getBoolean("paused"), tag.getBoolean("orderMissing"),
                 BitSet.valueOf(tag.getLongArray("done")), pending, delivered, orders, Construction.Status.byId(tag.getString("status")), at,
-                tag.getDouble("carry"));
+                tag.getDouble("carry"), readItems(tag, "removed"));
         return construction;
     }
 
@@ -248,10 +358,12 @@ public final class ConstructionNbt {
         if (!tag.hasUUID("kingdom")) {
             throw new IllegalArgumentException("the kingdom is not a UUID");
         }
-        return new Building(tag.getLong("id"), tag.getUUID("kingdom"), tag.getString("template"), tag.getString("type"),
-                tag.getString("category"), anchor(tag), new Placement(tag.getInt("rotation"), tag.getBoolean("mirror")), box(tag),
-                tag.getLong("fingerprint"), tag.getLong("built"), tag.getBoolean("admin"),
-                tag.contains("integrity") ? tag.getInt("integrity") : -1, tag.contains("checked") ? tag.getLong("checked") : -1);
+        return new Building(tag.getLong("id"), tag.getUUID("kingdom"), tag.getString("template"), cut(tag.getString("type")),
+                cut(tag.getString("category")), cut(tag.getString("role")), tag.contains("level") ? tag.getInt("level") : 1,
+                new Materials(tag.getString("wood"), tag.getString("stone")), anchor(tag),
+                new Placement(tag.getInt("rotation"), tag.getBoolean("mirror")), box(tag), tag.getLong("fingerprint"), tag.getLong("built"),
+                tag.getBoolean("admin"), tag.contains("integrity") ? tag.getInt("integrity") : -1,
+                tag.contains("checked") ? tag.getLong("checked") : -1, tag.getBoolean("autoRepair"), BitSet.valueOf(tag.getLongArray("damaged")));
     }
 
     /**
@@ -261,8 +373,44 @@ public final class ConstructionNbt {
         CompoundTag tag = new CompoundTag();
         tag.putLong("nextConstruction", 1);
         tag.putLong("nextBuilding", 1);
+        tag.putLong("nextBlueprint", 1);
         tag.put("constructions", new ListTag());
         tag.put("buildings", new ListTag());
+        tag.put("blueprints", new ListTag());
         return tag;
+    }
+
+    /**
+     * Format 9 gives every building of the register a role, a level, the template's own materials, no repair by itself and
+     * nothing found damaged, every construction the kind of a new building, and the register an empty list of saved
+     * blueprints. The role of a building of format 8 is its type when that names one of the roles of the mod.
+     */
+    public static void upgradeFrom8(CompoundTag construction) {
+        java.util.Set<String> roles = java.util.Set.of(BuildingRoles.HOUSE, BuildingRoles.WAREHOUSE, BuildingRoles.WORKSHOP, BuildingRoles.MARKET,
+                BuildingRoles.TOWER, BuildingRoles.WALL, BuildingRoles.WELL);
+        ListTag buildings = construction.getList("buildings", Tag.TAG_COMPOUND);
+        for (int i = 0; i < buildings.size(); i++) {
+            CompoundTag building = buildings.getCompound(i);
+            if (!building.contains("role")) {
+                String type = building.getString("type");
+                building.putString("role", roles.contains(type) ? type : "");
+            }
+            if (!building.contains("level")) {
+                building.putInt("level", 1);
+            }
+        }
+        ListTag constructions = construction.getList("constructions", Tag.TAG_COMPOUND);
+        for (int i = 0; i < constructions.size(); i++) {
+            CompoundTag entry = constructions.getCompound(i);
+            if (!entry.contains("kind")) {
+                entry.putString("kind", Construction.Kind.BUILD.id());
+            }
+        }
+        if (!construction.contains("blueprints")) {
+            construction.put("blueprints", new ListTag());
+        }
+        if (!construction.contains("nextBlueprint")) {
+            construction.putLong("nextBlueprint", 1);
+        }
     }
 }

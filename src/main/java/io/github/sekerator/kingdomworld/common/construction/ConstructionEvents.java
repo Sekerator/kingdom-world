@@ -21,10 +21,13 @@ public final class ConstructionEvents {
     }
 
     private static void onReload(AddReloadListenerEvent event) {
+        event.addListener(new BuildingRoleLoader());
         event.addListener(new BuildingTemplates.Loader());
     }
 
     private static void onTags(TagsUpdatedEvent event) {
+        // Which blocks are a wood or a stone depends on tags, on the server and on the client.
+        TemplateMaterials.reset();
         if (event.getUpdateCause() == TagsUpdatedEvent.UpdateCause.SERVER_DATA_LOAD) {
             BuildingTemplates.tagsChanged();
         }

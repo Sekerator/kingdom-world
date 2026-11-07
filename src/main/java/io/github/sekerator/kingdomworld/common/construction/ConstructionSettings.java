@@ -1,6 +1,7 @@
 package io.github.sekerator.kingdomworld.common.construction;
 
 import io.github.sekerator.kingdomworld.common.config.KingdomWorldConfig;
+import io.github.sekerator.kingdomworld.core.construction.BuildingRules;
 import io.github.sekerator.kingdomworld.core.construction.ConstructionRules;
 
 /**
@@ -10,6 +11,8 @@ import io.github.sekerator.kingdomworld.core.construction.ConstructionRules;
 public final class ConstructionSettings {
     private static ConstructionRules override;
     private static ConstructionRules cached;
+    private static BuildingRules buildingOverride;
+    private static BuildingRules buildingCached;
 
     private ConstructionSettings() {
     }
@@ -28,11 +31,46 @@ public final class ConstructionSettings {
 
     public static void refresh() {
         cached = fromConfig();
+        buildingCached = buildingsFromConfig();
     }
 
     public static void reset() {
         cached = null;
         override = null;
+        buildingCached = null;
+        buildingOverride = null;
+    }
+
+    /**
+     * The settings of the buildings of the register: roles, repairs, demolitions, saved blueprints.
+     */
+    public static BuildingRules buildings() {
+        if (buildingOverride != null) {
+            return buildingOverride;
+        }
+        BuildingRules rules = buildingCached;
+        if (rules == null) {
+            rules = buildingsFromConfig();
+            buildingCached = rules;
+        }
+        return rules;
+    }
+
+    /**
+     * Replaces the configured settings of buildings, for game tests; {@code null} restores the config.
+     */
+    public static void overrideBuildings(BuildingRules rules) {
+        buildingOverride = rules;
+    }
+
+    private static BuildingRules buildingsFromConfig() {
+        KingdomWorldConfig.Server c = KingdomWorldConfig.SERVER;
+        try {
+            return new BuildingRules(c.roleIntegrityPercent.get(), c.autoRepairBelowPercent.get(), c.demolitionLossPercent.get(),
+                    c.maxBlueprintsPerKingdom.get());
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return BuildingRules.DEFAULT;
+        }
     }
 
     /**

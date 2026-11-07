@@ -45,6 +45,8 @@ public final class KingdomStorage {
                 result.add(inventory);
             }
         }
+        // The containers of the warehouses of the kingdom count as storehouses while their place is loaded.
+        result.addAll(io.github.sekerator.kingdomworld.common.construction.BuildingEffects.containers(server, kingdomId));
         if (near != null) {
             result.sort(Comparator.comparingDouble(inventory -> near.distanceSqr(inventory.pos())));
         }

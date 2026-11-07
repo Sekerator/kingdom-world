@@ -230,7 +230,23 @@ public enum KingdomError {
     /** The crystals the player carries hold too little energy. */
     NO_CRYSTALS,
     /** The spell is still recharging. */
-    COOLDOWN;
+    COOLDOWN,
+    /** No such building in the register of the kingdom. */
+    UNKNOWN_BUILDING,
+    /** Builders work on the building already: an upgrade, a repair or a demolition. */
+    BUILDING_BUSY,
+    /** The template of the building names no next level. */
+    NO_UPGRADE,
+    /** Nothing of the building is missing or changed. */
+    NOTHING_TO_REPAIR,
+    /** The building was not looked at yet, so what a repair needs is not known. */
+    INTEGRITY_UNKNOWN,
+    /** No such saved blueprint of the kingdom. */
+    UNKNOWN_BLUEPRINT,
+    /** The name of a blueprint is empty or too long. */
+    BAD_BLUEPRINT_NAME,
+    /** A construction is built from the blueprint now. */
+    BLUEPRINT_IN_USE;
 
     /**
      * Lower case identifier, used for translation keys.
