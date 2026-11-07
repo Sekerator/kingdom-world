@@ -17,8 +17,10 @@ public enum LedgerCategory {
     TRANSFERS,
     /** Changes made by an operator. */
     ADMIN,
-    /** Buying and selling; used by the market of a later version. */
-    TRADE;
+    /** Buying and selling on the market, abroad and between kingdoms. */
+    TRADE,
+    /** Currencies exchanged at the bank of the kingdom. */
+    EXCHANGE;
 
     public String id() {
         return name().toLowerCase(Locale.ROOT);

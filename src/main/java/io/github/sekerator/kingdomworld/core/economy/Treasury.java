@@ -31,6 +31,7 @@ public final class Treasury {
     private int salesTaxPermille;
     private final Map<String, Long> wages = new LinkedHashMap<>();
     private final Map<UUID, Long> debts = new LinkedHashMap<>();
+    private final Map<UUID, Long> reserves = new LinkedHashMap<>();
     private long lastPayday = NO_PAYDAY;
     private Payroll.Summary lastPayroll = Payroll.Summary.NONE;
     private Runnable changeListener = () -> {
@@ -114,7 +115,7 @@ public final class Treasury {
     }
 
     /**
-     * Tax on sales in thousandths; kept for the market of a later version.
+     * Tax on the sales of players' lots in thousandths; the king sets it within the config.
      */
     public int salesTaxPermille() {
         return salesTaxPermille;
@@ -273,6 +274,84 @@ public final class Treasury {
         journal.record(day, category, worth, 0);
         changed();
         return true;
+    }
+
+    // ---------------------------------------------------------------- reserves of other currencies
+
+    /**
+     * Money of other currencies the treasury holds, by currency: what players exchanged at its bank or paid on its
+     * market, and what other kingdoms paid it in their currency.
+     */
+    public Map<UUID, Long> reserves() {
+        return Collections.unmodifiableMap(reserves);
+    }
+
+    public long reserve(UUID currency) {
+        return reserves.getOrDefault(currency, 0L);
+    }
+
+    boolean canReceiveReserve(UUID currency, long amount) {
+        return !currency.equals(kingdomId) && Money.isAmount(amount) && Money.add(reserve(currency), amount).isPresent();
+    }
+
+    boolean receiveReserve(UUID currency, long amount) {
+        if (!canReceiveReserve(currency, amount)) {
+            return false;
+        }
+        if (amount > 0) {
+            reserves.put(currency, reserve(currency) + amount);
+            changed();
+        }
+        return true;
+    }
+
+    boolean spendReserve(UUID currency, long amount) {
+        if (!Money.isAmount(amount) || reserve(currency) < amount) {
+            return false;
+        }
+        if (amount > 0) {
+            long left = reserve(currency) - amount;
+            if (left == 0) {
+                reserves.remove(currency);
+            } else {
+                reserves.put(currency, left);
+            }
+            changed();
+        }
+        return true;
+    }
+
+    /**
+     * Forgets the reserves of a currency whose kingdom was dissolved; its money is old and waits like any other.
+     */
+    long dropReserve(UUID currency) {
+        Long dropped = reserves.remove(currency);
+        if (dropped != null) {
+            changed();
+        }
+        return dropped == null ? 0 : dropped;
+    }
+
+    void setSalesTax(int permille) {
+        if (permille != salesTaxPermille) {
+            salesTaxPermille = permille;
+            changed();
+        }
+    }
+
+    /**
+     * Restores the reserves from saved data. Does not notify.
+     */
+    public void restoreReserves(Map<UUID, Long> values) {
+        reserves.clear();
+        values.forEach((currency, amount) -> {
+            if (!Money.isAmount(amount) || currency.equals(kingdomId)) {
+                throw new IllegalArgumentException("Reserve of " + currency + " out of range");
+            }
+            if (amount > 0) {
+                reserves.put(currency, amount);
+            }
+        });
     }
 
     /**

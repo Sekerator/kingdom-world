@@ -28,6 +28,13 @@ import io.github.sekerator.kingdomworld.core.territory.ClaimRules;
 import io.github.sekerator.kingdomworld.core.territory.KingdomStats;
 import io.github.sekerator.kingdomworld.core.territory.Territory;
 import io.github.sekerator.kingdomworld.core.territory.TerritoryIndex;
+import io.github.sekerator.kingdomworld.core.trade.Caravan;
+import io.github.sekerator.kingdomworld.core.trade.Deal;
+import io.github.sekerator.kingdomworld.core.trade.Goods;
+import io.github.sekerator.kingdomworld.core.trade.Market;
+import io.github.sekerator.kingdomworld.core.trade.Prices;
+import io.github.sekerator.kingdomworld.core.trade.TradeBook;
+import io.github.sekerator.kingdomworld.core.trade.TradeRules;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -54,6 +61,7 @@ public final class KingdomWorldState {
     private final Citizens citizens = new Citizens();
     private final OrderBook orders = new OrderBook();
     private final Economy economy = new Economy();
+    private final TradeBook trade = new TradeBook();
 
     /**
      * Called after every change of any part, used to mark the data for saving.
@@ -66,6 +74,7 @@ public final class KingdomWorldState {
         citizens.setChangeListener(listener);
         orders.setChangeListener(listener);
         economy.setChangeListener(listener);
+        trade.setChangeListener(listener);
     }
 
     public KingdomRegistry kingdoms() {
@@ -96,6 +105,13 @@ public final class KingdomWorldState {
      */
     public Economy economy() {
         return economy;
+    }
+
+    /**
+     * Markets, deals between kingdoms and caravans.
+     */
+    public TradeBook trade() {
+        return trade;
     }
 
     // ---------------------------------------------------------------- queries
@@ -192,6 +208,19 @@ public final class KingdomWorldState {
         if (kingdom.isEmpty()) {
             return Optional.empty();
         }
+        long day = Math.floorDiv(gameTime, io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds.TICKS_PER_DAY);
+        for (Caravan caravan : new ArrayList<>(trade.caravans())) {
+            if (caravan.buyer().equals(kingdomId)) {
+                // The buyer is gone: its payment goes back to where it came from, and the goods back to the seller.
+                economy.refundEscrow(caravan.escrowId(), day);
+                trade.putCaravan(caravan.withState(Caravan.State.RETURNING));
+            } else if (caravan.seller().equals(kingdomId)) {
+                // The seller is gone: the buyer gets its money back, the goods are lost.
+                economy.refundEscrow(caravan.escrowId(), day);
+                trade.removeCaravan(caravan.id());
+            }
+        }
+        trade.closeMarket(kingdomId);
         economy.retire(kingdomId, kingdom.get().name(), kingdom.get().color(), gameTime);
         citizens.removeKingdom(kingdomId);
         orders.removeKingdom(kingdomId);
@@ -206,6 +235,7 @@ public final class KingdomWorldState {
      */
     public void discard(UUID kingdomId) {
         economy.forget(kingdomId);
+        trade.forget(kingdomId);
         citizens.removeKingdom(kingdomId);
         orders.removeKingdom(kingdomId);
         territory.remove(kingdomId);
@@ -744,6 +774,336 @@ public final class KingdomWorldState {
             }
         }
         return payday;
+    }
+
+    // ---------------------------------------------------------------- the market
+
+    /**
+     * Whether the actor may manage the market of a kingdom; {@code null} is an administrator or the kingdom itself.
+     */
+    private Outcome checkMarket(UUID actor, UUID kingdomId) {
+        if (kingdoms.get(kingdomId).isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (actor != null && !membership.hasPermission(actor, kingdomId, Permission.MANAGE_MARKET)) {
+            return Outcome.fail(KingdomError.NO_PERMISSION);
+        }
+        return Outcome.DONE;
+    }
+
+    public Outcome putSell(UUID actor, UUID kingdomId, Market.SellEntry entry, TradeRules rules) {
+        Outcome check = checkMarket(actor, kingdomId);
+        return check.ok() ? trade.putSell(kingdomId, entry, rules) : check;
+    }
+
+    public Outcome removeSell(UUID actor, UUID kingdomId, String item) {
+        Outcome check = checkMarket(actor, kingdomId);
+        return check.ok() ? trade.removeSell(kingdomId, item) : check;
+    }
+
+    public Outcome putBuy(UUID actor, UUID kingdomId, Market.BuyEntry entry, TradeRules rules) {
+        Outcome check = checkMarket(actor, kingdomId);
+        return check.ok() ? trade.putBuy(kingdomId, entry, rules) : check;
+    }
+
+    public Outcome removeBuy(UUID actor, UUID kingdomId, String item) {
+        Outcome check = checkMarket(actor, kingdomId);
+        return check.ok() ? trade.removeBuy(kingdomId, item) : check;
+    }
+
+    public Outcome putExport(UUID actor, UUID kingdomId, Market.ExportRule rule, TradeRules rules) {
+        Outcome check = checkMarket(actor, kingdomId);
+        return check.ok() ? trade.putExport(kingdomId, rule, rules) : check;
+    }
+
+    public Outcome removeExport(UUID actor, UUID kingdomId, String item) {
+        Outcome check = checkMarket(actor, kingdomId);
+        return check.ok() ? trade.removeExport(kingdomId, item) : check;
+    }
+
+    public Outcome setOpenToOutsiders(UUID actor, UUID kingdomId, boolean open, TradeRules rules) {
+        Outcome check = checkMarket(actor, kingdomId);
+        return check.ok() ? trade.setOpenToOutsiders(kingdomId, open, rules) : check;
+    }
+
+    public Outcome setForeignCurrency(UUID actor, UUID kingdomId, boolean allowed, TradeRules rules) {
+        Outcome check = checkMarket(actor, kingdomId);
+        return check.ok() ? trade.setForeignCurrency(kingdomId, allowed, rules) : check;
+    }
+
+    public Outcome setExchangeFee(UUID actor, UUID kingdomId, int permille, TradeRules rules) {
+        Outcome check = checkMarket(actor, kingdomId);
+        return check.ok() ? trade.setExchangeFee(kingdomId, permille, rules) : check;
+    }
+
+    /**
+     * Sets the tax on the sales of players' lots, within the config.
+     */
+    public Outcome setSalesTax(UUID actor, UUID kingdomId, int permille, TradeRules rules) {
+        Outcome check = checkMarket(actor, kingdomId);
+        return check.ok() ? economy.setSalesTax(kingdomId, permille, rules.maxSalesTaxPercent() * 10) : check;
+    }
+
+    /**
+     * Orders goods from abroad: the treasury pays now, the goods arrive at {@code arrival}.
+     *
+     * @param cost what the external market asks for them
+     */
+    public Outcome orderImport(UUID actor, UUID kingdomId, String item, int count, long cost, long now, long arrival, TradeRules rules) {
+        Outcome check = checkMarket(actor, kingdomId);
+        if (!check.ok()) {
+            return check;
+        }
+        if (count < 1 || count > Market.MAX_COUNT || cost < 1) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        long day = Math.floorDiv(now, io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds.TICKS_PER_DAY);
+        Market market = trade.market(kingdomId, rules);
+        if ((long) market.stats(day).imported() + count > rules.importMaxPerDay()) {
+            return Outcome.fail(KingdomError.IMPORT_LIMIT);
+        }
+        Outcome paid = economy.importPayment(kingdomId, cost, day);
+        if (!paid.ok()) {
+            return paid;
+        }
+        trade.addImport(kingdomId, item, count, cost, now, arrival, rules);
+        trade.recordImport(kingdomId, day, count, cost, rules);
+        return Outcome.DONE;
+    }
+
+    /**
+     * Whether a player may put a lot up on a kingdom's market: subjects only, and not more lots than allowed.
+     */
+    public Outcome checkLot(UUID player, UUID kingdomId, TradeRules rules) {
+        if (kingdoms.get(kingdomId).isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (!membership.isMember(player, kingdomId)) {
+            return Outcome.fail(KingdomError.NOT_SUBJECT);
+        }
+        if (trade.existing(kingdomId).map(market -> market.lotsOf(player)).orElse(0) >= rules.maxLotsPerPlayer()) {
+            return Outcome.fail(KingdomError.TOO_MANY_LOTS);
+        }
+        return Outcome.DONE;
+    }
+
+    /**
+     * Puts the goods of a player up for sale; the caller took them from the player in the same moment.
+     */
+    public Outcome listLot(UUID player, UUID kingdomId, Goods goods, long price, long now, TradeRules rules) {
+        Outcome check = checkLot(player, kingdomId, rules);
+        return check.ok() ? trade.addLot(kingdomId, player, goods, price, now, rules) : check;
+    }
+
+    /**
+     * The seller takes a lot back; the caller hands the goods over in the same moment.
+     */
+    public Optional<Market.Lot> withdrawLot(UUID player, UUID kingdomId, long lotId) {
+        Optional<Market.Lot> lot = trade.existing(kingdomId).flatMap(market -> market.lot(lotId));
+        if (lot.isEmpty() || !lot.get().seller().equals(player)) {
+            return Optional.empty();
+        }
+        return trade.takeLot(kingdomId, lotId);
+    }
+
+    /**
+     * The result of buying a lot: the lot, or why not.
+     */
+    public record LotSale(Outcome outcome, Optional<Market.Lot> lot) {
+        static LotSale failed(KingdomError error) {
+            return new LotSale(Outcome.fail(error), Optional.empty());
+        }
+    }
+
+    /**
+     * What a lot costs a buyer.
+     */
+    public Optional<Market.Lot> lot(UUID kingdomId, long lotId) {
+        return trade.existing(kingdomId).flatMap(market -> market.lot(lotId));
+    }
+
+    /**
+     * Whether a player could buy a lot paying {@code paid} in a currency.
+     */
+    public Outcome checkBuyLot(UUID buyer, UUID kingdomId, long lotId, UUID currency, long paid, UUID payer) {
+        Optional<Market.Lot> lot = lot(kingdomId, lotId);
+        if (lot.isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_LOT);
+        }
+        if (lot.get().seller().equals(buyer)) {
+            return Outcome.fail(KingdomError.TARGET_IS_SELF);
+        }
+        Treasury treasury = economy.treasury(kingdomId).orElse(null);
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        Prices.Sale sale = Prices.split(lot.get().price(), treasury.salesTaxPermille());
+        return economy.checkLotSale(kingdomId, currency, paid, payer, lot.get().seller(), lot.get().price(), sale.tax());
+    }
+
+    /**
+     * A player buys a lot: pays {@code paid} in a currency (from the account, or coins the caller took), the treasury
+     * keeps the tax and the seller gets the rest. The caller hands the goods over in the same moment.
+     *
+     * @param payer the buyer paying from the account, or {@code null} for coins
+     */
+    public LotSale buyLot(UUID buyer, UUID kingdomId, long lotId, UUID currency, long paid, UUID payer, long day, TradeRules rules) {
+        Outcome check = checkBuyLot(buyer, kingdomId, lotId, currency, paid, payer);
+        if (!check.ok()) {
+            return new LotSale(check, Optional.empty());
+        }
+        Market.Lot lot = lot(kingdomId, lotId).orElseThrow();
+        Prices.Sale sale = Prices.split(lot.price(), economy.treasury(kingdomId).orElseThrow().salesTaxPermille());
+        Outcome sold = economy.sellLot(kingdomId, currency, paid, payer, lot.seller(), lot.price(), sale.tax(), day);
+        if (!sold.ok()) {
+            return new LotSale(sold, Optional.empty());
+        }
+        trade.takeLot(kingdomId, lotId);
+        trade.recordLotTax(kingdomId, day, sale.tax(), rules);
+        return new LotSale(Outcome.DONE, Optional.of(lot));
+    }
+
+    // ---------------------------------------------------------------- deals between kingdoms
+
+    /**
+     * Whether the actor may make deals for a kingdom; {@code null} is an administrator or the kingdom itself (kingdoms
+     * without a king use the same calls).
+     */
+    private Outcome checkTrade(UUID actor, UUID kingdomId) {
+        if (kingdoms.get(kingdomId).isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (actor != null && !membership.hasPermission(actor, kingdomId, Permission.MANAGE_TRADE)) {
+            return Outcome.fail(KingdomError.NO_PERMISSION);
+        }
+        return Outcome.DONE;
+    }
+
+    /**
+     * The result of proposing a deal.
+     */
+    public record Proposal(Outcome outcome, Optional<Deal> deal) {
+    }
+
+    /**
+     * A kingdom proposes a deal to another.
+     *
+     * @param actor        the player proposing, who needs {@link Permission#MANAGE_TRADE}; {@code null} for an administrator
+     *                     or a kingdom without a king
+     * @param sells        whether the proposing kingdom sends the goods (otherwise it receives them)
+     * @param ownCurrency  whether the price is in the currency of the proposing kingdom
+     * @param periodDays   days between deliveries, 0 for one delivery
+     */
+    public Proposal proposeDeal(UUID actor, UUID kingdomId, UUID partner, boolean sells, String item, int count, long price,
+                                boolean ownCurrency, int periodDays, long now, TradeRules rules) {
+        Outcome check = checkTrade(actor, kingdomId);
+        if (!check.ok()) {
+            return new Proposal(check, Optional.empty());
+        }
+        if (kingdoms.get(partner).isEmpty() || economy.treasury(partner).isEmpty() || economy.treasury(kingdomId).isEmpty()) {
+            return new Proposal(Outcome.fail(KingdomError.UNKNOWN_KINGDOM), Optional.empty());
+        }
+        if (partner.equals(kingdomId)) {
+            return new Proposal(Outcome.fail(KingdomError.SAME_KINGDOM), Optional.empty());
+        }
+        if (item == null || item.isEmpty() || item.length() > Goods.MAX_ITEM || count < 1 || count > Deal.MAX_COUNT
+                || !io.github.sekerator.kingdomworld.core.economy.Money.isPayment(price) || periodDays < 0 || periodDays > rules.maxPeriodDays()) {
+            return new Proposal(Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE), Optional.empty());
+        }
+        if (trade.openDeals(kingdomId) >= rules.maxDealsPerKingdom() || trade.openDeals(partner) >= rules.maxDealsPerKingdom()) {
+            return new Proposal(Outcome.fail(KingdomError.TOO_MANY_DEALS), Optional.empty());
+        }
+        UUID seller = sells ? kingdomId : partner;
+        UUID buyer = sells ? partner : kingdomId;
+        UUID currency = ownCurrency ? kingdomId : partner;
+        long expires = now + (long) rules.proposalDays() * io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds.TICKS_PER_DAY;
+        Deal deal = trade.addDeal(seller, buyer, kingdomId, item, count, price, currency, periodDays, now, expires);
+        return new Proposal(Outcome.DONE, Optional.of(deal));
+    }
+
+    /**
+     * Whether the actor may answer a proposal for the kingdom it was made to.
+     */
+    public Outcome checkAnswer(UUID actor, UUID kingdomId, long dealId) {
+        Outcome check = checkTrade(actor, kingdomId);
+        if (!check.ok()) {
+            return check;
+        }
+        Optional<Deal> deal = trade.deal(dealId);
+        if (deal.isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_DEAL);
+        }
+        if (!deal.get().answerer().equals(kingdomId)) {
+            return Outcome.fail(KingdomError.NOT_PARTNER);
+        }
+        if (deal.get().status() != Deal.Status.PROPOSED) {
+            return Outcome.fail(KingdomError.DEAL_CLOSED);
+        }
+        return Outcome.DONE;
+    }
+
+    /**
+     * Declines a proposal.
+     */
+    public Outcome declineDeal(UUID actor, UUID kingdomId, long dealId) {
+        Outcome check = checkAnswer(actor, kingdomId, dealId);
+        if (check.ok()) {
+            trade.putDeal(trade.deal(dealId).orElseThrow().withStatus(Deal.Status.DECLINED));
+        }
+        return check;
+    }
+
+    /**
+     * Calls a deal off: the proposer takes back a proposal, either kingdom ends a regular deal. Caravans on the way go on.
+     */
+    public Outcome cancelDeal(UUID actor, UUID kingdomId, long dealId) {
+        Outcome check = checkTrade(actor, kingdomId);
+        if (!check.ok()) {
+            return check;
+        }
+        Optional<Deal> deal = trade.deal(dealId);
+        if (deal.isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_DEAL);
+        }
+        Deal found = deal.get();
+        if (!found.involves(kingdomId) || (found.status() == Deal.Status.PROPOSED && !found.proposer().equals(kingdomId))) {
+            return Outcome.fail(KingdomError.NOT_PARTNER);
+        }
+        if (found.status().closed()) {
+            return Outcome.fail(KingdomError.DEAL_CLOSED);
+        }
+        trade.putDeal(found.withStatus(Deal.Status.CANCELLED));
+        return Outcome.DONE;
+    }
+
+    /**
+     * Whether the buyer of a deal could pay a delivery now.
+     */
+    public Outcome checkDelivery(Deal deal) {
+        if (kingdoms.get(deal.seller()).isEmpty() || kingdoms.get(deal.buyer()).isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        return economy.checkEscrow(deal.buyer(), deal.seller(), deal.currency(), deal.price());
+    }
+
+    /**
+     * Sends a caravan with the goods of a delivery; its payment goes into escrow. The caller took the goods from the
+     * seller's storehouses in the same moment and gives them back if this fails.
+     */
+    public Optional<Caravan> sendCaravan(Deal deal, List<Goods> cargo, String dimension, int fromX, int fromZ, int toX, int toZ, long now,
+                                         long travelTicks) {
+        if (!checkDelivery(deal).ok() || cargo.isEmpty()) {
+            return Optional.empty();
+        }
+        long day = Math.floorDiv(now, io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds.TICKS_PER_DAY);
+        Optional<Economy.Escrow> escrow = economy.openEscrow(deal.buyer(), deal.seller(), deal.currency(), deal.price(), day);
+        if (escrow.isEmpty()) {
+            return Optional.empty();
+        }
+        Caravan caravan = new Caravan(trade.nextId(), deal.id(), deal.seller(), deal.buyer(), cargo, deal.currency(), deal.price(),
+                escrow.get().id(), dimension, fromX, fromZ, toX, toZ, now, now + Math.max(1, travelTicks), Caravan.State.TRAVELING);
+        trade.putCaravan(caravan);
+        return Optional.of(caravan);
     }
 
     // ---------------------------------------------------------------- changes of ruler

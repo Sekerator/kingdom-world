@@ -23,6 +23,10 @@ public enum Permission {
     MANAGE_PRODUCTION,
     /** Pay from the treasury and set taxes and wages. */
     MANAGE_TREASURY,
+    /** Set what the market sells and buys, its prices and taxes, and trade abroad. */
+    MANAGE_MARKET,
+    /** Propose, accept and call off deals with other kingdoms. */
+    MANAGE_TRADE,
     /** Appoint members to positions and change the rights of positions. Only the king holds it. */
     APPOINT;
 

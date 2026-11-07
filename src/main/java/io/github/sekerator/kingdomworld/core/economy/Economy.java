@@ -4,6 +4,7 @@ import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomNames;
 import io.github.sekerator.kingdomworld.core.kingdom.NameProblem;
 import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
+import io.github.sekerator.kingdomworld.core.trade.ExchangeRates;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -19,10 +20,11 @@ import java.util.UUID;
  * The money of one world: the treasury of every kingdom, the accounts of the players and the currencies of dissolved
  * kingdoms.
  *
- * <p>Money only comes into being in two ways: the mint strikes coins from metal ({@link #mint}) and an operator adds
- * some ({@link #adminTreasury}, {@link #adminAccount}). Coins become money on an account at a bank and money on an
- * account becomes coins again ({@link #deposit}, {@link #withdraw}); everything else moves money from one place to
- * another, or takes it out of the world (wages). Every operation checks everything first and then changes all it
+ * <p>Money only comes into being in three ways: the mint strikes coins from metal ({@link #mint}), merchants sell goods
+ * abroad ({@link #exportIncome}) and an operator adds some ({@link #adminTreasury}, {@link #adminAccount}). Coins become
+ * money on an account at a bank and money on an account becomes coins again ({@link #deposit}, {@link #withdraw});
+ * everything else moves money from one place to another (payments, the market, exchanges, deals in escrow), or takes it
+ * out of the world (wages, goods bought abroad). Every operation checks everything first and then changes all it
  * changes at once, or refuses with a reason and changes nothing. Amounts are whole numbers of the smallest unit
  * between 0 and {@link Money#MAX}.
  *
@@ -32,10 +34,33 @@ public final class Economy {
     private final Map<UUID, Treasury> treasuries = new LinkedHashMap<>();
     private final Accounts accounts = new Accounts();
     private final Map<UUID, RetiredCurrency> retired = new LinkedHashMap<>();
+    /** Exchange rates by currency, see {@link ExchangeRates}. */
+    private final Map<UUID, Long> rates = new LinkedHashMap<>();
+    private long rateDay = -1;
+    /** Payments of deals waiting for their caravans. */
+    private final Map<Long, Escrow> escrows = new LinkedHashMap<>();
+    private long nextEscrow = 1;
+    /** Coins of each currency in the hands of players, as far as banks, treasuries and markets saw them go. */
+    private final Map<UUID, Long> coinsOut = new LinkedHashMap<>();
     private CurrencyUnits defaultUnits = CurrencyUnits.DEFAULT;
     private long defaultPollTax = EconomyRules.DEFAULT.defaultPollTax();
     private Runnable changeListener = () -> {
     };
+
+    /**
+     * A payment of a deal held until its caravan arrives: taken from the payer's treasury (its own currency) or its
+     * reserves (the other kingdom's currency), and given to the payee the same way, or back to the payer.
+     */
+    public record Escrow(long id, UUID payer, UUID payee, UUID currency, long amount) {
+        public Escrow {
+            Objects.requireNonNull(payer, "payer");
+            Objects.requireNonNull(payee, "payee");
+            Objects.requireNonNull(currency, "currency");
+            if (!Money.isPayment(amount)) {
+                throw new IllegalArgumentException("Escrow out of range: " + amount);
+            }
+        }
+    }
 
     /**
      * A citizen on the payroll.
@@ -117,13 +142,474 @@ public final class Economy {
     }
 
     /**
-     * All money of a currency on the books: the treasury and every account. Coins in the hands of players are not
-     * counted, they are not on any books.
+     * All money of a currency on the books: its treasury, every account, the reserves other treasuries hold of it and
+     * payments in escrow. Coins in the hands of players are not counted, they are not on any books.
      */
     public long supply(UUID currency) {
         Treasury treasury = treasuries.get(currency);
-        return Money.addCapped(treasury == null ? 0 : treasury.funds(), accounts.total(currency));
+        long sum = Money.addCapped(treasury == null ? 0 : treasury.funds(), accounts.total(currency));
+        for (Treasury other : treasuries.values()) {
+            sum = Money.addCapped(sum, other.reserve(currency));
+        }
+        for (Escrow escrow : escrows.values()) {
+            if (escrow.currency().equals(currency)) {
+                sum = Money.addCapped(sum, escrow.amount());
+            }
+        }
+        return sum;
     }
+
+    /**
+     * Coins of a currency in the hands of players, as far as banks, treasuries and markets saw them go.
+     */
+    public long coinsOut(UUID currency) {
+        return coinsOut.getOrDefault(currency, 0L);
+    }
+
+    public Map<UUID, Long> coinsOut() {
+        return Collections.unmodifiableMap(coinsOut);
+    }
+
+    /**
+     * Coins of a currency came into the hands of players (a positive count of their worth) or left them for a bank, a
+     * treasury or a market (a negative one).
+     */
+    public void coinsIssued(UUID currency, long worth) {
+        if (worth == 0) {
+            return;
+        }
+        long next = Math.max(0, Math.min(Money.MAX, coinsOut(currency) + Math.max(-Money.MAX, Math.min(Money.MAX, worth))));
+        if (next == 0) {
+            coinsOut.remove(currency);
+        } else {
+            coinsOut.put(currency, next);
+        }
+        changed();
+    }
+
+    /**
+     * The money of a currency the exchange rate counts: everything on the books and the coins in hands.
+     */
+    public long moneyMass(UUID currency) {
+        return Money.addCapped(supply(currency), coinsOut(currency));
+    }
+
+    // ---------------------------------------------------------------- exchange rates
+
+    /**
+     * The exchange rate of a currency, {@link ExchangeRates#ONE} until the first game day counted it.
+     */
+    public long rate(UUID currency) {
+        return rates.getOrDefault(currency, ExchangeRates.ONE);
+    }
+
+    public Map<UUID, Long> rates() {
+        return Collections.unmodifiableMap(rates);
+    }
+
+    /**
+     * The game day the rates were last counted on.
+     */
+    public long rateDay() {
+        return rateDay;
+    }
+
+    /**
+     * Moves the rate of every current currency a share of the way to its target, once a game day.
+     *
+     * @param targets the target rate of each currency
+     */
+    public void updateRates(long day, Map<UUID, Long> targets, io.github.sekerator.kingdomworld.core.trade.TradeRules rules) {
+        if (day <= rateDay) {
+            return;
+        }
+        boolean first = rateDay < 0;
+        rateDay = day;
+        targets.forEach((currency, target) -> {
+            if (treasuries.containsKey(currency)) {
+                rates.put(currency, ExchangeRates.smooth(first && !rates.containsKey(currency) ? ExchangeRates.ONE : rate(currency), target, rules));
+            }
+        });
+        changed();
+    }
+
+    // ---------------------------------------------------------------- reserves, exchange and the market
+
+    private Outcome checkCurrent(UUID currency) {
+        if (!isActive(currency)) {
+            return Outcome.fail(retired.containsKey(currency) ? KingdomError.OLD_CURRENCY : KingdomError.UNKNOWN_CURRENCY);
+        }
+        return Outcome.DONE;
+    }
+
+    /**
+     * Whether a treasury could take money in a currency: its own onto its balance, another into its reserves.
+     */
+    private boolean canTake(Treasury treasury, UUID currency, long amount) {
+        return currency.equals(treasury.kingdomId()) ? treasury.canReceive(amount) : treasury.canReceiveReserve(currency, amount);
+    }
+
+    private void take(Treasury treasury, UUID currency, long amount, LedgerCategory category, long day) {
+        boolean done = currency.equals(treasury.kingdomId()) ? treasury.receive(amount, category, day) : treasury.receiveReserve(currency, amount);
+        if (!done) {
+            throw new IllegalStateException("The treasury of " + treasury.kingdomId() + " could not take " + amount);
+        }
+    }
+
+    private long available(Treasury treasury, UUID currency) {
+        return currency.equals(treasury.kingdomId()) ? treasury.funds() : treasury.reserve(currency);
+    }
+
+    private void give(Treasury treasury, UUID currency, long amount, LedgerCategory category, long day) {
+        boolean done = currency.equals(treasury.kingdomId()) ? treasury.spend(amount, category, day) : treasury.spendReserve(currency, amount);
+        if (!done) {
+            throw new IllegalStateException("The treasury of " + treasury.kingdomId() + " could not give " + amount);
+        }
+    }
+
+    /**
+     * Whether a player could pay a kingdom an amount in a currency: from the account, or with coins the caller takes.
+     *
+     * @param payer the player paying from the account, or {@code null} for coins
+     */
+    public Outcome checkPayKingdom(UUID kingdomId, UUID currency, long amount, UUID payer) {
+        Treasury treasury = treasuries.get(kingdomId);
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        Outcome current = checkCurrent(currency);
+        if (!current.ok()) {
+            return current;
+        }
+        if (!Money.isPayment(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (payer != null && accounts.balance(payer, currency) < amount) {
+            return Outcome.fail(KingdomError.NOT_ENOUGH_MONEY);
+        }
+        return canTake(treasury, currency, amount) ? Outcome.DONE : Outcome.fail(KingdomError.TOO_MUCH_MONEY);
+    }
+
+    /**
+     * A player pays a kingdom for its goods on its market: from the account or with coins the caller took, in the
+     * kingdom's currency onto its balance or in another into its reserves.
+     *
+     * @param payer the player paying from the account, or {@code null} for coins
+     */
+    public Outcome payKingdom(UUID kingdomId, UUID currency, long amount, UUID payer, long day) {
+        Outcome check = checkPayKingdom(kingdomId, currency, amount, payer);
+        if (!check.ok()) {
+            return check;
+        }
+        if (payer != null) {
+            accounts.debit(payer, currency, amount);
+        }
+        take(treasuries.get(kingdomId), currency, amount, LedgerCategory.TRADE, day);
+        changed();
+        return Outcome.DONE;
+    }
+
+    /**
+     * Whether a treasury could pay a player an amount of its own currency, onto the account or as coins.
+     *
+     * @param payee the player paid onto the account, or {@code null} for coins
+     */
+    public Outcome checkKingdomPays(UUID kingdomId, long amount, UUID payee) {
+        Treasury treasury = treasuries.get(kingdomId);
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (!Money.isPayment(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (treasury.funds() < amount) {
+            return Outcome.fail(KingdomError.TREASURY_EMPTY);
+        }
+        if (payee != null && !accounts.canCredit(payee, kingdomId, amount)) {
+            return Outcome.fail(KingdomError.TOO_MUCH_MONEY);
+        }
+        return Outcome.DONE;
+    }
+
+    /**
+     * A treasury pays a player for goods, onto the account or as coins the caller hands out.
+     *
+     * @param payee the player paid onto the account, or {@code null} for coins
+     */
+    public Outcome kingdomPays(UUID kingdomId, long amount, UUID payee, LedgerCategory category, long day) {
+        Outcome check = checkKingdomPays(kingdomId, amount, payee);
+        if (!check.ok()) {
+            return check;
+        }
+        treasuries.get(kingdomId).spend(amount, category, day);
+        if (payee != null) {
+            accounts.credit(payee, kingdomId, amount);
+        }
+        changed();
+        return Outcome.DONE;
+    }
+
+    /**
+     * Whether the lot of a player can be sold: the buyer pays {@code paid} in a currency, the treasury keeps the tax and
+     * pays the seller the rest of the price in its own currency.
+     */
+    public Outcome checkLotSale(UUID kingdomId, UUID currency, long paid, UUID payer, UUID seller, long price, long tax) {
+        Outcome pay = checkPayKingdom(kingdomId, currency, paid, payer);
+        if (!pay.ok()) {
+            return pay;
+        }
+        Treasury treasury = treasuries.get(kingdomId);
+        long toSeller = price - tax;
+        long funds = currency.equals(kingdomId) ? Money.addCapped(treasury.funds(), paid) : treasury.funds();
+        if (toSeller > 0 && funds < toSeller) {
+            return Outcome.fail(KingdomError.TREASURY_EMPTY);
+        }
+        if (toSeller > 0 && !accounts.canCredit(seller, kingdomId, toSeller)) {
+            return Outcome.fail(KingdomError.TOO_MUCH_MONEY);
+        }
+        return Outcome.DONE;
+    }
+
+    /**
+     * Sells the lot of a player: the buyer pays, the treasury keeps the tax, the seller gets the rest on the account in
+     * the kingdom's currency, offline or not.
+     *
+     * @param payer the buyer paying from the account, or {@code null} for coins the caller took
+     */
+    public Outcome sellLot(UUID kingdomId, UUID currency, long paid, UUID payer, UUID seller, long price, long tax, long day) {
+        Outcome check = checkLotSale(kingdomId, currency, paid, payer, seller, price, tax);
+        if (!check.ok()) {
+            return check;
+        }
+        Treasury treasury = treasuries.get(kingdomId);
+        if (payer != null) {
+            accounts.debit(payer, currency, paid);
+        }
+        take(treasury, currency, paid, LedgerCategory.TRADE, day);
+        long toSeller = price - tax;
+        if (toSeller > 0) {
+            treasury.spend(toSeller, LedgerCategory.TRADE, day);
+            accounts.credit(seller, kingdomId, toSeller);
+        }
+        changed();
+        return Outcome.DONE;
+    }
+
+    /**
+     * What an amount of a currency gives in the currency of a kingdom's bank, by the rates and less the fee.
+     */
+    public long exchangeQuote(UUID kingdomId, UUID currency, long amount, int feePermille) {
+        return ExchangeRates.convert(amount, rate(currency), rate(kingdomId), feePermille);
+    }
+
+    /**
+     * Whether a player could exchange an amount of a currency at a kingdom's bank.
+     *
+     * @param payer the player paying from the account, or {@code null} for coins the caller takes
+     * @param payee the player paid onto the account, or {@code null} for coins the caller hands out
+     */
+    public Outcome checkExchange(UUID kingdomId, UUID currency, long amount, int feePermille, UUID payer, UUID payee) {
+        Treasury treasury = treasuries.get(kingdomId);
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (currency.equals(kingdomId)) {
+            return Outcome.fail(KingdomError.SAME_CURRENCY);
+        }
+        Outcome current = checkCurrent(currency);
+        if (!current.ok()) {
+            return current;
+        }
+        if (!Money.isPayment(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (payer != null && accounts.balance(payer, currency) < amount) {
+            return Outcome.fail(KingdomError.NOT_ENOUGH_MONEY);
+        }
+        long got = exchangeQuote(kingdomId, currency, amount, feePermille);
+        if (got < 1) {
+            return Outcome.fail(KingdomError.TOO_LITTLE);
+        }
+        if (treasury.funds() < got) {
+            return Outcome.fail(KingdomError.TREASURY_EMPTY);
+        }
+        if (!treasury.canReceiveReserve(currency, amount) || (payee != null && !accounts.canCredit(payee, kingdomId, got))) {
+            return Outcome.fail(KingdomError.TOO_MUCH_MONEY);
+        }
+        return Outcome.DONE;
+    }
+
+    /**
+     * A player exchanges money of a currency at the bank of a kingdom: the treasury takes it into its reserves and pays
+     * its own currency by the rates, less the fee, from its funds. Nothing is made: the currency given moves into the
+     * reserves, the currency got moves out of the treasury.
+     *
+     * @return what the player got, or the reason it was refused
+     */
+    public Exchanged exchange(UUID kingdomId, UUID currency, long amount, int feePermille, UUID payer, UUID payee, long day) {
+        Outcome check = checkExchange(kingdomId, currency, amount, feePermille, payer, payee);
+        if (!check.ok()) {
+            return new Exchanged(check, 0);
+        }
+        Treasury treasury = treasuries.get(kingdomId);
+        long got = exchangeQuote(kingdomId, currency, amount, feePermille);
+        if (payer != null) {
+            accounts.debit(payer, currency, amount);
+        }
+        treasury.receiveReserve(currency, amount);
+        treasury.spend(got, LedgerCategory.EXCHANGE, day);
+        if (payee != null) {
+            accounts.credit(payee, kingdomId, got);
+        }
+        changed();
+        return new Exchanged(Outcome.DONE, got);
+    }
+
+    /**
+     * The result of an exchange.
+     */
+    public record Exchanged(Outcome outcome, long got) {
+    }
+
+    /**
+     * Change in a foreign currency for coins a player paid with: it comes out of the reserves the payment went into.
+     */
+    public Outcome reserveChange(UUID kingdomId, UUID currency, long amount) {
+        Treasury treasury = treasuries.get(kingdomId);
+        if (treasury == null || !treasury.spendReserve(currency, amount)) {
+            return Outcome.fail(KingdomError.NOT_ENOUGH_MONEY);
+        }
+        changed();
+        return Outcome.DONE;
+    }
+
+    /**
+     * Merchants sold goods abroad: new money for the treasury.
+     */
+    public Outcome exportIncome(UUID kingdomId, long amount, long day) {
+        Treasury treasury = treasuries.get(kingdomId);
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (amount <= 0) {
+            return Outcome.DONE;
+        }
+        return treasury.receive(amount, LedgerCategory.TRADE, day) ? Outcome.DONE : Outcome.fail(KingdomError.TOO_MUCH_MONEY);
+    }
+
+    /**
+     * Goods ordered abroad are paid for: the money leaves the world.
+     */
+    public Outcome importPayment(UUID kingdomId, long amount, long day) {
+        Treasury treasury = treasuries.get(kingdomId);
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (!Money.isPayment(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        return treasury.spend(amount, LedgerCategory.TRADE, day) ? Outcome.DONE : Outcome.fail(KingdomError.NOT_ENOUGH_MONEY);
+    }
+
+    public Outcome setSalesTax(UUID kingdomId, int permille, int maxPermille) {
+        Treasury treasury = treasuries.get(kingdomId);
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (permille < 0 || permille > Math.min(1000, maxPermille)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (permille == treasury.salesTaxPermille()) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        treasury.setSalesTax(permille);
+        return Outcome.DONE;
+    }
+
+    // ---------------------------------------------------------------- escrow of deals
+
+    public Optional<Escrow> escrow(long id) {
+        return Optional.ofNullable(escrows.get(id));
+    }
+
+    public Map<Long, Escrow> escrows() {
+        return Collections.unmodifiableMap(escrows);
+    }
+
+    /**
+     * Whether a kingdom could pay an amount in a currency into escrow: its own from its treasury, another from its
+     * reserves.
+     */
+    public Outcome checkEscrow(UUID payer, UUID payee, UUID currency, long amount) {
+        Treasury from = treasuries.get(payer);
+        Treasury to = treasuries.get(payee);
+        if (from == null || to == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (!(currency.equals(payer) || currency.equals(payee))) {
+            return Outcome.fail(KingdomError.UNKNOWN_CURRENCY);
+        }
+        if (!Money.isPayment(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (available(from, currency) < amount) {
+            return Outcome.fail(KingdomError.NOT_ENOUGH_MONEY);
+        }
+        return Outcome.DONE;
+    }
+
+    /**
+     * Takes the payment of a deal into escrow.
+     *
+     * @return the escrow, or empty if the payer cannot pay
+     */
+    public Optional<Escrow> openEscrow(UUID payer, UUID payee, UUID currency, long amount, long day) {
+        if (!checkEscrow(payer, payee, currency, amount).ok()) {
+            return Optional.empty();
+        }
+        give(treasuries.get(payer), currency, amount, LedgerCategory.TRADE, day);
+        Escrow escrow = new Escrow(nextEscrow++, payer, payee, currency, amount);
+        escrows.put(escrow.id(), escrow);
+        changed();
+        return Optional.of(escrow);
+    }
+
+    /**
+     * The caravan arrived: the payment goes to the payee, its own currency onto its balance, another into its reserves.
+     * If the payee is gone or cannot take it, it goes back to the payer.
+     */
+    public Outcome releaseEscrow(long id, long day) {
+        Escrow escrow = escrows.get(id);
+        if (escrow == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_DEAL);
+        }
+        Treasury payee = treasuries.get(escrow.payee());
+        if (payee == null || !canTake(payee, escrow.currency(), escrow.amount())) {
+            return refundEscrow(id, day);
+        }
+        escrows.remove(id);
+        take(payee, escrow.currency(), escrow.amount(), LedgerCategory.TRADE, day);
+        changed();
+        return Outcome.DONE;
+    }
+
+    /**
+     * The caravan was lost or called off: the payment goes back to the payer. If the payer is gone, the money of its
+     * dissolved treasury is gone with it.
+     */
+    public Outcome refundEscrow(long id, long day) {
+        Escrow escrow = escrows.remove(id);
+        if (escrow == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_DEAL);
+        }
+        Treasury payer = treasuries.get(escrow.payer());
+        if (payer != null && canTake(payer, escrow.currency(), escrow.amount())) {
+            take(payer, escrow.currency(), escrow.amount(), LedgerCategory.TRADE, day);
+        }
+        changed();
+        return Outcome.DONE;
+    }
+
 
     // ---------------------------------------------------------------- treasuries
 
@@ -152,6 +638,11 @@ public final class Economy {
             return;
         }
         retired.put(kingdomId, new RetiredCurrency(kingdomId, treasury.currencyName(), kingdomName, color, treasury.units(), gameTime));
+        // Reserves of the old currency in other treasuries cannot be spent any more.
+        for (Treasury other : treasuries.values()) {
+            other.dropReserve(kingdomId);
+        }
+        rates.remove(kingdomId);
         changed();
     }
 
@@ -531,5 +1022,37 @@ public final class Economy {
 
     public void restoreRetired(RetiredCurrency currency) {
         retired.put(currency.id(), currency);
+    }
+
+    public void restoreRate(UUID currency, long rate) {
+        if (rate < 1) {
+            throw new IllegalArgumentException("Rate of " + currency + " out of range");
+        }
+        rates.put(currency, rate);
+    }
+
+    public void restoreRateDay(long day) {
+        rateDay = day;
+    }
+
+    public void restoreEscrow(Escrow escrow) {
+        if (escrows.containsKey(escrow.id())) {
+            throw new IllegalArgumentException("Two escrows with the id " + escrow.id());
+        }
+        escrows.put(escrow.id(), escrow);
+        nextEscrow = Math.max(nextEscrow, escrow.id() + 1);
+    }
+
+    public void restoreCoinsOut(UUID currency, long worth) {
+        if (!Money.isAmount(worth)) {
+            throw new IllegalArgumentException("Coins of " + currency + " out of range");
+        }
+        if (worth > 0) {
+            coinsOut.put(currency, worth);
+        }
+    }
+
+    public long nextEscrowId() {
+        return nextEscrow;
     }
 }
