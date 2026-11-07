@@ -242,10 +242,15 @@ public final class CompanionGameTests {
                 kingdom.id(), KingdomWorldApi.gameTime(server), TreasuryActions.day(server), CompanionSettings.rules());
         CompanionSavedData.get(server).pack(companion.id()).setItem(0, new ItemStack(Items.NETHERITE_SWORD));
         CompanionWork.present(owner, true);
+        // The throne of the kingdom stands on the straight way from the companion to its owner: the way goes around it.
+        BlockPos throne = helper.absolutePos(new BlockPos(2, 0, 2));
+        helper.assertTrue(!level.getBlockState(throne).isPathfindable(level, throne, net.minecraft.world.level.pathfinder.PathComputationType.LAND),
+                "Paths lead through the throne");
         CompanionEntity body = body(helper, companion, 1, 1);
         Husk[] husk = new Husk[1];
         helper.startSequence()
-                .thenWaitUntil(() -> helper.assertTrue(body.distanceTo(owner) < 4.5f, "The companion did not follow its owner"))
+                .thenWaitUntil(() -> helper.assertTrue(body.distanceTo(owner) < 4.5f, "The companion did not follow its owner: it stands at "
+                        + body.blockPosition() + ", the owner at " + owner.blockPosition()))
                 .thenExecute(() -> {
                     helper.assertTrue(body.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND).is(Items.NETHERITE_SWORD),
                             "The companion did not take the sword from its pack");
