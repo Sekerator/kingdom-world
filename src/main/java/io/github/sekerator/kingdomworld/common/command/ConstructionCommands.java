@@ -92,6 +92,12 @@ public final class ConstructionCommands {
                 .then(Commands.literal("cancel")
                         .then(Commands.argument("id", LongArgumentType.longArg(1))
                                 .executes(context -> cancel(context.getSource(), construction(context)))))
+                .then(Commands.literal("pause")
+                        .then(Commands.argument("id", LongArgumentType.longArg(1))
+                                .executes(context -> pause(context.getSource(), construction(context), true))))
+                .then(Commands.literal("resume")
+                        .then(Commands.argument("id", LongArgumentType.longArg(1))
+                                .executes(context -> pause(context.getSource(), construction(context), false))))
                 .then(Commands.literal("info")
                         .then(Commands.argument("id", LongArgumentType.longArg(1))
                                 .executes(context -> info(context.getSource(), construction(context)))))
@@ -239,6 +245,21 @@ public final class ConstructionCommands {
             return 0;
         }
         source.sendSuccess(() -> Component.translatable(KEY + "cancelled", construction.id()), true);
+        return 1;
+    }
+
+    /**
+     * Pauses a construction or lets it go on: while paused, no builder works on it and nothing is set aside for it.
+     */
+    private static int pause(CommandSourceStack source, Construction construction, boolean paused) {
+        KingdomWorldState.ConstructionChange change = KingdomWorldApi.state(source.getServer()).pauseConstruction(null, construction.kingdomId(),
+                construction.id(), paused);
+        if (!change.outcome().ok()) {
+            source.sendFailure(KingdomActions.errorMessage(change.outcome().error()));
+            return 0;
+        }
+        ConstructionWork.refreshReservations(source.getServer());
+        source.sendSuccess(() -> Component.translatable(KEY + (paused ? "paused" : "resumed"), construction.id()), true);
         return 1;
     }
 

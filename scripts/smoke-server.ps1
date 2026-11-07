@@ -563,6 +563,8 @@ $script:GuildSquad = $null
 $script:GuildHunt = $null
 $script:GuildBounty = $null
 $script:GuildMoney = -1
+$script:EconomyRaw = $null
+$script:TradeMoney = $null
 $script:MinerId = $null
 $script:Mined = 0
 $ConsoleFailPattern = 'Unknown or incomplete command|Incorrect argument|already exists|There is no kingdom|read-only'
@@ -1105,12 +1107,6 @@ Invoke-Phase 'session1' {
             }
         }
     }
-    if ($script:EconomyRaw) {
-        $seen = Count-Log 'Raw: balance (\d+), copper (\d+), silver (\d+), gold (\d+), funds (\d+), supply (\d+)'
-        Send-ServerCommand $server "kingdomworld admin economy info $KingdomName"
-        $raw = Wait-ForNewLog $server 'Raw: balance (\d+), copper (\d+), silver (\d+), gold (\d+), funds (\d+), supply (\d+)' $CommandTimeout $seen
-        if ($raw) { $script:EconomyRaw = $raw.Value }
-    }
     if ($MapModsDir -and $script:CaravanId) { Test-MapMarkers $server 'session1' }
 
     # Construction: the templates load, the data pack template needs Create; a builder far from players builds a small
@@ -1209,13 +1205,34 @@ Invoke-Phase 'session1' {
                 Add-Failure '[session1] the shed with blocks of Create could not be laid out'
             }
         }
-        # The builder goes on while the server runs: the numbers to compare after the restart are taken last, right before it stops.
+        # The builder would go on while the server runs, and a simulation step may come between a reading and the stop:
+        # the house is paused and its paid blocks placed, so the numbers taken last stay as they are until the restart.
+        Send-ServerCommand $server "kingdomworld admin build pause $id"
+        if (-not (Wait-ForLog $server "Construction #$id paused" $CommandTimeout $ConsoleFailPattern)) {
+            Add-Failure '[session1] the house could not be paused before the restart'
+        }
+        Send-ServerCommand $server 'kingdomworld admin build tick'
+        [void](Wait-ForLog $server 'Constructions moved on: \d+' $CommandTimeout $ConsoleFailPattern)
         $seen = Count-Log $infoPattern
         Send-ServerCommand $server "kingdomworld admin build info $id"
         $last = Wait-ForNewLog $server $infoPattern $CommandTimeout $seen
         if ($last) {
             $script:ConstructionInfo = "$($last.Groups[1].Value)/$($last.Groups[2].Value)/$($last.Groups[3].Value)/$($last.Groups[4].Value)/$($last.Groups[5].Value)"
         }
+    }
+
+    # Money last: the simulation steps of the construction let the minter strike what the smelter made meanwhile, so the
+    # treasury and the money of both kingdoms to compare after the restart are read right before the stop.
+    if ($script:EconomyRaw) {
+        $seen = Count-Log 'Raw: balance (\d+), copper (\d+), silver (\d+), gold (\d+), funds (\d+), supply (\d+)'
+        Send-ServerCommand $server "kingdomworld admin economy info $KingdomName"
+        $raw = Wait-ForNewLog $server 'Raw: balance (\d+), copper (\d+), silver (\d+), gold (\d+), funds (\d+), supply (\d+)' $CommandTimeout $seen
+        if ($raw) { $script:EconomyRaw = $raw.Value }
+    }
+    if ($script:TradeMoney -or $script:GuildMoney -ge 0) {
+        $moneyNow = Get-KingdomMoney $server $KingdomName
+        if ($script:GuildMoney -ge 0) { $script:GuildMoney = $moneyNow }
+        if ($script:TradeMoney) { $script:TradeMoney = "$moneyNow/$(Get-KingdomMoney $server $PartnerName)" }
     }
 }
 
@@ -1447,6 +1464,10 @@ Invoke-Phase 'session2' {
         Write-Ok "[session2] the construction is exactly where it was: $now"
     } else {
         Add-Failure "[session2] the construction changed in the restart: '$now', expected '$($script:ConstructionInfo)'"
+    }
+    Send-ServerCommand $server "kingdomworld admin build resume $id"
+    if (-not (Wait-ForLog $server "Construction #$id goes on" $CommandTimeout $ConsoleFailPattern)) {
+        Add-Failure '[session2] the house could not be let go on after the restart'
     }
     Send-ServerCommand $server 'forceload add 32 0 47 15'
     Send-ServerCommand $server "kingdomworld admin simulate $KingdomName 12"

@@ -1410,6 +1410,8 @@
   "commands.kingdomworld.admin.build.placed": "Construction #%s laid out: %s at %s, %s steps",
   "commands.kingdomworld.admin.build.finished": "Construction #%s finished at once; building #%s is in the register",
   "commands.kingdomworld.admin.build.cancelled": "Construction #%s cancelled",
+  "commands.kingdomworld.admin.build.paused": "Construction #%s paused",
+  "commands.kingdomworld.admin.build.resumed": "Construction #%s goes on",
   "commands.kingdomworld.admin.build.stocked": "Materials for construction #%s put into the storehouses: %s, did not fit: %s",
   "commands.kingdomworld.admin.build.ticked": "Constructions moved on: %s",
   "kingdomworld.screen.post.site": "Construction: %s at %s, %s%% built",

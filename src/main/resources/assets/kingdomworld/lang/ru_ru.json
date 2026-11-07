@@ -1410,6 +1410,8 @@
   "commands.kingdomworld.admin.build.placed": "Стройка №%s заложена: %s у %s, шагов %s",
   "commands.kingdomworld.admin.build.finished": "Стройка №%s завершена сразу; здание №%s в реестре",
   "commands.kingdomworld.admin.build.cancelled": "Стройка №%s отменена",
+  "commands.kingdomworld.admin.build.paused": "Стройка №%s приостановлена",
+  "commands.kingdomworld.admin.build.resumed": "Стройка №%s продолжается",
   "commands.kingdomworld.admin.build.stocked": "Материалы для стройки №%s положены на склады: %s, не поместилось: %s",
   "commands.kingdomworld.admin.build.ticked": "Стройки продвинуты: %s",
   "kingdomworld.screen.post.site": "Стройка: %s у %s, готово %s%%",
