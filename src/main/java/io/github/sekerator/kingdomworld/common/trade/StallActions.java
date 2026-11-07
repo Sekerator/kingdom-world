@@ -91,7 +91,7 @@ public final class StallActions {
      * Why a player may not trade at a stall now, or {@code null} if they may: a merchant must keep it, and outsiders are
      * served only if the king allows it.
      */
-    static KingdomActions.Feedback access(ServerPlayer player, Kingdom kingdom, BlockPos pos) {
+    public static KingdomActions.Feedback access(ServerPlayer player, Kingdom kingdom, BlockPos pos) {
         MinecraftServer server = player.server;
         WorldPos stall = new WorldPos(Dimensions.id(player.level()), pos.getX(), pos.getY(), pos.getZ());
         if (!MerchantBehavior.keepsOpen(server, kingdom.id(), stall)) {

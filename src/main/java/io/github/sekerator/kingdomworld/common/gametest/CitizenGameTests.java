@@ -88,6 +88,15 @@ public final class CitizenGameTests {
         level.setBlockAndUpdate(throne, ModRegistries.THRONE.get().defaultBlockState());
         CreateKingdomResult result = KingdomWorldApi.foundKingdom(level, throne, name, 0x8E44AD, king);
         if (result instanceof CreateKingdomResult.Created created) {
+            // Storehouses other tests left on this land would lend the kingdom their goods: they go.
+            KingdomSavedData data = KingdomSavedData.get(server);
+            for (StorehouseInventory leftover : new ArrayList<>(data.storehouses().all())) {
+                WorldPos pos = leftover.pos();
+                if (created.kingdom().id().equals(data.state().territory().ownerOf(pos.dimension(), pos.chunk()))) {
+                    data.storehouses().remove(pos);
+                    level.setBlock(new BlockPos(pos.x(), pos.y(), pos.z()), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 2 | 16);
+                }
+            }
             return created.kingdom();
         }
         helper.fail("Could not found '" + name + "': " + result);

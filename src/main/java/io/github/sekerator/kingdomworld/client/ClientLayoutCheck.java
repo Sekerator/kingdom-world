@@ -22,6 +22,11 @@ import io.github.sekerator.kingdomworld.common.network.data.CitizenView;
 import io.github.sekerator.kingdomworld.common.network.data.OrdersView;
 import io.github.sekerator.kingdomworld.core.production.Order;
 import io.github.sekerator.kingdomworld.common.network.data.StorageView;
+import io.github.sekerator.kingdomworld.common.network.data.TradeViews;
+import io.github.sekerator.kingdomworld.client.screen.ExchangeScreen;
+import io.github.sekerator.kingdomworld.client.screen.StallScreen;
+import io.github.sekerator.kingdomworld.core.trade.Caravan;
+import io.github.sekerator.kingdomworld.core.trade.Deal;
 import io.github.sekerator.kingdomworld.common.network.data.WorkPostView;
 import io.github.sekerator.kingdomworld.core.citizen.CauseOfDeath;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenNames;
@@ -637,6 +642,140 @@ final class ClientLayoutCheck {
         return screen;
     }
 
+    // ---------------------------------------------------------------- trade
+
+    private static final UUID VALORIA = UUID.nameUUIDFromBytes("second".getBytes(StandardCharsets.UTF_8));
+
+    private static TradeViews.Currency ownCurrency(UUID kingdom) {
+        return new TradeViews.Currency(kingdom, LONG_CURRENCY, LONG_KINGDOM, 0x6C3483, 10, 100, 9_990_000L);
+    }
+
+    private static TradeViews.Currency valoriaCurrency() {
+        return new TradeViews.Currency(VALORIA, "", "Valoria", 0xB7950B, 10, 100, 1_250_000L);
+    }
+
+    private static final net.minecraft.world.item.Item[] TRADE_ITEMS = {Items.BREAD, Items.IRON_INGOT, Items.LIGHT_BLUE_GLAZED_TERRACOTTA,
+            Items.ENCHANTED_GOLDEN_APPLE, Items.OAK_LOG, Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE, Items.WHEAT, Items.COBBLESTONE,
+            Items.CHAINMAIL_CHESTPLATE, Items.TORCH, Items.COOKED_BEEF, Items.DIAMOND};
+
+    private static ItemStack tradeItem(int i) {
+        return i == 0 ? longNamed(Items.NETHERITE_SWORD) : new ItemStack(TRADE_ITEMS[i % TRADE_ITEMS.length], i % 4 == 1 ? 64 : 1);
+    }
+
+    /**
+     * A market with the largest numbers, long names and more rows than fit in every list.
+     */
+    private static TradeViews.MarketView marketView(UUID kingdom, boolean canManage, boolean empty) {
+        List<TradeViews.SellRow> sells = new ArrayList<>();
+        List<TradeViews.BuyRow> buys = new ArrayList<>();
+        List<TradeViews.LotRow> lots = new ArrayList<>();
+        List<TradeViews.ExportRow> exports = new ArrayList<>();
+        List<TradeViews.ImportRow> imports = new ArrayList<>();
+        if (!empty) {
+            for (int i = 0; i < 20; i++) {
+                sells.add(new TradeViews.SellRow(tradeItem(i), i % 2 == 0 ? MUCH : 0, MUCH, 999_999, 999_999_999L));
+                buys.add(new TradeViews.BuyRow(tradeItem(i), i % 2 == 0 ? 0 : MUCH, MUCH, 999_999, i % 3 == 0 ? 0 : MUCH, MUCH - 1, 999_999_999L));
+                lots.add(new TradeViews.LotRow(i, tradeItem(i), MUCH, i == 0 ? LONG_PLAYER : "Seller_" + i, i % 3 == 0));
+                exports.add(new TradeViews.ExportRow(tradeItem(i), 999_999, 999_999_999L, MUCH));
+                imports.add(new TradeViews.ImportRow(tradeItem(i), 999_999, MUCH, i % 2 == 0 ? 23_999L * 30 : 0));
+            }
+        }
+        TradeViews.Day day = new TradeViews.Day(MUCH, MUCH, MUCH, 999, 999_999, 999_999, MUCH, MUCH, 999_999, 999_999, MUCH);
+        return new TradeViews.MarketView(kingdom, canManage, ownCurrency(kingdom), sells, buys, lots, exports, imports, false, true, 250, 250,
+                100, 900, day, List.of("minecraft:iron_ingot", "minecraft:oak_log", "minecraft:cobblestone", "minecraft:wheat"), 256);
+    }
+
+    private static ThroneScreen market(KingdomView view, boolean canManage, boolean empty, String mode, boolean form, String search,
+                                       Component status) {
+        ThroneScreen screen = throne(view, "market", status);
+        screen.updateMarket(marketView(view.id(), canManage, empty));
+        screen.showMarket(mode, form, form ? longNamed(Items.NETHERITE_SWORD) : ItemStack.EMPTY, "999999g99s9c", "999999", "999999g", search);
+        return screen;
+    }
+
+    /**
+     * Deals in every state, both directions and both currencies, and caravans on the way and waiting.
+     */
+    private static TradeViews.TradeView tradeView(UUID kingdom, boolean canManage, boolean empty) {
+        List<TradeViews.Partner> partners = new ArrayList<>();
+        List<TradeViews.DealRow> deals = new ArrayList<>();
+        List<TradeViews.CaravanRow> caravans = new ArrayList<>();
+        if (!empty) {
+            UUID far = UUID.nameUUIDFromBytes("far".getBytes(StandardCharsets.UTF_8));
+            partners.add(new TradeViews.Partner(far, LONG_KINGDOM, 0x6C3483, new TradeViews.Currency(far, LONG_CURRENCY, LONG_KINGDOM, 0x6C3483,
+                    10, 100, 9_990_000L)));
+            partners.add(new TradeViews.Partner(VALORIA, "Valoria", 0xB7950B, valoriaCurrency()));
+            int i = 0;
+            for (Deal.Status status : Deal.Status.values()) {
+                for (boolean incoming : new boolean[]{true, false}) {
+                    boolean proposed = status == Deal.Status.PROPOSED;
+                    deals.add(new TradeViews.DealRow(i, i % 2 == 0 ? far : VALORIA, i % 2 == 0 ? LONG_KINGDOM : "Valoria", 0x6C3483, i % 2 == 0,
+                            tradeItem(i), 4_096, MUCH, i % 3 == 0, i % 3, status, proposed && incoming, !status.closed() && !incoming,
+                            23_999L * 30, 999));
+                    i++;
+                }
+            }
+            for (int c = 0; c < 12; c++) {
+                caravans.add(new TradeViews.CaravanRow(c, c % 2 == 0, c % 2 == 0 ? LONG_KINGDOM : "Valoria", 0xB7950B, tradeItem(c), 999_999,
+                        MUCH, c % 3 == 0, 99, 23_999L * 30, c % 4 == 3 ? Caravan.State.WAITING : Caravan.State.TRAVELING));
+            }
+        }
+        return new TradeViews.TradeView(kingdom, canManage, ownCurrency(kingdom), partners, deals, caravans, 4_096, 30);
+    }
+
+    private static ThroneScreen trade(KingdomView view, boolean canManage, boolean empty, String mode, String search, Component status) {
+        ThroneScreen screen = throne(view, "trade", status);
+        screen.updateTrade(tradeView(view.id(), canManage, empty));
+        screen.showTrade(mode, mode.equals("propose") ? longNamed(Items.NETHERITE_SWORD) : ItemStack.EMPTY, "4096", "999999g99s9c", "30", search);
+        return screen;
+    }
+
+    private static TradeViews.StallView stallView(boolean empty, boolean member) {
+        UUID kingdom = UUID.nameUUIDFromBytes("first".getBytes(StandardCharsets.UTF_8));
+        List<TradeViews.Offer> offers = new ArrayList<>();
+        List<TradeViews.Wanted> wanted = new ArrayList<>();
+        List<TradeViews.LotRow> lots = new ArrayList<>();
+        if (!empty) {
+            for (int i = 0; i < 20; i++) {
+                offers.add(new TradeViews.Offer(tradeItem(i), MUCH, i % 5 == 4 ? 0 : 999_999_999L));
+                wanted.add(new TradeViews.Wanted(tradeItem(i), i % 6 == 5 ? 0 : MUCH, 999_999, 2_304));
+                lots.add(new TradeViews.LotRow(i, tradeItem(i), MUCH, i == 1 ? LONG_PLAYER : "Seller_" + i, i % 3 == 0));
+            }
+        }
+        List<TradeViews.Purse> purses = List.of(
+                new TradeViews.Purse(ownCurrency(kingdom), empty ? 0 : MUCH, empty ? io.github.sekerator.kingdomworld.core.economy.Coins.NONE
+                        : new io.github.sekerator.kingdomworld.core.economy.Coins(2_304, 2_304, 2_304)),
+                new TradeViews.Purse(valoriaCurrency(), MUCH, new io.github.sekerator.kingdomworld.core.economy.Coins(2_304, 2_304, 2_304)));
+        return new TradeViews.StallView(new BlockPos(-30_000_000, 319, 29_999_999), kingdom, LONG_KINGDOM, 0x6C3483, ownCurrency(kingdom), member,
+                250, 256, 100, offers, wanted, lots, empty ? purses.subList(0, 1) : purses);
+    }
+
+    private static StallScreen stall(boolean empty, boolean member, String mode, boolean account, int purse, Component status) {
+        StallScreen screen = new StallScreen(stallView(empty, member));
+        screen.showForCheck(mode, account, purse, "4096", "999999g99s9c");
+        if (!status.getString().isEmpty()) {
+            screen.onResult(false, status);
+        }
+        return screen;
+    }
+
+    private static ExchangeScreen exchange(boolean empty, String amount, boolean fromAccount, boolean toAccount, Component status, boolean success) {
+        UUID kingdom = UUID.nameUUIDFromBytes("bank".getBytes(StandardCharsets.UTF_8));
+        List<TradeViews.Purse> sources = new ArrayList<>();
+        if (!empty) {
+            sources.add(new TradeViews.Purse(new TradeViews.Currency(UUID.nameUUIDFromBytes("far".getBytes(StandardCharsets.UTF_8)), LONG_CURRENCY,
+                    LONG_KINGDOM, 0x6C3483, 10, 100, 9_990_000L), MUCH, new io.github.sekerator.kingdomworld.core.economy.Coins(2_304, 2_304, 2_304)));
+            sources.add(new TradeViews.Purse(valoriaCurrency(), MUCH, io.github.sekerator.kingdomworld.core.economy.Coins.NONE));
+        }
+        ExchangeScreen screen = new ExchangeScreen(new TradeViews.ExchangeView(new BlockPos(-30_000_000, 319, 29_999_999), kingdom, LONG_KINGDOM,
+                0x6C3483, ownCurrency(kingdom), 900, MUCH, MUCH, sources));
+        screen.fillForCheck(amount, 0, fromAccount, toAccount);
+        if (!status.getString().isEmpty()) {
+            screen.onResult(success, status);
+        }
+        return screen;
+    }
+
     private static void fillMapData() {
         UUID first = UUID.nameUUIDFromBytes("first".getBytes(StandardCharsets.UTF_8));
         UUID second = UUID.nameUUIDFromBytes("second".getBytes(StandardCharsets.UTF_8));
@@ -786,6 +925,66 @@ final class ClientLayoutCheck {
         cases.add(new Case("throne-subject-payments", () -> payments(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, false, false,
                 Component.empty())));
         cases.add(new Case("coin-tooltip", ClientLayoutCheck::coinTooltips));
+        cases.add(new Case("throne-treasury-reserves", () -> treasury(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "reserves",
+                "today", Component.empty())));
+        cases.add(new Case("throne-treasury-reserves-empty", () -> treasury(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, true,
+                "reserves", "today", Component.empty())));
+        for (String mode : List.of("sell", "buy", "lots", "export", "import", "settings")) {
+            cases.add(new Case("throne-market-" + mode, () -> market(view(KingdomView.Relation.MEMBER, Role.KING), true, false, mode, false, null,
+                    Component.empty())));
+        }
+        for (String mode : List.of("sell", "buy", "export", "import")) {
+            cases.add(new Case("throne-market-" + mode + "-form", () -> market(view(KingdomView.Relation.MEMBER, Role.TREASURER), true, false, mode,
+                    true, null, longError)));
+        }
+        cases.add(new Case("throne-market-search", () -> market(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "sell", true, "",
+                Component.empty())));
+        cases.add(new Case("throne-market-search-none", () -> market(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "import", true,
+                "zzzzzzzzzzzzzzzzzzzzzzzz", Component.empty())));
+        cases.add(new Case("throne-subject-market", () -> market(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, false, "buy", false, null,
+                Component.empty())));
+        cases.add(new Case("throne-subject-market-settings", () -> market(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, false,
+                "settings", false, null, Component.empty())));
+        cases.add(new Case("throne-market-empty", () -> market(view(KingdomView.Relation.MEMBER, Role.KING), true, true, "export", false, null,
+                Component.empty())));
+        cases.add(new Case("throne-market-loading", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "market", Component.empty())));
+        cases.add(new Case("throne-trade-deals", () -> trade(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "deals", null,
+                Component.translatable("kingdomworld.trade.offer_sell", LONG_KINGDOM, Component.translatable("kingdomworld.trade.goods",
+                        longNamed(Items.NETHERITE_SWORD).getHoverName(), io.github.sekerator.kingdomworld.common.trade.TradeTexts.items(4_096)),
+                        io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(MUCH,
+                                io.github.sekerator.kingdomworld.core.economy.CurrencyUnits.DEFAULT)))));
+        cases.add(new Case("throne-subject-trade", () -> trade(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, false, "deals", null,
+                Component.empty())));
+        cases.add(new Case("throne-trade-caravans", () -> trade(view(KingdomView.Relation.MEMBER, Role.CHANCELLOR), true, false, "caravans",
+                null, Component.empty())));
+        cases.add(new Case("throne-trade-propose", () -> trade(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "propose", null,
+                longError)));
+        cases.add(new Case("throne-subject-propose", () -> trade(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, false, "propose", null,
+                Component.empty())));
+        cases.add(new Case("throne-trade-propose-alone", () -> trade(view(KingdomView.Relation.MEMBER, Role.KING), true, true, "propose", null,
+                Component.empty())));
+        cases.add(new Case("throne-trade-search", () -> trade(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "propose", "ingot",
+                Component.empty())));
+        cases.add(new Case("throne-trade-empty", () -> trade(view(KingdomView.Relation.MEMBER, Role.KING), true, true, "caravans", null,
+                Component.empty())));
+        cases.add(new Case("throne-trade-loading", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "trade", Component.empty())));
+        cases.add(new Case("stall-buy", () -> stall(false, true, "buy", true, 0, Component.empty())));
+        cases.add(new Case("stall-buy-foreign", () -> stall(false, false, "buy", false, 1, longError)));
+        cases.add(new Case("stall-sell", () -> stall(false, true, "sell", false, 0, Component.translatable("kingdomworld.stall.and_account",
+                Component.translatable("kingdomworld.stall.sold", longNamed(Items.NETHERITE_SWORD).getHoverName(),
+                        io.github.sekerator.kingdomworld.common.trade.TradeTexts.items(4_096),
+                        io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(MUCH, io.github.sekerator.kingdomworld.core.economy.CurrencyUnits.DEFAULT)),
+                io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(MUCH, io.github.sekerator.kingdomworld.core.economy.CurrencyUnits.DEFAULT)))));
+        cases.add(new Case("stall-lots", () -> stall(false, false, "lots", true, 1, Component.empty())));
+        cases.add(new Case("stall-mine", () -> stall(false, true, "mine", true, 0, Component.empty())));
+        cases.add(new Case("stall-empty", () -> stall(true, false, "buy", true, 0, Component.empty())));
+        cases.add(new Case("stall-mine-empty", () -> stall(true, true, "mine", true, 0, Component.empty())));
+        cases.add(new Case("exchange", () -> exchange(false, "999999g99s9c", true, true, Component.empty(), false)));
+        cases.add(new Case("exchange-coins", () -> exchange(false, "abc", false, false, Component.translatable("kingdomworld.exchange.done",
+                io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(MUCH, io.github.sekerator.kingdomworld.core.economy.CurrencyUnits.DEFAULT),
+                io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(MUCH, io.github.sekerator.kingdomworld.core.economy.CurrencyUnits.DEFAULT)),
+                true)));
+        cases.add(new Case("exchange-nothing", () -> exchange(true, "", true, true, longError, false)));
         cases.add(new Case("bank", () -> bank(false, "", Component.empty(), false)));
         cases.add(new Case("bank-withdraw", () -> bank(false, "999999g99s9c", Component.translatable("kingdomworld.bank.withdrew_partly",
                 io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(MUCH, io.github.sekerator.kingdomworld.core.economy.CurrencyUnits.DEFAULT),

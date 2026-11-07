@@ -55,16 +55,29 @@ public final class PlayerNames {
     }
 
     /**
-     * A player who is online or has played on this server, by name; never asks the network.
+     * A player the kingdoms know, by name: online, a member of a kingdom or the owner of an account. Never asks the network,
+     * so a name nobody here ever used finds nobody.
      */
     public static java.util.Optional<GameProfile> known(MinecraftServer server, String name) {
         if (name == null || name.isBlank() || name.length() > 64) {
             return java.util.Optional.empty();
         }
-        ServerPlayer online = server.getPlayerList().getPlayerByName(name.strip());
+        String wanted = name.strip();
+        ServerPlayer online = server.getPlayerList().getPlayerByName(wanted);
         if (online != null) {
             return java.util.Optional.of(online.getGameProfile());
         }
-        return server.getProfileCache() == null ? java.util.Optional.empty() : server.getProfileCache().get(name.strip());
+        var state = io.github.sekerator.kingdomworld.common.api.KingdomWorldApi.state(server);
+        java.util.Set<UUID> players = new java.util.LinkedHashSet<>(state.economy().accounts().players());
+        for (var kingdom : state.kingdoms().all()) {
+            state.membership().kingdom(kingdom.id()).ifPresent(members -> players.addAll(members.members().keySet()));
+        }
+        for (UUID player : players) {
+            String known = name(server, player);
+            if (known.equalsIgnoreCase(wanted)) {
+                return java.util.Optional.of(new GameProfile(player, known));
+            }
+        }
+        return java.util.Optional.empty();
     }
 }

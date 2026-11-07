@@ -215,6 +215,7 @@ public final class KingdomWorldApi {
         io.github.sekerator.kingdomworld.core.economy.EconomyRules economy =
                 io.github.sekerator.kingdomworld.common.economy.EconomySettings.rules();
         state.economy().setDefaults(economy.units(), economy.defaultPollTax());
+        state.economy().setDefaultSalesTax(io.github.sekerator.kingdomworld.common.trade.TradeSettings.rules().defaultSalesTaxPercent() * 10);
     }
 
     // ---------------------------------------------------------------- money

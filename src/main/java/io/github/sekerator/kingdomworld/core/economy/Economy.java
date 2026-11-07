@@ -44,6 +44,7 @@ public final class Economy {
     private final Map<UUID, Long> coinsOut = new LinkedHashMap<>();
     private CurrencyUnits defaultUnits = CurrencyUnits.DEFAULT;
     private long defaultPollTax = EconomyRules.DEFAULT.defaultPollTax();
+    private int defaultSalesTaxPermille;
     private Runnable changeListener = () -> {
     };
 
@@ -94,6 +95,13 @@ public final class Economy {
 
     private void changed() {
         changeListener.run();
+    }
+
+    /**
+     * The tax on the sales of lots new treasuries start with, from the server config.
+     */
+    public void setDefaultSalesTax(int permille) {
+        this.defaultSalesTaxPermille = Math.max(0, Math.min(1000, permille));
     }
 
     /**
@@ -623,7 +631,7 @@ public final class Economy {
         }
         Treasury treasury = new Treasury(kingdomId, defaultUnits, defaultPollTax);
         treasury.setChangeListener(changeListener);
-        treasury.restore("", 0, Coins.NONE, defaultPollTax, 0, Map.of(), Map.of(), day, Payroll.Summary.NONE);
+        treasury.restore("", 0, Coins.NONE, defaultPollTax, defaultSalesTaxPermille, Map.of(), Map.of(), day, Payroll.Summary.NONE);
         treasuries.put(kingdomId, treasury);
         changed();
         return treasury;

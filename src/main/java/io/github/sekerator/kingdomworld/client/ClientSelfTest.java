@@ -188,9 +188,18 @@ public final class ClientSelfTest {
                 if (minecraft.screen instanceof ThroneScreen screen) {
                     screen.showTreasury("journal", "week");
                     screen.showTreasury("settings", "today");
+                    screen.selectTab("market");
                 }
             }
-            case 264 -> {
+            case 265 -> {
+                LOGGER.info(PREFIX + "market tab answered by the server: {}", minecraft.screen instanceof ThroneScreen screen && screen.marketShown());
+                if (minecraft.screen instanceof ThroneScreen screen) {
+                    screen.selectTab("trade");
+                }
+            }
+            case 268 -> LOGGER.info(PREFIX + "trade tab answered by the server: {}",
+                    minecraft.screen instanceof ThroneScreen screen && screen.tradeShown());
+            case 270 -> {
                 if (minecraft.screen instanceof ThroneScreen screen) {
                     ClientHooks.openTerritoryEditor(screen.view());
                 }
@@ -223,9 +232,30 @@ public final class ClientSelfTest {
                 LOGGER.info(PREFIX + "bank screen opened by the server: {}, currencies known: {}",
                         minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.BankScreen,
                         io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.get(kingdomId).isPresent());
+                server.execute(() -> {
+                    ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+                    if (player != null && bank != null) {
+                        io.github.sekerator.kingdomworld.common.trade.ExchangeActions.open(player, bank);
+                    }
+                });
+            }
+            case 350 -> {
+                LOGGER.info(PREFIX + "exchange screen opened by the server: {}",
+                        minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.ExchangeScreen);
+                server.execute(() -> {
+                    ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+                    if (player != null && bank != null && kingdomId != null) {
+                        io.github.sekerator.kingdomworld.common.api.KingdomWorldApi.kingdom(server, kingdomId).ifPresent(kingdom ->
+                                KingdomWorldNetwork.sendToPlayer(player, new io.github.sekerator.kingdomworld.common.network.packet.TradePackets
+                                        .StallOpen(io.github.sekerator.kingdomworld.common.trade.StallActions.view(player, bank, kingdom), true)));
+                    }
+                });
+            }
+            case 355 -> {
+                LOGGER.info(PREFIX + "stall screen shown: {}", minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.StallScreen);
                 minecraft.setScreen(new FoundKingdomScreen(throne, 0x336699));
             }
-            case 360 -> {
+            case 362 -> {
                 LOGGER.info(PREFIX + "founding screen shown: {}", minecraft.screen instanceof FoundKingdomScreen);
                 minecraft.setScreen(null);
                 server.execute(() -> cleanUp(server));
