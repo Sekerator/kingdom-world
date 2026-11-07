@@ -150,7 +150,7 @@ final class ClientLifeShowcase {
         switch (index) {
             case 0 -> {
                 minecraft.options.hideGui = true;
-                teleport(server, playerId, t.getX() + 7.5, t.getY() + 2.6, t.getZ() + 8.3, 140.0f, 18.0f);
+                teleport(server, playerId, t.getX() + 5.5, t.getY() + 2.4, t.getZ() + 8.4, 160.0f, 16.0f);
             }
             case 1 -> {
                 minecraft.options.hideGui = false;
