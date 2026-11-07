@@ -60,6 +60,17 @@ public final class LawEntry {
      * @return whether the guards let the player in
      */
     public static boolean onEnter(ServerPlayer player, CityGates.City city) {
+        return onEnter(player, city, null);
+    }
+
+    /**
+     * A player comes through a gate of a city.
+     *
+     * @param gate the gate, for the window that asks the fee
+     * @return whether the guards let the player in
+     */
+    public static boolean onEnter(ServerPlayer player, CityGates.City city, @org.jetbrains.annotations.Nullable
+            io.github.sekerator.kingdomworld.core.citizen.WorldPos gate) {
         MinecraftServer server = player.server;
         if (LawWork.isReadOnly(server)) {
             return true;
@@ -84,13 +95,13 @@ public final class LawEntry {
                 if (paid.ok()) {
                     return true;
                 }
-                LawActions.openEntry(player, city, fee);
+                LawActions.openEntry(player, city, fee, gate);
                 return false;
             }
             default -> {
                 player.displayClientMessage(Component.translatable(LawWork.KEY + "entry_price", LawTexts.shortAmount(fee,
                         LawTexts.units(server, city.kingdomId()))).withStyle(ChatFormatting.GOLD), true);
-                LawActions.openEntry(player, city, fee);
+                LawActions.openEntry(player, city, fee, gate);
                 return false;
             }
         }
@@ -118,6 +129,10 @@ public final class LawEntry {
         }
         if (fee <= 0) {
             return Outcome.fail(KingdomError.NO_ENTRY_FEE);
+        }
+        if (LawWork.state(server).hasPass(kingdomId, player.getUUID(), LawWork.now(server))) {
+            // A second click or a repeated packet pays nothing twice.
+            return Outcome.fail(KingdomError.PASS_HELD);
         }
         Economy economy = KingdomWorldApi.state(server).economy();
         long day = TreasuryActions.day(server);

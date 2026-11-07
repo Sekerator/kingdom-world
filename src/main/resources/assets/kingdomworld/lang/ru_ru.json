@@ -2715,6 +2715,8 @@
   "kingdomworld.error.debt_too_high": "Ваш долг казне слишком велик: рынок продаёт только за монеты и не берёт лоты.",
   "kingdomworld.error.no_debt": "Вы ничего не должны казне.",
   "kingdomworld.error.no_entry_fee": "Город не берёт платы за вход.",
+  "kingdomworld.error.pass_held": "У вас уже есть пропуск в города этого королевства.",
+  "kingdomworld.error.not_at_gate": "Вернитесь к воротам, чтобы оплатить вход.",
   "kingdomworld.error.guard_far": "Подойдите ближе к стражнику королевства.",
   "kingdomworld.permission.manage_law": "Суд",
   "kingdomworld.permission.manage_law.short": "Закон",

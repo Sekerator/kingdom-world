@@ -13,6 +13,7 @@ import io.github.sekerator.kingdomworld.core.law.CityGates;
 import io.github.sekerator.kingdomworld.core.law.LawState;
 import io.github.sekerator.kingdomworld.core.road.City;
 import io.github.sekerator.kingdomworld.core.road.CityLevel;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -111,7 +112,7 @@ public final class LawCities {
             if (guard != null) {
                 guard.getLookControl().setLookAt(player, 30.0f, 30.0f);
             }
-            boolean in = LawEntry.onEnter(player, city);
+            boolean in = LawEntry.onEnter(player, city, gate);
             if (!in) {
                 pushOut(player, center, gate);
             }
@@ -173,6 +174,14 @@ public final class LawCities {
      */
     static void pushOut(ServerPlayer player, @Nullable WorldPos place, @Nullable WorldPos gate) {
         if (gate == null) {
+            // No gate in this world: back to where the player came from, on safe ground.
+            Optional<double[]> from = CityWalls.enteredFrom(player.getUUID());
+            if (from.isPresent()) {
+                BlockPos spot = safeNear(player.serverLevel(), (int) Math.floor(from.get()[0]), (int) Math.floor(from.get()[1]), null, 0);
+                if (spot != null) {
+                    player.teleportTo(spot.getX() + 0.5, spot.getY(), spot.getZ() + 0.5);
+                }
+            }
             return;
         }
         double dx = place == null ? player.getX() - (gate.x() + 0.5) : gate.x() - place.x();
@@ -185,7 +194,47 @@ public final class LawCities {
         }
         int x = gate.x() + (int) Math.round(dx / length * PUSH_OUT);
         int z = gate.z() + (int) Math.round(dz / length * PUSH_OUT);
-        int y = player.serverLevel().getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
-        player.teleportTo(x + 0.5, y, z + 0.5);
+        // Outside means farther from the middle than the gate; the nearest safe ground there, else the safe ground nearest the gate.
+        double gateDistance = place == null ? -1 : Math.hypot(gate.x() - place.x(), gate.z() - place.z());
+        BlockPos spot = safeNear(player.serverLevel(), x, z, place, gateDistance);
+        if (spot == null) {
+            spot = safeNear(player.serverLevel(), gate.x(), gate.z(), null, 0);
+        }
+        if (spot != null) {
+            player.teleportTo(spot.getX() + 0.5, spot.getY(), spot.getZ() + 0.5);
+        }
+    }
+
+    /**
+     * Safe ground near a column: a solid block under two blocks of air without liquid, above the bottom of the world; the
+     * nearest within a few blocks, optionally only farther from the middle than {@code minDistance}.
+     */
+    @Nullable
+    static BlockPos safeNear(ServerLevel level, int x, int z, @Nullable WorldPos middle, double minDistance) {
+        for (int radius = 0; radius <= 4; radius++) {
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != radius) {
+                        continue;
+                    }
+                    int cx = x + dx;
+                    int cz = z + dz;
+                    if (middle != null && minDistance > 0 && Math.hypot(cx - middle.x(), cz - middle.z()) <= minDistance) {
+                        continue;
+                    }
+                    int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, cx, cz);
+                    BlockPos feet = new BlockPos(cx, y, cz);
+                    BlockPos ground = feet.below();
+                    if (y <= level.getMinBuildHeight() || !level.getFluidState(ground).isEmpty()
+                            || !level.getBlockState(ground).isFaceSturdy(level, ground, net.minecraft.core.Direction.UP)
+                            || !level.getBlockState(feet).isAir() || !level.getBlockState(feet.above()).isAir()
+                            || !level.getFluidState(feet).isEmpty()) {
+                        continue;
+                    }
+                    return feet;
+                }
+            }
+        }
+        return null;
     }
 }

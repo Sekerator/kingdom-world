@@ -556,6 +556,36 @@ public final class LawGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_law_gate_window")
+    public static void theWindowOfAGatePaysOnceAndOnlyAtThatGate(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Law Window", UUID.randomUUID());
+        ServerPlayer stranger = player(helper, "kw-window", 3, 6);
+        try {
+            var world = KingdomWorldApi.state(server);
+            helper.assertTrue(LawWork.state(server).setEntryFee(null, kingdom.id(), 50, LawSettings.rules(), world).ok(), "No entry fee");
+            world.economy().adminAccount(stranger.getUUID(), kingdom.id(), 500);
+            var pay = new io.github.sekerator.kingdomworld.common.network.packet.LawPackets.DialogAction(
+                    io.github.sekerator.kingdomworld.common.network.data.LawViews.Dialog.ENTRY, kingdom.id(), true);
+            // Without a gate that asked, the window pays nothing.
+            LawActions.handleDialog(stranger, pay);
+            helper.assertTrue(world.economy().accounts().balance(stranger.getUUID(), kingdom.id()) == 500, "A window without a gate took money");
+            var gate = CitizenGameTests.at(helper, 2, 1, 6);
+            var center = CitizenGameTests.at(helper, 6, 1, 6);
+            helper.assertTrue(!io.github.sekerator.kingdomworld.common.law.LawCities.enter(stranger, burg(kingdom), true, List.of(gate), center),
+                    "A traveller who did not pay came in");
+            LawActions.handleDialog(stranger, pay);
+            LawActions.handleDialog(stranger, pay);
+            helper.assertTrue(world.economy().accounts().balance(stranger.getUUID(), kingdom.id()) == 450, "The window took "
+                    + (500 - world.economy().accounts().balance(stranger.getUUID(), kingdom.id())) + " instead of the fee once");
+            helper.assertTrue(!io.github.sekerator.kingdomworld.common.law.LawEntry.pay(stranger, kingdom.id(), 50, true).ok(),
+                    "A pass was paid for twice");
+        } finally {
+            end(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
     @GameTest(template = EMPTY, batch = "kingdomworld_law_trespass")
     public static void gettingInOverTheWallIsATrespassWhenSeen(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
@@ -646,20 +676,18 @@ public final class LawGameTests {
         ServerLevel level = helper.getLevel();
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Law Machines", UUID.randomUUID());
         Citizen citizen = witness(helper, kingdom, 4, 4);
-        var allow = io.github.sekerator.kingdomworld.common.config.KingdomWorldConfig.SERVER.allowFakePlayers;
-        boolean allowed = allow.get();
         try {
-            // Machines answer to the protection as before: with allowFakePlayers off they may not strike citizens.
-            allow.set(false);
+            // Machines answer to the protection as before (allowFakePlayers decides), never to the law.
             net.minecraftforge.common.util.FakePlayer machine = net.minecraftforge.common.util.FakePlayerFactory.get(level,
                     new GameProfile(UUID.randomUUID(), "[kw-machine]"));
             CitizenEntity body = CitizenBodies.body(citizen.id());
+            boolean allowed = io.github.sekerator.kingdomworld.common.protection.ProtectionService.mayHurtCitizen(machine, body);
+            helper.assertTrue(LawEvents.refused(machine, body) == !allowed, "A machine is not judged by the rule of the protection");
             float before = body.getHealth();
             body.hurt(level.damageSources().playerAttack(machine), 4.0f);
-            helper.assertTrue(body.getHealth() == before, "A machine struck a citizen");
+            helper.assertTrue(allowed ? body.getHealth() < before : body.getHealth() == before, "The blow of a machine broke the rule of the protection");
             helper.assertTrue(LawWork.state(level.getServer()).wantedIn(kingdom.id()).isEmpty(), "A machine became wanted");
         } finally {
-            allow.set(allowed);
             end(helper, kingdom, citizen);
         }
         helper.succeed();

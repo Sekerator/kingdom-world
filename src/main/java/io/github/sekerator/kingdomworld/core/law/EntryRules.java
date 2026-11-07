@@ -36,6 +36,29 @@ public final class EntryRules {
         return Reputation.price(law.entryFee(), reputation, rules.priceEffectPercent);
     }
 
+    /**
+     * Whether the way a player went between two looks passed a gate: some point of the line between the two positions lies
+     * within {@code reach} blocks of a gate cell. A runner covers more than a gate is wide between two looks, so the position
+     * after crossing alone does not tell how the player came in.
+     *
+     * @param gates cells of gates as {x, z}
+     */
+    public static boolean passesGate(java.util.List<int[]> gates, int reach, double fromX, double fromZ, double toX, double toZ) {
+        double length = Math.hypot(toX - fromX, toZ - fromZ);
+        int steps = Math.max(1, (int) Math.ceil(length / 0.25));
+        for (int i = 0; i <= steps; i++) {
+            double t = i / (double) steps;
+            int x = (int) Math.floor(fromX + (toX - fromX) * t);
+            int z = (int) Math.floor(fromZ + (toZ - fromZ) * t);
+            for (int[] gate : gates) {
+                if (Math.abs(gate[0] - x) <= reach && Math.abs(gate[1] - z) <= reach) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     public static Decision decide(long fee, boolean hasPass, boolean autoPay, boolean canPay) {
         if (fee <= 0) {
             return Decision.FREE;

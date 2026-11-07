@@ -321,7 +321,11 @@ public enum KingdomError {
     /** The city asks nothing for entry from this player. */
     NO_ENTRY_FEE,
     /** Too far from a guard of the kingdom. */
-    GUARD_FAR;
+    GUARD_FAR,
+    /** The player holds a pass into the cities of the kingdom already. */
+    PASS_HELD,
+    /** The window of a gate belongs to a gate the player is no longer at. */
+    NOT_AT_GATE;
 
     /**
      * Lower case identifier, used for translation keys.

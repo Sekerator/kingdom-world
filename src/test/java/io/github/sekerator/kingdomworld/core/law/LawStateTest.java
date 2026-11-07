@@ -295,6 +295,17 @@ class LawStateTest {
     }
 
     @Test
+    void aRunnerPastTheGateBetweenTwoLooksCameThroughTheGate() {
+        // A wall along z = 10 with a gate at x = 0; a runner covers 5.6 blocks between two looks.
+        List<int[]> gates = List.of(new int[]{0, 10});
+        assertTrue(EntryRules.passesGate(gates, 3, 1.5, 14.5, 1.5, 8.9));
+        assertTrue(EntryRules.passesGate(gates, 3, -2.5, 15.0, 0.5, 4.0));
+        // Over the wall eight blocks from the gate: past the gates.
+        assertFalse(EntryRules.passesGate(gates, 3, 8.5, 14.5, 8.5, 8.9));
+        assertFalse(EntryRules.passesGate(gates, 3, 8.5, 12.0, 8.5, 12.0));
+    }
+
+    @Test
     void aPassHoldsOneGameDay() {
         law.grantPass(kingdom.id(), stranger, 1_000, rules);
         assertTrue(law.hasPass(kingdom.id(), stranger, 1_000 + DAY - 1));

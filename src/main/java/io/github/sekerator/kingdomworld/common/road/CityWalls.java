@@ -79,6 +79,10 @@ public final class CityWalls {
     /** Where each player was last: the kingdom and city it is in, or none. */
     private static final Map<UUID, String> INSIDE = new HashMap<>();
     private static final java.util.Set<UUID> SEEN = new java.util.HashSet<>();
+    /** Where each player stood at the last look, {x, z}. */
+    private static final Map<UUID, double[]> LAST = new HashMap<>();
+    /** Where each player stood before coming into the city it is in, {x, z}. */
+    private static final Map<UUID, double[]> FROM = new HashMap<>();
     private static int seconds;
 
     /**
@@ -98,6 +102,8 @@ public final class CityWalls {
     static void reset() {
         INSIDE.clear();
         SEEN.clear();
+        LAST.clear();
+        FROM.clear();
         LAYOUTS.clear();
         seconds = 0;
     }
@@ -727,6 +733,8 @@ public final class CityWalls {
         }
         SEEN.removeIf(id -> server.getPlayerList().getPlayer(id) == null);
         INSIDE.keySet().removeIf(id -> server.getPlayerList().getPlayer(id) == null);
+        LAST.keySet().removeIf(id -> server.getPlayerList().getPlayer(id) == null);
+        FROM.keySet().removeIf(id -> server.getPlayerList().getPlayer(id) == null);
     }
 
     /**
@@ -736,6 +744,7 @@ public final class CityWalls {
      */
     public static void watch(MinecraftServer server, ServerPlayer player, List<Place> places) {
         RoadRules rules = RoadSettings.rules();
+        double[] previous = LAST.put(player.getUUID(), new double[]{player.getX(), player.getZ()});
         String dimension = Dimensions.id(player.level());
         Place inside = null;
         Wall insideWall = null;
@@ -764,7 +773,12 @@ public final class CityWalls {
         String key = inside.key();
         INSIDE.put(player.getUUID(), key);
         if (seen && !key.equals(before)) {
-            boolean throughGate = insideWall != null && nearGate(insideWall, player.getBlockX(), player.getBlockZ());
+            // The way from the last look counts, not only where the player stands now: a runner is past the gate in a second.
+            boolean throughGate = insideWall != null && (nearGate(insideWall, player.getBlockX(), player.getBlockZ())
+                    || previous != null && passedGate(insideWall, previous[0], previous[1], player.getX(), player.getZ()));
+            if (previous != null) {
+                FROM.put(player.getUUID(), previous);
+            }
             MinecraftForge.EVENT_BUS.post(new CityEntryEvent(player, inside.kingdomId(), inside.cityId(), throughGate));
         }
     }
@@ -772,6 +786,24 @@ public final class CityWalls {
     /**
      * Whether a place is in or next to the opening of a gate of a wall.
      */
+    /**
+     * Whether the way between two positions passed a gate of a wall.
+     */
+    public static boolean passedGate(Wall wall, double fromX, double fromZ, double toX, double toZ) {
+        List<int[]> cells = new java.util.ArrayList<>();
+        for (RouteCell gate : wall.gateCells()) {
+            cells.add(new int[]{gate.x(), gate.z()});
+        }
+        return io.github.sekerator.kingdomworld.core.law.EntryRules.passesGate(cells, Wall.GATE_HALF + 2, fromX, fromZ, toX, toZ);
+    }
+
+    /**
+     * Where a player stood before coming into the city it is in, {x, z}; for the guards who put a player back outside.
+     */
+    public static Optional<double[]> enteredFrom(UUID player) {
+        return Optional.ofNullable(FROM.get(player));
+    }
+
     public static boolean nearGate(Wall wall, int x, int z) {
         for (RouteCell gate : wall.gateCells()) {
             if (Math.abs(gate.x() - x) <= Wall.GATE_HALF + 2 && Math.abs(gate.z() - z) <= Wall.GATE_HALF + 2) {

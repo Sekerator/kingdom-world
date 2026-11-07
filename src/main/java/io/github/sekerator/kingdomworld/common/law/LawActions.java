@@ -270,8 +270,31 @@ public final class LawActions {
     /**
      * The window to pay at the gate of a city.
      */
-    static void openEntry(ServerPlayer player, CityGates.City city, long fee) {
+    /**
+     * The gate whose window a player has open: what the window pays for.
+     */
+    private record PendingEntry(CityGates.City city, io.github.sekerator.kingdomworld.core.citizen.WorldPos at, long time) {
+    }
+
+    private static final java.util.Map<UUID, PendingEntry> ENTRIES = new java.util.HashMap<>();
+    /** How near the gate of its window a player pays, in blocks, and for how long. */
+    private static final double ENTRY_REACH = 16.0;
+    private static final long ENTRY_TICKS = 6_000;
+
+    static void forgetEntry(UUID player) {
+        ENTRIES.remove(player);
+    }
+
+    static void resetEntries() {
+        ENTRIES.clear();
+    }
+
+    static void openEntry(ServerPlayer player, CityGates.City city, long fee, @org.jetbrains.annotations.Nullable
+            io.github.sekerator.kingdomworld.core.citizen.WorldPos gate) {
         MinecraftServer server = player.server;
+        io.github.sekerator.kingdomworld.core.citizen.WorldPos at = gate != null ? gate : new io.github.sekerator.kingdomworld.core.citizen.WorldPos(
+                io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(player.level()), player.getBlockX(), player.getBlockY(), player.getBlockZ());
+        ENTRIES.put(player.getUUID(), new PendingEntry(city, at, LawWork.now(server)));
         String name = KingdomWorldApi.kingdom(server, city.kingdomId()).map(Kingdom::name).orElse("");
         KingdomWorldNetwork.sendToPlayer(player, new LawPackets.DialogOpen(new LawViews.DialogView(LawViews.Dialog.ENTRY, city.kingdomId(),
                 currency(server, city.kingdomId(), name), fee, false, city.name(), List.of(), coins(player, city.kingdomId()),
@@ -317,13 +340,20 @@ public final class LawActions {
         KingdomActions.Feedback feedback = switch (action.dialog()) {
             case SURRENDER -> surrender(player, action.kingdomId(), true);
             case ENTRY -> {
-                Optional<CityGates.City> city = LawWork.gates().cityAt(io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(player.level()),
-                        player.getBlockX(), player.getBlockY(), player.getBlockZ());
-                CityGates.City at = city.filter(c -> c.kingdomId().equals(action.kingdomId()))
-                        .orElse(new CityGates.City(action.kingdomId(), action.kingdomId(), "", true));
-                long fee = LawEntry.fee(player.server, player, at);
+                // The window pays only for the gate it was opened at, while the player is still there.
+                PendingEntry entry = ENTRIES.get(player.getUUID());
+                if (entry == null || !entry.city().kingdomId().equals(action.kingdomId())
+                        || LawWork.now(player.server) - entry.time() > ENTRY_TICKS
+                        || !entry.at().dimension().equals(io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(player.level()))
+                        || player.distanceToSqr(entry.at().x() + 0.5, entry.at().y(), entry.at().z() + 0.5) > ENTRY_REACH * ENTRY_REACH) {
+                    yield KingdomActions.Feedback.error(KingdomError.NOT_AT_GATE);
+                }
+                long fee = LawEntry.fee(player.server, player, entry.city());
                 Outcome paid = LawEntry.pay(player, action.kingdomId(), fee, action.account());
-                yield paid.ok() ? KingdomActions.Feedback.ok(KEY + "entry_paid", MoneyTexts.amount(fee, Purses.units(player.server, action.kingdomId())))
+                if (paid.ok()) {
+                    ENTRIES.remove(player.getUUID());
+                }
+                yield paid.ok() ? KingdomActions.Feedback.ok(KEY + "entry_paid", LawTexts.shortAmount(fee, Purses.units(player.server, action.kingdomId())))
                         : KingdomActions.Feedback.error(paid.error());
             }
         };

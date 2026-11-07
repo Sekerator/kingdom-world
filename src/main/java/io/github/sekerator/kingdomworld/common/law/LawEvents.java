@@ -108,7 +108,7 @@ public final class LawEvents {
     /**
      * Blows the law cannot judge are refused as before: those of machines, and of anybody while the law is read-only.
      */
-    static boolean refused(Player attacker, CitizenEntity citizen) {
+    public static boolean refused(Player attacker, CitizenEntity citizen) {
         if (io.github.sekerator.kingdomworld.common.protection.ProtectionService.mayHurtCitizen(attacker, citizen)) {
             return false;
         }
@@ -179,6 +179,7 @@ public final class LawEvents {
         LawSettings.reset();
         LawWork.reset();
         LawWork.setGates(null);
+        LawActions.resetEntries();
         LawSync.reset();
         LawPunish.resetSentences();
     }
@@ -196,6 +197,7 @@ public final class LawEvents {
             LawContainers.forget(leaving);
         }
         LawPunish.forgetSentence(player);
+        LawActions.forgetEntry(player);
         LawSync.forget(player);
         LawGuards.forget(player);
     }

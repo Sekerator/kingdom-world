@@ -2715,6 +2715,8 @@
   "kingdomworld.error.debt_too_high": "Your debt to the treasury is too high: the market sells only for coins and takes no lots.",
   "kingdomworld.error.no_debt": "You owe the treasury nothing.",
   "kingdomworld.error.no_entry_fee": "The city asks nothing for entry.",
+  "kingdomworld.error.pass_held": "You hold a pass into the cities of this kingdom already.",
+  "kingdomworld.error.not_at_gate": "Come back to the gate to pay for the entry.",
   "kingdomworld.error.guard_far": "Come closer to a guard of the kingdom.",
   "kingdomworld.permission.manage_law": "Court",
   "kingdomworld.permission.manage_law.short": "Law",
