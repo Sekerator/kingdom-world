@@ -384,7 +384,7 @@
   "kingdomworld.screen.post.no_workers": "Здесь пока никто не работает",
   "kingdomworld.screen.post.read_only_hint": "Менять пост может только тот, у кого есть право «Жители»",
   "kingdomworld.post.outside": "Пост работы действует только на землях королевства",
-  "kingdomworld.post.read_only": "Данные королевств только для чтения: пост не настроить",
+  "kingdomworld.post.read_only": "Данные только для чтения: пост не настроить",
   "kingdomworld.post.foreign": "Пост работы королевства %s",
   "kingdomworld.post.too_far": "Подойдите ближе к посту",
   "kingdomworld.post.profession_set": "Профессия поста: %s",

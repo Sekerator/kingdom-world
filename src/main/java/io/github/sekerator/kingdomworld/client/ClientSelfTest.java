@@ -5,6 +5,8 @@ import io.github.sekerator.kingdomworld.client.map.ClientTerritoryCache;
 import io.github.sekerator.kingdomworld.client.screen.FoundKingdomScreen;
 import io.github.sekerator.kingdomworld.client.screen.KingdomMapScreen;
 import io.github.sekerator.kingdomworld.client.screen.ThroneScreen;
+import io.github.sekerator.kingdomworld.client.screen.WorkPostScreen;
+import io.github.sekerator.kingdomworld.common.citizen.work.WorkPostActions;
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenEntity;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenLife;
@@ -37,10 +39,11 @@ import java.util.UUID;
  *   <li>{@code title}: quits as soon as the title screen opens, proving the client starts with the mod.</li>
  *   <li>{@code layout}: checks the layout of every screen in English and Russian at several window sizes and GUI
  *       scales and saves screenshots (see {@link ClientLayoutCheck}); a problem ends the client with exit code 1.</li>
- *   <li>{@code world}: in a singleplayer world, founds a kingdom next to the player with three citizens, opens
- *       the map, the throne screen (through the real server packet) with all tabs including the citizens, the
- *       territory editor with a claim request and the founding screen, dissolves the kingdom again and quits. Every step is logged; rendering problems
- *       show up as errors in the log.</li>
+ *   <li>{@code world}: in a singleplayer world, founds a kingdom next to the player with three citizens and a work
+ *       post, opens the map, the throne screen (through the real server packet) with all tabs including the citizens
+ *       and the storehouses, the territory editor with a claim request, the screen of the work post (through the real
+ *       server packet) and the founding screen, dissolves the kingdom again and quits. Every step is logged; rendering
+ *       problems show up as errors in the log.</li>
  * </ul>
  */
 public final class ClientSelfTest {
@@ -53,6 +56,7 @@ public final class ClientSelfTest {
     private static ClientLayoutCheck layout;
     private static volatile BlockPos throne;
     private static volatile UUID kingdomId;
+    private static volatile BlockPos post;
 
     private ClientSelfTest() {
     }
@@ -156,7 +160,14 @@ public final class ClientSelfTest {
                 boolean loaded = minecraft.screen instanceof ThroneScreen screen && screen.citizensShown() >= 0;
                 LOGGER.info(PREFIX + "citizens tab answered by the server: {} ({} citizen(s))", loaded,
                         minecraft.screen instanceof ThroneScreen screen ? screen.citizensShown() : -1);
+                if (minecraft.screen instanceof ThroneScreen screen) {
+                    screen.showCitizens("work");
+                    screen.selectTab("storage");
+                }
             }
+            case 256 -> LOGGER.info(PREFIX + "storehouses tab answered by the server: {} ({} kind(s) of items)",
+                    minecraft.screen instanceof ThroneScreen screen && screen.storageShown() >= 0,
+                    minecraft.screen instanceof ThroneScreen screen ? screen.storageShown() : -1);
             case 260 -> {
                 if (minecraft.screen instanceof ThroneScreen screen) {
                     ClientHooks.openTerritoryEditor(screen.view());
@@ -168,6 +179,16 @@ public final class ClientSelfTest {
                 UUID owner = ClientTerritoryCache.ownerOf((throne.getX() >> 4) + 2, throne.getZ() >> 4);
                 LOGGER.info(PREFIX + "territory editor answer: '{}', claimed chunk shown as owned: {}", status,
                         kingdomId != null && kingdomId.equals(owner));
+                minecraft.setScreen(null);
+                server.execute(() -> {
+                    ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+                    if (player != null && post != null) {
+                        WorkPostActions.open(player, post);
+                    }
+                });
+            }
+            case 340 -> {
+                LOGGER.info(PREFIX + "work post screen opened by the server: {}", minecraft.screen instanceof WorkPostScreen);
                 minecraft.setScreen(new FoundKingdomScreen(throne, 0x336699));
             }
             case 360 -> {
@@ -204,6 +225,11 @@ public final class ClientSelfTest {
                 CitizenLife.arrive(server, kingdomId, place, false);
             }
             LOGGER.info(PREFIX + "3 citizens arrived");
+            post = throne.offset(0, 0, 2);
+            level.setBlockAndUpdate(post, ModRegistries.WORK_POST.get().defaultBlockState());
+            WorldPos postPos = new WorldPos(Dimensions.id(level), post.getX(), post.getY(), post.getZ());
+            KingdomWorldApi.change(server, "client self-test", state -> state.setPostProfession(null, postPos, "lumberjack"));
+            LOGGER.info(PREFIX + "work post placed: {}", KingdomWorldApi.state(server).citizens().posts().get(postPos).isPresent());
         } else {
             LOGGER.error(PREFIX + "founding failed: {}", result);
         }
@@ -217,6 +243,9 @@ public final class ClientSelfTest {
         ServerPlayer any = server.getPlayerList().getPlayers().isEmpty() ? null : server.getPlayerList().getPlayers().get(0);
         if (any != null && throne != null) {
             any.serverLevel().setBlockAndUpdate(throne, Blocks.AIR.defaultBlockState());
+        }
+        if (any != null && post != null) {
+            any.serverLevel().setBlockAndUpdate(post, Blocks.AIR.defaultBlockState());
         }
     }
 }

@@ -69,7 +69,7 @@ public final class CitizenGameTests {
 
     // ---------------------------------------------------------------- helpers
 
-    private static Kingdom found(GameTestHelper helper, String name, UUID king) {
+    static Kingdom found(GameTestHelper helper, String name, UUID king) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         BlockPos throne = helper.absolutePos(new BlockPos(2, 0, 2));
@@ -94,12 +94,12 @@ public final class CitizenGameTests {
         throw new IllegalStateException("unreachable");
     }
 
-    private static WorldPos at(GameTestHelper helper, int x, int y, int z) {
+    static WorldPos at(GameTestHelper helper, int x, int y, int z) {
         BlockPos pos = helper.absolutePos(new BlockPos(x, y, z));
         return new WorldPos(Dimensions.id(helper.getLevel()), pos.getX(), pos.getY(), pos.getZ());
     }
 
-    private static Citizen newcomer(GameTestHelper helper, Kingdom kingdom, int x, int z) {
+    static Citizen newcomer(GameTestHelper helper, Kingdom kingdom, int x, int z) {
         return CitizenLife.arrive(helper.getLevel().getServer(), kingdom.id(), at(helper, x, 0, z), false)
                 .orElseThrow(() -> new IllegalStateException("No citizen arrived"));
     }
@@ -110,13 +110,13 @@ public final class CitizenGameTests {
                 body -> body.isAlive() && citizenId.equals(body.citizenId()));
     }
 
-    private static StorehouseInventory storehouse(GameTestHelper helper, int x, int y, int z) {
+    static StorehouseInventory storehouse(GameTestHelper helper, int x, int y, int z) {
         helper.setBlock(new BlockPos(x, y, z), ModRegistries.STOREHOUSE.get());
         return KingdomSavedData.get(helper.getLevel().getServer()).storehouses().get(at(helper, x, y, z))
                 .orElseThrow(() -> new IllegalStateException("The storehouse has no inventory"));
     }
 
-    private static int count(StorehouseInventory inventory, net.minecraft.world.item.Item item) {
+    static int count(StorehouseInventory inventory, net.minecraft.world.item.Item item) {
         int total = 0;
         for (int slot = 0; slot < inventory.getSlots(); slot++) {
             ItemStack stack = inventory.getStackInSlot(slot);
@@ -127,7 +127,7 @@ public final class CitizenGameTests {
         return total;
     }
 
-    private static void finish(GameTestHelper helper, Kingdom kingdom, Citizen... citizens) {
+    static void finish(GameTestHelper helper, Kingdom kingdom, Citizen... citizens) {
         for (Citizen citizen : citizens) {
             CitizenBodies.force(citizen.id(), false);
         }

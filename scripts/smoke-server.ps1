@@ -219,6 +219,12 @@ function Initialize-Server([string]$ModJar) {
     Set-ServerProperty $properties 'server-port' $(if ($Pack) { '25598' } else { '25599' })
     Set-ServerProperty $properties 'motd' 'KingdomWorld smoke test'
 
+    # Accidents far from players are random; the smoke test switches them off so that its miner always lives.
+    $defaults = Join-Path $ServerDir 'defaultconfigs'
+    New-Item -ItemType Directory -Force -Path $defaults | Out-Null
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText((Join-Path $defaults 'kingdomworld-server.toml'), "[work]`n`ttaskRiskMultiplier = 0.0`n", $utf8)
+
     foreach ($dir in @('world', 'logs', 'crash-reports', 'smoke-logs')) {
         $path = Join-Path $ServerDir $dir
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
@@ -451,6 +457,8 @@ if ($WithoutMod) {
 
 $script:CreatedId = $null
 $script:CitizenIds = @()
+$script:MinerId = $null
+$script:Mined = 0
 $ConsoleFailPattern = 'Unknown or incomplete command|Incorrect argument|already exists|There is no kingdom|read-only'
 $IdPattern ='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 
@@ -542,6 +550,62 @@ Invoke-Phase 'session1' {
             Write-Ok "[session1] 2 citizens remain: $($left -join ', ')"
         }
     }
+
+    # Work posts: a mine with a miner far from players, who digs by the estimate of its zone.
+    if ($script:CitizenIds.Count -gt 0) {
+        $script:MinerId = $script:CitizenIds[0]
+        # The mine lies in chunks that stay loaded without players, and in solid rock whatever the world looks like.
+        Send-ServerCommand $server 'forceload add 0 0 31 31'
+        if (-not (Wait-ForLog $server 'Marked .* chunks in minecraft:overworld from \[0, 0\] to \[1, 1\]' $CommandTimeout $ConsoleFailPattern)) {
+            Add-Failure '[session1] the chunks of the mine could not be force loaded'
+        }
+        Start-Sleep -Seconds 2
+        Send-ServerCommand $server 'fill 4 36 4 20 41 20 minecraft:stone'
+        Send-ServerCommand $server 'setblock 2 70 2 kingdomworld:storehouse'
+        if (-not (Wait-ForLog $server 'Changed the block at 2, 70, 2' $CommandTimeout $ConsoleFailPattern)) {
+            Add-Failure '[session1] the storehouse could not be placed'
+        }
+        Send-ServerCommand $server "kingdomworld admin storage put minecraft:iron_pickaxe 2 $KingdomName"
+        if (Wait-ForLog $server "Stored 2 of minecraft:iron_pickaxe in the storehouses of $KingdomName" $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok '[session1] pickaxes put into the storehouse'
+        } else {
+            Add-Failure '[session1] pickaxes could not be put into the storehouse'
+        }
+        Send-ServerCommand $server 'setblock 12 40 12 kingdomworld:work_post'
+        Send-ServerCommand $server 'kingdomworld admin posts set 12 40 12 profession miner'
+        if (Wait-ForLog $server 'Work post at 12 40 12: Miner, radius \d+, seats 1' $CommandTimeout 'No work post at|Unknown or incomplete command') {
+            Write-Ok '[session1] work post placed and set to mining'
+        } else {
+            Add-Failure '[session1] the work post was not registered or could not be set to mining'
+        }
+        Send-ServerCommand $server "kingdomworld admin citizens profession $($script:MinerId) miner"
+        if (Wait-ForLog $server '\S+ is now: Miner' $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok "[session1] citizen $($script:MinerId) became a miner"
+        } else {
+            Add-Failure "[session1] citizen $($script:MinerId) could not become a miner"
+        }
+        Send-ServerCommand $server "kingdomworld admin simulate $KingdomName 20"
+        if (-not (Wait-ForLog $server "Ran 20 simulation step\(s\) of $KingdomName" $CommandTimeout $ConsoleFailPattern)) {
+            Add-Failure '[session1] the simulation steps did not run'
+        }
+        Send-ServerCommand $server "kingdomworld admin posts list $KingdomName"
+        $post = Wait-ForLog $server ' - 12 40 12: Miner, workers 1/1, radius \d+, (.+), today (\d+), about (\d+) a day' $CommandTimeout $ConsoleFailPattern
+        if (-not $post) {
+            Add-Failure '[session1] the work post is not listed with its miner'
+        } elseif ([int]$post.Groups[2].Value -le 0) {
+            Add-Failure "[session1] the miner gathered nothing far from players (status: $($post.Groups[1].Value))"
+        } else {
+            $script:Mined = [int]$post.Groups[2].Value
+            Write-Ok "[session1] the miner gathered $($script:Mined) item(s) far from players ($($post.Groups[1].Value))"
+        }
+        Send-ServerCommand $server "kingdomworld admin storage list $KingdomName"
+        $stored = Wait-ForLog $server "Storehouses of ${KingdomName}: (\d+) kinds of items in 1 storehouses" $CommandTimeout $ConsoleFailPattern
+        if ($stored -and [int]$stored.Groups[1].Value -ge 2) {
+            Write-Ok "[session1] the storehouse holds $($stored.Groups[1].Value) kinds of items"
+        } else {
+            Add-Failure '[session1] the harvest of the mine did not reach the storehouse'
+        }
+    }
 }
 
 $dataFile = Join-Path $ServerDir 'world\data\kingdomworld_kingdoms.dat'
@@ -553,8 +617,8 @@ if (-not $script:CreatedId) { Stop-Smoke 'kingdom was not created, skipping the 
 
 Invoke-Phase 'session2' {
     param($server)
-    if (-not (Wait-ForLog $server 'KingdomWorld loaded 1 kingdom\(s\) with 2 citizen\(s\)' 10)) {
-        Add-Failure '[session2] expected 1 kingdom with 2 citizens to be loaded after restart'
+    if (-not (Wait-ForLog $server 'KingdomWorld loaded 1 kingdom\(s\) with 2 citizen\(s\), 1 work post\(s\) and 1 storehouse\(s\)' 10)) {
+        Add-Failure '[session2] expected 1 kingdom with 2 citizens, 1 work post and 1 storehouse to be loaded after restart'
     }
     Send-ServerCommand $server 'kingdomworld debug list'
     $listed = Wait-ForLog $server " - $KingdomName \(id ($IdPattern)\)" $CommandTimeout 'Unknown or incomplete command|There are no kingdoms yet'
@@ -602,6 +666,28 @@ Invoke-Phase 'session2' {
             Write-Ok "[session2] 'kingdomworld admin citizens info $first' works"
         } else {
             Add-Failure "[session2] 'kingdomworld admin citizens info $first' did not show the citizen"
+        }
+    }
+    if ($script:MinerId) {
+        Send-ServerCommand $server "kingdomworld admin posts list $KingdomName"
+        $post = Wait-ForLog $server ' - 12 40 12: Miner, workers 1/1, radius \d+, (.+), today (\d+)' $CommandTimeout $ConsoleFailPattern
+        if ($post) {
+            Write-Ok '[session2] the work post kept its profession and its miner after restart'
+        } else {
+            Add-Failure '[session2] the work post lost its settings or its miner after restart'
+        }
+        Send-ServerCommand $server "kingdomworld admin citizens info $($script:MinerId)"
+        if (Wait-ForLog $server 'Workplace: 12 40 12' $CommandTimeout 'No citizen has an id') {
+            Write-Ok "[session2] the miner $($script:MinerId) still works at the post"
+        } else {
+            Add-Failure "[session2] the miner $($script:MinerId) lost the workplace after restart"
+        }
+        Send-ServerCommand $server "kingdomworld admin storage list $KingdomName"
+        $stored = Wait-ForLog $server "Storehouses of ${KingdomName}: (\d+) kinds of items in 1 storehouses" $CommandTimeout $ConsoleFailPattern
+        if ($stored -and [int]$stored.Groups[1].Value -ge 2) {
+            Write-Ok '[session2] the contents of the storehouse survived the restart'
+        } else {
+            Add-Failure '[session2] the storehouse lost its contents after restart'
         }
     }
 }

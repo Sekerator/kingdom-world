@@ -13,9 +13,12 @@ import io.github.sekerator.kingdomworld.client.screen.FoundKingdomScreen;
 import io.github.sekerator.kingdomworld.client.screen.KingdomMapScreen;
 import io.github.sekerator.kingdomworld.client.screen.LayoutCheck;
 import io.github.sekerator.kingdomworld.client.screen.ThroneScreen;
+import io.github.sekerator.kingdomworld.client.screen.WorkPostScreen;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenTexts;
 import io.github.sekerator.kingdomworld.common.kingdom.KingdomActions;
 import io.github.sekerator.kingdomworld.common.network.data.CitizenView;
+import io.github.sekerator.kingdomworld.common.network.data.StorageView;
+import io.github.sekerator.kingdomworld.common.network.data.WorkPostView;
 import io.github.sekerator.kingdomworld.core.citizen.CauseOfDeath;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenNames;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds;
@@ -37,6 +40,8 @@ import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ChunkPos;
 import org.joml.Matrix4f;
 import org.slf4j.Logger;
@@ -144,6 +149,10 @@ final class ClientLayoutCheck {
         LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.protection.citizen",
                 ProtectionService.shortName(LONG_KINGDOM)), NARROWEST_SCREEN);
         LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.storehouse.read_only"), NARROWEST_SCREEN);
+        LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.post.outside"), NARROWEST_SCREEN);
+        LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.post.read_only"), NARROWEST_SCREEN);
+        LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.post.foreign",
+                ProtectionService.shortName(LONG_KINGDOM)), NARROWEST_SCREEN);
         for (Gender gender : Gender.values()) {
             LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.citizen.describe",
                     CitizenTexts.name(longestNameSeed(gender), gender), CitizenTexts.profession("unemployed", gender),
@@ -343,6 +352,68 @@ final class ClientLayoutCheck {
         return screen;
     }
 
+    private static StorageView storageView(UUID kingdom, boolean empty) {
+        List<StorageView.Entry> items = new ArrayList<>();
+        List<StorageView.Storehouse> storehouses = new ArrayList<>();
+        if (!empty) {
+            ItemStack named = new ItemStack(Items.DIAMOND_SWORD);
+            named.setHoverName(Component.literal("Меч Великого Северного Королевства Щит и Меч"));
+            ItemStack[] samples = {named, new ItemStack(Items.ENCHANTED_GOLDEN_APPLE), new ItemStack(Items.COBBLESTONE),
+                    new ItemStack(Items.OAK_LOG), new ItemStack(Items.COD), new ItemStack(Items.WHEAT), new ItemStack(Items.TORCH),
+                    new ItemStack(Items.IRON_PICKAXE), new ItemStack(Items.LIGHT_BLUE_GLAZED_TERRACOTTA),
+                    new ItemStack(Items.CHAINMAIL_CHESTPLATE), new ItemStack(Items.BEEF), new ItemStack(Items.WHITE_WOOL),
+                    new ItemStack(Items.SPRUCE_SAPLING), new ItemStack(Items.COAL), new ItemStack(Items.RAW_IRON),
+                    new ItemStack(Items.PUFFERFISH), new ItemStack(Items.MELON_SLICE), new ItemStack(Items.SUGAR_CANE),
+                    new ItemStack(Items.PITCHER_PLANT), new ItemStack(Items.SHEARS), new ItemStack(Items.FISHING_ROD)};
+            for (int i = 0; i < samples.length; i++) {
+                items.add(new StorageView.Entry(samples[i], 999_999_999L - i * 1_000L));
+            }
+            for (int i = 0; i < 20; i++) {
+                storehouses.add(new StorageView.Storehouse(new BlockPos(-30_000_000 + i, 319, 29_999_999), i == 0 ? 54 : i, 54));
+            }
+        }
+        return new StorageView(kingdom, items, storehouses, empty ? 0 : 9_999, empty ? 0 : 999_999_999L);
+    }
+
+    private static ThroneScreen storage(KingdomView view, boolean empty, boolean storehouses, String search) {
+        ThroneScreen screen = throne(view, "storage", Component.empty());
+        StorageView data = storageView(view.id(), empty);
+        screen.updateStorage(new StorageView(view.id(), data.items(), data.storehouses(), data.kinds(), data.total()));
+        screen.showStorehouses(storehouses, search);
+        return screen;
+    }
+
+    private static ThroneScreen citizensMode(KingdomView view, boolean canManage, boolean empty, String mode) {
+        ThroneScreen screen = citizens(view, citizenView(canManage, empty, CitizenNeeds.GrowthCheck.READY), false, Component.empty());
+        screen.showCitizens(mode);
+        return screen;
+    }
+
+    private static WorkPostView postView(String profession, WorkStatus status, boolean canManage, int workers, boolean container,
+                                         boolean measured) {
+        List<WorkPostView.Worker> list = new ArrayList<>();
+        WorkStatus[] statuses = WorkStatus.values();
+        for (int i = 0; i < workers; i++) {
+            Gender gender = i % 2 == 0 ? Gender.FEMALE : Gender.MALE;
+            list.add(new WorkPostView.Worker(UUID.nameUUIDFromBytes(("worker" + i).getBytes(StandardCharsets.UTF_8)),
+                    i < 2 ? longestNameSeed(gender) : i * 7919, gender == Gender.FEMALE, statuses[i % statuses.length]));
+        }
+        List<String> animals = profession.equals("herder")
+                ? List.of("minecraft:cow", "minecraft:sheep", "minecraft:mooshroom", "examplemod:very_long_named_highland_cattle")
+                : List.of();
+        return new WorkPostView(new BlockPos(-30_000_000, 319, 29_999_999), UUID.randomUUID(), canManage, profession, 16, 16,
+                Math.max(1, workers), 16, profession.equals("herder") ? "minecraft:mooshroom" : "", animals, 64, 64, status, container,
+                measured, measured ? 999_999 : 0, 9_999_999L, list, 9_999);
+    }
+
+    private static WorkPostScreen post(WorkPostView view, Component status) {
+        WorkPostScreen screen = new WorkPostScreen(view);
+        if (!status.getString().isEmpty()) {
+            screen.onResult(false, status);
+        }
+        return screen;
+    }
+
     private static void fillMapData() {
         UUID first = UUID.nameUUIDFromBytes("first".getBytes(StandardCharsets.UTF_8));
         UUID second = UUID.nameUUIDFromBytes("second".getBytes(StandardCharsets.UTF_8));
@@ -407,6 +478,38 @@ final class ClientLayoutCheck {
                 citizenView(false, true, CitizenNeeds.GrowthCheck.NO_FREE_BED), true, Component.empty())));
         cases.add(new Case("throne-citizens-loading", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "citizens",
                 Component.empty())));
+        cases.add(new Case("throne-king-work", () -> citizensMode(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "work")));
+        cases.add(new Case("throne-subject-work", () -> citizensMode(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, false, "work")));
+        cases.add(new Case("throne-king-production", () -> citizensMode(view(KingdomView.Relation.MEMBER, Role.KING), true, false,
+                "production")));
+        cases.add(new Case("throne-production-empty", () -> citizensMode(view(KingdomView.Relation.MEMBER, Role.KING), true, true,
+                "production")));
+        cases.add(new Case("throne-king-storage", () -> storage(view(KingdomView.Relation.MEMBER, Role.KING), false, false, "")));
+        cases.add(new Case("throne-storage-search", () -> storage(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, false,
+                "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")));
+        cases.add(new Case("throne-storehouses", () -> storage(view(KingdomView.Relation.MEMBER, Role.KING), false, true, "")));
+        cases.add(new Case("throne-storage-empty", () -> storage(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "")));
+        cases.add(new Case("throne-storehouses-empty", () -> storage(view(KingdomView.Relation.MEMBER, Role.KING), true, true, "")));
+        cases.add(new Case("throne-storage-loading", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "storage",
+                Component.empty())));
+        cases.add(new Case("post-farmer-working", () -> post(postView("farmer", WorkStatus.WORKING, true, 2, true, true), Component.empty())));
+        cases.add(new Case("post-lumberjack-no-trees", () -> post(postView("lumberjack", WorkStatus.NO_TREES, true, 3, false, false),
+                Component.empty())));
+        cases.add(new Case("post-miner-no-tool", () -> post(postView("miner", WorkStatus.NO_TOOL, true, 4, true, false), longError)));
+        cases.add(new Case("post-fisher-no-water", () -> post(postView("fisher", WorkStatus.NO_WATER, true, 1, false, true),
+                Component.empty())));
+        cases.add(new Case("post-herder", () -> post(postView("herder", WorkStatus.NO_FEED, true, 2, true, true), Component.empty())));
+        cases.add(new Case("post-herder-read-only", () -> post(postView("herder", WorkStatus.WAITING, false, 2, true, true),
+                Component.empty())));
+        cases.add(new Case("post-carrier", () -> post(postView("carrier", WorkStatus.NOTHING_TO_CARRY, true, 16, false, false),
+                Component.empty())));
+        cases.add(new Case("post-no-profession", () -> post(postView("unemployed", WorkStatus.NO_PROFESSION, true, 0, false, false),
+                Component.empty())));
+        cases.add(new Case("post-read-only", () -> post(postView("miner", WorkStatus.ZONE_PARTLY_OUTSIDE, false, 16, true, true),
+                Component.empty())));
+        cases.add(new Case("post-hired", () -> post(postView("lumberjack", WorkStatus.WORKING, true, 1, true, true),
+                Component.translatable("kingdomworld.post.hired", CitizenTexts.name(longestNameSeed(Gender.FEMALE), Gender.FEMALE),
+                        CitizenTexts.profession("lumberjack", Gender.FEMALE)))));
         cases.add(new Case("throne-outsider", () -> throne(view(KingdomView.Relation.OUTSIDER, null), "overview", Component.empty())));
         cases.add(new Case("throne-invited", () -> throne(view(KingdomView.Relation.INVITED, null), "overview", Component.empty())));
         cases.add(new Case("throne-applied", () -> throne(view(KingdomView.Relation.APPLIED, null), "overview", Component.empty())));

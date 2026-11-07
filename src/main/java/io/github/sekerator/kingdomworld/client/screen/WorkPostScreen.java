@@ -51,6 +51,7 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
     private int panelWidth;
     private int panelHeight;
     private int labelWidth;
+    private int secondLabelWidth;
     private int professionWidth;
     private int animalWidth;
     private int hireWidth;
@@ -119,12 +120,23 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         return status.isProblem() ? 0xFFFF9070 : 0xFFE0D090;
     }
 
+    /**
+     * Labels of the first column: profession, radius, herd size.
+     */
     private List<Component> labels() {
-        List<Component> labels = new ArrayList<>(List.of(Component.translatable(KEY + "profession"),
-                Component.translatable(KEY + "radius"), Component.translatable(KEY + "seats")));
-        labels.add(Component.translatable(KEY + "animal"));
-        labels.add(Component.translatable(KEY + "herd"));
-        return labels;
+        return List.of(Component.translatable(KEY + "profession"), Component.translatable(KEY + "radius"),
+                Component.translatable(KEY + "herd"));
+    }
+
+    /**
+     * Labels of the second column: seats, animals.
+     */
+    private List<Component> secondLabels() {
+        return List.of(Component.translatable(KEY + "seats"), Component.translatable(KEY + "animal"));
+    }
+
+    private static int stepperWidth() {
+        return 2 * SMALL + 2 * GAP + VALUE_WIDTH;
     }
 
     private Component containerLine() {
@@ -165,6 +177,10 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         for (Component label : labels()) {
             labelWidth = Math.max(labelWidth, font.width(label));
         }
+        secondLabelWidth = 0;
+        for (Component label : secondLabels()) {
+            secondLabelWidth = Math.max(secondLabelWidth, font.width(label));
+        }
         professionWidth = 0;
         for (Profession profession : choices()) {
             professionWidth = Math.max(professionWidth, buttonWidth(professionName(profession.id())));
@@ -179,7 +195,9 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         for (WorkStatus value : WorkStatus.values()) {
             stateWidth = Math.max(stateWidth, font.width(statusText(value)));
         }
-        int controls = labelWidth + 6 + Math.max(Math.max(professionWidth, animalWidth), 2 * SMALL + 2 * GAP + VALUE_WIDTH);
+        // The animal button shortens its text when it has to; a few letters must show.
+        int controls = labelWidth + 6 + Math.max(professionWidth, stepperWidth() + 12 + secondLabelWidth + 6
+                + Math.max(stepperWidth(), Math.min(animalWidth, 80)));
         int info = font.width(title()) + 2 * PAD;
         WorkPostView saved = view;
         // The longest numbers the lines can show.
@@ -196,7 +214,8 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         info = Math.max(info, Math.max(font.width(Component.translatable(KEY + "yield_measured", 999_999)),
                 font.width(Component.translatable(KEY + "yield_estimated", 999_999))));
         info = Math.max(info, Math.max(font.width(Component.translatable(KEY + "yield_unknown")), font.width(todayLine())));
-        int header = font.width(Component.translatable(KEY + "workers", 16, 16)) + 8 + hireWidth;
+        int header = font.width(Component.translatable(KEY + "workers", 16, 16)) + 8 + hireWidth + 4
+                + font.width(Component.translatable("kingdomworld.screen.throne.page", 16, 16, 16));
         view = saved;
         int workers = NAME_COLUMN + stateWidth + 8 + dismissWidth;
         int inner = Math.max(Math.max(controls, info), Math.max(header, workers));
@@ -214,7 +233,15 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
     }
 
     private int settingRows() {
-        return isHerder() ? 5 : 3;
+        return isHerder() ? 3 : 2;
+    }
+
+    private int secondColumnX() {
+        return controlsX() + stepperWidth() + 12;
+    }
+
+    private int secondControlsX() {
+        return secondColumnX() + secondLabelWidth + 6;
     }
 
     private int infoTop() {
@@ -257,21 +284,22 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
             addRenderableWidget(Button.builder(professionName(view.profession()),
                     b -> send(WorkPostActionPacket.Action.PROFESSION, 0, next, null)).bounds(x, y, professionWidth, ROW - 2).build());
             stepper(x, y + ROW, view.radius(), 1, view.maxRadius(), WorkPostActionPacket.Action.RADIUS);
-            stepper(x, y + 2 * ROW, view.seats(), 1, view.maxSeats(), WorkPostActionPacket.Action.SEATS);
+            stepper(secondControlsX(), y + ROW, view.seats(), 1, view.maxSeats(), WorkPostActionPacket.Action.SEATS);
             if (isHerder()) {
+                stepper(x, y + 2 * ROW, view.herdSize(), 2, view.maxHerd(), WorkPostActionPacket.Action.HERD);
                 List<String> animals = view.animals();
                 if (!animals.isEmpty()) {
                     int current = animals.indexOf(view.animal());
                     String nextAnimal = animals.get((current + 1) % animals.size());
-                    int available = left() + panelWidth - PAD - x;
+                    int available = left() + panelWidth - PAD - secondControlsX();
+                    int buttonWidth = Math.min(animalWidth, available);
                     Component label = animalName(view.animal());
                     Button button = addRenderableWidget(Button.builder(Component.literal(fit(label.getString(),
-                                    Math.min(animalWidth, available) - LayoutCheck.BUTTON_TEXT_MARGIN - 8)),
+                                    buttonWidth - LayoutCheck.BUTTON_TEXT_MARGIN - 8)),
                             b -> send(WorkPostActionPacket.Action.ANIMAL, 0, nextAnimal, null))
-                            .bounds(x, y + 3 * ROW, Math.min(animalWidth, available), ROW - 2).build());
+                            .bounds(secondControlsX(), y + 2 * ROW, buttonWidth, ROW - 2).build());
                     button.setTooltip(Tooltip.create(label));
                 }
-                stepper(x, y + 4 * ROW, view.herdSize(), 2, view.maxHerd(), WorkPostActionPacket.Action.HERD);
             }
             int right = left() + panelWidth - PAD;
             Button hire = addRenderableWidget(Button.builder(hireLabel(), b -> send(WorkPostActionPacket.Action.HIRE, 0, "", null))
@@ -341,21 +369,27 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         int x = left + PAD;
         int y = top + TOP;
         List<Component> labels = labels();
+        List<Component> second = secondLabels();
         int controls = controlsX();
+        int secondX = secondColumnX();
+        int secondControls = secondControlsX();
         for (int row = 0; row < settingRows(); row++) {
             label(graphics, labels.get(row), x, y + row * ROW + 5, 0xFFE8E8E8, controls - 2);
+            if (row > 0) {
+                label(graphics, second.get(row - 1), secondX, y + row * ROW + 5, 0xFFE8E8E8, secondControls - 2);
+            }
         }
         boolean manage = view.canManage();
         if (!manage) {
             label(graphics, professionName(view.profession()), controls, y + 5, 0xFFFFFFFF, right);
         }
-        value(graphics, view.radius(), view.maxRadius(), controls, y + ROW, manage, right);
-        value(graphics, view.seats(), view.maxSeats(), controls, y + 2 * ROW, manage, right);
+        value(graphics, view.radius(), view.maxRadius(), controls, y + ROW, manage, secondX - 4);
+        value(graphics, view.seats(), view.maxSeats(), secondControls, y + ROW, manage, right);
         if (isHerder()) {
+            value(graphics, view.herdSize(), view.maxHerd(), controls, y + 2 * ROW, manage, secondX - 4);
             if (!manage || view.animals().isEmpty()) {
-                name(graphics, animalName(view.animal()).getString(), controls, y + 3 * ROW + 5, 0xFFFFFFFF, right - controls);
+                name(graphics, animalName(view.animal()).getString(), secondControls, y + 2 * ROW + 5, 0xFFFFFFFF, right - secondControls);
             }
-            value(graphics, view.herdSize(), view.maxHerd(), controls, y + 4 * ROW, manage, right);
         }
 
         int infoY = infoTop();
@@ -365,9 +399,17 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
             label(graphics, info.get(i), x, infoY + i * (LINE + 1), color, right);
         }
 
-        label(graphics, workersHeader(), x, workersTop() + 5, 0xFFF0D070, manage ? right - hireWidth - 4 : right);
         int rows = visibleWorkers();
         List<WorkPostView.Worker> workers = view.workers();
+        int headerRight = manage ? right - hireWidth - 4 : right;
+        if (workers.size() > rows) {
+            Component page = Component.translatable("kingdomworld.screen.throne.page", scroll + 1, Math.min(workers.size(), scroll + rows),
+                    workers.size());
+            int pageX = headerRight - font.width(page);
+            label(graphics, page, pageX, workersTop() + 5, 0xFF9A9A9A, headerRight);
+            headerRight = pageX - 4;
+        }
+        label(graphics, workersHeader(), x, workersTop() + 5, 0xFFF0D070, headerRight);
         if (workers.isEmpty()) {
             label(graphics, Component.translatable(KEY + "no_workers"), x, listTop() + 5, 0xFFB8B8B8, right);
         }
@@ -379,11 +421,6 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
             Gender gender = worker.female() ? Gender.FEMALE : Gender.MALE;
             name(graphics, CitizenTexts.name(worker.seed(), gender).getString(), x, rowY, 0xFFFFFFFF, NAME_COLUMN - 4);
             label(graphics, statusText(worker.status()), stateX, rowY, statusColor(worker.status()), stateRight);
-        }
-        if (workers.size() > rows) {
-            Component page = Component.translatable("kingdomworld.screen.throne.page", scroll + 1, Math.min(workers.size(), scroll + rows),
-                    workers.size());
-            label(graphics, page, right - font.width(page), listTop() + rows * WORKER_ROW + 2, 0xFF9A9A9A, right);
         }
 
         Component bottom = status;

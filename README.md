@@ -8,7 +8,7 @@ KingdomWorld: мод для Minecraft 1.20.1 (Forge) о королевствах
 
 ### Состояние
 
-Этап 2а: жители королевств (записи в данных мира и тела рядом с игроками, жильё, склады, еда, рост, настроение, ранения и лазарет, летопись смертей, профессии с фермером). Этап 1: основание королевства, территория по чанкам с защитой, подданство и должности, окно трона и политическая карта королевств. Каркас этапа 0 (хранение в мире с версией формата, сетевой канал с проверкой запросов на сервере, конфиги, тесты, smoke-проверка на настоящем сервере) сохранён.
+Этап 2б: добыча и логистика (посты работы, лесоруб, шахтёр, рыбак, пастух, носильщик, инструменты и броня со складов, риски работы, добыча вдали от игроков по замеренной выработке, учёт производства, вкладка «Склад»). Этап 2а: жители королевств (записи в данных мира и тела рядом с игроками, жильё, склады, еда, рост, настроение, ранения и лазарет, летопись смертей, профессии с фермером). Этап 1: основание королевства, территория по чанкам с защитой, подданство и должности, окно трона и политическая карта королевств. Каркас этапа 0 (хранение в мире с версией формата, сетевой канал с проверкой запросов на сервере, конфиги, тесты, smoke-проверка на настоящем сервере) сохранён.
 
 ### Как играть
 
@@ -29,6 +29,7 @@ KingdomWorld: мод для Minecraft 1.20.1 (Forge) о королевствах
 | Атлас королевств | книга, компас и пустая карта (без формы) |
 | Склад | бревна по углам, доски сверху и снизу, два сундука по бокам от бочки |
 | Лазарет | белая шерсть сверху, сверкающий ломтик арбуза между досками, доски снизу |
+| Пост работы | доски вокруг таблички и верстака (табличка сверху, верстак в центре) |
 
 ### Территория и защита
 
@@ -62,9 +63,25 @@ KingdomWorld: мод для Minecraft 1.20.1 (Forge) о королевствах
 - Новый житель приходит к трону, если есть свободная кровать, еды на складах хватит всем на `growthFoodDays` дней и с прошлого прихода прошло `growthIntervalMinutes` минут (довольные жители ускоряют приход, недовольные замедляют).
 - Настроение 0-100 зависит от сытости, жилья, ранения и недавних смертей соседей; пока влияет на скорость роста.
 - Жители смертны: монстры (зомби и разбойники на них охотятся), падение, лава, огонь, игроки. Чужакам в мирное время бить жителей нельзя (правило в общей политике доступа, война позже добавит исключение). Раненый житель идёт в **лазарет** (блок), где лечится гораздо быстрее (`infirmaryCapacity` мест), или домой. Смерть окончательна: запись уходит в летопись королевства (кто, когда, причина, где), король и члены с правом «Жители» получают сообщение.
-- Профессии: безработный и фермер; реестр расширяется (`ProfessionBehaviors.register`). Фермер работает у компостера на землях королевства: рядом с игроками собирает спелые культуры в радиусе `farmRadius`, пересаживает их и относит урожай на ближайший склад; культуры других модов тоже подходят (CropBlock или тег `minecraft:crops` со свойством возраста). Вдали от игроков фермер приносит урожай по формуле от числа грядок, увиденных в последний раз.
+- Профессии: безработный, фермер, лесоруб, шахтёр, рыбак, пастух и носильщик; реестр расширяется (`ProfessionBehaviors.register`). Фермер работает у компостера или у поста работы: рядом с игроками собирает спелые культуры в радиусе `farmRadius` (у поста в радиусе его зоны), пересаживает их и относит урожай на ближайший склад или в контейнер поста; культуры других модов тоже подходят (CropBlock или тег `minecraft:crops` со свойством возраста). С арбузов и тыкв он снимает плод и оставляет стебель, двухблочные культуры собирает по нижней половине, тростник срезает выше нижнего блока. Вдали от игроков фермер приносит урожай по формуле от числа грядок, увиденных в последний раз.
 - Вкладка «Жители» в окне трона: численность, кровати, запас еды в днях, настроение, почему не приходят новые жители; список жителей с профессией, состоянием и домом, фильтр и прокрутка; смена профессии (право «Жители»); летопись смертей. В карточке королевства на карте видно население.
 - Склады, поиск, взятие и добавление предметов для будущих механик собраны в одном сервисе `KingdomStorage`.
+
+### Добыча и логистика
+
+- **Пост работы** (блок) на землях королевства: место работы жителей. Правый клик открывает окно поста (смотреть может любой член королевства, менять только с правом «Жители»): профессия, радиус зоны (до `workPostMaxRadius`, зона не выходит за земли королевства), число мест (до `workPostMaxSeats`), для пастуха вид животных (из тех, что живут в зоне, включая мобов модов) и поголовье, состояние поста с причиной простоя, выработка (замер или оценка), добыто сегодня, работники с их состоянием, кнопки «Нанять» (ближайший безработный) и «Уволить». Чужакам пост только называет своё королевство.
+- **Контейнер поста**: любой соседний блок с IItemHandler (сундук, бочка, ящики и хранилища других модов). Работники кладут добычу туда; если контейнера нет, сами несут её на ближайший склад (вдали от игроков такая работа даёт меньше).
+- **Лесоруб** валит в зоне только натуральные деревья: бревна (тег `minecraft:logs`) на земле с выросшей листвой (`minecraft:leaves`, `persistent=false`); бревна без такой листвы считаются постройкой и не трогаются. Дерево больше `maxTreeBlocks` бревен или выходящее за зону и земли остаётся стоять. Листва снимается, дроп собирается, на месте дерева сажается саженец того же вида (из дропа листвы или со склада). Деревья модов с теми же тегами работают сами.
+- **Шахтёр** копает ниже поста по шаблону: тоннель 1x2 вдоль оси x перед постом с ответвлениями каждые три блока и лестницей на следующий уровень (до `mineLevels` уровней через три блока). Ломает только натуральные породы, землю, гравий, песок и руды (теги `forge:stone`, `forge:ores`, `minecraft:base_stone_overworld` и т.п.), никогда блоки с содержимым и ничего вне земель королевства. Руда, для которой кирка слишком слаба (`isCorrectToolForDrops`), остаётся, и пост показывает причину. Лаву и воду рядом с тоннелем шахтёр закладывает булыжником, факелы ставит со склада или из контейнера поста (их туда приносят носильщики).
+- **Рыбак** ищет в зоне стоячую воду с берегом, ловит удочкой (любая с `FISHING_ROD_CAST`); улов берётся из ванильной таблицы добычи рыбалки, поэтому рыба модов, добавленная в неё, ловится тоже. Удочка изнашивается.
+- **Пастух** держит в загоне поголовье выбранного вида: разводит кормом, который ест животное (`Animal.isFood`, со склада), до заданного размера, лишних взрослых забивает (дроп собирает), детёнышей, животных с именем и на поводке не трогает, стрижёт стригущихся (`IForgeShearable`), если есть ножницы.
+- **Носильщик** переносит предметы из контейнеров постов на склады (сначала самые полные), приносит постам то, что они просят (шахтёру факелы; так будут получать сырьё цепочки следующего этапа) и разгружает почти полный склад в далёкий пустой. Вдали от игроков носильщики королевства переносят `carrierItemsPerMinute` предметов в минуту каждый из загруженных контейнеров.
+- **Инструменты и броня**: работник берёт со складов подходящий инструмент по ToolActions (топор `AXE_DIG`, кирка `PICKAXE_DIG`, удочка `FISHING_ROD_CAST`, ножницы `SHEARS_HARVEST`, для забоя любое оружие или без него), из подходящих самый слабый достаточный и самый изношенный, держит его в руке; инструмент изнашивается, сломанный заменяется следующим, без инструмента пост стоит со статусом «Нет инструмента на складах». Инструменты и броня модов подходят сами. Лесоруб, шахтёр, рыбак и пастух надевают броню со складов. Снаряжение принадлежит жителю, а не телу: вдали от игроков инструмент изнашивается так же, после смерти без тела снаряжение возвращается на склад.
+- **Риски**: рядом с игроками опасности настоящие (монстры, падение, лава, вода). Вдали от игроков у работника за минуту работы есть шанс ранения и меньший шанс смерти по профессии (`professionRisks`, общий множитель `taskRiskMultiplier`); броня снижает риск до 75 процентов, опыт до 50. Раненый не работает, пока не вылечится (в лазарете быстрее); погибший уходит в летопись с причиной («погиб в шахте», «погиб на лесоповале», «утонул на рыбалке»), король получает сообщение.
+- **Добыча вдали от игроков**: рядом с игроками работа поста замеряется (что и сколько добыто за отработанное время, сколько израсходовано корма и использовано инструмента), вдали от игроков работники добывают по этой выработке; до первого замера по оценке зоны (деревья, порода, вода, животные). Добыча кладётся в контейнер поста (если он загружен) или на склады, износ инструмента списывается.
+- **Учёт производства**: королевство помнит, что добыла каждая профессия сегодня и вчера (по предметам); вкладка «Жители» показывает это в виде «добыча». Учёт пригодится экономике следующих этапов.
+- **Окно трона**: новая вкладка «Склад» (что лежит на всех складах королевства, с поиском и количеством, и список складов с заполненностью; только просмотр). Вкладка «Жители» переключает вид: жители (профессия, состояние, дом), работа (место работы и состояние работы с причиной простоя), добыча за день по профессиям, летопись.
+- **Производительность**: зоны осматриваются порциями с общим бюджетом блоков на тик (`ScanBudget`, оценки зон `ZoneSurveys`), найденное запоминается, пути строятся по общему бюджету (`PathBudget`); абстрактная работа идёт по формулам раз в шаг симуляции.
 
 ### Требования
 
@@ -147,7 +164,10 @@ Smoke-скрипт ставит настоящий сервер Forge 1.20.1-47.
 - `admin data status`: состояние данных; `admin data unlock`: выйти из режима только чтения (сначала делается резервная копия, затем остаётся только то, что удалось прочитать).
 - `admin citizens list [королевство]`: жители (короткий id, имя, профессия, состояние, здоровье, дом) и сколько из них сейчас в мире.
 - `admin citizens spawn <число> [королевство]`: добавить жителей без условий роста (рядом с вами, с консоли у трона).
-- `admin citizens kill <id>`: житель умирает (запись в летописи); `admin citizens info <id>`: всё о жителе. Достаточно начала id.
+- `admin citizens kill <id>`: житель умирает (запись в летописи); `admin citizens info <id>`: всё о жителе; `admin citizens profession <id> <профессия>`: дать профессию. Достаточно начала id.
+- `admin posts list [королевство]`: посты работы (место, профессия, работники, радиус, состояние, добыто сегодня, выработка); `admin posts set <x y z> profession|radius|seats|herd|animal <значение>`: настроить пост без проверки прав.
+- `admin storage put <предмет> <число> [королевство]`: положить предметы на склады; `admin storage list [королевство]`: что лежит на складах.
+- `admin simulate <королевство> [шагов]`: выполнить шаги симуляции жителей сразу (для проверок).
 - `debug create|list|info|remove`: отладочные команды этапа 0.
 
 Названия из нескольких слов в админских командах берите в кавычки: `"Old Valoria"`.
@@ -158,6 +178,7 @@ Smoke-скрипт ставит настоящий сервер Forge 1.20.1-47.
   - `npc`: `maxActiveNpcs` (300, тел жителей на сервер), `citizenActivationChunks` (6);
   - `simulation`: `simulationIntervalTicks` (1200, шаг абстрактной симуляции жителей);
   - `citizens`: `growthFoodDays` (3), `growthIntervalMinutes` (10), `starvationCanKill` (`false`), `dailyNutrition` (6), `infirmaryCapacity` (4), `woundedHealthPercent` (50), `maxCitizensPerKingdom` (200), `farmRadius` (8);
+  - `work`: `workPostDefaultRadius` (8), `workPostMaxRadius` (16), `workPostMaxSeats` (4), `maxTreeBlocks` (160), `mineLevels` (4), `maxHerdSize` (12), `carrierRange` (48 блоков), `carrierItemsPerMinute` (64), `taskRiskMultiplier` (1.0, 0 отключает несчастья вдали от игроков), `professionRisks` (риск за минуту работы как `профессия:ранение:смерть`, например `miner:0.004:0.0004`);
   - `player`: `afkTimeoutSeconds`, `combatTagSeconds` (заготовки для следующих этапов);
   - `kingdom`: `allowedDimensions` (`["minecraft:overworld"]`), `minChunksFromOtherKingdom` (4), `initialClaimRadius` (1);
   - `territory`: `baseMaxChunks` (25), `chunksPerMember` (4), `claimBufferChunks` (1, 0 разрешает соприкасаться границам);
@@ -167,7 +188,7 @@ Smoke-скрипт ставит настоящий сервер Forge 1.20.1-47.
 
 ### Данные и безопасность данных
 
-Данные королевств хранятся в `<мир>/data/kingdomworld_kingdoms.dat`, формат 3 (королевства с землями, подданными, правами, заявками и приглашениями, жителями, их кроватями и местами работы, летописью, а также содержимое всех складов). Данные форматов 1 и 2 обновляются автоматически; при обновлении с формата 2 управляющий получает право «Жители», остальное не меняется.
+Данные королевств хранятся в `<мир>/data/kingdomworld_kingdoms.dat`, формат 4 (королевства с землями, подданными, правами, заявками и приглашениями, жителями, их кроватями и местами работы, состоянием работы, летописью, постами работы с настройками и выработкой, учётом производства, а также содержимое всех складов и снаряжение жителей). Данные форматов 1-3 обновляются автоматически; при обновлении с формата 2 управляющий получает право «Жители», при обновлении с формата 3 появляются пустые посты, учёт и снаряжение, остальное не меняется.
 
 Если данные не удаётся прочитать полностью (формат новее, чем понимает эта версия мода, повреждённая версия формата, неудачная миграция, нечитаемая запись королевства, жителя или склада, нечитаемый файл), мод не бросает исключений и переходит в режим только чтения: прочитанное доступно и защищает земли, но любые изменения отклоняются с ошибкой в логе (уровень ERROR), симуляция жителей стоит, склады закрыты, а файл не перезаписывается. Выйти из режима можно, исправив файл, или командой `/kingdomworld admin data unlock`.
 
@@ -183,11 +204,11 @@ Smoke-скрипт ставит настоящий сервер Forge 1.20.1-47.
 Пакет `io.github.sekerator.kingdomworld`:
 
 - `core`: чистая Java-логика без Minecraft (королевства, территория и правила присоединения, подданство и права, политика доступа, проверка запросов). Быстро тестируется юнит-тестами.
-- `common`: всё, что работает на обеих сторонах: регистрации, хранение (`SavedData` с версией формата, миграциями и режимом только чтения), сеть, команды, конфиг, серверный API, защита, игровые тесты; `common.citizen` (тела, симуляция, места, профессии) и `common.storage` (склады и `KingdomStorage`). В `common.mixin` один mixin для огня: у Forge нет события распространения огня.
+- `common`: всё, что работает на обеих сторонах: регистрации, хранение (`SavedData` с версией формата, миграциями и режимом только чтения), сеть, команды, конфиг, серверный API, защита, игровые тесты; `common.citizen` (тела, симуляция, места, снаряжение) с `common.citizen.work` (профессии, посты работы, замер и абстрактная добыча, оценка зон, носильщики) и `common.storage` (склады и `KingdomStorage`). В `common.mixin` один mixin для огня: у Forge нет события распространения огня.
 - `client`: только клиентский код (экраны основания, трона и карты, клавиша, кэш территории). Подключается лишь на клиенте, выделенный сервер эти классы не загружает.
 - `compat`: мягкая совместимость с другими модами. Модуль включается только если мод установлен.
 
-Текстуры и модели короны, трона, атласа, склада, лазарета и жителей временные.
+Текстуры и модели короны, трона, атласа, склада, лазарета, поста работы и жителей временные.
 
 ### Лицензия
 
@@ -199,7 +220,7 @@ KingdomWorld is a Minecraft 1.20.1 (Forge) mod about kingdoms that grow across t
 
 ### Status
 
-Stage 2a: the citizens of kingdoms (records in the world data and bodies near players, homes, storehouses, food, growth, mood, wounds and the infirmary, a chronicle of deaths, professions with the farmer). Stage 1: founding a kingdom, chunk-based territory with protection, membership and positions, the throne screen and a political map of kingdoms. The stage 0 skeleton (versioned world storage, a network channel with server-side request validation, configs, tests, a smoke test on a real server) is kept.
+Stage 2b: gathering and logistics (work posts, lumberjack, miner, fisher, herder, carrier, tools and armor from the storehouses, risks of work, gathering far from players by measured yields, a record of production, the storehouses tab). Stage 2a: the citizens of kingdoms (records in the world data and bodies near players, homes, storehouses, food, growth, mood, wounds and the infirmary, a chronicle of deaths, professions with the farmer). Stage 1: founding a kingdom, chunk-based territory with protection, membership and positions, the throne screen and a political map of kingdoms. The stage 0 skeleton (versioned world storage, a network channel with server-side request validation, configs, tests, a smoke test on a real server) is kept.
 
 ### How to play
 
@@ -220,6 +241,7 @@ Recipes (data pack, replaceable):
 | Kingdom Atlas | book, compass and an empty map (shapeless) |
 | Storehouse | logs in the corners, planks above and below, two chests beside a barrel |
 | Infirmary | white wool on top, a glistering melon slice between planks, planks below |
+| Work post | planks around a sign and a crafting table (sign on top, table in the middle) |
 
 ### Territory and protection
 
@@ -253,9 +275,25 @@ Recipes (data pack, replaceable):
 - A newcomer arrives at the throne if there is a free bed, the storehouses feed everybody for `growthFoodDays` days and `growthIntervalMinutes` minutes have passed since the last arrival (content citizens make it faster, unhappy ones slower).
 - Mood 0-100 depends on food, a home, wounds and recent deaths of neighbours; for now it changes the speed of growth.
 - Citizens are mortal: monsters (zombies and illagers hunt them), falls, lava, fire, players. Outsiders may not hurt citizens in peacetime (a rule of the common access policy; war will add an exemption). A wounded citizen goes to an **infirmary** (block), where it heals much faster (`infirmaryCapacity` places), or home. Death is final: the record goes to the kingdom's chronicle (who, when, why, where) and the king and members with the citizens right are told.
-- Professions: unemployed and farmer; the registry is extensible (`ProfessionBehaviors.register`). A farmer works at a composter on the kingdom's land: near players it harvests ripe crops within `farmRadius`, replants them and carries the harvest to the nearest storehouse; crops of other mods work too (CropBlock, or the `minecraft:crops` tag with an age property). Far from players it brings in a harvest by formula from the number of plots seen last time.
+- Professions: unemployed, farmer, lumberjack, miner, fisher, herder and carrier; the registry is extensible (`ProfessionBehaviors.register`). A farmer works at a composter or a work post: near players it harvests ripe crops within `farmRadius` (at a post within its zone), replants them and carries the harvest to the nearest storehouse or the post's container; crops of other mods work too (CropBlock, or the `minecraft:crops` tag with an age property). It picks melons and pumpkins and leaves the stem, harvests two block crops by their lower half and cuts sugar cane above its lowest block. Far from players it brings in a harvest by formula from the number of plots seen last time.
 - The "Citizens" tab of the throne screen: population, beds, food in days, mood and why newcomers do not arrive; the list of citizens with profession, state and home, a filter and scrolling; changing professions (citizens right); the chronicle of deaths. The kingdom card on the map shows the population.
 - Storehouses and searching, taking and putting items for later mechanics go through one service, `KingdomStorage`.
+
+### Gathering and logistics
+
+- A **work post** (block) on kingdom land is a workplace of citizens. A right click opens its screen (every member of the kingdom may look, changes need the citizens right): the profession, the radius of the zone (up to `workPostMaxRadius`; a zone never reaches beyond the kingdom's land), the seats (up to `workPostMaxSeats`), for a herder the kind of animal (from those living in the zone, mobs of other mods included) and the herd size, the state of the post with the reason it stands still, the yield (measured or estimated), what was gathered today, the workers with their state, and buttons to hire (the nearest citizen without work) and dismiss. Outsiders are only told whose post it is.
+- The **container of a post** is any neighbouring block with an IItemHandler (chest, barrel, crates and storage of other mods). Workers put their harvest there; without one they carry it to the nearest storehouse themselves (far from players such work yields less).
+- The **lumberjack** fells only natural trees in its zone: logs (tag `minecraft:logs`) standing on the ground with leaves that grew there (`minecraft:leaves`, `persistent=false`); logs without such leaves belong to a building and are left alone. Trees larger than `maxTreeBlocks` logs or reaching out of the zone or the land stay standing. The crown comes down, the drops are gathered and a sapling of the same kind is planted where the tree stood (from the leaves' drops or the storehouses). Trees of other mods with the same tags just work.
+- The **miner** digs below its post along a plan: a 1x2 tunnel along the x axis in front of the post with branches every third block and a staircase to the next level (up to `mineLevels` levels, three blocks apart). It breaks only natural rock, earth, gravel, sand and ores (tags `forge:stone`, `forge:ores`, `minecraft:base_stone_overworld` and the like), never blocks with contents and nothing off the kingdom's land. Ore the pickaxe is too weak for (`isCorrectToolForDrops`) stays, and the post says why. Lava and water next to the tunnel are walled off with cobblestone; torches come from the storehouses or the post's container (carriers bring them there).
+- The **fisher** finds still water with a bank in its zone and fishes with a rod (anything with `FISHING_ROD_CAST`); the catch comes from the vanilla fishing loot table, so fish that mods add there are caught too. The rod wears out.
+- The **herder** keeps a herd of the chosen kind in its pen: breeds it with food the animal eats (`Animal.isFood`, from the storehouses) up to the set size, culls grown animals beyond it (gathering the drops), never touches young animals, named ones or those on a lead, and shears what can be shorn (`IForgeShearable`) when it has shears.
+- The **carrier** takes items from the containers of posts to the storehouses (the fullest first), brings posts what they ask for (torches for a miner; the production chains of the next stage get their inputs this way) and empties a nearly full storehouse into an emptier one further away. Far from players the carriers of a kingdom each move `carrierItemsPerMinute` items a minute out of loaded containers.
+- **Tools and armor**: a worker takes a suitable tool from the storehouses by its ToolActions (axe `AXE_DIG`, pickaxe `PICKAXE_DIG`, rod `FISHING_ROD_CAST`, shears `SHEARS_HARVEST`, any weapon or none for culling), the weakest sufficient and most worn one, and holds it; the tool wears out, a broken one is replaced by the next, and without one the post stands still with the state "No tool in the storehouses". Tools and armor of other mods work as they are. Lumberjacks, miners, fishers and herders put on armor from the storehouses. Gear belongs to the citizen rather than to its body: far from players the tool wears out all the same, and the gear of a citizen who dies without a body goes back to the storehouses.
+- **Risks**: near players the dangers are real (monsters, falls, lava, water). Far from players a worker has, per minute of work, a chance to be wounded and a smaller chance to die by profession (`professionRisks`, overall multiplier `taskRiskMultiplier`); armor lowers the risk by up to 75 percent, experience by up to 50. A wounded worker does not work until healed (faster in an infirmary); a dead one goes to the chronicle with its cause ("died in the mine", "was killed felling trees", "drowned while fishing") and the king is told.
+- **Gathering far from players**: near players the work of a post is measured (what and how much was gathered in the time worked, feed used, tool uses), far from players its workers gather by that yield; before the first measurement by an estimate of the zone (trees, rock, water, animals). The harvest goes into the post's container (if loaded) or the storehouses, and the tool wears out.
+- **Record of production**: a kingdom remembers what each profession produced today and yesterday, by item; the citizens tab shows it in its production view. The economy of later stages will use it.
+- **Throne screen**: a new "Storehouses" tab (what all the kingdom's storehouses hold, with a search and counts, and the storehouses with how full they are; only for looking). The "Citizens" tab switches between views: citizens (profession, state, home), work (workplace and the state of the work with the reason it stands still), production of the day by profession, and the chronicle.
+- **Performance**: zones are looked over a share at a time within a shared block budget per tick (`ScanBudget`, zone estimates in `ZoneSurveys`), what was found is remembered, paths come from a shared budget (`PathBudget`); abstract work runs by formula once per simulation step.
 
 ### Requirements
 
@@ -331,7 +369,10 @@ Operators (permission level 2, `/kingdomworld`):
 - `admin data status`: state of the data; `admin data unlock`: leave read-only mode (a backup is made first, then only what could be read is kept).
 - `admin citizens list [kingdom]`: citizens (short id, name, profession, state, health, home) and how many are in the world now.
 - `admin citizens spawn <count> [kingdom]`: add citizens regardless of the growth rules (next to you, or at the throne from the console).
-- `admin citizens kill <id>`: the citizen dies (with a chronicle entry); `admin citizens info <id>`: everything about a citizen. The start of the id is enough.
+- `admin citizens kill <id>`: the citizen dies (with a chronicle entry); `admin citizens info <id>`: everything about a citizen; `admin citizens profession <id> <profession>`: give a profession. The start of the id is enough.
+- `admin posts list [kingdom]`: work posts (place, profession, workers, radius, state, gathered today, yield); `admin posts set <x y z> profession|radius|seats|herd|animal <value>`: set up a post without checking rights.
+- `admin storage put <item> <count> [kingdom]`: put items into the storehouses; `admin storage list [kingdom]`: what the storehouses hold.
+- `admin simulate <kingdom> [steps]`: run steps of the citizen simulation at once (for tests).
 - `debug create|list|info|remove`: the stage 0 debug commands.
 
 Quote kingdom names with spaces in admin commands: `"Old Valoria"`.
@@ -342,6 +383,7 @@ Quote kingdom names with spaces in admin commands: `"Old Valoria"`.
   - `npc`: `maxActiveNpcs` (300, citizen bodies per server), `citizenActivationChunks` (6);
   - `simulation`: `simulationIntervalTicks` (1200, the step of the abstract citizen simulation);
   - `citizens`: `growthFoodDays` (3), `growthIntervalMinutes` (10), `starvationCanKill` (`false`), `dailyNutrition` (6), `infirmaryCapacity` (4), `woundedHealthPercent` (50), `maxCitizensPerKingdom` (200), `farmRadius` (8);
+  - `work`: `workPostDefaultRadius` (8), `workPostMaxRadius` (16), `workPostMaxSeats` (4), `maxTreeBlocks` (160), `mineLevels` (4), `maxHerdSize` (12), `carrierRange` (48 blocks), `carrierItemsPerMinute` (64), `taskRiskMultiplier` (1.0; 0 turns accidents far from players off), `professionRisks` (risk per minute of work as `profession:injury:death`, for example `miner:0.004:0.0004`);
   - `player`: `afkTimeoutSeconds`, `combatTagSeconds` (placeholders for later stages);
   - `kingdom`: `allowedDimensions` (`["minecraft:overworld"]`), `minChunksFromOtherKingdom` (4), `initialClaimRadius` (1);
   - `territory`: `baseMaxChunks` (25), `chunksPerMember` (4), `claimBufferChunks` (1; 0 lets borders touch);
@@ -351,7 +393,7 @@ Quote kingdom names with spaces in admin commands: `"Old Valoria"`.
 
 ### Data and data safety
 
-Kingdom data is stored in `<world>/data/kingdomworld_kingdoms.dat`, format 3 (kingdoms with land, members, rights, applications and invitations, citizens with their beds and workplaces, the chronicle, and the contents of every storehouse). Format 1 and 2 data is upgraded automatically; the upgrade from format 2 gives the steward the citizens right and changes nothing else.
+Kingdom data is stored in `<world>/data/kingdomworld_kingdoms.dat`, format 4 (kingdoms with land, members, rights, applications and invitations, citizens with their beds, workplaces and the state of their work, the chronicle, work posts with their settings and yields, the record of production, the contents of every storehouse and the gear of citizens). Data of formats 1-3 is upgraded automatically; the upgrade from format 2 gives the steward the citizens right, the upgrade from format 3 adds empty posts, records and gear, and nothing else changes.
 
 If the data cannot be fully read (a format newer than this version understands, a damaged format version, a failed migration, an unreadable kingdom, citizen or storehouse, or an unreadable file), loading does not throw: the data becomes read-only. What could be read stays available and keeps protecting land, but every change is refused with an ERROR in the log, the citizen simulation stops, storehouses stay closed, and the file is never overwritten. Fix the file or run `/kingdomworld admin data unlock` to leave read-only mode.
 
@@ -367,11 +409,11 @@ The data is laid out so it can easily be handed to JourneyMap, Xaero or BlueMap:
 Package `io.github.sekerator.kingdomworld`:
 
 - `core`: plain Java domain logic without Minecraft (kingdoms, territory and claim rules, membership and rights, the access policy, request validation). Fast to unit test.
-- `common`: everything that runs on both sides: registries, persistence (`SavedData` with a format version, migrations and read-only mode), networking, commands, config, the server API, protection and game tests; `common.citizen` (bodies, simulation, places, professions) and `common.storage` (storehouses and `KingdomStorage`). `common.mixin` holds one mixin for fire, because Forge has no event for fire spreading.
+- `common`: everything that runs on both sides: registries, persistence (`SavedData` with a format version, migrations and read-only mode), networking, commands, config, the server API, protection and game tests; `common.citizen` (bodies, simulation, places, gear) with `common.citizen.work` (professions, work posts, measured and abstract gathering, zone estimates, carriers) and `common.storage` (storehouses and `KingdomStorage`). `common.mixin` holds one mixin for fire, because Forge has no event for fire spreading.
 - `client`: client-only code (founding, throne and map screens, the key binding, the territory cache). Wired in on the client only; a dedicated server never loads these classes.
 - `compat`: soft integrations with other mods. A module is activated only when its mod is installed.
 
-Textures and models of the crown, the throne, the atlas, the storehouse, the infirmary and the citizens are placeholders.
+Textures and models of the crown, the throne, the atlas, the storehouse, the infirmary, the work post and the citizens are placeholders.
 
 ### License
 

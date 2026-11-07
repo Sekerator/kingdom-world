@@ -67,6 +67,7 @@ final class CitizensTab {
     private int pageWidth;
     private int dayWidth;
     private int countWidth;
+    private int professionLabelWidth;
 
     CitizensTab(ThroneScreen screen) {
         this.screen = screen;
@@ -220,13 +221,18 @@ final class CitizensTab {
         }
         pageWidth = font.width(Component.translatable("kingdomworld.screen.throne.page", 500, 500, 500));
         dayWidth = font.width(Component.translatable(KEY + "day", 99_999));
+        professionLabelWidth = 0;
+        for (Profession profession : professions()) {
+            professionLabelWidth = Math.max(professionLabelWidth, font.width(CitizenTexts.profession(profession.id())) + 8);
+        }
+        professionLabelWidth = Math.max(professionLabelWidth, font.width(CitizenTexts.profession("unknown_profession")) + 8);
         countWidth = Math.max(font.width(Component.translatable(KEY + "production.today", 9_999_999L)),
                 font.width(Component.translatable(KEY + "production.yesterday", 9_999_999L)));
 
         int buttons = filterWidth + GAP + modeWidth + 8 + pageWidth;
         int list = NAME_COLUMN + professionWidth + 6 + stateWidth + 6 + MIN_PLACE_COLUMN;
         int deaths = NAME_COLUMN + 120 + 6 + dayWidth;
-        int production = professionWidth + 2 * (countWidth + 6) + 60;
+        int production = professionLabelWidth + 2 * (countWidth + 6) + 60;
         int summary = 0;
         CitizenView saved = view;
         // The longest numbers a summary can show.
@@ -392,7 +398,7 @@ final class CitizensTab {
             screen.paragraph(graphics, Component.translatable(KEY + "production.none"), x, listTop + 5, right - x, 3, 0xFFB8B8B8);
             return;
         }
-        int todayX = x + professionWidth;
+        int todayX = x + professionLabelWidth;
         int yesterdayX = todayX + countWidth + 6;
         int itemX = yesterdayX + countWidth + 6;
         for (int i = 0; i < rows && scroll + i < production.size(); i++) {

@@ -76,8 +76,9 @@ public final class CommonEvents {
                 config.citizenActivationChunks.get(), config.growthFoodDays.get(), config.growthIntervalMinutes.get(),
                 config.starvationCanKill.get(), config.dailyNutrition.get(), config.infirmaryCapacity.get(),
                 config.woundedHealthPercent.get(), config.maxCitizensPerKingdom.get(), config.farmRadius.get());
-        LOGGER.info("KingdomWorld loaded {} kingdom(s) with {} citizen(s) and {} storehouse(s), data format {}{}",
-                data.registry().size(), data.state().citizens().registry().size(), data.storehouses().size(),
+        LOGGER.info("KingdomWorld loaded {} kingdom(s) with {} citizen(s), {} work post(s) and {} storehouse(s), data format {}{}",
+                data.registry().size(), data.state().citizens().registry().size(), data.state().citizens().posts().size(),
+                data.storehouses().size(),
                 KingdomSavedData.FORMAT_VERSION,
                 data.isReadOnly() ? " (READ-ONLY: " + data.readOnlyReason().orElse("?") + ")" : "");
     }
