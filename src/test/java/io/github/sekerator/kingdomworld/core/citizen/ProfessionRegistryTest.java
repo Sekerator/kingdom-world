@@ -12,9 +12,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ProfessionRegistryTest {
 
     @Test
-    void defaultsAreUnemployedAndFarmer() {
+    void defaultsAreUnemployedFarmerAndTheGatherers() {
         ProfessionRegistry registry = ProfessionRegistry.withDefaults();
-        assertEquals(List.of(Professions.UNEMPLOYED, Professions.FARMER), registry.all());
+        assertEquals(List.of(Professions.UNEMPLOYED, Professions.FARMER, Professions.LUMBERJACK, Professions.MINER,
+                Professions.FISHER, Professions.HERDER, Professions.CARRIER), registry.all());
+        assertEquals(SiteKinds.WORK_POST, Professions.MINER.workplaceKind());
+        assertTrue(Professions.worksAtPosts("farmer"));
+        assertTrue(Professions.worksAtPosts("carrier"));
+        assertFalse(Professions.worksAtPosts("unemployed"));
+        assertEquals(6, Professions.postProfessions().size());
         assertFalse(Professions.UNEMPLOYED.needsWorkplace());
         assertEquals(SiteKinds.COMPOSTER, Professions.FARMER.workplaceKind());
         assertTrue(Professions.REGISTRY.isKnown("farmer"));
@@ -26,7 +32,7 @@ class ProfessionRegistryTest {
         Profession miller = new Profession("miller", "mill");
         registry.register(miller);
         assertEquals(miller, registry.byId("miller").orElseThrow());
-        assertEquals(3, registry.all().size());
+        assertEquals(8, registry.all().size());
         assertThrows(IllegalArgumentException.class, () -> registry.register(new Profession("farmer", null)));
     }
 
@@ -34,7 +40,8 @@ class ProfessionRegistryTest {
     void cyclingWrapsAround() {
         ProfessionRegistry registry = ProfessionRegistry.withDefaults();
         assertEquals(Professions.FARMER, registry.next("unemployed"));
-        assertEquals(Professions.UNEMPLOYED, registry.next("farmer"));
+        assertEquals(Professions.LUMBERJACK, registry.next("farmer"));
+        assertEquals(Professions.UNEMPLOYED, registry.next("carrier"));
         assertEquals(Professions.UNEMPLOYED, registry.next("no_such_profession"));
     }
 

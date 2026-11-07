@@ -3,6 +3,9 @@ package io.github.sekerator.kingdomworld.core.state;
 import io.github.sekerator.kingdomworld.core.citizen.Citizen;
 import io.github.sekerator.kingdomworld.core.citizen.Citizens;
 import io.github.sekerator.kingdomworld.core.citizen.Professions;
+import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
+import io.github.sekerator.kingdomworld.core.citizen.WorkZone;
+import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
@@ -232,6 +235,191 @@ public final class KingdomWorldState {
             return Outcome.fail(KingdomError.UNCHANGED);
         }
         citizens.setProfession(citizen.get(), professionId);
+        return Outcome.DONE;
+    }
+
+    // ---------------------------------------------------------------- work posts
+
+    /**
+     * The post at a position, if the actor may change it.
+     */
+    private Outcome checkPost(UUID actor, WorldPos pos) {
+        Optional<WorkPost> post = citizens.posts().get(pos);
+        if (post.isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_POST);
+        }
+        if (actor != null && !membership.hasPermission(actor, post.get().kingdomId(), Permission.MANAGE_CITIZENS)) {
+            return Outcome.fail(KingdomError.NO_PERMISSION);
+        }
+        return Outcome.DONE;
+    }
+
+    /**
+     * Sets the profession of a work post; workers of another profession leave it.
+     *
+     * @param actor the player, who needs {@link Permission#MANAGE_CITIZENS} in the post's kingdom; {@code null} for
+     *              an administrator
+     */
+    public Outcome setPostProfession(UUID actor, WorldPos pos, String professionId) {
+        Outcome check = checkPost(actor, pos);
+        if (!check.ok()) {
+            return check;
+        }
+        if (!Professions.REGISTRY.isKnown(professionId)) {
+            return Outcome.fail(KingdomError.UNKNOWN_PROFESSION);
+        }
+        if (!professionId.equals(Professions.UNEMPLOYED.id()) && !Professions.worksAtPosts(professionId)) {
+            return Outcome.fail(KingdomError.NOT_A_POST_PROFESSION);
+        }
+        WorkPost post = citizens.posts().get(pos).orElseThrow();
+        if (post.professionId().equals(professionId)) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        citizens.setPostProfession(post, professionId);
+        return Outcome.DONE;
+    }
+
+    /**
+     * Sets the radius of a post's zone; the zone must lie on the kingdom's land.
+     */
+    public Outcome setPostRadius(UUID actor, WorldPos pos, int radius, int maxRadius) {
+        Outcome check = checkPost(actor, pos);
+        if (!check.ok()) {
+            return check;
+        }
+        if (radius < 1 || radius > maxRadius) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        WorkPost post = citizens.posts().get(pos).orElseThrow();
+        if (post.radius() == radius) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        // Growing a zone must not reach beyond the land; shrinking is always allowed.
+        if (radius > post.radius() && !WorkZone.around(pos, radius, 0, 0)
+                .liesWithin(chunk -> post.kingdomId().equals(territory.ownerOf(pos.dimension(), chunk)))) {
+            return Outcome.fail(KingdomError.ZONE_OUTSIDE_LAND);
+        }
+        citizens.setPostRadius(post, radius);
+        return Outcome.DONE;
+    }
+
+    /**
+     * Sets the seats of a post; the workers who came last leave it if there are too many.
+     */
+    public Outcome setPostSeats(UUID actor, WorldPos pos, int seats, int maxSeats) {
+        Outcome check = checkPost(actor, pos);
+        if (!check.ok()) {
+            return check;
+        }
+        if (seats < 1 || seats > maxSeats) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        WorkPost post = citizens.posts().get(pos).orElseThrow();
+        if (post.seats() == seats) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        citizens.setPostSeats(post, seats);
+        return Outcome.DONE;
+    }
+
+    /**
+     * Chooses the animals of a herder's post; whether the id names an animal is checked by the caller.
+     */
+    public Outcome setPostAnimal(UUID actor, WorldPos pos, String animal) {
+        Outcome check = checkPost(actor, pos);
+        if (!check.ok()) {
+            return check;
+        }
+        if (animal == null || animal.length() > WorkPost.MAX_ANIMAL_LENGTH) {
+            return Outcome.fail(KingdomError.UNKNOWN_ANIMAL);
+        }
+        WorkPost post = citizens.posts().get(pos).orElseThrow();
+        if (post.animal().equals(animal)) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        citizens.setPostAnimal(post, animal);
+        return Outcome.DONE;
+    }
+
+    /**
+     * Sets the head of animals a herder keeps.
+     */
+    public Outcome setPostHerdSize(UUID actor, WorldPos pos, int size, int maxHerd) {
+        Outcome check = checkPost(actor, pos);
+        if (!check.ok()) {
+            return check;
+        }
+        if (size < 2 || size > maxHerd) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        WorkPost post = citizens.posts().get(pos).orElseThrow();
+        if (post.herdSize() == size) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        citizens.setPostHerdSize(post, size);
+        return Outcome.DONE;
+    }
+
+    /**
+     * The result of hiring a worker for a post.
+     *
+     * @param citizen the citizen who now works there, if any
+     */
+    public record Hiring(Outcome outcome, Optional<Citizen> citizen) {
+        static Hiring failed(KingdomError error) {
+            return new Hiring(Outcome.fail(error), Optional.empty());
+        }
+    }
+
+    /**
+     * Gives the citizen without work nearest to a post the post's profession and a seat there.
+     */
+    public Hiring hire(UUID actor, WorldPos pos) {
+        Outcome check = checkPost(actor, pos);
+        if (!check.ok()) {
+            return new Hiring(check, Optional.empty());
+        }
+        WorkPost post = citizens.posts().get(pos).orElseThrow();
+        if (!post.hasProfession()) {
+            return Hiring.failed(KingdomError.NOT_A_POST_PROFESSION);
+        }
+        if (post.freeSeats() <= 0) {
+            return Hiring.failed(KingdomError.NO_FREE_SEAT);
+        }
+        Citizen best = null;
+        double bestDistance = Double.POSITIVE_INFINITY;
+        for (Citizen citizen : citizens.registry().citizensOf(post.kingdomId())) {
+            if (!citizen.professionId().equals(Professions.UNEMPLOYED.id())) {
+                continue;
+            }
+            double distance = citizen.lastPos().distanceSqr(pos);
+            if (best == null || distance < bestDistance) {
+                best = citizen;
+                bestDistance = distance;
+            }
+        }
+        if (best == null) {
+            return Hiring.failed(KingdomError.NO_UNEMPLOYED);
+        }
+        citizens.setProfession(best, post.professionId());
+        citizens.assignWorkplace(best, pos);
+        return new Hiring(Outcome.DONE, Optional.of(best));
+    }
+
+    /**
+     * A worker leaves a post and is without work again.
+     */
+    public Outcome dismiss(UUID actor, WorldPos pos, UUID citizenId) {
+        Outcome check = checkPost(actor, pos);
+        if (!check.ok()) {
+            return check;
+        }
+        WorkPost post = citizens.posts().get(pos).orElseThrow();
+        Optional<Citizen> citizen = citizens.get(citizenId);
+        if (citizen.isEmpty() || !post.workers().contains(citizenId)) {
+            return Outcome.fail(KingdomError.NOT_A_WORKER);
+        }
+        citizens.setProfession(citizen.get(), Professions.UNEMPLOYED.id());
         return Outcome.DONE;
     }
 

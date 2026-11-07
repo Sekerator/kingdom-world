@@ -157,12 +157,14 @@ class CitizensTest {
     void restoreDropsHomesThatAreNoPlaces() {
         UUID id = UUID.randomUUID();
         Citizen saved = new Citizen(id, realm, 1, Gender.MALE, 0, 0L, pos(0, 0));
-        saved.restore(15.0f, CitizenState.HEALTHY, "farmer", pos(1, 1), pos(3, 3), 12.0f, 60, 7, 4, "minecraft:wheat", 0.5);
+        saved.restore(15.0f, CitizenState.HEALTHY, "farmer", pos(1, 1), pos(3, 3), 12.0f, 60, 7, 4, "minecraft:wheat", 0.5,
+                WorkStatus.WORKING);
         Citizen lost = new Citizen(UUID.randomUUID(), realm, 2, Gender.MALE, 0, 0L, pos(0, 0));
-        lost.restore(20.0f, CitizenState.HEALTHY, "unemployed", pos(2, 2), null, 20.0f, 50, 0, 0, "", 0.0);
+        lost.restore(20.0f, CitizenState.HEALTHY, "unemployed", pos(2, 2), null, 20.0f, 50, 0, 0, "", 0.0, WorkStatus.NONE);
         citizens.restore(realm, List.of(new Site(pos(1, 1), SiteKinds.BED, realm, null),
-                        new Site(pos(3, 3), SiteKinds.COMPOSTER, realm, null)), List.of(saved, lost), 77L,
-                List.of(new DeathRecord(UUID.randomUUID(), 3, Gender.FEMALE, "farmer", CauseOfDeath.FIRE, "", 5L, pos(4, 4))));
+                        new Site(pos(3, 3), SiteKinds.COMPOSTER, realm, null)), List.of(), List.of(saved, lost), 77L,
+                List.of(new DeathRecord(UUID.randomUUID(), 3, Gender.FEMALE, "farmer", CauseOfDeath.FIRE, "", 5L, pos(4, 4))),
+                List.of());
 
         assertEquals(id, citizens.sites().get(pos(1, 1)).orElseThrow().occupant());
         assertEquals(id, citizens.sites().get(pos(3, 3)).orElseThrow().occupant());
@@ -170,6 +172,8 @@ class CitizensTest {
         assertEquals(77L, citizens.registry().lastArrival(realm));
         assertEquals(1, citizens.registry().chronicle(realm).size());
         assertEquals("minecraft:wheat", saved.workProduct());
-        assertThrows(IllegalArgumentException.class, () -> citizens.restore(realm, List.of(), List.of(saved), 0L, List.of()));
+        assertEquals(WorkStatus.WORKING, saved.workStatus());
+        assertThrows(IllegalArgumentException.class, () -> citizens.restore(realm, List.of(), List.of(), List.of(saved), 0L,
+                List.of(), List.of()));
     }
 }

@@ -34,6 +34,7 @@ public final class Citizen {
     private int workCapacity;
     private String workProduct = "";
     private double workProgress;
+    private WorkStatus workStatus = WorkStatus.NONE;
 
     private Runnable changeListener = () -> {
     };
@@ -272,6 +273,21 @@ public final class Citizen {
         }
     }
 
+    /**
+     * What the citizen's work looks like right now, and if it stands still, why.
+     */
+    public WorkStatus workStatus() {
+        return workStatus;
+    }
+
+    public void setWorkStatus(WorkStatus value) {
+        Objects.requireNonNull(value, "value");
+        if (value != workStatus) {
+            workStatus = value;
+            changed();
+        }
+    }
+
     public void setWorkProgress(double value) {
         double clamped = Double.isFinite(value) ? Math.max(0.0, value) : 0.0;
         if (clamped != workProgress) {
@@ -284,7 +300,8 @@ public final class Citizen {
      * Restores the fields that are not part of the constructor, for saved data. Does not notify.
      */
     public void restore(float health, CitizenState state, String professionId, WorldPos home, WorldPos workplace,
-                        float food, int mood, int experience, int workCapacity, String workProduct, double workProgress) {
+                        float food, int mood, int experience, int workCapacity, String workProduct, double workProgress,
+                        WorkStatus workStatus) {
         if (state == CitizenState.DEAD) {
             throw new IllegalArgumentException("A dead citizen cannot be restored into the population");
         }
@@ -299,6 +316,7 @@ public final class Citizen {
         this.workCapacity = Math.max(0, workCapacity);
         this.workProduct = workProduct == null ? "" : workProduct;
         this.workProgress = Double.isFinite(workProgress) ? Math.max(0.0, workProgress) : 0.0;
+        this.workStatus = workStatus == null ? WorkStatus.NONE : workStatus;
     }
 
     @Override

@@ -31,6 +31,7 @@ final class KingdomDataMigrations {
             switch (version) {
                 case 1 -> current = upgradeFrom1To2(current);
                 case 2 -> current = upgradeFrom2To3(current);
+                case 3 -> current = upgradeFrom3To4(current);
                 default -> throw new IllegalArgumentException("No migration from kingdom data format " + version);
             }
         }
@@ -85,6 +86,40 @@ final class KingdomDataMigrations {
             }
         }
         tag.putInt(KingdomSavedData.TAG_FORMAT_VERSION, 3);
+        return tag;
+    }
+
+    /**
+     * Format 4 adds work posts and the record of production to every population, the state of each citizen's work
+     * and the tools and armor citizens carry. A format 3 population has no posts, nothing produced on record and
+     * citizens without a work state; nobody carries anything yet.
+     */
+    private static CompoundTag upgradeFrom3To4(CompoundTag tag) {
+        ListTag kingdoms = tag.getList(KingdomSavedData.TAG_KINGDOMS, Tag.TAG_COMPOUND);
+        for (int i = 0; i < kingdoms.size(); i++) {
+            CompoundTag kingdom = kingdoms.getCompound(i);
+            if (!kingdom.contains(CitizenNbt.POPULATION, Tag.TAG_COMPOUND)) {
+                continue;
+            }
+            CompoundTag population = kingdom.getCompound(CitizenNbt.POPULATION);
+            if (!population.contains(CitizenNbt.POSTS)) {
+                population.put(CitizenNbt.POSTS, new ListTag());
+            }
+            if (!population.contains(CitizenNbt.PRODUCTION)) {
+                population.put(CitizenNbt.PRODUCTION, new ListTag());
+            }
+            ListTag citizens = population.getList("citizens", Tag.TAG_COMPOUND);
+            for (int j = 0; j < citizens.size(); j++) {
+                CompoundTag citizen = citizens.getCompound(j);
+                if (!citizen.contains("workStatus")) {
+                    citizen.putString("workStatus", "none");
+                }
+            }
+        }
+        if (!tag.contains(KingdomSavedData.TAG_GEAR)) {
+            tag.put(KingdomSavedData.TAG_GEAR, new ListTag());
+        }
+        tag.putInt(KingdomSavedData.TAG_FORMAT_VERSION, 4);
         return tag;
     }
 }

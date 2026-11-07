@@ -7,24 +7,33 @@ import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
 import io.github.sekerator.kingdomworld.core.citizen.Citizens;
 import io.github.sekerator.kingdomworld.core.citizen.DeathRecord;
 import io.github.sekerator.kingdomworld.core.citizen.Gender;
+import io.github.sekerator.kingdomworld.core.citizen.PostYield;
+import io.github.sekerator.kingdomworld.core.citizen.ProductionLedger;
 import io.github.sekerator.kingdomworld.core.citizen.Profession;
 import io.github.sekerator.kingdomworld.core.citizen.Site;
+import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
+import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
- * NBT form of the population of one kingdom (format 3), stored inside the kingdom's compound.
+ * NBT form of the population of one kingdom (format 4), stored inside the kingdom's compound.
  *
  * <pre>
- * population: { lastArrival?, citizens: [ citizen ], chronicle: [ death ], sites: [ { kind, pos } ] }
+ * population: { lastArrival?, citizens: [ citizen ], chronicle: [ death ], sites: [ { kind, pos } ],
+ *               posts: [ post ], production: [ { day, counts: { profession: { item: count } } } ] }
  * citizen: { id, seed, gender, skin, born, health, state, profession, pos, home?, workplace?, food, mood, xp,
- *            workCapacity, workProduct, workProgress }
+ *            workCapacity, workProduct, workProgress, workStatus }
+ * post:    { pos, profession, radius, seats, animal, herd, status, yield: { out: { item: rate }, in: { item: rate },
+ *            actions, measured }, progress: { item: amount }, day, produced }
  * death:   { citizen, seed, gender, profession, cause, killer, time, pos }
  * pos:     { dimension, x, y, z }
  * </pre>
@@ -62,12 +71,31 @@ public final class CitizenNbt {
     private static final String KILLER = "killer";
     private static final String TIME = "time";
     private static final String DIMENSION = "dimension";
+    private static final String WORK_STATUS = "workStatus";
+    static final String POSTS = "posts";
+    static final String PRODUCTION = "production";
+    private static final String RADIUS = "radius";
+    private static final String SEATS = "seats";
+    private static final String ANIMAL = "animal";
+    private static final String HERD = "herd";
+    private static final String STATUS = "status";
+    private static final String YIELD = "yield";
+    private static final String OUT = "out";
+    private static final String IN = "in";
+    private static final String ACTIONS = "actions";
+    private static final String MEASURED = "measured";
+    private static final String PROGRESS = "progress";
+    private static final String DAY = "day";
+    private static final String PRODUCED = "produced";
+    private static final String COUNTS = "counts";
 
     /**
      * What was read for one kingdom, not yet restored.
      */
-    public record Population(List<Site> sites, List<Citizen> citizens, long lastArrival, List<DeathRecord> chronicle) {
-        public static final Population EMPTY = new Population(List.of(), List.of(), CitizenRegistry.NEVER, List.of());
+    public record Population(List<Site> sites, List<WorkPost> posts, List<Citizen> citizens, long lastArrival,
+                             List<DeathRecord> chronicle, List<ProductionLedger.Day> production) {
+        public static final Population EMPTY = new Population(List.of(), List.of(), List.of(), CitizenRegistry.NEVER, List.of(),
+                List.of());
     }
 
     private CitizenNbt() {
@@ -99,6 +127,52 @@ public final class CitizenNbt {
             sites.add(entry);
         }
         tag.put(SITES, sites);
+        ListTag posts = new ListTag();
+        for (WorkPost post : citizens.posts().postsOf(kingdomId)) {
+            posts.add(writePost(post));
+        }
+        tag.put(POSTS, posts);
+        ListTag production = new ListTag();
+        for (ProductionLedger.Day day : citizens.ledger().days(kingdomId)) {
+            CompoundTag entry = new CompoundTag();
+            entry.putLong(DAY, day.day());
+            CompoundTag counts = new CompoundTag();
+            day.counts().forEach((profession, items) -> {
+                CompoundTag itemTag = new CompoundTag();
+                items.forEach(itemTag::putLong);
+                counts.put(profession, itemTag);
+            });
+            entry.put(COUNTS, counts);
+            production.add(entry);
+        }
+        tag.put(PRODUCTION, production);
+        return tag;
+    }
+
+    private static CompoundTag writePost(WorkPost post) {
+        CompoundTag tag = new CompoundTag();
+        tag.put(POS, writePos(post.pos()));
+        tag.putString(PROFESSION, post.professionId());
+        tag.putInt(RADIUS, post.radius());
+        tag.putInt(SEATS, post.seats());
+        tag.putString(ANIMAL, post.animal());
+        tag.putInt(HERD, post.herdSize());
+        tag.putString(STATUS, post.status().id());
+        CompoundTag yield = new CompoundTag();
+        yield.put(OUT, writeRates(post.yield().outputs()));
+        yield.put(IN, writeRates(post.yield().inputs()));
+        yield.putDouble(ACTIONS, post.yield().actions());
+        yield.putBoolean(MEASURED, post.yield().measured());
+        tag.put(YIELD, yield);
+        tag.put(PROGRESS, writeRates(post.progress()));
+        tag.putLong(DAY, post.counterDay());
+        tag.putLong(PRODUCED, post.counter());
+        return tag;
+    }
+
+    private static CompoundTag writeRates(Map<String, Double> rates) {
+        CompoundTag tag = new CompoundTag();
+        rates.forEach(tag::putDouble);
         return tag;
     }
 
@@ -125,6 +199,7 @@ public final class CitizenNbt {
         tag.putInt(WORK_CAPACITY, citizen.workCapacity());
         tag.putString(WORK_PRODUCT, citizen.workProduct());
         tag.putDouble(WORK_PROGRESS, citizen.workProgress());
+        tag.putString(WORK_STATUS, citizen.workStatus().id());
         return tag;
     }
 
@@ -182,7 +257,79 @@ public final class CitizenNbt {
             }
             sites.add(new Site(readPos(entry, POS, name), kind, kingdomId, null));
         }
-        return new Population(sites, citizens, arrival, chronicle);
+        List<WorkPost> posts = new ArrayList<>();
+        for (CompoundTag entry : compounds(tag, POSTS, name)) {
+            posts.add(readPost(entry, kingdomId, name));
+        }
+        List<ProductionLedger.Day> production = new ArrayList<>();
+        for (CompoundTag entry : compounds(tag, PRODUCTION, name)) {
+            production.add(readDay(entry, name));
+        }
+        return new Population(sites, posts, citizens, arrival, chronicle, production);
+    }
+
+    private static WorkPost readPost(CompoundTag tag, UUID kingdomId, String name) {
+        WorldPos pos = readPos(tag, POS, name);
+        String where = "Work post " + pos.coordinates() + " of " + name;
+        String profession = tag.getString(PROFESSION);
+        if (!Profession.isValidId(profession)) {
+            throw new IllegalArgumentException(where + " has an invalid profession");
+        }
+        if (!tag.contains(RADIUS, Tag.TAG_INT) || !tag.contains(SEATS, Tag.TAG_INT) || tag.getInt(RADIUS) < 1 || tag.getInt(SEATS) < 1) {
+            throw new IllegalArgumentException(where + " has an invalid radius or seats");
+        }
+        String animal = tag.getString(ANIMAL);
+        if (animal.length() > WorkPost.MAX_ANIMAL_LENGTH) {
+            throw new IllegalArgumentException(where + " has an invalid animal");
+        }
+        CompoundTag yieldTag = tag.getCompound(YIELD);
+        PostYield yield = new PostYield(readRates(yieldTag, OUT, where), readRates(yieldTag, IN, where), yieldTag.getDouble(ACTIONS),
+                yieldTag.getBoolean(MEASURED));
+        WorkPost post = new WorkPost(pos, kingdomId, tag.getInt(RADIUS), Math.max(2, tag.getInt(HERD)));
+        post.restore(profession, tag.getInt(SEATS), animal, WorkStatus.byId(tag.getString(STATUS)), yield,
+                readRates(tag, PROGRESS, where), tag.contains(DAY, Tag.TAG_LONG) ? tag.getLong(DAY) : -1L, tag.getLong(PRODUCED));
+        return post;
+    }
+
+    private static Map<String, Double> readRates(CompoundTag parent, String key, String where) {
+        Map<String, Double> rates = new LinkedHashMap<>();
+        if (!parent.contains(key)) {
+            return rates;
+        }
+        if (!parent.contains(key, Tag.TAG_COMPOUND)) {
+            throw new IllegalArgumentException(key + " of " + where + " is not a compound");
+        }
+        CompoundTag tag = parent.getCompound(key);
+        for (String item : tag.getAllKeys()) {
+            if (!tag.contains(item, Tag.TAG_ANY_NUMERIC)) {
+                throw new IllegalArgumentException(key + " of " + where + " holds a value that is not a number");
+            }
+            rates.put(item, tag.getDouble(item));
+        }
+        return rates;
+    }
+
+    private static ProductionLedger.Day readDay(CompoundTag tag, String name) {
+        if (!tag.contains(DAY, Tag.TAG_LONG) || !tag.contains(COUNTS, Tag.TAG_COMPOUND)) {
+            throw new IllegalArgumentException("A day of production of " + name + " is incomplete");
+        }
+        CompoundTag counts = tag.getCompound(COUNTS);
+        Map<String, Map<String, Long>> result = new LinkedHashMap<>();
+        for (String profession : counts.getAllKeys()) {
+            if (!Profession.isValidId(profession) || !counts.contains(profession, Tag.TAG_COMPOUND)) {
+                throw new IllegalArgumentException("Production of " + name + " names an invalid profession");
+            }
+            CompoundTag items = counts.getCompound(profession);
+            Map<String, Long> itemCounts = new LinkedHashMap<>();
+            for (String item : items.getAllKeys()) {
+                if (!items.contains(item, Tag.TAG_ANY_NUMERIC) || items.getLong(item) < 0) {
+                    throw new IllegalArgumentException("Production of " + name + " holds an invalid count");
+                }
+                itemCounts.put(item, items.getLong(item));
+            }
+            result.put(profession, itemCounts);
+        }
+        return new ProductionLedger.Day(tag.getLong(DAY), result);
     }
 
     public static Citizen readCitizen(CompoundTag tag, UUID kingdomId, String name) {
@@ -204,7 +351,8 @@ public final class CitizenNbt {
         WorldPos home = tag.contains(HOME) ? readPos(tag, HOME, name) : null;
         WorldPos workplace = tag.contains(WORKPLACE) ? readPos(tag, WORKPLACE, name) : null;
         citizen.restore(tag.getFloat(HEALTH), state, profession, home, workplace, tag.getFloat(FOOD), tag.getInt(MOOD),
-                tag.getInt(XP), tag.getInt(WORK_CAPACITY), tag.getString(WORK_PRODUCT), tag.getDouble(WORK_PROGRESS));
+                tag.getInt(XP), tag.getInt(WORK_CAPACITY), tag.getString(WORK_PRODUCT), tag.getDouble(WORK_PROGRESS),
+                WorkStatus.byId(tag.getString(WORK_STATUS)));
         return citizen;
     }
 

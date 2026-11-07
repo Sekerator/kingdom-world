@@ -23,7 +23,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * NBT form of a kingdom with its land, members, rights, pending requests and population (format 3).
+ * NBT form of a kingdom with its land, members, rights, pending requests and population (format 4).
  *
  * <pre>
  * { id, name, color, ruler?, createdGameTime,
@@ -210,8 +210,8 @@ public final class KingdomNbt {
         CitizenNbt.Population population = CitizenNbt.read(tag, kingdom.id(), kingdom.name());
         state.restore(kingdom, capital, chunks, rights, members, applications, invitations);
         try {
-            state.citizens().restore(kingdom.id(), population.sites(), population.citizens(), population.lastArrival(),
-                    population.chronicle());
+            state.citizens().restore(kingdom.id(), population.sites(), population.posts(), population.citizens(),
+                    population.lastArrival(), population.chronicle(), population.production());
         } catch (IllegalArgumentException e) {
             // All or nothing: a kingdom whose people cannot be restored is not restored either.
             state.dissolve(kingdom.id());

@@ -13,6 +13,16 @@ public enum CauseOfDeath {
     LAVA,
     DROWNING,
     STARVATION,
+    /** An accident in a mine, far from players. */
+    MINE,
+    /** An accident while felling trees, far from players. */
+    FOREST,
+    /** Drowned while fishing, far from players. */
+    FISHING,
+    /** An accident with the herd, far from players. */
+    HERD,
+    /** Any other accident at work far from players. */
+    WORK,
     /** Removed by an operator command. */
     COMMAND,
     OTHER;

@@ -8,6 +8,7 @@ import io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
 import io.github.sekerator.kingdomworld.core.citizen.Profession;
 import io.github.sekerator.kingdomworld.core.citizen.Professions;
+import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
 import io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
 import io.github.sekerator.kingdomworld.core.kingdom.NameProblem;
@@ -191,6 +192,9 @@ class TranslationKeysTest {
         for (String key : gendered) {
             used.add(key);
             used.add(key + ".female");
+        }
+        for (WorkStatus status : WorkStatus.values()) {
+            used.add("kingdomworld.work.status." + status.id());
         }
         for (NameProblem problem : NameProblem.values()) {
             used.add("kingdomworld.screen.found.problem." + problem.name().toLowerCase(Locale.ROOT));
