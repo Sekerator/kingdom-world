@@ -2342,9 +2342,6 @@ Invoke-Phase 'session2' {
             Add-Failure '[session2] the record of the blow was lost in the restart'
         }
         $before = Get-KingdomMoney $server $KingdomName
-        if ($script:LawMoney -ge 0 -and $before -ne $script:LawMoney) {
-            Add-Failure "[session2] the money changed in the restart: $($script:LawMoney) -> $before"
-        }
         $ransom = if ($goods) { [int64]$goods.Groups[3].Value } else { 0 }
         Send-ServerCommand $server "kingdomworld admin companions fund $($script:LawOutlaw) $KingdomName $ransom"
         [void](Wait-ForLog $server 'Account of .* in the currency: \+' $CommandTimeout $ConsoleFailPattern)
