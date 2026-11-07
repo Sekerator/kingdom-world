@@ -10,6 +10,7 @@ import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
 import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
 import io.github.sekerator.kingdomworld.core.citizen.WorkZone;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -18,8 +19,11 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.OwnableEntity;
+import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.animal.horse.AbstractHorse;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
@@ -31,6 +35,7 @@ import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.AABB;
 import net.minecraftforge.common.IForgeShearable;
+import net.minecraftforge.event.entity.living.LivingDropsEvent;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.jetbrains.annotations.Nullable;
 
@@ -105,11 +110,26 @@ public final class HerderBehavior implements ProfessionBehavior {
     }
 
     /**
-     * Animals of the kind in the zone, on the kingdom's land.
+     * Animals of the kind in the zone, on the kingdom's land, that belong to the herd: pets and mounts somebody
+     * tamed are never part of it.
      */
     static List<Animal> herd(ServerLevel level, WorkZone zone, LandCheck land, String type) {
         return level.getEntitiesOfClass(Animal.class, box(zone),
-                animal -> animal.isAlive() && typeId(animal).equals(type) && land.owns(animal.blockPosition()));
+                animal -> animal.isAlive() && typeId(animal).equals(type) && land.owns(animal.blockPosition()) && !isSomebodys(animal));
+    }
+
+    /**
+     * Whether an animal belongs to somebody: a tamed wolf, cat or parrot, a tamed horse, any animal of a mod that
+     * has an owner.
+     */
+    public static boolean isSomebodys(Animal animal) {
+        if (animal instanceof OwnableEntity ownable && ownable.getOwnerUUID() != null) {
+            return true;
+        }
+        if (animal instanceof TamableAnimal tamable && tamable.isTame()) {
+            return true;
+        }
+        return animal instanceof AbstractHorse horse && horse.isTamed();
     }
 
     /**
@@ -128,10 +148,12 @@ public final class HerderBehavior implements ProfessionBehavior {
     }
 
     /**
-     * Whether an animal may be culled: grown, without a name, not on a lead.
+     * Whether an animal may be culled: grown, without a name, not on a lead, not ridden or riding, and nobody's
+     * pet or mount.
      */
-    static boolean mayCull(Animal animal) {
-        return !animal.isBaby() && !animal.hasCustomName() && !animal.isLeashed() && !animal.isVehicle();
+    public static boolean mayCull(Animal animal) {
+        return !animal.isBaby() && !animal.hasCustomName() && !animal.isLeashed() && !animal.isVehicle() && !animal.isPassenger()
+                && !isSomebodys(animal);
     }
 
     /**
@@ -498,16 +520,42 @@ public final class HerderBehavior implements ProfessionBehavior {
         }
 
         /**
-         * Picks up what a culled animal dropped.
+         * Picks up what the animal it culled dropped, and nothing else: items players threw nearby stay where they
+         * are.
          */
         private void collectDrops(ServerLevel level, BlockPos where) {
             for (ItemEntity item : level.getEntitiesOfClass(ItemEntity.class, new AABB(where).inflate(3.0),
-                    entity -> entity.isAlive() && entity.getAge() < 200)) {
+                    entity -> entity.isAlive() && isDropOf(entity, body))) {
                 ItemStack stack = item.getItem().copy();
                 item.discard();
                 gather(stack);
             }
         }
+    }
+
+    // ---------------------------------------------------------------- drops of culled animals
+
+    /** Marks the items an animal dropped when a citizen killed it, with the id of the citizen's body. */
+    private static final String CULLED_BY = "kingdomworld_culled_by";
+
+    /**
+     * An animal killed by a citizen drops its loot: the items are marked as that citizen's, so that it picks up its
+     * own drops only.
+     */
+    public static void onDrops(LivingDropsEvent event) {
+        if (event.getSource().getEntity() instanceof CitizenEntity killer && event.getEntity() instanceof Animal) {
+            for (ItemEntity drop : event.getDrops()) {
+                drop.getPersistentData().putUUID(CULLED_BY, killer.getUUID());
+            }
+        }
+    }
+
+    /**
+     * Whether an item on the ground was dropped by an animal the body killed.
+     */
+    public static boolean isDropOf(ItemEntity item, Entity body) {
+        CompoundTag data = item.getPersistentData();
+        return data.hasUUID(CULLED_BY) && data.getUUID(CULLED_BY).equals(body.getUUID());
     }
 
     /**

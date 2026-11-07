@@ -178,6 +178,65 @@ public final class GatheringGameTests {
         });
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_work_lumberjack_cabin", timeoutTicks = 1200)
+    public static void lumberjackLeavesALogCabinThatTouchesATree(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        level.setDayTime(1_000L);
+        BlockPos from = helper.absolutePos(new BlockPos(-2, 0, -2));
+        BlockPos to = helper.absolutePos(new BlockPos(9, 8, 6));
+        clear(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Log Cabins", UUID.randomUUID());
+        for (int y = 0; y < 4; y++) {
+            helper.setBlock(new BlockPos(5, y, 1), Blocks.OAK_LOG);
+        }
+        BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, false).setValue(LeavesBlock.DISTANCE, 1);
+        for (int x = 4; x <= 6; x++) {
+            for (int z = 0; z <= 2; z++) {
+                for (int y = 3; y <= 4; y++) {
+                    if (!(x == 5 && z == 1 && y == 3)) {
+                        helper.setBlock(new BlockPos(x, y, z), leaves);
+                    }
+                }
+            }
+        }
+        // A wall of lying logs against the trunk and a corner post of the same wood under a plank roof, touching the
+        // trunk diagonally.
+        BlockState lying = Blocks.OAK_LOG.defaultBlockState().setValue(net.minecraft.world.level.block.RotatedPillarBlock.AXIS,
+                net.minecraft.core.Direction.Axis.X);
+        for (int x = 6; x <= 8; x++) {
+            helper.setBlock(new BlockPos(x, 0, 1), lying);
+            helper.setBlock(new BlockPos(x, 1, 1), lying);
+        }
+        for (int y = 0; y < 3; y++) {
+            helper.setBlock(new BlockPos(6, y, 2), Blocks.OAK_LOG);
+        }
+        helper.setBlock(new BlockPos(6, 3, 2), Blocks.OAK_PLANKS);
+        helper.setBlock(new BlockPos(7, 3, 2), Blocks.OAK_PLANKS);
+        StorehouseInventory store = storehouse(level, helper.absolutePos(new BlockPos(0, 0, 3)));
+        store.insertItem(0, new ItemStack(Items.IRON_AXE), false);
+        store.insertItem(1, new ItemStack(Items.OAK_SAPLING), false);
+        WorldPos postPos = post(helper, new BlockPos(0, 0, 0), "lumberjack");
+        Citizen worker = worker(helper, kingdom, "lumberjack", postPos, helper.absolutePos(new BlockPos(3, 0, 1)));
+
+        helper.succeedWhen(() -> {
+            for (int y = 0; y < 4; y++) {
+                helper.assertTrue(!helper.getBlockState(new BlockPos(5, y, 1)).is(Blocks.OAK_LOG), "The tree still stands");
+            }
+            for (int x = 6; x <= 8; x++) {
+                helper.assertTrue(helper.getBlockState(new BlockPos(x, 0, 1)).is(Blocks.OAK_LOG)
+                        && helper.getBlockState(new BlockPos(x, 1, 1)).is(Blocks.OAK_LOG), "A log of the wall was felled");
+            }
+            for (int y = 0; y < 3; y++) {
+                helper.assertTrue(helper.getBlockState(new BlockPos(6, y, 2)).is(Blocks.OAK_LOG), "A log of the corner post was felled");
+            }
+            helper.assertTrue(helper.getBlockState(new BlockPos(6, 3, 2)).is(Blocks.OAK_PLANKS), "The roof was broken");
+            helper.assertTrue(produced(server, kingdom, "lumberjack", "minecraft:oak_log") == 4,
+                    "Expected exactly the 4 logs of the tree, got " + produced(server, kingdom, "lumberjack", "minecraft:oak_log"));
+            end(helper, kingdom, worker, from, to);
+        });
+    }
+
     // ---------------------------------------------------------------- miner
 
     @GameTest(template = EMPTY, batch = "kingdomworld_work_miner", timeoutTicks = 1600)
@@ -318,6 +377,88 @@ public final class GatheringGameTests {
             left.forEach(cow -> cow.discard());
             level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, new AABB(from, to).inflate(2)).forEach(e -> e.discard());
         });
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_work_herder_drops", timeoutTicks = 1600)
+    public static void herderPicksUpOnlyTheDropsOfItsOwnCull(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        level.setDayTime(1_000L);
+        BlockPos from = helper.absolutePos(new BlockPos(-2, 0, -2));
+        BlockPos to = helper.absolutePos(new BlockPos(8, 3, 8));
+        clear(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Fair Butchers", UUID.randomUUID());
+        pen(helper);
+        for (int i = 0; i < 3; i++) {
+            cow(helper, 3 + i, 3, false, null);
+        }
+        // Things a player threw into the pen, all over it.
+        List<net.minecraft.world.entity.item.ItemEntity> thrown = new java.util.ArrayList<>();
+        for (int x = 1; x <= 5; x += 2) {
+            for (int z = 1; z <= 5; z += 2) {
+                net.minecraft.world.entity.item.ItemEntity item = new net.minecraft.world.entity.item.ItemEntity(level,
+                        helper.absolutePos(new BlockPos(x, 0, z)).getX() + 0.5, helper.absolutePos(BlockPos.ZERO).getY() + 0.1,
+                        helper.absolutePos(new BlockPos(x, 0, z)).getZ() + 0.5, new ItemStack(Items.DIAMOND));
+                item.setUnlimitedLifetime();
+                item.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+                level.addFreshEntity(item);
+                thrown.add(item);
+            }
+        }
+        StorehouseInventory store = storehouse(level, helper.absolutePos(new BlockPos(6, 0, 6)));
+        store.insertItem(0, new ItemStack(Items.IRON_SWORD), false);
+        WorldPos postPos = post(helper, new BlockPos(0, 0, 0), "herder");
+        KingdomWorldApi.change(server, "test", state -> state.setPostAnimal(null, postPos, "minecraft:cow"));
+        KingdomWorldApi.change(server, "test", state -> state.setPostHerdSize(null, postPos, 2, 64));
+        Citizen worker = worker(helper, kingdom, "herder", postPos, helper.absolutePos(new BlockPos(1, 0, 1)));
+
+        helper.succeedWhen(() -> {
+            helper.assertTrue(cows(helper).size() == 2, "The herder did not cull the third cow");
+            helper.assertTrue(produced(server, kingdom, "herder", "minecraft:beef") >= 1, "The beef of the culled cow was not picked up");
+            for (net.minecraft.world.entity.item.ItemEntity item : thrown) {
+                helper.assertTrue(item.isAlive() && item.getItem().is(Items.DIAMOND), "The herder picked up a diamond a player threw");
+            }
+            helper.assertTrue(produced(server, kingdom, "herder", "minecraft:diamond") == 0, "A diamond was counted as the herder's");
+            end(helper, kingdom, worker, from, to);
+            cows(helper).forEach(cow -> cow.discard());
+            level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, new AABB(from, to).inflate(2)).forEach(e -> e.discard());
+        });
+    }
+
+    @GameTest(template = EMPTY)
+    public static void herderNeverCullsPetsMountsOrMarkedAnimals(GameTestHelper helper) {
+        net.minecraft.world.entity.animal.Wolf pet = helper.spawn(EntityType.WOLF, new BlockPos(1, 0, 1));
+        pet.setTame(true);
+        pet.setOwnerUUID(UUID.randomUUID());
+        net.minecraft.world.entity.animal.Wolf wild = helper.spawn(EntityType.WOLF, new BlockPos(2, 0, 1));
+        net.minecraft.world.entity.animal.horse.Horse mount = helper.spawn(EntityType.HORSE, new BlockPos(3, 0, 1));
+        mount.setTamed(true);
+        mount.setOwnerUUID(UUID.randomUUID());
+        net.minecraft.world.entity.animal.horse.Horse stray = helper.spawn(EntityType.HORSE, new BlockPos(4, 0, 1));
+        Cow named = cow(helper, 1, 3, false, "Zorka");
+        Cow calf = cow(helper, 2, 3, true, null);
+        Cow led = cow(helper, 3, 3, false, null);
+        led.setLeashedTo(wild, true);
+        Cow plain = cow(helper, 4, 3, false, null);
+        try {
+            helper.assertTrue(!io.github.sekerator.kingdomworld.common.citizen.work.HerderBehavior.mayCull(pet), "A tamed wolf may be culled");
+            helper.assertTrue(!io.github.sekerator.kingdomworld.common.citizen.work.HerderBehavior.mayCull(mount), "A tamed horse may be culled");
+            helper.assertTrue(!io.github.sekerator.kingdomworld.common.citizen.work.HerderBehavior.mayCull(named), "A named cow may be culled");
+            helper.assertTrue(!io.github.sekerator.kingdomworld.common.citizen.work.HerderBehavior.mayCull(calf), "A calf may be culled");
+            helper.assertTrue(!io.github.sekerator.kingdomworld.common.citizen.work.HerderBehavior.mayCull(led), "A cow on a lead may be culled");
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.citizen.work.HerderBehavior.mayCull(plain), "A plain cow may not be culled");
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.citizen.work.HerderBehavior.mayCull(wild), "A wild wolf may not be culled");
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.citizen.work.HerderBehavior.mayCull(stray), "A wild horse may not be culled");
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.citizen.work.HerderBehavior.isSomebodys(pet)
+                    && io.github.sekerator.kingdomworld.common.citizen.work.HerderBehavior.isSomebodys(mount)
+                    && !io.github.sekerator.kingdomworld.common.citizen.work.HerderBehavior.isSomebodys(plain), "Pets are not told from the herd");
+        } finally {
+            led.dropLeash(true, false);
+            for (Animal animal : List.of(pet, wild, mount, stray, named, calf, led, plain)) {
+                animal.discard();
+            }
+        }
+        helper.succeed();
     }
 
     @GameTest(template = EMPTY, batch = "kingdomworld_work_herder_breed", timeoutTicks = 1200)

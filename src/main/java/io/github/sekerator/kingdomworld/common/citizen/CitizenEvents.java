@@ -49,6 +49,7 @@ public final class CitizenEvents {
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOW, CitizenEvents::onPlace);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOW, CitizenEvents::onBreak);
         MinecraftForge.EVENT_BUS.addListener(CitizenEvents::onChunkLoad);
+        MinecraftForge.EVENT_BUS.addListener(io.github.sekerator.kingdomworld.common.citizen.work.HerderBehavior::onDrops);
     }
 
     private static void onServerTick(TickEvent.ServerTickEvent event) {

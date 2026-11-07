@@ -407,9 +407,16 @@ final class ClientLayoutCheck {
     }
 
     private static WorkPostScreen post(WorkPostView view, Component status) {
+        return post(view, status, false);
+    }
+
+    /**
+     * A post screen with a message from the server at the bottom: an error, or the report of a change that worked.
+     */
+    private static WorkPostScreen post(WorkPostView view, Component status, boolean success) {
         WorkPostScreen screen = new WorkPostScreen(view);
         if (!status.getString().isEmpty()) {
-            screen.onResult(false, status);
+            screen.onResult(success, status);
         }
         return screen;
     }
@@ -509,7 +516,7 @@ final class ClientLayoutCheck {
                 Component.empty())));
         cases.add(new Case("post-hired", () -> post(postView("lumberjack", WorkStatus.WORKING, true, 1, true, true),
                 Component.translatable("kingdomworld.post.hired", CitizenTexts.name(longestNameSeed(Gender.FEMALE), Gender.FEMALE),
-                        CitizenTexts.profession("lumberjack", Gender.FEMALE)))));
+                        CitizenTexts.profession("lumberjack", Gender.FEMALE)), true)));
         cases.add(new Case("throne-outsider", () -> throne(view(KingdomView.Relation.OUTSIDER, null), "overview", Component.empty())));
         cases.add(new Case("throne-invited", () -> throne(view(KingdomView.Relation.INVITED, null), "overview", Component.empty())));
         cases.add(new Case("throne-applied", () -> throne(view(KingdomView.Relation.APPLIED, null), "overview", Component.empty())));
