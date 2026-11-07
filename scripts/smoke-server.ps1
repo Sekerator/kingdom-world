@@ -606,6 +606,113 @@ Invoke-Phase 'session1' {
             Add-Failure '[session1] the harvest of the mine did not reach the storehouse'
         }
     }
+
+    # Workshops and orders: far from players a smelter at a furnace and a smith at a crafting table make an iron sword
+    # from raw iron through a chain of orders (the sword asks for ingots, the ingots for smelting).
+    if ($script:CitizenIds.Count -gt 0) {
+        Send-ServerCommand $server "kingdomworld admin citizens spawn 2 $KingdomName"
+        if (-not (Wait-ForLog $server "Spawned 2 citizen\(s\) in $KingdomName" $CommandTimeout $ConsoleFailPattern)) {
+            Add-Failure '[session1] 2 more citizens could not be added'
+        }
+        $all = Get-CitizenList $server 4 'session1'
+        if ($all) {
+            $new = @($all | Where-Object { $script:CitizenIds -notcontains $_ })
+            $script:CitizenIds = @($all)
+            $script:SmelterId = $new[0]
+            $script:SmithId = $new[1]
+            Send-ServerCommand $server 'setblock 26 70 4 minecraft:furnace'
+            Send-ServerCommand $server 'setblock 26 70 12 minecraft:crafting_table'
+            Send-ServerCommand $server 'setblock 24 70 4 kingdomworld:work_post'
+            Send-ServerCommand $server 'setblock 24 70 12 kingdomworld:work_post'
+            Start-Sleep -Seconds 2
+            Send-ServerCommand $server 'kingdomworld admin posts set 24 70 4 profession smelter'
+            if (-not (Wait-ForLog $server 'Work post at 24 70 4: Smelter, radius \d+' $CommandTimeout 'No work post at 24 70 4|Unknown or incomplete command')) {
+                Add-Failure '[session1] the smelter post was not registered or could not be set'
+            }
+            Send-ServerCommand $server 'kingdomworld admin posts set 24 70 12 profession smith'
+            if (-not (Wait-ForLog $server 'Work post at 24 70 12: Smith, radius \d+' $CommandTimeout 'No work post at 24 70 12|Unknown or incomplete command')) {
+                Add-Failure '[session1] the smithy post was not registered or could not be set'
+            }
+            Send-ServerCommand $server "kingdomworld admin citizens profession $($script:SmelterId) smelter"
+            Send-ServerCommand $server "kingdomworld admin citizens profession $($script:SmithId) smith"
+            if ((Wait-ForLog $server '\S+ is now: Smelter' $CommandTimeout $ConsoleFailPattern) -and (Wait-ForLog $server '\S+ is now: Smith' $CommandTimeout $ConsoleFailPattern)) {
+                Write-Ok "[session1] citizens $($script:SmelterId) and $($script:SmithId) became a smelter and a smith"
+            } else {
+                Add-Failure '[session1] the smelter or the smith could not be appointed'
+            }
+            foreach ($stock in @('minecraft:raw_iron 2', 'minecraft:coal 2', 'minecraft:stick 1')) {
+                Send-ServerCommand $server "kingdomworld admin storage put $stock $KingdomName"
+            }
+            if (-not (Wait-ForLog $server "Stored 1 of minecraft:stick in the storehouses of $KingdomName" $CommandTimeout $ConsoleFailPattern)) {
+                Add-Failure '[session1] the materials of the sword could not be stored'
+            }
+            Send-ServerCommand $server "kingdomworld admin orders add minecraft:iron_sword 1 make $KingdomName"
+            if (Wait-ForLog $server 'Order #(\d+) given: minecraft:iron_sword, 1 pcs\., make' $CommandTimeout $ConsoleFailPattern) {
+                Write-Ok '[session1] the order of an iron sword was given'
+            } else {
+                Add-Failure '[session1] the order of an iron sword was refused'
+            }
+            Send-ServerCommand $server "kingdomworld admin orders add minecraft:bread 5 keep $KingdomName"
+            $keep = Wait-ForLog $server 'Order #(\d+) given: minecraft:bread, 5 pcs\., keep' $CommandTimeout $ConsoleFailPattern
+            if ($keep) {
+                $script:KeepOrderId = $keep.Groups[1].Value
+                Write-Ok "[session1] a keep order #$($script:KeepOrderId) for bread was given"
+            } else {
+                Add-Failure '[session1] the keep order for bread was refused'
+            }
+            Send-ServerCommand $server "kingdomworld admin simulate $KingdomName 6"
+            if (-not (Wait-ForLog $server "Ran 6 simulation step\(s\) of $KingdomName" $CommandTimeout $ConsoleFailPattern)) {
+                Add-Failure '[session1] the simulation steps of the workshops did not run'
+            }
+            Send-ServerCommand $server "kingdomworld admin storage list $KingdomName"
+            if (Wait-ForLog $server ' - minecraft:iron_sword: 1' $CommandTimeout $ConsoleFailPattern) {
+                Write-Ok '[session1] the smith made the iron sword from raw iron through the smelter far from players'
+                $script:SwordMade = $true
+            } else {
+                Add-Failure '[session1] the iron sword was not made (chain smelter -> smith)'
+            }
+            Send-ServerCommand $server "kingdomworld admin orders list $KingdomName"
+            if (Wait-ForLog $server "Orders of ${KingdomName}: 1\b" $CommandTimeout $ConsoleFailPattern) {
+                Write-Ok '[session1] the finished order left, the keep order stays'
+            } else {
+                Add-Failure '[session1] expected only the keep order to be left'
+            }
+
+            # With the mods of the pack: an item of a mod with a crafting table recipe is made by the smith on order.
+            if ($Pack) {
+                Send-ServerCommand $server 'kingdomworld admin recipes list smith mods'
+                # A weapon or a tool, not armor or other gear that wears out.
+                $modItem = Wait-ForLog $server ' - ([a-z0-9_.-]+:[a-z0-9_./-]*(?:sword|axe|shovel|hoe|bow|spear|dagger|hammer|mace|halberd|katana|scythe)[a-z0-9_./-]*): crafting, recipe ' $CommandTimeout 'Smith: 0 recipes'
+                if (-not $modItem) {
+                    Add-Failure '[session1] no tool or weapon of a mod with a crafting table recipe was found'
+                } else {
+                    $item = $modItem.Groups[1].Value
+                    $script:ModItem = $item
+                    Write-Ok "[session1] a smith item of a mod: $item"
+                    Send-ServerCommand $server "kingdomworld admin recipes stock $item $KingdomName"
+                    if (-not (Wait-ForLog $server "For $([regex]::Escape($item)) \(recipe " $CommandTimeout $ConsoleFailPattern)) {
+                        Add-Failure "[session1] the materials of $item could not be stored"
+                    }
+                    Send-ServerCommand $server "kingdomworld admin orders add $item 1 make $KingdomName"
+                    if (-not (Wait-ForLog $server "Order #\d+ given: $([regex]::Escape($item)), 1 pcs\." $CommandTimeout $ConsoleFailPattern)) {
+                        Add-Failure "[session1] the order of $item was refused"
+                    }
+                    Send-ServerCommand $server "kingdomworld admin simulate $KingdomName 4"
+                    if (-not (Wait-ForLog $server "Ran 4 simulation step\(s\) of $KingdomName" $CommandTimeout $ConsoleFailPattern)) {
+                        Add-Failure '[session1] the simulation steps for the item of a mod did not run'
+                    }
+                    Send-ServerCommand $server "kingdomworld admin orders list $KingdomName"
+                    Start-Sleep -Seconds 2
+                    Send-ServerCommand $server "kingdomworld admin storage list $KingdomName"
+                    if (Wait-ForLog $server " - $([regex]::Escape($item)): 1" $CommandTimeout $ConsoleFailPattern) {
+                        Write-Ok "[session1] the smith made $item on order"
+                    } else {
+                        Add-Failure "[session1] the smith did not make $item on order"
+                    }
+                }
+            }
+        }
+    }
 }
 
 $dataFile = Join-Path $ServerDir 'world\data\kingdomworld_kingdoms.dat'
@@ -617,8 +724,10 @@ if (-not $script:CreatedId) { Stop-Smoke 'kingdom was not created, skipping the 
 
 Invoke-Phase 'session2' {
     param($server)
-    if (-not (Wait-ForLog $server 'KingdomWorld loaded 1 kingdom\(s\) with 2 citizen\(s\), 1 work post\(s\) and 1 storehouse\(s\)' 10)) {
-        Add-Failure '[session2] expected 1 kingdom with 2 citizens, 1 work post and 1 storehouse to be loaded after restart'
+    $citizenCount = $script:CitizenIds.Count
+    $postCount = if ($script:SmithId) { 3 } else { 1 }
+    if (-not (Wait-ForLog $server "KingdomWorld loaded 1 kingdom\(s\) with $citizenCount citizen\(s\), $postCount work post\(s\) and 1 storehouse\(s\)" 10)) {
+        Add-Failure "[session2] expected 1 kingdom with $citizenCount citizens, $postCount work post(s) and 1 storehouse to be loaded after restart"
     }
     Send-ServerCommand $server 'kingdomworld debug list'
     $listed = Wait-ForLog $server " - $KingdomName \(id ($IdPattern)\)" $CommandTimeout 'Unknown or incomplete command|There are no kingdoms yet'
@@ -651,12 +760,12 @@ Invoke-Phase 'session2' {
     } else {
         Add-Failure "[session2] 'kingdom info $KingdomName' did not report 10 chunks"
     }
-    $ids = Get-CitizenList $server 2 'session2'
+    $ids = Get-CitizenList $server $citizenCount 'session2'
     if ($ids) {
         $expected = @($script:CitizenIds | Sort-Object)
         $actual = @($ids | Sort-Object)
         if (($expected -join ',') -eq ($actual -join ',')) {
-            Write-Ok "[session2] the same 2 citizens survived the restart: $($actual -join ', ')"
+            Write-Ok "[session2] the same $citizenCount citizens survived the restart: $($actual -join ', ')"
         } else {
             Add-Failure "[session2] citizens after restart are $($actual -join ', '), expected $($expected -join ', ')"
         }
@@ -688,6 +797,27 @@ Invoke-Phase 'session2' {
             Write-Ok '[session2] the contents of the storehouse survived the restart'
         } else {
             Add-Failure '[session2] the storehouse lost its contents after restart'
+        }
+    }
+    if ($script:SwordMade) {
+        if (Wait-ForLog $server ' - minecraft:iron_sword: 1' $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok '[session2] the iron sword is still in the storehouse'
+        } else {
+            Add-Failure '[session2] the iron sword was lost after restart'
+        }
+    }
+    if ($script:KeepOrderId) {
+        Send-ServerCommand $server "kingdomworld admin orders list $KingdomName"
+        if (Wait-ForLog $server " - #$($script:KeepOrderId) minecraft:bread \(.+\): keep 5" $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok "[session2] the keep order #$($script:KeepOrderId) survived the restart"
+        } else {
+            Add-Failure "[session2] the keep order #$($script:KeepOrderId) was lost after restart"
+        }
+        Send-ServerCommand $server 'kingdomworld admin posts list SmokeTest'
+        if (Wait-ForLog $server ' - 24 70 12: Smith, workers 1/1' $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok '[session2] the smithy kept its smith after restart'
+        } else {
+            Add-Failure '[session2] the smithy lost its smith after restart'
         }
     }
 }
