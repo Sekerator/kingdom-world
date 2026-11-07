@@ -131,7 +131,7 @@ public class ExchangeScreen extends KingdomScreen implements ResultListener {
                 rebuildWidgets();
             }).bounds(x, y, sourceWidth, ROW - 2).build());
             sourceButton.setTooltip(Tooltip.create(MoneyTexts.currency(purse.get().currency().name(), purse.get().currency().kingdomName())));
-            y += 2 * ROW;
+            y += 2 * ROW + 4;
             addRenderableWidget(Button.builder(Component.translatable(fromAccount ? KEY + "from.account" : KEY + "from.coins"), b -> {
                 fromAccount = !fromAccount;
                 rebuildWidgets();
@@ -192,7 +192,7 @@ public class ExchangeScreen extends KingdomScreen implements ResultListener {
                     MoneyTexts.coins(wallet.carried())).getString(), x, formY() + ROW + 1, 0xFFD0D0D0, right - x);
             name(graphics, Component.translatable(KEY + "rate_of", TradeTexts.rate(wallet.currency().rate())).getString(), x,
                     formY() + ROW + LINE + 2, 0xFFB8B8B8, right - x);
-            int amountY = formY() + 3 * ROW;
+            int amountY = formY() + 3 * ROW + 4;
             label(graphics, Component.translatable(KEY + "amount_label"), x, amountY + 5, 0xFFE8E8E8, x + labelWidth - 2);
             if (!amount.isBlank()) {
                 Optional<Long> parsed = Money.parse(amount, wallet.currency().units());

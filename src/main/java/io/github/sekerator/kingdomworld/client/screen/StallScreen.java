@@ -35,7 +35,7 @@ public class StallScreen extends KingdomScreen implements ResultListener {
     private static final int ROW = 20;
     private static final int GAP = 2;
     private static final int BOX = 48;
-    private static final int STATUS_LINES = 3;
+    private static final int STATUS_LINES = 4;
     private static final String KEY = "kingdomworld.screen.stall.";
 
     enum Mode {

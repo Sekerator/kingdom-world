@@ -559,7 +559,7 @@
   "item.kingdomworld.coin.loading": "Валюта загружается...",
   "item.kingdomworld.coin.currency": "Валюта: %s",
   "item.kingdomworld.coin.worth": "Стоит: %s",
-  "item.kingdomworld.coin.old": "Старая монета: королевство %s распалось",
+  "item.kingdomworld.coin.old": "Старая монета: её королевство распалось",
   "kingdomworld.money.copper.n1": "%s медяк",
   "kingdomworld.money.copper.n21": "%s медяк",
   "kingdomworld.money.copper.n2": "%s медяка",
@@ -781,7 +781,7 @@
   "kingdomworld.stall.too_far": "Подойдите к прилавку ближе",
   "kingdomworld.stall.bought": "Куплено «%s»: %s за %s",
   "kingdomworld.stall.sold": "Продано «%s»: %s за %s",
-  "kingdomworld.stall.and_account": "%s; %s зачислено на ваш счёт: для монет не хватило места",
+  "kingdomworld.stall.and_account": "%s; на счёт: %s",
   "kingdomworld.stall.lot_bought": "Вы купили лот «%s» за %s",
   "kingdomworld.stall.lot_sold": "Ваш лот «%s» продан на рынке королевства %s за %s: на ваш счёт зачислено %s, налог %s",
   "kingdomworld.stall.listed": "Лот «%s» (%s) выставлен за %s",
@@ -806,8 +806,8 @@
   "kingdomworld.trade.decline_done": "Предложение отклонено",
   "kingdomworld.trade.cancelled": "Королевство %s отменило сделку",
   "kingdomworld.trade.cancel_done": "Сделка отменена",
-  "kingdomworld.trade.offer_sell": "Королевство %s предлагает продать вам %s за %s; ответьте во вкладке «Торговля» окна трона",
-  "kingdomworld.trade.offer_buy": "Королевство %s предлагает купить у вас %s за %s; ответьте во вкладке «Торговля» окна трона",
+  "kingdomworld.trade.offer_sell": "%s предлагает продать вам %s за %s; ответ во вкладке «Торговля»",
+  "kingdomworld.trade.offer_buy": "%s предлагает купить у вас %s за %s; ответ во вкладке «Торговля»",
   "kingdomworld.trade.proposed": "Предложение отправлено королевству %s",
   "kingdomworld.market.sell_set": "Королевство продаёт: %s",
   "kingdomworld.market.removed": "«%s» убран из списка",
@@ -990,5 +990,6 @@
   "commands.kingdomworld.admin.trade.caravans.header": "Караванов в пути: %s",
   "commands.kingdomworld.admin.trade.caravans.entry": "№%s %s -> %s: %s x%s, оплата %s, %s, осталось тиков: %s",
   "commands.kingdomworld.admin.trade.arrived": "Прибыло караванов: %s, ещё в пути: %s",
-  "commands.kingdomworld.admin.trade.rates.entry": "%s: курс %s, деньги %s, монеты на руках %s, казна %s, резервов %s, вывезено сегодня %s"
+  "commands.kingdomworld.admin.trade.rates.entry": "%s: курс %s, деньги %s, монеты на руках %s, казна %s, резервов %s, вывезено сегодня %s",
+  "commands.kingdomworld.admin.trade.wallet": "Счёт %s в валюте королевства %s: %s"
 }

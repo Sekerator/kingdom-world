@@ -28,7 +28,6 @@ import io.github.sekerator.kingdomworld.core.trade.Market;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
-import net.minecraft.commands.arguments.GameProfileArgument;
 import net.minecraft.commands.arguments.ResourceLocationArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -86,9 +85,14 @@ public final class TradeCommands {
                                         .then(Commands.argument("count", IntegerArgumentType.integer(1))
                                                 .executes(context -> market(context, TradePackets.MarketChange.Action.ORDER_IMPORT, 0,
                                                         IntegerArgumentType.getInteger(context, "count"), 0))))))
+                .then(Commands.literal("wallet")
+                        .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
+                                .then(Commands.argument("buyer", StringArgumentType.word())
+                                        .then(Commands.argument("amount", LongArgumentType.longArg(1))
+                                                .executes(TradeCommands::wallet)))))
                 .then(Commands.literal("purchase")
                         .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
-                                .then(Commands.argument("player", GameProfileArgument.gameProfile())
+                                .then(Commands.argument("buyer", StringArgumentType.word())
                                         .then(Commands.argument("item", ResourceLocationArgument.id())
                                                 .then(Commands.argument("count", IntegerArgumentType.integer(1, StallActions.MAX_COUNT))
                                                         .executes(TradeCommands::purchase))))))
@@ -136,18 +140,40 @@ public final class TradeCommands {
     }
 
     /**
-     * Buys at a kingdom's market for a player, from the player's account; the goods go to a stand-in that is thrown
+     * A test buyer known by name only, the way an offline server names its players; nobody has to be online.
+     */
+    private static GameProfile buyer(CommandContext<CommandSourceStack> context) {
+        String name = StringArgumentType.getString(context, "buyer");
+        return new GameProfile(net.minecraft.core.UUIDUtil.createOfflinePlayerUUID(name), name);
+    }
+
+    /**
+     * Gives a test buyer money on the account in a kingdom's currency, written into no journal (an operator's money).
+     */
+    private static int wallet(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        Kingdom kingdom = kingdom(context, "kingdom");
+        GameProfile profile = buyer(context);
+        long amount = LongArgumentType.getLong(context, "amount");
+        var outcome = KingdomWorldApi.change(source.getServer(), "fill a wallet",
+                state -> state.economy().adminAccount(profile.getId(), kingdom.id(), amount));
+        if (!outcome.ok()) {
+            source.sendFailure(KingdomActions.errorMessage(outcome.error()));
+            return 0;
+        }
+        long balance = KingdomWorldApi.balance(source.getServer(), profile.getId(), kingdom.id());
+        source.sendSuccess(() -> Component.translatable(ADMIN + "wallet", profile.getName(), kingdom.name(), balance), true);
+        return 1;
+    }
+
+    /**
+     * Buys at a kingdom's market for a test buyer, from the buyer's account; the goods go to a stand-in that is thrown
      * away, so this only moves money and goods out of the storehouses.
      */
     private static int purchase(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         CommandSourceStack source = context.getSource();
         Kingdom kingdom = kingdom(context, "kingdom");
-        Collection<GameProfile> profiles = GameProfileArgument.getGameProfiles(context, "player");
-        if (profiles.size() != 1) {
-            source.sendFailure(Component.translatable("commands.kingdomworld.economy.one_player"));
-            return 0;
-        }
-        GameProfile profile = profiles.iterator().next();
+        GameProfile profile = buyer(context);
         var player = FakePlayerFactory.get(source.getLevel(), profile);
         player.getInventory().clearContent();
         try {
@@ -163,7 +189,7 @@ public final class TradeCommands {
         Kingdom buyer = kingdom(context, "buyer");
         TradePackets.TradeChange change = new TradePackets.TradeChange(seller.id(), TradePackets.TradeChange.Action.PROPOSE, buyer.id(), 0,
                 ResourceLocationArgument.getId(context, "item").toString(), IntegerArgumentType.getInteger(context, "count"),
-                LongArgumentType.getLong(context, "price"), true, true, period);
+                LongArgumentType.getLong(context, "price"), true, false, period);
         return run(context.getSource(), TradeActions.apply(context.getSource().getServer(), null, seller.id(), change));
     }
 

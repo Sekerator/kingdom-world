@@ -75,6 +75,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $ForgeVersion = '1.20.1-47.4.10'
 $InstallerUrl = "https://maven.minecraftforge.net/net/minecraftforge/forge/$ForgeVersion/forge-$ForgeVersion-installer.jar"
 $KingdomName = 'SmokeTest'
+$PartnerName = 'SmokePartner'
 
 # Mods that only make sense on a client. Mods that declare clientSideOnly=true are skipped as well.
 $ClientOnlyModIds = @(
@@ -823,6 +824,93 @@ Invoke-Phase 'session1' {
             Add-Failure '[session1] the worth of an iron sword was not worked out from its recipe'
         }
     }
+
+    # Trade: a second kingdom far away buys wheat in a deal; its caravan leaves with the payment in escrow and is still on
+    # the way when the server stops. A test buyer buys wheat at the market from the account. No money appears anywhere.
+    Send-ServerCommand $server "kingdomworld admin found $PartnerName 2000 70 2000"
+    if (Wait-ForLog $server "Founded kingdom $PartnerName \(id ($IdPattern)\) with (\d+) chunk\(s\)" $CommandTimeout $ConsoleFailPattern) {
+        Write-Ok "[session1] the partner kingdom $PartnerName was founded"
+    } else {
+        Add-Failure "[session1] the partner kingdom $PartnerName was not founded"
+    }
+    Send-ServerCommand $server 'forceload add 1984 1984 2015 2015'
+    Start-Sleep -Seconds 3
+    Send-ServerCommand $server 'setblock 2001 70 2001 kingdomworld:storehouse'
+    Start-Sleep -Seconds 2
+    Send-ServerCommand $server "kingdomworld admin economy treasury $PartnerName add 500"
+    if (-not (Wait-ForLog $server "Added 500 to the treasury of $PartnerName, funds 500" $CommandTimeout $ConsoleFailPattern)) {
+        Add-Failure "[session1] the treasury of $PartnerName got no money"
+    }
+    Send-ServerCommand $server "kingdomworld admin storage put minecraft:wheat 64 $KingdomName"
+    if (-not (Wait-ForLog $server "Stored 64 of minecraft:wheat in the storehouses of $KingdomName" $CommandTimeout $ConsoleFailPattern)) {
+        Add-Failure '[session1] the wheat for the deal could not be stored'
+    }
+    $ratePattern = '(\S+): rate (\d+), money (\d+), coins in hands (\d+), treasury (\d+), reserves (\d+), exported today (\d+)'
+    Send-ServerCommand $server "kingdomworld admin trade propose $KingdomName $PartnerName minecraft:wheat 32 100"
+    if (-not (Wait-ForLog $server "The proposal went to $PartnerName" $CommandTimeout $ConsoleFailPattern)) {
+        Add-Failure '[session1] the deal was not proposed'
+    }
+    Send-ServerCommand $server 'kingdomworld admin trade deals'
+    $deal = Wait-ForLog $server "#(\d+) $KingdomName -> ${PartnerName}: minecraft:wheat x32 for 100, proposed, deliveries 0" $CommandTimeout $ConsoleFailPattern
+    if ($deal) {
+        Send-ServerCommand $server "kingdomworld admin trade accept $PartnerName $($deal.Groups[1].Value)"
+        if (Wait-ForLog $server 'The deal is accepted and the caravan left' $CommandTimeout 'Unknown or incomplete command|Incorrect argument|read-only|too few|too little') {
+            Write-Ok "[session1] $PartnerName accepted deal #$($deal.Groups[1].Value) and the caravan left"
+        } else {
+            Add-Failure '[session1] the deal was not accepted'
+        }
+    } else {
+        Add-Failure '[session1] the proposed deal is not listed'
+    }
+    Send-ServerCommand $server 'kingdomworld admin trade caravans'
+    $caravan = Wait-ForLog $server "#(\d+) $KingdomName -> ${PartnerName}: minecraft:wheat x32, payment 100, traveling, (\d+) ticks left" $CommandTimeout $ConsoleFailPattern
+    if ($caravan -and [int64]$caravan.Groups[2].Value -gt 6000) {
+        $script:CaravanId = $caravan.Groups[1].Value
+        Write-Ok "[session1] caravan #$($script:CaravanId) is on the way, $($caravan.Groups[2].Value) ticks left"
+    } else {
+        Add-Failure "[session1] no caravan on a long way: '$(if ($caravan) { $caravan.Value })'"
+    }
+    Send-ServerCommand $server "kingdomworld admin trade sell $KingdomName minecraft:wheat 5 0"
+    if (-not (Wait-ForLog $server 'The kingdom sells Wheat' $CommandTimeout $ConsoleFailPattern)) {
+        Add-Failure '[session1] the market does not sell wheat'
+    }
+    $seen = Count-Log $ratePattern
+    Send-ServerCommand $server 'kingdomworld admin trade rates'
+    [void](Wait-ForNewLog $server $ratePattern $CommandTimeout $seen)
+    Start-Sleep -Seconds 1
+    $before = [regex]::Matches((Get-LatestLog), "${KingdomName}: rate \d+, money (\d+),")
+    $moneyBefore = if ($before.Count -gt 0) { [int64]$before[$before.Count - 1].Groups[1].Value } else { -1 }
+    Send-ServerCommand $server "kingdomworld admin trade wallet $KingdomName SmokeBuyer 100"
+    if (-not (Wait-ForLog $server "Account of SmokeBuyer in the currency of ${KingdomName}: 100" $CommandTimeout $ConsoleFailPattern)) {
+        Add-Failure '[session1] the test buyer got no money'
+    }
+    Send-ServerCommand $server "kingdomworld admin trade purchase $KingdomName SmokeBuyer minecraft:wheat 3"
+    if (Wait-ForLog $server 'Bought Wheat: 3 items for' $CommandTimeout $ConsoleFailPattern) {
+        Write-Ok '[session1] the test buyer bought 3 wheat at the market from the account'
+    } else {
+        Add-Failure '[session1] buying at the market failed'
+    }
+    $seen = Count-Log $ratePattern
+    Send-ServerCommand $server 'kingdomworld admin trade rates'
+    [void](Wait-ForNewLog $server $ratePattern $CommandTimeout $seen)
+    Start-Sleep -Seconds 1
+    $log = Get-LatestLog
+    $mine = [regex]::Matches($log, "${KingdomName}: rate \d+, money (\d+),")
+    $theirs = [regex]::Matches($log, "${PartnerName}: rate \d+, money (\d+),")
+    $moneyAfter = if ($mine.Count -gt 0) { [int64]$mine[$mine.Count - 1].Groups[1].Value } else { -2 }
+    $partnerMoney = if ($theirs.Count -gt 0) { [int64]$theirs[$theirs.Count - 1].Groups[1].Value } else { -1 }
+    if ($moneyAfter -eq $moneyBefore + 100 -and $partnerMoney -eq 500) {
+        $script:TradeMoney = "$moneyAfter/$partnerMoney"
+        Write-Ok "[session1] no money appeared: $KingdomName $moneyBefore + 100 from the operator = $moneyAfter, $PartnerName 500 with 100 in escrow"
+    } else {
+        Add-Failure "[session1] money changed in trade: $KingdomName $moneyBefore -> $moneyAfter (expected +100), $PartnerName $partnerMoney (expected 500)"
+    }
+    if ($script:EconomyRaw) {
+        $seen = Count-Log 'Raw: balance (\d+), copper (\d+), silver (\d+), gold (\d+), funds (\d+), supply (\d+)'
+        Send-ServerCommand $server "kingdomworld admin economy info $KingdomName"
+        $raw = Wait-ForNewLog $server 'Raw: balance (\d+), copper (\d+), silver (\d+), gold (\d+), funds (\d+), supply (\d+)' $CommandTimeout $seen
+        if ($raw) { $script:EconomyRaw = $raw.Value }
+    }
 }
 
 $dataFile = Join-Path $ServerDir 'world\data\kingdomworld_kingdoms.dat'
@@ -838,8 +926,8 @@ Invoke-Phase 'session2' {
     $postCount = 1
     if ($script:SmithId) { $postCount += 2 }
     if ($script:MinterId) { $postCount += 1 }
-    if (-not (Wait-ForLog $server "KingdomWorld loaded 1 kingdom\(s\) with $citizenCount citizen\(s\), $postCount work post\(s\), 1 storehouse\(s\), 1 treasury\(ies\)" 10)) {
-        Add-Failure "[session2] expected 1 kingdom with $citizenCount citizens, $postCount work post(s), 1 storehouse and 1 treasury to be loaded after restart"
+    if (-not (Wait-ForLog $server "KingdomWorld loaded 2 kingdom\(s\) with $citizenCount citizen\(s\), $postCount work post\(s\), 2 storehouse\(s\), 2 treasury\(ies\), \d+ player\(s\) with accounts, 1 market\(s\), 1 deal\(s\), 1 caravan\(s\) on the way" 10)) {
+        Add-Failure "[session2] expected 2 kingdoms with $citizenCount citizens, $postCount work post(s), 2 storehouses, 2 treasuries, a market, a deal and a caravan on the way to be loaded after restart"
     }
     Send-ServerCommand $server 'kingdomworld debug list'
     $listed = Wait-ForLog $server " - $KingdomName \(id ($IdPattern)\)" $CommandTimeout 'Unknown or incomplete command|There are no kingdoms yet'
@@ -946,6 +1034,42 @@ Invoke-Phase 'session2' {
             Write-Ok '[session2] the mint post kept its minter after restart'
         } else {
             Add-Failure '[session2] the mint post lost its minter after restart'
+        }
+    }
+    if ($script:CaravanId) {
+        # The caravan is still on its way after the restart, with the same cargo and payment; brought in now, it delivers
+        # the wheat and pays the seller, and the money of both currencies stays what it was.
+        Send-ServerCommand $server 'kingdomworld admin trade caravans'
+        if (Wait-ForLog $server "#$($script:CaravanId) $KingdomName -> ${PartnerName}: minecraft:wheat x32, payment 100, traveling, (\d+) ticks left" $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok "[session2] caravan #$($script:CaravanId) survived the restart on its way"
+        } else {
+            Add-Failure "[session2] caravan #$($script:CaravanId) did not survive the restart"
+        }
+        Send-ServerCommand $server 'kingdomworld admin trade arrive'
+        if (Wait-ForLog $server 'Caravans arrived: 1, still on the way: 0' $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok '[session2] the caravan arrived'
+        } else {
+            Add-Failure '[session2] the caravan did not arrive'
+        }
+        Send-ServerCommand $server "kingdomworld admin storage list $PartnerName"
+        if (Wait-ForLog $server ' - (minecraft:wheat|Wheat): 32' $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok "[session2] the wheat is in the storehouse of $PartnerName"
+        } else {
+            Add-Failure "[session2] the wheat did not reach the storehouse of $PartnerName"
+        }
+        $ratePattern = '(\S+): rate (\d+), money (\d+), coins in hands (\d+), treasury (\d+), reserves (\d+), exported today (\d+)'
+        $seen = Count-Log $ratePattern
+        Send-ServerCommand $server 'kingdomworld admin trade rates'
+        [void](Wait-ForNewLog $server $ratePattern $CommandTimeout $seen)
+        Start-Sleep -Seconds 1
+        $log = Get-LatestLog
+        $mine = [regex]::Matches($log, "${KingdomName}: rate \d+, money (\d+), coins in hands \d+, treasury \d+, reserves (\d+)")
+        $theirs = [regex]::Matches($log, "${PartnerName}: rate \d+, money (\d+),")
+        $now = if ($mine.Count -gt 0 -and $theirs.Count -gt 0) { "$($mine[$mine.Count - 1].Groups[1].Value)/$($theirs[$theirs.Count - 1].Groups[1].Value)" } else { '' }
+        if ($now -eq $script:TradeMoney -and $mine[$mine.Count - 1].Groups[2].Value -eq '1') {
+            Write-Ok "[session2] the delivery made no money: $now, the seller holds the buyer's currency in its reserves"
+        } else {
+            Add-Failure "[session2] money changed in the delivery: '$now', expected '$($script:TradeMoney)' and a reserve"
         }
     }
 }

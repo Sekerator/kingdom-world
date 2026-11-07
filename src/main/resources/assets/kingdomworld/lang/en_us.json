@@ -559,7 +559,7 @@
   "item.kingdomworld.coin.loading": "Loading the currency...",
   "item.kingdomworld.coin.currency": "Currency: %s",
   "item.kingdomworld.coin.worth": "Worth: %s",
-  "item.kingdomworld.coin.old": "Old coin: the kingdom of %s was dissolved",
+  "item.kingdomworld.coin.old": "Old coin: its kingdom was dissolved",
   "kingdomworld.money.copper.n1": "%s copper coin",
   "kingdomworld.money.copper.n21": "%s copper coins",
   "kingdomworld.money.copper.n2": "%s copper coins",
@@ -781,7 +781,7 @@
   "kingdomworld.stall.too_far": "Come closer to the stall",
   "kingdomworld.stall.bought": "Bought %s: %s for %s",
   "kingdomworld.stall.sold": "Sold %s: %s for %s",
-  "kingdomworld.stall.and_account": "%s; %s went onto your account: no room for the coins",
+  "kingdomworld.stall.and_account": "%s; to your account: %s",
   "kingdomworld.stall.lot_bought": "You bought the lot %s for %s",
   "kingdomworld.stall.lot_sold": "Your lot %s sold on the market of %s for %s: %s went onto your account, the tax was %s",
   "kingdomworld.stall.listed": "Lot %s (%s) is up for %s",
@@ -806,8 +806,8 @@
   "kingdomworld.trade.decline_done": "The proposal is declined",
   "kingdomworld.trade.cancelled": "%s called the deal off",
   "kingdomworld.trade.cancel_done": "The deal is called off",
-  "kingdomworld.trade.offer_sell": "%s offers to sell you %s for %s; answer in the Trade tab of the throne",
-  "kingdomworld.trade.offer_buy": "%s offers to buy %s from you for %s; answer in the Trade tab of the throne",
+  "kingdomworld.trade.offer_sell": "%s offers to sell you %s for %s; answer in the Trade tab",
+  "kingdomworld.trade.offer_buy": "%s offers to buy %s from you for %s; answer in the Trade tab",
   "kingdomworld.trade.proposed": "The proposal went to %s",
   "kingdomworld.market.sell_set": "The kingdom sells %s",
   "kingdomworld.market.removed": "%s is off the list",
@@ -990,5 +990,6 @@
   "commands.kingdomworld.admin.trade.caravans.header": "Caravans on the way: %s",
   "commands.kingdomworld.admin.trade.caravans.entry": "#%s %s -> %s: %s x%s, payment %s, %s, %s ticks left",
   "commands.kingdomworld.admin.trade.arrived": "Caravans arrived: %s, still on the way: %s",
-  "commands.kingdomworld.admin.trade.rates.entry": "%s: rate %s, money %s, coins in hands %s, treasury %s, reserves %s, exported today %s"
+  "commands.kingdomworld.admin.trade.rates.entry": "%s: rate %s, money %s, coins in hands %s, treasury %s, reserves %s, exported today %s",
+  "commands.kingdomworld.admin.trade.wallet": "Account of %s in the currency of %s: %s"
 }
