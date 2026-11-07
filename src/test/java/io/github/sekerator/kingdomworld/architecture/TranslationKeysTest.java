@@ -248,6 +248,25 @@ class TranslationKeysTest {
         assertEquals(Plurals.Form.N21, Plurals.form(21));
     }
 
+    /**
+     * Numbers of companions and parties read right in both languages: «21 спутник», «3 спутника», «5 участников».
+     */
+    @Test
+    void countsOfCompanionsHaveEveryPluralForm() {
+        Map<String, String> russianForms = Map.of("companions", "спутник|спутник|спутника|спутников", "members", "участник|участник|участника|участников");
+        Map<String, String> englishSingular = Map.of("companions", "companion", "members", "member");
+        russianForms.forEach((word, forms) -> {
+            String[] words = forms.split("[|]");
+            Plurals.Form[] all = Plurals.Form.values();
+            for (int i = 0; i < all.length; i++) {
+                String key = "kingdomworld.count." + word + "." + all[i].suffix();
+                assertEquals("%s " + words[i], russian.get(key), key);
+                assertEquals("%s " + (all[i] == Plurals.Form.N1 ? englishSingular.get(word) : word), english.get(key),
+                        key + ": English is singular only for one");
+            }
+        });
+    }
+
     @Test
     void argumentCounting() {
         assertEquals(2, argumentCount("%s and %s"));
@@ -476,6 +495,48 @@ class TranslationKeysTest {
                 used.add((block ? "block.kingdomworld." : "item.kingdomworld.") + name);
             }
         }
+
+        // Companions and parties: origins, states and messages for both genders, orders, loyalty, the windows, counts in every form.
+        List<String> companionGendered = new ArrayList<>(List.of("status.slave", "status.free", "freed", "freed_citizen", "belongs", "protected",
+                "bought", "dismissed", "unpaid", "left_unpaid", "quit", "warning_slave", "warning_free", "recovered", "escaped", "died", "level_up",
+                "freed_by_law"));
+        for (io.github.sekerator.kingdomworld.core.companion.Origin origin : io.github.sekerator.kingdomworld.core.companion.Origin.values()) {
+            companionGendered.add("origin." + origin.id());
+        }
+        for (String key : companionGendered) {
+            used.add("kingdomworld.companion." + key);
+            used.add("kingdomworld.companion." + key + ".female");
+        }
+        for (io.github.sekerator.kingdomworld.core.companion.CompanionOrder order
+                : io.github.sekerator.kingdomworld.core.companion.CompanionOrder.values()) {
+            used.add("kingdomworld.companion.order." + order.id());
+            used.add("kingdomworld.screen.companion.order." + order.id());
+            used.add("kingdomworld.screen.companion.order." + order.id() + ".hint");
+        }
+        for (io.github.sekerator.kingdomworld.core.companion.LoyaltyReason reason
+                : io.github.sekerator.kingdomworld.core.companion.LoyaltyReason.values()) {
+            used.add("kingdomworld.companion.loyalty." + reason.id());
+        }
+        for (String action : List.of("free", "free_to_kingdom", "sell", "dismiss")) {
+            used.add("kingdomworld.screen.companion.action." + action);
+            used.add("kingdomworld.screen.companion.action." + action + ".hint");
+        }
+        for (int slot = 0; slot < 6; slot++) {
+            used.add("kingdomworld.screen.companion.gear." + slot);
+        }
+        for (String tab : List.of("market", "hire")) {
+            used.add("kingdomworld.screen.guild.tab." + tab);
+            used.add("kingdomworld.screen.guild.tab." + tab + ".full");
+        }
+        for (String word : List.of("companions", "members")) {
+            for (Plurals.Form form : Plurals.Form.values()) {
+                used.add("kingdomworld.count." + word + "." + form.suffix());
+            }
+        }
+        used.add("kingdomworld.profession.companion");
+        used.add("kingdomworld.profession.companion.female");
+        used.add("entity.kingdomworld.companion");
+        used.add("key.kingdomworld.party");
 
         Set<String> missing = new TreeSet<>(used);
         missing.removeAll(english.keySet());

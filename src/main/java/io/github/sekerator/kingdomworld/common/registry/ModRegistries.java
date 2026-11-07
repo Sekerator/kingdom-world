@@ -145,6 +145,7 @@ public final class ModRegistries {
         io.github.sekerator.kingdomworld.common.guild.GuildRegistries.register(modBus);
         io.github.sekerator.kingdomworld.common.army.ArmyRegistries.register(modBus);
         io.github.sekerator.kingdomworld.common.magic.MagicRegistries.register(modBus);
+        io.github.sekerator.kingdomworld.common.companion.CompanionRegistries.register(modBus);
         modBus.addListener(ModRegistries::onBuildCreativeTabs);
         modBus.addListener(ModRegistries::onEntityAttributes);
     }

@@ -96,6 +96,7 @@ public final class KingdomCommand {
                                 .executes(context -> info(context.getSource(), StringArgumentType.getString(context, "name")))))
                 .then(Commands.literal("list").executes(context -> list(context.getSource())))
                 .then(CitizenCommands.playerCommand())
+                .then(CompanionCommands.playerCommand())
                 .then(Commands.literal("join")
                         .then(Commands.argument("name", StringArgumentType.greedyString()).suggests(KINGDOM_NAMES)
                                 .executes(context -> join(context.getSource(), StringArgumentType.getString(context, "name")))))

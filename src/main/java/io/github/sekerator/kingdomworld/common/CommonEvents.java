@@ -49,11 +49,13 @@ public final class CommonEvents {
         io.github.sekerator.kingdomworld.common.construction.ConstructionEvents.register();
         io.github.sekerator.kingdomworld.common.army.ArmyEvents.register();
         io.github.sekerator.kingdomworld.common.magic.MagicEvents.register();
+        io.github.sekerator.kingdomworld.common.companion.CompanionEvents.register();
     }
 
     private static void onRegisterCommands(RegisterCommandsEvent event) {
         KingdomWorldCommand.register(event.getDispatcher());
         KingdomCommand.register(event.getDispatcher());
+        io.github.sekerator.kingdomworld.common.command.CompanionCommands.registerChat(event.getDispatcher());
     }
 
     private static void onServerStarted(ServerStartedEvent event) {

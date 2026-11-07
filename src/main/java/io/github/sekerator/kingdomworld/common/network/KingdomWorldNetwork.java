@@ -3,6 +3,7 @@ package io.github.sekerator.kingdomworld.common.network;
 import io.github.sekerator.kingdomworld.KingdomWorld;
 import io.github.sekerator.kingdomworld.common.network.packet.ActionResultPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.ArmyPackets;
+import io.github.sekerator.kingdomworld.common.network.packet.CompanionPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.BorderCrossingPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.CitizenActionPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.CitizenRequestPacket;
@@ -192,6 +193,24 @@ public final class KingdomWorldNetwork {
                 BuildingPackets.BlueprintChange::decode, BuildingPackets.BlueprintChange::handle);
         add(id++, BuildingPackets.Capture.class, NetworkDirection.PLAY_TO_SERVER, BuildingPackets.Capture::encode,
                 BuildingPackets.Capture::decode, BuildingPackets.Capture::handle);
+        add(id++, CompanionPackets.MarketRequest.class, NetworkDirection.PLAY_TO_SERVER, CompanionPackets.MarketRequest::encode,
+                CompanionPackets.MarketRequest::decode, CompanionPackets.MarketRequest::handle);
+        add(id++, CompanionPackets.MarketOpen.class, NetworkDirection.PLAY_TO_CLIENT, CompanionPackets.MarketOpen::encode,
+                CompanionPackets.MarketOpen::decode, CompanionPackets.MarketOpen::handle);
+        add(id++, CompanionPackets.MarketAction.class, NetworkDirection.PLAY_TO_SERVER, CompanionPackets.MarketAction::encode,
+                CompanionPackets.MarketAction::decode, CompanionPackets.MarketAction::handle);
+        add(id++, CompanionPackets.CompanionUpdate.class, NetworkDirection.PLAY_TO_CLIENT, CompanionPackets.CompanionUpdate::encode,
+                CompanionPackets.CompanionUpdate::decode, CompanionPackets.CompanionUpdate::handle);
+        add(id++, CompanionPackets.CompanionAction.class, NetworkDirection.PLAY_TO_SERVER, CompanionPackets.CompanionAction::encode,
+                CompanionPackets.CompanionAction::decode, CompanionPackets.CompanionAction::handle);
+        add(id++, CompanionPackets.PartyRequest.class, NetworkDirection.PLAY_TO_SERVER, CompanionPackets.PartyRequest::encode,
+                CompanionPackets.PartyRequest::decode, CompanionPackets.PartyRequest::handle);
+        add(id++, CompanionPackets.PartyOpen.class, NetworkDirection.PLAY_TO_CLIENT, CompanionPackets.PartyOpen::encode,
+                CompanionPackets.PartyOpen::decode, CompanionPackets.PartyOpen::handle);
+        add(id++, CompanionPackets.PartyAction.class, NetworkDirection.PLAY_TO_SERVER, CompanionPackets.PartyAction::encode,
+                CompanionPackets.PartyAction::decode, CompanionPackets.PartyAction::handle);
+        add(id++, CompanionPackets.PartyHud.class, NetworkDirection.PLAY_TO_CLIENT, CompanionPackets.PartyHud::encode,
+                CompanionPackets.PartyHud::decode, CompanionPackets.PartyHud::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

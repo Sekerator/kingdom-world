@@ -48,8 +48,12 @@ public final class CitizenTexts {
     }
 
     public static Component profession(String id, Gender gender) {
-        return Component.translatable(gendered(Professions.REGISTRY.isKnown(id) ? PROFESSION + id : PROFESSION + "unknown", gender));
+        boolean known = Professions.REGISTRY.isKnown(id) || COMPANION.equals(id);
+        return Component.translatable(gendered(known ? PROFESSION + id : PROFESSION + "unknown", gender));
     }
+
+    /** What the chronicle writes for a companion of a subject, in place of a profession. */
+    public static final String COMPANION = "companion";
 
     /**
      * The name of a profession as a job, for filters and settings.

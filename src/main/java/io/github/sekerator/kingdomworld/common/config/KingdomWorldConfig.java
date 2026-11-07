@@ -162,6 +162,8 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue autoRepairBelowPercent;
         public final ForgeConfigSpec.IntValue demolitionLossPercent;
         public final ForgeConfigSpec.IntValue maxBlueprintsPerKingdom;
+        /** Companions of players, the slave market and parties. */
+        public final Companions companions;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -458,6 +460,7 @@ public final class KingdomWorldConfig {
             builder.pop();
             army = new Army(builder);
             magic = new Magic(builder);
+            companions = new Companions(builder);
 
             builder.comment("Abstract simulation of kingdoms far from players.").push("simulation");
             simulationIntervalTicks = builder
@@ -988,6 +991,110 @@ public final class KingdomWorldConfig {
         }
     }
 
+    /**
+     * Companions of players: the slave market and the hire of free companions at the desks of the guild, the limits by rank,
+     * hunger, loyalty and escape, wages, experience, and the parties of players. Money is in copper coins, times in ticks.
+     */
+    public static final class Companions {
+        public final ForgeConfigSpec.IntValue slaveOffers;
+        public final ForgeConfigSpec.IntValue freeOffers;
+        public final ForgeConfigSpec.IntValue refreshDays;
+        public final ForgeConfigSpec.DoubleValue pricePerPower;
+        public final ForgeConfigSpec.LongValue minPrice;
+        public final ForgeConfigSpec.DoubleValue wagePerPower;
+        public final ForgeConfigSpec.LongValue minWage;
+        public final ForgeConfigSpec.IntValue sellPercent;
+        public final ForgeConfigSpec.IntValue maxOfferLevel;
+        public final ForgeConfigSpec.ConfigValue<String> rankLimits;
+        public final ForgeConfigSpec.LongValue hungerTicks;
+        public final ForgeConfigSpec.LongValue starveTicks;
+        public final ForgeConfigSpec.DoubleValue starvingStrength;
+        public final ForgeConfigSpec.LongValue healTicks;
+        public final ForgeConfigSpec.LongValue infirmaryHealTicks;
+        public final ForgeConfigSpec.IntValue slaveLoyalty;
+        public final ForgeConfigSpec.IntValue freeLoyalty;
+        public final ForgeConfigSpec.IntValue freedLoyalty;
+        public final ForgeConfigSpec.IntValue hungerLoss;
+        public final ForgeConfigSpec.IntValue woundLoss;
+        public final ForgeConfigSpec.IntValue beatenLoss;
+        public final ForgeConfigSpec.LongValue wellKeptTicks;
+        public final ForgeConfigSpec.IntValue wellKeptCap;
+        public final ForgeConfigSpec.LongValue giftPerPoint;
+        public final ForgeConfigSpec.IntValue maxGift;
+        public final ForgeConfigSpec.IntValue escapeBelow;
+        public final ForgeConfigSpec.LongValue escapeTicks;
+        public final ForgeConfigSpec.IntValue unpaidDays;
+        public final ForgeConfigSpec.LongValue experiencePerLevel;
+        public final ForgeConfigSpec.IntValue maxLevel;
+        public final ForgeConfigSpec.IntValue maxParty;
+        public final ForgeConfigSpec.LongValue inviteTicks;
+        public final ForgeConfigSpec.IntValue bodyRange;
+
+        Companions(ForgeConfigSpec.Builder builder) {
+            io.github.sekerator.kingdomworld.core.companion.CompanionRules.Builder d =
+                    new io.github.sekerator.kingdomworld.core.companion.CompanionRules.Builder();
+            builder.comment("Companions of players: slaves bought and free companions hired at the desks of the guild, and the parties",
+                    "of players. Money is in copper coins, times in ticks (24000 is a game day).").push("companions");
+            slaveOffers = builder.comment("Slaves on the market of one branch of the guild.").defineInRange("slaveOffers", d.slaveOffers, 0, 16);
+            freeOffers = builder.comment("Free companions looking for work at one branch.").defineInRange("freeOffers", d.freeOffers, 0, 16);
+            refreshDays = builder.comment("Game days between new offers on the market.").defineInRange("refreshDays", d.refreshDays, 1, 30);
+            pricePerPower = builder.comment("What a slave costs per point of strength (a beginner without gear has 10).")
+                    .defineInRange("pricePerPower", d.pricePerPower, 0.0, 10_000.0);
+            minPrice = builder.comment("What a slave costs at least.").defineInRange("minPrice", d.minPrice, 1L, 1_000_000_000L);
+            wagePerPower = builder.comment("The daily wage of a free companion per point of strength.")
+                    .defineInRange("wagePerPower", d.wagePerPower, 0.0, 10_000.0);
+            minWage = builder.comment("The daily wage at least.").defineInRange("minWage", d.minWage, 1L, 1_000_000_000L);
+            sellPercent = builder.comment("Share of the worth the market pays for a slave sold back, in percent; paid by the treasury",
+                    "of the branch's kingdom when it has the money.").defineInRange("sellPercent", d.sellPercent, 0, 100);
+            maxOfferLevel = builder.comment("Highest level of companions on the market.").defineInRange("maxOfferLevel", d.maxOfferLevel, 0, 30);
+            rankLimits = builder.comment("Companions a member of the guild keeps at most, by rank from F to SSS (nine numbers).")
+                    .define("rankLimits", "1, 1, 2, 2, 3, 3, 4, 4, 5", value -> value instanceof String text
+                            && io.github.sekerator.kingdomworld.core.guild.GuildRules.parseTable(text).isPresent());
+            hungerTicks = builder.comment("Ticks in which a companion of average stamina uses one point of food (20 points when full).",
+                    "Companions eat on their own, from their pack or from their owner's inventory.").defineInRange("hungerTicks",
+                    d.hungerTicks, 20L, 1_000_000L);
+            starveTicks = builder.comment("Ticks without food before a companion grows weaker and starts to lose loyalty.")
+                    .defineInRange("starveTicks", d.starveTicks, 20L, 10_000_000L);
+            starvingStrength = builder.comment("Share of its strength a starving companion keeps.")
+                    .defineInRange("starvingStrength", d.starvingStrength, 0.1, 1.0);
+            healTicks = builder.comment("Ticks per point of health a wounded companion heals.").defineInRange("healTicks", d.healTicks, 20L,
+                    1_000_000L);
+            infirmaryHealTicks = builder.comment("Ticks per point of health at an infirmary of the owner's kingdom.")
+                    .defineInRange("infirmaryHealTicks", d.infirmaryHealTicks, 20L, 1_000_000L);
+            slaveLoyalty = builder.comment("Loyalty of a slave just bought, from 0 to 100.").defineInRange("slaveLoyalty", d.slaveLoyalty, 0, 100);
+            freeLoyalty = builder.comment("Loyalty of a free companion just hired.").defineInRange("freeLoyalty", d.freeLoyalty, 0, 100);
+            freedLoyalty = builder.comment("Loyalty of a slave set free who stays in service.").defineInRange("freedLoyalty", d.freedLoyalty, 0,
+                    100);
+            hungerLoss = builder.comment("Loyalty lost for every stretch of starveTicks without food.").defineInRange("hungerLoss", d.hungerLoss, 0,
+                    100);
+            woundLoss = builder.comment("Loyalty lost for a heavy wound.").defineInRange("woundLoss", d.woundLoss, 0, 100);
+            beatenLoss = builder.comment("Loyalty lost for a blow of the owner, and for a day's wage not paid.")
+                    .defineInRange("beatenLoss", d.beatenLoss, 0, 100);
+            wellKeptTicks = builder.comment("Ticks of being fed and healthy that win a point of loyalty.")
+                    .defineInRange("wellKeptTicks", d.wellKeptTicks, 20L, 10_000_000L);
+            wellKeptCap = builder.comment("Loyalty a slave reaches at most by good keeping alone; gifts and freedom go further.")
+                    .defineInRange("wellKeptCap", d.wellKeptCap, 0, 100);
+            giftPerPoint = builder.comment("Worth of a gift per point of loyalty.").defineInRange("giftPerPoint", d.giftPerPoint, 1L,
+                    1_000_000_000L);
+            maxGift = builder.comment("Loyalty one gift wins at most.").defineInRange("maxGift", d.maxGift, 0, 100);
+            escapeBelow = builder.comment("Below this loyalty a companion warns that it will leave.").defineInRange("escapeBelow", d.escapeBelow, 0,
+                    100);
+            escapeTicks = builder.comment("Ticks a companion stays below escapeBelow after its warning before it escapes (a slave) or",
+                    "quits (a free companion).").defineInRange("escapeTicks", d.escapeTicks, 20L, 10_000_000L);
+            unpaidDays = builder.comment("Days a free companion goes without its wage before it leaves.").defineInRange("unpaidDays",
+                    d.unpaidDays, 0, 30);
+            experiencePerLevel = builder.comment("Experience a level needs: this times the level.").defineInRange("experiencePerLevel",
+                    d.experiencePerLevel, 1L, 1_000_000L);
+            maxLevel = builder.comment("Highest level of a companion.").defineInRange("maxLevel", d.maxLevel, 0, 30);
+            maxParty = builder.comment("Players in one party at most, the leader included.").defineInRange("maxParty", d.maxParty, 2, 16);
+            inviteTicks = builder.comment("Ticks an invitation to a party is good for.").defineInRange("inviteTicks", d.inviteTicks, 20L,
+                    1_000_000L);
+            bodyRange = builder.comment("A companion told to stand or guard a place is in the world while its owner is this near, in blocks.")
+                    .defineInRange("bodyRange", d.bodyRange, 16, 512);
+            builder.pop();
+        }
+    }
+
     public static final class Common {
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> disabledCompatModules;
 
@@ -1003,6 +1110,7 @@ public final class KingdomWorldConfig {
     public static final class Client {
         public final ForgeConfigSpec.BooleanValue requestKingdomListOnJoin;
         public final ForgeConfigSpec.BooleanValue showBorderMessages;
+        public final ForgeConfigSpec.BooleanValue showPartyList;
         public final ForgeConfigSpec.BooleanValue journeyMap;
         public final ForgeConfigSpec.BooleanValue xaeroMaps;
         public final ForgeConfigSpec.BooleanValue mapCaravans;
@@ -1017,6 +1125,9 @@ public final class KingdomWorldConfig {
             showBorderMessages = builder
                     .comment("Show a message above the hotbar when entering or leaving the land of a kingdom.")
                     .define("showBorderMessages", true);
+            showPartyList = builder
+                    .comment("Show the members of your party and your companions with their health in the corner of the screen.")
+                    .define("showPartyList", true);
             builder.pop();
 
             builder.comment("Kingdoms on the maps of other mods, when they are installed.").push("maps");

@@ -581,6 +581,20 @@ public final class CompanionState {
     }
 
     /**
+     * An operator sets the food; a companion left without food starts to starve now.
+     */
+    public void setFood(UUID id, int food, long now) {
+        Companion companion = companions.get(id);
+        if (companion != null) {
+            companion.setFood(food);
+            companion.setHungerProgress(0);
+            companion.setStarvingSince(food == 0 ? now : -1);
+            companion.setStarveProgress(0);
+            changed();
+        }
+    }
+
+    /**
      * The companion ate something with this much food.
      */
     public void feed(UUID id, int nutrition) {

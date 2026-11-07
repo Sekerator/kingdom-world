@@ -62,7 +62,14 @@ public final class GuildViews {
     public record ContractRow(long id, Contract.Kind kind, String target, Rank targetRank, boolean boss, int count, int progress, Rank minRank,
                               long reward, int points, int commissionPermille, long ticksLeft, Contract.Poster poster, String posterName,
                               boolean mine, boolean taken, boolean posted, boolean canCancel, boolean squadsAllowed, long squad,
-                              ItemStack icon) {
+                              ItemStack icon, boolean party) {
+        public ContractRow(long id, Contract.Kind kind, String target, Rank targetRank, boolean boss, int count, int progress, Rank minRank,
+                           long reward, int points, int commissionPermille, long ticksLeft, Contract.Poster poster, String posterName,
+                           boolean mine, boolean taken, boolean posted, boolean canCancel, boolean squadsAllowed, long squad, ItemStack icon) {
+            this(id, kind, target, targetRank, boss, count, progress, minRank, reward, points, commissionPermille, ticksLeft, poster, posterName,
+                    mine, taken, posted, canCancel, squadsAllowed, squad, icon, false);
+        }
+
         public ContractRow {
             Objects.requireNonNull(kind, "kind");
             Objects.requireNonNull(targetRank, "targetRank");
@@ -95,13 +102,15 @@ public final class GuildViews {
             buf.writeBoolean(squadsAllowed);
             buf.writeVarLong(squad);
             buf.writeItem(icon);
+            buf.writeBoolean(party);
         }
 
         static ContractRow decode(FriendlyByteBuf buf) {
             return new ContractRow(buf.readVarLong(), KingdomView.readEnum(buf, Contract.Kind.class), buf.readUtf(MAX_TARGET), readRank(buf),
                     buf.readBoolean(), buf.readVarInt(), buf.readVarInt(), readRank(buf), buf.readVarLong(), buf.readVarInt(), buf.readVarInt(),
                     buf.readVarLong(), KingdomView.readEnum(buf, Contract.Poster.class), buf.readUtf(KingdomNames.MAX_LENGTH), buf.readBoolean(),
-                    buf.readBoolean(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean(), buf.readVarLong(), buf.readItem());
+                    buf.readBoolean(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean(), buf.readVarLong(), buf.readItem(),
+                    buf.readBoolean());
         }
 
         /**

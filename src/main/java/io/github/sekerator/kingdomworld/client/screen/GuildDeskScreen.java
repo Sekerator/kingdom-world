@@ -46,7 +46,9 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
         CARD,
         BOARD,
         MINE,
-        POST;
+        POST,
+        MARKET,
+        HIRE;
 
         String id() {
             return name().toLowerCase(Locale.ROOT);
@@ -59,6 +61,10 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
 
     private GuildViews.DeskView view;
     private final GuildPicker picker = new GuildPicker(this);
+    private final MarketPanel market = new MarketPanel(this);
+    /** Width of each tab, by its label. */
+    private final int[] tabWidths = new int[Mode.values().length];
+    private int tabRows = 1;
     private Mode mode = Mode.CARD;
     private int filter;
     private boolean onlyMine;
@@ -121,6 +127,25 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
+     * The market and the hire of companions at this desk, from the server.
+     */
+    public void updateMarket(io.github.sekerator.kingdomworld.common.network.data.CompanionViews.MarketView newView) {
+        market.update(newView);
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
+    }
+
+    /**
+     * Shows the market or the hire with a view; for the layout check.
+     */
+    public void showMarketForCheck(boolean slaves, io.github.sekerator.kingdomworld.common.network.data.CompanionViews.MarketView marketView,
+                                   boolean coins) {
+        mode = slaves ? Mode.MARKET : Mode.HIRE;
+        market.showForCheck(marketView, coins);
+    }
+
+    /**
      * Shows a view of the screen, with a filled form or the search; for the layout check.
      */
     public void showForCheck(String value, String targetId, ItemStack icon, Component name, String count, String reward, boolean kingdom,
@@ -171,6 +196,10 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
         return Component.translatable(KEY + "tab." + value.id());
     }
 
+    private static boolean companions(Mode value) {
+        return value == Mode.MARKET || value == Mode.HIRE;
+    }
+
     private static Component kindName(Contract.Kind kind) {
         return kind == null ? Component.translatable(KEY + "filter.all") : GuildTexts.kind(kind);
     }
@@ -213,6 +242,7 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
         return switch (mode) {
             case BOARD -> board().size();
             case MINE -> view.mine().size();
+            case MARKET, HIRE -> market.rowCount(mode == Mode.MARKET);
             default -> 0;
         };
     }
@@ -221,8 +251,11 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
 
     private void measure() {
         tabWidth = 0;
+        int tabsTotal = 0;
         for (Mode value : Mode.values()) {
-            tabWidth = Math.max(tabWidth, buttonWidth(tabLabel(value)));
+            tabWidths[value.ordinal()] = buttonWidth(tabLabel(value));
+            tabWidth = Math.max(tabWidth, tabWidths[value.ordinal()]);
+            tabsTotal += tabWidths[value.ordinal()] + GAP;
         }
         doneWidth = Math.max(50, buttonWidth(Component.translatable("gui.done")));
         actionWidth = buttonWidth(Component.translatable(KEY + "take"), Component.translatable(KEY + "hand_in"),
@@ -251,7 +284,7 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
         badgeWidth = font.width("SSS+") + 4;
         int rewardLabel = font.width(Component.translatable(KEY + "form.reward")) + 6;
         int daysLabel = font.width(Component.translatable(KEY + "form.days")) + 6;
-        int tabs = 4 * (tabWidth + GAP);
+        int tabs = tabsTotal;
         int form = Math.max(labelWidth + kindWidth + GAP + posterWidth, labelWidth + modeWidth + GAP + chooseWidth + GAP + rankWidth);
         form = Math.max(form, labelWidth + BOX + 6 + rewardLabel + BOX);
         form = Math.max(form, labelWidth + rankWidth + 6 + daysLabel + BOX + GAP + squadsWidth);
@@ -259,11 +292,23 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
         int list = 16 + 4 + badgeWidth + 140 + actionWidth;
         int inner = Math.max(Math.max(tabs, form), Math.max(list, filterWidth + GAP + rankFilterWidth));
         inner = Math.max(inner, picker.measure(font));
+        inner = Math.max(inner, market.measure(font));
         for (String key : List.of("empty.board", "empty.mine", "not_member")) {
             inner = Math.max(inner, Math.min(320, font.width(Component.translatable(KEY + key))));
         }
         panelWidth = Math.min(Math.max(MIN_PANEL_WIDTH, inner + 2 * PAD), width - 8);
         panelHeight = Math.min(MAX_PANEL_HEIGHT, height - 8);
+        // Tabs that do not fit in one row go on to a second.
+        tabRows = 1;
+        int x = 0;
+        for (Mode value : Mode.values()) {
+            int w = tabWidths[value.ordinal()];
+            if (x > 0 && x + w > panelWidth - 2 * PAD) {
+                tabRows++;
+                x = 0;
+            }
+            x += w + GAP;
+        }
     }
 
     private int left() {
@@ -279,7 +324,7 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
     }
 
     private int controlsY() {
-        return tabsY() + ROW;
+        return tabsY() + tabRows * ROW;
     }
 
     private int listTop() {
@@ -306,15 +351,28 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
         int left = left();
         int x = left + PAD;
         int right = left + panelWidth - PAD;
+        int tabY = tabsY();
         for (Mode value : Mode.values()) {
+            int w = tabWidths[value.ordinal()];
+            if (x > left + PAD && x + w > right) {
+                x = left + PAD;
+                tabY += ROW;
+            }
             Button tab = addRenderableWidget(Button.builder(tabLabel(value), b -> {
                 mode = value;
                 scroll = 0;
                 picker.close();
+                if (companions(value)) {
+                    market.resetScroll();
+                    market.request();
+                }
                 rebuildWidgets();
-            }).bounds(x, tabsY(), tabWidth, ROW - 2).build());
-            tab.active = mode != value && (value == Mode.CARD || view.card().member() || value == Mode.POST);
-            x += tabWidth + GAP;
+            }).bounds(x, tabY, w, ROW - 2).build());
+            tab.active = mode != value && (value == Mode.CARD || view.card().member() || value == Mode.POST || companions(value));
+            if (companions(value)) {
+                tab.setTooltip(Tooltip.create(Component.translatable(KEY + "tab." + value.id() + ".full")));
+            }
+            x += w + GAP;
         }
         x = left + PAD;
         switch (mode) {
@@ -327,6 +385,12 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
                 } else {
                     initForm(x);
                 }
+            }
+            case MARKET, HIRE -> {
+                if (market.view() == null) {
+                    market.request();
+                }
+                market.init(mode == Mode.MARKET, x, right, controlsY(), bottom());
             }
         }
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose())
@@ -399,6 +463,10 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
                             b -> send(GuildPackets.DeskAction.simple(view.pos(), GuildPackets.DeskAction.Action.HAND_IN, row.id())))
                             .bounds(right - 2 * actionWidth - GAP, y, actionWidth, ROW - 2).build());
                 }
+            } else if (row.party() && row.kind() == Contract.Kind.GATHER) {
+                addRenderableWidget(Button.builder(Component.translatable(KEY + "hand_in"),
+                        b -> send(GuildPackets.DeskAction.simple(view.pos(), GuildPackets.DeskAction.Action.HAND_IN, row.id())))
+                        .bounds(right - actionWidth, y, actionWidth, ROW - 2).tooltip(Tooltip.create(details(row))).build());
             } else if (row.canCancel()) {
                 addRenderableWidget(Button.builder(Component.translatable(KEY + "cancel"),
                         b -> send(GuildPackets.DeskAction.simple(view.pos(), GuildPackets.DeskAction.Action.CANCEL, row.id())))
@@ -528,6 +596,12 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
             }
             return true;
         }
+        if (companions(mode)) {
+            if (market.scroll(mode == Mode.MARKET, controlsY(), bottom(), delta)) {
+                rebuildWidgets();
+            }
+            return true;
+        }
         int max = Math.max(0, rowCount() - visibleRows());
         int next = Math.max(0, Math.min(max, scroll - (int) Math.signum(delta)));
         if (next != scroll) {
@@ -566,6 +640,7 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
                     renderForm(graphics, x, right);
                 }
             }
+            case MARKET, HIRE -> market.render(graphics, mode == Mode.MARKET, x, right, controlsY(), bottom());
         }
         Component bottom = status;
         int color = statusIsError ? 0xFFFF8080 : 0xFFA0E0A0;
@@ -584,6 +659,7 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
             case POST -> forKingdom ? Component.translatable(KEY + "hint.post_kingdom", TradeTexts.percent(view.commissionPermille()))
                     : Component.translatable(KEY + "hint.post", TradeTexts.percent(view.postingFeePermille()),
                     TradeTexts.percent(view.commissionPermille()));
+            case MARKET, HIRE -> market.hint(mode == Mode.MARKET);
         };
     }
 
@@ -637,7 +713,7 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
             int badgeX = x + 20;
             label(graphics, Component.literal(row.minRank().label()), badgeX, y + 5, 0xFF000000 | rankColor(row.minRank()), badgeX + badgeWidth);
             int textX = badgeX + badgeWidth;
-            Component right2 = mode == Mode.MINE && row.mine()
+            Component right2 = mode == Mode.MINE && (row.mine() || row.party())
                     ? Component.translatable(KEY + "row.progress", row.progress(), row.count(), time(row.ticksLeft()))
                     : Component.translatable(KEY + "row.reward", money(row.payout()));
             int sideWidth = Math.min(font.width(right2), Math.max(0, (textRight - textX) / 2));
@@ -658,6 +734,9 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
         }
         if (row.mine()) {
             return row.kind() == Contract.Kind.GATHER ? 2 * actionWidth + GAP : actionWidth;
+        }
+        if (row.party() && row.kind() == Contract.Kind.GATHER) {
+            return actionWidth;
         }
         return row.canCancel() ? actionWidth : 0;
     }

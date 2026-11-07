@@ -120,10 +120,13 @@ public final class GuildActions {
         };
         boolean posted = contract.poster() == Contract.Poster.PLAYER && contract.posterId().equals(viewer);
         boolean canCancel = viewer != null && GuildWork.state(server).checkCancel(viewer, contract.id(), world).ok();
+        boolean party = viewer != null && !GuildWork.isReadOnly(server)
+                && io.github.sekerator.kingdomworld.common.companion.CompanionWork.state(server).parties().partyOf(viewer)
+                .map(found -> found.contracts().containsKey(contract.id())).orElse(false);
         return new GuildViews.ContractRow(contract.id(), contract.kind(), contract.target(), contract.targetRank(), contract.boss(), contract.count(),
                 contract.progress(), contract.minRank(), contract.reward(), contract.points(), contract.commissionPermille(),
                 contract.deadline() - now, contract.poster(), posterName, contract.takenBy(viewer), !contract.isOpen(), posted, canCancel,
-                contract.squadsAllowed(), contract.squad(), GuildTexts.icon(contract.kind(), contract.target(), contract.targetRank()));
+                contract.squadsAllowed(), contract.squad(), GuildTexts.icon(contract.kind(), contract.target(), contract.targetRank()), party);
     }
 
     /**
@@ -185,6 +188,12 @@ public final class GuildActions {
                 mine.add(row(server, contract, viewer, now));
             }
         }
+        GuildState.Sharing sharing = io.github.sekerator.kingdomworld.common.companion.CompanionWork.sharing(server);
+        for (Contract contract : guild.contracts()) {
+            if (GuildState.isShared(contract, viewer, sharing) && !contract.takenBy(viewer) && mine.size() < GuildViews.MAX_ROWS) {
+                mine.add(row(server, contract, viewer, now));
+            }
+        }
         for (Contract contract : guild.contracts()) {
             if (contract.poster() == Contract.Poster.PLAYER && contract.posterId().equals(viewer) && !contract.branch().equals(kingdom.id())
                     && mine.size() < GuildViews.MAX_ROWS) {
@@ -243,6 +252,10 @@ public final class GuildActions {
                 Outcome outcome = GuildWork.change(server, "take a contract", guild -> contract.isPresent()
                         && !contract.get().branch().equals(kingdom.id()) ? Outcome.fail(KingdomError.UNKNOWN_CONTRACT)
                         : guild.take(id, action.id(), now, rules));
+                if (outcome.ok()) {
+                    // A leader takes contracts for the party.
+                    io.github.sekerator.kingdomworld.common.companion.CompanionWork.adoptContract(server, id, action.id());
+                }
                 yield outcome.ok() ? KingdomActions.Feedback.ok(KEY + "taken", GuildTexts.task(contract.orElseThrow()))
                         : KingdomActions.Feedback.error(outcome.error());
             }
@@ -364,13 +377,15 @@ public final class GuildActions {
         }
         Contract contract = found.get();
         Item item = contract.kind() == Contract.Kind.GATHER ? GoodsStacks.item(contract.target()) : null;
-        int need = contract.count() - contract.progress();
         int have = item == null ? 0 : GoodsStacks.countPlain(player.getInventory(), item);
         long now = KingdomWorldApi.gameTime(server);
-        Outcome check = guild.checkHandIn(player.getUUID(), contractId, have, now);
+        GuildState.Sharing sharing = io.github.sekerator.kingdomworld.common.companion.CompanionWork.sharing(server);
+        Outcome check = guild.checkHandIn(player.getUUID(), contractId, have, now, sharing);
         if (!check.ok()) {
             return KingdomActions.Feedback.error(check.error());
         }
+        // Alone, everything missing at once; in a party, as much as the player has.
+        int need = Math.min(have, contract.count() - contract.progress());
         boolean toKingdom = contract.poster() != Contract.Poster.PLAYER;
         if (toKingdom) {
             List<ItemStack> stacks = new ArrayList<>();
@@ -391,7 +406,7 @@ public final class GuildActions {
             return KingdomActions.Feedback.error(KingdomError.NO_ITEMS);
         }
         Optional<GuildState.Progress> done = guild.handIn(player.getUUID(), contractId, taken, now, TreasuryActions.day(server),
-                KingdomWorldApi.state(server));
+                KingdomWorldApi.state(server), sharing);
         if (done.isEmpty()) {
             GoodsStacks.give(player, new ItemStack(item, taken));
             return KingdomActions.Feedback.error(KingdomError.UNKNOWN_CONTRACT);
@@ -410,6 +425,15 @@ public final class GuildActions {
                 StallActions.deliverReturns(poster);
             }
             KingdomActions.tell(server, contract.posterId(), Component.translatable(KEY + "posted_done", GuildTexts.task(contract)));
+        }
+        if (!done.get().finished()) {
+            GuildWork.tellProgress(server, contract.player(), done.get());
+            return KingdomActions.Feedback.ok(KEY + "handed_in_part", GuildTexts.task(contract), done.get().contract().progress(),
+                    contract.count());
+        }
+        if (!done.get().payments().isEmpty()) {
+            GuildWork.tellProgress(server, contract.player(), done.get());
+            return KingdomActions.Feedback.ok(KEY + "handed_in_party", GuildTexts.task(contract));
         }
         return KingdomActions.Feedback.ok(KEY + "handed_in", GuildTexts.task(contract),
                 MoneyTexts.amount(done.get().paid(), Purses.units(server, contract.currency())), GuildTexts.points(contract.points()));

@@ -191,6 +191,13 @@ public final class CitizenRegistry {
         return Optional.of(record);
     }
 
+    /**
+     * Writes the death of somebody who was no citizen (a companion of a subject) into a kingdom's chronicle.
+     */
+    public void remember(UUID kingdomId, DeathRecord record) {
+        addToChronicle(kingdomId, record);
+    }
+
     private void addToChronicle(UUID kingdomId, DeathRecord record) {
         Deque<DeathRecord> entries = chronicles.computeIfAbsent(kingdomId, k -> new ArrayDeque<>());
         entries.addFirst(record);

@@ -172,6 +172,13 @@ public final class GuildWork {
             return Optional.empty();
         }
         ServerPlayer player = killer instanceof ServerPlayer p && !(p instanceof FakePlayer) ? p : null;
+        // A companion kills for its owner: the owner's contracts move on, the points of the kill are not the owner's.
+        boolean byCompanion = false;
+        if (player == null && killer instanceof io.github.sekerator.kingdomworld.common.companion.CompanionEntity companion
+                && companion.owner() != null) {
+            player = server.getPlayerList().getPlayer(companion.owner());
+            byCompanion = player != null;
+        }
         CitizenEntity adventurer = killer instanceof CitizenEntity body && Professions.ADVENTURER.id().equals(body.professionId())
                 && body.citizenId() != null && body.kingdomId() != null ? body : null;
         if (player == null && adventurer == null) {
@@ -191,11 +198,12 @@ public final class GuildWork {
         GuildState guild = state(server);
         KingdomWorldState world = KingdomWorldApi.state(server);
         if (player != null) {
-            if (points > 0) {
+            if (points > 0 && !byCompanion) {
                 guild.recordKillPoints(player.getUUID(), points);
             }
-            for (GuildState.Progress progress : guild.recordKill(player.getUUID(), monster, rank, ranked.boss(), now, day, world)) {
-                tellProgress(server, player.getUUID(), progress);
+            GuildState.Sharing sharing = io.github.sekerator.kingdomworld.common.companion.CompanionWork.sharing(server);
+            for (GuildState.Progress progress : guild.recordKill(player.getUUID(), monster, rank, ranked.boss(), now, day, world, sharing)) {
+                tellProgress(server, progress.contract().player() != null ? progress.contract().player() : player.getUUID(), progress);
             }
             if (crystal) {
                 PENDING_DROPS.put(victim.getUUID(), MonsterCrystalItem.stack(rank, 1));
@@ -224,13 +232,32 @@ public final class GuildWork {
         return Optional.ofNullable(PENDING_DROPS.remove(victim));
     }
 
-    private static void tellProgress(MinecraftServer server, UUID player, GuildState.Progress progress) {
+    static void tellProgress(MinecraftServer server, UUID player, GuildState.Progress progress) {
         Contract contract = progress.contract();
-        ServerPlayer online = server.getPlayerList().getPlayer(player);
         if (!progress.finished()) {
-            if (online != null) {
-                online.displayClientMessage(Component.translatable(KEY + "progress", GuildTexts.shortTarget(contract), contract.progress(),
-                        contract.count()), true);
+            java.util.Set<UUID> told = new java.util.LinkedHashSet<>();
+            told.add(player);
+            io.github.sekerator.kingdomworld.common.companion.CompanionWork.state(server).parties().partyOf(player)
+                    .filter(party -> party.contracts().containsKey(contract.id())).ifPresent(party -> told.addAll(party.members()));
+            for (UUID one : told) {
+                ServerPlayer online = server.getPlayerList().getPlayer(one);
+                if (online != null) {
+                    online.displayClientMessage(Component.translatable(KEY + "progress", GuildTexts.shortTarget(contract), contract.progress(),
+                            contract.count()), true);
+                }
+            }
+            return;
+        }
+        if (!progress.payments().isEmpty()) {
+            // A contract of a party: everybody hears what they got.
+            for (GuildState.Payment payment : progress.payments()) {
+                KingdomActions.tell(server, payment.player(), Component.translatable(KEY + "done_party", GuildTexts.task(contract),
+                        MoneyTexts.amount(payment.money(), Purses.units(server, contract.currency())), GuildTexts.points(payment.points()))
+                        .withStyle(ChatFormatting.GREEN));
+            }
+            if (contract.poster() == Contract.Poster.PLAYER) {
+                KingdomActions.tell(server, contract.posterId(), Component.translatable(KEY + "posted_done", GuildTexts.task(contract))
+                        .withStyle(ChatFormatting.AQUA));
             }
             return;
         }

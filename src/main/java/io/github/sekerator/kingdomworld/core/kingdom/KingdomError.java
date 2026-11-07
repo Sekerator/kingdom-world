@@ -272,7 +272,9 @@ public enum KingdomError {
     /** Only the king may do this. */
     NOT_KING,
     /** The companion is too far away. */
-    COMPANION_FAR;
+    COMPANION_FAR,
+    /** No player of that name is online. */
+    PLAYER_OFFLINE;
 
     /**
      * Lower case identifier, used for translation keys.
