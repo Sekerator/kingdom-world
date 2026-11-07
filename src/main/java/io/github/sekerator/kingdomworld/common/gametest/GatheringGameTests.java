@@ -117,6 +117,25 @@ public final class GatheringGameTests {
         }
     }
 
+    /**
+     * Walls a box (absolute, inclusive) off the world around it: stone under it, over it and on its sides, air inside. The
+     * framework clears and floors the space only a few blocks around the small template of these tests; a test using more
+     * stands with the rest in the caves of the world deep below (lava, water, gravel, open drops), which differ from world
+     * to world.
+     */
+    static void enclose(ServerLevel level, BlockPos from, BlockPos to) {
+        BlockState stone = Blocks.STONE.defaultBlockState();
+        BlockState air = Blocks.AIR.defaultBlockState();
+        for (BlockPos pos : BlockPos.betweenClosed(from.offset(-1, -1, -1), to.offset(1, 1, 1))) {
+            boolean inside = pos.getX() >= from.getX() && pos.getX() <= to.getX() && pos.getY() >= from.getY() && pos.getY() <= to.getY()
+                    && pos.getZ() >= from.getZ() && pos.getZ() <= to.getZ();
+            BlockState wanted = inside ? air : stone;
+            if (level.getBlockState(pos) != wanted) {
+                level.setBlock(pos, wanted, 2 | 16);
+            }
+        }
+    }
+
     static long produced(MinecraftServer server, Kingdom kingdom, String profession, String item) {
         return KingdomWorldApi.state(server).citizens().ledger().today(kingdom.id(), PostWork.gameDay(server)).counts()
                 .getOrDefault(profession, Map.of()).getOrDefault(item, 0L);
@@ -386,7 +405,9 @@ public final class GatheringGameTests {
         level.setDayTime(1_000L);
         BlockPos from = helper.absolutePos(new BlockPos(-2, 0, -2));
         BlockPos to = helper.absolutePos(new BlockPos(8, 3, 8));
-        clear(level, from, to);
+        // The far side of the pen and the storehouse lie beyond the space the framework clears: without walls the lava or the
+        // gravel of the caves around reached in, and the herder died in them before it culled.
+        enclose(level, from, to);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Fair Butchers", UUID.randomUUID());
         pen(helper);
         for (int i = 0; i < 3; i++) {
