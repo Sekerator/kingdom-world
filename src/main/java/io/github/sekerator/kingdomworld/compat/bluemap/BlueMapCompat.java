@@ -60,6 +60,7 @@ public final class BlueMapCompat implements CompatModule, WebMapSink {
     private volatile BlueMapAPI api;
     private volatile boolean wantsFull;
     private int loggedCaravans = -1;
+    private int loggedShown = -1;
 
     @Override
     public void init() {
@@ -118,9 +119,17 @@ public final class BlueMapCompat implements CompatModule, WebMapSink {
             wantsFull = false;
         }
         if (update.full() || !update.kingdoms().isEmpty() || !update.removed().isEmpty() || update.caravans().size() != loggedCaravans) {
+            // The totals go to the log when they change; every change of land only at debug level.
+            boolean changed = update.full() || update.shown() != loggedShown || update.caravans().size() != loggedCaravans;
             loggedCaravans = update.caravans().size();
-            LOGGER.info("KingdomWorld BlueMap markers: {} kingdom(s) shown, {} caravan(s), {} marker(s) updated on {} map(s)",
-                    update.shown(), update.caravans().size(), markers, maps.values().stream().mapToInt(Collection::size).sum());
+            loggedShown = update.shown();
+            String message = "KingdomWorld BlueMap markers: {} kingdom(s) shown, {} caravan(s), {} marker(s) updated on {} map(s)";
+            int mapCount = maps.values().stream().mapToInt(Collection::size).sum();
+            if (changed) {
+                LOGGER.info(message, update.shown(), update.caravans().size(), markers, mapCount);
+            } else {
+                LOGGER.debug(message, update.shown(), update.caravans().size(), markers, mapCount);
+            }
         }
     }
 
@@ -212,7 +221,7 @@ public final class BlueMapCompat implements CompatModule, WebMapSink {
                     .label(kingdom.name())
                     .position(largest.anchorX() * 16 + 8.0, y, largest.anchorZ() * 16 + 8.0)
                     .html(MapIcons.labelHtml(kingdom.name(), kingdom.color()))
-                    .anchor(new Vector2i(0, kingdom.hasCapital() ? -14 : 0))
+                    .anchor(new Vector2i(0, kingdom.hasCapital() ? -22 : 0))
                     .listed(false)
                     .build());
             markers++;

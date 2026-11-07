@@ -56,6 +56,7 @@ public final class DynmapCompat implements CompatModule, WebMapSink {
     private volatile MarkerAPI markers;
     private volatile boolean wantsFull;
     private int loggedCaravans = -1;
+    private int loggedShown = -1;
     private final Map<UUID, List<GenericMarker>> kingdomMarkers = new HashMap<>();
 
     @Override
@@ -174,9 +175,16 @@ public final class DynmapCompat implements CompatModule, WebMapSink {
             wantsFull = false;
         }
         if (update.full() || !update.kingdoms().isEmpty() || !update.removed().isEmpty() || update.caravans().size() != loggedCaravans) {
+            // The totals go to the log when they change; every change of land only at debug level.
+            boolean changed = update.full() || update.shown() != loggedShown || update.caravans().size() != loggedCaravans;
             loggedCaravans = update.caravans().size();
-            LOGGER.info("KingdomWorld Dynmap markers: {} kingdom(s) shown, {} caravan(s), {} marker(s) updated", update.shown(),
-                    update.caravans().size(), count);
+            loggedShown = update.shown();
+            String message = "KingdomWorld Dynmap markers: {} kingdom(s) shown, {} caravan(s), {} marker(s) updated";
+            if (changed) {
+                LOGGER.info(message, update.shown(), update.caravans().size(), count);
+            } else {
+                LOGGER.debug(message, update.shown(), update.caravans().size(), count);
+            }
         }
     }
 
