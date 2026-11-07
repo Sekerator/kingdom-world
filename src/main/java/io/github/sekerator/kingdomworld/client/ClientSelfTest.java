@@ -333,17 +333,19 @@ public final class ClientSelfTest {
                 minecraft.setScreen(null);
                 KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.CompanionPackets.PartyRequest());
             }
-            case 364 -> {
-                LOGGER.info(PREFIX + "party window opened by the server: {}, lines in the corner: {}",
-                        minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.PartyScreen, PartyHud.lines().size());
+            case 364 -> LOGGER.info(PREFIX + "party window opened by the server: {}",
+                    minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.PartyScreen);
+            case 390 -> {
+                // The list in the corner comes once a second.
+                LOGGER.info(PREFIX + "lines in the corner of the screen: {}", PartyHud.lines().size());
                 minecraft.setScreen(new FoundKingdomScreen(throne, 0x336699));
             }
-            case 367 -> {
+            case 393 -> {
                 LOGGER.info(PREFIX + "founding screen shown: {}", minecraft.screen instanceof FoundKingdomScreen);
                 minecraft.setScreen(null);
                 server.execute(() -> cleanUp(server));
             }
-            case 385 -> {
+            case 410 -> {
                 LOGGER.info(PREFIX + "finished");
                 quit = true;
             }
