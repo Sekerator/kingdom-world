@@ -187,7 +187,28 @@ public enum KingdomError {
     CONSTRUCTION_OVERLAPS,
     PROTECTED_BLOCK,
     AREA_NOT_LOADED,
-    OUTSIDE_WORLD;
+    OUTSIDE_WORLD,
+    /** The citizen is no soldier of the kingdom. */
+    NOT_A_SOLDIER,
+    /** The citizen serves in the army already. */
+    ALREADY_A_SOLDIER,
+    /** The kingdom keeps as many soldiers as allowed. */
+    TOO_MANY_SOLDIERS,
+    /** The kingdom keeps as many squads as allowed. */
+    TOO_MANY_SQUADS,
+    /** The soldier serves in another squad. */
+    IN_ANOTHER_SQUAD,
+    /** Soldiers are recruited and dismissed in the army tab, not as a profession. */
+    ARMY_PROFESSION,
+    /** The kingdom keeps as many mercenaries as allowed. */
+    TOO_MANY_MERCENARIES,
+    UNKNOWN_OFFER,
+    /** The order cannot be given: a place in another dimension, a deal of other kingdoms, a player of another kingdom. */
+    BAD_ORDER,
+    /** The squad is on the road with a caravan. */
+    SQUAD_ON_THE_ROAD,
+    /** The citizen is on an expedition of the guild. */
+    ON_EXPEDITION;
 
     /**
      * Lower case identifier, used for translation keys.

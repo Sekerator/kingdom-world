@@ -27,6 +27,8 @@ public enum CauseOfDeath {
     WORK,
     /** Fell on an expedition of the guild. */
     EXPEDITION,
+    /** Fell in a battle of the army far from players. */
+    BATTLE,
     /** Removed by an operator command. */
     COMMAND,
     OTHER;

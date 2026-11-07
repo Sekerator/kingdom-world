@@ -324,6 +324,10 @@ public final class KingdomWorldState {
         if (!Professions.REGISTRY.isKnown(professionId)) {
             return Outcome.fail(KingdomError.UNKNOWN_PROFESSION);
         }
+        if (actor != null && (Professions.isMilitary(professionId) || Professions.isMilitary(citizen.get().professionId()))) {
+            // Soldiers come and go through the army, which keeps their records and gear.
+            return Outcome.fail(KingdomError.ARMY_PROFESSION);
+        }
         if (citizen.get().professionId().equals(professionId)) {
             return Outcome.fail(KingdomError.UNCHANGED);
         }

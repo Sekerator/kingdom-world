@@ -22,7 +22,9 @@ public enum LedgerCategory {
     /** Currencies exchanged at the bank of the kingdom. */
     EXCHANGE,
     /** Rewards of guild contracts, the guild's commission and its fees. */
-    GUILD;
+    GUILD,
+    /** Pay of mercenaries. */
+    ARMY;
 
     public String id() {
         return name().toLowerCase(Locale.ROOT);

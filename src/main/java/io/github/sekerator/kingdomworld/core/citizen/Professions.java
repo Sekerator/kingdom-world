@@ -36,6 +36,10 @@ public final class Professions {
     public static final Profession ADVENTURER = new Profession("adventurer", null);
     /** Builds the constructions of the kingdom near its work post: clears the place and lays the blocks of the template. */
     public static final Profession BUILDER = new Profession("builder", SiteKinds.WORK_POST);
+    /** A soldier who fights in melee with the best weapon of the storehouses; recruited in the army tab. */
+    public static final Profession WARRIOR = new Profession("warrior", null);
+    /** A soldier who shoots with a bow or a crossbow of the storehouses; recruited in the army tab. */
+    public static final Profession ARCHER = new Profession("archer", null);
 
     /** The registry of the running game; more professions are registered here. */
     public static final ProfessionRegistry REGISTRY = ProfessionRegistry.withDefaults();
@@ -73,6 +77,24 @@ public final class Professions {
      */
     public static boolean hasAutoMode(String professionId) {
         return SMELTER.id().equals(professionId) || COOK.id().equals(professionId);
+    }
+
+    /**
+     * Whether the profession is that of a soldier: given and taken by the army, not as an ordinary profession.
+     */
+    public static boolean isMilitary(String professionId) {
+        return WARRIOR.id().equals(professionId) || ARCHER.id().equals(professionId);
+    }
+
+    /**
+     * The profession after {@code id} in registration order that is not a soldier's, for the citizens tab.
+     */
+    public static Profession nextCivilian(String professionId) {
+        Profession next = REGISTRY.next(professionId);
+        for (int i = 0; i < REGISTRY.all().size() && isMilitary(next.id()); i++) {
+            next = REGISTRY.next(next.id());
+        }
+        return next;
     }
 
     /**

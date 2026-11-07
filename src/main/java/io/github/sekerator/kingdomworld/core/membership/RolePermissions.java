@@ -27,7 +27,7 @@ public final class RolePermissions {
     public static RolePermissions defaults() {
         RolePermissions table = new RolePermissions();
         table.grant(Role.MARSHAL, Permission.BUILD, Permission.CONTAINERS, Permission.INTERACT, Permission.RECRUIT, Permission.TERRITORY,
-                Permission.MANAGE_GUILD);
+                Permission.MANAGE_GUILD, Permission.MANAGE_ARMY);
         table.grant(Role.TREASURER, Permission.BUILD, Permission.CONTAINERS, Permission.INTERACT, Permission.MANAGE_TREASURY,
                 Permission.MANAGE_MARKET, Permission.MANAGE_TRADE);
         table.grant(Role.CHANCELLOR, Permission.BUILD, Permission.CONTAINERS, Permission.INTERACT, Permission.RECRUIT, Permission.MANAGE_TRADE);

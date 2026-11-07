@@ -35,6 +35,8 @@ class RolePermissionsTest {
         assertEquals(EnumSet.of(Permission.BUILD, Permission.INTERACT), table.effective(Role.SUBJECT));
         assertTrue(table.has(Role.MARSHAL, Permission.RECRUIT));
         assertTrue(table.has(Role.MARSHAL, Permission.TERRITORY));
+        assertTrue(table.has(Role.MARSHAL, Permission.MANAGE_ARMY));
+        assertFalse(table.has(Role.STEWARD, Permission.MANAGE_ARMY));
         assertTrue(table.has(Role.STEWARD, Permission.TERRITORY));
         assertTrue(table.has(Role.STEWARD, Permission.MANAGE_CITIZENS));
         assertFalse(table.has(Role.MARSHAL, Permission.MANAGE_CITIZENS));

@@ -31,6 +31,8 @@ public enum Permission {
     MANAGE_GUILD,
     /** Lay out buildings, pause, hurry and cancel constructions. */
     MANAGE_CONSTRUCTION,
+    /** Recruit and dismiss soldiers, form squads and give them orders, hire mercenaries. */
+    MANAGE_ARMY,
     /** Appoint members to positions and change the rights of positions. Only the king holds it. */
     APPOINT;
 

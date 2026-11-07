@@ -521,6 +521,20 @@ public final class Economy {
         return treasury.spend(amount, LedgerCategory.TRADE, day) ? Outcome.DONE : Outcome.fail(KingdomError.NOT_ENOUGH_MONEY);
     }
 
+    /**
+     * The army pays mercenaries from the treasury: the money leaves the world.
+     */
+    public Outcome armyPayment(UUID kingdomId, long amount, long day) {
+        Treasury treasury = treasuries.get(kingdomId);
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (!Money.isPayment(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        return treasury.spend(amount, LedgerCategory.ARMY, day) ? Outcome.DONE : Outcome.fail(KingdomError.TREASURY_EMPTY);
+    }
+
     public Outcome setSalesTax(UUID kingdomId, int permille, int maxPermille) {
         Treasury treasury = treasuries.get(kingdomId);
         if (treasury == null) {
