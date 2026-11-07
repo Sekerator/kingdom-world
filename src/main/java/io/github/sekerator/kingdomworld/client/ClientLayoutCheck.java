@@ -1125,9 +1125,14 @@ final class ClientLayoutCheck {
             return screen;
         }));
         cases.add(new Case("confirm-dissolve", () -> new ConfirmScreen(yes -> {
-        }, Component.literal(LONG_KINGDOM), Component.translatable("kingdomworld.screen.throne.dissolve.confirm", LONG_KINGDOM))));
+        }, Component.translatable("kingdomworld.screen.throne.confirm_title"),
+                Component.translatable("kingdomworld.screen.throne.dissolve.confirm", LONG_KINGDOM))));
+        cases.add(new Case("confirm-leave", () -> new ConfirmScreen(yes -> {
+        }, Component.translatable("kingdomworld.screen.throne.confirm_title"),
+                Component.translatable("kingdomworld.screen.throne.leave.confirm", LONG_KINGDOM))));
         cases.add(new Case("confirm-crown", () -> new ConfirmScreen(yes -> {
-        }, Component.literal(LONG_KINGDOM), Component.translatable("kingdomworld.screen.throne.crown.confirm", LONG_PLAYER))));
+        }, Component.translatable("kingdomworld.screen.throne.confirm_title"),
+                Component.translatable("kingdomworld.screen.throne.crown.confirm", LONG_PLAYER))));
         GuildLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         ArmyLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         MagicLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));

@@ -18,7 +18,10 @@ public abstract class KingdomScreen extends Screen {
     protected static final int LINE = 10;
     private static final String ELLIPSIS = "…";
 
-    private record Hover(int x, int y, int width, Component text) {
+    /**
+     * A text shown on hover; {@code full} marks the full form of a shortened text, listed first.
+     */
+    private record Hover(int x, int y, int width, Component text, boolean full) {
     }
 
     private final List<Hover> hovers = new ArrayList<>();
@@ -43,12 +46,28 @@ public abstract class KingdomScreen extends Screen {
         renderContent(graphics, mouseX, mouseY, partialTick);
         super.render(graphics, mouseX, mouseY, partialTick);
         LayoutCheck.widgets(this, font);
+        List<Component> shown = hoverLines(mouseX, mouseY);
+        if (!shown.isEmpty()) {
+            graphics.renderComponentTooltip(font, shown, mouseX, mouseY);
+        }
+    }
+
+    /**
+     * Every hover text under the mouse in one list: the full forms of shortened texts first, then the details, each once.
+     */
+    protected List<Component> hoverLines(int mouseX, int mouseY) {
+        List<Component> full = new ArrayList<>();
+        List<Component> details = new ArrayList<>();
         for (Hover hover : hovers) {
             if (mouseX >= hover.x() && mouseX < hover.x() + hover.width() && mouseY >= hover.y() - 1 && mouseY < hover.y() + LINE) {
-                graphics.renderTooltip(font, hover.text(), mouseX, mouseY);
-                break;
+                List<Component> target = hover.full() ? full : details;
+                if (target.stream().noneMatch(line -> line.getString().equals(hover.text().getString()))) {
+                    target.add(hover.text());
+                }
             }
         }
+        full.addAll(details);
+        return full;
     }
 
     /**
@@ -103,16 +122,24 @@ public abstract class KingdomScreen extends Screen {
         int width = font.width(shown);
         LayoutCheck.drawn(this, Component.literal(shown), x, y, width);
         if (!shown.equals(name)) {
-            hovers.add(new Hover(x, y, width, Component.literal(name)));
+            hovers.add(new Hover(x, y, width, Component.literal(name), true));
         }
         return width;
+    }
+
+    /**
+     * Shows the full form of a text shortened with an ellipsis while the mouse is over it; it comes first among the hover
+     * texts of the place.
+     */
+    protected void hoverFull(int x, int y, int width, Component text) {
+        hovers.add(new Hover(x, y, width, text, true));
     }
 
     /**
      * Shows a text in a tooltip while the mouse is over a line drawn at {@code x}, {@code y}.
      */
     protected void hoverText(int x, int y, int width, Component text) {
-        hovers.add(new Hover(x, y, width, text));
+        hovers.add(new Hover(x, y, width, text, false));
     }
 
     /**

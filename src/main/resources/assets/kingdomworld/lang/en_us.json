@@ -165,6 +165,7 @@
   "kingdomworld.screen.throne.decline_invitation": "Decline",
   "kingdomworld.screen.throne.dissolve": "Dissolve kingdom",
   "kingdomworld.screen.throne.dissolve.confirm": "Dissolve %s for good? All members lose the kingdom and its land becomes free.",
+  "kingdomworld.screen.throne.confirm_title": "Please confirm",
   "kingdomworld.screen.throne.leave": "Leave kingdom",
   "kingdomworld.screen.throne.leave.confirm": "Leave %s?",
   "kingdomworld.screen.throne.applications": "Applications (%s)",

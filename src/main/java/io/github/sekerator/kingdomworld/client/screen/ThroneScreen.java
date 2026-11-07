@@ -586,7 +586,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
                 onYes.run();
             }
             minecraft.setScreen(this);
-        }, Component.literal(fit(view.name(), 300)), question));
+        }, Component.translatable("kingdomworld.screen.throne.confirm_title"), question));
     }
 
     private static Component roleName(Role role) {
@@ -825,13 +825,13 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
                         .bounds(x + buttonWidth(label) + GAP, y, buttonWidth(territory), 20).build());
                 if (view.viewerRole() == Role.KING) {
                     addRenderableWidget(Button.builder(label.copy().withStyle(ChatFormatting.RED),
-                            button -> confirm(Component.translatable("kingdomworld.screen.throne.dissolve.confirm", fit(view.name(), 200)), () -> {
+                            button -> confirm(Component.translatable("kingdomworld.screen.throne.dissolve.confirm", view.name()), () -> {
                                 closeOnSuccess = true;
                                 send(KingdomActionPacket.Action.DISSOLVE, null, 0);
                             })).bounds(x, y, buttonWidth(label), 20).build());
                 } else {
                     addRenderableWidget(Button.builder(label,
-                            button -> confirm(Component.translatable("kingdomworld.screen.throne.leave.confirm", fit(view.name(), 200)),
+                            button -> confirm(Component.translatable("kingdomworld.screen.throne.leave.confirm", view.name()),
                                     () -> send(KingdomActionPacket.Action.LEAVE, null, 0))).bounds(x, y, buttonWidth(label), 20).build());
                 }
             }

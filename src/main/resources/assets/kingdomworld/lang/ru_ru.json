@@ -165,6 +165,7 @@
   "kingdomworld.screen.throne.decline_invitation": "Отклонить",
   "kingdomworld.screen.throne.dissolve": "Распустить королевство",
   "kingdomworld.screen.throne.dissolve.confirm": "Распустить королевство %s навсегда? Подданные его лишатся, земли станут свободными.",
+  "kingdomworld.screen.throne.confirm_title": "Подтвердите действие",
   "kingdomworld.screen.throne.leave": "Покинуть королевство",
   "kingdomworld.screen.throne.leave.confirm": "Покинуть королевство %s?",
   "kingdomworld.screen.throne.applications": "Заявки (%s)",
