@@ -5,6 +5,6 @@
   "role": "tavern",
   "level": 2,
   "icon": "minecraft:barrel",
-  "anchor": [6, 0, 10],
+  "anchor": [5, 0, 10],
   "entrance": "south"
 }

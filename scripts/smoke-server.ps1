@@ -1689,8 +1689,8 @@ Invoke-Phase 'session1' {
             $new = @($all | Where-Object { $script:CitizenIds -notcontains $_ })
             $script:CitizenIds = @($all)
             $script:InnkeeperId = $new[0]
-            Send-ServerCommand $server 'kingdomworld admin posts set -12 71 -14 profession innkeeper'
-            if (-not (Wait-ForLog $server 'Work post at -12 71 -14: Innkeeper, radius \d+' $CommandTimeout 'No work post at -12 71 -14|Unknown or incomplete command')) {
+            Send-ServerCommand $server 'kingdomworld admin posts set -11 71 -14 profession innkeeper'
+            if (-not (Wait-ForLog $server 'Work post at -11 71 -14: Innkeeper, radius \d+' $CommandTimeout 'No work post at -11 71 -14|Unknown or incomplete command')) {
                 Add-Failure '[session1] the post at the counter of the tavern was not registered or could not be set'
             }
             Send-ServerCommand $server "kingdomworld admin citizens profession $($script:InnkeeperId) innkeeper"

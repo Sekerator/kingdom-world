@@ -177,7 +177,8 @@ public final class LawCities {
             // No gate in this world: back to where the player came from, on safe ground.
             Optional<double[]> from = CityWalls.enteredFrom(player.getUUID());
             if (from.isPresent()) {
-                BlockPos spot = safeNear(player.serverLevel(), (int) Math.floor(from.get()[0]), (int) Math.floor(from.get()[1]), null, 0);
+                BlockPos spot = safeNear(player.serverLevel(), (int) Math.floor(from.get()[0]), player.getBlockY(), (int) Math.floor(from.get()[1]),
+                        null, 0);
                 if (spot != null) {
                     player.teleportTo(spot.getX() + 0.5, spot.getY(), spot.getZ() + 0.5);
                 }
@@ -196,21 +197,49 @@ public final class LawCities {
         int z = gate.z() + (int) Math.round(dz / length * PUSH_OUT);
         // Outside means farther from the middle than the gate; the nearest safe ground there, else the safe ground nearest the gate.
         double gateDistance = place == null ? -1 : Math.hypot(gate.x() - place.x(), gate.z() - place.z());
-        BlockPos spot = safeNear(player.serverLevel(), x, z, place, gateDistance);
+        BlockPos spot = safeNear(player.serverLevel(), x, gate.y(), z, place, gateDistance);
         if (spot == null) {
-            spot = safeNear(player.serverLevel(), gate.x(), gate.z(), null, 0);
+            spot = safeNear(player.serverLevel(), gate.x(), gate.y(), gate.z(), null, 0);
         }
         if (spot != null) {
             player.teleportTo(spot.getX() + 0.5, spot.getY(), spot.getZ() + 0.5);
         }
     }
 
+    /** How far above and below the height of the gate a safe place is looked for first, in blocks. */
+    static final int NEAR_HEIGHT = 4;
+
     /**
-     * Safe ground near a column: a solid block under two blocks of air without liquid, above the bottom of the world; the
-     * nearest within a few blocks, optionally only farther from the middle than {@code minDistance}.
+     * Safe ground near a column: two blocks of air on a sturdy block, no liquid, within four blocks of it (and farther than
+     * {@code minDistance} from {@code middle}, when given). The height of the gate counts first: a place within
+     * {@link #NEAR_HEIGHT} blocks above or below {@code y}, nearest that height, so that a city on a ledge, under an overhang or
+     * in a cave does not throw a player onto a roof or the surface far above; only when there is none near that height, the
+     * top of the land.
+     *
+     * @return the block the feet stand in, or {@code null}
      */
-    @Nullable
-    static BlockPos safeNear(ServerLevel level, int x, int z, @Nullable WorldPos middle, double minDistance) {
+    static BlockPos safeNear(ServerLevel level, int x, int y, int z, @Nullable WorldPos middle, double minDistance) {
+        BlockPos near = search(level, x, z, middle, minDistance, (cx, cz) -> {
+            for (int step = 0; step <= 2 * NEAR_HEIGHT; step++) {
+                int dy = (step + 1) / 2 * (step % 2 == 0 ? -1 : 1);
+                BlockPos feet = new BlockPos(cx, y + dy, cz);
+                if (standable(level, feet)) {
+                    return feet;
+                }
+            }
+            return null;
+        });
+        if (near != null) {
+            return near;
+        }
+        return search(level, x, z, middle, minDistance, (cx, cz) -> {
+            BlockPos feet = new BlockPos(cx, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, cx, cz), cz);
+            return standable(level, feet) ? feet : null;
+        });
+    }
+
+    private static BlockPos search(ServerLevel level, int x, int z, @Nullable WorldPos middle, double minDistance,
+                                   java.util.function.BiFunction<Integer, Integer, BlockPos> column) {
         for (int radius = 0; radius <= 4; radius++) {
             for (int dx = -radius; dx <= radius; dx++) {
                 for (int dz = -radius; dz <= radius; dz++) {
@@ -222,19 +251,20 @@ public final class LawCities {
                     if (middle != null && minDistance > 0 && Math.hypot(cx - middle.x(), cz - middle.z()) <= minDistance) {
                         continue;
                     }
-                    int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, cx, cz);
-                    BlockPos feet = new BlockPos(cx, y, cz);
-                    BlockPos ground = feet.below();
-                    if (y <= level.getMinBuildHeight() || !level.getFluidState(ground).isEmpty()
-                            || !level.getBlockState(ground).isFaceSturdy(level, ground, net.minecraft.core.Direction.UP)
-                            || !level.getBlockState(feet).isAir() || !level.getBlockState(feet.above()).isAir()
-                            || !level.getFluidState(feet).isEmpty()) {
-                        continue;
+                    BlockPos feet = column.apply(cx, cz);
+                    if (feet != null) {
+                        return feet;
                     }
-                    return feet;
                 }
             }
         }
         return null;
+    }
+
+    private static boolean standable(ServerLevel level, BlockPos feet) {
+        BlockPos ground = feet.below();
+        return feet.getY() > level.getMinBuildHeight() && feet.getY() < level.getMaxBuildHeight() - 1 && level.getFluidState(ground).isEmpty()
+                && level.getBlockState(ground).isFaceSturdy(level, ground, net.minecraft.core.Direction.UP)
+                && level.getBlockState(feet).isAir() && level.getBlockState(feet.above()).isAir() && level.getFluidState(feet).isEmpty();
     }
 }

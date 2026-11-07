@@ -150,7 +150,7 @@ final class ClientLifeShowcase {
         switch (index) {
             case 0 -> {
                 minecraft.options.hideGui = true;
-                teleport(server, playerId, t.getX() + 9.5, t.getY() + 2.6, t.getZ() + 8.5, 135.0f, 18.0f);
+                teleport(server, playerId, t.getX() + 7.5, t.getY() + 2.6, t.getZ() + 8.3, 140.0f, 18.0f);
             }
             case 1 -> {
                 minecraft.options.hideGui = false;
@@ -361,7 +361,7 @@ final class ClientLifeShowcase {
         innkeeperEntity = keeperBody == null ? -1 : keeperBody.getId();
         // Guests in the tavern, and three beds in the open for the night.
         List<Citizen> guests = new ArrayList<>();
-        int[][] seats = {{7, 2}, {9, 2}, {7, 5}, {9, 5}, {2, 6}, {4, 6}};
+        int[][] seats = {{6, 4}, {8, 4}, {6, 7}, {8, 7}, {2, 7}, {4, 7}};
         for (int i = 0; i < 39; i++) {
             int[] seat = seats[i % seats.length];
             guests.add(citizen(server, kingdom, new WorldPos(post.dimension(), min.getX() + seat[0], min.getY() + 1, min.getZ() + seat[1])));

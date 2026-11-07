@@ -1172,7 +1172,7 @@ public final class NpcSpawner {
     }
 
     /**
-     * Gives the posts inside the workshops, the market and the tower of mages their professions.
+     * Gives the posts inside the workshops, the market, the tower of mages and the tavern their professions.
      */
     private static void professionsInBuildings(MinecraftServer server, UUID id, NpcComposition composition) {
         KingdomWorldState state = KingdomWorldApi.state(server);
@@ -1184,6 +1184,7 @@ public final class NpcSpawner {
                 case NpcComposition.WORKSHOP -> workshops.isEmpty() ? "" : workshops.remove(0);
                 case NpcComposition.MARKET -> merchants-- > 0 ? "merchant" : "";
                 case NpcComposition.MAGE_TOWER -> mages > 0 ? "mage" : "";
+                case NpcComposition.TAVERN, NpcComposition.TAVERN_2 -> "innkeeper";
                 default -> "";
             };
             if (profession.isEmpty() || composition.jobs().getOrDefault(profession, 0) <= 0) {

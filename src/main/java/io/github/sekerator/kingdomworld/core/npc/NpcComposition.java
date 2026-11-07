@@ -35,6 +35,9 @@ public record NpcComposition(NpcLevel level, List<Plot> buildings, int rings, in
     public static final String WATCHTOWER = "kingdomworld:watchtower";
     public static final String BARRACKS = "kingdomworld:barracks";
     public static final String MAGE_TOWER = "kingdomworld:mage_tower";
+    /** The tavern of a medium kingdom; a large one has the tavern with rooms, a level higher. */
+    public static final String TAVERN = "kingdomworld:tavern";
+    public static final String TAVERN_2 = "kingdomworld:tavern_2";
 
     /** Beds in the buildings that have them. */
     private static final Map<String, Integer> BEDS = Map.of(SMALL_HOUSE, 1, LARGE_HOUSE, 3, BARRACKS, 4, MAGE_TOWER, 1);
@@ -105,7 +108,7 @@ public record NpcComposition(NpcLevel level, List<Plot> buildings, int rings, in
             }
             case MEDIUM -> {
                 radius = wallRadius * 3 / 2;
-                list.addAll(List.of(MARKET, STOREHOUSE, WELL, WORKSHOP, WORKSHOP));
+                list.addAll(List.of(MARKET, STOREHOUSE, WELL, WORKSHOP, WORKSHOP, TAVERN));
                 for (int i = 0; i < barracks; i++) {
                     list.add(BARRACKS);
                 }
@@ -113,7 +116,7 @@ public record NpcComposition(NpcLevel level, List<Plot> buildings, int rings, in
             }
             default -> {
                 radius = wallRadius * 2;
-                list.addAll(List.of(MARKET, STOREHOUSE, WELL, WORKSHOP, WORKSHOP, STOREHOUSE, WELL, WORKSHOP, MAGE_TOWER));
+                list.addAll(List.of(MARKET, STOREHOUSE, WELL, WORKSHOP, WORKSHOP, STOREHOUSE, WELL, WORKSHOP, MAGE_TOWER, TAVERN_2));
                 for (int i = 0; i < barracks; i++) {
                     list.add(BARRACKS);
                 }
@@ -156,11 +159,11 @@ public record NpcComposition(NpcLevel level, List<Plot> buildings, int rings, in
             case SMALL -> List.of(new String[]{"farmer", "2"}, new String[]{"merchant", "1"}, new String[]{"crafter", "1"},
                     new String[]{"lumberjack", "1"}, new String[]{"carrier", "1"}, new String[]{"registrar", "1"},
                     new String[]{"farmer", "1"}, new String[]{"builder", "1"});
-            case MEDIUM -> List.of(new String[]{"farmer", "3"}, new String[]{"merchant", "1"}, new String[]{"crafter", "1"},
+            case MEDIUM -> List.of(new String[]{"farmer", "3"}, new String[]{"merchant", "1"}, new String[]{"innkeeper", "1"}, new String[]{"crafter", "1"},
                     new String[]{"smith", "1"}, new String[]{"lumberjack", "1"}, new String[]{"miner", "1"}, new String[]{"carrier", "1"},
                     new String[]{"builder", "1"}, new String[]{"minter", "1"}, new String[]{"registrar", "1"}, new String[]{"farmer", "1"},
                     new String[]{"lumberjack", "1"});
-            default -> List.of(new String[]{"farmer", "6"}, new String[]{"merchant", "2"}, new String[]{"crafter", "1"},
+            default -> List.of(new String[]{"farmer", "6"}, new String[]{"merchant", "2"}, new String[]{"innkeeper", "1"}, new String[]{"crafter", "1"},
                     new String[]{"smith", "1"}, new String[]{"cook", "1"}, new String[]{"lumberjack", "3"}, new String[]{"miner", "2"},
                     new String[]{"carrier", "2"}, new String[]{"builder", "2"}, new String[]{"minter", "1"}, new String[]{"registrar", "1"},
                     new String[]{"mage", "2"}, new String[]{"farmer", "4"}, new String[]{"miner", "2"}, new String[]{"carrier", "1"});

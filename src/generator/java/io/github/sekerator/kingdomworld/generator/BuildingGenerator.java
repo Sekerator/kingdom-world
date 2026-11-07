@@ -81,8 +81,8 @@ public final class BuildingGenerator {
         list.add(new Building("well", "decoration", "well", "minecraft:bucket", 2, 0, 4, well()));
         list.add(new Building("barracks", "defense", "barracks", "kingdomworld:barracks", 5, 0, 8, barracks()));
         list.add(new Building("mage_tower", "magic", "mage_tower", "kingdomworld:magic_focus", 4, 0, 8, mageTower()));
-        list.add(new Building("tavern", "trade", "tavern", "minecraft:barrel", 6, 0, 10, tavern(), "tavern", 1, "kingdomworld:tavern_2"));
-        list.add(new Building("tavern_2", "trade", "tavern", "minecraft:barrel", 6, 0, 10, tavern2(), "tavern", 2, ""));
+        list.add(new Building("tavern", "trade", "tavern", "minecraft:barrel", 5, 0, 10, tavern(), "tavern", 1, "kingdomworld:tavern_2"));
+        list.add(new Building("tavern_2", "trade", "tavern", "minecraft:barrel", 5, 0, 10, tavern2(), "tavern", 2, ""));
         return list;
     }
 
@@ -437,26 +437,26 @@ public final class BuildingGenerator {
     }
 
     /**
-     * A tavern of two floors: below, a counter with the innkeeper's post behind it and barrels at the back wall, tables with
-     * benches and lanterns; above, rooms with beds for guests, reached by a ladder.
+     * A tavern of two floors on the ground of a large house: below, a counter with the innkeeper's post behind it and barrels
+     * at the back wall, tables with benches and lanterns; above, rooms with beds for guests, reached by a ladder.
      */
     static Structure tavern() {
-        Structure s = new Structure(13, 15, 11);
-        s.fill(1, 0, 1, 11, 0, 9, COBBLE).fill(2, 0, 2, 10, 0, 8, SPRUCE_PLANKS);
-        s.set(6, 0, 10, stairs(COBBLE_STAIRS, "north"));
-        s.walls(1, 1, 1, 11, 1, 9, COBBLE).walls(1, 2, 1, 11, 4, 9, OAK_PLANKS);
-        s.beam(1, 1, 11, 9, 5, OAK_LOG);
-        s.fill(2, 5, 2, 10, 5, 8, SPRUCE_PLANKS);
-        s.walls(1, 6, 1, 11, 8, 9, OAK_PLANKS);
-        s.corners(1, 1, 1, 11, 8, 9, OAK_LOG);
-        s.fill(6, 2, 1, 6, 8, 1, OAK_LOG + "[axis=y]");
+        Structure s = new Structure(11, 15, 11);
+        s.fill(1, 0, 1, 9, 0, 9, COBBLE).fill(2, 0, 2, 8, 0, 8, SPRUCE_PLANKS);
+        s.set(5, 0, 10, stairs(COBBLE_STAIRS, "north"));
+        s.walls(1, 1, 1, 9, 1, 9, COBBLE).walls(1, 2, 1, 9, 4, 9, OAK_PLANKS);
+        s.beam(1, 1, 9, 9, 5, OAK_LOG);
+        s.fill(2, 5, 2, 8, 5, 8, SPRUCE_PLANKS);
+        s.walls(1, 6, 1, 9, 8, 9, OAK_PLANKS);
+        s.corners(1, 1, 1, 9, 8, 9, OAK_LOG);
+        s.fill(5, 2, 1, 5, 8, 1, OAK_LOG + "[axis=y]");
         for (int z : new int[]{3, 7}) {
-            s.set(1, 3, z, PANE_Z).set(11, 3, z, PANE_Z).set(1, 7, z, PANE_Z).set(11, 7, z, PANE_Z);
+            s.set(1, 3, z, PANE_Z).set(9, 3, z, PANE_Z).set(1, 7, z, PANE_Z).set(9, 7, z, PANE_Z);
         }
-        for (int x : new int[]{3, 9}) {
+        for (int x : new int[]{3, 7}) {
             s.set(x, 3, 1, PANE_X).set(x, 3, 9, PANE_X).set(x, 7, 1, PANE_X).set(x, 7, 9, PANE_X);
         }
-        s.door(6, 1, 9, OAK_DOOR, "north", "left");
+        s.door(5, 1, 9, OAK_DOOR, "north", "left");
         // The counter with the innkeeper's post behind it; the gap at its end lets the innkeeper out.
         for (int x = 2; x <= 4; x++) {
             s.set(x, 1, 4, "minecraft:stripped_spruce_log[axis=x]");
@@ -465,45 +465,43 @@ public final class BuildingGenerator {
         s.set(2, 1, 2, BARREL).set(4, 1, 2, BARREL).set(2, 2, 2, BARREL);
         s.set(5, 1, 2, "minecraft:smoker[facing=south,lit=false]");
         // Tables with benches.
-        for (int[] table : new int[][]{{8, 3}, {8, 6}, {3, 7}}) {
+        for (int[] table : new int[][]{{7, 3}, {7, 6}, {3, 7}}) {
             s.set(table[0], 1, table[1], FENCE).set(table[0], 2, table[1], "minecraft:oak_pressure_plate[powered=false]");
             s.set(table[0] - 1, 1, table[1], stairs(DARK_STAIRS, "east")).set(table[0] + 1, 1, table[1], stairs(DARK_STAIRS, "west"));
         }
-        s.set(4, 4, 6, HANGING_LANTERN).set(8, 4, 4, HANGING_LANTERN).set(8, 4, 7, HANGING_LANTERN);
-        s.set(5, 3, 8, wallTorch("north")).set(7, 3, 8, wallTorch("north"));
-        s.set(5, 3, 10, wallTorch("south")).set(7, 3, 10, wallTorch("south"));
+        s.set(4, 4, 6, HANGING_LANTERN).set(7, 4, 4, HANGING_LANTERN).set(7, 4, 7, HANGING_LANTERN);
+        s.set(4, 3, 10, wallTorch("south")).set(6, 3, 10, wallTorch("south"));
         // A ladder along the east wall up through the floor.
-        s.set(10, 5, 2, Structure.AIR);
+        s.set(8, 5, 2, Structure.AIR);
         for (int y = 1; y <= 6; y++) {
-            s.set(10, y, 2, "minecraft:ladder[facing=west,waterlogged=false]");
+            s.set(8, y, 2, "minecraft:ladder[facing=west,waterlogged=false]");
         }
         // Rooms for guests above.
         s.bed(2, 6, 3, BED, "north", 0, -1).bed(4, 6, 3, BED, "north", 0, -1).bed(6, 6, 3, BED, "north", 0, -1);
-        s.set(2, 6, 8, BARREL).set(8, 6, 8, BARREL);
-        s.set(2, 8, 5, wallTorch("east")).set(10, 8, 5, wallTorch("west"));
-        s.beam(1, 1, 11, 9, 9, OAK_LOG);
-        s.gableRoof(0, 12, 0, 10, 9, ROOF_STAIRS, ROOF_SLAB, OAK_PLANKS, 1, 11);
+        s.set(6, 6, 8, BARREL).set(8, 6, 8, BARREL);
+        s.set(2, 8, 5, wallTorch("east")).set(8, 8, 5, wallTorch("west"));
+        s.beam(1, 1, 9, 9, 9, OAK_LOG);
+        s.gableRoof(0, 10, 0, 10, 9, ROOF_STAIRS, ROOF_SLAB, OAK_PLANKS, 1, 9);
         return s;
     }
 
     /**
-     * The tavern a level higher: a plinth of stone bricks, a fourth table, a fourth room and more light, on the same ground
-     * with the same door and counter, so that an upgrade changes only what differs.
+     * The tavern a level higher: a plinth of stone bricks, a fourth room and more light, on the same ground with the same
+     * door and counter, so that an upgrade changes only what differs.
      */
     static Structure tavern2() {
         Structure s = tavern();
-        for (int x = 2; x <= 10; x++) {
-            if (x != 6) {
+        for (int x = 2; x <= 8; x++) {
+            if (x != 5) {
                 s.set(x, 1, 1, STONE_BRICKS).set(x, 1, 9, STONE_BRICKS);
             }
         }
         for (int z = 2; z <= 8; z++) {
-            s.set(1, 1, z, STONE_BRICKS).set(11, 1, z, STONE_BRICKS);
+            s.set(1, 1, z, STONE_BRICKS).set(9, 1, z, STONE_BRICKS);
         }
-        s.set(5, 1, 7, FENCE).set(5, 2, 7, "minecraft:oak_pressure_plate[powered=false]");
-        s.bed(8, 6, 3, BED, "north", 0, -1);
-        s.set(4, 4, 3, HANGING_LANTERN).set(6, 8, 6, HANGING_LANTERN);
-        s.set(2, 2, 6, "minecraft:flower_pot").set(10, 2, 6, "minecraft:flower_pot");
+        s.bed(2, 6, 7, BED, "north", 0, -1);
+        s.set(4, 4, 3, HANGING_LANTERN).set(5, 8, 6, HANGING_LANTERN);
+        s.set(2, 2, 6, "minecraft:flower_pot").set(8, 2, 8, "minecraft:flower_pot");
         s.set(4, 2, 2, "minecraft:brewing_stand[has_bottle_0=false,has_bottle_1=false,has_bottle_2=false]");
         return s;
     }
