@@ -198,8 +198,9 @@ public final class ArmyGameTests {
         CitizenBodies.update(server);
         CitizenEntity body = CitizenBodies.body(citizen.id());
         helper.assertTrue(body != null, "The soldier got no body");
-        // A husk does not burn in the sun, so only the soldier can kill it.
-        Husk zombie = helper.spawn(EntityType.HUSK, new BlockPos(4, 1, 5));
+        // A husk does not burn in the sun, so only the soldier can kill it. It stands on the ground: a husk held still does not
+        // fall, and one hanging a block above the floor is at the very end of the reach of a sword.
+        Husk zombie = helper.spawn(EntityType.HUSK, new BlockPos(4, 0, 5));
         zombie.setNoAi(true);
         helper.succeedWhen(() -> {
             helper.assertTrue(!zombie.isAlive(), "The zombie is still alive");
