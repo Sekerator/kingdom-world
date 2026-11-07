@@ -218,7 +218,13 @@ public final class NpcRulers {
     }
 
     private static void carryOut(MinecraftServer server, NpcKingdom kingdom, RulerDecision decision, long day) {
-        RulerActions.Result result = RulerActions.start(server, kingdom, decision);
+        RulerActions.Result result;
+        try {
+            result = RulerActions.start(server, kingdom, decision);
+        } catch (RuntimeException e) {
+            LOGGER.error("The ruler of {} could not carry out {}", kingdom.name().latin(), decision, e);
+            return;
+        }
         if (result.job() != null) {
             job = result.job();
             stepJob(server, day);

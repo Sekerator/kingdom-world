@@ -386,7 +386,7 @@ public final class RulerMind {
         if (view.soldiers > keep) {
             out.add(new Scored(100, RulerDecision.of(Kind.DISMISS, "", Math.max(1, (view.soldiers - keep + 1) / 2))));
         }
-        if (view.constructions > 0 || !view.buying.isEmpty()) {
+        if (view.constructions > view.paused || !view.buying.isEmpty()) {
             out.add(new Scored(95, RulerDecision.of(Kind.PAUSE, "", view.constructions)));
         }
         long tax = pollTax(view, rules);
@@ -548,7 +548,8 @@ public final class RulerMind {
                 }
             }
         }
-        view.neighbours.stream().filter(n -> !n.road() && n.distance() <= rules.roadDistance() && memory.relation(n.id()) > -30)
+        view.neighbours.stream().filter(n -> !n.road() && n.distance() <= rules.roadDistance() && memory.relation(n.id()) > -30
+                        && !recent(memory, Kind.ROAD, n.id().toString(), view.day, 5))
                 .min(Comparator.comparingInt(RulerView.Neighbour::distance))
                 .ifPresent(n -> out.add(new Scored(35 + merchant + (view.character == RulerCharacter.BUILDER ? 10 : 0),
                         RulerDecision.of(Kind.ROAD, "", n.distance(), n.id().toString(), n.name()))));
@@ -618,6 +619,19 @@ public final class RulerMind {
         double factor = sell ? 1 + markup(view, rules) / 1000.0 : 1 - markup(view, rules) / 2000.0;
         long price = Math.max(1, Math.round(good.worth() * count * factor));
         return new RulerDecision(Kind.OFFER, good.item(), sell ? count : -count, price, neighbour.id().toString(), neighbour.name());
+    }
+
+    /**
+     * Whether the ruler decreed the same thing about the same target within some days: a road that is being searched for or
+     * could not be found is not ordered again at once.
+     */
+    private static boolean recent(RulerMemory memory, Kind kind, String target, long day, int days) {
+        for (RulerMemory.Decree decree : memory.decrees()) {
+            if (decree.decision().kind() == kind && decree.decision().target().equals(target) && day - decree.day() < days) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Optional<RulerView.Good> wantedBy(RulerView view, RulerView.Neighbour neighbour) {

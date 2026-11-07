@@ -221,6 +221,9 @@ final class RulerSnapshots {
             if (construction.status() == Construction.Status.NO_MATERIALS) {
                 view.stalled++;
             }
+            if (construction.paused()) {
+                view.paused++;
+            }
             if (construction.kind() == Construction.Kind.BUILD) {
                 BuildingTemplates.get(construction.templateId()).ifPresent(template -> view.planned.merge(template.role(), 1, Integer::sum));
             }

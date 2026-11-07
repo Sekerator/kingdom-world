@@ -117,6 +117,8 @@ public final class RulerView {
     public int maxConstructions = 4;
     /** Constructions that stand still for lack of materials. */
     public int stalled;
+    /** Constructions stopped already. */
+    public int paused;
     public List<Option> builds = new ArrayList<>();
     public List<Option> upgrades = new ArrayList<>();
     public List<Long> damaged = new ArrayList<>();
@@ -200,6 +202,7 @@ public final class RulerView {
         view.constructions = constructions;
         view.maxConstructions = maxConstructions;
         view.stalled = stalled;
+        view.paused = paused;
         view.builds = new ArrayList<>(builds);
         view.upgrades = new ArrayList<>(upgrades);
         view.damaged = new ArrayList<>(damaged);
