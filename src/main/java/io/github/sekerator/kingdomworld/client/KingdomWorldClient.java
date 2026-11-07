@@ -70,6 +70,9 @@ public final class KingdomWorldClient {
                     .map(info -> info.old() ? 0xFF808080 : 0xFF000000 | info.color())
                     .orElse(0xFFA0A0A0);
         }, ModRegistries.COIN.get());
+        // A monster crystal shines in the color of its rank.
+        event.register((stack, tint) -> tint == 0 ? 0xFF000000 | io.github.sekerator.kingdomworld.common.guild.MonsterCrystalItem.color(stack)
+                : 0xFFFFFFFF, io.github.sekerator.kingdomworld.common.guild.GuildRegistries.MONSTER_CRYSTAL.get());
     }
 
     private static void onRegisterKeys(RegisterKeyMappingsEvent event) {

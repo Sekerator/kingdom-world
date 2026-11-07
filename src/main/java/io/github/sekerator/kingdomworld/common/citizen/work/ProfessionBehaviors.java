@@ -30,6 +30,8 @@ public final class ProfessionBehaviors {
         register(Professions.SMITH, new io.github.sekerator.kingdomworld.common.production.WorkshopBehavior(Professions.SMITH.id()));
         register(Professions.MINTER, new io.github.sekerator.kingdomworld.common.economy.MinterBehavior());
         register(Professions.MERCHANT, new io.github.sekerator.kingdomworld.common.trade.MerchantBehavior());
+        register(Professions.REGISTRAR, new io.github.sekerator.kingdomworld.common.guild.RegistrarBehavior());
+        register(Professions.ADVENTURER, new io.github.sekerator.kingdomworld.common.guild.AdventurerBehavior());
     }
 
     private ProfessionBehaviors() {

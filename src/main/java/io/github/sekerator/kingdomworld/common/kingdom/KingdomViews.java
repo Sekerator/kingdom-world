@@ -72,7 +72,9 @@ public final class KingdomViews {
                     break;
                 }
                 memberEntries.add(new KingdomView.MemberEntry(member.playerId(), PlayerNames.name(server, member.playerId()),
-                        member.role(), PlayerNames.isOnline(server, member.playerId())));
+                        member.role(), PlayerNames.isOnline(server, member.playerId()),
+                        io.github.sekerator.kingdomworld.common.guild.GuildSavedData.get(server).state().member(member.playerId())
+                                .map(guildMember -> guildMember.rank().ordinal()).orElse(-1)));
             }
             for (Role role : Role.values()) {
                 rightsTable.put(role, rights.effective(role));

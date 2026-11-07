@@ -18,10 +18,12 @@ public final class Stations {
     public static final String MINT = "mint";
     /** The market stall of the merchant. */
     public static final String MARKET_STALL = "market_stall";
+    /** The desk of the guild, kept by the registrar. */
+    public static final String GUILD_DESK = "guild_desk";
 
     /** Every kind, in the order the post screen lists them. */
     public static final List<String> ALL = List.of(FURNACE, BLAST_FURNACE, SMOKER, CAMPFIRE, CRAFTING_TABLE, STONECUTTER, SMITHING_TABLE, MINT,
-            MARKET_STALL);
+            MARKET_STALL, GUILD_DESK);
 
     private Stations() {
     }

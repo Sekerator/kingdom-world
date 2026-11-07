@@ -5,6 +5,7 @@
     "kingdomworld:storehouse",
     "kingdomworld:infirmary",
     "kingdomworld:work_post",
-    "kingdomworld:market_stall"
+    "kingdomworld:market_stall",
+    "kingdomworld:guild_desk"
   ]
 }

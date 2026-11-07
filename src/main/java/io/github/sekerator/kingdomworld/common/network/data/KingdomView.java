@@ -45,7 +45,13 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
         OUTSIDER
     }
 
-    public record MemberEntry(UUID id, String name, Role role, boolean online) {
+    /**
+     * @param guildRank the member's rank in the adventurers' guild as an index from F, -1 outside the guild
+     */
+    public record MemberEntry(UUID id, String name, Role role, boolean online, int guildRank) {
+        public MemberEntry(UUID id, String name, Role role, boolean online) {
+            this(id, name, role, online, -1);
+        }
     }
 
     public record PendingEntry(UUID id, String name) {
@@ -94,6 +100,7 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
             buf.writeUtf(member.name(), KingdomMapInfo.MAX_PLAYER_NAME);
             buf.writeEnum(member.role());
             buf.writeBoolean(member.online());
+            buf.writeVarInt(member.guildRank() + 1);
         }
         buf.writeVarInt(applications.size());
         for (PendingEntry entry : applications) {
@@ -123,7 +130,8 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
         int memberSize = readSize(buf, MAX_MEMBERS);
         List<MemberEntry> members = new ArrayList<>(memberSize);
         for (int i = 0; i < memberSize; i++) {
-            members.add(new MemberEntry(buf.readUUID(), buf.readUtf(KingdomMapInfo.MAX_PLAYER_NAME), readEnum(buf, Role.class), buf.readBoolean()));
+            members.add(new MemberEntry(buf.readUUID(), buf.readUtf(KingdomMapInfo.MAX_PLAYER_NAME), readEnum(buf, Role.class), buf.readBoolean(),
+                    Math.min(io.github.sekerator.kingdomworld.core.guild.Rank.COUNT, buf.readVarInt()) - 1));
         }
         int applicationSize = readSize(buf, MAX_APPLICATIONS);
         List<PendingEntry> applications = new ArrayList<>(applicationSize);

@@ -23,6 +23,8 @@ public enum CauseOfDeath {
     HERD,
     /** Any other accident at work far from players. */
     WORK,
+    /** Fell on an expedition of the guild. */
+    EXPEDITION,
     /** Removed by an operator command. */
     COMMAND,
     OTHER;

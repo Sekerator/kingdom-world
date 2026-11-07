@@ -45,6 +45,7 @@ public final class CommonEvents {
         CitizenEvents.register();
         io.github.sekerator.kingdomworld.common.economy.EconomyEvents.register();
         io.github.sekerator.kingdomworld.common.trade.TradeEvents.register();
+        io.github.sekerator.kingdomworld.common.guild.GuildEvents.register();
     }
 
     private static void onRegisterCommands(RegisterCommandsEvent event) {

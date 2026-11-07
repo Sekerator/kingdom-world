@@ -45,6 +45,8 @@ public final class Economy {
     private CurrencyUnits defaultUnits = CurrencyUnits.DEFAULT;
     private long defaultPollTax = EconomyRules.DEFAULT.defaultPollTax();
     private int defaultSalesTaxPermille;
+    /** Money of each currency held outside these books, in the escrow of guild contracts. */
+    private java.util.function.ToLongFunction<UUID> heldElsewhere = currency -> 0L;
     private Runnable changeListener = () -> {
     };
 
@@ -164,7 +166,7 @@ public final class Economy {
                 sum = Money.addCapped(sum, escrow.amount());
             }
         }
-        return sum;
+        return Money.addCapped(sum, Math.max(0, heldElsewhere.applyAsLong(currency)));
     }
 
     /**
@@ -618,6 +620,151 @@ public final class Economy {
         return Outcome.DONE;
     }
 
+    // ---------------------------------------------------------------- money held for guild contracts
+
+    /**
+     * Tells the books how much money of each currency the guild holds in the escrow of its contracts, so that the supply
+     * of a currency counts it.
+     */
+    public void setHeldElsewhere(java.util.function.ToLongFunction<UUID> held) {
+        this.heldElsewhere = Objects.requireNonNull(held, "held");
+    }
+
+    /**
+     * Whether a treasury could put an amount of its own currency into escrow.
+     */
+    public Outcome checkHoldFromTreasury(UUID kingdomId, long amount) {
+        Treasury treasury = treasuries.get(kingdomId);
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (!Money.isPayment(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        return treasury.funds() >= amount ? Outcome.DONE : Outcome.fail(KingdomError.TREASURY_EMPTY);
+    }
+
+    /**
+     * Money of a treasury goes into escrow; the caller keeps it in its books in the same moment.
+     */
+    public Outcome holdFromTreasury(UUID kingdomId, long amount, LedgerCategory category, long day) {
+        Outcome check = checkHoldFromTreasury(kingdomId, amount);
+        if (!check.ok()) {
+            return check;
+        }
+        give(treasuries.get(kingdomId), kingdomId, amount, category, day);
+        changed();
+        return Outcome.DONE;
+    }
+
+    /**
+     * Whether a player could put an amount of a current currency into escrow from the account.
+     */
+    public Outcome checkHoldFromAccount(UUID player, UUID currency, long amount) {
+        Outcome current = checkCurrent(currency);
+        if (!current.ok()) {
+            return current;
+        }
+        if (!Money.isPayment(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        return accounts.balance(player, currency) >= amount ? Outcome.DONE : Outcome.fail(KingdomError.NOT_ENOUGH_MONEY);
+    }
+
+    /**
+     * Money of a player's account goes into escrow; the caller keeps it in its books in the same moment.
+     */
+    public Outcome holdFromAccount(UUID player, UUID currency, long amount) {
+        Outcome check = checkHoldFromAccount(player, currency, amount);
+        if (!check.ok()) {
+            return check;
+        }
+        accounts.debit(player, currency, amount);
+        changed();
+        return Outcome.DONE;
+    }
+
+    /**
+     * Whether money from escrow could go onto a player's account; old currencies are kept on accounts too.
+     */
+    public boolean canReleaseToAccount(UUID player, UUID currency, long amount) {
+        return amount == 0 || accounts.canCredit(player, currency, amount);
+    }
+
+    /**
+     * Money from escrow goes onto a player's account.
+     */
+    public Outcome releaseToAccount(UUID player, UUID currency, long amount) {
+        if (!Money.isAmount(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (amount == 0) {
+            return Outcome.DONE;
+        }
+        if (!accounts.canCredit(player, currency, amount)) {
+            return Outcome.fail(KingdomError.TOO_MUCH_MONEY);
+        }
+        accounts.credit(player, currency, amount);
+        changed();
+        return Outcome.DONE;
+    }
+
+    /**
+     * Whether money from escrow could go to a treasury: its own currency onto its balance, another into its reserves.
+     */
+    public boolean canReleaseToTreasury(UUID kingdomId, UUID currency, long amount) {
+        Treasury treasury = treasuries.get(kingdomId);
+        return amount == 0 || (treasury != null && isActive(currency) && canTake(treasury, currency, amount));
+    }
+
+    /**
+     * Money from escrow goes to a treasury: its own currency onto its balance, another into its reserves.
+     */
+    public Outcome releaseToTreasury(UUID kingdomId, UUID currency, long amount, LedgerCategory category, long day) {
+        if (!Money.isAmount(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (amount == 0) {
+            return Outcome.DONE;
+        }
+        if (!canReleaseToTreasury(kingdomId, currency, amount)) {
+            return Outcome.fail(treasuries.containsKey(kingdomId) ? KingdomError.TOO_MUCH_MONEY : KingdomError.UNKNOWN_KINGDOM);
+        }
+        take(treasuries.get(kingdomId), currency, amount, category, day);
+        changed();
+        return Outcome.DONE;
+    }
+
+    /**
+     * Whether a player could pay a fee to a treasury from the account in its currency.
+     */
+    public Outcome checkPayTreasury(UUID player, UUID kingdomId, long amount) {
+        Treasury treasury = treasuries.get(kingdomId);
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (!Money.isPayment(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (accounts.balance(player, kingdomId) < amount) {
+            return Outcome.fail(KingdomError.NOT_ENOUGH_MONEY);
+        }
+        return treasury.canReceive(amount) ? Outcome.DONE : Outcome.fail(KingdomError.TOO_MUCH_MONEY);
+    }
+
+    /**
+     * A player pays a fee to a treasury from the account in its currency, without touching any debt.
+     */
+    public Outcome payTreasury(UUID player, UUID kingdomId, long amount, LedgerCategory category, long day) {
+        Outcome check = checkPayTreasury(player, kingdomId, amount);
+        if (!check.ok()) {
+            return check;
+        }
+        accounts.debit(player, kingdomId, amount);
+        treasuries.get(kingdomId).receive(amount, category, day);
+        changed();
+        return Outcome.DONE;
+    }
 
     // ---------------------------------------------------------------- treasuries
 

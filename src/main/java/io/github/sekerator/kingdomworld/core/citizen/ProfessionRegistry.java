@@ -36,6 +36,8 @@ public final class ProfessionRegistry {
         registry.register(Professions.SMITH);
         registry.register(Professions.MINTER);
         registry.register(Professions.MERCHANT);
+        registry.register(Professions.REGISTRAR);
+        registry.register(Professions.ADVENTURER);
         return registry;
     }
 

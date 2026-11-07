@@ -186,6 +186,35 @@ final class KingdomDataMigrations {
     }
 
     /**
+     * Upgrades that do not need a format of their own, by name: new rights that positions get once. Data written by this
+     * version lists every upgrade it has; data without one gets it on load. Applied after the format migrations.
+     */
+    static final java.util.List<String> UPGRADES = java.util.List.of("guild_rights");
+
+    /**
+     * Applies the upgrades the data does not list yet.
+     *
+     * @return whether anything was applied
+     */
+    static boolean applyUpgrades(CompoundTag tag) {
+        ListTag done = tag.getList(KingdomSavedData.TAG_UPGRADES, Tag.TAG_STRING);
+        java.util.Set<String> applied = new java.util.HashSet<>();
+        for (int i = 0; i < done.size(); i++) {
+            applied.add(done.getString(i));
+        }
+        boolean changed = false;
+        if (!applied.contains("guild_rights")) {
+            // The right to manage the guild goes to the marshal, as it does in new kingdoms.
+            ListTag kingdoms = tag.getList(KingdomSavedData.TAG_KINGDOMS, Tag.TAG_COMPOUND);
+            for (int i = 0; i < kingdoms.size(); i++) {
+                grant(kingdoms.getCompound(i), "marshal", "manage_guild");
+            }
+            changed = true;
+        }
+        return changed;
+    }
+
+    /**
      * Adds a right to a position whose rights the kingdom saved, unless it holds it already.
      */
     private static void grant(CompoundTag kingdom, String role, String right) {

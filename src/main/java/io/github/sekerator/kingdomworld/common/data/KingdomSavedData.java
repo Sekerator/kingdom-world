@@ -55,6 +55,7 @@ public final class KingdomSavedData extends SavedData {
     static final String TAG_GEAR = "gear";
     static final String TAG_ECONOMY = EconomyNbt.ECONOMY;
     static final String TAG_TRADE = TradeNbt.TRADE;
+    static final String TAG_UPGRADES = "upgrades";
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
@@ -189,6 +190,13 @@ public final class KingdomSavedData extends SavedData {
                 return;
             }
         }
+        boolean upgraded = false;
+        if (KingdomDataMigrations.UPGRADES.size() > data.getList(TAG_UPGRADES, Tag.TAG_STRING).size()) {
+            if (data == tag) {
+                data = tag.copy();
+            }
+            upgraded = KingdomDataMigrations.applyUpgrades(data);
+        }
         List<String> problems = readKingdoms(data);
         problems.addAll(readStorehouses(data));
         problems.addAll(readGear(data));
@@ -198,8 +206,8 @@ public final class KingdomSavedData extends SavedData {
             lock(tag, problems.size() + " unreadable part(s): " + String.join("; ", problems), "unreadable_parts", problems.size());
             return;
         }
-        // Freshly loaded data only needs saving if it was converted from another format.
-        setDirty(version != FORMAT_VERSION);
+        // Freshly loaded data only needs saving if it was converted from another format or upgraded.
+        setDirty(version != FORMAT_VERSION || upgraded);
     }
 
     /**
@@ -343,6 +351,11 @@ public final class KingdomSavedData extends SavedData {
         tag.put(TAG_GEAR, gear.save());
         tag.put(TAG_ECONOMY, EconomyNbt.writeWorld(state.economy()));
         tag.put(TAG_TRADE, TradeNbt.write(state.trade()));
+        ListTag upgrades = new ListTag();
+        for (String upgrade : KingdomDataMigrations.UPGRADES) {
+            upgrades.add(net.minecraft.nbt.StringTag.valueOf(upgrade));
+        }
+        tag.put(TAG_UPGRADES, upgrades);
         return tag;
     }
 }

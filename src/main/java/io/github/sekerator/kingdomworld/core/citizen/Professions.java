@@ -30,6 +30,10 @@ public final class Professions {
     public static final Profession MINTER = new Profession("minter", SiteKinds.WORK_POST);
     /** Keeps the market stalls in the zone of a work post open and sells surplus goods abroad. */
     public static final Profession MERCHANT = new Profession("merchant", SiteKinds.WORK_POST);
+    /** Keeps the desks of the adventurers' guild in the zone of a work post open. */
+    public static final Profession REGISTRAR = new Profession("registrar", SiteKinds.WORK_POST);
+    /** Guards the land against monsters and goes on expeditions with a squad; needs no workplace. */
+    public static final Profession ADVENTURER = new Profession("adventurer", null);
 
     /** The registry of the running game; more professions are registered here. */
     public static final ProfessionRegistry REGISTRY = ProfessionRegistry.withDefaults();
@@ -58,7 +62,8 @@ public final class Professions {
      * at its zone again and again, and its screen shows the workstations.
      */
     public static boolean usesStations(String professionId) {
-        return isWorkshop(professionId) || MINTER.id().equals(professionId) || MERCHANT.id().equals(professionId);
+        return isWorkshop(professionId) || MINTER.id().equals(professionId) || MERCHANT.id().equals(professionId)
+                || REGISTRAR.id().equals(professionId);
     }
 
     /**

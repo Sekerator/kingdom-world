@@ -138,7 +138,47 @@ public enum KingdomError {
     /** Only subjects of the kingdom put up lots. */
     NOT_SUBJECT,
     /** The item cannot be traded: unknown, coins, or with data the market does not take. */
-    BAD_ITEM;
+    BAD_ITEM,
+
+    /** The player is not in the adventurers' guild. */
+    NOT_IN_GUILD,
+    ALREADY_IN_GUILD,
+    /** No registrar works at this desk of the guild. */
+    BRANCH_CLOSED,
+    /** The contract asks for a higher rank. */
+    RANK_TOO_LOW,
+    /** The player holds as many contracts as allowed. */
+    TOO_MANY_CONTRACTS,
+    UNKNOWN_CONTRACT,
+    /** The contract was taken by somebody else or is over. */
+    CONTRACT_TAKEN,
+    /** The contract is not the player's to hand in, abandon or call off. */
+    NOT_YOUR_CONTRACT,
+    /** The board of the branch is full. */
+    BOARD_FULL,
+    /** Too few points for the exam of the next rank. */
+    TOO_FEW_POINTS,
+    /** The last exam failed not long ago. */
+    EXAM_COOLDOWN,
+    /** An exam is under way already. */
+    EXAM_UNDER_WAY,
+    /** The highest rank has no exam. */
+    TOP_RANK,
+    UNKNOWN_SQUAD,
+    /** A squad has too few or too many members. */
+    SQUAD_SIZE,
+    /** The squad is on an expedition. */
+    SQUAD_AWAY,
+    /** The citizen is no adventurer of the kingdom, or in another squad. */
+    NOT_AN_ADVENTURER,
+    /** A member of the squad is wounded. */
+    SQUAD_WOUNDED,
+    /** The player who posted the contract does not let squads take it. */
+    SQUADS_NOT_ALLOWED,
+    /** The expedition would come back after the contract runs out. */
+    NO_TIME,
+    /** Not a monster the guild knows. */
+    UNKNOWN_MONSTER;
 
     /**
      * Lower case identifier, used for translation keys.

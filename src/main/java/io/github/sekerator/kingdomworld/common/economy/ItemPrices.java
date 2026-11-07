@@ -137,6 +137,13 @@ public final class ItemPrices {
      * The worth of one item of the stack's kind.
      */
     public static ItemValues.Value value(MinecraftServer server, ItemStack stack) {
+        // A monster crystal is worth what its rank is worth.
+        java.util.Optional<io.github.sekerator.kingdomworld.core.guild.Rank> crystal =
+                io.github.sekerator.kingdomworld.common.guild.MonsterCrystalItem.rank(stack);
+        if (crystal.isPresent()) {
+            return new ItemValues.Value(io.github.sekerator.kingdomworld.common.guild.GuildSettings.rules().crystalValue(crystal.get()),
+                    ItemValues.Source.BASE);
+        }
         return table(server).value(Recipes.itemId(stack.getItem()));
     }
 

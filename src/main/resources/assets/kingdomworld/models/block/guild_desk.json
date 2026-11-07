@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/orientable",
+  "textures": {
+    "top": "kingdomworld:block/guild_desk_top",
+    "front": "kingdomworld:block/guild_desk_front",
+    "side": "kingdomworld:block/guild_desk_side"
+  }
+}

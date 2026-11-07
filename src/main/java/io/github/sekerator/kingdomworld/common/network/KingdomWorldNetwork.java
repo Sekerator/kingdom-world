@@ -9,6 +9,7 @@ import io.github.sekerator.kingdomworld.common.network.packet.CitizenViewPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.EconomyPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.ClaimChunkPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.FoundKingdomPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.GuildPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomActionPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomListRequestPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomListResponsePacket;
@@ -47,7 +48,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "8";
+    public static final String PROTOCOL_VERSION = "9";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -131,6 +132,16 @@ public final class KingdomWorldNetwork {
                 TerritorySnapshotRequestPacket::decode, TerritorySnapshotRequestPacket::handle);
         add(id++, TerritorySnapshotPacket.class, NetworkDirection.PLAY_TO_CLIENT, TerritorySnapshotPacket::encode,
                 TerritorySnapshotPacket::decode, TerritorySnapshotPacket::handle);
+        add(id++, GuildPackets.DeskOpen.class, NetworkDirection.PLAY_TO_CLIENT, GuildPackets.DeskOpen::encode,
+                GuildPackets.DeskOpen::decode, GuildPackets.DeskOpen::handle);
+        add(id++, GuildPackets.DeskAction.class, NetworkDirection.PLAY_TO_SERVER, GuildPackets.DeskAction::encode,
+                GuildPackets.DeskAction::decode, GuildPackets.DeskAction::handle);
+        add(id++, GuildPackets.TabRequest.class, NetworkDirection.PLAY_TO_SERVER, GuildPackets.TabRequest::encode,
+                GuildPackets.TabRequest::decode, GuildPackets.TabRequest::handle);
+        add(id++, GuildPackets.TabResponse.class, NetworkDirection.PLAY_TO_CLIENT, GuildPackets.TabResponse::encode,
+                GuildPackets.TabResponse::decode, GuildPackets.TabResponse::handle);
+        add(id++, GuildPackets.TabChange.class, NetworkDirection.PLAY_TO_SERVER, GuildPackets.TabChange::encode,
+                GuildPackets.TabChange::decode, GuildPackets.TabChange::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

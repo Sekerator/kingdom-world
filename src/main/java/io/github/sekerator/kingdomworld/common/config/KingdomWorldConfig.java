@@ -3,6 +3,8 @@ package io.github.sekerator.kingdomworld.common.config;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import io.github.sekerator.kingdomworld.core.guild.GuildRules;
+import io.github.sekerator.kingdomworld.core.guild.Rank;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.List;
@@ -138,6 +140,8 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue webMapBorderWidth;
         public final ForgeConfigSpec.ConfigValue<String> webMapLanguage;
         public final ForgeConfigSpec.IntValue webMapUpdateSeconds;
+        /** The adventurers' guild. */
+        public final Guild guild;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -382,6 +386,8 @@ public final class KingdomWorldConfig {
                     .defineInRange("maxDealPeriodDays", 30, 1, 365);
             builder.pop();
 
+            guild = new Guild(builder);
+
             builder.comment("Abstract simulation of kingdoms far from players.").push("simulation");
             simulationIntervalTicks = builder
                     .comment("How often, in ticks, the abstract kingdom simulation advances. 1200 ticks = 1 minute.")
@@ -477,6 +483,144 @@ public final class KingdomWorldConfig {
                     .comment("At most one update of the web maps per this many seconds; changes in between are collected.")
                     .translation("kingdomworld.config.maps.update_seconds")
                     .defineInRange("webMapUpdateSeconds", 5, 1, 300);
+            builder.pop();
+        }
+    }
+
+    /**
+     * The adventurers' guild: monster ranks, crystals, ranks of adventurers, contracts and squads. Tables by rank hold nine
+     * numbers, for F, E, D, C, B, A, S, SS and SSS.
+     */
+    public static final class Guild {
+        public final ForgeConfigSpec.DoubleValue healthWeight;
+        public final ForgeConfigSpec.DoubleValue damageWeight;
+        public final ForgeConfigSpec.DoubleValue armorWeight;
+        public final ForgeConfigSpec.DoubleValue speedWeight;
+        public final ForgeConfigSpec.ConfigValue<String> monsterRankScores;
+        public final ForgeConfigSpec.IntValue bossRankBonus;
+        public final ForgeConfigSpec.ConfigValue<String> bossMinRank;
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> monsterRanks;
+        public final ForgeConfigSpec.ConfigValue<String> crystalEnergy;
+        public final ForgeConfigSpec.ConfigValue<String> crystalChance;
+        public final ForgeConfigSpec.ConfigValue<String> crystalValue;
+        public final ForgeConfigSpec.IntValue farmWindowMinutes;
+        public final ForgeConfigSpec.IntValue farmFreeKills;
+        public final ForgeConfigSpec.IntValue farmHalfKills;
+        public final ForgeConfigSpec.DoubleValue spawnerFactor;
+        public final ForgeConfigSpec.ConfigValue<String> rankPoints;
+        public final ForgeConfigSpec.ConfigValue<String> killPoints;
+        public final ForgeConfigSpec.ConfigValue<String> examKills;
+        public final ForgeConfigSpec.IntValue examMinutes;
+        public final ForgeConfigSpec.IntValue examCooldownMinutes;
+        public final ForgeConfigSpec.IntValue penaltyPercent;
+        public final ForgeConfigSpec.LongValue joinFee;
+        public final ForgeConfigSpec.IntValue maxActiveContracts;
+        public final ForgeConfigSpec.IntValue maxContractsPerBranch;
+        public final ForgeConfigSpec.IntValue maxPostedPerPlayer;
+        public final ForgeConfigSpec.IntValue minCommissionPercent;
+        public final ForgeConfigSpec.IntValue maxCommissionPercent;
+        public final ForgeConfigSpec.IntValue defaultCommissionPercent;
+        public final ForgeConfigSpec.IntValue postingFeePermille;
+        public final ForgeConfigSpec.IntValue maxContractDays;
+        public final ForgeConfigSpec.LongValue defaultDailyBudget;
+        public final ForgeConfigSpec.LongValue maxDailyBudget;
+        public final ForgeConfigSpec.ConfigValue<String> autoRewardPerKill;
+        public final ForgeConfigSpec.IntValue maxAutoContracts;
+        public final ForgeConfigSpec.IntValue minSquadSize;
+        public final ForgeConfigSpec.IntValue maxSquadSize;
+        public final ForgeConfigSpec.IntValue expeditionBaseMinutes;
+        public final ForgeConfigSpec.IntValue expeditionMinutesPerRank;
+        public final ForgeConfigSpec.DoubleValue expeditionInjury;
+        public final ForgeConfigSpec.DoubleValue expeditionDeath;
+
+        Guild(ForgeConfigSpec.Builder builder) {
+            GuildRules.Builder d = new GuildRules.Builder();
+            java.util.function.Predicate<Object> table = value -> value instanceof String text && GuildRules.parseTable(text).isPresent();
+            builder.comment("The adventurers' guild: monster ranks, crystals, ranks of adventurers, contracts and squads.",
+                    "Tables by rank hold nine numbers for F, E, D, C, B, A, S, SS and SSS. Money is in copper coins.").push("guild");
+            healthWeight = builder.comment("Weight of the maximum health in the strength of a monster.")
+                    .defineInRange("healthWeight", d.healthWeight, 0.0, 1_000.0);
+            damageWeight = builder.comment("Weight of the attack damage in the strength of a monster.")
+                    .defineInRange("damageWeight", d.damageWeight, 0.0, 1_000.0);
+            armorWeight = builder.comment("Weight of the armor points in the strength of a monster.")
+                    .defineInRange("armorWeight", d.armorWeight, 0.0, 1_000.0);
+            speedWeight = builder.comment("Weight of the movement speed in the strength of a monster (a zombie has 0.23).")
+                    .defineInRange("speedWeight", d.speedWeight, 0.0, 10_000.0);
+            monsterRankScores = builder.comment("The strength a monster needs for each rank.")
+                    .define("monsterRankScores", GuildRules.formatTable(d.rankScores), table);
+            bossRankBonus = builder.comment("Ranks a boss (tag forge:bosses or a boss bar of its own) stands above its strength.")
+                    .defineInRange("bossRankBonus", d.bossRankBonus, 0, 8);
+            bossMinRank = builder.comment("The lowest rank of a boss.")
+                    .define("bossMinRank", d.bossMinRank.id(), value -> value instanceof String text && Rank.byId(text).isPresent());
+            monsterRanks = builder.comment("Ranks of monsters given by hand, as entity id or #tag = rank, for example",
+                            "minecraft:wither=ss or #forge:bosses=s. An id beats a tag, a tag beats the strength.")
+                    .defineListAllowEmpty("monsterRanks", d.idOverrides.entrySet().stream()
+                            .map(entry -> entry.getKey() + "=" + entry.getValue().id()).toList(),
+                            value -> value instanceof String text && GuildRules.parseOverride(text).isPresent());
+            crystalEnergy = builder.comment("Energy of a monster crystal by rank (spent by later mechanics of the kingdom).")
+                    .define("crystalEnergy", GuildRules.formatTable(d.crystalEnergy), table);
+            crystalChance = builder.comment("Chance a monster killed by a player or an adventurer leaves a crystal, by rank, from 0 to 1.")
+                    .define("crystalChance", GuildRules.formatTable(d.crystalChance), table);
+            crystalValue = builder.comment("Worth of a monster crystal by rank, for the market and the wealth of kingdoms.")
+                    .define("crystalValue", GuildRules.formatTable(d.crystalValue), table);
+            farmWindowMinutes = builder.comment("How long kills in one place (32x32 blocks) are remembered, in minutes.")
+                    .defineInRange("farmWindowMinutes", (int) (d.farmWindowTicks / 1200), 1, 1_440);
+            farmFreeKills = builder.comment("Kills in one place within the window before crystals and points start to fall.")
+                    .defineInRange("farmFreeKills", d.farmFreeKills, 0, 10_000);
+            farmHalfKills = builder.comment("Each so many further kills in one place halve the chance of crystals and the points.")
+                    .defineInRange("farmHalfKills", d.farmHalfKills, 1, 10_000);
+            spawnerFactor = builder.comment("Share of the chance and the points a monster from a spawner gives from the first kill on.")
+                    .defineInRange("spawnerFactor", d.spawnerFactor, 0.0, 1.0);
+            rankPoints = builder.comment("Guild points a player needs for each rank (and its exam); F needs none.")
+                    .define("rankPoints", GuildRules.formatTable(d.rankPoints), table);
+            killPoints = builder.comment("Guild points for killing a monster of each rank.")
+                    .define("killPoints", GuildRules.formatTable(d.killPoints), table);
+            examKills = builder.comment("Monsters of the rank or above the exam for each rank asks for (S and above: bosses).")
+                    .define("examKills", GuildRules.formatTable(d.examKills), table);
+            examMinutes = builder.comment("Time an exam may take, in minutes.")
+                    .defineInRange("examMinutes", (int) (d.examTicks / 1200), 1, 100_000);
+            examCooldownMinutes = builder.comment("Time after a failed exam before the next try, in minutes.")
+                    .defineInRange("examCooldownMinutes", (int) (d.examCooldownTicks / 1200), 0, 100_000);
+            penaltyPercent = builder.comment("Share of a contract's points an adventurer loses for failing or abandoning it, in percent.")
+                    .defineInRange("penaltyPercent", d.penaltyPercent, 0, 100);
+            joinFee = builder.comment("What joining the guild costs, paid to the treasury of the branch's kingdom; 0 is free.")
+                    .defineInRange("joinFee", d.joinFee, 0L, 1_000_000_000L);
+            maxActiveContracts = builder.comment("Contracts one player may hold at the same time.")
+                    .defineInRange("maxActiveContracts", d.maxActiveContracts, 1, 64);
+            maxContractsPerBranch = builder.comment("Contracts on the board of one branch.")
+                    .defineInRange("maxContractsPerBranch", d.maxContractsPerBranch, 1, 512);
+            maxPostedPerPlayer = builder.comment("Contracts one player may have posted at the same time.")
+                    .defineInRange("maxPostedPerPlayer", d.maxPostedPerPlayer, 0, 64);
+            minCommissionPercent = builder.comment("Lowest commission of the guild a king may set, in percent of the reward.")
+                    .defineInRange("minCommissionPercent", d.minCommissionPermille / 10, 0, 100);
+            maxCommissionPercent = builder.comment("Highest commission of the guild a king may set, in percent of the reward.")
+                    .defineInRange("maxCommissionPercent", d.maxCommissionPermille / 10, 0, 100);
+            defaultCommissionPercent = builder.comment("Commission of a new branch, in percent of the reward.")
+                    .defineInRange("defaultCommissionPercent", d.defaultCommissionPermille / 10, 0, 100);
+            postingFeePermille = builder.comment("What a player pays the branch for posting a contract, in permille of the reward.")
+                    .defineInRange("postingFeePermille", d.postingFeePermille, 0, 1_000);
+            maxContractDays = builder.comment("Longest time a contract may run, in game days.")
+                    .defineInRange("maxContractDays", d.maxContractDays, 1, 365);
+            defaultDailyBudget = builder.comment("What the guild may spend each day on contracts of its own in a new branch.")
+                    .defineInRange("defaultDailyBudget", d.defaultDailyBudget, 0L, 1_000_000_000_000L);
+            maxDailyBudget = builder.comment("Highest daily budget of the guild's own contracts a king may set.")
+                    .defineInRange("maxDailyBudget", d.maxDailyBudget, 0L, 1_000_000_000_000L);
+            autoRewardPerKill = builder.comment("What the guild's own contracts pay per monster of each rank.")
+                    .define("autoRewardPerKill", GuildRules.formatTable(d.autoRewardPerKill), table);
+            maxAutoContracts = builder.comment("Contracts of the guild itself one branch keeps open at most.")
+                    .defineInRange("maxAutoContracts", d.maxAutoContracts, 0, 64);
+            minSquadSize = builder.comment("Fewest adventurers in a squad.")
+                    .defineInRange("minSquadSize", d.minSquad, 1, 16);
+            maxSquadSize = builder.comment("Most adventurers in a squad.")
+                    .defineInRange("maxSquadSize", d.maxSquad, 1, 16);
+            expeditionBaseMinutes = builder.comment("Minutes an expedition takes at least.")
+                    .defineInRange("expeditionBaseMinutes", d.expeditionBaseMinutes, 1, 10_000);
+            expeditionMinutesPerRank = builder.comment("Further minutes of an expedition for each rank of the contract above F.")
+                    .defineInRange("expeditionMinutesPerRank", d.expeditionMinutesPerRank, 0, 10_000);
+            expeditionInjury = builder.comment("Chance of a member to be wounded on an even expedition (taskRiskMultiplier applies).")
+                    .defineInRange("expeditionInjury", d.expeditionInjury, 0.0, 1.0);
+            expeditionDeath = builder.comment("Chance of a member to die on an even expedition (taskRiskMultiplier applies).")
+                    .defineInRange("expeditionDeath", d.expeditionDeath, 0.0, 1.0);
             builder.pop();
         }
     }

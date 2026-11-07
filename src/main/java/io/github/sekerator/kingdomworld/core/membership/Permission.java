@@ -27,6 +27,8 @@ public enum Permission {
     MANAGE_MARKET,
     /** Propose, accept and call off deals with other kingdoms. */
     MANAGE_TRADE,
+    /** Run the kingdom's branch of the guild, post its contracts and send its squads. */
+    MANAGE_GUILD,
     /** Appoint members to positions and change the rights of positions. Only the king holds it. */
     APPOINT;
 

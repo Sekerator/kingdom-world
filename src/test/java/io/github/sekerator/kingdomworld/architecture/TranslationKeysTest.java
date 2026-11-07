@@ -176,6 +176,27 @@ class TranslationKeysTest {
         assertEquals(Plurals.Form.N5, Plurals.form(111));
     }
 
+    /**
+     * Numbers of the guild read right in both languages: «21 монстр», «3 очка», «5 кристаллов», «1 босс».
+     */
+    @Test
+    void countsOfTheGuildHaveEveryPluralForm() {
+        Map<String, String> russianForms = Map.of("monsters", "монстр|монстр|монстра|монстров", "bosses", "босс|босс|босса|боссов",
+                "points", "очко|очко|очка|очков", "crystals", "кристалл|кристалл|кристалла|кристаллов");
+        russianForms.forEach((word, forms) -> {
+            String[] words = forms.split("[|]");
+            Plurals.Form[] all = Plurals.Form.values();
+            for (int i = 0; i < all.length; i++) {
+                String key = "kingdomworld.count." + word + "." + all[i].suffix();
+                assertEquals("%s " + words[i], russian.get(key), key);
+                String singular = word.equals("bosses") ? "boss" : word.substring(0, word.length() - 1);
+                assertEquals("%s " + (all[i] == Plurals.Form.N1 ? singular : word), english.get(key), key + ": English is singular only for one");
+            }
+        });
+        assertEquals(Plurals.Form.N21, Plurals.form(101));
+        assertEquals(Plurals.Form.N5, Plurals.form(12));
+    }
+
     @Test
     void argumentCounting() {
         assertEquals(2, argumentCount("%s and %s"));
@@ -285,6 +306,24 @@ class TranslationKeysTest {
         }
         for (Denomination denomination : Denomination.values()) {
             used.add("kingdomworld.screen.treasury.coin_choice." + denomination.id());
+        }
+        // The guild: kinds of contracts, the ends of expeditions, the views of the desk and of the tab, counts in every form.
+        for (io.github.sekerator.kingdomworld.core.guild.Contract.Kind kind : io.github.sekerator.kingdomworld.core.guild.Contract.Kind.values()) {
+            used.add("kingdomworld.guild.contract.kind." + kind.id());
+        }
+        for (String result : List.of("success", "partial", "failure")) {
+            used.add("kingdomworld.guild.squad_back." + result);
+        }
+        for (String tab : List.of("card", "board", "mine", "post")) {
+            used.add("kingdomworld.screen.guild.tab." + tab);
+        }
+        for (String mode : List.of("branch", "adventurers", "squads", "contracts")) {
+            used.add("kingdomworld.screen.guild_tab.mode." + mode);
+        }
+        for (String word : List.of("monsters", "bosses", "points", "crystals")) {
+            for (Plurals.Form form : Plurals.Form.values()) {
+                used.add("kingdomworld.count." + word + "." + form.suffix());
+            }
         }
         for (ItemValues.Source source : ItemValues.Source.values()) {
             used.add("commands.kingdomworld.economy.value.source." + source.name().toLowerCase(Locale.ROOT));

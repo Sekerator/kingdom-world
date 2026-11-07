@@ -20,7 +20,9 @@ public enum LedgerCategory {
     /** Buying and selling on the market, abroad and between kingdoms. */
     TRADE,
     /** Currencies exchanged at the bank of the kingdom. */
-    EXCHANGE;
+    EXCHANGE,
+    /** Rewards of guild contracts, the guild's commission and its fees. */
+    GUILD;
 
     public String id() {
         return name().toLowerCase(Locale.ROOT);

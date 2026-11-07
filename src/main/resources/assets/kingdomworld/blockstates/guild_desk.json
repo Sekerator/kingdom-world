@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "kingdomworld:block/guild_desk"
+    },
+    "facing=east": {
+      "model": "kingdomworld:block/guild_desk",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "kingdomworld:block/guild_desk",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "kingdomworld:block/guild_desk",
+      "y": 270
+    }
+  }
+}

@@ -26,7 +26,7 @@ public final class TradeSettings {
             "minecraft:enchanted_golden_apple", "minecraft:beacon", "minecraft:shulker_shell", "minecraft:netherite_scrap",
             "minecraft:ancient_debris", "minecraft:wither_skeleton_skull", "minecraft:echo_shard", "minecraft:sniffer_egg",
             "minecraft:trident", "minecraft:spawner", "minecraft:bedrock", "minecraft:command_block", "minecraft:barrier",
-            "minecraft:structure_block", "kingdomworld:coin", "kingdomworld:founder_crown");
+            "minecraft:structure_block", "kingdomworld:coin", "kingdomworld:founder_crown", "kingdomworld:monster_crystal");
 
     private static TradeRules override;
     private static TradeRules cached;

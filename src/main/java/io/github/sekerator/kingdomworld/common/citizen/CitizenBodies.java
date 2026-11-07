@@ -107,9 +107,11 @@ public final class CitizenBodies {
             }
         }
         List<ActiveSelection.Candidate> candidates = new ArrayList<>();
+        var guild = io.github.sekerator.kingdomworld.common.guild.GuildSavedData.get(server).state();
         for (Citizen citizen : state.citizens().registry().all()) {
             boolean forced = FORCED.contains(citizen.id());
-            if (players.isEmpty() && !forced) {
+            if ((players.isEmpty() && !forced) || guild.isAway(citizen.id())) {
+                // Adventurers on an expedition have no body until they come back.
                 continue;
             }
             List<WorldPos> anchors = new ArrayList<>(ActiveSelection.anchors(citizen));
