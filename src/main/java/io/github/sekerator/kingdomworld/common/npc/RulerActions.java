@@ -91,6 +91,8 @@ final class RulerActions {
     private static final int MAX_STEP = 3;
     /** Half the side of the levelled square of a new town. */
     private static final int TOWN_SQUARE = 12;
+    /** Chunks a new town claims in a tick at most. */
+    private static final int CLAIMS_PER_TICK = 4;
     /** Days a contract on robbers stays on the board. */
     private static final int CONTRACT_DAYS = 7;
 
@@ -242,6 +244,7 @@ final class RulerActions {
         private final NpcKingdom npc;
         private RulerPlaces.Spot spot;
         private boolean levelled;
+        private int levelRow;
 
         BuildJob(UUID kingdomId, RulerDecision decision, NpcKingdom npc, RulerPlaces.Spot spot) {
             super(kingdomId, decision);
@@ -273,10 +276,13 @@ final class RulerActions {
                 }
                 int y = max;
                 NpcGround.Soil soil = NpcGround.soilAt(level, (box.minX() + box.maxX()) / 2, (box.minZ() + box.maxZ()) / 2);
-                for (int x = box.minX(); x <= box.maxX(); x++) {
+                // One row of the ground a tick.
+                if (levelRow < box.sizeX()) {
+                    int x = box.minX() + levelRow++;
                     for (int z = box.minZ(); z <= box.maxZ(); z++) {
                         NpcGround.level(level, kingdomId, x, z, y, soil.top(), soil.fill());
                     }
+                    return null;
                 }
                 anchor = new BlockPos(anchor.getX(), y + 1, anchor.getZ());
                 spot = new RulerPlaces.Spot(spot.template(), anchor, spot.placement(), spot.template().box(anchor, spot.placement()), true);
@@ -485,6 +491,8 @@ final class RulerActions {
         private int stage;
         private int row;
         private int y;
+        private int claimIndex;
+        private boolean claimedInPass;
 
         TownJob(NpcKingdom npc, RulerDecision decision, int[] spot) {
             super(npc.kingdomId(), decision);
@@ -529,15 +537,23 @@ final class RulerActions {
                     return null;
                 }
                 case 2 -> {
-                    boolean any = true;
-                    while (any) {
-                        any = false;
-                        for (long chunk : chunks) {
-                            if (state.territory().ownerOf(dimension, chunk) == null
-                                    && KingdomWorldApi.claimChunk(level, new ChunkPos(ChunkKey.x(chunk), ChunkKey.z(chunk)), kingdomId, null).ok()) {
-                                any = true;
-                            }
+                    // A few claims a tick; a pass that claims nothing more ends the claiming.
+                    int budget = CLAIMS_PER_TICK;
+                    while (budget > 0 && claimIndex < chunks.size()) {
+                        long chunk = chunks.get(claimIndex++);
+                        if (state.territory().ownerOf(dimension, chunk) == null
+                                && KingdomWorldApi.claimChunk(level, new ChunkPos(ChunkKey.x(chunk), ChunkKey.z(chunk)), kingdomId, null).ok()) {
+                            claimedInPass = true;
+                            budget--;
                         }
+                    }
+                    if (claimIndex < chunks.size()) {
+                        return null;
+                    }
+                    if (claimedInPass) {
+                        claimIndex = 0;
+                        claimedInPass = false;
+                        return null;
                     }
                     for (long chunk : chunks) {
                         if (!kingdomId.equals(state.territory().ownerOf(dimension, chunk))) {
@@ -552,7 +568,7 @@ final class RulerActions {
                 case 3 -> {
                     int side = 2 * TOWN_SQUARE + 1;
                     NpcGround.Soil soil = NpcGround.soilAt(level, x, z);
-                    int budget = NpcSettings.rules().blocksPerTick();
+                    int budget = Math.max(64, NpcSettings.rules().blocksPerTick() / 8);
                     while (row < side && budget > 0) {
                         int rz = z - TOWN_SQUARE + row;
                         for (int rx = x - TOWN_SQUARE; rx <= x + TOWN_SQUARE; rx++) {

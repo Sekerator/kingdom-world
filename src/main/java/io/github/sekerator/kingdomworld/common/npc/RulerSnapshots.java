@@ -93,16 +93,34 @@ final class RulerSnapshots {
     /** Goods besides the watched ones a ruler offers when it has heaps of them. */
     private static final int EXTRA_GOODS = 4;
 
+    /** What raising a building of a template with its materials and placement costs; templates do not change while the server runs. */
+    private static final Map<String, Optional<Map<String, Integer>>> UPGRADES = new java.util.concurrent.ConcurrentHashMap<>();
+
     private RulerSnapshots() {
+    }
+
+    static void reset() {
+        UPGRADES.clear();
     }
 
     /**
      * What the ruler of a kingdom sees.
      */
     static RulerView of(MinecraftServer server, NpcKingdom npc, RulerMemory memory, RulerRules rules, long day) {
+        RulerView view = begin(server, npc, memory, rules, day);
+        finish(server, npc, rules, view);
+        return view;
+    }
+
+    /**
+     * The first part of a snapshot: people, money, buildings, the army, threats, goods, trade, neighbours, the law, magic and
+     * positions.
+     */
+    static RulerView begin(MinecraftServer server, NpcKingdom npc, RulerMemory memory, RulerRules rules, long day) {
         UUID id = npc.kingdomId();
         KingdomWorldState state = KingdomWorldApi.state(server);
         RulerView view = new RulerView();
+        Map<String, Long> counts = KingdomStorage.countsById(server, id);
         view.day = day;
         view.character = npc.character();
         view.traits = npc.traits();
@@ -110,11 +128,10 @@ final class RulerSnapshots {
         view.cityLevel = CityWalls.level(server, id, 0).ordinal();
         people(server, state, id, view);
         treasury(server, state, id, npc, view);
-        buildings(server, state, id, view);
-        land(server, state, npc, view, rules);
+        buildings(server, state, id, view, counts);
         army(server, id, view);
         threats(server, id, view);
-        goods(server, state, id, view);
+        goods(server, state, id, view, counts);
         trade(server, state, id, memory, view);
         neighbours(server, state, id, view);
         law(server, id, view);
@@ -122,8 +139,16 @@ final class RulerSnapshots {
         positions(server, state, id, view);
         view.festivals = RulerFestivals.available();
         view.festivalCost = Math.max(50, view.population * 10L);
-        RulerPlaces.options(server, npc, view);
         return view;
+    }
+
+    /**
+     * The second part of a snapshot: the land, places for towns and places for the buildings the ruler wants.
+     */
+    static void finish(MinecraftServer server, NpcKingdom npc, RulerRules rules, RulerView view) {
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        land(server, state, npc, view, rules);
+        RulerPlaces.options(server, npc, view, KingdomStorage.countsById(server, npc.kingdomId()));
     }
 
     private static void people(MinecraftServer server, KingdomWorldState state, UUID id, RulerView view) {
@@ -193,10 +218,11 @@ final class RulerSnapshots {
         view.wagePercent = usual <= 0 ? 100 : (int) Math.round(paid * 100.0 / usual);
     }
 
-    private static void buildings(MinecraftServer server, KingdomWorldState state, UUID id, RulerView view) {
+    private static void buildings(MinecraftServer server, KingdomWorldState state, UUID id, RulerView view, Map<String, Long> counts) {
         view.knownRoles = new ArrayList<>();
         io.github.sekerator.kingdomworld.core.construction.BuildingRoles.all().forEach(role -> view.knownRoles.add(role.id()));
         int below = ConstructionSettings.buildings().autoRepairBelow();
+        Set<String> upgradeable = new HashSet<>();
         for (Building building : state.construction().buildingsOf(id)) {
             view.roles.merge(building.role(), 1, Integer::sum);
             boolean busy = state.construction().forBuilding(building.id()).isPresent();
@@ -204,13 +230,15 @@ final class RulerSnapshots {
                     && !"wall".equals(building.role())) {
                 view.damaged.add(building.id());
             }
-            if (!busy) {
+            if (!busy && upgradeable.add(building.templateId() + "|" + building.materials() + "|" + building.placement())) {
                 Optional<BuildingTemplate> next = BuildingWork.nextTemplate(building);
                 if (next.isPresent()) {
-                    long missing = BuildingWork.upgradeDiff(building).map(diff -> missingWorth(server, id, diff.cost())).orElse(Long.MAX_VALUE);
-                    if (missing != Long.MAX_VALUE) {
-                        view.upgrades.add(new RulerView.Option(building.role(), next.get().id().toString(), Long.toString(building.id()), missing,
-                                true));
+                    String key = building.templateId() + "|" + building.materials() + "|" + building.placement() + "|" + next.get().id();
+                    Optional<Map<String, Integer>> cost = UPGRADES.computeIfAbsent(key,
+                            k -> BuildingWork.upgradeDiff(building).map(diff -> Map.copyOf(diff.cost())));
+                    if (cost.isPresent()) {
+                        view.upgrades.add(new RulerView.Option(building.role(), next.get().id().toString(), Long.toString(building.id()),
+                                missingWorth(server, counts, cost.get()), true));
                     }
                 }
             }
@@ -235,7 +263,13 @@ final class RulerSnapshots {
      * What the materials a kingdom lacks for a cost are worth.
      */
     static long missingWorth(MinecraftServer server, UUID id, Map<String, Integer> cost) {
-        Map<String, Long> stock = KingdomStorage.countsById(server, id);
+        return missingWorth(server, KingdomStorage.countsById(server, id), cost);
+    }
+
+    /**
+     * What the materials a kingdom lacks for a cost are worth, from the counts of its storehouses.
+     */
+    static long missingWorth(MinecraftServer server, Map<String, Long> stock, Map<String, Integer> cost) {
         var prices = ItemPrices.table(server);
         long worth = 0;
         for (Map.Entry<String, Integer> entry : cost.entrySet()) {
@@ -334,8 +368,7 @@ final class RulerSnapshots {
      * The goods a ruler watches: food for some days, building materials, metal, weapons for its soldiers, tools, and the goods it
      * has heaps of.
      */
-    private static void goods(MinecraftServer server, KingdomWorldState state, UUID id, RulerView view) {
-        Map<String, Long> counts = KingdomStorage.countsById(server, id);
+    private static void goods(MinecraftServer server, KingdomWorldState state, UUID id, RulerView view, Map<String, Long> counts) {
         var prices = ItemPrices.table(server);
         int nutrition = Math.max(1, CitizenSettings.rules().dailyNutrition());
         String wood = RulerPlaces.wood(server, id);

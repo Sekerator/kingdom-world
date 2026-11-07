@@ -57,6 +57,11 @@ public final class NpcRulers {
     private static final Deque<UUID> DUE = new ArrayDeque<>();
     private static final Map<UUID, RulerView> LAST_VIEWS = new ConcurrentHashMap<>();
     private static RulerActions.Job job;
+    /** A turn whose snapshot is half made: the rest is made and the decisions taken in the next tick. */
+    private static Turning turning;
+
+    private record Turning(UUID kingdomId, RulerView view, long day) {
+    }
     private static int cursor;
     private static long loadingConstruction = -1;
     private static final List<Long> loadingChunks = new ArrayList<>();
@@ -65,6 +70,10 @@ public final class NpcRulers {
     private static long busyTicks;
     private static long sumNanos;
     private static long maxNanos;
+    /** What the rulers did in the tick, for the log of slow ticks. */
+    private static String doing = "";
+    /** Ticks of rulers longer than this are written to the log with what they did. */
+    private static final long SLOW_TICK_NANOS = 50_000_000L;
 
     /**
      * How long the ticks were in which rulers worked: turns taken, ticks with work, the average and the worst in milliseconds.
@@ -79,6 +88,7 @@ public final class NpcRulers {
         DUE.clear();
         LAST_VIEWS.clear();
         job = null;
+        turning = null;
         cursor = 0;
         loadingConstruction = -1;
         loadingChunks.clear();
@@ -88,6 +98,7 @@ public final class NpcRulers {
         sumNanos = 0;
         maxNanos = 0;
         RulerPlaces.reset();
+        RulerSnapshots.reset();
     }
 
     public static Timing timing() {
@@ -162,7 +173,11 @@ public final class NpcRulers {
             busyTicks++;
             sumNanos += spent;
             maxNanos = Math.max(maxNanos, spent);
+            if (spent > SLOW_TICK_NANOS) {
+                LOGGER.warn("A tick of the rulers of the world took {} ms: {}", String.format(java.util.Locale.ROOT, "%.1f", spent / 1e6), doing);
+            }
         }
+        doing = "";
     }
 
     /**
@@ -171,12 +186,31 @@ public final class NpcRulers {
     private static boolean work(MinecraftServer server) {
         NpcState state = NpcWork.state(server);
         long day = TreasuryActions.day(server);
+        if (turning != null) {
+            Turning current = turning;
+            turning = null;
+            state.kingdom(current.kingdomId()).ifPresent(kingdom -> {
+                doing = "the decisions of " + kingdom.name().latin();
+                RulerSnapshots.finish(server, kingdom, NpcSettings.rulers(), current.view());
+                decide(server, kingdom, current.view(), current.day(), false);
+            });
+            return true;
+        }
         UUID next = DUE.poll();
         if (next != null) {
-            state.kingdom(next).ifPresent(kingdom -> turn(server, kingdom, day, false));
+            state.kingdom(next).ifPresent(kingdom -> {
+                doing = "the look of " + kingdom.name().latin();
+                if (KingdomWorldApi.kingdom(server, kingdom.kingdomId()).isPresent()) {
+                    RulerMemory memory = state.ruler(kingdom.kingdomId());
+                    countDeals(server, kingdom.kingdomId(), memory);
+                    memory.fade();
+                    turning = new Turning(kingdom.kingdomId(), RulerSnapshots.begin(server, kingdom, memory, NpcSettings.rulers(), day), day);
+                }
+            });
             return true;
         }
         if (job != null) {
+            doing = "a step of " + job.decision;
             stepJob(server, day);
             return true;
         }
@@ -189,6 +223,7 @@ public final class NpcRulers {
             }
             cursor = (cursor + i + 1) % Math.max(1, kingdoms.size());
             RulerDecision decision = memory.get().nextPending().orElseThrow();
+            doing = kingdom.name().latin() + ": " + decision;
             state.rulerChanged();
             carryOut(server, kingdom, decision, day);
             return true;
@@ -334,11 +369,22 @@ public final class NpcRulers {
         if (KingdomWorldApi.kingdom(server, id).isEmpty()) {
             return Optional.empty();
         }
-        RulerRules rules = NpcSettings.rulers();
         RulerMemory memory = state.ruler(id);
         countDeals(server, id, memory);
         memory.fade();
-        RulerView view = RulerSnapshots.of(server, kingdom, memory, rules, day);
+        RulerView view = RulerSnapshots.of(server, kingdom, memory, NpcSettings.rulers(), day);
+        return Optional.of(decide(server, kingdom, view, day, now));
+    }
+
+    /**
+     * The decisions of a turn from the snapshot of the kingdom: the answers to deals at once, the supply, the needs, and the
+     * decisions in the queue (or carried out at once, for operators).
+     */
+    private static RulerMind.Plan decide(MinecraftServer server, NpcKingdom kingdom, RulerView view, long day, boolean now) {
+        NpcState state = NpcWork.state(server);
+        UUID id = kingdom.kingdomId();
+        RulerRules rules = NpcSettings.rulers();
+        RulerMemory memory = state.ruler(id);
         boolean poor = RulerMind.poor(view, rules);
         if (!poor) {
             RulerActions.resume(server, id);
@@ -394,7 +440,7 @@ public final class NpcRulers {
                 carryOut(server, kingdom, decision, day);
             }
         }
-        return Optional.of(plan);
+        return plan;
     }
 
     private static boolean needsJob(RulerDecision decision) {
@@ -501,6 +547,7 @@ public final class NpcRulers {
                 continue;
             }
             any = true;
+            doing = doing + " answers of " + kingdom.name().latin();
             RulerMemory memory = state.ruler(id);
             RulerView view = RulerSnapshots.of(server, kingdom, memory, NpcSettings.rulers(), day);
             LAST_VIEWS.put(id, view);
@@ -509,6 +556,8 @@ public final class NpcRulers {
                 carryOut(server, kingdom, new RulerDecision(verdict.accept() ? RulerDecision.Kind.ACCEPT : RulerDecision.Kind.DECLINE,
                         verdict.reason(), offer.count(), offer.deal(), offer.partner().toString(), offer.partnerName()), day);
             }
+            // The deals of one kingdom a round: a look at a kingdom is not cheap.
+            break;
         }
         return any;
     }

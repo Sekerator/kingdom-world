@@ -17,7 +17,6 @@ import io.github.sekerator.kingdomworld.core.npc.NpcComposition;
 import io.github.sekerator.kingdomworld.core.npc.NpcKingdom;
 import io.github.sekerator.kingdomworld.core.npc.NpcSite;
 import io.github.sekerator.kingdomworld.core.npc.RulerMind;
-import io.github.sekerator.kingdomworld.core.npc.RulerRules;
 import io.github.sekerator.kingdomworld.core.npc.RulerView;
 import io.github.sekerator.kingdomworld.core.road.Road;
 import io.github.sekerator.kingdomworld.core.road.RoadRules;
@@ -52,6 +51,8 @@ final class RulerPlaces {
             "tower", NpcComposition.WATCHTOWER, "mage_tower", NpcComposition.MAGE_TOWER);
     /** Blocks a plot beyond the wall keeps from fields, roads and the wall. */
     private static final int KEEP_CLEAR = 3;
+    /** What a template costs with a wood; templates do not change while the server runs. */
+    private static final Map<String, Map<String, Integer>> COSTS = new ConcurrentHashMap<>();
     /** Anchors that turned out unfit, by kingdom; tried again after a restart. */
     private static final Map<UUID, Set<Long>> UNFIT = new ConcurrentHashMap<>();
 
@@ -68,6 +69,15 @@ final class RulerPlaces {
 
     static void reset() {
         UNFIT.clear();
+        COSTS.clear();
+    }
+
+    /**
+     * What a template costs with the wood of a kingdom.
+     */
+    static Map<String, Integer> cost(BuildingTemplate template, String wood) {
+        return COSTS.computeIfAbsent(template.id() + "|" + template.fingerprint() + "|" + wood,
+                key -> Map.copyOf(TemplateMaterials.apply(template, new Materials(wood, "")).items()));
     }
 
     static void unfit(UUID kingdomId, BlockPos anchor) {
@@ -122,14 +132,10 @@ final class RulerPlaces {
      * The buildings a ruler could lay out this turn: a house, a storehouse and every role of the table, each with what its missing
      * materials are worth and whether a place was found.
      */
-    static void options(MinecraftServer server, NpcKingdom npc, RulerView view) {
+    static void options(MinecraftServer server, NpcKingdom npc, RulerView view, Map<String, Long> counts) {
         UUID id = npc.kingdomId();
         String wood = wood(server, id);
-        Set<String> roles = new LinkedHashSet<>(List.of(RulerMind.HOUSE, RulerMind.WAREHOUSE));
-        for (RulerRules.RoleWant want : NpcSettings.rulers().roles()) {
-            roles.add(want.role());
-        }
-        for (String role : roles) {
+        for (String role : RulerMind.wantedRoles(view, NpcSettings.rulers())) {
             if (!view.knownRoles.contains(role)) {
                 continue;
             }
@@ -137,7 +143,7 @@ final class RulerPlaces {
             BuildingTemplate best = null;
             long least = Long.MAX_VALUE;
             for (BuildingTemplate candidate : templates(role)) {
-                long missing = RulerSnapshots.missingWorth(server, id, TemplateMaterials.apply(candidate, new Materials(wood, "")).items());
+                long missing = RulerSnapshots.missingWorth(server, counts, cost(candidate, wood));
                 if (missing < least) {
                     least = missing;
                     best = candidate;

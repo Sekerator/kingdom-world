@@ -344,6 +344,29 @@ public final class RulerMind {
         return new Verdict(true, "");
     }
 
+    /**
+     * The roles a ruler would lay out a building of in this turn: a house when the beds are nearly taken, a storehouse when the
+     * stores are full and the first role of the table its kingdom lacks. Only for these are places looked for.
+     */
+    public static List<String> wantedRoles(RulerView view, RulerRules rules) {
+        List<String> roles = new ArrayList<>();
+        if (view.bedsTotal - view.bedsUsed <= rules.freeBeds() && view.planned(HOUSE) == 0) {
+            roles.add(HOUSE);
+        }
+        if (view.storageSlots > 0 && view.storageUsed * 100L >= (long) view.storageSlots * rules.storageFullPercent() && view.planned(WAREHOUSE) == 0) {
+            roles.add(WAREHOUSE);
+        }
+        for (RulerRules.RoleWant want : rules.roles()) {
+            if (view.knownRoles.contains(want.role()) && view.built(want.role()) + view.planned(want.role()) < want.count(view.cityLevel)) {
+                if (!roles.contains(want.role())) {
+                    roles.add(want.role());
+                }
+                break;
+            }
+        }
+        return roles;
+    }
+
     // ---------------------------------------------------------------- the turn
 
     /**
@@ -642,7 +665,9 @@ public final class RulerMind {
             }
         }
         if (!neighbour.npc()) {
-            return surplus(view);
+            // A king of players is offered the biggest surplus, whether or not the market sells it already.
+            return view.goods.values().stream().filter(good -> good.surplus() > 0)
+                    .max(Comparator.comparingLong(good -> good.surplus() * Math.max(1, good.worth())));
         }
         return Optional.empty();
     }

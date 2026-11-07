@@ -2665,6 +2665,11 @@ if ($script:NpcSite) {
         foreach ($slow in [regex]::Matches((Get-LatestLog), 'A tick of the appearance of [^\r\n]*')) { Write-Host "    $($slow.Value)" }
         # Rulers: ten days of turns at once. The money of the treasury moves only as its journal says, and the kingdom grows:
         # a building is laid out for its builders and goods go to the market or to its neighbours.
+        # A kingdom of players offers the ruler swords its soldiers lack at a modest price: the ruler takes the deal in its turn.
+        Send-ServerCommand $server "kingdomworld admin storage put minecraft:iron_sword 4 $KingdomName"
+        [void](Wait-ForLog $server "Stored 4 of minecraft:iron_sword in the storehouses of $KingdomName" $CommandTimeout $ConsoleFailPattern)
+        Send-ServerCommand $server "kingdomworld admin trade propose $KingdomName `"$name`" minecraft:iron_sword 4 4"
+        if (Wait-ForLog $server "The proposal went to" $CommandTimeout $ConsoleFailPattern) { Write-Ok "[session3] $KingdomName offered $name swords" } else { Add-Failure "[session3] $KingdomName could not offer $name a deal" }
         Send-ServerCommand $server "kingdomworld admin npc days $site 10"
         $days = Wait-ForLog $server 'The ruler of (.+?) took (\d+) turn\(s\): (\d+) decree\(s\) remembered, (\d+) waiting; treasury (-?\d+) -> (-?\d+), journal \+(\d+) -(\d+), difference (-?\d+)' $CommandTimeout $ConsoleFailPattern
         if (-not $days) {
@@ -2689,8 +2694,9 @@ if ($script:NpcSite) {
         } else {
             Add-Failure '[session3] admin npc decisions did not answer'
         }
-        $trade = [regex]::Matches((Get-LatestLog), '  day \d+: [^\r\n]*\[(offer|sell|buy|accept)\b')
-        if ($trade.Count -gt 0) { Write-Ok "[session3] the ruler trades: $(($trade | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique) -join ', ')" } else { Add-Failure '[session3] the ruler made no deal and sold nothing' }
+        $trade = [regex]::Matches((Get-LatestLog), '  day \d+: [^\r\n]*\[(offer|sell|buy|import|accept)\b')
+        $kinds = ($trade | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique) -join ', '
+        if (@($trade | Where-Object { $_.Groups[1].Value -in @('offer', 'accept') }).Count -gt 0) { Write-Ok "[session3] the ruler trades in deals: $kinds" } else { Add-Failure "[session3] the ruler offered and took no deal (trade: $kinds)" }
         $chronicle = Count-Log 'Chronicle of .+?: the ruler'
         Write-Ok "[session3] decrees written to the chronicle: $chronicle"
         Send-ServerCommand $server "kingdomworld admin npc needs $site"
