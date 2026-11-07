@@ -130,6 +130,7 @@ public final class NpcSpawner {
         long sumNanos;
         long maxNanos;
         boolean searching;
+        boolean loaded;
 
         Job(int siteId, NpcComposition composition) {
             this.siteId = siteId;
@@ -230,7 +231,7 @@ public final class NpcSpawner {
                 job = new Job(site.id(), composition(site));
                 job.chunks.addAll(chunks(site, job.composition));
             }
-            if (site.stage() == SpawnStage.LOAD) {
+            if (!job.loaded) {
                 for (ChunkPos chunk : job.chunks) {
                     server.overworld().getChunk(chunk.x, chunk.z);
                 }
@@ -253,6 +254,10 @@ public final class NpcSpawner {
     }
 
     private static void step(MinecraftServer server, ServerLevel level, NpcSite site, Job job) {
+        if (site.stage() != SpawnStage.LOAD && site.stage() != SpawnStage.DONE && !loaded(level, site, job)) {
+            // After a restart the chunks come back with the tickets first, so that nothing loads on the main thread.
+            return;
+        }
         switch (site.stage()) {
             case LOAD -> load(level, site, job);
             case CHECK -> check(server, level, site, job);
@@ -333,6 +338,19 @@ public final class NpcSpawner {
     }
 
     private static void load(ServerLevel level, NpcSite site, Job job) {
+        if (loaded(level, site, job)) {
+            LOGGER.info("The chunks of {} are loaded ({} chunks, {} ticks)", site, job.chunks.size(), job.ticks);
+            site.advance(SpawnStage.CHECK);
+        }
+    }
+
+    /**
+     * Adds the tickets of the chunks of an appearance within the budget and tells whether all of them are loaded.
+     */
+    private static boolean loaded(ServerLevel level, NpcSite site, Job job) {
+        if (job.loaded) {
+            return true;
+        }
         int budget = Math.max(1, NpcSettings.rules().chunksPerTick());
         for (ChunkPos chunk : job.chunks) {
             if (budget <= 0) {
@@ -344,7 +362,7 @@ public final class NpcSpawner {
             }
         }
         if (job.ticketed.size() < job.chunks.size()) {
-            return;
+            return false;
         }
         for (ChunkPos chunk : job.chunks) {
             if (!level.hasChunk(chunk.x, chunk.z)) {
@@ -352,11 +370,11 @@ public final class NpcSpawner {
                 if (job.waited == LOAD_WARN_TICKS) {
                     LOGGER.warn("The appearance of {} is still waiting for {} chunks to load", site, job.chunks.size());
                 }
-                return;
+                return false;
             }
         }
-        LOGGER.info("The chunks of {} are loaded ({} chunks, {} ticks)", site, job.chunks.size(), job.ticks);
-        site.advance(SpawnStage.CHECK);
+        job.loaded = true;
+        return true;
     }
 
     private static void check(MinecraftServer server, ServerLevel level, NpcSite site, Job job) {

@@ -28,7 +28,7 @@ public record NpcRules(boolean generate, int count, int radius, int minDistance,
                        int[] materials, int[] soldiers, int blocksPerTick, int chunksPerTick, int maxInhabitedMinutes,
                        int attemptsPerSite) {
     public static final NpcRules DEFAULT = new NpcRules(true, 8, 6000, 1200, 1000, 12, new int[]{5, 3, 2}, new int[]{3, 4, 5},
-            new int[]{1, 2, 3}, 200, new long[]{1500, 4000, 10000}, 10, new int[]{4, 8, 16}, new int[]{2, 4, 8}, 4000, 4, 20, 60);
+            new int[]{1, 2, 3}, 200, new long[]{1500, 4000, 10000}, 10, new int[]{4, 6, 10}, new int[]{2, 4, 8}, 4000, 4, 20, 60);
 
     public NpcRules {
         sizeWeights = three(sizeWeights, 0, 1000);
