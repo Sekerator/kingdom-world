@@ -115,14 +115,21 @@ public final class ConstructionActions {
      */
     static ConstructionView.Building building(MinecraftServer server, BuildingEffects.Effect effect) {
         Building building = effect.building();
-        Component name = BuildingTemplates.get(building.templateId()).map(BuildingTemplate::name).orElse(Component.literal(building.templateId()));
+        Component name = BuildingTemplates.get(building.templateId()).map(BuildingTemplate::name)
+                .or(() -> io.github.sekerator.kingdomworld.common.road.CityWalls.name(building.templateId()))
+                .orElse(Component.literal(building.templateId()));
         Component next = BuildingWork.nextTemplate(building).map(BuildingTemplate::name).orElse(Component.empty());
         Construction busy = KingdomWorldApi.state(server).construction().forBuilding(building.id()).orElse(null);
         Map<String, Integer> upgrade = BuildingWork.upgradeDiff(building).map(io.github.sekerator.kingdomworld.core.construction.TemplateDiff.Result::cost)
                 .orElse(Map.of());
+        List<Component> lines = new ArrayList<>(effects(effect));
+        if (io.github.sekerator.kingdomworld.common.road.CityWalls.isFortification(building)) {
+            // Why its works are off: walls and gates are kept by the roads tab.
+            lines.add(0, Component.translatable("kingdomworld.screen.construction.work_hint.by_roads"));
+        }
         return new ConstructionView.Building(building.id(), name, building.type(), building.category(), ConstructionWork.blockPos(building.anchor()),
                 building.integrity(), Math.floorDiv(building.builtTime(), CitizenNeeds.TICKS_PER_DAY), building.admin(), roleName(building.role()),
-                effect.status(), roleReason(effect), building.level(), next, effects(effect), materials(building), building.damagedCount(),
+                effect.status(), roleReason(effect), building.level(), next, lines, materials(building), building.damagedCount(),
                 building.autoRepair(), busy == null ? null : busy.kind(), costs(upgrade), costs(BuildingWork.repairCost(building)),
                 costs(BuildingWork.demolitionReturn(building)));
     }
@@ -260,6 +267,10 @@ public final class ConstructionActions {
         KingdomWorldState state = KingdomWorldApi.state(server);
         Component name = state.construction().building(buildingId).map(Building::templateId).flatMap(BuildingTemplates::get).map(BuildingTemplate::name)
                 .orElse(Component.literal("#" + buildingId));
+        if (state.construction().building(buildingId).filter(io.github.sekerator.kingdomworld.common.road.CityWalls::isFortification).isPresent()) {
+            // City walls and gates are built and kept by the roads tab.
+            return KingdomActions.Feedback.error(KingdomError.KEPT_BY_ROADS);
+        }
         switch (action) {
             case AUTO_REPAIR_ON, AUTO_REPAIR_OFF -> {
                 boolean on = action == io.github.sekerator.kingdomworld.common.network.packet.BuildingPackets.Change.Action.AUTO_REPAIR_ON;

@@ -303,7 +303,9 @@ public enum KingdomError {
     /** The place is too far from the wall for a gate, or a gate is there already. */
     NOT_AT_WALL,
     /** Around the city there is too little ground for a wall: water, danger or the land of others. */
-    NO_GROUND_FOR_WALL;
+    NO_GROUND_FOR_WALL,
+    /** City walls and gates are built, kept and given up in the roads tab, not as buildings of templates. */
+    KEPT_BY_ROADS;
 
     /**
      * Lower case identifier, used for translation keys.

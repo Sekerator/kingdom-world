@@ -212,6 +212,9 @@ public final class RoadEvents {
     }
 
     private static void onServerStarted(ServerStartedEvent event) {
+        // Slaves who escape their owners run to the camps of robbers.
+        io.github.sekerator.kingdomworld.common.companion.CompanionWork.setEscapeRoute((server, companion, pack, where) ->
+                BanditWork.takeRunaway(server, "Companion " + companion.id(), pack, where));
         RoadSavedData data = RoadSavedData.get(event.getServer());
         RoadState roads = data.state();
         LOGGER.info("KingdomWorld roads: {} city(ies), {} road(s), {} camp(s) of robbers, {} caravan(s) on their way, data format {}{}",

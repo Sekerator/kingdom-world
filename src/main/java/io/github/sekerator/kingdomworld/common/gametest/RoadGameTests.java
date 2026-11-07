@@ -526,20 +526,19 @@ public final class RoadGameTests {
         helper.assertTrue(!ForgeEventFactory.getMobGriefingEvent(level, bandit), "A robber may grief");
         helper.assertTrue(bandit.goalSelector.getAvailableGoals().stream().noneMatch(goal -> goal.getGoal() instanceof BreakDoorGoal),
                 "A robber breaks doors");
-        int timeout = KingdomWorldConfig.SERVER.afkTimeoutSeconds.get();
-        KingdomWorldConfig.SERVER.afkTimeoutSeconds.set(1);
+        // The timeout of the config stays as it is (other tests read it); the player's last action goes back past it.
+        long away = Math.max(1, KingdomWorldConfig.SERVER.afkTimeoutSeconds.get()) * 1_000L + 5_000L;
         ServerPlayer player = player(helper, UUID.randomUUID(), "Sleeper", 5, 1, 5);
         helper.assertTrue(BanditWork.mayAttack(player), "Robbers spare a player at the keyboard");
         helper.runAfterDelay(5, () -> {
             try {
                 // The player did nothing for a while: its last action is pushed back past the timeout.
-                awayFor(player, 5_000L);
+                awayFor(player, away);
                 helper.assertTrue(!BanditWork.mayAttack(player), "Robbers attack a player away from the game");
                 float health = player.getHealth();
                 boolean hurt = player.hurt(level.damageSources().mobAttack(bandit), 4.0f);
                 helper.assertTrue(!hurt && player.getHealth() == health, "A robber hurt a player away from the game");
             } finally {
-                KingdomWorldConfig.SERVER.afkTimeoutSeconds.set(timeout);
                 bandit.discard();
                 GatheringGameTests.clear(level, from, to);
             }
@@ -694,6 +693,18 @@ public final class RoadGameTests {
             player.setPos(overTheWall.getX() + 0.5, overTheWall.getY(), overTheWall.getZ() + 0.5);
             CityWalls.watch(server, player, places);
             helper.assertTrue(entries.size() == 2 && !entries.get(1).throughGate(), "Coming in past the gates was not seen");
+            // The register of buildings: the wall plays the role of a wall, and the work of buildings by template leaves it alone.
+            Building kept = KingdomWorldApi.state(server).construction().building(wall.buildingId()).orElseThrow();
+            helper.assertTrue(kept.role().equals(io.github.sekerator.kingdomworld.core.construction.BuildingRoles.WALL) && !kept.autoRepair()
+                    && CityWalls.isFortification(kept), "The wall has no role of a wall: " + kept.role());
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.construction.BuildingEffects.fortification(server, kingdom.id()) > 0,
+                    "The wall adds nothing to the fortification of the kingdom");
+            for (var order : List.<java.util.function.Supplier<io.github.sekerator.kingdomworld.core.state.KingdomWorldState.ConstructionChange>>of(
+                    () -> io.github.sekerator.kingdomworld.common.construction.BuildingWork.orderRepair(server, null, kingdom.id(), wall.buildingId()),
+                    () -> io.github.sekerator.kingdomworld.common.construction.BuildingWork.orderUpgrade(server, null, kingdom.id(), wall.buildingId()),
+                    () -> io.github.sekerator.kingdomworld.common.construction.BuildingWork.orderDemolition(server, null, kingdom.id(), wall.buildingId()))) {
+                helper.assertTrue(order.get().outcome().error() == KingdomError.KEPT_BY_ROADS, "Work by template was ordered for the wall");
+            }
             Outcome removed = CityWalls.remove(server, wall.id());
             helper.assertTrue(removed.ok() && RoadWork.state(server).wallOf(city.id(), kingdom.id()).isEmpty()
                     && KingdomWorldApi.state(server).construction().building(wall.buildingId()).isEmpty(), "The wall was not given up");
@@ -705,6 +716,38 @@ public final class RoadGameTests {
                 forget(server, road);
             }
             end(helper, kingdom, from, to, worker == null ? new Citizen[0] : new Citizen[]{worker});
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_roads_runaway")
+    public static void anEscapedSlaveRunsToTheNearestCamp(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        String dimension = dimension(helper);
+        BlockPos at = helper.absolutePos(BlockPos.ZERO);
+        BanditCamp near = null;
+        BanditCamp far = null;
+        try {
+            WorldPos where = new WorldPos(dimension, at.getX(), at.getY(), at.getZ());
+            helper.assertTrue(BanditWork.takeRunaway(server, "GameTest runaway", List.of(new ItemStack(Items.BREAD)),
+                    new WorldPos("kingdomworld:nowhere", 0, 64, 0)).isEmpty(), "A runaway found a camp in a dimension without camps");
+            near = BanditWork.found(server, dimension, at.getX() + 3000, at.getZ(), 3);
+            far = BanditWork.found(server, dimension, at.getX() - 9000, at.getZ(), 3);
+            int before = near.bandits();
+            ItemStack sword = new ItemStack(Items.IRON_SWORD);
+            sword.setDamageValue(17);
+            BanditCamp joined = BanditWork.takeRunaway(server, "GameTest runaway", List.of(sword, new ItemStack(Items.BREAD, 5)), where).orElse(null);
+            helper.assertTrue(joined != null && joined.id() == near.id(), "The runaway did not go to the nearest camp");
+            helper.assertTrue(near.bandits() == before + 1 && far.bandits() == 3, "The runaway did not become a robber: " + near.bandits());
+            helper.assertTrue(near.lootItems() == 6 && near.loot().stream().anyMatch(goods -> goods.item().equals("minecraft:iron_sword")
+                    && !goods.data().isEmpty()), "The pack of the runaway is not in the loot of the camp: " + near.loot());
+        } finally {
+            if (near != null) {
+                RoadWork.state(server).removeCamp(near.id());
+            }
+            if (far != null) {
+                RoadWork.state(server).removeCamp(far.id());
+            }
         }
         helper.succeed();
     }

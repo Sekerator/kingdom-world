@@ -862,9 +862,20 @@ final class ClientLayoutCheck {
                         i % 3 == 0 ? Component.literal(LONG_KINGDOM) : Component.empty(), effects, materials, 73_728 - i, i % 2 == 1,
                         i == 2 ? io.github.sekerator.kingdomworld.core.construction.Construction.Kind.REPAIR : null, cost, cost, cost));
             }
+            // A city wall, kept by the roads tab: its works are off with a hint.
+            buildings.add(new io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Building(CITY_WALL,
+                    Component.translatable("kingdomworld.building.city_wall"), "fortification",
+                    io.github.sekerator.kingdomworld.common.road.CityWalls.CATEGORY, far, 87, 99_999, false,
+                    Component.translatable("kingdomworld.building.role.wall"), io.github.sekerator.kingdomworld.core.construction.BuildingRoles.Status.ACTIVE,
+                    Component.translatable("kingdomworld.construction.role_status.active"), 1, Component.empty(),
+                    List.of(Component.translatable("kingdomworld.screen.construction.work_hint.by_roads")), Component.empty(), 99_999,
+                    false, null, List.of(), List.of(), List.of()));
         }
         return new io.github.sekerator.kingdomworld.common.network.data.ConstructionView(kingdom, canManage, 64, templates, sites, buildings, 256, 9_999_999L);
     }
+
+    /** The number of the city wall among the buildings of the layout check. */
+    private static final long CITY_WALL = 9_999;
 
     private static ThroneScreen constructionBuilding(KingdomView view, boolean canManage, long building, String work, Component status) {
         ThroneScreen screen = throne(view, "construction", status);
@@ -1168,6 +1179,8 @@ final class ClientLayoutCheck {
                 longError)));
         cases.add(new Case("throne-construction-building-damaged", () -> constructionBuilding(view(KingdomView.Relation.MEMBER, Role.KING), true, 3,
                 "", Component.empty())));
+        cases.add(new Case("throne-construction-building-city-wall", () -> constructionBuilding(view(KingdomView.Relation.MEMBER, Role.KING), true,
+                CITY_WALL, "", Component.empty())));
         cases.add(new Case("throne-construction-building-busy", () -> constructionBuilding(view(KingdomView.Relation.MEMBER, Role.STEWARD), true, 3,
                 "", Component.empty())));
         cases.add(new Case("throne-subject-construction-building", () -> constructionBuilding(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false,

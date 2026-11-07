@@ -11,6 +11,7 @@ import io.github.sekerator.kingdomworld.core.army.ArmySquad;
 import io.github.sekerator.kingdomworld.core.army.Order;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.combat.Battle;
+import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
 import io.github.sekerator.kingdomworld.core.road.Ambushes;
 import io.github.sekerator.kingdomworld.core.road.BanditCamp;
 import io.github.sekerator.kingdomworld.core.road.BanditRules;
@@ -302,6 +303,47 @@ public final class BanditWork {
         RoadWork.notify(server, kingdomId, Component.translatable(KEY + "camp_loot", RoadTexts.items(Ambushes.items(MarketStock.goods(stacks))
                 - Ambushes.items(rest))).withStyle(ChatFormatting.GREEN));
         RoadWork.state(server).changed();
+    }
+
+    /**
+     * A slave who escaped its owner runs to the nearest camp of robbers in its dimension and becomes one of them; what it
+     * carried goes into the loot of the camp. With no camp to run to it is gone with its pack.
+     *
+     * @param who   for the log
+     * @param where where it ran from, {@code null} if not known
+     * @return the camp it joined
+     */
+    public static Optional<BanditCamp> takeRunaway(MinecraftServer server, String who, List<ItemStack> pack, @Nullable WorldPos where) {
+        if (where == null || RoadWork.isReadOnly(server) || !RoadSettings.bandits().enabled()) {
+            return Optional.empty();
+        }
+        RoadState roads = RoadWork.state(server);
+        Optional<BanditCamp> camp = roads.nearestCamp(where.dimension(), where.x(), where.z(), Double.MAX_VALUE / 4)
+                .filter(found -> !found.cleared());
+        if (camp.isEmpty()) {
+            return Optional.empty();
+        }
+        Outcome outcome = RoadWork.change(server, "take in a runaway", state -> {
+            // A runaway joins even a full camp.
+            camp.get().grow(Math.max(RoadSettings.bandits().maxBandits(), camp.get().bandits() + 1));
+            state.changed();
+            return Outcome.DONE;
+        });
+        if (!outcome.ok()) {
+            return Optional.empty();
+        }
+        List<Goods> goods = new ArrayList<>();
+        for (ItemStack stack : pack) {
+            if (!stack.isEmpty()) {
+                goods.add(io.github.sekerator.kingdomworld.common.trade.GoodsStacks.goods(stack));
+            }
+        }
+        if (!goods.isEmpty()) {
+            addLoot(server, camp.get(), goods);
+        }
+        LOGGER.info("{} ran away to the camp of robbers {} at {} {} with {} stack(s)", who, camp.get().id(), camp.get().x(), camp.get().z(),
+                goods.size());
+        return camp;
     }
 
     /**

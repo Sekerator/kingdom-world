@@ -2523,5 +2523,9 @@
   "commands.kingdomworld.admin.roads.gate_cut": "Wall #%s now has gates: %s",
   "commands.kingdomworld.admin.roads.wall_paid": "Wall #%s: %s more columns paid, %s in all",
   "commands.kingdomworld.admin.roads.wall_placed": "Wall #%s: %s columns placed",
-  "commands.kingdomworld.admin.roads.wall_removed": "Wall #%s is given up; what stands stays"
+  "commands.kingdomworld.admin.roads.wall_removed": "Wall #%s is given up; what stands stays",
+  "kingdomworld.error.kept_by_roads": "City walls and gates are built, kept and given up in the Roads tab: a wall put up again there only adds what is missing",
+  "kingdomworld.screen.construction.work_hint.by_roads": "A city wall or gate: it is kept in the Roads tab (cities), where a wall put up again only adds what is missing",
+  "kingdomworld.building.city_wall": "City wall",
+  "kingdomworld.building.city_gate": "City gate"
 }

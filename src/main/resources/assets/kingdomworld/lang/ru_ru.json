@@ -2523,5 +2523,9 @@
   "commands.kingdomworld.admin.roads.gate_cut": "У стены №%s теперь ворот: %s",
   "commands.kingdomworld.admin.roads.wall_paid": "Стена №%s: оплачено ещё %s столбов, всего %s",
   "commands.kingdomworld.admin.roads.wall_placed": "Стена №%s: поставлено столбов %s",
-  "commands.kingdomworld.admin.roads.wall_removed": "От стены №%s отказались; то, что стоит, остаётся"
+  "commands.kingdomworld.admin.roads.wall_removed": "От стены №%s отказались; то, что стоит, остаётся",
+  "kingdomworld.error.kept_by_roads": "Стены и ворота города строят, чинят и сносят во вкладке «Дороги»: поставленная там заново стена достраивает только недостающее",
+  "kingdomworld.screen.construction.work_hint.by_roads": "Стена или ворота города: их ведёт вкладка «Дороги» (города), там поставленная заново стена достраивает только недостающее",
+  "kingdomworld.building.city_wall": "Городская стена",
+  "kingdomworld.building.city_gate": "Городские ворота"
 }

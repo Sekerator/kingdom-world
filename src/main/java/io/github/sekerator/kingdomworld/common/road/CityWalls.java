@@ -4,6 +4,7 @@ import com.mojang.logging.LogUtils;
 import io.github.sekerator.kingdomworld.KingdomWorld;
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.citizen.work.PostWork;
+import io.github.sekerator.kingdomworld.common.construction.BuildingEffects;
 import io.github.sekerator.kingdomworld.common.construction.ConstructionWork;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
 import io.github.sekerator.kingdomworld.common.production.Production;
@@ -12,7 +13,9 @@ import io.github.sekerator.kingdomworld.core.citizen.Citizen;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.construction.Box;
 import io.github.sekerator.kingdomworld.core.construction.Building;
+import io.github.sekerator.kingdomworld.core.construction.BuildingRoles;
 import io.github.sekerator.kingdomworld.core.construction.ConstructionBook;
+import io.github.sekerator.kingdomworld.core.construction.Materials;
 import io.github.sekerator.kingdomworld.core.construction.Placement;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
 import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
@@ -65,6 +68,11 @@ public final class CityWalls {
     public static final TagKey<Item> WALL_STONE = TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath(KingdomWorld.MOD_ID, "wall_stone"));
     public static final String WALL_TEMPLATE = KingdomWorld.MOD_ID + ":city_wall";
     public static final String GATE_TEMPLATE = KingdomWorld.MOD_ID + ":city_gate";
+    /**
+     * Category of walls and gates in the register of buildings. They are built and kept by the roads tab: the upgrades,
+     * repairs, demolitions and automatic repairs of buildings by template leave them alone.
+     */
+    public static final String CATEGORY = "city_wall";
     /** Blocks around a city that count for its level. */
     public static final int AREA = 64;
     /** Where each player was last: the kingdom and city it is in, or none. */
@@ -132,7 +140,7 @@ public final class CityWalls {
         }
         int buildings = 0;
         for (Building building : KingdomWorldApi.state(server).construction().buildingsOf(place.kingdomId())) {
-            if (!building.type().equals("fortification") && !building.type().equals("gate") && near(place, building.anchor())) {
+            if (!isFortification(building) && near(place, building.anchor())) {
                 buildings++;
             }
         }
@@ -347,6 +355,7 @@ public final class CityWalls {
             }
         }
         state.removeWall(wall.id());
+        BuildingEffects.changed();
     }
 
     private static void giveBack(MinecraftServer server, Wall wall) {
@@ -493,14 +502,16 @@ public final class CityWalls {
         long id = book.nextBuildingId();
         book.restoreCounters(0, id + 1);
         long now = KingdomWorldApi.gameTime(server);
-        book.putBuilding(new Building(id, wall.kingdomId(), WALL_TEMPLATE, "fortification", "fortification",
+        book.putBuilding(new Building(id, wall.kingdomId(), WALL_TEMPLATE, "fortification", CATEGORY, BuildingRoles.WALL, 1, Materials.NONE,
                 new WorldPos(wall.dimension(), first.x(), first.y(), first.z()), Placement.NONE,
-                new Box(first.x(), first.y() + 1, first.z(), first.x(), first.y() + wall.wallClass().height(), first.z()), 0, now, false, 100, now));
+                new Box(first.x(), first.y() + 1, first.z(), first.x(), first.y() + wall.wallClass().height(), first.z()), 0, now, false, 100, now,
+                false, new java.util.BitSet()));
         wall.setBuildingId(id);
         for (int gate : wall.gates()) {
             registerGate(server, wall, gate);
         }
         RoadWork.state(server).changed();
+        BuildingEffects.changed();
         RoadWork.notify(server, wall.kingdomId(), Component.translatable(KEY + "wall_built", wall.id()).withStyle(ChatFormatting.GREEN));
         LOGGER.info("Wall {} is built and entered into the register as building {}", wall.id(), id);
     }
@@ -529,9 +540,30 @@ public final class CityWalls {
         long id = book.nextBuildingId();
         book.restoreCounters(0, id + 1);
         long now = KingdomWorldApi.gameTime(server);
-        book.putBuilding(new Building(id, wall.kingdomId(), GATE_TEMPLATE, "gate", "fortification",
+        book.putBuilding(new Building(id, wall.kingdomId(), GATE_TEMPLATE, "gate", CATEGORY, BuildingRoles.WALL, 1, Materials.NONE,
                 new WorldPos(wall.dimension(), gate.x(), gate.y() + 1, gate.z()), Placement.NONE,
-                new Box(minX, minY + 1, minZ, maxX, maxY + wall.wallClass().height(), maxZ), 0, now, false, 100, now));
+                new Box(minX, minY + 1, minZ, maxX, maxY + wall.wallClass().height(), maxZ), 0, now, false, 100, now, false, new java.util.BitSet()));
+        BuildingEffects.changed();
+    }
+
+    /**
+     * Whether a building of the register is a city wall or gate, kept by the roads tab.
+     */
+    public static boolean isFortification(Building building) {
+        return CATEGORY.equals(building.category()) && (WALL_TEMPLATE.equals(building.templateId()) || GATE_TEMPLATE.equals(building.templateId()));
+    }
+
+    /**
+     * The name of a city wall or gate in the register, for the tabs that list buildings.
+     */
+    public static Optional<Component> name(String templateId) {
+        if (WALL_TEMPLATE.equals(templateId)) {
+            return Optional.of(Component.translatable("kingdomworld.building.city_wall"));
+        }
+        if (GATE_TEMPLATE.equals(templateId)) {
+            return Optional.of(Component.translatable("kingdomworld.building.city_gate"));
+        }
+        return Optional.empty();
     }
 
     /**
@@ -555,6 +587,7 @@ public final class CityWalls {
         int percent = counted == 0 ? 100 : (int) Math.round(100.0 * standing / counted);
         ConstructionBook book = KingdomWorldApi.state(server).construction();
         book.building(wall.buildingId()).ifPresent(building -> book.putBuilding(building.withIntegrity(percent, KingdomWorldApi.gameTime(server))));
+        BuildingEffects.changed();
     }
 
     /**

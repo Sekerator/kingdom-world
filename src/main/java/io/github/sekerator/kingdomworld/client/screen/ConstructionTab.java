@@ -574,18 +574,23 @@ final class ConstructionTab {
                 scroll = 0;
                 screen.rebuild();
             }).bounds(button.x(), button.y(), button.width(), ROW - 2).build());
-            widget.active = shown.busy() == null && switch (work) {
+            // City walls and gates are kept in the roads tab.
+            boolean byRoads = io.github.sekerator.kingdomworld.common.road.CityWalls.CATEGORY.equals(shown.category());
+            widget.active = shown.busy() == null && !byRoads && switch (work) {
                 case UPGRADE -> shown.upgradable();
                 case REPAIR -> shown.damaged() > 0 && shown.integrity() >= 0;
                 default -> true;
             };
-            widget.setTooltip(Tooltip.create(Component.translatable(KEY + "work_hint." + work.name().toLowerCase(Locale.ROOT))));
+            widget.setTooltip(Tooltip.create(byRoads ? Component.translatable(KEY + "work_hint.by_roads")
+                    : Component.translatable(KEY + "work_hint." + work.name().toLowerCase(Locale.ROOT))));
         }
         Placed auto = placed.get(3);
         Button toggle = screen.add(Button.builder(auto.label(), b -> send(new BuildingPackets.Change(view.kingdomId(),
                 shown.autoRepair() ? BuildingPackets.Change.Action.AUTO_REPAIR_OFF : BuildingPackets.Change.Action.AUTO_REPAIR_ON, shown.id())))
                 .bounds(auto.x(), auto.y(), auto.width(), ROW - 2).build());
-        toggle.setTooltip(Tooltip.create(Component.translatable(KEY + "auto_repair_hint")));
+        boolean byRoads = io.github.sekerator.kingdomworld.common.road.CityWalls.CATEGORY.equals(shown.category());
+        toggle.active = !byRoads;
+        toggle.setTooltip(Tooltip.create(Component.translatable(byRoads ? KEY + "work_hint.by_roads" : KEY + "auto_repair_hint")));
     }
 
     private void confirm(Component question, Runnable onYes) {

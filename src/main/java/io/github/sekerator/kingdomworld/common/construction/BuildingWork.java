@@ -182,7 +182,7 @@ public final class BuildingWork {
      */
     public static KingdomWorldState.ConstructionChange orderUpgrade(MinecraftServer server, @Nullable UUID actor, UUID kingdomId, long buildingId) {
         KingdomWorldState state = KingdomWorldApi.state(server);
-        Outcome allowed = readOnly(server).orElseGet(() -> state.checkBuilding(actor, kingdomId, buildingId));
+        Outcome allowed = readOnly(server).or(() -> byRoads(state, buildingId)).orElseGet(() -> state.checkBuilding(actor, kingdomId, buildingId));
         if (!allowed.ok()) {
             return failed(allowed.error());
         }
@@ -220,7 +220,7 @@ public final class BuildingWork {
      */
     public static KingdomWorldState.ConstructionChange orderRepair(MinecraftServer server, @Nullable UUID actor, UUID kingdomId, long buildingId) {
         KingdomWorldState state = KingdomWorldApi.state(server);
-        Outcome allowed = readOnly(server).orElseGet(() -> state.checkBuilding(actor, kingdomId, buildingId));
+        Outcome allowed = readOnly(server).or(() -> byRoads(state, buildingId)).orElseGet(() -> state.checkBuilding(actor, kingdomId, buildingId));
         if (!allowed.ok()) {
             return failed(allowed.error());
         }
@@ -251,7 +251,7 @@ public final class BuildingWork {
     public static KingdomWorldState.ConstructionChange orderDemolition(MinecraftServer server, @Nullable UUID actor, UUID kingdomId,
                                                                        long buildingId) {
         KingdomWorldState state = KingdomWorldApi.state(server);
-        Outcome allowed = readOnly(server).orElseGet(() -> state.checkBuilding(actor, kingdomId, buildingId));
+        Outcome allowed = readOnly(server).or(() -> byRoads(state, buildingId)).orElseGet(() -> state.checkBuilding(actor, kingdomId, buildingId));
         if (!allowed.ok()) {
             return failed(allowed.error());
         }
@@ -268,6 +268,14 @@ public final class BuildingWork {
                 ConstructionSettings.rules(), Construction.Kind.DEMOLISH, building.id(), building.materials(), new BitSet());
         laid(server, change, "demolition");
         return change;
+    }
+
+    /**
+     * City walls and gates are built and kept by the roads tab, not by templates.
+     */
+    private static Optional<Outcome> byRoads(KingdomWorldState state, long buildingId) {
+        return state.construction().building(buildingId).filter(io.github.sekerator.kingdomworld.common.road.CityWalls::isFortification)
+                .map(building -> Outcome.fail(KingdomError.KEPT_BY_ROADS));
     }
 
     private static Optional<Outcome> readOnly(MinecraftServer server) {
