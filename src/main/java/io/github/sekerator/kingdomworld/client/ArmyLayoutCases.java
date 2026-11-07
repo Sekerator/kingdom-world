@@ -102,13 +102,13 @@ final class ArmyLayoutCases {
                 default -> Component.translatable("kingdomworld.army.where.training");
             };
             rows.add(new ArmyViews.SoldierRow(UUID.nameUUIDFromBytes(("soldier" + i).getBytes(StandardCharsets.UTF_8)), longName(i), i % 2 == 1,
-                    SoldierRank.ofIndex(i % SoldierRank.COUNT), MUCH, 999_999, weapon, 30, i % 5 == 4 ? CitizenState.WOUNDED : CitizenState.HEALTHY,
+                    SoldierRank.ofIndex(i % SoldierRank.COUNT), io.github.sekerator.kingdomworld.core.army.Soldier.MAX_EXPERIENCE, 999_999, weapon, 30, i % 5 == 4 ? CitizenState.WOUNDED : CitizenState.HEALTHY,
                     20, i % 3 == 0 ? 0 : 99, where));
         }
         return rows;
     }
 
-    private static ArmyViews.ArmyTabView tab(boolean canManage, boolean empty) {
+    private static ArmyViews.ArmyTabView tab(UUID kingdom, boolean canManage, boolean empty) {
         List<ArmyViews.SquadRow> squads = new ArrayList<>();
         List<ArmyViews.CandidateRow> candidates = new ArrayList<>();
         List<ArmyViews.BandRow> offers = new ArrayList<>();
@@ -138,7 +138,7 @@ final class ArmyLayoutCases {
                         : Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE), 4_096, i % 2 == 0, i % 3 == 0 ? 0 : MUCH, 1_000 - i, i % 4 == 3));
             }
         }
-        return new ArmyViews.ArmyTabView(KINGDOM, canManage, currency(), empty ? 0 : 1_024, 1_024, empty ? 0 : 1_024, 1_024, 999_999_999,
+        return new ArmyViews.ArmyTabView(kingdom, canManage, currency(), empty ? 0 : 1_024, 1_024, empty ? 0 : 1_024, 1_024, 999_999_999,
                 MUCH, MUCH, empty ? 0 : 999, 255_744, 30, empty ? List.of() : soldiers(24), squads, candidates, offers, hired, deals);
     }
 
@@ -150,7 +150,7 @@ final class ArmyLayoutCases {
         if (!status.getString().isEmpty()) {
             screen.onResult(false, status);
         }
-        screen.updateArmy(tab(canManage, empty));
+        screen.updateArmy(tab(view.id(), canManage, empty));
         screen.showArmy(mode, chosen, ordering, escorting);
         return screen;
     }
@@ -225,7 +225,9 @@ final class ArmyLayoutCases {
         add.accept("barracks", () -> barracks(true, false));
         add.accept("barracks-member", () -> barracks(false, false));
         add.accept("barracks-empty", () -> barracks(true, true));
-        add.accept("baton-tooltip", () -> new ItemTooltipScreen("baton", List.of(baton(0, 0), baton(MUCH, 1), baton(MUCH, 2),
-                new ItemStack(ArmyRegistries.BARRACKS_ITEM.get()))));
+        add.accept("baton-tooltip", () -> new ItemTooltipScreen("baton", List.of(baton(0, 0))));
+        add.accept("baton-tooltip-patrol", () -> new ItemTooltipScreen("baton-patrol", List.of(baton(MUCH, 1))));
+        add.accept("baton-tooltip-guard", () -> new ItemTooltipScreen("baton-guard", List.of(baton(MUCH, 2))));
+        add.accept("barracks-tooltip", () -> new ItemTooltipScreen("barracks", List.of(new ItemStack(ArmyRegistries.BARRACKS_ITEM.get()))));
     }
 }

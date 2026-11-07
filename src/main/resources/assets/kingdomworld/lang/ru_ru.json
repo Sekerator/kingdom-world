@@ -1517,7 +1517,7 @@
   "kingdomworld.army.baton.at": "у %s %s %s, в %s м",
   "kingdomworld.army.baton.at_elsewhere": "у %s %s %s в мире %s",
   "kingdomworld.army.baton.line": "%s: %s, %s",
-  "kingdomworld.army.baton.no_squad_chosen": "Сначала выберите отряд: присядьте и примените жезл в воздух",
+  "kingdomworld.army.baton.no_squad_chosen": "Выберите отряд: присесть и ПКМ жезлом в воздух",
   "kingdomworld.army.baton.ordered": "%s: %s",
   "kingdomworld.army.baton.mode_set": "Жезл: %s",
   "kingdomworld.army.baton.mode.hold": "держать точку",
@@ -1605,7 +1605,7 @@
   "kingdomworld.screen.army_tab.hint.escort": "Выберите отряд, который пойдёт с караванами сделки.",
   "kingdomworld.screen.barracks.title": "Казарма: %s",
   "kingdomworld.screen.barracks.soldiers": "Солдаты: %s из %s",
-  "kingdomworld.screen.barracks.room": "Казарм в королевстве: %s, тренируют одновременно %s",
+  "kingdomworld.screen.barracks.room": "Казарм: %s, мест для тренировки: %s",
   "kingdomworld.screen.barracks.training": "Тренировка до звания «%s», опыт %s в минуту",
   "kingdomworld.screen.barracks.no_unemployed": "Нет здоровых безработных для вербовки",
   "kingdomworld.screen.barracks.nearest": "Ближайший безработный: %s",
@@ -1638,5 +1638,7 @@
   "commands.kingdomworld.admin.army.status.ok": "Данные армии доступны для записи, формат %s: солдат %s, отрядов %s, наёмных отрядов %s",
   "commands.kingdomworld.admin.army.unlock.not_needed": "Данные армии не были в режиме только для чтения",
   "commands.kingdomworld.admin.army.unlocked": "Данные армии разблокированы, оригинал сохранён в %s",
-  "commands.kingdomworld.admin.army.unlock.failed": "Не удалось сохранить копию данных армии: %s"
+  "commands.kingdomworld.admin.army.unlock.failed": "Не удалось сохранить копию данных армии: %s",
+  "commands.kingdomworld.admin.army.weapons.header": "Оружие мода %s, которое возьмут солдаты: %s",
+  "commands.kingdomworld.admin.army.weapons.line": "Оружие %s: %s %s"
 }

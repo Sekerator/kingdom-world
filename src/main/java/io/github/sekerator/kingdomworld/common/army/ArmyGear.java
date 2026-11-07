@@ -174,6 +174,16 @@ public final class ArmyGear {
         if (stack.isEmpty()) {
             return 0.0;
         }
+        try {
+            return scoreOf(stack, slot);
+        } catch (RuntimeException | LinkageError e) {
+            // An item of a mod that cannot tell its attributes is no gear for soldiers.
+            LOGGER.debug("KingdomWorld could not judge {} as gear", id(stack.getItem()), e);
+            return 0.0;
+        }
+    }
+
+    private static double scoreOf(ItemStack stack, GearChoice.Slot slot) {
         double own = switch (slot) {
             case MELEE -> isRanged(stack) || isShield(stack) ? 0.0 : GearChoice.meleeScore(meleeDamage(stack), attackSpeed(stack));
             case RANGED -> rangedDamage(stack);

@@ -560,6 +560,12 @@ $script:ConstructionInfo = $null
 $script:BuilderId = $null
 $script:CitizenIds = @()
 $script:GuildSquad = $null
+$script:ArmySquad = $null
+$script:ArmyBand = $null
+$script:ArmyBandSquad = $null
+$script:ArmyPaidUntil = $null
+$script:ArmyWeapons = @()
+$script:ArmySoldiers = 0
 $script:GuildHunt = $null
 $script:GuildBounty = $null
 $script:GuildMoney = -1
@@ -938,6 +944,112 @@ Invoke-Phase 'session1' {
             Write-Ok '[session1] an iron sword is worth what its recipe costs'
         } else {
             Add-Failure '[session1] the worth of an iron sword was not worked out from its recipe'
+        }
+    }
+
+    # The army: citizens are recruited as warriors and an archer and take the best weapons of the storehouses (with -Pack the
+    # weapons of Simply Swords and of L'Ender's Cataclysm with Cataclysmic Combat), a squad of them holds a point and a band
+    # of mercenaries is hired for its advance from the treasury. The money of the advance leaves the world; everything must
+    # survive the restart, and nothing of it may make money or items.
+    if ($script:CitizenIds.Count -gt 0) {
+        # Daylight all the time: squads that hold a point far from players meet monsters at night.
+        Send-ServerCommand $server 'gamerule doDaylightCycle false'
+        Send-ServerCommand $server 'time set 1000'
+        Send-ServerCommand $server 'kingdomworld admin army status'
+        if (Wait-ForLog $server 'Army data is writable, format 1' $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok '[session1] the army data is writable'
+        } else {
+            Add-Failure '[session1] the army data is not writable'
+        }
+        # Not the smith's iron sword: it stays in the storehouse.
+        $weapons = @('minecraft:stone_sword', 'minecraft:bow')
+        $expected = @()
+        if (-not $Pack) {
+            $weapons += 'minecraft:diamond_sword'
+            $expected += 'minecraft:diamond_sword'
+        }
+        if ($Pack) {
+            foreach ($namespace in @('simplyswords', 'cataclysm')) {
+                $seen = Count-Log "Weapons of $namespace soldiers would take: (\d+)"
+                Send-ServerCommand $server "kingdomworld admin army weapons $namespace"
+                $header = Wait-ForNewLog $server "Weapons of $namespace soldiers would take: (\d+)" $CommandTimeout $seen
+                Start-Sleep -Seconds 1
+                $best = [regex]::Match((Get-LatestLog), "Weapon ($namespace`:[a-z0-9_./-]+): melee ([\d.]+)")
+                if ($header -and [int]$header.Groups[1].Value -gt 0 -and $best.Success -and [double]$best.Groups[2].Value -le 10) {
+                    Add-Warning "[session1] the best weapon of $namespace ($($best.Groups[1].Value), $($best.Groups[2].Value)) is no better than an iron sword"
+                } elseif ($header -and [int]$header.Groups[1].Value -gt 0 -and $best.Success) {
+                    Write-Ok "[session1] $($header.Groups[1].Value) weapons of $namespace judged, the best for melee $($best.Groups[1].Value) ($($best.Groups[2].Value))"
+                    $weapons += $best.Groups[1].Value
+                    $expected += $best.Groups[1].Value
+                } else {
+                    Add-Failure "[session1] no melee weapon of $namespace was found for soldiers"
+                }
+            }
+        }
+        $warriors = [Math]::Max(1, $expected.Count)
+        $script:ArmySoldiers = $warriors + 1
+        $count = $script:CitizenIds.Count + $script:ArmySoldiers
+        Send-ServerCommand $server "kingdomworld admin citizens spawn $($script:ArmySoldiers) $KingdomName"
+        [void](Wait-ForLog $server "Spawned $($script:ArmySoldiers) citizen\(s\) in $KingdomName" $CommandTimeout $ConsoleFailPattern)
+        $all = Get-CitizenList $server $count 'session1'
+        if ($all) { $script:CitizenIds = @($all) }
+        foreach ($weapon in $weapons) {
+            Send-ServerCommand $server "kingdomworld admin storage put $weapon 1 $KingdomName"
+            [void](Wait-ForLog $server "Stored 1 of $([regex]::Escape($weapon)) in the storehouses of $KingdomName" $CommandTimeout $ConsoleFailPattern)
+        }
+        Send-ServerCommand $server "kingdomworld admin army recruit $KingdomName $warriors warrior"
+        $recruited = Wait-ForLog $server "Recruited (\d+) citizen\(s\) as warrior in $KingdomName" $CommandTimeout $ConsoleFailPattern
+        Send-ServerCommand $server "kingdomworld admin army recruit $KingdomName 1 archer"
+        $archers = Wait-ForLog $server "Recruited (\d+) citizen\(s\) as archer in $KingdomName" $CommandTimeout $ConsoleFailPattern
+        if ($recruited -and [int]$recruited.Groups[1].Value -eq $warriors -and $archers -and $archers.Groups[1].Value -eq '1') {
+            Write-Ok "[session1] $warriors warrior(s) and an archer recruited"
+        } else {
+            Add-Failure '[session1] the soldiers were not recruited'
+        }
+        Start-Sleep -Seconds 1
+        $log = Get-LatestLog
+        foreach ($weapon in $expected + @('minecraft:bow')) {
+            if ($log -match "Soldier [0-9a-f]{8} took $([regex]::Escape($weapon)) for mainhand") {
+                Write-Ok "[session1] a soldier took $weapon"
+            } else {
+                Add-Failure "[session1] no soldier took $weapon"
+            }
+        }
+        foreach ($line in ([regex]::Matches($log, 'Soldier [0-9a-f]{8} took [^\r\n]+') | Select-Object -First 12)) { Write-Host "      $($line.Value)" }
+        $script:ArmyWeapons = @($expected + @('minecraft:bow'))
+        Send-ServerCommand $server "kingdomworld admin army squad form $KingdomName $($script:ArmySoldiers)"
+        $squad = Wait-ForLog $server "Squad #(\d+) of $KingdomName formed: members $($script:ArmySoldiers)" $CommandTimeout $ConsoleFailPattern
+        if ($squad) {
+            $script:ArmySquad = $squad.Groups[1].Value
+            Send-ServerCommand $server "kingdomworld admin army order $($script:ArmySquad) hold 20 70 20"
+            if (Wait-ForLog $server "Squad #$($script:ArmySquad) got the order hold at 20 70 20" $CommandTimeout $ConsoleFailPattern) {
+                Write-Ok "[session1] squad #$($script:ArmySquad) holds the point 20 70 20"
+            } else {
+                Add-Failure '[session1] the squad did not get its order'
+            }
+        } else {
+            Add-Failure '[session1] the squad of soldiers was not formed'
+        }
+        $offersPattern = "Band #(\d+): (\d+) fighter\(s\), rank \w+, power (\d+), (\d+) a day, advance (\d+)"
+        $seen = Count-Log $offersPattern
+        Send-ServerCommand $server "kingdomworld admin army mercenary offers $KingdomName new"
+        $offer = Wait-ForNewLog $server $offersPattern $CommandTimeout $seen
+        if ($offer) {
+            $before = Get-KingdomMoney $server $KingdomName
+            $advance = [int64]$offer.Groups[5].Value
+            Send-ServerCommand $server "kingdomworld admin army mercenary hire $KingdomName $($offer.Groups[1].Value)"
+            $hired = Wait-ForLog $server "Band #$($offer.Groups[1].Value) hired by $KingdomName as squad #(\d+), paid until day (-?\d+)" $CommandTimeout $ConsoleFailPattern
+            $after = Get-KingdomMoney $server $KingdomName
+            if ($hired -and $after -eq $before - $advance) {
+                $script:ArmyBand = $offer.Groups[1].Value
+                $script:ArmyBandSquad = $hired.Groups[1].Value
+                $script:ArmyPaidUntil = $hired.Groups[2].Value
+                Write-Ok "[session1] band #$($script:ArmyBand) of $($offer.Groups[2].Value) mercenaries hired as squad #$($script:ArmyBandSquad), the advance of $advance left the world: $before -> $after"
+            } else {
+                Add-Failure "[session1] hiring mercenaries went wrong: '$(if ($hired) { $hired.Value })', money $before -> $after, advance $advance"
+            }
+        } else {
+            Add-Failure '[session1] no mercenaries were offered'
         }
     }
 
@@ -1446,6 +1558,68 @@ Invoke-Phase 'session2' {
             Write-Ok "[session2] crystals from the expedition: $($crystals.Groups[1].Value) of at most 3 monsters, energy $($crystals.Groups[2].Value)"
         } else {
             Add-Failure "[session2] more crystals than monsters killed: $($crystals.Value)"
+        }
+    }
+    # The army after the restart: the soldiers with their weapons, the squad on its point and the hired band are all there,
+    # nobody twice. Dismissed soldiers bring their weapons back to the storehouses, exactly one of each.
+    if ($script:ArmySquad) {
+        Send-ServerCommand $server "kingdomworld admin army squad list $KingdomName"
+        if (Wait-ForLog $server "#$($script:ArmySquad) of ${KingdomName}: soldiers $($script:ArmySoldiers), order hold at 20 70 20" $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok "[session2] squad #$($script:ArmySquad) still holds its point"
+        } else {
+            Add-Failure '[session2] the squad and its order did not survive the restart'
+        }
+        if ($script:ArmyBand) {
+            if (Wait-ForLog $server "#$($script:ArmyBandSquad) of ${KingdomName}: mercenaries \d+, order none" $CommandTimeout $ConsoleFailPattern) {
+                Write-Ok "[session2] the squad of the mercenaries survived the restart"
+            } else {
+                Add-Failure '[session2] the squad of the mercenaries did not survive the restart'
+            }
+            Send-ServerCommand $server "kingdomworld admin army mercenary list $KingdomName"
+            if (Wait-ForLog $server "Band #$($script:ArmyBand) of ${KingdomName}: \d+ fighter\(s\), squad #$($script:ArmyBandSquad), paid until day $($script:ArmyPaidUntil)," $CommandTimeout $ConsoleFailPattern) {
+                Write-Ok "[session2] band #$($script:ArmyBand) is still hired and paid until day $($script:ArmyPaidUntil)"
+            } else {
+                Add-Failure '[session2] the hired band did not survive the restart'
+            }
+        }
+        $soldierPattern = "Soldiers of ${KingdomName}: (\d+)"
+        $seen = Count-Log $soldierPattern
+        Send-ServerCommand $server "kingdomworld admin army soldiers $KingdomName"
+        $soldiers = Wait-ForNewLog $server $soldierPattern $CommandTimeout $seen
+        Start-Sleep -Seconds 1
+        $log = Get-LatestLog
+        if ($soldiers -and [int]$soldiers.Groups[1].Value -eq $script:ArmySoldiers) {
+            Write-Ok "[session2] all $($script:ArmySoldiers) soldiers survived the restart"
+        } else {
+            Add-Failure "[session2] the soldiers changed in the restart: '$(if ($soldiers) { $soldiers.Value })'"
+        }
+        foreach ($weapon in $script:ArmyWeapons) {
+            if ($log -notmatch "weapon $([regex]::Escape($weapon)), armor") {
+                Add-Failure "[session2] no soldier holds $weapon after the restart"
+            }
+        }
+        $before = Get-KingdomMoney $server $KingdomName
+        Send-ServerCommand $server "kingdomworld admin army dismiss $KingdomName"
+        if (Wait-ForLog $server "Dismissed $($script:ArmySoldiers) soldier\(s\) of $KingdomName" $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok "[session2] the soldiers were dismissed"
+        } else {
+            Add-Failure '[session2] the soldiers were not dismissed'
+        }
+        Send-ServerCommand $server "kingdomworld admin storage list $KingdomName"
+        Start-Sleep -Seconds 2
+        $log = Get-LatestLog
+        foreach ($weapon in $script:ArmyWeapons) {
+            if ($log -match " - $([regex]::Escape($weapon)): 1(\r?\n|$)") {
+                Write-Ok "[session2] $weapon is back in the storehouse, once"
+            } else {
+                Add-Failure "[session2] $weapon did not come back to the storehouse exactly once"
+            }
+        }
+        $after = Get-KingdomMoney $server $KingdomName
+        if ($after -eq $before) {
+            Write-Ok "[session2] the army made no money: $after"
+        } else {
+            Add-Failure "[session2] the army changed the money: $before -> $after"
         }
     }
     if (-not $script:ConstructionId) { return }

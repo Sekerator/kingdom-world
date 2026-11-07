@@ -78,6 +78,8 @@ public final class ArmyCommands {
                 .then(Commands.literal("dismiss")
                         .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
                                 .executes(ArmyCommands::dismissAll)))
+                .then(Commands.literal("weapons")
+                        .then(Commands.argument("namespace", StringArgumentType.word()).executes(ArmyCommands::weapons)))
                 .then(Commands.literal("soldiers")
                         .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
                                 .executes(context -> soldiers(context, false))))
@@ -229,6 +231,36 @@ public final class ArmyCommands {
                     citizen.get().state() == CitizenState.WOUNDED ? "wounded" : "healthy"), false);
         }
         return soldiers.size();
+    }
+
+    /**
+     * The weapons of a mod as soldiers judge them, best first.
+     */
+    private static int weapons(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        String namespace = StringArgumentType.getString(context, "namespace");
+        record Judged(String id, String kind, double score) {
+        }
+        List<Judged> judged = new ArrayList<>();
+        for (net.minecraft.world.item.Item item : net.minecraftforge.registries.ForgeRegistries.ITEMS.getValues()) {
+            net.minecraft.resources.ResourceLocation key = net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(item);
+            if (key == null || !key.getNamespace().equals(namespace)) {
+                continue;
+            }
+            net.minecraft.world.item.ItemStack stack = new net.minecraft.world.item.ItemStack(item);
+            double melee = ArmyGear.score(stack, io.github.sekerator.kingdomworld.core.army.GearChoice.Slot.MELEE);
+            double ranged = ArmyGear.score(stack, io.github.sekerator.kingdomworld.core.army.GearChoice.Slot.RANGED);
+            if (melee > 0 || ranged > 0) {
+                judged.add(new Judged(key.toString(), ranged > melee ? "ranged" : "melee", Math.max(melee, ranged)));
+            }
+        }
+        judged.sort(java.util.Comparator.comparingDouble(Judged::score).reversed());
+        source.sendSuccess(() -> Component.translatable(ADMIN + "weapons.header", namespace, judged.size()), false);
+        for (Judged one : judged.subList(0, Math.min(20, judged.size()))) {
+            source.sendSuccess(() -> Component.translatable(ADMIN + "weapons.line", one.id(), one.kind(),
+                    String.format(java.util.Locale.ROOT, "%.1f", one.score())), false);
+        }
+        return judged.size();
     }
 
     // ---------------------------------------------------------------- squads

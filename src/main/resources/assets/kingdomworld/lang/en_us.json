@@ -1605,7 +1605,7 @@
   "kingdomworld.screen.army_tab.hint.escort": "Choose the squad that goes with the caravans of the deal.",
   "kingdomworld.screen.barracks.title": "Barracks of %s",
   "kingdomworld.screen.barracks.soldiers": "Soldiers: %s of %s",
-  "kingdomworld.screen.barracks.room": "Barracks of the kingdom: %s, they train %s at a time",
+  "kingdomworld.screen.barracks.room": "Barracks: %s, places to train: %s",
   "kingdomworld.screen.barracks.training": "Training takes soldiers up to %s, %s experience a minute",
   "kingdomworld.screen.barracks.no_unemployed": "No healthy unemployed citizen to recruit",
   "kingdomworld.screen.barracks.nearest": "Nearest unemployed: %s",
@@ -1638,5 +1638,7 @@
   "commands.kingdomworld.admin.army.status.ok": "Army data is writable, format %s: %s soldier(s), %s squad(s), %s band(s)",
   "commands.kingdomworld.admin.army.unlock.not_needed": "Army data was not read-only",
   "commands.kingdomworld.admin.army.unlocked": "Army data unlocked, the original was backed up to %s",
-  "commands.kingdomworld.admin.army.unlock.failed": "Could not back up the army data: %s"
+  "commands.kingdomworld.admin.army.unlock.failed": "Could not back up the army data: %s",
+  "commands.kingdomworld.admin.army.weapons.header": "Weapons of %s soldiers would take: %s",
+  "commands.kingdomworld.admin.army.weapons.line": "Weapon %s: %s %s"
 }

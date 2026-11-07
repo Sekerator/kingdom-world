@@ -451,10 +451,7 @@ final class ArmyTab {
             text(graphics, Component.translatable(KEY + key), x, listTop + 5, 0xFFB8B8B8, right - x, null);
             return;
         }
-        if (ordering != 0) {
-            return;
-        }
-        for (int i = 0; i < rows && scroll + i < count; i++) {
+        for (int i = 0; i < rows && scroll + i < count && ordering == 0; i++) {
             int y = listTop + i * ROW;
             if (escorting != 0) {
                 renderSquad(graphics, x, right - assignWidth - 4, y, guardCandidates().get(scroll + i));

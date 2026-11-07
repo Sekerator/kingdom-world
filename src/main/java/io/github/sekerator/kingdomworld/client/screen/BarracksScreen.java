@@ -60,7 +60,7 @@ public class BarracksScreen extends KingdomScreen implements ResultListener {
         SoldierRank cap = SoldierRank.of(view.trainingCap());
         return List.of(
                 Component.translatable(KEY + "soldiers", ArmyTexts.soldiers(view.soldiers()), view.maxSoldiers()),
-                Component.translatable(KEY + "room", view.barracks(), ArmyTexts.soldiers((long) view.barracks() * view.capacity())),
+                Component.translatable(KEY + "room", view.barracks(), (long) view.barracks() * view.capacity()),
                 Component.translatable(KEY + "training", ArmyTexts.rank(cap), view.trainingPerMinute()),
                 view.nearest().getString().isEmpty() ? Component.translatable(KEY + "no_unemployed")
                         : Component.translatable(KEY + "nearest", view.nearest()));
@@ -78,8 +78,12 @@ public class BarracksScreen extends KingdomScreen implements ResultListener {
         return top() + TOP + lines().size() * ROW + 16;
     }
 
+    /**
+     * Rows that fit the list; one less when a page counter is needed below them.
+     */
     private int visibleRows() {
-        return Math.max(1, (top() + panelHeight - BOTTOM_AREA - listTop()) / ROW);
+        int fit = Math.max(1, (top() + panelHeight - BOTTOM_AREA - 2 - listTop()) / ROW);
+        return view.training().size() > fit ? Math.max(1, fit - 1) : fit;
     }
 
     @Override
@@ -160,7 +164,7 @@ public class BarracksScreen extends KingdomScreen implements ResultListener {
             int rankWidth = Math.min(font.width(rank), 70);
             name(graphics, rank.getString(), left + PAD, rowY, 0xFFF0D070, rankWidth);
             Component experience = Component.translatable(KEY + "experience", row.experience());
-            int experienceWidth = Math.min(font.width(experience), 90);
+            int experienceWidth = Math.min(font.width(experience), 120);
             int nameX = left + PAD + rankWidth + 6;
             name(graphics, row.name().getString(), nameX, rowY, 0xFFFFFFFF, right - experienceWidth - 6 - nameX);
             name(graphics, experience.getString(), right - experienceWidth, rowY, 0xFFB8B8B8, experienceWidth);
