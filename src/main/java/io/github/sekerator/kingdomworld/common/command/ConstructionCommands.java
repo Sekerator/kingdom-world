@@ -262,6 +262,7 @@ public final class ConstructionCommands {
                 given += count - rest.getCount();
             }
         }
+        ConstructionWork.refreshReservations(server);
         int put = given;
         int over = lost;
         source.sendSuccess(() -> Component.translatable(KEY + "stocked", construction.id(), put, over), true);

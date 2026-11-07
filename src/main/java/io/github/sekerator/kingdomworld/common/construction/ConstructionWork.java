@@ -270,6 +270,7 @@ public final class ConstructionWork {
                 KingdomWorldApi.gameTime(server), rules);
         change.construction().ifPresent(construction -> {
             PLANS.put(construction.id(), plan);
+            refreshReservations(server);
             LOGGER.info("Construction {} of {} laid at {} ({} steps, {} to clear)", construction.id(), template.id(), anchor.toShortString(),
                     plan.size(), plan.clears());
         });

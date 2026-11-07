@@ -253,6 +253,11 @@ function Initialize-Server([string]$ModJar) {
     }
     New-Item -ItemType Directory -Force -Path $SmokeLogDir | Out-Null
 
+    # The data pack of the smoke check: a building template that needs Create. A new world turns it on by itself.
+    $datapacks = Join-Path $ServerDir 'world\datapacks\kingdomworld-smoke'
+    New-Item -ItemType Directory -Force -Path $datapacks | Out-Null
+    Copy-Item -Path (Join-Path $RepoRoot 'scripts\smoke-datapack\*') -Destination $datapacks -Recurse -Force
+
     $modsDir = Join-Path $ServerDir 'mods'
     if (Test-Path -LiteralPath $modsDir) { Remove-Item -LiteralPath $modsDir -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $modsDir | Out-Null
@@ -550,6 +555,9 @@ if ($WithoutMod) {
 }
 
 $script:CreatedId = $null
+$script:ConstructionId = $null
+$script:ConstructionInfo = $null
+$script:BuilderId = $null
 $script:CitizenIds = @()
 $script:GuildSquad = $null
 $script:GuildHunt = $null
@@ -874,9 +882,11 @@ Invoke-Phase 'session1' {
             [void](Wait-ForNewLog $server "Ran 1 simulation step\(s\) of $KingdomName" $CommandTimeout $runs)
             # The zone of the post is looked at over a few ticks before the minter knows its mint.
             Start-Sleep -Seconds 3
-            $runs = Count-Log "Ran 6 simulation step\(s\) of $KingdomName"
-            Send-ServerCommand $server "kingdomworld admin simulate $KingdomName 6"
-            if (-not (Wait-ForNewLog $server "Ran 6 simulation step\(s\) of $KingdomName" $CommandTimeout $runs)) {
+            # With the mods of the pack the smelter makes copper ingots of more ores; the minter needs more time for them all.
+            $mintSteps = if ($Pack) { 12 } else { 6 }
+            $runs = Count-Log "Ran $mintSteps simulation step\(s\) of $KingdomName"
+            Send-ServerCommand $server "kingdomworld admin simulate $KingdomName $mintSteps"
+            if (-not (Wait-ForNewLog $server "Ran $mintSteps simulation step\(s\) of $KingdomName" $CommandTimeout $runs)) {
                 Add-Failure '[session1] the simulation steps of the mint did not run'
             }
             $seen = Count-Log $rawPattern
@@ -1102,6 +1112,111 @@ Invoke-Phase 'session1' {
         if ($raw) { $script:EconomyRaw = $raw.Value }
     }
     if ($MapModsDir -and $script:CaravanId) { Test-MapMarkers $server 'session1' }
+
+    # Construction: the templates load, the data pack template needs Create; a builder far from players builds a small
+    # house from the storehouse on a flat place of chunk [2, 0], and the restart comes half way.
+    Send-ServerCommand $server 'kingdomworld admin build templates'
+    $templates = Wait-ForLog $server 'Building templates: (\d+)' $CommandTimeout $ConsoleFailPattern
+    if ($templates -and [int]$templates.Groups[1].Value -ge 9) {
+        Write-Ok "[session1] $($templates.Groups[1].Value) building templates loaded"
+    } else {
+        Add-Failure '[session1] the building templates (8 built-in and the data pack one) did not load'
+    }
+    if (Wait-ForLog $server 'kingdomworld:small_house \(Small house\): 9.9.9, blocks \d+, items \d+, can be built' $CommandTimeout $ConsoleFailPattern) {
+        Write-Ok '[session1] the small house can be built'
+    } else {
+        Add-Failure '[session1] the small house is not listed as buildable'
+    }
+    $hasCreate = @(Get-ChildItem -LiteralPath (Join-Path $ServerDir 'mods') -Filter 'create-*.jar' -ErrorAction SilentlyContinue).Count -gt 0
+    if ($hasCreate) {
+        if (Wait-ForLog $server 'smoketest:create_shed \(Create shed\): 3.3.3, blocks \d+, items \d+, can be built' $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok '[session1] the data pack template with a block of Create can be built with Create installed'
+        } else {
+            Add-Failure '[session1] the data pack template with a block of Create is not buildable although Create is installed'
+        }
+    } else {
+        if (Wait-ForLog $server 'smoketest:create_shed \(Create shed\): .*create' $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok '[session1] the data pack template that needs Create cannot be built and names the mod'
+        } else {
+            Add-Failure '[session1] the data pack template that needs Create did not say why it cannot be built'
+        }
+    }
+    Send-ServerCommand $server 'forceload add 32 0 47 15'
+    Send-ServerCommand $server 'fill 33 69 1 46 69 15 minecraft:stone'
+    Send-ServerCommand $server 'fill 33 70 1 46 85 15 minecraft:air'
+    Send-ServerCommand $server 'setblock 33 70 2 kingdomworld:work_post'
+    Start-Sleep -Seconds 2
+    Send-ServerCommand $server 'kingdomworld admin posts set 33 70 2 profession builder'
+    if (-not (Wait-ForLog $server 'Work post at 33 70 2: Builder, radius \d+' $CommandTimeout 'No work post at 33 70 2|Unknown or incomplete command')) {
+        Add-Failure '[session1] the builder post was not registered or could not be set'
+    }
+    $count = $script:CitizenIds.Count + 1
+    Send-ServerCommand $server "kingdomworld admin citizens spawn 1 $KingdomName"
+    [void](Wait-ForLog $server "Spawned 1 citizen\(s\) in $KingdomName" $CommandTimeout $ConsoleFailPattern)
+    $all = Get-CitizenList $server $count 'session1'
+    if ($all) {
+        $new = @($all | Where-Object { $script:CitizenIds -notcontains $_ })
+        $script:CitizenIds = @($all)
+        $script:BuilderId = $new[0]
+        Send-ServerCommand $server "kingdomworld admin citizens profession $($script:BuilderId) builder"
+        if (Wait-ForLog $server '\S+ is now: Builder' $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok "[session1] citizen $($script:BuilderId) became a builder"
+        } else {
+            Add-Failure '[session1] the builder could not be appointed'
+        }
+    }
+    Send-ServerCommand $server "kingdomworld admin build place $KingdomName kingdomworld:small_house 39 70 15"
+    $laid = Wait-ForLog $server 'Construction #(\d+) laid out: .* at 39 70 15, (\d+) steps' $CommandTimeout $ConsoleFailPattern
+    if ($laid) {
+        $script:ConstructionId = $laid.Groups[1].Value
+        Write-Ok "[session1] construction #$($script:ConstructionId) of a small house laid out with $($laid.Groups[2].Value) steps"
+    } else {
+        Add-Failure '[session1] the small house could not be laid out'
+    }
+    if ($script:ConstructionId) {
+        $id = $script:ConstructionId
+        Send-ServerCommand $server "kingdomworld admin build stock $id"
+        if (Wait-ForLog $server "Materials for construction #$id put into the storehouses: (\d+), did not fit: 0" $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok '[session1] the materials of the house are in the storehouse'
+        } else {
+            Add-Failure '[session1] the materials of the house did not fit into the storehouse'
+        }
+        Send-ServerCommand $server "kingdomworld admin simulate $KingdomName 4"
+        [void](Wait-ForLog $server "Ran 4 simulation step\(s\) of $KingdomName" $CommandTimeout $ConsoleFailPattern)
+        Send-ServerCommand $server 'kingdomworld admin build tick'
+        [void](Wait-ForLog $server 'Constructions moved on: \d+' $CommandTimeout $ConsoleFailPattern)
+        $infoPattern = "#$id kingdomworld:small_house at 39 70 15: steps done (\d+) of (\d+), blocks placed (\d+) of (\d+), paid and waiting (\d+)"
+        $seen = Count-Log $infoPattern
+        Send-ServerCommand $server "kingdomworld admin build info $id"
+        $info = Wait-ForNewLog $server $infoPattern $CommandTimeout $seen
+        if ($info -and [int]$info.Groups[3].Value -gt 0 -and [int]$info.Groups[3].Value -lt [int]$info.Groups[4].Value) {
+            $script:ConstructionInfo = "$($info.Groups[1].Value)/$($info.Groups[2].Value)/$($info.Groups[3].Value)/$($info.Groups[4].Value)/$($info.Groups[5].Value)"
+            Write-Ok "[session1] the builder built half way far from players: $($info.Groups[3].Value) of $($info.Groups[4].Value) blocks placed"
+        } else {
+            Add-Failure "[session1] the house did not grow half way: '$($info.Value)'"
+        }
+        if ($hasCreate) {
+            Send-ServerCommand $server "kingdomworld admin build place $KingdomName smoketest:create_shed 45 70 6"
+            $shed = Wait-ForLog $server 'Construction #(\d+) laid out: .* at 45 70 6' $CommandTimeout $ConsoleFailPattern
+            if ($shed) {
+                Send-ServerCommand $server "kingdomworld admin build finish $($shed.Groups[1].Value)"
+                if (Wait-ForLog $server "Construction #$($shed.Groups[1].Value) finished at once; building #(\d+) is in the register" $CommandTimeout $ConsoleFailPattern) {
+                    Write-Ok '[session1] the shed with blocks of Create was built'
+                } else {
+                    Add-Failure '[session1] the shed with blocks of Create was not finished'
+                }
+            } else {
+                Add-Failure '[session1] the shed with blocks of Create could not be laid out'
+            }
+        }
+        # The builder goes on while the server runs: the numbers to compare after the restart are taken last, right before it stops.
+        $seen = Count-Log $infoPattern
+        Send-ServerCommand $server "kingdomworld admin build info $id"
+        $last = Wait-ForNewLog $server $infoPattern $CommandTimeout $seen
+        if ($last) {
+            $script:ConstructionInfo = "$($last.Groups[1].Value)/$($last.Groups[2].Value)/$($last.Groups[3].Value)/$($last.Groups[4].Value)/$($last.Groups[5].Value)"
+        }
+    }
 }
 
 $dataFile = Join-Path $ServerDir 'world\data\kingdomworld_kingdoms.dat'
@@ -1117,6 +1232,7 @@ Invoke-Phase 'session2' {
     $postCount = 1
     if ($script:SmithId) { $postCount += 2 }
     if ($script:MinterId) { $postCount += 1 }
+    if ($script:BuilderId) { $postCount += 1 }
     if (-not (Wait-ForLog $server "KingdomWorld loaded 2 kingdom\(s\) with $citizenCount citizen\(s\), $postCount work post\(s\), 2 storehouse\(s\), 2 treasury\(ies\), \d+ player\(s\) with accounts, 1 market\(s\), 1 deal\(s\), 1 caravan\(s\) on the way" 10)) {
         Add-Failure "[session2] expected 2 kingdoms with $citizenCount citizens, $postCount work post(s), 2 storehouses, 2 treasuries, a market, a deal and a caravan on the way to be loaded after restart"
     }
@@ -1314,6 +1430,45 @@ Invoke-Phase 'session2' {
         } else {
             Add-Failure "[session2] more crystals than monsters killed: $($crystals.Value)"
         }
+    }
+    if (-not $script:ConstructionId) { return }
+    # The construction survived the restart exactly; the builder finishes it and nothing of its materials is left over.
+    $id = $script:ConstructionId
+    if (Wait-ForLog $server 'KingdomWorld loaded .* 1 construction\(s\), \d+ building\(s\)' 10) {
+        Write-Ok '[session2] the construction was loaded after the restart'
+    } else {
+        Add-Failure '[session2] the construction was not loaded after the restart'
+    }
+    $infoPattern = "#$id kingdomworld:small_house at 39 70 15: steps done (\d+) of (\d+), blocks placed (\d+) of (\d+), paid and waiting (\d+)"
+    Send-ServerCommand $server "kingdomworld admin build info $id"
+    $info = Wait-ForLog $server $infoPattern $CommandTimeout $ConsoleFailPattern
+    $now = if ($info) { "$($info.Groups[1].Value)/$($info.Groups[2].Value)/$($info.Groups[3].Value)/$($info.Groups[4].Value)/$($info.Groups[5].Value)" } else { '' }
+    if ($now -eq $script:ConstructionInfo) {
+        Write-Ok "[session2] the construction is exactly where it was: $now"
+    } else {
+        Add-Failure "[session2] the construction changed in the restart: '$now', expected '$($script:ConstructionInfo)'"
+    }
+    Send-ServerCommand $server 'forceload add 32 0 47 15'
+    Send-ServerCommand $server "kingdomworld admin simulate $KingdomName 12"
+    [void](Wait-ForLog $server "Ran 12 simulation step\(s\) of $KingdomName" $CommandTimeout $ConsoleFailPattern)
+    Send-ServerCommand $server 'kingdomworld admin build tick'
+    [void](Wait-ForLog $server 'Constructions moved on: \d+' $CommandTimeout $ConsoleFailPattern)
+    Send-ServerCommand $server "kingdomworld admin build buildings $KingdomName"
+    if (Wait-ForLog $server "#\d+ ${KingdomName}: kingdomworld:small_house \(house\) at 39 70 15, intact \d+, by an operator false" $CommandTimeout $ConsoleFailPattern) {
+        Write-Ok '[session2] the builder finished the house; it is in the register'
+    } else {
+        Add-Failure '[session2] the house was not finished after the restart'
+    }
+    $before = (Get-LatestLog).Length
+    Send-ServerCommand $server "kingdomworld admin storage list $KingdomName"
+    Start-Sleep -Seconds 3
+    $listed = (Get-LatestLog).Substring($before)
+    $left = @(@('minecraft:red_bed', 'minecraft:oak_door', 'minecraft:glass_pane', 'minecraft:spruce_stairs', 'minecraft:spruce_slab', 'minecraft:barrel') |
+            Where-Object { $listed -match [regex]::Escape($_) })
+    if ($left.Count -eq 0) {
+        Write-Ok '[session2] the materials add up: nothing the house needed is left over and nothing was missing'
+    } else {
+        Add-Failure "[session2] materials of the house are left over in the storehouse: $($left -join ', ')"
     }
 }
 

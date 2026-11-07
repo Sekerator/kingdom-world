@@ -103,6 +103,8 @@ public final class CitizenSimulation {
         float hunger = CitizenNeeds.hunger(rules.dailyNutrition(), interval);
 
         Production.plan(server, kingdomId);
+        // Materials of constructions are set aside before workshops look for ingredients and fuel.
+        io.github.sekerator.kingdomworld.common.construction.ConstructionWork.refreshReservations(server);
         for (Citizen citizen : citizens.registry().citizensOf(kingdomId)) {
             CitizenEntity body = CitizenBodies.body(citizen.id());
             if (body != null) {
