@@ -129,7 +129,10 @@ public final class MageBehavior implements ProfessionBehavior {
      * How fast a mage works: up to twice as fast with experience, faster or slower with the mood.
      */
     public static double speed(Citizen citizen) {
-        return ProductionRules.speed(citizen.experience()) * EconomySettings.workSpeed(citizen.mood());
+        net.minecraft.server.MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+        double tower = server == null ? 1.0
+                : io.github.sekerator.kingdomworld.common.construction.BuildingEffects.mageSpeed(server, citizen.workplace());
+        return ProductionRules.speed(citizen.experience()) * EconomySettings.workSpeed(citizen.mood()) * tower;
     }
 
     /**

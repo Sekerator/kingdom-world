@@ -147,8 +147,12 @@ public final class ConstructionActions {
         String key = KEY + "role_status." + effect.status().id();
         return switch (effect.status()) {
             case DAMAGED -> Component.translatable(key, effect.building().integrity(), ConstructionSettings.buildings().roleThreshold());
-            case LACKING -> Component.translatable(key + "." + (io.github.sekerator.kingdomworld.core.construction.BuildingRoles.WAREHOUSE
-                    .equals(effect.building().role()) ? "container" : "bed"));
+            case LACKING -> Component.translatable(key + "." + switch (effect.building().role()) {
+                case io.github.sekerator.kingdomworld.core.construction.BuildingRoles.WAREHOUSE -> "container";
+                case io.github.sekerator.kingdomworld.core.construction.BuildingRoles.BARRACKS -> "barracks";
+                case io.github.sekerator.kingdomworld.core.construction.BuildingRoles.MAGE_TOWER -> "focus";
+                default -> "bed";
+            });
             default -> Component.translatable(key);
         };
     }
@@ -177,6 +181,10 @@ public final class ConstructionActions {
                     blocks(whole(effect.param(io.github.sekerator.kingdomworld.core.construction.BuildingRoles.SIGHT)))));
             case io.github.sekerator.kingdomworld.core.construction.BuildingRoles.WALL -> lines.add(Component.translatable(key + "fortification",
                     whole(effect.param(io.github.sekerator.kingdomworld.core.construction.BuildingRoles.FORTIFICATION))));
+            case io.github.sekerator.kingdomworld.core.construction.BuildingRoles.BARRACKS -> lines.add(Component.translatable(key + "bunks",
+                    whole(effect.param(io.github.sekerator.kingdomworld.core.construction.BuildingRoles.BUNKS))));
+            case io.github.sekerator.kingdomworld.core.construction.BuildingRoles.MAGE_TOWER -> lines.add(Component.translatable(key + "mages",
+                    Math.round((effect.param(io.github.sekerator.kingdomworld.core.construction.BuildingRoles.SPEED) - 1.0) * 100)));
             case io.github.sekerator.kingdomworld.core.construction.BuildingRoles.WELL -> lines.add(Component.translatable(key + "well",
                     whole(effect.param(io.github.sekerator.kingdomworld.core.construction.BuildingRoles.MOOD)),
                     blocks(whole(effect.param(io.github.sekerator.kingdomworld.core.construction.BuildingRoles.RADIUS)))));

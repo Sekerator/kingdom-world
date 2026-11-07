@@ -234,7 +234,8 @@ public final class ArmyActions {
         int barracks = army.barracksOf(kingdomId).size();
         return Optional.of(new ArmyViews.ArmyTabView(kingdomId, canManage, currency.get(), army.soldiersOf(kingdomId).size(), rules.maxSoldiers(),
                 army.mercenaryCount(kingdomId), rules.maxMercenaries(), (int) Math.min(Integer.MAX_VALUE, Math.round(ArmyWork.power(server, kingdomId))),
-                wages, army.mercenaryCost(kingdomId), barracks, barracks * rules.barracksCapacity(), rules.advanceDays(), soldiers, squads,
+                wages, army.mercenaryCost(kingdomId), barracks, barracks * rules.barracksCapacity()
+                + io.github.sekerator.kingdomworld.common.construction.BuildingEffects.bunks(server, kingdomId), rules.advanceDays(), soldiers, squads,
                 candidates, offers, hired, deals));
     }
 

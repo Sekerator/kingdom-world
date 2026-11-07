@@ -23,6 +23,10 @@ public final class BuildingRoles {
     public static final String TOWER = "tower";
     public static final String WALL = "wall";
     public static final String WELL = "well";
+    /** A barracks of the army: needs a barracks block inside. */
+    public static final String BARRACKS = "barracks";
+    /** A mage tower: needs a magic focus inside. */
+    public static final String MAGE_TOWER = "mage_tower";
 
     /** Mood a house gives the citizens who live in it. */
     public static final String COMFORT = "comfort";
@@ -42,6 +46,8 @@ public final class BuildingRoles {
     public static final String MOOD = "mood";
     /** How far a well reaches, in blocks. */
     public static final String RADIUS = "radius";
+    /** Soldiers more a barracks building lets train at the same time. */
+    public static final String BUNKS = "bunks";
 
     private static final Map<String, BuildingRole> CODE = new LinkedHashMap<>();
     private static volatile Map<String, BuildingRole> data = Map.of();
@@ -54,6 +60,8 @@ public final class BuildingRoles {
         register(new BuildingRole(TOWER, BuildingRole.Requirement.NONE, Map.of(SIGHT, 16.0), Map.of(SIGHT, 8.0)));
         register(new BuildingRole(WALL, BuildingRole.Requirement.NONE, Map.of(FORTIFICATION, 100.0), Map.of(FORTIFICATION, 50.0)));
         register(new BuildingRole(WELL, BuildingRole.Requirement.NONE, ordered(MOOD, 4.0, RADIUS, 24.0), ordered(MOOD, 2.0, RADIUS, 8.0)));
+        register(new BuildingRole(BARRACKS, BuildingRole.Requirement.NONE, Map.of(BUNKS, 4.0), Map.of(BUNKS, 4.0)));
+        register(new BuildingRole(MAGE_TOWER, BuildingRole.Requirement.NONE, Map.of(SPEED, 1.25), Map.of(SPEED, 0.15)));
     }
 
     private BuildingRoles() {

@@ -31,7 +31,7 @@ class BuildingRolesTest {
     @Test
     void theModRegistersItsRoles() {
         for (String role : List.of(BuildingRoles.HOUSE, BuildingRoles.WAREHOUSE, BuildingRoles.WORKSHOP, BuildingRoles.MARKET, BuildingRoles.TOWER,
-                BuildingRoles.WALL, BuildingRoles.WELL)) {
+                BuildingRoles.WALL, BuildingRoles.WELL, BuildingRoles.BARRACKS, BuildingRoles.MAGE_TOWER)) {
             assertTrue(BuildingRoles.exists(role), role);
         }
         assertEquals(BuildingRole.Requirement.BED, BuildingRoles.get(BuildingRoles.HOUSE).orElseThrow().requirement());

@@ -293,6 +293,39 @@ public final class BuildingGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_roles_army_magic")
+    public static void theRolesOfTheArmyAndTheMagesNeedTheirBlocks(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos[] area = area(helper);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Garrison Builders", UUID.randomUUID());
+        BuildingTemplate barracks = template("test_role_barracks", BuildingRoles.BARRACKS, 1, "", List.of("kingdomworld:barracks"),
+                new int[][]{{1, 1, 0}});
+        BuildingTemplate empty = template("test_role_empty_barracks", BuildingRoles.BARRACKS, 1, "", List.of("minecraft:oak_planks"),
+                new int[][]{{1, 1, 0}});
+        BuildingTemplate tower = template("test_role_mage_tower", BuildingRoles.MAGE_TOWER, 1, "", List.of("kingdomworld:magic_focus"),
+                new int[][]{{1, 1, 0}});
+        try {
+            Building withBlock = build(helper, kingdom, barracks, new BlockPos(2, 0, 9));
+            Building without = build(helper, kingdom, empty, new BlockPos(6, 0, 9));
+            Building mages = build(helper, kingdom, tower, new BlockPos(10, 0, 9));
+            BuildingEffects.changed();
+            helper.assertTrue(BuildingEffects.of(server, withBlock).orElseThrow().works(), "The barracks with a barracks block does not work: "
+                    + BuildingEffects.of(server, withBlock).orElseThrow().status());
+            helper.assertTrue(BuildingEffects.of(server, without).orElseThrow().status() == BuildingRoles.Status.LACKING,
+                    "A barracks without the block of the army plays its role");
+            helper.assertTrue(BuildingEffects.bunks(server, kingdom.id()) > 0, "The barracks gives no more room for training");
+            helper.assertTrue(BuildingEffects.of(server, mages).orElseThrow().works(), "The mage tower with a focus does not work: "
+                    + BuildingEffects.of(server, mages).orElseThrow().status());
+            WorldPos post = CitizenGameTests.at(helper, 10, 1, 8);
+            helper.assertTrue(BuildingEffects.mageSpeed(server, post) > 1.0, "Mages inside the tower are not faster");
+            helper.assertTrue(BuildingEffects.mageSpeed(server, CitizenGameTests.at(helper, 0, 1, 0)) == 1.0, "Mages outside the tower are faster");
+        } finally {
+            end(helper, kingdom, area[0], area[1], barracks.id(), empty.id(), tower.id());
+        }
+        helper.succeed();
+    }
+
     // ---------------------------------------------------------------- upgrades and demolitions
 
     @GameTest(template = EMPTY, batch = "kingdomworld_roles_upgrade")

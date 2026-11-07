@@ -163,6 +163,12 @@ public final class BuildingEffects {
                     status = BuildingRoles.Status.LACKING;
                 }
             }
+            if (BuildingRoles.BARRACKS.equals(building.role()) && status == BuildingRoles.Status.ACTIVE && !holdsBarracks(server, building)) {
+                status = BuildingRoles.Status.LACKING;
+            }
+            if (BuildingRoles.MAGE_TOWER.equals(building.role()) && status == BuildingRoles.Status.ACTIVE && !holdsFocus(server, building)) {
+                status = BuildingRoles.Status.LACKING;
+            }
             if (BuildingRoles.WAREHOUSE.equals(building.role()) && status == BuildingRoles.Status.ACTIVE) {
                 List<BlockPos> seen = CONTAINERS.get(building.id());
                 if (seen != null && seen.isEmpty()) {
@@ -336,6 +342,62 @@ public final class BuildingEffects {
     private static UUID ownerOf(MinecraftServer server, WorldPos pos) {
         UUID owner = KingdomWorldApi.state(server).territory().ownerOf(pos.dimension(), pos.chunk());
         return owner == null ? new UUID(0, 0) : owner;
+    }
+
+    // ---------------------------------------------------------------- the army and the mages
+
+    /**
+     * Whether a barracks block of the army stands inside a building.
+     */
+    static boolean holdsBarracks(MinecraftServer server, Building building) {
+        for (WorldPos pos : io.github.sekerator.kingdomworld.common.army.ArmyWork.state(server).barracksOf(building.kingdomId())) {
+            if (inside(building, pos)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Whether a magic focus of the kingdom stands inside a building.
+     */
+    static boolean holdsFocus(MinecraftServer server, Building building) {
+        for (var device : io.github.sekerator.kingdomworld.common.magic.MagicWork.state(server).devices()) {
+            if (device.kind() == io.github.sekerator.kingdomworld.core.magic.MagicDevice.Kind.FOCUS
+                    && building.kingdomId().equals(device.kingdomId()) && inside(building, device.pos())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Soldiers more the working barracks buildings of a kingdom let train at the same time, on top of what its barracks
+     * blocks hold.
+     */
+    public static int bunks(MinecraftServer server, UUID kingdomId) {
+        long bunks = 0;
+        for (Effect effect : working(server, kingdomId, BuildingRoles.BARRACKS)) {
+            bunks += Math.max(0, Math.round(effect.param(BuildingRoles.BUNKS)));
+        }
+        return (int) Math.min(1_024, bunks);
+    }
+
+    /**
+     * How much faster a mage at a post works: the speed of the best working mage tower around the post, 1 elsewhere. It
+     * speeds up dissolving crystals and the research of the tower alike.
+     */
+    public static double mageSpeed(MinecraftServer server, WorldPos post) {
+        if (post == null) {
+            return 1.0;
+        }
+        double speed = 1.0;
+        for (Effect effect : of(server, ownerOf(server, post))) {
+            if (effect.works() && BuildingRoles.MAGE_TOWER.equals(effect.building().role()) && inside(effect.building(), post)) {
+                speed = Math.max(speed, effect.param(BuildingRoles.SPEED));
+            }
+        }
+        return Math.max(1.0, Math.min(4.0, speed));
     }
 
     // ---------------------------------------------------------------- towers and walls

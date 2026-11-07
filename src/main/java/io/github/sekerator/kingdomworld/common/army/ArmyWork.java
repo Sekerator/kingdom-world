@@ -748,7 +748,8 @@ public final class ArmyWork {
                 || orderOf(server, citizen.id()).kind() != Order.Kind.NONE || army.barracksOf(citizen.kingdomId()).isEmpty()) {
             return;
         }
-        int room = army.barracksOf(citizen.kingdomId()).size() * rules.barracksCapacity();
+        int room = army.barracksOf(citizen.kingdomId()).size() * rules.barracksCapacity()
+                + io.github.sekerator.kingdomworld.common.construction.BuildingEffects.bunks(server, citizen.kingdomId());
         int index = 0;
         for (Soldier soldier : army.soldiersOf(citizen.kingdomId())) {
             if (soldier.citizenId().equals(citizen.id())) {
