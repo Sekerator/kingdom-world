@@ -86,6 +86,7 @@ public final class KingdomWorldClient {
         }
         ClientSelfTest.onClientTick();
         Minecraft minecraft = Minecraft.getInstance();
+        io.github.sekerator.kingdomworld.client.map.ClientMapSync.tick(minecraft);
         while (MAP_KEY.consumeClick()) {
             if (minecraft.player != null && minecraft.screen == null) {
                 ClientHooks.openKingdomMap();
@@ -98,6 +99,7 @@ public final class KingdomWorldClient {
         ClientKingdomCache.clear();
         ClientTerritoryCache.clear();
         io.github.sekerator.kingdomworld.client.map.ClientTradeCache.clear();
+        io.github.sekerator.kingdomworld.client.map.ClientMapSync.reset();
         if (KingdomWorldConfig.CLIENT.requestKingdomListOnJoin.get()) {
             KingdomWorldNetwork.sendToServer(new KingdomListRequestPacket(0, KingdomListRequestPacket.MAX_PAGE_SIZE));
         }
@@ -108,6 +110,7 @@ public final class KingdomWorldClient {
         ClientKingdomCache.clear();
         ClientTerritoryCache.clear();
         io.github.sekerator.kingdomworld.client.map.ClientTradeCache.clear();
+        io.github.sekerator.kingdomworld.client.map.ClientMapSync.reset();
     }
 
     private static void onScreenOpening(ScreenEvent.Opening event) {

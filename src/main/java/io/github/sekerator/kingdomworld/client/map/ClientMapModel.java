@@ -8,6 +8,7 @@ import io.github.sekerator.kingdomworld.core.territory.ChunkOutlines;
 import io.github.sekerator.kingdomworld.core.territory.TerritoryListener;
 import io.github.sekerator.kingdomworld.core.territory.TerritoryShapes;
 import net.minecraft.client.Minecraft;
+import net.minecraft.locale.Language;
 
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -37,7 +38,7 @@ public final class ClientMapModel {
     private static boolean listening;
     private static String dimension;
     private static int generation = -1;
-    private static String language;
+    private static Object language;
     private static int ticks;
 
     private ClientMapModel() {
@@ -87,13 +88,14 @@ public final class ClientMapModel {
             return;
         }
         ticks = 0;
-        update(minecraft.getLanguageManager().getSelected());
+        // The loaded language, not the selected one: labels are made again once the new texts are in place.
+        update(Language.getInstance());
     }
 
     /**
      * Outlines what changed and tells the listeners.
      */
-    public static void update(String currentLanguage) {
+    public static void update(Object currentLanguage) {
         boolean reset = false;
         if (generation != ClientTerritoryCache.generation() || !Objects.equals(dimension, ClientTerritoryCache.dimension())) {
             generation = ClientTerritoryCache.generation();
@@ -112,7 +114,7 @@ public final class ClientMapModel {
             }
         }
 
-        boolean languageChanged = !Objects.equals(language, currentLanguage);
+        boolean languageChanged = language != currentLanguage;
         language = currentLanguage;
         Set<UUID> relabel = new LinkedHashSet<>();
         for (UUID kingdom : SHAPES.shapes().keySet()) {

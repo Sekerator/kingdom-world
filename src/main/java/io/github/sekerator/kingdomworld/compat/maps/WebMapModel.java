@@ -78,8 +78,10 @@ public final class WebMapModel {
      * @param removed   kingdoms whose markers go away
      * @param caravans  all caravans on the way
      * @param zones     all zones of the war layers
+     * @param shown     how many kingdoms the web maps show after this update
      */
-    public record Update(boolean full, List<Kingdom> kingdoms, Set<UUID> removed, List<Caravan> caravans, List<Zone> zones) {
+    public record Update(boolean full, List<Kingdom> kingdoms, Set<UUID> removed, List<Caravan> caravans, List<Zone> zones,
+                         int shown) {
         public Update {
             kingdoms = List.copyOf(kingdoms);
             removed = Set.copyOf(removed);

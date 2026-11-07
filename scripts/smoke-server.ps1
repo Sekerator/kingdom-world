@@ -50,6 +50,13 @@
 .PARAMETER Memory
     Maximum heap of the server JVM, e.g. 2G or 6G.
 
+.PARAMETER MapModsDir
+    Folder with jars of server-side map mods (BlueMap, Dynmap) to install as well; other jars there are skipped. The
+    test then also checks that every installed map mod shows both kingdoms and the caravan, after the first start and
+    again after the restart (by the marker lines of the mod's log, and for BlueMap by its live markers over HTTP).
+    BlueMap starts only after the download of the game's resources is accepted, so the script accepts it in the
+    server's BlueMap config. Nothing of this folder is modified.
+
 .PARAMETER Port
     Server port. By default 25599, or 25598 with -Pack. Give each copy of the repository its own port (and its
     own -TestEnvRoot) when several smoke tests run on one machine at the same time.
@@ -71,7 +78,8 @@ param(
     [string]$JavaHome = $(if ($env:KINGDOMWORLD_JAVA_HOME) { $env:KINGDOMWORLD_JAVA_HOME } else { 'C:\Program Files\Eclipse Adoptium\jdk-17.0.16.8-hotspot' }),
     [string]$Memory = '',
     [ValidateRange(0, 65535)]
-    [int]$Port = 0
+    [int]$Port = 0,
+    [string]$MapModsDir = ''
 )
 
 Set-StrictMode -Version Latest
@@ -96,9 +104,13 @@ $ServerDir = Join-Path $TestEnvRoot $(if ($Pack) { 'server-pack' } else { 'serve
 $CacheDir = Join-Path $TestEnvRoot 'cache'
 $SmokeLogDir = Join-Path $ServerDir 'smoke-logs'
 if (-not $Memory) { $Memory = if ($Pack) { '6G' } else { '2G' } }
-$StartTimeout = if ($Pack) { 1500 } else { 420 }
+$StartTimeout = if ($Pack) { 1500 } elseif ($MapModsDir) { 900 } else { 420 }
 $StopTimeout = if ($Pack) { 600 } else { 180 }
 $CommandTimeout = 90
+# Mod ids of the server-side map mods taken from -MapModsDir, and the time they may take to show markers.
+$ServerMapModIds = @('bluemap', 'dynmap')
+$MapTimeout = 240
+$script:MapMods = @()
 
 $script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $script:Failures = New-Object System.Collections.Generic.List[string]
@@ -230,7 +242,10 @@ function Initialize-Server([string]$ModJar) {
     $defaults = Join-Path $ServerDir 'defaultconfigs'
     New-Item -ItemType Directory -Force -Path $defaults | Out-Null
     $utf8 = New-Object System.Text.UTF8Encoding($false)
-    [System.IO.File]::WriteAllText((Join-Path $defaults 'kingdomworld-server.toml'), "[work]`n`ttaskRiskMultiplier = 0.0`n", $utf8)
+    $serverDefaults = "[work]`n`ttaskRiskMultiplier = 0.0`n"
+    # With map mods the web maps are updated every second, so that the checks do not wait for the default 5 s.
+    if ($MapModsDir) { $serverDefaults += "[maps]`n`twebMapUpdateSeconds = 1`n" }
+    [System.IO.File]::WriteAllText((Join-Path $defaults 'kingdomworld-server.toml'), $serverDefaults, $utf8)
 
     foreach ($dir in @('world', 'logs', 'crash-reports', 'smoke-logs')) {
         $path = Join-Path $ServerDir $dir
@@ -265,6 +280,33 @@ function Initialize-Server([string]$ModJar) {
             $copied++
         }
         Write-Ok "copied $copied modpack jar(s) from $PackModsDir"
+    }
+
+    if ($MapModsDir) {
+        if (-not (Test-Path -LiteralPath $MapModsDir)) { Stop-Smoke "Map mods folder not found: $MapModsDir" }
+        foreach ($jar in @(Get-ChildItem -LiteralPath $MapModsDir -Filter '*.jar' | Sort-Object Name)) {
+            $ids = @((Get-ModInfo $jar.FullName).Ids | Where-Object { $ServerMapModIds -contains $_ })
+            if ($ids.Count -eq 0) {
+                Write-Host "    skip  $($jar.Name) (not a server map mod)"
+                continue
+            }
+            Copy-Item -LiteralPath $jar.FullName -Destination $modsDir
+            $script:MapMods += $ids
+            Write-Ok "installed map mod $($jar.Name)"
+        }
+        if ($script:MapMods -contains 'bluemap') {
+            # BlueMap only starts once the download of the game's resources is accepted in its core config.
+            $blueMapConfig = Join-Path (Join-Path $ServerDir 'config') 'bluemap'
+            New-Item -ItemType Directory -Force -Path $blueMapConfig | Out-Null
+            $core = Join-Path $blueMapConfig 'core.conf'
+            $utf8 = New-Object System.Text.UTF8Encoding($false)
+            if (Test-Path -LiteralPath $core) {
+                $text = [System.IO.File]::ReadAllText($core) -replace 'accept-download\s*:\s*false', 'accept-download: true'
+                [System.IO.File]::WriteAllText($core, $text, $utf8)
+            } else {
+                [System.IO.File]::WriteAllText($core, "accept-download: true`nrender-thread-count: 1`n", $utf8)
+            }
+        }
     }
 }
 
@@ -429,6 +471,37 @@ function Test-PhaseLogs([string]$Phase) {
             } else {
                 Write-Ok "[$Phase] no client classes of the mod were loaded"
             }
+        }
+    }
+}
+
+# Checks that every installed map mod shows both kingdoms and the caravan.
+function Test-MapMarkers([object]$Server, [string]$Phase) {
+    foreach ($mod in @(@{ Id = 'bluemap'; Name = 'BlueMap' }, @{ Id = 'dynmap'; Name = 'Dynmap' })) {
+        if ($script:MapMods -notcontains $mod.Id) { continue }
+        $pattern = "KingdomWorld $($mod.Name) markers: 2 kingdom\(s\) shown, 1 caravan\(s\), (\d+) marker\(s\)"
+        if (Wait-ForLog $Server $pattern $MapTimeout) {
+            Write-Ok "[$Phase] $($mod.Name) shows both kingdoms and the caravan"
+        } else {
+            Add-Failure "[$Phase] $($mod.Name) did not report markers for 2 kingdoms and 1 caravan within $MapTimeout s"
+        }
+    }
+    if ($script:MapMods -contains 'bluemap') {
+        # BlueMap's web server hands out the live markers of the overworld map.
+        $client = New-Object System.Net.WebClient
+        $client.Proxy = [System.Net.GlobalProxySelection]::GetEmptyWebProxy()
+        $client.Encoding = [System.Text.Encoding]::UTF8
+        try {
+            $json = $client.DownloadString('http://127.0.0.1:8100/maps/world/live/markers.json')
+            if ($json -match 'kingdomworld-kingdoms' -and $json -match $KingdomName -and $json -match $PartnerName -and $json -match 'kingdomworld-caravans') {
+                Write-Ok "[$Phase] BlueMap serves the markers of both kingdoms and the caravan"
+            } else {
+                Add-Failure "[$Phase] BlueMap's live markers lack the kingdoms or the caravan"
+            }
+        } catch {
+            Add-Warning "[$Phase] BlueMap's web server did not answer: $($_.Exception.Message)"
+        } finally {
+            $client.Dispose()
         }
     }
 }
@@ -918,6 +991,7 @@ Invoke-Phase 'session1' {
         $raw = Wait-ForNewLog $server 'Raw: balance (\d+), copper (\d+), silver (\d+), gold (\d+), funds (\d+), supply (\d+)' $CommandTimeout $seen
         if ($raw) { $script:EconomyRaw = $raw.Value }
     }
+    if ($MapModsDir -and $script:CaravanId) { Test-MapMarkers $server 'session1' }
 }
 
 $dataFile = Join-Path $ServerDir 'world\data\kingdomworld_kingdoms.dat'
@@ -936,6 +1010,7 @@ Invoke-Phase 'session2' {
     if (-not (Wait-ForLog $server "KingdomWorld loaded 2 kingdom\(s\) with $citizenCount citizen\(s\), $postCount work post\(s\), 2 storehouse\(s\), 2 treasury\(ies\), \d+ player\(s\) with accounts, 1 market\(s\), 1 deal\(s\), 1 caravan\(s\) on the way" 10)) {
         Add-Failure "[session2] expected 2 kingdoms with $citizenCount citizens, $postCount work post(s), 2 storehouses, 2 treasuries, a market, a deal and a caravan on the way to be loaded after restart"
     }
+    if ($MapModsDir -and $script:CaravanId) { Test-MapMarkers $server 'session2' }
     Send-ServerCommand $server 'kingdomworld debug list'
     $listed = Wait-ForLog $server " - $KingdomName \(id ($IdPattern)\)" $CommandTimeout 'Unknown or incomplete command|There are no kingdoms yet'
     if (-not $listed) {

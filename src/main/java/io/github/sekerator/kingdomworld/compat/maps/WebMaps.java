@@ -164,8 +164,8 @@ public final class WebMaps {
 
         List<WebMapModel.Caravan> caravans = KingdomWorldConfig.SERVER.webMapCaravans.get() ? caravans(state) : List.of();
         List<WebMapModel.Zone> zones = zones(state);
-        WebMapModel.Update incremental = new WebMapModel.Update(false, changed, removed, caravans, zones);
-        WebMapModel.Update full = new WebMapModel.Update(true, List.copyOf(SHOWN.values()), Set.of(), caravans, zones);
+        WebMapModel.Update incremental = new WebMapModel.Update(false, changed, removed, caravans, zones, SHOWN.size());
+        WebMapModel.Update full = new WebMapModel.Update(true, List.copyOf(SHOWN.values()), Set.of(), caravans, zones, SHOWN.size());
         for (WebMapSink sink : SINKS) {
             if (FAILED.contains(sink) || !sink.ready()) {
                 continue;

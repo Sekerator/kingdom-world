@@ -55,6 +55,7 @@ public final class DynmapCompat implements CompatModule, WebMapSink {
 
     private volatile MarkerAPI markers;
     private volatile boolean wantsFull;
+    private int loggedCaravans = -1;
     private final Map<UUID, List<GenericMarker>> kingdomMarkers = new HashMap<>();
 
     @Override
@@ -109,6 +110,8 @@ public final class DynmapCompat implements CompatModule, WebMapSink {
             worlds.put(level.dimension().location().toString(), worldName(level));
         }
         MarkerSet kingdoms = set(api, KINGDOMS, texts.text("kingdomworld.map.layer.kingdoms"), update.full());
+        // Capitals carry their names on the map, not only in the popup.
+        kingdoms.setLabelShow(true);
         if (update.full()) {
             kingdomMarkers.clear();
         }
@@ -169,7 +172,10 @@ public final class DynmapCompat implements CompatModule, WebMapSink {
         }
         if (update.full()) {
             wantsFull = false;
-            LOGGER.info("KingdomWorld Dynmap markers: {} kingdom(s), {} caravan(s), {} marker(s)", update.kingdoms().size(),
+        }
+        if (update.full() || !update.kingdoms().isEmpty() || !update.removed().isEmpty() || update.caravans().size() != loggedCaravans) {
+            loggedCaravans = update.caravans().size();
+            LOGGER.info("KingdomWorld Dynmap markers: {} kingdom(s) shown, {} caravan(s), {} marker(s) updated", update.shown(),
                     update.caravans().size(), count);
         }
     }

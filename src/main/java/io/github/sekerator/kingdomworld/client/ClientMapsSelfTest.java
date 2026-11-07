@@ -12,13 +12,18 @@ import io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult;
 import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
 import io.github.sekerator.kingdomworld.core.territory.Territory;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.MouseHandler;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.GameRules;
 import net.minecraftforge.fml.ModList;
+import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 
@@ -34,8 +39,9 @@ import java.util.concurrent.CompletableFuture;
  * Client self-check of the map integrations ({@code -PclientSelfTest=maps}), run in a singleplayer world with map mods
  * added by {@code -PwithMaps}. Founds two kingdoms around the player (one with a hole in its land, one shaped like the
  * letter L), shows a caravan between them, waits until the map mods have drawn the land, then for English and Russian
- * opens the full screen map of every installed map mod with the pointer over the capital and saves screenshots of it
- * and of the minimap. Dissolves the kingdoms again and quits. Steps are logged with the self-test prefix.
+ * opens the full screen map of every installed map mod with the pointer over the capital of the first kingdom and over
+ * the land of the second, and saves screenshots of it and of the minimap. Dissolves the kingdoms again and quits. Steps
+ * are logged with the self-test prefix.
  */
 final class ClientMapsSelfTest {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -57,22 +63,25 @@ final class ClientMapsSelfTest {
     private volatile BlockPos secondThrone;
     private int saved;
     private boolean finished;
+    private boolean warmedUp;
+    private List<Runnable> actions;
 
     /**
      * A map mod with a full screen map opened by a key.
      */
-    private record MapMod(String name, int key) {
+    private record MapMod(String name, int key, double pixelsPerBlock) {
     }
 
     ClientMapsSelfTest(Path screenshots) {
         this.screenshots = screenshots;
         if (ModList.get().isLoaded("journeymap")) {
-            mods.add(new MapMod("journeymap", GLFW.GLFW_KEY_J));
+            mods.add(new MapMod("journeymap", GLFW.GLFW_KEY_J, 1.0));
         }
         if (ModList.get().isLoaded("xaeroworldmap")) {
-            mods.add(new MapMod("xaero", GLFW.GLFW_KEY_M));
+            // Xaero's World Map opens at three screen pixels per block.
+            mods.add(new MapMod("xaero", GLFW.GLFW_KEY_M, 3.0));
         } else if (ModList.get().isLoaded("xaerominimap")) {
-            mods.add(new MapMod("xaero", -1));
+            mods.add(new MapMod("xaero", -1, 1.0));
         }
         LOGGER.info(PREFIX + "maps check with {}, screenshots go to {}", mods.stream().map(MapMod::name).toList(), screenshots);
     }
@@ -91,6 +100,10 @@ final class ClientMapsSelfTest {
         }
         ticks++;
         if (ticks == 20) {
+            // The check must go on while the window is in the background.
+            minecraft.options.pauseOnLostFocus = false;
+            // The movement hints of the game would cover the minimaps.
+            minecraft.getTutorial().setStep(net.minecraft.client.tutorial.TutorialSteps.NONE);
             minecraft.getWindow().setWindowed(1280, 720);
         }
         if (ticks == 40) {
@@ -134,48 +147,87 @@ final class ClientMapsSelfTest {
     }
 
     /**
-     * Per language: the minimap in the world, then the full screen map of every mod with the pointer over the capital.
+     * Per language: the minimap in the world, then the full screen map of every mod, once with the pointer over the
+     * capital of the first kingdom and once over the land of the second. Before the first language every map is opened
+     * and closed once, so that news screens of the map mods shown on the first opening are out of the way.
      */
     private void stepLanguage(String language) {
-        int modIndex = (step - 1) / 3;
-        if (step == 0) {
-            minecraft.setScreen(null);
-            wait = 20;
-            step++;
-            return;
+        if (actions == null) {
+            actions = actions(language);
         }
-        if (step == 1 && !mods.isEmpty()) {
-            save("minimap-" + language);
-        }
-        if (modIndex >= mods.size()) {
+        if (step < actions.size()) {
+            actions.get(step++).run();
+        } else {
+            actions = null;
             step = 0;
             languageIndex++;
-            return;
         }
-        MapMod mod = mods.get(modIndex);
-        switch ((step - 1) % 3) {
-            case 0 -> {
+    }
+
+    private List<Runnable> actions(String language) {
+        List<Runnable> actions = new ArrayList<>();
+        actions.add(() -> {
+            minecraft.setScreen(null);
+            wait = 20;
+        });
+        if (!warmedUp) {
+            for (MapMod mod : mods) {
                 if (mod.key() >= 0) {
-                    press(mod.key());
-                    LOGGER.info(PREFIX + "{} map opened: {}", mod.name(), minecraft.screen == null ? "<none>" : minecraft.screen.getClass().getName());
+                    actions.add(() -> {
+                        press(mod.key());
+                        wait = 40;
+                    });
+                    actions.add(() -> {
+                        minecraft.setScreen(null);
+                        wait = 20;
+                    });
                 }
+            }
+            warmedUp = true;
+        }
+        if (!mods.isEmpty()) {
+            String names = String.join("-", mods.stream().map(MapMod::name).toList());
+            actions.add(() -> save(names + "-minimap-" + language));
+        }
+        for (MapMod mod : mods) {
+            if (mod.key() < 0) {
+                continue;
+            }
+            actions.add(() -> {
+                press(mod.key());
                 wait = 80;
-            }
-            case 1 -> {
-                // Pointer over the middle of the screen, where the player stands on the capital.
-                long window = minecraft.getWindow().getWindow();
-                GLFW.glfwSetCursorPos(window, minecraft.getWindow().getScreenWidth() / 2.0 + 6, minecraft.getWindow().getScreenHeight() / 2.0 + 6);
-                wait = 30;
-            }
-            default -> {
-                if (mod.key() >= 0) {
-                    save(mod.name() + "-" + language);
-                }
+            });
+            actions.add(() -> {
+                LOGGER.info(PREFIX + "{} map shown: {}", mod.name(), minecraft.screen == null ? "<none>" : minecraft.screen.getClass().getName());
+                pointAt(mod, (firstThrone.getX() >> 4) * 16 + 8, (firstThrone.getZ() >> 4) * 16 + 8);
+            });
+            actions.add(() -> save(mod.name() + "-" + language + "-capital"));
+            actions.add(() -> pointAt(mod, ((secondThrone.getX() >> 4) - 1) * 16 + 8, ((secondThrone.getZ() >> 4) + 3) * 16 + 8));
+            actions.add(() -> {
+                save(mod.name() + "-" + language + "-land");
                 minecraft.setScreen(null);
                 wait = 20;
-            }
+            });
         }
-        step++;
+        return actions;
+    }
+
+    /**
+     * Puts the pointer over a block, for a full screen map centered on the player.
+     */
+    private void pointAt(MapMod mod, int blockX, int blockZ) {
+        double x = minecraft.getWindow().getScreenWidth() / 2.0 + (blockX - minecraft.player.getX()) * mod.pixelsPerBlock();
+        double y = minecraft.getWindow().getScreenHeight() / 2.0 + (blockZ - minecraft.player.getZ()) * mod.pixelsPerBlock();
+        long window = minecraft.getWindow().getWindow();
+        GLFW.glfwSetCursorPos(window, x, y);
+        // A window in the background gets no move event from the system, so the game is told directly.
+        try {
+            ObfuscationReflectionHelper.findMethod(MouseHandler.class, "m_91561_", long.class, double.class, double.class)
+                    .invoke(minecraft.mouseHandler, window, x, y);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            LOGGER.warn(PREFIX + "could not move the pointer: {}", e.toString());
+        }
+        wait = 30;
     }
 
     private void press(int key) {
@@ -207,6 +259,9 @@ final class ClientMapsSelfTest {
         ServerLevel level = player.serverLevel();
         level.setDayTime(6000);
         level.setWeatherParameters(6000, 0, false, false);
+        // Animals would cover the land with their icons on the maps.
+        level.getGameRules().getRule(GameRules.RULE_DOMOBSPAWNING).set(false, server);
+        level.getEntities((Entity) null, player.getBoundingBox().inflate(320), entity -> !(entity instanceof Player)).forEach(Entity::discard);
         ChunkPos here = player.chunkPosition();
         List<UUID> stale = new ArrayList<>();
         for (Territory territory : KingdomWorldApi.state(server).territory().territories()) {
@@ -217,8 +272,8 @@ final class ClientMapsSelfTest {
         KingdomWorldApi.kingdomOf(server, playerId).ifPresent(old -> stale.add(old.id()));
         stale.forEach(id -> KingdomWorldApi.dissolveKingdom(server, id));
 
-        // The player stands on the capital of the first kingdom: a square of 5 by 5 chunks with a hole.
-        firstThrone = player.blockPosition().offset(2, 0, 2);
+        // The player stands in the first kingdom, two chunks east of its capital: a square of 5 by 5 chunks with a hole.
+        firstThrone = player.blockPosition().offset(-32, 0, 2);
         CreateKingdomResult a = KingdomWorldApi.foundKingdom(level, firstThrone, "Valoria", 0x2E6FD8, playerId);
         // The second one, east of it, in the shape of the letter L, with a name in Cyrillic letters.
         secondThrone = firstThrone.offset(16 * 9, 0, 0);

@@ -59,6 +59,7 @@ public final class BlueMapCompat implements CompatModule, WebMapSink {
 
     private volatile BlueMapAPI api;
     private volatile boolean wantsFull;
+    private int loggedCaravans = -1;
 
     @Override
     public void init() {
@@ -115,8 +116,11 @@ public final class BlueMapCompat implements CompatModule, WebMapSink {
         }
         if (update.full()) {
             wantsFull = false;
-            LOGGER.info("KingdomWorld BlueMap markers: {} kingdom(s), {} caravan(s), {} marker(s) on {} map(s)",
-                    update.kingdoms().size(), update.caravans().size(), markers, maps.values().stream().mapToInt(Collection::size).sum());
+        }
+        if (update.full() || !update.kingdoms().isEmpty() || !update.removed().isEmpty() || update.caravans().size() != loggedCaravans) {
+            loggedCaravans = update.caravans().size();
+            LOGGER.info("KingdomWorld BlueMap markers: {} kingdom(s) shown, {} caravan(s), {} marker(s) updated on {} map(s)",
+                    update.shown(), update.caravans().size(), markers, maps.values().stream().mapToInt(Collection::size).sum());
         }
     }
 

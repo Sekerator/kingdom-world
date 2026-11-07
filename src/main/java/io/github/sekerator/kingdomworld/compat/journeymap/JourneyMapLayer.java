@@ -189,7 +189,7 @@ final class JourneyMapLayer implements ClientMapModel.Listener {
             polygon.setTitle(title);
             if (i == 0) {
                 polygon.setLabel(info.name());
-                polygon.setTextProperties(label(info.color()));
+                polygon.setTextProperties(label(info.color(), info.hasCapital() && nearCapital(areas.get(i), info)));
             }
             overlays.add(polygon);
         }
@@ -198,7 +198,7 @@ final class JourneyMapLayer implements ClientMapModel.Listener {
             MarkerOverlay capital = new MarkerOverlay(KingdomWorld.MOD_ID, center, icon(CAPITAL, 18));
             capital.setDimension(key);
             capital.setOverlayGroupName(GROUP);
-            capital.setTitle(MapLabels.capital(info).getString() + "\n" + title);
+            // No title of its own: over the crown JourneyMap shows the title of the land, and two would overlap.
             capital.setDisplayOrder(1000);
             overlays.add(capital);
         }
@@ -234,14 +234,37 @@ final class JourneyMapLayer implements ClientMapModel.Listener {
                 .setFillOpacity(fillOpacity);
     }
 
-    private static TextProperties label(int color) {
+    /**
+     * The name of a kingdom: white on a band of its color, under the crown when the capital is where the name stands.
+     */
+    private static TextProperties label(int color, boolean underCrown) {
         return new TextProperties()
                 .setColor(0xFFFFFF)
                 .setBackgroundColor(color)
                 .setBackgroundOpacity(0.7f)
                 .setOpacity(1.0f)
                 .setFontShadow(true)
-                .setScale(1.0f);
+                .setScale(1.25f)
+                .setOffsetY(underCrown ? 14 : 0);
+    }
+
+    /**
+     * Whether JourneyMap writes the name (in the middle of the area's bounds) where the crown of the capital stands.
+     */
+    private static boolean nearCapital(ChunkOutlines.Area area, KingdomMapInfo info) {
+        int minX = Integer.MAX_VALUE;
+        int minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxZ = Integer.MIN_VALUE;
+        for (ChunkOutlines.Corner corner : area.outer().corners()) {
+            minX = Math.min(minX, corner.blockX());
+            minZ = Math.min(minZ, corner.blockZ());
+            maxX = Math.max(maxX, corner.blockX());
+            maxZ = Math.max(maxZ, corner.blockZ());
+        }
+        double dx = (minX + maxX) / 2.0 - (info.capitalChunkX() * 16 + 8);
+        double dz = (minZ + maxZ) / 2.0 - (info.capitalChunkZ() * 16 + 8);
+        return Math.abs(dx) < 16 && Math.abs(dz) < 12;
     }
 
     private static MapImage icon(ResourceLocation texture, int size) {
