@@ -1320,6 +1320,69 @@ Invoke-Phase 'session1' {
     }
     if ($MapModsDir -and $script:CaravanId) { Test-MapMarkers $server 'session1' }
 
+    # Companions: a player who is offline gets money on the account and buys a slave on the market of the kingdom; the price
+    # goes from the account to the treasury and no money appears. Iron goes into the pack, the player forms a party. With
+    # -Pack the companion takes a weapon of a mod of the pack over an iron sword. All of it must survive the restart.
+    Send-ServerCommand $server 'kingdomworld admin companions status'
+    if (Wait-ForLog $server 'Companion data format 1: 0 slave\(s\), 0 free companion\(s\), 0 part\(ies\)' $CommandTimeout $ConsoleFailPattern) {
+        Write-Ok '[session1] the companion data is writable and empty'
+    } else {
+        Add-Failure '[session1] the companion data is not writable or not empty'
+    }
+    $before = Get-KingdomMoney $server $KingdomName
+    Send-ServerCommand $server "kingdomworld admin companions fund $($script:CompanionOwner) $KingdomName 5000"
+    [void](Wait-ForLog $server 'Account of .* in the currency: \+' $CommandTimeout $ConsoleFailPattern)
+    $funded = Get-KingdomMoney $server $KingdomName
+    Send-ServerCommand $server "kingdomworld admin companions buy $($script:CompanionOwner) $KingdomName"
+    $bought = Wait-ForLog $server ' bought the slave .* for (\d+), id ' $CommandTimeout $ConsoleFailPattern
+    $after = Get-KingdomMoney $server $KingdomName
+    if (-not $bought) {
+        Add-Failure '[session1] the slave could not be bought'
+    } elseif ($before -ge 0 -and $funded -eq $before + 5000 -and $after -eq $funded) {
+        $script:CompanionMoney = $after
+        Write-Ok "[session1] a slave bought for $($bought.Groups[1].Value): the price went to the treasury, no money appeared ($funded before, $after after)"
+    } else {
+        Add-Failure "[session1] buying a slave changed the money: $before, funded $funded, after $after"
+    }
+    Send-ServerCommand $server "kingdomworld admin companions pack $($script:CompanionOwner) minecraft:iron_ingot 7"
+    if (-not (Wait-ForLog $server 'Put 7 of minecraft:iron_ingot into the pack of ' $CommandTimeout $ConsoleFailPattern)) {
+        Add-Failure '[session1] iron could not be put into the pack'
+    }
+    if ($Pack) {
+        $modWeapon = @($script:ArmyWeapons | Where-Object { $_ -and -not $_.StartsWith('minecraft:') }) | Select-Object -First 1
+        if ($modWeapon) {
+            Send-ServerCommand $server "kingdomworld admin companions pack $($script:CompanionOwner) minecraft:iron_sword 1"
+            Send-ServerCommand $server "kingdomworld admin companions pack $($script:CompanionOwner) $modWeapon 1"
+            [void](Wait-ForLog $server "Put 1 of $([regex]::Escape($modWeapon)) into the pack of " $CommandTimeout $ConsoleFailPattern)
+            $seen = Count-Log 'Gear mainhand: (\S+)'
+            Send-ServerCommand $server "kingdomworld admin companions gear $($script:CompanionOwner)"
+            $hand = Wait-ForNewLog $server 'Gear mainhand: (\S+)' $CommandTimeout $seen
+            if ($hand -and $hand.Groups[1].Value -eq $modWeapon) {
+                $script:CompanionWeapon = $modWeapon
+                Write-Ok "[session1] the companion takes $modWeapon of the pack over an iron sword"
+            } else {
+                Add-Failure "[session1] the companion did not take $modWeapon (took $(if ($hand) { $hand.Groups[1].Value } else { 'nothing' }))"
+            }
+        } else {
+            Add-Warning '[session1] no weapon of a mod was found for the companion'
+        }
+    }
+    Send-ServerCommand $server "kingdomworld admin companions party add $($script:CompanionOwner) $($script:CompanionMember)"
+    if (Wait-ForLog $server 'joined the party of .* \(#\d+\)' $CommandTimeout $ConsoleFailPattern) {
+        Write-Ok '[session1] a party of two was formed'
+    } else {
+        Add-Failure '[session1] the party could not be formed'
+    }
+    $seen = Count-Log ', level (\d+), loyalty (\d+), food (\d+), health (\d+), .*, items (\d+)'
+    Send-ServerCommand $server "kingdomworld admin companions list $($script:CompanionOwner)"
+    $entry = Wait-ForNewLog $server ', level (\d+), loyalty (\d+), food (\d+), health (\d+), .*, items (\d+)' $CommandTimeout $seen
+    if ($entry) {
+        $script:CompanionEntry = "$($entry.Groups[1].Value)/$($entry.Groups[2].Value)/$($entry.Groups[3].Value)/$($entry.Groups[4].Value)/$($entry.Groups[5].Value)"
+        Write-Ok "[session1] the companion: level/loyalty/food/health/items $($script:CompanionEntry)"
+    } else {
+        Add-Failure '[session1] the companion was not listed'
+    }
+
     # Construction: the templates load, the data pack template needs Create; a builder far from players builds a small
     # house from the storehouse on a flat place of chunk [2, 0], and the restart comes half way.
     Send-ServerCommand $server 'kingdomworld admin build templates'
@@ -1594,69 +1657,6 @@ Invoke-Phase 'session1' {
         } else {
             Add-Failure '[session1] the construction from the saved blueprint shows no numbers'
         }
-    }
-
-    # Companions: a player who is offline gets money on the account and buys a slave on the market of the kingdom; the price
-    # goes from the account to the treasury and no money appears. Iron goes into the pack, the player forms a party. With
-    # -Pack the companion takes a weapon of a mod of the pack over an iron sword. All of it must survive the restart.
-    Send-ServerCommand $server 'kingdomworld admin companions status'
-    if (Wait-ForLog $server 'Companion data format 1: 0 slave\(s\), 0 free companion\(s\), 0 part\(ies\)' $CommandTimeout $ConsoleFailPattern) {
-        Write-Ok '[session1] the companion data is writable and empty'
-    } else {
-        Add-Failure '[session1] the companion data is not writable or not empty'
-    }
-    $before = Get-KingdomMoney $server $KingdomName
-    Send-ServerCommand $server "kingdomworld admin companions fund $($script:CompanionOwner) $KingdomName 5000"
-    [void](Wait-ForLog $server 'Account of .* in the currency: \+' $CommandTimeout $ConsoleFailPattern)
-    $funded = Get-KingdomMoney $server $KingdomName
-    Send-ServerCommand $server "kingdomworld admin companions buy $($script:CompanionOwner) $KingdomName"
-    $bought = Wait-ForLog $server ' bought the slave .* for (\d+), id ' $CommandTimeout $ConsoleFailPattern
-    $after = Get-KingdomMoney $server $KingdomName
-    if (-not $bought) {
-        Add-Failure '[session1] the slave could not be bought'
-    } elseif ($before -ge 0 -and $funded -eq $before + 5000 -and $after -eq $funded) {
-        $script:CompanionMoney = $after
-        Write-Ok "[session1] a slave bought for $($bought.Groups[1].Value): the price went to the treasury, no money appeared ($funded before, $after after)"
-    } else {
-        Add-Failure "[session1] buying a slave changed the money: $before, funded $funded, after $after"
-    }
-    Send-ServerCommand $server "kingdomworld admin companions pack $($script:CompanionOwner) minecraft:iron_ingot 7"
-    if (-not (Wait-ForLog $server 'Put 7 of minecraft:iron_ingot into the pack of ' $CommandTimeout $ConsoleFailPattern)) {
-        Add-Failure '[session1] iron could not be put into the pack'
-    }
-    if ($Pack) {
-        $modWeapon = @($script:ArmyWeapons | Where-Object { $_ -and -not $_.StartsWith('minecraft:') }) | Select-Object -First 1
-        if ($modWeapon) {
-            Send-ServerCommand $server "kingdomworld admin companions pack $($script:CompanionOwner) minecraft:iron_sword 1"
-            Send-ServerCommand $server "kingdomworld admin companions pack $($script:CompanionOwner) $modWeapon 1"
-            [void](Wait-ForLog $server "Put 1 of $([regex]::Escape($modWeapon)) into the pack of " $CommandTimeout $ConsoleFailPattern)
-            $seen = Count-Log 'Gear mainhand: (\S+)'
-            Send-ServerCommand $server "kingdomworld admin companions gear $($script:CompanionOwner)"
-            $hand = Wait-ForNewLog $server 'Gear mainhand: (\S+)' $CommandTimeout $seen
-            if ($hand -and $hand.Groups[1].Value -eq $modWeapon) {
-                $script:CompanionWeapon = $modWeapon
-                Write-Ok "[session1] the companion takes $modWeapon of the pack over an iron sword"
-            } else {
-                Add-Failure "[session1] the companion did not take $modWeapon (took $(if ($hand) { $hand.Groups[1].Value } else { 'nothing' }))"
-            }
-        } else {
-            Add-Warning '[session1] no weapon of a mod was found for the companion'
-        }
-    }
-    Send-ServerCommand $server "kingdomworld admin companions party add $($script:CompanionOwner) $($script:CompanionMember)"
-    if (Wait-ForLog $server 'joined the party of .* \(#\d+\)' $CommandTimeout $ConsoleFailPattern) {
-        Write-Ok '[session1] a party of two was formed'
-    } else {
-        Add-Failure '[session1] the party could not be formed'
-    }
-    $seen = Count-Log ', level (\d+), loyalty (\d+), food (\d+), health (\d+), .*, items (\d+)'
-    Send-ServerCommand $server "kingdomworld admin companions list $($script:CompanionOwner)"
-    $entry = Wait-ForNewLog $server ', level (\d+), loyalty (\d+), food (\d+), health (\d+), .*, items (\d+)' $CommandTimeout $seen
-    if ($entry) {
-        $script:CompanionEntry = "$($entry.Groups[1].Value)/$($entry.Groups[2].Value)/$($entry.Groups[3].Value)/$($entry.Groups[4].Value)/$($entry.Groups[5].Value)"
-        Write-Ok "[session1] the companion: level/loyalty/food/health/items $($script:CompanionEntry)"
-    } else {
-        Add-Failure '[session1] the companion was not listed'
     }
 
     # Money last: the simulation steps of the construction let the minter strike what the smelter made meanwhile, so the
