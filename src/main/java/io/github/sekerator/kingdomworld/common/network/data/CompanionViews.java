@@ -140,6 +140,7 @@ public final class CompanionViews {
      *
      * @param power      strength with the gear it carries, rounded
      * @param nextLevel  experience the next level needs, 0 at the top
+     * @param wage       the daily wage of a free companion; for a slave, what it would ask once set free
      * @param sellValue  what the market pays for it, 0 for a free companion
      * @param canSell    whether the market can pay that now
      * @param subject    whether the owner is a subject of a kingdom that could take it in as a citizen
