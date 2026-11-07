@@ -55,7 +55,11 @@ public final class GuildEvents {
         if (killer == null) {
             killer = victim.getKillCredit();
         }
-        GuildWork.onKill(victim.getServer(), victim, killer);
+        try {
+            GuildWork.onKill(victim.getServer(), victim, killer);
+        } catch (RuntimeException e) {
+            LOGGER.error("KingdomWorld guild could not count the death of {}", victim.getType(), e);
+        }
     }
 
     private static void onDrops(LivingDropsEvent event) {
@@ -76,7 +80,11 @@ public final class GuildEvents {
             return;
         }
         GuildSettings.refresh();
-        GuildWork.tick(server);
+        try {
+            GuildWork.tick(server);
+        } catch (RuntimeException e) {
+            LOGGER.error("KingdomWorld guild tick failed", e);
+        }
     }
 
     private static void onServerStarted(ServerStartedEvent event) {

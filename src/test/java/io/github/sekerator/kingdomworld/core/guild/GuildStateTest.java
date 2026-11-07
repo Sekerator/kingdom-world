@@ -325,7 +325,7 @@ class GuildStateTest {
         GuildState.Return back = guild.finishExpedition(squad.id(), new Expeditions.Outcome(Expeditions.Result.PARTIAL, 3, List.of()), Set.of(),
                 now, 3, RULES, world).orElseThrow();
         assertTrue(back.contract().isOpen());
-        assertEquals(3, back.contract().progress());
+        assertEquals(0, back.contract().progress(), "the next taker starts from nothing");
         assertEquals(0, back.paid());
     }
 

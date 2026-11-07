@@ -222,10 +222,11 @@ public record Contract(long id, Kind kind, UUID branch, Poster poster, UUID post
     }
 
     /**
-     * The contract back on the board without a taker; what was done stays done.
+     * The contract back on the board without a taker; the next taker starts from nothing, so that nobody finishes what
+     * another gave up.
      */
     public Contract reopened() {
-        return new Contract(id, kind, branch, poster, posterId, minRank, target, targetRank, boss, count, progress, currency, reward, points,
+        return new Contract(id, kind, branch, poster, posterId, minRank, target, targetRank, boss, count, 0, currency, reward, points,
                 commissionPermille, posted, deadline, Status.OPEN, null, 0, squadsAllowed);
     }
 
