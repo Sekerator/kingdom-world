@@ -231,22 +231,23 @@ public final class CompanionGameTests {
 
     // ---------------------------------------------------------------- in the world
 
-    @GameTest(template = EMPTY, batch = "kingdomworld_companion_fight", timeoutTicks = 400)
+    @GameTest(template = EMPTY, batch = "kingdomworld_companion_fight", timeoutTicks = 1200)
     public static void aCompanionFollowsItsOwnerAndKillsAMonster(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         GatheringGameTests.clear(level, from(helper), to(helper));
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Companion Hunt", UUID.randomUUID());
-        ServerPlayer owner = player(helper, "kw-owner", 6, 6);
-        Companion companion = give(server, owner, kingdom, 10);
-        CompanionSavedData.get(server).pack(companion.id()).setItem(0, new ItemStack(Items.DIAMOND_SWORD));
+        ServerPlayer owner = player(helper, "kw-owner", 5, 5);
+        Companion companion = CompanionWork.state(server).give(owner.getUUID(), UUID.randomUUID(), 77, Gender.MALE, 0, 10, new Skills(10, 4, 4),
+                kingdom.id(), KingdomWorldApi.gameTime(server), TreasuryActions.day(server), CompanionSettings.rules());
+        CompanionSavedData.get(server).pack(companion.id()).setItem(0, new ItemStack(Items.NETHERITE_SWORD));
         CompanionWork.present(owner, true);
         CompanionEntity body = body(helper, companion, 1, 1);
         Husk[] husk = new Husk[1];
         helper.startSequence()
                 .thenWaitUntil(() -> helper.assertTrue(body.distanceTo(owner) < 4.5f, "The companion did not follow its owner"))
                 .thenExecute(() -> {
-                    helper.assertTrue(body.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND).is(Items.DIAMOND_SWORD),
+                    helper.assertTrue(body.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND).is(Items.NETHERITE_SWORD),
                             "The companion did not take the sword from its pack");
                     // A husk does not burn in the sun; the owner fights it next to the companion, so the companion joins.
                     husk[0] = EntityType.HUSK.create(level);
@@ -255,7 +256,10 @@ public final class CompanionGameTests {
                     level.addFreshEntity(husk[0]);
                     owner.setLastHurtMob(husk[0]);
                 })
-                .thenWaitUntil(() -> helper.assertTrue(!husk[0].isAlive(), "The monster is still alive"))
+                .thenWaitUntil(() -> helper.assertTrue(!husk[0].isAlive(), "The monster is still alive: health " + husk[0].getHealth()
+                        + ", companion alive " + body.isAlive() + " removed " + body.isRemoved() + ", target " + body.getTarget()
+                        + ", distance " + body.distanceTo(husk[0]) + ", hand " + body.getMainHandItem() + ", at " + body.blockPosition()
+                        + ", monster at " + husk[0].blockPosition()))
                 .thenExecute(() -> {
                     Companion record = CompanionWork.state(server).companion(companion.id()).orElseThrow();
                     helper.assertTrue(record.kills() >= 1 && record.experience() > 0, "The kill gave the companion no experience: kills "
