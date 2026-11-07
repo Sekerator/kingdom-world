@@ -10,6 +10,7 @@ import com.mojang.logging.LogUtils;
 import io.github.sekerator.kingdomworld.client.map.ClientTerritoryCache;
 import io.github.sekerator.kingdomworld.client.network.ClientPacketHandlers;
 import io.github.sekerator.kingdomworld.client.screen.FoundKingdomScreen;
+import io.github.sekerator.kingdomworld.client.screen.ItemTooltipScreen;
 import io.github.sekerator.kingdomworld.client.screen.KingdomMapScreen;
 import io.github.sekerator.kingdomworld.client.screen.LayoutCheck;
 import io.github.sekerator.kingdomworld.client.screen.ThroneScreen;
@@ -519,6 +520,12 @@ final class ClientLayoutCheck {
      */
     private static io.github.sekerator.kingdomworld.common.network.data.TreasuryView treasuryView(UUID kingdom, boolean canManage, boolean king,
                                                                                                      boolean empty) {
+        return treasuryView(kingdom, canManage, canManage && king, king, empty);
+    }
+
+    private static io.github.sekerator.kingdomworld.common.network.data.TreasuryView treasuryView(UUID kingdom, boolean canManage,
+                                                                                                     boolean canTakeCoins, boolean king,
+                                                                                                     boolean empty) {
         List<io.github.sekerator.kingdomworld.common.network.data.TreasuryView.JournalRow> journal = new ArrayList<>();
         List<io.github.sekerator.kingdomworld.common.network.data.TreasuryView.Wage> wages = new ArrayList<>();
         List<io.github.sekerator.kingdomworld.common.network.data.TreasuryView.Debtor> debtors = new ArrayList<>();
@@ -544,7 +551,7 @@ final class ClientLayoutCheck {
             wages.add(new io.github.sekerator.kingdomworld.common.network.data.TreasuryView.Wage(profession.id(), wage, usual, empty ? 0 : 9_999));
             index++;
         }
-        return new io.github.sekerator.kingdomworld.common.network.data.TreasuryView(kingdom, canManage, king, LONG_KINGDOM,
+        return new io.github.sekerator.kingdomworld.common.network.data.TreasuryView(kingdom, canManage, canTakeCoins, king, LONG_KINGDOM,
                 empty ? "" : LONG_CURRENCY, 10, 100, empty ? 0 : MUCH, empty ? io.github.sekerator.kingdomworld.core.economy.Coins.NONE
                 : new io.github.sekerator.kingdomworld.core.economy.Coins(9_999, 9_999, 999_999), journal, 1_000, 1_000, 9_999, 23_999,
                 new io.github.sekerator.kingdomworld.common.network.data.TreasuryView.Payroll(empty ? -1 : 5, MUCH, MUCH / 3, 9_999, 9_999),
@@ -558,6 +565,32 @@ final class ClientLayoutCheck {
         screen.updateTreasury(treasuryView(view.id(), canManage, view.viewerRole() == Role.KING, empty));
         screen.showTreasury(mode, period);
         return screen;
+    }
+
+    private static ThroneScreen payments(KingdomView view, boolean canManage, boolean canTakeCoins, boolean filled, Component status) {
+        ThroneScreen screen = throne(view, "treasury", status);
+        screen.updateTreasury(treasuryView(view.id(), canManage, canTakeCoins, view.viewerRole() == Role.KING, false));
+        screen.showTreasury("payments", "today");
+        if (filled) {
+            screen.fillPaymentsForCheck(LONG_PLAYER, "999999g99s9c", "9999999999");
+        }
+        return screen;
+    }
+
+    /**
+     * Coins of a current currency with a long name, of one named after its kingdom, of a dissolved kingdom, and a blank
+     * coin.
+     */
+    private static ItemTooltipScreen coinTooltips() {
+        fillMapData();
+        UUID first = UUID.nameUUIDFromBytes("first".getBytes(StandardCharsets.UTF_8));
+        UUID second = UUID.nameUUIDFromBytes("second".getBytes(StandardCharsets.UTF_8));
+        UUID old = UUID.nameUUIDFromBytes("old".getBytes(StandardCharsets.UTF_8));
+        return new ItemTooltipScreen("coins", List.of(
+                io.github.sekerator.kingdomworld.common.economy.CoinItem.stack(first, io.github.sekerator.kingdomworld.core.economy.Denomination.GOLD, 64),
+                io.github.sekerator.kingdomworld.common.economy.CoinItem.stack(second, io.github.sekerator.kingdomworld.core.economy.Denomination.SILVER, 1),
+                io.github.sekerator.kingdomworld.common.economy.CoinItem.stack(old, io.github.sekerator.kingdomworld.core.economy.Denomination.COPPER, 7),
+                new ItemStack(io.github.sekerator.kingdomworld.common.registry.ModRegistries.COIN.get())));
     }
 
     /**
@@ -613,7 +646,9 @@ final class ClientLayoutCheck {
         ClientTerritoryCache.applyArea(new MapAreaPacket("kingdomworld:layout_check", -6, -6, width, height, palette, cells));
         io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.replace(List.of(
                 new io.github.sekerator.kingdomworld.common.network.data.CurrencyInfo(first, LONG_CURRENCY, LONG_KINGDOM, 0x6C3483, false, 10, 100),
-                new io.github.sekerator.kingdomworld.common.network.data.CurrencyInfo(second, "", "Valoria", 0xB7950B, false, 10, 100)));
+                new io.github.sekerator.kingdomworld.common.network.data.CurrencyInfo(second, "", "Valoria", 0xB7950B, false, 10, 100),
+                new io.github.sekerator.kingdomworld.common.network.data.CurrencyInfo(UUID.nameUUIDFromBytes("old".getBytes(StandardCharsets.UTF_8)),
+                        "", LONG_KINGDOM, 0x1F618D, true, 10, 100)));
     }
 
     private static List<Case> cases() {
@@ -728,6 +763,14 @@ final class ClientLayoutCheck {
         cases.add(new Case("throne-debtors-empty", () -> treasury(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, true, "debtors",
                 "today", Component.empty())));
         cases.add(new Case("throne-treasury-loading", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "treasury", Component.empty())));
+        cases.add(new Case("throne-treasury-payments", () -> payments(view(KingdomView.Relation.MEMBER, Role.KING), true, true, true,
+                Component.translatable("kingdomworld.treasury.coins_taken_partly", io.github.sekerator.kingdomworld.common.economy.MoneyTexts.coins(
+                        io.github.sekerator.kingdomworld.core.economy.Denomination.SILVER, 9_999_999_999L), 9_999_999_999L))));
+        cases.add(new Case("throne-treasury-payments-empty", () -> payments(view(KingdomView.Relation.MEMBER, Role.STEWARD), true, false, false,
+                Component.translatable("kingdomworld.treasury.unknown_player", LONG_PLAYER))));
+        cases.add(new Case("throne-subject-payments", () -> payments(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, false, false,
+                Component.empty())));
+        cases.add(new Case("coin-tooltip", ClientLayoutCheck::coinTooltips));
         cases.add(new Case("bank", () -> bank(false, "", Component.empty(), false)));
         cases.add(new Case("bank-withdraw", () -> bank(false, "999999g99s9c", Component.translatable("kingdomworld.bank.withdrew_partly",
                 io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(MUCH, io.github.sekerator.kingdomworld.core.economy.CurrencyUnits.DEFAULT),

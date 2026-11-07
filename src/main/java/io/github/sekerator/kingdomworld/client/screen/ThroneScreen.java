@@ -195,6 +195,13 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
+     * Fills the forms of the payments in the treasury tab, for the layout check.
+     */
+    public void fillPaymentsForCheck(String payee, String amount, String coins) {
+        treasury.fillForCheck(payee, amount, coins);
+    }
+
+    /**
      * Shows a page of the items that can be ordered.
      */
     public void updateCatalog(CatalogView catalogView) {

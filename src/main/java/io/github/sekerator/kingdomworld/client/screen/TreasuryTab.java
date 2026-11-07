@@ -46,6 +46,7 @@ final class TreasuryTab {
         OVERVIEW,
         JOURNAL,
         SETTINGS,
+        PAYMENTS,
         DEBTORS;
 
         String id() {
@@ -60,6 +61,10 @@ final class TreasuryTab {
     private int scroll;
     private String taxText;
     private String nameText;
+    private String payeeText = "";
+    private String payText = "";
+    private String coinsText = "";
+    private Denomination coinChoice = Denomination.GOLD;
 
     private int modeWidth;
     private int periodWidth;
@@ -70,6 +75,10 @@ final class TreasuryTab {
     private int categoryWidth;
     private int professionWidth;
     private int settingLabelWidth;
+    private int paymentLabelWidth;
+    private int payWidth;
+    private int coinChoiceWidth;
+    private int takeWidth;
 
     TreasuryTab(ThroneScreen screen) {
         this.screen = screen;
@@ -202,11 +211,24 @@ final class TreasuryTab {
         }
         settingLabelWidth = Math.max(font.width(Component.translatable(KEY + "tax_label")),
                 font.width(Component.translatable(KEY + "name_label"))) + 6;
+        paymentLabelWidth = 0;
+        for (String key : List.of("payee_label", "pay_label", "coins_label")) {
+            paymentLabelWidth = Math.max(paymentLabelWidth, font.width(Component.translatable(KEY + key)) + 6);
+        }
+        payWidth = screen.buttonWidth(Component.translatable(KEY + "pay"));
+        coinChoiceWidth = 0;
+        for (Denomination coin : Denomination.values()) {
+            coinChoiceWidth = Math.max(coinChoiceWidth, screen.buttonWidth(coinChoiceLabel(coin)));
+        }
+        takeWidth = screen.buttonWidth(Component.translatable(KEY + "take_coins"));
         int buttons = modeWidth + GAP + periodWidth + 8 + pageWidth;
         int settings = settingLabelWidth + BOX_WIDTH + GAP + Math.max(setWidth, renameWidth);
+        int payments = paymentLabelWidth + BOX_WIDTH + GAP + Math.max(payWidth, coinChoiceWidth + GAP + takeWidth);
+        settings = Math.max(settings, payments);
         int wages = professionWidth + 90 + 2 * (stepWidth + GAP);
         int messages = 0;
-        for (String key : List.of("loading", "journal_empty", "debtors_none", "read_only", "payroll_none", "mint_none", "debts_none")) {
+        for (String key : List.of("loading", "journal_empty", "debtors_none", "read_only", "payroll_none", "mint_none", "debts_none",
+                "payments_read_only", "coins_read_only")) {
             messages = Math.max(messages, Math.min(320, font.width(Component.translatable(KEY + key))));
         }
         return Math.max(Math.max(buttons, settings), Math.max(wages, messages));
@@ -271,6 +293,80 @@ final class TreasuryTab {
         if (mode == Mode.SETTINGS) {
             initSettings(x, right, top, rows);
         }
+        if (mode == Mode.PAYMENTS) {
+            initPayments(x, top);
+        }
+    }
+
+    private static Component coinChoiceLabel(Denomination coin) {
+        return Component.translatable(KEY + "coin_choice." + coin.id());
+    }
+
+    private void initPayments(int x, int top) {
+        int boxX = x + paymentLabelWidth;
+        int y = listTop(top);
+        EditBox payee = new EditBox(screen.font(), boxX + 1, y + 1, BOX_WIDTH - 2, ROW - 4, Component.translatable(KEY + "payee_label"));
+        payee.setMaxLength(16);
+        payee.setValue(payeeText);
+        payee.setResponder(value -> payeeText = value);
+        payee.setEditable(view.canManage());
+        payee.setHint(Component.translatable(KEY + "payee_hint"));
+        screen.add(payee);
+
+        y += ROW + 1;
+        EditBox amount = new EditBox(screen.font(), boxX + 1, y + 1, BOX_WIDTH - 2, ROW - 4, Component.translatable(KEY + "pay_label"));
+        amount.setMaxLength(Money.MAX_TEXT);
+        amount.setValue(payText);
+        amount.setResponder(value -> payText = value);
+        amount.setEditable(view.canManage());
+        screen.add(amount);
+        Button pay = screen.add(Button.builder(Component.translatable(KEY + "pay"), b -> Money.parse(payText, units())
+                        .filter(value -> value > 0 && !payeeText.isBlank())
+                        .ifPresent(value -> send(EconomyPackets.TreasuryChange.Action.PAY, payeeText.strip(), value)))
+                .bounds(boxX + BOX_WIDTH + GAP, y, payWidth, ROW - 2).build());
+        pay.active = view.canManage();
+        pay.setTooltip(Tooltip.create(Component.translatable(KEY + "pay_hint")));
+
+        y += ROW + 6;
+        EditBox coins = new EditBox(screen.font(), boxX + 1, y + 1, BOX_WIDTH - 2, ROW - 4, Component.translatable(KEY + "coins_label"));
+        coins.setMaxLength(19);
+        coins.setValue(coinsText);
+        coins.setResponder(value -> coinsText = value);
+        coins.setEditable(view.canTakeCoins());
+        coins.setHint(Component.translatable(KEY + "coins_hint"));
+        screen.add(coins);
+        int choiceX = boxX + BOX_WIDTH + GAP;
+        Button choice = screen.add(Button.builder(coinChoiceLabel(coinChoice), b -> {
+            coinChoice = Denomination.values()[(coinChoice.ordinal() + 1) % Denomination.values().length];
+            screen.rebuild();
+        }).bounds(choiceX, y, coinChoiceWidth, ROW - 2).build());
+        choice.active = view.canTakeCoins();
+        Button take = screen.add(Button.builder(Component.translatable(KEY + "take_coins"), b -> {
+            long count = parseCount(coinsText);
+            if (count > 0) {
+                send(EconomyPackets.TreasuryChange.Action.TAKE_COINS, coinChoice.id(), count);
+            }
+        }).bounds(choiceX + coinChoiceWidth + GAP, y, takeWidth, ROW - 2).build());
+        take.active = view.canTakeCoins() && view.vault().count(coinChoice) > 0;
+        take.setTooltip(Tooltip.create(Component.translatable(KEY + "take_coins_hint")));
+    }
+
+    private static long parseCount(String text) {
+        try {
+            long value = Long.parseLong(text.strip());
+            return value > 0 && value <= Money.MAX ? value : 0;
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Fills the forms of the payments, for the layout check.
+     */
+    void fillForCheck(String payee, String amount, String coins) {
+        payeeText = payee;
+        payText = amount;
+        coinsText = coins;
     }
 
     private void initSettings(int x, int right, int top, int rows) {
@@ -363,6 +459,7 @@ final class TreasuryTab {
             case OVERVIEW -> renderOverview(graphics, x, right, listTop, top, panelHeight);
             case JOURNAL -> renderJournal(graphics, font, x, right, listTop);
             case SETTINGS -> renderSettings(graphics, font, x, right, top, rows);
+            case PAYMENTS -> renderPayments(graphics, x, right, top);
             case DEBTORS -> renderDebtors(graphics, font, x, right, listTop, rows);
         }
     }
@@ -455,6 +552,30 @@ final class TreasuryTab {
         }
     }
 
+    private void renderPayments(GuiGraphics graphics, int x, int right, int top) {
+        int y = listTop(top);
+        int labelRight = x + paymentLabelWidth - 2;
+        screen.label(graphics, Component.translatable(KEY + "payee_label"), x, y + 5, 0xFFE8E8E8, labelRight);
+        screen.label(graphics, Component.translatable(KEY + "pay_label"), x, y + ROW + 6, 0xFFE8E8E8, labelRight);
+        int previewX = x + paymentLabelWidth + BOX_WIDTH + GAP + payWidth + 8;
+        if (!payText.isBlank() && previewX + 8 < right) {
+            Optional<Long> parsed = Money.parse(payText, units());
+            String shown = parsed.map(value -> MoneyTexts.amount(value, units()).getString())
+                    .orElseGet(() -> Component.translatable(KEY + "bad_amount").getString());
+            screen.name(graphics, shown, previewX, y + ROW + 6, parsed.isPresent() ? 0xFFB8B8B8 : 0xFFFF9070, right - previewX);
+        }
+        int coinsY = y + 2 * ROW + 7;
+        screen.label(graphics, Component.translatable(KEY + "coins_label"), x, coinsY + 5, 0xFFE8E8E8, labelRight);
+        String vault = Component.translatable(KEY + "vault_coins", MoneyTexts.coins(view.vault())).getString();
+        screen.name(graphics, vault, x, coinsY + ROW + 4, 0xFFD0D0D0, right - x);
+        int noteY = coinsY + ROW + 4 + LINE + 2;
+        if (!view.canManage()) {
+            screen.name(graphics, Component.translatable(KEY + "payments_read_only").getString(), x, noteY, 0xFFB8B8B8, right - x);
+        } else if (!view.canTakeCoins()) {
+            screen.name(graphics, Component.translatable(KEY + "coins_read_only").getString(), x, noteY, 0xFFB8B8B8, right - x);
+        }
+    }
+
     private void renderDebtors(GuiGraphics graphics, Font font, int x, int right, int listTop, int rows) {
         List<TreasuryView.Debtor> debtors = view.debtors();
         if (debtors.isEmpty()) {
@@ -474,17 +595,21 @@ final class TreasuryTab {
      * Whether the tab has a text field the player is typing into, so that the screen keeps keys for it.
      */
     boolean editing() {
-        return mode == Mode.SETTINGS;
+        return mode == Mode.SETTINGS || mode == Mode.PAYMENTS;
     }
 
     /**
      * A status line for the bottom while there is no other message.
      */
     Component hint() {
-        if (view == null || mode != Mode.SETTINGS) {
+        if (view == null || !view.canManage()) {
             return Component.empty();
         }
-        return view.canManage() ? Component.translatable(KEY + "settings_hint") : Component.empty();
+        return switch (mode) {
+            case SETTINGS -> Component.translatable(KEY + "settings_hint");
+            case PAYMENTS -> Component.translatable(KEY + "payments_hint");
+            default -> Component.empty();
+        };
     }
 
     static boolean isProblem(WorkStatus status) {

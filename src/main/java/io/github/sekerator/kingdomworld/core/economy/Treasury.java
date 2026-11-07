@@ -275,6 +275,22 @@ public final class Treasury {
         return true;
     }
 
+    /**
+     * Takes coins out of the vault, for example into the hands of the king, and writes their worth into the journal.
+     *
+     * @return {@code false} if the vault holds fewer of them; nothing changes then
+     */
+    boolean takeCoins(Denomination denomination, long count, LedgerCategory category, long day) {
+        if (count < 1 || count > vault.count(denomination)) {
+            return false;
+        }
+        long worth = Money.multiplyCapped(count, units.value(denomination));
+        vault = vault.minus(denomination, count);
+        journal.record(day, category, 0, worth);
+        changed();
+        return true;
+    }
+
     // ---------------------------------------------------------------- saved data
 
     /**

@@ -107,7 +107,9 @@ public final class TreasuryActions {
                 .filter(member -> member.role() != Role.KING).count()).orElse(0);
         long untilPayday = Math.max(0, (today + 1) * CitizenNeeds.TICKS_PER_DAY - KingdomWorldApi.gameTime(server));
         var payroll = treasury.lastPayroll();
-        return Optional.of(new TreasuryView(kingdomId, state.membership().hasPermission(viewer, kingdomId, Permission.MANAGE_TREASURY),
+        boolean canManage = state.membership().hasPermission(viewer, kingdomId, Permission.MANAGE_TREASURY);
+        Role role = state.membership().memberOf(viewer).map(io.github.sekerator.kingdomworld.core.membership.Member::role).orElse(null);
+        return Optional.of(new TreasuryView(kingdomId, canManage, canManage && (role == Role.KING || role == Role.TREASURER),
                 viewer.equals(kingdom.get().rulerId()), kingdom.get().name(), treasury.currencyName(), treasury.units().silver(),
                 treasury.units().gold(), treasury.balance(), treasury.vault(), journal, treasury.pollTax(), rules.maxPollTax(), taxpayers,
                 untilPayday, new TreasuryView.Payroll(payroll.day(), payroll.due(), payroll.paid(), payroll.citizens(), payroll.underpaid()),
@@ -151,6 +153,8 @@ public final class TreasuryActions {
             case POLL_TAX -> setPollTax(player, kingdom, change.amount());
             case WAGE -> setWage(player, kingdom, change.text(), change.amount());
             case RENAME -> rename(player, kingdom, change.text());
+            case PAY -> payByName(player, kingdom, change.text(), change.amount());
+            case TAKE_COINS -> takeCoins(player, kingdom, change.text(), change.amount());
         };
         KingdomActions.reply(player, feedback);
         sendView(player, kingdom);
@@ -212,6 +216,64 @@ public final class TreasuryActions {
         LOGGER.info("{} paid {} from the treasury of {} to {}", actor.getGameProfile().getName(), amount, kingdom.get().name(), targetName);
         KingdomActions.tell(server, target, Component.translatable(KEY + "received", KingdomActions.kingdomName(kingdom.get()), money));
         return KingdomActions.Feedback.ok(KEY + "paid", money, targetName);
+    }
+
+    /**
+     * The treasury pays a player named in the treasury tab: one who is online or has played on this server.
+     */
+    public static KingdomActions.Feedback payByName(ServerPlayer actor, UUID kingdom, String name, long amount) {
+        Optional<Kingdom> own = KingdomWorldApi.kingdomOf(actor.server, actor.getUUID());
+        if (own.isEmpty() || !own.get().id().equals(kingdom)) {
+            return KingdomActions.Feedback.error(KingdomError.NOT_A_MEMBER);
+        }
+        Optional<com.mojang.authlib.GameProfile> target = PlayerNames.known(actor.server, name);
+        if (target.isEmpty()) {
+            return KingdomActions.Feedback.fail(KEY + "unknown_player", name == null ? "" : name.strip());
+        }
+        return pay(actor, target.get().getId(), target.get().getName(), amount);
+    }
+
+    /**
+     * Coins of one kind leave the vault for the hands of the king or the treasurer: as many as asked, the vault holds and
+     * the inventory takes. The treasury's journal writes them down as a transfer.
+     */
+    public static KingdomActions.Feedback takeCoins(ServerPlayer actor, UUID kingdom, String coinId, long count) {
+        MinecraftServer server = actor.server;
+        Optional<io.github.sekerator.kingdomworld.core.economy.Denomination> coin =
+                io.github.sekerator.kingdomworld.core.economy.Denomination.byId(coinId);
+        Optional<Treasury> treasury = KingdomWorldApi.state(server).economy().treasury(kingdom);
+        if (coin.isEmpty() || treasury.isEmpty() || count < 1) {
+            return KingdomActions.Feedback.error(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        long wanted = Math.min(count, treasury.get().vault().count(coin.get()));
+        if (wanted <= 0) {
+            return KingdomActions.Feedback.error(KingdomError.NO_COINS);
+        }
+        io.github.sekerator.kingdomworld.core.economy.Coins fitting = CoinStacks.fitting(actor.getInventory(), kingdom,
+                io.github.sekerator.kingdomworld.core.economy.Coins.of(coin.get(), wanted));
+        long taken = fitting.count(coin.get());
+        if (taken <= 0) {
+            return KingdomActions.Feedback.error(KingdomError.NO_ROOM);
+        }
+        long day = day(server);
+        Outcome outcome = KingdomWorldApi.change(server, "take coins from a vault",
+                state -> state.takeVaultCoins(actor.getUUID(), kingdom, coin.get(), taken, day));
+        if (!outcome.ok()) {
+            return KingdomActions.Feedback.error(outcome.error());
+        }
+        io.github.sekerator.kingdomworld.core.economy.Coins left = CoinStacks.give(actor.getInventory(), kingdom,
+                io.github.sekerator.kingdomworld.core.economy.Coins.of(coin.get(), taken));
+        long back = left.count(coin.get());
+        if (back > 0) {
+            // What did not fit after all goes back into the vault; nothing is dropped.
+            KingdomWorldApi.state(server).economy().returnToVault(kingdom, coin.get(), back, day);
+        }
+        long given = taken - back;
+        LOGGER.info("{} took {} {} coin(s) from the vault of {}", actor.getGameProfile().getName(), given, coin.get().id(),
+                KingdomWorldApi.kingdom(server, kingdom).map(Kingdom::name).orElse("?"));
+        Component coins = MoneyTexts.coins(coin.get(), given);
+        return given < count ? KingdomActions.Feedback.ok(KEY + "coins_taken_partly", coins, count)
+                : KingdomActions.Feedback.ok(KEY + "coins_taken", coins);
     }
 
     /**

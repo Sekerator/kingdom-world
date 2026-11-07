@@ -106,6 +106,13 @@ public abstract class KingdomScreen extends Screen {
     }
 
     /**
+     * Shows a text in a tooltip while the mouse is over a line drawn at {@code x}, {@code y}.
+     */
+    protected void hoverText(int x, int y, int width, Component text) {
+        hovers.add(new Hover(x, y, width, text));
+    }
+
+    /**
      * Draws a name centered on {@code centerX}, shortened to {@code maxWidth}.
      */
     protected void centeredName(GuiGraphics graphics, String name, int centerX, int y, int color, int maxWidth) {

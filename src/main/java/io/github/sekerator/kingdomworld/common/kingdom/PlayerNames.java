@@ -53,4 +53,18 @@ public final class PlayerNames {
     public static boolean isOnline(MinecraftServer server, UUID playerId) {
         return server.getPlayerList().getPlayer(playerId) != null;
     }
+
+    /**
+     * A player who is online or has played on this server, by name; never asks the network.
+     */
+    public static java.util.Optional<GameProfile> known(MinecraftServer server, String name) {
+        if (name == null || name.isBlank() || name.length() > 64) {
+            return java.util.Optional.empty();
+        }
+        ServerPlayer online = server.getPlayerList().getPlayerByName(name.strip());
+        if (online != null) {
+            return java.util.Optional.of(online.getGameProfile());
+        }
+        return server.getProfileCache() == null ? java.util.Optional.empty() : server.getProfileCache().get(name.strip());
+    }
 }

@@ -208,12 +208,12 @@ public final class EconomyCommands {
         Optional<Treasury> treasury = economy.treasury(currency);
         Optional<Kingdom> kingdom = KingdomWorldApi.kingdom(server, currency);
         if (treasury.isPresent() && kingdom.isPresent()) {
-            return MoneyTexts.currency(treasury.get().currencyName(), kingdom.get().name())
+            return MoneyTexts.currencyShort(treasury.get().currencyName(), kingdom.get().name())
                     .withStyle(style -> style.withColor(kingdom.get().color()));
         }
         RetiredCurrency old = economy.retired().get(currency);
         if (old != null) {
-            return Component.translatable(KEY + "old_currency", MoneyTexts.currency(old.name(), old.kingdomName()));
+            return Component.translatable(KEY + "old_currency", MoneyTexts.currencyShort(old.name(), old.kingdomName()));
         }
         return Component.literal(currency.toString().substring(0, 8));
     }

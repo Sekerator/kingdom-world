@@ -19,7 +19,8 @@ import java.util.UUID;
 /**
  * What the "Treasury" tab of the throne screen shows to a member of the kingdom.
  *
- * @param canManage      whether the viewer may set taxes and wages
+ * @param canManage      whether the viewer may set taxes and wages and pay players
+ * @param canTakeCoins   whether the viewer may take coins of the vault into the hands: the king or the treasurer with the right
  * @param isKing         whether the viewer may rename the currency
  * @param currencyName   the name the king gave the currency, empty for the name derived from the kingdom's
  * @param journal        income and expenses by period and category
@@ -31,7 +32,7 @@ import java.util.UUID;
  * @param debtTotal      what all of them owe together
  * @param mint           the mint of the kingdom
  */
-public record TreasuryView(UUID kingdomId, boolean canManage, boolean isKing, String kingdomName, String currencyName, long silver, long gold,
+public record TreasuryView(UUID kingdomId, boolean canManage, boolean canTakeCoins, boolean isKing, String kingdomName, String currencyName, long silver, long gold,
                            long balance, Coins vault, List<JournalRow> journal, long pollTax, long maxPollTax, int taxpayers,
                            long untilPayday, Payroll lastPayroll, List<Wage> wages, long maxWage, List<Debtor> debtors, int debtorCount,
                            long debtTotal, Mint mint) {
@@ -110,6 +111,7 @@ public record TreasuryView(UUID kingdomId, boolean canManage, boolean isKing, St
     public void encode(FriendlyByteBuf buf) {
         buf.writeUUID(kingdomId);
         buf.writeBoolean(canManage);
+        buf.writeBoolean(canTakeCoins);
         buf.writeBoolean(isKing);
         buf.writeUtf(kingdomName, KingdomNames.MAX_LENGTH);
         buf.writeUtf(currencyName, KingdomNames.MAX_LENGTH);
@@ -161,6 +163,7 @@ public record TreasuryView(UUID kingdomId, boolean canManage, boolean isKing, St
     public static TreasuryView decode(FriendlyByteBuf buf) {
         UUID kingdomId = buf.readUUID();
         boolean canManage = buf.readBoolean();
+        boolean canTakeCoins = buf.readBoolean();
         boolean isKing = buf.readBoolean();
         String kingdomName = buf.readUtf(KingdomNames.MAX_LENGTH);
         String currencyName = buf.readUtf(KingdomNames.MAX_LENGTH);
@@ -194,7 +197,7 @@ public record TreasuryView(UUID kingdomId, boolean canManage, boolean isKing, St
         long debtTotal = amount(buf);
         Mint mint = new Mint(buf.readVarInt(), buf.readVarInt(), KingdomView.readEnum(buf, WorkStatus.class), amount(buf), amount(buf),
                 buf.readBoolean());
-        return new TreasuryView(kingdomId, canManage, isKing, kingdomName, currencyName, silver, gold, balance, vault, journal, pollTax,
+        return new TreasuryView(kingdomId, canManage, canTakeCoins, isKing, kingdomName, currencyName, silver, gold, balance, vault, journal, pollTax,
                 maxPollTax, taxpayers, untilPayday, payroll, wages, maxWage, debtors, allDebtors, debtTotal, mint);
     }
 

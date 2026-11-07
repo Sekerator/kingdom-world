@@ -78,8 +78,8 @@ public final class EconomyPackets {
     /**
      * Client to server: a decision about the treasury.
      *
-     * @param text   the profession of a wage, or the new name of the currency
-     * @param amount the new tax or wage
+     * @param text   the profession of a wage, the new name of the currency, the player to pay, or the kind of coin to take
+     * @param amount the new tax or wage, the amount to pay, or the number of coins to take
      */
     public record TreasuryChange(UUID kingdomId, Action action, String text, long amount) {
         public static final RequestPolicy POLICY = new RequestPolicy("treasury_change", 0, 20, 10_000L);
@@ -87,7 +87,9 @@ public final class EconomyPackets {
         public enum Action {
             POLL_TAX,
             WAGE,
-            RENAME
+            RENAME,
+            PAY,
+            TAKE_COINS
         }
 
         public TreasuryChange {

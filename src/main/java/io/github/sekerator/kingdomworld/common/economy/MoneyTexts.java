@@ -56,6 +56,17 @@ public final class MoneyTexts {
     }
 
     /**
+     * The short name of a currency for chat: the one its king gave it, or the name of its kingdom; hovering shows the full
+     * name, so that «крона королевства» does not stand in front of every long name.
+     */
+    public static MutableComponent currencyShort(String name, String kingdomName) {
+        MutableComponent full = currency(name, kingdomName);
+        return Component.literal(name == null || name.isEmpty() ? kingdomName : name)
+                .withStyle(style -> style.withHoverEvent(new net.minecraft.network.chat.HoverEvent(
+                        net.minecraft.network.chat.HoverEvent.Action.SHOW_TEXT, full)));
+    }
+
+    /**
      * The name of a coin: «Золотой», "Gold coin".
      */
     public static MutableComponent coinName(Denomination denomination) {

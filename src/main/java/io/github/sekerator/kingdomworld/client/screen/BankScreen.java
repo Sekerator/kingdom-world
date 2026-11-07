@@ -129,6 +129,8 @@ public class BankScreen extends KingdomScreen implements ResultListener {
         int withdraw = labels + BOX_WIDTH + GAP + coinWidth + GAP + takeWidth;
         int inner = Math.max(labels + deposits, withdraw);
         inner = Math.max(inner, Math.min(360, font.width(title())));
+        // The coins on the player may be many: the line gets the room it needs, as far as the screen allows.
+        inner = Math.max(inner, Math.min(width - 8 - 2 * PAD, font.width(Component.translatable(KEY + "carried", MoneyTexts.coins(view.carried())))));
         for (String key : List.of("accounts", "no_accounts", "old")) {
             inner = Math.max(inner, font.width(Component.translatable(KEY + key)));
         }
@@ -273,13 +275,18 @@ public class BankScreen extends KingdomScreen implements ResultListener {
                 label(graphics, Component.translatable(KEY + "no_accounts"), x, accountsTop + LINE + 2, 0xFFB8B8B8, right);
             }
         } else {
+            // The name of an account is the short one (the king's name for the currency or the kingdom's); the full name of the
+            // currency is in the tooltip.
+            int nameColumn = Math.min(150, (right - x) / 2);
             for (int i = 0; i < rows && scroll + i < others.size(); i++) {
                 BankView.Account account = others.get(scroll + i);
                 int rowY = accountsTop + (i + 1) * (LINE + 1) + 1;
-                Component name = MoneyTexts.currency(account.name(), account.kingdomName());
-                String text = Component.translatable(account.old() ? KEY + "account_old" : KEY + "account", name,
-                        MoneyTexts.amount(account.balance(), account.units())).getString();
-                name(graphics, text, x, rowY, account.old() ? 0xFF9A9A9A : 0xFF000000 | FoundKingdomScreen.readable(account.color()), right - x);
+                String shortName = account.name().isEmpty() ? account.kingdomName() : account.name();
+                String label = account.old() ? Component.translatable(KEY + "account_old", shortName).getString() : shortName;
+                int color = account.old() ? 0xFF9A9A9A : 0xFF000000 | FoundKingdomScreen.readable(account.color());
+                int drawn = name(graphics, label, x, rowY, color, nameColumn - 6);
+                hoverText(x, rowY, drawn, Component.translatable(KEY + "account_currency", MoneyTexts.currency(account.name(), account.kingdomName())));
+                name(graphics, MoneyTexts.amount(account.balance(), account.units()).getString(), x + nameColumn, rowY, color, right - x - nameColumn);
             }
         }
         Component bottom = status;

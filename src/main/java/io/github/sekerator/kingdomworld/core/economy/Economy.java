@@ -332,6 +332,35 @@ public final class Economy {
     }
 
     /**
+     * Coins leave the vault of a treasury for somebody's hands; the caller puts exactly these coins into an inventory in
+     * the same moment. Written into the journal as a transfer.
+     */
+    public Outcome takeFromVault(UUID kingdomId, Denomination denomination, long count, long day) {
+        Treasury treasury = treasuries.get(kingdomId);
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_CURRENCY);
+        }
+        if (count < 1 || count > Money.MAX) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (!treasury.takeCoins(denomination, count, LedgerCategory.TRANSFERS, day)) {
+            return Outcome.fail(KingdomError.NO_COINS);
+        }
+        return Outcome.DONE;
+    }
+
+    /**
+     * Coins that were taken from a vault but did not fit into an inventory go back into it.
+     */
+    public Outcome returnToVault(UUID kingdomId, Denomination denomination, long count, long day) {
+        Treasury treasury = treasuries.get(kingdomId);
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_CURRENCY);
+        }
+        return treasury.store(denomination, count, LedgerCategory.TRANSFERS, day) ? Outcome.DONE : Outcome.fail(KingdomError.TOO_MUCH_MONEY);
+    }
+
+    /**
      * A player pays into a treasury from the account in its currency. A debt of the player is paid back first.
      */
     public Outcome playerToTreasury(UUID player, UUID kingdomId, long amount, long day) {

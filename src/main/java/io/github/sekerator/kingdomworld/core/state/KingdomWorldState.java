@@ -656,6 +656,26 @@ public final class KingdomWorldState {
     }
 
     /**
+     * Coins of the vault go into the hands of the king or the treasurer. The caller hands out exactly these coins.
+     *
+     * @param actor the king or the treasurer with {@link Permission#MANAGE_TREASURY}; {@code null} for an administrator
+     */
+    public Outcome takeVaultCoins(UUID actor, UUID kingdomId, io.github.sekerator.kingdomworld.core.economy.Denomination denomination,
+                                  long count, long day) {
+        Outcome check = checkTreasury(actor, kingdomId);
+        if (!check.ok()) {
+            return check;
+        }
+        if (actor != null) {
+            Role role = membership.memberOf(actor).map(Member::role).orElse(null);
+            if (role != Role.KING && role != Role.TREASURER) {
+                return Outcome.fail(KingdomError.NO_PERMISSION);
+            }
+        }
+        return economy.takeFromVault(kingdomId, denomination, count, day);
+    }
+
+    /**
      * Sets the daily tax of the subjects.
      */
     public Outcome setPollTax(UUID actor, UUID kingdomId, long amount, long max) {
