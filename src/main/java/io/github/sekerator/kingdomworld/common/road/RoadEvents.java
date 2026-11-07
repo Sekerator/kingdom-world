@@ -79,6 +79,11 @@ public final class RoadEvents {
         } catch (RuntimeException e) {
             LOGGER.error("KingdomWorld search for roads failed", e);
         }
+        try {
+            CityWalls.tickLayouts(server);
+        } catch (RuntimeException e) {
+            LOGGER.error("KingdomWorld laying out of walls failed", e);
+        }
         if (server.getTickCount() % SPEED_TICKS == 0) {
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 RoadSpeed.update(player);

@@ -60,18 +60,35 @@ public final class RoadState {
     }
 
     /**
-     * Whether an owner of land let the roads of a kingdom cross it before, and that is remembered.
+     * Whether an owner of land let a road of a kingdom of this mode cross it before, and that is remembered. Only roads the
+     * requester builds and pays for alone ({@link Road.Mode#PAYER}) pass without a new request; a joint road makes the owner
+     * build and pay on its land, so the owner is always asked.
      */
-    public boolean consented(UUID owner, UUID requester) {
-        return rememberConsent && consents.contains(owner + ">" + requester);
+    public boolean consented(UUID owner, UUID requester, Road.Mode mode) {
+        return rememberConsent && mode == Road.Mode.PAYER && consents.contains(consentKey(owner, requester, mode));
+    }
+
+    private static String consentKey(UUID owner, UUID requester, Road.Mode mode) {
+        return owner + ">" + requester + ">" + mode.id();
     }
 
     public java.util.Set<String> consents() {
         return java.util.Collections.unmodifiableSet(consents);
     }
 
-    public void restoreConsent(String pair) {
-        consents.add(pair);
+    /**
+     * Restores a remembered consent as {@link #consents()} lists it, {@code owner>requester>mode}. Anything else, a consent
+     * that does not name its mode among them, is not taken: the owner is asked again.
+     */
+    public void restoreConsent(String entry) {
+        String[] parts = entry.split(">");
+        if (parts.length == 3 && parts[2].equals(Road.Mode.PAYER.id())) {
+            try {
+                consents.add(consentKey(UUID.fromString(parts[0]), UUID.fromString(parts[1]), Road.Mode.PAYER));
+            } catch (IllegalArgumentException e) {
+                // Not two kingdoms: nothing is remembered.
+            }
+        }
     }
 
     // ---------------------------------------------------------------- walls
@@ -249,14 +266,14 @@ public final class RoadState {
         }
         boolean waiting = false;
         for (UUID owner : foreign.keySet()) {
-            waiting |= !consented(owner, kingdomId);
+            waiting |= !consented(owner, kingdomId, actual);
         }
         Road road = new Road(nextRoad++, kingdomId, roadClass, dimension, from, to, cells, actual, now,
                 waiting ? Road.Status.WAITING_CONSENT : Road.Status.BUILDING, builders);
         roads.put(road.id(), road);
         for (Map.Entry<UUID, Integer> entry : foreign.entrySet()) {
-            // A kingdom that let the roads of this one cross its land before is not asked again.
-            boolean known = consented(entry.getKey(), kingdomId);
+            // A kingdom that let roads of this one, built at its cost, cross its land before is not asked again for such a road.
+            boolean known = consented(entry.getKey(), kingdomId, actual);
             Crossing crossing = new Crossing(nextCrossing++, road.id(), kingdomId, entry.getKey(), actual,
                     known ? Crossing.Status.ACCEPTED : Crossing.Status.PROPOSED, entry.getValue(), now, Math.max(now, expires));
             crossings.put(crossing.id(), crossing);
@@ -386,8 +403,8 @@ public final class RoadState {
             return Answer.fail(KingdomError.CROSSING_CLOSED);
         }
         crossings.put(crossing.id(), crossing.withStatus(accept ? Crossing.Status.ACCEPTED : Crossing.Status.DECLINED));
-        if (accept && rememberConsent) {
-            consents.add(crossing.owner() + ">" + crossing.requester());
+        if (accept && rememberConsent && crossing.mode() == Road.Mode.PAYER) {
+            consents.add(consentKey(crossing.owner(), crossing.requester(), crossing.mode()));
         }
         return settle(crossing.roadId());
     }

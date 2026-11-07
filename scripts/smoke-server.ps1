@@ -1197,12 +1197,19 @@ Invoke-Phase 'session1' {
     } else {
         Add-Failure '[session1] the city Smoke Hollow was not founded'
     }
-    # The wild land between the two kingdoms is levelled along z = 8, so that the way of the road is the same in every world.
-    Send-ServerCommand $server 'forceload add 56 0 591 16'
+    # The land around the city is levelled, so that the road starts and the ring of the wall stands on the ground in every
+    # world (the kingdom is near the spawn, often by the sea); the town hall above stays.
+    Send-ServerCommand $server 'forceload add 34 2 46 14'
+    Send-ServerCommand $server 'fill 34 71 2 46 90 14 minecraft:air'
+    Send-ServerCommand $server 'fill 34 69 2 46 69 14 minecraft:dirt'
+    Send-ServerCommand $server 'fill 34 70 2 46 70 14 minecraft:grass_block'
+    # The wild land between the city and the partner is levelled along z = 8, so that the way of the road is the same in
+    # every world.
+    Send-ServerCommand $server 'forceload add 46 0 591 16'
     Start-Sleep -Seconds 5
     # Up to the top of the world, so that no hill or tree (mountains of mods are high) stands over the strip; at most
     # 32768 blocks a fill.
-    for ($x = 56; $x -le 591; $x += 40) {
+    for ($x = 46; $x -le 591; $x += 40) {
         $end = [Math]::Min($x + 39, 591)
         Send-ServerCommand $server "fill $x 71 7 $end 319 9 minecraft:air"
         Send-ServerCommand $server "fill $x 69 7 $end 69 9 minecraft:dirt"

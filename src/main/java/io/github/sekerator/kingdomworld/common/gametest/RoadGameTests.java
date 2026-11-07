@@ -665,6 +665,17 @@ public final class RoadGameTests {
             CityWalls.integrity(server, level, wall);
             int integrity = KingdomWorldApi.state(server).construction().building(wall.buildingId()).orElseThrow().integrity();
             helper.assertTrue(integrity < 100 && integrity > 90, "A wall with a hole kept its integrity: " + integrity);
+            // A gate cut later takes away only the blocks the wall put there: a log a player laid on top of the wall stays.
+            BlockPos top = helper.absolutePos(new BlockPos(6, 5, 10));
+            level.setBlockAndUpdate(top, Blocks.OAK_LOG.defaultBlockState());
+            long logsBefore = KingdomStorage.count(server, kingdom.id(), stack -> stack.is(Items.OAK_LOG));
+            BlockPos south = helper.absolutePos(new BlockPos(6, 0, 10));
+            Outcome cut = CityWalls.gateAt(server, null, wall.id(), south.getX(), south.getZ());
+            helper.assertTrue(cut.ok(), "No gate was cut in the south side: " + cut.error());
+            helper.assertTrue(level.getBlockState(top).is(Blocks.OAK_LOG), "The gate took a log the wall did not place");
+            helper.assertTrue(level.getBlockState(south.above()).isAir() && level.getBlockState(south.above(4)).isAir(), "The gate did not open");
+            long logsAfter = KingdomStorage.count(server, kingdom.id(), stack -> stack.is(Items.OAK_LOG));
+            helper.assertTrue(logsAfter == logsBefore + 12, "The logs of the gate did not go to the storehouse: " + (logsAfter - logsBefore));
             // Players coming in through a gate and over the wall.
             List<CityEntryEvent> entries = new ArrayList<>();
             UUID walker = UUID.randomUUID();
@@ -708,6 +719,21 @@ public final class RoadGameTests {
             Outcome removed = CityWalls.remove(server, wall.id());
             helper.assertTrue(removed.ok() && RoadWork.state(server).wallOf(city.id(), kingdom.id()).isEmpty()
                     && KingdomWorldApi.state(server).construction().building(wall.buildingId()).isEmpty(), "The wall was not given up");
+            // Ordered from the tab, a wall is laid out over ticks, a chunk of land a tick here.
+            rules.chunksPerTick = 1;
+            RoadSettings.override(rules.build(), null);
+            Outcome ordered = CityWalls.order(server, null, kingdom.id(), city.id(), Wall.WallClass.STONE);
+            helper.assertTrue(ordered.ok() && CityWalls.layingOut(kingdom.id(), city.id())
+                    && RoadWork.state(server).wallOf(city.id(), kingdom.id()).isEmpty(), "The ordered wall was laid out at once");
+            int ticks = 0;
+            while (CityWalls.layingOut(kingdom.id(), city.id()) && ticks < 100) {
+                CityWalls.tickLayouts(server);
+                ticks++;
+            }
+            Wall stone = RoadWork.state(server).wallOf(city.id(), kingdom.id()).orElse(null);
+            helper.assertTrue(stone != null && stone.wallClass() == Wall.WallClass.STONE && stone.cells().size() == 32,
+                    "The ordered wall was not laid out over " + ticks + " ticks");
+            CityWalls.remove(server, stone.id());
         } finally {
             if (listener != null) {
                 net.minecraftforge.common.MinecraftForge.EVENT_BUS.unregister(listener);
@@ -782,7 +808,7 @@ public final class RoadGameTests {
             wall.sections().get(0).markPaid(Map.of("minecraft:cobblestone", 6));
             wall.setBuildingId(77);
             RoadWork.state(server).putWall(wall);
-            RoadWork.state(server).restoreConsent(kingdom.id() + ">" + new UUID(5, 5));
+            RoadWork.state(server).restoreConsent(kingdom.id() + ">" + new UUID(5, 5) + ">payer");
             // A way whose pieces are not whole blocks long reads back to the same length.
             TravelPlan way = new TravelPlan(List.of(new TravelPlan.Point(0, 0, 0), new TravelPlan.Point(3, 1, 40), new TravelPlan.Point(9, 4, 90)),
                     List.of(new TravelPlan.Piece(road.id(), 0, RoadClass.PAVED, Math.sqrt(10)), new TravelPlan.Piece(0, -1, null, Math.sqrt(45))));
@@ -801,7 +827,7 @@ public final class RoadGameTests {
             helper.assertTrue(savedWall.cells().equals(wall.cells()) && savedWall.gates().equals(wall.gates()) && savedWall.buildingId() == 77
                     && savedWall.wallClass() == Wall.WallClass.STONE && savedWall.sections().get(0).paid() == 1
                     && savedWall.sections().get(0).pool().equals(wall.sections().get(0).pool()), "The wall changed in saving");
-            helper.assertTrue(loaded.state().consented(kingdom.id(), new UUID(5, 5)), "The remembered consent was lost in saving");
+            helper.assertTrue(loaded.state().consented(kingdom.id(), new UUID(5, 5), Road.Mode.PAYER), "The remembered consent was lost in saving");
             TravelPlan savedWay = loaded.state().route(SAVED_ROUTE).orElseThrow().plan();
             helper.assertTrue(savedWay.length() == way.length() && savedWay.onRoads() == way.onRoads(),
                     "The length of the way of a caravan changed in saving: " + savedWay.length() + " for " + way.length());

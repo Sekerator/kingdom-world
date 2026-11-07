@@ -162,24 +162,57 @@ class RoadStateTest {
     }
 
     @Test
-    void aConsentGivenOnceIsRememberedForTheNextRoads() {
+    void aConsentToARoadAtTheRequestersCostIsRememberedForTheNextSuch() {
         RoadState state = new RoadState();
         List<Crossing> sent = new ArrayList<>();
-        Road first = add(state, way(THEM, null), Road.Mode.JOINT, sent);
+        Road first = add(state, way(THEM, null), Road.Mode.PAYER, sent);
         assertEquals(1, sent.size());
-        assertFalse(state.consented(THEM, US));
+        assertFalse(state.consented(THEM, US, Road.Mode.PAYER));
         assertTrue(state.answer(sent.get(0).id(), THEM, true).started().isPresent());
         assertEquals(Road.Status.BUILDING, first.status());
-        assertTrue(state.consented(THEM, US));
-        assertFalse(state.consented(US, THEM), "a consent goes one way");
+        assertTrue(state.consented(THEM, US, Road.Mode.PAYER));
+        assertFalse(state.consented(US, THEM, Road.Mode.PAYER), "a consent goes one way");
         sent.clear();
-        Road second = add(state, way(THEM, null), Road.Mode.JOINT, sent);
-        assertTrue(sent.isEmpty(), "no new request for land that let roads through before");
+        Road second = add(state, way(THEM, null), Road.Mode.PAYER, sent);
+        assertTrue(sent.isEmpty(), "no new request for land that let such roads through before");
         assertEquals(Road.Status.BUILDING, second.status());
+        assertEquals(US, second.section(1).builder(), "the requester builds and pays on the land of the owner");
         // Without remembering, each road asks again.
         state.setRememberConsent(false);
-        Road third = add(state, way(THEM, null), Road.Mode.JOINT, sent);
+        Road third = add(state, way(THEM, null), Road.Mode.PAYER, sent);
         assertEquals(1, sent.size());
         assertEquals(Road.Status.WAITING_CONSENT, third.status());
+    }
+
+    @Test
+    void aJointRoadAlwaysAsksTheOwnerOfTheLand() {
+        RoadState state = new RoadState();
+        List<Crossing> sent = new ArrayList<>();
+        // The owner once let a road through that the requester built and paid for alone.
+        add(state, way(THEM, null), Road.Mode.PAYER, sent);
+        assertTrue(state.answer(sent.get(0).id(), THEM, true).outcome().ok());
+        sent.clear();
+        // A joint road would make the owner build and pay on its land: it is asked, whatever it agreed to before.
+        Road joint = add(state, way(THEM, null), Road.Mode.JOINT, sent);
+        assertEquals(Road.Status.WAITING_CONSENT, joint.status());
+        assertEquals(1, sent.size());
+        assertEquals(THEM, sent.get(0).owner());
+        assertEquals(Road.Mode.JOINT, sent.get(0).mode());
+        assertEquals(THEM, joint.section(1).builder());
+        assertFalse(state.consented(THEM, US, Road.Mode.JOINT));
+        // A joint road agreed to once is not remembered either.
+        assertTrue(state.answer(sent.get(0).id(), THEM, true).outcome().ok());
+        sent.clear();
+        Road again = add(state, way(THEM, null), Road.Mode.JOINT, sent);
+        assertEquals(Road.Status.WAITING_CONSENT, again.status());
+        assertEquals(1, sent.size());
+        // Remembered consents read back only with their mode; one that names none is not taken.
+        RoadState restored = new RoadState();
+        state.consents().forEach(restored::restoreConsent);
+        assertTrue(restored.consented(THEM, US, Road.Mode.PAYER));
+        RoadState legacy = new RoadState();
+        legacy.restoreConsent(THEM + ">" + US);
+        legacy.restoreConsent(THEM + ">" + US + ">joint");
+        assertTrue(legacy.consents().isEmpty());
     }
 }

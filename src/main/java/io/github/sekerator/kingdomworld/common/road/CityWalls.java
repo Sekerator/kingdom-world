@@ -7,6 +7,7 @@ import io.github.sekerator.kingdomworld.common.citizen.work.PostWork;
 import io.github.sekerator.kingdomworld.common.construction.BuildingEffects;
 import io.github.sekerator.kingdomworld.common.construction.ConstructionWork;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
+import io.github.sekerator.kingdomworld.common.kingdom.KingdomActions;
 import io.github.sekerator.kingdomworld.common.production.Production;
 import io.github.sekerator.kingdomworld.common.storage.KingdomStorage;
 import io.github.sekerator.kingdomworld.core.citizen.Citizen;
@@ -97,6 +98,7 @@ public final class CityWalls {
     static void reset() {
         INSIDE.clear();
         SEEN.clear();
+        LAYOUTS.clear();
         seconds = 0;
     }
 
@@ -177,7 +179,96 @@ public final class CityWalls {
     // ---------------------------------------------------------------- laying out walls
 
     /**
-     * Lays out the wall of a city around it on the lay of the land, with gates where roads cross it.
+     * A wall being laid out from the tab: the land of its ring is read a few chunks a tick, as the search for a road does.
+     */
+    private static final class Layout {
+        final @Nullable UUID actor;
+        final UUID kingdomId;
+        final long cityId;
+        final Wall.WallClass wallClass;
+        final Place place;
+        final int radius;
+        final RoadTerrain terrain;
+        int ticks;
+
+        Layout(@Nullable UUID actor, UUID kingdomId, long cityId, Wall.WallClass wallClass, Place place, int radius, RoadTerrain terrain) {
+            this.actor = actor;
+            this.kingdomId = kingdomId;
+            this.cityId = cityId;
+            this.wallClass = wallClass;
+            this.place = place;
+            this.radius = radius;
+            this.terrain = terrain;
+        }
+    }
+
+    /** Walls being laid out from the tab, by city. */
+    private static final Map<String, Layout> LAYOUTS = new LinkedHashMap<>();
+    /** Ticks a layout may take before it is given up. */
+    private static final int LAYOUT_TICKS = 2_400;
+
+    /**
+     * Orders the wall of a city from the tab: the ring is read over the next ticks without loading the land at once, and the
+     * kingdom hears when the wall is laid out or why not.
+     *
+     * @param actor the player, who needs the right to run construction
+     */
+    public static Outcome order(MinecraftServer server, @Nullable UUID actor, UUID kingdomId, long cityId, Wall.WallClass wallClass) {
+        if (RoadWork.isReadOnly(server)) {
+            return Outcome.fail(KingdomError.READ_ONLY);
+        }
+        if (!RoadWork.mayManage(server, actor, kingdomId)) {
+            return Outcome.fail(KingdomError.NO_PERMISSION);
+        }
+        Optional<Place> place = place(server, kingdomId, cityId);
+        if (place.isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_CITY);
+        }
+        ServerLevel level = ConstructionWork.level(server, place.get().dimension());
+        if (level == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_CITY);
+        }
+        int radius = level(server, kingdomId, cityId).wallRadius(RoadSettings.rules());
+        // A later order for the same city takes the place of one still being read.
+        LAYOUTS.put(place.get().key(), new Layout(actor, kingdomId, cityId, wallClass, place.get(), radius, new RoadTerrain(level)));
+        return Outcome.DONE;
+    }
+
+    /**
+     * Reads a few more chunks of the rings being laid out; a ring read whole becomes the wall. Called every tick.
+     */
+    public static void tickLayouts(MinecraftServer server) {
+        if (LAYOUTS.isEmpty()) {
+            return;
+        }
+        Map.Entry<String, Layout> next = LAYOUTS.entrySet().iterator().next();
+        Layout job = next.getValue();
+        ServerLevel level = ConstructionWork.level(server, job.place.dimension());
+        job.terrain.allow(RoadSettings.rules().chunksPerTick());
+        List<RouteCell> ring = level == null ? null : WallContour.ring(job.terrain, job.place.x(), job.place.z(), job.radius);
+        if (ring == null && level != null && ++job.ticks < LAYOUT_TICKS) {
+            return;
+        }
+        LAYOUTS.remove(next.getKey());
+        Wall[] made = new Wall[1];
+        Outcome outcome = level == null || ring == null ? Outcome.fail(KingdomError.NO_GROUND_FOR_WALL)
+                : lay(server, job.actor, job.kingdomId, job.cityId, job.wallClass, job.place, level, ring, made);
+        if (!outcome.ok()) {
+            RoadWork.notify(server, job.kingdomId, Component.translatable(KEY + "wall_refused", job.place.name(),
+                    KingdomActions.errorMessage(outcome.error())).withStyle(ChatFormatting.RED));
+        }
+    }
+
+    /**
+     * Whether the wall of a city is being laid out from the tab.
+     */
+    public static boolean layingOut(UUID kingdomId, long cityId) {
+        return LAYOUTS.containsKey(kingdomId + "/" + cityId);
+    }
+
+    /**
+     * Lays out the wall of a city around it on the lay of the land at once, with gates where roads cross it; for operators,
+     * game tests and the showcase. The tab orders walls with {@link #order}, which reads the land over several ticks.
      *
      * @param actor the player, who needs the right to run construction; {@code null} for an operator
      */
@@ -193,40 +284,54 @@ public final class CityWalls {
         if (level == null) {
             return Outcome.fail(KingdomError.UNKNOWN_CITY);
         }
-        RoadState roads = RoadWork.state(server);
-        Optional<Wall> old = roads.wallOf(cityId, kingdomId);
         int radius = level(server, kingdomId, cityId).wallRadius(RoadSettings.rules());
         RoadTerrain terrain = new RoadTerrain(level);
         terrain.allow(Integer.MAX_VALUE);
         List<RouteCell> ring = WallContour.ring(terrain, place.get().x(), place.get().z(), radius);
-        if (ring != null) {
-            // No wall on the land of another kingdom: the ring has a gap there.
-            ring = new ArrayList<>(ring);
-            ring.removeIf(cell -> cell.owner() != null && !cell.owner().equals(kingdomId));
-            ring.replaceAll(cell -> onGround(level, cell));
-        }
-        if (ring == null || ring.size() < 4) {
+        if (ring == null) {
             return Outcome.fail(KingdomError.NO_GROUND_FOR_WALL);
         }
+        return lay(server, actor, kingdomId, cityId, wallClass, place.get(), level, ring, made);
+    }
+
+    /**
+     * Turns a ring read whole into the wall of the city, in place of the old one.
+     */
+    private static Outcome lay(MinecraftServer server, @Nullable UUID actor, UUID kingdomId, long cityId, Wall.WallClass wallClass, Place place,
+                               ServerLevel level, List<RouteCell> whole, Wall[] made) {
+        if (!RoadWork.mayManage(server, actor, kingdomId)) {
+            return Outcome.fail(KingdomError.NO_PERMISSION);
+        }
+        // No wall on the land of another kingdom: the ring has a gap there.
+        List<RouteCell> ring = new ArrayList<>(whole);
+        ring.removeIf(cell -> cell.owner() != null && !cell.owner().equals(kingdomId));
+        ring.replaceAll(cell -> onGround(level, cell));
+        if (ring.size() < 4) {
+            LOGGER.info("No wall around {}: {} blocks of the ring are on the ground, {} of them on the land of others", place.name(), whole.size(),
+                    whole.size() - ring.size());
+            return Outcome.fail(KingdomError.NO_GROUND_FOR_WALL);
+        }
+        RoadState roads = RoadWork.state(server);
+        Optional<Wall> old = roads.wallOf(cityId, kingdomId);
         List<RouteCell> cells = ring;
         List<List<RouteCell>> ways = new ArrayList<>();
         for (Road road : roads.roads()) {
-            if (road.dimension().equals(place.get().dimension())) {
+            if (road.dimension().equals(place.dimension())) {
                 ways.add(road.cells());
             }
         }
         List<Integer> gates = WallContour.gates(cells, ways);
         Outcome outcome = RoadWork.change(server, "lay out a wall", state -> {
             old.ifPresent(wall -> forget(server, state, wall));
-            made[0] = new Wall(state.nextWallId(), cityId, kingdomId, wallClass, place.get().dimension(), place.get().x(), place.get().z(), cells,
+            made[0] = new Wall(state.nextWallId(), cityId, kingdomId, wallClass, place.dimension(), place.x(), place.z(), cells,
                     gates, KingdomWorldApi.gameTime(server));
             state.putWall(made[0]);
             return Outcome.DONE;
         });
         if (outcome.ok()) {
             LOGGER.info("Wall {} of {} laid out around {}: {} columns, {} gate(s)", made[0].id(), RoadWork.kingdomName(server, kingdomId).getString(),
-                    place.get().name(), made[0].blocks().size(), gates.size());
-            RoadWork.notify(server, kingdomId, Component.translatable(KEY + "wall_laid", place.get().name(), RoadTexts.gates(made[0].gates().size()))
+                    place.name(), made[0].blocks().size(), gates.size());
+            RoadWork.notify(server, kingdomId, Component.translatable(KEY + "wall_laid", place.name(), RoadTexts.gates(made[0].gates().size()))
                     .withStyle(ChatFormatting.GREEN));
             RoadSync.changed();
         }
@@ -265,14 +370,6 @@ public final class CityWalls {
         if (Math.abs(at.x() - x) > 6 || Math.abs(at.z() - z) > 6) {
             return Outcome.fail(KingdomError.NOT_AT_WALL);
         }
-        // Only blocks the wall put there are taken away for the gate.
-        java.util.Set<Integer> standing = new java.util.HashSet<>();
-        for (Road.Section section : wall.get().sections()) {
-            List<Wall.Block> blocks = wall.get().blocksOf(section);
-            for (int i = 0; i < section.placed() && i < blocks.size(); i++) {
-                standing.add(blocks.get(i).cell());
-            }
-        }
         Outcome outcome = RoadWork.change(server, "cut a gate", state -> {
             if (!wall.get().addGate(cell)) {
                 return Outcome.fail(KingdomError.NOT_AT_WALL);
@@ -283,7 +380,7 @@ public final class CityWalls {
         if (outcome.ok()) {
             ServerLevel level = ConstructionWork.level(server, wall.get().dimension());
             if (level != null) {
-                openGate(level, wall.get(), cell, standing);
+                openGate(level, wall.get(), cell);
             }
             if (wall.get().buildingId() != 0) {
                 registerGate(server, wall.get(), cell);
@@ -294,25 +391,27 @@ public final class CityWalls {
     }
 
     /**
-     * Takes away the blocks of the wall that stand where a gate is now; they go to the storehouses.
+     * Takes away the blocks the wall put where a gate is now; they go to the storehouses. Blocks the wall did not place, or
+     * that were changed since, stay.
      */
-    private static void openGate(ServerLevel level, Wall wall, int cell, java.util.Set<Integer> standing) {
+    private static void openGate(ServerLevel level, Wall wall, int cell) {
         for (int i = cell - Wall.GATE_HALF; i <= cell + Wall.GATE_HALF; i++) {
             int index = Math.floorMod(i, wall.cells().size());
-            if (!standing.contains(index)) {
-                continue;
-            }
             RouteCell at = wall.cells().get(index);
             for (int up = 1; up <= wall.wallClass().height() + 1; up++) {
                 BlockPos pos = new BlockPos(at.x(), at.y() + up, at.z());
                 BlockState state = level.getBlockState(pos);
-                if (level.isLoaded(pos) && !state.is(io.github.sekerator.kingdomworld.common.construction.TemplateBlocks.UNCLEARABLE)
+                if (!wall.placedHere(pos.asLong()) || !level.isLoaded(pos)) {
+                    continue;
+                }
+                if (!state.is(io.github.sekerator.kingdomworld.common.construction.TemplateBlocks.UNCLEARABLE)
                         && (state.is(net.minecraft.tags.BlockTags.LOGS) || isWallStone(state))) {
                     for (ItemStack drop : net.minecraft.world.level.block.Block.getDrops(state, level, pos, null)) {
                         RoadBlocks.store(level, wall.kingdomId(), pos, drop);
                     }
                     level.removeBlock(pos, false);
                 }
+                wall.forgetPlaced(pos.asLong());
             }
         }
     }
@@ -479,6 +578,9 @@ public final class CityWalls {
                 BlockPos pos = base.above(up);
                 if (RoadBlocks.free(level.getBlockState(pos)) && found instanceof BlockItem blockItem) {
                     ConstructionWork.place(level, pos, blockItem.getBlock().defaultBlockState(), found);
+                    if (level.getBlockState(pos).getBlock() == blockItem.getBlock()) {
+                        wall.markPlaced(pos.asLong());
+                    }
                 } else {
                     // Something stands there: the item goes back.
                     RoadBlocks.store(level, wall.kingdomId(), pos, new ItemStack(found));

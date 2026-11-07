@@ -1195,8 +1195,9 @@ public final class KingdomWorldConfig {
             autoRepair = builder.comment("Whether builders repair worn sections of roads by themselves.").define("autoRepair", r.autoRepair);
             repairBelow = builder.comment("Condition below which a section of road is repaired by itself.")
                     .defineInRange("repairBelow", r.repairBelow, 0.0, 1.0);
-            rememberConsent = builder.comment("Whether a kingdom that once let the roads of another cross its land lets the next ones",
-                            "cross without a new request.").define("rememberConsent", r.rememberConsent);
+            rememberConsent = builder.comment("Whether a kingdom that once let a road of another, built and paid for by that other alone,",
+                            "cross its land lets the next such roads cross without a new request. A joint road always asks.")
+                    .define("rememberConsent", r.rememberConsent);
             townPeople = builder.comment("Citizens around a city that make it a town (with townBuildings buildings).")
                     .defineInRange("townPeople", r.townPeople, 0, 10_000);
             townBuildings = builder.comment("Buildings around a city that make it a town.").defineInRange("townBuildings", r.townBuildings, 0, 10_000);

@@ -37,7 +37,7 @@ import java.util.UUID;
  * camps: [ { id, dim, x, y, z, bandits, leader, founded, lastGrowth, built, raids, lastRaid, known: [uuid],
  *            loot: [ { item, count, data } ], structure: [pos], chest? } ]
  * routes: [ { caravan, dim, depart, checked, xs, zs, ticks, roads, sections, classes, lengths, exactLengths } ]
- * walls: [ { id, city, kingdom, class, dim, cx, cz, cells: [x, y, z, ...], gates: [cell], created, building,
+ * walls: [ { id, city, kingdom, class, dim, cx, cz, cells: [x, y, z, ...], gates: [cell], created, building, placed: [pos],
  *           sections: [ { paid, placed, pool } ] } ]
  * consents: ["owner>requester"]
  * nextCity, nextRoad, nextCrossing, nextCamp, nextWall
@@ -236,6 +236,7 @@ final class RoadNbt {
         entry.putIntArray("gates", wall.gates().stream().mapToInt(Integer::intValue).toArray());
         entry.putLong("created", wall.created());
         entry.putLong("building", wall.buildingId());
+        entry.putLongArray("placed", wall.placedBlocks());
         ListTag sections = new ListTag();
         for (Road.Section section : wall.sections()) {
             CompoundTag s = new CompoundTag();
@@ -274,6 +275,7 @@ final class RoadNbt {
                         .orElseThrow(() -> new IllegalArgumentException("unknown class of wall")),
                 entry.getString("dim"), entry.getInt("cx"), entry.getInt("cz"), cells, gates, entry.getLong("created"));
         wall.setBuildingId(entry.getLong("building"));
+        wall.restorePlaced(entry.getLongArray("placed"));
         ListTag sections = entry.getList("sections", Tag.TAG_COMPOUND);
         for (int i = 0; i < sections.size() && i < wall.sections().size(); i++) {
             CompoundTag s = sections.getCompound(i);

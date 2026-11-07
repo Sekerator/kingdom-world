@@ -77,6 +77,7 @@ public final class Wall {
     private final List<Block> blocks = new ArrayList<>();
     private final long created;
     private long buildingId;
+    private final java.util.Set<Long> placedBlocks = new java.util.HashSet<>();
 
     public Wall(long id, long cityId, UUID kingdomId, WallClass wallClass, String dimension, int centerX, int centerZ, List<RouteCell> cells,
                 Collection<Integer> gates, long created) {
@@ -254,6 +255,37 @@ public final class Wall {
 
     public void setBuildingId(long value) {
         buildingId = value;
+    }
+
+    /**
+     * Notes a block the wall put into the world, by its packed position.
+     */
+    public void markPlaced(long position) {
+        placedBlocks.add(position);
+    }
+
+    /**
+     * Whether the wall put the block at a packed position into the world itself; only such blocks are taken away for a gate.
+     */
+    public boolean placedHere(long position) {
+        return placedBlocks.contains(position);
+    }
+
+    public void forgetPlaced(long position) {
+        placedBlocks.remove(position);
+    }
+
+    /**
+     * The packed positions of the blocks the wall put into the world.
+     */
+    public long[] placedBlocks() {
+        return placedBlocks.stream().mapToLong(Long::longValue).sorted().toArray();
+    }
+
+    public void restorePlaced(long[] positions) {
+        for (long position : positions) {
+            placedBlocks.add(position);
+        }
     }
 
     /**

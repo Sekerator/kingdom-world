@@ -2485,7 +2485,7 @@
   "commands.kingdomworld.admin.roads.gear": "Robbers armed: %s of 64, items of %s mods",
   "commands.kingdomworld.admin.roads.gear_line": "Mod %s: %s items: %s",
   "commands.kingdomworld.admin.roads.searching": "The way of a road of %s is being searched; the road is built when it is found",
-  "kingdomworld.screen.roads.wall_ordered": "Wall laid out: %s, %s",
+  "kingdomworld.screen.roads.wall_ordered": "The wall around %s is being laid out on the land",
   "kingdomworld.screen.roads.gate_cut": "A gate is cut at %s %s",
   "kingdomworld.screen.roads.city_actions": "City actions: %s",
   "kingdomworld.screen.roads.city_action.wall_palisade": "Put up a palisade",
@@ -2527,5 +2527,6 @@
   "kingdomworld.error.kept_by_roads": "City walls and gates are built, kept and given up in the Roads tab: a wall put up again there only adds what is missing",
   "kingdomworld.screen.construction.work_hint.by_roads": "A city wall or gate: it is kept in the Roads tab (cities), where a wall put up again only adds what is missing",
   "kingdomworld.building.city_wall": "City wall",
-  "kingdomworld.building.city_gate": "City gate"
+  "kingdomworld.building.city_gate": "City gate",
+  "kingdomworld.road.wall_refused": "The wall around %s was not laid out: %s"
 }

@@ -559,7 +559,7 @@ class TranslationKeysTest {
         for (String key : List.of("city_founded", "city_refused", "city_lost", "hall_empty", "hall_city", "place", "capital_of", "road_built",
                 "repaired", "road_planned", "crossing_asked", "road_dropped", "crossing_accepted", "crossing_declined", "road_starts", "ambush",
                 "beaten_off", "goods_taken", "robbed", "robbed_all", "merchant_name", "camp_fight", "camp_cleared", "camp_loot", "camp_found",
-                "leader_dead", "wall_laid", "wall_built")) {
+                "leader_dead", "wall_laid", "wall_built", "wall_refused")) {
             used.add("kingdomworld.road." + key);
         }
         for (ItemValues.Source source : ItemValues.Source.values()) {

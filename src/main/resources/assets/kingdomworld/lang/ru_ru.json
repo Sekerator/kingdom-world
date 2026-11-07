@@ -2485,7 +2485,7 @@
   "commands.kingdomworld.admin.roads.gear": "Вооружено разбойников: %s из 64, предметы %s модов",
   "commands.kingdomworld.admin.roads.gear_line": "Мод %s: %s предм.: %s",
   "commands.kingdomworld.admin.roads.searching": "Ищется путь дороги королевства %s; дорога будет проложена, когда путь найдётся",
-  "kingdomworld.screen.roads.wall_ordered": "Стена размечена: %s, %s",
+  "kingdomworld.screen.roads.wall_ordered": "Стена вокруг %s размечается по земле",
   "kingdomworld.screen.roads.gate_cut": "Ворота прорублены у %s %s",
   "kingdomworld.screen.roads.city_actions": "Город: %s",
   "kingdomworld.screen.roads.city_action.wall_palisade": "Поставить частокол",
@@ -2527,5 +2527,6 @@
   "kingdomworld.error.kept_by_roads": "Стены и ворота города строят, чинят и сносят во вкладке «Дороги»: поставленная там заново стена достраивает только недостающее",
   "kingdomworld.screen.construction.work_hint.by_roads": "Стена или ворота города: их ведёт вкладка «Дороги» (города), там поставленная заново стена достраивает только недостающее",
   "kingdomworld.building.city_wall": "Городская стена",
-  "kingdomworld.building.city_gate": "Городские ворота"
+  "kingdomworld.building.city_gate": "Городские ворота",
+  "kingdomworld.road.wall_refused": "Стену вокруг %s разметить не удалось: %s"
 }

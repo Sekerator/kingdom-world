@@ -321,11 +321,11 @@ public final class RoadActions {
                 yield result(outcome, "renamed", name);
             }
             case WALL_PALISADE, WALL_STONE -> {
-                Wall[] made = new Wall[1];
-                Outcome outcome = CityWalls.build(server, actor, kingdom, change.first(),
-                        change.action() == RoadPackets.TabChange.Action.WALL_STONE ? Wall.WallClass.STONE : Wall.WallClass.PALISADE, made);
-                yield outcome.ok() ? KingdomActions.Feedback.ok(KEY + "wall_ordered", RoadTexts.blocks(made[0].blocks().size()), RoadTexts.gates(made[0].gates().size()))
-                        : KingdomActions.Feedback.error(outcome.error());
+                // The ring is read over the next ticks; the kingdom hears when the wall is laid out.
+                Outcome outcome = CityWalls.order(server, actor, kingdom, change.first(),
+                        change.action() == RoadPackets.TabChange.Action.WALL_STONE ? Wall.WallClass.STONE : Wall.WallClass.PALISADE);
+                yield outcome.ok() ? KingdomActions.Feedback.ok(KEY + "wall_ordered", CityWalls.place(server, kingdom, change.first())
+                        .map(CityWalls.Place::name).orElse("?")) : KingdomActions.Feedback.error(outcome.error());
             }
             case GATE_HERE -> {
                 Optional<Wall> wall = roads.wallOf(change.first(), kingdom);
