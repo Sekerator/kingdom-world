@@ -6,6 +6,11 @@ import io.github.sekerator.kingdomworld.core.citizen.Professions;
 import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
 import io.github.sekerator.kingdomworld.core.citizen.WorkZone;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
+import io.github.sekerator.kingdomworld.core.construction.Box;
+import io.github.sekerator.kingdomworld.core.construction.Construction;
+import io.github.sekerator.kingdomworld.core.construction.ConstructionBook;
+import io.github.sekerator.kingdomworld.core.construction.ConstructionRules;
+import io.github.sekerator.kingdomworld.core.construction.Placement;
 import io.github.sekerator.kingdomworld.core.economy.Economy;
 import io.github.sekerator.kingdomworld.core.economy.EconomyRules;
 import io.github.sekerator.kingdomworld.core.economy.Treasury;
@@ -62,6 +67,7 @@ public final class KingdomWorldState {
     private final OrderBook orders = new OrderBook();
     private final Economy economy = new Economy();
     private final TradeBook trade = new TradeBook();
+    private final ConstructionBook construction = new ConstructionBook();
 
     /**
      * Called after every change of any part, used to mark the data for saving.
@@ -75,6 +81,7 @@ public final class KingdomWorldState {
         orders.setChangeListener(listener);
         economy.setChangeListener(listener);
         trade.setChangeListener(listener);
+        construction.setChangeListener(listener);
     }
 
     public KingdomRegistry kingdoms() {
@@ -112,6 +119,13 @@ public final class KingdomWorldState {
      */
     public TradeBook trade() {
         return trade;
+    }
+
+    /**
+     * Constructions and the register of finished buildings.
+     */
+    public ConstructionBook construction() {
+        return construction;
     }
 
     // ---------------------------------------------------------------- queries
@@ -221,6 +235,7 @@ public final class KingdomWorldState {
             }
         }
         trade.closeMarket(kingdomId);
+        construction.removeKingdom(kingdomId);
         economy.retire(kingdomId, kingdom.get().name(), kingdom.get().color(), gameTime);
         citizens.removeKingdom(kingdomId);
         orders.removeKingdom(kingdomId);
@@ -236,6 +251,7 @@ public final class KingdomWorldState {
     public void discard(UUID kingdomId) {
         economy.forget(kingdomId);
         trade.forget(kingdomId);
+        construction.removeKingdom(kingdomId);
         citizens.removeKingdom(kingdomId);
         orders.removeKingdom(kingdomId);
         territory.remove(kingdomId);
@@ -1104,6 +1120,118 @@ public final class KingdomWorldState {
                 escrow.get().id(), dimension, fromX, fromZ, toX, toZ, now, now + Math.max(1, travelTicks), Caravan.State.TRAVELING);
         trade.putCaravan(caravan);
         return Optional.of(caravan);
+    }
+
+    // ---------------------------------------------------------------- construction
+
+    /**
+     * The result of a change to the constructions: the construction laid, changed or cancelled, or why not.
+     */
+    public record ConstructionChange(Outcome outcome, Optional<Construction> construction) {
+        static ConstructionChange failed(KingdomError error) {
+            return new ConstructionChange(Outcome.fail(error), Optional.empty());
+        }
+    }
+
+    /**
+     * Lays out a construction: the whole box must lie on land of the kingdom, away from every other construction and
+     * building, and the kingdom must have room for one more. What stands in the box is checked by the caller.
+     *
+     * @param actor the player, who needs {@link Permission#MANAGE_CONSTRUCTION}; {@code null} for an administrator
+     * @param clear positions in the box that hold blocks in the way
+     * @param steps steps of the plan of the construction
+     */
+    public ConstructionChange layConstruction(UUID actor, UUID kingdomId, String templateId, long fingerprint, WorldPos anchor,
+                                              Placement placement, Box box, List<int[]> clear, int steps, long now, ConstructionRules rules) {
+        if (kingdoms.get(kingdomId).isEmpty()) {
+            return ConstructionChange.failed(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (actor != null && !membership.hasPermission(actor, kingdomId, Permission.MANAGE_CONSTRUCTION)) {
+            return ConstructionChange.failed(KingdomError.NO_PERMISSION);
+        }
+        for (long chunk : box.chunks()) {
+            if (!kingdomId.equals(territory.ownerOf(anchor.dimension(), chunk))) {
+                return ConstructionChange.failed(KingdomError.CONSTRUCTION_OUTSIDE_LAND);
+            }
+        }
+        if (construction.overlapping(anchor.dimension(), box, -1).isPresent()) {
+            return ConstructionChange.failed(KingdomError.CONSTRUCTION_OVERLAPS);
+        }
+        if (construction.count(kingdomId) >= rules.maxConstructions()) {
+            return ConstructionChange.failed(KingdomError.TOO_MANY_CONSTRUCTIONS);
+        }
+        return new ConstructionChange(Outcome.DONE, Optional.of(construction.add(kingdomId, templateId, fingerprint, anchor, placement, box,
+                now, clear, steps)));
+    }
+
+    /**
+     * A construction of the kingdom the actor may change.
+     */
+    private ConstructionChange checkConstruction(UUID actor, UUID kingdomId, long id) {
+        if (kingdoms.get(kingdomId).isEmpty()) {
+            return ConstructionChange.failed(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (actor != null && !membership.hasPermission(actor, kingdomId, Permission.MANAGE_CONSTRUCTION)) {
+            return ConstructionChange.failed(KingdomError.NO_PERMISSION);
+        }
+        Optional<Construction> found = construction.get(id);
+        if (found.isEmpty() || !found.get().kingdomId().equals(kingdomId)) {
+            return ConstructionChange.failed(KingdomError.UNKNOWN_CONSTRUCTION);
+        }
+        return new ConstructionChange(Outcome.DONE, found);
+    }
+
+    /**
+     * Cancels a construction. The blocks placed stay; the caller takes the materials of the site back to the storehouses.
+     */
+    public ConstructionChange cancelConstruction(UUID actor, UUID kingdomId, long id) {
+        ConstructionChange check = checkConstruction(actor, kingdomId, id);
+        if (check.outcome().ok()) {
+            construction.remove(id);
+        }
+        return check;
+    }
+
+    public ConstructionChange pauseConstruction(UUID actor, UUID kingdomId, long id, boolean paused) {
+        ConstructionChange check = checkConstruction(actor, kingdomId, id);
+        if (!check.outcome().ok()) {
+            return check;
+        }
+        Construction found = check.construction().orElseThrow();
+        if (found.paused() == paused) {
+            return ConstructionChange.failed(KingdomError.UNCHANGED);
+        }
+        found.setPaused(paused);
+        return check;
+    }
+
+    public ConstructionChange setConstructionPriority(UUID actor, UUID kingdomId, long id, Construction.Priority priority) {
+        ConstructionChange check = checkConstruction(actor, kingdomId, id);
+        if (!check.outcome().ok()) {
+            return check;
+        }
+        Construction found = check.construction().orElseThrow();
+        if (found.priority() == priority) {
+            return ConstructionChange.failed(KingdomError.UNCHANGED);
+        }
+        found.setPriority(priority);
+        return check;
+    }
+
+    /**
+     * Switches whether the construction orders the materials it lacks from the workshops.
+     */
+    public ConstructionChange setOrderMissing(UUID actor, UUID kingdomId, long id, boolean value) {
+        ConstructionChange check = checkConstruction(actor, kingdomId, id);
+        if (!check.outcome().ok()) {
+            return check;
+        }
+        Construction found = check.construction().orElseThrow();
+        if (found.orderMissing() == value) {
+            return ConstructionChange.failed(KingdomError.UNCHANGED);
+        }
+        found.setOrderMissing(value);
+        return check;
     }
 
     // ---------------------------------------------------------------- changes of ruler

@@ -34,7 +34,7 @@ public final class RolePermissions {
         table.grant(Role.SPYMASTER, Permission.BUILD, Permission.CONTAINERS, Permission.INTERACT);
         table.grant(Role.COURT_MAGE, Permission.BUILD, Permission.CONTAINERS, Permission.INTERACT);
         table.grant(Role.STEWARD, Permission.BUILD, Permission.CONTAINERS, Permission.INTERACT, Permission.TERRITORY,
-                Permission.MANAGE_CITIZENS, Permission.MANAGE_PRODUCTION, Permission.MANAGE_MARKET);
+                Permission.MANAGE_CITIZENS, Permission.MANAGE_PRODUCTION, Permission.MANAGE_MARKET, Permission.MANAGE_CONSTRUCTION);
         table.grant(Role.SUBJECT, Permission.BUILD, Permission.INTERACT);
         return table;
     }

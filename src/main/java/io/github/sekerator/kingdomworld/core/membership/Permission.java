@@ -29,6 +29,8 @@ public enum Permission {
     MANAGE_TRADE,
     /** Run the kingdom's branch of the guild, post its contracts and send its squads. */
     MANAGE_GUILD,
+    /** Lay out buildings, pause, hurry and cancel constructions. */
+    MANAGE_CONSTRUCTION,
     /** Appoint members to positions and change the rights of positions. Only the king holds it. */
     APPOINT;
 

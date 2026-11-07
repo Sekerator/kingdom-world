@@ -62,6 +62,8 @@ public final class TaskRisks {
         risks.put(Professions.SMITH.id(), new Risk(0.0004, 0.0));
         risks.put(Professions.COOK.id(), new Risk(0.0003, 0.0));
         risks.put(Professions.CRAFTER.id(), new Risk(0.0002, 0.0));
+        // Builders work on walls and roofs; a fall is rare and seldom deadly.
+        risks.put(Professions.BUILDER.id(), new Risk(0.001, 0.00005));
         return java.util.Collections.unmodifiableMap(risks);
     }
 

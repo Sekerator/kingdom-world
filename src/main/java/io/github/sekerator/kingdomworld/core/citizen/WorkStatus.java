@@ -51,6 +51,14 @@ public enum WorkStatus {
     NO_FUEL(true),
     /** A workshop with nothing ordered and nothing to do on its own. */
     NO_ORDERS(false),
+    /** A builder without a construction of its kingdom within reach of its post. */
+    NO_CONSTRUCTIONS(false),
+    /** A builder whose construction lacks the materials for the next block. */
+    NO_MATERIALS(true),
+    /** A builder waiting while a container with items stands in the way of its construction. */
+    BLOCKED(true),
+    /** A builder that could not reach the place of a block and went on with another. */
+    UNREACHABLE(true),
     /** The work has gone wrong in a way that does not fit the other reasons (an unknown profession). */
     UNKNOWN(true);
 

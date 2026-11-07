@@ -21,6 +21,8 @@ public enum CauseOfDeath {
     FISHING,
     /** An accident with the herd, far from players. */
     HERD,
+    /** A fall from a building going up, far from players. */
+    BUILDING,
     /** Any other accident at work far from players. */
     WORK,
     /** Fell on an expedition of the guild. */

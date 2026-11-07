@@ -178,7 +178,16 @@ public enum KingdomError {
     /** The expedition would come back after the contract runs out. */
     NO_TIME,
     /** Not a monster the guild knows. */
-    UNKNOWN_MONSTER;
+    UNKNOWN_MONSTER,
+    UNKNOWN_TEMPLATE,
+    TEMPLATE_UNAVAILABLE,
+    UNKNOWN_CONSTRUCTION,
+    TOO_MANY_CONSTRUCTIONS,
+    CONSTRUCTION_OUTSIDE_LAND,
+    CONSTRUCTION_OVERLAPS,
+    PROTECTED_BLOCK,
+    AREA_NOT_LOADED,
+    OUTSIDE_WORLD;
 
     /**
      * Lower case identifier, used for translation keys.

@@ -34,6 +34,8 @@ public final class Professions {
     public static final Profession REGISTRAR = new Profession("registrar", SiteKinds.WORK_POST);
     /** Guards the land against monsters and goes on expeditions with a squad; needs no workplace. */
     public static final Profession ADVENTURER = new Profession("adventurer", null);
+    /** Builds the constructions of the kingdom near its work post: clears the place and lays the blocks of the template. */
+    public static final Profession BUILDER = new Profession("builder", SiteKinds.WORK_POST);
 
     /** The registry of the running game; more professions are registered here. */
     public static final ProfessionRegistry REGISTRY = ProfessionRegistry.withDefaults();
