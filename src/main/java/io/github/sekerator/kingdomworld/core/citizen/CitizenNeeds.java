@@ -35,11 +35,16 @@ public final class CitizenNeeds {
     }
 
     /**
-     * What the mood of a citizen depends on. More factors (taxes, festivals, unrest) are added here later.
+     * What the mood of a citizen depends on. More factors (festivals, unrest) are added here later.
      *
      * @param recentDeaths citizens of the same kingdom who died in the last {@link #RECENT_DEATH_DAYS} days
+     * @param payPercent   how much of the usual wage the citizen got on the last payday, see
+     *                     {@link io.github.sekerator.kingdomworld.core.economy.Payroll#percent}
      */
-    public record MoodInputs(float food, boolean hasHome, boolean wounded, int recentDeaths) {
+    public record MoodInputs(float food, boolean hasHome, boolean wounded, int recentDeaths, int payPercent) {
+        public MoodInputs(float food, boolean hasHome, boolean wounded, int recentDeaths) {
+            this(food, hasHome, wounded, recentDeaths, io.github.sekerator.kingdomworld.core.economy.Payroll.NOTHING_EXPECTED);
+        }
     }
 
     private CitizenNeeds() {
@@ -109,6 +114,7 @@ public final class CitizenNeeds {
             mood -= 5;
         }
         mood -= Math.min(20, 5 * Math.max(0, inputs.recentDeaths()));
+        mood += io.github.sekerator.kingdomworld.core.economy.Payroll.mood(inputs.payPercent());
         return Math.max(0, Math.min(MAX_MOOD, mood));
     }
 

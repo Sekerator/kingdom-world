@@ -21,6 +21,8 @@ public enum Permission {
     MANAGE_CITIZENS,
     /** Give, change and cancel orders for the workshops. */
     MANAGE_PRODUCTION,
+    /** Pay from the treasury and set taxes and wages. */
+    MANAGE_TREASURY,
     /** Appoint members to positions and change the rights of positions. Only the king holds it. */
     APPOINT;
 

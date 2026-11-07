@@ -9,6 +9,11 @@ import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
 import io.github.sekerator.kingdomworld.core.citizen.Profession;
 import io.github.sekerator.kingdomworld.core.citizen.Professions;
 import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
+import io.github.sekerator.kingdomworld.core.economy.Denomination;
+import io.github.sekerator.kingdomworld.core.economy.ItemValues;
+import io.github.sekerator.kingdomworld.core.economy.LedgerCategory;
+import io.github.sekerator.kingdomworld.core.economy.Plurals;
+import io.github.sekerator.kingdomworld.core.economy.TreasuryJournal;
 import io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
 import io.github.sekerator.kingdomworld.core.kingdom.NameProblem;
@@ -130,6 +135,26 @@ class TranslationKeysTest {
         assertTrue(problems.isEmpty(), "Russian values without Russian text:\n" + String.join("\n", problems));
     }
 
+    /**
+     * Numbers of coins read right in both languages: «1 золотой, 2 золотых, 5 золотых, 21 медяк» and "1 gold coin,
+     * 21 gold coins".
+     */
+    @Test
+    void coinsHaveEveryPluralForm() {
+        Map<String, String> russianForms = Map.of("copper", "медяк|медяк|медяка|медяков", "silver",
+                "серебряник|серебряник|серебряника|серебряников", "gold", "золотой|золотой|золотых|золотых");
+        for (Denomination denomination : Denomination.values()) {
+            String[] words = russianForms.get(denomination.id()).split("\\|");
+            Plurals.Form[] forms = Plurals.Form.values();
+            for (int i = 0; i < forms.length; i++) {
+                String key = "kingdomworld.money." + denomination.id() + "." + forms[i].suffix();
+                assertEquals("%s " + words[i], russian.get(key), key);
+                String english = TranslationKeysTest.english.get(key);
+                assertEquals(forms[i] == Plurals.Form.N1, !english.endsWith("s"), key + ": English is singular only for exactly one");
+            }
+        }
+    }
+
     @Test
     void argumentCounting() {
         assertEquals(2, argumentCount("%s and %s"));
@@ -198,6 +223,30 @@ class TranslationKeysTest {
         }
         for (NameProblem problem : NameProblem.values()) {
             used.add("kingdomworld.screen.found.problem." + problem.name().toLowerCase(Locale.ROOT));
+        }
+        // Money: every coin in every plural form, the coins themselves, the journal and the views of the treasury.
+        for (Denomination denomination : Denomination.values()) {
+            for (Plurals.Form form : Plurals.Form.values()) {
+                used.add("kingdomworld.money." + denomination.id() + "." + form.suffix());
+            }
+            used.add("item.kingdomworld.coin." + denomination.id());
+            used.add("kingdomworld.screen.bank.deposit." + denomination.id());
+            used.add("kingdomworld.screen.bank.coins." + denomination.id());
+        }
+        for (LedgerCategory category : LedgerCategory.values()) {
+            used.add("kingdomworld.ledger." + category.id());
+        }
+        for (TreasuryJournal.Period period : TreasuryJournal.Period.values()) {
+            used.add("kingdomworld.screen.treasury.period." + period.id());
+        }
+        for (String mode : List.of("overview", "journal", "settings", "debtors")) {
+            used.add("kingdomworld.screen.treasury.mode." + mode);
+        }
+        for (ItemValues.Source source : ItemValues.Source.values()) {
+            used.add("commands.kingdomworld.economy.value.source." + source.name().toLowerCase(Locale.ROOT));
+        }
+        for (String station : io.github.sekerator.kingdomworld.core.production.Stations.ALL) {
+            used.add("kingdomworld.station." + station);
         }
         // Names of registered blocks and items, found through their models.
         try (Stream<Path> models = Files.list(assets.resolve("models").resolve("item"))) {

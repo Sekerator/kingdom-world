@@ -14,9 +14,11 @@ public final class Stations {
     public static final String BLAST_FURNACE = "blast_furnace";
     public static final String SMOKER = "smoker";
     public static final String CAMPFIRE = "campfire";
+    /** The mint of the minter. */
+    public static final String MINT = "mint";
 
     /** Every kind, in the order the post screen lists them. */
-    public static final List<String> ALL = List.of(FURNACE, BLAST_FURNACE, SMOKER, CAMPFIRE, CRAFTING_TABLE, STONECUTTER, SMITHING_TABLE);
+    public static final List<String> ALL = List.of(FURNACE, BLAST_FURNACE, SMOKER, CAMPFIRE, CRAFTING_TABLE, STONECUTTER, SMITHING_TABLE, MINT);
 
     private Stations() {
     }

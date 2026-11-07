@@ -64,7 +64,27 @@ public enum KingdomError {
     /** No citizen can make the item. */
     NOT_ORDERABLE,
     /** Orders the planner added for ingredients follow their parent and are not changed by hand. */
-    SUB_ORDER;
+    SUB_ORDER,
+
+    /** The account or the treasury holds less than the amount. */
+    NOT_ENOUGH_MONEY,
+    /** The amount would make a balance larger than the largest amount of money. */
+    TOO_MUCH_MONEY,
+    /** No current or old currency has that id or name. */
+    UNKNOWN_CURRENCY,
+    /** The currency belongs to a dissolved kingdom; its coins and accounts wait for an exchange. */
+    OLD_CURRENCY,
+    /** The name of a currency follows the rules of kingdom names. */
+    INVALID_CURRENCY_NAME,
+    CURRENCY_NAME_TAKEN,
+    /** There are no coins of the currency to hand in. */
+    NO_COINS,
+    /** The inventory has no room for coins. */
+    NO_ROOM,
+    /** A bank works only on the land of a kingdom. */
+    BANK_OUTSIDE,
+    /** The amount needs confirmation first. */
+    NOT_CONFIRMED;
 
     /**
      * Lower case identifier, used for translation keys.

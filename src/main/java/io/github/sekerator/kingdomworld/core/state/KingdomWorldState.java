@@ -6,6 +6,9 @@ import io.github.sekerator.kingdomworld.core.citizen.Professions;
 import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
 import io.github.sekerator.kingdomworld.core.citizen.WorkZone;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
+import io.github.sekerator.kingdomworld.core.economy.Economy;
+import io.github.sekerator.kingdomworld.core.economy.EconomyRules;
+import io.github.sekerator.kingdomworld.core.economy.Treasury;
 import io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
@@ -26,6 +29,7 @@ import io.github.sekerator.kingdomworld.core.territory.KingdomStats;
 import io.github.sekerator.kingdomworld.core.territory.Territory;
 import io.github.sekerator.kingdomworld.core.territory.TerritoryIndex;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -37,7 +41,7 @@ import java.util.UUID;
 import java.util.function.Predicate;
 
 /**
- * All kingdom state of one world: the kingdoms, their members, their land and their citizens. Operations that touch more
+ * All kingdom state of one world: the kingdoms, their members, their land, their citizens and their money. Operations that touch more
  * than one part (founding, dissolving, claiming, changes of ruler) go through this class so the parts stay
  * consistent; single-part reads go to the parts directly.
  *
@@ -49,6 +53,7 @@ public final class KingdomWorldState {
     private final TerritoryIndex territory = new TerritoryIndex();
     private final Citizens citizens = new Citizens();
     private final OrderBook orders = new OrderBook();
+    private final Economy economy = new Economy();
 
     /**
      * Called after every change of any part, used to mark the data for saving.
@@ -60,6 +65,7 @@ public final class KingdomWorldState {
         territory.setChangeListener(listener);
         citizens.setChangeListener(listener);
         orders.setChangeListener(listener);
+        economy.setChangeListener(listener);
     }
 
     public KingdomRegistry kingdoms() {
@@ -83,6 +89,13 @@ public final class KingdomWorldState {
      */
     public OrderBook orders() {
         return orders;
+    }
+
+    /**
+     * Treasuries, accounts and currencies.
+     */
+    public Economy economy() {
+        return economy;
     }
 
     // ---------------------------------------------------------------- queries
@@ -159,24 +172,45 @@ public final class KingdomWorldState {
             if (capital != null) {
                 territory.establish(id, capital, initialChunks);
             }
+            economy.open(id, Math.floorDiv(gameTime, io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds.TICKS_PER_DAY));
         }
         return result;
     }
 
     /**
-     * Removes a kingdom with its members, pending requests, land and citizens.
+     * Removes a kingdom with its members, pending requests, land, citizens and treasury; its currency becomes old.
      */
     public Optional<Kingdom> dissolve(UUID kingdomId) {
+        return dissolve(kingdomId, 0L);
+    }
+
+    /**
+     * Removes a kingdom; the game time is remembered with its old currency.
+     */
+    public Optional<Kingdom> dissolve(UUID kingdomId, long gameTime) {
         Optional<Kingdom> kingdom = kingdoms.get(kingdomId);
         if (kingdom.isEmpty()) {
             return Optional.empty();
         }
+        economy.retire(kingdomId, kingdom.get().name(), kingdom.get().color(), gameTime);
         citizens.removeKingdom(kingdomId);
         orders.removeKingdom(kingdomId);
         territory.remove(kingdomId);
         membership.unregister(kingdomId);
         kingdoms.remove(kingdomId);
         return kingdom;
+    }
+
+    /**
+     * Forgets a kingdom whose saved data could not be restored completely, without making its currency old.
+     */
+    public void discard(UUID kingdomId) {
+        economy.forget(kingdomId);
+        citizens.removeKingdom(kingdomId);
+        orders.removeKingdom(kingdomId);
+        territory.remove(kingdomId);
+        membership.unregister(kingdomId);
+        kingdoms.remove(kingdomId);
     }
 
     // ---------------------------------------------------------------- territory
@@ -594,6 +628,102 @@ public final class KingdomWorldState {
         }
         orders.setKind(order, kind);
         return Outcome.DONE;
+    }
+
+    // ---------------------------------------------------------------- money
+
+    /**
+     * Whether the actor may manage the treasury of a kingdom; {@code null} is an administrator.
+     */
+    private Outcome checkTreasury(UUID actor, UUID kingdomId) {
+        if (kingdoms.get(kingdomId).isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (actor != null && !membership.hasPermission(actor, kingdomId, Permission.MANAGE_TREASURY)) {
+            return Outcome.fail(KingdomError.NO_PERMISSION);
+        }
+        return Outcome.DONE;
+    }
+
+    /**
+     * The treasury pays a player onto the player's account.
+     *
+     * @param actor the player, who needs {@link Permission#MANAGE_TREASURY}; {@code null} for an administrator
+     */
+    public Outcome payFromTreasury(UUID actor, UUID kingdomId, UUID player, long amount, long day) {
+        Outcome check = checkTreasury(actor, kingdomId);
+        return check.ok() ? economy.treasuryToPlayer(kingdomId, player, amount, day) : check;
+    }
+
+    /**
+     * Sets the daily tax of the subjects.
+     */
+    public Outcome setPollTax(UUID actor, UUID kingdomId, long amount, long max) {
+        Outcome check = checkTreasury(actor, kingdomId);
+        return check.ok() ? economy.setPollTax(kingdomId, amount, max) : check;
+    }
+
+    /**
+     * Sets the daily wage of a profession.
+     */
+    public Outcome setWage(UUID actor, UUID kingdomId, String profession, long amount, EconomyRules rules) {
+        Outcome check = checkTreasury(actor, kingdomId);
+        if (!check.ok()) {
+            return check;
+        }
+        if (!Professions.REGISTRY.isKnown(profession)) {
+            return Outcome.fail(KingdomError.UNKNOWN_PROFESSION);
+        }
+        return economy.setWage(kingdomId, profession, amount, rules.maxWage(), rules);
+    }
+
+    /**
+     * Renames the currency of a kingdom; only its king may.
+     *
+     * @param actor the king; {@code null} for an administrator
+     */
+    public Outcome renameCurrency(UUID actor, UUID kingdomId, String name) {
+        Optional<Kingdom> kingdom = kingdoms.get(kingdomId);
+        if (kingdom.isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (actor != null && !actor.equals(kingdom.get().rulerId())) {
+            return Outcome.fail(KingdomError.NO_PERMISSION);
+        }
+        return economy.renameCurrency(kingdomId, name);
+    }
+
+    /**
+     * The daily payday of a kingdom: the tax of its subjects (the king pays none) and the wages of its citizens. The
+     * pay of every citizen is remembered for its mood.
+     */
+    public Economy.Payday payday(UUID kingdomId, long day, EconomyRules rules) {
+        Optional<Kingdom> kingdom = kingdoms.get(kingdomId);
+        Optional<Treasury> treasury = economy.treasury(kingdomId);
+        if (kingdom.isEmpty() || treasury.isEmpty()) {
+            return Economy.Payday.NONE;
+        }
+        List<UUID> taxpayers = new ArrayList<>();
+        membership.kingdom(kingdomId).ifPresent(members -> {
+            for (Member member : members.members().values()) {
+                if (member.role() != Role.KING) {
+                    taxpayers.add(member.playerId());
+                }
+            }
+        });
+        List<Economy.WageClaim> claims = new ArrayList<>();
+        List<Citizen> people = citizens.registry().citizensOf(kingdomId);
+        for (Citizen citizen : people) {
+            claims.add(new Economy.WageClaim(citizen.id(), citizen.professionId()));
+        }
+        Economy.Payday payday = economy.payday(kingdomId, day, taxpayers, claims, rules);
+        for (Citizen citizen : people) {
+            Integer percent = payday.percents().get(citizen.id());
+            if (percent != null) {
+                citizen.setPayPercent(percent);
+            }
+        }
+        return payday;
     }
 
     // ---------------------------------------------------------------- changes of ruler

@@ -34,6 +34,7 @@ public final class ProfessionRegistry {
         registry.register(Professions.COOK);
         registry.register(Professions.CRAFTER);
         registry.register(Professions.SMITH);
+        registry.register(Professions.MINTER);
         return registry;
     }
 

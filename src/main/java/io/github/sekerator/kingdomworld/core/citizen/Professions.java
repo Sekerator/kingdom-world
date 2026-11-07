@@ -26,6 +26,8 @@ public final class Professions {
     public static final Profession CRAFTER = new Profession("crafter", SiteKinds.WORK_POST);
     /** Makes tools, weapons and armor at the crafting table and upgrades them at the smithing table. */
     public static final Profession SMITH = new Profession("smith", SiteKinds.WORK_POST);
+    /** Strikes coins of the kingdom from metal of the storehouses at a mint in the zone of a work post. */
+    public static final Profession MINTER = new Profession("minter", SiteKinds.WORK_POST);
 
     /** The registry of the running game; more professions are registered here. */
     public static final ProfessionRegistry REGISTRY = ProfessionRegistry.withDefaults();
@@ -47,6 +49,14 @@ public final class Professions {
     public static boolean isWorkshop(String professionId) {
         return SMELTER.id().equals(professionId) || COOK.id().equals(professionId) || CRAFTER.id().equals(professionId)
                 || SMITH.id().equals(professionId);
+    }
+
+    /**
+     * Whether the profession works at workstations in the zone of its post (the workshops and the minter): the post looks
+     * at its zone again and again, and its screen shows the workstations.
+     */
+    public static boolean usesStations(String professionId) {
+        return isWorkshop(professionId) || MINTER.id().equals(professionId);
     }
 
     /**

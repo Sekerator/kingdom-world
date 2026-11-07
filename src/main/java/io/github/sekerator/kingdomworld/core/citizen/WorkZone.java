@@ -53,7 +53,7 @@ public record WorkZone(String dimension, int minX, int minY, int minZ, int maxX,
         if (Professions.CARRIER.id().equals(professionId)) {
             return around(post, radius, 16, 16);
         }
-        if (Professions.isWorkshop(professionId)) {
+        if (Professions.usesStations(professionId)) {
             return around(post, radius, 3, 3);
         }
         return around(post, radius, 2, 2);

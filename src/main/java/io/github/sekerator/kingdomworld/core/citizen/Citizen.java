@@ -35,6 +35,7 @@ public final class Citizen {
     private String workProduct = "";
     private double workProgress;
     private WorkStatus workStatus = WorkStatus.NONE;
+    private int payPercent = io.github.sekerator.kingdomworld.core.economy.Payroll.NOTHING_EXPECTED;
 
     private Runnable changeListener = () -> {
     };
@@ -294,6 +295,33 @@ public final class Citizen {
             workProgress = clamped;
             changed();
         }
+    }
+
+    // ---------------------------------------------------------------- pay
+
+    /**
+     * How much of the usual wage of its profession the citizen got on the last payday, in percent, or
+     * {@link io.github.sekerator.kingdomworld.core.economy.Payroll#NOTHING_EXPECTED} if it expects none.
+     */
+    public int payPercent() {
+        return payPercent;
+    }
+
+    public void setPayPercent(int value) {
+        int clamped = Math.max(io.github.sekerator.kingdomworld.core.economy.Payroll.NOTHING_EXPECTED,
+                Math.min(io.github.sekerator.kingdomworld.core.economy.Payroll.MAX_PERCENT, value));
+        if (clamped != payPercent) {
+            payPercent = clamped;
+            changed();
+        }
+    }
+
+    /**
+     * Restores the pay of the last payday, for saved data. Does not notify.
+     */
+    public void restorePay(int percent) {
+        payPercent = Math.max(io.github.sekerator.kingdomworld.core.economy.Payroll.NOTHING_EXPECTED,
+                Math.min(io.github.sekerator.kingdomworld.core.economy.Payroll.MAX_PERCENT, percent));
     }
 
     /**
