@@ -26,10 +26,12 @@ import java.util.UUID;
  */
 public record CitizenView(UUID kingdomId, boolean canManage, int population, int bedsUsed, int bedsTotal, int foodDays,
                           int mood, int storehouses, CitizenNeeds.GrowthCheck growth, List<Entry> citizens,
-                          List<Death> chronicle, List<Production> production) {
+                          List<Death> chronicle, List<Production> production, List<RulerInfo.Decree> decrees) {
     public static final int MAX_CITIZENS = 500;
     public static final int MAX_PRODUCTION = 32;
     public static final int MAX_CHRONICLE = 50;
+    /** Decrees of a ruler of the world the chronicle shows at most. */
+    public static final int MAX_DECREES = 32;
     public static final int UNLIMITED_FOOD = -1;
     /** Food days are shown up to this number. */
     public static final int MAX_FOOD_DAYS = 9_999;
@@ -87,9 +89,17 @@ public record CitizenView(UUID kingdomId, boolean canManage, int population, int
         citizens = List.copyOf(citizens);
         chronicle = List.copyOf(chronicle);
         production = List.copyOf(production);
-        if (citizens.size() > MAX_CITIZENS || chronicle.size() > MAX_CHRONICLE || production.size() > MAX_PRODUCTION) {
+        decrees = List.copyOf(decrees);
+        if (citizens.size() > MAX_CITIZENS || chronicle.size() > MAX_CHRONICLE || production.size() > MAX_PRODUCTION
+                || decrees.size() > MAX_DECREES) {
             throw new IllegalArgumentException("Citizen view too large");
         }
+    }
+
+    public CitizenView(UUID kingdomId, boolean canManage, int population, int bedsUsed, int bedsTotal, int foodDays, int mood, int storehouses,
+                       CitizenNeeds.GrowthCheck growth, List<Entry> citizens, List<Death> chronicle, List<Production> production) {
+        this(kingdomId, canManage, population, bedsUsed, bedsTotal, foodDays, mood, storehouses, growth, citizens, chronicle, production,
+                List.of());
     }
 
     public void encode(FriendlyByteBuf buf) {
@@ -138,6 +148,10 @@ public record CitizenView(UUID kingdomId, boolean canManage, int population, int
             buf.writeVarLong(entry.yesterday());
             buf.writeUtf(entry.top(), MAX_ITEM_ID);
         }
+        buf.writeVarInt(decrees.size());
+        for (RulerInfo.Decree decree : decrees) {
+            RulerInfo.writeDecree(buf, decree);
+        }
     }
 
     public static CitizenView decode(FriendlyByteBuf buf) {
@@ -176,8 +190,13 @@ public record CitizenView(UUID kingdomId, boolean canManage, int population, int
         for (int i = 0; i < produced; i++) {
             production.add(new Production(readProfession(buf), buf.readVarLong(), buf.readVarLong(), buf.readUtf(MAX_ITEM_ID)));
         }
+        int decreeCount = KingdomView.readSize(buf, MAX_DECREES);
+        List<RulerInfo.Decree> decrees = new ArrayList<>(decreeCount);
+        for (int i = 0; i < decreeCount; i++) {
+            decrees.add(RulerInfo.readDecree(buf));
+        }
         return new CitizenView(kingdomId, canManage, population, bedsUsed, bedsTotal, foodDays, mood, storehouses, growth,
-                citizens, chronicle, production);
+                citizens, chronicle, production, decrees);
     }
 
     static String readProfession(FriendlyByteBuf buf) {

@@ -93,7 +93,16 @@ public final class KingdomViews {
                 members.map(KingdomMembers::size).orElse(0), territory.map(Territory::size).orElse(0),
                 state.chunkLimit(kingdom.id(), KingdomWorldApi.rules()), state.citizens().registry().count(kingdom.id()),
                 capital, relation, viewerRole, viewerPermissions,
-                memberEntries, applications, rightsTable, npcInfo(server, kingdom));
+                memberEntries, applications, rightsTable, npcInfo(server, kingdom), rulerInfo(server, kingdom, viewer));
+    }
+
+    /**
+     * What a ruler of the world decreed, needs and feels about the viewer, or {@code null} for a kingdom of players.
+     */
+    @org.jetbrains.annotations.Nullable
+    static io.github.sekerator.kingdomworld.common.network.data.RulerInfo rulerInfo(MinecraftServer server, Kingdom kingdom, UUID viewer) {
+        return io.github.sekerator.kingdomworld.common.npc.NpcWork.kingdom(server, kingdom.id())
+                .map(npc -> io.github.sekerator.kingdomworld.common.npc.NpcRulers.info(server, npc, viewer)).orElse(null);
     }
 
     /**

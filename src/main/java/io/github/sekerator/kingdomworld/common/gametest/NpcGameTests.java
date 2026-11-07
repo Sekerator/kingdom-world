@@ -62,13 +62,13 @@ import java.util.UUID;
 @GameTestHolder(KingdomWorld.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class NpcGameTests {
-    private static final String EMPTY = "empty";
+    static final String EMPTY = "empty";
     /** The height of the top of the platform. */
-    private static final int PLATFORM = 290;
+    static final int PLATFORM = 290;
     /** Half the side of the platform, in blocks: the wall, the fields and the grove of the lumberjack fit on it. */
     private static final int HALF = 60;
     /** Steps the appearance of a small kingdom takes at most. */
-    private static final int STEPS = 4_000;
+    static final int STEPS = 4_000;
 
     private NpcGameTests() {
     }
@@ -79,7 +79,7 @@ public final class NpcGameTests {
      * Flat grass at {@value #PLATFORM} around the test place with air above, after kingdoms left near it by earlier tests are
      * dissolved.
      */
-    private static BlockPos platform(GameTestHelper helper) {
+    static BlockPos platform(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         BlockPos origin = helper.absolutePos(BlockPos.ZERO);
@@ -118,7 +118,7 @@ public final class NpcGameTests {
     /**
      * Takes the kingdom of a place down and clears the platform.
      */
-    private static void cleanUp(GameTestHelper helper, NpcSite site, BlockPos center) {
+    static void cleanUp(GameTestHelper helper, NpcSite site, BlockPos center) {
         MinecraftServer server = helper.getLevel().getServer();
         if (site != null) {
             NpcWork.remove(server, site.id(), true);
@@ -129,7 +129,7 @@ public final class NpcGameTests {
     /**
      * A small kingdom of the world appearing on the platform, without towns.
      */
-    private static NpcSite plant(GameTestHelper helper, BlockPos center) {
+    static NpcSite plant(GameTestHelper helper, BlockPos center) {
         MinecraftServer server = helper.getLevel().getServer();
         helper.assertTrue(NpcWork.state(server).spawning().isEmpty(), "Another kingdom of the world is appearing");
         NpcSite site = NpcWork.plant(server, center.getX(), center.getZ(), NpcLevel.SMALL, false).orElse(null);
@@ -137,7 +137,7 @@ public final class NpcGameTests {
         return site;
     }
 
-    private static Kingdom kingdomOf(GameTestHelper helper, NpcSite site) {
+    static Kingdom kingdomOf(GameTestHelper helper, NpcSite site) {
         MinecraftServer server = helper.getLevel().getServer();
         UUID id = site.kingdomId().orElse(null);
         Kingdom kingdom = id == null ? null : KingdomWorldApi.kingdom(server, id).orElse(null);

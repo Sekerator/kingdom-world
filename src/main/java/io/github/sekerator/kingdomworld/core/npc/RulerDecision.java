@@ -38,6 +38,8 @@ public record RulerDecision(Kind kind, String subject, long amount, long extra, 
         SELL(false),
         /** Buys goods the kingdom lacks from players at its market. */
         BUY(false),
+        /** Orders from abroad what the buildings and the workshops of the kingdom lack, paid from its treasury. */
+        IMPORT(false),
         /** Puts a citizen without work at an idle mint, so that the metal of the storehouses becomes coins. */
         MINT(false),
         /** Offers a deal to another kingdom. */

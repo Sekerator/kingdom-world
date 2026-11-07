@@ -93,6 +93,9 @@ $PartnerName = 'SmokePartner'
 # Where the kingdom of the world of the smoke check appears (the server looks for flat land around it), and how long it may take.
 $NpcX = -700
 $NpcZ = -700
+# What the rulers of the kingdoms of the world remembered in session3, checked again after the restart in session4.
+$script:RulerTurns = 0
+$script:RulerDecrees = 0
 
 # Mods that only make sense on a client. Mods that declare clientSideOnly=true are skipped as well.
 $ClientOnlyModIds = @(
@@ -137,6 +140,7 @@ function Write-Summary {
     Write-Host "Server folder: $ServerDir"
     Write-Host "Logs: $SmokeLogDir"
     foreach ($w in $script:Warnings) { Write-Host "  warning: $w" -ForegroundColor Yellow }
+    if (Get-Variable -Name RulerLoad -Scope Script -ErrorAction SilentlyContinue) { Write-Host "Turns of the rulers: $($script:RulerLoad)" }
     if ($script:Failures.Count -eq 0) {
         Write-Host 'RESULT: PASSED' -ForegroundColor Green
     } else {
@@ -2575,8 +2579,8 @@ Invoke-Phase 'session2' {
     # Kingdoms of the world: one appears at the word of an operator away from the other kingdoms, and the server stops in the
     # middle of its appearance; the third session checks that it ends without copies and that its money adds up.
     Send-ServerCommand $server 'kingdomworld admin npc status'
-    if (Wait-ForLog $server 'Kingdoms of the world: \d+ places? in the plan, \d+ kingdoms?, generation on, data format 1' $CommandTimeout $ConsoleFailPattern) {
-        Write-Ok '[session2] the kingdoms of the world are planned (data format 1)'
+    if (Wait-ForLog $server 'Kingdoms of the world: \d+ places? in the plan, \d+ kingdoms?, generation on, data format 2' $CommandTimeout $ConsoleFailPattern) {
+        Write-Ok '[session2] the kingdoms of the world are planned (data format 2)'
     } else {
         Add-Failure '[session2] admin npc status did not answer'
     }
@@ -2659,6 +2663,74 @@ if ($script:NpcSite) {
             }
         }
         foreach ($slow in [regex]::Matches((Get-LatestLog), 'A tick of the appearance of [^\r\n]*')) { Write-Host "    $($slow.Value)" }
+        # Rulers: ten days of turns at once. The money of the treasury moves only as its journal says, and the kingdom grows:
+        # a building is laid out for its builders and goods go to the market or to its neighbours.
+        Send-ServerCommand $server "kingdomworld admin npc days $site 10"
+        $days = Wait-ForLog $server 'The ruler of (.+?) took (\d+) turn\(s\): (\d+) decree\(s\) remembered, (\d+) waiting; treasury (-?\d+) -> (-?\d+), journal \+(\d+) -(\d+), difference (-?\d+)' $CommandTimeout $ConsoleFailPattern
+        if (-not $days) {
+            Add-Failure '[session3] admin npc days did not answer'
+        } else {
+            if ([int]$days.Groups[2].Value -eq 10) { Write-Ok "[session3] the ruler of $($days.Groups[1].Value) took 10 turns: $($days.Groups[3].Value) decree(s), $($days.Groups[4].Value) waiting" } else { Add-Failure "[session3] the ruler took $($days.Groups[2].Value) turns of 10" }
+            if ([int64]$days.Groups[9].Value -eq 0) {
+                Write-Ok "[session3] the money adds up with the journal: treasury $($days.Groups[5].Value) -> $($days.Groups[6].Value), +$($days.Groups[7].Value) -$($days.Groups[8].Value)"
+            } else {
+                Add-Failure "[session3] the treasury and the journal differ by $($days.Groups[9].Value)"
+            }
+        }
+        $laid = Wait-ForLog $server 'The ruler of .+? laid out (\S+) at (-?\d+), (-?\d+), (-?\d+)' 240
+        if ($laid) { Write-Ok "[session3] the ruler laid out $($laid.Groups[1].Value) for its builders" } else { Add-Failure '[session3] the ruler laid out no building' }
+        Send-ServerCommand $server "kingdomworld admin npc decisions $site"
+        $decisions = Wait-ForLog $server ': (\d+) decrees?, (\d+) turn\(s\), waiting: ' $CommandTimeout $ConsoleFailPattern
+        Start-Sleep -Seconds 2
+        if ($decisions) {
+            $script:RulerDecrees = [int]$decisions.Groups[1].Value
+            $script:RulerTurns = [int]$decisions.Groups[2].Value
+            Write-Ok "[session3] the ruler remembers $($script:RulerDecrees) decree(s) after $($script:RulerTurns) turn(s)"
+        } else {
+            Add-Failure '[session3] admin npc decisions did not answer'
+        }
+        $trade = [regex]::Matches((Get-LatestLog), '  day \d+: [^\r\n]*\[(offer|sell|buy|accept)\b')
+        if ($trade.Count -gt 0) { Write-Ok "[session3] the ruler trades: $(($trade | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique) -join ', ')" } else { Add-Failure '[session3] the ruler made no deal and sold nothing' }
+        $chronicle = Count-Log 'Chronicle of .+?: the ruler'
+        Write-Ok "[session3] decrees written to the chronicle: $chronicle"
+        Send-ServerCommand $server "kingdomworld admin npc needs $site"
+        [void](Wait-ForLog $server ' needs: ' $CommandTimeout $ConsoleFailPattern)
+    }
+
+    # The memory of rulers outlives a restart; then eight kingdoms of the world take a turn each and their ticks are measured.
+    Invoke-Phase 'session4' {
+        param($server)
+        $site = $script:NpcSite
+        if (Wait-ForLog $server 'KingdomWorld kingdoms of the world: .*data format 2' 10) { Write-Ok '[session4] the kingdoms of the world are loaded in data format 2' } else { Add-Failure '[session4] the data format of the kingdoms of the world is not 2' }
+        Send-ServerCommand $server "kingdomworld admin npc decisions $site"
+        $decisions = Wait-ForLog $server ': (\d+) decrees?, (\d+) turn\(s\), waiting: ' $CommandTimeout $ConsoleFailPattern
+        if ($decisions -and [int]$decisions.Groups[2].Value -ge $script:RulerTurns -and [int]$decisions.Groups[1].Value -ge [Math]::Min(1, $script:RulerDecrees)) {
+            Write-Ok "[session4] the ruler remembers its $($decisions.Groups[1].Value) decree(s) and $($decisions.Groups[2].Value) turn(s) after the restart"
+        } else {
+            Add-Failure '[session4] the memory of the ruler was lost in the restart'
+        }
+        $spots = @(@(1500, 1500), @(-1500, 1500), @(1500, -1500), @(-1500, -1500), @(0, 2200), @(2200, 0))
+        foreach ($spot in $spots) {
+            $seen = Count-Log 'appeared \(small\)'
+            Send-ServerCommand $server "kingdomworld admin npc spawn $($spot[0]) $($spot[1]) small"
+            if (-not (Wait-ForNewLog $server 'The kingdom of the world (.+?) appeared \(small\)' $NpcTimeout $seen)) {
+                Add-Failure "[session4] a small kingdom of the world did not appear near $($spot[0]) $($spot[1])"
+            }
+        }
+        $kingdoms = Count-Log 'The kingdom of the world .+? appeared \('
+        Send-ServerCommand $server 'kingdomworld admin npc turn all'
+        $queued = Wait-ForLog $server 'Turns queued: (\d+) kingdoms?' $CommandTimeout $ConsoleFailPattern
+        Start-Sleep -Seconds 20
+        Send-ServerCommand $server 'kingdomworld admin npc timing'
+        $timing = Wait-ForLog $server 'Rulers: (\d+) turn\(s\), (\d+) tick\(s\) with work, average ([\d.]+) ms, worst ([\d.]+) ms' $CommandTimeout $ConsoleFailPattern
+        if ($timing -and $queued) {
+            $script:RulerLoad = "$($queued.Groups[1].Value) kingdoms, $($timing.Groups[1].Value) turns, $($timing.Groups[2].Value) ticks with work, average $($timing.Groups[3].Value) ms, worst $($timing.Groups[4].Value) ms"
+            Write-Ok "[session4] turns of the rulers: $($script:RulerLoad)"
+            if ([int]$queued.Groups[1].Value -lt 8) { Add-Failure "[session4] only $($queued.Groups[1].Value) kingdoms of the world took a turn" }
+            if ([double]$timing.Groups[4].Value -gt 50) { Add-Failure "[session4] a tick of the rulers took $($timing.Groups[4].Value) ms" }
+        } else {
+            Add-Failure '[session4] the turns of the rulers were not measured'
+        }
     }
 }
 

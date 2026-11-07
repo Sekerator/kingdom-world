@@ -27,7 +27,8 @@ import java.util.UUID;
 public record KingdomView(UUID id, String name, int color, String rulerName, int memberCount, int chunks,
                           int chunkLimit, int population, @Nullable BlockPos capital, Relation relation, @Nullable Role viewerRole,
                           EnumSet<Permission> viewerPermissions, List<MemberEntry> members,
-                          List<PendingEntry> applications, Map<Role, EnumSet<Permission>> rights, @Nullable NpcKingdomInfo npc) {
+                          List<PendingEntry> applications, Map<Role, EnumSet<Permission>> rights, @Nullable NpcKingdomInfo npc,
+                          @Nullable RulerInfo ruler) {
     public static final int MAX_MEMBERS = 1000;
     public static final int MAX_APPLICATIONS = 100;
 
@@ -75,7 +76,15 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
                        @Nullable BlockPos capital, Relation relation, @Nullable Role viewerRole, EnumSet<Permission> viewerPermissions,
                        List<MemberEntry> members, List<PendingEntry> applications, Map<Role, EnumSet<Permission>> rights) {
         this(id, name, color, rulerName, memberCount, chunks, chunkLimit, population, capital, relation, viewerRole, viewerPermissions, members,
-                applications, rights, null);
+                applications, rights, null, null);
+    }
+
+    public KingdomView(UUID id, String name, int color, String rulerName, int memberCount, int chunks, int chunkLimit, int population,
+                       @Nullable BlockPos capital, Relation relation, @Nullable Role viewerRole, EnumSet<Permission> viewerPermissions,
+                       List<MemberEntry> members, List<PendingEntry> applications, Map<Role, EnumSet<Permission>> rights,
+                       @Nullable NpcKingdomInfo npc) {
+        this(id, name, color, rulerName, memberCount, chunks, chunkLimit, population, capital, relation, viewerRole, viewerPermissions, members,
+                applications, rights, npc, null);
     }
 
     /**
@@ -83,7 +92,15 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
      */
     public KingdomView withNpc(@Nullable NpcKingdomInfo info) {
         return new KingdomView(id, name, color, rulerName, memberCount, chunks, chunkLimit, population, capital, relation, viewerRole,
-                viewerPermissions, members, applications, rights, info);
+                viewerPermissions, members, applications, rights, info, ruler);
+    }
+
+    /**
+     * The same view with what its ruler of the world decreed, needs and feels about the viewer.
+     */
+    public KingdomView withRuler(@Nullable RulerInfo info) {
+        return new KingdomView(id, name, color, rulerName, memberCount, chunks, chunkLimit, population, capital, relation, viewerRole,
+                viewerPermissions, members, applications, rights, npc, info);
     }
 
     public boolean can(Permission permission) {
@@ -128,6 +145,7 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
             buf.writeEnumSet(set, Permission.class);
         });
         NpcKingdomInfo.write(buf, npc);
+        RulerInfo.write(buf, ruler);
     }
 
     public static KingdomView decode(FriendlyByteBuf buf) {
@@ -161,8 +179,9 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
             rights.put(key, buf.readEnumSet(Permission.class));
         }
         NpcKingdomInfo npc = NpcKingdomInfo.read(buf);
+        RulerInfo rulerInfo = RulerInfo.read(buf);
         return new KingdomView(id, name, color, ruler, memberCount, chunks, chunkLimit, population, capital, relation, role,
-                permissions, members, applications, rights, npc);
+                permissions, members, applications, rights, npc, rulerInfo);
     }
 
     static int readSize(FriendlyByteBuf buf, int max) {

@@ -185,6 +185,9 @@ final class RulerActions {
                 case WAGE -> wage(server, id, decision);
                 case SELL -> sell(server, id, decision);
                 case BUY -> buy(server, id, decision);
+                case IMPORT -> io.github.sekerator.kingdomworld.common.trade.MarketActions.orderImport(server, null, id,
+                        io.github.sekerator.kingdomworld.common.trade.GoodsStacks.item(decision.subject()), (int) Math.max(1, decision.amount()))
+                        .success() ? Result.done(decision) : Result.failed(KingdomError.NOT_IMPORTABLE, decision);
                 case MINT -> mint(server, id, decision);
                 case OFFER -> offer(server, id, decision);
                 case ACCEPT -> accept(server, id, decision);
@@ -218,7 +221,8 @@ final class RulerActions {
     // ---------------------------------------------------------------- buildings
 
     private static Result build(MinecraftServer server, NpcKingdom npc, RulerDecision decision) {
-        Optional<BuildingTemplate> template = RulerPlaces.template(decision.subject());
+        Optional<BuildingTemplate> template = io.github.sekerator.kingdomworld.common.construction.BuildingTemplates.get(decision.target())
+                .filter(t -> decision.subject().equals(t.role())).or(() -> RulerPlaces.template(decision.subject()));
         if (template.isEmpty()) {
             return Result.failed(KingdomError.UNKNOWN_TEMPLATE, decision);
         }
@@ -279,18 +283,23 @@ final class RulerActions {
                 levelled = true;
                 return null;
             }
+            // The wood of the buildings that stand, so that the stores of the kingdom fit the new one.
             KingdomWorldState.ConstructionChange change = ConstructionWork.lay(level, null, kingdomId, spot.template(), anchor, spot.placement(),
-                    new Materials(Materials.AUTO, ""));
+                    new Materials(RulerPlaces.wood(server, kingdomId), ""));
             if (change.construction().isEmpty()) {
                 if (change.outcome().error() == KingdomError.PROTECTED_BLOCK || change.outcome().error() == KingdomError.CONSTRUCTION_OVERLAPS) {
                     RulerPlaces.unfit(kingdomId, anchor);
                 }
                 return change.outcome();
             }
-            long id = change.construction().get().id();
+            Construction laid = change.construction().get();
+            long id = laid.id();
             KingdomWorldApi.change(server, "let a construction of a kingdom of the world order what it lacks",
                     state -> state.setOrderMissing(null, kingdomId, id, true).outcome());
-            LOGGER.info("The ruler of {} laid out {} at {}", npc.name().latin(), spot.template().id(), anchor.toShortString());
+            java.util.Map<String, Integer> lacks = ConstructionWork.plan(laid).map(plan -> ConstructionWork.missing(server, laid, plan))
+                    .orElse(java.util.Map.of());
+            LOGGER.info("The ruler of {} laid out {} at {}; it lacks {}", npc.name().latin(), spot.template().id(), anchor.toShortString(),
+                    lacks.isEmpty() ? "nothing" : lacks);
             return Outcome.DONE;
         }
     }
@@ -342,6 +351,65 @@ final class RulerActions {
         return resumed;
     }
 
+    /**
+     * What the constructions of a kingdom and the orders of its workshops lack, ordered from abroad as far as the goods can be
+     * bought there, the money it may spare reaches and the day's limit of imports allows. Goods on their way count as there.
+     *
+     * @return the goods ordered, as decrees
+     */
+    static List<RulerDecision> supply(MinecraftServer server, UUID id, long spare) {
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        java.util.Map<String, Integer> lacking = new java.util.LinkedHashMap<>();
+        for (Construction construction : state.construction().of(id)) {
+            if (construction.paused()) {
+                continue;
+            }
+            ConstructionWork.plan(construction).ifPresent(plan -> ConstructionWork.missing(server, construction, plan)
+                    .forEach((item, count) -> lacking.merge(item, count, Integer::sum)));
+        }
+        for (io.github.sekerator.kingdomworld.core.production.Order order : state.orders().ordersOf(id)) {
+            for (io.github.sekerator.kingdomworld.core.production.Order.Missing missing : order.missing()) {
+                lacking.merge(missing.item(), missing.count(), Integer::sum);
+            }
+        }
+        if (lacking.isEmpty()) {
+            return List.of();
+        }
+        io.github.sekerator.kingdomworld.core.trade.TradeRules rules = TradeSettings.rules();
+        Market market = state.trade().market(id, rules);
+        for (Market.ImportOrder order : market.imports()) {
+            lacking.computeIfPresent(order.item(), (item, count) -> count - order.count() > 0 ? count - order.count() : null);
+        }
+        long day = TreasuryActions.day(server);
+        int left = rules.importMaxPerDay() - market.stats(day).imported();
+        long budget = spare / 2;
+        List<RulerDecision> ordered = new ArrayList<>();
+        for (java.util.Map.Entry<String, Integer> entry : lacking.entrySet()) {
+            if (left <= 0 || budget <= 0) {
+                break;
+            }
+            net.minecraft.world.item.Item item = io.github.sekerator.kingdomworld.common.trade.GoodsStacks.item(entry.getKey());
+            if (item == net.minecraft.world.item.Items.AIR || !io.github.sekerator.kingdomworld.common.trade.MarketActions.isImportable(server, item)) {
+                continue;
+            }
+            double worth = io.github.sekerator.kingdomworld.common.trade.MarketStock.worth(server, item).amount();
+            int count = Math.min(entry.getValue(), left);
+            while (count > 0 && io.github.sekerator.kingdomworld.core.trade.Prices.importCost(worth, count, rules) > budget) {
+                count /= 2;
+            }
+            if (count <= 0) {
+                continue;
+            }
+            long cost = io.github.sekerator.kingdomworld.core.trade.Prices.importCost(worth, count, rules);
+            if (io.github.sekerator.kingdomworld.common.trade.MarketActions.orderImport(server, null, id, item, count).success()) {
+                budget -= cost;
+                left -= count;
+                ordered.add(RulerDecision.of(RulerDecision.Kind.IMPORT, entry.getKey(), count).withExtra(cost));
+            }
+        }
+        return ordered;
+    }
+
     // ---------------------------------------------------------------- land and towns
 
     /**
@@ -351,6 +419,7 @@ final class RulerActions {
         private List<Long> candidates;
         private int claimed;
         private int index;
+        private int room;
 
         ClaimJob(UUID kingdomId, RulerDecision decision) {
             super(kingdomId, decision);
@@ -360,8 +429,13 @@ final class RulerActions {
         Outcome step(MinecraftServer server, ServerLevel level) {
             int wanted = (int) Math.max(1, decision.amount());
             if (candidates == null) {
-                candidates = RulerPlaces.claimable(server, kingdomId, wanted * 4);
+                // Claims of a ruler pass no limit of the server: the limit of the rulers is kept here.
+                int held = KingdomWorldApi.state(server).territory().territory(kingdomId).map(Territory::size).orElse(0);
+                int limit = NpcWork.kingdom(server, kingdomId).map(npc -> NpcSettings.rulers().maxChunks(npc.level())).orElse(held);
+                room = Math.max(0, limit - held);
+                candidates = room == 0 ? List.of() : RulerPlaces.claimable(server, kingdomId, Math.min(wanted, room) * 4);
             }
+            wanted = Math.min(wanted, room);
             if (claimed >= wanted || index >= candidates.size()) {
                 if (claimed == 0) {
                     return Outcome.fail(KingdomError.LIMIT_REACHED);

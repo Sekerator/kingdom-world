@@ -715,7 +715,50 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             lines.add(Component.translatable("kingdomworld.screen.throne.capital",
                     view.capital().getX(), view.capital().getY(), view.capital().getZ()));
         }
+        lines.addAll(rulerLines());
         return lines;
+    }
+
+    /**
+     * The decrees of a ruler of the world: the last one, what the kingdom needs and how the ruler feels about the viewer.
+     */
+    private List<Component> rulerLines() {
+        io.github.sekerator.kingdomworld.common.network.data.RulerInfo ruler = view.ruler();
+        if (ruler == null || view.npc() == null) {
+            return List.of();
+        }
+        List<Component> lines = new ArrayList<>();
+        if (ruler.decrees().isEmpty()) {
+            lines.add(Component.translatable("kingdomworld.screen.throne.npc.decree.none"));
+        } else {
+            lines.add(Component.translatable("kingdomworld.screen.throne.npc.decree",
+                    io.github.sekerator.kingdomworld.common.npc.RulerTexts.decree(ruler.decrees().get(0).decision(), view.npc().rulerGender())));
+        }
+        lines.add(Component.translatable("kingdomworld.screen.throne.npc.needs", io.github.sekerator.kingdomworld.common.npc.RulerTexts.needs(ruler.needs())));
+        lines.add(Component.translatable("kingdomworld.screen.throne.npc.attitude",
+                io.github.sekerator.kingdomworld.common.npc.RulerTexts.attitude(ruler.attitude())));
+        return lines;
+    }
+
+    /**
+     * What hovering over a line of a ruler of the world tells: every recent decree, every need, the reasons of the attitude.
+     */
+    private List<Component> rulerHover(int line) {
+        io.github.sekerator.kingdomworld.common.network.data.RulerInfo ruler = view.ruler();
+        List<Component> texts = new ArrayList<>();
+        if (ruler == null || view.npc() == null) {
+            return texts;
+        }
+        switch (line) {
+            case 0 -> ruler.decrees().forEach(decree -> texts.add(Component.translatable("kingdomworld.screen.throne.npc.decree.line", decree.day(),
+                    io.github.sekerator.kingdomworld.common.npc.RulerTexts.decree(decree.decision(), view.npc().rulerGender()))));
+            case 1 -> {
+                ruler.needs().forEach(need -> texts.add(io.github.sekerator.kingdomworld.common.npc.RulerTexts.need(need)));
+                texts.add(Component.translatable("kingdomworld.screen.throne.npc.needs.hint"));
+            }
+            default -> texts.add(Component.translatable("kingdomworld.screen.throne.npc.attitude.hint", ruler.reputation(), ruler.dealings()));
+        }
+        return texts;
     }
 
     private Component relationText() {
@@ -1279,15 +1322,29 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         int x = left + PAD + 4;
         int y = top + CONTENT_TOP + 4;
         int index = 0;
-        for (Component line : overviewLines()) {
-            fittedLabel(graphics, line, x, y, 0xFFE8E8E8, right - PAD);
+        List<Component> lines = overviewLines();
+        int rulerFirst = lines.size() - rulerLines().size();
+        // The lines of a ruler of the world come closer together, as on the card of the atlas.
+        int step = rulerFirst < lines.size() ? 11 : 14;
+        for (Component line : lines) {
+            fittedLabel(graphics, line, x, y, index >= rulerFirst ? 0xFFD8E8C8 : 0xFFE8E8E8, right - PAD);
+            int width = Math.min(font.width(line), right - PAD - x);
             if (view.npc() != null && index == 1) {
-                hoverText(x, y, Math.min(font.width(line), right - PAD - x), npcHint());
+                hoverText(x, y, width, npcHint());
+            }
+            if (index >= rulerFirst) {
+                for (Component hover : rulerHover(index - rulerFirst)) {
+                    hoverText(x, y, width, hover);
+                }
             }
             index++;
-            y += 14;
+            y += step;
         }
-        fittedLabel(graphics, relationText(), x, y + 6, 0xFFF0D070, right - PAD);
+        int relationY = y + (step == 14 ? 6 : 4);
+        boolean statusShown = !status.getString().isEmpty() && relationY + 9 > top - contentOffset + panelHeight - BOTTOM_AREA + 2;
+        if (!statusShown) {
+            fittedLabel(graphics, relationText(), x, relationY, 0xFFF0D070, right - PAD);
+        }
     }
 
     private void renderMembers(GuiGraphics graphics, int left, int top) {

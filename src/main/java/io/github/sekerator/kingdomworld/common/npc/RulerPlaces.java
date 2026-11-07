@@ -103,6 +103,17 @@ final class RulerPlaces {
                 .min(Comparator.comparingInt(BuildingTemplate::level).thenComparing(t -> t.id().toString()));
     }
 
+    /**
+     * The templates of a role at its first level, the ruler's own choice first.
+     */
+    static List<BuildingTemplate> templates(String role) {
+        List<BuildingTemplate> list = new ArrayList<>();
+        template(role).ifPresent(list::add);
+        BuildingTemplates.all().stream().filter(t -> role.equals(t.role()) && t.level() <= 1 && usable(t) && !list.contains(t))
+                .sorted(Comparator.comparing(t -> t.id().toString())).forEach(list::add);
+        return list;
+    }
+
     private static boolean usable(BuildingTemplate template) {
         return template.owner() == null && template.available() && BuildingTemplates.problem(template, ConstructionSettings.rules()) == null;
     }
@@ -122,14 +133,21 @@ final class RulerPlaces {
             if (!view.knownRoles.contains(role)) {
                 continue;
             }
-            Optional<BuildingTemplate> template = template(role);
-            if (template.isEmpty()) {
+            // Of the first-level templates of the role, the one whose missing materials cost least; the ruler's own choice on a tie.
+            BuildingTemplate best = null;
+            long least = Long.MAX_VALUE;
+            for (BuildingTemplate candidate : templates(role)) {
+                long missing = RulerSnapshots.missingWorth(server, id, TemplateMaterials.apply(candidate, new Materials(wood, "")).items());
+                if (missing < least) {
+                    least = missing;
+                    best = candidate;
+                }
+            }
+            if (best == null) {
                 continue;
             }
-            BuildingTemplate built = TemplateMaterials.apply(template.get(), new Materials(wood, ""));
-            long missing = RulerSnapshots.missingWorth(server, id, built.items());
-            boolean place = find(server, npc, template.get()).isPresent();
-            view.builds.add(new RulerView.Option(role, template.get().id().toString(), "", missing, place));
+            boolean place = find(server, npc, best).isPresent();
+            view.builds.add(new RulerView.Option(role, best.id().toString(), "", least, place));
         }
     }
 

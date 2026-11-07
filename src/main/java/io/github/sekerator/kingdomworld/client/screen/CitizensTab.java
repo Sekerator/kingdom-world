@@ -286,7 +286,7 @@ final class CitizensTab {
             return 0;
         }
         return switch (mode) {
-            case CHRONICLE -> view.chronicle().size();
+            case CHRONICLE -> view.chronicle().size() + view.decrees().size();
             case PRODUCTION -> view.production().size();
             case LIFE -> LifeRows.rows(life).size();
             default -> rows().size();
@@ -448,16 +448,42 @@ final class CitizensTab {
         }
     }
 
-    private void renderChronicle(GuiGraphics graphics, Font font, int x, int right, int listTop, int rows) {
+    /**
+     * The deaths and, in a kingdom of the world, the decrees of its ruler, the newest first.
+     */
+    private List<Object> chronicleRows() {
+        List<Object> rows = new ArrayList<>();
         List<CitizenView.Death> deaths = view.chronicle();
-        if (deaths.isEmpty()) {
+        List<io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree> decrees = view.decrees();
+        int d = 0;
+        int r = 0;
+        while (d < deaths.size() || r < decrees.size()) {
+            if (r < decrees.size() && (d >= deaths.size() || decrees.get(r).day() >= deaths.get(d).day())) {
+                rows.add(decrees.get(r++));
+            } else {
+                rows.add(deaths.get(d++));
+            }
+        }
+        return rows;
+    }
+
+    private void renderChronicle(GuiGraphics graphics, Font font, int x, int right, int listTop, int rows) {
+        List<Object> entries = chronicleRows();
+        if (entries.isEmpty()) {
             screen.label(graphics, Component.translatable(KEY + "chronicle_empty"), x, listTop + 5, 0xFFB8B8B8, right);
             return;
         }
         int causeX = x + NAME_COLUMN;
-        for (int i = 0; i < rows && scroll + i < deaths.size(); i++) {
-            CitizenView.Death death = deaths.get(scroll + i);
+        for (int i = 0; i < rows && scroll + i < entries.size(); i++) {
             int y = listTop + i * ROW + 4;
+            if (entries.get(scroll + i) instanceof io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree decree) {
+                Component day = Component.translatable(KEY + "day", decree.day());
+                int dayX = right - font.width(day);
+                screen.label(graphics, day, dayX, y, 0xFF9A9A9A, right);
+                screen.name(graphics, decreeLine(decree).getString(), x, y, 0xFFE8D8A0, dayX - 6 - x);
+                continue;
+            }
+            CitizenView.Death death = (CitizenView.Death) entries.get(scroll + i);
             screen.name(graphics, name(death.seed(), death.female()), x, y, 0xFFE8E8E8, NAME_COLUMN - 4);
             Component day = Component.translatable(KEY + "day", death.day());
             int dayX = right - font.width(day);
@@ -467,6 +493,19 @@ final class CitizensTab {
                     death.place().getY(), death.place().getZ());
             screen.name(graphics, cause.getString(), causeX, y, 0xFFD0B0B0, dayX - 6 - causeX);
         }
+    }
+
+    /**
+     * A decree as the chronicle writes it, with the name of the ruler when the screen knows it.
+     */
+    private Component decreeLine(io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree decree) {
+        io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo npc = screen.view().npc();
+        if (npc == null) {
+            return Component.translatable(KEY + "decree", io.github.sekerator.kingdomworld.common.npc.RulerTexts.decree(decree.decision(),
+                    io.github.sekerator.kingdomworld.core.citizen.Gender.MALE));
+        }
+        return io.github.sekerator.kingdomworld.common.npc.RulerTexts.chronicle(io.github.sekerator.kingdomworld.common.npc.NpcTexts.ruler(
+                npc.rulerLatin(), npc.rulerCyrillic(), npc.rulerGender()), decree.decision(), npc.rulerGender());
     }
 
     /**

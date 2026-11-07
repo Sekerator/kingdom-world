@@ -101,6 +101,13 @@ public final class NpcRulers {
         maxNanos = 0;
     }
 
+    /**
+     * Whether a job of a ruler (a building, land or a town) is going on.
+     */
+    public static boolean working() {
+        return job != null;
+    }
+
     static Optional<RulerView> lastView(UUID kingdomId) {
         return Optional.ofNullable(LAST_VIEWS.get(kingdomId));
     }
@@ -187,6 +194,27 @@ public final class NpcRulers {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Carries out one decision of a ruler at once, for operators and game tests; a decision that needs the world starts a job
+     * that goes on over the next ticks (or with {@link #runJobs}).
+     */
+    public static void carryOutNow(MinecraftServer server, NpcKingdom kingdom, RulerDecision decision) {
+        carryOut(server, kingdom, decision, TreasuryActions.day(server));
+    }
+
+    /**
+     * Steps the job of a ruler until it ends or the steps run out, for game tests whose chunks are loaded.
+     *
+     * @return whether no job is left
+     */
+    public static boolean runJobs(MinecraftServer server, int steps) {
+        long day = TreasuryActions.day(server);
+        for (int i = 0; i < steps && job != null; i++) {
+            stepJob(server, day);
+        }
+        return job == null;
     }
 
     private static void carryOut(MinecraftServer server, NpcKingdom kingdom, RulerDecision decision, long day) {
@@ -323,6 +351,11 @@ public final class NpcRulers {
         memory.countTurn();
         for (RulerDecision answer : plan.answers()) {
             carryOut(server, kingdom, answer, day);
+        }
+        if (!poor) {
+            for (RulerDecision bought : RulerActions.supply(server, id, RulerMind.spare(view, rules))) {
+                finish(server, id, bought, Outcome.DONE, day);
+            }
         }
         List<RulerDecision> fresh = new ArrayList<>();
         for (RulerDecision decision : plan.decisions()) {
@@ -524,6 +557,40 @@ public final class NpcRulers {
                 : io.github.sekerator.kingdomworld.common.law.LawWork.reputation(server, kingdom.kingdomId(), player);
         int dealings = NpcWork.state(server).existingRuler(kingdom.kingdomId()).map(memory -> memory.dealings(player)).orElse(0);
         return RulerMind.attitude(reputation, dealings, kingdom.traits());
+    }
+
+    /**
+     * The decrees of the chronicle of a kingdom of the world, the newest first; empty for a kingdom of players.
+     */
+    public static List<io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree> chronicle(MinecraftServer server, UUID kingdomId) {
+        List<io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree> decrees = new ArrayList<>();
+        NpcWork.state(server).existingRuler(kingdomId).ifPresent(memory -> {
+            for (RulerMemory.Decree decree : memory.chronicle()) {
+                if (decrees.size() < io.github.sekerator.kingdomworld.common.network.data.CitizenView.MAX_DECREES) {
+                    decrees.add(new io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree(decree.day(), decree.decision()));
+                }
+            }
+        });
+        return decrees;
+    }
+
+    /**
+     * What the overview of a kingdom of the world shows a player of its ruler.
+     */
+    public static io.github.sekerator.kingdomworld.common.network.data.RulerInfo info(MinecraftServer server, NpcKingdom kingdom, UUID viewer) {
+        RulerMemory memory = NpcWork.state(server).existingRuler(kingdom.kingdomId()).orElseGet(RulerMemory::new);
+        List<io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree> decrees = new ArrayList<>();
+        for (RulerMemory.Decree decree : memory.decrees()) {
+            if (decrees.size() >= io.github.sekerator.kingdomworld.common.network.data.RulerInfo.MAX_DECREES) {
+                break;
+            }
+            decrees.add(new io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree(decree.day(), decree.decision()));
+        }
+        int reputation = io.github.sekerator.kingdomworld.common.law.LawWork.isReadOnly(server) ? 0
+                : io.github.sekerator.kingdomworld.common.law.LawWork.reputation(server, kingdom.kingdomId(), viewer);
+        int dealings = memory.dealings(viewer);
+        return new io.github.sekerator.kingdomworld.common.network.data.RulerInfo(decrees, memory.needs(),
+                RulerMind.attitude(reputation, dealings, kingdom.traits()), reputation, dealings);
     }
 
     /**

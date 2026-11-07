@@ -88,7 +88,8 @@ public final class CitizenActions {
         }
         return Optional.of(new CitizenView(kingdomId, state.membership().hasPermission(viewer, kingdomId, Permission.MANAGE_CITIZENS),
                 summary.population(), summary.bedsUsed(), summary.bedsTotal(), summary.foodDays(), summary.mood(),
-                summary.storehouses(), summary.growth(), entries, chronicle, production(server, kingdomId)));
+                summary.storehouses(), summary.growth(), entries, chronicle, production(server, kingdomId),
+                io.github.sekerator.kingdomworld.common.npc.NpcRulers.chronicle(server, kingdomId)));
     }
 
     /**
