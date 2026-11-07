@@ -643,6 +643,30 @@ public final class Economy {
         return Outcome.DONE;
     }
 
+    /**
+     * Robbers took part of the goods of a caravan: that part of the payment goes back to the payer, the rest stays in escrow
+     * until the caravan arrives.
+     */
+    public Outcome refundEscrowPart(long id, long amount, long day) {
+        Escrow escrow = escrows.get(id);
+        if (escrow == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_DEAL);
+        }
+        if (amount <= 0) {
+            return Outcome.DONE;
+        }
+        if (amount >= escrow.amount()) {
+            return refundEscrow(id, day);
+        }
+        escrows.put(id, new Escrow(escrow.id(), escrow.payer(), escrow.payee(), escrow.currency(), escrow.amount() - amount));
+        Treasury payer = treasuries.get(escrow.payer());
+        if (payer != null && canTake(payer, escrow.currency(), amount)) {
+            take(payer, escrow.currency(), amount, LedgerCategory.TRADE, day);
+        }
+        changed();
+        return Outcome.DONE;
+    }
+
     // ---------------------------------------------------------------- money held for guild contracts
 
     /**

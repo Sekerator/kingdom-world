@@ -274,7 +274,30 @@ public enum KingdomError {
     /** The companion is too far away. */
     COMPANION_FAR,
     /** No player of that name is online. */
-    PLAYER_OFFLINE;
+    PLAYER_OFFLINE,
+
+    /** The kingdom has as many cities as allowed. */
+    TOO_MANY_CITIES,
+    /** Another city or a capital is too close. */
+    CITY_TOO_CLOSE,
+    UNKNOWN_CITY,
+    UNKNOWN_ROAD,
+    /** The kingdom keeps as many roads as allowed. */
+    TOO_MANY_ROADS,
+    /** No way for a road was found between the points. */
+    NO_ROUTE,
+    /** The points are farther apart than the longest road. */
+    ROUTE_TOO_LONG,
+    /** A way for a road is being searched already; the answer comes soon. */
+    ROUTE_SEARCHING,
+    /** The plan of the road is gone; plan it again. */
+    UNKNOWN_PLAN,
+    UNKNOWN_CROSSING,
+    /** The request was answered already or ran out. */
+    CROSSING_CLOSED,
+    UNKNOWN_CAMP,
+    /** The road crosses the land of another kingdom that did not agree. */
+    NO_CONSENT;
 
     /**
      * Lower case identifier, used for translation keys.

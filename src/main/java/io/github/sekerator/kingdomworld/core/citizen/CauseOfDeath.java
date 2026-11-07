@@ -29,6 +29,8 @@ public enum CauseOfDeath {
     EXPEDITION,
     /** Fell in a battle of the army far from players. */
     BATTLE,
+    /** Killed by robbers who fell upon a caravan. */
+    ROBBERS,
     /** Removed by an operator command. */
     COMMAND,
     OTHER;
