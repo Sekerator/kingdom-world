@@ -2775,7 +2775,7 @@
   "kingdomworld.npc.trait.patient": "patience",
   "kingdomworld.npc.traits.two": "%s and %s",
   "kingdomworld.screen.throne.npc.ruler": "Ruler: %s",
-  "kingdomworld.screen.throne.npc.size": "Kingdom of the world: %s",
+  "kingdomworld.screen.throne.npc.size": "Ancient kingdom: %s",
   "kingdomworld.screen.throne.npc.character": "Leaning: %s; %s",
   "kingdomworld.screen.throne.npc.outsider": "Its ruler takes every subject who applies; its throne is taken only by war.",
   "kingdomworld.count.kingdoms.n1": "%s kingdom",
@@ -2809,5 +2809,6 @@
   "commands.kingdomworld.admin.npc.removed": "Place #%s removed with the kingdom %s",
   "commands.kingdomworld.admin.npc.removed_buildings": "Place #%s removed with the kingdom %s and its buildings",
   "commands.kingdomworld.admin.npc.throne_taken": "%s is a kingdom of the world: its throne is taken only by war",
-  "commands.kingdomworld.admin.npc.site_state": "  #%s: treasury %s, founding %s, citizens %s, soldiers %s, buildings %s, towns %s"
+  "commands.kingdomworld.admin.npc.site_state": "  #%s: treasury %s, founding %s, citizens %s, soldiers %s, buildings %s, towns %s",
+  "kingdomworld.screen.throne.npc.size.hint": "It arose together with the world; no player rules it"
 }

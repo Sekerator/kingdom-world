@@ -139,7 +139,8 @@ public final class RoadPlanning {
      */
     public static Component name(MinecraftServer server, Endpoint endpoint) {
         return switch (endpoint.kind()) {
-            case CITY -> RoadWork.state(server).city(endpoint.city()).<Component>map(city -> Component.literal(city.name()))
+            case CITY -> RoadWork.state(server).city(endpoint.city()).<Component>map(city ->
+                    io.github.sekerator.kingdomworld.common.npc.NpcTexts.city(city.name()))
                     .orElseGet(() -> Component.translatable(RoadWork.KEY + "place", endpoint.x(), endpoint.z()));
             case CAPITAL -> Component.translatable(RoadWork.KEY + "capital_of", RoadWork.kingdomName(server, endpoint.kingdom()));
             case POINT -> Component.translatable(RoadWork.KEY + "place", endpoint.x(), endpoint.z());

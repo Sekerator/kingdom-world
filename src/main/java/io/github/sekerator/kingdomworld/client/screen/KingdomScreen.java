@@ -143,6 +143,13 @@ public abstract class KingdomScreen extends Screen {
     }
 
     /**
+     * The hint over the line of the size of a kingdom of the world.
+     */
+    protected static Component npcHint() {
+        return Component.translatable("kingdomworld.screen.throne.npc.size.hint");
+    }
+
+    /**
      * Shortens a name with an ellipsis so that it is at most {@code maxWidth} wide.
      */
     protected String fit(String name, int maxWidth) {

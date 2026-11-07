@@ -218,8 +218,10 @@ public final class WebMaps {
                 continue;
             }
             String kingdom = state.kingdoms().get(city.kingdomId()).map(Kingdom::name).orElse("?");
-            list.add(new WebMapModel.City(city.id(), city.dimension(), city.name(), kingdom, city.color(), city.x(), city.z(),
-                    texts.text("kingdomworld.map.city", city.name(), kingdom)));
+            // Towns of kingdoms of the world are named in the language of the web maps.
+            String name = io.github.sekerator.kingdomworld.common.npc.NpcWork.localCity(city.name(), texts.language());
+            list.add(new WebMapModel.City(city.id(), city.dimension(), name, kingdom, city.color(), city.x(), city.z(),
+                    texts.text("kingdomworld.map.city", name, kingdom)));
         }
         return list;
     }

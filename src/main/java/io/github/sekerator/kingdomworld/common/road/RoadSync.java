@@ -71,7 +71,7 @@ public final class RoadSync {
             if (player instanceof FakePlayer) {
                 continue;
             }
-            RoadViews.MapData data = data(server, state, player.getUUID());
+            RoadViews.MapData data = data(server, state, player.getUUID(), player.getLanguage());
             if (!data.equals(SENT.get(player.getUUID()))) {
                 SENT.put(player.getUUID(), data);
                 KingdomWorldNetwork.sendToPlayer(player, new RoadPackets.MapSync(data));
@@ -146,7 +146,7 @@ public final class RoadSync {
                 xs.stream().mapToInt(Integer::intValue).toArray(), zs.stream().mapToInt(Integer::intValue).toArray());
     }
 
-    private static RoadViews.MapData data(MinecraftServer server, RoadState state, UUID player) {
+    private static RoadViews.MapData data(MinecraftServer server, RoadState state, UUID player, String language) {
         Optional<UUID> kingdom = KingdomWorldApi.state(server).membership().kingdomOf(player);
         List<RoadViews.MapCamp> camps = new ArrayList<>();
         if (kingdom.isPresent()) {
@@ -156,7 +156,15 @@ public final class RoadSync {
                 }
             }
         }
-        return new RoadViews.MapData(cities, roads, camps, walls);
+        // Towns of kingdoms of the world are named in the alphabet of the player.
+        List<RoadViews.MapCity> named = new ArrayList<>(cities.size());
+        for (RoadViews.MapCity city : cities) {
+            String name = city.id() == 0 ? io.github.sekerator.kingdomworld.common.npc.NpcWork.localKingdom(city.kingdomId(), city.name(), language)
+                    : io.github.sekerator.kingdomworld.common.npc.NpcWork.localCity(city.name(), language);
+            named.add(name.equals(city.name()) ? city : new RoadViews.MapCity(city.id(), city.kingdomId(), name, city.dimension(), city.x(),
+                    city.z(), city.color(), city.level()));
+        }
+        return new RoadViews.MapData(named, roads, camps, walls);
     }
 
     /**

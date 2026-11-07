@@ -102,10 +102,15 @@ public final class RoadActions {
         boolean canOrder = viewer == null || world.membership().hasPermission(viewer, kingdomId, Permission.MANAGE_ARMY);
         Optional<Capital> capital = RoadWork.capital(server, kingdomId);
         List<RoadViews.CityRow> cities = new ArrayList<>();
-        capital.ifPresent(c -> cities.add(cityRow(server, roads, kingdomId, 0, kingdom.get().name(), c.x(), c.y(), c.z(),
+        // Towns of kingdoms of the world are named in the alphabet of the viewer.
+        net.minecraft.server.level.ServerPlayer reader = viewer == null ? null : server.getPlayerList().getPlayer(viewer);
+        String language = reader == null ? "en_us" : reader.getLanguage();
+        capital.ifPresent(c -> cities.add(cityRow(server, roads, kingdomId, 0,
+                io.github.sekerator.kingdomworld.common.npc.NpcWork.localKingdom(kingdomId, kingdom.get().name(), language), c.x(), c.y(), c.z(),
                 countRoads(roads, Endpoint.Kind.CAPITAL, 0, kingdomId))));
         for (City city : roads.citiesOf(kingdomId)) {
-            cities.add(cityRow(server, roads, kingdomId, city.id(), city.name(), city.x(), city.y(), city.z(),
+            cities.add(cityRow(server, roads, kingdomId, city.id(), io.github.sekerator.kingdomworld.common.npc.NpcWork.localCity(city.name(),
+                    language), city.x(), city.y(), city.z(),
                     countRoads(roads, Endpoint.Kind.CITY, city.id(), null)));
         }
         List<RoadViews.RoadRow> roadRows = new ArrayList<>();

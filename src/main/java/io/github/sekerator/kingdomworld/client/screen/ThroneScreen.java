@@ -1264,8 +1264,13 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private void renderOverview(GuiGraphics graphics, int left, int top, int right) {
         int x = left + PAD + 4;
         int y = top + CONTENT_TOP + 4;
+        int index = 0;
         for (Component line : overviewLines()) {
             fittedLabel(graphics, line, x, y, 0xFFE8E8E8, right - PAD);
+            if (view.npc() != null && index == 1) {
+                hoverText(x, y, Math.min(font.width(line), right - PAD - x), npcHint());
+            }
+            index++;
             y += 14;
         }
         fittedLabel(graphics, relationText(), x, y + 6, 0xFFF0D070, right - PAD);

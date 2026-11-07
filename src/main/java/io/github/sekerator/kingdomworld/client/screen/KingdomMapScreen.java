@@ -976,8 +976,12 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         name(graphics, shownName, x + 6, y + 5, 0xFF000000 | FoundKingdomScreen.readable(info.color()),
                 Math.min(MAX_CARD_NAME, cardWidth - 12));
         int lineY = y + 17;
-        for (Component line : lines) {
+        for (int i = 0; i < lines.size(); i++) {
+            Component line = lines.get(i);
             fittedLabel(graphics, line, x + 6, lineY, 0xFFE8E8E8, x + cardWidth - 6);
+            if (info.npc() != null && i == 1) {
+                hoverText(x + 6, lineY, Math.min(font.width(line), cardWidth - 12), npcHint());
+            }
             lineY += 11;
         }
         // The name of a currency is chosen by a king and may be long: it is shortened like the names of kingdoms.

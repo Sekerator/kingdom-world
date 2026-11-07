@@ -195,7 +195,8 @@ public final class RoadWork {
         state(server).cityAt(Dimensions.id(level), pos.getX(), pos.getY(), pos.getZ()).ifPresent(city -> {
             state(server).removeCity(city.id());
             LOGGER.info("City {} given up: its town hall at {} is gone", city.name(), pos.toShortString());
-            notify(server, city.kingdomId(), Component.translatable(KEY + "city_lost", city.name()).withStyle(ChatFormatting.GOLD));
+            notify(server, city.kingdomId(), Component.translatable(KEY + "city_lost",
+                    io.github.sekerator.kingdomworld.common.npc.NpcTexts.city(city.name())).withStyle(ChatFormatting.GOLD));
             RoadSync.changed();
         });
     }

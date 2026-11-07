@@ -297,7 +297,8 @@ public final class LawActions {
         ENTRIES.put(player.getUUID(), new PendingEntry(city, at, LawWork.now(server)));
         String name = KingdomWorldApi.kingdom(server, city.kingdomId()).map(Kingdom::name).orElse("");
         KingdomWorldNetwork.sendToPlayer(player, new LawPackets.DialogOpen(new LawViews.DialogView(LawViews.Dialog.ENTRY, city.kingdomId(),
-                currency(server, city.kingdomId(), name), fee, false, city.name(), List.of(), coins(player, city.kingdomId()),
+                currency(server, city.kingdomId(), name), fee, false,
+                io.github.sekerator.kingdomworld.common.npc.NpcWork.localCity(city.name(), player.getLanguage()), List.of(), coins(player, city.kingdomId()),
                 KingdomWorldApi.state(server).economy().accounts().balance(player.getUUID(), city.kingdomId()))));
     }
 
