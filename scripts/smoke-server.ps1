@@ -2441,11 +2441,11 @@ Invoke-Phase 'session2' {
     } else {
         Add-Failure '[session2] admin npc status did not answer'
     }
-    Send-ServerCommand $server "kingdomworld admin npc spawn $NpcX $NpcZ medium"
-    $spawning = Wait-ForLog $server 'Place #(\d+): a kingdom of the world \(medium\) appears at (-?\d+), (-?\d+) with towns: (\d+)' $CommandTimeout $ConsoleFailPattern
+    Send-ServerCommand $server "kingdomworld admin npc spawn $NpcX $NpcZ large"
+    $spawning = Wait-ForLog $server 'Place #(\d+): a kingdom of the world \(large\) appears at (-?\d+), (-?\d+) with towns: (\d+)' $CommandTimeout $ConsoleFailPattern
     if ($spawning) {
         $script:NpcSite = $spawning.Groups[1].Value
-        Write-Ok "[session2] a medium kingdom of the world appears at $($spawning.Groups[2].Value) $($spawning.Groups[3].Value) with $($spawning.Groups[4].Value) town(s)"
+        Write-Ok "[session2] a large kingdom of the world appears at $($spawning.Groups[2].Value) $($spawning.Groups[3].Value) with $($spawning.Groups[4].Value) town(s)"
         if (Wait-ForLog $server "\d+ chunks claimed for site $($script:NpcSite) " $NpcTimeout) {
             Write-Ok '[session2] the kingdom of the world has its land; the server stops in the middle of its appearance'
         } else {
@@ -2465,19 +2465,22 @@ if ($script:NpcSite) {
         } else {
             Add-Failure '[session3] the appearance was not loaded as going on'
         }
-        $appeared = Wait-ForLog $server 'The kingdom of the world (.+?) appeared \(medium\): (\d+) buildings, (\d+) citizens, (\d+) soldiers, (\d+) town\(s\); (\d+) ticks, average tick ([\d.]+) ms, worst tick ([\d.]+) ms' $NpcTimeout
+        $appeared = Wait-ForLog $server 'The kingdom of the world (.+?) appeared \(large\): (\d+) buildings, (\d+) citizens, (\d+) soldiers, (\d+) town\(s\); (\d+) ticks, average tick ([\d.]+) ms, worst tick ([\d.]+) ms \(at (\w+)\)' $NpcTimeout
         if (-not $appeared) {
             Add-Failure '[session3] the kingdom of the world did not finish appearing after the restart'
             return
         }
         $name = $appeared.Groups[1].Value
         Write-Ok "[session3] $name appeared: $($appeared.Groups[2].Value) buildings, $($appeared.Groups[3].Value) citizens, $($appeared.Groups[4].Value) soldiers, $($appeared.Groups[5].Value) town(s)"
-        $script:NpcTiming = "$($appeared.Groups[6].Value) ticks after the restart, average $($appeared.Groups[7].Value) ms, worst $($appeared.Groups[8].Value) ms"
+        $script:NpcTiming = "$($appeared.Groups[6].Value) ticks after the restart, average $($appeared.Groups[7].Value) ms, worst $($appeared.Groups[8].Value) ms (at $($appeared.Groups[9].Value))"
         Write-Ok "[session3] ticks of the appearance: $($script:NpcTiming)"
-        if ([double]$appeared.Groups[8].Value -gt 50) { Add-Warning "[session3] a tick of the appearance took $($appeared.Groups[8].Value) ms" }
-        $wood = [regex]::Match((Get-LatestLog), "site $site medium at [^\r\n]* got its founding wealth: (\d+) in the treasury, \d+ kinds of goods in the storehouses, the wood of the place (\S+)")
+        if ([double]$appeared.Groups[8].Value -gt 50) {
+            Add-Failure "[session3] a tick of the appearance took $($appeared.Groups[8].Value) ms"
+            foreach ($slow in [regex]::Matches((Get-LatestLog), 'A tick of the appearance of [^\r\n]*')) { Write-Host "    $($slow.Value)" }
+        }
+        $wood = [regex]::Match((Get-LatestLog), "site $site large at [^\r\n]* got its founding wealth: (\d+) in the treasury, \d+ kinds of goods in the storehouses, the wood of the place (\S+)")
         if ($wood.Success) { Write-Ok "[session3] founding wealth $($wood.Groups[1].Value), the wood of the place $($wood.Groups[2].Value)" }
-        if ((Count-Log "appears at -?\d+, -?\d+, -?\d+: medium ruled by") -gt 0) {
+        if ((Count-Log "appears at -?\d+, -?\d+, -?\d+: large ruled by") -gt 0) {
             Add-Failure '[session3] the kingdom of the world was founded again after the restart'
         }
         Send-ServerCommand $server 'kingdomworld admin npc list'
@@ -2487,8 +2490,8 @@ if ($script:NpcSite) {
         } else {
             $treasury = [int64]$state.Groups[1].Value
             $founding = [int64]$state.Groups[2].Value
-            if ($founding -eq 4000 -and $treasury -le $founding -and $treasury -gt 0) {
-                Write-Ok "[session3] the money adds up: the founding gave 4000 once, the treasury holds $treasury"
+            if ($founding -eq 10000 -and $treasury -le $founding -and $treasury -gt 0) {
+                Write-Ok "[session3] the money adds up: the founding gave 10000 once, the treasury holds $treasury"
             } else {
                 Add-Failure "[session3] the money does not add up: founding $founding, treasury $treasury"
             }
@@ -2498,7 +2501,7 @@ if ($script:NpcSite) {
                 Add-Failure "[session3] citizens $($state.Groups[3].Value), the appearance made $($appeared.Groups[3].Value)"
             }
         }
-        $sites = [regex]::Matches((Get-LatestLog), "#$site medium at")
+        $sites = [regex]::Matches((Get-LatestLog), "#$site large at")
         if ($sites.Count -eq 1) { Write-Ok '[session3] the place is listed once' } else { Add-Failure "[session3] the place is listed $($sites.Count) times" }
         Send-ServerCommand $server 'kingdom list'
         Start-Sleep -Seconds 2

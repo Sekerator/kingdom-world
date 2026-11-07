@@ -110,6 +110,14 @@ public final class NpcSpawner {
     private static final int PLACE_WAIT_TICKS = 2_400;
     /** The least radius of the walls of a village the capital is laid out for. */
     private static final int MIN_WALL_RADIUS = 24;
+    /** Ticks longer than this while a kingdom appears are written to the log with their stage. */
+    private static final long SLOW_TICK_NANOS = 50_000_000L;
+    /** Blocks of a building done in a tick at least, so that a small budget still moves on. */
+    private static final int BLOCKS_PER_PART = 64;
+    /** Blocks of the wall paid in a tick at most: the roads place the paid columns once a second, all at once. */
+    private static final int WALL_BLOCKS_PER_TICK = 48;
+    /** Columns of ramp around a levelled square, so that it does not end with a step a road cannot climb. */
+    static final int RAMP = 6;
     /** Citizens added in a tick at most. */
     private static final int CITIZENS_PER_TICK = 4;
     /** Positions of the town plots around the town hall: x, z and where the front looks. */
@@ -129,6 +137,8 @@ public final class NpcSpawner {
         long ticks;
         long sumNanos;
         long maxNanos;
+        SpawnStage worstStage = SpawnStage.LOAD;
+        SpawnStage lastStage = SpawnStage.LOAD;
         boolean searching;
         boolean loaded;
 
@@ -207,9 +217,17 @@ public final class NpcSpawner {
         if (job.ticks > 0) {
             long nanos = server.tickTimes[Math.floorMod(server.getTickCount() - 1, server.tickTimes.length)];
             job.sumNanos += nanos;
-            job.maxNanos = Math.max(job.maxNanos, nanos);
+            if (nanos > job.maxNanos) {
+                job.maxNanos = nanos;
+                job.worstStage = job.lastStage;
+            }
+            if (nanos > SLOW_TICK_NANOS) {
+                LOGGER.info("A tick of the appearance of {} took {} ms at {} step {}", site, String.format(java.util.Locale.ROOT, "%.1f",
+                        nanos / 1e6), job.lastStage.id(), site.step());
+            }
         }
         job.ticks++;
+        job.lastStage = site.stage();
         ServerLevel level = server.overworld();
         try {
             step(server, level, site, job);
@@ -300,11 +318,12 @@ public final class NpcSpawner {
                     keys.add(ChunkPos.asLong(tx + dx, tz + dz));
                 }
             }
+            // The way of the road wanders round hills: two chunks each side of the straight line are loaded for its search.
             for (long chunk : corridor(cx, cz, tx, tz)) {
                 int x = ChunkPos.getX(chunk);
                 int z = ChunkPos.getZ(chunk);
-                for (int dx = -1; dx <= 1; dx++) {
-                    for (int dz = -1; dz <= 1; dz++) {
+                for (int dx = -2; dx <= 2; dx++) {
+                    for (int dz = -2; dz <= 2; dz++) {
                         keys.add(ChunkPos.asLong(x + dx, z + dz));
                     }
                 }
@@ -572,7 +591,7 @@ public final class NpcSpawner {
     private static void ground(MinecraftServer server, ServerLevel level, NpcSite site, Job job) {
         UUID id = site.kingdomId().orElseThrow();
         int reach = job.composition.reach();
-        int margin = 3;
+        int margin = RAMP;
         int rows = 2 * (reach + margin) + 1;
         int budget = NpcSettings.rules().blocksPerTick();
         NpcGround.Soil soil = NpcGround.soilAt(level, site.x(), site.z());
@@ -582,7 +601,8 @@ public final class NpcSpawner {
             for (int x = site.x() - reach - margin; x <= site.x() + reach + margin; x++) {
                 boolean inside = Math.abs(x - site.x()) <= reach && Math.abs(z - site.z()) <= reach;
                 if (!inside) {
-                    budget -= NpcGround.clearTrees(level, id, x, z);
+                    int out = Math.max(Math.abs(x - site.x()), Math.abs(z - site.z())) - reach;
+                    budget -= Math.max(1, ramp(level, id, x, z, site.groundY(), out, soil));
                     continue;
                 }
                 BlockState top = soil.top();
@@ -603,6 +623,22 @@ public final class NpcSpawner {
             decoratePlaza(level, site, id);
             site.advance(SpawnStage.BUILD);
         }
+    }
+
+    /**
+     * A column just outside a levelled square: the ground there rises or falls at most a block for every column out, so that
+     * the square ends in a slope a road can climb; trees over it go.
+     *
+     * @param out how many columns outside the square, from 1
+     */
+    private static int ramp(ServerLevel level, UUID id, int x, int z, int height, int out, NpcGround.Soil soil) {
+        int ground = NpcGround.groundAt(level, x, z);
+        int changed = NpcGround.clearTrees(level, id, x, z);
+        if (Math.abs(ground - height) > out) {
+            int target = height + Integer.signum(ground - height) * out;
+            changed += Math.max(0, NpcGround.level(level, id, x, z, target, soil.top(), soil.fill()));
+        }
+        return changed;
     }
 
     private static boolean inAny(List<Box> boxes, int x, int z) {
@@ -655,7 +691,7 @@ public final class NpcSpawner {
     }
 
     /**
-     * Puts up the buildings of the capital, as many as the budget of blocks allows in a tick (at least one).
+     * Puts up the buildings of the capital a part at a time, as many blocks a tick as the budget allows.
      */
     private static void build(MinecraftServer server, ServerLevel level, NpcSite site, Job job) {
         UUID id = site.kingdomId().orElseThrow();
@@ -664,9 +700,13 @@ public final class NpcSpawner {
         Materials materials = new Materials(Materials.AUTO, "");
         while (site.step() < plots.size() && budget > 0) {
             NpcComposition.Plot plot = plots.get(site.step());
-            budget -= buildAt(server, level, id, plot.template(), site.x() + plot.x(), site.groundY() + 1, site.z() + plot.z(),
-                    new Placement(plot.facing(), false), materials);
-            site.setStep(site.step() + 1);
+            int[] used = new int[1];
+            boolean standing = buildAt(server, level, id, plot.template(), site.x() + plot.x(), site.groundY() + 1, site.z() + plot.z(),
+                    new Placement(plot.facing(), false), materials, budget, used);
+            budget -= Math.max(1, used[0]);
+            if (standing) {
+                site.setStep(site.step() + 1);
+            }
         }
         if (site.step() >= plots.size()) {
             site.advance(SpawnStage.WORK);
@@ -674,33 +714,52 @@ public final class NpcSpawner {
     }
 
     /**
-     * Puts up a building at once, unless one of the template already stands there.
+     * Puts up a building a part at a time without materials (the founding), unless one of the template already stands there; a
+     * construction left half done by a restart goes on.
      *
-     * @return the blocks it took, for the budget
+     * @param used gets the blocks done, for the budget
+     * @return whether the building stands (or cannot be put up at all)
      */
-    private static int buildAt(MinecraftServer server, ServerLevel level, UUID id, String templateId, int centerX, int y, int centerZ,
-                               Placement placement, Materials materials) {
+    private static boolean buildAt(MinecraftServer server, ServerLevel level, UUID id, String templateId, int centerX, int y, int centerZ,
+                                   Placement placement, Materials materials, int budget, int[] used) {
         Optional<BuildingTemplate> template = BuildingTemplates.get(templateId);
         if (template.isEmpty() || !template.get().available()) {
             LOGGER.warn("The template {} for a kingdom of the world is missing or unavailable", templateId);
-            return 1;
+            return true;
         }
         BlockPos anchor = anchor(template.get(), centerX, y, centerZ, placement);
-        for (Building building : KingdomWorldApi.state(server).construction().buildingsOf(id)) {
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        for (Building building : state.construction().buildingsOf(id)) {
             if (building.templateId().equals(templateId) && building.anchor().x() == anchor.getX() && building.anchor().z() == anchor.getZ()) {
-                return 1;
+                return true;
             }
         }
-        KingdomWorldState.ConstructionChange change = ConstructionWork.lay(level, null, id, template.get(), anchor, placement, materials);
-        if (change.construction().isEmpty()) {
-            LOGGER.warn("{} of a kingdom of the world was not laid out at {}: {}", templateId, anchor.toShortString(), change.outcome().error());
-            return 1;
+        Construction construction = null;
+        for (Construction started : state.construction().of(id)) {
+            if (started.templateId().equals(templateId) && started.anchor().x() == anchor.getX() && started.anchor().z() == anchor.getZ()) {
+                construction = started;
+            }
         }
-        Construction construction = change.construction().get();
-        if (ConstructionWork.finishNow(server, construction).isEmpty()) {
+        if (construction == null) {
+            KingdomWorldState.ConstructionChange change = ConstructionWork.lay(level, null, id, template.get(), anchor, placement, materials);
+            if (change.construction().isEmpty()) {
+                LOGGER.warn("{} of a kingdom of the world was not laid out at {}: {}", templateId, anchor.toShortString(), change.outcome().error());
+                return true;
+            }
+            construction = change.construction().get();
+        }
+        int part = Math.max(BLOCKS_PER_PART, budget);
+        Optional<Building> built = ConstructionWork.finishSome(server, construction, part);
+        used[0] = part;
+        if (built.isPresent()) {
+            return true;
+        }
+        if (construction.status() == Construction.Status.OUTSIDE_LAND) {
             LOGGER.warn("{} of a kingdom of the world could not be finished at {}", templateId, anchor.toShortString());
+            ConstructionWork.cancel(server, null, id, construction.id());
+            return true;
         }
-        return template.get().blocks().size();
+        return false;
     }
 
     // ---------------------------------------------------------------- work: the square, fields, posts
@@ -783,9 +842,11 @@ public final class NpcSpawner {
         List<int[]> spots = new ArrayList<>();
         for (double[] direction : directions) {
             double angle = direction[0];
-            // Diagonals reach the corners of the square land, so they lie a little further out.
-            double reach = Math.abs(Math.cos(angle)) > 0.1 && Math.abs(Math.sin(angle)) > 0.1 ? distance * 0.85 : distance;
-            spots.add(new int[]{site.x() + (int) Math.round(Math.cos(angle) * reach), site.z() + (int) Math.round(Math.sin(angle) * reach)});
+            // The wall and the land are squares: a spot lies the same number of columns out on the diagonals as on the sides.
+            double cos = Math.cos(angle);
+            double sin = Math.sin(angle);
+            double scale = distance / Math.max(Math.abs(cos), Math.abs(sin));
+            spots.add(new int[]{site.x() + (int) Math.round(cos * scale), site.z() + (int) Math.round(sin * scale)});
         }
         return spots;
     }
@@ -939,14 +1000,19 @@ public final class NpcSpawner {
             return;
         }
         NpcSite.Town town = site.towns().get(index);
-        int rows = 2 * TOWN_REACH + 1;
+        int rows = 2 * (TOWN_REACH + RAMP) + 1;
         int y = townHeight(level, town);
         if (sub < rows) {
             int budget = NpcSettings.rules().blocksPerTick();
             NpcGround.Soil soil = NpcGround.soilAt(level, town.x(), town.z());
             while (sub < rows && budget > 0) {
-                int z = town.z() - TOWN_REACH + sub;
-                for (int x = town.x() - TOWN_REACH; x <= town.x() + TOWN_REACH; x++) {
+                int z = town.z() - TOWN_REACH - RAMP + sub;
+                for (int x = town.x() - TOWN_REACH - RAMP; x <= town.x() + TOWN_REACH + RAMP; x++) {
+                    int out = Math.max(Math.abs(x - town.x()), Math.abs(z - town.z())) - TOWN_REACH;
+                    if (out > 0) {
+                        budget -= Math.max(1, ramp(level, id, x, z, y, out, soil));
+                        continue;
+                    }
                     boolean square = Math.abs(x - town.x()) <= 3 && Math.abs(z - town.z()) <= 3;
                     BlockState top = square ? Blocks.COBBLESTONE.defaultBlockState() : soil.top();
                     budget -= Math.max(1, NpcGround.level(level, id, x, z, y, top, soil.fill()));
@@ -977,9 +1043,11 @@ public final class NpcSpawner {
         if (plot < buildings.size() && plot < TOWN_PLOTS.length) {
             String template = buildings.get(plot);
             int[] where = template.equals(NpcComposition.WELL) ? new int[]{-9, -9, 0} : TOWN_PLOTS[plot];
-            buildAt(server, level, id, template, town.x() + where[0], y + 1, town.z() + where[1], new Placement(where[2], false),
-                    new Materials(Materials.AUTO, ""));
-            site.setStep(index * 1000 + sub + 1);
+            int[] used = new int[1];
+            if (buildAt(server, level, id, template, town.x() + where[0], y + 1, town.z() + where[1], new Placement(where[2], false),
+                    new Materials(Materials.AUTO, ""), NpcSettings.rules().blocksPerTick(), used)) {
+                site.setStep(index * 1000 + sub + 1);
+            }
             return;
         }
         site.setStep((index + 1) * 1000);
@@ -1356,7 +1424,7 @@ public final class NpcSpawner {
                 : CityWalls.WALL_STONE)) {
             item = wall.wallClass() == Wall.WallClass.PALISADE ? "minecraft:oak_log" : "minecraft:cobblestone";
         }
-        int budget = NpcSettings.rules().blocksPerTick() / 4;
+        int budget = Math.min(WALL_BLOCKS_PER_TICK, NpcSettings.rules().blocksPerTick());
         String paid = item;
         RoadWork.change(server, "pay the wall of a kingdom of the world", roads -> {
             int left = budget;
@@ -1403,10 +1471,11 @@ public final class NpcSpawner {
         lastTiming = new Timing(job.ticks, average, job.maxNanos / 1e6);
         KingdomWorldState state = KingdomWorldApi.state(server);
         LOGGER.info("The kingdom of the world {} appeared ({}): {} buildings, {} citizens, {} soldiers, {} town(s); {} ticks, average tick "
-                        + "{} ms, worst tick {} ms", state.kingdoms().get(id).map(Kingdom::name).orElse("?"), site.level().id(),
+                        + "{} ms, worst tick {} ms (at {})", state.kingdoms().get(id).map(Kingdom::name).orElse("?"), site.level().id(),
                 state.construction().buildingsOf(id).size(), state.citizens().registry().citizensOf(id).size(),
                 ArmyWork.state(server).soldiersOf(id).size(), RoadWork.state(server).citiesOf(id).size(), job.ticks,
-                String.format(java.util.Locale.ROOT, "%.2f", average), String.format(java.util.Locale.ROOT, "%.2f", job.maxNanos / 1e6));
+                String.format(java.util.Locale.ROOT, "%.2f", average), String.format(java.util.Locale.ROOT, "%.2f", job.maxNanos / 1e6),
+                job.worstStage.id());
         NpcSpawner.job = null;
     }
 

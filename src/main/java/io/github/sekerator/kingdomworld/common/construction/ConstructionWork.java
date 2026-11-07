@@ -1092,6 +1092,17 @@ public final class ConstructionWork {
      * @return the building in the register, or empty if the place is not all the kingdom's land
      */
     public static Optional<Building> finishNow(MinecraftServer server, Construction construction) {
+        return finishSome(server, construction, Integer.MAX_VALUE);
+    }
+
+    /**
+     * Does up to {@code budget} steps of a construction at once, as {@link #finishNow} does all of them, so that a large
+     * building can be put up over several ticks; the construction is finished with its last step.
+     *
+     * @return the building in the register once the construction is finished, empty while steps are left or if the place is not
+     *         all the kingdom's land
+     */
+    public static Optional<Building> finishSome(MinecraftServer server, Construction construction, int budget) {
         if (!onOwnLand(server, construction)) {
             construction.setStatus(Construction.Status.OUTSIDE_LAND);
             return Optional.empty();
@@ -1101,9 +1112,14 @@ public final class ConstructionWork {
         Optional<BuildingTemplate> template = template(construction);
         if (level != null && plan.isPresent() && template.isPresent()) {
             List<ItemStack> drops = new ArrayList<>();
+            int done = 0;
             for (BuildPlan.Step step : plan.get().steps()) {
                 if (construction.isDone(step.index())) {
                     continue;
+                }
+                if (done++ >= budget) {
+                    store(server, construction.kingdomId(), level, blockPos(construction.anchor()), drops);
+                    return Optional.empty();
                 }
                 BlockPos at = new BlockPos(step.x(), step.y(), step.z());
                 level.getChunk(at);
