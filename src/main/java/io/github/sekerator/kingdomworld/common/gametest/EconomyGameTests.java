@@ -46,6 +46,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -443,6 +444,22 @@ public final class EconomyGameTests {
 
     // ---------------------------------------------------------------- saved data
 
+    /**
+     * The saved tag of a kingdom. The data holds every kingdom of the world, also those other tests left behind when they
+     * failed, so the first one is not always the test's own.
+     */
+    private static CompoundTag savedKingdom(GameTestHelper helper, CompoundTag saved, Kingdom kingdom) {
+        ListTag kingdoms = saved.getList("kingdoms", Tag.TAG_COMPOUND);
+        for (int i = 0; i < kingdoms.size(); i++) {
+            CompoundTag tag = kingdoms.getCompound(i);
+            if (tag.hasUUID("id") && tag.getUUID("id").equals(kingdom.id())) {
+                return tag;
+            }
+        }
+        helper.fail("The kingdom is not in the saved data");
+        return new CompoundTag();
+    }
+
     @GameTest(template = EMPTY, batch = "kingdomworld_economy_saving")
     public static void treasuriesAndAccountsSurviveSavingAndUpgrades(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
@@ -472,8 +489,11 @@ public final class EconomyGameTests {
             CompoundTag old = saved.copy();
             old.putInt("formatVersion", 5);
             old.remove("economy");
-            CompoundTag kingdomTag = old.getList("kingdoms", 10).getCompound(0);
-            kingdomTag.remove("treasury");
+            ListTag oldKingdoms = old.getList("kingdoms", Tag.TAG_COMPOUND);
+            for (int i = 0; i < oldKingdoms.size(); i++) {
+                oldKingdoms.getCompound(i).remove("treasury");
+            }
+            CompoundTag kingdomTag = savedKingdom(helper, old, kingdom);
             ListTag treasurerRights = new ListTag();
             treasurerRights.add(StringTag.valueOf("build"));
             kingdomTag.getCompound("permissions").put("treasurer", treasurerRights);
@@ -487,7 +507,7 @@ public final class EconomyGameTests {
 
             // Broken money makes the data read-only instead of being dropped.
             CompoundTag broken = saved.copy();
-            broken.getList("kingdoms", 10).getCompound(0).getCompound("treasury").putLong("balance", -5);
+            savedKingdom(helper, broken, kingdom).getCompound("treasury").putLong("balance", -5);
             helper.assertTrue(KingdomSavedData.load(broken).isReadOnly(), "A negative balance did not make the data read-only");
             CompoundTag brokenAccounts = saved.copy();
             brokenAccounts.getCompound("economy").put("accounts", StringTag.valueOf("nonsense"));
