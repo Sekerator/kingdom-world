@@ -2009,5 +2009,20 @@
   "commands.kingdomworld.admin.magic.unlock.not_needed": "Magic data was not read-only",
   "commands.kingdomworld.admin.magic.unlocked": "Magic data unlocked, the original was backed up to %s",
   "commands.kingdomworld.admin.magic.unlock.failed": "Could not back up the magic data: %s",
-  "commands.kingdomworld.admin.magic.crystals": "Put %s crystal(s) of rank %s into the storehouses of %s"
+  "commands.kingdomworld.admin.magic.crystals": "Put %s crystal(s) of rank %s into the storehouses of %s",
+  "kingdomworld.error.not_in_party": "You are not in a party",
+  "kingdomworld.error.already_in_party": "Already in a party",
+  "kingdomworld.error.party_full": "The party is full",
+  "kingdomworld.error.not_party_leader": "Only the leader of the party may do this",
+  "kingdomworld.error.not_invited": "No invitation to this party, or it ran out",
+  "kingdomworld.error.unknown_companion": "No such companion",
+  "kingdomworld.error.not_your_companion": "This is not your companion",
+  "kingdomworld.error.too_many_companions": "Your rank in the guild allows no more companions",
+  "kingdomworld.error.slave_market_closed": "The king closed the slave market on these lands",
+  "kingdomworld.error.slavery_forbidden": "The law of the kingdom forbids slaves",
+  "kingdomworld.error.not_a_slave": "Only a slave can be set free or sold",
+  "kingdomworld.error.not_a_subject": "You are no subject of a kingdom that could take them in",
+  "kingdomworld.error.not_king": "Only the king may do this",
+  "kingdomworld.error.companion_far": "The companion is too far away",
+  "kingdomworld.ledger.companions": "Companions"
 }

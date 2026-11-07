@@ -608,12 +608,55 @@ public final class GuildState {
     // ---------------------------------------------------------------- progress and the end of contracts
 
     /**
+     * Contracts shared by a group of players, such as a party: a kill or a hand-in of any of them moves the contract, and the
+     * reward and the points are split among them. The guild only asks; who shares what is kept elsewhere.
+     */
+    public interface Sharing {
+        /** Nobody shares anything: every contract belongs to its taker alone. */
+        Sharing NONE = new Sharing() {
+            @Override
+            public Set<Long> sharedWith(UUID player) {
+                return Set.of();
+            }
+
+            @Override
+            public List<RewardSplit.Share> shares(Contract contract) {
+                return List.of();
+            }
+        };
+
+        /**
+         * The contracts a player works on with others, held by the player or by another.
+         */
+        Set<Long> sharedWith(UUID player);
+
+        /**
+         * Who gets what part of a finished contract; empty when the taker keeps everything.
+         */
+        List<RewardSplit.Share> shares(Contract contract);
+    }
+
+    /**
+     * What one person got for a finished contract.
+     */
+    public record Payment(UUID player, long money, long points) {
+    }
+
+    /**
      * What a kill or a hand-in did to a contract.
      *
      * @param contract the contract after the change; closed with {@link Contract.Status#DONE} when it was finished
      * @param paid     what the taker got
+     * @param payments what everybody got when the contract was shared, the taker first; empty otherwise
      */
-    public record Progress(Contract contract, boolean finished, long paid) {
+    public record Progress(Contract contract, boolean finished, long paid, List<Payment> payments) {
+        public Progress {
+            payments = List.copyOf(payments);
+        }
+
+        public Progress(Contract contract, boolean finished, long paid) {
+            this(contract, finished, paid, List.of());
+        }
     }
 
     /**
@@ -621,15 +664,25 @@ public final class GuildState {
      * finished and paid.
      */
     public List<Progress> recordKill(UUID player, String monster, Rank rank, boolean boss, long now, long day, KingdomWorldState world) {
+        return recordKill(player, monster, rank, boss, now, day, world, Sharing.NONE);
+    }
+
+    /**
+     * A member killed a monster: every contract they hold or share that counts it moves on, and those that are complete are
+     * finished and paid (split among those who share them).
+     */
+    public List<Progress> recordKill(UUID player, String monster, Rank rank, boolean boss, long now, long day, KingdomWorldState world,
+                                     Sharing sharing) {
         List<Progress> result = new ArrayList<>();
         for (Contract contract : List.copyOf(contracts.values())) {
-            if (!contract.takenBy(player) || contract.deadline() <= now || !contract.counts(monster, rank, boss)) {
+            boolean mine = contract.takenBy(player) || isShared(contract, player, sharing);
+            if (!mine || contract.deadline() <= now || !contract.counts(monster, rank, boss)) {
                 continue;
             }
             Contract moved = contract.withProgress(contract.progress() + 1);
             contracts.put(moved.id(), moved);
             if (moved.complete()) {
-                result.add(finishForPlayer(moved, day, world));
+                result.add(finishForPlayer(moved, day, world, sharing));
             } else {
                 result.add(new Progress(moved, false, 0));
             }
@@ -641,10 +694,19 @@ public final class GuildState {
     }
 
     /**
-     * Finishes a contract a player holds: an exam raises the rank, any other pays the reward less the commission onto the
-     * player's account and the commission to the branch, and gives the points.
+     * Whether a contract held by another is shared with a player: taken by a player, not an exam, and named by the sharing.
      */
-    private Progress finishForPlayer(Contract contract, long day, KingdomWorldState world) {
+    public static boolean isShared(Contract contract, UUID player, Sharing sharing) {
+        return contract.status() == Contract.Status.TAKEN && contract.player() != null && !contract.isExam()
+                && sharing.sharedWith(player).contains(contract.id());
+    }
+
+    /**
+     * Finishes a contract a player holds: an exam raises the rank, any other pays the reward less the commission onto the
+     * player's account (or the accounts of those who share it, by their shares) and the commission to the branch, and gives
+     * the points the same way.
+     */
+    private Progress finishForPlayer(Contract contract, long day, KingdomWorldState world, Sharing sharing) {
         contracts.remove(contract.id());
         UUID player = contract.player();
         GuildMember member = members.get(player);
@@ -663,19 +725,64 @@ public final class GuildState {
             payout = contract.reward();
             commission = 0;
         }
-        if (economy.canReleaseToAccount(player, contract.currency(), payout)) {
-            economy.releaseToAccount(player, contract.currency(), payout);
+        List<RewardSplit.Share> all = sharing.shares(contract);
+        List<UUID> people = new ArrayList<>();
+        List<Integer> weightList = new ArrayList<>();
+        people.add(player);
+        weightList.add(0);
+        for (RewardSplit.Share share : all) {
+            if (share.player().equals(player)) {
+                weightList.set(0, share.weight());
+            } else if (!people.contains(share.player())) {
+                people.add(share.player());
+                weightList.add(share.weight());
+            }
+        }
+        if (people.size() == 1) {
+            if (economy.canReleaseToAccount(player, contract.currency(), payout)) {
+                economy.releaseToAccount(player, contract.currency(), payout);
+                economy.releaseToTreasury(contract.branch(), contract.currency(), commission, LedgerCategory.GUILD, day);
+            } else {
+                // An account that cannot take more: the money goes back to whoever posted the contract.
+                refund(contract, day, world);
+                payout = 0;
+            }
+            if (member != null) {
+                members.put(player, member.plusPoints(contract.points()).plusContract());
+            }
+            changed();
+            return new Progress(contract.closed(Contract.Status.DONE), true, payout);
+        }
+        // Shared: the taker first, then the others, each by the share; the parts add up to the whole.
+        int[] weights = weightList.stream().mapToInt(Integer::intValue).toArray();
+        long[] money = RewardSplit.split(payout, weights);
+        long[] points = RewardSplit.split(contract.points(), weights);
+        // A part an account cannot take goes to the taker; if the taker cannot take it either, everything goes back.
+        for (int i = 1; i < money.length; i++) {
+            if (!economy.canReleaseToAccount(people.get(i), contract.currency(), money[i])) {
+                money[0] += money[i];
+                money[i] = 0;
+            }
+        }
+        if (economy.canReleaseToAccount(player, contract.currency(), money[0])) {
+            for (int i = 0; i < money.length; i++) {
+                economy.releaseToAccount(people.get(i), contract.currency(), money[i]);
+            }
             economy.releaseToTreasury(contract.branch(), contract.currency(), commission, LedgerCategory.GUILD, day);
         } else {
-            // An account that cannot take more: the money goes back to whoever posted the contract.
             refund(contract, day, world);
-            payout = 0;
+            java.util.Arrays.fill(money, 0);
         }
-        if (member != null) {
-            members.put(player, member.plusPoints(contract.points()).plusContract());
+        List<Payment> payments = new ArrayList<>();
+        for (int i = 0; i < people.size(); i++) {
+            GuildMember someone = members.get(people.get(i));
+            if (someone != null) {
+                members.put(someone.player(), someone.plusPoints(points[i]).plusContract());
+            }
+            payments.add(new Payment(people.get(i), money[i], points[i]));
         }
         changed();
-        return new Progress(contract.closed(Contract.Status.DONE), true, payout);
+        return new Progress(contract.closed(Contract.Status.DONE), true, money[0], payments);
     }
 
     /**
@@ -684,17 +791,29 @@ public final class GuildState {
      * @param have how many of the items the player carries
      */
     public Outcome checkHandIn(UUID player, long id, int have, long now) {
+        return checkHandIn(player, id, have, now, Sharing.NONE);
+    }
+
+    /**
+     * Whether a member could hand in items for a gathering contract now: alone, everything that is missing at once; in a
+     * group that shares the contract, any part of it.
+     *
+     * @param have how many of the items the player carries
+     */
+    public Outcome checkHandIn(UUID player, long id, int have, long now, Sharing sharing) {
         Contract contract = contracts.get(id);
         if (contract == null || contract.deadline() <= now) {
             return Outcome.fail(KingdomError.UNKNOWN_CONTRACT);
         }
-        if (!contract.takenBy(player)) {
+        boolean shared = !sharing.shares(contract).isEmpty() && (contract.takenBy(player) || isShared(contract, player, sharing));
+        if (!contract.takenBy(player) && !shared) {
             return Outcome.fail(KingdomError.NOT_YOUR_CONTRACT);
         }
         if (contract.kind() != Contract.Kind.GATHER) {
             return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
         }
-        return have >= contract.count() - contract.progress() ? Outcome.DONE : Outcome.fail(KingdomError.NO_ITEMS);
+        int missing = contract.count() - contract.progress();
+        return have >= missing || shared && have > 0 ? Outcome.DONE : Outcome.fail(KingdomError.NO_ITEMS);
     }
 
     /**
@@ -702,11 +821,25 @@ public final class GuildState {
      * contract is finished and paid.
      */
     public Optional<Progress> handIn(UUID player, long id, int handed, long now, long day, KingdomWorldState world) {
-        if (!checkHandIn(player, id, handed, now).ok()) {
+        return handIn(player, id, handed, now, day, world, Sharing.NONE);
+    }
+
+    /**
+     * Items of a gathering contract were handed in (the caller took them from the player in the same moment, no more than
+     * are missing): the contract moves on, and when nothing is missing any more it is finished and paid.
+     */
+    public Optional<Progress> handIn(UUID player, long id, int handed, long now, long day, KingdomWorldState world, Sharing sharing) {
+        if (!checkHandIn(player, id, handed, now, sharing).ok()) {
             return Optional.empty();
         }
         Contract contract = contracts.get(id);
-        return Optional.of(finishForPlayer(contract.withProgress(contract.count()), day, world));
+        Contract moved = contract.withProgress(contract.progress() + handed);
+        if (!moved.complete()) {
+            contracts.put(id, moved);
+            changed();
+            return Optional.of(new Progress(moved, false, 0));
+        }
+        return Optional.of(finishForPlayer(moved, day, world, sharing));
     }
 
     /**

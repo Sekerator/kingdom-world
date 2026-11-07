@@ -246,7 +246,33 @@ public enum KingdomError {
     /** The name of a blueprint is empty or too long. */
     BAD_BLUEPRINT_NAME,
     /** A construction is built from the blueprint now. */
-    BLUEPRINT_IN_USE;
+    BLUEPRINT_IN_USE,
+
+    /** The player is in no party. */
+    NOT_IN_PARTY,
+    ALREADY_IN_PARTY,
+    /** The party has as many members as allowed. */
+    PARTY_FULL,
+    /** Only the leader of the party may do this. */
+    NOT_PARTY_LEADER,
+    /** The player was not invited to the party, or the invitation ran out. */
+    NOT_INVITED,
+    UNKNOWN_COMPANION,
+    NOT_YOUR_COMPANION,
+    /** The player keeps as many companions as the rank in the guild allows. */
+    TOO_MANY_COMPANIONS,
+    /** The king closed the market of slaves on the land of the kingdom. */
+    SLAVE_MARKET_CLOSED,
+    /** The law of the kingdom forbids slaves. */
+    SLAVERY_FORBIDDEN,
+    /** Only a slave can be set free or sold. */
+    NOT_A_SLAVE,
+    /** The player is no subject of a kingdom that could take the freed companion in. */
+    NOT_A_SUBJECT,
+    /** Only the king may do this. */
+    NOT_KING,
+    /** The companion is too far away. */
+    COMPANION_FAR;
 
     /**
      * Lower case identifier, used for translation keys.

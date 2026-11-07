@@ -307,6 +307,15 @@ public final class Economy {
      * @param payer the player paying from the account, or {@code null} for coins
      */
     public Outcome payKingdom(UUID kingdomId, UUID currency, long amount, UUID payer, long day) {
+        return payKingdom(kingdomId, currency, amount, payer, LedgerCategory.TRADE, day);
+    }
+
+    /**
+     * A player pays a kingdom, written into the journal under a category.
+     *
+     * @param payer the player paying from the account, or {@code null} for coins
+     */
+    public Outcome payKingdom(UUID kingdomId, UUID currency, long amount, UUID payer, LedgerCategory category, long day) {
         Outcome check = checkPayKingdom(kingdomId, currency, amount, payer);
         if (!check.ok()) {
             return check;
@@ -314,7 +323,7 @@ public final class Economy {
         if (payer != null) {
             accounts.debit(payer, currency, amount);
         }
-        take(treasuries.get(kingdomId), currency, amount, LedgerCategory.TRADE, day);
+        take(treasuries.get(kingdomId), currency, amount, category, day);
         changed();
         return Outcome.DONE;
     }

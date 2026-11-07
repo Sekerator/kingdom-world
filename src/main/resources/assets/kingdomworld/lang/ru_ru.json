@@ -2009,5 +2009,20 @@
   "commands.kingdomworld.admin.magic.unlock.not_needed": "Данные магии не были только для чтения",
   "commands.kingdomworld.admin.magic.unlocked": "Данные магии разблокированы, оригинал сохранён в %s",
   "commands.kingdomworld.admin.magic.unlock.failed": "Не удалось сохранить копию данных магии: %s",
-  "commands.kingdomworld.admin.magic.crystals": "На склады %3$s положено кристаллов ранга %2$s: %1$s"
+  "commands.kingdomworld.admin.magic.crystals": "На склады %3$s положено кристаллов ранга %2$s: %1$s",
+  "kingdomworld.error.not_in_party": "Вы не в отряде",
+  "kingdomworld.error.already_in_party": "Уже в отряде",
+  "kingdomworld.error.party_full": "В отряде нет мест",
+  "kingdomworld.error.not_party_leader": "Это может только глава отряда",
+  "kingdomworld.error.not_invited": "Приглашения в этот отряд нет или оно истекло",
+  "kingdomworld.error.unknown_companion": "Такого спутника нет",
+  "kingdomworld.error.not_your_companion": "Это не ваш спутник",
+  "kingdomworld.error.too_many_companions": "Ваш ранг в гильдии не позволяет больше спутников",
+  "kingdomworld.error.slave_market_closed": "Король закрыл невольничий рынок в своих землях",
+  "kingdomworld.error.slavery_forbidden": "Закон королевства запрещает рабство",
+  "kingdomworld.error.not_a_slave": "Освободить или продать можно только невольника",
+  "kingdomworld.error.not_a_subject": "Вы не подданный королевства, которое могло бы его принять",
+  "kingdomworld.error.not_king": "Это может только король",
+  "kingdomworld.error.companion_far": "Спутник слишком далеко",
+  "kingdomworld.ledger.companions": "Спутники"
 }
