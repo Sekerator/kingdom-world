@@ -55,7 +55,7 @@ public final class BankActions {
             return;
         }
         if (KingdomWorldApi.isReadOnly(player.server)) {
-            player.displayClientMessage(KingdomActions.errorMessage(KingdomError.READ_ONLY), true);
+            player.displayClientMessage(net.minecraft.network.chat.Component.translatable(KEY + "read_only"), true);
             return;
         }
         KingdomWorldNetwork.sendToPlayer(player, new EconomyPackets.BankOpen(view(player, pos, kingdom.get()), true));

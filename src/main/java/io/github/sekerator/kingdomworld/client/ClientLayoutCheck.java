@@ -154,6 +154,9 @@ final class ClientLayoutCheck {
         LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.storehouse.read_only"), NARROWEST_SCREEN);
         LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.post.outside"), NARROWEST_SCREEN);
         LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.post.read_only"), NARROWEST_SCREEN);
+        LayoutCheck.actionbar(minecraft.font, Component.translatable("block.kingdomworld.mint.use"), NARROWEST_SCREEN);
+        LayoutCheck.actionbar(minecraft.font, KingdomActions.errorMessage(KingdomError.BANK_OUTSIDE), NARROWEST_SCREEN);
+        LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.bank.read_only"), NARROWEST_SCREEN);
         LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.post.foreign",
                 ProtectionService.shortName(LONG_KINGDOM)), NARROWEST_SCREEN);
         for (Gender gender : Gender.values()) {
@@ -406,11 +409,19 @@ final class ClientLayoutCheck {
                 : List.of();
         List<WorkPostView.Station> stations = new ArrayList<>();
         ItemStack current = ItemStack.EMPTY;
-        if (io.github.sekerator.kingdomworld.core.citizen.Professions.isWorkshop(profession)) {
-            for (String kind : io.github.sekerator.kingdomworld.core.production.Stations.ALL) {
-                stations.add(new WorkPostView.Station(kind, 16));
+        if (io.github.sekerator.kingdomworld.core.citizen.Professions.usesStations(profession)) {
+            if (profession.equals("minter")) {
+                // A minter works at mints only and strikes from ingots.
+                stations.add(new WorkPostView.Station(io.github.sekerator.kingdomworld.core.production.Stations.MINT, 16));
+                current = new ItemStack(Items.IRON_INGOT);
+            } else {
+                for (String kind : io.github.sekerator.kingdomworld.core.production.Stations.ALL) {
+                    if (!kind.equals(io.github.sekerator.kingdomworld.core.production.Stations.MINT)) {
+                        stations.add(new WorkPostView.Station(kind, 16));
+                    }
+                }
+                current = new ItemStack(Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE);
             }
-            current = new ItemStack(Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE);
         }
         return new WorkPostView(new BlockPos(-30_000_000, 319, 29_999_999), UUID.randomUUID(), canManage, profession, 16, 16,
                 Math.max(1, workers), 16, profession.equals("herder") ? "minecraft:mooshroom" : "", animals, 64, 64, status, container,
@@ -500,6 +511,85 @@ final class ClientLayoutCheck {
         return screen;
     }
 
+    private static final long MUCH = 999_999_999_999L;
+    private static final String LONG_CURRENCY = "Великая Северная Крона Щит";
+
+    /**
+     * A treasury with the largest numbers, long names, every category of the journal, every wage and many debtors.
+     */
+    private static io.github.sekerator.kingdomworld.common.network.data.TreasuryView treasuryView(UUID kingdom, boolean canManage, boolean king,
+                                                                                                     boolean empty) {
+        List<io.github.sekerator.kingdomworld.common.network.data.TreasuryView.JournalRow> journal = new ArrayList<>();
+        List<io.github.sekerator.kingdomworld.common.network.data.TreasuryView.Wage> wages = new ArrayList<>();
+        List<io.github.sekerator.kingdomworld.common.network.data.TreasuryView.Debtor> debtors = new ArrayList<>();
+        if (!empty) {
+            for (io.github.sekerator.kingdomworld.core.economy.TreasuryJournal.Period period
+                    : io.github.sekerator.kingdomworld.core.economy.TreasuryJournal.Period.values()) {
+                for (io.github.sekerator.kingdomworld.core.economy.LedgerCategory category
+                        : io.github.sekerator.kingdomworld.core.economy.LedgerCategory.values()) {
+                    journal.add(new io.github.sekerator.kingdomworld.common.network.data.TreasuryView.JournalRow(period, category,
+                            category.ordinal() % 2 == 0 ? MUCH : 0, category.ordinal() != 0 ? MUCH - 1 : 0));
+                }
+            }
+            for (int i = 0; i < 30; i++) {
+                debtors.add(new io.github.sekerator.kingdomworld.common.network.data.TreasuryView.Debtor(i == 0 ? LONG_PLAYER : "Debtor_" + i,
+                        MUCH - i));
+            }
+        }
+        int index = 0;
+        for (io.github.sekerator.kingdomworld.core.citizen.Profession profession
+                : io.github.sekerator.kingdomworld.core.citizen.Professions.REGISTRY.all()) {
+            long usual = 6;
+            long wage = index % 3 == 0 ? usual : index % 3 == 1 ? 199 : 0;
+            wages.add(new io.github.sekerator.kingdomworld.common.network.data.TreasuryView.Wage(profession.id(), wage, usual, empty ? 0 : 9_999));
+            index++;
+        }
+        return new io.github.sekerator.kingdomworld.common.network.data.TreasuryView(kingdom, canManage, king, LONG_KINGDOM,
+                empty ? "" : LONG_CURRENCY, 10, 100, empty ? 0 : MUCH, empty ? io.github.sekerator.kingdomworld.core.economy.Coins.NONE
+                : new io.github.sekerator.kingdomworld.core.economy.Coins(9_999, 9_999, 999_999), journal, 1_000, 1_000, 9_999, 23_999,
+                new io.github.sekerator.kingdomworld.common.network.data.TreasuryView.Payroll(empty ? -1 : 5, MUCH, MUCH / 3, 9_999, 9_999),
+                wages, 200, debtors, empty ? 0 : 9_999, empty ? 0 : MUCH,
+                new io.github.sekerator.kingdomworld.common.network.data.TreasuryView.Mint(empty ? 0 : 99, 999, WorkStatus.NO_INGREDIENTS, MUCH,
+                        MUCH, true));
+    }
+
+    private static ThroneScreen treasury(KingdomView view, boolean canManage, boolean empty, String mode, String period, Component status) {
+        ThroneScreen screen = throne(view, "treasury", status);
+        screen.updateTreasury(treasuryView(view.id(), canManage, view.viewerRole() == Role.KING, empty));
+        screen.showTreasury(mode, period);
+        return screen;
+    }
+
+    /**
+     * A bank with long names, coins and debts with the largest numbers and more accounts than fit.
+     */
+    private static io.github.sekerator.kingdomworld.common.network.data.BankView bankView(boolean empty) {
+        UUID currency = UUID.nameUUIDFromBytes("bank".getBytes(StandardCharsets.UTF_8));
+        List<io.github.sekerator.kingdomworld.common.network.data.BankView.Account> accounts = new ArrayList<>();
+        accounts.add(new io.github.sekerator.kingdomworld.common.network.data.BankView.Account(currency, LONG_CURRENCY, LONG_KINGDOM, 0x6C3483,
+                false, empty ? 0 : MUCH, 10, 100));
+        if (!empty) {
+            for (int i = 0; i < 20; i++) {
+                accounts.add(new io.github.sekerator.kingdomworld.common.network.data.BankView.Account(
+                        UUID.nameUUIDFromBytes(("account" + i).getBytes(StandardCharsets.UTF_8)), i % 2 == 0 ? "" : LONG_CURRENCY,
+                        i == 0 ? LONG_KINGDOM : "Valoria " + i, 0x1F618D + i * 1000, i % 3 == 2, MUCH - i, 10, 100));
+            }
+        }
+        return new io.github.sekerator.kingdomworld.common.network.data.BankView(new BlockPos(-30_000_000, 319, 29_999_999), currency,
+                LONG_KINGDOM, 0x6C3483, empty ? "" : LONG_CURRENCY, 10, 100,
+                empty ? io.github.sekerator.kingdomworld.core.economy.Coins.NONE
+                        : new io.github.sekerator.kingdomworld.core.economy.Coins(2_304, 2_304, 2_304), empty ? 0 : MUCH, accounts);
+    }
+
+    private static io.github.sekerator.kingdomworld.client.screen.BankScreen bank(boolean empty, String amount, Component status, boolean success) {
+        io.github.sekerator.kingdomworld.client.screen.BankScreen screen = new io.github.sekerator.kingdomworld.client.screen.BankScreen(bankView(empty));
+        screen.fillForCheck(amount, amount.isEmpty() ? 0 : 2);
+        if (!status.getString().isEmpty()) {
+            screen.onResult(success, status);
+        }
+        return screen;
+    }
+
     private static void fillMapData() {
         UUID first = UUID.nameUUIDFromBytes("first".getBytes(StandardCharsets.UTF_8));
         UUID second = UUID.nameUUIDFromBytes("second".getBytes(StandardCharsets.UTF_8));
@@ -521,6 +611,9 @@ final class ClientLayoutCheck {
             }
         }
         ClientTerritoryCache.applyArea(new MapAreaPacket("kingdomworld:layout_check", -6, -6, width, height, palette, cells));
+        io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.replace(List.of(
+                new io.github.sekerator.kingdomworld.common.network.data.CurrencyInfo(first, LONG_CURRENCY, LONG_KINGDOM, 0x6C3483, false, 10, 100),
+                new io.github.sekerator.kingdomworld.common.network.data.CurrencyInfo(second, "", "Valoria", 0xB7950B, false, 10, 100)));
     }
 
     private static List<Case> cases() {
@@ -615,6 +708,34 @@ final class ClientLayoutCheck {
         cases.add(new Case("throne-orders-create-empty", () -> orders(view(KingdomView.Relation.MEMBER, Role.KING), true, true, "create",
                 Component.empty())));
         cases.add(new Case("throne-orders-edit", () -> orders(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "edit", longError)));
+        cases.add(new Case("throne-king-treasury", () -> treasury(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "overview", "today",
+                Component.empty())));
+        cases.add(new Case("throne-treasury-journal", () -> treasury(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "journal", "week",
+                Component.empty())));
+        cases.add(new Case("throne-treasury-journal-empty", () -> treasury(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, true,
+                "journal", "yesterday", Component.empty())));
+        cases.add(new Case("throne-treasury-settings", () -> treasury(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "settings",
+                "today", longError)));
+        cases.add(new Case("throne-treasurer-settings", () -> treasury(view(KingdomView.Relation.MEMBER, Role.TREASURER), true, false,
+                "settings", "today", Component.translatable("kingdomworld.treasury.wage_set", CitizenTexts.profession("minter"),
+                        io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(MUCH, io.github.sekerator.kingdomworld.core.economy.CurrencyUnits.DEFAULT)))));
+        cases.add(new Case("throne-subject-settings", () -> treasury(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, false, "settings",
+                "today", Component.empty())));
+        cases.add(new Case("throne-treasury-debtors", () -> treasury(view(KingdomView.Relation.MEMBER, Role.STEWARD), false, false, "debtors",
+                "today", Component.empty())));
+        cases.add(new Case("throne-treasury-empty", () -> treasury(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, true, "overview",
+                "today", Component.empty())));
+        cases.add(new Case("throne-debtors-empty", () -> treasury(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, true, "debtors",
+                "today", Component.empty())));
+        cases.add(new Case("throne-treasury-loading", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "treasury", Component.empty())));
+        cases.add(new Case("bank", () -> bank(false, "", Component.empty(), false)));
+        cases.add(new Case("bank-withdraw", () -> bank(false, "999999g99s9c", Component.translatable("kingdomworld.bank.withdrew_partly",
+                io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(MUCH, io.github.sekerator.kingdomworld.core.economy.CurrencyUnits.DEFAULT),
+                io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(MUCH, io.github.sekerator.kingdomworld.core.economy.CurrencyUnits.DEFAULT)),
+                true)));
+        cases.add(new Case("bank-error", () -> bank(false, "abc", longError, false)));
+        cases.add(new Case("bank-empty", () -> bank(true, "", Component.empty(), false)));
+        cases.add(new Case("post-minter", () -> post(postView("minter", WorkStatus.NO_INGREDIENTS, true, 4, false, true), Component.empty())));
         cases.add(new Case("throne-outsider", () -> throne(view(KingdomView.Relation.OUTSIDER, null), "overview", Component.empty())));
         cases.add(new Case("throne-invited", () -> throne(view(KingdomView.Relation.INVITED, null), "overview", Component.empty())));
         cases.add(new Case("throne-applied", () -> throne(view(KingdomView.Relation.APPLIED, null), "overview", Component.empty())));

@@ -703,5 +703,6 @@
   "commands.kingdomworld.admin.economy.info.raw": "Числа: счёт %s, медяков %s, серебряников %s, золотых %s, всего %s, в обороте %s",
   "commands.kingdomworld.admin.economy.accounts.header": "Счета игрока %s: %s",
   "commands.kingdomworld.admin.economy.accounts.entry": "%s: %s",
-  "commands.kingdomworld.admin.economy.values": "Ценность предметов: %s предм. (по рецептам %s, по таблице %s, по умолчанию %s), рецептов %s, не прочитано %s"
+  "commands.kingdomworld.admin.economy.values": "Ценность предметов: %s предм. (по рецептам %s, по таблице %s, по умолчанию %s), рецептов %s, не прочитано %s",
+  "kingdomworld.bank.read_only": "Банк закрыт: данные королевств только для чтения"
 }

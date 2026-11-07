@@ -57,6 +57,7 @@ public final class ClientSelfTest {
     private static volatile BlockPos throne;
     private static volatile UUID kingdomId;
     private static volatile BlockPos post;
+    private static volatile BlockPos bank;
 
     private ClientSelfTest() {
     }
@@ -173,10 +174,23 @@ public final class ClientSelfTest {
                     screen.selectTab("orders");
                 }
             }
-            case 259 -> LOGGER.info(PREFIX + "orders tab answered by the server: {} ({} order(s))",
-                    minecraft.screen instanceof ThroneScreen screen && screen.ordersShown() >= 0,
-                    minecraft.screen instanceof ThroneScreen screen ? screen.ordersShown() : -1);
-            case 260 -> {
+            case 259 -> {
+                LOGGER.info(PREFIX + "orders tab answered by the server: {} ({} order(s))",
+                        minecraft.screen instanceof ThroneScreen screen && screen.ordersShown() >= 0,
+                        minecraft.screen instanceof ThroneScreen screen ? screen.ordersShown() : -1);
+                if (minecraft.screen instanceof ThroneScreen screen) {
+                    screen.selectTab("treasury");
+                }
+            }
+            case 262 -> {
+                LOGGER.info(PREFIX + "treasury tab answered by the server: {}",
+                        minecraft.screen instanceof ThroneScreen screen && screen.treasuryShown());
+                if (minecraft.screen instanceof ThroneScreen screen) {
+                    screen.showTreasury("journal", "week");
+                    screen.showTreasury("settings", "today");
+                }
+            }
+            case 264 -> {
                 if (minecraft.screen instanceof ThroneScreen screen) {
                     ClientHooks.openTerritoryEditor(screen.view());
                 }
@@ -197,6 +211,18 @@ public final class ClientSelfTest {
             }
             case 340 -> {
                 LOGGER.info(PREFIX + "work post screen opened by the server: {}", minecraft.screen instanceof WorkPostScreen);
+                minecraft.setScreen(null);
+                server.execute(() -> {
+                    ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+                    if (player != null && bank != null) {
+                        io.github.sekerator.kingdomworld.common.economy.BankActions.open(player, bank);
+                    }
+                });
+            }
+            case 345 -> {
+                LOGGER.info(PREFIX + "bank screen opened by the server: {}, currencies known: {}",
+                        minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.BankScreen,
+                        io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.get(kingdomId).isPresent());
                 minecraft.setScreen(new FoundKingdomScreen(throne, 0x336699));
             }
             case 360 -> {
@@ -238,6 +264,8 @@ public final class ClientSelfTest {
             WorldPos postPos = new WorldPos(Dimensions.id(level), post.getX(), post.getY(), post.getZ());
             KingdomWorldApi.change(server, "client self-test", state -> state.setPostProfession(null, postPos, "lumberjack"));
             LOGGER.info(PREFIX + "work post placed: {}", KingdomWorldApi.state(server).citizens().posts().get(postPos).isPresent());
+            bank = throne.offset(0, 0, -2);
+            level.setBlockAndUpdate(bank, ModRegistries.BANK.get().defaultBlockState());
         } else {
             LOGGER.error(PREFIX + "founding failed: {}", result);
         }
@@ -254,6 +282,9 @@ public final class ClientSelfTest {
         }
         if (any != null && post != null) {
             any.serverLevel().setBlockAndUpdate(post, Blocks.AIR.defaultBlockState());
+        }
+        if (any != null && bank != null) {
+            any.serverLevel().setBlockAndUpdate(bank, Blocks.AIR.defaultBlockState());
         }
     }
 }

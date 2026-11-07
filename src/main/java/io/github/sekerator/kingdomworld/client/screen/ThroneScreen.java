@@ -407,7 +407,6 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             labels.add(Component.translatable(Tab.ORDERS.key));
             labels.add(Component.translatable(Tab.TREASURY.key));
             labels.add(Component.translatable(Tab.RIGHTS.key));
-            labels.add(Component.translatable("kingdomworld.screen.throne.tab.territory"));
         }
         return labels;
     }
@@ -454,6 +453,9 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         for (Component action : overviewActions()) {
             bottom += buttonWidth(action) + GAP;
         }
+        if (isMember()) {
+            bottom += buttonWidth(Component.translatable("kingdomworld.screen.throne.tab.territory")) + GAP;
+        }
         int inner = Math.max(Math.max(tabs, members), Math.max(Math.max(applications, rights), Math.max(overview + 4, bottom)));
         if (isMember()) {
             inner = Math.max(inner, Math.max(Math.max(citizens.measure(font), storage.measure(font)),
@@ -480,10 +482,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             x = tabButton(Tab.STORAGE, x, top + TAB_TOP);
             x = tabButton(Tab.ORDERS, x, top + TAB_TOP);
             x = tabButton(Tab.TREASURY, x, top + TAB_TOP);
-            x = tabButton(Tab.RIGHTS, x, top + TAB_TOP);
-            Component territory = Component.translatable("kingdomworld.screen.throne.tab.territory");
-            addRenderableWidget(Button.builder(territory, button -> ClientHooks.openTerritoryEditor(view))
-                    .bounds(x, top + TAB_TOP, tabWidth(territory), TAB_HEIGHT).build());
+            tabButton(Tab.RIGHTS, x, top + TAB_TOP);
         }
         switch (tab) {
             case OVERVIEW -> initOverview(left, top);
@@ -535,6 +534,10 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             }
             case MEMBER -> {
                 Component label = actions.get(0);
+                // The map of the territory opens from the overview, next to leaving or dissolving.
+                Component territory = Component.translatable("kingdomworld.screen.throne.tab.territory");
+                addRenderableWidget(Button.builder(territory, button -> ClientHooks.openTerritoryEditor(view))
+                        .bounds(x + buttonWidth(label) + GAP, y, buttonWidth(territory), 20).build());
                 if (view.viewerRole() == Role.KING) {
                     addRenderableWidget(Button.builder(label.copy().withStyle(ChatFormatting.RED),
                             button -> confirm(Component.translatable("kingdomworld.screen.throne.dissolve.confirm", fit(view.name(), 200)), () -> {

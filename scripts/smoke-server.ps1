@@ -323,6 +323,20 @@ function Wait-ForLog([object]$Server, [string]$Pattern, [int]$TimeoutSeconds, [s
     return $null
 }
 
+function Count-Log([string]$Pattern) { [regex]::Matches((Get-LatestLog), $Pattern).Count }
+
+# Waits for a match after the first $Seen ones, for answers to commands that are sent more than once.
+function Wait-ForNewLog([object]$Server, [string]$Pattern, [int]$TimeoutSeconds, [int]$Seen) {
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        $found = [regex]::Matches((Get-LatestLog), $Pattern)
+        if ($found.Count -gt $Seen) { return $found[$Seen] }
+        if ($Server.Process.HasExited) { return $null }
+        Start-Sleep -Milliseconds 1000
+    }
+    return $null
+}
+
 function Send-ServerCommand([object]$Server, [string]$Command) {
     Write-Host "    > $Command"
     $Server.Stdin.WriteLine($Command)
@@ -713,6 +727,102 @@ Invoke-Phase 'session1' {
             }
         }
     }
+
+    # Money: the treasury gets 1000 from an operator, a minter far from players strikes silver coins from five iron
+    # ingots of the storehouses, a payday pays the wages, and the worth of every item (of the mods too) is worked out.
+    if ($script:CitizenIds.Count -gt 0) {
+        $rawPattern = 'Raw: balance (\d+), copper (\d+), silver (\d+), gold (\d+), funds (\d+), supply (\d+)'
+        Send-ServerCommand $server "kingdomworld admin economy treasury $KingdomName add 1000"
+        if (Wait-ForLog $server "Added 1000 to the treasury of $KingdomName, funds 1000" $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok '[session1] the treasury got 1000 from the operator'
+        } else {
+            Add-Failure '[session1] the operator could not add money to the treasury'
+        }
+        $count = $script:CitizenIds.Count + 1
+        Send-ServerCommand $server "kingdomworld admin citizens spawn 1 $KingdomName"
+        if (-not (Wait-ForLog $server "Spawned 1 citizen\(s\) in $KingdomName" $CommandTimeout $ConsoleFailPattern)) {
+            Add-Failure '[session1] the minter could not be added'
+        }
+        $all = Get-CitizenList $server $count 'session1'
+        if ($all) {
+            $new = @($all | Where-Object { $script:CitizenIds -notcontains $_ })
+            $script:CitizenIds = @($all)
+            $script:MinterId = $new[0]
+            Send-ServerCommand $server 'setblock 26 70 20 kingdomworld:mint'
+            Send-ServerCommand $server 'setblock 24 70 20 kingdomworld:work_post'
+            Start-Sleep -Seconds 2
+            Send-ServerCommand $server 'kingdomworld admin posts set 24 70 20 profession minter'
+            if (-not (Wait-ForLog $server 'Work post at 24 70 20: Minter, radius \d+' $CommandTimeout 'No work post at 24 70 20|Unknown or incomplete command')) {
+                Add-Failure '[session1] the mint post was not registered or could not be set'
+            }
+            Send-ServerCommand $server "kingdomworld admin citizens profession $($script:MinterId) minter"
+            if (Wait-ForLog $server '\S+ is now: Minter' $CommandTimeout $ConsoleFailPattern) {
+                Write-Ok "[session1] citizen $($script:MinterId) became a minter"
+            } else {
+                Add-Failure '[session1] the minter could not be appointed'
+            }
+            Send-ServerCommand $server "kingdomworld admin storage put minecraft:iron_ingot 5 $KingdomName"
+            if (-not (Wait-ForLog $server "Stored 5 of minecraft:iron_ingot in the storehouses of $KingdomName" $CommandTimeout $ConsoleFailPattern)) {
+                Add-Failure '[session1] the iron for the mint could not be stored'
+            }
+            $runs = Count-Log "Ran 1 simulation step\(s\) of $KingdomName"
+            Send-ServerCommand $server "kingdomworld admin simulate $KingdomName 1"
+            [void](Wait-ForNewLog $server "Ran 1 simulation step\(s\) of $KingdomName" $CommandTimeout $runs)
+            # The zone of the post is looked at over a few ticks before the minter knows its mint.
+            Start-Sleep -Seconds 3
+            $runs = Count-Log "Ran 6 simulation step\(s\) of $KingdomName"
+            Send-ServerCommand $server "kingdomworld admin simulate $KingdomName 6"
+            if (-not (Wait-ForNewLog $server "Ran 6 simulation step\(s\) of $KingdomName" $CommandTimeout $runs)) {
+                Add-Failure '[session1] the simulation steps of the mint did not run'
+            }
+            $seen = Count-Log $rawPattern
+            Send-ServerCommand $server "kingdomworld admin economy info $KingdomName"
+            $raw = Wait-ForNewLog $server $rawPattern $CommandTimeout $seen
+            # The smelter may have made copper ingots of the miner's ore: the minter strikes them too.
+            $funds = 0
+            if ($raw) {
+                $vault = [int64]$raw.Groups[2].Value + 10 * [int64]$raw.Groups[3].Value + 100 * [int64]$raw.Groups[4].Value
+                $funds = [int64]$raw.Groups[5].Value
+            }
+            if ($raw -and [int64]$raw.Groups[1].Value -eq 1000 -and [int64]$raw.Groups[3].Value -eq 10 -and $funds -eq 1000 + $vault) {
+                Write-Ok "[session1] the minter struck 10 silver coins from 5 iron ingots into the vault: $($raw.Value)"
+            } else {
+                Add-Failure "[session1] expected 10 silver coins in the vault and 1000 on the books, got '$(if ($raw) { $raw.Value })'"
+            }
+            Send-ServerCommand $server "kingdomworld admin economy payday $KingdomName"
+            $pay = Wait-ForLog $server "Payday of $KingdomName on day (\d+): tax payers (\d+), taxes (\d+), wages (\d+) of (\d+), citizens (\d+)" $CommandTimeout $ConsoleFailPattern
+            if ($pay -and $pay.Groups[4].Value -eq $pay.Groups[5].Value -and [int]$pay.Groups[6].Value -eq $count) {
+                Write-Ok "[session1] the payday paid all wages: $($pay.Groups[4].Value) to $count citizens"
+            } else {
+                Add-Failure "[session1] the payday did not pay the wages: '$(if ($pay) { $pay.Value })'"
+            }
+            $seen = Count-Log $rawPattern
+            Send-ServerCommand $server "kingdomworld admin economy info $KingdomName"
+            $raw = Wait-ForNewLog $server $rawPattern $CommandTimeout $seen
+            if ($raw -and $pay -and [int64]$raw.Groups[5].Value -eq ($funds - [int64]$pay.Groups[4].Value)) {
+                $script:EconomyRaw = $raw.Value
+                Write-Ok "[session1] the wages left the treasury: $($raw.Value)"
+            } else {
+                Add-Failure "[session1] the treasury after the payday is wrong: '$(if ($raw) { $raw.Value })'"
+            }
+        }
+        Send-ServerCommand $server 'kingdomworld admin economy values'
+        $values = Wait-ForLog $server 'Item values: (\d+) items \((\d+) from recipes, (\d+) from the config, (\d+) by default\), (\d+) recipes, (\d+) unreadable' $CommandTimeout $ConsoleFailPattern
+        if ($values -and [int]$values.Groups[1].Value -gt 1000 -and [int]$values.Groups[2].Value -gt 300) {
+            Write-Ok "[session1] item values: $($values.Value)"
+            if ([int]$values.Groups[6].Value -gt 0) {
+                Add-Warning "[session1] $($values.Groups[6].Value) recipe(s) of mods could not be read for item values"
+            }
+        } else {
+            Add-Failure "[session1] the worth of items was not worked out: '$(if ($values) { $values.Value })'"
+        }
+        Send-ServerCommand $server 'kingdomworld admin economy value minecraft:iron_sword'
+        if (Wait-ForLog $server 'is worth .+ \(from recipes; minecraft:iron_sword = (\d+)\)' $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok '[session1] an iron sword is worth what its recipe costs'
+        } else {
+            Add-Failure '[session1] the worth of an iron sword was not worked out from its recipe'
+        }
+    }
 }
 
 $dataFile = Join-Path $ServerDir 'world\data\kingdomworld_kingdoms.dat'
@@ -725,9 +835,11 @@ if (-not $script:CreatedId) { Stop-Smoke 'kingdom was not created, skipping the 
 Invoke-Phase 'session2' {
     param($server)
     $citizenCount = $script:CitizenIds.Count
-    $postCount = if ($script:SmithId) { 3 } else { 1 }
-    if (-not (Wait-ForLog $server "KingdomWorld loaded 1 kingdom\(s\) with $citizenCount citizen\(s\), $postCount work post\(s\) and 1 storehouse\(s\)" 10)) {
-        Add-Failure "[session2] expected 1 kingdom with $citizenCount citizens, $postCount work post(s) and 1 storehouse to be loaded after restart"
+    $postCount = 1
+    if ($script:SmithId) { $postCount += 2 }
+    if ($script:MinterId) { $postCount += 1 }
+    if (-not (Wait-ForLog $server "KingdomWorld loaded 1 kingdom\(s\) with $citizenCount citizen\(s\), $postCount work post\(s\), 1 storehouse\(s\), 1 treasury\(ies\)" 10)) {
+        Add-Failure "[session2] expected 1 kingdom with $citizenCount citizens, $postCount work post(s), 1 storehouse and 1 treasury to be loaded after restart"
     }
     Send-ServerCommand $server 'kingdomworld debug list'
     $listed = Wait-ForLog $server " - $KingdomName \(id ($IdPattern)\)" $CommandTimeout 'Unknown or incomplete command|There are no kingdoms yet'
@@ -818,6 +930,22 @@ Invoke-Phase 'session2' {
             Write-Ok '[session2] the smithy kept its smith after restart'
         } else {
             Add-Failure '[session2] the smithy lost its smith after restart'
+        }
+    }
+    if ($script:EconomyRaw) {
+        # The treasury and its coins are exactly as they were: nothing lost, nothing made by the restart.
+        Send-ServerCommand $server "kingdomworld admin economy info $KingdomName"
+        $raw = Wait-ForLog $server 'Raw: balance (\d+), copper (\d+), silver (\d+), gold (\d+), funds (\d+), supply (\d+)' $CommandTimeout $ConsoleFailPattern
+        if ($raw -and $raw.Value -eq $script:EconomyRaw) {
+            Write-Ok "[session2] the treasury survived the restart unchanged: $($raw.Value)"
+        } else {
+            Add-Failure "[session2] the treasury changed in the restart: '$(if ($raw) { $raw.Value })', expected '$($script:EconomyRaw)'"
+        }
+        Send-ServerCommand $server 'kingdomworld admin posts list SmokeTest'
+        if (Wait-ForLog $server ' - 24 70 20: Minter, workers 1/1' $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok '[session2] the mint post kept its minter after restart'
+        } else {
+            Add-Failure '[session2] the mint post lost its minter after restart'
         }
     }
 }

@@ -31,7 +31,7 @@ public class BankScreen extends KingdomScreen implements ResultListener {
     private static final int ROW = 18;
     private static final int GAP = 2;
     private static final int BOX_WIDTH = 90;
-    private static final int STATUS_LINES = 2;
+    private static final int STATUS_LINES = 3;
     private static final String KEY = "kingdomworld.screen.bank.";
     /** Coins to pay out in: any (the fewest coins), then each kind from the largest. */
     private static final List<Optional<Denomination>> COIN_CHOICES = List.of(Optional.empty(), Optional.of(Denomination.GOLD),

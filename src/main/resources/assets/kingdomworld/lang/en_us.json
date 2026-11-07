@@ -703,5 +703,6 @@
   "commands.kingdomworld.admin.economy.info.raw": "Raw: balance %s, copper %s, silver %s, gold %s, funds %s, supply %s",
   "commands.kingdomworld.admin.economy.accounts.header": "Accounts of %s: %s",
   "commands.kingdomworld.admin.economy.accounts.entry": "%s: %s",
-  "commands.kingdomworld.admin.economy.values": "Item values: %s items (%s from recipes, %s from the config, %s by default), %s recipes, %s unreadable"
+  "commands.kingdomworld.admin.economy.values": "Item values: %s items (%s from recipes, %s from the config, %s by default), %s recipes, %s unreadable",
+  "kingdomworld.bank.read_only": "The bank is closed: kingdom data is read-only"
 }
