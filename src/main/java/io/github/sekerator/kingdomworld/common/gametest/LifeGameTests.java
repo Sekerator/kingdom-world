@@ -108,23 +108,48 @@ public final class LifeGameTests {
         level.setDayTime(day * LifeRules.DAY + dayTime);
     }
 
-    /**
-     * A small tavern of three by three, built at once; its role works.
-     */
     private static Building tavern(GameTestHelper helper, Kingdom kingdom) {
+        return tavern(helper, kingdom, false);
+    }
+
+    /**
+     * A small tavern of three by three, built at once, with a bed for a guest when asked; its role works.
+     */
+    private static Building tavern(GameTestHelper helper, Kingdom kingdom, boolean withBed) {
         com.google.gson.JsonObject description = com.google.gson.JsonParser.parseString("{\"name\": \"kingdomworld.building.tavern\", "
                 + "\"fallback_name\": \"Test tavern\", \"category\": \"trade\", \"type\": \"tavern\", \"role\": \"tavern\", \"level\": 1, "
                 + "\"icon\": \"minecraft:barrel\", \"anchor\": [1, 0, 2], \"entrance\": \"south\"}").getAsJsonObject();
-        List<String> palette = List.of("minecraft:cobblestone");
-        int[][] blocks = new int[9][];
+        List<String> palette = List.of("minecraft:cobblestone", "minecraft:red_bed[facing=north,part=foot,occupied=false]",
+                "minecraft:red_bed[facing=north,part=head,occupied=false]");
+        int[][] blocks = new int[withBed ? 11 : 9][];
         int i = 0;
         for (int x = 0; x < 3; x++) {
             for (int z = 0; z < 3; z++) {
                 blocks[i++] = new int[]{x, 0, z, 0};
             }
         }
-        BuildingTemplate template = BuildingTemplates.addForTest(TAVERN, description,
-                ConstructionGameTests.structure(3, 2, 3, palette, blocks));
+        if (withBed) {
+            blocks[i++] = new int[]{0, 1, 2, 1};
+            blocks[i] = new int[]{0, 1, 1, 2};
+        }
+        net.minecraft.nbt.CompoundTag structure = ConstructionGameTests.structure(3, 2, 3, palette, blocks);
+        // States with properties: the name and the properties go apart, as the structure block writes them.
+        net.minecraft.nbt.ListTag paletteTag = structure.getList("palette", 10);
+        for (int p = 0; p < paletteTag.size(); p++) {
+            net.minecraft.nbt.CompoundTag entry = paletteTag.getCompound(p);
+            String name = entry.getString("Name");
+            int open = name.indexOf('[');
+            if (open > 0) {
+                net.minecraft.nbt.CompoundTag properties = new net.minecraft.nbt.CompoundTag();
+                for (String pair : name.substring(open + 1, name.length() - 1).split(",")) {
+                    String[] parts = pair.split("=");
+                    properties.putString(parts[0], parts[1]);
+                }
+                entry.putString("Name", name.substring(0, open));
+                entry.put("Properties", properties);
+            }
+        }
+        BuildingTemplate template = BuildingTemplates.addForTest(TAVERN, description, structure);
         KingdomWorldState.ConstructionChange change = ConstructionWork.lay(helper.getLevel(), null, kingdom.id(), template,
                 helper.absolutePos(new BlockPos(6, 0, 7)), Placement.NONE, Materials.NONE);
         Construction construction = change.construction().orElseThrow(() -> new IllegalStateException("The tavern was refused: " + change.outcome()));
@@ -155,6 +180,8 @@ public final class LifeGameTests {
     }
 
     private static void end(GameTestHelper helper, Kingdom kingdom, BlockPos[] area, Citizen... citizens) {
+        // The world is left at noon: the tests that follow expect a day to work in.
+        at(helper.getLevel(), 6_000);
         LifeSettings.override(null);
         LifeWork.setRandomForCheck(null);
         for (Citizen citizen : citizens) {
@@ -370,6 +397,117 @@ public final class LifeGameTests {
             RoadWork.state(server).removeCamp(camp.id());
             LifeWork.state(server).keepMarks(id -> false);
             end(helper, kingdom, area, keeper);
+        }
+        helper.succeed();
+    }
+
+    // ---------------------------------------------------------------- beds
+
+    /**
+     * The bed of the test tavern, as the register of places keeps it.
+     */
+    private static WorldPos tavernBed(GameTestHelper helper, Building tavern) {
+        for (var site : KingdomWorldApi.state(helper.getLevel().getServer()).citizens().sites().sitesOf(tavern.kingdomId(), SiteKinds.BED)) {
+            WorldPos pos = site.pos();
+            if (tavern.box().contains(pos.x(), pos.y(), pos.z())) {
+                return pos;
+            }
+        }
+        throw new IllegalStateException("The tavern has no bed among the places of the kingdom");
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_life_tavern_bed", timeoutTicks = 200)
+    public static void aNewcomerTakesNoRoomOfATavernAsItsHome(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        BlockPos[] area = area(helper);
+        rules();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Tavern Rooms", UUID.randomUUID());
+        Building tavern = tavern(helper, kingdom, true);
+        WorldPos room = tavernBed(helper, tavern);
+        Citizen newcomer = CitizenGameTests.newcomer(helper, kingdom, 1, 1);
+        try {
+            helper.assertTrue(newcomer.home() == null, "The newcomer moved into a room of the tavern: " + newcomer.home());
+            helper.assertTrue(!KingdomWorldApi.state(server).citizens().assignHome(newcomer, room), "A room of the tavern was given as a home");
+            CitizenSimulation.step(server, kingdom.id());
+            helper.assertTrue(newcomer.home() == null, "The simulation gave a room of the tavern as a home");
+            helper.assertTrue(BuildingEffects.freeBeds(server, kingdom.id())[0] == 0, "A room of the tavern counts as a bed for newcomers");
+        } finally {
+            end(helper, kingdom, area, newcomer);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_life_player_bed", timeoutTicks = 200)
+    public static void aCitizenTakesNoBedOfAPlayerAndLeavesOneAPlayerTakes(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos[] area = area(helper);
+        rules();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Player Beds", UUID.randomUUID());
+        WorldPos own = bed(helper, kingdom, new BlockPos(6, 0, 6));
+        WorldPos taken = bed(helper, kingdom, new BlockPos(3, 0, 6));
+        ServerPlayer sleeper = player(helper, "kw-bed-owner", new BlockPos(6, 0, 4));
+        Citizen lodger = CitizenGameTests.newcomer(helper, kingdom, 1, 1);
+        Citizen newcomer = null;
+        try {
+            helper.assertTrue(lodger.home() != null, "The first citizen got no bed");
+            WorldPos lodged = lodger.home();
+            WorldPos other = lodged.equals(own) ? taken : own;
+            // The player sleeps in the other bed: it is theirs, no citizen moves in.
+            sleeper.setRespawnPosition(level.dimension(), new BlockPos(other.x(), other.y(), other.z()), 0.0f, false, false);
+            helper.assertTrue(LifeWork.playerBed(server, other), "The bed of the player is not known as theirs");
+            newcomer = CitizenGameTests.newcomer(helper, kingdom, 1, 1);
+            helper.assertTrue(newcomer.home() == null, "A citizen moved into the bed of a player: " + newcomer.home());
+            // Then the player takes the bed the first citizen lives in: the citizen leaves it at the next step.
+            sleeper.setRespawnPosition(level.dimension(), new BlockPos(lodged.x(), lodged.y(), lodged.z()), 0.0f, false, false);
+            CitizenSimulation.step(server, kingdom.id());
+            helper.assertTrue(!lodged.equals(lodger.home()), "The citizen still lives in the bed the player took");
+            helper.assertTrue(other.equals(lodger.home()) || lodger.home() == null, "The citizen moved somewhere strange: " + lodger.home());
+        } finally {
+            LifeWork.state(server).setPlayerBed(sleeper.getUUID(), null);
+            if (newcomer != null) {
+                end(helper, kingdom, area, lodger, newcomer);
+            } else {
+                end(helper, kingdom, area, lodger);
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_life_room_taken", timeoutTicks = 200)
+    public static void aRoomIsNotRentedWhileSomebodyLiesInItsBed(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos[] area = area(helper);
+        rules();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Taken Room", UUID.randomUUID());
+        Building tavern = tavern(helper, kingdom, true);
+        WorldPos room = tavernBed(helper, tavern);
+        Citizen keeper = innkeeper(helper, kingdom, tavern);
+        Citizen tired = CitizenGameTests.newcomer(helper, kingdom, 1, 1);
+        CitizenEntity body = body(helper, tired, new BlockPos(1, 0, 1));
+        ServerPlayer guest = player(helper, "kw-late-guest", new BlockPos(5, 0, 4));
+        try {
+            fund(server, kingdom, 1_000);
+            helper.assertTrue(KingdomWorldApi.state(server).economy().kingdomPays(kingdom.id(), 100, null, LedgerCategory.ADMIN,
+                    TreasuryActions.day(server)).ok(), "The treasury could not hand out coins");
+            Purses.payOut(guest, kingdom.id(), 100);
+            at(level, 18_000);
+            body.startSleeping(new BlockPos(room.x(), room.y(), room.z()));
+            KingdomActions.Feedback refused = TavernActions.rent(guest, tavern, false);
+            helper.assertTrue(!refused.success(), "A room was rented where somebody sleeps");
+            helper.assertTrue(guest.getRespawnPosition() == null || !guest.getRespawnPosition().equals(new BlockPos(room.x(), room.y(), room.z())),
+                    "The bed of a sleeper became the guest's point of return");
+            body.stopSleeping();
+            KingdomActions.Feedback rented = TavernActions.rent(guest, tavern, false);
+            helper.assertTrue(rented.success(), "The empty room was not rented: " + rented.message().getString());
+        } finally {
+            if (body.isSleeping()) {
+                body.stopSleeping();
+            }
+            LifeWork.state(server).leave(guest.getUUID());
+            LifeWork.state(server).setPlayerBed(guest.getUUID(), null);
+            end(helper, kingdom, area, keeper, tired);
         }
         helper.succeed();
     }

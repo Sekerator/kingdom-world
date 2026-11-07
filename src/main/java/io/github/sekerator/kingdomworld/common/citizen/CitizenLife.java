@@ -9,7 +9,6 @@ import io.github.sekerator.kingdomworld.core.citizen.CitizenNames;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds;
 import io.github.sekerator.kingdomworld.core.citizen.DeathRecord;
 import io.github.sekerator.kingdomworld.core.citizen.Gender;
-import io.github.sekerator.kingdomworld.core.citizen.SiteKinds;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
@@ -59,7 +58,8 @@ public final class CitizenLife {
             }
             state.citizens().add(citizen);
             state.citizens().registry().markArrival(kingdomId, now);
-            state.citizens().sites().nearestFree(kingdomId, SiteKinds.BED, place)
+            // The same beds the simulation offers: a house first, never a room of a tavern or the bed of a player.
+            io.github.sekerator.kingdomworld.common.construction.BuildingEffects.freeBed(server, kingdomId, place)
                     .ifPresent(bed -> state.citizens().assignHome(citizen, bed.pos()));
             return Outcome.DONE;
         });

@@ -208,7 +208,9 @@ public final class DayGoal extends Goal {
         if (server == null || body.citizenId() == null) {
             return true;
         }
+        // A bed that is no longer its home (a room of a tavern, the bed of a player) is left at once.
         return LifeWork.phase(server, body.citizenId()) != DaySchedule.Phase.NIGHT || body.isWounded()
-                || body.kingdomId() != null && LifeWork.festivalRest(server, body.kingdomId());
+                || body.kingdomId() != null && LifeWork.festivalRest(server, body.kingdomId())
+                || body.getSleepingPos().filter(pos -> pos.equals(body.home())).isEmpty();
     }
 }

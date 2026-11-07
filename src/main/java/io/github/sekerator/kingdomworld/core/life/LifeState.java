@@ -87,6 +87,8 @@ public final class LifeState {
     private final Map<Long, FairLot> fairLots = new LinkedHashMap<>();
     private final Map<UUID, Room> rooms = new LinkedHashMap<>();
     private final Map<UUID, Set<Long>> marks = new LinkedHashMap<>();
+    /** The bed each player sleeps in as their point of return: nobody's home. */
+    private final Map<UUID, WorldPos> playerBeds = new LinkedHashMap<>();
     private Runnable listener = () -> {
     };
 
@@ -331,6 +333,30 @@ public final class LifeState {
         if (changed) {
             changed();
         }
+    }
+
+    // ---------------------------------------------------------------- beds of players
+
+    /**
+     * Remembers the bed a player sleeps in as their point of return, or forgets it ({@code null}).
+     */
+    public void setPlayerBed(UUID player, WorldPos bed) {
+        WorldPos before = bed == null ? playerBeds.remove(player) : playerBeds.put(player, bed);
+        if (!Objects.equals(before, bed)) {
+            changed();
+        }
+    }
+
+    public Map<UUID, WorldPos> playerBeds() {
+        return java.util.Collections.unmodifiableMap(playerBeds);
+    }
+
+    public boolean isPlayerBed(WorldPos bed) {
+        return playerBeds.containsValue(bed);
+    }
+
+    public void restorePlayerBed(UUID player, WorldPos bed) {
+        playerBeds.put(player, bed);
     }
 
     // ---------------------------------------------------------------- restoring saved data

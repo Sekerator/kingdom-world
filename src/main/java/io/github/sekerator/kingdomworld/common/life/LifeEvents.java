@@ -41,6 +41,39 @@ public final class LifeEvents {
         MinecraftForge.EVENT_BUS.addListener(LifeEvents::onServerStopped);
         MinecraftForge.EVENT_BUS.addListener(LifeEvents::onLoggedIn);
         MinecraftForge.EVENT_BUS.addListener(LifeEvents::onLoggedOut);
+        MinecraftForge.EVENT_BUS.addListener(LifeEvents::onSpawnSet);
+        MinecraftForge.EVENT_BUS.addListener(net.minecraftforge.eventbus.api.EventPriority.HIGH, false,
+                net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickBlock.class, LifeEvents::onUseBed);
+    }
+
+    /**
+     * A player's point of return changed: a bed becomes the player's.
+     */
+    private static void onSpawnSet(net.minecraftforge.event.entity.player.PlayerSetSpawnEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player && !(player instanceof FakePlayer)) {
+            LifeWork.spawnSet(player.server, player.getUUID(), event.getSpawnLevel(), event.getNewSpawn());
+        }
+    }
+
+    /**
+     * A player lies down in a bed where a citizen sleeps: the citizen gets up and leaves the bed to the player.
+     */
+    private static void onUseBed(net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickBlock event) {
+        if (!(event.getLevel() instanceof net.minecraft.server.level.ServerLevel level)) {
+            return;
+        }
+        net.minecraft.world.level.block.state.BlockState state = level.getBlockState(event.getPos());
+        if (!(state.getBlock() instanceof net.minecraft.world.level.block.BedBlock)) {
+            return;
+        }
+        net.minecraft.core.BlockPos head = state.getValue(net.minecraft.world.level.block.BedBlock.PART)
+                == net.minecraft.world.level.block.state.properties.BedPart.HEAD ? event.getPos()
+                : event.getPos().relative(state.getValue(net.minecraft.world.level.block.BedBlock.FACING));
+        for (io.github.sekerator.kingdomworld.common.citizen.CitizenEntity body : level.getEntitiesOfClass(
+                io.github.sekerator.kingdomworld.common.citizen.CitizenEntity.class, new net.minecraft.world.phys.AABB(head).inflate(1.5),
+                body -> body.isSleeping() && body.getSleepingPos().filter(head::equals).isPresent())) {
+            body.stopSleeping();
+        }
     }
 
     private static void onServerTick(TickEvent.ServerTickEvent event) {
@@ -72,6 +105,9 @@ public final class LifeEvents {
     private static void onServerStarted(ServerStartedEvent event) {
         MinecraftServer server = event.getServer();
         LifeSettings.noChanceIllness(server instanceof net.minecraft.gametest.framework.GameTestServer);
+        // Every way a citizen gets a home asks the same rule: never a room of a tavern or the bed of a player.
+        KingdomWorldApi.state(server).citizens().setHomeRule((kingdom, bed) ->
+                io.github.sekerator.kingdomworld.common.construction.BuildingEffects.bedUsable(server, kingdom, bed));
         LifeSavedData data = LifeSavedData.get(server);
         LifeState state = data.state();
         LifeWork.loaded(server);
@@ -106,6 +142,10 @@ public final class LifeEvents {
         if (event.getEntity() instanceof ServerPlayer player) {
             SENT.remove(player.getUUID());
             TavernActions.loggedIn(player);
+            // A bed a player slept in before the life of cities knew of it.
+            if (!(player instanceof FakePlayer) && player.getRespawnPosition() != null) {
+                LifeWork.spawnSet(player.server, player.getUUID(), player.getRespawnDimension(), player.getRespawnPosition());
+            }
         }
     }
 

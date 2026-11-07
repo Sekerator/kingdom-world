@@ -198,8 +198,9 @@ public final class NpcSpawner {
     public static NpcComposition composition(NpcSite site) {
         RoadRules roads = RoadSettings.rules();
         // The capital is laid out for walls of at least the default radius; a wall of a smaller one leaves out what stands in its way.
+        // The work is planned for the towns the place has: a place without room for its towns gets no work for their people.
         return NpcComposition.of(site.level(), site.seed(), NpcSettings.rules(), roads.townPeople(), roads.townBuildings(), roads.cityPeople(),
-                roads.cityBuildings(), Math.max(roads.wallRadius(), MIN_WALL_RADIUS));
+                roads.cityBuildings(), Math.max(roads.wallRadius(), MIN_WALL_RADIUS), site.towns().size());
     }
 
     /**

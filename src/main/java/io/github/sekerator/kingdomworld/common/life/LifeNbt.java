@@ -22,7 +22,8 @@ import java.util.UUID;
  *       sick: [ { citizen, since, progress } ], tavern: [ { citizen, day } ],
  *       festivals: [ { kingdom, called, day, treated, foundingYear, events: [ { kind, day, place } ] } ],
  *       fairs: [ { city, day } ], fairLots: [ { lot, host, visitor, day } ],
- *       rooms: [ { player, kingdom, bed: pos, until, previous: pos?, angle, forced } ], marks: [ { player, camps: [ long ] } ]
+ *       rooms: [ { player, kingdom, bed: pos, until, previous: pos?, angle, forced } ], marks: [ { player, camps: [ long ] } ],
+ *       playerBeds: [ { player, bed: pos } ]
  * pos: { dim, x, y, z }
  * </pre>
  *
@@ -119,6 +120,14 @@ final class LifeNbt {
             marks.add(tag);
         });
         root.put("marks", marks);
+        ListTag beds = new ListTag();
+        state.playerBeds().forEach((player, bed) -> {
+            CompoundTag tag = new CompoundTag();
+            tag.putUUID("player", player);
+            tag.put("bed", pos(bed));
+            beds.add(tag);
+        });
+        root.put("playerBeds", beds);
     }
 
     private static CompoundTag pos(WorldPos pos) {
@@ -225,6 +234,14 @@ final class LifeNbt {
                 state.restoreMarks(uuid(tag, "player"), camps);
             } catch (RuntimeException e) {
                 problems.add("camps marked on an atlas: " + e.getMessage());
+            }
+        }
+        for (Tag raw : root.getList("playerBeds", Tag.TAG_COMPOUND)) {
+            try {
+                CompoundTag tag = (CompoundTag) raw;
+                state.restorePlayerBed(uuid(tag, "player"), readPos(tag.getCompound("bed")));
+            } catch (RuntimeException e) {
+                problems.add("the bed of a player: " + e.getMessage());
             }
         }
         return problems;

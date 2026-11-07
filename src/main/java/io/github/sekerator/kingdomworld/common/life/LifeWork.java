@@ -154,6 +154,37 @@ public final class LifeWork {
                 || phase == DaySchedule.Phase.EVENING && InnkeeperBehavior.INNKEEPER.id().equals(body.professionId());
     }
 
+    // ---------------------------------------------------------------- beds of players
+
+    /**
+     * Whether a bed is the point of return of a player: nobody's home, whoever placed it.
+     */
+    public static boolean playerBed(MinecraftServer server, WorldPos bed) {
+        return state(server).isPlayerBed(bed);
+    }
+
+    /**
+     * A player's point of return changed: a bed becomes theirs (a citizen living in it moves out at the next step), and the
+     * bed they had before is free for citizens again.
+     */
+    public static void spawnSet(MinecraftServer server, UUID player, @Nullable net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> dimension,
+                                @Nullable net.minecraft.core.BlockPos pos) {
+        if (isReadOnly(server)) {
+            return;
+        }
+        WorldPos bed = null;
+        net.minecraft.server.level.ServerLevel level = dimension == null ? null : server.getLevel(dimension);
+        if (level != null && pos != null && level.isLoaded(pos)
+                && level.getBlockState(pos).getBlock() instanceof net.minecraft.world.level.block.BedBlock) {
+            net.minecraft.world.level.block.state.BlockState state = level.getBlockState(pos);
+            net.minecraft.core.BlockPos head = state.getValue(net.minecraft.world.level.block.BedBlock.PART)
+                    == net.minecraft.world.level.block.state.properties.BedPart.HEAD ? pos
+                    : pos.relative(state.getValue(net.minecraft.world.level.block.BedBlock.FACING));
+            bed = new WorldPos(io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level), head.getX(), head.getY(), head.getZ());
+        }
+        state(server).setPlayerBed(player, bed);
+    }
+
     // ---------------------------------------------------------------- taverns
 
     /**
@@ -236,9 +267,12 @@ public final class LifeWork {
             return false;
         }
         // A drink first, food if there is none.
-        List<ItemStack> taken = KingdomStorage.take(server, citizen.kingdomId(), stack -> stack.is(TAVERN_DRINK), 1, center(tavern.building()));
+        // Plain things only: nothing named or enchanted is eaten.
+        List<ItemStack> taken = KingdomStorage.take(server, citizen.kingdomId(), stack -> stack.is(TAVERN_DRINK)
+                && io.github.sekerator.kingdomworld.common.trade.GoodsStacks.plain(stack), 1, center(tavern.building()));
         if (taken.isEmpty()) {
-            taken = KingdomStorage.take(server, citizen.kingdomId(), stack -> stack.is(TAVERN_FOOD), 1, center(tavern.building()));
+            taken = KingdomStorage.take(server, citizen.kingdomId(), stack -> stack.is(TAVERN_FOOD)
+                    && io.github.sekerator.kingdomworld.common.trade.GoodsStacks.plain(stack), 1, center(tavern.building()));
         }
         if (taken.isEmpty()) {
             return false;
@@ -277,6 +311,11 @@ public final class LifeWork {
         LifeRules rules = LifeSettings.rules();
         LifeState life = state(server);
         boolean usedInfirmary = false;
+        if (citizen.home() != null && io.github.sekerator.kingdomworld.common.construction.BuildingEffects.homeLost(server, citizen.kingdomId(),
+                citizen.home())) {
+            // A room of a tavern or the bed of a player is nobody's home: the citizen looks for another bed.
+            KingdomWorldApi.state(server).citizens().releaseHome(citizen);
+        }
         if (life.isSick(citizen.id())) {
             boolean infirmary = body != null ? io.github.sekerator.kingdomworld.common.citizen.CitizenCare.isInInfirmary(body) : infirmaryFree;
             usedInfirmary = infirmary && body == null;

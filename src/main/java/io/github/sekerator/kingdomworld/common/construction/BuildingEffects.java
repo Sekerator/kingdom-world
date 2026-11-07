@@ -236,19 +236,46 @@ public final class BuildingEffects {
     }
 
     /**
-     * Whether a bed may be offered to a citizen: not inside a house whose role rests, nor inside a tavern.
+     * Whether a bed may become the home of a citizen. Never a bed of a tavern (the rooms of guests) or a bed a player sleeps
+     * in as their point of return. A bed inside a building of the register may, unless the role of the building rests (a
+     * house, a barracks or a tower of mages that works, or a building without a role). A bed outside every building may only
+     * while the kingdom has no working house yet: a new kingdom gets its first citizens, and so its builders, from such beds.
+     * Citizens who already live in a bed outside a building keep it.
      */
     public static boolean bedUsable(MinecraftServer server, UUID kingdomId, WorldPos bed) {
+        if (io.github.sekerator.kingdomworld.common.life.LifeWork.playerBed(server, bed)) {
+            return false;
+        }
+        Effect holder = null;
+        boolean anyHouse = false;
         for (Effect effect : of(server, kingdomId)) {
-            if (BuildingRoles.TAVERN.equals(effect.building().role()) && inside(effect.building(), bed)) {
-                // The beds of a tavern are rooms for guests, nobody's home.
+            if (inside(effect.building(), bed)) {
+                holder = effect;
+            }
+            anyHouse |= effect.works() && BuildingRoles.HOUSE.equals(effect.building().role());
+        }
+        if (holder != null) {
+            if (BuildingRoles.TAVERN.equals(holder.building().role())) {
                 return false;
             }
-            if (BuildingRoles.HOUSE.equals(effect.building().role()) && inside(effect.building(), bed)) {
-                return effect.works() || effect.status() == BuildingRoles.Status.NONE;
+            return holder.works() || holder.status() == BuildingRoles.Status.NONE;
+        }
+        return !anyHouse;
+    }
+
+    /**
+     * Whether a citizen who lives in a bed should leave it: it became a room of a tavern or the bed of a player.
+     */
+    public static boolean homeLost(MinecraftServer server, UUID kingdomId, WorldPos bed) {
+        if (io.github.sekerator.kingdomworld.common.life.LifeWork.playerBed(server, bed)) {
+            return true;
+        }
+        for (Effect effect : of(server, kingdomId)) {
+            if (BuildingRoles.TAVERN.equals(effect.building().role()) && inside(effect.building(), bed)) {
+                return true;
             }
         }
-        return true;
+        return false;
     }
 
     /**

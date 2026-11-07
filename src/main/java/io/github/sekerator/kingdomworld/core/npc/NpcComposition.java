@@ -91,6 +91,15 @@ public record NpcComposition(NpcLevel level, List<Plot> buildings, int rings, in
      */
     public static NpcComposition of(NpcLevel level, long seed, NpcRules rules, int townPeople, int townBuildings, int cityPeople,
                                     int cityBuildings, int wallRadius) {
+        return of(level, seed, rules, townPeople, townBuildings, cityPeople, cityBuildings, wallRadius, rules.towns(level));
+    }
+
+    /**
+     * The composition of a kingdom of a level whose place has room for {@code townsAtMost} towns: the work of the citizens is
+     * planned only for the people of the towns that are there.
+     */
+    public static NpcComposition of(NpcLevel level, long seed, NpcRules rules, int townPeople, int townBuildings, int cityPeople,
+                                    int cityBuildings, int wallRadius, int townsAtMost) {
         SplittableRandom random = new SplittableRandom(seed ^ 0x434F4D50L);
         List<String> list = new ArrayList<>();
         int radius;
@@ -125,7 +134,7 @@ public record NpcComposition(NpcLevel level, List<Plot> buildings, int rings, in
         }
         int rings = Math.max(1, (radius - 3 - PLOT / 2 - 1) / SPACING);
         int plots = 4 * rings * (rings + 1);
-        int towns = rules.towns(level);
+        int towns = Math.max(0, Math.min(rules.towns(level), townsAtMost));
         int townHouses = level == NpcLevel.SMALL ? 3 : 4;
         int townBeds = 0;
         for (String building : townBuildings(townHouses)) {

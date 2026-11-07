@@ -300,8 +300,21 @@ public final class TavernActions {
         return beds;
     }
 
+    /**
+     * Rooms of a tavern that may be rented now: none that another guest rents, that is somebody's home (in a world from before
+     * the rule) or the point of return of another player, nor one where somebody lies.
+     */
     static List<WorldPos> freeBeds(MinecraftServer server, Building tavern) {
-        List<WorldPos> free = new ArrayList<>(beds(server, tavern));
+        List<WorldPos> free = new ArrayList<>();
+        var sites = KingdomWorldApi.state(server).citizens().sites();
+        ServerLevel level = level(server, LifeWork.center(tavern));
+        for (WorldPos bed : beds(server, tavern)) {
+            boolean home = sites.get(bed).map(site -> !site.isFree()).orElse(false);
+            if (home || LifeWork.playerBed(server, bed) || level != null && occupied(level, bed)) {
+                continue;
+            }
+            free.add(bed);
+        }
         long now = KingdomWorldApi.gameTime(server);
         for (LifeState.Room room : LifeWork.state(server).rooms().values()) {
             if (room.until() > now) {
@@ -348,6 +361,17 @@ public final class TavernActions {
         Optional<ResourceKey<Level>> dimension = Dimensions.key(bed.dimension());
         dimension.ifPresent(key -> player.setRespawnPosition(key, new BlockPos(bed.x(), bed.y(), bed.z()), 0.0f, true, false));
         return KingdomActions.Feedback.ok(LifeTexts.KEY + "tavern.rented", money(server, tavern.kingdomId(), cost));
+    }
+
+    private static boolean occupied(ServerLevel level, WorldPos bed) {
+        BlockPos pos = new BlockPos(bed.x(), bed.y(), bed.z());
+        if (!level.isLoaded(pos)) {
+            return false;
+        }
+        var state = level.getBlockState(pos);
+        return state.getBlock() instanceof net.minecraft.world.level.block.BedBlock && state.getValue(net.minecraft.world.level.block.BedBlock.OCCUPIED)
+                && !level.getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class, new net.minecraft.world.phys.AABB(pos).inflate(1.0),
+                net.minecraft.world.entity.LivingEntity::isSleeping).isEmpty();
     }
 
     @Nullable

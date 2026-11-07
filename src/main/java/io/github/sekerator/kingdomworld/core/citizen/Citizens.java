@@ -27,6 +27,8 @@ public final class Citizens {
     private int newPostRadius = GatheringRules.DEFAULT.defaultRadius();
     private int newHerdSize = GatheringRules.DEFAULT.maxHerd() / 2;
 
+    private java.util.function.BiPredicate<UUID, WorldPos> homeRule = (kingdom, bed) -> true;
+
     public void setChangeListener(Runnable listener) {
         registry.setChangeListener(listener);
         sites.setChangeListener(listener);
@@ -170,7 +172,18 @@ public final class Citizens {
      * @return whether the citizen now lives there
      */
     public boolean assignHome(Citizen citizen, WorldPos bed) {
+        if (!homeRule.test(citizen.kingdomId(), bed)) {
+            return false;
+        }
         return assign(citizen, bed, SiteKinds.BED, true);
+    }
+
+    /**
+     * Sets which beds may become homes of the citizens of a kingdom (the game decides it from the buildings and the beds of
+     * players); every bed may when none is set.
+     */
+    public void setHomeRule(java.util.function.BiPredicate<UUID, WorldPos> rule) {
+        homeRule = rule == null ? (kingdom, bed) -> true : rule;
     }
 
     /**
