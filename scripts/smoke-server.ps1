@@ -1027,13 +1027,16 @@ Invoke-Phase 'session1' {
         if (-not (Wait-ForLog $server "Adventurers made: 2 in $KingdomName" $CommandTimeout $ConsoleFailPattern)) {
             Add-Failure '[session1] two citizens did not become adventurers'
         }
+        # Wooden swords for the adventurers: they take the weakest weapon that will do and leave the smith's iron sword.
+        Send-ServerCommand $server "kingdomworld admin storage put minecraft:wooden_sword 2 $KingdomName"
+        [void](Wait-ForLog $server "Stored 2 of \S+ in the storehouses of $KingdomName" $CommandTimeout $ConsoleFailPattern)
         Send-ServerCommand $server "kingdomworld admin guild squad form $KingdomName 2"
         $squad = Wait-ForLog $server "Formed squad #(\d+) of $KingdomName, members: 2" $CommandTimeout $ConsoleFailPattern
         $guildMoney = Get-KingdomMoney $server $KingdomName
         $seen = Count-Log 'Posted contract #(\d+) at '
-        Send-ServerCommand $server "kingdomworld admin guild contract post $KingdomName hunt minecraft:zombie 3 100 2"
+        Send-ServerCommand $server "kingdomworld admin guild contract post $KingdomName hunt `"minecraft:zombie`" 3 100 2"
         $hunt = Wait-ForNewLog $server 'Posted contract #(\d+) at ' $CommandTimeout $seen
-        Send-ServerCommand $server "kingdomworld admin guild contract post $KingdomName bounty minecraft:ravager 1 50 3"
+        Send-ServerCommand $server "kingdomworld admin guild contract post $KingdomName bounty `"minecraft:ravager`" 1 50 3"
         $bounty = Wait-ForNewLog $server 'Posted contract #(\d+) at ' $CommandTimeout ($seen + 1)
         if ($squad -and $hunt -and $bounty) {
             $script:GuildSquad = $squad.Groups[1].Value
