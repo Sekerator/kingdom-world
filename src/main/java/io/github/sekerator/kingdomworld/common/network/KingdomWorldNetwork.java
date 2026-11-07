@@ -2,6 +2,7 @@ package io.github.sekerator.kingdomworld.common.network;
 
 import io.github.sekerator.kingdomworld.KingdomWorld;
 import io.github.sekerator.kingdomworld.common.network.packet.ActionResultPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.ArmyPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.BorderCrossingPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.CitizenActionPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.CitizenRequestPacket;
@@ -49,7 +50,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "10";
+    public static final String PROTOCOL_VERSION = "11";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -159,6 +160,16 @@ public final class KingdomWorldNetwork {
                 ConstructionPackets.Place::decode, ConstructionPackets.Place::handle);
         add(id++, ConstructionPackets.CheckResult.class, NetworkDirection.PLAY_TO_CLIENT, ConstructionPackets.CheckResult::encode,
                 ConstructionPackets.CheckResult::decode, ConstructionPackets.CheckResult::handle);
+        add(id++, ArmyPackets.TabRequest.class, NetworkDirection.PLAY_TO_SERVER, ArmyPackets.TabRequest::encode,
+                ArmyPackets.TabRequest::decode, ArmyPackets.TabRequest::handle);
+        add(id++, ArmyPackets.TabResponse.class, NetworkDirection.PLAY_TO_CLIENT, ArmyPackets.TabResponse::encode,
+                ArmyPackets.TabResponse::decode, ArmyPackets.TabResponse::handle);
+        add(id++, ArmyPackets.TabChange.class, NetworkDirection.PLAY_TO_SERVER, ArmyPackets.TabChange::encode,
+                ArmyPackets.TabChange::decode, ArmyPackets.TabChange::handle);
+        add(id++, ArmyPackets.BarracksOpen.class, NetworkDirection.PLAY_TO_CLIENT, ArmyPackets.BarracksOpen::encode,
+                ArmyPackets.BarracksOpen::decode, ArmyPackets.BarracksOpen::handle);
+        add(id++, ArmyPackets.BarracksAction.class, NetworkDirection.PLAY_TO_SERVER, ArmyPackets.BarracksAction::encode,
+                ArmyPackets.BarracksAction::decode, ArmyPackets.BarracksAction::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

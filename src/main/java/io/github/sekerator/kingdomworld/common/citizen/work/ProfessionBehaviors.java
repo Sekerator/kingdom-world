@@ -33,6 +33,8 @@ public final class ProfessionBehaviors {
         register(Professions.REGISTRAR, new io.github.sekerator.kingdomworld.common.guild.RegistrarBehavior());
         register(Professions.ADVENTURER, new io.github.sekerator.kingdomworld.common.guild.AdventurerBehavior());
         register(Professions.BUILDER, new io.github.sekerator.kingdomworld.common.construction.BuilderBehavior());
+        register(Professions.WARRIOR, new io.github.sekerator.kingdomworld.common.army.SoldierBehavior(false));
+        register(Professions.ARCHER, new io.github.sekerator.kingdomworld.common.army.SoldierBehavior(true));
     }
 
     private ProfessionBehaviors() {
@@ -57,6 +59,14 @@ public final class ProfessionBehaviors {
 
     public static Optional<ProfessionBehavior> get(String professionId) {
         return Optional.ofNullable(byId.get(professionId));
+    }
+
+    /**
+     * Whether a body stands against monsters now: its profession fights and it is not wounded.
+     */
+    public static boolean fights(io.github.sekerator.kingdomworld.common.citizen.CitizenEntity body) {
+        ProfessionBehavior behavior = byId.get(body.professionId());
+        return behavior != null && behavior.fights() && !body.isWounded();
     }
 
     /**

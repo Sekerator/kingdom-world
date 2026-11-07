@@ -60,6 +60,11 @@ public final class AdventurerBehavior implements ProfessionBehavior {
         return true;
     }
 
+    @Override
+    public boolean fights() {
+        return true;
+    }
+
     /**
      * Hunts the nearest monster on the kingdom's land within reach of sight, and whatever attacks the adventurer.
      */

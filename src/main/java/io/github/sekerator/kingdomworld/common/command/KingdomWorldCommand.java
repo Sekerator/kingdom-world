@@ -141,6 +141,7 @@ public final class KingdomWorldCommand {
                         .then(TradeCommands.adminCommand())
                         .then(GuildCommands.adminCommand())
                         .then(ConstructionCommands.adminCommand())
+                        .then(ArmyCommands.adminCommand())
                         .then(Commands.literal("data")
                                 .then(Commands.literal("status").executes(context -> dataStatus(context.getSource())))
                                 .then(Commands.literal("unlock").executes(context -> dataUnlock(context.getSource()))))));

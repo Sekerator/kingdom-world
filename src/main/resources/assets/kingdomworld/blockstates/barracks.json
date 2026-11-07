@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "kingdomworld:block/barracks"
+    },
+    "facing=east": {
+      "model": "kingdomworld:block/barracks",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "kingdomworld:block/barracks",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "kingdomworld:block/barracks",
+      "y": 270
+    }
+  }
+}

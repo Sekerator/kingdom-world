@@ -235,7 +235,8 @@ public final class TradeWork {
         TradeRules rules = TradeSettings.rules();
         long day = day(server);
         Component goods = cargoText(caravan);
-        if (caravan.state() == Caravan.State.TRAVELING && roll.getAsDouble() < rules.caravanLossChance()) {
+        if (caravan.state() == Caravan.State.TRAVELING
+                && io.github.sekerator.kingdomworld.common.army.ArmyCaravans.lost(server, caravan, rules.caravanLossChance(), roll)) {
             state.economy().refundEscrow(caravan.escrowId(), day);
             state.trade().removeCaravan(caravan.id());
             LOGGER.info("A caravan from {} to {} was lost on the way", kingdomName(server, caravan.seller()).getString(),

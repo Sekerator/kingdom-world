@@ -72,6 +72,13 @@ public interface ProfessionBehavior {
     }
 
     /**
+     * Whether citizens of the profession stand against monsters: they neither flee from them nor go home at night.
+     */
+    default boolean fights() {
+        return false;
+    }
+
+    /**
      * How the chronicle names a deadly accident of this work far from players.
      */
     default CauseOfDeath accidentCause() {

@@ -306,10 +306,15 @@ final class CitizensTab {
         for (int i = 0; i < rows && scroll + i < entries.size(); i++) {
             CitizenView.Entry entry = entries.get(scroll + i);
             int y = listTop(top) + i * ROW;
-            String nextProfession = Professions.REGISTRY.next(entry.profession()).id();
-            screen.add(Button.builder(CitizenTexts.profession(entry.profession(), gender(entry.female())),
+            // Soldiers are recruited and dismissed in the army tab.
+            String nextProfession = Professions.nextCivilian(entry.profession()).id();
+            Button profession = screen.add(Button.builder(CitizenTexts.profession(entry.profession(), gender(entry.female())),
                             b -> KingdomWorldNetwork.sendToServer(new CitizenActionPacket(entry.id(), nextProfession)))
                     .bounds(professionX, y, professionWidth, ROW - 2).build());
+            if (Professions.isMilitary(entry.profession())) {
+                profession.active = false;
+                profession.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable(KEY + "soldier_hint")));
+            }
         }
     }
 

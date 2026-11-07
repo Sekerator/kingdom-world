@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/orientable",
+  "textures": {
+    "top": "kingdomworld:block/barracks_top",
+    "front": "kingdomworld:block/barracks_front",
+    "side": "kingdomworld:block/barracks_side"
+  }
+}

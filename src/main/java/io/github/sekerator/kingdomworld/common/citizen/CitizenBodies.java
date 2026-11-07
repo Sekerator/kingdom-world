@@ -110,11 +110,14 @@ public final class CitizenBodies {
         var guild = io.github.sekerator.kingdomworld.common.guild.GuildSavedData.get(server).state();
         for (Citizen citizen : state.citizens().registry().all()) {
             boolean forced = FORCED.contains(citizen.id());
-            if ((players.isEmpty() && !forced) || guild.isAway(citizen.id())) {
-                // Adventurers on an expedition have no body until they come back.
+            if ((players.isEmpty() && !forced) || guild.isAway(citizen.id())
+                    || io.github.sekerator.kingdomworld.common.army.ArmyWork.isAwayFromHome(server, citizen.id())) {
+                // Adventurers on an expedition and soldiers on the road with a caravan have no body until they come back.
                 continue;
             }
             List<WorldPos> anchors = new ArrayList<>(ActiveSelection.anchors(citizen));
+            // Soldiers also have a body where their squad holds, patrols or guards, and near the player they follow.
+            anchors.addAll(io.github.sekerator.kingdomworld.common.army.ArmyWork.anchors(server, citizen.id()));
             boolean active = ACTIVE.containsKey(citizen.id());
             if (active) {
                 anchors.add(citizen.lastPos());
@@ -190,6 +193,7 @@ public final class CitizenBodies {
         }
         List<WorldPos> places = new ArrayList<>();
         places.add(citizen.lastPos());
+        places.addAll(io.github.sekerator.kingdomworld.common.army.ArmyWork.anchors(server, citizen.id()));
         if (citizen.home() != null) {
             places.add(citizen.home());
         }

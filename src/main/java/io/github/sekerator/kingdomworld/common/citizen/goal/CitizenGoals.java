@@ -26,7 +26,7 @@ public final class CitizenGoals {
      */
     public static Goal fleeMonsters(CitizenEntity body) {
         return new AvoidEntityGoal<>(body, Mob.class, entity -> entity instanceof Enemy
-                && !io.github.sekerator.kingdomworld.common.guild.AdventurerBehavior.fights(body), 8.0f, 0.6, 0.8, entity -> true);
+                && !io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehaviors.fights(body), 8.0f, 0.6, 0.8, entity -> true);
     }
 
     /**
@@ -118,8 +118,8 @@ public final class CitizenGoals {
 
         @Override
         protected boolean wanted() {
-            // Adventurers keep watch at night, when the monsters come.
-            return !body.level().isDay() && !io.github.sekerator.kingdomworld.common.guild.AdventurerBehavior.fights(body);
+            // Adventurers and soldiers keep watch at night, when the monsters come.
+            return !body.level().isDay() && !io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehaviors.fights(body);
         }
 
         @Override

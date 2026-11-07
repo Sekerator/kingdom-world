@@ -73,8 +73,10 @@ public final class EconomySettings {
         int gold = config.goldValue.get();
         CurrencyUnits units = CurrencyUnits.valid(silver, gold) ? new CurrencyUnits(silver, gold) : CurrencyUnits.DEFAULT;
         int maxTax = config.maxPollTax.get();
+        java.util.Map<String, Long> wages = EconomyRules.parseWages(config.wages.get());
+        io.github.sekerator.kingdomworld.common.army.ArmySettings.addWages(wages);
         return new EconomyRules(units, Math.min(config.defaultPollTax.get(), maxTax), maxTax, config.maxWage.get(),
-                EconomyRules.parseWages(config.wages.get()), config.moodWorkEffect.get(), config.payConfirmAbove.get(),
+                wages, config.moodWorkEffect.get(), config.payConfirmAbove.get(),
                 config.mintToVault.get());
     }
 

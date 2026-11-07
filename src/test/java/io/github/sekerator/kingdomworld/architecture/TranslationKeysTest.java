@@ -197,6 +197,30 @@ class TranslationKeysTest {
         assertEquals(Plurals.Form.N5, Plurals.form(12));
     }
 
+    /**
+     * Numbers of the army read right in both languages: «21 солдат», «3 наёмника», «5 бойцов», «2 врага», «11 отрядов».
+     */
+    @Test
+    void countsOfTheArmyHaveEveryPluralForm() {
+        Map<String, String> russianForms = Map.of("soldiers", "солдат|солдат|солдата|солдат", "mercenaries", "наёмник|наёмник|наёмника|наёмников",
+                "fighters", "боец|боец|бойца|бойцов", "enemies", "враг|враг|врага|врагов", "squads", "отряд|отряд|отряда|отрядов");
+        Map<String, String> englishSingular = Map.of("soldiers", "soldier", "mercenaries", "mercenary", "fighters", "fighter", "enemies", "enemy",
+                "squads", "squad");
+        russianForms.forEach((word, forms) -> {
+            String[] words = forms.split("[|]");
+            Plurals.Form[] all = Plurals.Form.values();
+            for (int i = 0; i < all.length; i++) {
+                String key = "kingdomworld.count." + word + "." + all[i].suffix();
+                assertEquals("%s " + words[i], russian.get(key), key);
+                assertEquals("%s " + (all[i] == Plurals.Form.N1 ? englishSingular.get(word) : word), english.get(key),
+                        key + ": English is singular only for one");
+            }
+        });
+        assertEquals(Plurals.Form.N2, Plurals.form(3));
+        assertEquals(Plurals.Form.N5, Plurals.form(11));
+        assertEquals(Plurals.Form.N21, Plurals.form(21));
+    }
+
     @Test
     void argumentCounting() {
         assertEquals(2, argumentCount("%s and %s"));
@@ -339,6 +363,26 @@ class TranslationKeysTest {
             used.add("kingdomworld.screen.guild_tab.mode." + mode);
         }
         for (String word : List.of("monsters", "bosses", "points", "crystals")) {
+            for (Plurals.Form form : Plurals.Form.values()) {
+                used.add("kingdomworld.count." + word + "." + form.suffix());
+            }
+        }
+        // The army: ranks, orders, the views of the tab, the modes of the baton, counts in every form.
+        for (io.github.sekerator.kingdomworld.core.army.SoldierRank rank : io.github.sekerator.kingdomworld.core.army.SoldierRank.values()) {
+            used.add("kingdomworld.army.rank." + rank.id());
+        }
+        for (io.github.sekerator.kingdomworld.core.army.Order.Kind kind : io.github.sekerator.kingdomworld.core.army.Order.Kind.values()) {
+            used.add("kingdomworld.army.order." + kind.id());
+            used.add("kingdomworld.army.order_text." + kind.id());
+        }
+        for (String mode : List.of("overview", "soldiers", "recruit", "squads", "mercenaries", "deals")) {
+            used.add("kingdomworld.screen.army_tab.mode." + mode);
+            used.add("kingdomworld.screen.army_tab.hint." + mode);
+        }
+        for (String mode : List.of("hold", "patrol", "guard")) {
+            used.add("kingdomworld.army.baton.mode." + mode);
+        }
+        for (String word : List.of("soldiers", "mercenaries", "fighters", "enemies", "squads")) {
             for (Plurals.Form form : Plurals.Form.values()) {
                 used.add("kingdomworld.count." + word + "." + form.suffix());
             }

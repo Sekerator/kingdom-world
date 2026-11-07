@@ -153,6 +153,8 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue templateMaxWidth;
         public final ForgeConfigSpec.IntValue templateMaxHeight;
         public final ForgeConfigSpec.IntValue templateMaxLength;
+        /** The army: soldiers, squads, mercenaries and battles. */
+        public final Army army;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -435,6 +437,7 @@ public final class KingdomWorldConfig {
                     .comment("Largest building template along z, in blocks.")
                     .defineInRange("templateMaxLength", 48, 1, 256);
             builder.pop();
+            army = new Army(builder);
 
             builder.comment("Abstract simulation of kingdoms far from players.").push("simulation");
             simulationIntervalTicks = builder
@@ -669,6 +672,94 @@ public final class KingdomWorldConfig {
                     .defineInRange("expeditionInjury", d.expeditionInjury, 0.0, 1.0);
             expeditionDeath = builder.comment("Chance of a member to die on an even expedition (taskRiskMultiplier applies).")
                     .defineInRange("expeditionDeath", d.expeditionDeath, 0.0, 1.0);
+            builder.pop();
+        }
+    }
+
+    /**
+     * The army: soldiers among the citizens, their gear, training and pay, squads, mercenaries and battles far from players.
+     */
+    public static final class Army {
+        public final ForgeConfigSpec.LongValue soldierWage;
+        public final ForgeConfigSpec.IntValue maxSoldiers;
+        public final ForgeConfigSpec.IntValue maxSquads;
+        public final ForgeConfigSpec.IntValue maxSquadSize;
+        public final ForgeConfigSpec.IntValue trainingPerMinute;
+        public final ForgeConfigSpec.LongValue trainingCap;
+        public final ForgeConfigSpec.IntValue barracksCapacity;
+        public final ForgeConfigSpec.DoubleValue battleInjury;
+        public final ForgeConfigSpec.DoubleValue battleDeath;
+        public final ForgeConfigSpec.IntValue battleExperience;
+        public final ForgeConfigSpec.IntValue mercenaryOffersPerDay;
+        public final ForgeConfigSpec.IntValue minBand;
+        public final ForgeConfigSpec.IntValue maxBand;
+        public final ForgeConfigSpec.DoubleValue mercenaryPricePerPower;
+        public final ForgeConfigSpec.IntValue mercenaryAdvanceDays;
+        public final ForgeConfigSpec.IntValue maxMercenaries;
+        public final ForgeConfigSpec.DoubleValue skirmishChance;
+        public final ForgeConfigSpec.DoubleValue monsterStrength;
+        public final ForgeConfigSpec.DoubleValue caravanThreat;
+        public final ForgeConfigSpec.IntValue caravanThreatUnits;
+        public final ForgeConfigSpec.IntValue alarmRadius;
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> gearScores;
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> rangedWeapons;
+
+        Army(ForgeConfigSpec.Builder builder) {
+            io.github.sekerator.kingdomworld.core.army.ArmyRules.Builder d = new io.github.sekerator.kingdomworld.core.army.ArmyRules.Builder();
+            builder.comment("The army: soldiers, their gear, training and pay, squads, mercenaries and battles far from players.",
+                    "Money is in copper coins.").push("army");
+            soldierWage = builder.comment("The usual daily wage of warriors and archers, unless the list of wages names them.",
+                            "Soldiers measure their pay against it like other citizens.")
+                    .defineInRange("soldierWage", 15L, 0L, 1_000_000L);
+            maxSoldiers = builder.comment("Soldiers one kingdom keeps at most.").defineInRange("maxSoldiers", d.maxSoldiers, 0, 1_024);
+            maxSquads = builder.comment("Squads one kingdom keeps at most, bands of mercenaries included.")
+                    .defineInRange("maxSquads", d.maxSquads, 0, 256);
+            maxSquadSize = builder.comment("Soldiers in one squad at most.").defineInRange("maxSquadSize", d.maxSquadSize, 1, 32);
+            trainingPerMinute = builder.comment("Experience a soldier gains per minute of training at a barracks of its kingdom.")
+                    .defineInRange("trainingPerMinute", d.trainingPerMinute, 0, 1_000);
+            trainingCap = builder.comment("Experience training takes a soldier to at most (700 is a sergeant); battles go beyond.")
+                    .defineInRange("trainingCap", d.trainingCap, 0L, 1_000_000_000L);
+            barracksCapacity = builder.comment("Soldiers one barracks trains at a time.")
+                    .defineInRange("barracksCapacity", d.barracksCapacity, 0, 256);
+            battleInjury = builder.comment("Chance of a fighter to be wounded in an even battle its side won, far from players",
+                            "(taskRiskMultiplier applies; a lost battle and a weaker side are worse).")
+                    .defineInRange("battleInjury", d.battleInjury, 0.0, 1.0);
+            battleDeath = builder.comment("Chance of a fighter to fall in such a battle.")
+                    .defineInRange("battleDeath", d.battleDeath, 0.0, 1.0);
+            battleExperience = builder.comment("Experience of war a soldier gains for a battle far from players, twice for a won one.")
+                    .defineInRange("battleExperience", d.battleExperience, 0, 100_000);
+            mercenaryOffersPerDay = builder.comment("Bands of mercenaries offered to each kingdom every game day.")
+                    .defineInRange("mercenaryOffersPerDay", d.offersPerDay, 0, 16);
+            minBand = builder.comment("Fewest mercenaries in a band.").defineInRange("minBand", d.minBand, 1, 16);
+            maxBand = builder.comment("Most mercenaries in a band.").defineInRange("maxBand", d.maxBand, 1, 16);
+            mercenaryPricePerPower = builder.comment("Daily price of mercenaries per point of their strength.")
+                    .defineInRange("mercenaryPricePerPower", d.pricePerPower, 0.001, 1_000.0);
+            mercenaryAdvanceDays = builder.comment("Days of pay a kingdom pays in advance when it hires a band.")
+                    .defineInRange("mercenaryAdvanceDays", d.advanceDays, 1, 30);
+            maxMercenaries = builder.comment("Mercenaries one kingdom keeps at most.")
+                    .defineInRange("maxMercenaries", d.maxMercenaries, 0, 1_024);
+            skirmishChance = builder.comment("Chance per step of the simulation that monsters fall upon a squad that holds a point, guards",
+                            "or patrols at night far from players.")
+                    .defineInRange("skirmishChance", d.skirmishChance, 0.0, 1.0);
+            monsterStrength = builder.comment("Strength of one monster in such a skirmish (a recruit with bare hands has 10).")
+                    .defineInRange("monsterStrength", d.monsterStrength, 0.1, 100_000.0);
+            caravanThreat = builder.comment("Strength of what lies in wait for a caravan on the road (caravanLossChance is the chance it",
+                            "does); guards win against it by their strength. 0 lets any guard win.")
+                    .defineInRange("caravanThreat", d.caravanThreat, 0.0, 1_000_000.0);
+            caravanThreatUnits = builder.comment("Head count of what lies in wait for a caravan.")
+                    .defineInRange("caravanThreatUnits", d.caravanThreatUnits, 1, 1_000);
+            alarmRadius = builder.comment("Blocks around a citizen or a player of the kingdom attacked by a monster on the kingdom's land",
+                            "in which soldiers come to help.")
+                    .defineInRange("alarmRadius", d.alarmRadius, 0, 256);
+            gearScores = builder.comment("Gear of soldiers: scores of items and tags that replace what their attributes say, or deny to",
+                            "never take them, e.g. [\"minecraft:trident=30\", \"#forge:tools/knives=deny\"]. A melee weapon scores its",
+                            "damage per second (a diamond sword about 11), armor its defense and half its toughness.")
+                    .defineListAllowEmpty("gearScores", List.of(), value -> value instanceof String text
+                            && io.github.sekerator.kingdomworld.core.army.GearChoice.parse(text).isPresent());
+            rangedWeapons = builder.comment("Items and tags archers shoot with, besides bows and crossbows of any mod. Guns of mods that",
+                            "cannot be used like a bow are left alone.")
+                    .defineListAllowEmpty("rangedWeapons", List.of("#forge:tools/bows", "#forge:tools/crossbows"),
+                            value -> value instanceof String);
             builder.pop();
         }
     }
