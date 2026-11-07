@@ -1128,6 +1128,21 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue blocksPerTick;
         public final ForgeConfigSpec.IntValue chunksPerTick;
         public final ForgeConfigSpec.IntValue maxInhabitedMinutes;
+        public final ForgeConfigSpec.IntValue rulerTurnEveryDays;
+        public final ForgeConfigSpec.IntValue rulerDecisionsPerTurn;
+        public final ForgeConfigSpec.IntValue rulerDecreesPerDay;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> rulerMaxChunks;
+        public final ForgeConfigSpec.IntValue rulerChunksPerClaim;
+        public final ForgeConfigSpec.IntValue rulerFreeBeds;
+        public final ForgeConfigSpec.IntValue rulerStorageFullPercent;
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> rulerRoles;
+        public final ForgeConfigSpec.IntValue rulerTownPopulation;
+        public final ForgeConfigSpec.IntValue rulerMaxTowns;
+        public final ForgeConfigSpec.IntValue rulerReserveDays;
+        public final ForgeConfigSpec.IntValue rulerSoldiersPermille;
+        public final ForgeConfigSpec.IntValue rulerSlackPermille;
+        public final ForgeConfigSpec.IntValue rulerRoadDistance;
+        public final ForgeConfigSpec.IntValue rulerFestivalMood;
 
         NpcKingdoms(ForgeConfigSpec.Builder builder) {
             io.github.sekerator.kingdomworld.core.npc.NpcRules d = io.github.sekerator.kingdomworld.core.npc.NpcRules.DEFAULT;
@@ -1176,6 +1191,47 @@ public final class KingdomWorldConfig {
             maxInhabitedMinutes = builder.comment("A place where players spent more minutes than this (the game counts it for every chunk)",
                             "is left alone, so that a kingdom never appears over what players built.")
                     .defineInRange("maxInhabitedMinutes", d.maxInhabitedMinutes(), 0, 100_000);
+            io.github.sekerator.kingdomworld.core.npc.RulerRules r = io.github.sekerator.kingdomworld.core.npc.RulerRules.DEFAULT;
+            builder.comment("The rulers of the kingdoms of the world: they build, trade, hire and answer threats by the rules players play by.")
+                    .push("rulers");
+            rulerTurnEveryDays = builder.comment("A ruler takes a turn every this many game days.")
+                    .defineInRange("turnEveryDays", r.turnEveryDays(), 1, 30);
+            rulerDecisionsPerTurn = builder.comment("Decisions a ruler makes in a turn at most, so that its kingdom changes step by step.",
+                            "Answers to deals and to roads over its land do not count.")
+                    .defineInRange("decisionsPerTurn", r.decisionsPerTurn(), 0, 10);
+            rulerDecreesPerDay = builder.comment("Decrees of one kingdom the chronicle takes in a game day at most.")
+                    .defineInRange("decreesPerDay", r.decreesPerDay(), 0, 10);
+            rulerMaxChunks = builder.comment("The land a kingdom of the world may hold at most, in chunks, for small, medium and large kingdoms.")
+                    .defineList("maxChunks", ints(r.maxChunks()), value -> value instanceof Integer number && number >= 9 && number <= 4096);
+            rulerChunksPerClaim = builder.comment("Chunks one decision claims at most.")
+                    .defineInRange("chunksPerClaim", r.chunksPerClaim(), 1, 16);
+            rulerFreeBeds = builder.comment("A house is laid out once no more than this many beds are free.")
+                    .defineInRange("freeBeds", r.freeBeds(), 0, 16);
+            rulerStorageFullPercent = builder.comment("A storehouse is laid out once the storehouses are this full, in percent.")
+                    .defineInRange("storageFullPercent", r.storageFullPercent(), 10, 100);
+            List<String> roles = new java.util.ArrayList<>();
+            r.roles().forEach(want -> roles.add(want.text()));
+            rulerRoles = builder.comment("Buildings a kingdom wants by the level of its capital, in the order they are built: role=village,town,city.",
+                            "A role the server does not know (for example the tavern before the life of towns) is skipped.")
+                    .defineList("roles", roles, value -> value instanceof String text
+                            && io.github.sekerator.kingdomworld.core.npc.RulerRules.RoleWant.parse(text).isPresent());
+            rulerTownPopulation = builder.comment("A kingdom with at least this many citizens founds a new town with a town hall and a road to it.")
+                    .defineInRange("townPopulation", r.townPopulation(), 1, 10_000);
+            rulerMaxTowns = builder.comment("Towns a kingdom of the world has at most.")
+                    .defineInRange("maxTowns", r.maxTowns(), 0, 6);
+            rulerReserveDays = builder.comment("Days of expenses a ruler keeps in its treasury; below that and losing money it counts itself poor,",
+                            "lets soldiers go, stops building, raises taxes and sells its surplus.")
+                    .defineInRange("reserveDays", r.reserveDays(), 0, 60);
+            rulerSoldiersPermille = builder.comment("Soldiers for every thousand citizens a ruler of no particular leaning keeps; warriors twice as many.")
+                    .defineInRange("soldiersPermille", r.soldiersPermille(), 0, 1000);
+            rulerSlackPermille = builder.comment("How far below the worth of goods a ruler still sells them, or above it buys them, in thousandths.",
+                            "Offers further off are declined as robbing.")
+                    .defineInRange("slackPermille", r.slackPermille(), 0, 900);
+            rulerRoadDistance = builder.comment("Roads are laid to neighbours this close at most, in blocks.")
+                    .defineInRange("roadDistance", r.roadDistance(), 0, 1536);
+            rulerFestivalMood = builder.comment("A feast is held when the mood of the citizens falls below this (with the life of towns).")
+                    .defineInRange("festivalMood", r.festivalMood(), 0, 100);
+            builder.pop();
             builder.pop();
         }
 

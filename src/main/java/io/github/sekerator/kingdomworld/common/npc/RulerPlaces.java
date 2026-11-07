@@ -1,0 +1,339 @@
+package io.github.sekerator.kingdomworld.common.npc;
+
+import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
+import io.github.sekerator.kingdomworld.common.construction.BuildingTemplate;
+import io.github.sekerator.kingdomworld.common.construction.BuildingTemplates;
+import io.github.sekerator.kingdomworld.common.construction.ConstructionSettings;
+import io.github.sekerator.kingdomworld.common.construction.TemplateMaterials;
+import io.github.sekerator.kingdomworld.common.road.RoadSettings;
+import io.github.sekerator.kingdomworld.common.road.RoadWork;
+import io.github.sekerator.kingdomworld.core.citizen.Professions;
+import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
+import io.github.sekerator.kingdomworld.core.construction.Box;
+import io.github.sekerator.kingdomworld.core.construction.Building;
+import io.github.sekerator.kingdomworld.core.construction.Materials;
+import io.github.sekerator.kingdomworld.core.construction.Placement;
+import io.github.sekerator.kingdomworld.core.npc.NpcComposition;
+import io.github.sekerator.kingdomworld.core.npc.NpcKingdom;
+import io.github.sekerator.kingdomworld.core.npc.NpcSite;
+import io.github.sekerator.kingdomworld.core.npc.RulerMind;
+import io.github.sekerator.kingdomworld.core.npc.RulerRules;
+import io.github.sekerator.kingdomworld.core.npc.RulerView;
+import io.github.sekerator.kingdomworld.core.road.Road;
+import io.github.sekerator.kingdomworld.core.road.RoadRules;
+import io.github.sekerator.kingdomworld.core.road.RouteCell;
+import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
+import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
+import io.github.sekerator.kingdomworld.core.territory.Territory;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.level.ChunkPos;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * Where a ruler of the world puts what it decides on, from the data of its kingdom: free plots of the grid of its capital (the
+ * gardens, levelled when the kingdom appeared), plots beyond its wall along the streets of the grid, chunks of free land next to
+ * its own and places for new towns. Places that turned out unfit when the world was looked at are remembered until a restart.
+ */
+final class RulerPlaces {
+    /** Templates a ruler builds for a role, before any other template of that role. */
+    private static final Map<String, String> PREFERRED = Map.of("house", NpcComposition.LARGE_HOUSE, "warehouse", NpcComposition.STOREHOUSE,
+            "market", NpcComposition.MARKET, "well", NpcComposition.WELL, "workshop", NpcComposition.WORKSHOP, "barracks", NpcComposition.BARRACKS,
+            "tower", NpcComposition.WATCHTOWER, "mage_tower", NpcComposition.MAGE_TOWER);
+    /** Blocks a plot beyond the wall keeps from fields, roads and the wall. */
+    private static final int KEEP_CLEAR = 3;
+    /** Anchors that turned out unfit, by kingdom; tried again after a restart. */
+    private static final Map<UUID, Set<Long>> UNFIT = new ConcurrentHashMap<>();
+
+    /**
+     * A place for a building.
+     *
+     * @param levelled whether the ground is flat already (a plot of the grid inside the wall)
+     */
+    record Spot(BuildingTemplate template, BlockPos anchor, Placement placement, Box box, boolean levelled) {
+    }
+
+    private RulerPlaces() {
+    }
+
+    static void reset() {
+        UNFIT.clear();
+    }
+
+    static void unfit(UUID kingdomId, BlockPos anchor) {
+        UNFIT.computeIfAbsent(kingdomId, id -> ConcurrentHashMap.newKeySet()).add(anchor.asLong());
+    }
+
+    /**
+     * The wood of the buildings of a kingdom, as a species ({@code minecraft:spruce}); oak if none is known.
+     */
+    static String wood(MinecraftServer server, UUID kingdomId) {
+        for (Building building : KingdomWorldApi.state(server).construction().buildingsOf(kingdomId)) {
+            String wood = building.materials().wood();
+            if (!wood.isEmpty() && !wood.equals(Materials.AUTO)) {
+                return wood;
+            }
+        }
+        return "minecraft:oak";
+    }
+
+    /**
+     * The template a ruler builds for a role: its own choice for the roles it knows, else the first template of the role at the
+     * lowest level.
+     */
+    static Optional<BuildingTemplate> template(String role) {
+        String preferred = PREFERRED.get(role);
+        if (preferred != null) {
+            Optional<BuildingTemplate> found = BuildingTemplates.get(preferred).filter(t -> usable(t) && role.equals(t.role()));
+            if (found.isPresent()) {
+                return found;
+            }
+        }
+        return BuildingTemplates.all().stream().filter(t -> role.equals(t.role()) && usable(t))
+                .min(Comparator.comparingInt(BuildingTemplate::level).thenComparing(t -> t.id().toString()));
+    }
+
+    private static boolean usable(BuildingTemplate template) {
+        return template.owner() == null && template.available() && BuildingTemplates.problem(template, ConstructionSettings.rules()) == null;
+    }
+
+    /**
+     * The buildings a ruler could lay out this turn: a house, a storehouse and every role of the table, each with what its missing
+     * materials are worth and whether a place was found.
+     */
+    static void options(MinecraftServer server, NpcKingdom npc, RulerView view) {
+        UUID id = npc.kingdomId();
+        String wood = wood(server, id);
+        Set<String> roles = new LinkedHashSet<>(List.of(RulerMind.HOUSE, RulerMind.WAREHOUSE));
+        for (RulerRules.RoleWant want : NpcSettings.rulers().roles()) {
+            roles.add(want.role());
+        }
+        for (String role : roles) {
+            if (!view.knownRoles.contains(role)) {
+                continue;
+            }
+            Optional<BuildingTemplate> template = template(role);
+            if (template.isEmpty()) {
+                continue;
+            }
+            BuildingTemplate built = TemplateMaterials.apply(template.get(), new Materials(wood, ""));
+            long missing = RulerSnapshots.missingWorth(server, id, built.items());
+            boolean place = find(server, npc, template.get()).isPresent();
+            view.builds.add(new RulerView.Option(role, template.get().id().toString(), "", missing, place));
+        }
+    }
+
+    /**
+     * A free place for a building on the land of a kingdom within reach of its builders: a garden of the grid of the capital
+     * first, then plots beyond its wall.
+     */
+    static Optional<Spot> find(MinecraftServer server, NpcKingdom npc, BuildingTemplate template) {
+        Optional<NpcSite> found = NpcWork.state(server).site(npc.siteId());
+        if (found.isEmpty() || found.get().groundY() == 0) {
+            return Optional.empty();
+        }
+        NpcSite site = found.get();
+        UUID id = npc.kingdomId();
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        Optional<Territory> territory = state.territory().territory(id);
+        if (territory.isEmpty()) {
+            return Optional.empty();
+        }
+        String dimension = territory.get().dimension();
+        NpcComposition composition = NpcSpawner.composition(site);
+        int y = site.groundY() + 1;
+        Set<Long> unfit = UNFIT.getOrDefault(id, Set.of());
+        List<WorkPost> builders = state.citizens().posts().postsOf(id, Professions.BUILDER.id());
+        int reach = Math.max(8, ConstructionSettings.rules().builderRadius() - 4);
+        for (int[] cell : NpcSpawner.gardenPlots(composition)) {
+            Optional<Spot> spot = spot(state, id, dimension, template, site.x() + cell[0] * NpcComposition.SPACING, y,
+                    site.z() + cell[1] * NpcComposition.SPACING, NpcComposition.facing(cell[0], cell[1]), true, unfit, builders, reach);
+            if (spot.isPresent()) {
+                return spot;
+            }
+        }
+        RoadRules roads = RoadSettings.rules();
+        int wall = switch (site.level()) {
+            case SMALL -> roads.wallRadius();
+            case MEDIUM -> roads.wallRadius() * 3 / 2;
+            case LARGE -> roads.wallRadius() * 2;
+        };
+        int first = Math.max(composition.rings() + 1, (wall + NpcComposition.PLOT / 2 + 1 + KEEP_CLEAR + NpcComposition.SPACING - 1)
+                / NpcComposition.SPACING);
+        List<int[]> outside = NpcSpawner.outsideSpots(site, composition);
+        List<int[]> cells = roadCells(server, id);
+        for (int ring = first; ring <= first + 1; ring++) {
+            for (int gx = -ring; gx <= ring; gx++) {
+                for (int gz = -ring; gz <= ring; gz++) {
+                    if (Math.max(Math.abs(gx), Math.abs(gz)) != ring) {
+                        continue;
+                    }
+                    int cx = site.x() + gx * NpcComposition.SPACING;
+                    int cz = site.z() + gz * NpcComposition.SPACING;
+                    if (near(outside, cx, cz, NpcComposition.PLOT / 2 + 6 + KEEP_CLEAR) || near(cells, cx, cz, NpcComposition.PLOT / 2 + KEEP_CLEAR)) {
+                        continue;
+                    }
+                    Optional<Spot> spot = spot(state, id, dimension, template, cx, y, cz, NpcComposition.facing(gx, gz), false, unfit, builders,
+                            reach);
+                    if (spot.isPresent()) {
+                        return spot;
+                    }
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<Spot> spot(KingdomWorldState state, UUID id, String dimension, BuildingTemplate template, int cx, int y, int cz,
+                                       int facing, boolean levelled, Set<Long> unfit, List<WorkPost> builders, int reach) {
+        Placement placement = new Placement(facing, false);
+        BlockPos anchor = NpcSpawner.anchor(template, cx, y, cz, placement);
+        if (unfit.contains(anchor.asLong())) {
+            return Optional.empty();
+        }
+        Box box = template.box(anchor, placement);
+        if (!state.checkLay(null, id, dimension, box, ConstructionSettings.rules()).ok()) {
+            return Optional.empty();
+        }
+        boolean reached = false;
+        for (WorkPost post : builders) {
+            int dx = Math.max(0, Math.max(box.minX() - post.pos().x(), post.pos().x() - box.maxX()));
+            int dz = Math.max(0, Math.max(box.minZ() - post.pos().z(), post.pos().z() - box.maxZ()));
+            if (post.pos().dimension().equals(dimension) && dx * dx + dz * dz <= reach * reach) {
+                reached = true;
+                break;
+            }
+        }
+        return reached ? Optional.of(new Spot(template, anchor, placement, box, levelled)) : Optional.empty();
+    }
+
+    private static boolean near(List<int[]> points, int x, int z, int distance) {
+        for (int[] point : points) {
+            if (Math.abs(point[0] - x) <= distance && Math.abs(point[1] - z) <= distance) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static List<int[]> roadCells(MinecraftServer server, UUID id) {
+        List<int[]> cells = new ArrayList<>();
+        for (Road road : RoadWork.state(server).roadsOf(id)) {
+            for (RouteCell cell : road.cells()) {
+                cells.add(new int[]{cell.x(), cell.z()});
+            }
+        }
+        return cells;
+    }
+
+    /**
+     * Free chunks next to the land of a kingdom it could claim by the rules of land (no other kingdom near), nearest to its
+     * capital first. Whether players lived there is looked at when the chunk is claimed.
+     */
+    static List<Long> claimable(MinecraftServer server, UUID id, int max) {
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        Optional<Territory> territory = state.territory().territory(id);
+        if (territory.isEmpty()) {
+            return List.of();
+        }
+        String dimension = territory.get().dimension();
+        int buffer = KingdomWorldApi.rules().claimBufferChunks();
+        int cx = territory.get().capital().x() >> 4;
+        int cz = territory.get().capital().z() >> 4;
+        Set<Long> seen = new HashSet<>();
+        List<Long> result = new ArrayList<>();
+        Set<Long> unfit = UNFIT.getOrDefault(id, Set.of());
+        for (long chunk : territory.get().chunks()) {
+            int x = ChunkKey.x(chunk);
+            int z = ChunkKey.z(chunk);
+            for (int[] side : new int[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+                long next = ChunkKey.of(x + side[0], z + side[1]);
+                if (!seen.add(next) || state.territory().ownerOf(dimension, next) != null || unfit.contains(next)
+                        || state.territory().hasForeignLandWithin(dimension, next, buffer, id)) {
+                    continue;
+                }
+                result.add(next);
+            }
+        }
+        result.sort(Comparator.comparingDouble(chunk -> Math.hypot(ChunkKey.x(chunk) - cx, ChunkKey.z(chunk) - cz)));
+        return result.size() > max ? List.copyOf(result.subList(0, max)) : result;
+    }
+
+    static void unfitChunk(UUID kingdomId, long chunk) {
+        UNFIT.computeIfAbsent(kingdomId, id -> ConcurrentHashMap.newKeySet()).add(chunk);
+    }
+
+    /**
+     * A place for a new town at the distance of towns from the capital, where a city may stand by the rules of roads and no other
+     * kingdom holds or touches the land of its square or of the way to it; empty if there is none.
+     */
+    static Optional<int[]> townSpot(MinecraftServer server, NpcKingdom npc) {
+        UUID id = npc.kingdomId();
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        Optional<Territory> territory = state.territory().territory(id);
+        if (territory.isEmpty()) {
+            return Optional.empty();
+        }
+        String dimension = territory.get().dimension();
+        int capitalX = territory.get().capital().x();
+        int capitalZ = territory.get().capital().z();
+        int distance = NpcSettings.rules().townDistance();
+        int buffer = KingdomWorldApi.rules().claimBufferChunks() + 1;
+        List<int[]> capitals = new ArrayList<>();
+        for (Territory other : state.territory().territories()) {
+            if (other.capital().dimension().equals(dimension)) {
+                capitals.add(new int[]{other.capital().x(), other.capital().z()});
+            }
+        }
+        Set<Long> unfit = UNFIT.getOrDefault(id, Set.of());
+        for (int i = 0; i < 8; i++) {
+            double angle = i * Math.PI / 4 + Math.PI / 8;
+            int x = capitalX + (int) Math.round(Math.cos(angle) * distance);
+            int z = capitalZ + (int) Math.round(Math.sin(angle) * distance);
+            if (unfit.contains(BlockPos.asLong(x, 0, z))) {
+                continue;
+            }
+            if (!RoadWork.state(server).checkCity(id, dimension, x, z, capitals, RoadSettings.rules()).ok()) {
+                continue;
+            }
+            boolean free = true;
+            for (long chunk : townChunks(capitalX, capitalZ, x, z)) {
+                UUID owner = state.territory().ownerOf(dimension, chunk);
+                if ((owner != null && !owner.equals(id)) || state.territory().hasForeignLandWithin(dimension, chunk, buffer, id)) {
+                    free = false;
+                    break;
+                }
+            }
+            if (free) {
+                return Optional.of(new int[]{x, z});
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * The chunks of a new town: the way from the capital and the square around the town hall, in the order they are claimed.
+     */
+    static List<Long> townChunks(int capitalX, int capitalZ, int x, int z) {
+        Set<Long> keys = new LinkedHashSet<>();
+        for (long chunk : NpcSpawner.corridor(capitalX >> 4, capitalZ >> 4, x >> 4, z >> 4)) {
+            keys.add(ChunkKey.of(ChunkPos.getX(chunk), ChunkPos.getZ(chunk)));
+        }
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                keys.add(ChunkKey.of((x >> 4) + dx, (z >> 4) + dz));
+            }
+        }
+        return new ArrayList<>(keys);
+    }
+}

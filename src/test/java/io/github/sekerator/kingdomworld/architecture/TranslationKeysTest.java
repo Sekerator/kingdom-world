@@ -341,8 +341,10 @@ class TranslationKeysTest {
      */
     @Test
     void countsOfKingdomsOfTheWorldHaveEveryPluralForm() {
-        Map<String, String> russianForms = Map.of("kingdoms", "королевство|королевство|королевства|королевств", "places", "место|место|места|мест");
-        Map<String, String[]> englishForms = Map.of("kingdoms", new String[]{"kingdom", "kingdoms"}, "places", new String[]{"place", "places"});
+        Map<String, String> russianForms = Map.of("kingdoms", "королевство|королевство|королевства|королевств", "places", "место|место|места|мест",
+                "decrees", "указ|указ|указа|указов");
+        Map<String, String[]> englishForms = Map.of("kingdoms", new String[]{"kingdom", "kingdoms"}, "places", new String[]{"place", "places"},
+                "decrees", new String[]{"decree", "decrees"});
         russianForms.forEach((word, forms) -> {
             String[] words = forms.split("[|]");
             Plurals.Form[] all = Plurals.Form.values();
@@ -694,10 +696,31 @@ class TranslationKeysTest {
         for (io.github.sekerator.kingdomworld.core.npc.NpcSite.Status status : io.github.sekerator.kingdomworld.core.npc.NpcSite.Status.values()) {
             used.add("commands.kingdomworld.admin.npc.status." + status.id());
         }
-        for (String word : List.of("kingdoms", "places")) {
+        for (String word : List.of("kingdoms", "places", "decrees")) {
             for (Plurals.Form form : Plurals.Form.values()) {
                 used.add("kingdomworld.count." + word + "." + form.suffix());
             }
+        }
+        // Rulers of the world: decrees of kings and queens, roles, reasons for declining a deal, needs and attitudes.
+        for (io.github.sekerator.kingdomworld.core.npc.RulerDecision.Kind kind : io.github.sekerator.kingdomworld.core.npc.RulerDecision.Kind.values()) {
+            used.add("kingdomworld.ruler.decree." + kind.id());
+            used.add("kingdomworld.ruler.decree." + kind.id() + ".female");
+        }
+        used.add("kingdomworld.ruler.decree.offer.buy");
+        used.add("kingdomworld.ruler.decree.offer.female.buy");
+        for (String role : List.of("house", "warehouse", "workshop", "market", "tower", "well", "barracks", "mage_tower", "tavern")) {
+            used.add("kingdomworld.ruler.role." + role);
+        }
+        for (String reason : io.github.sekerator.kingdomworld.core.npc.RulerMind.REASONS) {
+            used.add("kingdomworld.ruler.reason." + reason);
+        }
+        for (io.github.sekerator.kingdomworld.core.npc.RulerMemory.NeedKind kind : io.github.sekerator.kingdomworld.core.npc.RulerMemory.NeedKind.values()) {
+            used.add("kingdomworld.ruler.need." + kind.id());
+        }
+        used.add("kingdomworld.ruler.need.food.count");
+        used.add("kingdomworld.ruler.need.goods.count");
+        for (io.github.sekerator.kingdomworld.core.npc.RulerMind.Attitude attitude : io.github.sekerator.kingdomworld.core.npc.RulerMind.Attitude.values()) {
+            used.add("kingdomworld.ruler.attitude." + attitude.id());
         }
         for (io.github.sekerator.kingdomworld.core.economy.LedgerCategory category : io.github.sekerator.kingdomworld.core.economy.LedgerCategory.values()) {
             used.add("kingdomworld.ledger." + category.id());

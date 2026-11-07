@@ -127,6 +127,7 @@ public final class NpcWork {
         lastDay = Long.MIN_VALUE;
         NpcPlanning.reset();
         NpcSpawner.reset();
+        NpcRulers.reset();
     }
 
     static void loaded(MinecraftServer server) {
@@ -148,13 +149,11 @@ public final class NpcWork {
             keepInStep(server);
             long day = TreasuryActions.day(server);
             if (day != lastDay) {
-                boolean first = lastDay == Long.MIN_VALUE;
                 lastDay = day;
-                if (!first) {
-                    daily(server, day);
-                }
+                NpcRulers.due(server, day);
             }
         }
+        NpcRulers.tick(server);
     }
 
     /**
@@ -209,20 +208,6 @@ public final class NpcWork {
                 }
             });
             LOGGER.info("The kingdom of the world {} is gone; its record is forgotten", kingdom.name().latin());
-        }
-    }
-
-    /**
-     * The daily turn of the rulers of the kingdoms of the world. Their decisions (taxes, building, hiring, trade, land, roads,
-     * laws, robbers) come later; the day of the turn is already kept.
-     */
-    private static void daily(MinecraftServer server, long day) {
-        NpcState state = state(server);
-        for (NpcKingdom kingdom : List.copyOf(state.kingdoms())) {
-            if (kingdom.lastTurnDay() < day) {
-                NpcRulers.turn(server, kingdom, day);
-                state.putKingdom(kingdom.withLastTurnDay(day));
-            }
         }
     }
 

@@ -395,6 +395,33 @@ public final class MembershipRegistry {
     }
 
     /**
+     * Appoints a member to a position in a kingdom that has no player on its throne (a kingdom of the world, whose ruler
+     * appoints its subjects itself). Refused where a player is king.
+     */
+    public Outcome appoint(UUID kingdomId, UUID targetId, Role role) {
+        KingdomMembers entry = kingdoms.get(kingdomId);
+        if (entry == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (entry.members.values().stream().anyMatch(member -> member.role() == Role.KING)) {
+            return Outcome.fail(KingdomError.NO_PERMISSION);
+        }
+        if (!role.isAssignable()) {
+            return Outcome.fail(KingdomError.ROLE_NOT_ASSIGNABLE);
+        }
+        Member target = entry.members.get(targetId);
+        if (target == null) {
+            return Outcome.fail(KingdomError.NOT_A_MEMBER);
+        }
+        if (target.role() == role) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        entry.members.put(targetId, target.withRole(role));
+        changeListener.run();
+        return Outcome.DONE;
+    }
+
+    /**
      * Grants or revokes a right of a position. Needs {@link Permission#APPOINT}.
      */
     public Outcome setRolePermission(UUID actorId, Role role, Permission permission, boolean granted) {

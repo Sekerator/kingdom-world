@@ -12,6 +12,8 @@ import java.util.List;
 public final class NpcSettings {
     private static NpcRules override;
     private static NpcRules rules;
+    private static io.github.sekerator.kingdomworld.core.npc.RulerRules rulerOverride;
+    private static io.github.sekerator.kingdomworld.core.npc.RulerRules rulers;
 
     private NpcSettings() {
     }
@@ -28,13 +30,53 @@ public final class NpcSettings {
         return value;
     }
 
+    /**
+     * The rules of the rulers of the kingdoms of the world.
+     */
+    public static io.github.sekerator.kingdomworld.core.npc.RulerRules rulers() {
+        if (rulerOverride != null) {
+            return rulerOverride;
+        }
+        io.github.sekerator.kingdomworld.core.npc.RulerRules value = rulers;
+        if (value == null) {
+            value = rulersFromConfig();
+            rulers = value;
+        }
+        return value;
+    }
+
     public static void refresh() {
         rules = fromConfig();
+        rulers = rulersFromConfig();
     }
 
     public static void reset() {
         rules = null;
         override = null;
+        rulers = null;
+        rulerOverride = null;
+    }
+
+    /**
+     * Replaces the configured rules of the rulers, for game tests; {@code null} restores the config.
+     */
+    public static void overrideRulers(io.github.sekerator.kingdomworld.core.npc.RulerRules value) {
+        rulerOverride = value;
+    }
+
+    private static io.github.sekerator.kingdomworld.core.npc.RulerRules rulersFromConfig() {
+        io.github.sekerator.kingdomworld.core.npc.RulerRules d = io.github.sekerator.kingdomworld.core.npc.RulerRules.DEFAULT;
+        try {
+            KingdomWorldConfig.NpcKingdoms c = KingdomWorldConfig.SERVER.npcKingdoms;
+            List<io.github.sekerator.kingdomworld.core.npc.RulerRules.RoleWant> roles =
+                    io.github.sekerator.kingdomworld.core.npc.RulerRules.RoleWant.parse(c.rulerRoles.get());
+            return new io.github.sekerator.kingdomworld.core.npc.RulerRules(c.rulerTurnEveryDays.get(), c.rulerDecisionsPerTurn.get(),
+                    c.rulerDecreesPerDay.get(), ints(c.rulerMaxChunks.get(), d.maxChunks()), c.rulerChunksPerClaim.get(), c.rulerFreeBeds.get(),
+                    c.rulerStorageFullPercent.get(), roles, c.rulerTownPopulation.get(), c.rulerMaxTowns.get(), c.rulerReserveDays.get(),
+                    c.rulerSoldiersPermille.get(), c.rulerSlackPermille.get(), c.rulerRoadDistance.get(), c.rulerFestivalMood.get());
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return d;
+        }
     }
 
     /**

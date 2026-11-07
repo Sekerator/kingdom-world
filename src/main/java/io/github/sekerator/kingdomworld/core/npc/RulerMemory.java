@@ -26,6 +26,10 @@ public final class RulerMemory {
     public static final int MAX_RELATIONS = 64;
     /** How far a relation goes either way. */
     public static final int MAX_RELATION = 100;
+    /** Decrees the chronicle of a kingdom keeps. */
+    public static final int MAX_CHRONICLE = 32;
+    /** Closed deals remembered, so that each counts once for the relations. */
+    public static final int MAX_SEEN_DEALS = 64;
 
     /**
      * A decision carried out on a day.
@@ -164,7 +168,10 @@ public final class RulerMemory {
     }
 
     private final List<Decree> decrees = new ArrayList<>();
+    private final List<Decree> chronicle = new ArrayList<>();
+    private final List<Long> seenDeals = new ArrayList<>();
     private final List<Need> needs = new ArrayList<>();
+    private final List<String> spares = new ArrayList<>();
     private final List<RulerDecision> pending = new ArrayList<>();
     private final Map<UUID, Relation> relations = new LinkedHashMap<>();
     private final Map<UUID, Integer> players = new LinkedHashMap<>();
@@ -206,6 +213,55 @@ public final class RulerMemory {
         return true;
     }
 
+    /**
+     * The important decrees of the ruler as the chronicle of the kingdom keeps them, the newest first.
+     */
+    public List<Decree> chronicle() {
+        return Collections.unmodifiableList(chronicle);
+    }
+
+    /**
+     * Writes an important decree into the chronicle if the day has room for it.
+     *
+     * @return whether it was written
+     */
+    public boolean writeChronicle(long day, RulerDecision decision, int perDay) {
+        if (!decision.kind().important() || !chronicle(day, perDay)) {
+            return false;
+        }
+        chronicle.add(0, new Decree(day, decision));
+        while (chronicle.size() > MAX_CHRONICLE) {
+            chronicle.remove(chronicle.size() - 1);
+        }
+        return true;
+    }
+
+    public void restoreChronicle(Decree decree) {
+        if (chronicle.size() < MAX_CHRONICLE) {
+            chronicle.add(decree);
+        }
+    }
+
+    // ---------------------------------------------------------------- deals counted
+
+    /**
+     * Whether a closed deal was counted for the relations already; counts it if not.
+     */
+    public boolean seeDeal(long dealId) {
+        if (seenDeals.contains(dealId)) {
+            return false;
+        }
+        seenDeals.add(dealId);
+        while (seenDeals.size() > MAX_SEEN_DEALS) {
+            seenDeals.remove(0);
+        }
+        return true;
+    }
+
+    public List<Long> seenDeals() {
+        return Collections.unmodifiableList(seenDeals);
+    }
+
     public long chronicleDay() {
         return chronicleDay;
     }
@@ -228,6 +284,19 @@ public final class RulerMemory {
             }
             needs.add(need);
         }
+    }
+
+    /**
+     * Goods the kingdom has more of than it needs, as the last turn saw them; other rulers look at them for deals. Not saved:
+     * the next turn sees them again.
+     */
+    public List<String> spares() {
+        return Collections.unmodifiableList(spares);
+    }
+
+    public void setSpares(List<String> value) {
+        spares.clear();
+        spares.addAll(value);
     }
 
     // ---------------------------------------------------------------- pending decisions

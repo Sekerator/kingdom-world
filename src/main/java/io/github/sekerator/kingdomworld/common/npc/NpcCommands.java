@@ -44,6 +44,16 @@ public final class NpcCommands {
                 .then(Commands.literal("plan").executes(context -> plan(context.getSource())))
                 .then(Commands.literal("list").executes(context -> list(context.getSource())))
                 .then(Commands.literal("timing").executes(context -> timing(context.getSource())))
+                .then(Commands.literal("turn")
+                        .then(Commands.literal("all").executes(context -> turnAll(context.getSource())))
+                        .then(Commands.argument("id", IntegerArgumentType.integer(1)).executes(NpcCommands::turn)))
+                .then(Commands.literal("days")
+                        .then(Commands.argument("id", IntegerArgumentType.integer(1))
+                                .then(Commands.argument("days", IntegerArgumentType.integer(1, 60)).executes(NpcCommands::days))))
+                .then(Commands.literal("decisions")
+                        .then(Commands.argument("id", IntegerArgumentType.integer(1)).executes(NpcCommands::decisions)))
+                .then(Commands.literal("needs")
+                        .then(Commands.argument("id", IntegerArgumentType.integer(1)).executes(NpcCommands::needs)))
                 .then(Commands.literal("reset-plan").executes(context -> resetPlan(context.getSource())))
                 .then(Commands.literal("spawn")
                         .then(Commands.literal("here")
@@ -136,6 +146,10 @@ public final class NpcCommands {
         source.sendSuccess(() -> Component.translatable(ADMIN + "timing", timing.ticks(),
                 String.format(java.util.Locale.ROOT, "%.2f", timing.averageMillis()), String.format(java.util.Locale.ROOT, "%.2f", timing.worstMillis())),
                 false);
+        NpcRulers.Timing rulers = NpcRulers.timing();
+        source.sendSuccess(() -> Component.translatable(ADMIN + "rulers_timing", rulers.turns(), rulers.ticks(),
+                String.format(java.util.Locale.ROOT, "%.2f", rulers.averageMillis()), String.format(java.util.Locale.ROOT, "%.2f", rulers.worstMillis())),
+                false);
         return (int) timing.ticks();
     }
 
@@ -218,5 +232,111 @@ public final class NpcCommands {
         source.sendSuccess(() -> Component.translatable(buildings ? ADMIN + "removed_buildings" : ADMIN + "removed", id,
                 kingdom.<Component>map(k -> Component.literal(k.name())).orElse(Component.literal("-"))), true);
         return 1;
+    }
+
+    // ---------------------------------------------------------------- rulers
+
+    private static Optional<io.github.sekerator.kingdomworld.core.npc.NpcKingdom> ruled(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        int id = IntegerArgumentType.getInteger(context, "id");
+        MinecraftServer server = source.getServer();
+        Optional<io.github.sekerator.kingdomworld.core.npc.NpcKingdom> kingdom = NpcWork.state(server).site(id).flatMap(NpcSite::kingdomId)
+                .flatMap(k -> NpcWork.kingdom(server, k));
+        if (kingdom.isEmpty()) {
+            source.sendFailure(Component.translatable(ADMIN + "no_site", id));
+        } else if (NpcWork.isReadOnly(server) || KingdomWorldApi.isReadOnly(server)) {
+            source.sendFailure(Component.translatable("commands.kingdomworld.admin.read_only"));
+            return Optional.empty();
+        }
+        return kingdom;
+    }
+
+    private static Component decisionList(java.util.List<io.github.sekerator.kingdomworld.core.npc.RulerDecision> decisions) {
+        return Component.literal(decisions.isEmpty() ? "-" : decisions.toString());
+    }
+
+    private static int turn(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        MinecraftServer server = source.getServer();
+        Optional<io.github.sekerator.kingdomworld.core.npc.NpcKingdom> kingdom = ruled(context);
+        if (kingdom.isEmpty()) {
+            return 0;
+        }
+        long day = io.github.sekerator.kingdomworld.common.economy.TreasuryActions.day(server);
+        Optional<io.github.sekerator.kingdomworld.core.npc.RulerMind.Plan> plan = NpcRulers.turn(server, kingdom.get(), day, false);
+        if (plan.isEmpty()) {
+            source.sendFailure(Component.translatable(ADMIN + "no_site", IntegerArgumentType.getInteger(context, "id")));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.translatable(ADMIN + "turn", NpcTexts.name(kingdom.get().name().latin(), kingdom.get().name().cyrillic()),
+                decisionList(plan.get().decisions()), plan.get().answers().size(), RulerTexts.needs(plan.get().needs())), true);
+        return plan.get().decisions().size();
+    }
+
+    private static int turnAll(CommandSourceStack source) {
+        MinecraftServer server = source.getServer();
+        if (NpcWork.isReadOnly(server) || KingdomWorldApi.isReadOnly(server)) {
+            source.sendFailure(Component.translatable("commands.kingdomworld.admin.read_only"));
+            return 0;
+        }
+        NpcRulers.resetTiming();
+        int count = NpcRulers.queueAll(server);
+        source.sendSuccess(() -> Component.translatable(ADMIN + "turn_all", NpcTexts.kingdoms(count)), true);
+        return count;
+    }
+
+    private static int days(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        MinecraftServer server = source.getServer();
+        Optional<io.github.sekerator.kingdomworld.core.npc.NpcKingdom> kingdom = ruled(context);
+        if (kingdom.isEmpty()) {
+            return 0;
+        }
+        int days = IntegerArgumentType.getInteger(context, "days");
+        int before = NpcWork.state(server).ruler(kingdom.get().kingdomId()).turns();
+        long[] money = NpcRulers.runDays(server, kingdom.get(), days);
+        io.github.sekerator.kingdomworld.core.npc.RulerMemory memory = NpcWork.state(server).ruler(kingdom.get().kingdomId());
+        int turns = memory.turns() - before;
+        long difference = money[1] - (money[0] + money[2] - money[3]);
+        source.sendSuccess(() -> Component.translatable(ADMIN + "days", NpcTexts.name(kingdom.get().name().latin(), kingdom.get().name().cyrillic()),
+                turns, memory.decrees().size(), memory.pending().size(), money[0], money[1], money[2], money[3], difference), true);
+        return turns;
+    }
+
+    private static int decisions(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        MinecraftServer server = source.getServer();
+        Optional<io.github.sekerator.kingdomworld.core.npc.NpcKingdom> kingdom = ruled(context);
+        if (kingdom.isEmpty()) {
+            return 0;
+        }
+        io.github.sekerator.kingdomworld.core.npc.RulerMemory memory = NpcWork.state(server).ruler(kingdom.get().kingdomId());
+        source.sendSuccess(() -> Component.translatable(ADMIN + "decisions", NpcTexts.name(kingdom.get().name().latin(),
+                kingdom.get().name().cyrillic()), RulerTexts.decrees(memory.decrees().size()), memory.turns(), decisionList(memory.pending())), false);
+        for (io.github.sekerator.kingdomworld.core.npc.RulerMemory.Decree decree : memory.decrees()) {
+            source.sendSuccess(() -> Component.translatable(ADMIN + "decree", decree.day(), RulerTexts.decree(decree.decision(),
+                    kingdom.get().rulerGender()), decree.decision().toString()), false);
+        }
+        return memory.decrees().size();
+    }
+
+    private static int needs(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        MinecraftServer server = source.getServer();
+        Optional<io.github.sekerator.kingdomworld.core.npc.NpcKingdom> kingdom = ruled(context);
+        if (kingdom.isEmpty()) {
+            return 0;
+        }
+        io.github.sekerator.kingdomworld.core.npc.RulerMemory memory = NpcWork.state(server).ruler(kingdom.get().kingdomId());
+        source.sendSuccess(() -> Component.translatable(ADMIN + "needs", NpcTexts.name(kingdom.get().name().latin(), kingdom.get().name().cyrillic()),
+                RulerTexts.needs(memory.needs()), memory.chronicle().size()), false);
+        memory.relations().forEach((other, relation) -> source.sendSuccess(() -> Component.translatable(ADMIN + "relation",
+                Component.literal(NpcRulers.kingdomName(server, other)), relation.score(),
+                Component.literal(relation.main().map(io.github.sekerator.kingdomworld.core.npc.RulerMemory.Reason::id).orElse("-"))), false));
+        NpcRulers.Timing timing = NpcRulers.timing();
+        source.sendSuccess(() -> Component.translatable(ADMIN + "rulers_timing", timing.turns(), timing.ticks(),
+                String.format(java.util.Locale.ROOT, "%.2f", timing.averageMillis()), String.format(java.util.Locale.ROOT, "%.2f", timing.worstMillis())),
+                false);
+        return memory.needs().size();
     }
 }

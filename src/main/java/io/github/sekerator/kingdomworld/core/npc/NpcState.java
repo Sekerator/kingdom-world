@@ -17,6 +17,7 @@ import java.util.UUID;
 public final class NpcState {
     private final Map<Integer, NpcSite> sites = new LinkedHashMap<>();
     private final Map<UUID, NpcKingdom> kingdoms = new LinkedHashMap<>();
+    private final Map<UUID, RulerMemory> rulers = new LinkedHashMap<>();
     private int nextSiteId = 1;
     private int planCursor;
     private int planShift;
@@ -121,6 +122,8 @@ public final class NpcState {
     }
 
     public Optional<NpcKingdom> removeKingdom(UUID kingdomId) {
+        rulers.remove(kingdomId);
+        rulers.values().forEach(memory -> memory.forgetRelation(kingdomId));
         NpcKingdom removed = kingdoms.remove(kingdomId);
         if (removed != null) {
             changeListener.run();
@@ -128,7 +131,36 @@ public final class NpcState {
         return Optional.ofNullable(removed);
     }
 
+    // ---------------------------------------------------------------- rulers
+
+    /**
+     * What the ruler of a kingdom of the world remembers; a ruler that never took a turn starts with an empty memory. Changes
+     * to the memory are saved with the next {@link #rulerChanged()}.
+     */
+    public RulerMemory ruler(UUID kingdomId) {
+        return rulers.computeIfAbsent(kingdomId, id -> new RulerMemory());
+    }
+
+    public Optional<RulerMemory> existingRuler(UUID kingdomId) {
+        return Optional.ofNullable(rulers.get(kingdomId));
+    }
+
+    public Map<UUID, RulerMemory> rulers() {
+        return Collections.unmodifiableMap(rulers);
+    }
+
+    /**
+     * Marks the memories of the rulers as changed, so that they are saved.
+     */
+    public void rulerChanged() {
+        changeListener.run();
+    }
+
     // ---------------------------------------------------------------- persistence
+
+    public void restoreRuler(UUID kingdomId, RulerMemory memory) {
+        rulers.put(kingdomId, memory);
+    }
 
     /**
      * Restores a place from saved data.
@@ -176,6 +208,11 @@ public final class NpcState {
         for (NpcSite site : sites.values()) {
             if (site.status() == NpcSite.Status.SPAWNED && (site.kingdomId().isEmpty() || !kingdoms.containsKey(site.kingdomId().get()))) {
                 problems.add(site + " appeared without a kingdom");
+            }
+        }
+        for (UUID ruler : rulers.keySet()) {
+            if (!kingdoms.containsKey(ruler)) {
+                problems.add("the memory of a ruler names the missing kingdom " + ruler);
             }
         }
         return problems;

@@ -27,6 +27,7 @@ import java.util.UUID;
  * sites: [ { id, x, z, level, seed, towns: [x, z, ...], status, kingdom?, stage, step, ground, reason } ]
  * kingdoms: [ { kingdom, site, level, latin, cyrillic, character, traits: [id], ruler, gender, towns: [ { latin, cyrillic } ],
  *              founded, turn } ]
+ * rulers: see {@link RulerNbt} (format 2)
  * </pre>
  */
 final class NpcNbt {
@@ -90,6 +91,7 @@ final class NpcNbt {
             kingdoms.add(entry);
         }
         tag.put("kingdoms", kingdoms);
+        RulerNbt.write(state, tag);
     }
 
     /**
@@ -161,6 +163,7 @@ final class NpcNbt {
                 problems.add("kingdom " + i + ": " + e.getMessage());
             }
         }
+        RulerNbt.read(tag, state, problems);
         return problems;
     }
 }
