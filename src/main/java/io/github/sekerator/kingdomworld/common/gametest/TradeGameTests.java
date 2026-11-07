@@ -73,7 +73,7 @@ import java.util.UUID;
 public final class TradeGameTests {
     private static final String EMPTY = "empty";
     /** Blocks between the first and the second kingdom of a test: seven chunks. */
-    private static final int SECOND = 112;
+    static final int SECOND = 112;
 
     private TradeGameTests() {
     }
@@ -121,7 +121,7 @@ public final class TradeGameTests {
     /**
      * A second kingdom seven chunks east of the first, with a storehouse.
      */
-    private static Kingdom second(GameTestHelper helper, String name, UUID king) {
+    static Kingdom second(GameTestHelper helper, String name, UUID king) {
         ServerLevel level = helper.getLevel();
         BlockPos throne = helper.absolutePos(new BlockPos(2 + SECOND, 0, 2));
         level.setBlockAndUpdate(throne, ModRegistries.THRONE.get().defaultBlockState());
@@ -132,7 +132,7 @@ public final class TradeGameTests {
         throw new IllegalStateException("The second kingdom was not founded: " + result);
     }
 
-    private static void clearSecond(GameTestHelper helper) {
+    static void clearSecond(GameTestHelper helper) {
         GatheringGameTests.clear(helper.getLevel(), helper.absolutePos(new BlockPos(SECOND - 1, 0, -1)),
                 helper.absolutePos(new BlockPos(SECOND + 8, 3, 8)));
     }
@@ -444,7 +444,7 @@ public final class TradeGameTests {
 
     // ---------------------------------------------------------------- deals and caravans
 
-    private static Deal propose(MinecraftServer server, Kingdom seller, Kingdom buyer, int count, long price) {
+    static Deal propose(MinecraftServer server, Kingdom seller, Kingdom buyer, int count, long price) {
         TradePackets.TradeChange change = new TradePackets.TradeChange(seller.id(), TradePackets.TradeChange.Action.PROPOSE, buyer.id(), 0,
                 "minecraft:wheat", count, price, true, false, 0);
         if (!TradeActions.apply(server, null, seller.id(), change).success()) {

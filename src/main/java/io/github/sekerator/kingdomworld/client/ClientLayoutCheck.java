@@ -175,6 +175,7 @@ final class ClientLayoutCheck {
                     LONG_KINGDOM, color), NARROWEST_SCREEN);
         }
         GuildLayoutCases.actionbars(minecraft.font, NARROWEST_SCREEN);
+        ArmyLayoutCases.actionbars(minecraft.font, NARROWEST_SCREEN);
         problems.addAll(LayoutCheck.end());
 
         for (int[] window : WINDOWS) {
@@ -1127,6 +1128,7 @@ final class ClientLayoutCheck {
         cases.add(new Case("confirm-crown", () -> new ConfirmScreen(yes -> {
         }, Component.literal(LONG_KINGDOM), Component.translatable("kingdomworld.screen.throne.crown.confirm", LONG_PLAYER))));
         GuildLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
+        ArmyLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         return cases;
     }
 }

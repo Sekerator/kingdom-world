@@ -248,6 +248,12 @@ public final class ClientSelfTest {
                 LOGGER.info(PREFIX + "construction tab answered by the server: {}",
                         minecraft.screen instanceof ThroneScreen screen && screen.constructionShown());
                 if (minecraft.screen instanceof ThroneScreen screen) {
+                    screen.selectTab("army");
+                }
+            }
+            case 276 -> {
+                LOGGER.info(PREFIX + "army tab answered by the server: {}", minecraft.screen instanceof ThroneScreen screen && screen.armyShown());
+                if (minecraft.screen instanceof ThroneScreen screen) {
                     ClientHooks.openTerritoryEditor(screen.view());
                 }
                 KingdomWorldNetwork.sendToServer(new ClaimChunkPacket((throne.getX() >> 4) + 2, throne.getZ() >> 4, true));

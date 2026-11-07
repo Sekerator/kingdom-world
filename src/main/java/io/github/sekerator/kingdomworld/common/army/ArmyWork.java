@@ -359,6 +359,7 @@ public final class ArmyWork {
                 if (fate == TaskRisks.Accident.DEATH) {
                     fallen.add(CitizenTexts.name(citizen.get()));
                     CitizenLife.die(server, member, CauseOfDeath.BATTLE, "", place != null ? place : citizen.get().lastPos());
+                    army.forgetSoldier(member);
                     continue;
                 }
                 army.reward(member, experience, kills / survivors, 1);
