@@ -2,7 +2,6 @@ package io.github.sekerator.kingdomworld.core.npc;
 
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomNames;
 
-import java.util.Locale;
 import java.util.Objects;
 import java.util.SplittableRandom;
 import java.util.function.Predicate;
@@ -112,12 +111,5 @@ public final class NpcNames {
             }
         }
         return result.toString();
-    }
-
-    /**
-     * The key of a name for comparing, as kingdom names are compared.
-     */
-    public static String key(String name) {
-        return name.toLowerCase(Locale.ROOT).strip();
     }
 }

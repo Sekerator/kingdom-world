@@ -9,7 +9,6 @@ import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.kingdom.KingdomActions;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
-import io.github.sekerator.kingdomworld.core.npc.NpcKingdom;
 import io.github.sekerator.kingdomworld.core.npc.NpcLevel;
 import io.github.sekerator.kingdomworld.core.npc.NpcSite;
 import io.github.sekerator.kingdomworld.core.npc.NpcState;
@@ -219,12 +218,5 @@ public final class NpcCommands {
         source.sendSuccess(() -> Component.translatable(buildings ? ADMIN + "removed_buildings" : ADMIN + "removed", id,
                 kingdom.<Component>map(k -> Component.literal(k.name())).orElse(Component.literal("-"))), true);
         return 1;
-    }
-
-    /**
-     * The record of a kingdom of the world, for other commands.
-     */
-    static Optional<NpcKingdom> record(MinecraftServer server, Kingdom kingdom) {
-        return NpcWork.kingdom(server, kingdom.id());
     }
 }

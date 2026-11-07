@@ -3,7 +3,6 @@ package io.github.sekerator.kingdomworld.common.npc;
 import com.mojang.logging.LogUtils;
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.economy.TreasuryActions;
-import io.github.sekerator.kingdomworld.core.citizen.CitizenNames;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
 import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
 import io.github.sekerator.kingdomworld.core.npc.NpcKingdom;
@@ -13,7 +12,6 @@ import io.github.sekerator.kingdomworld.core.npc.NpcState;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.Level;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -284,18 +282,4 @@ public final class NpcWork {
     }
 
     // ---------------------------------------------------------------- texts
-
-    /**
-     * The ruler of a kingdom of the world as plain text in an alphabet, for the logs and for views sent to players.
-     */
-    public static String rulerName(NpcKingdom kingdom, CitizenNames.Alphabet alphabet) {
-        return kingdom.rulerName(alphabet);
-    }
-
-    /**
-     * Whether the level is the overworld, the only world kingdoms of the world appear in.
-     */
-    static boolean isOverworld(ServerLevel level) {
-        return level.dimension() == Level.OVERWORLD;
-    }
 }

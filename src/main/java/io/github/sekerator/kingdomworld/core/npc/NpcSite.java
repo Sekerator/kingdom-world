@@ -134,12 +134,6 @@ public final class NpcSite {
         return reason;
     }
 
-    public double distanceSqr(int otherX, int otherZ) {
-        double dx = x - otherX;
-        double dz = z - otherZ;
-        return dx * dx + dz * dz;
-    }
-
     public void setStatus(Status value) {
         status = Objects.requireNonNull(value, "status");
         changeListener.run();

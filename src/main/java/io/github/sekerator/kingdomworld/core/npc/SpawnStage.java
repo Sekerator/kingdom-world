@@ -50,8 +50,4 @@ public enum SpawnStage {
         }
         return Optional.empty();
     }
-
-    public SpawnStage next() {
-        return this == DONE ? DONE : values()[ordinal() + 1];
-    }
 }
