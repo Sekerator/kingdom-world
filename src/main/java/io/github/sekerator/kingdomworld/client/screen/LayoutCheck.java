@@ -9,12 +9,15 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Collects layout problems while a check is running: text wider than the place given to it, text that needs
- * more lines than fit, widgets whose text does not fit, and anything leaving the screen. Screens report what they
- * draw through {@link KingdomScreen}; outside a check every call returns at once.
+ * more lines than fit, widgets whose text does not fit, anything leaving the screen, and lines of text drawn over
+ * each other or over widgets. Screens report what they draw through {@link KingdomScreen}; outside a check every
+ * call returns at once.
  */
 public final class LayoutCheck {
     /** Space a button needs around its text so that the text neither touches the border nor scrolls. */
@@ -23,6 +26,18 @@ public final class LayoutCheck {
 
     private static List<String> problems;
     private static String context = "";
+    /** Lines of text drawn in the current frame, by screen. */
+    private static final Map<Screen, List<Area>> DRAWN = new IdentityHashMap<>();
+
+    /**
+     * Where a line of text was drawn.
+     */
+    private record Area(Component text, int x, int y, int width) {
+        boolean overlaps(int otherX, int otherY, int otherWidth, int otherHeight) {
+            return width > 0 && otherWidth > 0 && x < otherX + otherWidth && otherX < x + width && y < otherY + otherHeight
+                    && otherY < y + LINE_HEIGHT;
+        }
+    }
 
     private LayoutCheck() {
     }
@@ -30,12 +45,23 @@ public final class LayoutCheck {
     public static void begin(String newContext) {
         problems = new ArrayList<>();
         context = newContext;
+        DRAWN.clear();
     }
 
     public static List<String> end() {
         List<String> result = problems == null ? List.of() : problems;
         problems = null;
+        DRAWN.clear();
         return result;
+    }
+
+    /**
+     * A line of text was drawn at {@code x}, {@code y}; lines that cover each other are reported when the frame ends.
+     */
+    static void drawn(Screen screen, Component text, int x, int y, int width) {
+        if (active() && width > 0) {
+            DRAWN.computeIfAbsent(screen, s -> new ArrayList<>()).add(new Area(text, x, y, width));
+        }
     }
 
     public static boolean active() {
@@ -75,6 +101,7 @@ public final class LayoutCheck {
         if (!active()) {
             return;
         }
+        overlaps(screen);
         for (GuiEventListener child : screen.children()) {
             if (!(child instanceof AbstractWidget widget) || !widget.visible) {
                 continue;
@@ -89,6 +116,34 @@ public final class LayoutCheck {
                 if (textWidth + BUTTON_TEXT_MARGIN > widget.getWidth()) {
                     add(screen, widget.getMessage(), "button text is " + textWidth + " px wide, the button only " + widget.getWidth()
                             + " px");
+                }
+            }
+        }
+    }
+
+    /**
+     * Reports lines of text of the frame that are drawn over each other or over a widget, then forgets them.
+     */
+    private static void overlaps(Screen screen) {
+        List<Area> areas = DRAWN.remove(screen);
+        if (areas == null) {
+            return;
+        }
+        for (int i = 0; i < areas.size(); i++) {
+            Area area = areas.get(i);
+            for (int j = i + 1; j < areas.size(); j++) {
+                Area other = areas.get(j);
+                if (area.overlaps(other.x(), other.y(), other.width(), LINE_HEIGHT)) {
+                    add(screen, area.text(), "text at " + area.x() + "," + area.y() + " is drawn over the text '" + other.text().getString()
+                            + "' (key " + key(other.text()) + ") at " + other.x() + "," + other.y());
+                }
+            }
+            for (GuiEventListener child : screen.children()) {
+                if (child instanceof AbstractWidget widget && widget.visible
+                        && area.overlaps(widget.getX(), widget.getY(), widget.getWidth(), widget.getHeight())) {
+                    add(screen, area.text(), "text at " + area.x() + "," + area.y() + " is drawn over the widget '"
+                            + widget.getMessage().getString() + "' at " + widget.getX() + "," + widget.getY() + " size "
+                            + widget.getWidth() + "x" + widget.getHeight());
                 }
             }
         }

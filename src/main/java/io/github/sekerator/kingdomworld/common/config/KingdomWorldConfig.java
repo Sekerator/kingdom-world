@@ -142,6 +142,7 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue webMapUpdateSeconds;
         /** The adventurers' guild. */
         public final Guild guild;
+        public final ForgeConfigSpec.IntValue caravanMaxWaitMinutes;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -384,6 +385,10 @@ public final class KingdomWorldConfig {
             maxDealPeriodDays = builder
                     .comment("Longest period of a regular deal, in game days.")
                     .defineInRange("maxDealPeriodDays", 30, 1, 365);
+            caravanMaxWaitMinutes = builder
+                    .comment("Minutes a caravan waits for room in the storehouses of the buyer. Then the deal is closed: the payment goes",
+                            "back to the buyer and the goods back to the seller.")
+                    .defineInRange("caravanMaxWaitMinutes", 40, 1, 100_000);
             builder.pop();
 
             guild = new Guild(builder);

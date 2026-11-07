@@ -68,6 +68,7 @@ public abstract class KingdomScreen extends Screen {
     protected void label(GuiGraphics graphics, Component text, int x, int y, int color, int right) {
         graphics.drawString(font, text, x, y, color);
         LayoutCheck.text(this, text, x, y, font.width(text), x, right);
+        LayoutCheck.drawn(this, text, x, y, font.width(text));
     }
 
     /**
@@ -78,6 +79,7 @@ public abstract class KingdomScreen extends Screen {
         int x = centerX - width / 2;
         graphics.drawString(font, text, x, y, color);
         LayoutCheck.text(this, text, x, y, width, left, right);
+        LayoutCheck.drawn(this, text, x, y, width);
     }
 
     /**
@@ -99,6 +101,7 @@ public abstract class KingdomScreen extends Screen {
         String shown = fit(name, maxWidth);
         graphics.drawString(font, shown, x, y, color);
         int width = font.width(shown);
+        LayoutCheck.drawn(this, Component.literal(shown), x, y, width);
         if (!shown.equals(name)) {
             hovers.add(new Hover(x, y, width, Component.literal(name)));
         }
@@ -137,6 +140,7 @@ public abstract class KingdomScreen extends Screen {
                 break;
             }
             graphics.drawString(font, line, x, y + drawn * LINE, color);
+            LayoutCheck.drawn(this, text, x, y + drawn * LINE, font.width(line));
             drawn++;
         }
         return drawn;

@@ -1264,5 +1264,7 @@
   "commands.kingdomworld.admin.guild.unlock.not_needed": "Guild data was not read-only",
   "commands.kingdomworld.admin.guild.unlock.failed": "Could not back up the guild data: %s",
   "kingdomworld.guild.contract.short_rank": "rank %s or above",
-  "kingdomworld.guild.desk.read_only": "The guild is read-only now"
+  "kingdomworld.guild.desk.read_only": "The guild is read-only now",
+  "kingdomworld.trade.wait_over_buyer": "The caravan with %s from %s waited too long for room in your storehouses and went back; the payment came back to the treasury",
+  "kingdomworld.trade.wait_over_seller": "The caravan with %s for %s found no room in the storehouses of the buyer and comes back; the deal is closed"
 }

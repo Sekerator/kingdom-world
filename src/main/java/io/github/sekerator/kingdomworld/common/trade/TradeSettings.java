@@ -56,6 +56,7 @@ public final class TradeSettings {
         cached = null;
         override = null;
         denied = null;
+        waitOverride = -1;
     }
 
     /**
@@ -86,6 +87,30 @@ public final class TradeSettings {
         } catch (IllegalArgumentException e) {
             return d;
         }
+    }
+
+    /** Replaces the configured wait of caravans, for game tests; negative uses the config. */
+    private static long waitOverride = -1;
+
+    /**
+     * Game ticks a caravan waits for room in the storehouses of the buyer before its deal is closed.
+     */
+    public static long caravanMaxWaitTicks() {
+        if (waitOverride >= 0) {
+            return waitOverride;
+        }
+        try {
+            return KingdomWorldConfig.SERVER.caravanMaxWaitMinutes.get() * 1_200L;
+        } catch (IllegalStateException e) {
+            return 40 * 1_200L;
+        }
+    }
+
+    /**
+     * Replaces the wait of caravans, for game tests; a negative value restores the config.
+     */
+    public static void overrideCaravanWait(long ticks) {
+        waitOverride = ticks;
     }
 
     /**

@@ -949,11 +949,15 @@ final class ClientLayoutCheck {
         cases.add(new Case("throne-market-empty", () -> market(view(KingdomView.Relation.MEMBER, Role.KING), true, true, "export", false, null,
                 Component.empty())));
         cases.add(new Case("throne-market-loading", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "market", Component.empty())));
-        cases.add(new Case("throne-trade-deals", () -> trade(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "deals", null,
-                Component.translatable("kingdomworld.trade.offer_sell", LONG_KINGDOM, Component.translatable("kingdomworld.trade.goods",
-                        longNamed(Items.NETHERITE_SWORD).getHoverName(), io.github.sekerator.kingdomworld.common.trade.TradeTexts.items(4_096)),
-                        io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(MUCH,
-                                io.github.sekerator.kingdomworld.core.economy.CurrencyUnits.DEFAULT)))));
+        cases.add(new Case("throne-trade-deals", () -> {
+            // News of a proposal is not an error: it keeps the color the server gave it.
+            ThroneScreen screen = trade(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "deals", null, Component.empty());
+            screen.onResult(true, Component.translatable("kingdomworld.trade.offer_sell", LONG_KINGDOM, Component.translatable("kingdomworld.trade.goods",
+                    longNamed(Items.NETHERITE_SWORD).getHoverName(), io.github.sekerator.kingdomworld.common.trade.TradeTexts.items(4_096)),
+                    io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(MUCH,
+                            io.github.sekerator.kingdomworld.core.economy.CurrencyUnits.DEFAULT)).withStyle(net.minecraft.ChatFormatting.AQUA));
+            return screen;
+        }));
         cases.add(new Case("throne-subject-trade", () -> trade(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, false, "deals", null,
                 Component.empty())));
         cases.add(new Case("throne-trade-caravans", () -> trade(view(KingdomView.Relation.MEMBER, Role.CHANCELLOR), true, false, "caravans",

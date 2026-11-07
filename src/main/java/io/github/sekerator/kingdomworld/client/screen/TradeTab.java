@@ -223,7 +223,10 @@ final class TradeTab {
             return;
         }
         if (mode == Mode.PROPOSE) {
-            initForm(x, top);
+            // Without another kingdom there is nobody to propose to: the tab only says so.
+            if (!view.partners().isEmpty()) {
+                initForm(x, top);
+            }
             return;
         }
         int rows = visibleRows(top, panelHeight);

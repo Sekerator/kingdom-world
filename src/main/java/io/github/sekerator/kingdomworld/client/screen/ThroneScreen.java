@@ -96,7 +96,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private Tab tab = Tab.OVERVIEW;
     private int scroll;
     private Component status = Component.empty();
-    private boolean statusIsError;
+    private int statusColor = 0xFFA0E0A0;
     private boolean closeOnSuccess;
 
     private int panelWidth;
@@ -817,6 +817,20 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         return rightsLeft() + (rightsPaged() ? arrowWidth + GAP : 0);
     }
 
+    /**
+     * Height of a row of the rights table: smaller on low screens, so that every position fits above the bottom line.
+     */
+    private int rightsRow() {
+        int roles = 0;
+        for (Role role : Role.values()) {
+            if (role.isAssignable()) {
+                roles++;
+            }
+        }
+        int room = panelHeight - contentOffset - CONTENT_TOP - 12 - BOTTOM_AREA;
+        return Math.max(12, Math.min(RIGHTS_ROW, room / Math.max(1, roles)));
+    }
+
     private void initRights(int top) {
         if (rightsPaged()) {
             int arrowY = top + CONTENT_TOP - 2;
@@ -836,7 +850,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             if (!role.isAssignable()) {
                 continue;
             }
-            int y = top + CONTENT_TOP + 12 + row * RIGHTS_ROW;
+            int y = top + CONTENT_TOP + 12 + row * rightsRow();
             EnumSet<Permission> granted = view.rights().getOrDefault(role, EnumSet.noneOf(Permission.class));
             for (int shown = 0; shown < rightsVisible && rightsColumn + shown < EDITABLE_RIGHTS.size(); shown++) {
                 Permission permission = EDITABLE_RIGHTS.get(rightsColumn + shown);
@@ -845,7 +859,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
                                 Component.translatable(has ? "kingdomworld.screen.throne.right_on" : "kingdomworld.screen.throne.right_off")
                                         .withStyle(has ? ChatFormatting.GREEN : ChatFormatting.RED),
                                 b -> KingdomWorldNetwork.sendToServer(KingdomActionPacket.setPermission(role, permission, !has)))
-                        .bounds(rightsCellsLeft() + shown * (rightsCellWidth + GAP), y, rightsCellWidth, RIGHTS_ROW - 1).build());
+                        .bounds(rightsCellsLeft() + shown * (rightsCellWidth + GAP), y, rightsCellWidth, rightsRow() - 1).build());
                 button.active = view.can(Permission.APPOINT);
                 button.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomworld.permission." + permission.id())));
             }
@@ -920,7 +934,9 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         }
         closeOnSuccess = false;
         status = message;
-        statusIsError = !success;
+        // A message with a color of its own (news from the server, such as a proposal) keeps it; otherwise green or red.
+        net.minecraft.network.chat.TextColor own = message.getStyle().getColor();
+        statusColor = own != null ? 0xFF000000 | own.getValue() : success ? 0xFFA0E0A0 : 0xFFFF8080;
     }
 
     // ---------------------------------------------------------------- drawing
@@ -949,7 +965,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             case RIGHTS -> renderRights(graphics, left, inner);
         }
         Component bottomText = status;
-        int color = statusIsError ? 0xFFFF8080 : 0xFFA0E0A0;
+        int color = statusColor;
         if (bottomText.getString().isEmpty() && tab == Tab.RIGHTS && !view.can(Permission.APPOINT)) {
             bottomText = Component.translatable("kingdomworld.screen.throne.rights_read_only");
             color = 0xFFB8B8B8;
@@ -1034,7 +1050,8 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             if (!role.isAssignable()) {
                 continue;
             }
-            label(graphics, roleName(role), left + PAD, top + CONTENT_TOP + 16 + row * RIGHTS_ROW, 0xFFE8E8E8, rightsLeft() - 2);
+            label(graphics, roleName(role), left + PAD, top + CONTENT_TOP + 12 + (rightsRow() - 8) / 2 + row * rightsRow(), 0xFFE8E8E8,
+                    rightsLeft() - 2);
             row++;
         }
     }

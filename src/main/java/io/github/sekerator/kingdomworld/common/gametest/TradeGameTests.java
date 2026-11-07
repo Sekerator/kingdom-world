@@ -539,6 +539,59 @@ public final class TradeGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_trade_wait")
+    public static void aCaravanThatWaitsTooLongGoesBackWithThePayment(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos to = helper.absolutePos(new BlockPos(8, 3, 8));
+        GatheringGameTests.clear(level, from, to);
+        clearSecond(helper);
+        Kingdom seller = CitizenGameTests.found(helper, "GameTest Patient Fields", UUID.randomUUID());
+        // The buyer has no storehouse at all: the caravan finds no room and waits.
+        Kingdom buyer = second(helper, "GameTest Crowded Town", UUID.randomUUID());
+        CitizenGameTests.storehouse(helper, 0, 0, 4).insertItem(0, new ItemStack(Items.WHEAT, 64), false);
+        try {
+            Economy economy = KingdomWorldApi.state(server).economy();
+            economy.adminTreasury(buyer.id(), 500, 0);
+            long buyerMoney = economy.supply(buyer.id());
+            long sellerMoney = economy.supply(seller.id());
+            TradePackets.TradeChange change = new TradePackets.TradeChange(seller.id(), TradePackets.TradeChange.Action.PROPOSE, buyer.id(), 0,
+                    "minecraft:wheat", 16, 80, true, false, 2);
+            helper.assertTrue(TradeActions.apply(server, null, seller.id(), change).success(), "The deal was not proposed");
+            Deal deal = KingdomWorldApi.state(server).trade().dealsOf(seller.id()).get(0);
+            helper.assertTrue(TradeWork.accept(server, null, buyer.id(), deal.id()).ok(), "The buyer could not accept");
+            Caravan caravan = KingdomWorldApi.state(server).trade().caravans().iterator().next();
+            TradeWork.overrideRoll(() -> 1.0);
+            TradeWork.arrive(server, caravan, caravan.arriveTime());
+            Caravan waiting = KingdomWorldApi.state(server).trade().caravan(caravan.id()).orElseThrow();
+            helper.assertTrue(waiting.state() == Caravan.State.WAITING, "The caravan does not wait for room: " + waiting.state());
+            helper.assertTrue(treasury(server, buyer).funds() == 420, "The payment is not in escrow while the caravan waits");
+
+            // Within the limit the caravan keeps waiting; after it the deal is closed.
+            TradeSettings.overrideCaravanWait(1_000L);
+            TradeWork.arrive(server, waiting, waiting.arriveTime() + 999L);
+            helper.assertTrue(KingdomWorldApi.state(server).trade().caravan(caravan.id()).isPresent(), "The caravan gave up too early");
+            TradeWork.arrive(server, waiting, waiting.arriveTime() + 1_000L);
+            helper.assertTrue(KingdomWorldApi.state(server).trade().caravans().isEmpty(), "The caravan did not go back");
+            helper.assertTrue(economy.escrows().isEmpty(), "The payment stayed in escrow");
+            helper.assertTrue(treasury(server, buyer).funds() == 500, "The payment did not come back: " + treasury(server, buyer).funds());
+            helper.assertTrue(treasury(server, seller).reserves().isEmpty(), "The seller was paid for goods that never arrived");
+            helper.assertTrue(KingdomStorage.count(server, seller.id(), stack -> stack.is(Items.WHEAT)) == 64, "The goods did not come back");
+            helper.assertTrue(economy.supply(buyer.id()) == buyerMoney && economy.supply(seller.id()) == sellerMoney, "Money was made or lost");
+            helper.assertTrue(KingdomWorldApi.state(server).trade().deal(deal.id()).orElseThrow().status() == Deal.Status.CANCELLED,
+                    "The regular deal is still open");
+        } finally {
+            TradeWork.overrideRoll(null);
+            TradeSettings.overrideCaravanWait(-1);
+            KingdomWorldApi.dissolveKingdom(server, seller.id());
+            KingdomWorldApi.dissolveKingdom(server, buyer.id());
+            GatheringGameTests.clear(level, from, to);
+            clearSecond(helper);
+        }
+        helper.succeed();
+    }
+
     // ---------------------------------------------------------------- rights
 
     @GameTest(template = EMPTY, batch = "kingdomworld_trade_rights")

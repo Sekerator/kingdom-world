@@ -1264,5 +1264,7 @@
   "commands.kingdomworld.admin.guild.unlock.not_needed": "Данные гильдии не были только для чтения",
   "commands.kingdomworld.admin.guild.unlock.failed": "Не удалось сохранить копию данных гильдии: %s",
   "kingdomworld.guild.contract.short_rank": "ранг %s и выше",
-  "kingdomworld.guild.desk.read_only": "Гильдия сейчас только для чтения"
+  "kingdomworld.guild.desk.read_only": "Гильдия сейчас только для чтения",
+  "kingdomworld.trade.wait_over_buyer": "Караван с товаром %s из королевства %s слишком долго ждал места на ваших складах и ушёл обратно; оплата вернулась в казну",
+  "kingdomworld.trade.wait_over_seller": "Караван с товаром %s для королевства %s не дождался места на складах покупателя и возвращается; сделка закрыта"
 }

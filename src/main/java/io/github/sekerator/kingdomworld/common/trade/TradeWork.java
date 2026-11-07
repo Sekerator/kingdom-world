@@ -251,6 +251,10 @@ public final class TradeWork {
             goBack(server, caravan.withState(Caravan.State.RETURNING));
             return;
         }
+        if (caravan.state() == Caravan.State.WAITING && now - caravan.arriveTime() >= TradeSettings.caravanMaxWaitTicks()) {
+            giveUpWaiting(server, caravan, now);
+            return;
+        }
         if (!KingdomStorage.fits(server, caravan.buyer(), stacks)) {
             if (caravan.state() != Caravan.State.WAITING) {
                 state.trade().putCaravan(caravan.withState(Caravan.State.WAITING));
@@ -276,6 +280,27 @@ public final class TradeWork {
                 .withStyle(ChatFormatting.GREEN));
         notify(server, caravan.buyer(), Component.translatable(KEY + "arrived_buyer", goods, kingdomName(server, caravan.seller()))
                 .withStyle(ChatFormatting.GREEN));
+    }
+
+    /**
+     * A caravan waited too long for room in the storehouses of the buyer: the deal is closed, the payment goes back to the
+     * buyer (both journals record it) and the goods go back to the seller.
+     */
+    private static void giveUpWaiting(MinecraftServer server, Caravan caravan, long now) {
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        Component goods = cargoText(caravan);
+        state.economy().refundEscrow(caravan.escrowId(), day(server));
+        state.trade().deal(caravan.dealId()).filter(deal -> !deal.status().closed())
+                .ifPresent(deal -> state.trade().putDeal(deal.withStatus(Deal.Status.CANCELLED).withNext(now, deal.deliveries(), deal.failures())));
+        Caravan back = caravan.withState(Caravan.State.RETURNING);
+        state.trade().putCaravan(back);
+        LOGGER.info("A caravan from {} waited too long at {} and goes back; the payment was returned",
+                kingdomName(server, caravan.seller()).getString(), kingdomName(server, caravan.buyer()).getString());
+        notify(server, caravan.buyer(), Component.translatable(KEY + "wait_over_buyer", goods, kingdomName(server, caravan.seller()))
+                .withStyle(ChatFormatting.GOLD));
+        notify(server, caravan.seller(), Component.translatable(KEY + "wait_over_seller", goods, kingdomName(server, caravan.buyer()))
+                .withStyle(ChatFormatting.GOLD));
+        goBack(server, back);
     }
 
     /**

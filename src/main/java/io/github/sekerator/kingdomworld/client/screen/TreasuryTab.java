@@ -66,6 +66,8 @@ final class TreasuryTab {
     private String payText = "";
     private String coinsText = "";
     private Denomination coinChoice = Denomination.GOLD;
+    /** Whether the note under the payments did not fit and the bottom line shows it instead. */
+    private boolean noteInHint;
 
     private int modeWidth;
     private int periodWidth;
@@ -255,11 +257,30 @@ final class TreasuryTab {
         return listTop(top) + 2 * ROW + 2;
     }
 
+    private List<TreasuryView.JournalRow> journalRows() {
+        List<TreasuryView.JournalRow> rows = new ArrayList<>();
+        for (TreasuryView.JournalRow row : view.journal()) {
+            if (row.period() == period && (row.income() > 0 || row.expense() > 0)) {
+                rows.add(row);
+            }
+        }
+        return rows;
+    }
+
+    /**
+     * Lines of the journal that fit above the bottom line, leaving room for the total.
+     */
+    private static int journalLines(int top, int panelHeight) {
+        int room = top + panelHeight - ThroneScreen.BOTTOM_AREA - (listTop(top) + 4) - (LINE + 4);
+        return Math.max(1, room / (LINE + 1));
+    }
+
     private int rowCount() {
         if (view == null) {
             return 0;
         }
         return switch (mode) {
+            case JOURNAL -> journalRows().size();
             case SETTINGS -> view.wages().size();
             case DEBTORS -> view.debtors().size();
             case RESERVES -> view.reserves().size();
@@ -291,7 +312,7 @@ final class TreasuryTab {
                 screen.rebuild();
             }).bounds(x + modeWidth + GAP, buttonsY(top), periodWidth, ROW - 2).build());
         }
-        int rows = visibleRows(rowsTop(top), top, panelHeight);
+        int rows = visible(top, panelHeight);
         scroll = Math.max(0, Math.min(scroll, rowCount() - rows));
         if (mode == Mode.SETTINGS) {
             initSettings(x, right, top, rows);
@@ -428,8 +449,12 @@ final class TreasuryTab {
         }
     }
 
+    private int visible(int top, int panelHeight) {
+        return mode == Mode.JOURNAL ? journalLines(top, panelHeight) : visibleRows(rowsTop(top), top, panelHeight);
+    }
+
     boolean scroll(int top, int panelHeight, double delta) {
-        int max = Math.max(0, rowCount() - visibleRows(rowsTop(top), top, panelHeight));
+        int max = Math.max(0, rowCount() - visible(top, panelHeight));
         int next = Math.max(0, Math.min(max, scroll - (int) Math.signum(delta)));
         if (next == scroll) {
             return false;
@@ -452,7 +477,7 @@ final class TreasuryTab {
         screen.name(graphics, summary.get(0).getString(), x, y, 0xFFF0D070, right - x);
         screen.name(graphics, summary.get(1).getString(), x, y + LINE, 0xFFD0D0D0, right - x);
         int count = rowCount();
-        int rows = visibleRows(rowsTop(top), top, panelHeight);
+        int rows = visible(top, panelHeight);
         if (count > rows) {
             Component page = Component.translatable("kingdomworld.screen.throne.page", scroll + 1, Math.min(count, scroll + rows), count);
             screen.label(graphics, page, right - font.width(page), buttonsY(top) + 4, 0xFF9A9A9A, right);
@@ -460,9 +485,9 @@ final class TreasuryTab {
         int listTop = listTop(top);
         switch (mode) {
             case OVERVIEW -> renderOverview(graphics, x, right, listTop, top, panelHeight);
-            case JOURNAL -> renderJournal(graphics, font, x, right, listTop);
+            case JOURNAL -> renderJournal(graphics, font, x, right, listTop, rows);
             case SETTINGS -> renderSettings(graphics, font, x, right, top, rows);
-            case PAYMENTS -> renderPayments(graphics, x, right, top);
+            case PAYMENTS -> renderPayments(graphics, x, right, top, panelHeight);
             case DEBTORS -> renderDebtors(graphics, font, x, right, listTop, rows);
             case RESERVES -> renderReserves(graphics, x, right, listTop, rows);
         }
@@ -480,13 +505,8 @@ final class TreasuryTab {
         }
     }
 
-    private void renderJournal(GuiGraphics graphics, Font font, int x, int right, int listTop) {
-        List<TreasuryView.JournalRow> rows = new ArrayList<>();
-        for (TreasuryView.JournalRow row : view.journal()) {
-            if (row.period() == period && (row.income() > 0 || row.expense() > 0)) {
-                rows.add(row);
-            }
-        }
+    private void renderJournal(GuiGraphics graphics, Font font, int x, int right, int listTop, int lines) {
+        List<TreasuryView.JournalRow> rows = journalRows();
         if (rows.isEmpty()) {
             screen.label(graphics, Component.translatable(KEY + "journal_empty"), x, listTop + 5, 0xFFB8B8B8, right);
             return;
@@ -495,11 +515,16 @@ final class TreasuryTab {
         long income = 0;
         long expense = 0;
         int y = listTop + 4;
-        for (TreasuryView.JournalRow row : rows) {
-            screen.label(graphics, category(row.category()), x, y, 0xFFE8E8E8, amountX - 4);
-            renderFlow(graphics, font, row.income(), row.expense(), amountX, right, y);
+        for (int i = 0; i < rows.size(); i++) {
+            TreasuryView.JournalRow row = rows.get(i);
             income = Money.addCapped(income, row.income());
             expense = Money.addCapped(expense, row.expense());
+            // Lines that do not fit are reached by scrolling; the total always counts all of them.
+            if (i < scroll || i >= scroll + lines) {
+                continue;
+            }
+            screen.label(graphics, category(row.category()), x, y, 0xFFE8E8E8, amountX - 4);
+            renderFlow(graphics, font, row.income(), row.expense(), amountX, right, y);
             y += LINE + 1;
         }
         graphics.fill(x, y, right, y + 1, 0xFF706050);
@@ -556,7 +581,7 @@ final class TreasuryTab {
         }
     }
 
-    private void renderPayments(GuiGraphics graphics, int x, int right, int top) {
+    private void renderPayments(GuiGraphics graphics, int x, int right, int top, int panelHeight) {
         int y = listTop(top);
         int labelRight = x + paymentLabelWidth - 2;
         screen.label(graphics, Component.translatable(KEY + "payee_label"), x, y + 5, 0xFFE8E8E8, labelRight);
@@ -570,12 +595,19 @@ final class TreasuryTab {
         }
         int coinsY = y + 2 * ROW + 7;
         screen.label(graphics, Component.translatable(KEY + "coins_label"), x, coinsY + 5, 0xFFE8E8E8, labelRight);
-        String vault = Component.translatable(KEY + "vault_coins", MoneyTexts.coins(view.vault())).getString();
-        screen.name(graphics, vault, x, coinsY + ROW + 4, 0xFFD0D0D0, right - x);
-        int noteY = coinsY + ROW + 4 + LINE + 2;
-        if (!view.canManage()) {
+        // Lines under the form only where they stay clear of the messages at the bottom; the coins of the vault are also
+        // in the summary at the top, and the notes for members without the right go to the bottom line instead.
+        int bottom = top + panelHeight - ThroneScreen.BOTTOM_AREA;
+        int vaultY = coinsY + ROW + 4;
+        if (vaultY + LINE <= bottom) {
+            String vault = Component.translatable(KEY + "vault_coins", MoneyTexts.coins(view.vault())).getString();
+            screen.name(graphics, vault, x, vaultY, 0xFFD0D0D0, right - x);
+        }
+        int noteY = vaultY + LINE + 2;
+        noteInHint = noteY + LINE > bottom;
+        if (!noteInHint && !view.canManage()) {
             screen.name(graphics, Component.translatable(KEY + "payments_read_only").getString(), x, noteY, 0xFFB8B8B8, right - x);
-        } else if (!view.canTakeCoins()) {
+        } else if (!noteInHint && !view.canTakeCoins()) {
             screen.name(graphics, Component.translatable(KEY + "coins_read_only").getString(), x, noteY, 0xFFB8B8B8, right - x);
         }
     }
@@ -625,6 +657,12 @@ final class TreasuryTab {
      * A status line for the bottom while there is no other message.
      */
     Component hint() {
+        if (view != null && mode == Mode.PAYMENTS && noteInHint && !view.canManage()) {
+            return Component.translatable(KEY + "payments_read_only");
+        }
+        if (view != null && mode == Mode.PAYMENTS && noteInHint && !view.canTakeCoins()) {
+            return Component.translatable(KEY + "coins_read_only");
+        }
         if (view == null || !view.canManage()) {
             return Component.empty();
         }
