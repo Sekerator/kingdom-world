@@ -1,0 +1,8 @@
+{
+  "name": "kingdomworld.building.well",
+  "category": "decoration",
+  "type": "well",
+  "icon": "minecraft:bucket",
+  "anchor": [2, 0, 4],
+  "entrance": "south"
+}

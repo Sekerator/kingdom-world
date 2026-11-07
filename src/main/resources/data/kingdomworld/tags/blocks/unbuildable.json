@@ -1,0 +1,26 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:bedrock",
+    "minecraft:spawner",
+    "minecraft:end_portal_frame",
+    "minecraft:command_block",
+    "minecraft:chain_command_block",
+    "minecraft:repeating_command_block",
+    "minecraft:barrier",
+    "minecraft:structure_block",
+    "minecraft:jigsaw",
+    "minecraft:light",
+    "minecraft:reinforced_deepslate",
+    "minecraft:budding_amethyst",
+    "minecraft:petrified_oak_slab",
+    "minecraft:infested_stone",
+    "minecraft:infested_cobblestone",
+    "minecraft:infested_stone_bricks",
+    "minecraft:infested_mossy_stone_bricks",
+    "minecraft:infested_cracked_stone_bricks",
+    "minecraft:infested_chiseled_stone_bricks",
+    "minecraft:infested_deepslate",
+    "minecraft:frogspawn"
+  ]
+}

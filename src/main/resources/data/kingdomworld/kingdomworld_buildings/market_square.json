@@ -1,0 +1,8 @@
+{
+  "name": "kingdomworld.building.market_square",
+  "category": "trade",
+  "type": "market",
+  "icon": "kingdomworld:market_stall",
+  "anchor": [5, 0, 10],
+  "entrance": "south"
+}

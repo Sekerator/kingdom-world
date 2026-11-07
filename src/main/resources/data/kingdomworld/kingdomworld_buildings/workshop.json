@@ -1,0 +1,8 @@
+{
+  "name": "kingdomworld.building.workshop",
+  "category": "production",
+  "type": "workshop",
+  "icon": "minecraft:crafting_table",
+  "anchor": [5, 0, 8],
+  "entrance": "south"
+}

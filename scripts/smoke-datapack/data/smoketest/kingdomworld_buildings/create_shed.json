@@ -1,0 +1,9 @@
+{
+  "name": "kingdomworld.building.create_shed",
+  "fallback_name": "Create shed",
+  "category": "production",
+  "type": "shed",
+  "icon": "minecraft:oak_planks",
+  "anchor": [1, 0, 2],
+  "entrance": "south"
+}

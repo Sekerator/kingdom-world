@@ -1,0 +1,8 @@
+{
+  "name": "kingdomworld.building.watchtower",
+  "category": "defense",
+  "type": "tower",
+  "icon": "minecraft:stone_bricks",
+  "anchor": [3, 0, 7],
+  "entrance": "south"
+}

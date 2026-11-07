@@ -80,6 +80,22 @@ mixin {
 // Resources produced by data generators.
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
+// The generator of the built-in building templates lives apart from the mod and never goes into the jar.
+sourceSets {
+    generator {
+        java.srcDir 'src/generator/java'
+    }
+}
+
+// "gradlew generateBuildings" draws the built-in building templates again, and the data pack of the smoke check.
+tasks.register('generateBuildings', JavaExec) {
+    group = 'kingdomworld'
+    description = 'Writes the built-in building templates and the data pack of the smoke check'
+    classpath = sourceSets.generator.runtimeClasspath
+    mainClass = 'io.github.sekerator.kingdomworld.generator.BuildingGenerator'
+    args file('src/main/resources/data/kingdomworld/kingdomworld_buildings').absolutePath, file('scripts/smoke-datapack').absolutePath
+}
+
 repositories {
     // ForgeGradle adds the Forge maven and Maven Central automatically.
     // Map mods for the soft integrations in the compat package: their APIs at compile time only, the mods themselves
@@ -160,6 +176,8 @@ dependencies {
         runtimeOnly fg.deobf('local:xaerolib-forge-1.20.1:1.7.3')
     }
 
+    // The tests check that the committed building templates are exactly what the generator draws.
+    testImplementation sourceSets.generator.output
     testImplementation platform("org.junit:junit-bom:${junit_version}")
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
