@@ -92,6 +92,8 @@ public final class GuildWork {
     /** Crystals that fall with the drops of monsters killed this tick, by monster. */
     private static final Map<UUID, ItemStack> PENDING_DROPS = new HashMap<>();
     private static KillResult lastKill;
+    /** Random numbers of expeditions; game tests replace them to know how an expedition ends. */
+    private static java.util.function.DoubleSupplier rolls;
 
     /**
      * What a kill was worth, for the drops and for checks.
@@ -131,8 +133,23 @@ public final class GuildWork {
         FARMS.clear();
         PENDING_DROPS.clear();
         lastKill = null;
+        rolls = null;
         RegistrarBehavior.reset();
         MonsterRanks.invalidate();
+    }
+
+    /**
+     * Forgets every kill the farm guard remembers; for game tests.
+     */
+    public static void forgetFarms() {
+        FARMS.clear();
+    }
+
+    /**
+     * Replaces the random numbers of expeditions, for game tests; {@code null} gives chance back its say.
+     */
+    public static void overrideRolls(java.util.function.DoubleSupplier value) {
+        rolls = value;
     }
 
     /**
@@ -513,11 +530,12 @@ public final class GuildWork {
         if (contract.isEmpty()) {
             outcome = new Expeditions.Outcome(Expeditions.Result.FAILURE, 0, List.of());
         } else {
-            double[] rolls = new double[2 * members.size()];
-            for (int i = 0; i < rolls.length; i++) {
-                rolls[i] = random.nextDouble();
+            java.util.function.DoubleSupplier roll = rolls != null ? rolls : random::nextDouble;
+            double[] fates = new double[2 * members.size()];
+            for (int i = 0; i < fates.length; i++) {
+                fates[i] = roll.getAsDouble();
             }
-            outcome = Expeditions.resolve(members, squad.power(), contract.get(), rules, random.nextDouble(), rolls);
+            outcome = Expeditions.resolve(members, squad.power(), contract.get(), rules, roll.getAsDouble(), fates);
         }
         Set<UUID> dead = new HashSet<>();
         Set<UUID> wounded = new HashSet<>();
@@ -573,8 +591,9 @@ public final class GuildWork {
         if (contract.isPresent() && outcome.kills() > 0) {
             Rank rank = contract.get().targetRank();
             double chance = rules.crystalChance(rank);
+            java.util.function.DoubleSupplier roll = rolls != null ? rolls : random::nextDouble;
             for (int i = 0; i < outcome.kills(); i++) {
-                if (random.nextDouble() < chance) {
+                if (roll.getAsDouble() < chance) {
                     crystals++;
                 }
             }

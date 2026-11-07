@@ -210,9 +210,14 @@ public final class ClientSelfTest {
                     screen.selectTab("trade");
                 }
             }
-            case 268 -> LOGGER.info(PREFIX + "trade tab answered by the server: {}",
-                    minecraft.screen instanceof ThroneScreen screen && screen.tradeShown());
+            case 268 -> {
+                LOGGER.info(PREFIX + "trade tab answered by the server: {}", minecraft.screen instanceof ThroneScreen screen && screen.tradeShown());
+                if (minecraft.screen instanceof ThroneScreen screen) {
+                    screen.selectTab("guild");
+                }
+            }
             case 270 -> {
+                LOGGER.info(PREFIX + "guild tab answered by the server: {}", minecraft.screen instanceof ThroneScreen screen && screen.guildShown());
                 if (minecraft.screen instanceof ThroneScreen screen) {
                     ClientHooks.openTerritoryEditor(screen.view());
                 }

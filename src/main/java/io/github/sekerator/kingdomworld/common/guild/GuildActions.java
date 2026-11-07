@@ -74,7 +74,7 @@ public final class GuildActions {
     /**
      * Whether a desk works: on the land of a kingdom and kept by a registrar. Gives the kingdom, or says why not.
      */
-    static Optional<Kingdom> openBranch(ServerPlayer player, BlockPos pos, boolean tell) {
+    public static Optional<Kingdom> openBranch(ServerPlayer player, BlockPos pos, boolean tell) {
         ServerLevel level = player.serverLevel();
         Optional<Kingdom> kingdom = kingdomAt(level, pos);
         Component refusal = null;
