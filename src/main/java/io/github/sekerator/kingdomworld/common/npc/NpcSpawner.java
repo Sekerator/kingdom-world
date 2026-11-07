@@ -113,7 +113,7 @@ public final class NpcSpawner {
     /** Ticks longer than this while a kingdom appears are written to the log with their stage. */
     private static final long SLOW_TICK_NANOS = 50_000_000L;
     /** Chunks of land claimed in a tick for every chunk the rules let an appearance look through. */
-    private static final int CLAIMS_PER_CHUNK_BUDGET = 8;
+    private static final int CLAIMS_PER_CHUNK_BUDGET = 2;
     /** Blocks of a building done in a tick at least, so that a small budget still moves on. */
     private static final int BLOCKS_PER_PART = 64;
     /** Blocks of the wall paid in a tick at most: the roads place the paid columns once a second, all at once. */
