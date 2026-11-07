@@ -1197,6 +1197,20 @@ public final class Economy {
         return done ? Outcome.DONE : Outcome.fail(delta > 0 ? KingdomError.TOO_MUCH_MONEY : KingdomError.NOT_ENOUGH_MONEY);
     }
 
+    /**
+     * The money a kingdom of the world has when it appears; written into its journal as its founding.
+     */
+    public Outcome foundingGrant(UUID kingdomId, long amount, long day) {
+        Treasury treasury = treasuries.get(kingdomId);
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_CURRENCY);
+        }
+        if (amount <= 0 || amount > Money.MAX) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        return treasury.receive(amount, LedgerCategory.FOUNDING, day) ? Outcome.DONE : Outcome.fail(KingdomError.TOO_MUCH_MONEY);
+    }
+
     // ---------------------------------------------------------------- payday
 
     /**

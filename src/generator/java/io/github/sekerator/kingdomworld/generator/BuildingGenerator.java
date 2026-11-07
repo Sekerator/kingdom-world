@@ -79,6 +79,8 @@ public final class BuildingGenerator {
         list.add(new Building("watchtower", "defense", "tower", "minecraft:stone_bricks", 3, 0, 7, watchtower()));
         list.add(new Building("wall_gate", "defense", "wall", "minecraft:stone_brick_wall", 5, 0, 3, wallGate()));
         list.add(new Building("well", "decoration", "well", "minecraft:bucket", 2, 0, 4, well()));
+        list.add(new Building("barracks", "defense", "barracks", "kingdomworld:barracks", 5, 0, 8, barracks()));
+        list.add(new Building("mage_tower", "magic", "mage_tower", "kingdomworld:magic_focus", 4, 0, 8, mageTower()));
         return list;
     }
 
@@ -293,6 +295,71 @@ public final class BuildingGenerator {
             s.fill(corner[0], 1, corner[1], corner[0], 2, corner[1], FENCE);
             s.set(corner[0], 3, corner[1], LANTERN);
         }
+        return s;
+    }
+
+    /**
+     * The barracks: a long hall of stone below and timber above, four bunks along the back wall, the barracks block in the
+     * middle and barrels of gear by the door.
+     */
+    static Structure barracks() {
+        Structure s = new Structure(11, 9, 9);
+        s.fill(1, 0, 1, 9, 0, 7, COBBLE).fill(2, 0, 2, 8, 0, 6, SPRUCE_PLANKS);
+        s.set(5, 0, 8, stairs(COBBLE_STAIRS, "north"));
+        s.walls(1, 1, 1, 9, 1, 7, COBBLE).walls(1, 2, 1, 9, 3, 7, SPRUCE_PLANKS);
+        s.corners(1, 1, 1, 9, 3, 7, SPRUCE_LOG);
+        s.set(1, 2, 4, PANE_Z).set(9, 2, 4, PANE_Z).set(3, 2, 7, PANE_X).set(7, 2, 7, PANE_X);
+        s.door(5, 1, 7, DOOR, "north", "left");
+        s.beam(1, 1, 9, 7, 4, SPRUCE_LOG);
+        s.gableRoof(0, 10, 0, 8, 4, DARK_STAIRS, DARK_SLAB, SPRUCE_PLANKS, 1, 9);
+        for (int x : new int[]{2, 4, 6, 8}) {
+            s.bed(x, 1, 3, BED, "north", 0, -1);
+        }
+        s.set(5, 1, 5, "kingdomworld:barracks");
+        s.set(2, 1, 6, BARREL).set(8, 1, 6, BARREL).set(8, 1, 5, BARREL);
+        s.set(3, 3, 2, wallTorch("south")).set(7, 3, 2, wallTorch("south"));
+        s.set(4, 3, 8, wallTorch("south")).set(6, 3, 8, wallTorch("south"));
+        return s;
+    }
+
+    /**
+     * The tower of the mages: a round-cornered stone tower with windows of purple glass, the magic focus and the mage's work
+     * post on the ground floor, a bed above and a platform with battlements on top.
+     */
+    static Structure mageTower() {
+        Structure s = new Structure(9, 14, 9);
+        s.fill(0, 0, 0, 8, 0, 7, COBBLE).fill(2, 0, 2, 6, 0, 6, "minecraft:polished_andesite");
+        s.set(4, 0, 8, stairs(COBBLE_STAIRS, "north"));
+        s.walls(1, 1, 1, 7, 10, 7, STONE_BRICKS);
+        for (int y = 1; y <= 10; y++) {
+            for (int[] corner : new int[][]{{1, 1}, {7, 1}, {1, 7}, {7, 7}}) {
+                s.set(corner[0], y, corner[1], "minecraft:deepslate_bricks");
+            }
+        }
+        String glassX = "minecraft:purple_stained_glass_pane[east=true,west=true,north=false,south=false,waterlogged=false]";
+        String glassZ = "minecraft:purple_stained_glass_pane[north=true,south=true,east=false,west=false,waterlogged=false]";
+        for (int y : new int[]{2, 7}) {
+            s.set(1, y, 4, glassZ).set(7, y, 4, glassZ).set(4, y, 1, glassX);
+        }
+        s.set(4, 7, 7, glassX);
+        s.door(4, 1, 7, DOOR, "north", "left");
+        s.fill(2, 5, 2, 6, 5, 6, SPRUCE_PLANKS);
+        for (int y = 1; y <= 10; y++) {
+            s.set(6, y, 2, "minecraft:ladder[facing=west,waterlogged=false]");
+        }
+        s.fill(1, 11, 1, 7, 11, 7, STONE_BRICKS);
+        s.set(6, 11, 2, "minecraft:ladder[facing=west,waterlogged=false]");
+        for (int i = 1; i <= 7; i += 2) {
+            s.set(i, 12, 1, STONE_BRICK_WALL).set(i, 12, 7, STONE_BRICK_WALL).set(1, 12, i, STONE_BRICK_WALL).set(7, 12, i, STONE_BRICK_WALL);
+        }
+        s.set(4, 12, 4, "minecraft:amethyst_block").set(4, 13, 4, "minecraft:amethyst_cluster[facing=up,waterlogged=false]");
+        s.set(4, 1, 4, "kingdomworld:magic_focus");
+        s.set(3, 1, 3, "kingdomworld:work_post");
+        s.set(2, 1, 6, "minecraft:bookshelf").set(2, 1, 5, "minecraft:bookshelf").set(6, 1, 6, "minecraft:enchanting_table");
+        s.bed(3, 6, 4, BED, "north", 0, -1);
+        s.set(5, 6, 5, "minecraft:bookshelf").set(5, 6, 3, LANTERN);
+        s.set(4, 3, 2, wallTorch("south")).set(2, 3, 4, wallTorch("east"));
+        s.set(3, 3, 8, wallTorch("south")).set(5, 3, 8, wallTorch("south"));
         return s;
     }
 

@@ -942,20 +942,26 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         if (info == null) {
             return;
         }
-        List<Component> lines = List.of(
-                Component.translatable("kingdomworld.screen.map.card.ruler", PlayerNames.display(fit(info.rulerName(), MAX_CARD_NAME))),
+        List<Component> lines = new java.util.ArrayList<>();
+        if (info.npc() != null) {
+            lines.addAll(npcLines(info.npc()));
+        } else {
+            lines.add(Component.translatable("kingdomworld.screen.map.card.ruler", PlayerNames.display(fit(info.rulerName(), MAX_CARD_NAME))));
+        }
+        lines.addAll(List.of(
                 Component.translatable("kingdomworld.screen.map.card.members", info.members()),
                 Component.translatable("kingdomworld.screen.map.card.population", info.population()),
-                Component.translatable("kingdomworld.screen.map.card.chunks", info.chunks()));
+                Component.translatable("kingdomworld.screen.map.card.chunks", info.chunks())));
         String currency = Component.translatable("kingdomworld.screen.map.card.currency", currencyName(info)).getString();
         long rate = io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.get(info.id())
                 .map(io.github.sekerator.kingdomworld.common.network.data.CurrencyInfo::rate).orElse(0L);
         Component rateLine = rate > 0 ? Component.translatable("kingdomworld.screen.map.card.rate",
                 io.github.sekerator.kingdomworld.common.trade.TradeTexts.rate(rate)) : null;
         int maxWidth = mapRight() - mapLeft() - 12;
-        int inner = font.width(fit(info.name(), Math.min(MAX_CARD_NAME, maxWidth - 12)));
+        String shownName = kingdomName(info.name(), info.npc());
+        int inner = font.width(fit(shownName, Math.min(MAX_CARD_NAME, maxWidth - 12)));
         for (Component line : lines) {
-            inner = Math.max(inner, font.width(line));
+            inner = Math.max(inner, Math.min(font.width(line), MAX_CARD_NAME + 60));
         }
         inner = Math.max(inner, Math.min(font.width(currency), MAX_CARD_NAME + 60));
         if (rateLine != null) {
@@ -967,11 +973,11 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         int cardHeight = 16 + (lines.size() + (rateLine != null ? 2 : 1)) * 11;
         graphics.fill(x, y, x + cardWidth, y + cardHeight, 0xF0201810);
         graphics.renderOutline(x, y, cardWidth, cardHeight, 0xFF000000 | info.color());
-        name(graphics, info.name(), x + 6, y + 5, 0xFF000000 | FoundKingdomScreen.readable(info.color()),
+        name(graphics, shownName, x + 6, y + 5, 0xFF000000 | FoundKingdomScreen.readable(info.color()),
                 Math.min(MAX_CARD_NAME, cardWidth - 12));
         int lineY = y + 17;
         for (Component line : lines) {
-            label(graphics, line, x + 6, lineY, 0xFFE8E8E8, x + cardWidth - 6);
+            fittedLabel(graphics, line, x + 6, lineY, 0xFFE8E8E8, x + cardWidth - 6);
             lineY += 11;
         }
         // The name of a currency is chosen by a king and may be long: it is shortened like the names of kingdoms.

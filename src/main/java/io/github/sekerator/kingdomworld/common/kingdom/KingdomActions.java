@@ -75,7 +75,10 @@ public final class KingdomActions {
     // ---------------------------------------------------------------- texts
 
     public static MutableComponent kingdomName(Kingdom kingdom) {
-        return Component.literal(kingdom.name()).withStyle(style -> style.withColor(TextColor.fromRgb(kingdom.color())));
+        MutableComponent name = io.github.sekerator.kingdomworld.common.npc.NpcWork.name(kingdom.id())
+                .<MutableComponent>map(both -> Component.translatable("kingdomworld.npc.name", both.latin(), both.cyrillic()))
+                .orElseGet(() -> Component.literal(kingdom.name()));
+        return name.withStyle(style -> style.withColor(TextColor.fromRgb(kingdom.color())));
     }
 
     public static Component errorMessage(KingdomError error) {
@@ -244,6 +247,14 @@ public final class KingdomActions {
                 state -> state.membership().apply(player.getUUID(), kingdom.id(), KingdomWorldApi.gameTime(server)));
         if (!outcome.ok()) {
             return Feedback.error(outcome.error());
+        }
+        if (!outcome.joined() && io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, kingdom.id())) {
+            // The ruler of a kingdom of the world takes every subject that applies.
+            Outcome admitted = KingdomWorldApi.change(server, "admit to " + kingdom.name(),
+                    state -> state.membership().admit(kingdom.id(), player.getUUID(), KingdomWorldApi.gameTime(server)));
+            if (admitted.joined()) {
+                return Feedback.ok("kingdomworld.membership.joined", kingdomName(kingdom));
+            }
         }
         if (outcome.joined()) {
             notifyMembers(server, kingdom, null, Component.translatable("kingdomworld.notify.joined", player.getDisplayName(), kingdomName(kingdom)));

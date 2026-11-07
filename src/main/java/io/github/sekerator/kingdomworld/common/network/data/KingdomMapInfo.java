@@ -20,8 +20,13 @@ import java.util.UUID;
  * @param capitalChunkZ chunk z of the throne, meaningful only if {@code hasCapital}
  */
 public record KingdomMapInfo(UUID id, String name, int color, String rulerName, int members, int chunks, int population,
-                             boolean hasCapital, int capitalChunkX, int capitalChunkZ) {
+                             boolean hasCapital, int capitalChunkX, int capitalChunkZ, NpcKingdomInfo npc) {
     public static final int MAX_PLAYER_NAME = 64;
+
+    public KingdomMapInfo(UUID id, String name, int color, String rulerName, int members, int chunks, int population, boolean hasCapital,
+                          int capitalChunkX, int capitalChunkZ) {
+        this(id, name, color, rulerName, members, chunks, population, hasCapital, capitalChunkX, capitalChunkZ, null);
+    }
 
     public KingdomMapInfo {
         Objects.requireNonNull(id, "id");
@@ -43,6 +48,7 @@ public record KingdomMapInfo(UUID id, String name, int color, String rulerName, 
             buf.writeInt(capitalChunkX);
             buf.writeInt(capitalChunkZ);
         }
+        NpcKingdomInfo.write(buf, npc);
     }
 
     public static KingdomMapInfo decode(FriendlyByteBuf buf) {
@@ -56,7 +62,8 @@ public record KingdomMapInfo(UUID id, String name, int color, String rulerName, 
         boolean hasCapital = buf.readBoolean();
         int x = hasCapital ? buf.readInt() : 0;
         int z = hasCapital ? buf.readInt() : 0;
-        return new KingdomMapInfo(id, name, color, ruler, members, chunks, population, hasCapital, x, z);
+        NpcKingdomInfo npc = NpcKingdomInfo.read(buf);
+        return new KingdomMapInfo(id, name, color, ruler, members, chunks, population, hasCapital, x, z, npc);
     }
 
     public static void writeList(FriendlyByteBuf buf, List<KingdomMapInfo> list) {

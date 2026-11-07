@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.mage_tower",
+  "category": "magic",
+  "type": "mage_tower",
+  "role": "mage_tower",
+  "level": 1,
+  "icon": "kingdomworld:magic_focus",
+  "anchor": [4, 0, 8],
+  "entrance": "south"
+}

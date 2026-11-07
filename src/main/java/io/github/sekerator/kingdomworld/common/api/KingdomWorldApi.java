@@ -217,6 +217,24 @@ public final class KingdomWorldApi {
     }
 
     /**
+     * Founds a kingdom without a ruler whose throne stands at {@code throne}, with a given id; the kingdoms of the world are
+     * founded so, and their id comes from their place, so that a restart in the middle of an appearance finds the kingdom again.
+     */
+    public static CreateKingdomResult foundWithId(ServerLevel level, BlockPos throne, String name, int color, UUID id) {
+        MinecraftServer server = level.getServer();
+        KingdomWorldState state = writable(server, "found kingdom " + name);
+        if (state == null) {
+            return new CreateKingdomResult.Rejected(CreateKingdomResult.Error.READ_ONLY);
+        }
+        if (state.kingdoms().get(id).isPresent()) {
+            return new CreateKingdomResult.Rejected(CreateKingdomResult.Error.ID_TAKEN);
+        }
+        economyDefaults(state);
+        Capital capital = new Capital(Dimensions.id(level), throne.getX(), throne.getY(), throne.getZ());
+        return state.found(id, name, color & Kingdom.MAX_COLOR, null, capital, gameTime(server), rules());
+    }
+
+    /**
      * Removes a kingdom with its members and land.
      */
     public static Optional<Kingdom> dissolveKingdom(MinecraftServer server, UUID id) {

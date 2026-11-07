@@ -52,6 +52,7 @@ public final class CommonEvents {
         io.github.sekerator.kingdomworld.common.companion.CompanionEvents.register();
         io.github.sekerator.kingdomworld.common.road.RoadEvents.register();
         io.github.sekerator.kingdomworld.common.law.LawEvents.register();
+        io.github.sekerator.kingdomworld.common.npc.NpcEvents.register();
     }
 
     private static void onRegisterCommands(RegisterCommandsEvent event) {

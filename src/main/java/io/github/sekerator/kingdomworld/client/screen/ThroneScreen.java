@@ -689,7 +689,11 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
 
     private List<Component> overviewLines() {
         List<Component> lines = new ArrayList<>();
-        lines.add(Component.translatable("kingdomworld.screen.throne.ruler", PlayerNames.display(view.rulerName())));
+        if (view.npc() != null) {
+            lines.addAll(npcLines(view.npc()));
+        } else {
+            lines.add(Component.translatable("kingdomworld.screen.throne.ruler", PlayerNames.display(view.rulerName())));
+        }
         lines.add(Component.translatable("kingdomworld.screen.throne.members", view.memberCount()));
         lines.add(Component.translatable("kingdomworld.screen.throne.population", view.population()));
         lines.add(Component.translatable("kingdomworld.screen.throne.chunks", view.chunks(), view.chunkLimit()));
@@ -706,7 +710,8 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             case APPLIED -> Component.translatable("kingdomworld.screen.throne.applied");
             case INVITED -> Component.translatable("kingdomworld.screen.throne.invited");
             case OTHER_KINGDOM -> Component.translatable("kingdomworld.screen.throne.other_kingdom");
-            case OUTSIDER -> Component.translatable("kingdomworld.screen.throne.outsider");
+            case OUTSIDER -> view.npc() != null ? Component.translatable("kingdomworld.screen.throne.npc.outsider")
+                    : Component.translatable("kingdomworld.screen.throne.outsider");
         };
     }
 
@@ -1186,7 +1191,8 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         int right = left + panelWidth;
         graphics.fill(left, top, right, top + panelHeight, 0xF0201810);
         graphics.renderOutline(left, top, panelWidth, panelHeight, 0xFF000000 | view.color());
-        centeredName(graphics, view.name(), width / 2, top + 7, 0xFF000000 | FoundKingdomScreen.readable(view.color()), panelWidth - 2 * PAD);
+        centeredName(graphics, kingdomName(view.name(), view.npc()), width / 2, top + 7, 0xFF000000 | FoundKingdomScreen.readable(view.color()),
+                panelWidth - 2 * PAD);
         int inner = top + contentOffset;
         int innerHeight = panelHeight - contentOffset;
         switch (tab) {
@@ -1259,10 +1265,10 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         int x = left + PAD + 4;
         int y = top + CONTENT_TOP + 4;
         for (Component line : overviewLines()) {
-            label(graphics, line, x, y, 0xFFE8E8E8, right - PAD);
+            fittedLabel(graphics, line, x, y, 0xFFE8E8E8, right - PAD);
             y += 14;
         }
-        label(graphics, relationText(), x, y + 6, 0xFFF0D070, right - PAD);
+        fittedLabel(graphics, relationText(), x, y + 6, 0xFFF0D070, right - PAD);
     }
 
     private void renderMembers(GuiGraphics graphics, int left, int top) {

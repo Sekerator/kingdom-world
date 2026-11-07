@@ -256,6 +256,29 @@ public final class MembershipRegistry {
         return Outcome.JOINED;
     }
 
+    /**
+     * Accepts an application to a kingdom that has no player to answer it (a kingdom of the world, whose ruler takes every
+     * subject that applies).
+     */
+    public Outcome admit(UUID kingdomId, UUID applicantId, long gameTime) {
+        KingdomMembers entry = kingdoms.get(kingdomId);
+        if (entry == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (!entry.applications.containsKey(applicantId)) {
+            return Outcome.fail(KingdomError.NO_APPLICATION);
+        }
+        if (kingdomOfPlayer.containsKey(applicantId)) {
+            entry.applications.remove(applicantId);
+            removeIndex(applicationsByPlayer, applicantId, entry.kingdomId());
+            changeListener.run();
+            return Outcome.fail(KingdomError.ALREADY_IN_KINGDOM);
+        }
+        join(applicantId, entry.kingdomId(), Role.SUBJECT, gameTime);
+        changeListener.run();
+        return Outcome.JOINED;
+    }
+
     public Outcome rejectApplication(UUID actorId, UUID applicantId) {
         KingdomMembers entry = kingdomWithRight(actorId, Permission.RECRUIT);
         if (entry == null) {

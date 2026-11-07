@@ -59,7 +59,7 @@ class TranslationKeysTest {
      * Keys that pick one of their arguments per language on purpose: a citizen name comes with its Latin and its
      * Cyrillic spelling, English shows the first and Russian the second.
      */
-    private static final Set<String> LANGUAGE_PICKS = Set.of("kingdomworld.citizen.name");
+    private static final Set<String> LANGUAGE_PICKS = Set.of("kingdomworld.citizen.name", "kingdomworld.npc.name");
 
     private static Map<String, String> english;
     private static Map<String, String> russian;
@@ -312,6 +312,27 @@ class TranslationKeysTest {
         assertEquals(Plurals.Form.N21, Plurals.form(21));
         assertEquals(Plurals.Form.N2, Plurals.form(3));
         assertEquals(Plurals.Form.N5, Plurals.form(11));
+    }
+
+    /**
+     * Numbers of the kingdoms of the world read right in both languages: «21 королевство», «3 места», «5 королевств».
+     */
+    @Test
+    void countsOfKingdomsOfTheWorldHaveEveryPluralForm() {
+        Map<String, String> russianForms = Map.of("kingdoms", "королевство|королевство|королевства|королевств", "places", "место|место|места|мест");
+        Map<String, String[]> englishForms = Map.of("kingdoms", new String[]{"kingdom", "kingdoms"}, "places", new String[]{"place", "places"});
+        russianForms.forEach((word, forms) -> {
+            String[] words = forms.split("[|]");
+            Plurals.Form[] all = Plurals.Form.values();
+            for (int i = 0; i < all.length; i++) {
+                String key = "kingdomworld.count." + word + "." + all[i].suffix();
+                assertEquals("%s " + words[i], russian.get(key), key);
+                assertEquals("%s " + englishForms.get(word)[all[i] == Plurals.Form.N1 ? 0 : 1], english.get(key), key);
+            }
+        });
+        assertEquals(Plurals.Form.N21, Plurals.form(81));
+        assertEquals(Plurals.Form.N2, Plurals.form(8 - 6));
+        assertEquals(Plurals.Form.N5, Plurals.form(8));
     }
 
     @Test
@@ -638,6 +659,30 @@ class TranslationKeysTest {
                 used.add("kingdomworld.count." + word + "." + form.suffix());
             }
         }
+        // Kingdoms of the world: sizes, leanings and traits of rulers, the states of places.
+        for (io.github.sekerator.kingdomworld.core.npc.NpcLevel level : io.github.sekerator.kingdomworld.core.npc.NpcLevel.values()) {
+            used.add("kingdomworld.npc.level." + level.id());
+        }
+        for (io.github.sekerator.kingdomworld.core.npc.RulerCharacter character : io.github.sekerator.kingdomworld.core.npc.RulerCharacter.values()) {
+            used.add("kingdomworld.npc.character." + character.id());
+        }
+        for (io.github.sekerator.kingdomworld.core.npc.RulerCharacter.Trait trait : io.github.sekerator.kingdomworld.core.npc.RulerCharacter.Trait.values()) {
+            used.add("kingdomworld.npc.trait." + trait.id());
+        }
+        for (io.github.sekerator.kingdomworld.core.npc.NpcSite.Status status : io.github.sekerator.kingdomworld.core.npc.NpcSite.Status.values()) {
+            used.add("commands.kingdomworld.admin.npc.status." + status.id());
+        }
+        for (String word : List.of("kingdoms", "places")) {
+            for (Plurals.Form form : Plurals.Form.values()) {
+                used.add("kingdomworld.count." + word + "." + form.suffix());
+            }
+        }
+        for (io.github.sekerator.kingdomworld.core.economy.LedgerCategory category : io.github.sekerator.kingdomworld.core.economy.LedgerCategory.values()) {
+            used.add("kingdomworld.ledger." + category.id());
+        }
+        used.add("kingdomworld.building.barracks");
+        used.add("kingdomworld.building.mage_tower");
+        used.add("kingdomworld.building.category.magic");
         used.add("kingdomworld.profession.companion");
         used.add("kingdomworld.profession.companion.female");
         used.add("entity.kingdomworld.companion");

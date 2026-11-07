@@ -102,6 +102,47 @@ public abstract class KingdomScreen extends Screen {
     }
 
     /**
+     * Draws a translated line that must end before {@code right}; a longer one is shortened with an ellipsis and shown in full
+     * on hover.
+     */
+    protected void fittedLabel(GuiGraphics graphics, Component text, int x, int y, int color, int right) {
+        int room = Math.max(0, right - x);
+        if (font.width(text) <= room) {
+            label(graphics, text, x, y, color, right);
+            return;
+        }
+        String shown = fit(text.getString(), room);
+        graphics.drawString(font, shown, x, y, color);
+        int width = font.width(shown);
+        LayoutCheck.drawn(this, Component.literal(shown), x, y, width);
+        hoverFull(x, y, width, text);
+    }
+
+    /**
+     * The name of a kingdom in the alphabet of the language of the game: kingdoms of the world have one in each.
+     */
+    protected static String kingdomName(String name, @org.jetbrains.annotations.Nullable io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo npc) {
+        if (npc == null) {
+            return name;
+        }
+        String language = net.minecraft.client.Minecraft.getInstance().getLanguageManager().getSelected();
+        return io.github.sekerator.kingdomworld.core.citizen.CitizenNames.alphabetFor(language)
+                == io.github.sekerator.kingdomworld.core.citizen.CitizenNames.Alphabet.CYRILLIC ? npc.nameCyrillic() : npc.nameLatin();
+    }
+
+    /**
+     * The lines about a kingdom of the world: its ruler, its size and the character of its ruler.
+     */
+    protected static List<Component> npcLines(io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo npc) {
+        Component ruler = io.github.sekerator.kingdomworld.common.npc.NpcTexts.ruler(npc.rulerLatin(), npc.rulerCyrillic(), npc.rulerGender());
+        return List.of(Component.translatable("kingdomworld.screen.throne.npc.ruler", ruler),
+                Component.translatable("kingdomworld.screen.throne.npc.size", io.github.sekerator.kingdomworld.common.npc.NpcTexts.level(npc.level())),
+                Component.translatable("kingdomworld.screen.throne.npc.character",
+                        io.github.sekerator.kingdomworld.common.npc.NpcTexts.character(npc.character()),
+                        io.github.sekerator.kingdomworld.common.npc.NpcTexts.traits(npc.traits())));
+    }
+
+    /**
      * Shortens a name with an ellipsis so that it is at most {@code maxWidth} wide.
      */
     protected String fit(String name, int maxWidth) {

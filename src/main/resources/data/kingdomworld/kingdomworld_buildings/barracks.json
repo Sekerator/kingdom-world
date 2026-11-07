@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.barracks",
+  "category": "defense",
+  "type": "barracks",
+  "role": "barracks",
+  "level": 1,
+  "icon": "kingdomworld:barracks",
+  "anchor": [5, 0, 8],
+  "entrance": "south"
+}

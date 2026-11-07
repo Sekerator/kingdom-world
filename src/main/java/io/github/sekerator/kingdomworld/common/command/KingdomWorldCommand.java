@@ -146,6 +146,7 @@ public final class KingdomWorldCommand {
                         .then(CompanionCommands.adminCommand())
                         .then(RoadCommands.adminCommand())
                         .then(LawCommands.adminCommand())
+                        .then(io.github.sekerator.kingdomworld.common.npc.NpcCommands.adminCommand())
                         .then(Commands.literal("data")
                                 .then(Commands.literal("status").executes(context -> dataStatus(context.getSource())))
                                 .then(Commands.literal("unlock").executes(context -> dataUnlock(context.getSource()))))));
@@ -245,6 +246,11 @@ public final class KingdomWorldCommand {
         Kingdom kingdom = find(source, StringArgumentType.getString(context, "kingdom"));
         GameProfile player = single(context, "player");
         MinecraftServer server = source.getServer();
+        if (io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, kingdom.id())) {
+            // The throne of a kingdom of the world is taken only by war.
+            source.sendFailure(Component.translatable("commands.kingdomworld.admin.npc.throne_taken", coloredName(kingdom)));
+            return 0;
+        }
         Outcome outcome = KingdomWorldApi.change(server, "set ruler of " + kingdom.name(),
                 state -> state.crown(kingdom.id(), player.getId(), KingdomWorldApi.gameTime(server)));
         if (!outcome.ok()) {

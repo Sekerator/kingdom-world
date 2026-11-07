@@ -93,7 +93,16 @@ public final class KingdomViews {
                 members.map(KingdomMembers::size).orElse(0), territory.map(Territory::size).orElse(0),
                 state.chunkLimit(kingdom.id(), KingdomWorldApi.rules()), state.citizens().registry().count(kingdom.id()),
                 capital, relation, viewerRole, viewerPermissions,
-                memberEntries, applications, rightsTable);
+                memberEntries, applications, rightsTable, npcInfo(server, kingdom));
+    }
+
+    /**
+     * What players see of a kingdom of the world, or {@code null} for a kingdom of players.
+     */
+    @org.jetbrains.annotations.Nullable
+    static io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo npcInfo(MinecraftServer server, Kingdom kingdom) {
+        return io.github.sekerator.kingdomworld.common.npc.NpcWork.kingdom(server, kingdom.id())
+                .map(io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo::of).orElse(null);
     }
 
     /**
@@ -115,7 +124,7 @@ public final class KingdomViews {
         Capital capital = territory.map(Territory::capital).orElse(null);
         return new KingdomMapInfo(kingdom.id(), kingdom.name(), kingdom.color(), PlayerNames.name(server, kingdom.rulerId()),
                 members, territory.map(Territory::size).orElse(0), state.citizens().registry().count(kingdom.id()), hasCapital,
-                hasCapital ? capital.chunkX() : 0, hasCapital ? capital.chunkZ() : 0);
+                hasCapital ? capital.chunkX() : 0, hasCapital ? capital.chunkZ() : 0, npcInfo(server, kingdom));
     }
 
     /**

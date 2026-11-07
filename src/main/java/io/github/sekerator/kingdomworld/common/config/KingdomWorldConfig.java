@@ -168,6 +168,8 @@ public final class KingdomWorldConfig {
         public final Roads roads;
         /** Crimes, witnesses, guards, fines, confiscation, bounties, reputation, debts and the entry into cities. */
         public final Law law;
+        /** Kingdoms of the world that appear on their own. */
+        public final NpcKingdoms npcKingdoms;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -467,6 +469,7 @@ public final class KingdomWorldConfig {
             companions = new Companions(builder);
             roads = new Roads(builder);
             law = new Law(builder);
+            npcKingdoms = new NpcKingdoms(builder);
 
             builder.comment("Abstract simulation of kingdoms far from players.").push("simulation");
             simulationIntervalTicks = builder
@@ -1104,6 +1107,84 @@ public final class KingdomWorldConfig {
     /**
      * Cities, roads, caravans on the roads and robbers.
      */
+    public static final class NpcKingdoms {
+        public final ForgeConfigSpec.BooleanValue generate;
+        public final ForgeConfigSpec.IntValue count;
+        public final ForgeConfigSpec.IntValue radius;
+        public final ForgeConfigSpec.IntValue minDistance;
+        public final ForgeConfigSpec.IntValue minSpawnDistance;
+        public final ForgeConfigSpec.IntValue triggerChunks;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> sizeWeights;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> landRadius;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> towns;
+        public final ForgeConfigSpec.IntValue townDistance;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> startingMoney;
+        public final ForgeConfigSpec.IntValue startingFoodDays;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> startingMaterials;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> soldiers;
+        public final ForgeConfigSpec.IntValue blocksPerTick;
+        public final ForgeConfigSpec.IntValue chunksPerTick;
+        public final ForgeConfigSpec.IntValue maxInhabitedMinutes;
+
+        NpcKingdoms(ForgeConfigSpec.Builder builder) {
+            io.github.sekerator.kingdomworld.core.npc.NpcRules d = io.github.sekerator.kingdomworld.core.npc.NpcRules.DEFAULT;
+            builder.comment("Kingdoms of the world: their places are planned from the seed of the world in the overworld, and each one",
+                    "appears (a capital with a wall, towns, roads, citizens, soldiers, a treasury) when a player first comes near.",
+                    "Values given by size are in the order small, medium, large.").push("npcKingdoms");
+            generate = builder.comment("Whether kingdoms of the world are planned and appear.").define("generate", d.generate());
+            count = builder.comment("How many kingdoms a world plans.").defineInRange("count", d.count(), 0, 256);
+            radius = builder.comment("How far from the spawn of the world their capitals may lie, in blocks.")
+                    .defineInRange("radius", d.radius(), 256, 1_000_000);
+            minDistance = builder.comment("The least distance between two capitals, in blocks.")
+                    .defineInRange("minDistance", d.minDistance(), 256, 100_000);
+            minSpawnDistance = builder.comment("The least distance of a capital from the spawn of the world, in blocks.")
+                    .defineInRange("minSpawnDistance", d.minSpawnDistance(), 0, 100_000);
+            triggerChunks = builder.comment("A kingdom appears once a player comes this close to its place, in chunks.")
+                    .defineInRange("triggerChunks", d.triggerChunks(), 2, 64);
+            sizeWeights = builder.comment("How often kingdoms of each size are chosen.")
+                    .defineList("sizeWeights", ints(d.sizeWeights()), value -> value instanceof Integer number && number >= 0 && number <= 1000);
+            landRadius = builder.comment("The land of the capital, in chunks around the chunk of the throne, by size.")
+                    .defineList("landRadius", ints(d.landRadius()), value -> value instanceof Integer number && number >= 1 && number <= 8);
+            towns = builder.comment("Towns around the capital, by size.")
+                    .defineList("towns", ints(d.towns()), value -> value instanceof Integer number && number >= 0 && number <= 4);
+            townDistance = builder.comment("How far towns lie from the capital, in blocks.")
+                    .defineInRange("townDistance", d.townDistance(), 64, 1_000);
+            startingMoney = builder.comment("The money of the treasury when a kingdom appears, by size; journaled as its founding.")
+                    .defineList("startingMoney", List.of((int) d.money(io.github.sekerator.kingdomworld.core.npc.NpcLevel.SMALL),
+                                    (int) d.money(io.github.sekerator.kingdomworld.core.npc.NpcLevel.MEDIUM),
+                                    (int) d.money(io.github.sekerator.kingdomworld.core.npc.NpcLevel.LARGE)),
+                            value -> value instanceof Integer number && number >= 0);
+            startingFoodDays = builder.comment("Food in the storehouses when a kingdom appears, in days of food for all its citizens.")
+                    .defineInRange("startingFoodDays", d.foodDays(), 0, 365);
+            startingMaterials = builder.comment("Stacks of logs, planks and cobblestone in the storehouses when a kingdom appears, by size.")
+                    .defineList("startingMaterials", ints(new int[]{d.materials(io.github.sekerator.kingdomworld.core.npc.NpcLevel.SMALL),
+                                    d.materials(io.github.sekerator.kingdomworld.core.npc.NpcLevel.MEDIUM),
+                                    d.materials(io.github.sekerator.kingdomworld.core.npc.NpcLevel.LARGE)}),
+                            value -> value instanceof Integer number && number >= 0 && number <= 64);
+            soldiers = builder.comment("Soldiers of a kingdom when it appears, by size.")
+                    .defineList("soldiers", ints(new int[]{d.soldiers(io.github.sekerator.kingdomworld.core.npc.NpcLevel.SMALL),
+                                    d.soldiers(io.github.sekerator.kingdomworld.core.npc.NpcLevel.MEDIUM),
+                                    d.soldiers(io.github.sekerator.kingdomworld.core.npc.NpcLevel.LARGE)}),
+                            value -> value instanceof Integer number && number >= 0 && number <= 32);
+            blocksPerTick = builder.comment("Blocks an appearance places, clears or levels in one tick at most.")
+                    .defineInRange("blocksPerTick", d.blocksPerTick(), 64, 100_000);
+            chunksPerTick = builder.comment("Chunks an appearance looks through in one tick at most.")
+                    .defineInRange("chunksPerTick", d.chunksPerTick(), 1, 64);
+            maxInhabitedMinutes = builder.comment("A place where players spent more minutes than this (the game counts it for every chunk)",
+                            "is left alone, so that a kingdom never appears over what players built.")
+                    .defineInRange("maxInhabitedMinutes", d.maxInhabitedMinutes(), 0, 100_000);
+            builder.pop();
+        }
+
+        private static List<Integer> ints(int[] values) {
+            List<Integer> list = new java.util.ArrayList<>();
+            for (int value : values) {
+                list.add(value);
+            }
+            return list;
+        }
+    }
+
     public static final class Roads {
         public final ForgeConfigSpec.IntValue maxCities;
         public final ForgeConfigSpec.IntValue minCityDistance;
