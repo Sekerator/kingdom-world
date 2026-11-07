@@ -50,6 +50,10 @@
 .PARAMETER Memory
     Maximum heap of the server JVM, e.g. 2G or 6G.
 
+.PARAMETER Port
+    Server port. By default 25599, or 25598 with -Pack. Give each copy of the repository its own port (and its
+    own -TestEnvRoot) when several smoke tests run on one machine at the same time.
+
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File scripts/smoke-server.ps1
 
@@ -65,7 +69,9 @@ param(
     [string]$PackModsDir = 'D:\Games\Minecraft\Instances\Taghi RPG & Create RU\mods',
     [string[]]$ExcludeModIds = @(),
     [string]$JavaHome = $(if ($env:KINGDOMWORLD_JAVA_HOME) { $env:KINGDOMWORLD_JAVA_HOME } else { 'C:\Program Files\Eclipse Adoptium\jdk-17.0.16.8-hotspot' }),
-    [string]$Memory = ''
+    [string]$Memory = '',
+    [ValidateRange(0, 65535)]
+    [int]$Port = 0
 )
 
 Set-StrictMode -Version Latest
@@ -217,7 +223,7 @@ function Initialize-Server([string]$ModJar) {
     Set-Content -LiteralPath (Join-Path $ServerDir 'eula.txt') -Value 'eula=true' -Encoding ASCII
     $properties = Join-Path $ServerDir 'server.properties'
     # A port other than the default avoids clashes with a server that may already run on this machine.
-    Set-ServerProperty $properties 'server-port' $(if ($Pack) { '25598' } else { '25599' })
+    Set-ServerProperty $properties 'server-port' $(if ($Port -gt 0) { "$Port" } elseif ($Pack) { '25598' } else { '25599' })
     Set-ServerProperty $properties 'motd' 'KingdomWorld smoke test'
 
     # Accidents far from players are random; the smoke test switches them off so that its miner always lives.
