@@ -23,6 +23,7 @@ import io.github.sekerator.kingdomworld.core.construction.Building;
 import io.github.sekerator.kingdomworld.core.construction.Construction;
 import io.github.sekerator.kingdomworld.core.construction.Placement;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
+import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomNames;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import net.minecraft.commands.CommandSourceStack;
@@ -222,8 +223,12 @@ public final class ConstructionCommands {
     }
 
     private static int finish(CommandSourceStack source, Construction construction) {
-        Building building = ConstructionWork.finishNow(source.getServer(), construction);
-        source.sendSuccess(() -> Component.translatable(KEY + "finished", construction.id(), building.id()), true);
+        Optional<Building> building = ConstructionWork.finishNow(source.getServer(), construction);
+        if (building.isEmpty()) {
+            source.sendFailure(KingdomActions.errorMessage(KingdomError.CONSTRUCTION_OUTSIDE_LAND));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.translatable(KEY + "finished", construction.id(), building.get().id()), true);
         return 1;
     }
 

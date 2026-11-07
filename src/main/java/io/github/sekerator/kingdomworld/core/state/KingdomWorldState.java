@@ -1143,25 +1143,40 @@ public final class KingdomWorldState {
      */
     public ConstructionChange layConstruction(UUID actor, UUID kingdomId, String templateId, long fingerprint, WorldPos anchor,
                                               Placement placement, Box box, List<int[]> clear, int steps, long now, ConstructionRules rules) {
-        if (kingdoms.get(kingdomId).isEmpty()) {
-            return ConstructionChange.failed(KingdomError.UNKNOWN_KINGDOM);
-        }
-        if (actor != null && !membership.hasPermission(actor, kingdomId, Permission.MANAGE_CONSTRUCTION)) {
-            return ConstructionChange.failed(KingdomError.NO_PERMISSION);
-        }
-        for (long chunk : box.chunks()) {
-            if (!kingdomId.equals(territory.ownerOf(anchor.dimension(), chunk))) {
-                return ConstructionChange.failed(KingdomError.CONSTRUCTION_OUTSIDE_LAND);
-            }
-        }
-        if (construction.overlapping(anchor.dimension(), box, -1).isPresent()) {
-            return ConstructionChange.failed(KingdomError.CONSTRUCTION_OVERLAPS);
-        }
-        if (construction.count(kingdomId) >= rules.maxConstructions()) {
-            return ConstructionChange.failed(KingdomError.TOO_MANY_CONSTRUCTIONS);
+        Outcome allowed = checkLay(actor, kingdomId, anchor.dimension(), box, rules);
+        if (!allowed.ok()) {
+            return ConstructionChange.failed(allowed.error());
         }
         return new ConstructionChange(Outcome.DONE, Optional.of(construction.add(kingdomId, templateId, fingerprint, anchor, placement, box,
                 now, clear, steps)));
+    }
+
+    /**
+     * Whether a construction may be laid out on a place, before the blocks there are looked at: the kingdom exists, the
+     * actor has the right, the place is all the kingdom's land, it overlaps no other construction and the kingdom is
+     * under its limit.
+     *
+     * @param actor the player laying it, or {@code null} for an operator
+     */
+    public Outcome checkLay(UUID actor, UUID kingdomId, String dimension, Box box, ConstructionRules rules) {
+        if (kingdoms.get(kingdomId).isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (actor != null && !membership.hasPermission(actor, kingdomId, Permission.MANAGE_CONSTRUCTION)) {
+            return Outcome.fail(KingdomError.NO_PERMISSION);
+        }
+        for (long chunk : box.chunks()) {
+            if (!kingdomId.equals(territory.ownerOf(dimension, chunk))) {
+                return Outcome.fail(KingdomError.CONSTRUCTION_OUTSIDE_LAND);
+            }
+        }
+        if (construction.overlapping(dimension, box, -1).isPresent()) {
+            return Outcome.fail(KingdomError.CONSTRUCTION_OVERLAPS);
+        }
+        if (construction.count(kingdomId) >= rules.maxConstructions()) {
+            return Outcome.fail(KingdomError.TOO_MANY_CONSTRUCTIONS);
+        }
+        return Outcome.DONE;
     }
 
     /**

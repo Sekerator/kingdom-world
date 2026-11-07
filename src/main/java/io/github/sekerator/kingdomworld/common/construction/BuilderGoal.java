@@ -197,6 +197,13 @@ final class BuilderGoal extends PostWorkGoal {
             }
             case NO_MATERIALS -> {
             }
+            case OUTSIDE_LAND -> {
+                // The kingdom lost the place: the construction waits with what was paid for, the builder looks elsewhere.
+                ConstructionWork.releaseAll(me);
+                drop();
+                report(WorkStatus.OUTSIDE_TERRITORY);
+                return null;
+            }
         }
         boolean clearing = current.kind() == BuildPlan.Kind.CLEAR;
         next(construction, me);

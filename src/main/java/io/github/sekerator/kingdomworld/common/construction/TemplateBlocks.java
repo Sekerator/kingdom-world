@@ -60,6 +60,11 @@ import net.minecraftforge.registries.ForgeRegistries;
 public final class TemplateBlocks {
     /** Blocks no player can obtain as items; a template with one of them cannot be built. Data packs add their own. */
     public static final TagKey<Block> UNBUILDABLE = TagKey.create(Registries.BLOCK, KingdomWorld.id("unbuildable"));
+    /**
+     * Blocks a construction never breaks although a player could: a spawner, reinforced deepslate and the like. Blocks
+     * no player can break are never broken anyway. Data packs add their own.
+     */
+    public static final TagKey<Block> UNCLEARABLE = TagKey.create(Registries.BLOCK, KingdomWorld.id("unclearable"));
 
     private TemplateBlocks() {
     }

@@ -31,6 +31,7 @@ import io.github.sekerator.kingdomworld.core.membership.Permission;
 import io.github.sekerator.kingdomworld.core.membership.Role;
 import io.github.sekerator.kingdomworld.core.production.Order;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
+import io.github.sekerator.kingdomworld.core.territory.Capital;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -45,11 +46,13 @@ import net.minecraft.world.Container;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -275,6 +278,128 @@ public final class ConstructionGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_build_protected")
+    public static void blocksNoPlayerCanBreakAndSpawnersStayStanding(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos to = helper.absolutePos(new BlockPos(8, 3, 8));
+        GatheringGameTests.clear(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Bedrock Builders", UUID.randomUUID());
+        BuildingTemplate template = hut("protected");
+        StorehouseInventory store = GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(0, 0, 4)));
+        fill(store, new ItemStack(Items.COBBLESTONE, 9), new ItemStack(Items.OAK_PLANKS, 2), new ItemStack(Items.TORCH, 1));
+        WorldPos post = GatheringGameTests.post(helper, new BlockPos(0, 0, 0), "builder");
+        Citizen builder = farBuilder(helper, kingdom, post);
+        Construction construction = null;
+        try {
+            // A template over any of them is refused.
+            for (Block block : List.of(Blocks.BEDROCK, Blocks.SPAWNER, Blocks.REINFORCED_DEEPSLATE, Blocks.END_PORTAL_FRAME)) {
+                helper.setBlock(new BlockPos(6, 1, 6), block);
+                KingdomWorldState.ConstructionChange refused = ConstructionWork.lay(level, null, kingdom.id(), template,
+                        helper.absolutePos(new BlockPos(6, 0, 6)), Placement.NONE);
+                helper.assertTrue(refused.construction().isEmpty() && refused.outcome().error() == KingdomError.PROTECTED_BLOCK,
+                        "A template over " + block + " was laid: " + refused.outcome());
+            }
+            // Clearing leaves them standing.
+            List<ItemStack> drops = new ArrayList<>();
+            for (Block block : List.of(Blocks.BEDROCK, Blocks.END_PORTAL_FRAME, Blocks.BARRIER, Blocks.COMMAND_BLOCK,
+                    Blocks.REINFORCED_DEEPSLATE, Blocks.SPAWNER)) {
+                helper.setBlock(new BlockPos(2, 1, 6), block);
+                helper.assertTrue(ConstructionWork.clear(level, helper.absolutePos(new BlockPos(2, 1, 6)), null, ItemStack.EMPTY, drops)
+                        == ConstructionWork.StepResult.BLOCKED && at(helper, 2, 1, 6).is(block), block + " was broken by clearing");
+            }
+            helper.setBlock(new BlockPos(2, 1, 6), Blocks.AIR);
+            helper.assertTrue(drops.isEmpty(), "Clearing dropped " + drops);
+            // A log is in the way when the construction is laid; bedrock, a spawner and reinforced deepslate come later.
+            helper.setBlock(new BlockPos(6, 1, 6), Blocks.OAK_LOG);
+            construction = lay(helper, kingdom, template, new BlockPos(6, 0, 6));
+            helper.setBlock(new BlockPos(6, 1, 6), Blocks.BEDROCK);
+            helper.setBlock(new BlockPos(5, 0, 4), Blocks.SPAWNER);
+            helper.setBlock(new BlockPos(7, 1, 4), Blocks.REINFORCED_DEEPSLATE);
+            // Far from players: the clearing stops at the bedrock, nothing is broken.
+            workFar(server, builder, 3);
+            ConstructionWork.tick(server, 1);
+            helper.assertTrue(at(helper, 6, 1, 6).is(Blocks.BEDROCK) && at(helper, 5, 0, 4).is(Blocks.SPAWNER)
+                    && at(helper, 7, 1, 4).is(Blocks.REINFORCED_DEEPSLATE), "A protected block was broken far from players");
+            helper.assertTrue(construction.status() == Construction.Status.BLOCKED, "The construction does not wait: " + construction.status());
+            // The operator's finish builds around them and gives back what was paid for their places.
+            Building building = ConstructionWork.finishNow(server, construction).orElseThrow();
+            helper.assertTrue(building.admin(), "No building in the register");
+            helper.assertTrue(at(helper, 6, 1, 6).is(Blocks.BEDROCK) && at(helper, 5, 0, 4).is(Blocks.SPAWNER)
+                    && at(helper, 7, 1, 4).is(Blocks.REINFORCED_DEEPSLATE), "The operator's finish broke a protected block");
+            helper.assertTrue(at(helper, 6, 0, 6).is(Blocks.COBBLESTONE) && at(helper, 5, 1, 4).is(Blocks.OAK_PLANKS)
+                    && at(helper, 6, 1, 5).is(Blocks.TORCH), "The rest of the building was not finished");
+            helper.assertTrue(stored(server, kingdom, Items.COBBLESTONE) == 1 && stored(server, kingdom, Items.OAK_PLANKS) == 1,
+                    "The materials of the places taken were lost: " + stored(server, kingdom, Items.COBBLESTONE) + " cobblestone, "
+                            + stored(server, kingdom, Items.OAK_PLANKS) + " planks");
+            helper.assertTrue(stored(server, kingdom, Items.BEDROCK) == 0 && stored(server, kingdom, Items.SPAWNER) == 0
+                    && stored(server, kingdom, Items.REINFORCED_DEEPSLATE) == 0, "A protected block came to the storehouses");
+        } finally {
+            end(helper, kingdom, from, to, template.id(), builder);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_build_lost_land")
+    public static void landLostBeforeThePlaceLoadsGetsNothingBuiltAndKeepsWhatWasPaid(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos to = helper.absolutePos(new BlockPos(8, 3, 8));
+        GatheringGameTests.clear(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Landless Builders", UUID.randomUUID());
+        BuildingTemplate template = hut("lost_land");
+        StorehouseInventory store = GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(0, 0, 4)));
+        fill(store, new ItemStack(Items.COBBLESTONE, 9), new ItemStack(Items.OAK_PLANKS, 2), new ItemStack(Items.TORCH, 1));
+        // A log stands where the template wants air: clearing it would break a block of the land.
+        helper.setBlock(new BlockPos(6, 1, 6), Blocks.OAK_LOG);
+        WorldPos post = GatheringGameTests.post(helper, new BlockPos(0, 0, 0), "builder");
+        Citizen builder = farBuilder(helper, kingdom, post);
+        Construction construction = lay(helper, kingdom, template, new BlockPos(6, 0, 6));
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        Capital capital = state.territory().territory(kingdom.id()).orElseThrow().capital();
+        java.util.Set<Long> land = null;
+        try {
+            workFar(server, builder, 3);
+            int paid = construction.pending().size();
+            helper.assertTrue(paid == construction.steps() && stored(server, kingdom, Items.COBBLESTONE) == 0,
+                    "Not every step was paid: " + paid + " of " + construction.steps());
+            // The land goes before the place is loaded again.
+            land = state.territory().remove(kingdom.id());
+            ConstructionWork.tick(server, 1);
+            helper.assertTrue(at(helper, 6, 1, 6).is(Blocks.OAK_LOG) && at(helper, 5, 0, 4).isAir() && at(helper, 6, 1, 5).isAir(),
+                    "Blocks were broken or placed on land the kingdom lost");
+            helper.assertTrue(construction.status() == Construction.Status.OUTSIDE_LAND, "The status is " + construction.status());
+            helper.assertTrue(construction.pending().size() == paid, "What was paid for went: " + construction.pending().size());
+            helper.assertTrue(stored(server, kingdom, Items.OAK_LOG) == 0, "The log of the lost land came to the storehouses");
+            // Neither a builder near players nor an operator's finish touches it.
+            BuildPlan plan = ConstructionWork.plan(construction).orElseThrow();
+            List<ItemStack> drops = new ArrayList<>();
+            int first = construction.pending().stream().min(Integer::compare).orElseThrow();
+            helper.assertTrue(ConstructionWork.doStep(level, construction, plan, template, first, null, ItemStack.EMPTY, drops, true)
+                    == ConstructionWork.StepResult.OUTSIDE_LAND && drops.isEmpty(), "A step was done on land the kingdom lost");
+            helper.assertTrue(ConstructionWork.finishNow(server, construction).isEmpty(), "The operator finished a construction on lost land");
+            helper.assertTrue(state.construction().get(construction.id()).isPresent() && at(helper, 6, 1, 6).is(Blocks.OAK_LOG)
+                    && at(helper, 5, 0, 4).isAir(), "The finish changed the lost land");
+            // The land comes back: what was paid for is built, nothing is paid twice.
+            state.territory().establish(kingdom.id(), capital, land);
+            land = null;
+            ConstructionWork.tick(server, 1);
+            helper.assertTrue(state.construction().all().isEmpty(), "The construction did not finish once the land was back");
+            helper.assertTrue(at(helper, 6, 1, 6).isAir() && at(helper, 5, 0, 4).is(Blocks.COBBLESTONE) && at(helper, 6, 1, 5).is(Blocks.TORCH),
+                    "The paid blocks were not built once the land was back");
+            helper.assertTrue(stored(server, kingdom, Items.OAK_LOG) == 1 && stored(server, kingdom, Items.COBBLESTONE) == 0,
+                    "The storehouses do not add up");
+        } finally {
+            if (land != null) {
+                state.territory().establish(kingdom.id(), capital, land);
+            }
+            end(helper, kingdom, from, to, template.id(), builder);
+        }
+        helper.succeed();
+    }
+
     // ---------------------------------------------------------------- materials
 
     @GameTest(template = EMPTY, batch = "kingdomworld_build_missing")
@@ -374,7 +499,7 @@ public final class ConstructionGameTests {
                 structure(3, 2, 3, palette, new int[][]{{0, 0, 0, 0}, {1, 0, 0, 0}, {2, 0, 0, 0}, {0, 1, 0, 1}, {2, 1, 0, 2}}));
         Construction construction = lay(helper, kingdom, template, new BlockPos(6, 0, 6));
         try {
-            Building building = ConstructionWork.finishNow(server, construction);
+            Building building = ConstructionWork.finishNow(server, construction).orElseThrow();
             helper.assertTrue(building.admin(), "The register does not remember the operator");
             WorldPos storehouse = CitizenGameTests.at(helper, 5, 1, 4);
             WorldPos post = CitizenGameTests.at(helper, 7, 1, 4);
@@ -519,18 +644,37 @@ public final class ConstructionGameTests {
             CompoundTag old = KingdomSavedData.get(server).save(new CompoundTag());
             old.putInt("formatVersion", 7);
             old.remove("construction");
+            // A world of the release before the guild: no list of upgrades either, and a marshal without its right.
+            old.remove("upgrades");
             ListTag kingdoms = old.getList("kingdoms", 10);
             for (int i = 0; i < kingdoms.size(); i++) {
                 ListTag steward = new ListTag();
                 steward.add(StringTag.valueOf("build"));
                 kingdoms.getCompound(i).getCompound("permissions").put("steward", steward);
+                kingdoms.getCompound(i).getCompound("permissions").put("marshal", new ListTag());
             }
             KingdomSavedData upgraded = KingdomSavedData.load(old);
             helper.assertTrue(!upgraded.isReadOnly(), "Format 7 data became read-only: " + upgraded.readOnlyReason());
             helper.assertTrue(upgraded.state().construction().all().isEmpty(), "An upgraded world came with constructions");
             helper.assertTrue(upgraded.state().membership().kingdom(kingdom.id()).orElseThrow().permissions()
                     .has(Role.STEWARD, Permission.MANAGE_CONSTRUCTION), "The steward did not get the right to manage construction");
-            helper.assertTrue(upgraded.save(new CompoundTag()).getInt("formatVersion") == KingdomSavedData.FORMAT_VERSION, "Saved in the old format");
+            helper.assertTrue(upgraded.state().membership().kingdom(kingdom.id()).orElseThrow().permissions()
+                    .has(Role.MARSHAL, Permission.MANAGE_GUILD), "The marshal did not get the right to manage the guild");
+            CompoundTag resaved = upgraded.save(new CompoundTag());
+            helper.assertTrue(resaved.getInt("formatVersion") == KingdomSavedData.FORMAT_VERSION, "Saved in the old format");
+            helper.assertTrue(resaved.getList("upgrades", 8).contains(StringTag.valueOf("guild_rights")), "The guild upgrade was not noted");
+            // A world of the guild's release, format 7 with the upgrade noted, whose king took the right from the marshal:
+            // the steward gets the right to build and the marshal stays without the guild.
+            CompoundTag guildRelease = old.copy();
+            ListTag noted = new ListTag();
+            noted.add(StringTag.valueOf("guild_rights"));
+            guildRelease.put("upgrades", noted);
+            KingdomSavedData fromGuild = KingdomSavedData.load(guildRelease);
+            helper.assertTrue(!fromGuild.isReadOnly(), "Format 7 data of the guild became read-only: " + fromGuild.readOnlyReason());
+            helper.assertTrue(fromGuild.state().membership().kingdom(kingdom.id()).orElseThrow().permissions()
+                    .has(Role.STEWARD, Permission.MANAGE_CONSTRUCTION), "The steward of the guild's release got no right to build");
+            helper.assertTrue(!fromGuild.state().membership().kingdom(kingdom.id()).orElseThrow().permissions()
+                    .has(Role.MARSHAL, Permission.MANAGE_GUILD), "The guild upgrade was applied twice");
             CompoundTag broken = KingdomSavedData.get(server).save(new CompoundTag());
             CompoundTag bad = new CompoundTag();
             bad.putLong("id", 5);

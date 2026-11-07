@@ -39,6 +39,7 @@ import net.minecraft.world.Containers;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -197,8 +198,8 @@ public final class ConstructionWork {
     }
 
     /**
-     * Looks at the place of a template: inside the world, loaded, and free of blocks of the mod (a throne, a bank, a
-     * storehouse) that the building would replace; finds the blocks the builders have to clear.
+     * Looks at the place of a template: inside the world, loaded, and free of protected blocks ({@link #isProtected})
+     * that the building would replace; finds the blocks the builders have to clear.
      */
     public static Survey survey(ServerLevel level, BuildingTemplate template, BlockPos anchor, Placement placement) {
         Box box = template.box(anchor, placement);
@@ -221,7 +222,7 @@ public final class ConstructionWork {
             if (there.equals(wanted) || there.isAir()) {
                 continue;
             }
-            if (isProtected(there)) {
+            if (isProtected(level, at, there)) {
                 if (conflicts.size() < 256) {
                     conflicts.add(at.immutable());
                 }
@@ -238,9 +239,14 @@ public final class ConstructionWork {
     }
 
     /**
-     * Blocks of the mod are never broken by a construction: thrones, banks, storehouses, posts and the like.
+     * Blocks a construction never breaks: those no player can break (bedrock, an end portal frame, a barrier, a command
+     * block), those of the tag {@link TemplateBlocks#UNCLEARABLE} (a spawner, reinforced deepslate and what data packs
+     * add) and the blocks of the mod (thrones, banks, storehouses, posts and the like).
      */
-    public static boolean isProtected(BlockState state) {
+    public static boolean isProtected(BlockGetter level, BlockPos pos, BlockState state) {
+        if (state.getDestroySpeed(level, pos) < 0 || state.is(TemplateBlocks.UNCLEARABLE)) {
+            return true;
+        }
         ResourceLocation id = ForgeRegistries.BLOCKS.getKey(state.getBlock());
         return id != null && KingdomWorld.MOD_ID.equals(id.getNamespace());
     }
@@ -259,6 +265,12 @@ public final class ConstructionWork {
         ConstructionRules rules = ConstructionSettings.rules();
         if (BuildingTemplates.problem(template, rules) != null) {
             return new KingdomWorldState.ConstructionChange(Outcome.fail(KingdomError.TEMPLATE_UNAVAILABLE), Optional.empty());
+        }
+        // The kingdom, the right and the land first: a place outside the kingdom is refused as such, whatever stands there.
+        Outcome allowed = KingdomWorldApi.state(server).checkLay(actor, kingdomId, worldPos(level, anchor).dimension(),
+                template.box(anchor, placement), rules);
+        if (!allowed.ok()) {
+            return new KingdomWorldState.ConstructionChange(allowed, Optional.empty());
         }
         Survey survey = survey(level, template, anchor, placement);
         if (survey.error() != null) {
@@ -447,8 +459,10 @@ public final class ConstructionWork {
 
     public enum StepResult {
         DONE,
-        /** A container with items stands in the way. */
+        /** A container with items or a protected block stands in the way. */
         BLOCKED,
+        /** The place is no longer all the kingdom's land: nothing was touched. */
+        OUTSIDE_LAND,
         /** The materials of the block are not at the site. */
         NO_MATERIALS
     }
@@ -478,14 +492,14 @@ public final class ConstructionWork {
 
     /**
      * Breaks a block in the way as a player would: its drops go into {@code drops}, liquids just leave. A container with
-     * items and blocks of the mod are left standing.
+     * items and protected blocks are left standing.
      */
     public static StepResult clear(ServerLevel level, BlockPos pos, @Nullable LivingEntity breaker, ItemStack tool, List<ItemStack> drops) {
         BlockState state = level.getBlockState(pos);
         if (state.isAir()) {
             return StepResult.DONE;
         }
-        if (isProtected(state) || holdsItems(level, pos)) {
+        if (isProtected(level, pos, state) || holdsItems(level, pos)) {
             return StepResult.BLOCKED;
         }
         if (TemplateBlocks.isLiquid(state)) {
@@ -517,6 +531,10 @@ public final class ConstructionWork {
      */
     public static StepResult doStep(ServerLevel level, Construction construction, BuildPlan plan, BuildingTemplate template, int index,
                                     @Nullable LivingEntity builder, ItemStack tool, List<ItemStack> drops, boolean pay) {
+        if (!onOwnLand(level.getServer(), construction)) {
+            construction.setStatus(Construction.Status.OUTSIDE_LAND);
+            return StepResult.OUTSIDE_LAND;
+        }
         BuildPlan.Step step = plan.step(index);
         BlockPos at = new BlockPos(step.x(), step.y(), step.z());
         if (step.kind() == BuildPlan.Kind.CLEAR) {
@@ -677,6 +695,20 @@ public final class ConstructionWork {
     }
 
     /**
+     * Whether every chunk of a construction still belongs to its kingdom. Land given up or taken by another kingdom stops
+     * the work: nothing is broken or placed there, and what was paid for stays the construction's.
+     */
+    public static boolean onOwnLand(MinecraftServer server, Construction construction) {
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        for (long chunk : construction.box().chunks()) {
+            if (!construction.kingdomId().equals(state.territory().ownerOf(construction.dimension(), chunk))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Whether every chunk of a construction is loaded.
      */
     public static boolean loaded(ServerLevel level, Box box) {
@@ -734,11 +766,16 @@ public final class ConstructionWork {
     }
 
     /**
-     * Places blocks paid for far from players, in their order, once every chunk of the construction is loaded.
+     * Places blocks paid for far from players, in their order, once every chunk of the construction is loaded, and only
+     * while the place is still the kingdom's land; until then they stay paid for and waiting.
      *
      * @return steps done
      */
     public static int applyPending(ServerLevel level, Construction construction, BuildPlan plan, int budget) {
+        if (!onOwnLand(level.getServer(), construction)) {
+            construction.setStatus(Construction.Status.OUTSIDE_LAND);
+            return 0;
+        }
         if (!loaded(level, construction.box())) {
             if (!construction.paused()) {
                 construction.setStatus(Construction.Status.WAITING_FOR_LOAD);
@@ -760,6 +797,9 @@ public final class ConstructionWork {
                 break;
             }
             StepResult result = doStep(level, construction, plan, template.get(), step, null, ItemStack.EMPTY, drops, false);
+            if (result == StepResult.OUTSIDE_LAND) {
+                break;
+            }
             if (result == StepResult.BLOCKED) {
                 BuildPlan.Step at = plan.step(step);
                 construction.setStatus(Construction.Status.BLOCKED, new WorldPos(construction.dimension(), at.x(), at.y(), at.z()));
@@ -772,19 +812,16 @@ public final class ConstructionWork {
             store(level.getServer(), construction.kingdomId(), level, blockPos(construction.anchor()), drops);
         }
         if (!blocked && done > 0 && (construction.status() == Construction.Status.WAITING_FOR_LOAD
-                || construction.status() == Construction.Status.BLOCKED)) {
+                || construction.status() == Construction.Status.BLOCKED || construction.status() == Construction.Status.OUTSIDE_LAND)) {
             construction.setStatus(Construction.Status.WORKING);
         }
         return done;
     }
 
     private static void refreshStatus(MinecraftServer server, Construction construction, BuildPlan plan, ServerLevel level, long now) {
-        KingdomWorldState state = KingdomWorldApi.state(server);
-        for (long chunk : construction.box().chunks()) {
-            if (!construction.kingdomId().equals(state.territory().ownerOf(construction.dimension(), chunk))) {
-                construction.setStatus(Construction.Status.OUTSIDE_LAND);
-                return;
-            }
+        if (!onOwnLand(server, construction)) {
+            construction.setStatus(Construction.Status.OUTSIDE_LAND);
+            return;
         }
         if (construction.status() == Construction.Status.OUTSIDE_LAND) {
             construction.setStatus(Construction.Status.NO_BUILDER);
@@ -971,9 +1008,16 @@ public final class ConstructionWork {
     }
 
     /**
-     * Finishes a construction at once, for operators: every step is done without materials, containers in the way stay.
+     * Finishes a construction at once, for operators: every step is done without materials, containers and protected
+     * blocks in the way stay. A construction on land its kingdom no longer holds is left as it is.
+     *
+     * @return the building in the register, or empty if the place is not all the kingdom's land
      */
-    public static Building finishNow(MinecraftServer server, Construction construction) {
+    public static Optional<Building> finishNow(MinecraftServer server, Construction construction) {
+        if (!onOwnLand(server, construction)) {
+            construction.setStatus(Construction.Status.OUTSIDE_LAND);
+            return Optional.empty();
+        }
         ServerLevel level = level(server, construction.dimension());
         Optional<BuildPlan> plan = plan(construction);
         Optional<BuildingTemplate> template = template(construction);
@@ -987,10 +1031,15 @@ public final class ConstructionWork {
                 level.getChunk(at);
                 if (step.kind() == BuildPlan.Kind.PLACE) {
                     if (construction.isPending(step.index())) {
-                        doStep(level, construction, plan.get(), template.get(), step.index(), null, ItemStack.EMPTY, drops, false);
+                        StepResult result = doStep(level, construction, plan.get(), template.get(), step.index(), null, ItemStack.EMPTY,
+                                drops, false);
+                        if (result != StepResult.DONE && construction.isPending(step.index())) {
+                            // A protected block or a container keeps the place: what was paid for it goes back.
+                            giveBack(server, construction, step.cost());
+                        }
                     } else {
                         BlockState there = level.getBlockState(at);
-                        if (!isProtected(there) && !holdsItems(level, at)) {
+                        if (!isProtected(level, at, there) && !holdsItems(level, at)) {
                             if (!there.isAir() && !there.canBeReplaced()) {
                                 clear(level, at, null, ItemStack.EMPTY, drops);
                             }
@@ -1006,7 +1055,7 @@ public final class ConstructionWork {
             }
             store(server, construction.kingdomId(), level, blockPos(construction.anchor()), drops);
         }
-        return complete(server, construction, true);
+        return Optional.of(complete(server, construction, true));
     }
 
     private static void forget(MinecraftServer server, Construction construction) {

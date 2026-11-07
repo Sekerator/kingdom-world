@@ -221,7 +221,11 @@ final class ClientBuildingShowcase {
                 continue;
             }
             Construction construction = change.construction().get();
-            ConstructionWork.finishNow(server, construction);
+            if (ConstructionWork.finishNow(server, construction).isEmpty()) {
+                LOGGER.error(PREFIX + "{} could not be finished: the place is not the kingdom's land", template.id());
+                failed = true;
+                continue;
+            }
             names.add(template.id().toString());
             LOGGER.info(PREFIX + "built {} at {}", template.id(), start.offset(i * SPACING, 0, 0).toShortString());
         }
