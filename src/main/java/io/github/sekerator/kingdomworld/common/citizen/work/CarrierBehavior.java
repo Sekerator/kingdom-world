@@ -71,6 +71,10 @@ public final class CarrierBehavior implements ProfessionBehavior {
         if (!level.isLoaded(pos)) {
             return null;
         }
+        IItemHandler site = io.github.sekerator.kingdomworld.common.construction.ConstructionWork.siteHandler(level.getServer(), at(level, pos));
+        if (site != null) {
+            return site;
+        }
         if (level.getBlockState(pos).is(ModRegistries.STOREHOUSE.get())) {
             return KingdomSavedData.get(level.getServer()).storehouses()
                     .get(new WorldPos(Dimensions.id(level), pos.getX(), pos.getY(), pos.getZ())).orElse(null);
@@ -317,6 +321,27 @@ public final class CarrierBehavior implements ProfessionBehavior {
                     if (holder != null) {
                         requests.add(new CarrierPlanner.Request(at(level, source.container().pos()), entry.getKey(),
                                 entry.getValue(), holder));
+                    }
+                }
+            }
+            // Constructions ask for their materials the same way posts ask for their inputs; the site is where they go.
+            for (io.github.sekerator.kingdomworld.core.construction.Construction construction
+                    : KingdomWorldApi.state(level.getServer()).construction().of(post.kingdomId())) {
+                if (construction.paused() || !construction.dimension().equals(home.dimension()) || !level.isLoaded(blockPos(construction.anchor()))) {
+                    continue;
+                }
+                var plan = io.github.sekerator.kingdomworld.common.construction.ConstructionWork.plan(construction);
+                if (plan.isEmpty()) {
+                    continue;
+                }
+                int kinds = 0;
+                for (Map.Entry<String, Integer> entry : plan.get().needed(construction).entrySet()) {
+                    WorldPos holder = storehouseWith(level, entry.getKey(), storehouses);
+                    if (holder != null) {
+                        requests.add(new CarrierPlanner.Request(construction.anchor(), entry.getKey(), Math.min(64, entry.getValue()), holder));
+                        if (++kinds >= 4) {
+                            break;
+                        }
                     }
                 }
             }

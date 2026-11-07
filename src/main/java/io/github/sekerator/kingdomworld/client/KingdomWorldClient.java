@@ -42,6 +42,9 @@ public final class KingdomWorldClient {
         modBus.addListener(KingdomWorldClient::onRegisterKeys);
         modBus.addListener(KingdomWorldClient::onRegisterRenderers);
         modBus.addListener(KingdomWorldClient::onItemColors);
+        modBus.addListener(KingdomWorldClient::onRegisterOverlays);
+        MinecraftForge.EVENT_BUS.addListener(io.github.sekerator.kingdomworld.client.construction.ClientBlueprint::onInteraction);
+        MinecraftForge.EVENT_BUS.addListener(io.github.sekerator.kingdomworld.client.construction.BlueprintRenderer::onRenderLevel);
         MinecraftForge.EVENT_BUS.addListener(KingdomWorldClient::onLoggingIn);
         MinecraftForge.EVENT_BUS.addListener(KingdomWorldClient::onLoggingOut);
         MinecraftForge.EVENT_BUS.addListener(KingdomWorldClient::onScreenOpening);
@@ -77,6 +80,16 @@ public final class KingdomWorldClient {
 
     private static void onRegisterKeys(RegisterKeyMappingsEvent event) {
         event.register(MAP_KEY);
+        event.register(io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.ROTATE_KEY);
+        event.register(io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.MIRROR_KEY);
+    }
+
+    /**
+     * The hints of a blueprint in hand, above everything else.
+     */
+    private static void onRegisterOverlays(net.minecraftforge.client.event.RegisterGuiOverlaysEvent event) {
+        event.registerAboveAll("blueprint", (gui, graphics, partialTick, width, height) ->
+                io.github.sekerator.kingdomworld.client.construction.BlueprintRenderer.drawHud(graphics, Minecraft.getInstance().font, width));
     }
 
     private static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
@@ -88,6 +101,7 @@ public final class KingdomWorldClient {
             return;
         }
         ClientSelfTest.onClientTick();
+        io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.tick();
         Minecraft minecraft = Minecraft.getInstance();
         io.github.sekerator.kingdomworld.client.map.ClientMapSync.tick(minecraft);
         while (MAP_KEY.consumeClick()) {
@@ -109,6 +123,7 @@ public final class KingdomWorldClient {
     }
 
     private static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+        io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.clear();
         io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.clear();
         ClientKingdomCache.clear();
         ClientTerritoryCache.clear();

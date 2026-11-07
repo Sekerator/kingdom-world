@@ -512,7 +512,7 @@ public final class StallActions {
         KingdomWorldState state = KingdomWorldApi.state(server);
         TradeRules rules = TradeSettings.rules();
         ItemStack hand = player.getMainHandItem();
-        if (hand.isEmpty() || hand.is(ModRegistries.COIN.get())) {
+        if (hand.isEmpty() || GoodsStacks.untradeable(hand)) {
             return KingdomActions.Feedback.error(KingdomError.BAD_ITEM);
         }
         if (count < 1 || count > hand.getCount() || !Money.isPayment(price)) {

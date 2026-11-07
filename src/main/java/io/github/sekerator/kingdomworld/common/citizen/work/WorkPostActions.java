@@ -141,6 +141,22 @@ public final class WorkPostActions {
             }
         }
         net.minecraft.world.item.Item current = PostWork.item(post.current());
+        net.minecraft.network.chat.Component site = net.minecraft.network.chat.Component.empty();
+        int progress = (int) Math.round(post.currentProgress() * 100);
+        if (post.professionId().equals(io.github.sekerator.kingdomworld.core.citizen.Professions.BUILDER.id())) {
+            // A builder's post names the construction it works on now and how far that is.
+            var candidates = io.github.sekerator.kingdomworld.common.construction.ConstructionWork.candidates(server, post);
+            if (!candidates.isEmpty()) {
+                var construction = candidates.get(0);
+                site = io.github.sekerator.kingdomworld.common.construction.ConstructionWork.template(construction)
+                        .map(io.github.sekerator.kingdomworld.common.construction.BuildingTemplate::name)
+                        .orElse(net.minecraft.network.chat.Component.literal(construction.templateId()));
+                progress = io.github.sekerator.kingdomworld.common.construction.ConstructionWork.plan(construction)
+                        .map(plan -> plan.percent(construction)).orElse(0);
+                site = net.minecraft.network.chat.Component.translatable("kingdomworld.screen.post.site", site,
+                        construction.anchor().coordinates(), progress);
+            }
+        }
         return new WorkPostView(new BlockPos(post.pos().x(), post.pos().y(), post.pos().z()), post.kingdomId(),
                 state.membership().hasPermission(player.getUUID(), post.kingdomId(), Permission.MANAGE_CITIZENS),
                 post.professionId(), post.radius(), Math.max(post.radius(), rules.maxRadius()), post.seats(),
@@ -148,7 +164,7 @@ public final class WorkPostActions {
                 post.status(), container, post.yield().measured(), (int) Math.min(1_000_000, Math.round(post.yield().total())),
                 post.producedOn(PostWork.gameDay(server)), workers, unemployed, post.auto(), stations,
                 current == null ? net.minecraft.world.item.ItemStack.EMPTY : new net.minecraft.world.item.ItemStack(current),
-                (int) Math.round(post.currentProgress() * 100));
+                progress, site);
     }
 
     // ---------------------------------------------------------------- changes

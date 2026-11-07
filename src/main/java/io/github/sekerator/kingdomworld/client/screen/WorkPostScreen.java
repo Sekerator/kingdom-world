@@ -95,6 +95,19 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         return Professions.usesStations(view.profession());
     }
 
+    private boolean isBuilder() {
+        return view.profession().equals(Professions.BUILDER.id());
+    }
+
+    private Component siteLine() {
+        return view.site().getString().isEmpty() ? Component.translatable(KEY + "site_none") : view.site();
+    }
+
+    private Component placingLine() {
+        return view.current().isEmpty() ? Component.translatable(KEY + "placing_none")
+                : Component.translatable(KEY + "placing", view.current().getHoverName());
+    }
+
     private boolean hasAuto() {
         return Professions.hasAutoMode(view.profession());
     }
@@ -211,6 +224,10 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
     }
 
     private List<Component> infoLines() {
+        if (isBuilder()) {
+            return List.of(Component.translatable(KEY + "status", statusText(view.status())), siteLine(), placingLine(),
+                    Component.translatable(KEY + "placed_today", view.producedToday()));
+        }
         if (isWorkshop()) {
             return List.of(Component.translatable(KEY + "status", statusText(view.status())), stationsLine(), currentLine(), containerLine(),
                     workshopYieldLine());
@@ -223,7 +240,7 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
      * rather than sizing the panel.
      */
     private boolean isNameLine(int index) {
-        return isWorkshop() && (index == 1 || index == 2);
+        return (isWorkshop() || isBuilder()) && (index == 1 || index == 2);
     }
 
     private Component title() {
@@ -264,7 +281,7 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         // The longest numbers the lines can show.
         view = new WorkPostView(new BlockPos(-30_000_000, 319, 29_999_999), saved.kingdomId(), saved.canManage(), saved.profession(),
                 64, 64, 16, 16, saved.animal(), saved.animals(), 64, 64, WorkStatus.ZONE_PARTLY_OUTSIDE, false, true,
-                999_999, 9_999_999L, List.of(), 9_999, saved.auto(), saved.stations(), saved.current(), 100);
+                999_999, 9_999_999L, List.of(), 9_999, saved.auto(), saved.stations(), saved.current(), 100, saved.site());
         info = Math.max(info, font.width(title()));
         for (WorkStatus value : WorkStatus.values()) {
             info = Math.max(info, font.width(Component.translatable(KEY + "status", statusText(value))));
@@ -281,6 +298,11 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
             info = Math.max(info, Math.max(font.width(Component.translatable(KEY + "made_today", 9_999_999L)),
                     font.width(Component.translatable(KEY + "no_stations"))));
             info = Math.max(info, font.width(Component.translatable(KEY + "current_none")));
+        }
+        if (isBuilder()) {
+            info = Math.max(info, Math.max(font.width(Component.translatable(KEY + "site_none")),
+                    font.width(Component.translatable(KEY + "placed_today", 9_999_999L))));
+            info = Math.max(info, font.width(Component.translatable(KEY + "placing_none")));
         }
         int header = font.width(Component.translatable(KEY + "workers", 16, 16)) + 8 + hireWidth + 4
                 + font.width(Component.translatable("kingdomworld.screen.throne.page", 16, 16, 16));

@@ -45,7 +45,7 @@ import java.util.Optional;
 public final class KingdomSavedData extends SavedData {
     public static final String DATA_NAME = KingdomWorld.MOD_ID + "_kingdoms";
     /** Current layout of the saved data. Increase it together with a migration step. */
-    public static final int FORMAT_VERSION = 7;
+    public static final int FORMAT_VERSION = 8;
     /** Format assumed for data without a version field. */
     static final int FIRST_FORMAT_VERSION = 1;
 
@@ -56,6 +56,7 @@ public final class KingdomSavedData extends SavedData {
     static final String TAG_ECONOMY = EconomyNbt.ECONOMY;
     static final String TAG_TRADE = TradeNbt.TRADE;
     static final String TAG_UPGRADES = "upgrades";
+    static final String TAG_CONSTRUCTION = ConstructionNbt.CONSTRUCTION;
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
@@ -202,6 +203,7 @@ public final class KingdomSavedData extends SavedData {
         problems.addAll(readGear(data));
         problems.addAll(readEconomy(data));
         problems.addAll(readTrade(data));
+        problems.addAll(readConstruction(data));
         if (!problems.isEmpty()) {
             lock(tag, problems.size() + " unreadable part(s): " + String.join("; ", problems), "unreadable_parts", problems.size());
             return;
@@ -265,6 +267,13 @@ public final class KingdomSavedData extends SavedData {
         return TradeNbt.read(data.get(TAG_TRADE), state);
     }
 
+    private List<String> readConstruction(CompoundTag data) {
+        if (!data.contains(TAG_CONSTRUCTION)) {
+            return List.of();
+        }
+        return ConstructionNbt.read(data.get(TAG_CONSTRUCTION), state);
+    }
+
     private void readBestEffort(CompoundTag tag) {
         try {
             List<String> problems = readKingdoms(tag);
@@ -272,6 +281,7 @@ public final class KingdomSavedData extends SavedData {
             problems.addAll(readGear(tag));
             problems.addAll(readEconomy(tag));
             problems.addAll(readTrade(tag));
+            problems.addAll(readConstruction(tag));
             if (!problems.isEmpty()) {
                 LOGGER.warn("Kingdom data parts not understood: {}", String.join("; ", problems));
             }
@@ -356,6 +366,7 @@ public final class KingdomSavedData extends SavedData {
             upgrades.add(net.minecraft.nbt.StringTag.valueOf(upgrade));
         }
         tag.put(TAG_UPGRADES, upgrades);
+        tag.put(TAG_CONSTRUCTION, ConstructionNbt.write(state.construction()));
         return tag;
     }
 }

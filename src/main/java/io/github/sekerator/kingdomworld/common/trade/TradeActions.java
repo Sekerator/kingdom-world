@@ -6,7 +6,6 @@ import io.github.sekerator.kingdomworld.common.kingdom.KingdomActions;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.TradeViews;
 import io.github.sekerator.kingdomworld.common.network.packet.TradePackets;
-import io.github.sekerator.kingdomworld.common.registry.ModRegistries;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
 import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
@@ -152,7 +151,7 @@ public final class TradeActions {
 
     private static KingdomActions.Feedback propose(MinecraftServer server, UUID actor, UUID kingdom, TradePackets.TradeChange change) {
         Item item = GoodsStacks.item(change.item());
-        if (item == null || new ItemStack(item).is(ModRegistries.COIN.get())) {
+        if (item == null || GoodsStacks.untradeable(new ItemStack(item))) {
             return KingdomActions.Feedback.error(KingdomError.BAD_ITEM);
         }
         if (change.partner() == null) {

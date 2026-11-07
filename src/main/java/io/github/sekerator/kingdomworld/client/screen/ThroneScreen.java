@@ -53,7 +53,8 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private static final int GAP = 2;
     private static final List<Permission> EDITABLE_RIGHTS = List.of(Permission.BUILD, Permission.CONTAINERS,
             Permission.INTERACT, Permission.RECRUIT, Permission.TERRITORY, Permission.MANAGE_CITIZENS, Permission.MANAGE_PRODUCTION,
-            Permission.MANAGE_TREASURY, Permission.MANAGE_MARKET, Permission.MANAGE_TRADE, Permission.MANAGE_GUILD);
+            Permission.MANAGE_TREASURY, Permission.MANAGE_MARKET, Permission.MANAGE_TRADE, Permission.MANAGE_GUILD,
+            Permission.MANAGE_CONSTRUCTION);
 
     private enum Tab {
         OVERVIEW("kingdomworld.screen.throne.tab.overview"),
@@ -65,6 +66,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         MARKET("kingdomworld.screen.throne.tab.market"),
         TRADE("kingdomworld.screen.throne.tab.trade"),
         GUILD("kingdomworld.screen.throne.tab.guild"),
+        CONSTRUCTION("kingdomworld.screen.throne.tab.construction"),
         RIGHTS("kingdomworld.screen.throne.tab.rights");
 
         /**
@@ -72,7 +74,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
          */
         boolean tall() {
             return this == CITIZENS || this == STORAGE || this == ORDERS || this == TREASURY || this == MARKET || this == TRADE
-                    || this == GUILD;
+                    || this == GUILD || this == CONSTRUCTION;
         }
 
         private final String key;
@@ -92,6 +94,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private final TreasuryTab treasury = new TreasuryTab(this);
     private final MarketTab market = new MarketTab(this);
     private final TradeTab trade = new TradeTab(this);
+    private final ConstructionTab construction = new ConstructionTab(this);
     private final GuildTab guild = new GuildTab(this);
     private Tab tab = Tab.OVERVIEW;
     private int scroll;
@@ -135,6 +138,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             case MARKET -> market.checkName();
             case TRADE -> trade.checkName();
             case GUILD -> guild.checkName();
+            case CONSTRUCTION -> construction.checkName();
             default -> tab.name().toLowerCase(Locale.ROOT);
         };
         return "throne/" + name + "/" + view.relation().name().toLowerCase(Locale.ROOT);
@@ -276,6 +280,34 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
      */
     public void showGuild(String mode, int chosen, long sending) {
         guild.showForCheck(GuildTab.Mode.valueOf(mode.toUpperCase(Locale.ROOT)), chosen, sending);
+    }
+
+    /**
+     * Shows the construction the server sent, if it belongs to the kingdom on screen.
+     */
+    public void updateConstruction(io.github.sekerator.kingdomworld.common.network.data.ConstructionView constructionView) {
+        if (!constructionView.kingdomId().equals(view.id())) {
+            return;
+        }
+        construction.setView(constructionView);
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
+    }
+
+    /**
+     * Whether the construction tab got its view, for the self-check.
+     */
+    public boolean constructionShown() {
+        return construction.view() != null;
+    }
+
+    /**
+     * Shows a view of the construction tab ({@code catalog}, {@code sites}, {@code buildings}), a template or a construction
+     * in detail when given; for the layout check.
+     */
+    public void showConstruction(String mode, String template, long site) {
+        construction.showForCheck(ConstructionTab.Mode.valueOf(mode.toUpperCase(Locale.ROOT)), template, site);
     }
 
     /**
@@ -447,6 +479,9 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         if (target == Tab.MARKET && Minecraft.getInstance().getConnection() != null) {
             KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.TradePackets.MarketRequest(view.id()));
         }
+        if (target == Tab.CONSTRUCTION && Minecraft.getInstance().getConnection() != null) {
+            KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.ConstructionPackets.Request(view.id()));
+        }
         if (target == Tab.TRADE && Minecraft.getInstance().getConnection() != null) {
             KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.TradePackets.TradeRequest(view.id()));
         }
@@ -543,6 +578,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             labels.add(Component.translatable(Tab.MARKET.key));
             labels.add(Component.translatable(Tab.TRADE.key));
             labels.add(Component.translatable(Tab.GUILD.key));
+            labels.add(Component.translatable(Tab.CONSTRUCTION.key));
             labels.add(Component.translatable(Tab.RIGHTS.key));
         }
         return labels;
@@ -619,6 +655,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             inner = Math.max(inner, Math.max(Math.max(citizens.measure(font), storage.measure(font)),
                     Math.max(orders.measure(font), treasury.measure(font))));
             inner = Math.max(inner, Math.max(market.measure(font), trade.measure(font)));
+            inner = Math.max(inner, construction.measure(font));
             inner = Math.max(inner, guild.measure(font));
         }
         panelWidth = Math.min(Math.max(MIN_PANEL_WIDTH, inner + 2 * PAD), width - 8);
@@ -642,7 +679,8 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         int y = top + TAB_TOP;
         List<Tab> shown = new ArrayList<>(List.of(Tab.OVERVIEW));
         if (isMember()) {
-            shown.addAll(List.of(Tab.MEMBERS, Tab.CITIZENS, Tab.STORAGE, Tab.ORDERS, Tab.TREASURY, Tab.MARKET, Tab.TRADE, Tab.GUILD, Tab.RIGHTS));
+            shown.addAll(List.of(Tab.MEMBERS, Tab.CITIZENS, Tab.STORAGE, Tab.ORDERS, Tab.TREASURY, Tab.MARKET, Tab.TRADE, Tab.GUILD,
+                    Tab.CONSTRUCTION, Tab.RIGHTS));
         }
         for (int i = 0; i < shown.size(); i++) {
             if (i == secondRowStart) {
@@ -663,6 +701,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             case MARKET -> market.init(left, inner, panelWidth, innerHeight);
             case TRADE -> trade.init(left, inner, panelWidth, innerHeight);
             case GUILD -> guild.init(left, inner, panelWidth, innerHeight);
+            case CONSTRUCTION -> construction.init(left, inner, panelWidth, innerHeight);
             case RIGHTS -> initRights(inner);
         }
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), button -> onClose())
@@ -911,6 +950,12 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             }
             return true;
         }
+        if (tab == Tab.CONSTRUCTION) {
+            if (construction.scroll(top() + contentOffset, panelHeight - contentOffset, delta)) {
+                rebuildWidgets();
+            }
+            return true;
+        }
         if (tab == Tab.MEMBERS) {
             int max = Math.max(0, rows().size() - visibleRows());
             int next = Math.max(0, Math.min(max, scroll - (int) Math.signum(delta)));
@@ -962,6 +1007,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             case MARKET -> market.render(graphics, font, left, inner, panelWidth, innerHeight);
             case TRADE -> trade.render(graphics, font, left, inner, panelWidth, innerHeight);
             case GUILD -> guild.render(graphics, font, left, inner, panelWidth, innerHeight);
+            case CONSTRUCTION -> construction.render(graphics, font, left, inner, panelWidth, innerHeight);
             case RIGHTS -> renderRights(graphics, left, inner);
         }
         Component bottomText = status;
@@ -984,6 +1030,10 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         }
         if (bottomText.getString().isEmpty() && tab == Tab.TRADE) {
             bottomText = trade.hint();
+            color = 0xFFB8B8B8;
+        }
+        if (bottomText.getString().isEmpty() && tab == Tab.CONSTRUCTION) {
+            bottomText = construction.hint();
             color = 0xFFB8B8B8;
         }
         if (bottomText.getString().isEmpty() && tab == Tab.GUILD) {
@@ -1068,6 +1118,9 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (super.mouseClicked(mouseX, mouseY, button)) {
             return true;
+        }
+        if (tab == Tab.CONSTRUCTION && button == 0) {
+            return construction.click(left(), top() + contentOffset, panelWidth, panelHeight - contentOffset, mouseX, mouseY);
         }
         return tab == Tab.ORDERS && button == 0 && orders.click(left(), top() + contentOffset, panelWidth, panelHeight - contentOffset, mouseX, mouseY);
     }

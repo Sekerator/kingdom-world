@@ -46,6 +46,7 @@ public final class CommonEvents {
         io.github.sekerator.kingdomworld.common.economy.EconomyEvents.register();
         io.github.sekerator.kingdomworld.common.trade.TradeEvents.register();
         io.github.sekerator.kingdomworld.common.guild.GuildEvents.register();
+        io.github.sekerator.kingdomworld.common.construction.ConstructionEvents.register();
     }
 
     private static void onRegisterCommands(RegisterCommandsEvent event) {
@@ -80,11 +81,12 @@ public final class CommonEvents {
                 config.starvationCanKill.get(), config.dailyNutrition.get(), config.infirmaryCapacity.get(),
                 config.woundedHealthPercent.get(), config.maxCitizensPerKingdom.get(), config.farmRadius.get());
         LOGGER.info("KingdomWorld loaded {} kingdom(s) with {} citizen(s), {} work post(s), {} storehouse(s), {} treasury(ies), "
-                        + "{} player(s) with accounts, {} market(s), {} deal(s), {} caravan(s) on the way, data format {}{}",
+                        + "{} player(s) with accounts, {} market(s), {} deal(s), {} caravan(s) on the way, {} construction(s), "
+                        + "{} building(s), data format {}{}",
                 data.registry().size(), data.state().citizens().registry().size(), data.state().citizens().posts().size(),
                 data.storehouses().size(), data.state().economy().treasuries().size(), data.state().economy().accounts().players().size(),
                 data.state().trade().markets().size(), data.state().trade().deals().size(), data.state().trade().caravans().size(),
-                KingdomSavedData.FORMAT_VERSION,
+                data.state().construction().all().size(), data.state().construction().buildings().size(), KingdomSavedData.FORMAT_VERSION,
                 data.isReadOnly() ? " (READ-ONLY: " + data.readOnlyReason().orElse("?") + ")" : "");
     }
 
@@ -95,6 +97,7 @@ public final class CommonEvents {
         CitizenEvents.reset();
         io.github.sekerator.kingdomworld.common.economy.EconomyEvents.reset();
         io.github.sekerator.kingdomworld.common.trade.TradeEvents.reset();
+        io.github.sekerator.kingdomworld.common.construction.ConstructionEvents.reset();
     }
 
     private static void onServerTick(TickEvent.ServerTickEvent event) {

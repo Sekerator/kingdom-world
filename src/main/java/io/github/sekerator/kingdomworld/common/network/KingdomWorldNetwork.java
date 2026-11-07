@@ -8,6 +8,7 @@ import io.github.sekerator.kingdomworld.common.network.packet.CitizenRequestPack
 import io.github.sekerator.kingdomworld.common.network.packet.CitizenViewPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.EconomyPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.ClaimChunkPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.ConstructionPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.FoundKingdomPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.GuildPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomActionPacket;
@@ -48,7 +49,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "9";
+    public static final String PROTOCOL_VERSION = "10";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -142,6 +143,22 @@ public final class KingdomWorldNetwork {
                 GuildPackets.TabResponse::decode, GuildPackets.TabResponse::handle);
         add(id++, GuildPackets.TabChange.class, NetworkDirection.PLAY_TO_SERVER, GuildPackets.TabChange::encode,
                 GuildPackets.TabChange::decode, GuildPackets.TabChange::handle);
+        add(id++, ConstructionPackets.Request.class, NetworkDirection.PLAY_TO_SERVER, ConstructionPackets.Request::encode,
+                ConstructionPackets.Request::decode, ConstructionPackets.Request::handle);
+        add(id++, ConstructionPackets.Response.class, NetworkDirection.PLAY_TO_CLIENT, ConstructionPackets.Response::encode,
+                ConstructionPackets.Response::decode, ConstructionPackets.Response::handle);
+        add(id++, ConstructionPackets.Change.class, NetworkDirection.PLAY_TO_SERVER, ConstructionPackets.Change::encode,
+                ConstructionPackets.Change::decode, ConstructionPackets.Change::handle);
+        add(id++, ConstructionPackets.TakeBlueprint.class, NetworkDirection.PLAY_TO_SERVER, ConstructionPackets.TakeBlueprint::encode,
+                ConstructionPackets.TakeBlueprint::decode, ConstructionPackets.TakeBlueprint::handle);
+        add(id++, ConstructionPackets.TemplateRequest.class, NetworkDirection.PLAY_TO_SERVER, ConstructionPackets.TemplateRequest::encode,
+                ConstructionPackets.TemplateRequest::decode, ConstructionPackets.TemplateRequest::handle);
+        add(id++, ConstructionPackets.TemplateData.class, NetworkDirection.PLAY_TO_CLIENT, ConstructionPackets.TemplateData::encode,
+                ConstructionPackets.TemplateData::decode, ConstructionPackets.TemplateData::handle);
+        add(id++, ConstructionPackets.Place.class, NetworkDirection.PLAY_TO_SERVER, ConstructionPackets.Place::encode,
+                ConstructionPackets.Place::decode, ConstructionPackets.Place::handle);
+        add(id++, ConstructionPackets.CheckResult.class, NetworkDirection.PLAY_TO_CLIENT, ConstructionPackets.CheckResult::encode,
+                ConstructionPackets.CheckResult::decode, ConstructionPackets.CheckResult::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

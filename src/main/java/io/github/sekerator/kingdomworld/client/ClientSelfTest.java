@@ -39,6 +39,8 @@ import java.util.UUID;
  *   <li>{@code title}: quits as soon as the title screen opens, proving the client starts with the mod.</li>
  *   <li>{@code layout}: checks the layout of every screen in English and Russian at several window sizes and GUI
  *       scales and saves screenshots (see {@link ClientLayoutCheck}); a problem ends the client with exit code 1.</li>
+ *   <li>{@code buildings}: in a copy of a test world, builds every built-in building template and saves screenshots of
+ *       them and of the outline of a blueprint (see {@link ClientBuildingShowcase}).</li>
  *   <li>{@code world}: in a singleplayer world, founds a kingdom next to the player with three citizens and a work
  *       post, opens the map, the throne screen (through the real server packet) with all tabs including the citizens
  *       and the storehouses, the territory editor with a claim request, the screen of the work post (through the real
@@ -56,6 +58,7 @@ public final class ClientSelfTest {
     private static int ticks;
     private static boolean quit;
     private static ClientLayoutCheck layout;
+    private static ClientBuildingShowcase showcase;
     private static volatile BlockPos throne;
     private static volatile UUID kingdomId;
     private static volatile BlockPos post;
@@ -109,6 +112,25 @@ public final class ClientSelfTest {
             quit = maps.finished();
             return;
         }
+        if ("buildings".equals(MODE) && minecraft.player != null && minecraft.getSingleplayerServer() != null) {
+            if (showcase == null) {
+                String folder = System.getProperty("kingdomworld.clientSelfTest.screenshots");
+                Path screenshots = folder != null && !folder.isEmpty() ? Path.of(folder)
+                        : minecraft.gameDirectory.toPath().resolve("kingdomworld-layout");
+                LOGGER.info(PREFIX + "building showcase started, screenshots go to {}", screenshots.resolve("buildings"));
+                showcase = new ClientBuildingShowcase(screenshots);
+            }
+            showcase.tick();
+            if (showcase.finished()) {
+                if (showcase.failed()) {
+                    LOGGER.error(PREFIX + "building showcase failed, exiting with code 1");
+                    System.exit(1);
+                }
+                LOGGER.info(PREFIX + "finished");
+                quit = true;
+            }
+            return;
+        }
         if (!"world".equals(MODE) || minecraft.player == null || minecraft.level == null) {
             return;
         }
@@ -118,7 +140,7 @@ public final class ClientSelfTest {
         }
         ticks++;
         UUID playerId = minecraft.player.getUUID();
-        if (ticks > 60 && ticks < 360 && throne == null) {
+        if (ticks > 150 && ticks < 360 && throne == null) {
             LOGGER.error(PREFIX + "no throne was placed, stopping");
             quit = true;
             return;
@@ -218,6 +240,13 @@ public final class ClientSelfTest {
             }
             case 270 -> {
                 LOGGER.info(PREFIX + "guild tab answered by the server: {}", minecraft.screen instanceof ThroneScreen screen && screen.guildShown());
+                if (minecraft.screen instanceof ThroneScreen screen) {
+                    screen.selectTab("construction");
+                }
+            }
+            case 273 -> {
+                LOGGER.info(PREFIX + "construction tab answered by the server: {}",
+                        minecraft.screen instanceof ThroneScreen screen && screen.constructionShown());
                 if (minecraft.screen instanceof ThroneScreen screen) {
                     ClientHooks.openTerritoryEditor(screen.view());
                 }

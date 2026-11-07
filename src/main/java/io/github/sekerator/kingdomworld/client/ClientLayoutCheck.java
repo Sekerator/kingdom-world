@@ -435,7 +435,10 @@ final class ClientLayoutCheck {
         }
         return new WorkPostView(new BlockPos(-30_000_000, 319, 29_999_999), UUID.randomUUID(), canManage, profession, 16, 16,
                 Math.max(1, workers), 16, profession.equals("herder") ? "minecraft:mooshroom" : "", animals, 64, 64, status, container,
-                measured, measured ? 999_999 : 0, 9_999_999L, list, 9_999, !profession.equals("cook"), stations, current, 45);
+                measured, measured ? 999_999 : 0, 9_999_999L, list, 9_999, !profession.equals("cook"), stations,
+                profession.equals("builder") ? new ItemStack(Items.SPRUCE_STAIRS) : current, 45,
+                profession.equals("builder") ? Component.translatable("kingdomworld.screen.post.site", Component.literal(LONG_KINGDOM),
+                        "-30000000 319 29999999", 100) : Component.empty());
     }
 
     private static WorkPostScreen post(WorkPostView view, Component status) {
@@ -456,7 +459,7 @@ final class ClientLayoutCheck {
     private static WorkPostView withoutStations(WorkPostView view) {
         return new WorkPostView(view.pos(), view.kingdomId(), view.canManage(), view.profession(), view.radius(), view.maxRadius(), view.seats(),
                 view.maxSeats(), view.animal(), view.animals(), view.herdSize(), view.maxHerd(), view.status(), view.container(), view.measured(),
-                0, view.producedToday(), view.workers(), view.unemployed(), view.auto(), List.of(), ItemStack.EMPTY, 0);
+                0, view.producedToday(), view.workers(), view.unemployed(), view.auto(), List.of(), ItemStack.EMPTY, 0, Component.empty());
     }
 
     private static ItemStack longNamed(net.minecraft.world.item.Item item) {
@@ -777,6 +780,77 @@ final class ClientLayoutCheck {
         return screen;
     }
 
+    // ---------------------------------------------------------------- construction
+
+    /**
+     * A catalog with long names and long costs, one template that cannot be built; constructions in every state with long
+     * lists of what they lack; many buildings.
+     */
+    private static io.github.sekerator.kingdomworld.common.network.data.ConstructionView constructionView(UUID kingdom, boolean canManage,
+                                                                                                         boolean empty) {
+        List<io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Template> templates = new ArrayList<>();
+        List<io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Site> sites = new ArrayList<>();
+        List<io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Building> buildings = new ArrayList<>();
+        String[] categories = {"housing", "farming", "production", "trade", "defense", "decoration"};
+        String[] names = {"small_house", "large_house", "storehouse", "workshop", "market_square", "watchtower", "wall_gate", "well"};
+        if (!empty) {
+            List<io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Cost> cost = new ArrayList<>();
+            for (int i = 0; i < 40; i++) {
+                cost.add(new io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Cost(tradeItem(i), 99_999 - i));
+            }
+            for (int i = 0; i < 12; i++) {
+                Component name = i == 0 ? Component.literal(LONG_KINGDOM + " " + LONG_KINGDOM)
+                        : Component.translatable("kingdomworld.building." + names[i % names.length]);
+                Component problem = i == 1 ? Component.translatable("kingdomworld.template.problem.missing_mod",
+                        "create, immersiveengineering, mekanism, thermal_expansion") : Component.empty();
+                templates.add(new io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Template("kingdomworld:" + names[i % names.length]
+                        + i, name, categories[i % categories.length], new ItemStack(i % 2 == 0 ? Items.OAK_DOOR : Items.STONE_BRICKS), 48, 32, 48, cost,
+                        73_728, i == 2 ? 9 : 0, problem));
+            }
+            List<io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Missing> missing = new ArrayList<>();
+            String[] gatherers = {"miner", "", "lumberjack", ""};
+            for (int i = 0; i < 24; i++) {
+                missing.add(new io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Missing(i == 0 ? longNamed(Items.SPRUCE_PLANKS)
+                        : tradeItem(i), 99_999, gatherers[i % gatherers.length], i % 3 != 0, i % 4 == 1));
+            }
+            io.github.sekerator.kingdomworld.core.construction.Construction.Status[] statuses =
+                    io.github.sekerator.kingdomworld.core.construction.Construction.Status.values();
+            BlockPos far = new BlockPos(-30_000_000, 319, 29_999_999);
+            for (int i = 0; i < statuses.length; i++) {
+                io.github.sekerator.kingdomworld.core.construction.Construction.Status status = statuses[i];
+                boolean at = status == io.github.sekerator.kingdomworld.core.construction.Construction.Status.BLOCKED
+                        || status == io.github.sekerator.kingdomworld.core.construction.Construction.Status.UNREACHABLE;
+                sites.add(new io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Site(100 + i, i == 0
+                        ? Component.literal(LONG_KINGDOM + " " + LONG_KINGDOM) : Component.translatable("kingdomworld.building." + names[i % names.length]),
+                        new ItemStack(Items.OAK_DOOR), far, io.github.sekerator.kingdomworld.core.construction.Construction.Priority.values()[i % 3],
+                        i % 4 == 1, i % 2 == 0, status, at ? far : null, 100 - i, 73_728 - i, 73_728, 16, i == 1 ? List.of() : missing));
+            }
+            for (int i = 0; i < 30; i++) {
+                buildings.add(new io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Building(i + 1, i == 0
+                        ? Component.literal(LONG_KINGDOM + " " + LONG_KINGDOM) : Component.translatable("kingdomworld.building." + names[i % names.length]),
+                        "house", categories[i % categories.length], far, i % 5 == 4 ? -1 : 100 - i * 3, 99_999, i % 7 == 3));
+            }
+        }
+        return new io.github.sekerator.kingdomworld.common.network.data.ConstructionView(kingdom, canManage, 64, templates, sites, buildings);
+    }
+
+    private static ThroneScreen construction(KingdomView view, boolean canManage, boolean empty, String mode, String template, long site,
+                                             Component status) {
+        ThroneScreen screen = throne(view, "construction", status);
+        screen.updateConstruction(constructionView(view.id(), canManage, empty));
+        screen.showConstruction(mode, template, site);
+        return screen;
+    }
+
+    private static io.github.sekerator.kingdomworld.client.screen.BlueprintHintScreen blueprintHint(boolean refused, int obstacles) {
+        Component status = refused ? KingdomActions.errorMessage(KingdomError.CONSTRUCTION_OUTSIDE_LAND)
+                : Component.translatable("kingdomworld.construction.place_ok");
+        return new io.github.sekerator.kingdomworld.client.screen.BlueprintHintScreen(refused ? "refused" : "ok",
+                io.github.sekerator.kingdomworld.client.construction.BlueprintRenderer.lines(Component.literal(LONG_KINGDOM),
+                        Component.literal("Right Control"), Component.literal("Right Control"), Component.literal("Right Button"), status,
+                        refused ? 0xFFFF8080 : 0xFFA0E0A0, obstacles));
+    }
+
     private static void fillMapData() {
         UUID first = UUID.nameUUIDFromBytes("first".getBytes(StandardCharsets.UTF_8));
         UUID second = UUID.nameUUIDFromBytes("second".getBytes(StandardCharsets.UTF_8));
@@ -998,6 +1072,39 @@ final class ClientLayoutCheck {
         cases.add(new Case("bank-error", () -> bank(false, "abc", longError, false)));
         cases.add(new Case("bank-empty", () -> bank(true, "", Component.empty(), false)));
         cases.add(new Case("post-minter", () -> post(postView("minter", WorkStatus.NO_INGREDIENTS, true, 4, false, true), Component.empty())));
+        cases.add(new Case("post-builder", () -> post(postView("builder", WorkStatus.WORKING, true, 4, false, true), Component.empty())));
+        cases.add(new Case("post-builder-idle", () -> post(postView("builder", WorkStatus.NO_MATERIALS, false, 16, false, false), longError)));
+        cases.add(new Case("throne-construction-catalog", () -> construction(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "catalog",
+                "", 0, Component.empty())));
+        cases.add(new Case("throne-construction-template", () -> construction(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "catalog",
+                "kingdomworld:storehouse2", 0, Component.translatable("kingdomworld.construction.blueprint_taken", Component.literal(LONG_KINGDOM)))));
+        cases.add(new Case("throne-construction-template-unavailable", () -> construction(view(KingdomView.Relation.MEMBER, Role.STEWARD), true,
+                false, "catalog", "kingdomworld:large_house1", 0, longError)));
+        cases.add(new Case("throne-subject-construction-template", () -> construction(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false,
+                false, "catalog", "kingdomworld:small_house0", 0, Component.empty())));
+        cases.add(new Case("throne-construction-sites", () -> construction(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "sites",
+                "", 0, Component.empty())));
+        cases.add(new Case("throne-construction-site", () -> construction(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "sites",
+                "", 104, longError)));
+        cases.add(new Case("throne-construction-site-blocked", () -> construction(view(KingdomView.Relation.MEMBER, Role.STEWARD), true, false,
+                "sites", "", 103, Component.empty())));
+        cases.add(new Case("throne-subject-construction-site", () -> construction(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, false,
+                "sites", "", 100, Component.empty())));
+        cases.add(new Case("throne-construction-site-complete", () -> construction(view(KingdomView.Relation.MEMBER, Role.KING), true, false,
+                "sites", "", 101, Component.translatable("kingdomworld.construction.priority_set", Component.literal(LONG_KINGDOM),
+                        Component.translatable("kingdomworld.order.priority.normal")))));
+        cases.add(new Case("throne-construction-buildings", () -> construction(view(KingdomView.Relation.MEMBER, Role.KING), true, false,
+                "buildings", "", 0, Component.empty())));
+        cases.add(new Case("throne-construction-empty", () -> construction(view(KingdomView.Relation.MEMBER, Role.KING), true, true, "sites", "",
+                0, Component.empty())));
+        cases.add(new Case("throne-construction-catalog-empty", () -> construction(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, true,
+                "catalog", "", 0, Component.empty())));
+        cases.add(new Case("throne-construction-buildings-empty", () -> construction(view(KingdomView.Relation.MEMBER, Role.KING), true, true,
+                "buildings", "", 0, Component.empty())));
+        cases.add(new Case("throne-construction-loading", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "construction",
+                Component.empty())));
+        cases.add(new Case("blueprint-hint", () -> blueprintHint(false, 9_999)));
+        cases.add(new Case("blueprint-hint-refused", () -> blueprintHint(true, 0)));
         cases.add(new Case("throne-outsider", () -> throne(view(KingdomView.Relation.OUTSIDER, null), "overview", Component.empty())));
         cases.add(new Case("throne-invited", () -> throne(view(KingdomView.Relation.INVITED, null), "overview", Component.empty())));
         cases.add(new Case("throne-applied", () -> throne(view(KingdomView.Relation.APPLIED, null), "overview", Component.empty())));

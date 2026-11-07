@@ -35,7 +35,7 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
                            int seats, int maxSeats, String animal, List<String> animals, int herdSize, int maxHerd,
                            WorkStatus status, boolean container, boolean measured, int perDay, long producedToday,
                            List<Worker> workers, int unemployed, boolean auto, List<Station> stations, ItemStack current,
-                           int progress) {
+                           int progress, net.minecraft.network.chat.Component site) {
     public static final int MAX_WORKERS = 16;
     public static final int MAX_ANIMALS = 16;
     public static final int MAX_STATIONS = 16;
@@ -112,6 +112,7 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
         }
         buf.writeItem(current);
         buf.writeVarInt(progress);
+        buf.writeComponent(site);
     }
 
     public static WorkPostView decode(FriendlyByteBuf buf) {
@@ -153,7 +154,8 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
         }
         ItemStack current = buf.readItem();
         int progress = buf.readVarInt();
+        net.minecraft.network.chat.Component site = buf.readComponent();
         return new WorkPostView(pos, kingdomId, canManage, profession, radius, maxRadius, seats, maxSeats, animal, animals, herdSize,
-                maxHerd, status, container, measured, perDay, produced, workers, unemployed, auto, stations, current, progress);
+                maxHerd, status, container, measured, perDay, produced, workers, unemployed, auto, stations, current, progress, site);
     }
 }

@@ -143,6 +143,16 @@ public final class KingdomWorldConfig {
         /** The adventurers' guild. */
         public final Guild guild;
         public final ForgeConfigSpec.IntValue caravanMaxWaitMinutes;
+        public final ForgeConfigSpec.IntValue maxConstructionsPerKingdom;
+        public final ForgeConfigSpec.IntValue builderRadius;
+        public final ForgeConfigSpec.DoubleValue builderReach;
+        public final ForgeConfigSpec.DoubleValue builderFarReach;
+        public final ForgeConfigSpec.IntValue builderGiveUpSeconds;
+        public final ForgeConfigSpec.DoubleValue builderSecondsPerBlock;
+        public final ForgeConfigSpec.DoubleValue builderFallChance;
+        public final ForgeConfigSpec.IntValue templateMaxWidth;
+        public final ForgeConfigSpec.IntValue templateMaxHeight;
+        public final ForgeConfigSpec.IntValue templateMaxLength;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -392,6 +402,39 @@ public final class KingdomWorldConfig {
             builder.pop();
 
             guild = new Guild(builder);
+            builder.comment("Construction: building templates, constructions and builders.").push("construction");
+            maxConstructionsPerKingdom = builder
+                    .comment("Constructions one kingdom may have at the same time.")
+                    .defineInRange("maxConstructionsPerKingdom", 4, 1, 64);
+            builderRadius = builder
+                    .comment("How far from its work post a builder takes constructions, in blocks.")
+                    .defineInRange("builderRadius", 64, 8, 512);
+            builderReach = builder
+                    .comment("How far a builder places blocks from where it stands, in blocks.")
+                    .defineInRange("builderReach", 4.5, 1.0, 16.0);
+            builderFarReach = builder
+                    .comment("How far a builder places blocks from the nearest place it can walk to, when it cannot come closer.")
+                    .defineInRange("builderFarReach", 12.0, 1.0, 64.0);
+            builderGiveUpSeconds = builder
+                    .comment("Seconds a builder tries to reach a block before it goes on with another; the place shows on the construction.")
+                    .defineInRange("builderGiveUpSeconds", 15, 1, 600);
+            builderSecondsPerBlock = builder
+                    .comment("Seconds a beginner builder needs for one block; experience makes it up to twice as fast.")
+                    .defineInRange("builderSecondsPerBlock", 2.0, 0.05, 600.0);
+            builderFallChance = builder
+                    .comment("Chance that a builder falls when it places a block high above its feet near players (far from players",
+                            "the risk of the builder in professionRisks counts).")
+                    .defineInRange("builderFallChance", 0.002, 0.0, 1.0);
+            templateMaxWidth = builder
+                    .comment("Largest building template along x, in blocks; larger ones cannot be built.")
+                    .defineInRange("templateMaxWidth", 48, 1, 256);
+            templateMaxHeight = builder
+                    .comment("Largest building template along y, in blocks.")
+                    .defineInRange("templateMaxHeight", 32, 1, 256);
+            templateMaxLength = builder
+                    .comment("Largest building template along z, in blocks.")
+                    .defineInRange("templateMaxLength", 48, 1, 256);
+            builder.pop();
 
             builder.comment("Abstract simulation of kingdoms far from players.").push("simulation");
             simulationIntervalTicks = builder

@@ -35,6 +35,7 @@ final class KingdomDataMigrations {
                 case 4 -> current = upgradeFrom4To5(current);
                 case 5 -> current = upgradeFrom5To6(current);
                 case 6 -> current = upgradeFrom6To7(current);
+                case 7 -> current = upgradeFrom7To8(current);
                 default -> throw new IllegalArgumentException("No migration from kingdom data format " + version);
             }
         }
@@ -212,6 +213,22 @@ final class KingdomDataMigrations {
             changed = true;
         }
         return changed;
+    }
+
+    /**
+     * Format 8 adds construction: the constructions under way and the register of finished buildings at the root, both
+     * empty for a format 7 world. The new right to manage construction goes to the steward, as in new kingdoms.
+     */
+    private static CompoundTag upgradeFrom7To8(CompoundTag tag) {
+        ListTag kingdoms = tag.getList(KingdomSavedData.TAG_KINGDOMS, Tag.TAG_COMPOUND);
+        for (int i = 0; i < kingdoms.size(); i++) {
+            grant(kingdoms.getCompound(i), "steward", "manage_construction");
+        }
+        if (!tag.contains(KingdomSavedData.TAG_CONSTRUCTION)) {
+            tag.put(KingdomSavedData.TAG_CONSTRUCTION, ConstructionNbt.empty());
+        }
+        tag.putInt(KingdomSavedData.TAG_FORMAT_VERSION, 8);
+        return tag;
     }
 
     /**

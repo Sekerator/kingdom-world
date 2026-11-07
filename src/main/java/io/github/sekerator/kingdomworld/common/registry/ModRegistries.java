@@ -117,6 +117,9 @@ public final class ModRegistries {
                     .sound(SoundType.WOOD)));
     public static final RegistryObject<Item> MARKET_STALL_ITEM = ITEMS.register("market_stall",
             () -> new BlockItem(MARKET_STALL.get(), new Item.Properties()));
+    /** A blueprint of a building template, taken in the construction tab of the throne; it lays out constructions. */
+    public static final RegistryObject<Item> BLUEPRINT = ITEMS.register("blueprint",
+            () -> new io.github.sekerator.kingdomworld.common.construction.BlueprintItem(new Item.Properties().stacksTo(1)));
 
     /**
      * The body of a citizen. Never saved with chunks: the citizen records in the kingdom data are what persists.

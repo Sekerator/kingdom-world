@@ -91,7 +91,7 @@ public final class OrderActions {
     /**
      * One item of the kind, or a barrier named by the id if the item is gone (its mod was removed).
      */
-    static ItemStack sample(String itemId) {
+    public static ItemStack sample(String itemId) {
         Item item = Recipes.item(itemId);
         if (item != null) {
             return new ItemStack(item);

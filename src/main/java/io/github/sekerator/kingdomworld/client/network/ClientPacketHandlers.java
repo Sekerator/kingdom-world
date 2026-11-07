@@ -122,6 +122,20 @@ public final class ClientPacketHandlers {
         io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.replace(currencies);
     }
 
+    public static void handleConstructionView(io.github.sekerator.kingdomworld.common.network.data.ConstructionView view) {
+        if (Minecraft.getInstance().screen instanceof ThroneScreen throne) {
+            throne.updateConstruction(view);
+        }
+    }
+
+    public static void handleTemplateData(io.github.sekerator.kingdomworld.common.network.packet.ConstructionPackets.TemplateData data) {
+        io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.accept(data);
+    }
+
+    public static void handleConstructionCheck(io.github.sekerator.kingdomworld.common.network.packet.ConstructionPackets.CheckResult result) {
+        io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.accept(result);
+    }
+
     public static void handleStorageView(StorageView view) {
         if (Minecraft.getInstance().screen instanceof ThroneScreen throne) {
             throne.updateStorage(view);

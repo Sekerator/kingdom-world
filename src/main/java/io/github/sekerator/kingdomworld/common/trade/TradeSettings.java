@@ -118,7 +118,7 @@ public final class TradeSettings {
      */
     @SuppressWarnings("unchecked")
     public static boolean importDenied(ItemStack stack) {
-        if (stack.isEmpty() || stack.getItem() instanceof SpawnEggItem || stack.is(ModRegistries.COIN.get())) {
+        if (stack.isEmpty() || stack.getItem() instanceof SpawnEggItem || GoodsStacks.untradeable(stack)) {
             return true;
         }
         List<Object> matchers = denied;

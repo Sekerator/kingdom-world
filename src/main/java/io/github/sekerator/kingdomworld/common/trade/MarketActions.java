@@ -8,7 +8,6 @@ import io.github.sekerator.kingdomworld.common.kingdom.KingdomActions;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.TradeViews;
 import io.github.sekerator.kingdomworld.common.network.packet.TradePackets;
-import io.github.sekerator.kingdomworld.common.registry.ModRegistries;
 import io.github.sekerator.kingdomworld.core.economy.ItemValues;
 import io.github.sekerator.kingdomworld.core.economy.Money;
 import io.github.sekerator.kingdomworld.core.economy.Treasury;
@@ -175,7 +174,7 @@ public final class MarketActions {
             case PUT_SELL, PUT_BUY, PUT_EXPORT, ORDER_IMPORT -> true;
             default -> false;
         };
-        if (needsItem && (item == null || new ItemStack(item).is(ModRegistries.COIN.get()))) {
+        if (needsItem && (item == null || GoodsStacks.untradeable(new ItemStack(item)))) {
             return KingdomActions.Feedback.error(KingdomError.BAD_ITEM);
         }
         int first = (int) Math.min(Market.MAX_COUNT, Math.max(0, change.first()));

@@ -91,10 +91,17 @@ public final class GoodsStacks {
     }
 
     /**
+     * Whether an item is never traded: coins are money, a blueprint is only a picture of a plan.
+     */
+    public static boolean untradeable(ItemStack stack) {
+        return stack.is(ModRegistries.COIN.get()) || stack.is(ModRegistries.BLUEPRINT.get());
+    }
+
+    /**
      * Whether a stack is a plain item the kingdom buys: no data, or only an undamaged tool's empty damage.
      */
     public static boolean plain(ItemStack stack) {
-        if (stack.isEmpty() || stack.is(ModRegistries.COIN.get())) {
+        if (stack.isEmpty() || untradeable(stack)) {
             return false;
         }
         CompoundTag tag = stack.getTag();

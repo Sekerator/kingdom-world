@@ -47,7 +47,9 @@ public final class Equipment {
         FISHING_ROD(ToolActions.FISHING_ROD_CAST, true),
         SHEARS(ToolActions.SHEARS_HARVEST, false),
         /** Anything to strike with; a herder culls bare handed if there is none. */
-        WEAPON(ToolActions.SWORD_SWEEP, false);
+        WEAPON(ToolActions.SWORD_SWEEP, false),
+        /** A pickaxe if the storehouses have one: a builder clears stone with it so that it drops, and works without. */
+        PICKAXE_IF_ANY(ToolActions.PICKAXE_DIG, false);
 
         @Nullable
         private final ToolAction action;

@@ -161,7 +161,7 @@ class TranslationKeysTest {
     @Test
     void countsOfTradeHaveEveryPluralForm() {
         Map<String, String> russianForms = Map.of("items", "предмет|предмет|предмета|предметов", "days", "день|день|дня|дней",
-                "minutes", "минуту|минуту|минуты|минут");
+                "minutes", "минуту|минуту|минуты|минут", "blocks", "блок|блок|блока|блоков");
         russianForms.forEach((word, forms) -> {
             String[] words = forms.split("[|]");
             Plurals.Form[] all = Plurals.Form.values();
@@ -299,7 +299,25 @@ class TranslationKeysTest {
         for (String status : List.of("done", "declined", "expired", "cancelled")) {
             used.add("kingdomworld.screen.trade.status." + status);
         }
-        for (String word : List.of("items", "days", "minutes")) {
+        // Construction: the views of the tab, the states of constructions, the categories and names of the built-in buildings.
+        for (String mode : List.of("catalog", "sites", "buildings")) {
+            used.add("kingdomworld.screen.construction.mode." + mode);
+        }
+        for (io.github.sekerator.kingdomworld.core.construction.Construction.Status status
+                : io.github.sekerator.kingdomworld.core.construction.Construction.Status.values()) {
+            used.add("kingdomworld.construction.status." + status.id());
+        }
+        for (String category : List.of("housing", "farming", "production", "trade", "defense", "decoration")) {
+            used.add("kingdomworld.building.category." + category);
+        }
+        try (Stream<Path> templates = Files.list(assets.getParent().getParent().resolve("data").resolve("kingdomworld")
+                .resolve("kingdomworld_buildings"))) {
+            for (Path template : templates.filter(file -> file.toString().endsWith(".json")).toList()) {
+                JsonObject description = JsonParser.parseString(Files.readString(template, StandardCharsets.UTF_8)).getAsJsonObject();
+                used.add(description.get("name").getAsString());
+            }
+        }
+        for (String word : List.of("items", "days", "minutes", "blocks")) {
             for (Plurals.Form form : Plurals.Form.values()) {
                 used.add("kingdomworld.count." + word + "." + form.suffix());
             }
