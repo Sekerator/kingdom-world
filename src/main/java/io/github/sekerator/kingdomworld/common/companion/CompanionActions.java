@@ -102,7 +102,7 @@ public final class CompanionActions {
             return;
         }
         if (CompanionWork.isReadOnly(server)) {
-            player.displayClientMessage(KingdomActions.errorMessage(KingdomError.READ_ONLY), true);
+            player.displayClientMessage(Component.translatable(KEY + "read_only"), true);
             return;
         }
         ItemStack hand = player.getMainHandItem();
@@ -124,11 +124,9 @@ public final class CompanionActions {
         if (won < 0) {
             return;
         }
-        Component what = hand.getHoverName();
-        int count = hand.getCount();
         hand.setCount(0);
         player.getInventory().setChanged();
-        player.displayClientMessage(Component.translatable(KEY + "gift", CompanionTexts.name(companion), what, count, won), true);
+        player.displayClientMessage(Component.translatable(KEY + "gift", CompanionTexts.name(companion), won), true);
     }
 
     /**

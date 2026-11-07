@@ -125,7 +125,7 @@ public final class CompanionBodies {
                     body = null;
                 } else {
                     sync(server, body);
-                    if (body.tickCount % 200 == 0) {
+                    if (body.tickCount % 100 < CompanionWork.CHECK_TICKS) {
                         body.refresh(companion);
                     }
                     Pack pack = pack(body);

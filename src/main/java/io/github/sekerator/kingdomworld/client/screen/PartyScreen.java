@@ -28,7 +28,7 @@ public class PartyScreen extends KingdomScreen implements ResultListener {
     private static final int MIN_PANEL_WIDTH = 280;
     private static final int MAX_PANEL_HEIGHT = 260;
     private static final int BOX = 90;
-    private static final int STATUS_LINES = 2;
+    private static final int STATUS_LINES = 3;
 
     private CompanionViews.PartyView view;
     private String inviteName = "";
@@ -104,7 +104,7 @@ public class PartyScreen extends KingdomScreen implements ResultListener {
         kickWidth = buttonWidth(Component.translatable(KEY + "kick"));
         answerWidth = buttonWidth(Component.translatable(KEY + "accept"), Component.translatable(KEY + "decline"));
         int controls = Math.max(BOX + GAP + inviteWidth + GAP + leaveWidth, splitWidth + GAP + fireWidth);
-        int list = 120 + 2 * smallWidth + leaderWidth + kickWidth + 3 * GAP;
+        int list = 200 + 2 * smallWidth + leaderWidth + kickWidth + 3 * GAP;
         int inner = Math.max(controls, list);
         inner = Math.max(inner, 100 + 2 * answerWidth + GAP);
         panelWidth = Math.min(Math.max(MIN_PANEL_WIDTH, inner + 2 * PAD), width - 8);
@@ -326,7 +326,7 @@ public class PartyScreen extends KingdomScreen implements ResultListener {
             bottom = Component.translatable(view.inParty() ? KEY + "hint.party" : KEY + "hint.none");
             color = 0xFFB8B8B8;
         }
-        paragraph(graphics, bottom, x, top + panelHeight - bottomArea() + 2, right - x - doneWidth - 6, STATUS_LINES, color);
+        paragraph(graphics, bottom, x, top + panelHeight - bottomArea() + 2, right - x, STATUS_LINES, color);
     }
 
     @Override

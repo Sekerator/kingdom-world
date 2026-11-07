@@ -84,6 +84,10 @@ final class CompanionLayoutCases {
 
     // ---------------------------------------------------------------- lines above the hotbar
 
+    /**
+     * Lines above the hotbar: whose companion this is, a companion protected from a stranger, a gift. Answers to the
+     * windows show in the window or in the chat, which wraps them.
+     */
     static void actionbars(Font font, int narrowest) {
         for (Gender gender : Gender.values()) {
             Component name = longName(gender);
@@ -91,42 +95,9 @@ final class CompanionLayoutCases {
                     narrowest);
             LayoutCheck.actionbar(font, Component.translatable(CitizenTexts.gendered("kingdomworld.companion.protected", gender), name, LONG_PLAYER),
                     narrowest);
-            LayoutCheck.actionbar(font, Component.translatable("kingdomworld.companion.gift", name,
-                    new ItemStack(Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE).getHoverName(), 64, 15), narrowest);
-            for (CompanionOrder order : CompanionOrder.values()) {
-                LayoutCheck.actionbar(font, Component.translatable("kingdomworld.companion.ordered", name, CompanionTexts.order(order)), narrowest);
-            }
-            LayoutCheck.actionbar(font, Component.translatable(CitizenTexts.gendered("kingdomworld.companion.bought", gender), name, money()),
-                    narrowest);
-            LayoutCheck.actionbar(font, Component.translatable("kingdomworld.companion.hired", name, money()), narrowest);
-            LayoutCheck.actionbar(font, Component.translatable("kingdomworld.companion.sold", name, money()), narrowest);
-            LayoutCheck.actionbar(font, Component.translatable(CitizenTexts.gendered("kingdomworld.companion.freed", gender), name, money()),
-                    narrowest);
-            LayoutCheck.actionbar(font, Component.translatable(CitizenTexts.gendered("kingdomworld.companion.freed_citizen", gender), name,
-                    LONG_KINGDOM), narrowest);
-            LayoutCheck.actionbar(font, Component.translatable(CitizenTexts.gendered("kingdomworld.companion.dismissed", gender), name), narrowest);
+            LayoutCheck.actionbar(font, Component.translatable("kingdomworld.companion.gift", name, 15), narrowest);
         }
-        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.companion.market.closed", LONG_KINGDOM), narrowest);
-        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.companion.market.opened", LONG_KINGDOM), narrowest);
-        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.companion.market.refreshed"), narrowest);
-        Contract hunt = new Contract(1, Contract.Kind.GATHER, BRANCH, Contract.Poster.GUILD, BRANCH, Rank.F,
-                "minecraft:netherite_upgrade_smithing_template", Rank.SSS, false, 4_096, 4_095, BRANCH, 0, 0, 0, 0, 1, Contract.Status.OPEN, null, 0,
-                true);
-        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.guild.handed_in_part", GuildTexts.task(hunt), 4_095, 4_096), narrowest);
-        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.guild.handed_in_party", GuildTexts.task(hunt)), narrowest);
-        for (String key : List.of("invited", "kicked", "leader_set", "new_leader", "joined", "left")) {
-            LayoutCheck.actionbar(font, Component.translatable("kingdomworld.party." + key, LONG_PLAYER), narrowest);
-        }
-        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.party.share_set", LONG_PLAYER, 100), narrowest);
-        for (String key : List.of("you_joined", "you_left", "declined", "split_even", "split_shares", "fire_on", "fire_off")) {
-            LayoutCheck.actionbar(font, Component.translatable("kingdomworld.party." + key), narrowest);
-        }
-        for (KingdomError error : new KingdomError[]{KingdomError.NOT_IN_PARTY, KingdomError.ALREADY_IN_PARTY, KingdomError.PARTY_FULL,
-                KingdomError.NOT_PARTY_LEADER, KingdomError.NOT_INVITED, KingdomError.UNKNOWN_COMPANION, KingdomError.NOT_YOUR_COMPANION,
-                KingdomError.TOO_MANY_COMPANIONS, KingdomError.SLAVE_MARKET_CLOSED, KingdomError.SLAVERY_FORBIDDEN, KingdomError.NOT_A_SLAVE,
-                KingdomError.NOT_A_SUBJECT, KingdomError.NOT_KING, KingdomError.COMPANION_FAR, KingdomError.PLAYER_OFFLINE}) {
-            LayoutCheck.actionbar(font, KingdomActions.errorMessage(error), narrowest);
-        }
+        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.companion.read_only"), narrowest);
     }
 
     // ---------------------------------------------------------------- the market at the desk
@@ -261,6 +232,13 @@ final class CompanionLayoutCases {
         add.accept("guild-desk-market-empty", () -> marketScreen(true, market(true, false, false, false, true), false, Component.empty()));
         add.accept("guild-desk-market-loading", () -> marketScreen(true, null, false, Component.empty()));
         add.accept("guild-desk-hire", () -> marketScreen(false, market(true, true, true, false, false), false, longError));
+        // The longest answers of the market, in the status lines of the desk.
+        for (Gender gender : Gender.values()) {
+            add.accept("guild-desk-market-bought-" + gender.id(), () -> marketScreen(true, market(true, false, false, false, false), false,
+                    Component.translatable(CitizenTexts.gendered("kingdomworld.companion.bought", gender), longName(gender), money())));
+            add.accept("guild-desk-hire-hired-" + gender.id(), () -> marketScreen(false, market(true, false, false, false, false), false,
+                    Component.translatable("kingdomworld.companion.hired", longName(gender), money())));
+        }
         add.accept("guild-desk-hire-empty", () -> marketScreen(false, market(true, false, false, false, true), true, Component.empty()));
         add.accept("guild-desk-mine-party", CompanionLayoutCases::partyContracts);
         for (int slots : new int[]{9, 18, 27, 36}) {
@@ -269,6 +247,8 @@ final class CompanionLayoutCases {
         add.accept("companion-slave-no-kingdom", () -> companion(view(true, false, false, 18, Gender.MALE)));
         add.accept("companion-free", () -> companion(view(false, true, true, 27, Gender.FEMALE)));
         add.accept("party-leader", () -> partyScreen(party(true, true, false, true), longError));
+        add.accept("party-leader-answer", () -> partyScreen(party(true, true, false, true), Component.translatable("kingdomworld.party.share_set",
+                LONG_PLAYER, 100)));
         add.accept("party-leader-even", () -> partyScreen(party(true, true, true, true), Component.empty()));
         add.accept("party-member", () -> partyScreen(party(true, false, false, true), Component.empty()));
         add.accept("party-none", () -> partyScreen(party(false, false, true, true), Component.empty()));

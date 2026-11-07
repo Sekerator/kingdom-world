@@ -114,7 +114,11 @@ public class CompanionEntity extends PathfinderMob {
     void refresh(Companion companion) {
         entityData.set(SLAVE, companion.isSlave());
         getAttribute(Attributes.MAX_HEALTH).setBaseValue(companion.maxHealth());
-        getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(CompanionPower.attackDamage(companion.skills()));
+        // A long hunger takes strength away.
+        boolean starving = getServer() != null && companion.isStarving(io.github.sekerator.kingdomworld.common.api.KingdomWorldApi.gameTime(getServer()),
+                CompanionSettings.rules());
+        getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(CompanionPower.attackDamage(companion.skills())
+                * (starving ? CompanionSettings.rules().starvingStrength : 1.0));
         getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0.5 + companion.skills().stamina() * 0.005);
         if (getHealth() > getMaxHealth()) {
             setHealth(getMaxHealth());

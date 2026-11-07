@@ -81,7 +81,7 @@ final class MarketPanel {
         payWidth = screen.buttonWidth(Component.translatable(KEY + "pay_account"), Component.translatable(KEY + "pay_coins"));
         closeWidth = screen.buttonWidth(Component.translatable(KEY + "close"), Component.translatable(KEY + "open"));
         badgeWidth = font.width(Component.translatable(KEY + "level", 30)) + 4;
-        return Math.max(payWidth + GAP + closeWidth, 16 + badgeWidth + 160 + buyWidth);
+        return Math.max(payWidth + GAP + closeWidth, 18 + badgeWidth + 200 + buyWidth);
     }
 
     private List<CompanionViews.OfferRow> rows(boolean slaves) {
@@ -197,11 +197,13 @@ final class MarketPanel {
             CompanionViews.OfferRow row = rows.get(scroll + i);
             int y = listTop(top) + i * ROW;
             int textRight = right - buyWidth - 4;
+            graphics.renderItem(new net.minecraft.world.item.ItemStack(row.slave() ? net.minecraft.world.item.Items.CHAIN
+                    : net.minecraft.world.item.Items.LEATHER_HELMET), x, y + 1);
             Component level = Component.translatable(KEY + "level", row.level());
-            screen.label(graphics, level, x, y + 5, 0xFFF0D070, x + badgeWidth);
-            int textX = x + badgeWidth;
+            screen.label(graphics, level, x + 18, y + 5, 0xFFF0D070, x + 18 + badgeWidth);
+            int textX = x + 18 + badgeWidth;
             Component price = row.slave() ? money(row.price()) : Component.translatable(KEY + "per_day", money(row.price()));
-            Component power = Component.translatable(KEY + "power", row.power());
+            Component power = Component.translatable(KEY + "power_skills", row.power(), row.combat(), row.carrying(), row.stamina());
             int priceWidth = Math.min(font.width(price), Math.max(0, (textRight - textX) / 3));
             int powerWidth = Math.min(font.width(power), Math.max(0, (textRight - textX) / 4));
             int nameRight = textRight - priceWidth - powerWidth - 12;
