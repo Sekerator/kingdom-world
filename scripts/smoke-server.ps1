@@ -626,6 +626,15 @@ function Get-KingdomCrystals([object]$Server, [string]$Kingdom) {
     return Wait-ForNewLog $Server $pattern $CommandTimeout $seen
 }
 
+# The magic of a kingdom as 'admin magic energy' tells it (energy, capacity, crystals in the storehouses and their energy,
+# research done and under way, spells, devices), or $null.
+function Get-KingdomMagic([object]$Server, [string]$Kingdom) {
+    $pattern = "Magic of ${Kingdom}: energy (\d+) of (\d+), crystals (\d+) with (\d+) energy, research done (\S+), under way (\S+), spells (\S+), devices: ([^\r\n]+)"
+    $seen = Count-Log $pattern
+    Send-ServerCommand $Server "kingdomworld admin magic energy $Kingdom"
+    return Wait-ForNewLog $Server $pattern $CommandTimeout $seen
+}
+
 Invoke-Phase 'session1' {
     param($server)
     if (-not (Wait-ForLog $server 'KingdomWorld loaded 0 kingdom\(s\)' 10)) {
@@ -1053,6 +1062,87 @@ Invoke-Phase 'session1' {
         }
     }
 
+    if ($script:CreatedId) {
+        # Magic: crystals become energy one for one, research and spells of the kingdom, the wells of other mods with -Pack.
+        # It runs before the money of trade and the guild is measured: the minter keeps striking coins meanwhile.
+        $magic = Get-KingdomMagic $server $KingdomName
+        if ($magic -and $magic.Groups[1].Value -eq '0') {
+            Write-Ok "[session1] the kingdom starts without energy, capacity $($magic.Groups[2].Value)"
+        } else {
+            Add-Failure "[session1] energy appeared from nothing: $($magic.Value)"
+        }
+        Send-ServerCommand $server "kingdomworld admin magic crystals $KingdomName e 4"
+        if (Wait-ForLog $server "Put 4 crystal\(s\) of rank E into the storehouses of $KingdomName" $CommandTimeout $ConsoleFailPattern) {
+            $crystals = Get-KingdomCrystals $server $KingdomName
+            $crystalEnergy = if ($crystals) { [int64]$crystals.Groups[2].Value } else { -1 }
+            Send-ServerCommand $server "kingdomworld admin magic dissolve $KingdomName 4"
+            $dissolved = Wait-ForLog $server "$KingdomName dissolved crystals for (\d+) energy, now (\d+)" $CommandTimeout $ConsoleFailPattern
+            $magic = Get-KingdomMagic $server $KingdomName
+            if ($dissolved -and $magic -and [int64]$dissolved.Groups[1].Value -eq $crystalEnergy -and [int64]$magic.Groups[1].Value -eq $crystalEnergy `
+                    -and $magic.Groups[3].Value -eq '0') {
+                Write-Ok "[session1] 4 crystals with $crystalEnergy energy became exactly $crystalEnergy energy, no crystal is left"
+            } else {
+                Add-Failure "[session1] dissolving changed the sum of crystals and energy: crystals $crystalEnergy, $($dissolved.Value), $($magic.Value)"
+            }
+        } else {
+            Add-Failure '[session1] crystals could not be put into the storehouses'
+        }
+        Send-ServerCommand $server "kingdomworld admin magic energy $KingdomName add 1000"
+        [void](Wait-ForLog $server "Energy of ${KingdomName}: (\d+)" $CommandTimeout $ConsoleFailPattern)
+        Send-ServerCommand $server "kingdomworld admin magic research $KingdomName ward done"
+        Send-ServerCommand $server "kingdomworld admin magic research $KingdomName gates done"
+        Send-ServerCommand $server "kingdomworld admin magic research $KingdomName arcana_1 start"
+        [void](Wait-ForLog $server "Research arcana_1 of $KingdomName started" $CommandTimeout $ConsoleFailPattern)
+        Send-ServerCommand $server "kingdomworld admin magic spell $KingdomName gates on"
+        if (Wait-ForLog $server "Spell gates of $KingdomName switched on" $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok '[session1] research done and started, the gates switched on'
+        } else {
+            Add-Failure '[session1] the spell of the gates did not switch on'
+        }
+        $script:Magic = Get-KingdomMagic $server $KingdomName
+        if ($script:Magic -and $script:Magic.Groups[5].Value -eq 'ward,gates' -and $script:Magic.Groups[6].Value -eq 'arcana_1' `
+                -and $script:Magic.Groups[7].Value -eq 'gates') {
+            Write-Ok "[session1] magic before the restart: energy $($script:Magic.Groups[1].Value), research $($script:Magic.Groups[5].Value), spells $($script:Magic.Groups[7].Value)"
+        } else {
+            Add-Failure "[session1] magic is not what was set: $($script:Magic.Value)"
+        }
+        if ($Pack) {
+            foreach ($mod in @("Iron's Spells 'n Spellbooks", 'Ars Nouveau')) {
+                if ((Get-LatestLog) -match "$([regex]::Escape($mod)) \S+ detected") {
+                    Write-Ok "[session1] the wells of magic foci serve $mod"
+                } else {
+                    Add-Warning "[session1] $mod is not in the pack or its integration did not start"
+                }
+            }
+            Send-ServerCommand $server 'setblock 4 70 12 ars_nouveau:source_jar'
+            Start-Sleep -Seconds 2
+            $seen = Count-Log 'KingdomWorld magic well check at '
+            Send-ServerCommand $server "kingdomworld admin magic wells $KingdomName 4 70 12"
+            $wells = Wait-ForLog $server "Wells of ${KingdomName}: (\d+) report\(s\), (\d+) energy spent" $CommandTimeout $ConsoleFailPattern
+            Start-Sleep -Seconds 1
+            $lines = @([regex]::Matches((Get-LatestLog), 'KingdomWorld magic well check at [^\r\n]+') | ForEach-Object { $_.Value })
+            foreach ($line in $lines) { Write-Host "      $line" }
+            $log = Get-LatestLog
+            if ($log -match "KingdomWorld magic well check at [^\r\n]*Iron's Spells mana \+\d+") {
+                Write-Ok "[session1] the well refilled the mana of Iron's Spells"
+            } else {
+                Add-Failure "[session1] the well did not refill the mana of Iron's Spells"
+            }
+            if ($log -match 'KingdomWorld magic well check at [^\r\n]*Ars Nouveau source \+\d+') {
+                Write-Ok '[session1] the focus filled a source jar of Ars Nouveau'
+            } else {
+                Add-Failure '[session1] the focus did not fill the source jar of Ars Nouveau'
+            }
+            if ($log -match 'KingdomWorld magic well check at [^\r\n]*Ars Nouveau mana \+\d+') {
+                Write-Ok '[session1] the well refilled the mana of Ars Nouveau'
+            } else {
+                Add-Warning '[session1] the well gave no mana of Ars Nouveau to the stand-in player (Ars knows no maximum for it)'
+            }
+            Send-ServerCommand $server 'setblock 4 70 12 minecraft:air'
+            $script:Magic = Get-KingdomMagic $server $KingdomName
+        }
+    }
+
     # Trade: a second kingdom far away buys wheat in a deal; its caravan leaves with the payment in escrow and is still on
     # the way when the server stops. A test buyer buys wheat at the market from the account. No money appears anywhere.
     Send-ServerCommand $server "kingdomworld admin found $PartnerName 2000 70 2000"
@@ -1374,6 +1464,21 @@ Invoke-Phase 'session2' {
         Add-Failure "[session2] $KingdomName has id $($listed.Groups[1].Value) after restart, expected $($script:CreatedId)"
     } else {
         Write-Ok "[session2] $KingdomName survived the restart with the same id"
+    }
+    if ($script:Magic) {
+        $magic = Get-KingdomMagic $server $KingdomName
+        if ($magic -and $magic.Groups[1].Value -eq $script:Magic.Groups[1].Value -and $magic.Groups[3].Value -eq $script:Magic.Groups[3].Value `
+                -and $magic.Groups[5].Value -eq $script:Magic.Groups[5].Value -and $magic.Groups[6].Value -eq $script:Magic.Groups[6].Value `
+                -and $magic.Groups[7].Value -eq $script:Magic.Groups[7].Value) {
+            Write-Ok "[session2] energy, crystals, research and spells survived the restart: energy $($magic.Groups[1].Value), crystals $($magic.Groups[3].Value)"
+        } else {
+            Add-Failure "[session2] magic changed in the restart: $($script:Magic.Value) -> $($magic.Value)"
+        }
+        if ((Get-LatestLog) -match 'KingdomWorld magic: 1 kingdom\(s\) with \d+ energy in all') {
+            Write-Ok '[session2] the magic data was loaded at startup'
+        } else {
+            Add-Failure '[session2] the magic data did not report itself at startup'
+        }
     }
     Send-ServerCommand $server "kingdomworld debug info $KingdomName"
     if (Wait-ForLog $server "Id: $([regex]::Escape($script:CreatedId))" $CommandTimeout 'There is no kingdom') {

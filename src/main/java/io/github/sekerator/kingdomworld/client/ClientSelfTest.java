@@ -63,6 +63,7 @@ public final class ClientSelfTest {
     private static volatile UUID kingdomId;
     private static volatile BlockPos post;
     private static volatile BlockPos bank;
+    private static volatile BlockPos focus;
     private static ClientMapsSelfTest maps;
 
     private ClientSelfTest() {
@@ -254,6 +255,12 @@ public final class ClientSelfTest {
             case 276 -> {
                 LOGGER.info(PREFIX + "army tab answered by the server: {}", minecraft.screen instanceof ThroneScreen screen && screen.armyShown());
                 if (minecraft.screen instanceof ThroneScreen screen) {
+                    screen.selectTab("magic");
+                }
+            }
+            case 279 -> {
+                LOGGER.info(PREFIX + "magic tab answered by the server: {}", minecraft.screen instanceof ThroneScreen screen && screen.magicShown());
+                if (minecraft.screen instanceof ThroneScreen screen) {
                     ClientHooks.openTerritoryEditor(screen.view());
                 }
                 KingdomWorldNetwork.sendToServer(new ClaimChunkPacket((throne.getX() >> 4) + 2, throne.getZ() >> 4, true));
@@ -306,6 +313,17 @@ public final class ClientSelfTest {
             }
             case 355 -> {
                 LOGGER.info(PREFIX + "stall screen shown: {}", minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.StallScreen);
+                minecraft.setScreen(null);
+                server.execute(() -> {
+                    ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+                    if (player != null && focus != null) {
+                        io.github.sekerator.kingdomworld.common.magic.MagicActions.openFocus(player, focus);
+                    }
+                });
+            }
+            case 358 -> {
+                LOGGER.info(PREFIX + "magic focus screen opened by the server: {}",
+                        minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.MagicFocusScreen);
                 minecraft.setScreen(new FoundKingdomScreen(throne, 0x336699));
             }
             case 362 -> {
@@ -349,6 +367,8 @@ public final class ClientSelfTest {
             LOGGER.info(PREFIX + "work post placed: {}", KingdomWorldApi.state(server).citizens().posts().get(postPos).isPresent());
             bank = throne.offset(0, 0, -2);
             level.setBlockAndUpdate(bank, ModRegistries.BANK.get().defaultBlockState());
+            focus = throne.offset(0, 0, -4);
+            level.setBlockAndUpdate(focus, io.github.sekerator.kingdomworld.common.magic.MagicRegistries.MAGIC_FOCUS.get().defaultBlockState());
         } else {
             LOGGER.error(PREFIX + "founding failed: {}", result);
         }
@@ -368,6 +388,9 @@ public final class ClientSelfTest {
         }
         if (any != null && bank != null) {
             any.serverLevel().setBlockAndUpdate(bank, Blocks.AIR.defaultBlockState());
+        }
+        if (any != null && focus != null) {
+            any.serverLevel().setBlockAndUpdate(focus, Blocks.AIR.defaultBlockState());
         }
     }
 }
