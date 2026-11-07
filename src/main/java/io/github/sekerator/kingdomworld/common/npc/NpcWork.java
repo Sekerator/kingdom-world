@@ -34,6 +34,8 @@ public final class NpcWork {
     private static final int TRIGGER_TICKS = 20;
     /** Names of the kingdoms of the world in both alphabets, for texts made without the server at hand. */
     private static final Map<UUID, NpcNames.Name> NAMES = new ConcurrentHashMap<>();
+    /** Names of the towns of the kingdoms of the world in both alphabets, by the Latin form (the name of the city). */
+    private static final Map<String, NpcNames.Name> TOWNS = new ConcurrentHashMap<>();
     private static long lastDay = Long.MIN_VALUE;
 
     private NpcWork() {
@@ -80,14 +82,48 @@ public final class NpcWork {
 
     static void remember(NpcKingdom kingdom) {
         NAMES.put(kingdom.kingdomId(), kingdom.name());
+        kingdom.towns().forEach(town -> TOWNS.put(town.latin(), town));
     }
 
     static void forgetName(UUID kingdomId) {
         NAMES.remove(kingdomId);
     }
 
+    /**
+     * The name of a city in the language of a player: a town of a kingdom of the world in its Cyrillic form for Russian, any other
+     * name as it is.
+     */
+    public static String localCity(String name, String language) {
+        NpcNames.Name town = TOWNS.get(name);
+        if (town == null) {
+            return name;
+        }
+        return io.github.sekerator.kingdomworld.core.citizen.CitizenNames.alphabetFor(language)
+                == io.github.sekerator.kingdomworld.core.citizen.CitizenNames.Alphabet.CYRILLIC ? town.cyrillic() : town.latin();
+    }
+
+    /**
+     * The name of a kingdom in the language of a player: a kingdom of the world in its Cyrillic form for Russian.
+     */
+    public static String localKingdom(UUID kingdomId, String name, String language) {
+        NpcNames.Name both = kingdomId == null ? null : NAMES.get(kingdomId);
+        if (both == null) {
+            return name;
+        }
+        return io.github.sekerator.kingdomworld.core.citizen.CitizenNames.alphabetFor(language)
+                == io.github.sekerator.kingdomworld.core.citizen.CitizenNames.Alphabet.CYRILLIC ? both.cyrillic() : both.latin();
+    }
+
+    /**
+     * The name of a city as a text in both alphabets when it is a town of a kingdom of the world.
+     */
+    public static Optional<NpcNames.Name> town(String name) {
+        return Optional.ofNullable(TOWNS.get(name));
+    }
+
     static void reset() {
         NAMES.clear();
+        TOWNS.clear();
         lastDay = Long.MIN_VALUE;
         NpcPlanning.reset();
         NpcSpawner.reset();
@@ -95,6 +131,7 @@ public final class NpcWork {
 
     static void loaded(MinecraftServer server) {
         NAMES.clear();
+        TOWNS.clear();
         state(server).kingdoms().forEach(NpcWork::remember);
     }
 
@@ -213,7 +250,21 @@ public final class NpcWork {
                     point -> !NpcPlanning.nearKingdom(server, point[0], point[1], 48)
                             && NpcPlanning.suitable(server.overworld(), point[0], point[1], 16, false), wanted, minCity);
         }
-        NpcSite site = state.addSite(x, z, level, seed, NpcSite.towns(chosen));
+        return plantAt(server, x, z, level, chosen);
+    }
+
+    /**
+     * Adds a place to the plan with the towns given and starts its appearance at once (when no other one is appearing); for
+     * operators and game tests.
+     */
+    public static Optional<NpcSite> plantAt(MinecraftServer server, int x, int z, io.github.sekerator.kingdomworld.core.npc.NpcLevel level,
+                                            List<int[]> towns) {
+        if (isReadOnly(server)) {
+            return Optional.empty();
+        }
+        NpcState state = state(server);
+        long seed = server.overworld().getSeed() * 31 + x * 341_873_128_712L + z * 132_897_987_541L;
+        NpcSite site = state.addSite(x, z, level, seed, NpcSite.towns(towns));
         if (state.spawning().isEmpty()) {
             NpcSpawner.start(server, site);
         }

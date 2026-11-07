@@ -35,6 +35,8 @@ public enum SpawnStage {
     ROADS,
     /** The wall of the capital with its gates. */
     WALL,
+    /** The laws of the ruler and the guards of the gates of the capital and of the towns. */
+    LAW,
     /** Done. */
     DONE;
 

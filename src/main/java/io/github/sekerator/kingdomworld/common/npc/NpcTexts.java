@@ -52,6 +52,13 @@ public final class NpcTexts {
     }
 
     /**
+     * The name of a city: a town of a kingdom of the world in both alphabets, any other as it is.
+     */
+    public static MutableComponent city(String name) {
+        return NpcWork.town(name).map(town -> name(town.latin(), town.cyrillic())).orElseGet(() -> Component.literal(name));
+    }
+
+    /**
      * A name in both alphabets.
      */
     public static MutableComponent name(String latin, String cyrillic) {

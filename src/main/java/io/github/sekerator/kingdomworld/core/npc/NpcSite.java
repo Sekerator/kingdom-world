@@ -52,7 +52,7 @@ public final class NpcSite {
     private final int z;
     private final NpcLevel level;
     private final long seed;
-    private final List<Town> towns;
+    private final List<Town> towns = new ArrayList<>();
     private Status status = Status.PLANNED;
     private UUID kingdomId;
     private SpawnStage stage = SpawnStage.LOAD;
@@ -70,7 +70,7 @@ public final class NpcSite {
         this.z = z;
         this.level = Objects.requireNonNull(level, "level");
         this.seed = seed;
-        this.towns = List.copyOf(towns);
+        this.towns.addAll(towns);
     }
 
     void setChangeListener(Runnable listener) {
@@ -98,7 +98,15 @@ public final class NpcSite {
     }
 
     public List<Town> towns() {
-        return towns;
+        return List.copyOf(towns);
+    }
+
+    /**
+     * Keeps only some of the towns: the others are left out, their land never claimed.
+     */
+    public void retainTowns(List<Town> kept) {
+        towns.retainAll(kept);
+        changeListener.run();
     }
 
     public Status status() {

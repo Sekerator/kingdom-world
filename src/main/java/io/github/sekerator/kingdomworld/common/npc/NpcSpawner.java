@@ -215,13 +215,21 @@ public final class NpcSpawner {
     static void tick(MinecraftServer server) {
         Optional<NpcSite> spawning = NpcWork.state(server).spawning();
         if (spawning.isEmpty()) {
-            job = null;
+            if (job != null) {
+                releaseTickets(server.overworld());
+                job = null;
+            }
             return;
         }
         NpcSite site = spawning.get();
         if (job == null || job.siteId != site.id()) {
-            job = new Job(site.id(), composition(site));
-            job.chunks.addAll(chunks(site, job.composition));
+            if (job != null) {
+                releaseTickets(server.overworld());
+            }
+            job = newJob(site);
+            if (job == null) {
+                return;
+            }
         }
         // The tick an appearance starts in belongs to what started it (a player coming near, a command looking for land).
         if (job.ticks > 1) {
@@ -256,8 +264,10 @@ public final class NpcSpawner {
         }
         for (int i = 0; i < maxTicks && site.status() == NpcSite.Status.SPAWNING; i++) {
             if (job == null || job.siteId != site.id()) {
-                job = new Job(site.id(), composition(site));
-                job.chunks.addAll(chunks(site, job.composition));
+                job = newJob(site);
+                if (job == null) {
+                    return;
+                }
             }
             if (!job.loaded) {
                 for (ChunkPos chunk : job.chunks) {
@@ -281,6 +291,21 @@ public final class NpcSpawner {
         }
     }
 
+    /**
+     * The job of a place, or {@code null} if it cannot be made (the place is left alone, instead of failing every tick).
+     */
+    private static Job newJob(NpcSite site) {
+        try {
+            Job made = new Job(site.id(), composition(site));
+            made.chunks.addAll(chunks(site, made.composition));
+            return made;
+        } catch (RuntimeException e) {
+            LOGGER.error("The appearance of the kingdom of the world at {} could not be prepared", site, e);
+            site.block("failed: " + e);
+            return null;
+        }
+    }
+
     private static void step(MinecraftServer server, ServerLevel level, NpcSite site, Job job) {
         if (site.stage() != SpawnStage.LOAD && site.stage() != SpawnStage.DONE && !loaded(level, site, job)) {
             // After a restart the chunks come back with the tickets first, so that nothing loads on the main thread.
@@ -300,6 +325,7 @@ public final class NpcSpawner {
             case ARMY -> army(server, site, job);
             case ROADS -> roads(server, level, site, job);
             case WALL -> wall(server, level, site, job);
+            case LAW -> law(server, site, job);
             case DONE -> done(server, level, site, job);
         }
     }
@@ -427,10 +453,47 @@ public final class NpcSpawner {
                 return;
             }
         }
+        List<NpcSite.Town> kept = new ArrayList<>();
+        for (NpcSite.Town town : site.towns()) {
+            String problem = townProblem(level, state, site, town, own, buffer, limit);
+            if (problem == null) {
+                kept.add(town);
+            } else {
+                LOGGER.info("The town at {} {} of {} is left out: {}", town.x(), town.z(), site, problem);
+            }
+        }
+        if (kept.size() != site.towns().size()) {
+            site.retainTowns(kept);
+        }
         if (site.groundY() == 0) {
             site.setGroundY(plazaHeight(level, site.x(), site.z()));
         }
         site.advance(SpawnStage.FOUND);
+    }
+
+    /**
+     * Why a town cannot be: a chunk of its square or of the way to it lies near the land of another kingdom or players spent
+     * longer there than the rules allow; {@code null} if it can.
+     */
+    private static String townProblem(ServerLevel level, KingdomWorldState state, NpcSite site, NpcSite.Town town, UUID own, int buffer,
+                                      long limit) {
+        String dimension = Dimensions.id(level);
+        int r = NpcSettings.rules().landRadius(site.level());
+        for (long key : NpcPlanning.townChunks(site.x() >> 4, site.z() >> 4, r, town.x(), town.z())) {
+            int x = ChunkPos.getX(key);
+            int z = ChunkPos.getZ(key);
+            if (state.territory().hasForeignLandWithin(dimension, ChunkKey.of(x, z), buffer, own)) {
+                return "the land of another kingdom is near chunk [" + x + ", " + z + "]";
+            }
+            LevelChunk loaded = level.getChunkSource().getChunkNow(x, z);
+            if (loaded == null) {
+                loaded = level.getChunk(x, z);
+            }
+            if (loaded.getInhabitedTime() > limit) {
+                return "players spent " + loaded.getInhabitedTime() / 1200 + " minutes in chunk [" + x + ", " + z + "]";
+            }
+        }
+        return null;
     }
 
     /**
@@ -478,6 +541,11 @@ public final class NpcSpawner {
         KingdomWorldState state = KingdomWorldApi.state(server);
         BlockPos throne = new BlockPos(site.x(), site.groundY() + 1, site.z());
         if (state.kingdoms().get(id).isEmpty()) {
+            String refused = foundingProblem(level, state, throne);
+            if (refused != null) {
+                stop(level, site, refused);
+                return;
+            }
             Set<String> taken = new java.util.HashSet<>();
             state.kingdoms().all().forEach(kingdom -> taken.add(KingdomNames.key(kingdom.name())));
             NpcNames.Name name = NpcNames.kingdom(site.seed(), candidate -> taken.contains(KingdomNames.key(candidate)));
@@ -514,11 +582,37 @@ public final class NpcSpawner {
             Kingdom existing = state.kingdoms().get(id).orElseThrow();
             NpcNames.Name name = new NpcNames.Name(existing.name(), existing.name());
             npc.putKingdom(NpcKingdom.create(id, site, name, List.of(), KingdomWorldApi.gameTime(server), TreasuryActions.day(server)));
+        }
+        if (site.kingdomId().isEmpty()) {
+            // A place appearing again (an operator spawned it anew) finds its kingdom by its id.
             site.setKingdomId(id);
         }
         if (claimLand(level, site, id, job)) {
             site.advance(SpawnStage.GROUND);
         }
+    }
+
+    /**
+     * Why a kingdom cannot be founded with its throne at a place, checked before any block is touched; {@code null} if it can.
+     */
+    private static String foundingProblem(ServerLevel level, KingdomWorldState state, BlockPos throne) {
+        String dimension = Dimensions.id(level);
+        long chunk = ChunkKey.of(throne.getX() >> 4, throne.getZ() >> 4);
+        var rules = KingdomWorldApi.rules();
+        if (!rules.allowedDimensions().contains(dimension)) {
+            return "kingdoms may not be founded in " + dimension;
+        }
+        if (state.territory().ownerOf(dimension, chunk) != null
+                || state.territory().hasForeignLandWithin(dimension, chunk, rules.minChunksFromOtherKingdom(), null)) {
+            return "the land of another kingdom is too close to the throne";
+        }
+        for (int dy = -1; dy < 3; dy++) {
+            BlockPos at = throne.above(dy);
+            if (NpcGround.protectedAt(level, at, level.getBlockState(at))) {
+                return "something that must not be broken stands at the throne " + at.toShortString();
+            }
+        }
+        return null;
     }
 
     /**
@@ -642,8 +736,8 @@ public final class NpcSpawner {
                     boolean edge = Math.abs(x - site.x()) == PLAZA || Math.abs(z - site.z()) == PLAZA;
                     top = edge ? Blocks.STONE_BRICKS.defaultBlockState()
                             : (Math.floorMod(x + z, 2) == 0 ? Blocks.POLISHED_ANDESITE.defaultBlockState() : Blocks.ANDESITE.defaultBlockState());
-                } else if (!inAny(plots, x, z) && soil == NpcGround.Soil.GRASS) {
-                    top = Blocks.DIRT_PATH.defaultBlockState();
+                } else if (street(job.composition, x - site.x(), z - site.z())) {
+                    top = streetBlock(job.composition, soil);
                 }
                 int changed = NpcGround.level(level, id, x, z, site.groundY(), top, soil.fill());
                 budget -= Math.max(1, changed);
@@ -670,6 +764,32 @@ public final class NpcSpawner {
             changed += Math.max(0, NpcGround.level(level, id, x, z, target, soil.top(), soil.fill()));
         }
         return changed;
+    }
+
+    /**
+     * Whether a column of the capital lies on a street: the gaps of two blocks between the plots of the grid.
+     */
+    static boolean street(NpcComposition composition, int dx, int dz) {
+        int edge = composition.rings() * NpcComposition.SPACING + NpcComposition.SPACING / 2 + 1;
+        if (Math.abs(dx) > edge || Math.abs(dz) > edge) {
+            return false;
+        }
+        return gap(dx) || gap(dz);
+    }
+
+    private static boolean gap(int d) {
+        return Math.floorMod(d - NpcComposition.SPACING / 2, NpcComposition.SPACING) < NpcComposition.SPACING - NpcComposition.PLOT;
+    }
+
+    /**
+     * The surface of the streets: trodden earth for a village, gravel for a town, stone for a large city.
+     */
+    private static BlockState streetBlock(NpcComposition composition, NpcGround.Soil soil) {
+        return switch (composition.roadClass()) {
+            case "paved" -> Blocks.STONE_BRICKS.defaultBlockState();
+            case "gravel" -> Blocks.GRAVEL.defaultBlockState();
+            default -> soil == NpcGround.Soil.GRASS ? Blocks.DIRT_PATH.defaultBlockState() : Blocks.GRAVEL.defaultBlockState();
+        };
     }
 
     private static boolean inAny(List<Box> boxes, int x, int z) {
@@ -842,8 +962,77 @@ public final class NpcSpawner {
             site.setStep(step + 1);
             return;
         }
+        List<int[]> gardens = gardenPlots(composition);
+        int garden = step - fields - 2;
+        if (garden < gardens.size()) {
+            int[] cell = gardens.get(garden);
+            garden(level, id, site.x() + cell[0] * NpcComposition.SPACING, site.groundY(), site.z() + cell[1] * NpcComposition.SPACING, garden);
+            site.setStep(step + 1);
+            return;
+        }
         professionsInBuildings(server, id, composition);
         site.advance(SpawnStage.TOWNS);
+    }
+
+    /**
+     * The plots of the grid of the capital no building took, for gardens.
+     */
+    static List<int[]> gardenPlots(NpcComposition composition) {
+        Set<Long> taken = new java.util.HashSet<>();
+        for (NpcComposition.Plot plot : composition.buildings()) {
+            taken.add(ChunkPos.asLong(plot.gx(), plot.gz()));
+        }
+        List<int[]> free = new ArrayList<>();
+        int rings = composition.rings();
+        for (int gx = -rings; gx <= rings; gx++) {
+            for (int gz = -rings; gz <= rings; gz++) {
+                if ((gx != 0 || gz != 0) && !taken.contains(ChunkPos.asLong(gx, gz))) {
+                    free.add(new int[]{gx, gz});
+                }
+            }
+        }
+        return free;
+    }
+
+    /**
+     * A garden on a plot: a hedge of leaves round beds of crops (wheat, carrots, potatoes or beetroots by turns) watered from the
+     * middle, a composter for the farmers and lanterns on two corners for the street.
+     */
+    private static void garden(ServerLevel level, UUID id, int cx, int y, int cz, int index) {
+        Block[] crops = {Blocks.WHEAT, Blocks.CARROTS, Blocks.POTATOES, Blocks.BEETROOTS};
+        CropBlock crop = (CropBlock) crops[Math.floorMod(index, crops.length)];
+        int half = NpcComposition.PLOT / 2;
+        for (int dx = -half; dx <= half; dx++) {
+            for (int dz = -half; dz <= half; dz++) {
+                BlockPos ground = new BlockPos(cx + dx, y, cz + dz);
+                boolean border = Math.abs(dx) == half || Math.abs(dz) == half;
+                if (border) {
+                    boolean corner = Math.abs(dx) == half && Math.abs(dz) == half;
+                    if (corner && dx == dz) {
+                        NpcGround.set(level, id, ground.above(), Blocks.SPRUCE_FENCE.defaultBlockState());
+                        NpcGround.set(level, id, ground.above(2), Blocks.LANTERN.defaultBlockState().setValue(LanternBlock.HANGING, false));
+                    } else if (!corner && (dx == 0 || dz == 0)) {
+                        continue;
+                    } else {
+                        NpcGround.set(level, id, ground.above(), Blocks.OAK_LEAVES.defaultBlockState()
+                                .setValue(net.minecraft.world.level.block.LeavesBlock.PERSISTENT, true));
+                    }
+                    continue;
+                }
+                if (Math.abs(dx) == half - 1 || Math.abs(dz) == half - 1) {
+                    continue;
+                }
+                if (dx == 0 && dz == 0) {
+                    NpcGround.set(level, id, ground, Blocks.WATER.defaultBlockState());
+                    continue;
+                }
+                if (NpcGround.set(level, id, ground, Blocks.FARMLAND.defaultBlockState().setValue(FarmBlock.MOISTURE, FarmBlock.MAX_MOISTURE))) {
+                    int age = Math.floorMod(cx * 7 + cz * 3 + dx * 5 + dz * 11, crop.getMaxAge() + 1);
+                    NpcGround.set(level, id, ground.above(), crop.getStateForAge(age));
+                }
+            }
+        }
+        place(level, id, new BlockPos(cx + half - 1, y + 1, cz - half + 1), Blocks.COMPOSTER.defaultBlockState());
     }
 
     /**
@@ -1289,30 +1478,72 @@ public final class NpcSpawner {
                 }
             }
         }
-        if (army.squadsOf(id).isEmpty() && have > 0) {
-            List<UUID> soldiers = new ArrayList<>();
-            for (Soldier soldier : army.soldiersOf(id)) {
-                soldiers.add(soldier.citizenId());
-            }
-            String dimension = Dimensions.id(server.overworld());
-            WorldPos center = new WorldPos(dimension, site.x(), site.groundY() + 1, site.z());
-            int maxSize = ArmySettings.rules().maxSquadSize();
-            List<UUID> guards = new ArrayList<>(soldiers.subList(0, Math.min(maxSize, soldiers.size() >= 4 ? (soldiers.size() + 1) / 2
-                    : soldiers.size())));
-            List<UUID> patrol = new ArrayList<>(soldiers.subList(guards.size(), Math.min(soldiers.size(), guards.size() + maxSize)));
-            int reach = job.composition.reach();
-            // The radius of a guarded area is counted in chunks.
-            formAndOrder(server, id, guards, Order.guard(center, Math.min(Order.MAX_RADIUS, Math.max(1, (reach + 15) / 16))));
-            if (!patrol.isEmpty()) {
-                List<WorldPos> route = new ArrayList<>();
-                int r = Math.max(10, reach - 2);
-                for (int[] corner : new int[][]{{-r, -r}, {r, -r}, {r, r}, {-r, r}}) {
-                    route.add(new WorldPos(dimension, site.x() + corner[0], site.groundY() + 1, site.z() + corner[1]));
-                }
-                formAndOrder(server, id, patrol, Order.patrol(route));
+        site.advance(SpawnStage.ROADS);
+    }
+
+    /**
+     * The laws of the ruler by its character (set through the law like a king would) and the guards: squads of the soldiers
+     * guard the gates of the capital and the town halls of the towns; without gates or towns one squad guards the capital.
+     */
+    private static void law(MinecraftServer server, NpcSite site, Job job) {
+        UUID id = site.kingdomId().orElseThrow();
+        Optional<NpcKingdom> record = NpcWork.kingdom(server, id);
+        if (record.isPresent() && !io.github.sekerator.kingdomworld.common.law.LawWork.isReadOnly(server)) {
+            io.github.sekerator.kingdomworld.core.law.LawRules rules = io.github.sekerator.kingdomworld.common.law.LawSettings.rules();
+            io.github.sekerator.kingdomworld.core.npc.NpcLaws laws = io.github.sekerator.kingdomworld.core.npc.NpcLaws.of(
+                    record.get().character(), record.get().traits(), rules.maxEntryFee, rules.maxBounty);
+            KingdomWorldState world = KingdomWorldApi.state(server);
+            io.github.sekerator.kingdomworld.common.law.LawWork.change(server, "set the laws of a kingdom of the world", law -> {
+                law.setMultiplier(null, id, laws.fineMultiplierPermille(), world);
+                law.setEntryFee(null, id, laws.entryFee(), rules, world);
+                law.setBountyReward(null, id, laws.bounty(), rules, world);
+                return law.setSlaveryBanned(null, id, laws.slaveryBanned(), world);
+            });
+            LOGGER.info("The laws of {}: fines {}%, entry to large cities {}, bounty {}, slavery {}", site,
+                    laws.fineMultiplierPermille() / 10, laws.entryFee(), laws.bounty(), laws.slaveryBanned() ? "banned" : "allowed");
+        }
+        if (!ArmyWork.isReadOnly(server)) {
+            guardGates(server, site, id, job);
+        }
+        site.advance(SpawnStage.DONE);
+    }
+
+    private static void guardGates(MinecraftServer server, NpcSite site, UUID id, Job job) {
+        ArmyState army = ArmyWork.state(server);
+        if (!army.squadsOf(id).isEmpty()) {
+            return;
+        }
+        List<UUID> soldiers = new ArrayList<>();
+        for (Soldier soldier : army.soldiersOf(id)) {
+            soldiers.add(soldier.citizenId());
+        }
+        if (soldiers.isEmpty()) {
+            return;
+        }
+        String dimension = Dimensions.id(server.overworld());
+        List<WorldPos> places = new ArrayList<>(CityWalls.gates(server, id, 0));
+        for (City city : RoadWork.state(server).citiesOf(id)) {
+            places.add(new WorldPos(city.dimension(), city.x(), city.y(), city.z()));
+        }
+        if (places.isEmpty()) {
+            places.add(new WorldPos(dimension, site.x(), site.groundY() + 1, site.z()));
+        }
+        var rules = ArmySettings.rules();
+        int squads = Math.max(1, Math.min(Math.min(places.size(), rules.maxSquads()), soldiers.size()));
+        List<List<UUID>> groups = new ArrayList<>();
+        for (int i = 0; i < squads; i++) {
+            groups.add(new ArrayList<>());
+        }
+        for (int i = 0; i < soldiers.size(); i++) {
+            List<UUID> group = groups.get(i % squads);
+            if (group.size() < rules.maxSquadSize()) {
+                group.add(soldiers.get(i));
             }
         }
-        site.advance(SpawnStage.ROADS);
+        for (int i = 0; i < squads; i++) {
+            // A gate is guarded close by: the radius of a guarded area is counted in chunks.
+            formAndOrder(server, id, groups.get(i), Order.guard(places.get(i), 1));
+        }
     }
 
     private static void formAndOrder(MinecraftServer server, UUID id, List<UUID> members, Order order) {
@@ -1432,7 +1663,7 @@ public final class NpcSpawner {
     private static void wall(MinecraftServer server, ServerLevel level, NpcSite site, Job job) {
         UUID id = site.kingdomId().orElseThrow();
         if (RoadWork.isReadOnly(server)) {
-            site.advance(SpawnStage.DONE);
+            site.advance(SpawnStage.LAW);
             return;
         }
         Optional<Wall> existing = RoadWork.state(server).wallOf(0, id);
@@ -1442,7 +1673,7 @@ public final class NpcSpawner {
             Outcome built = CityWalls.build(server, null, id, 0, wallClass, made);
             if (!built.ok() || made[0] == null) {
                 LOGGER.warn("The wall of {} was refused: {}", site, built.error());
-                site.advance(SpawnStage.DONE);
+                site.advance(SpawnStage.LAW);
                 return;
             }
             existing = Optional.of(made[0]);
@@ -1473,7 +1704,7 @@ public final class NpcSpawner {
         });
         if (wall.allPaid()) {
             RoadSync.changed();
-            site.advance(SpawnStage.DONE);
+            site.advance(SpawnStage.LAW);
         }
     }
 

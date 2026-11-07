@@ -134,6 +134,23 @@ class NpcCompositionTest {
     }
 
     @Test
+    void rulersSetTheirLawsByTheirCharacter() {
+        NpcLaws merchant = NpcLaws.of(RulerCharacter.MERCHANT, List.of(RulerCharacter.Trait.BOLD), 10_000, 1_000_000);
+        NpcLaws just = NpcLaws.of(RulerCharacter.MERCHANT, List.of(RulerCharacter.Trait.JUST), 10_000, 1_000_000);
+        NpcLaws warrior = NpcLaws.of(RulerCharacter.WARRIOR, List.of(RulerCharacter.Trait.PATIENT), 10_000, 1_000_000);
+        NpcLaws builder = NpcLaws.of(RulerCharacter.BUILDER, List.of(RulerCharacter.Trait.PATIENT), 10_000, 1_000_000);
+        assertTrue(merchant.entryFee() > builder.entryFee(), "a merchant asks more at the gates");
+        assertTrue(just.entryFee() < merchant.entryFee(), "a just ruler asks less");
+        assertTrue(just.slaveryBanned() && !merchant.slaveryBanned(), "only a just ruler bans slavery");
+        assertTrue(warrior.fineMultiplierPermille() > builder.fineMultiplierPermille(), "a warrior fines harder");
+        assertTrue(just.fineMultiplierPermille() < merchant.fineMultiplierPermille());
+        assertTrue(warrior.bounty() > builder.bounty(), "a warrior pays more for heads");
+        NpcLaws capped = NpcLaws.of(RulerCharacter.WARRIOR, List.of(RulerCharacter.Trait.GENEROUS), 5, 100);
+        assertEquals(100, capped.bounty(), "the rules cap the bounty");
+        assertTrue(capped.entryFee() <= 5, "the rules cap the fee");
+    }
+
+    @Test
     void rulersHaveACharacterAndOneOrTwoTraitsThatAgree() {
         Set<RulerCharacter> seen = new HashSet<>();
         for (long seed = 0; seed < 200; seed++) {

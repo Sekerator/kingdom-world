@@ -281,6 +281,41 @@ public final class NpcGameTests {
         }
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_npc_town", timeoutTicks = 200)
+    public static void aTownWherePlayersSpentHoursIsLeftOutAndTheirBlocksStay(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos center = platform(helper);
+        // A place for a town east of the capital, where a player spent hours and left a chest on planks.
+        BlockPos town = new BlockPos(center.getX() + 130, PLATFORM, center.getZ());
+        ChunkPos townChunk = new ChunkPos(town);
+        BlockPos planks = town.offset(3, 1, 2);
+        NpcSite site = null;
+        try {
+            level.setBlockAndUpdate(planks, Blocks.OAK_PLANKS.defaultBlockState());
+            level.setBlockAndUpdate(planks.above(), Blocks.CHEST.defaultBlockState());
+            level.getChunk(townChunk.x, townChunk.z).setInhabitedTime(10L * 60 * 60 * 20);
+            helper.assertTrue(NpcWork.state(server).spawning().isEmpty(), "Another kingdom of the world is appearing");
+            site = NpcWork.plantAt(server, center.getX(), center.getZ(), NpcLevel.SMALL, List.of(new int[]{town.getX(), town.getZ()}))
+                    .orElse(null);
+            helper.assertTrue(site != null && site.towns().size() == 1, "The place has no town to check");
+            NpcSpawner.runNow(server, site, STEPS);
+            helper.assertTrue(site.status() == NpcSite.Status.SPAWNED, "The capital did not appear: " + site + " " + site.reason());
+            helper.assertTrue(site.towns().isEmpty(), "The town where players spent hours was kept");
+            Kingdom kingdom = kingdomOf(helper, site);
+            helper.assertTrue(!kingdom.id().equals(KingdomWorldApi.ownerOfChunk(level, townChunk.x, townChunk.z)), "The land of the town was claimed");
+            helper.assertTrue(RoadWork.state(server).citiesOf(kingdom.id()).isEmpty(), "A town hall was founded");
+            helper.assertTrue(level.getBlockState(planks).is(Blocks.OAK_PLANKS) && level.getBlockState(planks.above()).is(Blocks.CHEST),
+                    "The blocks of the player were touched");
+            helper.succeed();
+        } finally {
+            level.getChunk(townChunk.x, townChunk.z).setInhabitedTime(0);
+            level.setBlock(planks.above(), Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS);
+            level.setBlock(planks, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+            cleanUp(helper, site, center);
+        }
+    }
+
     @GameTest(template = EMPTY, batch = "kingdomworld_npc_again", timeoutTicks = 200)
     public static void aRestartAndASecondAppearanceMakeNothingTwice(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();

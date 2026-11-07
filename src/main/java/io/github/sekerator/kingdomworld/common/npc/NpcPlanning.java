@@ -58,6 +58,8 @@ final class NpcPlanning {
         List<int[]> townCandidates;
         final List<int[]> towns = new ArrayList<>();
         int townIndex;
+        /** For every chosen town, the reads of the chunks of its square and of the way to it. */
+        List<List<CompletableFuture<Optional<CompoundTag>>>> townReads;
 
         Judging(SitePlanner.Candidate candidate) {
             this.candidate = candidate;
@@ -169,7 +171,69 @@ final class NpcPlanning {
         if (judging.towns.size() < wanted && judging.townIndex < judging.townCandidates.size()) {
             return Optional.empty();
         }
+        // The towns are looked at as the capital is: a town whose square or way was generated already, or whose way passes the
+        // land of a kingdom, is left out.
+        if (judging.townReads == null) {
+            judging.townReads = new ArrayList<>();
+            int r = rules.landRadius(candidate.level());
+            int cx = candidate.x() >> 4;
+            int cz = candidate.z() >> 4;
+            for (int[] town : judging.towns) {
+                List<CompletableFuture<Optional<CompoundTag>>> reads = new ArrayList<>();
+                for (long chunk : townChunks(cx, cz, r, town[0], town[1])) {
+                    reads.add(level.getChunkSource().chunkMap.read(new ChunkPos(chunk)));
+                }
+                judging.townReads.add(reads);
+            }
+            return Optional.empty();
+        }
+        for (List<CompletableFuture<Optional<CompoundTag>>> reads : judging.townReads) {
+            for (CompletableFuture<Optional<CompoundTag>> read : reads) {
+                if (!read.isDone()) {
+                    return Optional.empty();
+                }
+            }
+        }
+        List<int[]> kept = new ArrayList<>();
+        int r = rules.landRadius(candidate.level());
+        for (int i = 0; i < judging.towns.size(); i++) {
+            int[] town = judging.towns.get(i);
+            boolean free = true;
+            for (CompletableFuture<Optional<CompoundTag>> read : judging.townReads.get(i)) {
+                Optional<CompoundTag> chunk = read.isCompletedExceptionally() ? Optional.empty() : read.join();
+                free &= chunk.isEmpty() || !generated(chunk.get());
+            }
+            for (long chunk : townChunks(candidate.x() >> 4, candidate.z() >> 4, r, town[0], town[1])) {
+                free &= free && !nearKingdom(server, ChunkPos.getX(chunk) * 16 + 8, ChunkPos.getZ(chunk) * 16 + 8, 16);
+            }
+            if (free) {
+                kept.add(town);
+            }
+        }
+        judging.towns.clear();
+        judging.towns.addAll(kept);
         return Optional.of(SitePlanner.Verdict.GOOD);
+    }
+
+    /**
+     * The chunks of a town and of the way to it outside the land of the capital: the square of the town two chunks around and
+     * the chunks of the straight way from the capital.
+     */
+    static List<Long> townChunks(int capitalX, int capitalZ, int landRadius, int townX, int townZ) {
+        java.util.Set<Long> keys = new java.util.LinkedHashSet<>();
+        int tx = townX >> 4;
+        int tz = townZ >> 4;
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                keys.add(ChunkPos.asLong(tx + dx, tz + dz));
+            }
+        }
+        for (long chunk : NpcSpawner.corridor(capitalX, capitalZ, tx, tz)) {
+            if (Math.abs(ChunkPos.getX(chunk) - capitalX) > landRadius || Math.abs(ChunkPos.getZ(chunk) - capitalZ) > landRadius) {
+                keys.add(chunk);
+            }
+        }
+        return new ArrayList<>(keys);
     }
 
     private static boolean generated(CompoundTag chunk) {
