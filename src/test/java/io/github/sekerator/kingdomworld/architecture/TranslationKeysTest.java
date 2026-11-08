@@ -59,7 +59,10 @@ class TranslationKeysTest {
      * Keys that pick one of their arguments per language on purpose: a citizen name comes with its Latin and its
      * Cyrillic spelling, English shows the first and Russian the second.
      */
-    private static final Set<String> LANGUAGE_PICKS = Set.of("kingdomworld.citizen.name", "kingdomworld.npc.name");
+    private static final Set<String> LANGUAGE_PICKS = Set.of("kingdomworld.citizen.name", "kingdomworld.npc.name", "kingdomworld.nobility.both",
+            "kingdomworld.nobility.rumor.married", "kingdomworld.nobility.rumor.died", "kingdomworld.nobility.rumor.overthrown",
+            "kingdomworld.nobility.rumor.seceded", "kingdomworld.nobility.rumor.murdered", "kingdomworld.nobility.rumor.verdict.execute",
+            "kingdomworld.nobility.rumor.verdict.exile", "kingdomworld.nobility.rumor.spy_caught");
 
     private static Map<String, String> english;
     private static Map<String, String> russian;

@@ -150,6 +150,7 @@ public final class KingdomWorldCommand {
                         .then(LifeCommands.adminCommand())
                         .then(WarCommands.adminCommand())
                         .then(io.github.sekerator.kingdomworld.common.siege.SiegeCommands.adminCommand())
+                        .then(io.github.sekerator.kingdomworld.common.nobility.NobilityCommands.adminCommand())
                         .then(Commands.literal("data")
                                 .then(Commands.literal("status").executes(context -> dataStatus(context.getSource())))
                                 .then(Commands.literal("unlock").executes(context -> dataUnlock(context.getSource()))))));

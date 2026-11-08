@@ -244,6 +244,12 @@ public final class KingdomWorldNetwork {
                 io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.MapInfo::encode,
                 io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.MapInfo::decode,
                 io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.MapInfo::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.NobilityPackets.TabRequest.class, NetworkDirection.PLAY_TO_SERVER, io.github.sekerator.kingdomworld.common.network.packet.NobilityPackets.TabRequest::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.NobilityPackets.TabRequest::decode, io.github.sekerator.kingdomworld.common.network.packet.NobilityPackets.TabRequest::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.NobilityPackets.TabResponse.class, NetworkDirection.PLAY_TO_CLIENT, io.github.sekerator.kingdomworld.common.network.packet.NobilityPackets.TabResponse::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.NobilityPackets.TabResponse::decode, io.github.sekerator.kingdomworld.common.network.packet.NobilityPackets.TabResponse::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.NobilityPackets.TabChange.class, NetworkDirection.PLAY_TO_SERVER, io.github.sekerator.kingdomworld.common.network.packet.NobilityPackets.TabChange::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.NobilityPackets.TabChange::decode, io.github.sekerator.kingdomworld.common.network.packet.NobilityPackets.TabChange::handle);
         add(id++, LawPackets.TabRequest.class, NetworkDirection.PLAY_TO_SERVER, LawPackets.TabRequest::encode,
                 LawPackets.TabRequest::decode, LawPackets.TabRequest::handle);
         add(id++, LawPackets.TabResponse.class, NetworkDirection.PLAY_TO_CLIENT, LawPackets.TabResponse::encode,
