@@ -550,6 +550,11 @@ final class RulerActions {
         private final int x;
         private final int z;
         private List<Long> chunks;
+        /** The chunks of the square of the town, kept loaded: the way to it is only claimed and needs no blocks. */
+        private List<Long> square;
+        /** Reads of the chunks of the way and the square from the region files, for the time players spent there. */
+        private final java.util.Map<Long, java.util.concurrent.CompletableFuture<Optional<net.minecraft.nbt.CompoundTag>>> reads =
+                new java.util.LinkedHashMap<>();
         private int stage;
         private int row;
         private int y;
@@ -575,6 +580,12 @@ final class RulerActions {
             switch (stage) {
                 case 0 -> {
                     chunks = RulerPlaces.townChunks(territory.get().capital().x(), territory.get().capital().z(), x, z);
+                    square = new ArrayList<>();
+                    for (int dx = -1; dx <= 1; dx++) {
+                        for (int dz = -1; dz <= 1; dz++) {
+                            square.add(ChunkKey.of((x >> 4) + dx, (z >> 4) + dz));
+                        }
+                    }
                     long added = chunks.stream().filter(chunk -> state.territory().ownerOf(dimension, chunk) == null).count();
                     int limit = NpcSettings.rulers().maxChunks(npc.level());
                     if (territory.get().size() + added > limit) {
@@ -584,14 +595,24 @@ final class RulerActions {
                     return null;
                 }
                 case 1 -> {
-                    if (!loaded(level, chunks)) {
-                        return ++waited > LOAD_TICKS ? Outcome.fail(KingdomError.AREA_NOT_LOADED) : null;
-                    }
+                    // Whether players lived on the way or the square: loaded chunks say it at once, the others are read from
+                    // their region files off the main thread. Only the square is loaded, for its ground and its town hall.
                     long limit = NpcSettings.rules().maxInhabitedMinutes() * 1200L;
                     for (long chunk : chunks) {
-                        LevelChunk loaded = level.getChunkSource().getChunkNow(ChunkKey.x(chunk), ChunkKey.z(chunk));
-                        UUID owner = state.territory().ownerOf(dimension, chunk);
-                        if (loaded != null && owner == null && loaded.getInhabitedTime() > limit) {
+                        if (reads.containsKey(chunk) || state.territory().ownerOf(dimension, chunk) != null) {
+                            continue;
+                        }
+                        LevelChunk now = level.getChunkSource().getChunkNow(ChunkKey.x(chunk), ChunkKey.z(chunk));
+                        reads.put(chunk, now != null ? java.util.concurrent.CompletableFuture.completedFuture(Optional.of(inhabited(now)))
+                                : level.getChunkSource().chunkMap.read(new ChunkPos(ChunkKey.x(chunk), ChunkKey.z(chunk))));
+                    }
+                    boolean squareLoaded = loaded(level, square);
+                    if (!squareLoaded || reads.values().stream().anyMatch(read -> !read.isDone())) {
+                        return ++waited > LOAD_TICKS ? Outcome.fail(KingdomError.AREA_NOT_LOADED) : null;
+                    }
+                    for (java.util.concurrent.CompletableFuture<Optional<net.minecraft.nbt.CompoundTag>> read : reads.values()) {
+                        Optional<net.minecraft.nbt.CompoundTag> tag = read.getNow(Optional.empty());
+                        if (tag.isPresent() && tag.get().getLong("InhabitedTime") > limit) {
                             RulerPlaces.unfit(kingdomId, new BlockPos(x, 0, z));
                             return Outcome.fail(KingdomError.CONSTRUCTION_OUTSIDE_LAND);
                         }
@@ -626,9 +647,11 @@ final class RulerActions {
                             return Outcome.fail(KingdomError.CONSTRUCTION_OUTSIDE_LAND);
                         }
                     }
-                    long height = System.nanoTime();
-                    y = NpcSpawner.plazaHeight(level, x, z);
-                    part = part + ", height " + (System.nanoTime() - height) / 1_000_000L + " ms";
+                    Integer height = heightNow(level, x, z);
+                    if (height == null) {
+                        return ++waited > LOAD_TICKS ? Outcome.fail(KingdomError.AREA_NOT_LOADED) : null;
+                    }
+                    y = height;
                     stage = 3;
                     return null;
                 }
@@ -681,6 +704,42 @@ final class RulerActions {
                 }
             }
         }
+    }
+
+    /**
+     * The time players spent in a loaded chunk, as a region file keeps it.
+     */
+    private static net.minecraft.nbt.CompoundTag inhabited(LevelChunk chunk) {
+        net.minecraft.nbt.CompoundTag tag = new net.minecraft.nbt.CompoundTag();
+        tag.putLong("InhabitedTime", chunk.getInhabitedTime());
+        return tag;
+    }
+
+    /**
+     * The height of the square of a town as the spawner judges it (the middle of nine columns around it, not below the sea),
+     * from chunks that are loaded already; {@code null} while one of them is not, so that no chunk is waited for.
+     */
+    private static Integer heightNow(ServerLevel level, int x, int z) {
+        List<Integer> heights = new ArrayList<>();
+        int reach = NpcSpawner.PLAZA;
+        for (int dx = -reach; dx <= reach; dx += reach) {
+            for (int dz = -reach; dz <= reach; dz += reach) {
+                int bx = x + dx;
+                int bz = z + dz;
+                LevelChunk chunk = level.getChunkSource().getChunkNow(bx >> 4, bz >> 4);
+                if (chunk == null) {
+                    return null;
+                }
+                int y = chunk.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE, bx & 15, bz & 15);
+                BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(bx, y, bz);
+                while (y > level.getMinBuildHeight() && NpcGround.soft(chunk.getBlockState(pos.setY(y)))) {
+                    y--;
+                }
+                heights.add(y);
+            }
+        }
+        heights.sort(Integer::compare);
+        return Math.max(heights.get(heights.size() / 2), level.getSeaLevel());
     }
 
     private static NpcNames.Name townName(MinecraftServer server, NpcKingdom npc) {
