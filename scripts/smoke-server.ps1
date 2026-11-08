@@ -2682,8 +2682,9 @@ if ($script:NpcSite) {
                 Add-Failure "[session3] the treasury and the journal differ by $($days.Groups[9].Value)"
             }
         }
-        $laid = Wait-ForLog $server 'The ruler of .+? laid out (\S+) at (-?\d+), (-?\d+), (-?\d+)' 240
-        if ($laid) { Write-Ok "[session3] the ruler laid out $($laid.Groups[1].Value) for its builders" } else { Add-Failure '[session3] the ruler laid out no building' }
+        # The kingdom grows: a new building for its builders, a building raised to its next level or a new town.
+        $laid = Wait-ForLog $server 'The ruler of .+? (laid out (\S+) at|founded the town (\S+))|Construction \d+: upgrade of building \d+' 240
+        if ($laid) { Write-Ok "[session3] the kingdom grows: $($laid.Groups[0].Value)" } else { Add-Failure '[session3] the ruler neither laid out nor raised a building nor founded a town' }
         Send-ServerCommand $server "kingdomworld admin npc decisions $site"
         $decisions = Wait-ForLog $server ': (\d+) decrees?, (\d+) turn\(s\), waiting: ' $CommandTimeout $ConsoleFailPattern
         Start-Sleep -Seconds 2

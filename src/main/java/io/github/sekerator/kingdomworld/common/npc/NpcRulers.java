@@ -224,10 +224,17 @@ public final class NpcRulers {
             turning = null;
             state.kingdom(current.kingdomId()).ifPresent(kingdom -> {
                 turnTick = true;
-                if (current.part() == 1) {
+                RulerMemory memory = state.ruler(kingdom.kingdomId());
+                if (current.part() < RulerSnapshots.PARTS) {
+                    doing = "part " + current.part() + " of the look of " + kingdom.name().latin();
+                    RulerSnapshots.next(server, kingdom, memory, current.view(), current.part());
+                    turning = new Turning(current.kingdomId(), current.view(), current.day(), current.part() + 1);
+                    return;
+                }
+                if (current.part() == RulerSnapshots.PARTS) {
                     doing = "the second look of " + kingdom.name().latin();
-                    RulerSnapshots.more(server, kingdom, state.ruler(kingdom.kingdomId()), current.view());
-                    turning = new Turning(current.kingdomId(), current.view(), current.day(), 2);
+                    RulerSnapshots.more(server, kingdom, memory, current.view());
+                    turning = new Turning(current.kingdomId(), current.view(), current.day(), current.part() + 1);
                     return;
                 }
                 doing = "the decisions of " + kingdom.name().latin();
@@ -592,8 +599,11 @@ public final class NpcRulers {
             doing = doing + " answers of " + kingdom.name().latin();
             turnTick = true;
             RulerMemory memory = state.ruler(id);
-            // Judging deals needs no places for buildings or land: the first two parts of a look are enough.
+            // Judging deals needs no places for buildings or land: the look without them is enough.
             RulerView view = RulerSnapshots.begin(server, kingdom, memory, NpcSettings.rulers(), day);
+            for (int part = 1; part < RulerSnapshots.PARTS; part++) {
+                RulerSnapshots.next(server, kingdom, memory, view, part);
+            }
             RulerSnapshots.more(server, kingdom, memory, view);
             for (RulerView.Offer offer : view.offers) {
                 RulerMind.Verdict verdict = RulerMind.judge(offer, view, memory, NpcSettings.rulers());

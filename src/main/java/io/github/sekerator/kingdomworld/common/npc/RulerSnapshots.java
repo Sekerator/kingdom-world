@@ -101,6 +101,7 @@ final class RulerSnapshots {
 
     static void reset() {
         UPGRADES.clear();
+        LOOKS.clear();
     }
 
     /**
@@ -108,30 +109,51 @@ final class RulerSnapshots {
      */
     static RulerView of(MinecraftServer server, NpcKingdom npc, RulerMemory memory, RulerRules rules, long day) {
         RulerView view = begin(server, npc, memory, rules, day);
+        for (int part = 1; part < PARTS; part++) {
+            next(server, npc, memory, view, part);
+        }
         more(server, npc, memory, view);
         finish(server, npc, rules, view);
         return view;
     }
 
+    /** Parts of the first look at a kingdom, one a tick: people; money and buildings; the army and threats. */
+    static final int PARTS = 3;
+
     /**
-     * The first part of a snapshot: people, money, buildings, the army and threats.
+     * The first part of a snapshot: people.
      */
     static RulerView begin(MinecraftServer server, NpcKingdom npc, RulerMemory memory, RulerRules rules, long day) {
         UUID id = npc.kingdomId();
         KingdomWorldState state = KingdomWorldApi.state(server);
         RulerView view = new RulerView();
-        Map<String, Long> counts = KingdomStorage.countsById(server, id);
         view.day = day;
         view.character = npc.character();
         view.traits = npc.traits();
         view.size = npc.level();
         view.cityLevel = CityWalls.level(server, id, 0).ordinal();
         people(server, state, id, view);
-        treasury(server, state, id, npc, view);
-        buildings(server, state, id, view, counts);
-        army(server, id, view);
-        threats(server, id, view);
+        LOOKS.put(id, npc);
         return view;
+    }
+
+    /** The kingdoms being looked at, for the parts after the first. */
+    private static final Map<UUID, NpcKingdom> LOOKS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * A further part of the first look: money and buildings (part 1), the army and threats (part 2).
+     */
+    static void next(MinecraftServer server, NpcKingdom npc, RulerMemory memory, RulerView view, int part) {
+        UUID id = npc.kingdomId();
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        if (part == 1) {
+            treasury(server, state, id, npc, view);
+            buildings(server, state, id, view, KingdomStorage.countsById(server, id));
+        } else {
+            army(server, id, view);
+            threats(server, id, view);
+            LOOKS.remove(id);
+        }
     }
 
     /**
