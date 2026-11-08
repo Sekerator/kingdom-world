@@ -57,6 +57,16 @@ final class DiplomacyLayoutCases {
         LayoutCheck.actionbar(font, Component.translatable("kingdomworld.war.no_blow.away"), narrowest);
         LayoutCheck.actionbar(font, Component.translatable("kingdomworld.war.no_blow.peace"), narrowest);
         LayoutCheck.actionbar(font, Component.translatable("kingdomworld.war.no_blow.shielded"), narrowest);
+        String siege = "kingdomworld.siege.";
+        LayoutCheck.actionbar(font, Component.translatable(siege + "bar.gate", 100), narrowest);
+        for (String kind : List.of("chunk", "plaza", "throne")) {
+            LayoutCheck.actionbar(font, Component.translatable(siege + "bar.hold." + kind, 999, 999, Component.translatable(siege + "minutes.n5")),
+                    narrowest);
+        }
+        for (String key : List.of("bar.chunk_retaking", "bar.frozen", "bar.king_away", "gate_shut", "unbreakable", "loot")) {
+            LayoutCheck.actionbar(font, Component.translatable(siege + key, 100), narrowest);
+        }
+        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.army.baton.no_city_near"), narrowest);
     }
 
     private static DiplomacyViews.TabView tab(UUID kingdom, boolean canManage, boolean empty, boolean shielded) {

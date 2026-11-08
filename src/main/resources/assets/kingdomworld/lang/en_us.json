@@ -3367,7 +3367,7 @@
   "kingdomworld.siege.bar.hold.throne": "Holding the throne hall: %s of %s %s",
   "kingdomworld.siege.bar.chunk_retaking": "Freeing the chunk: %s%% held by the enemy",
   "kingdomworld.siege.bar.frozen": "Siege stands still: the defenders are away",
-  "kingdomworld.siege.bar.king_away": "The throne is not taken: the king has not been here in this war",
+  "kingdomworld.siege.bar.king_away": "No throne yet: the king was not here in this war",
   "kingdomworld.siege.gate_shut": "The gate is shut against you; break it",
   "kingdomworld.siege.unbreakable": "This block does not break in war",
   "kingdomworld.siege.loot": "Loot of war",
