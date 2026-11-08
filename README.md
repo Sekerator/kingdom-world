@@ -333,6 +333,21 @@ KingdomWorld: мод для Minecraft 1.20.1 (Forge) о королевствах
 - **Данные** в `kingdomworld_nobility.dat` (формат 1): дома, титулы, дворы (довольство фракций, игровые дни, дни смуты, недавние события, летопись, донесения), требования, заговоры, шпионы. Непонятные данные оставляют знать только для чтения. Права `manage_nobility` (канцлер) и `manage_spies` (тайный советник) старые миры получают обновлением `nobility_rights`.
 - **Нагрузка.** Ход знати раз в игровой день: одно королевство за тик, без сканов мира, затем шпионы и свадьбы.
 
+### Установка на сервер (exaroton)
+
+- Положите `kingdomworld-1.0.0.jar` в папку `mods` сервера и в `mods` каждого игрока: клиент без мода (или с другой версией) сервер не пустит, Forge покажет список несовпадающих модов.
+- Память: 8-10 ГБ на сервер со сборкой модов владельца (61 мод); сам мод в замере занимает десятки мегабайт (см. «Производительность»). На сервере без других модов хватает 3-4 ГБ.
+- Настройки мира: `world/serverconfig/kingdomworld-server.toml` (создаётся при первом запуске, правится при выключенном сервере или командой `/reload` для части значений). Общие: `config/kingdomworld-common.toml`, у игрока: `config/kingdomworld-client.toml`.
+- Что обычно меняют:
+  - `[war] npcWarsOnPlayers = false`: правители мира не объявляют войн королевствам игроков (по умолчанию объявляют, редко);
+  - `[war] protectPeacefulPlayers`: игроки мирных королевств не могут бить друг друга;
+  - `[siege] explosions = false`: взрывы не ломают блоки даже на открытой земле врага;
+  - `[npcKingdoms]`: число и расстояние королевств мира в плане, их появление при подходе игроков;
+  - `[nobility] maxHouses`, `demandEveryDays`, `secessionDays`: сколько знати и как часто она требует, через сколько дней смуты город может уйти;
+  - `[economy] wages`: жалование профессий (новые значения по умолчанию попадают только в новый файл конфига).
+- Резервные копии: данные мода лежат в `world/data/kingdomworld_*.dat`; копируйте их вместе с миром.
+- Проверка нагрузки на живом сервере: `/kingdomworld admin perf reset`, через полчаса игры `/kingdomworld admin perf report`.
+
 ### Требования
 
 - Minecraft 1.20.1
@@ -899,6 +914,21 @@ When a player or the server has a map mod, the land of kingdoms shows on it too;
 - **Commands.** `/kingdomworld admin nobility status|unlock|tick|day|timing`, `house <kingdom> [add]`, `house loyalty <house> <0-100>`, `title house|player <kingdom> <house|player> <baron|count|duke> <fief>` (fief `c<city id>` or `m<0-3>`), `title revoke <title>`, `stability <kingdom> [low <days>] [<cause> <amount> <days>]`, `faction <kingdom> <party> <content>`, `demand <house> <kind> [value]`, `demand answer <kingdom> accept|refuse|bargain`, `plot <house> <progress> [backer]`, `plot discover|verdict <kingdom> ...`, `spy list|hire|send|ransom ...`.
 - **Data** in `kingdomworld_nobility.dat` (format 1): houses, titles, courts (content of parties, played days, days of unrest, recent events, chronicle, reports), demands, plots, spies. Data that cannot be understood keeps the nobility read-only. Old worlds get the rights `manage_nobility` (chancellor) and `manage_spies` (spymaster) with the upgrade `nobility_rights`.
 - **Load.** The nobility moves once a game day: one kingdom a tick, without scanning the world, then the spies and the marriages.
+
+### Installing on a server (exaroton)
+
+- Put `kingdomworld-1.0.0.jar` into the `mods` folder of the server and into `mods` of every player: the server does not let in a client without the mod (or with another version), Forge lists the mods that do not match.
+- Memory: 8-10 GB for a server with the owner's pack (61 mods); the mod itself takes some tens of megabytes in the measurements (see "Performance"). A server without other mods does with 3-4 GB.
+- Settings of the world: `world/serverconfig/kingdomworld-server.toml` (made on the first start; change it while the server is stopped, or with `/reload` for some values). Common: `config/kingdomworld-common.toml`, a player's: `config/kingdomworld-client.toml`.
+- What is usually changed:
+  - `[war] npcWarsOnPlayers = false`: rulers of the world declare no wars on kingdoms of players (by default they do, rarely);
+  - `[war] protectPeacefulPlayers`: players of kingdoms at peace cannot hurt each other;
+  - `[siege] explosions = false`: explosions break no blocks even on open land of an enemy;
+  - `[npcKingdoms]`: how many kingdoms of the world the plan has and how far apart, how they appear as players come near;
+  - `[nobility] maxHouses`, `demandEveryDays`, `secessionDays`: how much nobility there is, how often it demands, after how many days of unrest a city may leave;
+  - `[economy] wages`: the wages of professions (new defaults go only into a new config file).
+- Backups: the data of the mod lies in `world/data/kingdomworld_*.dat`; copy it with the world.
+- Measuring the load of a live server: `/kingdomworld admin perf reset`, after half an hour of play `/kingdomworld admin perf report`.
 
 ### Requirements
 

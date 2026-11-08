@@ -254,6 +254,10 @@ tasks.named('jar', Jar).configure {
         ])
     }
 
+    // Game tests run from the classes of the development build; the jar of the players does without them and their template.
+    exclude 'io/github/sekerator/kingdomworld/common/gametest/**'
+    exclude 'data/kingdomworld/structures/empty.nbt'
+
     // Produces the SRG-named jar that runs outside the development environment.
     finalizedBy 'reobfJar'
 }
