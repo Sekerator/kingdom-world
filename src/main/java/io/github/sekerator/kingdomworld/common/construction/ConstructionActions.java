@@ -437,12 +437,29 @@ public final class ConstructionActions {
     /**
      * Sends the blocks of a template, so that the client draws it where it would stand.
      */
+    private static boolean mayRead(ServerPlayer player, BuildingTemplate template) {
+        if (KingdomWorldApi.kingdomOf(player.server, player.getUUID()).map(kingdom -> kingdom.id().equals(template.owner())).orElse(false)) {
+            return true;
+        }
+        String id = template.id().toString();
+        for (net.minecraft.world.InteractionHand hand : net.minecraft.world.InteractionHand.values()) {
+            if (id.equals(BlueprintItem.templateId(player.getItemInHand(hand)))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static void sendTemplate(ServerPlayer player, String templateId) {
         Optional<BuildingTemplate> found = BuildingTemplates.get(templateId);
         if (found.isEmpty()) {
             return;
         }
         BuildingTemplate template = found.get();
+        if (template.owner() != null && !mayRead(player, template)) {
+            // A blueprint another kingdom saved: only its own people and whoever holds a copy of it see the plan.
+            return;
+        }
         boolean drawable = template.sizeX() <= 256 && template.sizeY() <= 256 && template.sizeZ() <= 256;
         List<BuildingTemplate.Block> blocks = new ArrayList<>();
         if (drawable) {

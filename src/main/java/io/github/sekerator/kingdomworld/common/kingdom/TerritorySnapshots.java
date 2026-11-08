@@ -107,6 +107,19 @@ public final class TerritorySnapshots {
      * Whether a viewer may see a kingdom on maps.
      */
     public static boolean canSee(@Nullable UUID viewer, UUID kingdom) {
-        return visibility.canSee(viewer, Objects.requireNonNull(kingdom, "kingdom"));
+        Objects.requireNonNull(kingdom, "kingdom");
+        try {
+            return visibility.canSee(viewer, kingdom);
+        } catch (RuntimeException e) {
+            // A visibility of another mod that fails hides the kingdom instead of failing the tick of the server.
+            if (!visibilityFailed) {
+                visibilityFailed = true;
+                com.mojang.logging.LogUtils.getLogger().error("The map visibility {} failed; kingdoms it cannot judge are hidden",
+                        visibility.getClass().getName(), e);
+            }
+            return false;
+        }
     }
+
+    private static boolean visibilityFailed;
 }

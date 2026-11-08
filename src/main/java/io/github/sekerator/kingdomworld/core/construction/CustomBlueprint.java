@@ -23,6 +23,8 @@ public record CustomBlueprint(long id, UUID kingdomId, String name, String categ
     public static final int MAX_NAME = 32;
     /** Most states in a palette. */
     public static final int MAX_PALETTE = 4_096;
+    /** Longest side of a saved blueprint, whatever the configured limit of templates allows. */
+    public static final int MAX_SIDE = 255;
     /** The namespace of the ids of saved blueprints. */
     public static final String ID_PREFIX = "kingdomworld:custom/";
 
@@ -35,7 +37,7 @@ public record CustomBlueprint(long id, UUID kingdomId, String name, String categ
         Objects.requireNonNull(author, "author");
         palette = List.copyOf(palette);
         blocks = blocks.clone();
-        if (id <= 0 || sizeX < 1 || sizeY < 1 || sizeZ < 1 || sizeX > 255 || sizeY > 255 || sizeZ > 255) {
+        if (id <= 0 || sizeX < 1 || sizeY < 1 || sizeZ < 1 || sizeX > MAX_SIDE || sizeY > MAX_SIDE || sizeZ > MAX_SIDE) {
             throw new IllegalArgumentException("Bad blueprint " + id + " of size " + sizeX + "x" + sizeY + "x" + sizeZ);
         }
         if ((long) sizeX * sizeY * sizeZ != blocks.length) {
@@ -139,7 +141,7 @@ public record CustomBlueprint(long id, UUID kingdomId, String name, String categ
         if (kept >= maxKept) {
             return Optional.of(Problem.TOO_MANY);
         }
-        if (!rules.fits(sizeX, sizeY, sizeZ)) {
+        if (!rules.fits(sizeX, sizeY, sizeZ) || sizeX > MAX_SIDE || sizeY > MAX_SIDE || sizeZ > MAX_SIDE) {
             return Optional.of(Problem.TOO_BIG);
         }
         if (unbuildable > 0) {

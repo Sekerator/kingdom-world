@@ -221,6 +221,23 @@ final class CompanionNbt {
         return value.orElseThrow(() -> new IllegalArgumentException("unknown " + what + " '" + id + "'"));
     }
 
+    /**
+     * A list inside an entry: missing reads as empty, but a list of something else is damage, not an empty list.
+     */
+    private static ListTag typed(CompoundTag tag, String key, int type) {
+        if (!tag.contains(key)) {
+            return new ListTag();
+        }
+        if (!tag.contains(key, Tag.TAG_LIST)) {
+            throw new IllegalArgumentException(key + " is not a list");
+        }
+        ListTag raw = (ListTag) tag.get(key);
+        if (!raw.isEmpty() && raw.getElementType() != type) {
+            throw new IllegalArgumentException(key + " holds entries of another type");
+        }
+        return raw;
+    }
+
     private static List<CompoundTag> list(CompoundTag tag, String key, List<String> problems) {
         List<CompoundTag> result = new ArrayList<>();
         if (!tag.contains(key)) {
@@ -282,7 +299,7 @@ final class CompanionNbt {
                         entry.getInt("skin"), origin, entry.getInt("level"), skills, uuid(entry, "branch"), entry.getLong("price"),
                         entry.getLong("wage"), entry.getLong("acquired"), entry.getLong("paidDay"), entry.getInt("loyalty"));
                 List<LoyaltyNote> notes = new ArrayList<>();
-                ListTag noteList = entry.getList("notes", Tag.TAG_COMPOUND);
+                ListTag noteList = typed(entry, "notes", Tag.TAG_COMPOUND);
                 for (int i = 0; i < noteList.size(); i++) {
                     CompoundTag note = noteList.getCompound(i);
                     notes.add(new LoyaltyNote(known(LoyaltyReason.byId(note.getString("reason")), "reason", note.getString("reason")),
@@ -296,7 +313,7 @@ final class CompanionNbt {
                         entry.getLong("starving"), entry.getInt("loyalty"), notes, entry.getLong("kept"), entry.getLong("starve"),
                         entry.getLong("warned"), entry.getLong("paidDay"), entry.getInt("unpaid"), order, orderPos,
                         entry.contains("lastPos", Tag.TAG_COMPOUND) ? readPos(entry.getCompound("lastPos")) : null, entry.getInt("kills"));
-                SimpleContainer pack = readPack(entry.getList("pack", Tag.TAG_COMPOUND));
+                SimpleContainer pack = readPack(typed(entry, "pack", Tag.TAG_COMPOUND));
                 state.restoreCompanion(companion);
                 packs.put(companion.id(), pack);
             } catch (RuntimeException e) {
@@ -307,7 +324,7 @@ final class CompanionNbt {
             try {
                 UUID branch = uuid(entry, "branch");
                 List<Offer> offers = new ArrayList<>();
-                ListTag list = entry.getList("offers", Tag.TAG_COMPOUND);
+                ListTag list = typed(entry, "offers", Tag.TAG_COMPOUND);
                 for (int i = 0; i < list.size(); i++) {
                     CompoundTag one = list.getCompound(i);
                     offers.add(new Offer(one.getLong("id"), branch, one.getBoolean("slave"), one.getInt("seed"),
@@ -320,13 +337,18 @@ final class CompanionNbt {
                 problems.add("market: " + e.getMessage());
             }
         }
-        if (tag.contains(CLOSED)) {
-            for (Tag id : tag.getList(CLOSED, Tag.TAG_INT_ARRAY)) {
-                try {
-                    state.restoreClosed(NbtUtils.loadUUID(id));
-                } catch (RuntimeException e) {
-                    problems.add("closed market: " + e.getMessage());
-                }
+        ListTag closedList;
+        try {
+            closedList = typed(tag, CLOSED, Tag.TAG_INT_ARRAY);
+        } catch (RuntimeException e) {
+            problems.add("closed markets: " + e.getMessage());
+            closedList = new ListTag();
+        }
+        for (Tag id : closedList) {
+            try {
+                state.restoreClosed(NbtUtils.loadUUID(id));
+            } catch (RuntimeException e) {
+                problems.add("closed market: " + e.getMessage());
             }
         }
         PartyState parties = state.parties();
@@ -334,19 +356,19 @@ final class CompanionNbt {
             try {
                 Party party = new Party(entry.getLong("id"), uuid(entry, "leader"));
                 List<UUID> others = new ArrayList<>();
-                for (Tag id : entry.getList("members", Tag.TAG_INT_ARRAY)) {
+                for (Tag id : typed(entry, "members", Tag.TAG_INT_ARRAY)) {
                     UUID member = NbtUtils.loadUUID(id);
                     if (!member.equals(party.leader())) {
                         others.add(member);
                     }
                 }
                 Map<UUID, Integer> shares = new LinkedHashMap<>();
-                ListTag shareList = entry.getList("shares", Tag.TAG_COMPOUND);
+                ListTag shareList = typed(entry, "shares", Tag.TAG_COMPOUND);
                 for (int i = 0; i < shareList.size(); i++) {
                     shares.put(uuid(shareList.getCompound(i), "player"), shareList.getCompound(i).getInt("share"));
                 }
                 Map<Long, UUID> contracts = new LinkedHashMap<>();
-                ListTag contractList = entry.getList("contracts", Tag.TAG_COMPOUND);
+                ListTag contractList = typed(entry, "contracts", Tag.TAG_COMPOUND);
                 for (int i = 0; i < contractList.size(); i++) {
                     contracts.put(contractList.getCompound(i).getLong("id"), uuid(contractList.getCompound(i), "holder"));
                 }
