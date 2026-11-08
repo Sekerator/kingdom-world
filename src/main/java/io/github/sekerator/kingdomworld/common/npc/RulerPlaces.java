@@ -45,6 +45,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * its own and places for new towns. Places that turned out unfit when the world was looked at are remembered until a restart.
  */
 final class RulerPlaces {
+    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
     /** Templates a ruler builds for a role, before any other template of that role. */
     private static final Map<String, String> PREFERRED = Map.of("house", NpcComposition.LARGE_HOUSE, "warehouse", NpcComposition.STOREHOUSE,
             "market", NpcComposition.MARKET, "well", NpcComposition.WELL, "workshop", NpcComposition.WORKSHOP, "barracks", NpcComposition.BARRACKS,
@@ -177,7 +178,13 @@ final class RulerPlaces {
         NpcComposition composition = NpcSpawner.composition(site);
         int y = site.groundY() + 1;
         Set<Long> unfit = UNFIT.getOrDefault(id, Set.of());
-        List<WorkPost> builders = state.citizens().posts().postsOf(id, Professions.BUILDER.id());
+        List<io.github.sekerator.kingdomworld.core.citizen.WorldPos> builders = new ArrayList<>();
+        state.citizens().posts().postsOf(id, Professions.BUILDER.id()).forEach(post -> builders.add(post.pos()));
+        if (builders.isEmpty()) {
+            // A kingdom without a builder gets one at the square of its throne when it lays out a building.
+            BlockPos post = builderPost(site);
+            builders.add(new io.github.sekerator.kingdomworld.core.citizen.WorldPos(dimension, post.getX(), post.getY(), post.getZ()));
+        }
         int reach = Math.max(8, ConstructionSettings.rules().builderRadius() - 4);
         for (int[] cell : NpcSpawner.gardenPlots(composition)) {
             Optional<Spot> spot = spot(state, id, dimension, template, site.x() + cell[0] * NpcComposition.SPACING, y,
@@ -205,6 +212,7 @@ final class RulerPlaces {
                     int cx = site.x() + gx * NpcComposition.SPACING;
                     int cz = site.z() + gz * NpcComposition.SPACING;
                     if (near(outside, cx, cz, NpcComposition.PLOT / 2 + 6 + KEEP_CLEAR) || near(cells, cx, cz, NpcComposition.PLOT / 2 + KEEP_CLEAR)) {
+                        LOGGER.debug("No place for {} at {} {}: a field or a road", template.id(), cx, cz);
                         continue;
                     }
                     Optional<Spot> spot = spot(state, id, dimension, template, cx, y, cz, NpcComposition.facing(gx, gz), false, unfit, builders,
@@ -218,25 +226,37 @@ final class RulerPlaces {
         return Optional.empty();
     }
 
+    /**
+     * Where the post of the builder of a kingdom of the world stands on the square of its throne.
+     */
+    static BlockPos builderPost(NpcSite site) {
+        return new BlockPos(site.x() - 5, site.groundY() + 1, site.z() - 5);
+    }
+
     private static Optional<Spot> spot(KingdomWorldState state, UUID id, String dimension, BuildingTemplate template, int cx, int y, int cz,
-                                       int facing, boolean levelled, Set<Long> unfit, List<WorkPost> builders, int reach) {
+                                       int facing, boolean levelled, Set<Long> unfit, List<io.github.sekerator.kingdomworld.core.citizen.WorldPos> builders, int reach) {
         Placement placement = new Placement(facing, false);
         BlockPos anchor = NpcSpawner.anchor(template, cx, y, cz, placement);
         if (unfit.contains(anchor.asLong())) {
             return Optional.empty();
         }
         Box box = template.box(anchor, placement);
-        if (!state.checkLay(null, id, dimension, box, ConstructionSettings.rules()).ok()) {
+        io.github.sekerator.kingdomworld.core.kingdom.Outcome lay = state.checkLay(null, id, dimension, box, ConstructionSettings.rules());
+        if (!lay.ok()) {
+            LOGGER.debug("No place for {} at {} {}: {}", template.id(), cx, cz, lay.error());
             return Optional.empty();
         }
         boolean reached = false;
-        for (WorkPost post : builders) {
-            int dx = Math.max(0, Math.max(box.minX() - post.pos().x(), post.pos().x() - box.maxX()));
-            int dz = Math.max(0, Math.max(box.minZ() - post.pos().z(), post.pos().z() - box.maxZ()));
-            if (post.pos().dimension().equals(dimension) && dx * dx + dz * dz <= reach * reach) {
+        for (io.github.sekerator.kingdomworld.core.citizen.WorldPos post : builders) {
+            int dx = Math.max(0, Math.max(box.minX() - post.x(), post.x() - box.maxX()));
+            int dz = Math.max(0, Math.max(box.minZ() - post.z(), post.z() - box.maxZ()));
+            if (post.dimension().equals(dimension) && dx * dx + dz * dz <= reach * reach) {
                 reached = true;
                 break;
             }
+        }
+        if (!reached) {
+            LOGGER.debug("No place for {} at {} {}: no builder within reach", template.id(), cx, cz);
         }
         return reached ? Optional.of(new Spot(template, anchor, placement, box, levelled)) : Optional.empty();
     }

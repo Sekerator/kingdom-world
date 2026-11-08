@@ -169,7 +169,7 @@ final class RulerSnapshots {
         magic(server, state, id, view);
         positions(server, state, id, view);
         view.festivals = RulerFestivals.available();
-        view.festivalCost = Math.max(50, view.population * 10L);
+        view.festivalCost = RulerFestivals.cost(server, id, Math.max(50, view.population * 10L));
     }
 
     /**

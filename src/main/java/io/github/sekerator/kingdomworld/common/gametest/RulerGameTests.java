@@ -81,6 +81,14 @@ public final class RulerGameTests {
         NpcKingdom npc = appear(helper, site);
         UUID id = npc.kingdomId();
         long day = TreasuryActions.day(server);
+        // A ring of land around the kingdom, so that its plots beyond the wall are its own (claims of rulers need ticks).
+        Territory land = KingdomWorldApi.state(server).territory().territory(id).orElseThrow();
+        for (long chunk : List.copyOf(land.chunks())) {
+            for (int[] side : new int[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {-1, -1}, {1, -1}, {-1, 1}}) {
+                KingdomWorldApi.claimChunk(level, new net.minecraft.world.level.ChunkPos(ChunkKey.x(chunk) + side[0], ChunkKey.z(chunk) + side[1]), id,
+                        null);
+            }
+        }
         boolean laid = false;
         for (int turn = 0; turn < 4 && !laid; turn++) {
             Optional<RulerMind.Plan> plan = NpcRulers.turn(server, NpcWork.kingdom(server, id).orElse(npc), day, true);
@@ -91,7 +99,7 @@ public final class RulerGameTests {
             helper.assertTrue(wanted || turn > 0, "The beds are taken but the ruler wants no house: " + plan.get());
             laid = house(server, id).isPresent();
         }
-        helper.assertTrue(laid, "No house was laid out: " + NpcWork.state(server).ruler(id).needs());
+        helper.assertTrue(laid, "No house was laid out: " + NpcWork.state(server).ruler(id).needs() + "; " + NpcRulers.lastBuilds(id));
         Construction house = house(server, id).orElseThrow();
         helper.assertTrue(house.orderMissing(), "The house does not order what it lacks");
         // The kingdom bought what the house lacks (abroad and from the workshops, which takes days): it is in the storehouses now.
@@ -271,10 +279,17 @@ public final class RulerGameTests {
                     "The decree is not in the chronicle: " + memory.chronicle());
             helper.assertTrue(KingdomWorldApi.treasury(server, id).orElseThrow().pollTax() == tax, "The tax was not set");
             helper.assertTrue(NpcRulers.chronicle(server, id).size() == memory.chronicle().size(), "The chronicle is not shown");
+            // A feast of the life of towns, paid from the treasury like the feast of a king.
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.npc.RulerFestivals.available(), "Rulers have no host of feasts");
+            long before = KingdomWorldApi.treasury(server, id).orElseThrow().funds();
+            NpcRulers.carryOutNow(server, npc, RulerDecision.of(RulerDecision.Kind.FESTIVAL, "", 0));
+            helper.assertTrue(memory.decrees().get(0).decision().kind() == RulerDecision.Kind.FESTIVAL, "No feast was held: " + memory.decrees());
+            helper.assertTrue(KingdomWorldApi.treasury(server, id).orElseThrow().funds() <= before, "A feast brought money");
             // A decree of no importance is remembered but not written.
             NpcRulers.carryOutNow(server, npc, RulerDecision.of(RulerDecision.Kind.ENTRY_FEE, "", 33));
             helper.assertTrue(memory.decrees().get(0).decision().kind() == RulerDecision.Kind.ENTRY_FEE, "The fee is not remembered");
-            helper.assertTrue(memory.chronicle().get(0).decision().kind() == RulerDecision.Kind.TAX, "A small decree went to the chronicle");
+            helper.assertTrue(memory.chronicle().stream().noneMatch(d -> d.decision().kind() == RulerDecision.Kind.ENTRY_FEE),
+                    "A small decree went to the chronicle");
             helper.succeed();
         } finally {
             NpcGameTests.cleanUp(helper, site, center);

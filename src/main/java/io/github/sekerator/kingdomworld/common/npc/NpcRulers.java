@@ -142,6 +142,14 @@ public final class NpcRulers {
         return job != null;
     }
 
+    /**
+     * What a ruler saw of the buildings it could lay out in its last turn, for operators and game tests.
+     */
+    public static String lastBuilds(UUID kingdomId) {
+        return lastView(kingdomId).map(view -> view.builds + ", constructions " + view.constructions + ", beds " + view.bedsUsed + "/"
+                + view.bedsTotal + ", spare " + RulerMind.spare(view, NpcSettings.rulers())).orElse("-");
+    }
+
     static Optional<RulerView> lastView(UUID kingdomId) {
         return Optional.ofNullable(LAST_VIEWS.get(kingdomId));
     }
