@@ -635,6 +635,46 @@ public final class Economy {
         return treasury.spend(amount, LedgerCategory.ARMY, day) ? Outcome.DONE : Outcome.fail(KingdomError.TREASURY_EMPTY);
     }
 
+    /**
+     * The court pays from the treasury: the share of a noble house, the wages of spies, works the court asked for. The money
+     * leaves the world, as wages of citizens do.
+     */
+    public Outcome nobilityPayment(UUID kingdomId, long amount, long day) {
+        Treasury treasury = treasuries.get(kingdomId);
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (!Money.isPayment(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (!treasury.spend(amount, LedgerCategory.NOBILITY, day)) {
+            return Outcome.fail(KingdomError.TREASURY_EMPTY);
+        }
+        changed();
+        return Outcome.DONE;
+    }
+
+    /**
+     * Money of one treasury goes to another in the currency of the payer, in the books of both or not at all: a ransom, or
+     * what a spy took.
+     */
+    public Outcome nobilityTransfer(UUID payer, UUID payee, long amount, long day) {
+        Outcome check = checkHoldFromTreasury(payer, amount);
+        if (!check.ok()) {
+            return check;
+        }
+        if (!canReleaseToTreasury(payee, payer, amount)) {
+            return Outcome.fail(treasuries.containsKey(payee) ? KingdomError.TOO_MUCH_MONEY : KingdomError.UNKNOWN_KINGDOM);
+        }
+        holdFromTreasury(payer, amount, LedgerCategory.NOBILITY, day);
+        Outcome released = releaseToTreasury(payee, payer, amount, LedgerCategory.NOBILITY, day);
+        if (!released.ok()) {
+            releaseToTreasury(payer, payer, amount, LedgerCategory.NOBILITY, day);
+            return released;
+        }
+        return Outcome.DONE;
+    }
+
     public Outcome setSalesTax(UUID kingdomId, int permille, int maxPermille) {
         Treasury treasury = treasuries.get(kingdomId);
         if (treasury == null) {

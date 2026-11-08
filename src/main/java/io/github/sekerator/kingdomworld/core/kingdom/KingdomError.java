@@ -363,7 +363,19 @@ public enum KingdomError {
     /** The score of the war does not allow asking so much. */
     TERMS_TOO_HIGH,
     /** An enemy at war holds the land on the way: the caravan cannot pass. */
-    BLOCKADE;
+    BLOCKADE,
+    /** No such noble house, title, demand, plot or spy. */
+    NO_SUCH_NOBLE,
+    /** The fief is held by somebody already, or is not a fief of the kingdom. */
+    FIEF_TAKEN,
+    /** The player holds a title of the kingdom already. */
+    ALREADY_NOBLE,
+    /** The kingdom keeps as many spies as it may. */
+    TOO_MANY_SPIES,
+    /** The spy is busy, captured or cannot go there. */
+    SPY_BUSY,
+    /** The demand, plot or spy waits for nothing of that kind. */
+    NOT_PENDING;
 
     /**
      * Lower case identifier, used for translation keys.

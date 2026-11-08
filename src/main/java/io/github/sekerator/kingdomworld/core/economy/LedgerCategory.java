@@ -35,7 +35,9 @@ public enum LedgerCategory {
     /** Taverns, rooms and rumors, festivals and the goods of fairs. */
     LIFE,
     /** Tributes, indemnities and the loot of wars. */
-    WAR;
+    WAR,
+    /** The share of the nobles of their fiefs, demands of the court, spies, ransoms and what spies took. */
+    NOBILITY;
 
     public String id() {
         return name().toLowerCase(Locale.ROOT);
