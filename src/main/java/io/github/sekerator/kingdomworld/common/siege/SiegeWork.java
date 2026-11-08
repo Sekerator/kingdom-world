@@ -44,7 +44,7 @@ import java.util.UUID;
  */
 public final class SiegeWork {
     public static final String KEY = "kingdomworld.siege.";
-    static final Logger LOGGER = LogUtils.getLogger();
+    public static final Logger LOGGER = LogUtils.getLogger();
     /** Blocks from a player within which a place is played in the world rather than far from players. */
     static final double WATCHED = 64.0;
 
@@ -316,6 +316,23 @@ public final class SiegeWork {
         SiegeRepair.tick(server, rules, now);
         SiegeNpc.tick(server, now);
         busiest = Math.max(busiest, System.nanoTime() - started);
+    }
+
+    /**
+     * Whether a soldier of a siege (or of the defence of a city) would go beyond the budget of bodies of its kingdom; counts it
+     * when it does not.
+     */
+    public static boolean overBudget(MinecraftServer server, io.github.sekerator.kingdomworld.core.citizen.Citizen citizen,
+                                     java.util.Map<UUID, Integer> counted) {
+        if (!Professions.isMilitary(citizen.professionId()) || ArmyWork.isReadOnly(server)) {
+            return false;
+        }
+        Order.Kind kind = ArmyWork.orderOf(server, citizen.id()).kind();
+        if (kind != Order.Kind.SIEGE && kind != Order.Kind.DEFEND) {
+            return false;
+        }
+        int count = counted.merge(citizen.kingdomId(), 1, Integer::sum);
+        return count > SiegeSettings.rules().maxBodies();
     }
 
     // ---------------------------------------------------------------- for checks

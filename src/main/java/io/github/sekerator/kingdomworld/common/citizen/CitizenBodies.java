@@ -107,6 +107,7 @@ public final class CitizenBodies {
             }
         }
         List<ActiveSelection.Candidate> candidates = new ArrayList<>();
+        Map<UUID, Integer> siegeBodies = new HashMap<>();
         var guild = io.github.sekerator.kingdomworld.common.guild.GuildSavedData.get(server).state();
         for (Citizen citizen : state.citizens().registry().all()) {
             boolean forced = FORCED.contains(citizen.id());
@@ -126,6 +127,11 @@ public final class CitizenBodies {
             // A little slack for bodies that exist already, so that a player at the edge does not make them flicker.
             if (active && distance != Integer.MAX_VALUE) {
                 distance = Math.max(0, distance - 1);
+            }
+            if (!forced && distance <= rules.activationChunks()
+                    && io.github.sekerator.kingdomworld.common.siege.SiegeWork.overBudget(server, citizen, siegeBodies)) {
+                // Soldiers of a siege beyond its budget of bodies fight far from players.
+                continue;
             }
             if (forced || distance <= rules.activationChunks()) {
                 candidates.add(new ActiveSelection.Candidate(citizen.id(), distance, forced));

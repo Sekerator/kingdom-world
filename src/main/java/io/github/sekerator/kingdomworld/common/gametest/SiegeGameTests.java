@@ -407,4 +407,86 @@ public final class SiegeGameTests {
         }
         helper.succeed();
     }
+
+    // ---------------------------------------------------------------- load
+
+    /**
+     * Thirty soldiers on each side besiege and defend near one another as bodies inside a fence of barriers; the ticks of the
+     * server are measured over ten seconds (the average and the worst), and the siege must not lay the server down.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_siege_load", timeoutTicks = 400)
+    public static void aSiegeOfThirtyAgainstThirtyKeepsTheServerUp(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        Kingdom[] both = WarGameTests.kingdoms(helper, "Siege Load", UUID.randomUUID(), UUID.randomUUID());
+        Kingdom home = both[0];
+        Kingdom enemy = both[1];
+        List<Citizen> all = new ArrayList<>();
+        fence(helper, true);
+        WarGameTests.war(helper, enemy, home, WarGoal.CITY);
+        BlockPos center = helper.absolutePos(new BlockPos(2, 1, 2));
+        WorldPos city = new WorldPos(Dimensions.id(level), center.getX(), center.getY(), center.getZ());
+        for (Kingdom kingdom : List.of(home, enemy)) {
+            List<Citizen> side = new ArrayList<>();
+            for (int i = 0; i < 30; i++) {
+                Citizen citizen = CitizenGameTests.newcomer(helper, kingdom, kingdom == home ? 1 + i % 2 : 4 + i % 2, 1 + i % 4);
+                helper.assertTrue(ArmyWork.recruit(server, null, kingdom.id(), citizen.id(),
+                        io.github.sekerator.kingdomworld.core.citizen.Professions.WARRIOR.id()).ok(), "A soldier was not recruited");
+                side.add(citizen);
+            }
+            int size = ArmySettings.rules().maxSquadSize();
+            for (int from = 0; from < side.size(); from += size) {
+                ArmySquad squad = squad(helper, kingdom, side.subList(from, Math.min(side.size(), from + size)).toArray(Citizen[]::new));
+                ArmyWork.order(server, null, squad.id(), kingdom == home ? Order.defend(city) : Order.siege(city));
+            }
+            for (Citizen citizen : side) {
+                CitizenBodies.force(citizen.id(), true);
+            }
+            all.addAll(side);
+        }
+        CitizenBodies.update(server);
+        long[] sum = new long[3];
+        int start = server.getTickCount();
+        helper.onEachTick(() -> {
+            if (server.getTickCount() - start > 100) {
+                long nanos = server.tickTimes[Math.floorMod(server.getTickCount() - 1, server.tickTimes.length)];
+                sum[0] += nanos;
+                sum[1]++;
+                sum[2] = Math.max(sum[2], nanos);
+            }
+        });
+        helper.runAfterDelay(300, () -> {
+            try {
+                long bodies = level.getEntitiesOfClass(CitizenEntity.class, new AABB(center).inflate(16)).size();
+                double average = sum[1] == 0 ? 0 : sum[0] / (double) sum[1] / 1_000_000.0;
+                double worst = sum[2] / 1_000_000.0;
+                SiegeWork.LOGGER.info("Siege load: 30 against 30 soldiers, {} bodies at the end, {} ticks measured, average {} ms, worst {} ms",
+                        bodies, sum[1], String.format(java.util.Locale.ROOT, "%.2f", average), String.format(java.util.Locale.ROOT, "%.2f", worst));
+                helper.assertTrue(sum[1] > 100, "The ticks were not measured");
+                helper.assertTrue(average < 50.0, "A siege of thirty against thirty took " + average + " ms a tick on average");
+            } finally {
+                fence(helper, false);
+                finish(helper, home, List.of(enemy), List.of(), List.of(), all.toArray(Citizen[]::new));
+            }
+            helper.succeed();
+        });
+    }
+
+    /**
+     * A fence of barriers around the place of the test, so that the soldiers stay within it.
+     */
+    private static void fence(GameTestHelper helper, boolean up) {
+        ServerLevel level = helper.getLevel();
+        for (int x = -1; x <= 6; x++) {
+            for (int z = -1; z <= 6; z++) {
+                if (x != -1 && x != 6 && z != -1 && z != 6) {
+                    continue;
+                }
+                for (int y = 1; y <= 3; y++) {
+                    level.setBlockAndUpdate(helper.absolutePos(new BlockPos(x, y, z)), up ? Blocks.BARRIER.defaultBlockState()
+                            : Blocks.AIR.defaultBlockState());
+                }
+            }
+        }
+    }
 }
