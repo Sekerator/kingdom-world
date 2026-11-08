@@ -70,7 +70,11 @@ public final class PerfCommands {
         tickSlow += tick > SLOW ? 1 : 0;
         handlerSum += handlers;
         handlerWorst = Math.max(handlerWorst, handlers);
-        handlerSlow += handlers > SLOW ? 1 : 0;
+        if (handlers > SLOW) {
+            handlerSlow++;
+            com.mojang.logging.LogUtils.getLogger().info("A slow tick of the tick handlers: {} ms at tick {} ({} into its minute)", ms(handlers),
+                    event.getServer().getTickCount(), event.getServer().getTickCount() % 1_200);
+        }
     }
 
     public static void reset() {

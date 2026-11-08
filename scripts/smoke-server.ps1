@@ -74,6 +74,7 @@ param(
     [switch]$SkipBuild,
     [switch]$Load,
     [string]$OldWorld = '',
+    [string[]]$JvmArgs = @(),
     [int]$LoadMinutes = 30,
     [string]$TestEnvRoot = 'D:\Projects\kingdom-world-testenv',
     [string]$PackModsDir = 'D:\Games\Minecraft\Instances\Taghi RPG & Create RU\mods',
@@ -338,13 +339,12 @@ function Start-Server([string]$Phase) {
     $logsDir = Join-Path $ServerDir 'logs'
     if (Test-Path -LiteralPath $logsDir) { Remove-Item -LiteralPath $logsDir -Recurse -Force }
     $classLog = "smoke-logs/classload-$Phase.log"
-    $arguments = @(
-        "-Xmx$Memory",
-        "-Xlog:class+load=info:file=$classLog",
+    $extra = @($JvmArgs | ForEach-Object { $_ -replace '\{phase\}', $Phase })
+    $arguments = (@("-Xmx$Memory", "-Xlog:class+load=info:file=$classLog") + $extra + @(
         '@user_jvm_args.txt',
         "@libraries/net/minecraftforge/forge/$ForgeVersion/win_args.txt",
         'nogui'
-    ) -join ' '
+    )) -join ' '
     $startInfo = New-Object System.Diagnostics.ProcessStartInfo
     $startInfo.FileName = $Java
     $startInfo.Arguments = $arguments

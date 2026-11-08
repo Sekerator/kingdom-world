@@ -91,6 +91,8 @@ public final class EconomyEvents {
     }
 
     private static void onTags(TagsUpdatedEvent event) {
+        // Workplaces are told by tags of blocks too.
+        io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehaviors.clearCache();
         ItemPrices.invalidate();
         io.github.sekerator.kingdomworld.common.trade.MarketActions.invalidate();
         // After /reload the table is built again at once, inside the reload, not in the first tick that asks for a price.

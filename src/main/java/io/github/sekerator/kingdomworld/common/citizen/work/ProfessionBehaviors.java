@@ -16,6 +16,9 @@ import java.util.Optional;
  */
 public final class ProfessionBehaviors {
     private static volatile Map<String, ProfessionBehavior> byId = Map.of();
+    /** What each block state is as a workplace: scans of chunks ask about every block, and block states are shared. */
+    private static final Map<BlockState, Optional<String>> KINDS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<BlockState, Boolean> ANY = new java.util.concurrent.ConcurrentHashMap<>();
 
     static {
         register(Professions.FARMER, new FarmerBehavior());
@@ -57,6 +60,7 @@ public final class ProfessionBehaviors {
         Map<String, ProfessionBehavior> next = new LinkedHashMap<>(byId);
         next.put(profession.id(), behavior);
         byId = Collections.unmodifiableMap(next);
+        clearCache();
     }
 
     public static Optional<ProfessionBehavior> get(String professionId) {
@@ -75,6 +79,18 @@ public final class ProfessionBehaviors {
      * The kind of workplace the block is for, or {@code null}.
      */
     public static String workplaceKind(BlockState state) {
+        return KINDS.computeIfAbsent(state, s -> Optional.ofNullable(kindOf(s))).orElse(null);
+    }
+
+    /**
+     * Forgets what blocks are as workplaces, when behaviors or tags change.
+     */
+    public static void clearCache() {
+        KINDS.clear();
+        ANY.clear();
+    }
+
+    private static String kindOf(BlockState state) {
         for (Map.Entry<String, ProfessionBehavior> entry : byId.entrySet()) {
             if (entry.getValue().isWorkplace(state)) {
                 return Professions.REGISTRY.byId(entry.getKey()).map(Profession::workplaceKind).orElse(null);
@@ -87,6 +103,10 @@ public final class ProfessionBehaviors {
      * Whether the block may be a workplace of any profession; a quick test for scanning chunk sections.
      */
     public static boolean isAnyWorkplace(BlockState state) {
+        return ANY.computeIfAbsent(state, ProfessionBehaviors::anyOf);
+    }
+
+    private static boolean anyOf(BlockState state) {
         for (ProfessionBehavior behavior : byId.values()) {
             if (behavior.isWorkplace(state)) {
                 return true;
