@@ -119,6 +119,22 @@ final class NpcDiplomacy {
      * The turn of diplomacy of the next ruler of the world waiting for it today, if any. Called once a second.
      */
     static void work(MinecraftServer server, DiplomacyState state, DiplomacyRules rules, long now) {
+        if (QUEUE.isEmpty()) {
+            return;
+        }
+        // First the strength of every army, two a second, then one ruler a second.
+        int counted = 0;
+        for (Kingdom kingdom : KingdomWorldApi.kingdoms(server)) {
+            if (!POWER.containsKey(kingdom.id())) {
+                power(server, kingdom.id());
+                if (++counted >= 2) {
+                    return;
+                }
+            }
+        }
+        if (counted > 0) {
+            return;
+        }
         UUID next = QUEUE.poll();
         if (next != null && KingdomWorldApi.kingdom(server, next).isPresent()) {
             turn(server, state, rules, now, queueDay, next);

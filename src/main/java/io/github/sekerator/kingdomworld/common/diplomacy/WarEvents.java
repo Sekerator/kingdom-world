@@ -143,6 +143,7 @@ public final class WarEvents {
         current = server;
         DiplomacySettings.refresh();
         long started = System.nanoTime();
+        long gcBefore = collected();
         try {
             WarWork.tick(server);
             enemyLand(server);
@@ -153,13 +154,29 @@ public final class WarEvents {
             LOGGER.error("KingdomWorld war tick failed", e);
         }
         long spent = System.nanoTime() - started;
+        long gc = Math.max(0, collected() - gcBefore) * 1_000_000L;
         if (spent > 25_000_000L) {
-            LOGGER.info("A tick of diplomacy took {} ms ({} war(s) going on)", String.format(java.util.Locale.ROOT, "%.1f", spent / 1_000_000.0),
+            LOGGER.info("A tick of diplomacy took {} ms ({} ms of it the garbage collector, {} war(s) going on)",
+                    String.format(java.util.Locale.ROOT, "%.1f", spent / 1_000_000.0), gc / 1_000_000L,
                     WarWork.state(server).wars().stream().filter(war -> !war.over()).count());
         }
         ticks++;
         total += spent;
         worst = Math.max(worst, spent);
+        worstOwn = Math.max(worstOwn, Math.max(0, spent - gc));
+    }
+
+    private static long worstOwn;
+
+    /**
+     * The time the garbage collectors of the server took so far, in milliseconds.
+     */
+    private static long collected() {
+        long sum = 0;
+        for (java.lang.management.GarbageCollectorMXBean bean : java.lang.management.ManagementFactory.getGarbageCollectorMXBeans()) {
+            sum += Math.max(0, bean.getCollectionTime());
+        }
+        return sum;
     }
 
     private static long ticks;
@@ -171,7 +188,8 @@ public final class WarEvents {
      */
     public static String timing() {
         double average = ticks == 0 ? 0.0 : total / (double) ticks / 1_000_000.0;
-        return String.format(java.util.Locale.ROOT, "Wars: %d tick(s) with work, average %.3f ms, worst %.3f ms", ticks, average, worst / 1_000_000.0);
+        return String.format(java.util.Locale.ROOT, "Wars: %d tick(s) with work, average %.3f ms, worst %.3f ms, worst without the garbage collector %.3f ms",
+                ticks, average, worst / 1_000_000.0, worstOwn / 1_000_000.0);
     }
 
     private static void onServerStarted(ServerStartedEvent event) {
@@ -201,6 +219,7 @@ public final class WarEvents {
         ticks = 0;
         total = 0;
         worst = 0;
+        worstOwn = 0;
         LAND.clear();
         TOLD.clear();
     }
