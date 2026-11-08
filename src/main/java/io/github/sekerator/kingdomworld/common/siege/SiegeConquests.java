@@ -177,19 +177,11 @@ final class SiegeConquests {
     }
 
     private static void treasury(MinecraftServer server, Conquest conquest) {
-        long funds = WarWork.funds(server, conquest.loser());
-        long day = WarWork.day(server);
-        long moved = 0;
-        long part = funds;
-        while (part > 0 && moved < funds) {
-            if (WarWork.pay(server, conquest.loser(), conquest.winner(), Math.min(part, funds - moved), day).ok()) {
-                moved += Math.min(part, funds - moved);
-            } else {
-                part /= 2;
-            }
-        }
-        SiegeWork.LOGGER.info("Annexation #{}: {} of {} in the treasury of {} went to {}", conquest.id(), moved, funds,
-                WarWork.name(server, conquest.loser()).getString(), WarWork.name(server, conquest.winner()).getString());
+        io.github.sekerator.kingdomworld.core.economy.Economy.Annexed annexed = KingdomWorldApi.state(server).economy()
+                .annex(conquest.winner(), conquest.loser(), WarWork.day(server));
+        SiegeWork.LOGGER.info("Annexation #{}: the treasury of {} ({} of its money) went to {}, worth {} there, reserves {}: {}", conquest.id(),
+                WarWork.name(server, conquest.loser()).getString(), annexed.funds(), WarWork.name(server, conquest.winner()).getString(),
+                annexed.worth(), annexed.reserves(), annexed.outcome().ok() ? "done" : annexed.outcome().error());
     }
 
     private static void land(MinecraftServer server, SiegeState state, Conquest conquest) {

@@ -17,6 +17,7 @@ import io.github.sekerator.kingdomworld.core.diplomacy.War;
 import io.github.sekerator.kingdomworld.core.road.City;
 import io.github.sekerator.kingdomworld.core.road.RouteCell;
 import io.github.sekerator.kingdomworld.core.road.Wall;
+import io.github.sekerator.kingdomworld.core.siege.Conquest;
 import io.github.sekerator.kingdomworld.core.siege.Gate;
 import io.github.sekerator.kingdomworld.core.siege.SiegeRules;
 import io.github.sekerator.kingdomworld.core.siege.SiegeState;
@@ -66,6 +67,8 @@ public final class SiegeWork {
         busiest = 0;
         SiegeGates.reset();
         SiegeHolds.reset();
+        SiegeRepair.reset();
+        SiegeNpc.reset();
     }
 
     // ---------------------------------------------------------------- open land
@@ -311,7 +314,52 @@ public final class SiegeWork {
         SiegeHolds.tick(server, rules, now, ticks);
         SiegeConquests.tick(server, rules, now);
         SiegeRepair.tick(server, rules, now);
+        SiegeNpc.tick(server, now);
         busiest = Math.max(busiest, System.nanoTime() - started);
+    }
+
+    // ---------------------------------------------------------------- for checks
+
+    /**
+     * Runs the gates once, for game tests.
+     */
+    public static void forceGates(MinecraftServer server) {
+        SiegeGates.tick(server, SiegeSettings.rules(), KingdomWorldApi.gameTime(server));
+    }
+
+    /**
+     * Runs the holds once as if some ticks went by, for game tests.
+     */
+    public static void forceHolds(MinecraftServer server, long ticks) {
+        SiegeHolds.tick(server, SiegeSettings.rules(), KingdomWorldApi.gameTime(server), ticks);
+    }
+
+    /**
+     * Turns claims into conquests and carries out every step of them, for game tests.
+     */
+    public static void forceConquests(MinecraftServer server) {
+        for (int i = 0; i < Conquest.Step.values().length + 1; i++) {
+            SiegeConquests.tick(server, SiegeSettings.rules(), KingdomWorldApi.gameTime(server));
+        }
+    }
+
+    /**
+     * Mends up to some broken blocks of a kingdom at once, for game tests and operators.
+     */
+    public static int forceMend(MinecraftServer server, UUID kingdomId, int most) {
+        return SiegeRepair.mend(server, kingdomId, most, KingdomWorldApi.gameTime(server));
+    }
+
+    /**
+     * Hangs the leaves of a gate at once without paying, or breaks them, for game tests and operators.
+     */
+    public static boolean forceHang(MinecraftServer server, Wall wall, int cell, boolean hung) {
+        return SiegeGates.set(server, wall, cell, hung, SiegeSettings.rules());
+    }
+
+    public static void forceNpc(MinecraftServer server) {
+        SiegeNpc.reset();
+        SiegeNpc.tick(server, KingdomWorldApi.gameTime(server));
     }
 
     /**

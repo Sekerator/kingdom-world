@@ -79,7 +79,7 @@ public final class WarGameTests {
     /**
      * The test's own kingdom on its place, and a second kingdom without land.
      */
-    private static Kingdom[] kingdoms(GameTestHelper helper, String name, UUID first, UUID second) {
+    static Kingdom[] kingdoms(GameTestHelper helper, String name, UUID first, UUID second) {
         MinecraftServer server = helper.getLevel().getServer();
         GatheringGameTests.clear(helper.getLevel(), from(helper), to(helper));
         Kingdom home = CitizenGameTests.found(helper, "GameTest War " + name, first);
@@ -97,15 +97,15 @@ public final class WarGameTests {
         return new Kingdom[]{home, result.kingdom()};
     }
 
-    private static BlockPos from(GameTestHelper helper) {
+    static BlockPos from(GameTestHelper helper) {
         return helper.absolutePos(new BlockPos(-1, 0, -1));
     }
 
-    private static BlockPos to(GameTestHelper helper) {
+    static BlockPos to(GameTestHelper helper) {
         return helper.absolutePos(new BlockPos(6, 3, 6));
     }
 
-    private static ServerPlayer player(GameTestHelper helper, UUID id, String name, int x, int z) {
+    static ServerPlayer player(GameTestHelper helper, UUID id, String name, int x, int z) {
         ServerPlayer player = LawStandIn.create(helper.getLevel().getServer(), helper.getLevel(), new GameProfile(id, name));
         BlockPos at = helper.absolutePos(new BlockPos(x, 1, z));
         player.setPos(at.getX() + 0.5, at.getY(), at.getZ() + 0.5);
@@ -113,7 +113,7 @@ public final class WarGameTests {
         return player;
     }
 
-    private static void join(MinecraftServer server, Kingdom kingdom, UUID player) {
+    static void join(MinecraftServer server, Kingdom kingdom, UUID player) {
         KingdomWorldState state = KingdomWorldApi.state(server);
         state.membership().invite(kingdom.rulerId(), player, 1L);
         state.membership().acceptInvitation(player, kingdom.id(), 1L);
@@ -122,7 +122,7 @@ public final class WarGameTests {
     /**
      * Declares a war by an operator and starts it at once.
      */
-    private static War war(GameTestHelper helper, Kingdom attacker, Kingdom defender, WarGoal goal) {
+    static War war(GameTestHelper helper, Kingdom attacker, Kingdom defender, WarGoal goal) {
         MinecraftServer server = helper.getLevel().getServer();
         // Game tests have no real players: both kingdoms count as having one at the keyboard unless a test says otherwise.
         WarWork.markPresent(attacker.id(), true);
@@ -135,14 +135,14 @@ public final class WarGameTests {
         return war;
     }
 
-    private static Citizen soldier(GameTestHelper helper, Kingdom kingdom, int x) {
+    static Citizen soldier(GameTestHelper helper, Kingdom kingdom, int x) {
         MinecraftServer server = helper.getLevel().getServer();
         Citizen citizen = CitizenGameTests.newcomer(helper, kingdom, x, 5);
         helper.assertTrue(ArmyWork.recruit(server, null, kingdom.id(), citizen.id(), Professions.WARRIOR.id()).ok(), "The citizen was not recruited");
         return citizen;
     }
 
-    private static void end(GameTestHelper helper, Kingdom home, List<Kingdom> others, List<UUID> players, Citizen... citizens) {
+    static void end(GameTestHelper helper, Kingdom home, List<Kingdom> others, List<UUID> players, Citizen... citizens) {
         MinecraftServer server = helper.getLevel().getServer();
         long now = KingdomWorldApi.gameTime(server);
         DiplomacySettings.override(null);

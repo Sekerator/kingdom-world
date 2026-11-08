@@ -107,9 +107,9 @@ public final class SiegeRepair {
         SiegeState siege = SiegeWork.state(server);
         boolean added = siege.damage().record(new WarDamage.Entry(war, kingdom, dimension, pos.asLong(), NbtUtils.writeBlockState(state).toString(),
                 itemId, building.get(), KingdomWorldApi.gameTime(server)));
-        if (added) {
-            siege.changed();
-        }
+        // The enemy is at the city: the builders wait until it has been gone a while.
+        siege.enemyNear(kingdom, KingdomWorldApi.gameTime(server));
+        siege.changed();
         return added;
     }
 

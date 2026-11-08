@@ -88,9 +88,15 @@ public final class SiegeCommands {
                                 .then(Commands.argument("defender", StringArgumentType.string()).suggests(KINGDOMS)
                                         .then(Commands.argument("what", StringArgumentType.word())
                                                 .suggests((c, b) -> SharedSuggestionProvider.suggest(new String[]{"city", "throne"}, b))
-                                                .executes(context -> hold(context, ""))
+                                                .executes(context -> hold(context, "", 100))
                                                 .then(Commands.argument("city", StringArgumentType.string())
-                                                        .executes(context -> hold(context, StringArgumentType.getString(context, "city"))))))))
+                                                        .executes(context -> hold(context, StringArgumentType.getString(context, "city"), 100))
+                                                        .then(Commands.argument("percent", IntegerArgumentType.integer(0, 100))
+                                                                .executes(context -> hold(context, StringArgumentType.getString(context, "city"),
+                                                                        IntegerArgumentType.getInteger(context, "percent")))))))))
+                .then(Commands.literal("count")
+                        .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
+                                .executes(SiegeCommands::count)))
                 .then(Commands.literal("occupy")
                         .then(Commands.argument("attacker", StringArgumentType.string()).suggests(KINGDOMS)
                                 .then(Commands.argument("defender", StringArgumentType.string()).suggests(KINGDOMS)
@@ -266,7 +272,7 @@ public final class SiegeCommands {
         return done;
     }
 
-    private static int hold(CommandContext<CommandSourceStack> context, String city) throws CommandSyntaxException {
+    private static int hold(CommandContext<CommandSourceStack> context, String city, int percent) throws CommandSyntaxException {
         CommandSourceStack source = context.getSource();
         MinecraftServer server = source.getServer();
         Kingdom attacker = kingdom(context, "attacker");
@@ -281,12 +287,31 @@ public final class SiegeCommands {
             return 0;
         }
         long now = KingdomWorldApi.gameTime(server);
-        Hold hold = SiegeWork.state(server).holdAt(throne ? Hold.Kind.THRONE : Hold.Kind.PLAZA, war.id(), war.attacker(), defender.id(),
-                seat.dimension(), seat.city(), now);
-        hold.take(now, SiegeSettings.rules());
-        SiegeWork.state(server).changed();
+        Hold.Kind kind = throne ? Hold.Kind.THRONE : Hold.Kind.PLAZA;
+        Hold hold = SiegeWork.state(server).holdAt(kind, war.id(), war.attacker(), defender.id(), seat.dimension(), seat.city(), now);
+        if (percent >= 100) {
+            hold.take(now, SiegeSettings.rules());
+            SiegeWork.state(server).changed();
+        } else {
+            SiegeWork.state(server).putHold(new Hold(kind, war.id(), war.attacker(), defender.id(), seat.dimension(), seat.city(),
+                    SiegeSettings.rules().ticks(kind) * percent / 100, false, now));
+        }
+        SiegeWork.LOGGER.info("Siege hold: war #{} {} of {} at {}%", war.id(), kind.id(), seat.name(), percent);
         source.sendSuccess(() -> Component.translatable(ADMIN + "held", SiegeTexts.cityLabel(server, defender.id(), seat.city())), true);
         return 1;
+    }
+
+    private static int count(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        MinecraftServer server = context.getSource().getServer();
+        Kingdom kingdom = kingdom(context, "kingdom");
+        var world = KingdomWorldApi.state(server);
+        int citizens = world.citizens().registry().count(kingdom.id());
+        int chunks = world.territory().territory(kingdom.id()).map(t -> t.size()).orElse(0);
+        long cities = RoadWork.state(server).citiesOf(kingdom.id()).size();
+        long funds = WarWork.funds(server, kingdom.id());
+        SiegeWork.LOGGER.info("Siege count: {}: {} citizens, {} chunks, {} cities, treasury {}", kingdom.name(), citizens, chunks, cities, funds);
+        context.getSource().sendSuccess(() -> Component.literal(kingdom.name() + ": " + citizens + " / " + chunks + " / " + cities + " / " + funds), false);
+        return citizens;
     }
 
     private static int occupy(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

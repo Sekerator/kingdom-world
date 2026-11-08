@@ -521,6 +521,54 @@ public final class Economy {
     /**
      * The result of an exchange.
      */
+    /**
+     * What an annexation moved: the money of the loser, what it is worth in the currency of the winner, and the reserves of
+     * other currencies that moved as they were.
+     */
+    public record Annexed(Outcome outcome, long funds, long worth, Map<UUID, Long> reserves) {
+    }
+
+    /**
+     * An annexed kingdom hands its treasury to the winner before its currency becomes old: its money leaves its treasury and
+     * the treasury of the winner grows by what it is worth by the rates; reserves of other currencies move as they are, and
+     * reserves of the currency of the winner become its money again. Nothing is kept in the currency that is about to go.
+     */
+    public Annexed annex(UUID winner, UUID loser, long day) {
+        Treasury from = treasuries.get(loser);
+        Treasury to = treasuries.get(winner);
+        if (from == null || to == null || winner.equals(loser)) {
+            return new Annexed(Outcome.fail(KingdomError.UNKNOWN_CURRENCY), 0, 0, Map.of());
+        }
+        long funds = Math.max(0, from.funds());
+        long worth = funds == 0 ? 0 : ExchangeRates.convert(funds, rate(loser), rate(winner), 0);
+        if (worth > 0 && !to.receive(worth, LedgerCategory.WAR, day)) {
+            return new Annexed(Outcome.fail(KingdomError.TOO_MUCH_MONEY), funds, worth, Map.of());
+        }
+        if (funds > 0) {
+            from.spend(funds, LedgerCategory.WAR, day);
+        }
+        Map<UUID, Long> moved = new LinkedHashMap<>();
+        for (Map.Entry<UUID, Long> reserve : new LinkedHashMap<>(from.reserves()).entrySet()) {
+            UUID currency = reserve.getKey();
+            long amount = reserve.getValue();
+            if (amount <= 0) {
+                continue;
+            }
+            if (currency.equals(winner)) {
+                if (to.receive(amount, LedgerCategory.WAR, day)) {
+                    from.spendReserve(currency, amount);
+                    moved.put(currency, amount);
+                }
+            } else if (to.canReceiveReserve(currency, amount)) {
+                from.spendReserve(currency, amount);
+                to.receiveReserve(currency, amount);
+                moved.put(currency, amount);
+            }
+        }
+        changed();
+        return new Annexed(Outcome.DONE, funds, worth, moved);
+    }
+
     public record Exchanged(Outcome outcome, long got) {
     }
 

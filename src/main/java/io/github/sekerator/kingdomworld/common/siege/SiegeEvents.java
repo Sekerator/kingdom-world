@@ -70,6 +70,7 @@ public final class SiegeEvents {
     public static void register() {
         MinecraftForge.EVENT_BUS.addListener(SiegeEvents::onServerTick);
         MinecraftForge.EVENT_BUS.addListener(SiegeEvents::onServerStopped);
+        MinecraftForge.EVENT_BUS.addListener(SiegeEvents::onServerStarted);
         MinecraftForge.EVENT_BUS.addListener(SiegeEvents::onLoggedIn);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGHEST, SiegeEvents::onBreakFirst);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, BlockEvent.BreakEvent.class, SiegeEvents::onBroken);
@@ -98,6 +99,14 @@ public final class SiegeEvents {
         } catch (RuntimeException e) {
             SiegeWork.LOGGER.error("The second of the sieges failed", e);
         }
+    }
+
+    private static void onServerStarted(net.minecraftforge.event.server.ServerStartedEvent event) {
+        SiegeSavedData data = SiegeSavedData.get(event.getServer());
+        io.github.sekerator.kingdomworld.core.siege.SiegeState state = data.state();
+        SiegeWork.LOGGER.info("KingdomWorld sieges: {} gate(s), {} siege(s), {} hold(s), {} conquest(s) in the journal, {} kingdom(s) with war damage, "
+                + "data format {}{}", state.gates().size(), state.sieges().size(), state.holds().size(), state.conquests().size(),
+                state.damage().all().size(), SiegeSavedData.FORMAT_VERSION, data.isReadOnly() ? " (READ-ONLY)" : "");
     }
 
     private static void onServerStopped(ServerStoppedEvent event) {

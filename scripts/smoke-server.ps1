@@ -2759,6 +2759,7 @@ if ($script:NpcSite) {
                 if (Wait-ForNewLog $server 'War #(\d+) declared: (.+?) against (.+?) for raid, active' $CommandTimeout $seen) { $declared++ }
             }
         }
+        if ($smalls.Count -ge 5) { $script:SiegeNpc = $smalls[4] }
         if ($declared -eq 2) { Write-Ok '[session4] two wars of kingdoms of the world are going on far from players' } else { Add-Failure "[session4] $declared of 2 wars of kingdoms of the world were declared" }
         Send-ServerCommand $server "kingdomworld admin war declare $KingdomName `"$($script:NpcName)`" indemnity now"
         $war = Wait-ForLog $server "War #(\d+) declared: $([regex]::Escape($KingdomName)) against .+? for indemnity, active" $CommandTimeout $ConsoleFailPattern
@@ -2842,6 +2843,87 @@ if ($script:NpcSite) {
             if (Wait-ForLog $server 'bond truce' $CommandTimeout $ConsoleFailPattern) { Write-Ok '[session5] a truce follows the peace' } else { Add-Failure '[session5] no truce after the peace' }
             Send-ServerCommand $server 'kingdomworld admin war status'
             [void](Wait-ForLog $server 'Diplomacy: \d+ treaty\(ies\)' $CommandTimeout $ConsoleFailPattern)
+            # War in the world: a kingdom of the world besieges the city of SmokeTest for the goal "city"; the square is held 40%
+            # when the server stops, so that the hold must outlive the restart.
+            if ($script:SiegeNpc) {
+                Send-ServerCommand $server "kingdomworld admin war present $KingdomName on"
+                Send-ServerCommand $server "kingdomworld admin war declare `"$($script:SiegeNpc)`" $KingdomName city now"
+                $siegeWar = Wait-ForLog $server "War #(\d+) declared: $([regex]::Escape($script:SiegeNpc)) against $([regex]::Escape($KingdomName)) for city, active" $CommandTimeout $ConsoleFailPattern
+                if ($siegeWar) {
+                    $script:SiegeWarId = $siegeWar.Groups[1].Value
+                    Send-ServerCommand $server "kingdomworld admin siege start `"$($script:SiegeNpc)`" $KingdomName `"Smoke Hollow`" 1"
+                    Send-ServerCommand $server "kingdomworld admin siege hold `"$($script:SiegeNpc)`" $KingdomName city `"Smoke Hollow`" 40"
+                    if (Wait-ForLog $server "Siege hold: war #$($script:SiegeWarId) plaza of Smoke Hollow at 40%" $CommandTimeout $ConsoleFailPattern) {
+                        Write-Ok "[session5] $($script:SiegeNpc) besieges Smoke Hollow (war #$($script:SiegeWarId)), the square is held 40%"
+                    } else {
+                        Add-Failure '[session5] the siege of Smoke Hollow did not start'
+                    }
+                    foreach ($kingdom in @($KingdomName, $script:SiegeNpc)) {
+                        Send-ServerCommand $server "kingdomworld admin siege count `"$kingdom`""
+                    }
+                    Start-Sleep -Seconds 2
+                    $counts = @([regex]::Matches((Get-LatestLog), 'Siege count: (.+?): (\d+) citizens, (\d+) chunks, (\d+) cities, treasury (-?\d+)'))
+                    if ($counts.Count -ge 2) {
+                        $script:SiegeCitizens = [int]$counts[-2].Groups[2].Value + [int]$counts[-1].Groups[2].Value
+                        $script:SiegeCities = [int]$counts[-2].Groups[4].Value + [int]$counts[-1].Groups[4].Value
+                        Write-Ok "[session5] before the capture: $($counts[-2].Value); $($counts[-1].Value)"
+                    } else {
+                        Add-Failure '[session5] the kingdoms of the siege were not counted'
+                    }
+                } else {
+                    Add-Failure "[session5] $($script:SiegeNpc) could not declare war on $KingdomName for a city"
+                }
+            } else {
+                Add-Warning '[session5] no free kingdom of the world for the siege'
+            }
+        }
+    }
+
+    # The hold outlives the restart; then the square is taken, the peace for the city hands it over with its people, and no citizen
+    # or city appears or vanishes.
+    if ($script:SiegeWarId) {
+        Invoke-Phase 'session6' {
+            param($server)
+            if (Wait-ForLog $server 'KingdomWorld sieges: \d+ gate\(s\), (\d+) siege\(s\), (\d+) hold\(s\), .*data format 1' 10) {
+                Write-Ok '[session6] the sieges are loaded in data format 1'
+            } else {
+                Add-Failure '[session6] the sieges were not loaded as expected'
+            }
+            Send-ServerCommand $server 'kingdomworld admin siege status'
+            if (Wait-ForLog $server "War #$($script:SiegeWarId): plaza \d+, 40%, taken: -" $CommandTimeout $ConsoleFailPattern) {
+                Write-Ok '[session6] the square is still held 40% after the restart'
+            } else {
+                Add-Failure '[session6] the hold of the square was lost in the restart'
+            }
+            Send-ServerCommand $server "kingdomworld admin war present $KingdomName on"
+            Send-ServerCommand $server "kingdomworld admin siege hold `"$($script:SiegeNpc)`" $KingdomName city `"Smoke Hollow`""
+            [void](Wait-ForLog $server "Siege hold: war #$($script:SiegeWarId) plaza of Smoke Hollow at 100%" $CommandTimeout $ConsoleFailPattern)
+            Send-ServerCommand $server "kingdomworld admin war peace $($script:SiegeWarId) `"$($script:SiegeNpc)`""
+            if (Wait-ForLog $server "Conquest #\d+: \d+ city\(ies\) went to $([regex]::Escape($script:SiegeNpc))" 30 $ConsoleFailPattern) {
+                Write-Ok "[session6] the peace handed Smoke Hollow to $($script:SiegeNpc)"
+            } else {
+                Add-Failure '[session6] the peace for the city did not hand it over'
+            }
+            $moved = [regex]::Match((Get-LatestLog), 'Conquest #\d+: (\d+) citizen\(s\) became citizens of')
+            foreach ($kingdom in @($KingdomName, $script:SiegeNpc)) {
+                Send-ServerCommand $server "kingdomworld admin siege count `"$kingdom`""
+            }
+            Start-Sleep -Seconds 2
+            $counts = @([regex]::Matches((Get-LatestLog), 'Siege count: (.+?): (\d+) citizens, (\d+) chunks, (\d+) cities, treasury (-?\d+)'))
+            if ($counts.Count -ge 2) {
+                $citizens = [int]$counts[-2].Groups[2].Value + [int]$counts[-1].Groups[2].Value
+                $cities = [int]$counts[-2].Groups[4].Value + [int]$counts[-1].Groups[4].Value
+                Write-Ok "[session6] after the capture: $($counts[-2].Value); $($counts[-1].Value); citizens moved: $(if ($moved.Success) { $moved.Groups[1].Value } else { '?' })"
+                if ($citizens -eq $script:SiegeCitizens -and $cities -eq $script:SiegeCities) {
+                    Write-Ok "[session6] citizens and cities add up: $citizens citizens, $cities cities"
+                } else {
+                    Add-Failure "[session6] citizens or cities do not add up: $($script:SiegeCitizens) -> $citizens citizens, $($script:SiegeCities) -> $cities cities"
+                }
+            } else {
+                Add-Failure '[session6] the kingdoms were not counted after the capture'
+            }
+            Send-ServerCommand $server 'kingdomworld admin siege timing'
+            [void](Wait-ForLog $server 'The longest second of the sieges: \d+ us' $CommandTimeout $ConsoleFailPattern)
         }
     }
 }
