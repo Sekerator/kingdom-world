@@ -270,6 +270,8 @@ public final class TradeWork {
         Component goods = cargoText(caravan);
         List<ItemStack> stacks = MarketStock.stacks(caravan.cargo());
         if (state.kingdoms().get(caravan.buyer()).isEmpty()) {
+            // The buyer is gone: its payment leaves the escrow with its dissolved treasury, the goods go back to the seller.
+            state.economy().refundEscrow(caravan.escrowId(), day);
             goBack(server, caravan.withState(Caravan.State.RETURNING));
             return;
         }

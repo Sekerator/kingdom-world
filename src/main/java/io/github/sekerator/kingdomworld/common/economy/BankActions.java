@@ -201,8 +201,11 @@ public final class BankActions {
         Coins left = CoinStacks.give(player.getInventory(), currency, fitting);
         long refund = left.value(units);
         if (refund > 0) {
-            // What did not fit after all goes back onto the account; nothing is dropped.
-            economy.deposit(player.getUUID(), currency, refund);
+            // What did not fit after all goes back onto the account; nothing is dropped. The account gave more a moment ago,
+            // so it always takes this back.
+            if (!economy.deposit(player.getUUID(), currency, refund).ok()) {
+                LOGGER.error("Bank refund of {} to {} failed after a withdrawal of {}", refund, player.getGameProfile().getName(), worth);
+            }
         }
         long paid = worth - refund;
         economy.coinsIssued(currency, paid);

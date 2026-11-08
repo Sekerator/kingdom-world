@@ -55,6 +55,21 @@ public final class PlayerNames {
     }
 
     /**
+     * Whether the kingdoms know a player: online, a member of a kingdom or the owner of an account. Money is never paid to
+     * a profile that has not played here, so that nothing lands on an account nobody will ever open.
+     */
+    public static boolean isKnown(MinecraftServer server, UUID playerId) {
+        if (playerId == null) {
+            return false;
+        }
+        if (isOnline(server, playerId)) {
+            return true;
+        }
+        var state = io.github.sekerator.kingdomworld.common.api.KingdomWorldApi.state(server);
+        return state.economy().accounts().players().contains(playerId) || state.membership().kingdomOf(playerId).isPresent();
+    }
+
+    /**
      * A player the kingdoms know, by name: online, a member of a kingdom or the owner of an account. Never asks the network,
      * so a name nobody here ever used finds nobody.
      */

@@ -263,7 +263,7 @@ public final class GuildActions {
                 long[] penalty = {-1};
                 Optional<Contract> contract = GuildWork.state(server).contract(action.id());
                 Outcome outcome = GuildWork.change(server, "give up a contract", guild -> {
-                    penalty[0] = guild.abandon(id, action.id(), now, rules);
+                    penalty[0] = guild.abandon(id, action.id(), now, rules, KingdomWorldApi.state(server));
                     return penalty[0] < 0 ? Outcome.fail(KingdomError.NOT_YOUR_CONTRACT) : Outcome.DONE;
                 });
                 if (!outcome.ok()) {
@@ -386,6 +386,11 @@ public final class GuildActions {
         }
         // Alone, everything missing at once; in a party, as much as the player has.
         int need = Math.min(have, contract.count() - contract.progress());
+        if (contract.progress() + need >= contract.count() && !KingdomWorldApi.state(server).economy()
+                .canReleaseToAccount(player.getUUID(), contract.currency(), contract.reward())) {
+            // The reward would not fit onto the account: the items stay with the player rather than being paid for with nothing.
+            return KingdomActions.Feedback.error(KingdomError.TOO_MUCH_MONEY);
+        }
         boolean toKingdom = contract.poster() != Contract.Poster.PLAYER;
         if (toKingdom) {
             List<ItemStack> stacks = new ArrayList<>();

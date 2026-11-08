@@ -239,6 +239,39 @@ class GuildStateTest {
     }
 
     @Test
+    void itemsHandedInBeforeAContractEndsUnfinishedArePaidFor() {
+        guild.join(hunter, kingdom.id(), now, 2, RULES, world);
+        GuildState.Sharing party = new GuildState.Sharing() {
+            @Override
+            public Set<Long> sharedWith(UUID player) {
+                return Set.of();
+            }
+
+            @Override
+            public List<RewardSplit.Share> shares(Contract contract) {
+                return List.of(new RewardSplit.Share(hunter, 1));
+            }
+        };
+        long before = money();
+        Contract given = guild.post(king, new GuildState.Posting(kingdom.id(), Contract.Poster.KINGDOM, kingdom.id(), Contract.Kind.GATHER,
+                "minecraft:bone", Rank.F, 40, 80, Rank.F, 1, true), now, 2, RULES, world).contract().orElseThrow();
+        guild.take(hunter, given.id(), now, RULES);
+        guild.handIn(hunter, given.id(), 10, now, 2, world, party).orElseThrow();
+        guild.abandon(hunter, given.id(), now, RULES, world);
+        assertEquals(20, economy.accounts().balance(hunter, kingdom.id()), "a quarter of the items, a quarter of the reward");
+        Contract rest = guild.contract(given.id()).orElseThrow();
+        assertEquals(30, rest.count(), "the rest of the contract is back on the board");
+        assertEquals(0, rest.progress());
+        assertEquals(60, rest.reward());
+
+        guild.take(hunter, rest.id(), now, RULES);
+        guild.handIn(hunter, rest.id(), 15, now, 2, world, party).orElseThrow();
+        guild.expire(rest.deadline(), 4, RULES, world);
+        assertEquals(50, economy.accounts().balance(hunter, kingdom.id()), "half of what was left paid on expiry");
+        assertEquals(before, money(), "no money made or lost");
+    }
+
+    @Test
     void anExamNeedsPointsAndRaisesTheRank() {
         guild.join(hunter, kingdom.id(), now, 2, RULES, world);
         assertEquals(Optional.of(KingdomError.TOO_FEW_POINTS), guild.startExam(hunter, kingdom.id(), now, RULES).outcome().failure());

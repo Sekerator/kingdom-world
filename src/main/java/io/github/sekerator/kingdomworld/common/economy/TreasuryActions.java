@@ -228,6 +228,9 @@ public final class TreasuryActions {
         if (kingdom.isEmpty()) {
             return KingdomActions.Feedback.error(KingdomError.NOT_IN_KINGDOM);
         }
+        if (!io.github.sekerator.kingdomworld.common.kingdom.PlayerNames.isKnown(server, target)) {
+            return KingdomActions.Feedback.fail(KEY + "unknown_player", targetName == null ? "" : targetName);
+        }
         Outcome outcome = KingdomWorldApi.change(server, "pay from the treasury",
                 state -> state.payFromTreasury(actor.getUUID(), kingdom.get().id(), target, amount, day(server)));
         if (!outcome.ok()) {

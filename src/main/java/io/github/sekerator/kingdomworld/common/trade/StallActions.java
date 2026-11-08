@@ -240,7 +240,8 @@ public final class StallActions {
     }
 
     /**
-     * What a price of the kingdom costs in the currency a player pays with, or -1 if the market does not take it.
+     * What a price of the kingdom costs in the currency a player pays with, or -1 if the market does not take foreign
+     * money and -2 if the currency cannot be spent at all (the old currency of a dissolved kingdom).
      */
     static long cost(MinecraftServer server, UUID kingdom, Market market, UUID currency, long price) {
         if (currency.equals(kingdom)) {
@@ -251,9 +252,13 @@ public final class StallActions {
         }
         Economy economy = KingdomWorldApi.state(server).economy();
         if (!economy.isActive(currency)) {
-            return -1;
+            return -2;
         }
         return ExchangeRates.priceIn(price, economy.rate(kingdom), economy.rate(currency), market.exchangeFeePermille());
+    }
+
+    private static KingdomError costError(long cost) {
+        return cost == -2 ? KingdomError.OLD_CURRENCY : KingdomError.FOREIGN_CURRENCY_REFUSED;
     }
 
     // ---------------------------------------------------------------- requests
@@ -360,7 +365,7 @@ public final class StallActions {
         }
         long cost = cost(server, kingdom.id(), market, currency, price);
         if (cost < 1) {
-            return KingdomActions.Feedback.error(KingdomError.FOREIGN_CURRENCY_REFUSED);
+            return KingdomActions.Feedback.error(costError(cost));
         }
         ItemStack sample = new ItemStack(item);
         List<ItemStack> wanted = MarketStock.stacks(List.of(new Goods(itemId, count, "")));
@@ -502,7 +507,7 @@ public final class StallActions {
         if (count <= 0) {
             return KingdomActions.Feedback.error(KingdomError.STOREHOUSES_FULL);
         }
-        total = unit * count;
+        total = Prices.total(unit, count); // less than the total checked above, so never -1
         Outcome paid = state.economy().kingdomPays(kingdom.id(), total, account ? player.getUUID() : null, LedgerCategory.TRADE, day);
         if (!paid.ok()) {
             // Cannot happen after the checks: the goods go back to the player.
@@ -535,7 +540,7 @@ public final class StallActions {
         }
         long cost = cost(server, kingdom.id(), market, currency, lot.get().price());
         if (cost < 1) {
-            return KingdomActions.Feedback.error(KingdomError.FOREIGN_CURRENCY_REFUSED);
+            return KingdomActions.Feedback.error(costError(cost));
         }
         List<ItemStack> stacks = GoodsStacks.stacks(lot.get().goods());
         if (!GoodsStacks.fits(player.getInventory(), stacks)) {

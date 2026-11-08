@@ -593,6 +593,17 @@ public final class GuildState {
      * @return the points lost
      */
     public long abandon(UUID player, long id, long now, GuildRules rules) {
+        return abandon(player, id, now, rules, null);
+    }
+
+    /**
+     * A member gives a contract up. Items of a gathering contract handed in already went to the poster: the member is paid
+     * their share of the reward, and the rest of the contract goes back to the board.
+     *
+     * @param world the state that pays for the items handed in, or {@code null} to pay nothing
+     * @return the points lost
+     */
+    public long abandon(UUID player, long id, long now, GuildRules rules, KingdomWorldState world) {
         Contract contract = contracts.get(id);
         if (contract == null || !contract.takenBy(player)) {
             return -1;
@@ -602,7 +613,8 @@ public final class GuildState {
             return 0;
         }
         long penalty = penalty(contract, rules);
-        contracts.put(id, contract.reopened());
+        long paid = world == null ? 0 : payHanded(contract, world);
+        contracts.put(id, contract.progress() > 0 && contract.kind() == Contract.Kind.GATHER ? contract.remainder(paid) : contract.reopened());
         addPoints(player, -penalty);
         changed();
         return penalty;
@@ -651,18 +663,53 @@ public final class GuildState {
     }
 
     /**
-     * The reward of a contract goes back to whoever posted it. A kingdom that is gone takes its money with it.
+     * The reward of a contract goes back to whoever posted it. A poster whose account or treasury cannot take it any more
+     * (at the limit of money) leaves it with the branch; a kingdom that is gone takes its money with it.
      */
     private static void refund(Contract contract, long day, KingdomWorldState world) {
-        if (contract.reward() <= 0) {
+        refund(contract, contract.reward(), day, world);
+    }
+
+    private static void refund(Contract contract, long amount, long day, KingdomWorldState world) {
+        if (amount <= 0) {
             return;
         }
         Economy economy = world.economy();
         if (contract.poster() == Contract.Poster.PLAYER) {
-            economy.releaseToAccount(contract.posterId(), contract.currency(), contract.reward());
-        } else if (economy.canReleaseToTreasury(contract.posterId(), contract.currency(), contract.reward())) {
-            economy.releaseToTreasury(contract.posterId(), contract.currency(), contract.reward(), LedgerCategory.GUILD, day);
+            if (economy.canReleaseToAccount(contract.posterId(), contract.currency(), amount)) {
+                economy.releaseToAccount(contract.posterId(), contract.currency(), amount);
+                return;
+            }
+        } else if (economy.canReleaseToTreasury(contract.posterId(), contract.currency(), amount)) {
+            economy.releaseToTreasury(contract.posterId(), contract.currency(), amount, LedgerCategory.GUILD, day);
+            return;
+        } else if (world.kingdoms().get(contract.posterId()).isEmpty()) {
+            return;
         }
+        if (economy.canReleaseToTreasury(contract.branch(), contract.currency(), amount)) {
+            economy.releaseToTreasury(contract.branch(), contract.currency(), amount, LedgerCategory.GUILD, day);
+        }
+    }
+
+    /**
+     * Items handed in for a gathering contract that ends unfinished already went to the poster: the taker gets their share
+     * of the reward. The guild takes no commission from it.
+     *
+     * @return the money paid out of the reward
+     */
+    private static long payHanded(Contract contract, KingdomWorldState world) {
+        if (contract.kind() != Contract.Kind.GATHER || contract.player() == null || contract.squad() != 0
+                || contract.progress() <= 0 || contract.count() <= 0) {
+            return 0;
+        }
+        // At most MAX_COUNT times Money.MAX: no overflow.
+        long part = contract.reward() * Math.min(contract.progress(), contract.count()) / contract.count();
+        Economy economy = world.economy();
+        if (part <= 0 || !economy.canReleaseToAccount(contract.player(), contract.currency(), part)) {
+            return 0;
+        }
+        economy.releaseToAccount(contract.player(), contract.currency(), part);
+        return part;
     }
 
     // ---------------------------------------------------------------- progress and the end of contracts
@@ -925,7 +972,7 @@ public final class GuildState {
                 failExam(contract, now, rules);
             } else {
                 contracts.remove(contract.id());
-                refund(contract, day, world);
+                refund(contract, contract.reward() - payHanded(contract, world), day, world);
                 if (contract.player() != null) {
                     addPoints(contract.player(), -penalty(contract, rules));
                 }
@@ -1233,11 +1280,13 @@ public final class GuildState {
                 Economy economy = world.economy();
                 long commission = moved.commission();
                 long payout = moved.payout();
-                if (!economy.canReleaseToTreasury(moved.branch(), moved.currency(), commission)) {
+                // A squad of the branch's own kingdom: the payout and the commission go into one treasury, checked as a whole.
+                boolean oneTreasury = squad.kingdomId().equals(moved.branch());
+                if (!oneTreasury && !economy.canReleaseToTreasury(moved.branch(), moved.currency(), commission)) {
                     payout = moved.reward();
                     commission = 0;
                 }
-                if (economy.canReleaseToTreasury(squad.kingdomId(), moved.currency(), payout)) {
+                if (economy.canReleaseToTreasury(squad.kingdomId(), moved.currency(), oneTreasury ? payout + commission : payout)) {
                     economy.releaseToTreasury(squad.kingdomId(), moved.currency(), payout, LedgerCategory.GUILD, day);
                     economy.releaseToTreasury(moved.branch(), moved.currency(), commission, LedgerCategory.GUILD, day);
                     paid = payout;

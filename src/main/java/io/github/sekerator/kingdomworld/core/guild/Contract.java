@@ -253,6 +253,16 @@ public record Contract(long id, Kind kind, UUID branch, Poster poster, UUID post
      * The contract back on the board without a taker; the next taker starts from nothing, so that nobody finishes what
      * another gave up.
      */
+    /**
+     * What is left of a gathering contract given up halfway, back on the board: the items still missing for the reward
+     * not paid out yet.
+     */
+    public Contract remainder(long paid) {
+        int left = Math.max(1, count - progress);
+        return new Contract(id, kind, branch, poster, posterId, minRank, target, targetRank, boss, left, 0, currency,
+                Math.max(0, reward - paid), points, commissionPermille, posted, deadline, Status.OPEN, null, 0, squadsAllowed);
+    }
+
     public Contract reopened() {
         return new Contract(id, kind, branch, poster, posterId, minRank, target, targetRank, boss, count, 0, currency, reward, points,
                 commissionPermille, posted, deadline, Status.OPEN, null, 0, squadsAllowed);

@@ -269,6 +269,9 @@ public final class EconomyCommands {
      */
     public static KingdomActions.Feedback transfer(ServerPlayer player, UUID target, String targetName, UUID currency, long amount) {
         MinecraftServer server = player.server;
+        if (!io.github.sekerator.kingdomworld.common.kingdom.PlayerNames.isKnown(server, target)) {
+            return KingdomActions.Feedback.fail("kingdomworld.treasury.unknown_player", targetName == null ? "" : targetName);
+        }
         Outcome outcome = KingdomWorldApi.change(server, "pay a player",
                 state -> state.economy().transfer(player.getUUID(), target, currency, amount));
         if (!outcome.ok()) {

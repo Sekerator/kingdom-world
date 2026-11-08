@@ -64,6 +64,10 @@ public final class ExchangeActions {
             KingdomActions.reply(player, KingdomActions.Feedback.fail("kingdomworld.bank.too_far"));
             return;
         }
+        if (KingdomWorldApi.isReadOnly(player.server)) {
+            player.displayClientMessage(net.minecraft.network.chat.Component.translatable("kingdomworld.bank.read_only"), true);
+            return;
+        }
         KingdomWorldNetwork.sendToPlayer(player, new TradePackets.ExchangeOpen(view(player, pos, kingdom.get()), true));
     }
 
