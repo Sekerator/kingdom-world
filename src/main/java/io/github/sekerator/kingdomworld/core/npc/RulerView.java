@@ -81,6 +81,8 @@ public final class RulerView {
     }
 
     public long day;
+    /** What the storehouses held when the ruler counted them in this turn, by item id; {@code null} before. */
+    public java.util.Map<String, Long> stock;
     public RulerCharacter character = RulerCharacter.BUILDER;
     public List<RulerCharacter.Trait> traits = List.of(RulerCharacter.Trait.PATIENT);
     public NpcLevel size = NpcLevel.SMALL;

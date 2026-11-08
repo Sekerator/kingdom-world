@@ -54,6 +54,19 @@ public final class EconomyEvents {
         MinecraftForge.EVENT_BUS.addListener(EconomyEvents::onLoggedIn);
         MinecraftForge.EVENT_BUS.addListener(EconomyEvents::onReload);
         MinecraftForge.EVENT_BUS.addListener(EconomyEvents::onTags);
+        MinecraftForge.EVENT_BUS.addListener(EconomyEvents::onServerStarted);
+    }
+
+    /**
+     * The table of the worth of items is built with the server, not in the first tick that needs it: with many mods it takes
+     * the time of several ticks.
+     */
+    private static void onServerStarted(net.minecraftforge.event.server.ServerStartedEvent event) {
+        try {
+            ItemPrices.table(event.getServer());
+        } catch (RuntimeException e) {
+            LOGGER.error("KingdomWorld could not build the table of the worth of items at the start", e);
+        }
     }
 
     public static void reset() {

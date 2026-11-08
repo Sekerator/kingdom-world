@@ -117,8 +117,8 @@ final class RulerSnapshots {
         return view;
     }
 
-    /** Parts of the first look at a kingdom, one a tick: people; money and buildings; the army and threats. */
-    static final int PARTS = 3;
+    /** Parts of the first look at a kingdom, one a tick: people; money and the storehouses; buildings; the army and threats. */
+    static final int PARTS = 4;
 
     /**
      * The first part of a snapshot: people.
@@ -141,14 +141,17 @@ final class RulerSnapshots {
     private static final Map<UUID, NpcKingdom> LOOKS = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
-     * A further part of the first look: money and buildings (part 1), the army and threats (part 2).
+     * A further part of the first look: money and what the storehouses hold (part 1), buildings (part 2), the army and threats
+     * (part 3). The counts of the storehouses serve the rest of the turn.
      */
     static void next(MinecraftServer server, NpcKingdom npc, RulerMemory memory, RulerView view, int part) {
         UUID id = npc.kingdomId();
         KingdomWorldState state = KingdomWorldApi.state(server);
         if (part == 1) {
             treasury(server, state, id, npc, view);
-            buildings(server, state, id, view, KingdomStorage.countsById(server, id));
+            view.stock = Map.copyOf(KingdomStorage.countsById(server, id));
+        } else if (part == 2) {
+            buildings(server, state, id, view, stock(server, id, view));
         } else {
             army(server, id, view);
             threats(server, id, view);
@@ -162,7 +165,7 @@ final class RulerSnapshots {
     static void more(MinecraftServer server, NpcKingdom npc, RulerMemory memory, RulerView view) {
         UUID id = npc.kingdomId();
         KingdomWorldState state = KingdomWorldApi.state(server);
-        goods(server, state, id, view, KingdomStorage.countsById(server, id));
+        goods(server, state, id, view, stock(server, id, view));
         trade(server, state, id, memory, view);
         neighbours(server, state, id, view);
         law(server, id, view);
@@ -178,7 +181,14 @@ final class RulerSnapshots {
     static void finish(MinecraftServer server, NpcKingdom npc, RulerRules rules, RulerView view) {
         KingdomWorldState state = KingdomWorldApi.state(server);
         land(server, state, npc, view, rules);
-        RulerPlaces.options(server, npc, view, KingdomStorage.countsById(server, npc.kingdomId()));
+        RulerPlaces.options(server, npc, view, stock(server, npc.kingdomId(), view));
+    }
+
+    /**
+     * What the storehouses of a kingdom hold, as counted at the start of the turn (or now, if they were not counted).
+     */
+    private static Map<String, Long> stock(MinecraftServer server, UUID id, RulerView view) {
+        return view.stock != null ? view.stock : KingdomStorage.countsById(server, id);
     }
 
     private static void people(MinecraftServer server, KingdomWorldState state, UUID id, RulerView view) {
