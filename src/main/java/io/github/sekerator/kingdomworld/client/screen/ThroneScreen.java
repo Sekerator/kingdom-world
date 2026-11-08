@@ -1326,7 +1326,12 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         int rulerFirst = lines.size() - rulerLines().size();
         // The lines of a ruler of the world come closer together, as on the card of the atlas.
         int step = rulerFirst < lines.size() ? 11 : 14;
+        // While a message of the status is shown, the lines of the ruler that would run into it wait until it goes.
+        int statusTop = status.getString().isEmpty() ? Integer.MAX_VALUE : top - contentOffset + panelHeight - BOTTOM_AREA + 2;
         for (Component line : lines) {
+            if (index >= rulerFirst && y + 9 > statusTop) {
+                break;
+            }
             fittedLabel(graphics, line, x, y, index >= rulerFirst ? 0xFFD8E8C8 : 0xFFE8E8E8, right - PAD);
             int width = Math.min(font.width(line), right - PAD - x);
             if (view.npc() != null && index == 1) {
