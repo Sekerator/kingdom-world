@@ -1095,6 +1095,9 @@ Invoke-Phase 'session1' {
         Send-ServerCommand $server "kingdomworld admin army mercenary offers $KingdomName new"
         $offer = Wait-ForNewLog $server $offersPattern $CommandTimeout $seen
         if ($offer) {
+            # The offers are random: take the cheapest of the new ones, so that the treasury can pay its advance.
+            Start-Sleep -Seconds 1
+            $offer = @([regex]::Matches((Get-LatestLog), $offersPattern) | Select-Object -Skip $seen | Sort-Object { [int64]$_.Groups[5].Value })[0]
             $before = Get-KingdomMoney $server $KingdomName
             $advance = [int64]$offer.Groups[5].Value
             Send-ServerCommand $server "kingdomworld admin army mercenary hire $KingdomName $($offer.Groups[1].Value)"
