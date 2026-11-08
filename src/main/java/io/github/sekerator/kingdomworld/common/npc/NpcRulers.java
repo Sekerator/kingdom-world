@@ -70,6 +70,8 @@ public final class NpcRulers {
     private static long busyTicks;
     private static long sumNanos;
     private static long maxNanos;
+    /** The worst tick without the pauses of the garbage collector that fell into it. */
+    private static long maxOwnNanos;
     /** What the rulers did in the tick, for the log of slow ticks. */
     private static String doing = "";
     private static String lastPart = "";
@@ -79,7 +81,7 @@ public final class NpcRulers {
     /**
      * How long the ticks were in which rulers worked: turns taken, ticks with work, the average and the worst in milliseconds.
      */
-    public record Timing(long turns, long ticks, double averageMillis, double worstMillis) {
+    public record Timing(long turns, long ticks, double averageMillis, double worstMillis, double worstOwnMillis) {
     }
 
     private NpcRulers() {
@@ -98,12 +100,13 @@ public final class NpcRulers {
         busyTicks = 0;
         sumNanos = 0;
         maxNanos = 0;
+        maxOwnNanos = 0;
         RulerPlaces.reset();
         RulerSnapshots.reset();
     }
 
     public static Timing timing() {
-        return new Timing(turns, busyTicks, busyTicks == 0 ? 0 : sumNanos / 1e6 / busyTicks, maxNanos / 1e6);
+        return new Timing(turns, busyTicks, busyTicks == 0 ? 0 : sumNanos / 1e6 / busyTicks, maxNanos / 1e6, maxOwnNanos / 1e6);
     }
 
     public static void resetTiming() {
@@ -111,6 +114,18 @@ public final class NpcRulers {
         busyTicks = 0;
         sumNanos = 0;
         maxNanos = 0;
+        maxOwnNanos = 0;
+    }
+
+    /**
+     * The time the garbage collectors of the server took so far, in milliseconds.
+     */
+    private static long collected() {
+        long total = 0;
+        for (java.lang.management.GarbageCollectorMXBean bean : java.lang.management.ManagementFactory.getGarbageCollectorMXBeans()) {
+            total += Math.max(0, bean.getCollectionTime());
+        }
+        return total;
     }
 
     /**
@@ -162,6 +177,7 @@ public final class NpcRulers {
 
     static void tick(MinecraftServer server) {
         long start = System.nanoTime();
+        long gcBefore = collected();
         boolean worked = work(server);
         if (server.getTickCount() % ANSWER_TICKS == 0) {
             worked |= answerAll(server);
@@ -171,11 +187,14 @@ public final class NpcRulers {
         }
         if (worked) {
             long spent = System.nanoTime() - start;
+            long gc = Math.max(0, collected() - gcBefore) * 1_000_000L;
             busyTicks++;
             sumNanos += spent;
             maxNanos = Math.max(maxNanos, spent);
+            maxOwnNanos = Math.max(maxOwnNanos, Math.max(0, spent - gc));
             if (spent > SLOW_TICK_NANOS) {
-                LOGGER.warn("A tick of the rulers of the world took {} ms: {}{}", String.format(java.util.Locale.ROOT, "%.1f", spent / 1e6), doing,
+                LOGGER.warn("A tick of the rulers of the world took {} ms ({} ms of it the garbage collector): {}{}",
+                        String.format(java.util.Locale.ROOT, "%.1f", spent / 1e6), gc / 1_000_000L, doing,
                         lastPart.isEmpty() ? "" : " (" + lastPart + ")");
             }
         }

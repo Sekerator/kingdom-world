@@ -324,9 +324,10 @@ final class RulerActions {
             if (!warm(server)) {
                 return null;
             }
-            part = "lay";
+            long started = System.nanoTime();
             KingdomWorldState.ConstructionChange change = ConstructionWork.lay(level, null, kingdomId, spot.template(), anchor, spot.placement(),
                     new Materials(RulerPlaces.wood(server, kingdomId), ""));
+            part = "lay " + (System.nanoTime() - started) / 1_000_000L + " ms";
             if (change.construction().isEmpty()) {
                 if (change.outcome().error() == KingdomError.PROTECTED_BLOCK || change.outcome().error() == KingdomError.CONSTRUCTION_OVERLAPS) {
                     RulerPlaces.unfit(kingdomId, anchor);
@@ -592,6 +593,7 @@ final class RulerActions {
                 }
                 case 2 -> {
                     // A few claims a tick; a pass that claims nothing more ends the claiming.
+                    long started = System.nanoTime();
                     int budget = CLAIMS_PER_TICK;
                     while (budget > 0 && claimIndex < chunks.size()) {
                         long chunk = chunks.get(claimIndex++);
@@ -601,6 +603,7 @@ final class RulerActions {
                             budget--;
                         }
                     }
+                    part = "stage 2, claims " + (System.nanoTime() - started) / 1_000_000L + " ms";
                     if (claimIndex < chunks.size()) {
                         return null;
                     }

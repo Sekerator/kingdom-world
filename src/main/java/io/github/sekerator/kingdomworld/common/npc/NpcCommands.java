@@ -148,8 +148,8 @@ public final class NpcCommands {
                 false);
         NpcRulers.Timing rulers = NpcRulers.timing();
         source.sendSuccess(() -> Component.translatable(ADMIN + "rulers_timing", rulers.turns(), rulers.ticks(),
-                String.format(java.util.Locale.ROOT, "%.2f", rulers.averageMillis()), String.format(java.util.Locale.ROOT, "%.2f", rulers.worstMillis())),
-                false);
+                String.format(java.util.Locale.ROOT, "%.2f", rulers.averageMillis()), String.format(java.util.Locale.ROOT, "%.2f", rulers.worstMillis()),
+                String.format(java.util.Locale.ROOT, "%.2f", rulers.worstOwnMillis())), false);
         return (int) timing.ticks();
     }
 
@@ -335,8 +335,8 @@ public final class NpcCommands {
                 Component.literal(relation.main().map(io.github.sekerator.kingdomworld.core.npc.RulerMemory.Reason::id).orElse("-"))), false));
         NpcRulers.Timing timing = NpcRulers.timing();
         source.sendSuccess(() -> Component.translatable(ADMIN + "rulers_timing", timing.turns(), timing.ticks(),
-                String.format(java.util.Locale.ROOT, "%.2f", timing.averageMillis()), String.format(java.util.Locale.ROOT, "%.2f", timing.worstMillis())),
-                false);
+                String.format(java.util.Locale.ROOT, "%.2f", timing.averageMillis()), String.format(java.util.Locale.ROOT, "%.2f", timing.worstMillis()),
+                String.format(java.util.Locale.ROOT, "%.2f", timing.worstOwnMillis())), false);
         return memory.needs().size();
     }
 }

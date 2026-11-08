@@ -3062,7 +3062,7 @@
   "commands.kingdomworld.admin.npc.decree": "  день %s: %s [%s]",
   "commands.kingdomworld.admin.npc.needs": "%s нуждается: %s; записей летописи %s",
   "commands.kingdomworld.admin.npc.relation": "  отношение к королевству %s: %s (%s)",
-  "commands.kingdomworld.admin.npc.rulers_timing": "Правители: ходов %s, тиков с работой %s, средний %s мс, худший %s мс",
+  "commands.kingdomworld.admin.npc.rulers_timing": "Правители: ходов %s, тиков с работой %s, средний %s мс, худший %s мс, худший без сборщика мусора %s мс",
   "kingdomworld.ruler.decree.import": "заказал из-за границы: %s (%s)",
   "kingdomworld.ruler.decree.import.female": "заказала из-за границы: %s (%s)"
 }
