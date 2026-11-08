@@ -2782,8 +2782,7 @@ if ($script:NpcSite) {
             $script:WarLoad = "8+ kingdoms of the world, 3 wars: $($ticks.Groups[1].Value) ticks of diplomacy, average $($ticks.Groups[2].Value) ms, worst $($ticks.Groups[3].Value) ms, worst without the garbage collector $($ticks.Groups[4].Value) ms; 30 steps of the wars, average $($steps.Groups[1].Value) ms, worst $($steps.Groups[2].Value) ms"
             Write-Ok "[session4] wars: $($script:WarLoad)"
             if ([double]$ticks.Groups[4].Value -gt 50) { Add-Failure "[session4] a tick of diplomacy took $($ticks.Groups[4].Value) ms besides the garbage collector" }
-            foreach ($slow in [regex]::Matches((Get-LatestLog), 'A tick of diplomacy took [^
-]*')) { Write-Host "    $($slow.Value)" }
+            foreach ($slow in [regex]::Matches((Get-LatestLog), 'A tick of diplomacy took [^\r\n]*')) { Write-Host "    $($slow.Value)" }
             if ([double]$steps.Groups[2].Value -gt 50) { Add-Warning "[session4] a step of the wars took $($steps.Groups[2].Value) ms" }
         } else {
             Add-Failure '[session4] the wars were not measured'
