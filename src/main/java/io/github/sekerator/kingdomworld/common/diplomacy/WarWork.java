@@ -432,6 +432,13 @@ public final class WarWork {
     }
 
     /**
+     * Names what the work of the tick is about, for the line of a slow tick.
+     */
+    static void note(String what) {
+        phases.append(phases.length() == 0 ? "" : ", ").append(what);
+    }
+
+    /**
      * The parts of the last tick that took more than 2 ms.
      */
     static String phases() {

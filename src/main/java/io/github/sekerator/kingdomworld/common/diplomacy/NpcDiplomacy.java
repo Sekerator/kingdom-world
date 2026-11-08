@@ -112,6 +112,7 @@ final class NpcDiplomacy {
         // The rulers take their turns of diplomacy one a second, so that no tick carries them all.
         QUEUE.clear();
         POWER.clear();
+        countingKingdom = null;
         for (Kingdom kingdom : KingdomWorldApi.kingdoms(server)) {
             if (NpcWork.isNpc(server, kingdom.id())) {
                 QUEUE.add(kingdom.id());
@@ -127,22 +128,66 @@ final class NpcDiplomacy {
         if (QUEUE.isEmpty()) {
             return;
         }
-        // First the strength of every army, one a second, then one ruler a second.
-        for (Kingdom kingdom : KingdomWorldApi.kingdoms(server)) {
-            if (!POWER.containsKey(kingdom.id())) {
-                power(server, kingdom.id());
-                return;
-            }
+        // First the strength of every army, a few soldiers a second, then one ruler a second.
+        if (count(server)) {
+            return;
         }
         UUID next = QUEUE.poll();
         if (next != null && KingdomWorldApi.kingdom(server, next).isPresent()) {
+            WarWork.note("the diplomacy of " + WarWork.name(server, next).getString());
             turn(server, state, rules, now, queueDay, next);
         }
+    }
+
+    /** Soldiers whose strength is counted in one second. */
+    private static final int SOLDIERS_A_TICK = 4;
+    /** The army being counted: its kingdom, its soldiers, how far and the strength so far. */
+    private static UUID countingKingdom;
+    private static List<UUID> countingSoldiers = List.of();
+    private static int countingIndex;
+    private static double countingSum;
+
+    /**
+     * Counts the strength of the next armies, a few soldiers a second.
+     *
+     * @return whether some army is still to be counted
+     */
+    private static boolean count(MinecraftServer server) {
+        if (countingKingdom == null) {
+            for (Kingdom kingdom : KingdomWorldApi.kingdoms(server)) {
+                if (!POWER.containsKey(kingdom.id())) {
+                    countingKingdom = kingdom.id();
+                    countingSoldiers = ArmyWork.state(server).soldiersOf(kingdom.id()).stream().map(Soldier::citizenId).toList();
+                    countingIndex = 0;
+                    countingSum = 0.0;
+                    for (io.github.sekerator.kingdomworld.core.army.MercenaryBand band : ArmyWork.state(server).hiredOf(kingdom.id())) {
+                        countingSum += band.power();
+                    }
+                    break;
+                }
+            }
+            if (countingKingdom == null) {
+                return false;
+            }
+        }
+        WarWork.note("the army of " + WarWork.name(server, countingKingdom).getString());
+        int end = Math.min(countingSoldiers.size(), countingIndex + SOLDIERS_A_TICK);
+        for (; countingIndex < end; countingIndex++) {
+            countingSum += ArmyWork.fighter(server, countingSoldiers.get(countingIndex))
+                    .map(io.github.sekerator.kingdomworld.core.combat.CombatPower::of).orElse(0.0);
+        }
+        if (countingIndex >= countingSoldiers.size()) {
+            POWER.put(countingKingdom, countingSum);
+            countingKingdom = null;
+        }
+        return true;
     }
 
     static void reset() {
         QUEUE.clear();
         POWER.clear();
+        countingKingdom = null;
+        countingSoldiers = List.of();
     }
 
     /**
