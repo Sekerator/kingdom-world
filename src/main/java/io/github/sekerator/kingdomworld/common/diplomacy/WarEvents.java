@@ -156,9 +156,9 @@ public final class WarEvents {
         long spent = System.nanoTime() - started;
         long gc = Math.max(0, collected() - gcBefore) * 1_000_000L;
         if (spent > 25_000_000L) {
-            LOGGER.info("A tick of diplomacy took {} ms ({} ms of it the garbage collector, {} war(s) going on)",
+            LOGGER.info("A tick of diplomacy took {} ms ({} ms of it the garbage collector, {} war(s) going on): {}",
                     String.format(java.util.Locale.ROOT, "%.1f", spent / 1_000_000.0), gc / 1_000_000L,
-                    WarWork.state(server).wars().stream().filter(war -> !war.over()).count());
+                    WarWork.state(server).wars().stream().filter(war -> !war.over()).count(), WarWork.phases());
         }
         ticks++;
         total += spent;
@@ -199,6 +199,12 @@ public final class WarEvents {
         DiplomacySavedData data = DiplomacySavedData.get(server);
         DiplomacyState state = data.state();
         // The classes of diplomacy load now, with the server, and not in the first measured tick.
+        java.util.List<Class<?>> classes = java.util.List.of(WarTexts.class, DiplomacyActions.class, DiplomacySync.class, WarRumors.class, NpcDiplomacy.class,
+                DiplomacyNbt.class, io.github.sekerator.kingdomworld.common.network.data.DiplomacyViews.class,
+                io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.class,
+                io.github.sekerator.kingdomworld.core.diplomacy.Proposal.class, io.github.sekerator.kingdomworld.core.diplomacy.War.class,
+                io.github.sekerator.kingdomworld.core.diplomacy.PeaceTerms.class, io.github.sekerator.kingdomworld.core.diplomacy.Relations.class);
+        LOGGER.debug("KingdomWorld diplomacy: {} classes ready", classes.size());
         NpcDiplomacy.reset();
         DiplomacySync.reset();
         DiplomacySettings.refresh();

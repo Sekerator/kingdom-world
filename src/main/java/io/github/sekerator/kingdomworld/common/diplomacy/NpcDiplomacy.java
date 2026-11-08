@@ -46,9 +46,14 @@ final class NpcDiplomacy {
      * Rulers of the world answer the offers made to them and the calls of their allies.
      */
     static void answer(MinecraftServer server, DiplomacyState state, DiplomacyRules rules, long now, long day) {
+        // At most two answers a second: the rest wait for the next ones.
+        int answered = 0;
         for (Proposal proposal : List.copyOf(state.proposals())) {
             if (!proposal.open() || !WarWork.isNpc(server, proposal.to())) {
                 continue;
+            }
+            if (++answered > 2) {
+                break;
             }
             Optional<DiplomacyMind.Self> self = WarWork.self(server, proposal.to());
             if (self.isEmpty()) {

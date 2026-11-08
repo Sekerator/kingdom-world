@@ -379,6 +379,8 @@ public final class WarWork {
         long now = KingdomWorldApi.gameTime(server);
         long day = day(server);
         KingdomWorldState world = KingdomWorldApi.state(server);
+        long mark = System.nanoTime();
+        phases.setLength(0);
         forgetGone(server, state, world, now);
         for (Kingdom kingdom : world.kingdoms().all()) {
             if (!isNpc(server, kingdom.id()) && present(server, kingdom.id())) {
@@ -397,19 +399,43 @@ public final class WarWork {
             tellDiplomats(server, treaty.first(), text);
             tellDiplomats(server, treaty.second(), Component.translatable(KEY + "treaty_ended." + treaty.kind().id(), name(server, treaty.first())));
         }
+        mark = phase("presence and treaties", mark);
         NpcDiplomacy.answer(server, state, rules, now, day);
+        mark = phase("answers of rulers", mark);
         NpcDiplomacy.work(server, state, rules, now);
+        mark = phase("a turn of a ruler", mark);
         if (lastStep == Long.MIN_VALUE || now < lastStep) {
             lastStep = now;
         } else if (now - lastStep >= rules.stepTicks()) {
             lastStep = now;
             step(server, state, rules, now);
+            mark = phase("a step of the wars", mark);
         }
         if (day != lastDay) {
             boolean first = lastDay == Long.MIN_VALUE;
             lastDay = day;
             daily(server, state, rules, now, day, first);
+            phase("a day of the wars", mark);
         }
+    }
+
+    /** The parts of the last tick that took a while, for the line of a slow tick. */
+    private static final StringBuilder phases = new StringBuilder();
+
+    private static long phase(String name, long since) {
+        long now = System.nanoTime();
+        if (now - since > 2_000_000L) {
+            phases.append(phases.length() == 0 ? "" : ", ").append(name).append(' ')
+                    .append(String.format(java.util.Locale.ROOT, "%.1f", (now - since) / 1_000_000.0)).append(" ms");
+        }
+        return now;
+    }
+
+    /**
+     * The parts of the last tick that took more than 2 ms.
+     */
+    static String phases() {
+        return phases.toString();
     }
 
     private static void forgetGone(MinecraftServer server, DiplomacyState state, KingdomWorldState world, long now) {
