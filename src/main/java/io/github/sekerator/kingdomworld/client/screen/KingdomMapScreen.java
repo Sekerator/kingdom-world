@@ -508,7 +508,11 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         Component heading;
         if (planning != null) {
             int prefix = font.width(Component.translatable("kingdomworld.screen.map.title_roads", ""));
-            heading = Component.translatable("kingdomworld.screen.map.title_roads", fit(planning.name(), available - prefix));
+            String shown = fit(planning.name(), available - prefix);
+            heading = Component.translatable("kingdomworld.screen.map.title_roads", shown);
+            if (!shown.equals(planning.name())) {
+                hoverFull(PAD, 7, font.width(heading), Component.translatable("kingdomworld.screen.map.title_roads", planning.name()));
+            }
         } else if (editing != null) {
             int prefix = font.width(Component.translatable("kingdomworld.screen.map.title_edit", ""));
             String shown = fit(editing.name(), available - prefix);

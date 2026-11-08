@@ -665,7 +665,7 @@
   "kingdomworld.tax.reminder": "Вы должны казне королевства %s: %s. Положите деньги на счёт в банке, и долг спишется в день налога, или внесите их сейчас: %s",
   "kingdomworld.wages.short": "Казне королевства %s не хватило на жалованье: выплачено %s из %s. Жители недовольны",
   "kingdomworld.screen.map.card.currency": "Валюта: %s",
-  "commands.kingdomworld.economy.bad_amount": "Это не сумма: %s. Пишите число медяков или монеты буквами: 1g5s3c",
+  "commands.kingdomworld.economy.bad_amount": "Это не сумма: %s. Пишите число медяков или монеты буквами: 1g5s3c или 1з5с3м",
   "commands.kingdomworld.economy.no_kingdom": "Королевство %s не найдено: укажите королевство или вступите в него",
   "commands.kingdomworld.economy.unknown_item": "Неизвестный предмет %s",
   "commands.kingdomworld.economy.one_player": "Укажите одного игрока",

@@ -28,7 +28,7 @@ import java.util.List;
  * (level, strength, health, food, loyalty with the reasons it changed and a warning when it is about to leave), the gear it
  * took from the pack, the orders and, for a slave, freedom and sale. Sizes come from the translated texts.
  */
-public class CompanionScreen extends AbstractContainerScreen<CompanionMenu> {
+public class CompanionScreen extends AbstractContainerScreen<CompanionMenu> implements ResultListener {
     private static final String KEY = "kingdomworld.screen.companion.";
     private static final int PAD = 6;
     private static final int LINE = 10;
@@ -47,6 +47,9 @@ public class CompanionScreen extends AbstractContainerScreen<CompanionMenu> {
     private int sideHeight;
     private int orderWidth;
     private int actionRows;
+    /** The answer to the last action, under the pack; empty until there is one. */
+    private Component status = Component.empty();
+    private boolean statusError;
 
     public CompanionScreen(CompanionMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title);
@@ -57,6 +60,28 @@ public class CompanionScreen extends AbstractContainerScreen<CompanionMenu> {
 
     public String checkName() {
         return "companion-" + (menu.view().slave() ? "slave" : "free");
+    }
+
+    @Override
+    public void onResult(boolean success, Component message) {
+        if (statusLines() < 1) {
+            // No room under the pack on this screen: the answer goes to the chat, as before.
+            if (minecraft != null && minecraft.player != null) {
+                minecraft.player.displayClientMessage(message.copy().withStyle(success ? net.minecraft.ChatFormatting.WHITE
+                        : net.minecraft.ChatFormatting.RED), false);
+            }
+            return;
+        }
+        status = message;
+        statusError = !success;
+    }
+
+    private int statusY() {
+        return topPos + imageHeight + 4;
+    }
+
+    private int statusLines() {
+        return Math.min(3, (height - statusY()) / LINE);
     }
 
     public void update(CompanionViews.CompanionView view) {
@@ -188,6 +213,9 @@ public class CompanionScreen extends AbstractContainerScreen<CompanionMenu> {
         renderBackground(graphics);
         super.render(graphics, mouseX, mouseY, partialTick);
         renderSide(graphics);
+        if (!status.getString().isEmpty()) {
+            paragraph(graphics, status, leftPos, statusY(), imageWidth, statusLines(), statusError ? 0xFFFF8080 : 0xFFB0E0B0);
+        }
         LayoutCheck.widgets(this, font);
         renderTooltip(graphics, mouseX, mouseY);
         for (Hover hover : hovers) {
