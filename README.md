@@ -383,6 +383,15 @@ KingdomWorld: мод для Minecraft 1.20.1 (Forge) о королевствах
 - Казны мирных королевств растут медленно и не банкротятся; банда лейтенанта (271 в день) по карману на неделю войны, дольше разоряет; дань 20% дохода и выкуп шпиона (150) это несколько дней дохода.
 - Значения по умолчанию: жалование торговца 0 стало 8, трактирщика 0 стало 6, регистратора 0 стало 7, мага 0 стало 12 (работали бесплатно, хотя торговцы приносят основной доход казны). Солдатам и так платится 15 из настроек армии. Новые значения попадают в новые файлы конфига; в существующих их можно дописать в `[economy] wages`.
 
+### Совместимость со сборкой
+
+- Сборка владельца (61 мод) проходит smoke `-Pack` без ошибок мода, с нагрузкой 30 минут.
+- **Create и другие машины через FakePlayer:** защита земли их пропускает по `allowFakePlayers`; закон не судит FakePlayer (это не игрок), солдаты и стража их не трогают.
+- **Better Combat:** удары игроков и солдат идут через обычный урон Minecraft, поэтому закон, война и защита отсутствующих работают так же; оружие модов солдаты выбирают по атрибутам урона и скорости.
+- **Jack's Gravestones:** при казни вещи забирает стража раньше мода могил (см. «Закон и стража»).
+- **Waystones и другие телепорты:** телепорт на землю чужого королевства не преступление сам по себе. Телепорт внутрь крупного города со стенами мимо ворот считается проникновением, только если чужак должен платить за вход и у него нет пропуска (или он в розыске); подданные, знать, обладатели пропуска и малые города без платы не затронуты.
+- **Клиент без мода** на сервер с модом не попадает: Forge сверяет моды при входе и показывает список несовпадений (`displayTest = MATCH_VERSION`).
+
 ### Требования
 
 - Minecraft 1.20.1
@@ -999,6 +1008,15 @@ A model of a treasury over 60 days (`KingdomBudget`, a unit test): the poll tax 
 
 - Treasuries at peace grow slowly and do not go bankrupt; a band of a lieutenant (271 a day) is affordable for a week of war and ruins a kingdom if kept longer; a tribute of 20% of the income and the ransom of a spy (150) are a few days of income.
 - Defaults: the wage of merchants 0 became 8, innkeepers 0 became 6, registrars 0 became 7, mages 0 became 12 (they worked for nothing, though merchants bring most of the income of a treasury). Soldiers are paid 15 by the settings of the army already. New values go into new config files; add them to `[economy] wages` of an existing one.
+
+### Compatibility with the pack
+
+- The owner's pack (61 mods) passes the smoke check `-Pack` without errors of the mod, with 30 minutes of load.
+- **Create and other machines acting as fake players:** the protection of land lets them by `allowFakePlayers`; the law does not judge a fake player (it is no player), soldiers and guards leave it alone.
+- **Better Combat:** blows of players and soldiers go through the usual damage of Minecraft, so the law, war and the protection of the absent work the same; soldiers choose weapons of mods by their damage and speed.
+- **Jack's Gravestones:** at an execution the guards take the items before the mod of graves (see "Law and guards").
+- **Waystones and other teleports:** teleporting onto the land of another kingdom is no crime in itself. Teleporting into a large walled city past its gates is trespassing only for an outsider who owes the entry fee and has no pass (or is wanted); subjects, nobles, holders of a pass and small cities without a fee are not touched.
+- **A client without the mod** does not get into a server with the mod: Forge compares mods on joining and lists what does not match (`displayTest = MATCH_VERSION`).
 
 ### Requirements
 
