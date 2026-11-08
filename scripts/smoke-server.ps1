@@ -619,6 +619,7 @@ $script:MinerId = $null
 $script:NpcName = $null
 $script:WarId = $null
 $script:WarScore = $null
+$script:WarNumbers = $null
 $script:Mined = 0
 $ConsoleFailPattern = 'Unknown or incomplete command|Incorrect argument|already exists|There is no kingdom|read-only'
 $IdPattern ='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
@@ -2759,9 +2760,8 @@ if ($script:NpcSite) {
             }
         }
         if ($declared -eq 2) { Write-Ok '[session4] two wars of kingdoms of the world are going on far from players' } else { Add-Failure "[session4] $declared of 2 wars of kingdoms of the world were declared" }
-        $seen = Count-Log 'War #\d+ declared: '
         Send-ServerCommand $server "kingdomworld admin war declare $KingdomName `"$($script:NpcName)`" indemnity now"
-        $war = Wait-ForNewLog $server "War #(\d+) declared: $([regex]::Escape($KingdomName)) against .+? for indemnity, active" $CommandTimeout $seen
+        $war = Wait-ForLog $server "War #(\d+) declared: $([regex]::Escape($KingdomName)) against .+? for indemnity, active" $CommandTimeout $ConsoleFailPattern
         if ($war) {
             $script:WarId = $war.Groups[1].Value
             Write-Ok "[session4] $KingdomName is at war with $($script:NpcName): war #$($script:WarId)"
@@ -2791,6 +2791,7 @@ if ($script:NpcSite) {
             $score = Wait-ForLog $server "War #$($script:WarId) active: [^\r\n]*?score ([\d.]+) / ([\d.]+), exhaustion ([\d.]+) / ([\d.]+)" $CommandTimeout $ConsoleFailPattern
             if ($score) {
                 $script:WarScore = "$($score.Groups[1].Value) / $($score.Groups[2].Value), exhaustion $($score.Groups[3].Value) / $($score.Groups[4].Value)"
+                $script:WarNumbers = @([double]$score.Groups[1].Value, [double]$score.Groups[2].Value, [double]$score.Groups[3].Value, [double]$score.Groups[4].Value)
                 Write-Ok "[session4] the war of $KingdomName stands at $($script:WarScore)"
             } else {
                 Add-Failure '[session4] the score of the war was not shown'
@@ -2814,7 +2815,9 @@ if ($script:NpcSite) {
             $score = Wait-ForLog $server "War #$($script:WarId) active: [^\r\n]*?score ([\d.]+) / ([\d.]+), exhaustion ([\d.]+) / ([\d.]+)" $CommandTimeout $ConsoleFailPattern
             if ($score) {
                 $after = "$($score.Groups[1].Value) / $($score.Groups[2].Value), exhaustion $($score.Groups[3].Value) / $($score.Groups[4].Value)"
-                if ($after -eq $script:WarScore) { Write-Ok "[session5] the score and exhaustion outlived the restart: $after" } else { Add-Failure "[session5] the war changed in the restart: $($script:WarScore) -> $after" }
+                # Exhaustion only grows: a new game day may begin between the two sessions.
+                $same = [double]$score.Groups[1].Value -eq $script:WarNumbers[0] -and [double]$score.Groups[2].Value -eq $script:WarNumbers[1] -and [double]$score.Groups[3].Value -ge $script:WarNumbers[2] -and [double]$score.Groups[4].Value -ge $script:WarNumbers[3]
+                if ($same) { Write-Ok "[session5] the score and exhaustion outlived the restart: $($script:WarScore) -> $after" } else { Add-Failure "[session5] the war changed in the restart: $($script:WarScore) -> $after" }
             } else {
                 Add-Failure '[session5] the war was lost in the restart'
             }

@@ -190,13 +190,24 @@ final class NpcDiplomacy {
         if (target == null) {
             return;
         }
+        // Squads at home go first, then those on patrol or guard; escorts stay with their caravans.
         List<ArmySquad> home = new ArrayList<>();
+        List<ArmySquad> watching = new ArrayList<>();
         for (ArmySquad squad : army.squadsOf(kingdomId)) {
-            if (squad.order().kind() == Order.Kind.NONE) {
+            Order.Kind kind = squad.order().kind();
+            if (kind == Order.Kind.NONE) {
                 home.add(squad);
+            } else if (kind == Order.Kind.PATROL || kind == Order.Kind.GUARD) {
+                watching.add(squad);
             }
         }
-        int send = (home.size() + 1) / 2;
+        int all = home.size() + watching.size();
+        home.addAll(watching);
+        int send = (all + 1) / 2;
+        if (send == 0) {
+            LOGGER.info("Ruler of {} has no squad to send against {}", WarWork.name(server, kingdomId).getString(),
+                    WarWork.name(server, enemy).getString());
+        }
         for (int i = 0; i < send; i++) {
             Outcome sent = ArmyWork.order(server, null, home.get(i).id(), Order.hold(target));
             LOGGER.info("Ruler of {} sends squad #{} against {}: {}", WarWork.name(server, kingdomId).getString(), home.get(i).id(),
