@@ -293,7 +293,8 @@ public final class NobilityWork {
         NobilityState state = state(server);
         NobilityRules rules = NobilitySettings.rules();
         boolean npc = WarWork.isNpc(server, kingdomId);
-        if (npc && state.existingCourt(kingdomId).isEmpty()) {
+        // A court of the world gets its houses on its first day, even if someone looked at it before.
+        if (npc && state.houses(kingdomId).isEmpty() && state.existingCourt(kingdomId).map(court -> court.playedDays() == 0).orElse(true)) {
             foundCourt(server, kingdomId, day);
         }
         boolean played = played(server, kingdomId);
@@ -482,7 +483,7 @@ public final class NobilityWork {
                 if (npc) {
                     NpcWork.kingdom(server, kingdomId).ifPresent(ruler -> {
                         Plot.Verdict verdict = NobilityMind.verdict(ruler.traits());
-                        state.verdict(happening.id(), verdict, day, rolls().getAsDouble() > 0.5 ? RANDOM.nextLong() : day * 31);
+                        state.verdict(happening.id(), verdict, day, RANDOM.nextLong());
                     });
                 } else {
                     tell(server, kingdomId, Permission.MANAGE_NOBILITY, Component.translatable(KEY + "msg.plot_found", houseName).withStyle(ChatFormatting.RED));
