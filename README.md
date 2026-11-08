@@ -348,6 +348,41 @@ KingdomWorld: мод для Minecraft 1.20.1 (Forge) о королевствах
 - Резервные копии: данные мода лежат в `world/data/kingdomworld_*.dat`; копируйте их вместе с миром.
 - Проверка нагрузки на живом сервере: `/kingdomworld admin perf reset`, через полчаса игры `/kingdomworld admin perf report`.
 
+### Производительность
+
+Замер: smoke с `-Load` (9-10 королевств мира с домами и шпионами, 2 войны, осада, караваны; 30 минут: каждую минуту ход всех правителей, день войн и день дворов), команда `/kingdomworld admin perf`. «Обработчики тика» это все обработчики тика сервера: на чистом сервере только мод, в сборке и другие моды.
+
+| Замер | сборка, до | сборка, после | чистый, после |
+| --- | --- | --- | --- |
+| тик сервера, средний | 1,88 мс | 2,50 мс | 2,03 мс |
+| тик сервера, худший | 430 мс | 254 мс | 298 мс |
+| тиков сервера дольше 50 мс | 0,08% | 0,04% | 0,23% |
+| обработчики тика, средний | 0,48 мс | 0,46 мс | 0,59 мс |
+| обработчики тика, худший | 424 мс | 248 мс | 296 мс |
+| обработчиков дольше 50 мс | 17 | 8 | 53 |
+| память после сборки мусора | 552 из 6144 МБ | 535 из 6144 МБ | 275 из 2048 МБ |
+| данные мода / мир | 51 КБ / 81 МБ | 53 КБ / 86 МБ | 58 КБ / 87 МБ |
+| запуск сервера | 31 с | 31 с | 14 с |
+
+- Свои замеры систем в том же прогоне: ход правителей худший 2,4 мс, шаг войн 6,7 мс, день дворов 1,7 мс.
+- После кэша мест работы (последняя правка) 10 минут той же нагрузки на чистом сервере: обработчики тика в среднем 0,34 мс, худший 31 мс, ни одного дольше 50 мс.
+- Что облегчено: солдат смотрит склады один раз на всё снаряжение, а не на каждый слот; таблица цен строится заново внутри `/reload`, а не в первом тике после него; правитель за взгляд считает не больше одной новой цены улучшения здания; поиск мест работы в чанках помнит ответ для каждого состояния блока (самое частое место мода в записи JFR).
+
+### Баланс
+
+Модель казны на 60 дней (`KingdomBudget`, юнит-тест): налог подданных, выручка торговцев за границей, жалование, наёмники, работы из казны, доли знати, шпионы, дань.
+
+| Королевство | доход в день | расход в день | через 60 дней |
+| --- | --- | --- | --- |
+| малое игроков | 125 | 41 | 5 240 |
+| крупное игроков | 386 | 308 | 6 680 |
+| торговец мира | 461 | 164 | 19 320 |
+| воин мира с наёмниками на войне | 346 | 514 | в минус, неделя войны покрывается запасом |
+| строитель мира | 230 | 182 | 4 380 |
+
+- Казны мирных королевств растут медленно и не банкротятся; банда лейтенанта (271 в день) по карману на неделю войны, дольше разоряет; дань 20% дохода и выкуп шпиона (150) это несколько дней дохода.
+- Значения по умолчанию: жалование торговца 0 стало 8, трактирщика 0 стало 6, регистратора 0 стало 7, мага 0 стало 12 (работали бесплатно, хотя торговцы приносят основной доход казны). Солдатам и так платится 15 из настроек армии. Новые значения попадают в новые файлы конфига; в существующих их можно дописать в `[economy] wages`.
+
 ### Требования
 
 - Minecraft 1.20.1
@@ -929,6 +964,41 @@ When a player or the server has a map mod, the land of kingdoms shows on it too;
   - `[economy] wages`: the wages of professions (new defaults go only into a new config file).
 - Backups: the data of the mod lies in `world/data/kingdomworld_*.dat`; copy it with the world.
 - Measuring the load of a live server: `/kingdomworld admin perf reset`, after half an hour of play `/kingdomworld admin perf report`.
+
+### Performance
+
+Measured with the smoke check and `-Load` (9-10 kingdoms of the world with houses and spies, 2 wars, a siege, caravans; 30 minutes with a turn of every ruler, a day of the wars and a day of the courts each minute) and `/kingdomworld admin perf`. "Tick handlers" are all handlers of the server tick: on a clean server the mod alone, in the pack other mods too.
+
+| Measure | pack, before | pack, after | clean, after |
+| --- | --- | --- | --- |
+| server tick, average | 1.88 ms | 2.50 ms | 2.03 ms |
+| server tick, worst | 430 ms | 254 ms | 298 ms |
+| server ticks over 50 ms | 0.08% | 0.04% | 0.23% |
+| tick handlers, average | 0.48 ms | 0.46 ms | 0.59 ms |
+| tick handlers, worst | 424 ms | 248 ms | 296 ms |
+| handler ticks over 50 ms | 17 | 8 | 53 |
+| memory after GC | 552 of 6144 MB | 535 of 6144 MB | 275 of 2048 MB |
+| data of the mod / world | 51 KB / 81 MB | 53 KB / 86 MB | 58 KB / 87 MB |
+| server start | 31 s | 31 s | 14 s |
+
+- The systems' own timings in the same run: the worst turn of rulers 2.4 ms, a step of wars 6.7 ms, a day of courts 1.7 ms.
+- After the cache of workplaces (the last change) 10 minutes of the same load on a clean server: tick handlers 0.34 ms on average, worst 31 ms, none over 50 ms.
+- Made lighter: a soldier looks through the storehouses once for all its gear instead of once a slot; the price table is built again inside `/reload`, not in the first tick after it; a ruler works out at most one new cost of an upgrade a look; the search for workplaces in chunks remembers the answer for each block state (the busiest place of the mod in a JFR recording).
+
+### Balance
+
+A model of a treasury over 60 days (`KingdomBudget`, a unit test): the poll tax of subjects, what merchants sell abroad, wages, mercenaries, works paid from the treasury, shares of the nobles, spies, a tribute.
+
+| Kingdom | income a day | expense a day | after 60 days |
+| --- | --- | --- | --- |
+| small, of players | 125 | 41 | 5,240 |
+| large, of players | 386 | 308 | 6,680 |
+| merchant of the world | 461 | 164 | 19,320 |
+| warrior of the world at war with mercenaries | 346 | 514 | below zero; a week of war fits its savings |
+| builder of the world | 230 | 182 | 4,380 |
+
+- Treasuries at peace grow slowly and do not go bankrupt; a band of a lieutenant (271 a day) is affordable for a week of war and ruins a kingdom if kept longer; a tribute of 20% of the income and the ransom of a spy (150) are a few days of income.
+- Defaults: the wage of merchants 0 became 8, innkeepers 0 became 6, registrars 0 became 7, mages 0 became 12 (they worked for nothing, though merchants bring most of the income of a treasury). Soldiers are paid 15 by the settings of the army already. New values go into new config files; add them to `[economy] wages` of an existing one.
 
 ### Requirements
 
