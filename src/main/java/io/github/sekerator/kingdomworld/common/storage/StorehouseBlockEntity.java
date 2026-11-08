@@ -76,18 +76,30 @@ public class StorehouseBlockEntity extends BlockEntity {
     private static final class Handler implements IItemHandlerModifiable {
         private final ServerLevel level;
         private final WorldPos pos;
+        private final BlockPos blockPos;
 
         private Handler(ServerLevel level, BlockPos pos) {
             this.level = level;
             this.pos = position(level, pos);
+            this.blockPos = pos.immutable();
         }
 
         private KingdomSavedData data() {
             return KingdomSavedData.get(level.getServer());
         }
 
+        /**
+         * The inventory, or {@code null} once the storehouse is gone: a handler another mod kept after that makes no new
+         * empty record, takes nothing and gives nothing.
+         */
+        @Nullable
         private StorehouseInventory inventory() {
-            return data().storehouses().getOrCreate(pos);
+            java.util.Optional<StorehouseInventory> found = data().storehouses().get(pos);
+            if (found.isPresent()) {
+                return found.get();
+            }
+            return level.isLoaded(blockPos) && level.getBlockEntity(blockPos) instanceof StorehouseBlockEntity storehouse && !storehouse.isRemoved()
+                    ? data().storehouses().getOrCreate(pos) : null;
         }
 
         @Override
@@ -97,39 +109,39 @@ public class StorehouseBlockEntity extends BlockEntity {
 
         @Override
         public @NotNull ItemStack getStackInSlot(int slot) {
-            return inventory().getStackInSlot(slot);
+            StorehouseInventory inventory = inventory();
+            return inventory == null ? ItemStack.EMPTY : inventory.getStackInSlot(slot);
         }
 
         @Override
         public @NotNull ItemStack insertItem(int slot, @NotNull ItemStack stack, boolean simulate) {
-            if (data().isReadOnly()) {
-                return stack;
-            }
-            return inventory().insertItem(slot, stack, simulate);
+            StorehouseInventory inventory = data().isReadOnly() ? null : inventory();
+            return inventory == null ? stack : inventory.insertItem(slot, stack, simulate);
         }
 
         @Override
         public @NotNull ItemStack extractItem(int slot, int amount, boolean simulate) {
-            if (data().isReadOnly()) {
-                return ItemStack.EMPTY;
-            }
-            return inventory().extractItem(slot, amount, simulate);
+            StorehouseInventory inventory = data().isReadOnly() ? null : inventory();
+            return inventory == null ? ItemStack.EMPTY : inventory.extractItem(slot, amount, simulate);
         }
 
         @Override
         public int getSlotLimit(int slot) {
-            return inventory().getSlotLimit(slot);
+            StorehouseInventory inventory = inventory();
+            return inventory == null ? 0 : inventory.getSlotLimit(slot);
         }
 
         @Override
         public boolean isItemValid(int slot, @NotNull ItemStack stack) {
-            return !data().isReadOnly() && inventory().isItemValid(slot, stack);
+            StorehouseInventory inventory = data().isReadOnly() ? null : inventory();
+            return inventory != null && inventory.isItemValid(slot, stack);
         }
 
         @Override
         public void setStackInSlot(int slot, @NotNull ItemStack stack) {
-            if (!data().isReadOnly()) {
-                inventory().setStackInSlot(slot, stack);
+            StorehouseInventory inventory = data().isReadOnly() ? null : inventory();
+            if (inventory != null) {
+                inventory.setStackInSlot(slot, stack);
             }
         }
     }

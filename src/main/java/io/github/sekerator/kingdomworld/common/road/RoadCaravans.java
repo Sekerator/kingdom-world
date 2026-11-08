@@ -590,6 +590,9 @@ public final class RoadCaravans {
         if (body == null) {
             return;
         }
+        // A llama in a chunk that is not loaded now is not ours any more: when the chunk comes back, it does not join.
+        SPAWNED.remove(body.merchant());
+        body.llamas().forEach(SPAWNED::remove);
         ServerLevel level = ConstructionWork.level(server, body.dimension());
         if (level == null) {
             return;
