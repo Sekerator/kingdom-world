@@ -91,6 +91,8 @@ final class RulerActions {
     private static final int MAX_STEP = 3;
     /** Half the side of the levelled square of a new town. */
     private static final int TOWN_SQUARE = 12;
+    /** Time a tick spends on making the plans of constructions at most. */
+    private static final long WARM_NANOS = 8_000_000L;
     /** Chunks a new town claims in a tick at most. */
     private static final int CLAIMS_PER_TICK = 4;
     /** Days a contract on robbers stays on the board. */
@@ -157,6 +159,31 @@ final class RulerActions {
             return all;
         }
 
+        private int warmIndex;
+        private boolean warmed;
+
+        /**
+         * Makes the plans of the constructions of the world a few a tick before a construction is laid out or raised: laying
+         * one out looks at the plans of all of them, and after a restart none is made yet.
+         *
+         * @return whether all plans are made
+         */
+        boolean warm(MinecraftServer server) {
+            if (warmed) {
+                return true;
+            }
+            List<Construction> all = List.copyOf(KingdomWorldApi.state(server).construction().all());
+            long start = System.nanoTime();
+            while (warmIndex < all.size() && System.nanoTime() - start < WARM_NANOS) {
+                ConstructionWork.plan(all.get(warmIndex++));
+            }
+            warmed = warmIndex >= all.size();
+            if (!warmed) {
+                part = "plans";
+            }
+            return warmed;
+        }
+
         void release(ServerLevel level) {
             for (long key : ticketed) {
                 ChunkPos pos = new ChunkPos(ChunkKey.x(key), ChunkKey.z(key));
@@ -180,7 +207,7 @@ final class RulerActions {
         try {
             return switch (decision.kind()) {
                 case BUILD -> build(server, npc, decision);
-                case UPGRADE -> Result.of(BuildingWork.orderUpgrade(server, null, id, parse(decision.target())).outcome(), decision);
+                case UPGRADE -> Result.working(new UpgradeJob(id, decision));
                 case REPAIR -> repair(server, id, decision);
                 case CLAIM -> Result.working(new ClaimJob(id, decision));
                 case TOWN -> town(server, npc, decision);
@@ -294,6 +321,10 @@ final class RulerActions {
                 return null;
             }
             // The wood of the buildings that stand, so that the stores of the kingdom fit the new one.
+            if (!warm(server)) {
+                return null;
+            }
+            part = "lay";
             KingdomWorldState.ConstructionChange change = ConstructionWork.lay(level, null, kingdomId, spot.template(), anchor, spot.placement(),
                     new Materials(RulerPlaces.wood(server, kingdomId), ""));
             if (change.construction().isEmpty()) {
@@ -311,6 +342,24 @@ final class RulerActions {
             LOGGER.info("The ruler of {} laid out {} at {}; it lacks {}", npc.name().latin(), spot.template().id(), anchor.toShortString(),
                     lacks.isEmpty() ? "nothing" : lacks);
             return Outcome.DONE;
+        }
+    }
+
+    /**
+     * Raises a building to its next level once the plans of the constructions are made.
+     */
+    private static final class UpgradeJob extends Job {
+        UpgradeJob(UUID kingdomId, RulerDecision decision) {
+            super(kingdomId, decision);
+        }
+
+        @Override
+        Outcome step(MinecraftServer server, ServerLevel level) {
+            if (!warm(server)) {
+                return null;
+            }
+            part = "upgrade";
+            return BuildingWork.orderUpgrade(server, null, kingdomId, parse(decision.target())).outcome();
         }
     }
 

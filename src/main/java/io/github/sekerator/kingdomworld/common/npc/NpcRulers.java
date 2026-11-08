@@ -449,7 +449,7 @@ public final class NpcRulers {
 
     private static boolean needsJob(RulerDecision decision) {
         return decision.kind() == RulerDecision.Kind.BUILD || decision.kind() == RulerDecision.Kind.CLAIM
-                || decision.kind() == RulerDecision.Kind.TOWN;
+                || decision.kind() == RulerDecision.Kind.TOWN || decision.kind() == RulerDecision.Kind.UPGRADE;
     }
 
     private static boolean needsLand(RulerMind.Plan plan) {
