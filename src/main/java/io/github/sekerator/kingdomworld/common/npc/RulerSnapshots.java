@@ -108,13 +108,13 @@ final class RulerSnapshots {
      */
     static RulerView of(MinecraftServer server, NpcKingdom npc, RulerMemory memory, RulerRules rules, long day) {
         RulerView view = begin(server, npc, memory, rules, day);
+        more(server, npc, memory, view);
         finish(server, npc, rules, view);
         return view;
     }
 
     /**
-     * The first part of a snapshot: people, money, buildings, the army, threats, goods, trade, neighbours, the law, magic and
-     * positions.
+     * The first part of a snapshot: people, money, buildings, the army and threats.
      */
     static RulerView begin(MinecraftServer server, NpcKingdom npc, RulerMemory memory, RulerRules rules, long day) {
         UUID id = npc.kingdomId();
@@ -131,7 +131,16 @@ final class RulerSnapshots {
         buildings(server, state, id, view, counts);
         army(server, id, view);
         threats(server, id, view);
-        goods(server, state, id, view, counts);
+        return view;
+    }
+
+    /**
+     * The second part of a snapshot: goods, trade, neighbours, the law, magic and positions.
+     */
+    static void more(MinecraftServer server, NpcKingdom npc, RulerMemory memory, RulerView view) {
+        UUID id = npc.kingdomId();
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        goods(server, state, id, view, KingdomStorage.countsById(server, id));
         trade(server, state, id, memory, view);
         neighbours(server, state, id, view);
         law(server, id, view);
@@ -139,7 +148,6 @@ final class RulerSnapshots {
         positions(server, state, id, view);
         view.festivals = RulerFestivals.available();
         view.festivalCost = Math.max(50, view.population * 10L);
-        return view;
     }
 
     /**

@@ -60,7 +60,7 @@ public final class NpcRulers {
     /** A turn whose snapshot is half made: the rest is made and the decisions taken in the next tick. */
     private static Turning turning;
 
-    private record Turning(UUID kingdomId, RulerView view, long day) {
+    private record Turning(UUID kingdomId, RulerView view, long day, int part) {
     }
     private static int cursor;
     private static long loadingConstruction = -1;
@@ -223,8 +223,14 @@ public final class NpcRulers {
             Turning current = turning;
             turning = null;
             state.kingdom(current.kingdomId()).ifPresent(kingdom -> {
-                doing = "the decisions of " + kingdom.name().latin();
                 turnTick = true;
+                if (current.part() == 1) {
+                    doing = "the second look of " + kingdom.name().latin();
+                    RulerSnapshots.more(server, kingdom, state.ruler(kingdom.kingdomId()), current.view());
+                    turning = new Turning(current.kingdomId(), current.view(), current.day(), 2);
+                    return;
+                }
+                doing = "the decisions of " + kingdom.name().latin();
                 RulerSnapshots.finish(server, kingdom, NpcSettings.rulers(), current.view());
                 decide(server, kingdom, current.view(), current.day(), false);
             });
@@ -239,7 +245,7 @@ public final class NpcRulers {
                     RulerMemory memory = state.ruler(kingdom.kingdomId());
                     countDeals(server, kingdom.kingdomId(), memory);
                     memory.fade();
-                    turning = new Turning(kingdom.kingdomId(), RulerSnapshots.begin(server, kingdom, memory, NpcSettings.rulers(), day), day);
+                    turning = new Turning(kingdom.kingdomId(), RulerSnapshots.begin(server, kingdom, memory, NpcSettings.rulers(), day), day, 1);
                 }
             });
             return true;
@@ -586,8 +592,9 @@ public final class NpcRulers {
             doing = doing + " answers of " + kingdom.name().latin();
             turnTick = true;
             RulerMemory memory = state.ruler(id);
-            RulerView view = RulerSnapshots.of(server, kingdom, memory, NpcSettings.rulers(), day);
-            LAST_VIEWS.put(id, view);
+            // Judging deals needs no places for buildings or land: the first two parts of a look are enough.
+            RulerView view = RulerSnapshots.begin(server, kingdom, memory, NpcSettings.rulers(), day);
+            RulerSnapshots.more(server, kingdom, memory, view);
             for (RulerView.Offer offer : view.offers) {
                 RulerMind.Verdict verdict = RulerMind.judge(offer, view, memory, NpcSettings.rulers());
                 carryOut(server, kingdom, new RulerDecision(verdict.accept() ? RulerDecision.Kind.ACCEPT : RulerDecision.Kind.DECLINE,
