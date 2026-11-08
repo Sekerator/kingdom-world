@@ -835,7 +835,30 @@ public final class WarWork {
             return ended;
         }
         announcePeace(server, war, how, terms, now);
+        recall(server, war);
         return Outcome.DONE;
+    }
+
+    /**
+     * After the peace the squads of rulers of the world that held places on the land of the former enemy come home.
+     */
+    private static void recall(MinecraftServer server, War war) {
+        if (ArmyWork.isReadOnly(server)) {
+            return;
+        }
+        for (War.Side side : War.Side.values()) {
+            Set<UUID> enemies = war.members(side.enemy());
+            for (UUID member : war.members(side)) {
+                if (!isNpc(server, member)) {
+                    continue;
+                }
+                for (ArmySquad squad : List.copyOf(ArmyWork.state(server).squadsOf(member))) {
+                    if (onLandOf(server, squad).map(enemies::contains).orElse(false)) {
+                        ArmyWork.order(server, null, squad.id(), Order.NONE);
+                    }
+                }
+            }
+        }
     }
 
     /**

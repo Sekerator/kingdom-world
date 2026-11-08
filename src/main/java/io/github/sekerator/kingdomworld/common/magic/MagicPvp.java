@@ -50,6 +50,11 @@ public final class MagicPvp {
             // Players without a kingdom are not fair game either.
             return false;
         }
+        if (victim instanceof net.minecraft.server.level.ServerPlayer target
+                && !io.github.sekerator.kingdomworld.common.diplomacy.WarEvents.fairGame(level.getServer(), target)) {
+            // Players away from the keyboard or offline are never hurt, in war neither.
+            return false;
+        }
         KingdomSavedData data = KingdomSavedData.get(level.getServer());
         if (data.state().membership().isMember(player.getUUID(), kingdom)) {
             return false;

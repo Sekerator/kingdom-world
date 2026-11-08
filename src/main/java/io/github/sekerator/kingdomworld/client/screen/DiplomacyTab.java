@@ -453,10 +453,6 @@ final class DiplomacyTab {
                 screen.name(graphics, Component.translatable(KEY + hints[i]).getString(), x, lineY, 0xFFB8B8B8, column - 6 - x);
             }
         }
-        if (!row.playable() && !row.npc()) {
-            int lineY = y + 5 * ROW + 4;
-            screen.name(graphics, Component.translatable(KEY + "nobody_online").getString(), x, lineY, 0xFF80C0FF, right - x);
-        }
     }
 
     private void renderOffers(GuiGraphics graphics, Font font, int x, int right, int top, int rows) {
@@ -535,6 +531,10 @@ final class DiplomacyTab {
             return Component.empty();
         }
         if (selected != null) {
+            Optional<DiplomacyViews.KingdomRow> row = selectedRow();
+            if (row.isPresent() && !row.get().playable() && !row.get().npc()) {
+                return Component.translatable(KEY + "nobody_online");
+            }
             return Component.translatable(KEY + (view.canManage() || view.canDeclare() ? "hint.actions" : "hint.no_rights"));
         }
         return Component.translatable(KEY + "hint." + mode.id());

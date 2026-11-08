@@ -221,8 +221,11 @@ public final class WarEvents {
             UUID before = LAND.put(player.getUUID(), owner);
             if (owner != null && !owner.equals(before) && WarWork.fighting(server, own, owner)) {
                 boolean shielded = WarWork.shielded(server, owner);
+                String name = KingdomWorldApi.kingdom(server, owner)
+                        .map(kingdom -> io.github.sekerator.kingdomworld.common.npc.NpcWork.localKingdom(owner, kingdom.name(), player.getLanguage()))
+                        .orElse("?");
                 player.displayClientMessage(Component.translatable(KEY + (shielded ? "enemy_land_shielded" : "enemy_land"),
-                        Component.literal(ProtectionService.shortName(WarWork.name(server, owner).getString()))).withStyle(ChatFormatting.RED), true);
+                        Component.literal(ProtectionService.shortName(name))).withStyle(ChatFormatting.RED), true);
             }
         }
     }
