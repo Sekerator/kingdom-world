@@ -122,18 +122,12 @@ final class NpcDiplomacy {
         if (QUEUE.isEmpty()) {
             return;
         }
-        // First the strength of every army, two a second, then one ruler a second.
-        int counted = 0;
+        // First the strength of every army, one a second, then one ruler a second.
         for (Kingdom kingdom : KingdomWorldApi.kingdoms(server)) {
             if (!POWER.containsKey(kingdom.id())) {
                 power(server, kingdom.id());
-                if (++counted >= 2) {
-                    return;
-                }
+                return;
             }
-        }
-        if (counted > 0) {
-            return;
         }
         UUID next = QUEUE.poll();
         if (next != null && KingdomWorldApi.kingdom(server, next).isPresent()) {
