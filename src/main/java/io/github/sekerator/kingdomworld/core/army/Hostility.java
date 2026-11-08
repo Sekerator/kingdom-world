@@ -17,4 +17,18 @@ public interface Hostility {
      * @param playerKingdom the player's kingdom, {@code null} for none
      */
     boolean isEnemy(UUID kingdomId, UUID playerId, UUID playerKingdom);
+
+    /**
+     * Whether the soldiers of two kingdoms fight each other. None do in peace.
+     */
+    default boolean areEnemies(UUID kingdomId, UUID otherKingdom) {
+        return false;
+    }
+
+    /**
+     * Whether a kingdom fights any war now, so that its soldiers look for enemies at all.
+     */
+    default boolean atWar(UUID kingdomId) {
+        return false;
+    }
 }

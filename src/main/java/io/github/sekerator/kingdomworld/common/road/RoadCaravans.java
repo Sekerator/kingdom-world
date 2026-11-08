@@ -440,6 +440,47 @@ public final class RoadCaravans {
         return left;
     }
 
+    /**
+     * What soldiers of an enemy took from a caravan.
+     *
+     * @param left  the caravan with the rest, empty if nothing is left
+     * @param taken the goods taken
+     */
+    public record Seized(Optional<Caravan> left, List<io.github.sekerator.kingdomworld.core.trade.Goods> taken) {
+    }
+
+    /**
+     * Soldiers of an enemy at war take a share of the goods of a caravan far from players, on the same terms as robbers: the
+     * payment for the goods taken goes back to the buyer, the rest goes on. The caller puts the goods taken where they
+     * belong in the same moment.
+     */
+    public static Seized seize(MinecraftServer server, Caravan caravan, double share) {
+        KingdomWorldState world = KingdomWorldApi.state(server);
+        Ambushes.Split split = Ambushes.split(caravan.cargo(), share);
+        long day = RoadWork.day(server);
+        long refund = Ambushes.refund(caravan.payment(), split.takenItems(), caravan.items());
+        Optional<Caravan> left;
+        if (split.kept().isEmpty()) {
+            world.economy().refundEscrow(caravan.escrowId(), day);
+            world.trade().removeCaravan(caravan.id());
+            RoadWork.state(server).removeRoute(caravan.id());
+            removeBody(server, caravan.id());
+            left = Optional.empty();
+        } else {
+            if (refund > 0) {
+                world.economy().refundEscrowPart(caravan.escrowId(), refund, day);
+            }
+            Caravan rest = new Caravan(caravan.id(), caravan.dealId(), caravan.seller(), caravan.buyer(), split.kept(), caravan.currency(),
+                    caravan.payment() - refund, caravan.escrowId(), caravan.dimension(), caravan.fromX(), caravan.fromZ(), caravan.toX(),
+                    caravan.toZ(), caravan.departTime(), caravan.arriveTime(), caravan.state());
+            world.trade().putCaravan(rest);
+            left = Optional.of(rest);
+        }
+        LOGGER.info("Soldiers of an enemy took {} item(s) of a caravan of deal #{}; {} of the payment went back to the buyer",
+                split.takenItems(), caravan.dealId(), refund);
+        return new Seized(left, split.taken());
+    }
+
     private static void killMerchant(MinecraftServer server, UUID kingdomId, WorldPos where) {
         for (Citizen citizen : KingdomWorldApi.state(server).citizens().registry().all()) {
             if (citizen.kingdomId().equals(kingdomId) && citizen.isAlive() && Professions.MERCHANT.id().equals(citizen.professionId())) {

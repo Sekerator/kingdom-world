@@ -198,11 +198,15 @@ public final class ArmyWork {
 
     /**
      * Whether soldiers of a kingdom may attack an entity: monsters always, players only if they are online, at the keyboard
-     * and enemies of the kingdom (never in peace), citizens never.
+     * and enemies of the kingdom (never in peace), citizens only if they are soldiers of a kingdom at war with it.
      */
     public static boolean mayAttack(MinecraftServer server, UUID kingdomId, LivingEntity target) {
-        if (target instanceof CitizenEntity || !target.isAlive()) {
+        if (!target.isAlive()) {
             return false;
+        }
+        if (target instanceof CitizenEntity citizen) {
+            return citizen.kingdomId() != null && !kingdomId.equals(citizen.kingdomId()) && Professions.isMilitary(citizen.professionId())
+                    && hostility.areEnemies(kingdomId, citizen.kingdomId());
         }
         if (target instanceof Player player) {
             if (!(player instanceof ServerPlayer serverPlayer) || player instanceof FakePlayer || serverPlayer.hasDisconnected()
@@ -218,6 +222,29 @@ public final class ArmyWork {
             return !kingdomId.equals(theirs) && hostility.isEnemy(kingdomId, player.getUUID(), theirs);
         }
         return target instanceof net.minecraft.world.entity.monster.Enemy && target instanceof Mob;
+    }
+
+    /**
+     * The nearest enemy of a war a soldier sees: a player of a kingdom at war with its own (online and at the keyboard) or a
+     * soldier of such a kingdom; {@code null} in peace.
+     */
+    @Nullable
+    public static LivingEntity warTarget(MinecraftServer server, CitizenEntity body, double radius) {
+        UUID kingdom = body.kingdomId();
+        if (kingdom == null || !hostility.atWar(kingdom)) {
+            return null;
+        }
+        LivingEntity best = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (LivingEntity candidate : body.level().getEntitiesOfClass(LivingEntity.class, body.getBoundingBox().inflate(radius, 8.0, radius),
+                entity -> entity != body && (entity instanceof Player || entity instanceof CitizenEntity))) {
+            double distance = body.distanceToSqr(candidate);
+            if (distance < bestDistance && mayAttack(server, kingdom, candidate) && body.getSensing().hasLineOfSight(candidate)) {
+                best = candidate;
+                bestDistance = distance;
+            }
+        }
+        return best;
     }
 
     // ---------------------------------------------------------------- alarms
@@ -715,7 +742,10 @@ public final class ArmyWork {
         }
     }
 
-    private static boolean hasBodies(ArmySquad squad) {
+    /**
+     * Whether any soldier of a squad has a body in the world now (near players), so that it fights for real there.
+     */
+    public static boolean hasBodies(ArmySquad squad) {
         for (UUID member : squad.members()) {
             if (CitizenBodies.body(member) != null) {
                 return true;

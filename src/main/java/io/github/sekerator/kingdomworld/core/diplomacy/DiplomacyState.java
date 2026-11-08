@@ -32,6 +32,29 @@ public final class DiplomacyState {
     public static final long ENDED_WAR_TICKS = 10L * CitizenNeeds.TICKS_PER_DAY;
     /** Most open offers one kingdom may have made. */
     public static final int MAX_OPEN_PROPOSALS = 16;
+    /** Most entries of the chronicle of wars and treaties. */
+    public static final int MAX_CHRONICLE = 64;
+
+    /**
+     * An entry of the chronicle of wars and treaties, for the tab, the messages and the rumors of taverns.
+     *
+     * @param kind   what happened: declared, started, battle, raid, blockade, peace, pact, alliance, vassal, released, broken,
+     *               joined, refused
+     * @param first  the kingdom that did it
+     * @param second the kingdom it was done to, {@code null} for none
+     * @param detail a word of detail: the goal of a war, how it ended
+     */
+    public record Event(long time, String kind, UUID first, UUID second, long war, String detail) {
+        public Event {
+            Objects.requireNonNull(kind, "kind");
+            Objects.requireNonNull(first, "first");
+            detail = detail == null ? "" : detail;
+        }
+
+        public boolean involves(UUID kingdom) {
+            return first.equals(kingdom) || kingdom.equals(second);
+        }
+    }
 
     /**
      * A tribute for some days after a war.
@@ -104,6 +127,8 @@ public final class DiplomacyState {
     private final Presence presence = new Presence();
     private final List<Tribute> tributes = new ArrayList<>();
     private final List<Claim> claims = new ArrayList<>();
+    /** The chronicle, newest first. */
+    private final List<Event> chronicle = new ArrayList<>();
     /** The game day each kingdom last declared a war. */
     private final Map<UUID, Long> lastDeclared = new LinkedHashMap<>();
     /** The game day a ruler of the world last declared war on each kingdom of players. */
@@ -161,6 +186,21 @@ public final class DiplomacyState {
 
     public List<Claim> claims() {
         return Collections.unmodifiableList(claims);
+    }
+
+    public List<Event> chronicle() {
+        return Collections.unmodifiableList(chronicle);
+    }
+
+    /**
+     * Writes an entry of the chronicle; the oldest go when it is full.
+     */
+    public void record(long time, String kind, UUID first, UUID second, long war, String detail) {
+        chronicle.add(0, new Event(time, kind, first, second, war, detail));
+        while (chronicle.size() > MAX_CHRONICLE) {
+            chronicle.remove(chronicle.size() - 1);
+        }
+        changed();
     }
 
     public Map<UUID, Long> lastDeclared() {
@@ -518,6 +558,19 @@ public final class DiplomacyState {
             changed();
         }
         return started;
+    }
+
+    /**
+     * Starts a war that is being prepared at once, for operators.
+     */
+    public Outcome startNow(long warId) {
+        War war = wars.get(warId);
+        if (war == null || war.over()) {
+            return Outcome.fail(KingdomError.UNKNOWN_WAR);
+        }
+        war.start();
+        changed();
+        return Outcome.DONE;
     }
 
     /**
@@ -1158,6 +1211,7 @@ public final class DiplomacyState {
         proposals.values().removeIf(proposal -> proposal.involves(kingdom));
         tributes.removeIf(tribute -> tribute.payer().equals(kingdom) || tribute.payee().equals(kingdom));
         claims.removeIf(claim -> claim.winner().equals(kingdom) || claim.loser().equals(kingdom));
+        chronicle.removeIf(event -> event.involves(kingdom));
         relations.forget(kingdom);
         presence.forget(kingdom);
         lastDeclared.remove(kingdom);
@@ -1198,6 +1252,15 @@ public final class DiplomacyState {
         claims.add(claim);
     }
 
+    /**
+     * Restores an entry of the chronicle, in the order of the saved data (newest first).
+     */
+    public void restoreEvent(Event event) {
+        if (chronicle.size() < MAX_CHRONICLE) {
+            chronicle.add(event);
+        }
+    }
+
     public void restoreTimes(Map<UUID, Long> declared, Map<UUID, Long> npcWars, Map<UUID, Long> warEnds, long tributes) {
         lastDeclared.putAll(declared);
         lastNpcWar.putAll(npcWars);
@@ -1218,6 +1281,7 @@ public final class DiplomacyState {
         presence.clear();
         tributes.clear();
         claims.clear();
+        chronicle.clear();
         lastDeclared.clear();
         lastNpcWar.clear();
         lastWarEnd.clear();

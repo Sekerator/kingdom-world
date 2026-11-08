@@ -148,6 +148,7 @@ public final class KingdomWorldCommand {
                         .then(LawCommands.adminCommand())
                         .then(io.github.sekerator.kingdomworld.common.npc.NpcCommands.adminCommand())
                         .then(LifeCommands.adminCommand())
+                        .then(WarCommands.adminCommand())
                         .then(Commands.literal("data")
                                 .then(Commands.literal("status").executes(context -> dataStatus(context.getSource())))
                                 .then(Commands.literal("unlock").executes(context -> dataUnlock(context.getSource()))))));

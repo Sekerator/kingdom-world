@@ -222,6 +222,10 @@ final class SoldierGoal extends Goal {
                 && ArmyWork.mayAttack(server, kingdom, attacker)) {
             return attacker;
         }
+        LivingEntity foe = ArmyWork.warTarget(server, body, SEARCH);
+        if (foe != null) {
+            return foe;
+        }
         long now = KingdomWorldApi.gameTime(server);
         double alarm = Math.max(SEARCH, ArmySettings.rules().alarmRadius());
         LivingEntity best = null;

@@ -361,7 +361,9 @@ public enum KingdomError {
     /** The kingdom was not called to this war. */
     NOT_CALLED,
     /** The score of the war does not allow asking so much. */
-    TERMS_TOO_HIGH;
+    TERMS_TOO_HIGH,
+    /** An enemy at war holds the land on the way: the caravan cannot pass. */
+    BLOCKADE;
 
     /**
      * Lower case identifier, used for translation keys.

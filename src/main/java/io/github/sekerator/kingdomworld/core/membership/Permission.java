@@ -37,6 +37,10 @@ public enum Permission {
     MANAGE_MAGIC,
     /** Hold the court: pardon, lower fines, spare murderers, set fines, the entry fee and the ban of slavery. */
     MANAGE_LAW,
+    /** Propose, accept and break treaties with other kingdoms, answer calls of allies and offer peace. */
+    MANAGE_DIPLOMACY,
+    /** Declare war on another kingdom. The king holds it unless he gives it to a position. */
+    DECLARE_WAR,
     /** Appoint members to positions and change the rights of positions. Only the king holds it. */
     APPOINT;
 

@@ -115,6 +115,15 @@ public final class TradeWork {
         if (!check.ok()) {
             return check;
         }
+        // In war deals between the enemies are frozen, and caravans of an enemy do not pass the land of the other side.
+        if (io.github.sekerator.kingdomworld.common.diplomacy.WarWork.frozen(server, deal.seller(), deal.buyer())) {
+            return Outcome.fail(KingdomError.AT_WAR);
+        }
+        Optional<UUID> blocker = io.github.sekerator.kingdomworld.common.diplomacy.WarWork.blocker(server, deal);
+        if (blocker.isPresent()) {
+            io.github.sekerator.kingdomworld.common.diplomacy.WarWork.blocked(server, deal, blocker.get());
+            return Outcome.fail(KingdomError.BLOCKADE);
+        }
         Optional<Capital> from = state.territory().territory(deal.seller()).map(Territory::capital);
         Optional<Capital> to = state.territory().territory(deal.buyer()).map(Territory::capital);
         if (from.isEmpty() || to.isEmpty()) {
@@ -214,6 +223,11 @@ public final class TradeWork {
     private static void regularDelivery(MinecraftServer server, Deal deal, long now) {
         KingdomWorldState state = KingdomWorldApi.state(server);
         long next = deal.nextTime() + (long) Math.max(1, deal.periodDays()) * CitizenNeeds.TICKS_PER_DAY;
+        if (io.github.sekerator.kingdomworld.common.diplomacy.WarWork.frozen(server, deal.seller(), deal.buyer())) {
+            // A deal between enemies waits for the peace without counting failures.
+            state.trade().putDeal(deal.withNext(Math.max(next, now + 1), deal.deliveries(), deal.failures()));
+            return;
+        }
         Outcome delivered = deliver(server, deal);
         if (delivered.ok()) {
             state.trade().putDeal(deal.withNext(Math.max(next, now + 1), deal.deliveries() + 1, 0));

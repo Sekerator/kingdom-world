@@ -22,6 +22,15 @@ public final class LawPolicy {
     @FunctionalInterface
     public interface Exemption {
         boolean excuses(UUID kingdomId, UUID player, CrimeKind kind);
+
+        /**
+         * Whether the deed is excused knowing whom it was done to.
+         *
+         * @param victimKingdom the kingdom of the victim (a citizen or a player), {@code null} if none or unknown
+         */
+        default boolean excuses(UUID kingdomId, UUID player, CrimeKind kind, UUID victimKingdom) {
+            return excuses(kingdomId, player, kind);
+        }
     }
 
     /**
@@ -71,6 +80,15 @@ public final class LawPolicy {
      * Whether the deed is a crime in the kingdom.
      */
     public boolean isCrime(UUID kingdomId, Offender offender, CrimeKind kind) {
+        return isCrime(kingdomId, offender, kind, null);
+    }
+
+    /**
+     * Whether the deed is a crime in the kingdom, knowing the kingdom of the victim.
+     *
+     * @param victimKingdom the kingdom of the victim, {@code null} if none or unknown
+     */
+    public boolean isCrime(UUID kingdomId, Offender offender, CrimeKind kind, UUID victimKingdom) {
         if (offender.role().isPresent() && offender.role().get() != Role.SUBJECT) {
             return false;
         }
@@ -84,7 +102,7 @@ public final class LawPolicy {
             return false;
         }
         for (Exemption exemption : exemptions) {
-            if (exemption.excuses(kingdomId, offender.player(), kind)) {
+            if (exemption.excuses(kingdomId, offender.player(), kind, victimKingdom)) {
                 return false;
             }
         }

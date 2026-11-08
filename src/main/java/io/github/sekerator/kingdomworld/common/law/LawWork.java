@@ -173,6 +173,17 @@ public final class LawWork {
      */
     public static boolean isCrime(MinecraftServer server, ServerPlayer player, UUID kingdomId, CrimeKind kind, @Nullable Permission right,
                                   boolean owner) {
+        return isCrime(server, player, kingdomId, kind, right, owner, null);
+    }
+
+    /**
+     * Whether a deed of a player in a kingdom is a crime there, knowing whom it was done to: the blows and the killing of an
+     * enemy in war are none.
+     *
+     * @param victimKingdom the kingdom of the victim, {@code null} if none or unknown
+     */
+    public static boolean isCrime(MinecraftServer server, ServerPlayer player, UUID kingdomId, CrimeKind kind, @Nullable Permission right,
+                                  boolean owner, @Nullable UUID victimKingdom) {
         if (player instanceof FakePlayer || player.isSpectator()
                 || ProtectionService.hasBypass(player.getUUID()) && player.hasPermissions(ProtectionService.BYPASS_PERMISSION_LEVEL)) {
             return false;
@@ -180,7 +191,7 @@ public final class LawWork {
         KingdomWorldState world = KingdomWorldApi.state(server);
         Optional<Member> member = world.membership().memberOf(player.getUUID()).filter(m -> world.membership().isMember(player.getUUID(), kingdomId));
         boolean hasRight = right != null && world.membership().hasPermission(player.getUUID(), kingdomId, right);
-        return POLICY.isCrime(kingdomId, new LawPolicy.Offender(player.getUUID(), member.map(Member::role), hasRight, owner), kind);
+        return POLICY.isCrime(kingdomId, new LawPolicy.Offender(player.getUUID(), member.map(Member::role), hasRight, owner), kind, victimKingdom);
     }
 
     /**
@@ -200,7 +211,13 @@ public final class LawWork {
             return false;
         }
         UUID kingdom = kingdomId != null ? kingdomId : KingdomWorldApi.ownerAt(player.level(), where);
-        if (kingdom == null || kingdom(server, kingdom).isEmpty() || !isCrime(server, player, kingdom, kind, right, owner)) {
+        UUID victimKingdom = null;
+        if (victimEntity instanceof CitizenEntity citizen) {
+            victimKingdom = citizen.kingdomId();
+        } else if (victimEntity instanceof ServerPlayer target) {
+            victimKingdom = KingdomWorldApi.state(server).membership().kingdomOf(target.getUUID()).orElse(null);
+        }
+        if (kingdom == null || kingdom(server, kingdom).isEmpty() || !isCrime(server, player, kingdom, kind, right, owner, victimKingdom)) {
             return false;
         }
         LawRules rules = LawSettings.rules();

@@ -54,7 +54,8 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private static final List<Permission> EDITABLE_RIGHTS = List.of(Permission.BUILD, Permission.CONTAINERS,
             Permission.INTERACT, Permission.RECRUIT, Permission.TERRITORY, Permission.MANAGE_CITIZENS, Permission.MANAGE_PRODUCTION,
             Permission.MANAGE_TREASURY, Permission.MANAGE_MARKET, Permission.MANAGE_TRADE, Permission.MANAGE_GUILD,
-            Permission.MANAGE_CONSTRUCTION, Permission.MANAGE_ARMY, Permission.MANAGE_MAGIC, Permission.MANAGE_LAW);
+            Permission.MANAGE_CONSTRUCTION, Permission.MANAGE_ARMY, Permission.MANAGE_MAGIC, Permission.MANAGE_LAW,
+            Permission.MANAGE_DIPLOMACY, Permission.DECLARE_WAR);
 
     private enum Tab {
         OVERVIEW("kingdomworld.screen.throne.tab.overview"),

@@ -33,7 +33,9 @@ public enum LedgerCategory {
     /** The money a kingdom of the world has when it appears, like the chests of villages. */
     FOUNDING,
     /** Taverns, rooms and rumors, festivals and the goods of fairs. */
-    LIFE;
+    LIFE,
+    /** Tributes, indemnities and the loot of wars. */
+    WAR;
 
     public String id() {
         return name().toLowerCase(Locale.ROOT);

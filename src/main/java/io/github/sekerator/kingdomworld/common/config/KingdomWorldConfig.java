@@ -172,6 +172,8 @@ public final class KingdomWorldConfig {
         public final NpcKingdoms npcKingdoms;
         /** The day of citizens, taverns, rumors, light illnesses, festivals and fairs. */
         public final Life life;
+        /** Relations, treaties, wars and peace between kingdoms. */
+        public final War war;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -473,6 +475,7 @@ public final class KingdomWorldConfig {
             law = new Law(builder);
             npcKingdoms = new NpcKingdoms(builder);
             life = new Life(builder);
+            war = new War(builder);
 
             builder.comment("Abstract simulation of kingdoms far from players.").push("simulation");
             simulationIntervalTicks = builder
@@ -1581,6 +1584,78 @@ public final class KingdomWorldConfig {
                     .defineInRange("rumorPrice", d.rumorPrice, 0L, 1_000_000L);
             rumorsMin = builder.comment("Least rumors an innkeeper knows a day.").defineInRange("rumorsMin", d.rumorsMin, 1, 8);
             rumorsMax = builder.comment("Most rumors an innkeeper knows a day.").defineInRange("rumorsMax", d.rumorsMax, 1, 8);
+            builder.pop();
+        }
+    }
+
+    public static final class War {
+        public final ForgeConfigSpec.IntValue preparationMinutes;
+        public final ForgeConfigSpec.IntValue maxWarDays;
+        public final ForgeConfigSpec.IntValue pactDays;
+        public final ForgeConfigSpec.IntValue truceDays;
+        public final ForgeConfigSpec.IntValue proposalMinutes;
+        public final ForgeConfigSpec.IntValue stepSeconds;
+        public final ForgeConfigSpec.DoubleValue battleChance;
+        public final ForgeConfigSpec.DoubleValue raidChance;
+        public final ForgeConfigSpec.DoubleValue exhaustionPerDay;
+        public final ForgeConfigSpec.DoubleValue imposeLead;
+        public final ForgeConfigSpec.IntValue tributePermille;
+        public final ForgeConfigSpec.IntValue tributeDays;
+        public final ForgeConfigSpec.IntValue vassalPermille;
+        public final ForgeConfigSpec.IntValue indemnityPermille;
+        public final ForgeConfigSpec.IntValue absenceMinutes;
+        public final ForgeConfigSpec.IntValue fightGraceSeconds;
+        public final ForgeConfigSpec.BooleanValue protectPeacefulPlayers;
+        public final ForgeConfigSpec.IntValue npcWarDays;
+        public final ForgeConfigSpec.IntValue npcRecentWarDays;
+        public final ForgeConfigSpec.BooleanValue npcWarsOnPlayers;
+        public final ForgeConfigSpec.IntValue npcPlayerWarDays;
+
+        War(ForgeConfigSpec.Builder builder) {
+            io.github.sekerator.kingdomworld.core.diplomacy.DiplomacyRules d = io.github.sekerator.kingdomworld.core.diplomacy.DiplomacyRules.DEFAULT;
+            builder.comment("Diplomacy and war between kingdoms: pacts, alliances, vassals, declarations, the score of a war, exhaustion",
+                    "and peace. Players who are offline or away are never attacked; a kingdom of players with nobody online is shielded.").push("war");
+            preparationMinutes = builder.comment("Minutes between the declaration of a war and its start (20 minutes is a game day).")
+                    .defineInRange("preparationMinutes", (int) (d.preparationTicks() / 1_200), 0, 10_080);
+            maxWarDays = builder.comment("Game days a war lasts at most; then it ends in a white peace.")
+                    .defineInRange("maxWarDays", d.maxWarDays(), 1, 365);
+            pactDays = builder.comment("Game days a pact of non-aggression holds.").defineInRange("pactDays", d.pactDays(), 1, 365);
+            truceDays = builder.comment("Game days of truce after a war; no war between the two sides is possible until it ends.")
+                    .defineInRange("truceDays", d.truceDays(), 0, 365);
+            proposalMinutes = builder.comment("Minutes an offer between kingdoms waits for an answer.")
+                    .defineInRange("proposalMinutes", (int) (d.proposalTicks() / 1_200), 1, 10_080);
+            stepSeconds = builder.comment("Seconds between two steps of the wars far from players (battles of squads, raids on caravans).")
+                    .defineInRange("stepSeconds", d.stepTicks() / 20, 1, 3_600);
+            battleChance = builder.comment("Chance of a squad that holds a place on the land of the enemy to meet its defenders in a step.")
+                    .defineInRange("battleChance", d.battleChance(), 0.0, 1.0);
+            raidChance = builder.comment("Chance of a side with squads on the land of the enemy to fall upon a caravan of the enemy in a step.")
+                    .defineInRange("raidChance", d.raidChance(), 0.0, 1.0);
+            exhaustionPerDay = builder.comment("Exhaustion a game day of war adds to each side that is not shielded (out of 100).")
+                    .defineInRange("exhaustionPerDay", d.exhaustionDay(), 0.0, 100.0);
+            imposeLead = builder.comment("Lead in the score of a war from which a side may ask for its goal in full (out of 100).")
+                    .defineInRange("imposeLead", d.imposeLead(), 0.0, 100.0);
+            tributePermille = builder.comment("Share of its daily income a loser pays as tribute, in permille.")
+                    .defineInRange("tributePermille", d.tributeShare(), 0, 500);
+            tributeDays = builder.comment("Game days a tribute is paid.").defineInRange("tributeDays", d.tributeDays(), 0, 30);
+            vassalPermille = builder.comment("Share of its daily income a vassal pays its overlord, in permille.")
+                    .defineInRange("vassalPermille", d.vassalShare(), 0, 500);
+            indemnityPermille = builder.comment("Share of the treasury of the loser an indemnity takes, in permille.")
+                    .defineInRange("indemnityPermille", d.indemnityShare(), 0, 1_000);
+            absenceMinutes = builder.comment("Minutes after the last player of a kingdom left or went away until its land is shielded.")
+                    .defineInRange("absenceMinutes", (int) (d.absenceTicks() / 1_200), 0, 1_440);
+            fightGraceSeconds = builder.comment("Seconds after a fight near the players of a kingdom during which it gets no shield.")
+                    .defineInRange("fightGraceSeconds", (int) (d.fightGraceTicks() / 20), 0, 3_600);
+            protectPeacefulPlayers = builder.comment("Whether players of two kingdoms at peace cannot hurt each other (wanted outlaws excepted).",
+                    "Players of kingdoms at war may always fight, unless one of them is away or offline.")
+                    .define("protectPeacefulPlayers", true);
+            npcWarDays = builder.comment("Game days between two wars a ruler of the world declares.")
+                    .defineInRange("npcWarDays", d.npcWarDays(), 1, 365);
+            npcRecentWarDays = builder.comment("Game days after a war during which rulers of the world leave a kingdom alone.")
+                    .defineInRange("npcRecentWarDays", d.npcRecentWarDays(), 0, 365);
+            npcWarsOnPlayers = builder.comment("Whether rulers of the world declare wars on kingdoms of players at all.")
+                    .define("npcWarsOnPlayers", d.npcWarsOnPlayers());
+            npcPlayerWarDays = builder.comment("Game days between two wars of rulers of the world on one kingdom of players.")
+                    .defineInRange("npcPlayerWarDays", d.npcPlayerWarDays(), 1, 365);
             builder.pop();
         }
     }
