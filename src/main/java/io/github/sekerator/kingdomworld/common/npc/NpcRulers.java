@@ -72,6 +72,7 @@ public final class NpcRulers {
     private static long maxNanos;
     /** What the rulers did in the tick, for the log of slow ticks. */
     private static String doing = "";
+    private static String lastPart = "";
     /** Ticks of rulers longer than this are written to the log with what they did. */
     private static final long SLOW_TICK_NANOS = 50_000_000L;
 
@@ -174,10 +175,12 @@ public final class NpcRulers {
             sumNanos += spent;
             maxNanos = Math.max(maxNanos, spent);
             if (spent > SLOW_TICK_NANOS) {
-                LOGGER.warn("A tick of the rulers of the world took {} ms: {}", String.format(java.util.Locale.ROOT, "%.1f", spent / 1e6), doing);
+                LOGGER.warn("A tick of the rulers of the world took {} ms: {}{}", String.format(java.util.Locale.ROOT, "%.1f", spent / 1e6), doing,
+                        lastPart.isEmpty() ? "" : " (" + lastPart + ")");
             }
         }
         doing = "";
+        lastPart = "";
     }
 
     /**
@@ -284,6 +287,7 @@ public final class NpcRulers {
         } else {
             try {
                 outcome = current.step(server, level);
+                lastPart = current.part;
             } catch (RuntimeException e) {
                 LOGGER.error("A job of a ruler of the world failed: {}", current.decision, e);
                 outcome = Outcome.fail(io.github.sekerator.kingdomworld.core.kingdom.KingdomError.VALUE_OUT_OF_RANGE);

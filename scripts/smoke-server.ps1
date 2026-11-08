@@ -2696,7 +2696,8 @@ if ($script:NpcSite) {
         }
         $trade = [regex]::Matches((Get-LatestLog), '  day \d+: [^\r\n]*\[(offer|sell|buy|import|accept)\b')
         $kinds = ($trade | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique) -join ', '
-        if (@($trade | Where-Object { $_.Groups[1].Value -in @('offer', 'accept') }).Count -gt 0) { Write-Ok "[session3] the ruler trades in deals: $kinds" } else { Add-Failure "[session3] the ruler offered and took no deal (trade: $kinds)" }
+        $caravan = [regex]::Match((Get-LatestLog), "A caravan left $([regex]::Escape($KingdomName)) for $([regex]::Escape($name)) with ([^\r\n]+)")
+        if ($caravan.Success) { Write-Ok "[session3] the ruler took the deal of $KingdomName, the caravan left with $($caravan.Groups[1].Value); trade decrees: $kinds" } else { Add-Failure "[session3] the ruler did not take the deal of $KingdomName (trade decrees: $kinds)" }
         $chronicle = Count-Log 'Chronicle of .+?: the ruler'
         Write-Ok "[session3] decrees written to the chronicle: $chronicle"
         Send-ServerCommand $server "kingdomworld admin npc needs $site"

@@ -25,6 +25,8 @@ public final class RulerMind {
     public static final String BREAD = "minecraft:bread";
     /** Robbers further than this from the roads and the capital of a kingdom are no threat to it, in blocks. */
     public static final int THREAT_DISTANCE = 320;
+    /** Buildings a ruler builds or raises at once at most, so that its builders finish what they start. */
+    public static final int MAX_BUILDING = 2;
     /** The sales tax of a ruler of no particular leaning, in thousandths. */
     public static final int BASE_SALES_TAX = 50;
     /** Reasons for declining a deal. */
@@ -437,7 +439,8 @@ public final class RulerMind {
     private static void growth(RulerView view, RulerMemory memory, RulerRules rules, List<Scored> out, List<Need> needs, long spare) {
         int builder = view.character == RulerCharacter.BUILDER ? 10 : 0;
         boolean landWanted = false;
-        boolean room = view.constructions < view.maxConstructions;
+        int slots = Math.min(view.maxConstructions, MAX_BUILDING);
+        boolean room = view.constructions < slots;
         if (view.bedsTotal - view.bedsUsed <= rules.freeBeds() && view.planned(HOUSE) == 0) {
             landWanted |= build(view, HOUSE, 85 + builder, spare, room, out, needs);
         }
@@ -463,7 +466,8 @@ public final class RulerMind {
         if (!view.damaged.isEmpty()) {
             out.add(new Scored(70, new RulerDecision(Kind.REPAIR, "", view.damaged.size(), 0, Long.toString(view.damaged.get(0)), "")));
         }
-        if (room) {
+        // An upgrade leaves a place for a new building the kingdom wants.
+        if (view.constructions + (wantedRoles(view, rules).isEmpty() ? 1 : 2) <= slots) {
             for (RulerView.Option upgrade : view.upgrades) {
                 if (upgrade.missing() <= spare / 2) {
                     out.add(new Scored(40 + builder, new RulerDecision(Kind.UPGRADE, upgrade.role(), 1, 0, upgrade.target(), upgrade.template())));
@@ -481,7 +485,7 @@ public final class RulerMind {
         if (landWanted && !canClaim) {
             needs.add(new Need(NeedKind.LAND, "", 0));
         }
-        if (view.population >= rules.townPopulation() && view.towns < rules.maxTowns() && view.townSpot && spare >= 500 && room) {
+        if (view.population >= rules.townPopulation() && view.towns < rules.maxTowns() && view.townSpot && spare >= 500) {
             int bonus = builder + (view.has(RulerCharacter.Trait.AMBITIOUS) ? 10 : 0);
             out.add(new Scored(45 + bonus, RulerDecision.of(Kind.TOWN, "", 1)));
         }

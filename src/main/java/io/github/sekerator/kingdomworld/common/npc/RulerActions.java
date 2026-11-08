@@ -125,6 +125,8 @@ final class RulerActions {
         RulerDecision decision;
         final Set<Long> ticketed = new LinkedHashSet<>();
         int waited;
+        /** What the last step did, for the log of slow ticks. */
+        String part = "";
 
         Job(UUID kingdomId, RulerDecision decision) {
             this.kingdomId = kingdomId;
@@ -256,10 +258,12 @@ final class RulerActions {
         @Override
         Outcome step(MinecraftServer server, ServerLevel level) {
             List<Long> chunks = new ArrayList<>(spot.box().chunks());
+            part = "load";
             if (!loaded(level, chunks)) {
                 return ++waited > LOAD_TICKS ? Outcome.fail(KingdomError.AREA_NOT_LOADED) : null;
             }
             BlockPos anchor = spot.anchor();
+            part = levelled ? "lay" : "level";
             if (!levelled) {
                 int min = Integer.MAX_VALUE;
                 int max = Integer.MIN_VALUE;
@@ -509,6 +513,7 @@ final class RulerActions {
                 return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
             }
             String dimension = territory.get().dimension();
+            part = "stage " + stage;
             switch (stage) {
                 case 0 -> {
                     chunks = RulerPlaces.townChunks(territory.get().capital().x(), territory.get().capital().z(), x, z);
