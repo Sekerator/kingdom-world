@@ -3733,5 +3733,7 @@
   "kingdomworld.screen.throne.tab.storage.short": "Stores",
   "kingdomworld.screen.throne.tab.trade.short": "Trade",
   "kingdomworld.screen.throne.tab.construction.short": "Build",
-  "kingdomworld.screen.throne.tab.diplomacy.short": "Envoys"
+  "kingdomworld.screen.throne.tab.diplomacy.short": "Envoys",
+  "commands.kingdomworld.admin.perf.reset": "The timing of ticks starts again.",
+  "commands.kingdomworld.admin.perf.report": "Performance: %s ticks, server tick average %s ms, worst %s ms, over 50 ms %s%%; tick handlers average %s ms, worst %s ms, %s over 50 ms; memory after GC %s of %s MB; data of the mod %s KB, world %s MB"
 }

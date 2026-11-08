@@ -72,6 +72,8 @@ param(
     [switch]$Pack,
     [switch]$WithoutMod,
     [switch]$SkipBuild,
+    [switch]$Load,
+    [int]$LoadMinutes = 30,
     [string]$TestEnvRoot = 'D:\Projects\kingdom-world-testenv',
     [string]$PackModsDir = 'D:\Games\Minecraft\Instances\Taghi RPG & Create RU\mods',
     [string[]]$ExcludeModIds = @(),
@@ -3023,6 +3025,46 @@ if ($script:NpcSite) {
         }
         Send-ServerCommand $server "kingdomworld admin nobility stability $KingdomName"
         [void](Wait-ForLog $server "${KingdomName}: stability \d+" $CommandTimeout $ConsoleFailPattern)
+    }
+}
+
+# The load of a server like the owner's: two wars, a siege and the caravans of the world, and for $LoadMinutes minutes a turn
+# of every ruler, a day of the wars and a day of the courts each minute; then the ticks, the memory and the data are measured.
+if ($Load) {
+    Invoke-Phase 'session9' {
+        param($server)
+        Send-ServerCommand $server "kingdomworld admin war present $KingdomName on"
+        Send-ServerCommand $server "kingdomworld admin war present $PartnerName on"
+        if ($script:NpcName -and $script:SiegeNpc) {
+            Send-ServerCommand $server "kingdomworld admin war declare `"$($script:NpcName)`" `"$($script:SiegeNpc)`" raid now"
+        }
+        Send-ServerCommand $server "kingdomworld admin war declare $KingdomName $PartnerName city now"
+        Start-Sleep -Seconds 2
+        Send-ServerCommand $server "kingdomworld admin siege start $KingdomName $PartnerName"
+        Send-ServerCommand $server 'kingdomworld admin nobility spy hireall'
+        Send-ServerCommand $server 'kingdomworld admin war list'
+        Start-Sleep -Seconds 2
+        $wars = [regex]::Matches((Get-LatestLog), 'War #\d+ declared').Count
+        Write-Ok "[session9] wars declared for the load: $wars"
+        Send-ServerCommand $server 'kingdomworld admin perf reset'
+        for ($minute = 1; $minute -le $LoadMinutes; $minute++) {
+            Send-ServerCommand $server 'kingdomworld admin npc turn all'
+            Send-ServerCommand $server 'kingdomworld admin war tick day'
+            Send-ServerCommand $server 'kingdomworld admin nobility day'
+            Start-Sleep -Seconds 60
+        }
+        Send-ServerCommand $server 'kingdomworld admin perf report'
+        $perf = Wait-ForLog $server 'Performance: (\d+) ticks, server tick average ([\d.]+) ms, worst ([\d.]+) ms, over 50 ms ([\d.]+)%; tick handlers average ([\d.]+) ms, worst ([\d.]+) ms, (\d+) over 50 ms; memory after GC (\d+) of (\d+) MB; data of the mod (\d+) KB, world (\d+) MB' $CommandTimeout $ConsoleFailPattern
+        if ($perf) {
+            $script:LoadReport = $perf.Value
+            Write-Ok "[session9] $($perf.Value)"
+        } else {
+            Add-Failure '[session9] the load was not measured'
+        }
+        foreach ($timing in @('kingdomworld admin npc timing', 'kingdomworld admin war timing', 'kingdomworld admin siege timing', 'kingdomworld admin nobility timing')) {
+            Send-ServerCommand $server $timing
+        }
+        Start-Sleep -Seconds 3
     }
 }
 

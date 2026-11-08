@@ -3733,5 +3733,7 @@
   "kingdomworld.screen.throne.tab.storage.short": "Склад",
   "kingdomworld.screen.throne.tab.trade.short": "Торг",
   "kingdomworld.screen.throne.tab.construction.short": "Стройка",
-  "kingdomworld.screen.throne.tab.diplomacy.short": "Послы"
+  "kingdomworld.screen.throne.tab.diplomacy.short": "Послы",
+  "commands.kingdomworld.admin.perf.reset": "Замер тиков начат заново.",
+  "commands.kingdomworld.admin.perf.report": "Нагрузка: тиков %s, тик сервера в среднем %s мс, худший %s мс, дольше 50 мс %s%%; обработчики тика в среднем %s мс, худший %s мс, дольше 50 мс: %s; память после сборки мусора %s из %s МБ; данные мода %s КБ, мир %s МБ"
 }

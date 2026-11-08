@@ -57,6 +57,7 @@ public final class CommonEvents {
         io.github.sekerator.kingdomworld.common.diplomacy.WarEvents.register();
         io.github.sekerator.kingdomworld.common.siege.SiegeEvents.register();
         io.github.sekerator.kingdomworld.common.nobility.NobilityEvents.register();
+        io.github.sekerator.kingdomworld.common.command.PerfCommands.register();
     }
 
     private static void onRegisterCommands(RegisterCommandsEvent event) {
