@@ -196,12 +196,22 @@ public final class OrderActions {
      * Changes amount, kind and priority of an order together; what stays the same is not an error.
      */
     private static Outcome update(KingdomWorldState state, UUID actor, OrderPackets.Change change) {
+        Optional<Order> found = state.orders().get(change.kingdomId(), change.order());
+        int amount = found.map(Order::amount).orElse(0);
+        Order.Kind kind = found.map(Order::kind).orElse(null);
+        Order.Priority priority = found.map(Order::priority).orElse(null);
         List<Outcome> outcomes = List.of(state.setOrderAmount(actor, change.kingdomId(), change.order(), change.amount()),
                 state.setOrderKind(actor, change.kingdomId(), change.order(), change.kind()),
                 state.setOrderPriority(actor, change.kingdomId(), change.order(), change.priority()));
         boolean changed = false;
         for (Outcome outcome : outcomes) {
             if (!outcome.ok() && outcome.error() != KingdomError.UNCHANGED) {
+                // One part was refused: the parts already changed go back, so an order changes whole or not at all.
+                found.ifPresent(order -> {
+                    state.orders().setAmount(order, amount);
+                    state.orders().setKind(order, kind);
+                    state.orders().setPriority(order, priority);
+                });
                 return outcome;
             }
             changed |= outcome.ok();
