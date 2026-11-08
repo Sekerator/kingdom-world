@@ -56,7 +56,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "19";
+    public static final String PROTOCOL_VERSION = "20";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -228,6 +228,22 @@ public final class KingdomWorldNetwork {
                 RoadPackets.PlanConfirm::decode, RoadPackets.PlanConfirm::handle);
         add(id++, RoadPackets.MapSync.class, NetworkDirection.PLAY_TO_CLIENT, RoadPackets.MapSync::encode,
                 RoadPackets.MapSync::decode, RoadPackets.MapSync::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.TabRequest.class, NetworkDirection.PLAY_TO_SERVER,
+                io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.TabRequest::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.TabRequest::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.TabRequest::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.TabResponse.class, NetworkDirection.PLAY_TO_CLIENT,
+                io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.TabResponse::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.TabResponse::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.TabResponse::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.TabChange.class, NetworkDirection.PLAY_TO_SERVER,
+                io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.TabChange::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.TabChange::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.TabChange::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.MapInfo.class, NetworkDirection.PLAY_TO_CLIENT,
+                io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.MapInfo::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.MapInfo::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.MapInfo::handle);
         add(id++, LawPackets.TabRequest.class, NetworkDirection.PLAY_TO_SERVER, LawPackets.TabRequest::encode,
                 LawPackets.TabRequest::decode, LawPackets.TabRequest::handle);
         add(id++, LawPackets.TabResponse.class, NetworkDirection.PLAY_TO_CLIENT, LawPackets.TabResponse::encode,

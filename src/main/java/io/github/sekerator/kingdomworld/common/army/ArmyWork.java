@@ -97,6 +97,8 @@ public final class ArmyWork {
     private static final Map<Long, Long> LAST_SKIRMISH = new HashMap<>();
     /** Players game tests mark as away from the keyboard, whatever they last did. */
     private static final Set<UUID> MARKED_AWAY = new HashSet<>();
+    /** Players game tests count as online, who are not in the list of players. */
+    private static final Set<UUID> MARKED_ONLINE = new HashSet<>();
 
     /**
      * How a battle far from players went, for messages and checks.
@@ -142,6 +144,25 @@ public final class ArmyWork {
         FOREIGN_REPORTS.clear();
         LAST_SKIRMISH.clear();
         MARKED_AWAY.clear();
+        MARKED_ONLINE.clear();
+    }
+
+    /**
+     * Counts a player as online or not, for game tests whose players are not in the list of players.
+     */
+    public static void markOnline(UUID player, boolean online) {
+        if (online) {
+            MARKED_ONLINE.add(player);
+        } else {
+            MARKED_ONLINE.remove(player);
+        }
+    }
+
+    /**
+     * Whether a player is online: connected and in the list of players.
+     */
+    public static boolean isOnline(MinecraftServer server, ServerPlayer player) {
+        return !player.hasDisconnected() && (server.getPlayerList().getPlayer(player.getUUID()) != null || MARKED_ONLINE.contains(player.getUUID()));
     }
 
     /**
@@ -209,8 +230,8 @@ public final class ArmyWork {
                     && hostility.areEnemies(kingdomId, citizen.kingdomId());
         }
         if (target instanceof Player player) {
-            if (!(player instanceof ServerPlayer serverPlayer) || player instanceof FakePlayer || serverPlayer.hasDisconnected()
-                    || server.getPlayerList().getPlayer(player.getUUID()) == null || isAway(serverPlayer) || player.isCreative()
+            if (!(player instanceof ServerPlayer serverPlayer) || player instanceof FakePlayer || !isOnline(server, serverPlayer)
+                    || isAway(serverPlayer) || player.isCreative()
                     || player.isSpectator()) {
                 return false;
             }

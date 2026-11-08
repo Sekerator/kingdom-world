@@ -86,6 +86,7 @@ public final class WarWork {
     private static final Map<UUID, Boolean> MARKED = new java.util.HashMap<>();
     private static long lastStep = Long.MIN_VALUE;
     private static long lastDay = Long.MIN_VALUE;
+    private static int forgetCalls;
 
     private WarWork() {
     }
@@ -410,7 +411,7 @@ public final class WarWork {
     }
 
     private static void forgetGone(MinecraftServer server, DiplomacyState state, KingdomWorldState world, long now) {
-        if (now % 100 != 0) {
+        if (++forgetCalls % 5 != 0) {
             return;
         }
         Set<UUID> known = new HashSet<>();
@@ -679,6 +680,43 @@ public final class WarWork {
         return Optional.of(seized.taken());
     }
 
+    /**
+     * Battle zones for the war layers of the maps: the chunks around every place a squad holds on the land of an enemy.
+     */
+    public static List<io.github.sekerator.kingdomworld.core.territory.MapZone> zones(MinecraftServer server) {
+        List<io.github.sekerator.kingdomworld.core.territory.MapZone> zones = new ArrayList<>();
+        if (DiplomacySavedData.get(server).isReadOnly()) {
+            return zones;
+        }
+        for (War war : state(server).wars()) {
+            if (!war.active()) {
+                continue;
+            }
+            for (War.Side side : War.Side.values()) {
+                Set<UUID> enemies = war.members(side.enemy());
+                for (UUID member : war.members(side)) {
+                    for (ArmySquad squad : ArmyWork.state(server).squadsOf(member)) {
+                        Optional<UUID> on = onLandOf(server, squad);
+                        Optional<WorldPos> anchor = squad.order().anchor();
+                        if (on.isEmpty() || !enemies.contains(on.get()) || anchor.isEmpty()) {
+                            continue;
+                        }
+                        Set<Long> chunks = new java.util.HashSet<>();
+                        for (int dx = -1; dx <= 1; dx++) {
+                            for (int dz = -1; dz <= 1; dz++) {
+                                chunks.add(ChunkKey.of(anchor.get().chunkX() + dx, anchor.get().chunkZ() + dz));
+                            }
+                        }
+                        zones.add(new io.github.sekerator.kingdomworld.core.territory.MapZone(
+                                io.github.sekerator.kingdomworld.core.territory.MapZone.Layer.BATTLE, anchor.get().dimension(),
+                                "war-" + war.id() + "-" + squad.id(), List.of(member, on.get()), chunks));
+                    }
+                }
+            }
+        }
+        return zones;
+    }
+
     @Nullable
     static WorldPos capital(MinecraftServer server, UUID kingdomId) {
         return KingdomWorldApi.state(server).territory().territory(kingdomId).map(Territory::capital)
@@ -814,7 +852,7 @@ public final class WarWork {
         War war = state.war(proposal.war()).orElseThrow();
         Outcome ended = end(server, war, War.Result.PEACE, proposal.terms());
         if (ended.ok()) {
-            state.accept(proposal.id(), kingdomId, now, day(server), rules);
+            state.markAccepted(proposal.id(), now);
         }
         return ended;
     }

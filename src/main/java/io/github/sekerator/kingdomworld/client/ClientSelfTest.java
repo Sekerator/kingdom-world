@@ -339,6 +339,13 @@ public final class ClientSelfTest {
             case 285 -> {
                 LOGGER.info(PREFIX + "law tab answered by the server: {}", minecraft.screen instanceof ThroneScreen screen && screen.lawShown());
                 if (minecraft.screen instanceof ThroneScreen screen) {
+                    screen.selectTab("diplomacy");
+                }
+            }
+            case 288 -> {
+                LOGGER.info(PREFIX + "diplomacy tab answered by the server: {}", minecraft.screen instanceof ThroneScreen screen
+                        && screen.diplomacyShown());
+                if (minecraft.screen instanceof ThroneScreen screen) {
                     ClientHooks.openTerritoryEditor(screen.view());
                 }
                 KingdomWorldNetwork.sendToServer(new ClaimChunkPacket((throne.getX() >> 4) + 2, throne.getZ() >> 4, true));

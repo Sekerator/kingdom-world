@@ -280,14 +280,18 @@ public final class WarCommands {
                 terms = new PeaceTerms(winner.id(), indemnity, 0, 0, false, false, 0, "", false);
             }
         }
-        long before = winner == null ? 0 : WarWork.funds(server, winner.id());
+        UUID loser = winner == null ? null : war.leader(war.sideOf(winner.id()).orElseThrow().enemy());
+        long before = loser == null ? 0 : WarWork.funds(server, loser);
+        long reserveBefore = loser == null ? 0 : KingdomWorldApi.state(server).economy().treasury(winner.id()).map(t -> t.reserve(loser)).orElse(0L);
         Outcome outcome = WarWork.end(server, war, War.Result.ADMIN, terms);
         if (!outcome.ok()) {
             return report(context.getSource(), outcome, Component.empty());
         }
-        long after = winner == null ? 0 : WarWork.funds(server, winner.id());
+        long after = loser == null ? 0 : WarWork.funds(server, loser);
+        long reserveAfter = loser == null ? 0 : KingdomWorldApi.state(server).economy().treasury(winner.id()).map(t -> t.reserve(loser)).orElse(0L);
         Component text = WarTexts.terms(server, war, war.terms());
-        context.getSource().sendSuccess(() -> Component.translatable(ADMIN + "peace", war.id(), text, after - before), true);
+        context.getSource().sendSuccess(() -> Component.translatable(ADMIN + "peace", war.id(), text, war.terms().indemnity(), before, after,
+                reserveAfter - reserveBefore), true);
         return 1;
     }
 
@@ -356,10 +360,18 @@ public final class WarCommands {
 
     private static int tick(CommandContext<CommandSourceStack> context, int steps) {
         MinecraftServer server = context.getSource().getServer();
+        long total = 0;
+        long worst = 0;
         for (int i = 0; i < steps; i++) {
+            long started = System.nanoTime();
             WarWork.forceStep(server);
+            long spent = System.nanoTime() - started;
+            total += spent;
+            worst = Math.max(worst, spent);
         }
-        context.getSource().sendSuccess(() -> Component.translatable(ADMIN + "ticked", steps), true);
+        String average = String.format(Locale.ROOT, "%.3f", total / (double) steps / 1_000_000.0);
+        String slowest = String.format(Locale.ROOT, "%.3f", worst / 1_000_000.0);
+        context.getSource().sendSuccess(() -> Component.translatable(ADMIN + "ticked", steps, average, slowest), true);
         return steps;
     }
 

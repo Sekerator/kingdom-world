@@ -127,6 +127,7 @@ public final class WarEvents {
         KingdomWorldApi.accessPolicy().addExemption(CITIZENS);
         LawWork.policy().addExemption(LAW);
         io.github.sekerator.kingdomworld.common.life.LifeRumors.register(WarRumors.SOURCE, WarRumors::rumors);
+        io.github.sekerator.kingdomworld.common.kingdom.MapZones.register(WarWork::zones);
     }
 
     // ---------------------------------------------------------------- the server
@@ -145,6 +146,9 @@ public final class WarEvents {
         try {
             WarWork.tick(server);
             enemyLand(server);
+            if (server.getTickCount() % 100 == 0) {
+                DiplomacySync.syncMaps(server);
+            }
         } catch (RuntimeException e) {
             LOGGER.error("KingdomWorld war tick failed", e);
         }
@@ -183,6 +187,7 @@ public final class WarEvents {
         current = null;
         DiplomacySettings.reset();
         WarWork.reset();
+        DiplomacySync.reset();
         ticks = 0;
         total = 0;
         worst = 0;
@@ -193,6 +198,7 @@ public final class WarEvents {
     private static void onLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         LAND.remove(event.getEntity().getUUID());
         TOLD.remove(event.getEntity().getUUID());
+        DiplomacySync.forget(event.getEntity().getUUID());
     }
 
     // ---------------------------------------------------------------- the land of the enemy
@@ -238,8 +244,7 @@ public final class WarEvents {
      * Whether a player may be attacked in war at all: online, at the keyboard and playing.
      */
     public static boolean fairGame(MinecraftServer server, ServerPlayer player) {
-        return !player.hasDisconnected() && server.getPlayerList().getPlayer(player.getUUID()) != null && !ArmyWork.isAway(player)
-                && !player.isCreative() && !player.isSpectator();
+        return ArmyWork.isOnline(server, player) && !ArmyWork.isAway(player) && !player.isCreative() && !player.isSpectator();
     }
 
     private static void onAttack(LivingAttackEvent event) {

@@ -166,6 +166,7 @@ public final class KingdomWorldClient {
         ClientTerritoryCache.clear();
         io.github.sekerator.kingdomworld.client.map.ClientTradeCache.clear();
         io.github.sekerator.kingdomworld.client.map.ClientMapSync.reset();
+        io.github.sekerator.kingdomworld.client.network.ClientDiplomacyHandlers.reset();
     }
 
     private static void onScreenOpening(ScreenEvent.Opening event) {

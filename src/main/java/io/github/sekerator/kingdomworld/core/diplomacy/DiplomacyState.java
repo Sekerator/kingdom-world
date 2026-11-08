@@ -1096,6 +1096,17 @@ public final class DiplomacyState {
         return Outcome.DONE;
     }
 
+    /**
+     * Marks an offer of peace accepted after its war was ended on its terms.
+     */
+    public void markAccepted(long id, long now) {
+        Proposal proposal = proposals.get(id);
+        if (proposal != null) {
+            proposals.put(id, proposal.withStatus(Proposal.Status.ACCEPTED).withExpires(now));
+            changed();
+        }
+    }
+
     public Outcome decline(long id, UUID kingdom, long now) {
         Proposal proposal = proposals.get(id);
         if (proposal == null) {

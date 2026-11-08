@@ -813,4 +813,49 @@ class TranslationKeysTest {
         }
         return Math.max(sequential, positional);
     }
+
+    /**
+     * Words of diplomacy and war exist in both languages: chunks in every plural form («1 чанк, 2 чанка, 5 чанков»), every goal,
+     * bond, offer, reason of a relation, way a war ends, answer of a ruler of the world and entry of the chronicle.
+     */
+    @Test
+    void wordsOfWarHaveEveryForm() {
+        String[] russianChunks = {"чанк", "чанк", "чанка", "чанков"};
+        Plurals.Form[] all = Plurals.Form.values();
+        for (int i = 0; i < all.length; i++) {
+            String key = "kingdomworld.war.count.chunks." + all[i].suffix();
+            assertEquals("%s " + russianChunks[i], russian.get(key), key);
+            assertEquals("%s " + (all[i] == Plurals.Form.N1 ? "chunk" : "chunks"), english.get(key), key);
+        }
+        List<String> keys = new java.util.ArrayList<>();
+        for (io.github.sekerator.kingdomworld.core.diplomacy.WarGoal goal : io.github.sekerator.kingdomworld.core.diplomacy.WarGoal.values()) {
+            keys.add("kingdomworld.war.goal." + goal.id());
+        }
+        for (io.github.sekerator.kingdomworld.core.diplomacy.Bond bond : io.github.sekerator.kingdomworld.core.diplomacy.Bond.values()) {
+            keys.add("kingdomworld.war.bond." + bond.id());
+        }
+        for (io.github.sekerator.kingdomworld.core.diplomacy.Proposal.Kind kind : io.github.sekerator.kingdomworld.core.diplomacy.Proposal.Kind.values()) {
+            keys.add("kingdomworld.war.offer." + kind.id());
+        }
+        for (io.github.sekerator.kingdomworld.core.diplomacy.Relations.Reason reason
+                : io.github.sekerator.kingdomworld.core.diplomacy.Relations.Reason.values()) {
+            keys.add("kingdomworld.screen.diplomacy.reason." + reason.id());
+        }
+        for (io.github.sekerator.kingdomworld.core.diplomacy.War.Result result : io.github.sekerator.kingdomworld.core.diplomacy.War.Result.values()) {
+            keys.add("kingdomworld.war.peace." + result.id());
+            keys.add("kingdomworld.war.chronicle.how." + result.id());
+        }
+        for (String reason : io.github.sekerator.kingdomworld.core.diplomacy.DiplomacyMind.REASONS) {
+            keys.add("kingdomworld.war.npc_reason." + reason);
+        }
+        for (String kind : List.of("declared", "started", "battle", "raid", "blockade", "peace", "pact", "alliance", "vassal", "released", "broken",
+                "joined", "refused", "kill")) {
+            keys.add("kingdomworld.war.chronicle." + kind);
+        }
+        for (String key : keys) {
+            assertTrue(english.containsKey(key) && russian.containsKey(key), "Missing: " + key);
+        }
+        assertEquals(Plurals.Form.N2, Plurals.form(4));
+        assertEquals(Plurals.Form.N5, Plurals.form(65));
+    }
 }

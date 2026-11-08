@@ -221,6 +221,7 @@ final class ClientLayoutCheck {
         MagicLayoutCases.actionbars(minecraft.font, NARROWEST_SCREEN);
         CompanionLayoutCases.actionbars(minecraft.font, NARROWEST_SCREEN);
         LawLayoutCases.actionbars(minecraft.font, NARROWEST_SCREEN);
+        DiplomacyLayoutCases.actionbars(minecraft.font, NARROWEST_SCREEN);
         problems.addAll(LayoutCheck.end());
 
         for (int[] window : WINDOWS) {
@@ -993,6 +994,7 @@ final class ClientLayoutCheck {
             }
         }
         ClientTerritoryCache.applyArea(new MapAreaPacket("kingdomworld:layout_check", -6, -6, width, height, palette, cells));
+        DiplomacyLayoutCases.fillMarks(first, second);
         io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.replace(List.of(
                 new io.github.sekerator.kingdomworld.common.network.data.CurrencyInfo(first, LONG_CURRENCY, LONG_KINGDOM, 0x6C3483, false, 10, 100,
                         9_990_000L),
@@ -1324,6 +1326,7 @@ final class ClientLayoutCheck {
         CompanionLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)));
         RoadLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         LawLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
+        DiplomacyLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         LifeLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)),
                 (role, manage) -> citizensMode(view(KingdomView.Relation.MEMBER, role), manage, false, "life"));
         return cases;

@@ -172,7 +172,7 @@ final class DiplomacyNbt {
             of.putInt("caravans", tally.caravans());
             of.putInt("blockades", tally.blockades());
             of.putInt("losses", tally.losses());
-            tag.put(side.id(), of);
+            tag.put("side_" + side.id(), of);
         }
         tag.putBoolean("brokePact", war.brokePact());
         tag.putLong("ended", war.ended());
@@ -328,7 +328,7 @@ final class DiplomacyNbt {
         double[] score = new double[2];
         double[] exhaustion = new double[2];
         for (War.Side side : War.Side.values()) {
-            CompoundTag of = tag.getCompound(side.id());
+            CompoundTag of = tag.getCompound("side_" + side.id());
             score[side.index()] = of.getDouble("score");
             exhaustion[side.index()] = of.getDouble("exhaustion");
             war.tally(side).restore(of.getInt("battles"), of.getInt("kills"), of.getInt("caravans"), of.getInt("blockades"), of.getInt("losses"));

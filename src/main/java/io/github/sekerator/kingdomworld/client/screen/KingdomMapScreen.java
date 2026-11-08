@@ -479,6 +479,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         drawRoads(graphics);
         drawWalls(graphics);
         drawCapitals(graphics, minX, maxX, minZ, maxZ);
+        drawDiplomacy(graphics);
         drawCities(graphics);
         drawCamps(graphics);
         drawLifeEvents(graphics);
@@ -877,6 +878,64 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
                 graphics.fill(x + i, y - i, x + i + 1, y - i + 1, 0xFFB01010);
             }
             hoverText(x - 4, y - 4, 8, Component.translatable("kingdomworld.screen.map.camp", camp.size()));
+        }
+    }
+
+    /**
+     * How the player's kingdom stands with the others, beside their capitals: a bar in the colour of the relation under the
+     * crown, and a sign of the bond left of it (crossed swords for war, a shield for an alliance, a seal for a pact, a ring for
+     * vassalage, a white flag for a truce), with a blue frame while a kingdom is shielded.
+     */
+    private void drawDiplomacy(GuiGraphics graphics) {
+        String dimension = dimension();
+        if (dimension == null) {
+            return;
+        }
+        for (io.github.sekerator.kingdomworld.common.network.data.DiplomacyViews.MapMark mark
+                : io.github.sekerator.kingdomworld.client.network.ClientDiplomacyHandlers.marks().marks()) {
+            if (!mark.dimension().equals(dimension)) {
+                continue;
+            }
+            int x = screenX(Math.floorDiv(mark.x(), 16) + 0.5) - 13;
+            int y = screenZ(Math.floorDiv(mark.z(), 16) + 0.5);
+            if (x - 5 < mapLeft() || x + 18 > mapRight() || y - 5 < mapTop() || y + 8 > mapBottom()) {
+                continue;
+            }
+            int relation = DiplomacyTab.relationColor(mark.relation());
+            graphics.fill(x + 8, y + 5, x + 18, y + 7, 0xFF2B1D0E);
+            graphics.fill(x + 9, y + 5, x + 9 + Math.max(1, (mark.relation() + 100) * 8 / 200), y + 6, relation);
+            int color = DiplomacyTab.bondColor(mark.bond());
+            switch (mark.bond()) {
+                case WAR -> {
+                    for (int i = -3; i <= 3; i++) {
+                        graphics.fill(x + i, y + i, x + i + 1, y + i + 1, 0xFF2B1D0E);
+                        graphics.fill(x + i, y - i, x + i + 1, y - i + 1, 0xFF2B1D0E);
+                        graphics.fill(x + i + 1, y + i, x + i + 2, y + i + 1, color);
+                        graphics.fill(x + i + 1, y - i, x + i + 2, y - i + 1, color);
+                    }
+                }
+                case ALLIANCE, PACT -> {
+                    graphics.fill(x - 3, y - 4, x + 4, y + 2, 0xFF2B1D0E);
+                    graphics.fill(x - 2, y - 3, x + 3, y + 1, color);
+                    graphics.fill(x - 1, y + 2, x + 2, y + 4, 0xFF2B1D0E);
+                }
+                case VASSAL -> {
+                    graphics.renderOutline(x - 3, y - 3, 7, 7, 0xFF2B1D0E);
+                    graphics.renderOutline(x - 2, y - 2, 5, 5, color);
+                }
+                case TRUCE -> {
+                    graphics.fill(x - 3, y - 4, x - 2, y + 4, 0xFF6B4A2B);
+                    graphics.fill(x - 2, y - 4, x + 3, y, color);
+                }
+                case PEACE -> {
+                }
+            }
+            if (mark.shielded()) {
+                graphics.renderOutline(x - 5, y - 5, 11, 11, 0xFF80C0FF);
+            }
+            Component bond = Component.translatable("kingdomworld.war.bond." + mark.bond().id());
+            hoverText(x - 5, y - 5, 23, Component.translatable(mark.shielded() ? "kingdomworld.screen.map.diplomacy_shielded"
+                    : "kingdomworld.screen.map.diplomacy", mark.name(), bond, mark.relation()));
         }
     }
 

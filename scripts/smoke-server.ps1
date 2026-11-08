@@ -141,6 +141,7 @@ function Write-Summary {
     Write-Host "Logs: $SmokeLogDir"
     foreach ($w in $script:Warnings) { Write-Host "  warning: $w" -ForegroundColor Yellow }
     if (Get-Variable -Name RulerLoad -Scope Script -ErrorAction SilentlyContinue) { Write-Host "Turns of the rulers: $($script:RulerLoad)" }
+    if (Get-Variable -Name WarLoad -Scope Script -ErrorAction SilentlyContinue) { Write-Host "Wars: $($script:WarLoad)" }
     if ($script:Failures.Count -eq 0) {
         Write-Host 'RESULT: PASSED' -ForegroundColor Green
     } else {
@@ -615,6 +616,9 @@ $script:SickId = $null
 $script:EconomyRaw = $null
 $script:TradeMoney = $null
 $script:MinerId = $null
+$script:NpcName = $null
+$script:WarId = $null
+$script:WarScore = $null
 $script:Mined = 0
 $ConsoleFailPattern = 'Unknown or incomplete command|Incorrect argument|already exists|There is no kingdom|read-only'
 $IdPattern ='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
@@ -2614,6 +2618,7 @@ if ($script:NpcSite) {
             return
         }
         $name = $appeared.Groups[1].Value
+        $script:NpcName = $name
         Write-Ok "[session3] $name appeared: $($appeared.Groups[2].Value) buildings, $($appeared.Groups[3].Value) citizens, $($appeared.Groups[4].Value) soldiers, $($appeared.Groups[5].Value) town(s)"
         $script:NpcTiming = "$($appeared.Groups[6].Value) ticks after the restart, average $($appeared.Groups[7].Value) ms, worst $($appeared.Groups[8].Value) ms (at $($appeared.Groups[9].Value))"
         Write-Ok "[session3] ticks of the appearance after the restart: $($script:NpcTiming)"
@@ -2741,6 +2746,99 @@ if ($script:NpcSite) {
             if ([double]$timing.Groups[5].Value -gt 50) { Add-Warning "[session4] a tick of the rulers carrying out a decision took $($timing.Groups[5].Value) ms besides the garbage collector" }
         } else {
             Add-Failure '[session4] the turns of the rulers were not measured'
+        }
+        # Diplomacy and war: two wars of kingdoms of the world far from players and a war of the kingdom of players against the
+        # large kingdom of the world, all through the commands of operators; steps of the wars and the ticks of diplomacy are measured.
+        $smalls = @([regex]::Matches((Get-LatestLog), 'The kingdom of the world (.+?) appeared \(small\)') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique)
+        $declared = 0
+        if ($smalls.Count -ge 4) {
+            foreach ($pair in @(@($smalls[0], $smalls[1]), @($smalls[2], $smalls[3]))) {
+                $seen = Count-Log 'War #\d+ declared: '
+                Send-ServerCommand $server "kingdomworld admin war declare `"$($pair[0])`" `"$($pair[1])`" raid now"
+                if (Wait-ForNewLog $server 'War #(\d+) declared: (.+?) against (.+?) for raid, active' $CommandTimeout $seen) { $declared++ }
+            }
+        }
+        if ($declared -eq 2) { Write-Ok '[session4] two wars of kingdoms of the world are going on far from players' } else { Add-Failure "[session4] $declared of 2 wars of kingdoms of the world were declared" }
+        $seen = Count-Log 'War #\d+ declared: '
+        Send-ServerCommand $server "kingdomworld admin war declare $KingdomName `"$($script:NpcName)`" indemnity now"
+        $war = Wait-ForNewLog $server "War #(\d+) declared: $([regex]::Escape($KingdomName)) against .+? for indemnity, active" $CommandTimeout $seen
+        if ($war) {
+            $script:WarId = $war.Groups[1].Value
+            Write-Ok "[session4] $KingdomName is at war with $($script:NpcName): war #$($script:WarId)"
+            Send-ServerCommand $server "kingdomworld admin war score $($script:WarId) attacker 55"
+            [void](Wait-ForLog $server "War #$($script:WarId), side attacker: score 55.0" $CommandTimeout $ConsoleFailPattern)
+            Send-ServerCommand $server "kingdomworld admin war exhaustion $($script:WarId) defender 33"
+            [void](Wait-ForLog $server "War #$($script:WarId), side defender: score [\d.]+, exhaustion 33.0" $CommandTimeout $ConsoleFailPattern)
+        } else {
+            Add-Failure "[session4] $KingdomName could not declare war on $($script:NpcName)"
+        }
+        # Half a minute of the wars as they go, then thirty steps at once.
+        Start-Sleep -Seconds 30
+        Send-ServerCommand $server 'kingdomworld admin war tick 30'
+        $steps = Wait-ForLog $server 'Steps of the wars: 30, average ([\d.]+) ms, worst ([\d.]+) ms' $CommandTimeout $ConsoleFailPattern
+        Send-ServerCommand $server 'kingdomworld admin war timing'
+        $ticks = Wait-ForLog $server 'Wars: (\d+) tick\(s\) with work, average ([\d.]+) ms, worst ([\d.]+) ms' $CommandTimeout $ConsoleFailPattern
+        if ($steps -and $ticks) {
+            $script:WarLoad = "8+ kingdoms of the world, 3 wars: $($ticks.Groups[1].Value) ticks of diplomacy, average $($ticks.Groups[2].Value) ms, worst $($ticks.Groups[3].Value) ms; 30 steps of the wars, average $($steps.Groups[1].Value) ms, worst $($steps.Groups[2].Value) ms"
+            Write-Ok "[session4] wars: $($script:WarLoad)"
+            if ([double]$ticks.Groups[3].Value -gt 50) { Add-Failure "[session4] a tick of diplomacy took $($ticks.Groups[3].Value) ms" }
+            if ([double]$steps.Groups[2].Value -gt 50) { Add-Warning "[session4] a step of the wars took $($steps.Groups[2].Value) ms" }
+        } else {
+            Add-Failure '[session4] the wars were not measured'
+        }
+        if ($script:WarId) {
+            Send-ServerCommand $server "kingdomworld admin war score $($script:WarId)"
+            $score = Wait-ForLog $server "War #$($script:WarId) active: [^\r\n]*?score ([\d.]+) / ([\d.]+), exhaustion ([\d.]+) / ([\d.]+)" $CommandTimeout $ConsoleFailPattern
+            if ($score) {
+                $script:WarScore = "$($score.Groups[1].Value) / $($score.Groups[2].Value), exhaustion $($score.Groups[3].Value) / $($score.Groups[4].Value)"
+                Write-Ok "[session4] the war of $KingdomName stands at $($script:WarScore)"
+            } else {
+                Add-Failure '[session4] the score of the war was not shown'
+            }
+        }
+        Send-ServerCommand $server 'kingdomworld admin war list'
+        [void](Wait-ForLog $server 'Wars and treaties: \d+' $CommandTimeout $ConsoleFailPattern)
+    }
+
+    # Wars outlive a restart with their score and exhaustion; peace with an indemnity moves money between the treasuries and
+    # no money appears or vanishes.
+    if ($script:WarId) {
+        Invoke-Phase 'session5' {
+            param($server)
+            if (Wait-ForLog $server 'KingdomWorld diplomacy: \d+ treaty\(ies\), (\d+) war\(s\) going on, \d+ open offer\(s\), data format 1' 10) {
+                Write-Ok '[session5] diplomacy is loaded in data format 1'
+            } else {
+                Add-Failure '[session5] diplomacy was not loaded as expected'
+            }
+            Send-ServerCommand $server "kingdomworld admin war score $($script:WarId)"
+            $score = Wait-ForLog $server "War #$($script:WarId) active: [^\r\n]*?score ([\d.]+) / ([\d.]+), exhaustion ([\d.]+) / ([\d.]+)" $CommandTimeout $ConsoleFailPattern
+            if ($score) {
+                $after = "$($score.Groups[1].Value) / $($score.Groups[2].Value), exhaustion $($score.Groups[3].Value) / $($score.Groups[4].Value)"
+                if ($after -eq $script:WarScore) { Write-Ok "[session5] the score and exhaustion outlived the restart: $after" } else { Add-Failure "[session5] the war changed in the restart: $($script:WarScore) -> $after" }
+            } else {
+                Add-Failure '[session5] the war was lost in the restart'
+            }
+            $npc = [regex]::Escape($script:NpcName)
+            $money = Get-KingdomMoney $server $npc
+            Send-ServerCommand $server "kingdomworld admin war peace $($script:WarId) $KingdomName 100"
+            $peace = Wait-ForLog $server "War #$($script:WarId) ended: [^\r\n]*; the loser paid (\d+), its treasury (-?\d+) -> (-?\d+), the reserves of the winner grew by (\d+)" $CommandTimeout $ConsoleFailPattern
+            if ($peace) {
+                $paid = [int64]$peace.Groups[1].Value
+                $moved = [int64]$peace.Groups[2].Value - [int64]$peace.Groups[3].Value
+                if ($paid -gt 0 -and $moved -eq $paid -and [int64]$peace.Groups[4].Value -eq $paid) {
+                    Write-Ok "[session5] peace on terms: $($script:NpcName) paid $paid to $KingdomName, treasury $($peace.Groups[2].Value) -> $($peace.Groups[3].Value)"
+                } else {
+                    Add-Failure "[session5] the indemnity does not add up: paid $paid, the treasury lost $moved, the reserves grew by $($peace.Groups[4].Value)"
+                }
+            } else {
+                Add-Failure '[session5] the war did not end in peace on terms'
+            }
+            $moneyAfter = Get-KingdomMoney $server $npc
+            if ($money -ge 0 -and $money -eq $moneyAfter) { Write-Ok "[session5] the money of $($script:NpcName) adds up: $money" } else { Add-Failure "[session5] the money of $($script:NpcName) changed with the peace: $money -> $moneyAfter" }
+            Send-ServerCommand $server "kingdomworld admin war relation $KingdomName `"$($script:NpcName)`""
+            if (Wait-ForLog $server 'bond truce' $CommandTimeout $ConsoleFailPattern) { Write-Ok '[session5] a truce follows the peace' } else { Add-Failure '[session5] no truce after the peace' }
+            Send-ServerCommand $server 'kingdomworld admin war status'
+            [void](Wait-ForLog $server 'Diplomacy: \d+ treaty\(ies\)' $CommandTimeout $ConsoleFailPattern)
         }
     }
 }

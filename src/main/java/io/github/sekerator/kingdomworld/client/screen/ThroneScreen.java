@@ -72,6 +72,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         MAGIC("kingdomworld.screen.throne.tab.magic"),
         ROADS("kingdomworld.screen.throne.tab.roads"),
         LAW("kingdomworld.screen.throne.tab.law"),
+        DIPLOMACY("kingdomworld.screen.throne.tab.diplomacy"),
         RIGHTS("kingdomworld.screen.throne.tab.rights");
 
         /**
@@ -79,7 +80,8 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
          */
         boolean tall() {
             return this == CITIZENS || this == STORAGE || this == ORDERS || this == TREASURY || this == MARKET || this == TRADE
-                    || this == GUILD || this == CONSTRUCTION || this == ARMY || this == MAGIC || this == ROADS || this == LAW;
+                    || this == GUILD || this == CONSTRUCTION || this == ARMY || this == MAGIC || this == ROADS || this == LAW
+                    || this == DIPLOMACY;
         }
 
         private final String key;
@@ -105,6 +107,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private final MagicTab magic = new MagicTab(this);
     private final RoadsTab roads = new RoadsTab(this);
     private final LawTab law = new LawTab(this);
+    private final DiplomacyTab diplomacy = new DiplomacyTab(this);
     private Tab tab = Tab.OVERVIEW;
     private int scroll;
     private Component status = Component.empty();
@@ -152,6 +155,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             case MAGIC -> magic.checkName();
             case ROADS -> roads.checkName();
             case LAW -> law.checkName();
+            case DIPLOMACY -> diplomacy.checkName();
             default -> tab.name().toLowerCase(Locale.ROOT);
         };
         return "throne/" + name + "/" + view.relation().name().toLowerCase(Locale.ROOT);
@@ -433,6 +437,37 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
+     * Shows the diplomacy tab the server sent, if it belongs to the kingdom on screen.
+     */
+    public void updateDiplomacy(io.github.sekerator.kingdomworld.common.network.data.DiplomacyViews.TabView diplomacyView) {
+        if (!diplomacyView.kingdomId().equals(view.id())) {
+            return;
+        }
+        diplomacy.setView(diplomacyView);
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
+    }
+
+    /**
+     * Whether the diplomacy tab got its view, for the self-check.
+     */
+    public boolean diplomacyShown() {
+        return diplomacy.view() != null;
+    }
+
+    /**
+     * Shows a view of the diplomacy tab ({@code kingdoms}, {@code offers}, {@code wars}, {@code chronicle}), with the actions
+     * for the first kingdom open when asked; for the layout check.
+     */
+    public void showDiplomacy(String mode, boolean actions) {
+        diplomacy.setMode(DiplomacyTab.Mode.valueOf(mode.toUpperCase(Locale.ROOT)));
+        if (actions) {
+            diplomacy.selectFirstForCheck();
+        }
+    }
+
+    /**
      * Shows a view of the law tab ({@code wanted}, {@code court}, {@code mine}), with the form of a fine open when asked; for
      * the layout check.
      */
@@ -659,6 +694,9 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         if (target == Tab.LAW && Minecraft.getInstance().getConnection() != null) {
             KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.LawPackets.TabRequest(view.id()));
         }
+        if (target == Tab.DIPLOMACY && Minecraft.getInstance().getConnection() != null) {
+            KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.TabRequest(view.id()));
+        }
         if (minecraft != null) {
             rebuildWidgets();
         }
@@ -809,6 +847,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             labels.add(Component.translatable(Tab.MAGIC.key));
             labels.add(Component.translatable(Tab.ROADS.key));
             labels.add(Component.translatable(Tab.LAW.key));
+            labels.add(Component.translatable(Tab.DIPLOMACY.key));
             labels.add(Component.translatable(Tab.RIGHTS.key));
         }
         return labels;
@@ -891,6 +930,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             inner = Math.max(inner, magic.measure(font));
             inner = Math.max(inner, roads.measure(font));
             inner = Math.max(inner, law.measure(font));
+            inner = Math.max(inner, diplomacy.measure(font));
         }
         panelWidth = Math.min(Math.max(MIN_PANEL_WIDTH, inner + 2 * PAD), width - 8);
         panelHeight = Math.min(tab.tall() ? MAX_CITIZENS_PANEL_HEIGHT : MAX_PANEL_HEIGHT, height - 8);
@@ -914,7 +954,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         List<Tab> shown = new ArrayList<>(List.of(Tab.OVERVIEW));
         if (isMember()) {
             shown.addAll(List.of(Tab.MEMBERS, Tab.CITIZENS, Tab.STORAGE, Tab.ORDERS, Tab.TREASURY, Tab.MARKET, Tab.TRADE, Tab.GUILD,
-                    Tab.CONSTRUCTION, Tab.ARMY, Tab.MAGIC, Tab.ROADS, Tab.LAW, Tab.RIGHTS));
+                    Tab.CONSTRUCTION, Tab.ARMY, Tab.MAGIC, Tab.ROADS, Tab.LAW, Tab.DIPLOMACY, Tab.RIGHTS));
         }
         for (int i = 0; i < shown.size(); i++) {
             if (i == secondRowStart) {
@@ -940,6 +980,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             case MAGIC -> magic.init(left, inner, panelWidth, innerHeight);
             case ROADS -> roads.init(left, inner, panelWidth, innerHeight);
             case LAW -> law.init(left, inner, panelWidth, innerHeight);
+            case DIPLOMACY -> diplomacy.init(left, inner, panelWidth, innerHeight);
             case RIGHTS -> initRights(inner);
         }
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), button -> onClose())
@@ -1218,6 +1259,12 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             }
             return true;
         }
+        if (tab == Tab.DIPLOMACY) {
+            if (diplomacy.scroll(top() + contentOffset, panelHeight - contentOffset, delta)) {
+                rebuildWidgets();
+            }
+            return true;
+        }
         if (tab == Tab.MEMBERS) {
             int max = Math.max(0, rows().size() - visibleRows());
             int next = Math.max(0, Math.min(max, scroll - (int) Math.signum(delta)));
@@ -1275,6 +1322,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             case MAGIC -> magic.render(graphics, font, left, inner, panelWidth, innerHeight);
             case ROADS -> roads.render(graphics, font, left, inner, panelWidth, innerHeight);
             case LAW -> law.render(graphics, font, left, inner, panelWidth, innerHeight);
+            case DIPLOMACY -> diplomacy.render(graphics, font, left, inner, panelWidth, innerHeight);
             case RIGHTS -> renderRights(graphics, left, inner);
         }
         Component bottomText = status;
@@ -1321,6 +1369,10 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         }
         if (bottomText.getString().isEmpty() && tab == Tab.LAW) {
             bottomText = law.hint();
+            color = 0xFFB8B8B8;
+        }
+        if (bottomText.getString().isEmpty() && tab == Tab.DIPLOMACY) {
+            bottomText = diplomacy.hint();
             color = 0xFFB8B8B8;
         }
         paragraph(graphics, bottomText, left + PAD, top + panelHeight - BOTTOM_AREA + 2, panelWidth - 2 * PAD, STATUS_LINES, color);
