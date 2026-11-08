@@ -3193,7 +3193,7 @@
   "commands.kingdomworld.admin.war.listed": "Wars and treaties: %s",
   "commands.kingdomworld.admin.war.declared": "War #%s declared: %s against %s for %s, %s",
   "commands.kingdomworld.admin.war.started": "War #%s started.",
-  "commands.kingdomworld.admin.war.peace": "War #%s ended: %s; the loser paid %s, its treasury %s -> %s, the reserves of the winner grew by %s",
+  "commands.kingdomworld.admin.war.peace": "War #%s ended: %s; the loser paid %s, its treasury %s -> %s, the reserves of the winner grew by %s, the money of its currency %s -> %s",
   "commands.kingdomworld.admin.war.set": "War #%s, side %s: score %s, exhaustion %s",
   "commands.kingdomworld.admin.war.relation": "Relation of %s and %s: %s as a pair, %s as shown, bond %s",
   "commands.kingdomworld.admin.war.treaty": "Treaty %s set between %s and %s",

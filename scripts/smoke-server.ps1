@@ -2822,10 +2822,8 @@ if ($script:NpcSite) {
             } else {
                 Add-Failure '[session5] the war was lost in the restart'
             }
-            $npc = [regex]::Escape($script:NpcName)
-            $money = Get-KingdomMoney $server $npc
             Send-ServerCommand $server "kingdomworld admin war peace $($script:WarId) $KingdomName 100"
-            $peace = Wait-ForLog $server "War #$($script:WarId) ended: [^\r\n]*; the loser paid (\d+), its treasury (-?\d+) -> (-?\d+), the reserves of the winner grew by (\d+)" $CommandTimeout $ConsoleFailPattern
+            $peace = Wait-ForLog $server "War #$($script:WarId) ended: [^\r\n]*; the loser paid (\d+), its treasury (-?\d+) -> (-?\d+), the reserves of the winner grew by (\d+), the money of its currency (\d+) -> (\d+)" $CommandTimeout $ConsoleFailPattern
             if ($peace) {
                 $paid = [int64]$peace.Groups[1].Value
                 $moved = [int64]$peace.Groups[2].Value - [int64]$peace.Groups[3].Value
@@ -2837,8 +2835,9 @@ if ($script:NpcSite) {
             } else {
                 Add-Failure '[session5] the war did not end in peace on terms'
             }
-            $moneyAfter = Get-KingdomMoney $server $npc
-            if ($money -ge 0 -and $money -eq $moneyAfter) { Write-Ok "[session5] the money of $($script:NpcName) adds up: $money" } else { Add-Failure "[session5] the money of $($script:NpcName) changed with the peace: $money -> $moneyAfter" }
+            # The money of the currency of the loser, counted in the same tick before and after the peace: trade abroad may add to it
+            # between two separate looks, the peace must not.
+            if ($peace -and $peace.Groups[5].Value -eq $peace.Groups[6].Value) { Write-Ok "[session5] the money of $($script:NpcName) adds up: $($peace.Groups[5].Value)" } elseif ($peace) { Add-Failure "[session5] the money of $($script:NpcName) changed with the peace: $($peace.Groups[5].Value) -> $($peace.Groups[6].Value)" }
             Send-ServerCommand $server "kingdomworld admin war relation $KingdomName `"$($script:NpcName)`""
             if (Wait-ForLog $server 'bond truce' $CommandTimeout $ConsoleFailPattern) { Write-Ok '[session5] a truce follows the peace' } else { Add-Failure '[session5] no truce after the peace' }
             Send-ServerCommand $server 'kingdomworld admin war status'

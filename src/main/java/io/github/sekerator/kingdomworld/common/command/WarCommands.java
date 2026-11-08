@@ -283,6 +283,7 @@ public final class WarCommands {
         UUID loser = winner == null ? null : war.leader(war.sideOf(winner.id()).orElseThrow().enemy());
         long before = loser == null ? 0 : WarWork.funds(server, loser);
         long reserveBefore = loser == null ? 0 : KingdomWorldApi.state(server).economy().treasury(winner.id()).map(t -> t.reserve(loser)).orElse(0L);
+        long supplyBefore = loser == null ? 0 : KingdomWorldApi.state(server).economy().supply(loser);
         Outcome outcome = WarWork.end(server, war, War.Result.ADMIN, terms);
         if (!outcome.ok()) {
             return report(context.getSource(), outcome, Component.empty());
@@ -291,7 +292,7 @@ public final class WarCommands {
         long reserveAfter = loser == null ? 0 : KingdomWorldApi.state(server).economy().treasury(winner.id()).map(t -> t.reserve(loser)).orElse(0L);
         Component text = WarTexts.terms(server, war, war.terms());
         context.getSource().sendSuccess(() -> Component.translatable(ADMIN + "peace", war.id(), text, war.terms().indemnity(), before, after,
-                reserveAfter - reserveBefore), true);
+                reserveAfter - reserveBefore, supplyBefore, loser == null ? 0 : KingdomWorldApi.state(server).economy().supply(loser)), true);
         return 1;
     }
 

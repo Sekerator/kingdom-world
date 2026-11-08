@@ -3193,7 +3193,7 @@
   "commands.kingdomworld.admin.war.listed": "Войн и договоров: %s",
   "commands.kingdomworld.admin.war.declared": "Объявлена война #%s: %s против %s, цель %s, %s",
   "commands.kingdomworld.admin.war.started": "Война #%s началась.",
-  "commands.kingdomworld.admin.war.peace": "Война #%s окончена: %s; проигравший заплатил %s, его казна %s -> %s, запасы победителя выросли на %s",
+  "commands.kingdomworld.admin.war.peace": "Война #%s окончена: %s; проигравший заплатил %s, его казна %s -> %s, запасы победителя выросли на %s, деньги его валюты %s -> %s",
   "commands.kingdomworld.admin.war.set": "Война #%s, сторона %s: счёт %s, усталость %s",
   "commands.kingdomworld.admin.war.relation": "Отношение %s и %s: пары %s, видимое %s, статус %s",
   "commands.kingdomworld.admin.war.treaty": "Договор %s между %s и %s установлен",
