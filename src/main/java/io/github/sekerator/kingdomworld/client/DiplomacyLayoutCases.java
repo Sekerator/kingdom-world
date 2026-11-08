@@ -56,6 +56,7 @@ final class DiplomacyLayoutCases {
         LayoutCheck.actionbar(font, Component.translatable("kingdomworld.war.enemy_land_shielded", shortName), narrowest);
         LayoutCheck.actionbar(font, Component.translatable("kingdomworld.war.no_blow.away"), narrowest);
         LayoutCheck.actionbar(font, Component.translatable("kingdomworld.war.no_blow.peace"), narrowest);
+        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.war.no_blow.shielded"), narrowest);
     }
 
     private static DiplomacyViews.TabView tab(UUID kingdom, boolean canManage, boolean empty, boolean shielded) {

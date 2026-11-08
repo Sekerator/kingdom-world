@@ -32,6 +32,12 @@ public final class DiplomacyState {
     public static final long ENDED_WAR_TICKS = 10L * CitizenNeeds.TICKS_PER_DAY;
     /** Most open offers one kingdom may have made. */
     public static final int MAX_OPEN_PROPOSALS = 16;
+    /** Most offers, open and closed, kept of one kingdom: the oldest closed ones go first. */
+    public static final int MAX_KEPT_PROPOSALS = 24;
+    /** Most claims kept for the world; the oldest go first. */
+    public static final int MAX_CLAIMS = 64;
+    /** Claims nobody took in this time are forgotten. */
+    public static final long CLAIM_TICKS = 30L * CitizenNeeds.TICKS_PER_DAY;
     /** Most entries of the chronicle of wars and treaties. */
     public static final int MAX_CHRONICLE = 64;
 
@@ -836,6 +842,9 @@ public final class DiplomacyState {
         }
         if (terms.claims() && loser != null) {
             claims.add(new Claim(war.id(), terms.winner(), loser, terms.landChunks(), terms.city(), terms.throne(), now));
+            while (claims.size() > MAX_CLAIMS) {
+                claims.remove(0);
+            }
         }
         war.end(now, how, terms);
         relations.add(war.attacker(), war.defender(), Relations.Reason.PEACE);
@@ -1026,6 +1035,7 @@ public final class DiplomacyState {
         Proposal proposal = new Proposal(nextProposalId++, from, to, kind, vassal, warId, terms, now, now + rules.proposalTicks(),
                 Proposal.Status.OPEN);
         proposals.put(proposal.id(), proposal);
+        keepFew(from);
         changed();
         return new Proposed(Outcome.DONE, Optional.of(proposal));
     }
@@ -1140,6 +1150,26 @@ public final class DiplomacyState {
         return Outcome.DONE;
     }
 
+    /**
+     * Forgets the oldest closed offers of a kingdom beyond {@link #MAX_KEPT_PROPOSALS}, so that offering and calling off in a
+     * loop fills nothing.
+     */
+    private void keepFew(UUID from) {
+        int kept = 0;
+        for (Proposal proposal : proposals.values()) {
+            if (proposal.from().equals(from)) {
+                kept++;
+            }
+        }
+        for (Iterator<Proposal> it = proposals.values().iterator(); it.hasNext() && kept > MAX_KEPT_PROPOSALS; ) {
+            Proposal proposal = it.next();
+            if (proposal.from().equals(from) && !proposal.open()) {
+                it.remove();
+                kept--;
+            }
+        }
+    }
+
     private void cancelOpen(UUID a, UUID b, Proposal.Kind... kinds) {
         Set<Proposal.Kind> set = Set.of(kinds);
         for (Proposal proposal : List.copyOf(proposals.values())) {
@@ -1171,6 +1201,7 @@ public final class DiplomacyState {
             }
         }
         changed |= wars.values().removeIf(war -> war.over() && now - war.ended() > ENDED_WAR_TICKS);
+        changed |= claims.removeIf(claim -> now - claim.made() > CLAIM_TICKS);
         if (changed) {
             changed();
         }

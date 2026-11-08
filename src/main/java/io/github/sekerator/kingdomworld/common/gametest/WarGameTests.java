@@ -124,6 +124,9 @@ public final class WarGameTests {
      */
     private static War war(GameTestHelper helper, Kingdom attacker, Kingdom defender, WarGoal goal) {
         MinecraftServer server = helper.getLevel().getServer();
+        // Game tests have no real players: both kingdoms count as having one at the keyboard unless a test says otherwise.
+        WarWork.markPresent(attacker.id(), true);
+        WarWork.markPresent(defender.id(), true);
         Outcome declared = DiplomacyActions.declareByOperator(server, attacker.id(), defender.id(), goal, false);
         helper.assertTrue(declared.ok(), "The war was not declared: " + declared);
         War war = WarWork.state(server).warBetween(attacker.id(), defender.id()).orElseThrow();
@@ -391,6 +394,44 @@ public final class WarGameTests {
             helper.assertTrue(!WarWork.shielded(server, enemy.id()), "The shield came right after a fight near the players");
         } finally {
             end(helper, home, List.of(enemy), List.of());
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_war_lone_player")
+    public static void aLonePlayerCannotLiftTheShieldOfAKingdomWithNobodyOnline(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        Kingdom[] both = kingdoms(helper, "Lone", UUID.randomUUID(), UUID.randomUUID());
+        Kingdom absent = both[0];
+        Kingdom raider = both[1];
+        CitizenGameTests.storehouse(helper, 0, 0, 4).insertItem(0, new ItemStack(Items.IRON_SWORD), false);
+        Citizen soldier = soldier(helper, absent, 1);
+        UUID lone = UUID.randomUUID();
+        ServerPlayer player = player(helper, lone, "kw-lone", 3, 3);
+        join(server, raider, lone);
+        try {
+            CitizenBodies.force(soldier.id(), true);
+            CitizenBodies.update(server);
+            CitizenEntity body = CitizenBodies.body(soldier.id());
+            helper.assertTrue(body != null, "The soldier got no body");
+            War war = war(helper, raider, absent, WarGoal.RAID);
+            WarWork.markPresent(absent.id(), false);
+            helper.assertTrue(WarWork.shielded(server, absent.id()), "A kingdom with nobody online is not shielded");
+            helper.assertTrue(MinecraftForge.EVENT_BUS.post(new LivingAttackEvent(body, level.damageSources().playerAttack(player), 4.0f)),
+                    "A blow of an enemy at a soldier of a shielded kingdom went through");
+            helper.assertTrue(!ArmyWork.mayAttack(server, raider.id(), body), "Soldiers of the enemy may attack a soldier of a shielded kingdom");
+            MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.entity.living.LivingDeathEvent(body, level.damageSources().playerAttack(player)));
+            helper.assertTrue(WarWork.shielded(server, absent.id()), "The lone enemy lifted the shield");
+            helper.assertTrue(war.score(War.Side.ATTACKER) == 0.0 && war.exhaustion(War.Side.DEFENDER) == 0.0
+                    && war.tally(War.Side.ATTACKER).kills() == 0, "A kill counted against a shielded kingdom: score "
+                    + war.score(War.Side.ATTACKER) + ", exhaustion " + war.exhaustion(War.Side.DEFENDER));
+            WarWork.markPresent(absent.id(), true);
+            helper.assertTrue(!MinecraftForge.EVENT_BUS.post(new LivingAttackEvent(body, level.damageSources().playerAttack(player), 4.0f)),
+                    "A blow at a soldier of an enemy whose players are there was stopped");
+        } finally {
+            LawWork.state(server).forgetKingdom(absent.id());
+            end(helper, absent, List.of(raider), List.of(lone), soldier);
         }
         helper.succeed();
     }

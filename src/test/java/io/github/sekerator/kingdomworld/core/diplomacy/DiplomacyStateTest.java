@@ -79,6 +79,33 @@ class DiplomacyStateTest {
     }
 
     @Test
+    void offeringAndCallingOffInALoopKeepsFewOffers() {
+        DiplomacyState state = new DiplomacyState();
+        for (int i = 0; i < 200; i++) {
+            Proposal pact = propose(state, a, b, Proposal.Kind.PACT, null, i);
+            assertTrue(state.cancel(pact.id(), a, i).ok());
+        }
+        long kept = state.proposals().stream().filter(p -> p.from().equals(a)).count();
+        assertTrue(kept <= DiplomacyState.MAX_KEPT_PROPOSALS, "kept " + kept);
+        assertTrue(state.proposals().stream().anyMatch(p -> p.from().equals(a)), "the newest offers stay for the tab");
+    }
+
+    @Test
+    void claimsAreFewAndForgottenInTime() {
+        DiplomacyState state = new DiplomacyState();
+        for (int i = 0; i < DiplomacyState.MAX_CLAIMS + 10; i++) {
+            UUID winner = new UUID(1, i);
+            UUID loser = new UUID(2, i);
+            War war = state.declare(winner, loser, WarGoal.LAND, 0, 0, RULES, false, true).war().orElseThrow();
+            state.startDue(RULES.preparationTicks());
+            assertTrue(state.endWar(war.id(), War.Result.PEACE, PeaceTerms.forGoal(WarGoal.LAND, winner, true, 0, RULES), 100, 0, RULES).ok());
+        }
+        assertEquals(DiplomacyState.MAX_CLAIMS, state.claims().size());
+        state.expire(100 + DiplomacyState.CLAIM_TICKS + 1);
+        assertTrue(state.claims().isEmpty(), "claims nobody took are forgotten");
+    }
+
+    @Test
     void vassalageNeedsFreeKingdoms() {
         DiplomacyState state = new DiplomacyState();
         accept(state, propose(state, a, b, Proposal.Kind.VASSALAGE, a, 0), 1);

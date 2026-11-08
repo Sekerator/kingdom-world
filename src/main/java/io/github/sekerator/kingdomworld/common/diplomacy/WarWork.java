@@ -213,6 +213,14 @@ public final class WarWork {
     }
 
     /**
+     * Whether two kingdoms may fight each other right now: their war has started and neither is shielded because its players
+     * are away. Soldiers, blows at citizens, the law and the score of kills go by this.
+     */
+    public static boolean hostileNow(MinecraftServer server, @Nullable UUID a, @Nullable UUID b) {
+        return fighting(server, a, b) && !shielded(server, a) && !shielded(server, b);
+    }
+
+    /**
      * Whether a deal between two kingdoms is frozen by a war between them (declared or fought).
      */
     public static boolean frozen(MinecraftServer server, UUID seller, UUID buyer) {
@@ -819,11 +827,11 @@ public final class WarWork {
                 continue;
             }
             long income = income(server, tribute.payer(), day - 1);
-            long amount = income * tribute.share() / 1_000L;
+            long amount = Math.min(income * tribute.share() / 1_000L, funds(server, tribute.payer()));
             if (amount <= 0) {
                 continue;
             }
-            Outcome paid = pay(server, tribute.payer(), tribute.payee(), Math.min(amount, funds(server, tribute.payer())), day);
+            Outcome paid = pay(server, tribute.payer(), tribute.payee(), amount, day);
             if (paid.ok()) {
                 Component money = io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(amount,
                         io.github.sekerator.kingdomworld.common.trade.Purses.units(server, tribute.payer()));

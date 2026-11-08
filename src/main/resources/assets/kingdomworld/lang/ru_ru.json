@@ -3336,5 +3336,6 @@
   "kingdomworld.war.chronicle.how.gone": "стороны больше нет",
   "kingdomworld.war.chronicle.how.none": "окончена",
   "kingdomworld.screen.map.diplomacy": "%s: %s, отношение %s",
-  "kingdomworld.screen.map.diplomacy_shielded": "%s: %s, отношение %s; под защитой, пока игроков нет"
+  "kingdomworld.screen.map.diplomacy_shielded": "%s: %s, отношение %s; под защитой, пока игроков нет",
+  "kingdomworld.war.no_blow.shielded": "Королевство под защитой"
 }

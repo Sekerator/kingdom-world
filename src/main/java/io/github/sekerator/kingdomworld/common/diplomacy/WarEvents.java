@@ -58,13 +58,13 @@ public final class WarEvents {
         @Override
         public boolean isEnemy(UUID kingdomId, UUID playerId, UUID playerKingdom) {
             MinecraftServer server = current;
-            return server != null && playerKingdom != null && WarWork.fighting(server, kingdomId, playerKingdom);
+            return server != null && playerKingdom != null && WarWork.hostileNow(server, kingdomId, playerKingdom);
         }
 
         @Override
         public boolean areEnemies(UUID kingdomId, UUID otherKingdom) {
             MinecraftServer server = current;
-            return server != null && WarWork.fighting(server, kingdomId, otherKingdom);
+            return server != null && WarWork.hostileNow(server, kingdomId, otherKingdom);
         }
 
         @Override
@@ -75,35 +75,35 @@ public final class WarEvents {
     };
 
     /**
-     * The law of a kingdom does not judge blows and killings of enemies in war: neither an enemy on its land, nor its own
-     * people fighting the enemy at home or on the land of the enemy.
+     * The law of a kingdom does not judge blows and killings of enemies in war: an enemy hitting its people, its own people
+     * hitting the enemy, an ally of either on the land of the war. The victim must be of a kingdom at war with the doer and
+     * not shielded; blows at anybody else (a merchant of a third kingdom) stay crimes, and a third kingdom at peace judges
+     * what happens on its land.
      */
     private static final LawPolicy.Exemption LAW = new LawPolicy.Exemption() {
         @Override
         public boolean excuses(UUID kingdomId, UUID player, CrimeKind kind) {
-            return excuses(kingdomId, player, kind, null);
+            return false;
         }
 
         @Override
         public boolean excuses(UUID kingdomId, UUID player, CrimeKind kind, UUID victimKingdom) {
             MinecraftServer server = current;
-            if (server == null || (kind != CrimeKind.ASSAULT && kind != CrimeKind.MURDER)) {
+            if (server == null || victimKingdom == null || (kind != CrimeKind.ASSAULT && kind != CrimeKind.MURDER)) {
                 return false;
             }
             UUID own = KingdomWorldApi.state(server).membership().kingdomOf(player).orElse(null);
-            if (own == null) {
+            if (own == null || !WarWork.hostileNow(server, own, victimKingdom)) {
                 return false;
             }
-            if (WarWork.fighting(server, own, kingdomId)) {
-                return true;
-            }
-            return victimKingdom != null && WarWork.fighting(server, own, victimKingdom)
-                    && (kingdomId.equals(own) || kingdomId.equals(victimKingdom));
+            return kingdomId.equals(own) || kingdomId.equals(victimKingdom) || WarWork.fighting(server, own, kingdomId);
         }
     };
 
     /**
-     * Players may hurt citizens of a kingdom they fight; blocks, containers and the rest of the land stay protected.
+     * Players may hurt citizens of a kingdom they fight while it is not shielded; the kingdom asked is that of the citizen,
+     * never the owner of the land, so the citizens of a third kingdom stay protected. Blocks, containers and the rest of the
+     * land stay protected.
      */
     private static final AccessPolicy.Exemption CITIZENS = (subject, owner, action, dimension, chunk) -> {
         MinecraftServer server = current;
@@ -111,7 +111,7 @@ public final class WarEvents {
             return false;
         }
         UUID own = KingdomWorldApi.state(server).membership().kingdomOf(subject.playerId()).orElse(null);
-        return own != null && WarWork.fighting(server, own, owner);
+        return own != null && WarWork.hostileNow(server, own, owner);
     };
 
     private WarEvents() {
@@ -360,13 +360,44 @@ public final class WarEvents {
             }
             return;
         }
-        // Soldiers and players in a fight of a war near players: no shield for their kingdoms for a while.
         UUID a = kingdomOf(server, source);
         UUID b = kingdomOf(server, victim);
-        if (a != null && b != null && !a.equals(b) && soldierOrPlayer(source) && soldierOrPlayer(victim) && WarWork.fighting(server, a, b)) {
-            WarWork.fought(server, a);
-            WarWork.fought(server, b);
+        if (a == null || b == null || a.equals(b) || !WarWork.fighting(server, a, b)) {
+            return;
         }
+        if (victim instanceof CitizenEntity && WarWork.shielded(server, b)) {
+            // A kingdom whose players are all away is not mowed down: nobody of the enemy hurts its citizens or soldiers.
+            event.setCanceled(true);
+            if (source instanceof ServerPlayer striker) {
+                refuse(server, striker, "shielded");
+            }
+            return;
+        }
+        // A fight of a war near players: no shield for a kingdom whose own player is in it or nearby.
+        if (soldierOrPlayer(source) && soldierOrPlayer(victim)) {
+            if (source instanceof ServerPlayer || ownPlayerNear(server, a, victim)) {
+                WarWork.fought(server, a);
+            }
+            if (victim instanceof ServerPlayer || ownPlayerNear(server, b, victim)) {
+                WarWork.fought(server, b);
+            }
+        }
+    }
+
+    /** How near a player of a kingdom must be to a fight for the fight to keep the shield of the kingdom away, in blocks. */
+    private static final double NEAR = 48.0;
+
+    /**
+     * Whether a player of a kingdom, online and at the keyboard, is near a place.
+     */
+    private static boolean ownPlayerNear(MinecraftServer server, UUID kingdom, Entity at) {
+        for (net.minecraft.world.entity.player.Player player : at.level().players()) {
+            if (player instanceof ServerPlayer serverPlayer && !(player instanceof FakePlayer) && player.distanceToSqr(at) <= NEAR * NEAR
+                    && KingdomWorldApi.state(server).membership().isMember(player.getUUID(), kingdom) && fairGame(server, serverPlayer)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean soldierOrPlayer(Entity entity) {
@@ -407,7 +438,8 @@ public final class WarEvents {
         }
         UUID a = kingdomOf(server, killer);
         UUID b = kingdomOf(server, victim);
-        if (a == null || b == null || a.equals(b) || !WarWork.fighting(server, a, b)) {
+        if (a == null || b == null || a.equals(b) || !WarWork.hostileNow(server, a, b)) {
+            // No score and no exhaustion against or for a shielded kingdom.
             return;
         }
         try {

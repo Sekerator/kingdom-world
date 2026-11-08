@@ -3336,5 +3336,6 @@
   "kingdomworld.war.chronicle.how.gone": "a side is gone",
   "kingdomworld.war.chronicle.how.none": "ended",
   "kingdomworld.screen.map.diplomacy": "%s: %s, relation %s",
-  "kingdomworld.screen.map.diplomacy_shielded": "%s: %s, relation %s; shielded while its players are away"
+  "kingdomworld.screen.map.diplomacy_shielded": "%s: %s, relation %s; shielded while its players are away",
+  "kingdomworld.war.no_blow.shielded": "That kingdom is shielded"
 }
