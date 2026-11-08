@@ -78,6 +78,7 @@ public final class NobilityPackets {
         public enum Action {
             GRANT,
             REVOKE,
+            TRANSFER,
             ANSWER,
             VERDICT,
             HIRE,

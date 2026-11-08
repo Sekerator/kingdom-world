@@ -147,6 +147,7 @@ public final class NobilityCommands {
                         .then(Commands.literal("list")
                                 .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
                                         .executes(context -> spies(context.getSource(), kingdom(context, "kingdom")))))
+                        .then(Commands.literal("hireall").executes(context -> hireAll(context.getSource())))
                         .then(Commands.literal("hire")
                                 .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
                                         .executes(context -> done(context.getSource(), NobilityActions.hire(context.getSource().getServer(), null,
@@ -362,6 +363,23 @@ public final class NobilityCommands {
             return done(context.getSource(), Outcome.fail(io.github.sekerator.kingdomworld.core.kingdom.KingdomError.NOT_PENDING));
         }
         return done(context.getSource(), NobilityActions.verdict(context.getSource().getServer(), null, kingdom.id(), plot.get().id(), verdict));
+    }
+
+    /**
+     * Every kingdom of the world hires a spy, if it can pay; for checks of the load.
+     */
+    private static int hireAll(CommandSourceStack source) {
+        MinecraftServer server = source.getServer();
+        int hired = 0;
+        for (Kingdom kingdom : KingdomWorldApi.kingdoms(server)) {
+            if (io.github.sekerator.kingdomworld.common.diplomacy.WarWork.isNpc(server, kingdom.id())
+                    && NobilityActions.hire(server, null, kingdom.id()).ok()) {
+                hired++;
+            }
+        }
+        int count = hired;
+        source.sendSuccess(() -> Component.translatable(ADMIN + "hired", count), true);
+        return count;
     }
 
     private static int spies(CommandSourceStack source, Kingdom kingdom) {

@@ -3720,5 +3720,12 @@
   "commands.kingdomworld.admin.nobility.stability": "%s: stability %s,%s; low days %s, warned %s, rebel days %s, played days %s",
   "commands.kingdomworld.admin.nobility.demand": "Demand #%s: %s %s",
   "commands.kingdomworld.admin.nobility.plot": "Plot #%s: %s of %s",
-  "commands.kingdomworld.admin.nobility.spy": "#%s %s, skill %s, %s, %s"
+  "commands.kingdomworld.admin.nobility.spy": "#%s %s, skill %s, %s, %s",
+  "kingdomworld.screen.nobility.act.transfer": "Hand over",
+  "kingdomworld.screen.nobility.act_hint.transfer": "Hand the title with its fief to the chosen house or subject.",
+  "kingdomworld.screen.nobility.pick_recipient": "To whom >",
+  "kingdomworld.screen.nobility.recipient": "To: %s",
+  "kingdomworld.screen.nobility.no_recipient": "Nobody to hand a title to",
+  "kingdomworld.nobility.tab.done.transfer": "Title handed over.",
+  "commands.kingdomworld.admin.nobility.hired": "Kingdoms of the world hired %s spy(ies)"
 }

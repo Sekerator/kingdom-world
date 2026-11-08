@@ -3720,5 +3720,12 @@
   "commands.kingdomworld.admin.nobility.stability": "%s: стабильность %s,%s; дней низкой %s, предупреждение %s, дней мятежа %s, игровых дней %s",
   "commands.kingdomworld.admin.nobility.demand": "Требование #%s: %s %s",
   "commands.kingdomworld.admin.nobility.plot": "Заговор #%s: %s из %s",
-  "commands.kingdomworld.admin.nobility.spy": "#%s %s, навык %s, %s, %s"
+  "commands.kingdomworld.admin.nobility.spy": "#%s %s, навык %s, %s, %s",
+  "kingdomworld.screen.nobility.act.transfer": "Передать",
+  "kingdomworld.screen.nobility.act_hint.transfer": "Передать титул с владением выбранному дому или подданному.",
+  "kingdomworld.screen.nobility.pick_recipient": "Кому >",
+  "kingdomworld.screen.nobility.recipient": "Кому: %s",
+  "kingdomworld.screen.nobility.no_recipient": "Некому передать титул",
+  "kingdomworld.nobility.tab.done.transfer": "Титул передан.",
+  "commands.kingdomworld.admin.nobility.hired": "Королевства мира наняли шпионов: %s"
 }

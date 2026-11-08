@@ -54,7 +54,7 @@ final class NobilityTab {
         }
     }
 
-    private static final String[] ACTS = {"grant", "revoke", "accept", "bargain", "refuse", "execute", "pardon", "exile", "hire", "send",
+    private static final String[] ACTS = {"grant", "revoke", "transfer", "accept", "bargain", "refuse", "execute", "pardon", "exile", "hire", "send",
             "hunt", "rest", "ransom", "dismiss"};
 
     private final ThroneScreen screen;
@@ -65,6 +65,7 @@ final class NobilityTab {
     private int fief;
     private int task;
     private int target;
+    private int recipient;
 
     private int modeWidth;
     private int actWidth;
@@ -123,7 +124,8 @@ final class NobilityTab {
         for (Title value : Title.values()) {
             titleWidth = Math.max(titleWidth, screen.buttonWidth(Component.translatable(KEY + "pick_title", Component.translatable(NOBLE + "title." + value.id()))));
         }
-        pickWidth = screen.buttonWidth(Component.translatable(KEY + "pick_fief"), Component.translatable(KEY + "pick_target"));
+        pickWidth = screen.buttonWidth(Component.translatable(KEY + "pick_fief"), Component.translatable(KEY + "pick_target"),
+                Component.translatable(KEY + "pick_recipient"));
         taskWidth = 0;
         for (Spy.Task value : Spy.Task.values()) {
             taskWidth = Math.max(taskWidth, screen.buttonWidth(Component.translatable(KEY + "pick_task", Component.translatable(NOBLE + "task." + value.id()))));
@@ -146,7 +148,7 @@ final class NobilityTab {
     }
 
     private boolean hasBar() {
-        return view != null && ((mode == Mode.HOUSES && view.canManage()) || mode == Mode.SPIES);
+        return view != null && (((mode == Mode.HOUSES || mode == Mode.TITLES) && view.canManage()) || mode == Mode.SPIES);
     }
 
     private static int bottom(int top, int panelHeight) {
@@ -200,12 +202,38 @@ final class NobilityTab {
         }
     }
 
+    /**
+     * Those a title can be handed to: the houses, then the subjects without a title; an id and a name each.
+     */
+    private List<NobilityViews.Choice> recipients() {
+        List<NobilityViews.Choice> all = new ArrayList<>();
+        for (NobilityViews.HouseRow house : view.houses()) {
+            all.add(new NobilityViews.Choice("h" + house.id(), house.name()));
+        }
+        for (NobilityViews.Choice subject : view.subjects()) {
+            all.add(new NobilityViews.Choice("p" + subject.id(), subject.name()));
+        }
+        return all;
+    }
+
     private void titles(List<Line> lines) {
+        List<NobilityViews.Choice> to = recipients();
+        NobilityViews.Choice chosen = to.isEmpty() ? null : to.get(Math.floorMod(recipient, to.size()));
         for (NobilityViews.GrantRow grant : view.grants()) {
             Component text = Component.translatable(KEY + "grant", Component.translatable(NOBLE + "title." + grant.title().id()), grant.fief(), grant.holder());
+            List<Act> acts = new ArrayList<>();
+            if (view.canManage()) {
+                acts.add(new Act("transfer", () -> {
+                    if (chosen != null) {
+                        boolean player = chosen.id().startsWith("p");
+                        send(NobilityPackets.TabChange.Action.TRANSFER, grant.id(), player ? 0 : Long.parseLong(chosen.id().substring(1)),
+                                player ? UUID.fromString(chosen.id().substring(1)) : null, "");
+                    }
+                }, chosen != null));
+                acts.add(new Act("revoke", () -> send(NobilityPackets.TabChange.Action.REVOKE, grant.id(), 0, null, ""), true));
+            }
             lines.add(new Line(text, Component.translatable(KEY + (grant.player() ? "grant_player_hint" : "grant_house_hint")),
-                    grant.player() ? 0xFFA0E0FF : 0xFFFFFFFF, view.canManage()
-                    ? List.of(new Act("revoke", () -> send(NobilityPackets.TabChange.Action.REVOKE, grant.id(), 0, null, ""), true)) : List.of()));
+                    grant.player() ? 0xFFA0E0FF : 0xFFFFFFFF, acts));
         }
         if (lines.isEmpty()) {
             lines.add(new Line(Component.translatable(KEY + "no_titles"), 0xFFB8B8B8));
@@ -302,6 +330,12 @@ final class NobilityTab {
                 screen.rebuild();
             }).bounds(x + titleWidth + GAP, barY, pickWidth, ROW - 2).build());
             pick.active = view.fiefs().size() > 1;
+        } else if (mode == Mode.TITLES && view.canManage()) {
+            Button pick = screen.add(Button.builder(Component.translatable(KEY + "pick_recipient"), b -> {
+                recipient++;
+                screen.rebuild();
+            }).bounds(x, barY, pickWidth, ROW - 2).build());
+            pick.active = recipients().size() > 1;
         } else if (mode == Mode.SPIES) {
             Spy.Task chosen = Spy.Task.values()[Math.floorMod(task, Spy.Task.values().length)];
             Button pickTask = screen.add(Button.builder(Component.translatable(KEY + "pick_task", Component.translatable(NOBLE + "task." + chosen.id())), b -> {
@@ -367,6 +401,14 @@ final class NobilityTab {
             int at = x + titleWidth + pickWidth + 2 * GAP + 4;
             Component chosen = view.fiefs().isEmpty() ? Component.translatable(KEY + "no_fief")
                     : view.fiefs().get(Math.floorMod(fief, view.fiefs().size())).name();
+            if (right - at > 8) {
+                screen.name(graphics, chosen.getString(), at, barY + 4, 0xFFE8E8E8, right - at);
+            }
+        } else if (mode == Mode.TITLES && view.canManage()) {
+            int at = x + pickWidth + GAP + 4;
+            List<NobilityViews.Choice> to = recipients();
+            Component chosen = to.isEmpty() ? Component.translatable(KEY + "no_recipient")
+                    : Component.translatable(KEY + "recipient", to.get(Math.floorMod(recipient, to.size())).name());
             if (right - at > 8) {
                 screen.name(graphics, chosen.getString(), at, barY + 4, 0xFFE8E8E8, right - at);
             }

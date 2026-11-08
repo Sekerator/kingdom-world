@@ -197,6 +197,8 @@ public final class NobilitySync {
                 yield NobilityActions.grant(server, actor, kingdomId, titles[(int) change.second()], fief.get(), subject != null ? 0 : change.first(), subject);
             }
             case REVOKE -> NobilityActions.revoke(server, actor, kingdomId, change.first());
+            case TRANSFER -> NobilityActions.transfer(server, actor, kingdomId, change.first(), change.targetOrNull() != null ? 0 : change.second(),
+                    change.targetOrNull());
             case ANSWER -> Demand.Answer.byId(change.word()).map(answer -> NobilityActions.answer(server, actor, kingdomId, change.first(), answer))
                     .orElse(Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE));
             case VERDICT -> Plot.Verdict.byId(change.word()).map(verdict -> NobilityActions.verdict(server, actor, kingdomId, change.first(), verdict))

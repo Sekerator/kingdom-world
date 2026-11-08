@@ -2972,7 +2972,10 @@ if ($script:NpcSite) {
         Send-ServerCommand $server "kingdomworld admin nobility stability $KingdomName"
         $stability = Wait-ForLog $server "${KingdomName}: stability (\d+),([^;]*);" $CommandTimeout $ConsoleFailPattern
         if ($stability) { Write-Ok "[session7] stability of ${KingdomName}: $($stability.Groups[1].Value) ($($stability.Groups[2].Value.Trim()))" } else { Add-Failure '[session7] the stability was not shown' }
-        # The day of the courts, one kingdom a tick, measured.
+        # Every kingdom of the world keeps a spy; then the day of the courts, one kingdom a tick, measured.
+        Send-ServerCommand $server 'kingdomworld admin nobility spy hireall'
+        $hired = Wait-ForLog $server 'Kingdoms of the world hired (\d+) spy\(ies\)' $CommandTimeout $ConsoleFailPattern
+        if ($hired) { Write-Ok "[session7] kingdoms of the world hired $($hired.Groups[1].Value) spies" }
         Send-ServerCommand $server 'kingdomworld admin nobility day'
         Start-Sleep -Seconds 8
         Send-ServerCommand $server 'kingdomworld admin nobility timing'
