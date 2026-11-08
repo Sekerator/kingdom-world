@@ -2926,6 +2926,91 @@ if ($script:NpcSite) {
             [void](Wait-ForLog $server 'The longest second of the sieges: \d+ us' $CommandTimeout $ConsoleFailPattern)
         }
     }
+
+    # The nobility: the courts of the kingdoms of the world appear with their houses; SmokeTest raises a house with a title, a
+    # plot of it brews, a party demands, a spy is hired and sent; all of it and the money outlive a restart.
+    Invoke-Phase 'session7' {
+        param($server)
+        if (Wait-ForLog $server 'KingdomWorld nobility: \d+ house\(s\), \d+ title\(s\), \d+ court\(s\), \d+ demand\(s\), \d+ plot\(s\), \d+ spy\(ies\), data format 1' 10) {
+            Write-Ok '[session7] the nobility is loaded in data format 1'
+        } else {
+            Add-Failure '[session7] the nobility was not loaded as expected'
+        }
+        Send-ServerCommand $server 'kingdomworld admin nobility tick'
+        $status = Wait-ForLog $server 'Nobility: (\d+) house\(s\), (\d+) title\(s\), (\d+) court\(s\)' $CommandTimeout $ConsoleFailPattern
+        if ($status -and [int]$status.Groups[1].Value -gt 0) {
+            Write-Ok "[session7] the courts of the world appeared: $($status.Groups[1].Value) houses, $($status.Groups[2].Value) titles, $($status.Groups[3].Value) courts"
+        } else {
+            Add-Failure '[session7] no houses appeared in the kingdoms of the world'
+        }
+        $seen = Count-Log 'House #\d+ added'
+        Send-ServerCommand $server "kingdomworld admin nobility house $KingdomName add"
+        $added = Wait-ForNewLog $server 'House #(\d+) added' $CommandTimeout $seen
+        if ($added) {
+            $script:NobleHouse = [regex]::Matches((Get-LatestLog), 'House #(\d+) added')[-1].Groups[1].Value
+            Send-ServerCommand $server "kingdomworld admin nobility title house $KingdomName $($script:NobleHouse) count m1"
+            [void](Wait-ForLog $server 'Done\.' $CommandTimeout $ConsoleFailPattern)
+            Send-ServerCommand $server "kingdomworld admin nobility plot $($script:NobleHouse) 2"
+            [void](Wait-ForLog $server "Plot #\d+: 2 of \d+" $CommandTimeout $ConsoleFailPattern)
+            Send-ServerCommand $server "kingdomworld admin nobility demand $($script:NobleHouse) build 100"
+            [void](Wait-ForLog $server 'Demand #\d+: build 100' $CommandTimeout $ConsoleFailPattern)
+            Send-ServerCommand $server "kingdomworld admin nobility spy hire $KingdomName"
+            Start-Sleep -Seconds 1
+            Send-ServerCommand $server "kingdomworld admin nobility spy list $KingdomName"
+            $spy = Wait-ForLog $server '#(\d+) [^\r\n]*, skill (\d+), idle, -' $CommandTimeout $ConsoleFailPattern
+            if ($spy -and $script:NpcName) {
+                $script:NobleSpy = $spy.Groups[1].Value
+                Send-ServerCommand $server "kingdomworld admin nobility spy send $KingdomName $($script:NobleSpy) scout `"$($script:NpcName)`""
+                [void](Wait-ForLog $server 'Done\.' $CommandTimeout $ConsoleFailPattern)
+                Write-Ok "[session7] house #$($script:NobleHouse) is a count with a plot and a demand; spy #$($script:NobleSpy) scouts $($script:NpcName)"
+            } else {
+                Add-Failure '[session7] no spy could be hired and sent'
+            }
+        } else {
+            Add-Failure "[session7] no house could be added to $KingdomName"
+        }
+        Send-ServerCommand $server "kingdomworld admin nobility stability $KingdomName"
+        $stability = Wait-ForLog $server "${KingdomName}: stability (\d+),([^;]*);" $CommandTimeout $ConsoleFailPattern
+        if ($stability) { Write-Ok "[session7] stability of ${KingdomName}: $($stability.Groups[1].Value) ($($stability.Groups[2].Value.Trim()))" } else { Add-Failure '[session7] the stability was not shown' }
+        # The day of the courts, one kingdom a tick, measured.
+        Send-ServerCommand $server 'kingdomworld admin nobility day'
+        Start-Sleep -Seconds 8
+        Send-ServerCommand $server 'kingdomworld admin nobility timing'
+        $timing = Wait-ForLog $server 'Ticks of the nobility: (\d+), average ([\d.]+) ms, worst ([\d.]+) ms' $CommandTimeout $ConsoleFailPattern
+        if ($timing) {
+            $script:NobilityTiming = "$($timing.Groups[1].Value) ticks, average $($timing.Groups[2].Value) ms, worst $($timing.Groups[3].Value) ms"
+            if ([double]$timing.Groups[3].Value -le 50) { Write-Ok "[session7] the day of the courts: $($script:NobilityTiming)" } else { Add-Failure "[session7] a tick of the nobility is too slow: $($script:NobilityTiming)" }
+        } else {
+            Add-Failure '[session7] the timing of the nobility was not shown'
+        }
+        Send-ServerCommand $server 'kingdomworld admin nobility status'
+        $before = Wait-ForLog $server 'Nobility: (\d+) house\(s\), (\d+) title\(s\), (\d+) court\(s\), (\d+) demand\(s\), (\d+) plot\(s\), (\d+) spy\(ies\)' $CommandTimeout $ConsoleFailPattern
+        if ($before) { $script:NobilityCounts = "$($before.Groups[1].Value) $($before.Groups[2].Value) $($before.Groups[4].Value) $($before.Groups[5].Value) $($before.Groups[6].Value)" }
+        $script:NobleMoney = Get-KingdomMoney $server $KingdomName
+    }
+
+    Invoke-Phase 'session8' {
+        param($server)
+        $loaded = Wait-ForLog $server 'KingdomWorld nobility: (\d+) house\(s\), (\d+) title\(s\), (\d+) court\(s\), (\d+) demand\(s\), (\d+) plot\(s\), (\d+) spy\(ies\), data format 1' 10
+        if ($loaded) {
+            $counts = "$($loaded.Groups[1].Value) $($loaded.Groups[2].Value) $($loaded.Groups[4].Value) $($loaded.Groups[5].Value) $($loaded.Groups[6].Value)"
+            if ($counts -eq $script:NobilityCounts) { Write-Ok "[session8] houses, titles, demands, plots and spies outlived the restart: $counts" } else { Add-Failure "[session8] the nobility changed in the restart: $($script:NobilityCounts) -> $counts" }
+        } else {
+            Add-Failure '[session8] the nobility was not loaded'
+        }
+        $money = Get-KingdomMoney $server $KingdomName
+        if ($money -ge 0 -and $money -eq $script:NobleMoney) { Write-Ok "[session8] the money of $KingdomName adds up: $money" } else { Add-Failure "[session8] the money of $KingdomName changed in the restart: $($script:NobleMoney) -> $money" }
+        if ($script:NobleHouse) {
+            Send-ServerCommand $server "kingdomworld admin nobility house $KingdomName"
+            if (Wait-ForLog $server "#$($script:NobleHouse) [^\r\n]*loyalty \d+, wealth \d+, count#\d+@m1" $CommandTimeout $ConsoleFailPattern) { Write-Ok "[session8] the count of $KingdomName kept the title" } else { Add-Failure '[session8] the title of the house was lost' }
+        }
+        if ($script:NobleSpy) {
+            Send-ServerCommand $server "kingdomworld admin nobility spy list $KingdomName"
+            if (Wait-ForLog $server "#$($script:NobleSpy) [^\r\n]*, (mission|idle), " $CommandTimeout $ConsoleFailPattern) { Write-Ok '[session8] the spy outlived the restart' } else { Add-Failure '[session8] the spy was lost in the restart' }
+        }
+        Send-ServerCommand $server "kingdomworld admin nobility stability $KingdomName"
+        [void](Wait-ForLog $server "${KingdomName}: stability \d+" $CommandTimeout $ConsoleFailPattern)
+    }
 }
 
 Write-Summary

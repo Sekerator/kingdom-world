@@ -79,6 +79,7 @@ public final class NobilityCommands {
                 .then(Commands.literal("status").executes(context -> status(context.getSource())))
                 .then(Commands.literal("unlock").executes(context -> unlock(context.getSource())))
                 .then(Commands.literal("tick").executes(context -> tick(context.getSource())))
+                .then(Commands.literal("day").executes(context -> day(context.getSource())))
                 .then(Commands.literal("timing").executes(context -> timing(context.getSource())))
                 .then(Commands.literal("house")
                         .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
@@ -202,6 +203,19 @@ public final class NobilityCommands {
         }
         NobilityWork.runDay(source.getServer());
         return status(source);
+    }
+
+    /**
+     * Queues a day of every court, run one kingdom a tick as a real day is, after the timing is reset.
+     */
+    private static int day(CommandSourceStack source) {
+        MinecraftServer server = source.getServer();
+        for (Court court : NobilityWork.state(server).courts()) {
+            NobilityWork.state(server).adminReplay(court.kingdomId());
+        }
+        NobilityWork.resetTiming();
+        NobilityWork.startDay(server, NobilityWork.day(server));
+        return done(source, Outcome.DONE);
     }
 
     private static int timing(CommandSourceStack source) {

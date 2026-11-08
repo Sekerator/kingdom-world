@@ -1327,6 +1327,7 @@ final class ClientLayoutCheck {
         RoadLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         LawLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         DiplomacyLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
+        NobilityLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         LifeLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)),
                 (role, manage) -> citizensMode(view(KingdomView.Relation.MEMBER, role), manage, false, "life"));
         return cases;

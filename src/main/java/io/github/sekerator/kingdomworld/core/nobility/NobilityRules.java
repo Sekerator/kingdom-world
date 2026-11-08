@@ -80,6 +80,15 @@ public record NobilityRules(int shareBaron, int shareCount, int shareDuke, int d
     }
 
     /**
+     * The same rules with another chance a failed spy is caught.
+     */
+    public NobilityRules withCaughtChance(double value) {
+        return new NobilityRules(shareBaron, shareCount, shareDuke, demandEveryDays, demandDueDays, demandValue, plotBelow, plotChance, plotDays,
+                secessionWarnDays, secessionDays, rebelDays, rebelPercent, spyHire, spyWage, maxSpies, npcMaxSpies, theftPercent, theftMax, ransom,
+                ransomDays, counterBase, value, marriageChance, deathChance, grantDealings, grantReputation, highStability, moodLow, moodHigh);
+    }
+
+    /**
      * Percent of the income of its fief a title gets.
      */
     public int share(Title title) {

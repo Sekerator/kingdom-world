@@ -289,7 +289,7 @@ public final class NobilityWork {
 
     // ---------------------------------------------------------------- the day of a court
 
-    static void kingdomDay(MinecraftServer server, UUID kingdomId, long day) {
+    public static void kingdomDay(MinecraftServer server, UUID kingdomId, long day) {
         NobilityState state = state(server);
         NobilityRules rules = NobilitySettings.rules();
         boolean npc = WarWork.isNpc(server, kingdomId);
@@ -550,7 +550,7 @@ public final class NobilityWork {
      * The holders of titles take their share of the income of their fief: a share of the income of yesterday, as large as
      * the part of the citizens of the kingdom who live there. Players get it onto their account; houses keep it.
      */
-    static void shares(MinecraftServer server, UUID kingdomId, long day) {
+    public static void shares(MinecraftServer server, UUID kingdomId, long day) {
         NobilityState state = state(server);
         List<Grant> grants = state.grants(kingdomId);
         if (grants.isEmpty()) {
@@ -598,7 +598,7 @@ public final class NobilityWork {
      * How many citizens live in each fief: in a city (near it, nearer to it than to the capital and the other cities), or in the
      * march of the side of the capital they live on.
      */
-    static Map<Fief, Integer> people(MinecraftServer server, UUID kingdomId) {
+    public static Map<Fief, Integer> people(MinecraftServer server, UUID kingdomId) {
         Map<Fief, Integer> result = new HashMap<>();
         Optional<Capital> capital = KingdomWorldApi.state(server).territory().territory(kingdomId).map(Territory::capital);
         List<City> cities = RoadWork.state(server).citiesOf(kingdomId);
@@ -647,6 +647,13 @@ public final class NobilityWork {
     }
 
     // ---------------------------------------------------------------- the day of the world
+
+    /**
+     * The day of the spies and the marriages at once, for operators and game tests.
+     */
+    public static void spiesDay(MinecraftServer server, long day) {
+        worldDay(server, day);
+    }
 
     private static void worldDay(MinecraftServer server, long day) {
         NobilityState state = state(server);
