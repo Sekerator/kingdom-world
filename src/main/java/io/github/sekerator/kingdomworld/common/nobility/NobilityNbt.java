@@ -38,6 +38,7 @@ final class NobilityNbt {
     static CompoundTag write(NobilityState state) {
         CompoundTag tag = new CompoundTag();
         tag.putLong("nextId", state.peekNextId());
+        tag.putLong("lastDay", state.lastDay());
         ListTag houses = new ListTag();
         for (NobleHouse house : state.houses()) {
             CompoundTag entry = new CompoundTag();
@@ -53,6 +54,7 @@ final class NobilityNbt {
             entry.putInt("loyalty", house.loyalty());
             entry.putInt("generation", house.generation());
             entry.putLong("founded", house.founded());
+            entry.putBoolean("raised", house.raised());
             houses.add(entry);
         }
         tag.put("houses", houses);
@@ -190,6 +192,9 @@ final class NobilityNbt {
     static List<String> read(CompoundTag tag, NobilityState state) {
         List<String> problems = new ArrayList<>();
         state.restoreNextId(tag.getLong("nextId"));
+        if (tag.contains("lastDay", Tag.TAG_LONG)) {
+            state.setLastDay(tag.getLong("lastDay"));
+        }
         ListTag houses = tag.getList("houses", Tag.TAG_COMPOUND);
         for (int i = 0; i < houses.size(); i++) {
             try {
@@ -197,9 +202,11 @@ final class NobilityNbt {
                 RulerCharacter character = RulerCharacter.byId(e.getString("character")).orElseThrow(() -> bad("character", e));
                 RulerCharacter.Trait trait = RulerCharacter.Trait.byId(e.getString("trait")).orElseThrow(() -> bad("trait", e));
                 Faction faction = Faction.byId(e.getString("faction")).orElseThrow(() -> bad("faction", e));
-                state.restoreHouse(new NobleHouse(e.getLong("id"), e.getUUID("kingdom"), e.getInt("family"), e.getInt("head"),
+                NobleHouse house = new NobleHouse(e.getLong("id"), e.getUUID("kingdom"), e.getInt("family"), e.getInt("head"),
                         Gender.valueOf(e.getString("gender")), character, trait, faction, e.getLong("wealth"), e.getInt("loyalty"),
-                        e.getInt("generation"), e.getLong("founded")));
+                        e.getInt("generation"), e.getLong("founded"));
+                house.setRaised(e.getBoolean("raised"));
+                state.restoreHouse(house);
             } catch (RuntimeException ex) {
                 problems.add("house " + i + ": " + ex.getMessage());
             }

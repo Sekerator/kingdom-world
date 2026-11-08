@@ -63,6 +63,7 @@ public final class NobilitySync {
         boolean npc = WarWork.isNpc(server, kingdomId);
         boolean canManage = !npc && membership.hasPermission(viewer, kingdomId, Permission.MANAGE_NOBILITY);
         boolean canSpies = !npc && membership.hasPermission(viewer, kingdomId, Permission.MANAGE_SPIES);
+        boolean crown = canManage && NobilityActions.king(server, viewer, kingdomId);
         long day = NobilityWork.day(server);
         Stability.Result stability = state.stability(kingdomId, NobilityWork.inputs(server, kingdomId, day));
         List<NobilityViews.CauseRow> causes = new ArrayList<>();
@@ -99,7 +100,7 @@ public final class NobilitySync {
             fiefs.add(new NobilityViews.Choice(fief.code(), NobilityTexts.fief(server, fief)));
         }
         List<NobilityViews.Choice> subjects = new ArrayList<>();
-        if (canManage) {
+        if (crown) {
             membership.kingdom(kingdomId).ifPresent(members -> {
                 for (Member member : members.members().values()) {
                     if (!state.isNoble(kingdomId, member.playerId())) {
@@ -143,7 +144,7 @@ public final class NobilitySync {
         }
         Component hire = Component.translatable(KEY + "tab.hire_cost", NobilityTexts.money(server, kingdomId, rules.spyHire()),
                 NobilityTexts.money(server, kingdomId, rules.spyWage()));
-        return new NobilityViews.TabView(kingdomId, canManage, canSpies, npc, stability.value(), causes, warning, houses, grants, fiefs, subjects, factions,
+        return new NobilityViews.TabView(kingdomId, canManage, canSpies, crown, npc, stability.value(), causes, warning, houses, grants, fiefs, subjects, factions,
                 demand, plots, chronicle, spies, reports, targets, state.counter(kingdomId, NobilityWork.spymaster(server, kingdomId), rules),
                 hire, rules.maxSpies());
     }

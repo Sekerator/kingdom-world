@@ -188,7 +188,7 @@ final class NobilityTab {
                     canGrant)) : List.of();
             lines.add(new Line(text, hover, house.loyalty() < 40 ? 0xFFF09050 : 0xFFFFFFFF, acts));
         }
-        if (view.canManage()) {
+        if (view.crown()) {
             lines.add(new Line(Component.translatable(KEY + "new_house"), Component.translatable(KEY + "new_house_hint"), 0xFFB8B8B8,
                     List.of(new Act("grant", () -> send(NobilityPackets.TabChange.Action.GRANT, -1, title, null, fiefCode), canGrant))));
             for (NobilityViews.Choice subject : view.subjects()) {

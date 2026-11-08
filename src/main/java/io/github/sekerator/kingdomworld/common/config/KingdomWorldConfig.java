@@ -1687,6 +1687,7 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue ransom;
         public final ForgeConfigSpec.IntValue ransomDays;
         public final ForgeConfigSpec.DoubleValue marriageChance;
+        public final ForgeConfigSpec.IntValue maxHouses;
 
         Nobility(ForgeConfigSpec.Builder builder) {
             io.github.sekerator.kingdomworld.core.nobility.NobilityRules d = io.github.sekerator.kingdomworld.core.nobility.NobilityRules.DEFAULT;
@@ -1722,6 +1723,8 @@ public final class KingdomWorldConfig {
             ransomDays = builder.comment("Game days a caught spy is held before being put to death.").defineInRange("ransomDays", d.ransomDays(), 1, 30);
             marriageChance = builder.comment("Chance of a marriage of houses of two kingdoms on good terms on a game day.")
                     .defineInRange("marriageChance", d.marriageChance(), 0.0, 1.0);
+            maxHouses = builder.comment("Noble houses a kingdom may have; a king raises no more. A house the crown raised for a title goes",
+                    "away when its last title is taken back.").defineInRange("maxHouses", d.maxHouses(), 1, 32);
             builder.pop();
         }
     }

@@ -82,7 +82,6 @@ public final class NobilityWork {
     private static final Random RANDOM = new Random();
 
     private static DoubleSupplier rolls;
-    private static long lastDay = Long.MIN_VALUE;
     private static final Deque<UUID> QUEUE = new ArrayDeque<>();
     private static boolean worldDayDone = true;
     private static long dayOfQueue;
@@ -117,7 +116,6 @@ public final class NobilityWork {
 
     public static void reset() {
         rolls = null;
-        lastDay = Long.MIN_VALUE;
         QUEUE.clear();
         worldDayDone = true;
         ticksMeasured = 0;
@@ -197,10 +195,12 @@ public final class NobilityWork {
         }
         long start = System.nanoTime();
         long day = day(server);
-        if (day != lastDay) {
-            boolean first = lastDay == Long.MIN_VALUE;
-            lastDay = day;
-            if (!first) {
+        NobilityState state = state(server);
+        long previous = state.lastDay();
+        if (day != previous) {
+            // The saved day also catches up a day that passed while the server was down; a new world just starts counting.
+            state.setLastDay(day);
+            if (previous != Long.MIN_VALUE) {
                 startDay(server, day);
             }
         }
@@ -309,8 +309,11 @@ public final class NobilityWork {
                 LOGGER.error("The nobility could not carry out {}", happening, e);
             }
         }
-        shares(server, kingdomId, day);
-        wages(server, kingdomId, day);
+        if (played) {
+            // Nobody of a kingdom of players was there: no shares and no wages, so that nothing is lost while they are away.
+            shares(server, kingdomId, day);
+            wages(server, kingdomId, day);
+        }
         if (npc) {
             NobilityNpc.day(server, kingdomId, day);
         }
@@ -494,7 +497,12 @@ public final class NobilityWork {
             }
             case RULER_OVERTHROWN -> house.ifPresent(h -> overthrow(server, kingdomId, h, happening.other(), day));
             case REBELS -> rebels(server, kingdomId, happening, house, day);
-            case SECESSION -> house.ifPresent(h -> NobilitySecession.secede(server, kingdomId, h, happening.value(), happening.other(), day));
+            case SECESSION -> house.ifPresent(h -> {
+                if (NobilitySecession.secede(server, kingdomId, h, happening.value(), happening.other(), day).isEmpty()) {
+                    state.secessionFailed(kingdomId, h.id(), NobilitySettings.rules().rebelDays(), day);
+                    tell(server, kingdomId, null, Component.translatable(KEY + "msg.rebels", houseName).withStyle(ChatFormatting.RED));
+                }
+            });
             case SECESSION_WARNING -> tell(server, kingdomId, null, Component.translatable(KEY + "msg.warning", houseName).withStyle(ChatFormatting.RED));
             case HEAD_DIED -> LOGGER.debug("The head of the house {} of {} died", houseName.getString(), WarWork.name(server, kingdomId).getString());
             default -> {

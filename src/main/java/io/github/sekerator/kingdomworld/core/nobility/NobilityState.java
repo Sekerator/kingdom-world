@@ -43,6 +43,8 @@ public final class NobilityState {
     private final Map<Long, Plot> plots = new LinkedHashMap<>();
     private final Map<Long, Spy> spies = new LinkedHashMap<>();
     private long nextId = 1;
+    /** The game day the courts last had their day, to catch up a day that passed while the server was down. */
+    private long lastDay = Long.MIN_VALUE;
     private Runnable listener = () -> {
     };
 
@@ -61,6 +63,17 @@ public final class NobilityState {
 
     public long peekNextId() {
         return nextId;
+    }
+
+    public long lastDay() {
+        return lastDay;
+    }
+
+    public void setLastDay(long day) {
+        if (lastDay != day) {
+            lastDay = day;
+            changed();
+        }
     }
 
     // ---------------------------------------------------------------- reading
@@ -366,9 +379,17 @@ public final class NobilityState {
     }
 
     /**
-     * Takes a title back to the crown. The house is offended, and the others take note.
+     * Takes a title back to the crown. The house is offended, and the others take note; a house the crown raised for a title
+     * goes away with its last title.
      */
     public Optional<Grant> revoke(long grantId, long day) {
+        Optional<Grant> taken = takeBack(grantId, day);
+        taken.filter(grant -> !grant.heldByPlayer()).flatMap(grant -> house(grant.house()))
+                .filter(house -> house.raised() && grantsOf(house).isEmpty()).ifPresent(house -> removeHouse(house.id()));
+        return taken;
+    }
+
+    private Optional<Grant> takeBack(long grantId, long day) {
         Grant grant = grants.remove(grantId);
         if (grant == null) {
             return Optional.empty();
@@ -413,8 +434,12 @@ public final class NobilityState {
                 return Outcome.fail(KingdomError.UNCHANGED);
             }
         }
-        revoke(grantId, day);
-        return grant(grant.kingdomId(), grant.title(), grant.fief(), player == null ? house : 0, player, day);
+        takeBack(grantId, day);
+        Outcome given = grant(grant.kingdomId(), grant.title(), grant.fief(), player == null ? house : 0, player, day);
+        if (!grant.heldByPlayer()) {
+            house(grant.house()).filter(old -> old.raised() && grantsOf(old).isEmpty()).ifPresent(old -> removeHouse(old.id()));
+        }
+        return given;
     }
 
     // ---------------------------------------------------------------- the day of a court
@@ -605,7 +630,7 @@ public final class NobilityState {
         }
         Optional<Grant> city = grantsOf(house).stream().filter(g -> g.fief().kind() == Fief.Kind.CITY).findFirst();
         if (city.isPresent() && court.warned() && court.lowDays() >= rules.secessionDays()) {
-            court.write(new Note(in.day(), "seceded", List.of(Note.house(house), Note.fief(city.get().fief()))));
+            // The chronicle tells of it once the city is gone; if it cannot go, the house turns to rebels (see secessionFailed).
             out.add(new Happening(Happening.Kind.SECESSION, kingdomId, house.id(), plot.id(), plot.sponsor().orElse(null), city.get().fief().city()));
             return;
         }
@@ -743,6 +768,9 @@ public final class NobilityState {
     public void seceded(UUID from, UUID to, long houseId, long city, long day) {
         grants.values().removeIf(grant -> grant.kingdomId().equals(from) && grant.fief().equals(Fief.city(city)));
         NobleHouse house = houses.get(houseId);
+        if (house != null) {
+            court(from).write(new Note(day, "seceded", List.of(Note.house(house), Note.fief(Fief.city(city)))));
+        }
         if (house != null && to != null) {
             grants.values().removeIf(grant -> grant.house() == houseId);
             demands.values().removeIf(demand -> demand.house() == houseId);
@@ -753,6 +781,20 @@ public final class NobilityState {
         }
         court(from).setLow(0, false);
         court(from).modify("secession", -5, day + 5);
+        changed();
+    }
+
+    /**
+     * A city could not leave the kingdom after all: the house keeps part of the income as rebels instead.
+     */
+    public void secessionFailed(UUID kingdomId, long houseId, int rebelDays, long day) {
+        Court court = court(kingdomId);
+        court.rebels(rebelDays, houseId);
+        court.modify("rebels", -5, day + 3);
+        NobleHouse house = houses.get(houseId);
+        if (house != null) {
+            court.write(new Note(day, "rebels", List.of(Note.house(house))));
+        }
         changed();
     }
 
@@ -856,19 +898,33 @@ public final class NobilityState {
                 spies.remove(spy.id());
                 continue;
             }
+            // A kingdom of players nobody played today loses nothing: its missions and the days of its ransoms wait.
+            boolean ownerAway = !world.npc(spy.owner()) && !world.played(spy.owner());
             if (spy.status() == Spy.Status.CAPTURED) {
-                UUID captor = spy.captor().orElseThrow();
-                if (day >= spy.releaseBy() || !world.exists(captor)) {
+                UUID captor = spy.captor().orElse(null);
+                if (captor == null || !world.exists(captor)) {
+                    spy.home(false);
+                    continue;
+                }
+                if (ownerAway) {
+                    spy.delayRelease(1);
+                    continue;
+                }
+                if (day >= spy.releaseBy()) {
                     spies.remove(spy.id());
                     court(spy.owner()).report(new Note(day, "report.executed", List.of(Note.person(spy.seed(), spy.gender()), Note.kingdom(captor))));
                     out.add(new Happening(Happening.Kind.SPY_EXECUTED, spy.owner(), 0, spy.id(), captor, 0));
                 }
                 continue;
             }
-            if (spy.status() != Spy.Status.MISSION) {
+            if (spy.status() != Spy.Status.MISSION || ownerAway) {
                 continue;
             }
-            Spy.Mission mission = spy.mission().orElseThrow();
+            Spy.Mission mission = spy.mission().orElse(null);
+            if (mission == null) {
+                spy.home(false);
+                continue;
+            }
             UUID target = mission.target();
             if (!world.exists(target)) {
                 spy.home(false);

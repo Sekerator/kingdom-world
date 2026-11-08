@@ -50,7 +50,8 @@ public final class NobilitySettings {
                     c.demandValue.get(), c.plotBelow.get(), c.plotChance.get(), c.plotDays.get(), c.secessionWarnDays.get(), c.secessionDays.get(),
                     c.rebelDays.get(), c.rebelPercent.get(), c.spyHire.get(), c.spyWage.get(), c.maxSpies.get(), c.npcMaxSpies.get(),
                     c.theftPercent.get(), c.theftMax.get(), c.ransom.get(), c.ransomDays.get(), d.counterBase(), d.caughtChance(),
-                    c.marriageChance.get(), d.deathChance(), d.grantDealings(), d.grantReputation(), d.highStability(), d.moodLow(), d.moodHigh());
+                    c.marriageChance.get(), d.deathChance(), d.grantDealings(), d.grantReputation(), d.highStability(), d.moodLow(), d.moodHigh(),
+                    c.maxHouses.get());
         } catch (RuntimeException e) {
             // A config that is not loaded yet (or a value out of range) leaves the defaults.
             return d;

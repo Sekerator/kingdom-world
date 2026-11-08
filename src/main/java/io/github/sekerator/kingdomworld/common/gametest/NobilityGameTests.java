@@ -133,6 +133,49 @@ public final class NobilityGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_nobility_rights", timeoutTicks = 100)
+    public static void onlyTheKingMakesPlayersNobleAndRaisesHousesWithinTheLimit(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        UUID king = UUID.randomUUID();
+        UUID chancellor = UUID.randomUUID();
+        UUID subject = UUID.randomUUID();
+        GatheringGameTests.clear(helper.getLevel(), WarGameTests.from(helper), WarGameTests.to(helper));
+        Kingdom home = CitizenGameTests.found(helper, "GameTest Noble Rights", king);
+        WarGameTests.join(server, home, chancellor);
+        WarGameTests.join(server, home, subject);
+        helper.assertTrue(KingdomWorldApi.state(server).membership().setRole(king, chancellor, Role.CHANCELLOR).ok(), "No chancellor");
+        helper.assertTrue(KingdomWorldApi.state(server).membership().hasPermission(chancellor, home.id(), Permission.MANAGE_NOBILITY),
+                "The chancellor does not run the court");
+        helper.assertTrue(NobilityActions.grant(server, chancellor, home.id(), Title.BARON, Fief.march(0), 0, chancellor).error() == KingdomError.NO_PERMISSION,
+                "The chancellor made themself noble");
+        helper.assertTrue(NobilityActions.grant(server, chancellor, home.id(), Title.BARON, Fief.march(0), 0, subject).error() == KingdomError.NO_PERMISSION,
+                "The chancellor made a player noble");
+        helper.assertTrue(NobilityActions.grant(server, chancellor, home.id(), Title.BARON, Fief.march(0), -1, null).error() == KingdomError.NO_PERMISSION,
+                "The chancellor raised a new house");
+        NobilityState state = NobilityWork.state(server);
+        NobleHouse house = state.found(home.id(), 41, day(server));
+        helper.assertTrue(NobilityActions.grant(server, chancellor, home.id(), Title.BARON, Fief.march(0), house.id(), null).ok(),
+                "The chancellor could not grant a title to a house");
+        long first = state.holderOf(home.id(), Fief.march(0)).orElseThrow().id();
+        helper.assertTrue(NobilityActions.transfer(server, chancellor, home.id(), first, 0, chancellor).error() == KingdomError.NO_PERMISSION,
+                "The chancellor handed a title to themself");
+        helper.assertFalse(LawWork.policy().isNoble(home.id(), chancellor), "The chancellor became noble");
+        helper.assertTrue(NobilityActions.grant(server, king, home.id(), Title.BARON, Fief.march(1), 0, subject).ok(), "The king could not make a subject noble");
+        helper.assertTrue(LawWork.policy().isNoble(home.id(), subject), "The baron of the king is not noble");
+        // The king raises houses only within the limit; a raised house goes away with its last title.
+        NobilitySettings.override(NobilityRules.DEFAULT.withMaxHouses(2));
+        helper.assertTrue(NobilityActions.grant(server, king, home.id(), Title.BARON, Fief.march(2), -1, null).ok(), "The king could not raise a house");
+        helper.assertTrue(NobilityActions.grant(server, king, home.id(), Title.BARON, Fief.march(3), -1, null).error() == KingdomError.LIMIT_REACHED,
+                "A house was raised beyond the limit");
+        helper.assertTrue(state.houses(home.id()).size() == 2, "Houses beyond the limit: " + state.houses(home.id()).size());
+        var raised = state.holderOf(home.id(), Fief.march(2)).orElseThrow();
+        helper.assertTrue(NobilityActions.revoke(server, king, home.id(), raised.id()).ok(), "The title was not taken back");
+        helper.assertTrue(state.house(raised.house()).isEmpty(), "The raised house stayed without a title");
+        helper.assertTrue(state.house(house.id()).isPresent(), "A house that was there went away");
+        finish(helper, home, List.of());
+        helper.succeed();
+    }
+
     // ---------------------------------------------------------------- demands
 
     @GameTest(template = EMPTY, batch = "kingdomworld_nobility_demand", timeoutTicks = 100)
@@ -353,6 +396,7 @@ public final class NobilityGameTests {
         WarGameTests.join(server, home, subject);
         NobilityState state = NobilityWork.state(server);
         NobleHouse house = state.found(home.id(), 31, day(server));
+        house.setRaised(true);
         helper.assertTrue(state.grant(home.id(), Title.DUKE, Fief.march(1), house.id(), null, day(server)).ok(), "No duke");
         helper.assertTrue(state.grant(home.id(), Title.BARON, Fief.march(3), 0, subject, day(server)).ok(), "No baron");
         state.adminPlot(house, 2, 5, null, day(server));
@@ -364,6 +408,8 @@ public final class NobilityGameTests {
         NobilityState read = copy.state();
         helper.assertTrue(read.houses(home.id()).size() == 1 && read.house(house.id()).map(NobleHouse::familySeed).orElse(0) == house.familySeed(),
                 "The house was not saved");
+        helper.assertTrue(read.house(house.id()).map(NobleHouse::raised).orElse(false), "The house forgot that the crown raised it");
+        helper.assertTrue(read.lastDay() == state.lastDay(), "The last day of the courts was not saved");
         helper.assertTrue(read.grants(home.id()).size() == 2 && read.isNoble(home.id(), subject), "The titles were not saved");
         helper.assertTrue(read.plotOf(home.id()).map(plot -> plot.progress() == 2).orElse(false), "The plot was not saved");
         helper.assertTrue(read.openDemand(home.id()).isPresent(), "The demand was not saved");

@@ -57,13 +57,28 @@ public final class NobilityActions {
     // ---------------------------------------------------------------- titles
 
     /**
+     * Whether the player acting is the king of the kingdom (operators and rulers of the world act as kings).
+     */
+    static boolean king(MinecraftServer server, @Nullable UUID actor, UUID kingdomId) {
+        return actor == null || KingdomWorldApi.kingdom(server, kingdomId).map(kingdom -> actor.equals(kingdom.rulerId())).orElse(false);
+    }
+
+    /**
      * Grants a title with a free fief of the kingdom to one of its houses, to a new house ({@code house} = -1) or to a player
-     * who is its subject. A player of a kingdom of the world is made noble by its ruler or an operator only.
+     * who is its subject. A title of a player brings a share of the income from the treasury, so only the king grants it, and
+     * only the king raises new houses, as many as the rules allow; a chancellor grants titles to houses that are there. A player
+     * of a kingdom of the world is made noble by its ruler or an operator only.
      */
     public static Outcome grant(MinecraftServer server, @Nullable UUID actor, UUID kingdomId, Title title, Fief fief, long house, @Nullable UUID player) {
         Outcome right = allowed(server, actor, kingdomId, Permission.MANAGE_NOBILITY);
         if (!right.ok()) {
             return right;
+        }
+        if ((player != null || house < 0) && !king(server, actor, kingdomId)) {
+            return Outcome.fail(KingdomError.NO_PERMISSION);
+        }
+        if (house < 0 && NobilityWork.state(server).houses(kingdomId).size() >= NobilitySettings.rules().maxHouses()) {
+            return Outcome.fail(KingdomError.LIMIT_REACHED);
         }
         if (!NobilityWork.fiefs(server, kingdomId).contains(fief)) {
             return Outcome.fail(KingdomError.FIEF_TAKEN);
@@ -90,7 +105,9 @@ public final class NobilityActions {
         }
         long holder = house;
         if (house < 0) {
-            holder = state.found(kingdomId, (long) (NobilityWork.rolls().getAsDouble() * Long.MAX_VALUE) ^ day ^ fief.code().hashCode(), day).id();
+            NobleHouse raised = state.found(kingdomId, (long) (NobilityWork.rolls().getAsDouble() * Long.MAX_VALUE) ^ day ^ fief.code().hashCode(), day);
+            raised.setRaised(true);
+            holder = raised.id();
         }
         Outcome outcome = state.grant(kingdomId, title, fief, holder, null, day);
         if (!outcome.ok() && house < 0) {
@@ -131,6 +148,10 @@ public final class NobilityActions {
         NobilityState state = NobilityWork.state(server);
         if (state.grant(grantId).filter(g -> g.kingdomId().equals(kingdomId)).isEmpty()) {
             return Outcome.fail(KingdomError.NO_SUCH_NOBLE);
+        }
+        if (player != null && !king(server, actor, kingdomId)) {
+            // A title of a player brings money from the treasury: only the king hands one to a player.
+            return Outcome.fail(KingdomError.NO_PERMISSION);
         }
         if (player != null && !WarWork.isNpc(server, kingdomId) && !KingdomWorldApi.state(server).membership().isMember(player, kingdomId)) {
             return Outcome.fail(KingdomError.NOT_A_MEMBER);

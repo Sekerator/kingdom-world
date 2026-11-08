@@ -197,6 +197,15 @@ public final class Spy {
         releaseBy = 0;
     }
 
+    /**
+     * The days of the ransom wait: the owner was not there.
+     */
+    void delayRelease(long days) {
+        if (status == Status.CAPTURED) {
+            releaseBy += days;
+        }
+    }
+
     void capture(UUID by, long price, long until) {
         status = Status.CAPTURED;
         mission = null;

@@ -103,7 +103,7 @@ final class NobilityLayoutCases {
             }
         }
         Component hire = Component.translatable(KEY + "tab.hire_cost", money(), money());
-        return new NobilityViews.TabView(kingdom, manage, spies, npc, empty ? 50 : 3, causes, warning, houses, grants, fiefs, subjects, factions, demand,
+        return new NobilityViews.TabView(kingdom, manage, spies, manage, npc, empty ? 50 : 3, causes, warning, houses, grants, fiefs, subjects, factions, demand,
                 plots, chronicle, spies ? spyRows : List.of(), spies ? reports : List.of(), spies ? targets : List.of(), 80, hire, 16);
     }
 

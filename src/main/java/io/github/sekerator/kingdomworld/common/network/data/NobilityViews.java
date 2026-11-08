@@ -186,12 +186,13 @@ public final class NobilityViews {
      *
      * @param canManage whether the viewer runs the court (titles, demands, verdicts)
      * @param canSpies  whether the viewer runs the spies; the secret service is empty otherwise
+     * @param crown     whether the viewer is the king: only the king raises new houses and makes players noble
      * @param npc       whether a ruler of the world rules the kingdom (the viewer only looks)
      * @param warning   a warning of the crown that a city may leave, empty for none
      * @param counter   the counter-intelligence of the kingdom in percent
      * @param hire      what a spy costs to hire and each day
      */
-    public record TabView(UUID kingdomId, boolean canManage, boolean canSpies, boolean npc, int stability, List<CauseRow> causes, Component warning,
+    public record TabView(UUID kingdomId, boolean canManage, boolean canSpies, boolean crown, boolean npc, int stability, List<CauseRow> causes, Component warning,
                           List<HouseRow> houses, List<GrantRow> grants, List<Choice> fiefs, List<Choice> subjects, List<FactionRow> factions,
                           DemandRow demand, List<PlotRow> plots, List<Component> chronicle, List<SpyRow> spies, List<Component> reports,
                           List<Choice> targets, int counter, Component hire, int maxSpies) {
@@ -214,6 +215,7 @@ public final class NobilityViews {
             buf.writeUUID(kingdomId);
             buf.writeBoolean(canManage);
             buf.writeBoolean(canSpies);
+            buf.writeBoolean(crown);
             buf.writeBoolean(npc);
             buf.writeVarInt(stability);
             writeList(buf, causes, CauseRow::encode);
@@ -235,7 +237,7 @@ public final class NobilityViews {
         }
 
         public static TabView decode(FriendlyByteBuf buf) {
-            return new TabView(buf.readUUID(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean(), buf.readVarInt(), readList(buf, CauseRow::decode),
+            return new TabView(buf.readUUID(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean(), buf.readVarInt(), readList(buf, CauseRow::decode),
                     buf.readComponent(), readList(buf, HouseRow::decode), readList(buf, GrantRow::decode), readList(buf, Choice::decode),
                     readList(buf, Choice::decode), readList(buf, FactionRow::decode), DemandRow.decode(buf), readList(buf, PlotRow::decode),
                     readList(buf, FriendlyByteBuf::readComponent), readList(buf, SpyRow::decode), readList(buf, FriendlyByteBuf::readComponent),

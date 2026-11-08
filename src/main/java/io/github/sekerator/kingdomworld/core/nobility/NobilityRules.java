@@ -33,14 +33,15 @@ package io.github.sekerator.kingdomworld.core.nobility;
  * @param highStability    stability from which citizens are happier
  * @param moodLow          the mood of citizens of a kingdom of low stability changes by this
  * @param moodHigh         the mood of citizens of a kingdom of high stability changes by this
+ * @param maxHouses        noble houses a kingdom may have; the crown raises no more
  */
 public record NobilityRules(int shareBaron, int shareCount, int shareDuke, int demandEveryDays, int demandDueDays, long demandValue,
                             int plotBelow, double plotChance, int plotDays, int secessionWarnDays, int secessionDays, int rebelDays,
                             int rebelPercent, long spyHire, long spyWage, int maxSpies, int npcMaxSpies, int theftPercent, long theftMax,
                             long ransom, int ransomDays, int counterBase, double caughtChance, double marriageChance, double deathChance,
-                            int grantDealings, int grantReputation, int highStability, int moodLow, int moodHigh) {
+                            int grantDealings, int grantReputation, int highStability, int moodLow, int moodHigh, int maxHouses) {
     public static final NobilityRules DEFAULT = new NobilityRules(10, 15, 20, 3, 2, 150, 30, 0.35, 4, 3, 6, 4, 25, 100, 5, 4, 2, 5, 400,
-            150, 3, 15, 0.6, 0.04, 0.004, 40, 60, 70, -10, 5);
+            150, 3, 15, 0.6, 0.04, 0.004, 40, 60, 70, -10, 5, 8);
 
     public NobilityRules {
         shareBaron = clamp(shareBaron, 0, 50);
@@ -73,6 +74,7 @@ public record NobilityRules(int shareBaron, int shareCount, int shareDuke, int d
         highStability = clamp(highStability, plotBelow + 1, 100);
         moodLow = clamp(moodLow, -50, 0);
         moodHigh = clamp(moodHigh, 0, 50);
+        maxHouses = clamp(maxHouses, 1, 32);
     }
 
     private static int clamp(int value, int min, int max) {
@@ -85,7 +87,17 @@ public record NobilityRules(int shareBaron, int shareCount, int shareDuke, int d
     public NobilityRules withCaughtChance(double value) {
         return new NobilityRules(shareBaron, shareCount, shareDuke, demandEveryDays, demandDueDays, demandValue, plotBelow, plotChance, plotDays,
                 secessionWarnDays, secessionDays, rebelDays, rebelPercent, spyHire, spyWage, maxSpies, npcMaxSpies, theftPercent, theftMax, ransom,
-                ransomDays, counterBase, value, marriageChance, deathChance, grantDealings, grantReputation, highStability, moodLow, moodHigh);
+                ransomDays, counterBase, value, marriageChance, deathChance, grantDealings, grantReputation, highStability, moodLow, moodHigh, maxHouses);
+    }
+
+    /**
+     * The same rules with another limit of houses.
+     */
+    public NobilityRules withMaxHouses(int value) {
+        return new NobilityRules(shareBaron, shareCount, shareDuke, demandEveryDays, demandDueDays, demandValue, plotBelow, plotChance, plotDays,
+                secessionWarnDays, secessionDays, rebelDays, rebelPercent, spyHire, spyWage, maxSpies, npcMaxSpies, theftPercent, theftMax, ransom,
+                ransomDays, counterBase, caughtChance, marriageChance, deathChance, grantDealings, grantReputation, highStability, moodLow, moodHigh,
+                value);
     }
 
     /**

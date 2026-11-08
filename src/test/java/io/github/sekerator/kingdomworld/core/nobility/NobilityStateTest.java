@@ -119,6 +119,25 @@ class NobilityStateTest {
     }
 
     @Test
+    void aHouseTheCrownRaisedGoesAwayWithItsLastTitle() {
+        NobleHouse raised = state.found(kingdom, 21, 0);
+        raised.setRaised(true);
+        NobleHouse old = state.found(kingdom, 22, 0);
+        assertTrue(state.grant(kingdom, Title.BARON, Fief.march(0), raised.id(), null, 1).ok());
+        assertTrue(state.grant(kingdom, Title.BARON, Fief.march(1), old.id(), null, 1).ok());
+        state.revoke(state.holderOf(kingdom, Fief.march(0)).orElseThrow().id(), 2);
+        assertTrue(state.house(raised.id()).isEmpty(), "a raised house without titles is gone");
+        state.revoke(state.holderOf(kingdom, Fief.march(1)).orElseThrow().id(), 2);
+        assertTrue(state.house(old.id()).isPresent(), "an old house stays without titles");
+        NobleHouse other = state.found(kingdom, 23, 0);
+        other.setRaised(true);
+        assertTrue(state.grant(kingdom, Title.COUNT, Fief.city(5), other.id(), null, 3).ok());
+        assertTrue(state.transfer(state.holderOf(kingdom, Fief.city(5)).orElseThrow().id(), old.id(), null, 3).ok());
+        assertTrue(state.house(other.id()).isEmpty(), "a raised house that handed over its last title is gone");
+        assertEquals(old.id(), state.holderOf(kingdom, Fief.city(5)).orElseThrow().house());
+    }
+
+    @Test
     void aKingdomOfTheWorldHasItsHousesWithTitlesFromTheStart() {
         List<NobleHouse> made = state.foundCourt(kingdom, 4, 99, List.of(Fief.city(3), Fief.march(0), Fief.march(1)), true, 0);
         assertEquals(4, made.size());
@@ -278,10 +297,22 @@ class NobilityStateTest {
         assertEquals(12, secession.value());
         assertEquals(other, secession.other());
         assertFalse(has(left, Happening.Kind.RULER_OVERTHROWN));
+        assertFalse(state.court(kingdom).chronicle().stream().anyMatch(n -> n.key().equals("seceded")), "no chronicle before the city is gone");
         UUID free = UUID.randomUUID();
         state.seceded(kingdom, free, house.id(), 12, 4);
         assertEquals(free, house.kingdomId());
         assertTrue(state.holderOf(kingdom, Fief.city(12)).isEmpty());
+        assertTrue(state.court(kingdom).chronicle().stream().anyMatch(n -> n.key().equals("seceded")));
+    }
+
+    @Test
+    void aCityThatCannotLeaveTurnsItsHouseToRebels() {
+        NobleHouse house = state.found(kingdom, 30, 0);
+        state.secessionFailed(kingdom, house.id(), RULES.rebelDays(), 5);
+        assertEquals(RULES.rebelDays(), state.court(kingdom).rebelDays());
+        assertEquals(house.id(), state.court(kingdom).rebelHouse());
+        assertTrue(state.court(kingdom).chronicle().stream().anyMatch(n -> n.key().equals("rebels")));
+        assertFalse(state.court(kingdom).chronicle().stream().anyMatch(n -> n.key().equals("seceded")));
     }
 
     @Test
@@ -316,10 +347,11 @@ class NobilityStateTest {
         boolean played = true;
         boolean harsh;
         int counter;
+        UUID gone;
 
         @Override
         public boolean exists(UUID kingdomId) {
-            return true;
+            return !kingdomId.equals(gone);
         }
 
         @Override
@@ -384,6 +416,30 @@ class NobilityStateTest {
         List<Happening> executed = state.spiesDay(20, world, RULES, rolls(0.99, 0.1));
         assertTrue(has(executed, Happening.Kind.SPY_EXECUTED));
         assertTrue(state.spy(spy.id()).isEmpty());
+    }
+
+    @Test
+    void theSpiesOfPlayersAwayWaitAndAPrisonerWithoutACaptorComesHome() {
+        World world = new World();
+        Spy spy = state.hire(kingdom, 3, Gender.MALE, 50, 0);
+        assertTrue(state.send(spy.id(), Spy.Task.THEFT, other, 0, 0).ok());
+        world.played = true;
+        world.counter = 80;
+        state.spiesDay(5, world, RULES, rolls(0.99, 0.1));
+        assertEquals(Spy.Status.CAPTURED, spy.status());
+        long release = spy.releaseBy();
+        // The owner is away: the days of the ransom wait, the spy is not put to death.
+        world.played = false;
+        for (long d = release; d < release + 10; d++) {
+            assertTrue(state.spiesDay(d, world, RULES, always(0.5)).isEmpty());
+        }
+        assertEquals(Spy.Status.CAPTURED, spy.status());
+        assertEquals(release + 10, spy.releaseBy());
+        // The captor is gone: the prisoner comes home instead of stopping the day.
+        world.played = true;
+        world.gone = other;
+        assertTrue(state.spiesDay(release + 20, world, RULES, always(0.5)).isEmpty());
+        assertEquals(Spy.Status.IDLE, spy.status());
     }
 
     @Test

@@ -26,6 +26,8 @@ public final class NobleHouse {
     private int loyalty;
     private int generation;
     private final long founded;
+    /** Whether the crown raised the house for a title; such a house goes away with its last title. */
+    private boolean raised;
 
     public NobleHouse(long id, UUID kingdomId, int familySeed, int headSeed, Gender headGender, RulerCharacter character,
                       RulerCharacter.Trait trait, Faction faction, long wealth, int loyalty, int generation, long founded) {
@@ -117,6 +119,14 @@ public final class NobleHouse {
 
     public long founded() {
         return founded;
+    }
+
+    public boolean raised() {
+        return raised;
+    }
+
+    public void setRaised(boolean value) {
+        raised = value;
     }
 
     /**
