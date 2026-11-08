@@ -170,10 +170,24 @@ final class SiegeConquests {
                     yield pos -> false;
                 }
                 City at = city.get();
+                // The city takes its own area: near it, and nearer to it than to the capital or another city of the loser.
+                List<SiegeWork.Seat> others = new ArrayList<>();
+                for (SiegeWork.Seat seat : SiegeWork.seats(server, conquest.loser())) {
+                    if (seat.city() != at.id() && seat.dimension().equals(at.dimension())) {
+                        others.add(seat);
+                    }
+                }
                 yield pos -> pos.dimension().equals(at.dimension()) && Math.abs(pos.x() - at.x()) <= CityWalls.AREA
-                        && Math.abs(pos.z() - at.z()) <= CityWalls.AREA;
+                        && Math.abs(pos.z() - at.z()) <= CityWalls.AREA && others.stream().noneMatch(other ->
+                        distance(other.x(), other.z(), pos) < distance(at.x(), at.z(), pos));
             }
         };
+    }
+
+    private static long distance(int x, int z, WorldPos pos) {
+        long dx = (long) x - pos.x();
+        long dz = (long) z - pos.z();
+        return dx * dx + dz * dz;
     }
 
     private static void treasury(MinecraftServer server, Conquest conquest) {
