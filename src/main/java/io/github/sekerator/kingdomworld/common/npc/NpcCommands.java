@@ -149,7 +149,8 @@ public final class NpcCommands {
         NpcRulers.Timing rulers = NpcRulers.timing();
         source.sendSuccess(() -> Component.translatable(ADMIN + "rulers_timing", rulers.turns(), rulers.ticks(),
                 String.format(java.util.Locale.ROOT, "%.2f", rulers.averageMillis()), String.format(java.util.Locale.ROOT, "%.2f", rulers.worstMillis()),
-                String.format(java.util.Locale.ROOT, "%.2f", rulers.worstOwnMillis())), false);
+                String.format(java.util.Locale.ROOT, "%.2f", rulers.worstOwnMillis()),
+                String.format(java.util.Locale.ROOT, "%.2f", rulers.worstTurnMillis())), false);
         return (int) timing.ticks();
     }
 
@@ -336,7 +337,8 @@ public final class NpcCommands {
         NpcRulers.Timing timing = NpcRulers.timing();
         source.sendSuccess(() -> Component.translatable(ADMIN + "rulers_timing", timing.turns(), timing.ticks(),
                 String.format(java.util.Locale.ROOT, "%.2f", timing.averageMillis()), String.format(java.util.Locale.ROOT, "%.2f", timing.worstMillis()),
-                String.format(java.util.Locale.ROOT, "%.2f", timing.worstOwnMillis())), false);
+                String.format(java.util.Locale.ROOT, "%.2f", timing.worstOwnMillis()),
+                String.format(java.util.Locale.ROOT, "%.2f", timing.worstTurnMillis())), false);
         return memory.needs().size();
     }
 }

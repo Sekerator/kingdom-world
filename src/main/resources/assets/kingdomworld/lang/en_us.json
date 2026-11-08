@@ -3062,7 +3062,7 @@
   "commands.kingdomworld.admin.npc.decree": "  day %s: %s [%s]",
   "commands.kingdomworld.admin.npc.needs": "%s needs: %s; chronicle entries %s",
   "commands.kingdomworld.admin.npc.relation": "  relation with %s: %s (%s)",
-  "commands.kingdomworld.admin.npc.rulers_timing": "Rulers: %s turn(s), %s tick(s) with work, average %s ms, worst %s ms, worst without the garbage collector %s ms",
+  "commands.kingdomworld.admin.npc.rulers_timing": "Rulers: %s turn(s), %s tick(s) with work, average %s ms, worst %s ms, worst without the garbage collector %s ms, worst tick of a turn %s ms",
   "kingdomworld.ruler.decree.import": "ordered %s from abroad (%s)",
   "kingdomworld.ruler.decree.import.female": "ordered %s from abroad (%s)"
 }

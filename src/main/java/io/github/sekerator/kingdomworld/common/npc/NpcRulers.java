@@ -72,6 +72,10 @@ public final class NpcRulers {
     private static long maxNanos;
     /** The worst tick without the pauses of the garbage collector that fell into it. */
     private static long maxOwnNanos;
+    /** The worst tick in which a ruler looked at its kingdom, decided or answered, without the garbage collector. */
+    private static long maxTurnNanos;
+    /** Whether the work of the tick was a part of a turn (a look, the decisions, answers) rather than carrying one out. */
+    private static boolean turnTick;
     /** What the rulers did in the tick, for the log of slow ticks. */
     private static String doing = "";
     private static String lastPart = "";
@@ -81,7 +85,7 @@ public final class NpcRulers {
     /**
      * How long the ticks were in which rulers worked: turns taken, ticks with work, the average and the worst in milliseconds.
      */
-    public record Timing(long turns, long ticks, double averageMillis, double worstMillis, double worstOwnMillis) {
+    public record Timing(long turns, long ticks, double averageMillis, double worstMillis, double worstOwnMillis, double worstTurnMillis) {
     }
 
     private NpcRulers() {
@@ -101,12 +105,14 @@ public final class NpcRulers {
         sumNanos = 0;
         maxNanos = 0;
         maxOwnNanos = 0;
+        maxTurnNanos = 0;
         RulerPlaces.reset();
         RulerSnapshots.reset();
     }
 
     public static Timing timing() {
-        return new Timing(turns, busyTicks, busyTicks == 0 ? 0 : sumNanos / 1e6 / busyTicks, maxNanos / 1e6, maxOwnNanos / 1e6);
+        return new Timing(turns, busyTicks, busyTicks == 0 ? 0 : sumNanos / 1e6 / busyTicks, maxNanos / 1e6, maxOwnNanos / 1e6,
+                maxTurnNanos / 1e6);
     }
 
     public static void resetTiming() {
@@ -115,6 +121,7 @@ public final class NpcRulers {
         sumNanos = 0;
         maxNanos = 0;
         maxOwnNanos = 0;
+        maxTurnNanos = 0;
     }
 
     /**
@@ -192,6 +199,9 @@ public final class NpcRulers {
             sumNanos += spent;
             maxNanos = Math.max(maxNanos, spent);
             maxOwnNanos = Math.max(maxOwnNanos, Math.max(0, spent - gc));
+            if (turnTick) {
+                maxTurnNanos = Math.max(maxTurnNanos, Math.max(0, spent - gc));
+            }
             if (spent > SLOW_TICK_NANOS) {
                 LOGGER.warn("A tick of the rulers of the world took {} ms ({} ms of it the garbage collector): {}{}",
                         String.format(java.util.Locale.ROOT, "%.1f", spent / 1e6), gc / 1_000_000L, doing,
@@ -200,6 +210,7 @@ public final class NpcRulers {
         }
         doing = "";
         lastPart = "";
+        turnTick = false;
     }
 
     /**
@@ -213,6 +224,7 @@ public final class NpcRulers {
             turning = null;
             state.kingdom(current.kingdomId()).ifPresent(kingdom -> {
                 doing = "the decisions of " + kingdom.name().latin();
+                turnTick = true;
                 RulerSnapshots.finish(server, kingdom, NpcSettings.rulers(), current.view());
                 decide(server, kingdom, current.view(), current.day(), false);
             });
@@ -222,6 +234,7 @@ public final class NpcRulers {
         if (next != null) {
             state.kingdom(next).ifPresent(kingdom -> {
                 doing = "the look of " + kingdom.name().latin();
+                turnTick = true;
                 if (KingdomWorldApi.kingdom(server, kingdom.kingdomId()).isPresent()) {
                     RulerMemory memory = state.ruler(kingdom.kingdomId());
                     countDeals(server, kingdom.kingdomId(), memory);
@@ -571,6 +584,7 @@ public final class NpcRulers {
             }
             any = true;
             doing = doing + " answers of " + kingdom.name().latin();
+            turnTick = true;
             RulerMemory memory = state.ruler(id);
             RulerView view = RulerSnapshots.of(server, kingdom, memory, NpcSettings.rulers(), day);
             LAST_VIEWS.put(id, view);
