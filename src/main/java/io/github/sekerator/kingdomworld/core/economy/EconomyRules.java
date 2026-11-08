@@ -22,7 +22,8 @@ public record EconomyRules(CurrencyUnits units, long defaultPollTax, long maxPol
                            double moodWorkEffect, long confirmAbove, boolean mintToVault) {
     /** The usual daily wages of the professions of the base game. */
     public static final List<String> DEFAULT_WAGES = List.of("unemployed:0", "farmer:6", "lumberjack:6", "miner:8", "fisher:5", "herder:5",
-            "carrier:4", "smelter:6", "cook:6", "crafter:7", "smith:10", "minter:8", "builder:7");
+            "carrier:4", "smelter:6", "cook:6", "crafter:7", "smith:10", "minter:8", "builder:7", "merchant:8", "innkeeper:6", "registrar:7",
+            "mage:12");
     public static final EconomyRules DEFAULT = new EconomyRules(CurrencyUnits.DEFAULT, 10, 1_000, 200, parseWages(DEFAULT_WAGES), 0.2,
             1_000, true);
 
