@@ -55,6 +55,8 @@ final class SiegeConquests {
     static final long OFFER_TICKS = 3L * io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds.TICKS_PER_DAY;
     /** How much a citizen's mood falls when the city changes hands. */
     private static final int MOOD_LOSS = 20;
+    /** When a conquest waiting for room in the treasury of the winner was last told in the log. */
+    private static final java.util.Map<Long, Long> WAITING = new java.util.HashMap<>();
 
     private SiegeConquests() {
     }
@@ -136,8 +138,13 @@ final class SiegeConquests {
             return;
         }
         Predicate<WorldPos> area = area(server, conquest);
+        if (conquest.step() == Conquest.Step.TREASURY && !treasury(server, conquest, now)) {
+            // The money of the loser waits for room in the treasury of the winner; the conquest goes no further until then.
+            return;
+        }
         switch (conquest.step()) {
-            case TREASURY -> treasury(server, conquest);
+            case TREASURY -> {
+            }
             case LAND -> land(server, state, conquest);
             case BUILDINGS -> buildings(server, conquest, area);
             case CITIZENS -> citizens(server, conquest, area);
@@ -190,12 +197,30 @@ final class SiegeConquests {
         return dx * dx + dz * dz;
     }
 
-    private static void treasury(MinecraftServer server, Conquest conquest) {
+    /**
+     * The treasury of the loser goes to the winner at its worth. When the treasury of the winner cannot take it all, what
+     * fits moves and the step waits for room: the loser is not dissolved while money is left in it, so nothing is lost.
+     *
+     * @return whether the treasury of the loser is empty now
+     */
+    private static boolean treasury(MinecraftServer server, Conquest conquest, long now) {
         io.github.sekerator.kingdomworld.core.economy.Economy.Annexed annexed = KingdomWorldApi.state(server).economy()
                 .annex(conquest.winner(), conquest.loser(), WarWork.day(server));
-        SiegeWork.LOGGER.info("Annexation #{}: the treasury of {} ({} of its money) went to {}, worth {} there, reserves {}: {}", conquest.id(),
-                WarWork.name(server, conquest.loser()).getString(), annexed.funds(), WarWork.name(server, conquest.winner()).getString(),
-                annexed.worth(), annexed.reserves(), annexed.outcome().ok() ? "done" : annexed.outcome().error());
+        if (annexed.funds() > 0 || !annexed.reserves().isEmpty()) {
+            SiegeWork.LOGGER.info("Annexation #{}: {} of the money of {} went to {}, worth {} there, reserves {}, {} left", conquest.id(),
+                    annexed.funds(), WarWork.name(server, conquest.loser()).getString(), WarWork.name(server, conquest.winner()).getString(),
+                    annexed.worth(), annexed.reserves(), annexed.left());
+        }
+        if (annexed.left() > 0 && now - WAITING.getOrDefault(conquest.id(), Long.MIN_VALUE / 4) >= 1_200) {
+            WAITING.put(conquest.id(), now);
+            SiegeWork.LOGGER.warn("Annexation #{} waits: the treasury of {} cannot take the {} left of {} ({})", conquest.id(),
+                    WarWork.name(server, conquest.winner()).getString(), annexed.left(), WarWork.name(server, conquest.loser()).getString(),
+                    annexed.outcome().ok() ? "?" : annexed.outcome().error());
+        }
+        if (annexed.left() == 0) {
+            WAITING.remove(conquest.id());
+        }
+        return annexed.left() == 0 || !KingdomWorldApi.kingdom(server, conquest.loser()).isPresent();
     }
 
     private static void land(MinecraftServer server, SiegeState state, Conquest conquest) {

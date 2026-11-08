@@ -198,7 +198,8 @@ public final class SiegeGates {
         Predicate<UUID> enemy = kingdom -> kingdom != null && WarWork.hostileNow(server, kingdom, owner);
         boolean enemyNear = atWar && anyone(server, level, middle, rules.closeRadius(), enemy, true);
         boolean enemyClose = enemyNear && anyone(server, level, middle, rules.openRadius() * 2, enemy, true);
-        boolean friendClose = anyone(server, level, middle, rules.openRadius(), kingdom -> SiegeWork.friends(server, kingdom, owner), false);
+        // Subjects and allies at the gate are looked for only when an enemy is near: in peace the gate stands open anyway.
+        boolean friendClose = enemyNear && anyone(server, level, middle, rules.openRadius(), kingdom -> SiegeWork.friends(server, kingdom, owner), false);
         if (enemyNear) {
             state.enemyNear(owner, now);
         }

@@ -20,6 +20,10 @@ public final class SiegeState {
     public static final int MAX_HOLDS = 1_024;
     /** Most sieges at once. */
     public static final int MAX_SIEGES = 64;
+    /** Most score a side gets for robbed containers in one war. */
+    public static final double MAX_LOOT_SCORE = 12.0;
+    /** Most containers placed by outsiders that are remembered; the oldest go first. */
+    public static final int MAX_PLACED = 4_096;
 
     private final Map<String, Gate> gates = new LinkedHashMap<>();
     private final Map<String, Hold> holds = new LinkedHashMap<>();
@@ -32,6 +36,14 @@ public final class SiegeState {
     private final Map<UUID, Long> enemyNear = new LinkedHashMap<>();
     /** Players of an annexed kingdom and the winner they may swear to, with the time of the offer. */
     private final Map<UUID, Offer> offers = new LinkedHashMap<>();
+    /** Containers placed on the land of a kingdom by players of other kingdoms ("dimension@pos"): no loot of war. */
+    private final Set<String> placed = new LinkedHashSet<>();
+    /** Containers robbed in a war ("war/dimension@pos"). */
+    private final Set<String> robbed = new LinkedHashSet<>();
+    /** Score for robbed containers of a kingdom in a war ("war/kingdom"). */
+    private final Map<String, Double> loot = new LinkedHashMap<>();
+    /** Places whose taking gave score in a war ("war/key of the hold"). */
+    private final Set<String> scored = new LinkedHashSet<>();
     private long nextConquest = 1;
     private Runnable changeListener = () -> {
     };
@@ -209,6 +221,9 @@ public final class SiegeState {
         boolean any = sieges.values().removeIf(siege -> siege.war() == war);
         any |= holds.values().removeIf(hold -> hold.war() == war);
         any |= kingsSeen.removeIf(key -> key.startsWith(war + "/"));
+        any |= robbed.removeIf(key -> key.startsWith(war + "/"));
+        any |= loot.keySet().removeIf(key -> key.startsWith(war + "/"));
+        any |= scored.removeIf(key -> key.startsWith(war + "/"));
         if (any) {
             changed();
         }
@@ -290,6 +305,87 @@ public final class SiegeState {
         enemyNear.remove(kingdom);
         damage.forget(kingdom);
         changed();
+    }
+
+    // ---------------------------------------------------------------- loot and score
+
+    /**
+     * Remembers a container an outsider placed on the land of a kingdom: robbing it is no loot of war.
+     */
+    public void placedByOutsider(String place) {
+        if (placed.add(place)) {
+            while (placed.size() > MAX_PLACED) {
+                placed.remove(placed.iterator().next());
+            }
+            changed();
+        }
+    }
+
+    public boolean placedByOutsider(String dimension, long pos) {
+        return placed.contains(dimension + "@" + pos);
+    }
+
+    /**
+     * Forgets a container that is gone.
+     */
+    public void removedContainer(String dimension, long pos) {
+        if (placed.remove(dimension + "@" + pos)) {
+            changed();
+        }
+    }
+
+    /**
+     * A container robbed in a war: the score it gives, at most what is left of {@link #MAX_LOOT_SCORE} for the side, and
+     * nothing for a container robbed already in this war.
+     */
+    public double rob(long war, UUID kingdom, String dimension, long pos, double points) {
+        if (!robbed.add(war + "/" + dimension + "@" + pos)) {
+            return 0.0;
+        }
+        String key = war + "/" + kingdom;
+        double sofar = loot.getOrDefault(key, 0.0);
+        double given = Math.max(0.0, Math.min(points, MAX_LOOT_SCORE - sofar));
+        loot.put(key, sofar + given);
+        changed();
+        return given;
+    }
+
+    public double lootScore(long war, UUID kingdom) {
+        return loot.getOrDefault(war + "/" + kingdom, 0.0);
+    }
+
+    /**
+     * Whether taking a place gives score now: once for each place in a war.
+     */
+    public boolean scoreOnce(long war, String holdKey) {
+        if (scored.add(war + "/" + holdKey)) {
+            changed();
+            return true;
+        }
+        return false;
+    }
+
+    public Set<String> placedContainers() {
+        return Collections.unmodifiableSet(placed);
+    }
+
+    public Set<String> robbedContainers() {
+        return Collections.unmodifiableSet(robbed);
+    }
+
+    public Map<String, Double> lootScores() {
+        return Collections.unmodifiableMap(loot);
+    }
+
+    public Set<String> scoredHolds() {
+        return Collections.unmodifiableSet(scored);
+    }
+
+    public void restoreLoot(Set<String> placedKeys, Set<String> robbedKeys, Map<String, Double> scores, Set<String> scoredKeys) {
+        placed.addAll(placedKeys);
+        robbed.addAll(robbedKeys);
+        loot.putAll(scores);
+        scored.addAll(scoredKeys);
     }
 
     // ---------------------------------------------------------------- players of annexed kingdoms
@@ -378,6 +474,10 @@ public final class SiegeState {
         kingsSeen.clear();
         enemyNear.clear();
         offers.clear();
+        placed.clear();
+        robbed.clear();
+        loot.clear();
+        scored.clear();
         nextConquest = 1;
     }
 }

@@ -71,21 +71,33 @@ public final class SiegeRepair {
     // ---------------------------------------------------------------- writing down
 
     /**
-     * What a block at a place of a kingdom belongs to: a building of the register (its id), a city wall (0), or nothing.
+     * What a broken block of a kingdom was: a block of the template of a registered building (with the state the template
+     * wants there) or a block a city wall put there; nothing for a block the template does not have, or one of another kind
+     * than the template wants (placed by somebody else), so that the kingdom never pays for putting back what was not its.
+     *
+     * @return the building (0 for a wall) and the state to put back
      */
-    static Optional<Long> registered(MinecraftServer server, UUID kingdom, String dimension, BlockPos pos) {
+    static Optional<Owned> owned(MinecraftServer server, UUID kingdom, String dimension, BlockPos pos, BlockState broken) {
         for (Building building : KingdomWorldApi.state(server).construction().buildingsOf(kingdom)) {
-            if (building.anchor().dimension().equals(dimension) && building.box() != null
-                    && building.box().contains(pos.getX(), pos.getY(), pos.getZ())) {
-                return Optional.of(building.id());
+            if (!building.anchor().dimension().equals(dimension) || building.box() == null
+                    || !building.box().contains(pos.getX(), pos.getY(), pos.getZ())) {
+                continue;
             }
+            Optional<BlockState> wanted = io.github.sekerator.kingdomworld.common.construction.BuildingWork.templateBlockAt(building, pos);
+            if (wanted.isPresent() && !wanted.get().isAir() && wanted.get().getBlock() == broken.getBlock()) {
+                return Optional.of(new Owned(building.id(), wanted.get()));
+            }
+            return Optional.empty();
         }
         for (Wall wall : RoadWork.state(server).walls()) {
             if (wall.kingdomId().equals(kingdom) && wall.dimension().equals(dimension) && wall.placedHere(pos.asLong())) {
-                return Optional.of(0L);
+                return Optional.of(new Owned(0L, broken));
             }
         }
         return Optional.empty();
+    }
+
+    record Owned(long building, BlockState state) {
     }
 
     /**
@@ -98,15 +110,16 @@ public final class SiegeRepair {
             return false;
         }
         String dimension = Dimensions.id(level);
-        Optional<Long> building = registered(server, kingdom, dimension, pos);
-        if (building.isEmpty()) {
+        Optional<Owned> owned = owned(server, kingdom, dimension, pos, state);
+        if (owned.isEmpty()) {
             return false;
         }
-        Item item = state.getBlock().asItem();
+        BlockState wanted = owned.get().state();
+        Item item = wanted.getBlock().asItem();
         String itemId = item == Items.AIR ? "" : BuiltInRegistries.ITEM.getKey(item).toString();
         SiegeState siege = SiegeWork.state(server);
-        boolean added = siege.damage().record(new WarDamage.Entry(war, kingdom, dimension, pos.asLong(), NbtUtils.writeBlockState(state).toString(),
-                itemId, building.get(), KingdomWorldApi.gameTime(server)));
+        boolean added = siege.damage().record(new WarDamage.Entry(war, kingdom, dimension, pos.asLong(), NbtUtils.writeBlockState(wanted).toString(),
+                itemId, owned.get().building(), KingdomWorldApi.gameTime(server)));
         // The enemy is at the city: the builders wait until it has been gone a while.
         siege.enemyNear(kingdom, KingdomWorldApi.gameTime(server));
         siege.changed();

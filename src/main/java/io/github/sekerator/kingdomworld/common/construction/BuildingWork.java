@@ -70,6 +70,24 @@ public final class BuildingWork {
     }
 
     /**
+     * The block the template of a building puts at a place of the world, if the place is one of its blocks: what mending
+     * puts back there, as the repair of buildings does.
+     */
+    public static Optional<BlockState> templateBlockAt(Building building, BlockPos at) {
+        Optional<BuildingTemplate> template = currentTemplate(building);
+        if (template.isEmpty()) {
+            return Optional.empty();
+        }
+        BlockPos local = templatePos(template.get(), ConstructionWork.blockPos(building.anchor()), building.placement(), at);
+        for (BuildingTemplate.Block block : template.get().blocks()) {
+            if (block.pos().equals(local)) {
+                return Optional.of(TemplateBlocks.transform(block.state(), building.placement()));
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
      * The template position that ends up at a position of the world.
      */
     static BlockPos templatePos(BuildingTemplate template, BlockPos anchor, Placement placement, BlockPos at) {

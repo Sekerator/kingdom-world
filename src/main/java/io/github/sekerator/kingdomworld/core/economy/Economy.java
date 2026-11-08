@@ -525,7 +525,7 @@ public final class Economy {
      * What an annexation moved: the money of the loser, what it is worth in the currency of the winner, and the reserves of
      * other currencies that moved as they were.
      */
-    public record Annexed(Outcome outcome, long funds, long worth, Map<UUID, Long> reserves) {
+    public record Annexed(Outcome outcome, long funds, long worth, Map<UUID, Long> reserves, long left) {
     }
 
     /**
@@ -537,15 +537,23 @@ public final class Economy {
         Treasury from = treasuries.get(loser);
         Treasury to = treasuries.get(winner);
         if (from == null || to == null || winner.equals(loser)) {
-            return new Annexed(Outcome.fail(KingdomError.UNKNOWN_CURRENCY), 0, 0, Map.of());
+            return new Annexed(Outcome.fail(KingdomError.UNKNOWN_CURRENCY), 0, 0, Map.of(), 0);
         }
+        // As much as the treasury of the winner can take; the rest stays with the loser until there is room.
         long funds = Math.max(0, from.funds());
         long worth = funds == 0 ? 0 : ExchangeRates.convert(funds, rate(loser), rate(winner), 0);
-        if (worth > 0 && !to.receive(worth, LedgerCategory.WAR, day)) {
-            return new Annexed(Outcome.fail(KingdomError.TOO_MUCH_MONEY), funds, worth, Map.of());
+        while (funds > 0 && !to.canReceive(worth)) {
+            funds /= 2;
+            worth = ExchangeRates.convert(funds, rate(loser), rate(winner), 0);
         }
         if (funds > 0) {
-            from.spend(funds, LedgerCategory.WAR, day);
+            if (!from.spend(funds, LedgerCategory.WAR, day)) {
+                return new Annexed(Outcome.fail(KingdomError.NOT_ENOUGH_MONEY), 0, 0, Map.of(), from.funds());
+            }
+            if (!to.receive(worth, LedgerCategory.WAR, day)) {
+                from.receive(funds, LedgerCategory.WAR, day);
+                return new Annexed(Outcome.fail(KingdomError.TOO_MUCH_MONEY), 0, 0, Map.of(), from.funds());
+            }
         }
         Map<UUID, Long> moved = new LinkedHashMap<>();
         for (Map.Entry<UUID, Long> reserve : new LinkedHashMap<>(from.reserves()).entrySet()) {
@@ -566,7 +574,8 @@ public final class Economy {
             }
         }
         changed();
-        return new Annexed(Outcome.DONE, funds, worth, moved);
+        long left = from.funds();
+        return new Annexed(left == 0 ? Outcome.DONE : Outcome.fail(KingdomError.TOO_MUCH_MONEY), funds, worth, moved, left);
     }
 
     public record Exchanged(Outcome outcome, long got) {

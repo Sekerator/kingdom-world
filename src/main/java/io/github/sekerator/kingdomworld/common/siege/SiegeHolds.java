@@ -323,9 +323,13 @@ final class SiegeHolds {
         double points = DiplomacySettings.rules().scoreHoldDay();
         switch (change) {
             case TAKEN -> {
+                // A place gives score once in a war, however often it is taken, freed and taken again.
+                boolean score = state.scoreOnce(war.id(), hold.key());
                 switch (hold.kind()) {
                     case CHUNK -> {
-                        diplomacy.score(hold.attacker(), hold.defender(), DiplomacyState.Feat.HOLD, points / 2.0);
+                        if (score) {
+                            diplomacy.score(hold.attacker(), hold.defender(), DiplomacyState.Feat.HOLD, points / 2.0);
+                        }
                         WarWork.tell(server, hold.defender(), Component.translatable(SiegeWork.KEY + "chunk_taken_ours",
                                 ChunkKey.x(hold.target()), ChunkKey.z(hold.target())).withStyle(ChatFormatting.RED));
                         WarWork.tell(server, hold.attacker(), Component.translatable(SiegeWork.KEY + "chunk_taken_theirs",
@@ -333,7 +337,9 @@ final class SiegeHolds {
                     }
                     case PLAZA, THRONE -> {
                         boolean throne = hold.kind() == Hold.Kind.THRONE;
-                        diplomacy.score(hold.attacker(), hold.defender(), DiplomacyState.Feat.HOLD, points * (throne ? 3 : 2));
+                        if (score) {
+                            diplomacy.score(hold.attacker(), hold.defender(), DiplomacyState.Feat.HOLD, points * (throne ? 3 : 2));
+                        }
                         String detail = seat == null ? "" : SiegeTexts.cityName(server, hold.defender(), seat.city());
                         diplomacy.record(now, throne ? "throne_taken" : "city_taken", hold.attacker(), hold.defender(), war.id(), detail);
                         Component label = seat == null ? Component.literal("?") : SiegeTexts.cityLabel(server, hold.defender(), seat.city());

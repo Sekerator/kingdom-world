@@ -205,6 +205,87 @@ public final class SiegeGameTests {
         }
     }
 
+    // ---------------------------------------------------------------- loot
+
+    private static void open(ServerLevel level, ServerPlayer player, BlockPos pos) {
+        MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickBlock(player,
+                net.minecraft.world.InteractionHand.MAIN_HAND, pos, new net.minecraft.world.phys.BlockHitResult(
+                net.minecraft.world.phys.Vec3.atCenterOf(pos), net.minecraft.core.Direction.UP, pos, false)));
+    }
+
+    private static void chest(ServerLevel level, BlockPos pos, boolean full) {
+        level.setBlockAndUpdate(pos, Blocks.CHEST.defaultBlockState());
+        if (full && level.getBlockEntity(pos) instanceof net.minecraft.world.level.block.entity.ChestBlockEntity chest) {
+            chest.setItem(0, new ItemStack(Items.BREAD, 3));
+        }
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_siege_loot")
+    public static void robbingGivesScoreOnlyForFullChestsOfTheEnemyOnceAndWithinALimit(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        Kingdom[] both = WarGameTests.kingdoms(helper, "Siege Loot", UUID.randomUUID(), UUID.randomUUID());
+        Kingdom home = both[0];
+        Kingdom enemy = both[1];
+        UUID raiderId = UUID.randomUUID();
+        ServerPlayer raider = WarGameTests.player(helper, raiderId, "kw-looter", 3, 3);
+        WarGameTests.join(server, enemy, raiderId);
+        List<BlockPos> chests = new ArrayList<>();
+        try {
+            War war = WarGameTests.war(helper, enemy, home, WarGoal.CITY);
+            // The raider places chests of his own on the land of the enemy, fills one, and opens them: no score.
+            for (int i = 0; i < 3; i++) {
+                BlockPos own = helper.absolutePos(new BlockPos(i, 1, 5));
+                chests.add(own);
+                chest(level, own, i == 0);
+                MinecraftForge.EVENT_BUS.post(new BlockEvent.EntityPlaceEvent(net.minecraftforge.common.util.BlockSnapshot.create(level.dimension(),
+                        level, own), Blocks.GRASS_BLOCK.defaultBlockState(), raider));
+                open(level, raider, own);
+            }
+            helper.assertTrue(war.score(War.Side.ATTACKER) == 0.0, "Chests the raider placed himself gave score: " + war.score(War.Side.ATTACKER));
+            // An empty chest of the enemy gives nothing, a full one some score, once.
+            BlockPos empty = helper.absolutePos(new BlockPos(0, 1, 4));
+            chests.add(empty);
+            chest(level, empty, false);
+            open(level, raider, empty);
+            helper.assertTrue(war.score(War.Side.ATTACKER) == 0.0, "An empty chest of the enemy gave score");
+            BlockPos full = helper.absolutePos(new BlockPos(1, 1, 4));
+            chests.add(full);
+            chest(level, full, true);
+            open(level, raider, full);
+            double once = war.score(War.Side.ATTACKER);
+            helper.assertTrue(once > 0.0, "A full chest of the enemy gave no score");
+            open(level, raider, full);
+            helper.assertTrue(war.score(War.Side.ATTACKER) == once, "The same chest gave score twice");
+            // The robbed chest is remembered with the war: after saving and loading it gives nothing again.
+            io.github.sekerator.kingdomworld.core.siege.SiegeState copy = new io.github.sekerator.kingdomworld.core.siege.SiegeState();
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.siege.SiegeNbt.read(io.github.sekerator.kingdomworld.common.siege.SiegeNbt.write(
+                    SiegeWork.state(server)), copy).isEmpty(), "The sieges could not be read back");
+            helper.assertTrue(copy.rob(war.id(), enemy.id(), Dimensions.id(level), full.asLong(), 5.0) == 0.0,
+                    "A robbed chest was forgotten in saving");
+            // Many full chests of the enemy give no more than the limit of a war.
+            for (int i = 0; i < 12; i++) {
+                BlockPos more = helper.absolutePos(new BlockPos(2 + i % 4, 1 + i / 4, 0));
+                chests.add(more);
+                chest(level, more, true);
+                open(level, raider, more);
+            }
+            double loot = SiegeWork.state(server).lootScore(war.id(), enemy.id());
+            helper.assertTrue(loot <= io.github.sekerator.kingdomworld.core.siege.SiegeState.MAX_LOOT_SCORE
+                    && war.score(War.Side.ATTACKER) <= io.github.sekerator.kingdomworld.core.siege.SiegeState.MAX_LOOT_SCORE,
+                    "Robbing went beyond the limit of a war: " + loot);
+        } finally {
+            for (BlockPos pos : chests) {
+                if (level.getBlockEntity(pos) instanceof net.minecraft.world.Container container) {
+                    container.clearContent();
+                }
+                level.setBlockAndUpdate(pos, Blocks.AIR.defaultBlockState());
+            }
+            finish(helper, home, List.of(enemy), List.of(raiderId), List.of());
+        }
+        helper.succeed();
+    }
+
     // ---------------------------------------------------------------- gates
 
     @GameTest(template = EMPTY, batch = "kingdomworld_siege_gate", timeoutTicks = 200)

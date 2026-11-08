@@ -148,10 +148,30 @@ final class SiegeNpc {
         if (!block && KingdomStorage.count(server, kingdom, stack -> stack.is(Items.IRON_INGOT)) < RAM_IRON) {
             return false;
         }
-        int iron = block ? KingdomStorage.take(server, kingdom, stack -> stack.is(Items.IRON_BLOCK), 1, at).stream().mapToInt(ItemStack::getCount).sum()
-                : KingdomStorage.take(server, kingdom, stack -> stack.is(Items.IRON_INGOT), RAM_IRON, at).stream().mapToInt(ItemStack::getCount).sum();
-        int logs = KingdomStorage.take(server, kingdom, stack -> stack.is(ItemTags.LOGS), RAM_LOGS, at).stream().mapToInt(ItemStack::getCount).sum();
-        return iron > 0 && logs >= RAM_LOGS;
+        // Both are counted before anything is taken; whatever was taken goes back if the other part is not there after all.
+        List<ItemStack> logs = KingdomStorage.take(server, kingdom, stack -> stack.is(ItemTags.LOGS), RAM_LOGS, at);
+        if (logs.stream().mapToInt(ItemStack::getCount).sum() < RAM_LOGS) {
+            giveBack(server, kingdom, logs, at);
+            return false;
+        }
+        List<ItemStack> iron = block ? KingdomStorage.take(server, kingdom, stack -> stack.is(Items.IRON_BLOCK), 1, at)
+                : KingdomStorage.take(server, kingdom, stack -> stack.is(Items.IRON_INGOT), RAM_IRON, at);
+        if (iron.stream().mapToInt(ItemStack::getCount).sum() < (block ? 1 : RAM_IRON)) {
+            giveBack(server, kingdom, logs, at);
+            giveBack(server, kingdom, iron, at);
+            return false;
+        }
+        return true;
+    }
+
+    private static void giveBack(MinecraftServer server, UUID kingdom, List<ItemStack> stacks, WorldPos at) {
+        for (ItemStack stack : stacks) {
+            ItemStack rest = KingdomStorage.insert(server, kingdom, stack, at);
+            if (!rest.isEmpty()) {
+                SiegeWork.LOGGER.warn("Ruler of {} could not put back {} x {} after a ram was not built", WarWork.name(server, kingdom).getString(),
+                        rest.getCount(), KingdomStorage.itemId(rest));
+            }
+        }
     }
 
     /**

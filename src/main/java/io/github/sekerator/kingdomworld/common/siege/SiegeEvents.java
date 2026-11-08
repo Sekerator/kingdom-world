@@ -35,9 +35,7 @@ import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.server.ServerLifecycleHooks;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.HashSet;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -47,8 +45,6 @@ import java.util.UUID;
  * the mending; enemies cannot open the leaves of a closed gate; a ram breaks gates and walls faster.
  */
 public final class SiegeEvents {
-    /** Containers already robbed in a war, so that opening the same chest again gives no more score. */
-    private static final Set<String> ROBBED = new HashSet<>();
     private static int ticks;
 
     /**
@@ -74,6 +70,7 @@ public final class SiegeEvents {
         MinecraftForge.EVENT_BUS.addListener(SiegeEvents::onLoggedIn);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGHEST, SiegeEvents::onBreakFirst);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, BlockEvent.BreakEvent.class, SiegeEvents::onBroken);
+        MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, BlockEvent.EntityPlaceEvent.class, SiegeEvents::onPlaced);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGHEST, SiegeEvents::onRightClickBlock);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, PlayerInteractEvent.RightClickBlock.class, SiegeEvents::onOpened);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOW, SiegeEvents::onExplosion);
@@ -110,7 +107,6 @@ public final class SiegeEvents {
     }
 
     private static void onServerStopped(ServerStoppedEvent event) {
-        ROBBED.clear();
         ticks = 0;
         SiegeWork.reset();
         SiegeRepair.reset();
@@ -158,6 +154,7 @@ public final class SiegeEvents {
             return;
         }
         MinecraftServer server = level.getServer();
+        SiegeWork.state(server).removedContainer(io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level), event.getPos().asLong());
         UUID owner = owner(level, event.getPos());
         if (!byWar(server, event.getPlayer(), owner)) {
             return;
@@ -183,26 +180,73 @@ public final class SiegeEvents {
     }
 
     /**
-     * A container of the enemy opened on its open land: loot of war, worth some score once per container and war.
+     * A container placed on the land of a kingdom by a player of another kingdom is remembered: robbing it in war is no loot.
      */
-    private static void onOpened(PlayerInteractEvent.RightClickBlock event) {
-        if (!(event.getLevel() instanceof ServerLevel level) || event.getUseBlock() == Event.Result.DENY) {
+    private static void onPlaced(BlockEvent.EntityPlaceEvent event) {
+        if (!(event.getLevel() instanceof ServerLevel level) || !(event.getEntity() instanceof Player player) || SiegeWork.isReadOnly(level.getServer())) {
             return;
         }
         MinecraftServer server = level.getServer();
-        BlockEntity blockEntity = level.getBlockEntity(event.getPos());
-        if (blockEntity == null || !blockEntity.getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.ITEM_HANDLER).isPresent()) {
+        BlockPos pos = event.getPos();
+        UUID owner = owner(level, pos);
+        if (owner == null || owner.equals(SiegeWork.kingdomOf(server, player)) || !container(level, pos)) {
             return;
         }
-        UUID owner = owner(level, event.getPos());
+        SiegeWork.state(server).placedByOutsider(io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level) + "@" + pos.asLong());
+    }
+
+    private static boolean container(Level level, BlockPos pos) {
+        BlockEntity blockEntity = level.getBlockEntity(pos);
+        return blockEntity != null && blockEntity.getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.ITEM_HANDLER).isPresent();
+    }
+
+    /**
+     * Whether a container holds anything to take.
+     */
+    private static boolean holdsAnything(Level level, BlockPos pos) {
+        BlockEntity blockEntity = level.getBlockEntity(pos);
+        if (blockEntity == null) {
+            return false;
+        }
+        return blockEntity.getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.ITEM_HANDLER).map(handler -> {
+            for (int slot = 0; slot < handler.getSlots(); slot++) {
+                if (!handler.getStackInSlot(slot).isEmpty()) {
+                    return true;
+                }
+            }
+            return false;
+        }).orElse(false);
+    }
+
+    /**
+     * A container of the enemy opened on its open land: loot of war, worth some score once per container and war, only for a
+     * container of the enemy (not one an outsider placed there) that holds something, and no more than
+     * {@link io.github.sekerator.kingdomworld.core.siege.SiegeState#MAX_LOOT_SCORE} for a side in a war.
+     */
+    private static void onOpened(PlayerInteractEvent.RightClickBlock event) {
+        if (!(event.getLevel() instanceof ServerLevel level) || event.getUseBlock() == Event.Result.DENY || SiegeWork.isReadOnly(level.getServer())) {
+            return;
+        }
+        MinecraftServer server = level.getServer();
+        BlockPos pos = event.getPos();
+        if (!container(level, pos)) {
+            return;
+        }
+        UUID owner = owner(level, pos);
         if (!byWar(server, event.getEntity(), owner)) {
+            return;
+        }
+        String dimension = io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level);
+        io.github.sekerator.kingdomworld.core.siege.SiegeState state = SiegeWork.state(server);
+        if (state.placedByOutsider(dimension, pos.asLong()) || !holdsAnything(level, pos)) {
             return;
         }
         UUID own = SiegeWork.kingdomOf(server, event.getEntity());
         DiplomacyState diplomacy = WarWork.state(server);
         long war = diplomacy.warBetween(own, owner).map(w -> w.id()).orElse(0L);
-        if (ROBBED.add(war + "@" + io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level) + "@" + event.getPos().asLong())) {
-            diplomacy.score(own, owner, DiplomacyState.Feat.HOLD, DiplomacySettings.rules().scoreCaravan() / 3.0);
+        double points = state.rob(war, own, dimension, pos.asLong(), DiplomacySettings.rules().scoreCaravan() / 3.0);
+        if (points > 0) {
+            diplomacy.score(own, owner, DiplomacyState.Feat.HOLD, points);
             event.getEntity().displayClientMessage(Component.translatable(SiegeWork.KEY + "loot").withStyle(ChatFormatting.GOLD), true);
         }
     }

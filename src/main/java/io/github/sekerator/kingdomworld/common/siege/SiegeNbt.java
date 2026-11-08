@@ -130,7 +130,30 @@ public final class SiegeNbt {
             offers.add(o);
         }
         tag.put("offers", offers);
+        tag.put("placed", strings(state.placedContainers()));
+        tag.put("robbed", strings(state.robbedContainers()));
+        CompoundTag loot = new CompoundTag();
+        state.lootScores().forEach(loot::putDouble);
+        tag.put("loot", loot);
+        tag.put("scored", strings(state.scoredHolds()));
         return tag;
+    }
+
+    private static ListTag strings(java.util.Collection<String> values) {
+        ListTag list = new ListTag();
+        for (String value : values) {
+            list.add(StringTag.valueOf(value));
+        }
+        return list;
+    }
+
+    private static java.util.Set<String> strings(CompoundTag tag, String key) {
+        java.util.Set<String> result = new java.util.LinkedHashSet<>();
+        ListTag list = tag.getList(key, Tag.TAG_STRING);
+        for (int i = 0; i < list.size(); i++) {
+            result.add(list.getString(i));
+        }
+        return result;
     }
 
     /**
@@ -219,6 +242,12 @@ public final class SiegeNbt {
                 problems.add("enemy near " + i + ": " + e.getMessage());
             }
         }
+        java.util.Map<String, Double> loot = new java.util.LinkedHashMap<>();
+        CompoundTag lootTag = tag.getCompound("loot");
+        for (String key : lootTag.getAllKeys()) {
+            loot.put(key, lootTag.getDouble(key));
+        }
+        state.restoreLoot(strings(tag, "placed"), strings(tag, "robbed"), loot, strings(tag, "scored"));
         ListTag offers = tag.getList("offers", Tag.TAG_COMPOUND);
         for (int i = 0; i < offers.size(); i++) {
             CompoundTag o = offers.getCompound(i);
