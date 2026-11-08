@@ -80,7 +80,7 @@ public final class NpcWork {
         return kingdomId == null ? Optional.empty() : Optional.ofNullable(NAMES.get(kingdomId));
     }
 
-    static void remember(NpcKingdom kingdom) {
+    public static void remember(NpcKingdom kingdom) {
         NAMES.put(kingdom.kingdomId(), kingdom.name());
         kingdom.towns().forEach(town -> TOWNS.put(town.latin(), town));
     }

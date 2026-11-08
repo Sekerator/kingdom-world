@@ -77,6 +77,13 @@ public final class LawPolicy {
     }
 
     /**
+     * Whether a player is a noble of a kingdom.
+     */
+    public boolean isNoble(UUID kingdomId, UUID player) {
+        return kingdomId != null && player != null && nobility.isNoble(kingdomId, player);
+    }
+
+    /**
      * Whether the deed is a crime in the kingdom.
      */
     public boolean isCrime(UUID kingdomId, Offender offender, CrimeKind kind) {

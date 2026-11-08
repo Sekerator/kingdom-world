@@ -39,7 +39,13 @@ public final class Relations {
         /** Peace was made. */
         PEACE(15),
         /** A vassal was let go in peace. */
-        RELEASED(10);
+        RELEASED(10),
+        /** A spy of theirs was caught here. */
+        SPY_CAUGHT(-25),
+        /** They backed a plot against our crown. */
+        PLOT_BACKED(-35),
+        /** Houses of the two kingdoms married. */
+        MARRIAGE(15);
 
         private final int weight;
 

@@ -41,6 +41,10 @@ public enum Permission {
     MANAGE_DIPLOMACY,
     /** Declare war on another kingdom. The king holds it unless he gives it to a position. */
     DECLARE_WAR,
+    /** Grant, take back and hand over titles, answer the parties at court and judge plotters. */
+    MANAGE_NOBILITY,
+    /** Hire spies, send them abroad, set them to hunt foreign spies and pay their ransoms. */
+    MANAGE_SPIES,
     /** Appoint members to positions and change the rights of positions. Only the king holds it. */
     APPOINT;
 

@@ -98,6 +98,7 @@ public final class CitizenSimulation {
         int interval = rules.simulationInterval();
         long now = KingdomWorldApi.gameTime(server);
         int recentDeaths = citizens.registry().deathsSince(kingdomId, now - CitizenNeeds.RECENT_DEATH_DAYS * CitizenNeeds.TICKS_PER_DAY);
+        int unrest = io.github.sekerator.kingdomworld.common.nobility.NobilityWork.moodShift(server, kingdomId);
         int infirmaryRoom = citizens.sites().count(kingdomId, SiteKinds.INFIRMARY) * rules.infirmaryCapacity();
         int treated = 0;
         float hunger = CitizenNeeds.hunger(rules.dailyNutrition(), interval);
@@ -134,7 +135,7 @@ public final class CitizenSimulation {
             int comfort = io.github.sekerator.kingdomworld.common.construction.BuildingEffects.comfort(server, kingdomId, citizen.home());
             int target = CitizenNeeds.targetMood(new CitizenNeeds.MoodInputs(citizen.food(), citizen.home() != null,
                     citizen.state() == CitizenState.WOUNDED, recentDeaths, citizen.payPercent(), comfort,
-                    io.github.sekerator.kingdomworld.common.life.LifeWork.mood(server, citizen)));
+                    io.github.sekerator.kingdomworld.common.life.LifeWork.mood(server, citizen), unrest));
             citizen.setMood(CitizenNeeds.nextMood(citizen.mood(), target));
             if (body == null) {
                 // An ill citizen gets less done.

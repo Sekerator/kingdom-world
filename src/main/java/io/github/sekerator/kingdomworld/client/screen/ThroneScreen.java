@@ -55,7 +55,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             Permission.INTERACT, Permission.RECRUIT, Permission.TERRITORY, Permission.MANAGE_CITIZENS, Permission.MANAGE_PRODUCTION,
             Permission.MANAGE_TREASURY, Permission.MANAGE_MARKET, Permission.MANAGE_TRADE, Permission.MANAGE_GUILD,
             Permission.MANAGE_CONSTRUCTION, Permission.MANAGE_ARMY, Permission.MANAGE_MAGIC, Permission.MANAGE_LAW,
-            Permission.MANAGE_DIPLOMACY, Permission.DECLARE_WAR);
+            Permission.MANAGE_DIPLOMACY, Permission.DECLARE_WAR, Permission.MANAGE_NOBILITY, Permission.MANAGE_SPIES);
 
     private enum Tab {
         OVERVIEW("kingdomworld.screen.throne.tab.overview"),

@@ -50,7 +50,8 @@ public final class LawEntry {
             return 0;
         }
         LawState state = LawWork.state(server);
-        boolean member = KingdomWorldApi.state(server).membership().isMember(player.getUUID(), city.kingdomId());
+        boolean member = KingdomWorldApi.state(server).membership().isMember(player.getUUID(), city.kingdomId())
+                || LawWork.policy().isNoble(city.kingdomId(), player.getUUID());
         return EntryRules.fee(state.law(city.kingdomId()), member, state.reputation(city.kingdomId(), player.getUUID()), LawSettings.rules());
     }
 

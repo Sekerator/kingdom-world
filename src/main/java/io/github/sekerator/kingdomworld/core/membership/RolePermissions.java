@@ -31,8 +31,8 @@ public final class RolePermissions {
         table.grant(Role.TREASURER, Permission.BUILD, Permission.CONTAINERS, Permission.INTERACT, Permission.MANAGE_TREASURY,
                 Permission.MANAGE_MARKET, Permission.MANAGE_TRADE);
         table.grant(Role.CHANCELLOR, Permission.BUILD, Permission.CONTAINERS, Permission.INTERACT, Permission.RECRUIT, Permission.MANAGE_TRADE,
-                Permission.MANAGE_LAW, Permission.MANAGE_DIPLOMACY);
-        table.grant(Role.SPYMASTER, Permission.BUILD, Permission.CONTAINERS, Permission.INTERACT);
+                Permission.MANAGE_LAW, Permission.MANAGE_DIPLOMACY, Permission.MANAGE_NOBILITY);
+        table.grant(Role.SPYMASTER, Permission.BUILD, Permission.CONTAINERS, Permission.INTERACT, Permission.MANAGE_SPIES);
         table.grant(Role.COURT_MAGE, Permission.BUILD, Permission.CONTAINERS, Permission.INTERACT, Permission.MANAGE_MAGIC);
         table.grant(Role.STEWARD, Permission.BUILD, Permission.CONTAINERS, Permission.INTERACT, Permission.TERRITORY,
                 Permission.MANAGE_CITIZENS, Permission.MANAGE_PRODUCTION, Permission.MANAGE_MARKET, Permission.MANAGE_CONSTRUCTION);

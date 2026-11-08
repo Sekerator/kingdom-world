@@ -175,6 +175,7 @@ public final class KingdomWorldConfig {
         /** Relations, treaties, wars and peace between kingdoms. */
         public final War war;
         public final Siege siege;
+        public final Nobility nobility;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -478,6 +479,7 @@ public final class KingdomWorldConfig {
             life = new Life(builder);
             war = new War(builder);
             siege = new Siege(builder);
+            nobility = new Nobility(builder);
 
             builder.comment("Abstract simulation of kingdoms far from players.").push("simulation");
             simulationIntervalTicks = builder
@@ -1658,6 +1660,68 @@ public final class KingdomWorldConfig {
                     .define("npcWarsOnPlayers", d.npcWarsOnPlayers());
             npcPlayerWarDays = builder.comment("Game days between two wars of rulers of the world on one kingdom of players.")
                     .defineInRange("npcPlayerWarDays", d.npcPlayerWarDays(), 1, 365);
+            builder.pop();
+        }
+    }
+
+    public static final class Nobility {
+        public final ForgeConfigSpec.IntValue shareBaron;
+        public final ForgeConfigSpec.IntValue shareCount;
+        public final ForgeConfigSpec.IntValue shareDuke;
+        public final ForgeConfigSpec.IntValue demandEveryDays;
+        public final ForgeConfigSpec.IntValue demandDueDays;
+        public final ForgeConfigSpec.IntValue demandValue;
+        public final ForgeConfigSpec.IntValue plotBelow;
+        public final ForgeConfigSpec.DoubleValue plotChance;
+        public final ForgeConfigSpec.IntValue plotDays;
+        public final ForgeConfigSpec.IntValue secessionWarnDays;
+        public final ForgeConfigSpec.IntValue secessionDays;
+        public final ForgeConfigSpec.IntValue rebelDays;
+        public final ForgeConfigSpec.IntValue rebelPercent;
+        public final ForgeConfigSpec.IntValue spyHire;
+        public final ForgeConfigSpec.IntValue spyWage;
+        public final ForgeConfigSpec.IntValue maxSpies;
+        public final ForgeConfigSpec.IntValue npcMaxSpies;
+        public final ForgeConfigSpec.IntValue theftPercent;
+        public final ForgeConfigSpec.IntValue theftMax;
+        public final ForgeConfigSpec.IntValue ransom;
+        public final ForgeConfigSpec.IntValue ransomDays;
+        public final ForgeConfigSpec.DoubleValue marriageChance;
+
+        Nobility(ForgeConfigSpec.Builder builder) {
+            io.github.sekerator.kingdomworld.core.nobility.NobilityRules d = io.github.sekerator.kingdomworld.core.nobility.NobilityRules.DEFAULT;
+            builder.comment("The nobility, the parties at court, plots and spies. A \"played day\" is a game day on which a player of the",
+                    "kingdom was online; demands, plots and rebels of a kingdom of players move only on such days.").push("nobility");
+            shareBaron = builder.comment("Percent of the income of its fief a baron gets each day.").defineInRange("shareBaron", d.shareBaron(), 0, 50);
+            shareCount = builder.comment("Percent of the income of its fief a count gets each day.").defineInRange("shareCount", d.shareCount(), 0, 50);
+            shareDuke = builder.comment("Percent of the income of its fief a duke gets each day.").defineInRange("shareDuke", d.shareDuke(), 0, 50);
+            demandEveryDays = builder.comment("Played days between two demands of the parties of a court, at least.")
+                    .defineInRange("demandEveryDays", d.demandEveryDays(), 1, 60);
+            demandDueDays = builder.comment("Played days a demand waits for an answer; then it counts as a mild refusal.")
+                    .defineInRange("demandDueDays", d.demandDueDays(), 1, 30);
+            demandValue = builder.comment("What works a party asks for cost the treasury, and twice the gift of a bargain.")
+                    .defineInRange("demandValue", (int) d.demandValue(), 1, 1_000_000);
+            plotBelow = builder.comment("Stability below which discontented houses may plot.").defineInRange("plotBelow", d.plotBelow(), 0, 100);
+            plotChance = builder.comment("Chance a discontented house starts a plot on a played day of low stability.")
+                    .defineInRange("plotChance", d.plotChance(), 0.0, 1.0);
+            plotDays = builder.comment("Played days a plot takes to ripen.").defineInRange("plotDays", d.plotDays(), 1, 60);
+            secessionWarnDays = builder.comment("Played days of low stability after which a king of players is warned that a city may leave.")
+                    .defineInRange("secessionWarnDays", d.secessionWarnDays(), 1, 120);
+            secessionDays = builder.comment("Played days of low stability after which a ripe plot takes the city of its house out of a",
+                    "kingdom of players (after the warning). Before that a ripe plot only keeps part of the income for a while.")
+                    .defineInRange("secessionDays", d.secessionDays(), 2, 240);
+            rebelDays = builder.comment("Played days rebels keep part of the income after a plot.").defineInRange("rebelDays", d.rebelDays(), 1, 60);
+            rebelPercent = builder.comment("Percent of the income of a played day the rebels keep.").defineInRange("rebelPercent", d.rebelPercent(), 0, 90);
+            spyHire = builder.comment("What hiring a spy costs the treasury.").defineInRange("spyHire", (int) d.spyHire(), 0, 1_000_000);
+            spyWage = builder.comment("What a spy costs the treasury each game day.").defineInRange("spyWage", (int) d.spyWage(), 0, 1_000_000);
+            maxSpies = builder.comment("Spies a kingdom of players may keep.").defineInRange("maxSpies", d.maxSpies(), 0, 16);
+            npcMaxSpies = builder.comment("Spies a ruler of the world keeps at most.").defineInRange("npcMaxSpies", d.npcMaxSpies(), 0, 8);
+            theftPercent = builder.comment("Percent of a foreign treasury a spy takes into ours.").defineInRange("theftPercent", d.theftPercent(), 0, 50);
+            theftMax = builder.comment("Most money a spy takes at once.").defineInRange("theftMax", (int) d.theftMax(), 0, 1_000_000_000);
+            ransom = builder.comment("The ransom of a caught spy.").defineInRange("ransom", (int) d.ransom(), 0, 1_000_000);
+            ransomDays = builder.comment("Game days a caught spy is held before being put to death.").defineInRange("ransomDays", d.ransomDays(), 1, 30);
+            marriageChance = builder.comment("Chance of a marriage of houses of two kingdoms on good terms on a game day.")
+                    .defineInRange("marriageChance", d.marriageChance(), 0.0, 1.0);
             builder.pop();
         }
     }
