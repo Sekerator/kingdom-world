@@ -3727,5 +3727,11 @@
   "kingdomworld.screen.nobility.recipient": "To: %s",
   "kingdomworld.screen.nobility.no_recipient": "Nobody to hand a title to",
   "kingdomworld.nobility.tab.done.transfer": "Title handed over.",
-  "commands.kingdomworld.admin.nobility.hired": "Kingdoms of the world hired %s spy(ies)"
+  "commands.kingdomworld.admin.nobility.hired": "Kingdoms of the world hired %s spy(ies)",
+  "kingdomworld.screen.throne.tab.overview.short": "Main",
+  "kingdomworld.screen.throne.tab.members.short": "Court",
+  "kingdomworld.screen.throne.tab.storage.short": "Stores",
+  "kingdomworld.screen.throne.tab.trade.short": "Trade",
+  "kingdomworld.screen.throne.tab.construction.short": "Build",
+  "kingdomworld.screen.throne.tab.diplomacy.short": "Envoys"
 }

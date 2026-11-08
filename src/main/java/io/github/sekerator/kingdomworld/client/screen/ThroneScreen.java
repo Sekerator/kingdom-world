@@ -51,6 +51,8 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     static final int BOTTOM_AREA = 26 + 4 + STATUS_LINES * LINE;
     private static final int MIN_NAME_COLUMN = 64;
     private static final int GAP = 2;
+    /** The gap between narrow tabs, which have to fit in two rows on the smallest screens. */
+    private static final int TAB_GAP = 1;
     private static final List<Permission> EDITABLE_RIGHTS = List.of(Permission.BUILD, Permission.CONTAINERS,
             Permission.INTERACT, Permission.RECRUIT, Permission.TERRITORY, Permission.MANAGE_CITIZENS, Permission.MANAGE_PRODUCTION,
             Permission.MANAGE_TREASURY, Permission.MANAGE_MARKET, Permission.MANAGE_TRADE, Permission.MANAGE_GUILD,
@@ -86,6 +88,13 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         }
 
         private final String key;
+
+        /**
+         * Whether the tab has a short label for the smallest screens, where even narrow tabs do not fit two rows.
+         */
+        boolean hasShort() {
+            return this == OVERVIEW || this == MEMBERS || this == STORAGE || this == TRADE || this == CONSTRUCTION || this == DIPLOMACY;
+        }
 
         Tab(String key) {
             this.key = key;
@@ -128,9 +137,11 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private int rightsCellWidth;
     /** Whether the tabs are drawn narrower, because the row of usual ones does not fit the screen. */
     private boolean compactTabs;
-    /** The tab each row of tabs starts with; a second row when even narrow tabs do not fit one. */
-    private int secondRowStart = Integer.MAX_VALUE;
-    /** How much lower the content starts because of a second row of tabs. */
+    /** Whether the longest tabs show their short labels, because even narrow tabs do not fit two rows. */
+    private boolean shortTabs;
+    /** The tabs further rows of tabs start with, when even narrow tabs do not fit one row. */
+    private final List<Integer> rowStarts = new ArrayList<>();
+    /** How much lower the content starts because of further rows of tabs. */
     private int contentOffset;
     /** The first column of rights shown, when not all of them fit. */
     private int rightsColumn;
@@ -866,26 +877,52 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
 
     private List<Component> tabLabels() {
         List<Component> labels = new ArrayList<>();
-        labels.add(Component.translatable(Tab.OVERVIEW.key));
+        labels.add(tabLabel(Tab.OVERVIEW));
         if (isMember()) {
-            labels.add(Component.translatable(Tab.MEMBERS.key));
-            labels.add(Component.translatable(Tab.CITIZENS.key));
-            labels.add(Component.translatable(Tab.STORAGE.key));
-            labels.add(Component.translatable(Tab.ORDERS.key));
-            labels.add(Component.translatable(Tab.TREASURY.key));
-            labels.add(Component.translatable(Tab.MARKET.key));
-            labels.add(Component.translatable(Tab.TRADE.key));
-            labels.add(Component.translatable(Tab.GUILD.key));
-            labels.add(Component.translatable(Tab.CONSTRUCTION.key));
-            labels.add(Component.translatable(Tab.ARMY.key));
-            labels.add(Component.translatable(Tab.MAGIC.key));
-            labels.add(Component.translatable(Tab.ROADS.key));
-            labels.add(Component.translatable(Tab.LAW.key));
-            labels.add(Component.translatable(Tab.DIPLOMACY.key));
-            labels.add(Component.translatable(Tab.NOBILITY.key));
-            labels.add(Component.translatable(Tab.RIGHTS.key));
+            for (Tab value : List.of(Tab.MEMBERS, Tab.CITIZENS, Tab.STORAGE, Tab.ORDERS, Tab.TREASURY, Tab.MARKET, Tab.TRADE, Tab.GUILD,
+                    Tab.CONSTRUCTION, Tab.ARMY, Tab.MAGIC, Tab.ROADS, Tab.LAW, Tab.DIPLOMACY, Tab.NOBILITY, Tab.RIGHTS)) {
+                labels.add(tabLabel(value));
+            }
         }
         return labels;
+    }
+
+    /**
+     * Lays the tabs out in rows for the width of the screen: usual tabs in one row, narrow ones if they do not fit, and further
+     * rows if even narrow tabs do not fit one.
+     *
+     * @return the width the rows of tabs take
+     */
+    private int arrangeTabs() {
+        int tabs = 0;
+        int compact = 0;
+        List<Component> labels = tabLabels();
+        for (Component label : labels) {
+            tabs += buttonWidth(label) + GAP;
+            compact += compactTabWidth(label) + TAB_GAP;
+        }
+        compactTabs = tabs + 2 * PAD > width - 8;
+        rowStarts.clear();
+        if (compactTabs) {
+            tabs = compact;
+            if (compact + 2 * PAD > width - 8) {
+                // Even narrow tabs do not fit one row: the rest go to further rows.
+                int room = width - 8 - 2 * PAD;
+                int used = 0;
+                int widest = 0;
+                for (int i = 0; i < labels.size(); i++) {
+                    int next = compactTabWidth(labels.get(i)) + TAB_GAP;
+                    if (used + next > room && used > 0) {
+                        rowStarts.add(i);
+                        widest = Math.max(widest, used);
+                        used = 0;
+                    }
+                    used += next;
+                }
+                tabs = Math.max(widest, used);
+            }
+        }
+        return tabs;
     }
 
     private void measure() {
@@ -909,35 +946,14 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             rightsCellWidth = Math.max(rightsCellWidth, font.width(shortName(permission)) + 6);
         }
 
-        int tabs = 0;
-        int compact = 0;
-        List<Component> labels = tabLabels();
-        for (Component label : labels) {
-            tabs += buttonWidth(label) + GAP;
-            compact += compactTabWidth(label) + GAP;
+        shortTabs = false;
+        int tabs = arrangeTabs();
+        if (rowStarts.size() > 1) {
+            // Even narrow tabs need a third row: the longest show their short labels.
+            shortTabs = true;
+            tabs = arrangeTabs();
         }
-        compactTabs = tabs + 2 * PAD > width - 8;
-        secondRowStart = Integer.MAX_VALUE;
-        if (compactTabs) {
-            tabs = compact;
-            if (compact + 2 * PAD > width - 8) {
-                // Even narrow tabs do not fit one row: the rest go to a second row.
-                int room = width - 8 - 2 * PAD;
-                int used = 0;
-                int widest = 0;
-                for (int i = 0; i < labels.size(); i++) {
-                    int next = compactTabWidth(labels.get(i)) + GAP;
-                    if (used + next > room && secondRowStart == Integer.MAX_VALUE) {
-                        secondRowStart = i;
-                        widest = used;
-                        used = 0;
-                    }
-                    used += next;
-                }
-                tabs = Math.max(widest, used);
-            }
-        }
-        contentOffset = secondRowStart == Integer.MAX_VALUE ? 0 : TAB_HEIGHT + 1;
+        contentOffset = rowStarts.size() * (TAB_HEIGHT + 1);
         int members = MIN_NAME_COLUMN + 12 + roleWidth + kickWidth + crownWidth + 2 * GAP;
         int applications = MIN_NAME_COLUMN + 12 + approveWidth + rejectWidth + GAP;
         arrowWidth = buttonWidth(Component.literal("<"), Component.literal(">"));
@@ -993,7 +1009,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
                     Tab.CONSTRUCTION, Tab.ARMY, Tab.MAGIC, Tab.ROADS, Tab.LAW, Tab.DIPLOMACY, Tab.NOBILITY, Tab.RIGHTS));
         }
         for (int i = 0; i < shown.size(); i++) {
-            if (i == secondRowStart) {
+            if (rowStarts.contains(i)) {
                 x = left + PAD;
                 y += TAB_HEIGHT + 1;
             }
@@ -1027,8 +1043,15 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     /**
      * A tab just wide enough for its text, for screens where the usual tabs do not fit in one row.
      */
+    /**
+     * The label of a tab: its short form on the smallest screens.
+     */
+    private Component tabLabel(Tab target) {
+        return shortTabs && target.hasShort() ? Component.translatable(target.key + ".short") : Component.translatable(target.key);
+    }
+
     private int compactTabWidth(Component label) {
-        return font.width(label) + LayoutCheck.BUTTON_TEXT_MARGIN + 2;
+        return font.width(label) + LayoutCheck.BUTTON_TEXT_MARGIN;
     }
 
     private int tabWidth(Component label) {
@@ -1036,12 +1059,15 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     }
 
     private int tabButton(Tab target, int x, int y) {
-        Component label = Component.translatable(target.key);
+        Component label = tabLabel(target);
         int buttonWidth = tabWidth(label);
         Button button = addRenderableWidget(Button.builder(label, b -> openTab(target))
                 .bounds(x, y, buttonWidth, TAB_HEIGHT).build());
         button.active = tab != target;
-        return x + buttonWidth + GAP;
+        if (shortTabs && target.hasShort()) {
+            button.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable(target.key)));
+        }
+        return x + buttonWidth + (compactTabs ? TAB_GAP : GAP);
     }
 
     private void initOverview(int left, int top) {

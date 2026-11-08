@@ -3622,7 +3622,7 @@
   "kingdomworld.screen.nobility.mode": "%s",
   "kingdomworld.screen.nobility.mode.houses": "Дома",
   "kingdomworld.screen.nobility.mode.titles": "Титулы",
-  "kingdomworld.screen.nobility.mode.court": "Двор",
+  "kingdomworld.screen.nobility.mode.court": "Фракции",
   "kingdomworld.screen.nobility.mode.chronicle": "Летопись",
   "kingdomworld.screen.nobility.mode.spies": "Шпионы",
   "kingdomworld.screen.nobility.mode.reports": "Донесения",
@@ -3727,5 +3727,11 @@
   "kingdomworld.screen.nobility.recipient": "Кому: %s",
   "kingdomworld.screen.nobility.no_recipient": "Некому передать титул",
   "kingdomworld.nobility.tab.done.transfer": "Титул передан.",
-  "commands.kingdomworld.admin.nobility.hired": "Королевства мира наняли шпионов: %s"
+  "commands.kingdomworld.admin.nobility.hired": "Королевства мира наняли шпионов: %s",
+  "kingdomworld.screen.throne.tab.overview.short": "Обзор",
+  "kingdomworld.screen.throne.tab.members.short": "Двор",
+  "kingdomworld.screen.throne.tab.storage.short": "Склад",
+  "kingdomworld.screen.throne.tab.trade.short": "Торг",
+  "kingdomworld.screen.throne.tab.construction.short": "Стройка",
+  "kingdomworld.screen.throne.tab.diplomacy.short": "Послы"
 }
