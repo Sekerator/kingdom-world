@@ -35,7 +35,9 @@ public class MarshalBatonItem extends Item {
     public enum Mode {
         HOLD,
         PATROL,
-        GUARD;
+        GUARD,
+        SIEGE,
+        DEFEND;
 
         public String id() {
             return name().toLowerCase(Locale.ROOT);

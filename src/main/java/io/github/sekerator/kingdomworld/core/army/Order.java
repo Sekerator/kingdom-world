@@ -40,7 +40,11 @@ public record Order(Kind kind, List<WorldPos> points, int radius, UUID player, l
         /** Follow a player: the king, the marshal or a subject they chose. */
         FOLLOW,
         /** Go with the caravans of a deal. */
-        ESCORT;
+        ESCORT,
+        /** Besiege a city of the enemy: break its gates and hold its square. */
+        SIEGE,
+        /** Defend a city of one's own: its gates, walls and square. */
+        DEFEND;
 
         public String id() {
             return name().toLowerCase(Locale.ROOT);
@@ -66,6 +70,7 @@ public record Order(Kind kind, List<WorldPos> points, int radius, UUID player, l
             case GUARD -> points.size() == 1 && radius >= 0 && radius <= MAX_RADIUS;
             case FOLLOW -> player != null && points.isEmpty();
             case ESCORT -> deal > 0 && points.isEmpty();
+            case SIEGE, DEFEND -> points.size() == 1;
         };
         if (!valid) {
             throw new IllegalArgumentException("Order out of range: " + kind);
@@ -99,6 +104,20 @@ public record Order(Kind kind, List<WorldPos> points, int radius, UUID player, l
 
     public static Order escort(long deal) {
         return new Order(Kind.ESCORT, List.of(), 0, null, deal);
+    }
+
+    /**
+     * Besieges the city standing at a point.
+     */
+    public static Order siege(WorldPos city) {
+        return new Order(Kind.SIEGE, List.of(city), 0, null, 0);
+    }
+
+    /**
+     * Defends the city standing at a point.
+     */
+    public static Order defend(WorldPos city) {
+        return new Order(Kind.DEFEND, List.of(city), 0, null, 0);
     }
 
     /**

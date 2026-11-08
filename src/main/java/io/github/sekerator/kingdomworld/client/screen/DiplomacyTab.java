@@ -36,6 +36,7 @@ final class DiplomacyTab {
         KINGDOMS,
         OFFERS,
         WARS,
+        WORLD,
         CHRONICLE;
 
         String id() {
@@ -124,7 +125,7 @@ final class DiplomacyTab {
         int offers = 160 + 2 * answerWidth + GAP;
         int wars = 3 * peaceWidth + 2 * GAP;
         int messages = 0;
-        for (String key : List.of("loading", "no_kingdoms", "no_offers", "no_wars", "no_chronicle")) {
+        for (String key : List.of("loading", "no_kingdoms", "no_offers", "no_wars", "no_world", "no_chronicle")) {
             messages = Math.max(messages, Math.min(320, font.width(Component.translatable(KEY + key))));
         }
         return Math.max(Math.max(modeWidth + GAP + backWidth + 60, list), Math.max(Math.max(actions, offers), Math.max(wars, messages)));
@@ -161,6 +162,7 @@ final class DiplomacyTab {
             case KINGDOMS -> view.kingdoms().size();
             case OFFERS -> view.offers().size() + view.calls().size();
             case WARS -> view.wars().size();
+            case WORLD -> view.world().size();
             case CHRONICLE -> view.chronicle().size();
         };
     }
@@ -207,7 +209,7 @@ final class DiplomacyTab {
             case KINGDOMS -> initKingdoms(right, top, rows);
             case OFFERS -> initOffers(right, top, rows);
             case WARS -> initWars(x, right, top, rows);
-            case CHRONICLE -> {
+            case WORLD, CHRONICLE -> {
             }
         }
     }
@@ -363,7 +365,8 @@ final class DiplomacyTab {
             case KINGDOMS -> renderKingdoms(graphics, font, x, right, top, rows);
             case OFFERS -> renderOffers(graphics, font, x, right, top, rows);
             case WARS -> renderWars(graphics, font, x, right, top, rows);
-            case CHRONICLE -> renderChronicle(graphics, x, right, top, rows);
+            case WORLD -> renderLines(graphics, x, right, top, rows, view.world(), "no_world");
+            case CHRONICLE -> renderLines(graphics, x, right, top, rows, view.chronicle(), "no_chronicle");
         }
         int count = itemCount();
         if (count > rows) {
@@ -513,13 +516,15 @@ final class DiplomacyTab {
         }
     }
 
-    private void renderChronicle(GuiGraphics graphics, int x, int right, int top, int rows) {
-        if (view.chronicle().isEmpty()) {
-            screen.name(graphics, Component.translatable(KEY + "no_chronicle").getString(), x, listTop(top) + 5, 0xFFB8B8B8, right - x);
+    private void renderLines(GuiGraphics graphics, int x, int right, int top, int rows, java.util.List<Component> lines, String empty) {
+        if (lines.isEmpty()) {
+            screen.name(graphics, Component.translatable(KEY + empty).getString(), x, listTop(top) + 5, 0xFFB8B8B8, right - x);
             return;
         }
-        for (int i = 0; i < rows && scroll + i < view.chronicle().size(); i++) {
-            screen.name(graphics, view.chronicle().get(scroll + i).getString(), x, listTop(top) + i * ROW + 4, 0xFFE8E8E8, right - x);
+        for (int i = 0; i < rows && scroll + i < lines.size(); i++) {
+            Component line = lines.get(scroll + i);
+            int color = line.getStyle().getColor() != null ? 0xFF000000 | line.getStyle().getColor().getValue() : 0xFFE8E8E8;
+            screen.name(graphics, line.getString(), x, listTop(top) + i * ROW + 4, color, right - x);
         }
     }
 

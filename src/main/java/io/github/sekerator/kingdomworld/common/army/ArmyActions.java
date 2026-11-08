@@ -586,7 +586,15 @@ public final class ArmyActions {
             case HOLD -> Order.hold(point);
             case PATROL -> squad.get().order().withPatrolPoint(point);
             case GUARD -> Order.guard(point, 1);
+            case SIEGE -> io.github.sekerator.kingdomworld.common.siege.SiegeCommands.enemyCityNear(server, squad.get().kingdomId(), point)
+                    .map(Order::siege).orElse(null);
+            case DEFEND -> io.github.sekerator.kingdomworld.common.siege.SiegeWork.seatNear(server, squad.get().kingdomId(), point, 160)
+                    .map(seat -> Order.defend(new WorldPos(seat.dimension(), seat.x(), seat.y(), seat.z()))).orElse(null);
         };
+        if (order == null) {
+            player.displayClientMessage(Component.translatable(KEY + "baton.no_city_near").withStyle(ChatFormatting.RED), true);
+            return;
+        }
         Outcome outcome = ArmyWork.order(server, player.getUUID(), squadId, order);
         player.displayClientMessage(outcome.ok() ? Component.translatable(KEY + "baton.ordered", ArmyTexts.squadName(squad.get()),
                 orderText(server, order)).withStyle(ChatFormatting.GREEN) : KingdomActions.errorMessage(outcome.error()).copy()

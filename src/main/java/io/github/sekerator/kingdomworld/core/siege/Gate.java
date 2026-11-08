@@ -8,6 +8,11 @@ import java.util.UUID;
  * strength is gone is breached until the builders hang new leaves.
  */
 public final class Gate {
+    /** Leaf blocks of a gate: three wide, two high. */
+    public static final int LEAVES = 6;
+    /** Every leaf block in place. */
+    public static final int ALL_LEAVES = (1 << LEAVES) - 1;
+
     private final long wallId;
     private final int cell;
     private final UUID kingdomId;
@@ -15,6 +20,7 @@ public final class Gate {
     private double strength;
     private boolean hung;
     private boolean closed;
+    private int leaves;
 
     public Gate(long wallId, int cell, UUID kingdomId, GateMaterial material, double strength, boolean hung, boolean closed) {
         this.wallId = wallId;
@@ -24,6 +30,7 @@ public final class Gate {
         this.strength = Math.max(0, strength);
         this.hung = hung;
         this.closed = closed && hung;
+        this.leaves = hung ? ALL_LEAVES : 0;
     }
 
     public static String key(long wallId, int cell) {
@@ -63,6 +70,21 @@ public final class Gate {
     }
 
     /**
+     * Which leaf blocks are in place, one bit each; a portcullis that is raised keeps here the bars it lowers again.
+     */
+    public int leaves() {
+        return leaves;
+    }
+
+    public void setLeaves(int value) {
+        leaves = value & ALL_LEAVES;
+    }
+
+    public int leafCount() {
+        return Integer.bitCount(leaves);
+    }
+
+    /**
      * Whether the leaves are gone (never hung, or broken).
      */
     public boolean breached() {
@@ -93,6 +115,7 @@ public final class Gate {
         material = Objects.requireNonNull(value, "material");
         strength = rules.strength(value);
         hung = true;
+        leaves = ALL_LEAVES;
     }
 
     /**
@@ -108,6 +131,7 @@ public final class Gate {
         if (strength <= 0) {
             hung = false;
             closed = false;
+            leaves = 0;
             return true;
         }
         return false;
@@ -134,6 +158,7 @@ public final class Gate {
         hung = false;
         closed = false;
         strength = 0;
+        leaves = 0;
     }
 
     /**

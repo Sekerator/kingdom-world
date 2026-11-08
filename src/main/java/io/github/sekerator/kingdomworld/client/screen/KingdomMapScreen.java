@@ -891,6 +891,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         if (dimension == null) {
             return;
         }
+        drawWarSpots(graphics, dimension);
         for (io.github.sekerator.kingdomworld.common.network.data.DiplomacyViews.MapMark mark
                 : io.github.sekerator.kingdomworld.client.network.ClientDiplomacyHandlers.marks().marks()) {
             if (!mark.dimension().equals(dimension)) {
@@ -936,6 +937,49 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             Component bond = Component.translatable("kingdomworld.war.bond." + mark.bond().id());
             hoverText(x - 5, y - 5, 23, Component.translatable(mark.shielded() ? "kingdomworld.screen.map.diplomacy_shielded"
                     : "kingdomworld.screen.map.diplomacy", mark.name(), bond, mark.relation()));
+        }
+    }
+
+    /**
+     * The war in the world: chunks occupied by an enemy are hatched (red when the enemy holds ours, green when we hold
+     * theirs), a besieged city wears a ring of flames with the share of its gate broken, a taken city a banner. Hovering
+     * tells how far the hold has gone.
+     */
+    private void drawWarSpots(GuiGraphics graphics, String dimension) {
+        for (io.github.sekerator.kingdomworld.common.network.data.DiplomacyViews.WarSpot spot
+                : io.github.sekerator.kingdomworld.client.network.ClientDiplomacyHandlers.marks().spots()) {
+            if (!spot.dimension().equals(dimension)) {
+                continue;
+            }
+            int color = spot.ours() ? 0xFFE04040 : 0xFF40C060;
+            if ("occupied".equals(spot.kind())) {
+                int x0 = screenX(spot.chunkX());
+                int x1 = screenX(spot.chunkX() + 1);
+                int y0 = screenZ(spot.chunkZ());
+                int y1 = screenZ(spot.chunkZ() + 1);
+                if (x1 < mapLeft() || x0 > mapRight() || y1 < mapTop() || y0 > mapBottom()) {
+                    continue;
+                }
+                for (int i = 0; i < Math.max(1, x1 - x0); i += 3) {
+                    mapFill(graphics, x0 + i, y0, Math.min(x1, x0 + i + 1), y1, 0x88000000 | (color & 0xFFFFFF));
+                }
+                hoverText(x0, y0, Math.max(4, x1 - x0), spot.label());
+                continue;
+            }
+            int x = screenX(spot.chunkX() + 0.5);
+            int y = screenZ(spot.chunkZ() + 0.5) - 12;
+            if (x - 6 < mapLeft() || x + 6 > mapRight() || y - 6 < mapTop() || y + 8 > mapBottom()) {
+                continue;
+            }
+            if ("siege".equals(spot.kind())) {
+                graphics.renderOutline(x - 6, y - 6, 13, 13, 0xFF2B1D0E);
+                graphics.renderOutline(x - 5, y - 5, 11, 11, 0xFFFF8020);
+                graphics.fill(x - 4, y + 4, x - 4 + Math.max(1, spot.percent() * 9 / 100), y + 5, 0xFFFF4020);
+            } else {
+                graphics.fill(x - 1, y - 6, x, y + 6, 0xFF6B4A2B);
+                graphics.fill(x, y - 6, x + 6, y - 1, color);
+            }
+            hoverText(x - 6, y - 6, 13, spot.label());
         }
     }
 

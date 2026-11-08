@@ -98,6 +98,7 @@ public final class KingdomCommand {
                 .then(CitizenCommands.playerCommand())
                 .then(CompanionCommands.playerCommand())
                 .then(LawCommands.playerCommand())
+                .then(io.github.sekerator.kingdomworld.common.siege.SiegeCommands.playerCommand())
                 .then(Commands.literal("join")
                         .then(Commands.argument("name", StringArgumentType.greedyString()).suggests(KINGDOM_NAMES)
                                 .executes(context -> join(context.getSource(), StringArgumentType.getString(context, "name")))))

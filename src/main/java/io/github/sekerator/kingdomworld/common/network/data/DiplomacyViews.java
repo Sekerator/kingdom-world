@@ -198,16 +198,18 @@ public final class DiplomacyViews {
      * @param canManage   whether the viewer may make and answer offers and break treaties
      * @param canDeclare  whether the viewer may declare war
      * @param shielded    whether the viewer's kingdom is shielded now
+     * @param world       the war in the world: what is occupied and besieged, what is broken and what mending it takes
      * @param chronicle   the latest entries of the chronicle of wars and treaties of the kingdom
      */
     public record TabView(UUID kingdomId, boolean canManage, boolean canDeclare, boolean shielded, List<KingdomRow> kingdoms,
-                          List<OfferRow> offers, List<CallRow> calls, List<WarRow> wars, List<Component> chronicle) {
+                          List<OfferRow> offers, List<CallRow> calls, List<WarRow> wars, List<Component> world, List<Component> chronicle) {
         public TabView {
             Objects.requireNonNull(kingdomId, "kingdomId");
             kingdoms = List.copyOf(kingdoms);
             offers = List.copyOf(offers);
             calls = List.copyOf(calls);
             wars = List.copyOf(wars);
+            world = List.copyOf(world.size() > MAX_CHRONICLE ? world.subList(0, MAX_CHRONICLE) : world);
             chronicle = List.copyOf(chronicle.size() > MAX_CHRONICLE ? chronicle.subList(0, MAX_CHRONICLE) : chronicle);
         }
 
@@ -220,13 +222,14 @@ public final class DiplomacyViews {
             writeList(buf, offers, OfferRow::encode);
             writeList(buf, calls, CallRow::encode);
             writeList(buf, wars, WarRow::encode);
+            writeList(buf, world, (line, out) -> out.writeComponent(line));
             writeList(buf, chronicle, (line, out) -> out.writeComponent(line));
         }
 
         public static TabView decode(FriendlyByteBuf buf) {
             return new TabView(buf.readUUID(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean(), readList(buf, KingdomRow::decode),
                     readList(buf, OfferRow::decode), readList(buf, CallRow::decode), readList(buf, WarRow::decode),
-                    readList(buf, FriendlyByteBuf::readComponent));
+                    readList(buf, FriendlyByteBuf::readComponent), readList(buf, FriendlyByteBuf::readComponent));
         }
     }
 
@@ -265,19 +268,55 @@ public final class DiplomacyViews {
     /**
      * The marks of the atlas for one player; empty for a player without a kingdom.
      */
-    public record MapView(List<MapMark> marks) {
-        public static final MapView EMPTY = new MapView(List.of());
+    public record MapView(List<MapMark> marks, List<WarSpot> spots) {
+        public static final MapView EMPTY = new MapView(List.of(), List.of());
 
         public MapView {
             marks = List.copyOf(marks);
+            spots = List.copyOf(spots.size() > MAX_SPOTS ? spots.subList(0, MAX_SPOTS) : spots);
         }
 
         public void encode(FriendlyByteBuf buf) {
             writeList(buf, marks, MapMark::encode);
+            writeList(buf, spots, WarSpot::encode);
         }
 
         public static MapView decode(FriendlyByteBuf buf) {
-            return new MapView(readList(buf, MapMark::decode));
+            return new MapView(readList(buf, MapMark::decode), readList(buf, WarSpot::decode));
+        }
+    }
+
+    /** Most places of war in the world one atlas shows. */
+    public static final int MAX_SPOTS = 256;
+
+    /**
+     * A place of war in the world on the atlas: a chunk occupied by an enemy, or a city besieged or taken.
+     *
+     * @param kind    "occupied", "siege" or "taken"
+     * @param ours    whether the place belongs to the viewer's kingdom (the enemy holds it), else the viewer's side holds it
+     * @param percent how far the hold or the breaking of the gate has gone, 0 to 100
+     * @param label   the hover text
+     */
+    public record WarSpot(String kind, String dimension, int chunkX, int chunkZ, boolean ours, int percent, Component label) {
+        public WarSpot {
+            Objects.requireNonNull(kind, "kind");
+            Objects.requireNonNull(dimension, "dimension");
+            Objects.requireNonNull(label, "label");
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(kind, 16);
+            buf.writeUtf(dimension, 256);
+            buf.writeVarInt(chunkX);
+            buf.writeVarInt(chunkZ);
+            buf.writeBoolean(ours);
+            buf.writeVarInt(percent);
+            buf.writeComponent(label);
+        }
+
+        public static WarSpot decode(FriendlyByteBuf buf) {
+            return new WarSpot(buf.readUtf(16), buf.readUtf(256), buf.readVarInt(), buf.readVarInt(), buf.readBoolean(), buf.readVarInt(),
+                    buf.readComponent());
         }
     }
 }

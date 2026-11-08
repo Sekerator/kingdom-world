@@ -216,7 +216,7 @@ final class RoadNbt {
         return road;
     }
 
-    private static CompoundTag writeWall(io.github.sekerator.kingdomworld.core.road.Wall wall) {
+    static CompoundTag writeWall(io.github.sekerator.kingdomworld.core.road.Wall wall) {
         CompoundTag entry = new CompoundTag();
         entry.putLong("id", wall.id());
         entry.putLong("city", wall.cityId());
@@ -256,7 +256,7 @@ final class RoadNbt {
         return entry;
     }
 
-    private static io.github.sekerator.kingdomworld.core.road.Wall readWall(CompoundTag entry) {
+    static io.github.sekerator.kingdomworld.core.road.Wall readWall(CompoundTag entry) {
         int[] packed = entry.getIntArray("cells");
         if (packed.length % 3 != 0) {
             throw new IllegalArgumentException("blocks of a wall are damaged");

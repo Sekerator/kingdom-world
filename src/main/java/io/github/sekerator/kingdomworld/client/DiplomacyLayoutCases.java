@@ -91,7 +91,7 @@ final class DiplomacyLayoutCases {
                 chronicle.add(Component.translatable("kingdomworld.war.chronicle.raid", 99_999, name(i), name(i + 1), TradeTexts.items(999_999)));
             }
         }
-        return new DiplomacyViews.TabView(kingdom, canManage, canManage, shielded, kingdoms, offers, calls, wars, chronicle);
+        return new DiplomacyViews.TabView(kingdom, canManage, canManage, shielded, kingdoms, offers, calls, wars, chronicle, chronicle);
     }
 
     private static ThroneScreen diplomacyTab(Function<Role, KingdomView> member, Role role, boolean canManage, boolean empty, boolean shielded,
@@ -133,6 +133,13 @@ final class DiplomacyLayoutCases {
         List<DiplomacyViews.MapMark> marks = new ArrayList<>();
         marks.add(new DiplomacyViews.MapMark(first, Component.literal(LONG_KINGDOM), "kingdomworld:layout_check", 0, 0, Bond.WAR, -100, true));
         marks.add(new DiplomacyViews.MapMark(second, name(1), "kingdomworld:layout_check", 112, 16, Bond.ALLIANCE, 100, false));
-        ClientDiplomacyHandlers.setMarksForCheck(new DiplomacyViews.MapView(marks));
+        List<DiplomacyViews.WarSpot> spots = new ArrayList<>();
+        spots.add(new DiplomacyViews.WarSpot("siege", "kingdomworld:layout_check", 7, 1, true, 40,
+                Component.translatable("kingdomworld.siege.map.siege", Component.literal(LONG_KINGDOM), 40, 60)));
+        spots.add(new DiplomacyViews.WarSpot("taken", "kingdomworld:layout_check", 3, 4, false, 100,
+                Component.translatable("kingdomworld.siege.map.taken", Component.literal(LONG_KINGDOM))));
+        spots.add(new DiplomacyViews.WarSpot("occupied", "kingdomworld:layout_check", 2, 2, true, 100,
+                Component.translatable("kingdomworld.siege.map.occupied_ours", Component.literal(LONG_KINGDOM))));
+        ClientDiplomacyHandlers.setMarksForCheck(new DiplomacyViews.MapView(marks, spots));
     }
 }

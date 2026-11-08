@@ -268,7 +268,8 @@ public final class ProtectionEvents {
         if (territory.claimsIn(dimension).isEmpty()) {
             return;
         }
-        event.getAffectedBlocks().removeIf(pos -> isClaimed(territory, dimension, pos));
+        event.getAffectedBlocks().removeIf(pos -> isClaimed(territory, dimension, pos)
+                && !io.github.sekerator.kingdomworld.common.siege.SiegeEvents.explosionBreaks(level, event.getExplosion(), pos));
         event.getAffectedEntities().removeIf(entity -> (entity instanceof HangingEntity || entity instanceof ArmorStand)
                 && isClaimed(territory, dimension, entity.blockPosition()));
     }

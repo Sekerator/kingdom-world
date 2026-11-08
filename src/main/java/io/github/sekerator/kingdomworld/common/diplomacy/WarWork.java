@@ -288,14 +288,14 @@ public final class WarWork {
 
     // ---------------------------------------------------------------- texts
 
-    static Component name(MinecraftServer server, UUID kingdomId) {
+    public static Component name(MinecraftServer server, UUID kingdomId) {
         return KingdomWorldApi.kingdom(server, kingdomId).<Component>map(KingdomActions::kingdomName).orElseGet(() -> Component.literal("?"));
     }
 
     /**
      * Tells the members of a kingdom who run its diplomacy (or everybody, for war) something.
      */
-    static void tell(MinecraftServer server, UUID kingdomId, Component message) {
+    public static void tell(MinecraftServer server, UUID kingdomId, Component message) {
         KingdomWorldApi.kingdom(server, kingdomId).ifPresent(kingdom -> KingdomActions.notifyMembers(server, kingdom, null, message));
     }
 
@@ -537,7 +537,8 @@ public final class WarWork {
      */
     public static Optional<UUID> onLandOf(MinecraftServer server, ArmySquad squad) {
         Order order = squad.order();
-        if (order.kind() != Order.Kind.HOLD && order.kind() != Order.Kind.GUARD && order.kind() != Order.Kind.PATROL) {
+        if (order.kind() != Order.Kind.HOLD && order.kind() != Order.Kind.GUARD && order.kind() != Order.Kind.PATROL
+                && order.kind() != Order.Kind.SIEGE && order.kind() != Order.Kind.DEFEND) {
             return Optional.empty();
         }
         Optional<WorldPos> anchor = order.anchor();

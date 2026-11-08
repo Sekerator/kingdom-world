@@ -268,6 +268,19 @@ final class SoldierGoal extends Goal {
         switch (order.kind()) {
             case HOLD -> stayNear(order.points().get(0), dimension, 3.0);
             case GUARD -> stayNear(order.points().get(0), dimension, 6.0 + order.radius() * 8.0);
+            case DEFEND -> stayNear(order.points().get(0), dimension, 14.0);
+            case SIEGE -> {
+                WorldPos target = io.github.sekerator.kingdomworld.common.siege.SiegeWork.siegeTarget(server, body, order.points().get(0));
+                if (body.distanceToSqr(target.x() + 0.5, target.y(), target.z() + 0.5) > 2.5 * 2.5) {
+                    walkTo(target, dimension, 0.7);
+                } else {
+                    body.getNavigation().stop();
+                    body.getLookControl().setLookAt(target.x() + 0.5, target.y() + 1.0, target.z() + 0.5);
+                    if (body.tickCount % 20 == 0) {
+                        body.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+                    }
+                }
+            }
             case PATROL -> {
                 List<WorldPos> route = order.points();
                 patrolIndex = Math.floorMod(patrolIndex, route.size());

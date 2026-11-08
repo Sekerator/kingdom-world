@@ -123,6 +123,7 @@ public final class DiplomacySync {
             }
         }
         return new DiplomacyViews.TabView(kingdomId, canManage, canDeclare, WarWork.shielded(server, kingdomId), kingdoms, offers, calls, wars,
+                io.github.sekerator.kingdomworld.common.siege.SiegeTab.lines(server, kingdomId),
                 chronicle);
     }
 
@@ -269,7 +270,7 @@ public final class DiplomacySync {
             marks.add(DiplomacyViews.MapMark.of(other.id(), KingdomActions.kingdomName(other), capital.get(), state.bond(own.get(), other.id(), now),
                     WarWork.relation(server, own.get(), other.id()), WarWork.shielded(server, other.id())));
         }
-        return new DiplomacyViews.MapView(marks);
+        return new DiplomacyViews.MapView(marks, io.github.sekerator.kingdomworld.common.siege.SiegeTab.spots(server, own.get()));
     }
 
     /**

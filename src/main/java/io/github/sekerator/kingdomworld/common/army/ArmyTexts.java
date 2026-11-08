@@ -72,6 +72,8 @@ public final class ArmyTexts {
                     place(order.points().get(0)));
             case FOLLOW -> Component.translatable(KEY + "order_text.follow", playerName);
             case ESCORT -> Component.translatable(KEY + "order_text.escort", order.deal(), deal);
+            case SIEGE -> Component.translatable(KEY + "order_text.siege", place(order.points().get(0)));
+            case DEFEND -> Component.translatable(KEY + "order_text.defend", place(order.points().get(0)));
         };
     }
 

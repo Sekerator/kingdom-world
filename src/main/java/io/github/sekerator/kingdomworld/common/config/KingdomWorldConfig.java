@@ -174,6 +174,7 @@ public final class KingdomWorldConfig {
         public final Life life;
         /** Relations, treaties, wars and peace between kingdoms. */
         public final War war;
+        public final Siege siege;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -476,6 +477,7 @@ public final class KingdomWorldConfig {
             npcKingdoms = new NpcKingdoms(builder);
             life = new Life(builder);
             war = new War(builder);
+            siege = new Siege(builder);
 
             builder.comment("Abstract simulation of kingdoms far from players.").push("simulation");
             simulationIntervalTicks = builder
@@ -1656,6 +1658,42 @@ public final class KingdomWorldConfig {
                     .define("npcWarsOnPlayers", d.npcWarsOnPlayers());
             npcPlayerWarDays = builder.comment("Game days between two wars of rulers of the world on one kingdom of players.")
                     .defineInRange("npcPlayerWarDays", d.npcPlayerWarDays(), 1, 365);
+            builder.pop();
+        }
+    }
+
+    public static final class Siege {
+        public final ForgeConfigSpec.IntValue woodGateStrength;
+        public final ForgeConfigSpec.IntValue ironGateStrength;
+        public final ForgeConfigSpec.IntValue occupyMinutes;
+        public final ForgeConfigSpec.IntValue plazaMinutes;
+        public final ForgeConfigSpec.IntValue throneMinutes;
+        public final ForgeConfigSpec.IntValue repairQuietMinutes;
+        public final ForgeConfigSpec.BooleanValue explosions;
+        public final ForgeConfigSpec.IntValue maxBodies;
+
+        Siege(ForgeConfigSpec.Builder builder) {
+            io.github.sekerator.kingdomworld.core.siege.SiegeRules d = io.github.sekerator.kingdomworld.core.siege.SiegeRules.DEFAULT;
+            builder.comment("War in the world: sieges, the breaking of gates, captures and the mending of war damage.").push("siege");
+            woodGateStrength = builder.comment("Strength of gate leaves of planks. A soldier at a gate takes 1 a second, a ram 3; six",
+                    "soldiers with a ram break 720 in 80 seconds.")
+                    .defineInRange("woodGateStrength", d.woodGateHp(), 1, 1_000_000);
+            ironGateStrength = builder.comment("Strength of an iron portcullis of a stone wall.")
+                    .defineInRange("ironGateStrength", d.ironGateHp(), 1, 1_000_000);
+            occupyMinutes = builder.comment("Minutes attackers hold a chunk of the enemy without defenders until it is occupied (the goal \"land\").")
+                    .defineInRange("occupyMinutes", (int) (d.occupyTicks() / 1_200), 1, 1_440);
+            plazaMinutes = builder.comment("Minutes attackers hold the square at a town hall without defenders until the city is taken.")
+                    .defineInRange("plazaMinutes", (int) (d.plazaTicks() / 1_200), 1, 1_440);
+            throneMinutes = builder.comment("Minutes attackers hold the throne hall without defenders until the throne is taken.")
+                    .defineInRange("throneMinutes", (int) (d.throneTicks() / 1_200), 1, 1_440);
+            repairQuietMinutes = builder.comment("Minutes without an enemy near after which builders mend war damage while the war goes on;",
+                    "0 waits for the peace.")
+                    .defineInRange("repairQuietMinutes", (int) (d.repairQuietTicks() / 1_200), 0, 10_080);
+            explosions = builder.comment("Whether explosions (TNT and the like) break blocks on land open to the enemy in war.",
+                    "Land of third kingdoms and land under the shield of absent players stays protected.")
+                    .define("explosions", d.explosions());
+            maxBodies = builder.comment("Most soldiers of one siege that walk as bodies near players; the rest fight far from them.")
+                    .defineInRange("maxBodies", d.maxBodies(), 0, 400);
             builder.pop();
         }
     }

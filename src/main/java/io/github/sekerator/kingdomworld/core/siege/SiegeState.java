@@ -30,6 +30,8 @@ public final class SiegeState {
     private final Set<String> kingsSeen = new LinkedHashSet<>();
     /** When an enemy was last near the cities of a kingdom. */
     private final Map<UUID, Long> enemyNear = new LinkedHashMap<>();
+    /** Players of an annexed kingdom and the winner they may swear to, with the time of the offer. */
+    private final Map<UUID, Offer> offers = new LinkedHashMap<>();
     private long nextConquest = 1;
     private Runnable changeListener = () -> {
     };
@@ -290,7 +292,49 @@ public final class SiegeState {
         changed();
     }
 
+    // ---------------------------------------------------------------- players of annexed kingdoms
+
+    /**
+     * A player of a kingdom that was annexed may become a subject of the winner or stay free.
+     */
+    public record Offer(UUID player, UUID winner, String winnerName, long made) {
+    }
+
+    public void offer(UUID player, UUID winner, String winnerName, long now) {
+        offers.put(player, new Offer(player, winner, winnerName == null ? "" : winnerName, now));
+        changed();
+    }
+
+    public Optional<Offer> offerTo(UUID player) {
+        return Optional.ofNullable(offers.get(player));
+    }
+
+    public Optional<Offer> takeOffer(UUID player) {
+        Offer removed = offers.remove(player);
+        if (removed != null) {
+            changed();
+        }
+        return Optional.ofNullable(removed);
+    }
+
+    public Collection<Offer> offers() {
+        return Collections.unmodifiableCollection(offers.values());
+    }
+
+    /**
+     * Forgets offers older than some ticks.
+     */
+    public void expireOffers(long now, long ticks) {
+        if (offers.values().removeIf(offer -> now - offer.made() > ticks)) {
+            changed();
+        }
+    }
+
     // ---------------------------------------------------------------- loading
+
+    public void restoreOffer(Offer offer) {
+        offers.put(offer.player(), offer);
+    }
 
     public long nextConquestId() {
         return nextConquest;
@@ -333,6 +377,7 @@ public final class SiegeState {
         damage.clear();
         kingsSeen.clear();
         enemyNear.clear();
+        offers.clear();
         nextConquest = 1;
     }
 }

@@ -655,6 +655,21 @@ public final class CityWalls {
     }
 
     /**
+     * Hands the wall of a city to another kingdom under another city, as it stands: a city that changed hands in a war, or the
+     * capital of an annexed kingdom that became a city of the winner.
+     */
+    public static void handOver(MinecraftServer server, long cityId, UUID from, UUID to, long newCity) {
+        Optional<Wall> wall = RoadWork.state(server).wallOf(cityId, from);
+        if (wall.isEmpty()) {
+            return;
+        }
+        net.minecraft.nbt.CompoundTag tag = RoadNbt.writeWall(wall.get());
+        tag.putUUID("kingdom", to);
+        tag.putLong("city", newCity);
+        RoadWork.state(server).putWall(RoadNbt.readWall(tag));
+    }
+
+    /**
      * Whether a building of the register is a city wall or gate, kept by the roads tab.
      */
     public static boolean isFortification(Building building) {
