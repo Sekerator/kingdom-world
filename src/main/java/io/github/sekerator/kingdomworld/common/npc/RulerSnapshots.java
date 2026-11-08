@@ -263,6 +263,9 @@ final class RulerSnapshots {
         io.github.sekerator.kingdomworld.core.construction.BuildingRoles.all().forEach(role -> view.knownRoles.add(role.id()));
         int below = ConstructionSettings.buildings().autoRepairBelow();
         Set<String> upgradeable = new HashSet<>();
+        // Working out the cost of an upgrade compares two templates block by block: one new comparison a look at most, the
+        // rest come in the next turns, so that a ruler who looks first after a start does not stall the tick.
+        int freshDiffs = 0;
         for (Building building : state.construction().buildingsOf(id)) {
             view.roles.merge(building.role(), 1, Integer::sum);
             boolean busy = state.construction().forBuilding(building.id()).isPresent();
@@ -274,6 +277,10 @@ final class RulerSnapshots {
                 Optional<BuildingTemplate> next = BuildingWork.nextTemplate(building);
                 if (next.isPresent()) {
                     String key = building.templateId() + "|" + building.materials() + "|" + building.placement() + "|" + next.get().id();
+                    if (!UPGRADES.containsKey(key) && freshDiffs++ >= 1) {
+                        upgradeable.remove(building.templateId() + "|" + building.materials() + "|" + building.placement());
+                        continue;
+                    }
                     Optional<Map<String, Integer>> cost = UPGRADES.computeIfAbsent(key,
                             k -> BuildingWork.upgradeDiff(building).map(diff -> Map.copyOf(diff.cost())));
                     if (cost.isPresent()) {

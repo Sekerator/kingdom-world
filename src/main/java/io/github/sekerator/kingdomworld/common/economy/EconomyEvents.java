@@ -93,6 +93,11 @@ public final class EconomyEvents {
     private static void onTags(TagsUpdatedEvent event) {
         ItemPrices.invalidate();
         io.github.sekerator.kingdomworld.common.trade.MarketActions.invalidate();
+        // After /reload the table is built again at once, inside the reload, not in the first tick that asks for a price.
+        net.minecraft.server.MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+        if (event.getUpdateCause() == TagsUpdatedEvent.UpdateCause.SERVER_DATA_LOAD && server != null && server.getTickCount() > 0) {
+            ItemPrices.table(server);
+        }
     }
 
     private static void onServerTick(TickEvent.ServerTickEvent event) {

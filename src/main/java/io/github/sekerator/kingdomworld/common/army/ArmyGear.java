@@ -203,6 +203,18 @@ public final class ArmyGear {
         return own;
     }
 
+    /**
+     * Whether a stack is gear for any slot of a soldier.
+     */
+    static boolean anyGear(ItemStack stack) {
+        for (GearChoice.Slot slot : GearChoice.Slot.values()) {
+            if (score(stack, slot) > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     static EquipmentSlot equipmentSlot(GearChoice.Slot slot) {
         return switch (slot) {
             case MELEE, RANGED -> EquipmentSlot.MAINHAND;
@@ -233,18 +245,20 @@ public final class ArmyGear {
      */
     public static List<Choice> equip(MinecraftServer server, UUID kingdomId, Equipment.Hands hands, boolean archer, @Nullable WorldPos near) {
         List<Choice> taken = new ArrayList<>();
+        // One look through the storehouses for every slot: the gear there, judged per slot below.
+        List<KingdomStorage.Found> gear = KingdomStorage.find(server, kingdomId, ArmyGear::anyGear, near);
         if (archer) {
-            if (!take(server, kingdomId, hands, GearChoice.Slot.RANGED, near, taken) && score(hands.get(EquipmentSlot.MAINHAND),
+            if (!take(server, kingdomId, hands, GearChoice.Slot.RANGED, near, taken, gear) && score(hands.get(EquipmentSlot.MAINHAND),
                     GearChoice.Slot.RANGED) <= 0) {
                 // No bow anywhere: an archer fights with what it can.
-                take(server, kingdomId, hands, GearChoice.Slot.MELEE, near, taken);
+                take(server, kingdomId, hands, GearChoice.Slot.MELEE, near, taken, gear);
             }
         } else {
-            take(server, kingdomId, hands, GearChoice.Slot.MELEE, near, taken);
-            take(server, kingdomId, hands, GearChoice.Slot.SHIELD, near, taken);
+            take(server, kingdomId, hands, GearChoice.Slot.MELEE, near, taken, gear);
+            take(server, kingdomId, hands, GearChoice.Slot.SHIELD, near, taken, gear);
         }
         for (EquipmentSlot slot : Equipment.ARMOR) {
-            take(server, kingdomId, hands, armorChoiceSlot(slot), near, taken);
+            take(server, kingdomId, hands, armorChoiceSlot(slot), near, taken, gear);
         }
         return taken;
     }
@@ -255,13 +269,19 @@ public final class ArmyGear {
      * @return whether the slot holds a piece for this kind of slot now
      */
     private static boolean take(MinecraftServer server, UUID kingdomId, Equipment.Hands hands, GearChoice.Slot slot, @Nullable WorldPos near,
-                                List<Choice> taken) {
+                                List<Choice> taken, List<KingdomStorage.Found> gear) {
         EquipmentSlot equipment = equipmentSlot(slot);
         ItemStack current = hands.get(equipment);
         double currentScore = score(current, slot);
         boolean wrongKind = slot == GearChoice.Slot.RANGED && !current.isEmpty() && currentScore <= 0
                 && score(current, GearChoice.Slot.MELEE) > 0;
-        List<KingdomStorage.Found> found = KingdomStorage.find(server, kingdomId, stack -> score(stack, slot) > 0, near);
+        List<KingdomStorage.Found> found = new ArrayList<>();
+        for (KingdomStorage.Found entry : gear) {
+            // A stack taken for another slot is empty now.
+            if (!entry.stack().isEmpty() && score(entry.stack(), slot) > 0) {
+                found.add(entry);
+            }
+        }
         List<GearChoice.Candidate> candidates = new ArrayList<>();
         for (int i = 0; i < found.size(); i++) {
             ItemStack stack = found.get(i).stack();
