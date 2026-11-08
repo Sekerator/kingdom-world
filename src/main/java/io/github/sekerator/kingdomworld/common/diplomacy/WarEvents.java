@@ -153,6 +153,10 @@ public final class WarEvents {
             LOGGER.error("KingdomWorld war tick failed", e);
         }
         long spent = System.nanoTime() - started;
+        if (spent > 25_000_000L) {
+            LOGGER.info("A tick of diplomacy took {} ms ({} war(s) going on)", String.format(java.util.Locale.ROOT, "%.1f", spent / 1_000_000.0),
+                    WarWork.state(server).wars().stream().filter(war -> !war.over()).count());
+        }
         ticks++;
         total += spent;
         worst = Math.max(worst, spent);
@@ -176,6 +180,12 @@ public final class WarEvents {
         ArmyWork.setHostility(HOSTILITY);
         DiplomacySavedData data = DiplomacySavedData.get(server);
         DiplomacyState state = data.state();
+        // The classes of diplomacy load now, with the server, and not in the first measured tick.
+        NpcDiplomacy.reset();
+        DiplomacySync.reset();
+        DiplomacySettings.refresh();
+        io.github.sekerator.kingdomworld.core.diplomacy.DiplomacyMind.REASONS.size();
+        WarWork.shielded(server, new UUID(0, 0));
         long wars = state.wars().stream().filter(war -> !war.over()).count();
         LOGGER.info("KingdomWorld diplomacy: {} treaty(ies), {} war(s) going on, {} open offer(s), data format {}{}", state.treaties().size(), wars,
                 state.proposals().stream().filter(p -> p.open()).count(), DiplomacySavedData.FORMAT_VERSION,

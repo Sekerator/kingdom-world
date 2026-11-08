@@ -104,8 +104,49 @@ final class NpcDiplomacy {
      * Once a game day: offers, declarations and offers of peace of every ruler of the world.
      */
     static void daily(MinecraftServer server, DiplomacyState state, DiplomacyRules rules, long now, long day) {
+        // The rulers take their turns of diplomacy one a second, so that no tick carries them all.
+        QUEUE.clear();
+        POWER.clear();
+        for (Kingdom kingdom : KingdomWorldApi.kingdoms(server)) {
+            if (NpcWork.isNpc(server, kingdom.id())) {
+                QUEUE.add(kingdom.id());
+            }
+        }
+        queueDay = day;
+    }
+
+    /**
+     * The turn of diplomacy of the next ruler of the world waiting for it today, if any. Called once a second.
+     */
+    static void work(MinecraftServer server, DiplomacyState state, DiplomacyRules rules, long now) {
+        UUID next = QUEUE.poll();
+        if (next != null && KingdomWorldApi.kingdom(server, next).isPresent()) {
+            turn(server, state, rules, now, queueDay, next);
+        }
+    }
+
+    static void reset() {
+        QUEUE.clear();
+        POWER.clear();
+    }
+
+    /**
+     * The strength of the army of a kingdom, counted once a game day for the decisions of rulers.
+     */
+    static double power(MinecraftServer server, UUID kingdomId) {
+        return POWER.computeIfAbsent(kingdomId, id -> ArmyWork.power(server, id));
+    }
+
+    private static final java.util.ArrayDeque<UUID> QUEUE = new java.util.ArrayDeque<>();
+    private static final Map<UUID, Double> POWER = new java.util.HashMap<>();
+    private static long queueDay;
+
+    private static void turn(MinecraftServer server, DiplomacyState state, DiplomacyRules rules, long now, long day, UUID id) {
         List<Kingdom> kingdoms = KingdomWorldApi.kingdoms(server);
         for (Kingdom kingdom : kingdoms) {
+            if (!kingdom.id().equals(id)) {
+                continue;
+            }
             Optional<NpcKingdom> npc = NpcWork.kingdom(server, kingdom.id());
             Optional<DiplomacyMind.Self> self = WarWork.self(server, kingdom.id());
             Optional<Capital> capital = KingdomWorldApi.state(server).territory().territory(kingdom.id()).map(Territory::capital);

@@ -117,6 +117,7 @@ public final class WarWork {
         MARKED.clear();
         lastStep = Long.MIN_VALUE;
         lastDay = Long.MIN_VALUE;
+        NpcDiplomacy.reset();
     }
 
     /**
@@ -397,6 +398,7 @@ public final class WarWork {
             tellDiplomats(server, treaty.second(), Component.translatable(KEY + "treaty_ended." + treaty.kind().id(), name(server, treaty.first())));
         }
         NpcDiplomacy.answer(server, state, rules, now, day);
+        NpcDiplomacy.work(server, state, rules, now);
         if (lastStep == Long.MIN_VALUE || now < lastStep) {
             lastStep = now;
         } else if (now - lastStep >= rules.stepTicks()) {
@@ -921,7 +923,7 @@ public final class WarWork {
             return Optional.empty();
         }
         Long last = state(server).lastDeclared().get(kingdomId);
-        return Optional.of(new DiplomacyMind.Self(kingdomId, npc.get().character(), npc.get().traits(), ArmyWork.power(server, kingdomId),
+        return Optional.of(new DiplomacyMind.Self(kingdomId, npc.get().character(), npc.get().traits(), NpcDiplomacy.power(server, kingdomId),
                 poor(server, kingdomId), last));
     }
 
@@ -932,7 +934,7 @@ public final class WarWork {
         DiplomacyState state = state(server);
         boolean recent = state.lastWarEnded(other).map(end -> now - end < (long) rules.npcRecentWarDays() * CitizenNeeds.TICKS_PER_DAY)
                 .orElse(false) || state.fightsAnyWar(other);
-        return new DiplomacyMind.Neighbor(other, isNpc(server, other), ArmyWork.power(server, other), distance, relation(server, self, other),
+        return new DiplomacyMind.Neighbor(other, isNpc(server, other), NpcDiplomacy.power(server, other), distance, relation(server, self, other),
                 state.bond(self, other, now), playable(server, other) && !shielded(server, other), recent, state.lastNpcWar().get(other));
     }
 
