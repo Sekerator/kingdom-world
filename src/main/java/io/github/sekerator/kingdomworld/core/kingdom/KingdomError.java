@@ -325,7 +325,43 @@ public enum KingdomError {
     /** The player holds a pass into the cities of the kingdom already. */
     PASS_HELD,
     /** The window of a gate belongs to a gate the player is no longer at. */
-    NOT_AT_GATE;
+    NOT_AT_GATE,
+    UNKNOWN_WAR,
+    UNKNOWN_PROPOSAL,
+    /** The offer was answered already or ran out. */
+    PROPOSAL_CLOSED,
+    /** The offer was made to another kingdom, or by another. */
+    NOT_YOUR_PROPOSAL,
+    /** The same offer waits for an answer already. */
+    PROPOSAL_EXISTS,
+    /** Too many offers of the kingdom wait for an answer. */
+    TOO_MANY_PROPOSALS,
+    /** The two kingdoms are at war already. */
+    AT_WAR,
+    /** The two kingdoms are not at war with each other. */
+    NOT_AT_WAR,
+    /** A truce holds: no war until it ends. */
+    IN_TRUCE,
+    /** A pact of non-aggression holds: break it to go to war. */
+    IN_PACT,
+    /** An alliance holds: break it to go to war. */
+    IN_ALLIANCE,
+    /** A war against one's own vassal or overlord: only a vassal fights its overlord, for independence. */
+    OWN_VASSAL,
+    /** A vassal declares no wars of its own. */
+    VASSAL_NO_WAR,
+    /** The kingdom is not the vassal of that one. */
+    NOT_A_VASSAL,
+    /** Nobody of that kingdom of players is online at the keyboard to defend it. */
+    NOBODY_ONLINE,
+    /** That treaty cannot be made between these kingdoms now. */
+    TREATY_IMPOSSIBLE,
+    /** There is no treaty to break. */
+    NO_TREATY,
+    /** The kingdom was not called to this war. */
+    NOT_CALLED,
+    /** The score of the war does not allow asking so much. */
+    TERMS_TOO_HIGH;
 
     /**
      * Lower case identifier, used for translation keys.
