@@ -205,6 +205,7 @@ public final class WarEvents {
                 io.github.sekerator.kingdomworld.core.diplomacy.Proposal.class, io.github.sekerator.kingdomworld.core.diplomacy.War.class,
                 io.github.sekerator.kingdomworld.core.diplomacy.PeaceTerms.class, io.github.sekerator.kingdomworld.core.diplomacy.Relations.class);
         LOGGER.debug("KingdomWorld diplomacy: {} classes ready", classes.size());
+        warmUp();
         NpcDiplomacy.reset();
         DiplomacySync.reset();
         DiplomacySettings.refresh();
@@ -214,6 +215,47 @@ public final class WarEvents {
         LOGGER.info("KingdomWorld diplomacy: {} treaty(ies), {} war(s) going on, {} open offer(s), data format {}{}", state.treaties().size(), wars,
                 state.proposals().stream().filter(p -> p.open()).count(), DiplomacySavedData.FORMAT_VERSION,
                 data.isReadOnly() ? " (READ-ONLY: " + data.readOnlyReason().orElse("?") + ")" : "");
+    }
+
+    /**
+     * The decisions of rulers run once on made-up kingdoms, so that their first real turn does not pay for linking their code.
+     * Nothing of the world is read or changed.
+     */
+    private static void warmUp() {
+        try {
+            DiplomacyRules rules = DiplomacyRules.DEFAULT;
+            UUID self = new UUID(0, 1);
+            UUID weak = new UUID(0, 2);
+            UUID strong = new UUID(0, 3);
+            java.util.List<io.github.sekerator.kingdomworld.core.diplomacy.DiplomacyMind.Neighbor> around = java.util.List.of(
+                    new io.github.sekerator.kingdomworld.core.diplomacy.DiplomacyMind.Neighbor(weak, true, 10, 100, 0,
+                            io.github.sekerator.kingdomworld.core.diplomacy.Bond.PEACE, true, false, null),
+                    new io.github.sekerator.kingdomworld.core.diplomacy.DiplomacyMind.Neighbor(strong, false, 500, 200, 30,
+                            io.github.sekerator.kingdomworld.core.diplomacy.Bond.PACT, true, false, 0L));
+            for (io.github.sekerator.kingdomworld.core.npc.RulerCharacter character : io.github.sekerator.kingdomworld.core.npc.RulerCharacter.values()) {
+                io.github.sekerator.kingdomworld.core.diplomacy.DiplomacyMind.Self ruler = new io.github.sekerator.kingdomworld.core.diplomacy.DiplomacyMind.Self(
+                        self, character, java.util.List.of(io.github.sekerator.kingdomworld.core.npc.RulerCharacter.Trait.BOLD), 100, false, null);
+                io.github.sekerator.kingdomworld.core.diplomacy.DiplomacyMind.decide(ruler, around, false, 100, rules);
+                for (io.github.sekerator.kingdomworld.core.diplomacy.Proposal.Kind kind : io.github.sekerator.kingdomworld.core.diplomacy.Proposal.Kind.values()) {
+                    io.github.sekerator.kingdomworld.core.diplomacy.Proposal proposal = new io.github.sekerator.kingdomworld.core.diplomacy.Proposal(1, strong,
+                            self, kind, kind == io.github.sekerator.kingdomworld.core.diplomacy.Proposal.Kind.VASSALAGE ? self : null, 1,
+                            io.github.sekerator.kingdomworld.core.diplomacy.PeaceTerms.WHITE, 0, 1,
+                            io.github.sekerator.kingdomworld.core.diplomacy.Proposal.Status.OPEN);
+                    io.github.sekerator.kingdomworld.core.diplomacy.DiplomacyMind.answer(proposal, ruler, around.get(1));
+                }
+                io.github.sekerator.kingdomworld.core.diplomacy.DiplomacyMind.joins(ruler, 10);
+            }
+            io.github.sekerator.kingdomworld.core.diplomacy.War war = new io.github.sekerator.kingdomworld.core.diplomacy.War(1, self, weak,
+                    io.github.sekerator.kingdomworld.core.diplomacy.WarGoal.INDEMNITY, 0, 0);
+            io.github.sekerator.kingdomworld.core.diplomacy.PeaceTerms terms = DiplomacyState.terms(war,
+                    io.github.sekerator.kingdomworld.core.diplomacy.War.Side.ATTACKER, true, 1_000, rules);
+            io.github.sekerator.kingdomworld.core.diplomacy.DiplomacyMind.peace(war, io.github.sekerator.kingdomworld.core.diplomacy.War.Side.DEFENDER,
+                    terms, terms, rules);
+            io.github.sekerator.kingdomworld.core.diplomacy.DiplomacyMind.offerPeace(war,
+                    io.github.sekerator.kingdomworld.core.diplomacy.War.Side.DEFENDER, terms, terms, rules);
+        } catch (RuntimeException e) {
+            LOGGER.debug("Warming up the decisions of rulers failed", e);
+        }
     }
 
     private static void onServerStopped(ServerStoppedEvent event) {
