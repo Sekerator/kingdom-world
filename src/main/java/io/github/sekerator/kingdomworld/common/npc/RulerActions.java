@@ -274,6 +274,7 @@ final class RulerActions {
         private RulerPlaces.Spot spot;
         private boolean levelled;
         private int levelRow;
+        private boolean refreshed;
 
         BuildJob(UUID kingdomId, RulerDecision decision, NpcKingdom npc, RulerPlaces.Spot spot) {
             super(kingdomId, decision);
@@ -322,6 +323,13 @@ final class RulerActions {
             }
             // The wood of the buildings that stand, so that the stores of the kingdom fit the new one.
             if (!warm(server)) {
+                return null;
+            }
+            if (!refreshed) {
+                long refresh = System.nanoTime();
+                ConstructionWork.refreshReservations(server);
+                refreshed = true;
+                part = "reservations " + (System.nanoTime() - refresh) / 1_000_000L + " ms";
                 return null;
             }
             long started = System.nanoTime();
@@ -618,7 +626,9 @@ final class RulerActions {
                             return Outcome.fail(KingdomError.CONSTRUCTION_OUTSIDE_LAND);
                         }
                     }
+                    long height = System.nanoTime();
                     y = NpcSpawner.plazaHeight(level, x, z);
+                    part = part + ", height " + (System.nanoTime() - height) / 1_000_000L + " ms";
                     stage = 3;
                     return null;
                 }
