@@ -404,6 +404,9 @@ public final class CompanionGameTests {
             KingdomWorldState world = KingdomWorldApi.state(server);
             world.membership().invite(kingId, owner.getUUID(), 1L);
             world.membership().acceptInvitation(owner.getUUID(), kingdom.id(), 1L);
+            helper.assertTrue(!CompanionActions.applyCompanion(owner, settler.id(), CompanionPackets.CompanionAction.Action.FREE_TO_KINGDOM).success(),
+                    "A slave settled in a kingdom without a free bed");
+            LifeGameTests.bed(helper, kingdom, new BlockPos(6, 0, 6));
             int citizens = world.citizens().registry().citizensOf(kingdom.id()).size();
             KingdomActions.Feedback settled = CompanionActions.applyCompanion(owner, settler.id(),
                     CompanionPackets.CompanionAction.Action.FREE_TO_KINGDOM);

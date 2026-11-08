@@ -217,7 +217,7 @@ public final class LifeGameTests {
     /**
      * A bed of the kingdom: the head at the place, the foot to the south.
      */
-    private static WorldPos bed(GameTestHelper helper, Kingdom kingdom, BlockPos relative) {
+    static WorldPos bed(GameTestHelper helper, Kingdom kingdom, BlockPos relative) {
         ServerLevel level = helper.getLevel();
         BlockPos head = helper.absolutePos(relative);
         BlockState bed = Blocks.RED_BED.defaultBlockState().setValue(BedBlock.FACING, net.minecraft.core.Direction.NORTH);

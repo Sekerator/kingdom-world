@@ -285,10 +285,13 @@ public final class EconomyGameTests {
         UUID bob = UUID.randomUUID();
         try {
             KingdomWorldApi.state(server).economy().adminAccount(alice.getUUID(), kingdom.id(), 500);
+            helper.assertTrue(!EconomyCommands.transfer(alice, bob, "kw-bob", kingdom.id(), 120).success(),
+                    "Money went to a player who never played here");
+            KingdomWorldApi.state(server).economy().adminAccount(bob, kingdom.id(), 1);
             long supply = KingdomWorldApi.state(server).economy().supply(kingdom.id());
             helper.assertTrue(EconomyCommands.transfer(alice, bob, "kw-bob", kingdom.id(), 120).success(), "The payment failed");
             helper.assertTrue(KingdomWorldApi.balance(server, alice.getUUID(), kingdom.id()) == 380, "The payer was not charged");
-            helper.assertTrue(KingdomWorldApi.balance(server, bob, kingdom.id()) == 120, "The payee got nothing");
+            helper.assertTrue(KingdomWorldApi.balance(server, bob, kingdom.id()) == 121, "The payee got nothing");
             helper.assertTrue(!EconomyCommands.transfer(alice, bob, "kw-bob", kingdom.id(), 381).success(), "An overdraft was allowed");
             helper.assertTrue(!EconomyCommands.transfer(alice, alice.getUUID(), "kw-alice", kingdom.id(), 1).success(), "Paying oneself");
             helper.assertTrue(KingdomWorldApi.state(server).economy().supply(kingdom.id()) == supply, "Payments made or lost money");
