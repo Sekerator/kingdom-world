@@ -73,6 +73,7 @@ param(
     [switch]$WithoutMod,
     [switch]$SkipBuild,
     [switch]$Load,
+    [string]$OldWorld = '',
     [int]$LoadMinutes = 30,
     [string]$TestEnvRoot = 'D:\Projects\kingdom-world-testenv',
     [string]$PackModsDir = 'D:\Games\Minecraft\Instances\Taghi RPG & Create RU\mods',
@@ -564,6 +565,34 @@ if (-not $WithoutMod) {
 }
 Install-ForgeServer
 Initialize-Server $modJar
+
+# A world made by an early version of the mod opens with this one: every part of its data is read (the kingdoms are upgraded
+# to the current format), nothing goes read-only, and its kingdoms, citizens and money are there.
+if ($OldWorld) {
+    $target = Join-Path $ServerDir 'world'
+    if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
+    Copy-Item -LiteralPath $OldWorld -Destination $target -Recurse
+    Invoke-Phase 'old-world' {
+        param($server)
+        $loaded = Wait-ForLog $server 'KingdomWorld loaded (\d+) kingdom\(s\) with (\d+) citizen\(s\)[^\r\n]*data format (\d+)' 10
+        if ($loaded -and [int]$loaded.Groups[1].Value -gt 0) {
+            Write-Ok "[old-world] $($loaded.Value)"
+        } else {
+            Add-Failure '[old-world] the kingdoms of the old world were not loaded'
+        }
+        $readOnly = [regex]::Matches((Get-LatestLog), '(?i)read-only[^\r\n]*').Count
+        if ($readOnly -eq 0) { Write-Ok '[old-world] no data went read-only' } else { Add-Failure "[old-world] $readOnly line(s) about read-only data" }
+        Send-ServerCommand $server 'kingdomworld admin trade rates'
+        Send-ServerCommand $server 'kingdomworld admin nobility status'
+        Send-ServerCommand $server 'kingdomworld admin war status'
+        Start-Sleep -Seconds 3
+        $rates = [regex]::Matches((Get-LatestLog), '(\S+): rate \d+, money (\d+),')
+        if ($rates.Count -gt 0) { Write-Ok "[old-world] money of the old kingdoms: $(@($rates | ForEach-Object { $_.Groups[1].Value + ' ' + $_.Groups[2].Value }) -join ', ')" } else { Add-Failure '[old-world] no money of the old kingdoms' }
+    }
+    Write-Summary
+    if ($script:Failures.Count -gt 0) { exit 1 }
+    exit 0
+}
 
 if ($WithoutMod) {
     Invoke-Phase 'baseline' { param($server) }
