@@ -88,13 +88,12 @@ final class ClientLayoutCheck {
     private static final int NARROWEST_SCREEN = 320;
     private static final String LONG_KINGDOM = "Великое Северное Королевство Щит";
     private static final String LONG_PLAYER = "WWWWWWWWWWWWWWWW";
-    /** A kingdom of the world with the longest names, leaning and traits there are. */
-    /** A ruler of the world with long decrees and every kind of need. */
-    private static final io.github.sekerator.kingdomworld.common.network.data.RulerInfo LONG_RULER =
-            new io.github.sekerator.kingdomworld.common.network.data.RulerInfo(List.of(
+    /** A ruler of the world with long decrees and every kind of need, its names in the current language. */
+    private static io.github.sekerator.kingdomworld.common.network.data.RulerInfo longRuler(boolean councillor) {
+        return new io.github.sekerator.kingdomworld.common.network.data.RulerInfo(List.of(
                     new io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree(1234,
                             new io.github.sekerator.kingdomworld.core.npc.RulerDecision(io.github.sekerator.kingdomworld.core.npc.RulerDecision.Kind.OFFER,
-                                    "minecraft:iron_ingot", -64, 900, "", "Serebrozemye-nad-Rekoyu XIV")),
+                                    "minecraft:iron_ingot", -64, 900, "", cyrillic() ? "Сереброземье-над-Рекою XIV" : "Serebrozemye-nad-Rekoyu XIV")),
                     new io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree(1233,
                             io.github.sekerator.kingdomworld.core.npc.RulerDecision.of(io.github.sekerator.kingdomworld.core.npc.RulerDecision.Kind.BUILD,
                                     "mage_tower", 1)),
@@ -113,7 +112,17 @@ final class ClientLayoutCheck {
                                     "", 3),
                             new io.github.sekerator.kingdomworld.core.npc.RulerMemory.Need(io.github.sekerator.kingdomworld.core.npc.RulerMemory.NeedKind.LAND,
                                     "", 0)),
-                    35, 20, 15);
+                    35, 20, 15, LONG_PLAYER, councillor);
+    }
+
+    /**
+     * Whether the current language writes names of the world in Cyrillic, as the server sends them to its players.
+     */
+    private static boolean cyrillic() {
+        return CitizenNames.alphabetFor(Minecraft.getInstance().getLanguageManager().getSelected()) == CitizenNames.Alphabet.CYRILLIC;
+    }
+
+    /** A kingdom of the world with the longest names, leaning and traits there are. */
     private static final io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo LONG_NPC =
             new io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo("Serebrozemye XIV", "Сереброземье XIV", "Dobroslaslava",
                     "Доброславслава", io.github.sekerator.kingdomworld.core.citizen.Gender.FEMALE,
@@ -406,10 +415,10 @@ final class ClientLayoutCheck {
      * The same citizens with decrees of a ruler of the world in their chronicle, among the deaths.
      */
     private static CitizenView withDecrees(CitizenView view) {
-        List<io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree> decrees = new ArrayList<>(LONG_RULER.decrees());
+        List<io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree> decrees = new ArrayList<>(longRuler(false).decrees());
         decrees.add(0, new io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree(99_999,
                 new io.github.sekerator.kingdomworld.core.npc.RulerDecision(io.github.sekerator.kingdomworld.core.npc.RulerDecision.Kind.TOWN, "",
-                        1, 0, "", "Zlatogorye-na-Dalnem-Beregu")));
+                        1, 0, "Златогорье-на-Дальнем-Берегу", cyrillic() ? "Златогорье-на-Дальнем-Берегу" : "Zlatogorye-na-Dalnem-Beregu")));
         decrees.add(new io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree(3,
                 io.github.sekerator.kingdomworld.core.npc.RulerDecision.of(io.github.sekerator.kingdomworld.core.npc.RulerDecision.Kind.HIRE, "", 21)));
         return new CitizenView(view.kingdomId(), view.canManage(), view.population(), view.bedsUsed(), view.bedsTotal(), view.foodDays(),
@@ -1030,7 +1039,7 @@ final class ClientLayoutCheck {
         cases.add(new Case("throne-citizens-empty", () -> citizens(view(KingdomView.Relation.MEMBER, Role.SUBJECT),
                 citizenView(false, true, CitizenNeeds.GrowthCheck.FULL), false, Component.empty())));
         cases.add(new Case("throne-npc-chronicle", () -> citizens(view(KingdomView.Relation.MEMBER, Role.SUBJECT).withNpc(LONG_NPC)
-                .withRuler(LONG_RULER), withDecrees(citizenView(false, false, CitizenNeeds.GrowthCheck.NO_FREE_BED)), true, Component.empty())));
+                .withRuler(longRuler(false)), withDecrees(citizenView(false, false, CitizenNeeds.GrowthCheck.NO_FREE_BED)), true, Component.empty())));
         cases.add(new Case("throne-chronicle-empty", () -> citizens(view(KingdomView.Relation.MEMBER, Role.SUBJECT),
                 citizenView(false, true, CitizenNeeds.GrowthCheck.NO_FREE_BED), true, Component.empty())));
         cases.add(new Case("throne-citizens-loading", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "citizens",
@@ -1282,12 +1291,14 @@ final class ClientLayoutCheck {
             screen.showForCheck(6.0, -5.0, 14.0, UUID.nameUUIDFromBytes("second".getBytes(StandardCharsets.UTF_8)), Component.empty(), false);
             return screen;
         }));
-        cases.add(new Case("throne-npc-outsider", () -> throne(view(KingdomView.Relation.OUTSIDER, null).withNpc(LONG_NPC).withRuler(LONG_RULER),
+        cases.add(new Case("throne-npc-outsider", () -> throne(view(KingdomView.Relation.OUTSIDER, null).withNpc(LONG_NPC).withRuler(longRuler(false)),
                 "overview", Component.empty())));
-        cases.add(new Case("throne-npc-subject", () -> throne(view(KingdomView.Relation.MEMBER, Role.SUBJECT).withNpc(LONG_NPC).withRuler(LONG_RULER),
+        cases.add(new Case("throne-npc-subject", () -> throne(view(KingdomView.Relation.MEMBER, Role.SUBJECT).withNpc(LONG_NPC).withRuler(longRuler(false)),
                 "overview", Component.empty())));
+        cases.add(new Case("throne-npc-councillor", () -> throne(view(KingdomView.Relation.MEMBER, Role.SUBJECT).withNpc(LONG_NPC)
+                .withRuler(longRuler(true)), "overview", Component.empty())));
         cases.add(new Case("throne-npc-subject-status", () -> throne(view(KingdomView.Relation.MEMBER, Role.SUBJECT).withNpc(LONG_NPC)
-                .withRuler(LONG_RULER), "overview", Component.translatable("kingdomworld.screen.throne.npc.needs.hint"))));
+                .withRuler(longRuler(false)), "overview", Component.translatable("kingdomworld.screen.throne.npc.needs.hint"))));
         cases.add(new Case("throne-npc-new-ruler", () -> throne(view(KingdomView.Relation.OUTSIDER, null).withNpc(LONG_NPC)
                 .withRuler(new io.github.sekerator.kingdomworld.common.network.data.RulerInfo(List.of(), List.of(), -60, -80, 0)), "overview",
                 Component.empty())));

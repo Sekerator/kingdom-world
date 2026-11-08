@@ -179,6 +179,7 @@ public final class RulerMemory {
     private int chronicleCount;
     private int turns;
     private long poorSince = -1;
+    private UUID councillor;
 
     // ---------------------------------------------------------------- decrees
 
@@ -408,6 +409,18 @@ public final class RulerMemory {
 
     static int clamp(int value) {
         return Math.max(-MAX_RELATION, Math.min(MAX_RELATION, value));
+    }
+
+    /**
+     * The subject the ruler named its honorary councillor, or {@code null}. The title is an honour alone: it gives no right in
+     * the kingdom, its treasury, storage, market, trade, buildings, army or law.
+     */
+    public UUID councillor() {
+        return councillor;
+    }
+
+    public void setCouncillor(UUID player) {
+        councillor = player;
     }
 
     // ---------------------------------------------------------------- turns and hard times

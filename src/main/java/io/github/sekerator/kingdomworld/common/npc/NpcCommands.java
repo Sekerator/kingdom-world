@@ -252,8 +252,28 @@ public final class NpcCommands {
         return kingdom;
     }
 
-    private static Component decisionList(java.util.List<io.github.sekerator.kingdomworld.core.npc.RulerDecision> decisions) {
-        return Component.literal(decisions.isEmpty() ? "-" : decisions.toString());
+    /**
+     * Decisions as the decrees would read, with the names in the language of the operator.
+     */
+    private static Component decisionList(CommandSourceStack source, io.github.sekerator.kingdomworld.core.npc.NpcKingdom kingdom,
+                                          java.util.List<io.github.sekerator.kingdomworld.core.npc.RulerDecision> decisions) {
+        if (decisions.isEmpty()) {
+            return Component.literal("-");
+        }
+        String language = language(source);
+        net.minecraft.network.chat.MutableComponent list = Component.empty();
+        for (int i = 0; i < decisions.size(); i++) {
+            if (i > 0) {
+                list.append("; ");
+            }
+            list.append(RulerTexts.decree(RulerTexts.localized(decisions.get(i), language), kingdom.rulerGender()));
+        }
+        return list;
+    }
+
+    private static String language(CommandSourceStack source) {
+        net.minecraft.server.level.ServerPlayer player = source.getPlayer();
+        return player == null ? "en_us" : player.getLanguage();
     }
 
     private static int turn(CommandContext<CommandSourceStack> context) {
@@ -270,7 +290,7 @@ public final class NpcCommands {
             return 0;
         }
         source.sendSuccess(() -> Component.translatable(ADMIN + "turn", NpcTexts.name(kingdom.get().name().latin(), kingdom.get().name().cyrillic()),
-                decisionList(plan.get().decisions()), plan.get().answers().size(), RulerTexts.needs(plan.get().needs())), true);
+                decisionList(source, kingdom.get(), plan.get().decisions()), plan.get().answers().size(), RulerTexts.needs(plan.get().needs())), true);
         return plan.get().decisions().size();
     }
 
@@ -313,10 +333,10 @@ public final class NpcCommands {
         }
         io.github.sekerator.kingdomworld.core.npc.RulerMemory memory = NpcWork.state(server).ruler(kingdom.get().kingdomId());
         source.sendSuccess(() -> Component.translatable(ADMIN + "decisions", NpcTexts.name(kingdom.get().name().latin(),
-                kingdom.get().name().cyrillic()), RulerTexts.decrees(memory.decrees().size()), memory.turns(), decisionList(memory.pending())), false);
+                kingdom.get().name().cyrillic()), RulerTexts.decrees(memory.decrees().size()), memory.turns(), decisionList(source, kingdom.get(), memory.pending())), false);
         for (io.github.sekerator.kingdomworld.core.npc.RulerMemory.Decree decree : memory.decrees()) {
-            source.sendSuccess(() -> Component.translatable(ADMIN + "decree", decree.day(), RulerTexts.decree(decree.decision(),
-                    kingdom.get().rulerGender()), decree.decision().toString()), false);
+            source.sendSuccess(() -> Component.translatable(ADMIN + "decree", decree.day(), RulerTexts.decree(
+                    RulerTexts.localized(decree.decision(), language(source)), kingdom.get().rulerGender()), decree.decision().kind().id()), false);
         }
         return memory.decrees().size();
     }
@@ -332,7 +352,8 @@ public final class NpcCommands {
         source.sendSuccess(() -> Component.translatable(ADMIN + "needs", NpcTexts.name(kingdom.get().name().latin(), kingdom.get().name().cyrillic()),
                 RulerTexts.needs(memory.needs()), memory.chronicle().size()), false);
         memory.relations().forEach((other, relation) -> source.sendSuccess(() -> Component.translatable(ADMIN + "relation",
-                Component.literal(NpcRulers.kingdomName(server, other)), relation.score(),
+                NpcWork.name(other).<Component>map(both -> NpcTexts.name(both.latin(), both.cyrillic()))
+                        .orElseGet(() -> Component.literal(NpcRulers.kingdomName(server, other))), relation.score(),
                 Component.literal(relation.main().map(io.github.sekerator.kingdomworld.core.npc.RulerMemory.Reason::id).orElse("-"))), false));
         NpcRulers.Timing timing = NpcRulers.timing();
         source.sendSuccess(() -> Component.translatable(ADMIN + "rulers_timing", timing.turns(), timing.ticks(),

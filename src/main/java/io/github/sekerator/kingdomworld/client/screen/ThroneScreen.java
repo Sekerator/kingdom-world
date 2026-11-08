@@ -756,14 +756,21 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
                 ruler.needs().forEach(need -> texts.add(io.github.sekerator.kingdomworld.common.npc.RulerTexts.need(need)));
                 texts.add(Component.translatable("kingdomworld.screen.throne.npc.needs.hint"));
             }
-            default -> texts.add(Component.translatable("kingdomworld.screen.throne.npc.attitude.hint", ruler.reputation(), ruler.dealings()));
+            default -> {
+                texts.add(Component.translatable("kingdomworld.screen.throne.npc.attitude.hint", ruler.reputation(), ruler.dealings()));
+                if (!ruler.councillor().isEmpty()) {
+                    texts.add(Component.translatable("kingdomworld.screen.throne.npc.councillor", PlayerNames.display(ruler.councillor())));
+                    texts.add(Component.translatable("kingdomworld.screen.throne.npc.councillor.rights"));
+                }
+            }
         }
         return texts;
     }
 
     private Component relationText() {
         return switch (view.relation()) {
-            case MEMBER -> Component.translatable("kingdomworld.screen.throne.your_role", roleName(view.viewerRole()));
+            case MEMBER -> Component.translatable("kingdomworld.screen.throne.your_role", view.ruler() != null && view.ruler().yours()
+                    ? Component.translatable("kingdomworld.ruler.position.councillor") : roleName(view.viewerRole()));
             case APPLIED -> Component.translatable("kingdomworld.screen.throne.applied");
             case INVITED -> Component.translatable("kingdomworld.screen.throne.invited");
             case OTHER_KINGDOM -> Component.translatable("kingdomworld.screen.throne.other_kingdom");

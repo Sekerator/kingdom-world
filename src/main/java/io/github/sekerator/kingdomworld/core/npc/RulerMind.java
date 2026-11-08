@@ -23,6 +23,10 @@ public final class RulerMind {
     public static final String WAREHOUSE = "warehouse";
     public static final String MAGE_TOWER = "mage_tower";
     public static final String BREAD = "minecraft:bread";
+    /** The honorary title a ruler gives a subject of good name. */
+    public static final String COUNCILLOR = "councillor";
+    /** The reputation a subject needs to become an honorary councillor. */
+    public static final int COUNCILLOR_REPUTATION = 50;
     /** Robbers further than this from the roads and the capital of a kingdom are no threat to it, in blocks. */
     public static final int THREAT_DISTANCE = 320;
     /** Buildings a ruler builds or raises at once at most, so that its builders finish what they start. */
@@ -630,11 +634,12 @@ public final class RulerMind {
         if (view.character == RulerCharacter.MAGE && view.tower && !view.researching && !view.research.isEmpty()) {
             out.add(new Scored(55, RulerDecision.of(Kind.RESEARCH, view.research, 1)));
         }
-        if (view.treasurerFree) {
-            view.candidates.stream().filter(candidate -> candidate.reputation() >= 50)
+        // A subject of good name becomes an honorary councillor: an honour without any right in the kingdom.
+        if (view.councillorFree) {
+            view.candidates.stream().filter(candidate -> candidate.reputation() >= COUNCILLOR_REPUTATION)
                     .max(Comparator.comparingInt(RulerView.Candidate::reputation))
                     .ifPresent(candidate -> out.add(new Scored(10 + (view.has(RulerCharacter.Trait.GENEROUS) ? 10 : 0),
-                            RulerDecision.of(Kind.APPOINT, "treasurer", 1, candidate.player().toString(), candidate.name()))));
+                            RulerDecision.of(Kind.APPOINT, COUNCILLOR, 1, candidate.player().toString(), candidate.name()))));
         }
     }
 

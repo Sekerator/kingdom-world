@@ -25,8 +25,8 @@ public final class RulerTexts {
     private static final String COUNT = "kingdomworld.count.";
     /** Roles with a word of their own in decrees; any other is named by its building. */
     public static final List<String> ROLES = List.of("house", "warehouse", "workshop", "market", "tower", "well", "barracks", "mage_tower", "tavern");
-    /** Positions a ruler appoints to. */
-    public static final List<String> POSITIONS = List.of("treasurer");
+    /** Honorary titles a ruler gives its subjects. */
+    public static final List<String> POSITIONS = List.of(RulerMind.COUNCILLOR);
 
     private RulerTexts() {
     }
@@ -55,6 +55,31 @@ public final class RulerTexts {
             case RESEARCH -> Component.translatable(key, Component.translatable("kingdomworld.magic.research." + decision.subject()));
             default -> Component.translatable(key);
         };
+    }
+
+    /**
+     * A decision with the names of kingdoms and towns of the world in the language of a player. A decree keeps the id of the
+     * kingdom it is about and both spellings of a town it founded, and the server names them for every player before it sends
+     * or tells them; kingdoms of players keep their names as they are.
+     */
+    public static RulerDecision localized(RulerDecision decision, String language) {
+        String name = switch (decision.kind()) {
+            case OFFER, ACCEPT, DECLINE, ROAD -> kingdomName(decision.target(), decision.targetName(), language);
+            case TOWN -> io.github.sekerator.kingdomworld.core.citizen.CitizenNames.alphabetFor(language)
+                    == io.github.sekerator.kingdomworld.core.citizen.CitizenNames.Alphabet.CYRILLIC && !decision.target().isEmpty()
+                    ? decision.target() : NpcWork.localCity(decision.targetName(), language);
+            default -> decision.targetName();
+        };
+        return name.equals(decision.targetName()) ? decision
+                : new RulerDecision(decision.kind(), decision.subject(), decision.amount(), decision.extra(), decision.target(), name);
+    }
+
+    private static String kingdomName(String id, String name, String language) {
+        try {
+            return NpcWork.localKingdom(java.util.UUID.fromString(id), name, language);
+        } catch (IllegalArgumentException e) {
+            return name;
+        }
     }
 
     /**

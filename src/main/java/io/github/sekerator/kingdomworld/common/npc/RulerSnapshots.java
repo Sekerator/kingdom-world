@@ -167,7 +167,7 @@ final class RulerSnapshots {
         neighbours(server, state, id, view);
         law(server, id, view);
         magic(server, state, id, view);
-        positions(server, state, id, view);
+        positions(server, state, id, view, memory.councillor());
         view.festivals = RulerFestivals.available();
         view.festivalCost = RulerFestivals.cost(server, id, Math.max(50, view.population * 10L));
     }
@@ -588,23 +588,23 @@ final class RulerSnapshots {
         }
     }
 
-    private static void positions(MinecraftServer server, KingdomWorldState state, UUID id, RulerView view) {
-        boolean treasurer = false;
+    private static void positions(MinecraftServer server, KingdomWorldState state, UUID id, RulerView view, UUID councillor) {
+        boolean named = false;
         List<RulerView.Candidate> candidates = new ArrayList<>();
         Optional<io.github.sekerator.kingdomworld.core.membership.KingdomMembers> members = state.membership().kingdom(id);
         if (members.isEmpty()) {
             return;
         }
         for (Member member : members.get().members().values()) {
-            if (member.role() == Role.TREASURER) {
-                treasurer = true;
+            if (member.playerId().equals(councillor)) {
+                named = true;
             } else if (member.role() == Role.SUBJECT) {
                 int reputation = LawWork.isReadOnly(server) ? 0 : LawWork.reputation(server, id, member.playerId());
                 candidates.add(new RulerView.Candidate(member.playerId(), io.github.sekerator.kingdomworld.common.kingdom.PlayerNames.name(server,
                         member.playerId()), reputation));
             }
         }
-        view.treasurerFree = !treasurer;
+        view.councillorFree = !named;
         view.candidates = candidates;
         // Mints without a minter while somebody is without work and there is metal to strike.
         long metal = KingdomStorage.count(server, id, stack -> io.github.sekerator.kingdomworld.common.economy.EconomySettings.mintRates().takes(stack));

@@ -17,8 +17,11 @@ import java.util.Objects;
  * @param attitude   how the ruler feels about the viewer, from -100 to 100
  * @param reputation the reputation of the viewer in the kingdom
  * @param dealings   how the deals of the viewer's kingdom with the ruler went
+ * @param councillor the name of the honorary councillor of the ruler, or an empty text
+ * @param yours      whether the viewer is that councillor
  */
-public record RulerInfo(List<Decree> decrees, List<RulerMemory.Need> needs, int attitude, int reputation, int dealings) {
+public record RulerInfo(List<Decree> decrees, List<RulerMemory.Need> needs, int attitude, int reputation, int dealings, String councillor,
+                        boolean yours) {
     public static final int MAX_DECREES = 6;
     public static final int MAX_NEEDS = RulerMemory.MAX_NEEDS;
     private static final int MAX_TEXT = 64;
@@ -35,6 +38,11 @@ public record RulerInfo(List<Decree> decrees, List<RulerMemory.Need> needs, int 
     public RulerInfo {
         decrees = List.copyOf(decrees.size() > MAX_DECREES ? decrees.subList(0, MAX_DECREES) : decrees);
         needs = List.copyOf(needs.size() > MAX_NEEDS ? needs.subList(0, MAX_NEEDS) : needs);
+        councillor = cut(Objects.requireNonNull(councillor, "councillor"));
+    }
+
+    public RulerInfo(List<Decree> decrees, List<RulerMemory.Need> needs, int attitude, int reputation, int dealings) {
+        this(decrees, needs, attitude, reputation, dealings, "", false);
     }
 
     public void encode(FriendlyByteBuf buf) {
@@ -51,6 +59,8 @@ public record RulerInfo(List<Decree> decrees, List<RulerMemory.Need> needs, int 
         buf.writeInt(attitude);
         buf.writeInt(reputation);
         buf.writeInt(dealings);
+        buf.writeUtf(councillor, MAX_TEXT);
+        buf.writeBoolean(yours);
     }
 
     /**
@@ -95,7 +105,7 @@ public record RulerInfo(List<Decree> decrees, List<RulerMemory.Need> needs, int 
         for (int i = 0; i < needCount; i++) {
             needs.add(new RulerMemory.Need(KingdomView.readEnum(buf, RulerMemory.NeedKind.class), buf.readUtf(MAX_TEXT), buf.readLong()));
         }
-        return new RulerInfo(decrees, needs, buf.readInt(), buf.readInt(), buf.readInt());
+        return new RulerInfo(decrees, needs, buf.readInt(), buf.readInt(), buf.readInt(), buf.readUtf(MAX_TEXT), buf.readBoolean());
     }
 
     /**

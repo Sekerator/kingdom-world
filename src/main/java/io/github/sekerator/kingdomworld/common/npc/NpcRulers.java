@@ -24,7 +24,6 @@ import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
 import io.github.sekerator.kingdomworld.core.trade.Deal;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -34,9 +33,11 @@ import org.slf4j.Logger;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -63,6 +64,10 @@ public final class NpcRulers {
     private record Turning(UUID kingdomId, RulerView view, long day, int part) {
     }
     private static int cursor;
+    /** The kingdom the next round of answers to deals starts with. */
+    private static int answerCursor;
+    /** Deals a ruler could neither take nor decline; they are not looked at again until they run out. */
+    private static final Set<Long> UNANSWERABLE = new LinkedHashSet<>();
     private static long loadingConstruction = -1;
     private static final List<Long> loadingChunks = new ArrayList<>();
     private static int loadingTicks;
@@ -97,6 +102,8 @@ public final class NpcRulers {
         job = null;
         turning = null;
         cursor = 0;
+        answerCursor = 0;
+        UNANSWERABLE.clear();
         loadingConstruction = -1;
         loadingChunks.clear();
         loadingTicks = 0;
@@ -370,24 +377,35 @@ public final class NpcRulers {
         RulerMemory memory = state.ruler(kingdomId);
         memory.decree(day, decision);
         if (memory.writeChronicle(day, decision, NpcSettings.rulers().decreesPerDay())) {
-            MutableComponent line = RulerTexts.chronicle(NpcTexts.ruler(kingdom.get()), decision, kingdom.get().rulerGender());
             LOGGER.info("Chronicle of {}: the ruler {} decreed {}", kingdom.get().name().latin(),
                     kingdom.get().rulerName(CitizenNames.Alphabet.LATIN), decision);
-            tellSubjects(server, kingdomId, Component.translatable("kingdomworld.ruler.chronicle.message", NpcTexts.name(kingdom.get().name().latin(),
-                    kingdom.get().name().cyrillic()), line));
+            tellSubjects(server, kingdomId, language -> Component.translatable("kingdomworld.ruler.chronicle.message",
+                    NpcTexts.name(kingdom.get().name().latin(), kingdom.get().name().cyrillic()),
+                    RulerTexts.chronicle(NpcTexts.ruler(kingdom.get()), RulerTexts.localized(decision, language), kingdom.get().rulerGender())));
         }
         state.rulerChanged();
     }
 
-    private static void tellSubjects(MinecraftServer server, UUID kingdomId, Component message) {
+    /**
+     * Tells every subject of a kingdom online a message in their language.
+     */
+    private static void tellSubjects(MinecraftServer server, UUID kingdomId, java.util.function.Function<String, Component> message) {
         KingdomWorldApi.state(server).membership().kingdom(kingdomId).ifPresent(members -> {
             for (Member member : members.members().values()) {
                 ServerPlayer player = server.getPlayerList().getPlayer(member.playerId());
                 if (player != null) {
-                    player.sendSystemMessage(message);
+                    player.sendSystemMessage(message.apply(player.getLanguage()));
                 }
             }
         });
+    }
+
+    /**
+     * The language of a player online, or English for one who is not.
+     */
+    static String language(MinecraftServer server, UUID player) {
+        ServerPlayer online = player == null ? null : server.getPlayerList().getPlayer(player);
+        return online == null ? "en_us" : online.getLanguage();
     }
 
     /**
@@ -593,27 +611,32 @@ public final class NpcRulers {
         KingdomWorldState world = KingdomWorldApi.state(server);
         long day = TreasuryActions.day(server);
         boolean any = false;
-        for (NpcKingdom kingdom : List.copyOf(state.kingdoms())) {
+        List<NpcKingdom> kingdoms = List.copyOf(state.kingdoms());
+        int count = kingdoms.size();
+        // The kingdoms take their turns to answer, so that one with a deal it cannot settle does not hold up the others.
+        for (int step = 0; step < count; step++) {
+            int index = Math.floorMod(answerCursor + step, count);
+            NpcKingdom kingdom = kingdoms.get(index);
             if (!ready(state, kingdom)) {
                 continue;
             }
             UUID id = kingdom.kingdomId();
             RulerActions.answerCrossings(server, kingdom);
-            boolean offered = world.trade().dealsOf(id).stream().anyMatch(deal -> deal.status() == Deal.Status.PROPOSED && id.equals(deal.answerer()));
+            boolean offered = world.trade().dealsOf(id).stream().anyMatch(deal -> deal.status() == Deal.Status.PROPOSED && id.equals(deal.answerer())
+                    && !UNANSWERABLE.contains(deal.id()));
             if (!offered) {
                 continue;
             }
+            answerCursor = index + 1;
             any = true;
             doing = doing + " answers of " + kingdom.name().latin();
             turnTick = true;
             RulerMemory memory = state.ruler(id);
-            // Judging deals needs no places for buildings or land: the look without them is enough.
-            RulerView view = RulerSnapshots.begin(server, kingdom, memory, NpcSettings.rulers(), day);
-            for (int part = 1; part < RulerSnapshots.PARTS; part++) {
-                RulerSnapshots.next(server, kingdom, memory, view, part);
-            }
-            RulerSnapshots.more(server, kingdom, memory, view);
+            RulerView view = look(server, kingdom, day);
             for (RulerView.Offer offer : view.offers) {
+                if (UNANSWERABLE.contains(offer.deal())) {
+                    continue;
+                }
                 RulerMind.Verdict verdict = RulerMind.judge(offer, view, memory, NpcSettings.rulers());
                 carryOut(server, kingdom, new RulerDecision(verdict.accept() ? RulerDecision.Kind.ACCEPT : RulerDecision.Kind.DECLINE,
                         verdict.reason(), offer.count(), offer.deal(), offer.partner().toString(), offer.partnerName()), day);
@@ -622,6 +645,29 @@ public final class NpcRulers {
             break;
         }
         return any;
+    }
+
+    /**
+     * A look of a ruler at its kingdom without the places for buildings and land: enough to judge deals and subjects.
+     */
+    public static RulerView look(MinecraftServer server, NpcKingdom kingdom, long day) {
+        RulerMemory memory = NpcWork.state(server).ruler(kingdom.kingdomId());
+        RulerView view = RulerSnapshots.begin(server, kingdom, memory, NpcSettings.rulers(), day);
+        for (int part = 1; part < RulerSnapshots.PARTS; part++) {
+            RulerSnapshots.next(server, kingdom, memory, view, part);
+        }
+        RulerSnapshots.more(server, kingdom, memory, view);
+        return view;
+    }
+
+    /**
+     * Remembers a deal that a ruler could neither take nor decline.
+     */
+    static void unanswerable(long dealId) {
+        UNANSWERABLE.add(dealId);
+        while (UNANSWERABLE.size() > 256) {
+            UNANSWERABLE.remove(UNANSWERABLE.iterator().next());
+        }
     }
 
     // ---------------------------------------------------------------- buildings far from players
@@ -679,12 +725,15 @@ public final class NpcRulers {
     /**
      * The decrees of the chronicle of a kingdom of the world, the newest first; empty for a kingdom of players.
      */
-    public static List<io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree> chronicle(MinecraftServer server, UUID kingdomId) {
+    public static List<io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree> chronicle(MinecraftServer server, UUID kingdomId,
+                                                                                                    UUID viewer) {
+        String language = language(server, viewer);
         List<io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree> decrees = new ArrayList<>();
         NpcWork.state(server).existingRuler(kingdomId).ifPresent(memory -> {
             for (RulerMemory.Decree decree : memory.chronicle()) {
                 if (decrees.size() < io.github.sekerator.kingdomworld.common.network.data.CitizenView.MAX_DECREES) {
-                    decrees.add(new io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree(decree.day(), decree.decision()));
+                    decrees.add(new io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree(decree.day(),
+                            RulerTexts.localized(decree.decision(), language)));
                 }
             }
         });
@@ -696,18 +745,24 @@ public final class NpcRulers {
      */
     public static io.github.sekerator.kingdomworld.common.network.data.RulerInfo info(MinecraftServer server, NpcKingdom kingdom, UUID viewer) {
         RulerMemory memory = NpcWork.state(server).existingRuler(kingdom.kingdomId()).orElseGet(RulerMemory::new);
+        String language = language(server, viewer);
         List<io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree> decrees = new ArrayList<>();
         for (RulerMemory.Decree decree : memory.decrees()) {
             if (decrees.size() >= io.github.sekerator.kingdomworld.common.network.data.RulerInfo.MAX_DECREES) {
                 break;
             }
-            decrees.add(new io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree(decree.day(), decree.decision()));
+            decrees.add(new io.github.sekerator.kingdomworld.common.network.data.RulerInfo.Decree(decree.day(),
+                    RulerTexts.localized(decree.decision(), language)));
         }
         int reputation = io.github.sekerator.kingdomworld.common.law.LawWork.isReadOnly(server) ? 0
                 : io.github.sekerator.kingdomworld.common.law.LawWork.reputation(server, kingdom.kingdomId(), viewer);
         int dealings = memory.dealings(viewer);
+        UUID councillor = memory.councillor();
+        String councillorName = councillor != null && KingdomWorldApi.state(server).membership().isMember(councillor, kingdom.kingdomId())
+                ? io.github.sekerator.kingdomworld.common.kingdom.PlayerNames.name(server, councillor) : "";
         return new io.github.sekerator.kingdomworld.common.network.data.RulerInfo(decrees, memory.needs(),
-                RulerMind.attitude(reputation, dealings, kingdom.traits()), reputation, dealings);
+                RulerMind.attitude(reputation, dealings, kingdom.traits()), reputation, dealings, councillorName,
+                !councillorName.isEmpty() && councillor.equals(viewer));
     }
 
     /**

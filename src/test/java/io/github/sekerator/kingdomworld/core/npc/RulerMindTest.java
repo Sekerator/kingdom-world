@@ -288,4 +288,22 @@ class RulerMindTest {
         view.festivals = true;
         assertTrue(has(decide(view), Kind.FESTIVAL, null));
     }
+
+    @Test
+    void aSubjectOfGoodNameBecomesAnHonoraryCouncillorAndNothingMore() {
+        RulerView view = calm();
+        UUID low = UUID.randomUUID();
+        UUID high = UUID.randomUUID();
+        view.candidates = List.of(new RulerView.Candidate(low, "Low", 20), new RulerView.Candidate(high, "High", 80));
+        view.councillorFree = true;
+        List<RulerDecision> decisions = decide(view);
+        assertTrue(decisions.stream().anyMatch(d -> d.kind() == Kind.APPOINT && d.subject().equals(RulerMind.COUNCILLOR)
+                && d.target().equals(high.toString())), decisions.toString());
+        view.councillorFree = false;
+        assertFalse(has(decide(view), Kind.APPOINT, null), "one councillor is enough");
+        RulerView unknown = calm();
+        unknown.candidates = List.of(new RulerView.Candidate(low, "Low", 20));
+        unknown.councillorFree = true;
+        assertFalse(has(decide(unknown), Kind.APPOINT, null), "a subject of no name is not honoured");
+    }
 }

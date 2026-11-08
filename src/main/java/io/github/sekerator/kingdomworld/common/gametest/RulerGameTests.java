@@ -278,7 +278,7 @@ public final class RulerGameTests {
             helper.assertTrue(!memory.chronicle().isEmpty() && memory.chronicle().get(0).decision().kind() == RulerDecision.Kind.TAX,
                     "The decree is not in the chronicle: " + memory.chronicle());
             helper.assertTrue(KingdomWorldApi.treasury(server, id).orElseThrow().pollTax() == tax, "The tax was not set");
-            helper.assertTrue(NpcRulers.chronicle(server, id).size() == memory.chronicle().size(), "The chronicle is not shown");
+            helper.assertTrue(NpcRulers.chronicle(server, id, null).size() == memory.chronicle().size(), "The chronicle is not shown");
             // A feast of the life of towns, paid from the treasury like the feast of a king.
             helper.assertTrue(io.github.sekerator.kingdomworld.common.npc.RulerFestivals.available(), "Rulers have no host of feasts");
             long before = KingdomWorldApi.treasury(server, id).orElseThrow().funds();
@@ -292,6 +292,61 @@ public final class RulerGameTests {
                     "A small decree went to the chronicle");
             helper.succeed();
         } finally {
+            NpcGameTests.cleanUp(helper, site, center);
+        }
+    }
+
+    @GameTest(template = NpcGameTests.EMPTY, batch = "kingdomworld_ruler_councillor", timeoutTicks = 200)
+    public static void anHonoraryCouncillorCannotPayHimselfFromTheTreasuryNorTakeTheCoinsOfTheVault(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos center = NpcGameTests.platform(helper);
+        NpcSite site = null;
+        UUID player = UUID.randomUUID();
+        try {
+            site = NpcGameTests.plant(helper, center);
+            NpcKingdom npc = appear(helper, site);
+            UUID id = npc.kingdomId();
+            KingdomWorldState state = KingdomWorldApi.state(server);
+            long now = KingdomWorldApi.gameTime(server);
+            KingdomWorldApi.change(server, "a player joins a kingdom of the world", s -> s.membership().apply(player, id, now));
+            KingdomWorldApi.change(server, "the ruler takes the player", s -> s.membership().admit(id, player, now));
+            helper.assertTrue(state.membership().isMember(player, id), "The player did not become a subject");
+            io.github.sekerator.kingdomworld.common.law.LawSavedData.get(server).state().setReputation(id, player, 100);
+            long day = TreasuryActions.day(server);
+            // The ruler sees a subject of the best name and honours them.
+            io.github.sekerator.kingdomworld.core.npc.RulerView view = NpcRulers.look(server, npc, day);
+            helper.assertTrue(view.councillorFree && view.candidates.stream().anyMatch(c -> c.player().equals(player) && c.reputation() >= 50),
+                    "The ruler does not see the player among its candidates: " + view.candidates);
+            NpcRulers.carryOutNow(server, npc, RulerDecision.of(RulerDecision.Kind.APPOINT, RulerMind.COUNCILLOR, 1, player.toString(),
+                    "GameTest Councillor"));
+            RulerMemory memory = NpcWork.state(server).ruler(id);
+            helper.assertTrue(player.equals(memory.councillor()), "The player was not named a councillor: " + memory.decrees());
+            // The title is an honour alone: the position and the rights stay those of a subject.
+            helper.assertTrue(state.membership().memberOf(player).map(io.github.sekerator.kingdomworld.core.membership.Member::role)
+                    .orElse(null) == io.github.sekerator.kingdomworld.core.membership.Role.SUBJECT, "The councillor got a position");
+            for (io.github.sekerator.kingdomworld.core.membership.Permission permission
+                    : io.github.sekerator.kingdomworld.core.membership.Permission.values()) {
+                boolean subject = permission == io.github.sekerator.kingdomworld.core.membership.Permission.BUILD
+                        || permission == io.github.sekerator.kingdomworld.core.membership.Permission.INTERACT;
+                helper.assertTrue(state.membership().hasPermission(player, id, permission) == subject,
+                        "The councillor has the right " + permission + ": " + state.membership().hasPermission(player, id, permission));
+            }
+            long funds = KingdomWorldApi.treasury(server, id).orElseThrow().funds();
+            helper.assertTrue(funds > 0, "The treasury is empty");
+            io.github.sekerator.kingdomworld.core.kingdom.Outcome pay = state.payFromTreasury(player, id, player, funds, day);
+            helper.assertTrue(!pay.ok() && pay.error() == io.github.sekerator.kingdomworld.core.kingdom.KingdomError.NO_PERMISSION,
+                    "The councillor paid himself from the treasury: " + pay);
+            for (io.github.sekerator.kingdomworld.core.economy.Denomination denomination
+                    : io.github.sekerator.kingdomworld.core.economy.Denomination.values()) {
+                io.github.sekerator.kingdomworld.core.kingdom.Outcome take = state.takeVaultCoins(player, id, denomination, 1, day);
+                helper.assertTrue(!take.ok() && take.error() == io.github.sekerator.kingdomworld.core.kingdom.KingdomError.NO_PERMISSION,
+                        "The councillor took coins of the vault: " + take);
+            }
+            helper.assertTrue(KingdomWorldApi.treasury(server, id).orElseThrow().funds() == funds, "The treasury changed");
+            helper.succeed();
+        } finally {
+            KingdomWorldApi.change(server, "the player leaves", s -> s.membership().leave(player));
             NpcGameTests.cleanUp(helper, site, center);
         }
     }

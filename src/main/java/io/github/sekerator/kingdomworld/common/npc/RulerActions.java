@@ -42,7 +42,6 @@ import io.github.sekerator.kingdomworld.core.guild.Rank;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
 import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
 import io.github.sekerator.kingdomworld.core.magic.Research;
-import io.github.sekerator.kingdomworld.core.membership.Role;
 import io.github.sekerator.kingdomworld.core.npc.NpcKingdom;
 import io.github.sekerator.kingdomworld.core.npc.NpcNames;
 import io.github.sekerator.kingdomworld.core.npc.NpcSite;
@@ -235,8 +234,7 @@ final class RulerActions {
                         law -> law.setBountyReward(null, id, decision.amount(), LawSettings.rules(), KingdomWorldApi.state(server))), decision);
                 case FESTIVAL -> Result.of(RulerFestivals.hold(server, id, decision.amount()), decision);
                 case RESEARCH -> research(server, id, decision);
-                case APPOINT -> Result.of(KingdomWorldApi.change(server, "appoint a subject of a kingdom of the world",
-                        state -> state.membership().appoint(id, UUID.fromString(decision.target()), Role.TREASURER)), decision);
+                case APPOINT -> name(server, id, decision);
                 case PAUSE -> pause(server, id, decision);
             };
         } catch (IllegalArgumentException e) {
@@ -420,8 +418,13 @@ final class RulerActions {
             s.setPostProfession(null, at, Professions.BUILDER.id());
             return s.setPostSeats(null, at, 1, maxSeats);
         });
-        if (state.hire(null, at).outcome().ok()) {
+        Outcome hired = KingdomWorldApi.change(server, "hire the builder of a kingdom of the world", s -> s.hire(null, at).outcome());
+        if (hired.ok()) {
             LOGGER.info("The ruler of {} set a builder to work at {}", npc.name().latin(), pos.toShortString());
+            return;
+        }
+        if (hired.error() != KingdomError.NO_UNEMPLOYED) {
+            LOGGER.debug("The ruler of {} could not set a builder to work at {}: {}", npc.name().latin(), pos.toShortString(), hired.error());
             return;
         }
         // Nobody is without work: a worker of the most common work goes to building.
@@ -434,13 +437,65 @@ final class RulerActions {
             if (counts.getOrDefault(profession, 0) >= 2 && !profession.equals(Professions.UNEMPLOYED.id())
                     && !io.github.sekerator.kingdomworld.common.army.ArmyWork.state(server).soldiersOf(id).stream()
                     .anyMatch(soldier -> soldier.citizenId().equals(citizen.id()))) {
-                boolean moved = state.setProfession(null, citizen.id(), Professions.UNEMPLOYED.id()).ok() && state.hire(null, at).outcome().ok();
-                io.github.sekerator.kingdomworld.common.citizen.CitizenActions.afterProfessionChange(server, citizen);
-                LOGGER.info("The ruler of {} {} a {} to building at {}", npc.name().latin(), moved ? "moved" : "could not move", profession,
-                        pos.toShortString());
+                Outcome moved = KingdomWorldApi.change(server, "move a citizen of a kingdom of the world to building",
+                        s -> move(s, citizen, at));
+                if (moved.ok()) {
+                    io.github.sekerator.kingdomworld.common.citizen.CitizenActions.afterProfessionChange(server, citizen);
+                }
+                LOGGER.info("The ruler of {} {} a {} to building at {}", npc.name().latin(), moved.ok() ? "moved" : "could not move",
+                        profession, pos.toShortString());
                 return;
             }
         }
+    }
+
+    /**
+     * Moves a citizen from its work to the post of a builder; when the post does not take it, the citizen goes back to the work
+     * and the place it had.
+     */
+    private static Outcome move(KingdomWorldState state, Citizen citizen, io.github.sekerator.kingdomworld.core.citizen.WorldPos post) {
+        String profession = citizen.professionId();
+        io.github.sekerator.kingdomworld.core.citizen.WorldPos workplace = citizen.workplace();
+        Outcome freed = state.setProfession(null, citizen.id(), Professions.UNEMPLOYED.id());
+        if (!freed.ok()) {
+            return freed;
+        }
+        Outcome hired = state.hire(null, post).outcome();
+        if (!hired.ok() || !Professions.BUILDER.id().equals(citizen.professionId())) {
+            if (!citizen.professionId().equals(profession)) {
+                state.setProfession(null, citizen.id(), profession);
+            }
+            if (workplace != null && citizen.workplace() == null
+                    && state.citizens().posts().get(workplace).map(found -> found.freeSeats() > 0).orElse(false)) {
+                state.citizens().assignWorkplace(citizen, workplace);
+            }
+            return hired.ok() ? Outcome.fail(KingdomError.UNCHANGED) : hired;
+        }
+        return hired;
+    }
+
+    /**
+     * Names a subject the honorary councillor of the ruler. The title gives no right in the kingdom: the position of the subject
+     * stays as it is.
+     */
+    private static Result name(MinecraftServer server, UUID id, RulerDecision decision) {
+        UUID player;
+        try {
+            player = UUID.fromString(decision.target());
+        } catch (IllegalArgumentException e) {
+            return Result.of(Outcome.fail(KingdomError.NOT_A_MEMBER), decision);
+        }
+        if (!KingdomWorldApi.state(server).membership().isMember(player, id)) {
+            return Result.of(Outcome.fail(KingdomError.NOT_A_MEMBER), decision);
+        }
+        io.github.sekerator.kingdomworld.core.npc.NpcState npc = NpcWork.state(server);
+        RulerMemory memory = npc.ruler(id);
+        if (player.equals(memory.councillor())) {
+            return Result.of(Outcome.fail(KingdomError.UNCHANGED), decision);
+        }
+        memory.setCouncillor(player);
+        npc.rulerChanged();
+        return Result.of(Outcome.DONE, decision);
     }
 
     private static Result repair(MinecraftServer server, UUID id, RulerDecision decision) {
@@ -769,7 +824,7 @@ final class RulerActions {
                     if (!road.ok()) {
                         LOGGER.info("The road to the new town {} of {} waits: {}", name.latin(), npc.name().latin(), road.error());
                     }
-                    decision = new RulerDecision(RulerDecision.Kind.TOWN, "", 1, 0, "", name.latin());
+                    decision = new RulerDecision(RulerDecision.Kind.TOWN, "", 1, 0, name.cyrillic(), name.latin());
                     LOGGER.info("The ruler of {} founded the town {} at {} {}", npc.name().latin(), name.latin(), x, z);
                     return Outcome.DONE;
                 }
@@ -967,13 +1022,13 @@ final class RulerActions {
             NpcWork.state(server).rulerChanged();
             return Result.done(decision);
         }
-        if (outcome.error() == KingdomError.NOT_ENOUGH_GOODS || outcome.error() == KingdomError.NOT_ENOUGH_MONEY) {
-            String reason = outcome.error() == KingdomError.NOT_ENOUGH_GOODS ? io.github.sekerator.kingdomworld.core.npc.RulerMind.NO_GOODS
-                    : io.github.sekerator.kingdomworld.core.npc.RulerMind.NO_MONEY;
-            return decline(server, id, new RulerDecision(RulerDecision.Kind.DECLINE, reason, decision.amount(), dealId, decision.target(),
-                    decision.targetName()));
-        }
-        return Result.of(outcome, decision);
+        // A deal the ruler cannot take, for whatever reason, is declined, so that it does not wait for an answer until it runs out.
+        String reason = outcome.error() == KingdomError.NOT_ENOUGH_GOODS ? io.github.sekerator.kingdomworld.core.npc.RulerMind.NO_GOODS
+                : outcome.error() == KingdomError.NOT_ENOUGH_MONEY ? io.github.sekerator.kingdomworld.core.npc.RulerMind.NO_MONEY
+                : io.github.sekerator.kingdomworld.core.npc.RulerMind.NOT_NEEDED;
+        LOGGER.debug("The ruler of {} could not take deal {}: {}", id, dealId, outcome.error());
+        return decline(server, id, new RulerDecision(RulerDecision.Kind.DECLINE, reason, decision.amount(), dealId, decision.target(),
+                decision.targetName()));
     }
 
     private static Result decline(MinecraftServer server, UUID id, RulerDecision decision) {
@@ -993,6 +1048,8 @@ final class RulerActions {
             NpcWork.state(server).existingRuler(partner).ifPresent(other -> other.relate(id, RulerMemory.Reason.REFUSAL));
             NpcWork.state(server).rulerChanged();
             NpcRulers.tellDeclined(server, id, partner, decision);
+        } else if (!outcome.ok()) {
+            NpcRulers.unanswerable(dealId);
         }
         return Result.of(outcome, decision);
     }

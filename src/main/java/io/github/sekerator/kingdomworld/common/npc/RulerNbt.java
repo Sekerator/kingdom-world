@@ -19,7 +19,7 @@ import java.util.UUID;
  * data read-only.
  *
  * <pre>
- * rulers: [ { kingdom, turns, poor, chronicleDay, chronicled, deals: [id],
+ * rulers: [ { kingdom, turns, poor, chronicleDay, chronicled, councillor?, deals: [id],
  *             decrees: [ { day, decision } ], chronicle: [ { day, decision } ], needs: [ { kind, subject, amount } ],
  *             pending: [ decision ], relations: [ { other, score, reasons: { reason: count } } ], players: [ { player, value } ] } ]
  * decision: { kind, subject, amount, extra, target, name }
@@ -38,6 +38,9 @@ final class RulerNbt {
             entry.putLong("poor", memory.poorSince());
             entry.putLong("chronicleDay", memory.chronicleDay());
             entry.putInt("chronicled", memory.chronicleCount());
+            if (memory.councillor() != null) {
+                entry.putUUID("councillor", memory.councillor());
+            }
             entry.put("deals", new LongArrayTag(memory.seenDeals()));
             entry.put("decrees", decrees(memory.decrees()));
             entry.put("chronicle", decrees(memory.chronicle()));
@@ -122,6 +125,9 @@ final class RulerNbt {
                 UUID kingdom = entry.getUUID("kingdom");
                 RulerMemory memory = new RulerMemory();
                 memory.restore(entry.getInt("turns"), entry.getLong("poor"), entry.getLong("chronicleDay"), entry.getInt("chronicled"));
+                if (entry.hasUUID("councillor")) {
+                    memory.setCouncillor(entry.getUUID("councillor"));
+                }
                 for (long deal : entry.getLongArray("deals")) {
                     memory.seeDeal(deal);
                 }

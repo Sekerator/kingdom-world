@@ -166,7 +166,8 @@ public final class RulerView {
     public boolean mintIdle;
 
     public List<Candidate> candidates = new ArrayList<>();
-    public boolean treasurerFree;
+    /** Whether the ruler has no honorary councillor among its subjects. */
+    public boolean councillorFree;
     /** Whether feasts can be held at all. */
     public boolean festivals;
     public long festivalCost = 200;
@@ -238,7 +239,7 @@ public final class RulerView {
         view.researching = researching;
         view.mintIdle = mintIdle;
         view.candidates = new ArrayList<>(candidates);
-        view.treasurerFree = treasurerFree;
+        view.councillorFree = councillorFree;
         view.festivals = festivals;
         view.festivalCost = festivalCost;
         return view;
