@@ -65,6 +65,7 @@ final class DiplomacyLayoutCases {
         List<DiplomacyViews.CallRow> calls = new ArrayList<>();
         List<DiplomacyViews.WarRow> wars = new ArrayList<>();
         List<Component> chronicle = new ArrayList<>();
+        List<Component> world = new ArrayList<>();
         if (!empty) {
             Bond[] bonds = Bond.values();
             for (int i = 0; i < 24; i++) {
@@ -90,8 +91,23 @@ final class DiplomacyLayoutCases {
             for (int i = 0; i < 40; i++) {
                 chronicle.add(Component.translatable("kingdomworld.war.chronicle.raid", 99_999, name(i), name(i + 1), TradeTexts.items(999_999)));
             }
+            Component city = Component.translatable("kingdomworld.siege.city_label", LONG_KINGDOM);
+            world.add(Component.translatable("kingdomworld.siege.tab.siege_ours", city, 40).withStyle(net.minecraft.ChatFormatting.RED));
+            world.add(Component.translatable("kingdomworld.siege.tab.plaza_taken_theirs", city, 100).withStyle(net.minecraft.ChatFormatting.GREEN));
+            world.add(Component.translatable("kingdomworld.siege.tab.throne_ours", city, 60).withStyle(net.minecraft.ChatFormatting.RED));
+            world.add(Component.translatable("kingdomworld.siege.tab.occupied_ours", Component.translatable("kingdomworld.siege.count.chunks.n5", 99))
+                    .withStyle(net.minecraft.ChatFormatting.RED));
+            world.add(Component.translatable("kingdomworld.siege.tab.conquest.annex", name(0), name(1)).withStyle(net.minecraft.ChatFormatting.YELLOW));
+            world.add(Component.translatable("kingdomworld.siege.tab.damage", Component.translatable("kingdomworld.siege.count.blocks.n5", 4_096))
+                    .withStyle(net.minecraft.ChatFormatting.GOLD));
+            world.add(Component.translatable("kingdomworld.siege.tab.cost", Component.translatable("kingdomworld.siege.tab.item", 999,
+                    Component.translatable("block.minecraft.stone_bricks"))));
+            world.add(Component.translatable("kingdomworld.siege.tab.missing", Component.translatable("kingdomworld.siege.tab.item", 999,
+                    Component.translatable("block.minecraft.spruce_log"))).withStyle(net.minecraft.ChatFormatting.RED));
+            world.add(Component.translatable("kingdomworld.siege.tab.mend_after").withStyle(net.minecraft.ChatFormatting.GRAY));
+            world.add(Component.translatable("kingdomworld.siege.tab.warning").withStyle(net.minecraft.ChatFormatting.GRAY));
         }
-        return new DiplomacyViews.TabView(kingdom, canManage, canManage, shielded, kingdoms, offers, calls, wars, chronicle, chronicle);
+        return new DiplomacyViews.TabView(kingdom, canManage, canManage, shielded, kingdoms, offers, calls, wars, world, chronicle);
     }
 
     private static ThroneScreen diplomacyTab(Function<Role, KingdomView> member, Role role, boolean canManage, boolean empty, boolean shielded,
@@ -114,7 +130,7 @@ final class DiplomacyLayoutCases {
             screen.selectTab("diplomacy");
             return screen;
         });
-        for (String mode : List.of("kingdoms", "offers", "wars", "chronicle")) {
+        for (String mode : List.of("kingdoms", "offers", "wars", "world", "chronicle")) {
             add.accept("throne-diplomacy-" + mode, () -> diplomacyTab(member, Role.KING, true, false, false, mode, false, Component.empty()));
             add.accept("throne-diplomacy-" + mode + "-empty", () -> diplomacyTab(member, Role.CHANCELLOR, true, true, true, mode, false,
                     Component.empty()));

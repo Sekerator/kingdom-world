@@ -258,7 +258,7 @@ public final class SiegeCommands {
                     case "hang" -> count += SiegeGates.set(server, wall, cell, true, rules) ? 1 : 0;
                     case "break" -> count += SiegeGates.set(server, wall, cell, false, rules) ? 1 : 0;
                     default -> {
-                        BlockPos middle = SiegeGates.leafPositions(wall, cell).get(2);
+                        BlockPos middle = SiegeGates.leafPositions(wall, cell).get(SiegeGates.MIDDLE);
                         source.sendSuccess(() -> Component.translatable(ADMIN + "gate_line", wall.id(), cell, middle.getX(), middle.getY(),
                                 middle.getZ(), gate.map(g -> g.material().id()).orElse("-"), gate.map(g -> g.percent(rules)).orElse(0),
                                 gate.map(g -> g.closed() ? "closed" : g.hung() ? "open" : "breached").orElse("-")), false);

@@ -8,8 +8,10 @@ import java.util.UUID;
  * strength is gone is breached until the builders hang new leaves.
  */
 public final class Gate {
-    /** Leaf blocks of a gate: three wide, two high. */
-    public static final int LEAVES = 6;
+    /** Rows of leaf blocks of a gate, from the ground up. */
+    public static final int ROWS = 4;
+    /** Leaf blocks of a gate: three wide, {@link #ROWS} high. */
+    public static final int LEAVES = 3 * ROWS;
     /** Every leaf block in place. */
     public static final int ALL_LEAVES = (1 << LEAVES) - 1;
 

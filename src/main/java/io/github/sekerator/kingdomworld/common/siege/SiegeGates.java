@@ -72,15 +72,18 @@ public final class SiegeGates {
         return wall.wallClass() == Wall.WallClass.STONE ? GateMaterial.IRON : GateMaterial.WOOD;
     }
 
+    /** The index of the leaf block in the middle of the opening, on the ground, in {@link #leafPositions}. */
+    public static final int MIDDLE = Gate.ROWS;
+
     /**
-     * The leaf blocks of a gate: the three blocks of its opening, two high.
+     * The leaf blocks of a gate: the three blocks of its opening, {@link Gate#ROWS} high.
      */
     public static List<BlockPos> leafPositions(Wall wall, int cell) {
         List<BlockPos> result = new ArrayList<>(Gate.LEAVES);
         int size = wall.cells().size();
         for (int i = -1; i <= 1; i++) {
             RouteCell at = wall.cells().get(Math.floorMod(cell + i, size));
-            for (int row = 1; row <= 2; row++) {
+            for (int row = 1; row <= Gate.ROWS; row++) {
                 result.add(new BlockPos(at.x(), at.y() + row, at.z()));
             }
         }
@@ -188,7 +191,7 @@ public final class SiegeGates {
                 state.changed();
             }
         }
-        BlockPos middle = leaves.get(2);
+        BlockPos middle = leaves.get(MIDDLE);
         UUID owner = gate.kingdomId();
         DiplomacyState diplomacy = WarWork.state(server);
         boolean atWar = diplomacy.fightsAnyWar(owner);
@@ -251,7 +254,7 @@ public final class SiegeGates {
      */
     private static void strike(MinecraftServer server, ServerLevel level, Wall wall, Gate gate, List<BlockPos> leaves, SiegeRules rules, long now,
                                Predicate<UUID> enemy) {
-        BlockPos middle = leaves.get(2);
+        BlockPos middle = leaves.get(MIDDLE);
         AABB box = new AABB(middle).inflate(REACH, 3, REACH);
         List<CitizenEntity> soldiers = level.getEntitiesOfClass(CitizenEntity.class, box, body -> body.isAlive() && enemy.test(body.kingdomId())
                 && SiegeWork.besieging(server, body));
@@ -333,7 +336,7 @@ public final class SiegeGates {
         }
         UUID kingdom = gate.kingdomId();
         io.github.sekerator.kingdomworld.core.citizen.WorldPos near = new io.github.sekerator.kingdomworld.core.citizen.WorldPos(wall.dimension(),
-                leaves.get(2).getX(), leaves.get(2).getY(), leaves.get(2).getZ());
+                leaves.get(MIDDLE).getX(), leaves.get(MIDDLE).getY(), leaves.get(MIDDLE).getZ());
         if (!pay(server, kingdom, material, near)) {
             return;
         }
@@ -359,7 +362,7 @@ public final class SiegeGates {
         }
         Predicate<ItemStack> leaf = material == GateMaterial.IRON ? stack -> stack.is(Items.IRON_BARS) : stack -> stack.is(ItemTags.FENCE_GATES);
         Predicate<ItemStack> raw = material == GateMaterial.IRON ? stack -> stack.is(Items.IRON_INGOT) : stack -> stack.is(ItemTags.PLANKS);
-        int rawCount = material == GateMaterial.IRON ? 3 : 24;
+        int rawCount = material == GateMaterial.IRON ? 5 : 4 * Gate.LEAVES;
         if (KingdomStorage.count(server, kingdom, leaf) >= Gate.LEAVES) {
             return KingdomStorage.take(server, kingdom, leaf, Gate.LEAVES, near).stream().mapToInt(ItemStack::getCount).sum() >= Gate.LEAVES;
         }

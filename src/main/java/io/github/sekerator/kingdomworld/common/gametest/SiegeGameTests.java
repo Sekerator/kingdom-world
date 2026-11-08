@@ -230,12 +230,12 @@ public final class SiegeGameTests {
             helper.assertTrue(SiegeWork.state(server).gate(wallId, 2).isPresent(), "The gate of the wall is not known");
             helper.assertTrue(SiegeWork.forceHang(server, wall, 2, true), "The leaves were not hung");
             SiegeWork.forceGates(server);
-            BlockState leaf = level.getBlockState(leaves.get(2));
+            BlockState leaf = level.getBlockState(leaves.get(SiegeGates.MIDDLE));
             helper.assertTrue(leaf.getBlock() instanceof FenceGateBlock && leaf.getValue(FenceGateBlock.OPEN), "A gate in peace is not open");
             War war = WarGameTests.war(helper, home, enemy, WarGoal.CITY);
             ArmySquad squad = squad(helper, home, attacker);
-            ArmyWork.order(server, null, squad.id(), Order.siege(new WorldPos(Dimensions.id(level), leaves.get(2).getX(), leaves.get(2).getY(),
-                    leaves.get(2).getZ() + 3)));
+            ArmyWork.order(server, null, squad.id(), Order.siege(new WorldPos(Dimensions.id(level), leaves.get(SiegeGates.MIDDLE).getX(), leaves.get(SiegeGates.MIDDLE).getY(),
+                    leaves.get(SiegeGates.MIDDLE).getZ() + 3)));
             CitizenEntity soldier = body(helper, attacker, 2.5, -2.0);
             CitizenEntity keeper = body(helper, gatekeeper, 2.5, 1.5);
             // An enemy soldier near and one of their own right at the gate: the gate opens for its own.
@@ -245,12 +245,12 @@ public final class SiegeGameTests {
             helper.assertTrue(!gate.closed(), "The gate did not open for its own while the enemy was not at it");
             keeper.discard();
             SiegeWork.forceGates(server);
-            helper.assertTrue(gate.closed() && !level.getBlockState(leaves.get(2)).getValue(FenceGateBlock.OPEN),
+            helper.assertTrue(gate.closed() && !level.getBlockState(leaves.get(SiegeGates.MIDDLE)).getValue(FenceGateBlock.OPEN),
                     "The gate did not close before an enemy");
             // The soldier comes to the gate with a ram of the siege: 1 a second and 3 for the ram, the leaves hold 12.
-            SiegeWork.state(server).startSiege(new Siege(war.id(), home.id(), enemy.id(), 0, Dimensions.id(level), leaves.get(2).getX(),
-                    leaves.get(2).getY(), leaves.get(2).getZ(), 0, 1, false));
-            soldier.moveTo(leaves.get(2).getX() + 0.5, leaves.get(2).getY(), leaves.get(2).getZ() - 1.5, 0, 0);
+            SiegeWork.state(server).startSiege(new Siege(war.id(), home.id(), enemy.id(), 0, Dimensions.id(level), leaves.get(SiegeGates.MIDDLE).getX(),
+                    leaves.get(SiegeGates.MIDDLE).getY(), leaves.get(SiegeGates.MIDDLE).getZ(), 0, 1, false));
+            soldier.moveTo(leaves.get(SiegeGates.MIDDLE).getX() + 0.5, leaves.get(SiegeGates.MIDDLE).getY(), leaves.get(SiegeGates.MIDDLE).getZ() - 1.5, 0, 0);
             long expected = quick.secondsToBreak(io.github.sekerator.kingdomworld.core.siege.GateMaterial.WOOD, 1, 1);
             helper.assertTrue(expected == 3, "Leaves of 12 should hold three seconds against a soldier with a ram, not " + expected);
             for (int second = 1; second < expected; second++) {
@@ -262,13 +262,13 @@ public final class SiegeGameTests {
             for (BlockPos at : leaves) {
                 helper.assertTrue(!(level.getBlockState(at).getBlock() instanceof FenceGateBlock), "A leaf stands after the gate broke");
             }
-            helper.assertTrue(!level.getEntitiesOfClass(ItemEntity.class, new AABB(leaves.get(2)).inflate(4)).isEmpty(),
+            helper.assertTrue(!level.getEntitiesOfClass(ItemEntity.class, new AABB(leaves.get(SiegeGates.MIDDLE)).inflate(4)).isEmpty(),
                     "The broken leaves dropped nothing");
         } finally {
             for (BlockPos at : leaves) {
                 level.setBlockAndUpdate(at, Blocks.AIR.defaultBlockState());
             }
-            for (ItemEntity item : level.getEntitiesOfClass(ItemEntity.class, new AABB(leaves.get(2)).inflate(6))) {
+            for (ItemEntity item : level.getEntitiesOfClass(ItemEntity.class, new AABB(leaves.get(SiegeGates.MIDDLE)).inflate(6))) {
                 item.discard();
             }
             finish(helper, home, List.of(enemy), List.of(), List.of(wallId), attacker, gatekeeper);

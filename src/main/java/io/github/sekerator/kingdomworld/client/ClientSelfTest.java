@@ -52,6 +52,9 @@ import java.util.UUID;
  *       and the storehouses, the territory editor with a claim request, the screen of the work post (through the real
  *       server packet) and the founding screen, dissolves the kingdom again and quits. Every step is logged; rendering
  *       problems show up as errors in the log.</li>
+ *   <li>{@code siege}: in a copy of a test world, puts up a stone wall with portcullises around a capital, sends soldiers of
+ *       raiders at war with a ram to a gate and saves screenshots of the closed gate, the siege and the atlas
+ *       (see {@link ClientSiegeShowcase}).</li>
  *   <li>{@code maps}: in a singleplayer world with map mods ({@code -PwithMaps}), shows kingdoms and a caravan on them
  *       and saves screenshots in English and Russian (see {@link ClientMapsSelfTest}).</li>
  * </ul>
@@ -66,6 +69,7 @@ public final class ClientSelfTest {
     private static ClientLayoutCheck layout;
     private static ClientBuildingShowcase showcase;
     private static ClientRoadShowcase roadShowcase;
+    private static ClientSiegeShowcase siegeShowcase;
     private static ClientNpcShowcase npcShowcase;
     private static ClientLifeShowcase lifeShowcase;
     private static volatile BlockPos throne;
@@ -172,6 +176,25 @@ public final class ClientSelfTest {
             if (roadShowcase.finished()) {
                 if (roadShowcase.failed()) {
                     LOGGER.error(PREFIX + "road showcase failed, exiting with code 1");
+                    System.exit(1);
+                }
+                LOGGER.info(PREFIX + "finished");
+                quit = true;
+            }
+            return;
+        }
+        if ("siege".equals(MODE) && minecraft.player != null && minecraft.getSingleplayerServer() != null) {
+            if (siegeShowcase == null) {
+                String folder = System.getProperty("kingdomworld.clientSelfTest.screenshots");
+                Path screenshots = folder != null && !folder.isEmpty() ? Path.of(folder)
+                        : minecraft.gameDirectory.toPath().resolve("kingdomworld-layout");
+                LOGGER.info(PREFIX + "siege showcase started, screenshots go to {}", screenshots.resolve("world"));
+                siegeShowcase = new ClientSiegeShowcase(screenshots);
+            }
+            siegeShowcase.tick();
+            if (siegeShowcase.finished()) {
+                if (siegeShowcase.failed()) {
+                    LOGGER.error(PREFIX + "siege showcase failed, exiting with code 1");
                     System.exit(1);
                 }
                 LOGGER.info(PREFIX + "finished");

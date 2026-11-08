@@ -263,7 +263,7 @@ final class SiegeHolds {
         double hit = rules.abstractShare() * rules.hitPerSecond(soldiers, siege.get().rams()) * ticks / 20.0;
         if (standing.strike(hit)) {
             state.changed();
-            if (level != null && level.isLoaded(SiegeGates.leafPositions(wall.get(), standing.cell()).get(2))) {
+            if (level != null && level.isLoaded(SiegeGates.leafPositions(wall.get(), standing.cell()).get(SiegeGates.MIDDLE))) {
                 SiegeGates.breach(server, level, wall.get(), standing, SiegeGates.leafPositions(wall.get(), standing.cell()));
             }
             SiegeGates.gateBroken(server, war.attacker(), seat.kingdomId(), seat.city(), KingdomWorldApi.gameTime(server));
