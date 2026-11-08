@@ -2964,7 +2964,7 @@ if ($script:NpcSite) {
         Send-ServerCommand $server "kingdomworld admin nobility house $KingdomName add"
         $added = Wait-ForNewLog $server 'House #(\d+) added' $CommandTimeout $seen
         if ($added) {
-            $script:NobleHouse = [regex]::Matches((Get-LatestLog), 'House #(\d+) added')[-1].Groups[1].Value
+            $script:NobleHouse = @([regex]::Matches((Get-LatestLog), 'House #(\d+) added'))[-1].Groups[1].Value
             Send-ServerCommand $server "kingdomworld admin nobility title house $KingdomName $($script:NobleHouse) count m1"
             [void](Wait-ForLog $server 'Done\.' $CommandTimeout $ConsoleFailPattern)
             Send-ServerCommand $server "kingdomworld admin nobility plot $($script:NobleHouse) 2"
@@ -2993,7 +2993,7 @@ if ($script:NpcSite) {
         $seen = Count-Log $statusPattern
         Send-ServerCommand $server 'kingdomworld admin nobility status'
         if (Wait-ForNewLog $server $statusPattern $CommandTimeout $seen) {
-            $before = [regex]::Matches((Get-LatestLog), $statusPattern)[-1]
+            $before = @([regex]::Matches((Get-LatestLog), $statusPattern))[-1]
             $script:NobilityCounts = "$($before.Groups[1].Value) $($before.Groups[2].Value) $($before.Groups[4].Value) $($before.Groups[5].Value) $($before.Groups[6].Value)"
             if ([int]$before.Groups[5].Value -lt 1) { Add-Failure '[session7] the plot of the house of SmokeTest is gone before the restart' }
         } else {
