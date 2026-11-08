@@ -2946,6 +2946,20 @@ if ($script:NpcSite) {
         } else {
             Add-Failure '[session7] no houses appeared in the kingdoms of the world'
         }
+        # Every kingdom of the world keeps a spy; then the day of the courts, one kingdom a tick, measured.
+        Send-ServerCommand $server 'kingdomworld admin nobility spy hireall'
+        $hired = Wait-ForLog $server 'Kingdoms of the world hired (\d+) spy\(ies\)' $CommandTimeout $ConsoleFailPattern
+        if ($hired) { Write-Ok "[session7] kingdoms of the world hired $($hired.Groups[1].Value) spies" }
+        Send-ServerCommand $server 'kingdomworld admin nobility day'
+        Start-Sleep -Seconds 8
+        Send-ServerCommand $server 'kingdomworld admin nobility timing'
+        $timing = Wait-ForLog $server 'Ticks of the nobility: (\d+), average ([\d.]+) ms, worst ([\d.]+) ms' $CommandTimeout $ConsoleFailPattern
+        if ($timing) {
+            $script:NobilityTiming = "$($timing.Groups[1].Value) ticks, average $($timing.Groups[2].Value) ms, worst $($timing.Groups[3].Value) ms"
+            if ([double]$timing.Groups[3].Value -le 50) { Write-Ok "[session7] the day of the courts: $($script:NobilityTiming)" } else { Add-Failure "[session7] a tick of the nobility is too slow: $($script:NobilityTiming)" }
+        } else {
+            Add-Failure '[session7] the timing of the nobility was not shown'
+        }
         $seen = Count-Log 'House #\d+ added'
         Send-ServerCommand $server "kingdomworld admin nobility house $KingdomName add"
         $added = Wait-ForNewLog $server 'House #(\d+) added' $CommandTimeout $seen
@@ -2975,23 +2989,16 @@ if ($script:NpcSite) {
         Send-ServerCommand $server "kingdomworld admin nobility stability $KingdomName"
         $stability = Wait-ForLog $server "${KingdomName}: stability (\d+),([^;]*);" $CommandTimeout $ConsoleFailPattern
         if ($stability) { Write-Ok "[session7] stability of ${KingdomName}: $($stability.Groups[1].Value) ($($stability.Groups[2].Value.Trim()))" } else { Add-Failure '[session7] the stability was not shown' }
-        # Every kingdom of the world keeps a spy; then the day of the courts, one kingdom a tick, measured.
-        Send-ServerCommand $server 'kingdomworld admin nobility spy hireall'
-        $hired = Wait-ForLog $server 'Kingdoms of the world hired (\d+) spy\(ies\)' $CommandTimeout $ConsoleFailPattern
-        if ($hired) { Write-Ok "[session7] kingdoms of the world hired $($hired.Groups[1].Value) spies" }
-        Send-ServerCommand $server 'kingdomworld admin nobility day'
-        Start-Sleep -Seconds 8
-        Send-ServerCommand $server 'kingdomworld admin nobility timing'
-        $timing = Wait-ForLog $server 'Ticks of the nobility: (\d+), average ([\d.]+) ms, worst ([\d.]+) ms' $CommandTimeout $ConsoleFailPattern
-        if ($timing) {
-            $script:NobilityTiming = "$($timing.Groups[1].Value) ticks, average $($timing.Groups[2].Value) ms, worst $($timing.Groups[3].Value) ms"
-            if ([double]$timing.Groups[3].Value -le 50) { Write-Ok "[session7] the day of the courts: $($script:NobilityTiming)" } else { Add-Failure "[session7] a tick of the nobility is too slow: $($script:NobilityTiming)" }
-        } else {
-            Add-Failure '[session7] the timing of the nobility was not shown'
-        }
+        $statusPattern = 'Nobility: (\d+) house\(s\), (\d+) title\(s\), (\d+) court\(s\), (\d+) demand\(s\), (\d+) plot\(s\), (\d+) spy\(ies\)'
+        $seen = Count-Log $statusPattern
         Send-ServerCommand $server 'kingdomworld admin nobility status'
-        $before = Wait-ForLog $server 'Nobility: (\d+) house\(s\), (\d+) title\(s\), (\d+) court\(s\), (\d+) demand\(s\), (\d+) plot\(s\), (\d+) spy\(ies\)' $CommandTimeout $ConsoleFailPattern
-        if ($before) { $script:NobilityCounts = "$($before.Groups[1].Value) $($before.Groups[2].Value) $($before.Groups[4].Value) $($before.Groups[5].Value) $($before.Groups[6].Value)" }
+        if (Wait-ForNewLog $server $statusPattern $CommandTimeout $seen) {
+            $before = [regex]::Matches((Get-LatestLog), $statusPattern)[-1]
+            $script:NobilityCounts = "$($before.Groups[1].Value) $($before.Groups[2].Value) $($before.Groups[4].Value) $($before.Groups[5].Value) $($before.Groups[6].Value)"
+            if ([int]$before.Groups[5].Value -lt 1) { Add-Failure '[session7] the plot of the house of SmokeTest is gone before the restart' }
+        } else {
+            Add-Failure '[session7] the status of the nobility was not shown'
+        }
         $script:NobleMoney = Get-KingdomMoney $server $KingdomName
     }
 
