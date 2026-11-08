@@ -279,6 +279,11 @@ public final class CompanionActions {
         if (!check.ok()) {
             return KingdomActions.Feedback.error(check.error());
         }
+        // A freed slave settles like any newcomer: within the population limit and with a free bed waiting.
+        if (world.citizens().registry().count(kingdom.get()) >= io.github.sekerator.kingdomworld.common.citizen.CitizenSettings.rules().maxPerKingdom()
+                || io.github.sekerator.kingdomworld.common.construction.BuildingEffects.freeBeds(server, kingdom.get())[0] <= 0) {
+            return KingdomActions.Feedback.fail(KEY + "no_room_to_settle");
+        }
         WorldPos place = CompanionBodies.body(companion.id()).map(body -> new WorldPos(Dimensions.id(body.level()), body.getBlockX(),
                 body.getBlockY(), body.getBlockZ())).orElse(companion.lastPos().orElse(new WorldPos(Dimensions.id(player.level()),
                 player.getBlockX(), player.getBlockY(), player.getBlockZ())));
@@ -407,7 +412,9 @@ public final class CompanionActions {
         if (CompanionWork.isReadOnly(server)) {
             return KingdomActions.Feedback.error(KingdomError.READ_ONLY);
         }
-        Optional<Offer> offer = state.market(kingdom.id()).flatMap(market -> market.offers().stream().filter(o -> o.id() == offerId).findFirst());
+        // The offers of today: an offer of a day gone by is not for sale any more, even if nobody opened the market since.
+        Optional<Offer> offer = state.offers(kingdom.id(), day(server), server.overworld().getSeed(), rules, CitizenLife.SKINS).stream()
+                .filter(o -> o.id() == offerId).findFirst();
         if (offer.isEmpty()) {
             return KingdomActions.Feedback.error(KingdomError.UNKNOWN_OFFER);
         }

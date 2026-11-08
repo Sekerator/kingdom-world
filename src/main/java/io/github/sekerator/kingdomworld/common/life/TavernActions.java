@@ -155,7 +155,7 @@ public final class TavernActions {
         long left = LifeWork.state(server).room(player.getUUID()).filter(room -> beds(server, tavern).contains(room.bed()))
                 .map(room -> Math.max(0, room.until() - KingdomWorldApi.gameTime(server))).orElse(0L);
         return Optional.of(new LifeViews.TavernView(kingdomId, currency.get(), innkeeper, female, LifeWork.open(server, tavern), goods, rumors,
-                rules.rumorPrice(), freeBeds(server, tavern).size(), rules.roomPrice(), left,
+                rules.rumorPrice(), freeBeds(server, tavern).size(), LawWork.priceFor(server, kingdomId, player.getUUID(), rules.roomPrice()), left,
                 CoinStacks.count(player.getInventory(), kingdomId).value(Purses.units(server, kingdomId)),
                 economy.accounts().balance(player.getUUID(), kingdomId)));
     }
@@ -342,7 +342,8 @@ public final class TavernActions {
             }
             bed = free.get(0);
         }
-        long cost = LifeSettings.rules().roomPrice();
+        // The law weighs on a room as on the goods: a little dearer for a bad name here, a little cheaper for a good one.
+        long cost = LawWork.priceFor(server, tavern.kingdomId(), player.getUUID(), LifeSettings.rules().roomPrice());
         Optional<KingdomActions.Feedback> refused = StallActions.payKingdom(player, tavern.kingdomId(), cost, account, LedgerCategory.LIFE);
         if (refused.isPresent()) {
             return refused.get();
@@ -354,9 +355,13 @@ public final class TavernActions {
             life.leave(player.getUUID());
             own = Optional.empty();
         }
-        WorldPos previous = own.map(LifeState.Room::previous).orElseGet(() -> respawn(player));
-        float angle = own.map(LifeState.Room::previousAngle).orElse(player.getRespawnAngle());
-        boolean forced = own.map(LifeState.Room::previousForced).orElse(player.isRespawnForced());
+        // Another day of the room keeps the point of return from before it, unless the guest slept in another bed since:
+        // then that bed is the point to come back to after the room.
+        WorldPos current = respawn(player);
+        boolean keep = own.isPresent() && (current == null || current.equals(own.get().bed()));
+        WorldPos previous = keep ? own.get().previous() : current;
+        float angle = keep ? own.get().previousAngle() : player.getRespawnAngle();
+        boolean forced = keep ? own.get().previousForced() : player.isRespawnForced();
         life.rent(player.getUUID(), new LifeState.Room(tavern.kingdomId(), bed, until, previous, angle, forced));
         Optional<ResourceKey<Level>> dimension = Dimensions.key(bed.dimension());
         dimension.ifPresent(key -> player.setRespawnPosition(key, new BlockPos(bed.x(), bed.y(), bed.z()), 0.0f, true, false));

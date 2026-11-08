@@ -106,7 +106,8 @@ public final class CompanionEvents {
         CompanionState state = CompanionWork.state(server);
         Optional<Party> party = state.parties().partyOf(from);
         boolean together = party.isPresent() && party.get().has(to);
-        if (together && !party.get().friendlyFire()) {
+        if (together && !party.get().friendlyFire() && attacker != victim) {
+            // Fire between members is off; one's own dynamite or arrow still hurts.
             event.setCanceled(true);
             return;
         }

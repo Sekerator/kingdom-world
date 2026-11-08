@@ -91,8 +91,8 @@ public record KingdomActionPacket(Action action, @Nullable UUID target, int valu
                 && !ServerRequestGuard.requireRange(sender, POLICY, "role", message.value, 0, Role.values().length - 1)) {
             return;
         }
-        if (message.action == Action.SET_PERMISSION && !isValidPermissionValue(message.value)
-                && !ServerRequestGuard.requireRange(sender, POLICY, "permission", message.value, 0, -1)) {
+        if (message.action == Action.SET_PERMISSION
+                && !ServerRequestGuard.requireValid(sender, POLICY, "permission", message.value, isValidPermissionValue(message.value))) {
             return;
         }
         KingdomActions.handleAction(sender, message);

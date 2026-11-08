@@ -43,6 +43,13 @@ public final class ServerRequestGuard {
                 field + "=" + value + " not in [" + min + ", " + max + "]");
     }
 
+    /**
+     * Rejects a value that no range describes, such as packed fields that must each be valid.
+     */
+    public static boolean requireValid(ServerPlayer sender, RequestPolicy policy, String field, long value, boolean valid) {
+        return accept(sender, policy, valid ? Optional.empty() : Optional.of(Rejection.VALUE_OUT_OF_RANGE), field + "=" + value + " is not valid");
+    }
+
     public static boolean requireLength(ServerPlayer sender, RequestPolicy policy, String field, @Nullable String value, int maxLength) {
         return accept(sender, policy, RequestValidator.checkLength(value, maxLength),
                 field + " length " + (value == null ? "null" : value.length()) + " exceeds " + maxLength);
