@@ -368,7 +368,15 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     }
 
     private static Component armyLabel(String kind, boolean full) {
-        return Component.translatable("kingdomworld.screen.map.army." + (full ? "order." : "short.") + kind);
+        return Component.translatable("kingdomworld.screen.map.army." + (full ? "label." : "short.") + kind);
+    }
+
+    /**
+     * The word on a button where it fits, else its letter.
+     */
+    private Component fitted(String kind, int buttonWidth) {
+        Component label = armyLabel(kind, true);
+        return font.width(label) + io.github.sekerator.kingdomworld.client.screen.LayoutCheck.BUTTON_TEXT_MARGIN <= buttonWidth ? label : armyLabel(kind, false);
     }
 
     /**
@@ -378,24 +386,20 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     private void initArmy() {
         int count = ARMY_ORDERS.size() + 1;
         int available = width - 2 * PAD;
-        int buttonWidth = Math.max(12, Math.min(64, (available - 2 * (count - 1)) / count));
+        int buttonWidth = Math.max(12, Math.min(80, (available - 2 * (count - 1)) / count));
         int x = PAD;
         int y = height - FOOTER + 2;
-        boolean full = true;
-        for (String kind : ARMY_ORDERS) {
-            full &= font.width(armyLabel(kind, true)) + io.github.sekerator.kingdomworld.client.screen.LayoutCheck.BUTTON_TEXT_MARGIN <= buttonWidth;
-        }
         String formation = currentFormation();
         Component formationFull = Component.translatable("kingdomworld.screen.map.army.formation." + formation);
-        full &= font.width(formationFull) + io.github.sekerator.kingdomworld.client.screen.LayoutCheck.BUTTON_TEXT_MARGIN <= buttonWidth;
+        boolean shapeFits = font.width(formationFull) + io.github.sekerator.kingdomworld.client.screen.LayoutCheck.BUTTON_TEXT_MARGIN <= buttonWidth;
         for (String kind : ARMY_ORDERS) {
-            Button button = addRenderableWidget(Button.builder(armyLabel(kind, full), pressed -> armyButton(kind)).bounds(x, y, buttonWidth, 14).build());
+            Button button = addRenderableWidget(Button.builder(fitted(kind, buttonWidth), pressed -> armyButton(kind)).bounds(x, y, buttonWidth, 14).build());
             button.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomworld.screen.map.army.order." + kind)
                     .append("\n").append(Component.translatable("kingdomworld.screen.map.army.hint." + kind))));
             button.active = !chosen.isEmpty();
             x += buttonWidth + 2;
         }
-        Button shape = addRenderableWidget(Button.builder(full ? formationFull : Component.translatable("kingdomworld.screen.map.army.short.formation"),
+        Button shape = addRenderableWidget(Button.builder(shapeFits ? formationFull : Component.translatable("kingdomworld.screen.map.army.short.formation"),
                 pressed -> nextFormation()).bounds(x, y, buttonWidth, 14).build());
         shape.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomworld.screen.map.army.formation",
                 Component.translatable("kingdomworld.screen.map.army.formation." + formation))
@@ -564,7 +568,8 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
      */
     private void drawArmy(GuiGraphics graphics) {
         io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.View view = io.github.sekerator.kingdomworld.client.map.ClientArmyMap.view();
-        if (!view.allowed() || !view.dimension().equals(dimension())) {
+        String dimension = dimension();
+        if (!view.allowed() || (dimension != null && !view.dimension().equals(dimension))) {
             return;
         }
         for (io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Other mark : view.marks()) {
