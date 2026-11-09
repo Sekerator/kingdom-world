@@ -55,7 +55,7 @@ public final class ArmyTrophies {
     /** Blocks around the place of a death where its gear is looked for. */
     private static final double GATHER_RADIUS = 8.0;
     /** Blocks within which a soldier takes an item. */
-    private static final double REACH = 3.0;
+    private static final double REACH = 5.0;
     /** Blocks from a storehouse within which a carrier hands the trophies in. */
     private static final double HAND_IN = 6.0;
 
@@ -102,6 +102,13 @@ public final class ArmyTrophies {
      */
     public static boolean carrying(UUID citizenId) {
         return CARRIERS.containsKey(citizenId);
+    }
+
+    /**
+     * Whether a soldier is gathering the gear of somebody it killed.
+     */
+    public static boolean gathering(UUID citizenId) {
+        return GATHERING.containsKey(citizenId);
     }
 
     // ---------------------------------------------------------------- the field

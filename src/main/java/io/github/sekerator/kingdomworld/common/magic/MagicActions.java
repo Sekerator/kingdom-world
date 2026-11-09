@@ -74,7 +74,8 @@ public final class MagicActions {
      * Moves a player to a place, in another dimension too; players made by game tests have no connection and are only moved.
      */
     static void move(ServerPlayer player, ServerLevel level, double x, double y, double z) {
-        if (player.connection == null) {
+        if (player.connection == null || player instanceof net.minecraftforge.common.util.FakePlayer) {
+            // A stand-in has no connection that would move it.
             player.moveTo(x, y, z, player.getYRot(), player.getXRot());
         } else {
             player.teleportTo(level, x, y, z, player.getYRot(), player.getXRot());

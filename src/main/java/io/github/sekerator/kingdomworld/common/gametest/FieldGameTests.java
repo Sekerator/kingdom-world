@@ -159,8 +159,9 @@ public final class FieldGameTests {
             ArmyWork.overrideRolls(() -> 0.58);
             ArmyField.decideAll(server);
             ArmyState army = ArmyWork.state(server);
-            helper.assertTrue(army.squad(defender.id()).map(squad -> squad.order().kind() == Order.Kind.RETREAT).orElse(true),
-                    "The defender did not lose");
+            // The losers go home: to the barracks, or stay without an order for a kingdom with no home.
+            helper.assertTrue(army.squad(defender.id()).map(squad -> squad.order().kind() == Order.Kind.RETREAT || squad.order().kind() == Order.Kind.NONE)
+                    .orElse(true), "The defender did not lose");
             helper.assertTrue(army.squad(front.id()).orElseThrow().order().kind() == Order.Kind.MOVE, "The attackers did not hold the field");
         } finally {
             finish(helper, home, enemy);
@@ -175,7 +176,8 @@ public final class FieldGameTests {
         Kingdom[] both = WarGameTests.kingdoms(helper, "Trophies", UUID.randomUUID(), UUID.randomUUID());
         Kingdom home = both[0];
         Kingdom enemy = both[1];
-        io.github.sekerator.kingdomworld.common.storage.StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 4);
+        // The storehouse stands away from the fight, so that the killer first gathers and then carries.
+        io.github.sekerator.kingdomworld.common.storage.StorehouseInventory store = CitizenGameTests.storehouse(helper, -2, 0, -3);
         io.github.sekerator.kingdomworld.core.citizen.Citizen ours = WarGameTests.soldier(helper, home, 1);
         io.github.sekerator.kingdomworld.core.citizen.Citizen theirs = CitizenGameTests.newcomer(helper, enemy, 4, 1);
         try {
@@ -193,17 +195,28 @@ public final class FieldGameTests {
             killer.setPos(fallen.getX() + 1.0, fallen.getY(), fallen.getZ());
             fallen.setHealth(0.0f);
             fallen.die(level.damageSources().mobAttack(killer));
+            net.minecraft.world.phys.Vec3 place = fallen.position();
+            int dropped = level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
+                    new net.minecraft.world.phys.AABB(place, place).inflate(8)).size();
+            helper.assertTrue(dropped > 0, "Nothing fell: the sword is " + (fallen.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND).isEmpty()
+                    ? "gone" : "still held") + ", dead " + fallen.isDeadOrDying() + ", removed " + fallen.isRemoved());
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.army.ArmyTrophies.gathering(ours.id()), "The killer is not gathering the gear");
             helper.runAfterDelay(5, () -> {
                 try {
+                    killer.setPos(place.x, place.y, place.z);
                     io.github.sekerator.kingdomworld.common.army.ArmyTrophies.tick(server);
-                    helper.assertTrue(io.github.sekerator.kingdomworld.common.army.ArmyTrophies.carrying(ours.id()), "The killer took nothing");
+                    io.github.sekerator.kingdomworld.common.army.ArmyTrophies.tick(server);
+                    int lying = level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
+                            new net.minecraft.world.phys.AABB(place, place).inflate(8)).size();
+                    helper.assertTrue(io.github.sekerator.kingdomworld.common.army.ArmyTrophies.carrying(ours.id()), "The killer took nothing, items lying: "
+                            + lying + ", gathering: " + io.github.sekerator.kingdomworld.common.army.ArmyTrophies.gathering(ours.id()));
                     int carried = 0;
                     for (int slot = 0; slot < killer.carried().getContainerSize(); slot++) {
                         carried += killer.carried().getItem(slot).getCount();
                     }
                     helper.assertTrue(carried >= 2, "The killer did not take the gear: " + carried);
                     // At the storehouse the gear is handed in as a trophy of the enemy, not as goods of the kingdom.
-                    net.minecraft.core.BlockPos at = helper.absolutePos(new net.minecraft.core.BlockPos(1, 1, 4));
+                    net.minecraft.core.BlockPos at = helper.absolutePos(new net.minecraft.core.BlockPos(-1, 1, -2));
                     killer.setPos(at.getX() + 0.5, at.getY(), at.getZ() + 0.5);
                     io.github.sekerator.kingdomworld.common.army.ArmyTrophies.tick(server);
                     List<io.github.sekerator.kingdomworld.common.army.TrophySavedData.Trophy> trophies =

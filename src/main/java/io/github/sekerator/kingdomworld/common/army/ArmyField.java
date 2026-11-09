@@ -307,7 +307,12 @@ public final class ArmyField {
                 // A squad that never marched is at home already.
                 return;
             }
-            legs.add(home(server, squad.kingdomId()));
+            WorldPos home = home(server, squad.kingdomId());
+            if (home == null) {
+                army.setMarch(squad.id(), March.standing(from));
+                return;
+            }
+            legs.add(home);
         } else if (order.kind() == Order.Kind.PATROL) {
             legs.addAll(order.points());
         } else {
@@ -468,7 +473,7 @@ public final class ArmyField {
                 search(server, squad.id(), march.at(), legs.get(0));
             }
             case RETREAT -> {
-                army.setOrder(null, squad.id(), Order.NONE, "", KingdomWorldApi.state(server));
+                command(server, squad.id(), Order.NONE);
                 army.forgetMarch(squad.id());
                 PLANNED.put(squad.id(), Order.NONE);
                 tell(server, squad, Component.translatable(KEY + "returned", ArmyTexts.squadName(squad)));
@@ -500,8 +505,16 @@ public final class ArmyField {
                 WarWork.assault(server, squad, owner);
             }
         }
-        army.setOrder(null, squad.id(), Order.move(at), at.dimension(), KingdomWorldApi.state(server));
+        command(server, squad.id(), Order.move(at));
         PLANNED.put(squad.id(), Order.move(at));
+    }
+
+    /**
+     * Changes the order of a squad on behalf of the field: arrivals, chases, the end of battles.
+     */
+    private static void command(MinecraftServer server, long squadId, Order order) {
+        String dimension = order.points().isEmpty() ? "" : order.points().get(0).dimension();
+        ArmyWork.state(server).setOrder(null, squadId, order, dimension, KingdomWorldApi.state(server));
     }
 
     // ---------------------------------------------------------------- battles
@@ -520,7 +533,7 @@ public final class ArmyField {
             Optional<ArmySquad> target = army.squad(order.target());
             WorldPos at = positionOf(server, squad);
             if (target.isEmpty() || at == null) {
-                army.setOrder(null, squad.id(), Order.move(at != null ? at : order.points().get(0)), "", KingdomWorldApi.state(server));
+                command(server, squad.id(), Order.move(at != null ? at : order.points().get(0)));
                 continue;
             }
             WorldPos enemy = positionOf(server, target.get());
@@ -537,7 +550,7 @@ public final class ArmyField {
             } else if (now % (CHASE_SECONDS * 20L) < 20 && sees(server, squad.kingdomId(), target.get())
                     && Math.hypot(enemy.x() - order.points().get(0).x(), enemy.z() - order.points().get(0).z()) > rules.engage()) {
                 // The enemy moved and is still in sight: the squad turns after it.
-                army.setOrder(null, squad.id(), Order.attack(enemy, target.get().id()), "", KingdomWorldApi.state(server));
+                command(server, squad.id(), Order.attack(enemy, target.get().id()));
             }
         }
         for (Engagement battle : List.copyOf(BATTLES.values())) {
@@ -640,14 +653,16 @@ public final class ArmyField {
         WarWork.scoreFieldBattle(server, battle.firstKingdom, battle.secondKingdom, firstWon, firstKills, secondKills);
         // The losers who are left go home; the winners who attacked stand where they fought.
         for (ArmySquad squad : firstWon ? second : first) {
-            army.squad(squad.id()).ifPresent(left -> army.setOrder(null, left.id(), Order.retreat(home(server, left.kingdomId())), "",
-                    KingdomWorldApi.state(server)));
+            army.squad(squad.id()).ifPresent(left -> {
+                WorldPos home = home(server, left.kingdomId());
+                command(server, left.id(), home != null ? Order.retreat(home) : Order.NONE);
+            });
         }
         for (ArmySquad squad : firstWon ? first : second) {
             army.squad(squad.id()).filter(left -> left.order().kind() == Order.Kind.ATTACK).ifPresent(left -> {
                 WorldPos at = positionOf(server, left);
                 if (at != null) {
-                    army.setOrder(null, left.id(), Order.move(at), "", KingdomWorldApi.state(server));
+                    command(server, left.id(), Order.move(at));
                 }
             });
         }

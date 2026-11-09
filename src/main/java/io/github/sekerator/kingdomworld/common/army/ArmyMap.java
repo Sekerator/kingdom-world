@@ -216,7 +216,13 @@ public final class ArmyMap {
             case GUARD -> Order.guard(points.get(0), radius);
             case SCOUT -> Order.scout(points.get(0), radius);
             case PATROL -> Order.patrol(points);
-            case RETREAT -> Order.retreat(ArmyField.home(server, kingdomId));
+            case RETREAT -> {
+                WorldPos home = ArmyField.home(server, kingdomId);
+                if (home == null) {
+                    throw new OrderRefused(KingdomError.BAD_ORDER);
+                }
+                yield Order.retreat(home);
+            }
             case SIEGE -> {
                 UUID owner = ownerAt(server, points.get(0));
                 if (owner == null || !WarWork.hostileNow(server, kingdomId, owner)) {
