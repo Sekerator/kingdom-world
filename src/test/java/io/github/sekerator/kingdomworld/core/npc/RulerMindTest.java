@@ -121,6 +121,23 @@ class RulerMindTest {
     }
 
     @Test
+    void aRulerGrowsItsLandALittleEveryTurnUpToItsLimit() {
+        RulerView merchant = calm();
+        // A builder claims more on its own every few turns; any ruler grows a little.
+        merchant.character = RulerCharacter.MERCHANT;
+        RulerDecision claim = decide(merchant).stream().filter(d -> d.kind() == Kind.CLAIM).findFirst().orElseThrow();
+        assertEquals(RULES.growthChunks(), claim.amount(), "a few chunks a turn");
+        RulerView full = calm();
+        full.chunks = full.maxChunks;
+        assertFalse(has(decide(full), Kind.CLAIM, null), "no growth past the limit");
+        RulerView nothingFree = calm();
+        nothingFree.landToClaim = false;
+        assertFalse(has(decide(nothingFree), Kind.CLAIM, null), "no growth without free land next to it");
+        List<RulerDecision> off = RulerMind.decide(merchant, new RulerMemory(), RULES.withGrowthChunks(0)).decisions();
+        assertFalse(has(off, Kind.CLAIM, null), "growth turned off: " + off);
+    }
+
+    @Test
     void theLandOfAKingdomStopsAtItsLimit() {
         RulerView view = calm();
         view.bedsUsed = 14;

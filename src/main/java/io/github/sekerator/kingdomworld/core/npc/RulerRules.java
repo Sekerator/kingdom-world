@@ -24,13 +24,15 @@ import java.util.Optional;
  * @param slackPermille      how far below the worth of goods a ruler still sells them (or above, buys them)
  * @param roadDistance       roads are laid to neighbours this close at most, in blocks
  * @param festivalMood       a feast is held when the mood of the citizens falls below this
+ * @param growthChunks       chunks a ruler adds to its land in a turn when nothing else needs them, so that the kingdom grows
+ *                           slowly up to its limit; 0 lets the land grow only when buildings want room
  */
 public record RulerRules(int turnEveryDays, int decisionsPerTurn, int decreesPerDay, int[] maxChunks, int chunksPerClaim, int freeBeds,
                          int storageFullPercent, List<RoleWant> roles, int townPopulation, int maxTowns, int reserveDays,
-                         int soldiersPermille, int slackPermille, int roadDistance, int festivalMood) {
+                         int soldiersPermille, int slackPermille, int roadDistance, int festivalMood, int growthChunks) {
     public static final RulerRules DEFAULT = new RulerRules(1, 3, 2, new int[]{96, 160, 256}, 4, 1, 85,
             RoleWant.parse(List.of("warehouse=1,1,2", "market=1,1,1", "well=1,2,3", "workshop=1,2,3", "barracks=1,1,2", "tower=1,2,4",
-                    "tavern=0,1,1", "mage_tower=0,0,1")), 40, 4, 5, 100, 100, 1200, 35);
+                    "tavern=0,1,1", "mage_tower=0,0,1")), 40, 4, 5, 100, 100, 1200, 35, 2);
 
     /**
      * How many buildings of a role a kingdom wants at each level of its capital.
@@ -110,7 +112,8 @@ public record RulerRules(int turnEveryDays, int decisionsPerTurn, int decreesPer
         roles = List.copyOf(roles);
         if (turnEveryDays < 1 || decisionsPerTurn < 0 || decreesPerDay < 0 || chunksPerClaim < 1 || freeBeds < 0 || storageFullPercent < 10
                 || storageFullPercent > 100 || townPopulation < 1 || maxTowns < 0 || reserveDays < 0 || soldiersPermille < 0
-                || soldiersPermille > 1000 || slackPermille < 0 || slackPermille > 900 || roadDistance < 0 || festivalMood < 0) {
+                || soldiersPermille > 1000 || slackPermille < 0 || slackPermille > 900 || roadDistance < 0 || festivalMood < 0 || growthChunks < 0
+                || growthChunks > 64) {
             throw new IllegalArgumentException("Rules of the rulers out of range");
         }
     }
@@ -126,11 +129,16 @@ public record RulerRules(int turnEveryDays, int decisionsPerTurn, int decreesPer
 
     public RulerRules withDecisionsPerTurn(int value) {
         return new RulerRules(turnEveryDays, value, decreesPerDay, maxChunks, chunksPerClaim, freeBeds, storageFullPercent, roles,
-                townPopulation, maxTowns, reserveDays, soldiersPermille, slackPermille, roadDistance, festivalMood);
+                townPopulation, maxTowns, reserveDays, soldiersPermille, slackPermille, roadDistance, festivalMood, growthChunks);
+    }
+
+    public RulerRules withGrowthChunks(int value) {
+        return new RulerRules(turnEveryDays, decisionsPerTurn, decreesPerDay, maxChunks, chunksPerClaim, freeBeds, storageFullPercent, roles,
+                townPopulation, maxTowns, reserveDays, soldiersPermille, slackPermille, roadDistance, festivalMood, value);
     }
 
     public RulerRules withMaxChunks(int[] value) {
         return new RulerRules(turnEveryDays, decisionsPerTurn, decreesPerDay, value, chunksPerClaim, freeBeds, storageFullPercent, roles,
-                townPopulation, maxTowns, reserveDays, soldiersPermille, slackPermille, roadDistance, festivalMood);
+                townPopulation, maxTowns, reserveDays, soldiersPermille, slackPermille, roadDistance, festivalMood, growthChunks);
     }
 }

@@ -144,6 +144,8 @@ function Write-Summary {
     Write-Host "Server folder: $ServerDir"
     Write-Host "Logs: $SmokeLogDir"
     foreach ($w in $script:Warnings) { Write-Host "  warning: $w" -ForegroundColor Yellow }
+    if (Get-Variable -Name WorldFounding -Scope Script -ErrorAction SilentlyContinue) { Write-Host "Kingdoms of the world: $($script:WorldFounding)" }
+    if (Get-Variable -Name BackgroundRaise -Scope Script -ErrorAction SilentlyContinue) { Write-Host "Buildings raised in the background: $($script:BackgroundRaise)" }
     if (Get-Variable -Name RulerLoad -Scope Script -ErrorAction SilentlyContinue) { Write-Host "Turns of the rulers: $($script:RulerLoad)" }
     if (Get-Variable -Name WarLoad -Scope Script -ErrorAction SilentlyContinue) { Write-Host "Wars: $($script:WarLoad)" }
     if ($script:Failures.Count -eq 0) {
@@ -723,6 +725,39 @@ Invoke-Phase 'session1' {
         Write-Ok '[session1] fire protection hook is active'
     } else {
         Add-Failure '[session1] the fire protection hook did not report itself active'
+    }
+    # Kingdoms of the world stand from the first minutes of a new world: the plan is made and every place is founded as data
+    # with its land (the maps show the borders at once), without a player coming near and without generating a chunk.
+    $founded = 0
+    $plannedCount = -1
+    $started = Get-Date
+    while (((Get-Date) - $started).TotalSeconds -lt 120) {
+        $plan = [regex]::Match((Get-LatestLog), 'The plan of the kingdoms of the world is made: (\d+) place\(s\)')
+        $founded = Count-Log 'The kingdom of the world of site \d+ \w+ at -?\d+, -?\d+ \(founded\) is founded: \d+ chunks of land'
+        if ($plan.Success) {
+            $plannedCount = [int]$plan.Groups[1].Value
+            $blocked = Count-Log 'The kingdom of the world at site \d+ [^\r\n]* is not founded'
+            if ($founded + $blocked -ge $plannedCount) { break }
+        }
+        Start-Sleep -Seconds 2
+    }
+    $elapsed = [int]((Get-Date) - $started).TotalSeconds
+    $script:WorldFounding = "$founded of $plannedCount kingdoms of the world founded $elapsed s after the start"
+    if ($founded -ge 8) {
+        Write-Ok "[session1] $($script:WorldFounding), each with its land"
+    } else {
+        Add-Failure "[session1] $($script:WorldFounding) (8 expected within 120 s)"
+    }
+    # Their rulers grow the land a little every turn, by the data alone.
+    for ($turn = 1; $turn -le 3; $turn++) {
+        Send-ServerCommand $server 'kingdomworld admin npc turn all'
+        Start-Sleep -Seconds 8
+    }
+    $grown = [regex]::Matches((Get-LatestLog), 'The ruler of (.+?) claimed (\d+) chunk\(s\) of land: (\d+) of (\d+)')
+    if ($grown.Count -ge 1) {
+        Write-Ok "[session1] the rulers of the world grew their land in three turns: $($grown.Count) claim(s), the last: $($grown[$grown.Count - 1].Value)"
+    } else {
+        Add-Failure '[session1] no ruler of the world grew its land in three turns'
     }
     Send-ServerCommand $server "kingdomworld admin found $KingdomName 8 70 8"
     $created = Wait-ForLog $server "Founded kingdom $KingdomName \(id ($IdPattern)\) with (\d+) chunk\(s\)" $CommandTimeout $ConsoleFailPattern
@@ -2096,7 +2131,8 @@ Invoke-Phase 'session2' {
     if ($script:MinterId) { $postCount += 1 }
     if ($script:BuilderId) { $postCount += 1 }
     if ($script:InnkeeperId) { $postCount += 1 }
-    if (-not (Wait-ForLog $server "KingdomWorld loaded 2 kingdom\(s\) with $citizenCount citizen\(s\), $postCount work post\(s\), 2 storehouse\(s\), 2 treasury\(ies\), \d+ player\(s\) with accounts, 1 market\(s\), 1 deal\(s\), 1 caravan\(s\) on the way" 10)) {
+    # The kingdoms of the world founded as data count as kingdoms with treasuries, without citizens or storehouses yet.
+    if (-not (Wait-ForLog $server "KingdomWorld loaded \d+ kingdom\(s\) with $citizenCount citizen\(s\), $postCount work post\(s\), 2 storehouse\(s\), \d+ treasury\(ies\), \d+ player\(s\) with accounts, 1 market\(s\), 1 deal\(s\), 1 caravan\(s\) on the way" 10)) {
         Add-Failure "[session2] expected 2 kingdoms with $citizenCount citizens, $postCount work post(s), 2 storehouses, 2 treasuries, a market, a deal and a caravan on the way to be loaded after restart"
     }
     if ($MapModsDir -and $script:CaravanId) { Test-MapMarkers $server 'session2' }
@@ -2618,8 +2654,8 @@ Invoke-Phase 'session2' {
     # Kingdoms of the world: one appears at the word of an operator away from the other kingdoms, and the server stops in the
     # middle of its appearance; the third session checks that it ends without copies and that its money adds up.
     Send-ServerCommand $server 'kingdomworld admin npc status'
-    if (Wait-ForLog $server 'Kingdoms of the world: \d+ places? in the plan, \d+ kingdoms?, generation on, data format 2' $CommandTimeout $ConsoleFailPattern) {
-        Write-Ok '[session2] the kingdoms of the world are planned (data format 2)'
+    if (Wait-ForLog $server 'Kingdoms of the world: \d+ places? in the plan, \d+ kingdoms?, generation on, data format 3' $CommandTimeout $ConsoleFailPattern) {
+        Write-Ok '[session2] the kingdoms of the world are planned (data format 3)'
     } else {
         Add-Failure '[session2] admin npc status did not answer'
     }
@@ -2642,7 +2678,7 @@ if ($script:NpcSite) {
     Invoke-Phase 'session3' {
         param($server)
         $site = $script:NpcSite
-        if (Wait-ForLog $server "KingdomWorld kingdoms of the world: \d+ place\(s\) planned \(\d+ waiting, \d+ appeared, 1 appearing at \w+\)" 10) {
+        if (Wait-ForLog $server "KingdomWorld kingdoms of the world: \d+ place\(s\) planned \(\d+ waiting, \d+ founded, \d+ appeared, 1 appearing at \w+\)" 10) {
             Write-Ok '[session3] the appearance goes on after the restart'
         } else {
             Add-Failure '[session3] the appearance was not loaded as going on'
@@ -2749,7 +2785,7 @@ if ($script:NpcSite) {
     Invoke-Phase 'session4' {
         param($server)
         $site = $script:NpcSite
-        if (Wait-ForLog $server 'KingdomWorld kingdoms of the world: .*data format 2' 10) { Write-Ok '[session4] the kingdoms of the world are loaded in data format 2' } else { Add-Failure '[session4] the data format of the kingdoms of the world is not 2' }
+        if (Wait-ForLog $server 'KingdomWorld kingdoms of the world: .*data format 3' 10) { Write-Ok '[session4] the kingdoms of the world are loaded in data format 3' } else { Add-Failure '[session4] the data format of the kingdoms of the world is not 3' }
         Send-ServerCommand $server "kingdomworld admin npc decisions $site"
         $decisions = Wait-ForLog $server ': (\d+) decrees?, (\d+) turn\(s\), waiting: ' $CommandTimeout $ConsoleFailPattern
         if ($decisions -and [int]$decisions.Groups[2].Value -ge $script:RulerTurns -and [int]$decisions.Groups[1].Value -ge [Math]::Min(1, $script:RulerDecrees)) {
@@ -3054,6 +3090,37 @@ if ($script:NpcSite) {
         }
         Send-ServerCommand $server "kingdomworld admin nobility stability $KingdomName"
         [void](Wait-ForLog $server "${KingdomName}: stability \d+" $CommandTimeout $ConsoleFailPattern)
+
+        # The buildings of a kingdom of the world founded as data rise in the background with the small budget, as they do while
+        # players play; no tick of it may be longer than 50 ms.
+        $before = (Get-LatestLog).Length
+        Send-ServerCommand $server 'kingdomworld admin npc list'
+        Start-Sleep -Seconds 3
+        $waiting = [regex]::Matches((Get-LatestLog).Substring($before), '#(\d+) (small|medium|large) at (-?\d+), (-?\d+), towns: \d+, founded, waits for its buildings')
+        $pick = @($waiting | Sort-Object { @('small', 'medium', 'large').IndexOf($_.Groups[2].Value) }) | Select-Object -First 1
+        if (-not $pick) {
+            Add-Failure '[session8] no kingdom of the world waits for its buildings'
+        } else {
+            $id = $pick.Groups[1].Value
+            Send-ServerCommand $server "kingdomworld admin npc spawn background $id"
+            $raised = Wait-ForLog $server "The buildings of site $id \w+ at [^\r\n]* were raised in the background: (\d+) ticks of work, (\d+) ticks waited, average tick ([\d.]+) ms, worst tick ([\d.]+) ms" ($NpcTimeout * 2)
+            if (-not $raised) {
+                Add-Failure "[session8] the buildings of site $id were not raised in the background in time"
+            } else {
+                $script:BackgroundRaise = "site $id ($($pick.Groups[2].Value)): $($raised.Groups[1].Value) ticks of work, $($raised.Groups[2].Value) ticks waited, average tick $($raised.Groups[3].Value) ms, worst tick $($raised.Groups[4].Value) ms"
+                if ([double]::Parse($raised.Groups[4].Value, [System.Globalization.CultureInfo]::InvariantCulture) -le 50.0) {
+                    Write-Ok "[session8] raised in the background: $($script:BackgroundRaise)"
+                } else {
+                    Add-Failure "[session8] a tick of the background raising was longer than 50 ms: $($script:BackgroundRaise)"
+                }
+                $appeared = [regex]::Match((Get-LatestLog), "The kingdom of the world (.+?) appeared \($($pick.Groups[2].Value)\): (\d+) buildings, (\d+) citizens")
+                if ($appeared.Success -and [int]$appeared.Groups[2].Value -gt 0 -and [int]$appeared.Groups[3].Value -gt 0) {
+                    Write-Ok "[session8] $($appeared.Groups[1].Value) stands: $($appeared.Groups[2].Value) buildings, $($appeared.Groups[3].Value) citizens"
+                } else {
+                    Add-Failure "[session8] the kingdom raised in the background has no buildings or citizens"
+                }
+            }
+        }
     }
 }
 

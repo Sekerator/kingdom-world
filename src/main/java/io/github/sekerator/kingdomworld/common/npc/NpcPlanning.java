@@ -44,6 +44,8 @@ final class NpcPlanning {
     private static final int MAX_TOWN_ROUGHNESS = 12;
     /** Town candidates judged in a tick. */
     private static final int TOWNS_PER_TICK = 2;
+    /** Time a tick spends on the plan at most: candidates the noise judges at once are gone through several a tick. */
+    private static final long BUDGET_NANOS = 4_000_000L;
 
     private static SitePlanner planner;
     private static Judging judging;
@@ -75,10 +77,23 @@ final class NpcPlanning {
     }
 
     static void tick(MinecraftServer server) {
+        long start = System.nanoTime();
+        // A step that waits for region files ends the tick; steps the noise answers at once go on while the budget lasts.
+        while (step(server) && System.nanoTime() - start < BUDGET_NANOS) {
+            // next candidate
+        }
+    }
+
+    /**
+     * One step of the plan.
+     *
+     * @return whether the step came to a verdict, so that another may follow in the same tick
+     */
+    private static boolean step(MinecraftServer server) {
         NpcRules rules = NpcSettings.rules();
         NpcState state = NpcWork.state(server);
         if (!rules.generate() || state.planned()) {
-            return;
+            return false;
         }
         ServerLevel level = server.overworld();
         if (planner == null) {
@@ -89,14 +104,14 @@ final class NpcPlanning {
         Optional<SitePlanner.Candidate> current = planner.current();
         if (current.isEmpty()) {
             finish(state);
-            return;
+            return false;
         }
         if (judging == null || !judging.candidate.equals(current.get())) {
             judging = new Judging(current.get());
         }
         Optional<SitePlanner.Verdict> verdict = judge(level, judging, rules);
         if (verdict.isEmpty()) {
-            return;
+            return false;
         }
         Optional<SitePlanner.Candidate> accepted = planner.judge(verdict.get());
         accepted.ifPresent(candidate -> {
@@ -107,7 +122,9 @@ final class NpcPlanning {
         state.setPlanProgress(planner.cursor(), planner.shift(), planner.done());
         if (planner.done()) {
             finish(state);
+            return false;
         }
+        return true;
     }
 
     private static void finish(NpcState state) {

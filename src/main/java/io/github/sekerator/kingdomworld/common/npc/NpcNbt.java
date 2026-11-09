@@ -24,7 +24,7 @@ import java.util.UUID;
  *
  * <pre>
  * plan: { cursor, shift, done, next }
- * sites: [ { id, x, z, level, seed, towns: [x, z, ...], status, kingdom?, stage, step, ground, reason } ]
+ * sites: [ { id, x, z, level, seed, towns: [x, z, ...], status, kingdom?, stage, step, ground, reason, given (format 3: 1 money, 2 laws, 4 stores) } ]
  * kingdoms: [ { kingdom, site, level, latin, cyrillic, character, traits: [id], ruler, gender, towns: [ { latin, cyrillic } ],
  *              founded, turn } ]
  * rulers: see {@link RulerNbt} (format 2)
@@ -61,6 +61,7 @@ final class NpcNbt {
             entry.putInt("step", site.step());
             entry.putInt("ground", site.groundY());
             entry.putString("reason", site.reason());
+            entry.putInt("given", site.givenFlags());
             sites.add(entry);
         }
         tag.put("sites", sites);
@@ -121,7 +122,8 @@ final class NpcNbt {
                         .orElseThrow(() -> new IllegalArgumentException("status"));
                 SpawnStage stage = SpawnStage.byId(entry.getString("stage")).orElseThrow(() -> new IllegalArgumentException("stage"));
                 UUID kingdom = entry.hasUUID("kingdom") ? entry.getUUID("kingdom") : null;
-                site.restore(status, kingdom, stage, entry.getInt("step"), entry.getInt("ground"), entry.getString("reason"));
+                site.restore(status, kingdom, stage, entry.getInt("step"), entry.getInt("ground"), entry.getString("reason"),
+                        entry.getInt("given"));
                 state.restoreSite(site);
                 maxId = Math.max(maxId, site.id());
             } catch (RuntimeException e) {

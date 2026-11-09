@@ -63,10 +63,12 @@ public final class NpcEvents {
         NpcWork.loaded(server);
         long planned = state.sites().stream().filter(site -> site.status() == NpcSite.Status.PLANNED).count();
         long spawned = state.sites().stream().filter(site -> site.status() == NpcSite.Status.SPAWNED).count();
-        LOGGER.info("KingdomWorld kingdoms of the world: {} place(s) planned ({} waiting, {} appeared{}), {} kingdom(s), plan {}, data format {}{}",
-                state.sites().size(), planned, spawned, state.spawning().map(site -> ", 1 appearing at " + site.stage().id()).orElse(""),
+        long founded = state.sites().stream().filter(site -> site.status() == NpcSite.Status.FOUNDED).count();
+        LOGGER.info("KingdomWorld kingdoms of the world: {} place(s) planned ({} waiting, {} founded, {} appeared{}), {} kingdom(s), plan {}, "
+                        + "data format {}{}, buildings raised by {}",
+                state.sites().size(), planned, founded, spawned, state.spawning().map(site -> ", 1 appearing at " + site.stage().id()).orElse(""),
                 state.kingdoms().size(), state.planned() ? "made" : "being made", NpcSavedData.FORMAT_VERSION,
-                data.isReadOnly() ? " (READ-ONLY: " + data.readOnlyReason().orElse("?") + ")" : "");
+                data.isReadOnly() ? " (READ-ONLY: " + data.readOnlyReason().orElse("?") + ")" : "", NpcSettings.build().mode().id());
     }
 
     private static void onServerStopped(ServerStoppedEvent event) {

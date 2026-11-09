@@ -1,6 +1,7 @@
 package io.github.sekerator.kingdomworld.common.npc;
 
 import io.github.sekerator.kingdomworld.common.config.KingdomWorldConfig;
+import io.github.sekerator.kingdomworld.core.npc.NpcBuildRules;
 import io.github.sekerator.kingdomworld.core.npc.NpcRules;
 
 import java.util.List;
@@ -14,6 +15,8 @@ public final class NpcSettings {
     private static NpcRules rules;
     private static io.github.sekerator.kingdomworld.core.npc.RulerRules rulerOverride;
     private static io.github.sekerator.kingdomworld.core.npc.RulerRules rulers;
+    private static NpcBuildRules buildOverride;
+    private static NpcBuildRules build;
 
     private NpcSettings() {
     }
@@ -45,9 +48,32 @@ public final class NpcSettings {
         return value;
     }
 
+    /**
+     * How the buildings of the kingdoms of the world are raised.
+     */
+    public static NpcBuildRules build() {
+        if (buildOverride != null) {
+            return buildOverride;
+        }
+        NpcBuildRules value = build;
+        if (value == null) {
+            value = buildFromConfig();
+            build = value;
+        }
+        return value;
+    }
+
+    /**
+     * Replaces the configured rules of raising, for game tests; {@code null} restores the config.
+     */
+    public static void overrideBuild(NpcBuildRules value) {
+        buildOverride = value;
+    }
+
     public static void refresh() {
         rules = fromConfig();
         rulers = rulersFromConfig();
+        build = buildFromConfig();
     }
 
     public static void reset() {
@@ -55,6 +81,19 @@ public final class NpcSettings {
         override = null;
         rulers = null;
         rulerOverride = null;
+        build = null;
+        buildOverride = null;
+    }
+
+    private static NpcBuildRules buildFromConfig() {
+        NpcBuildRules d = NpcBuildRules.DEFAULT;
+        try {
+            KingdomWorldConfig.NpcKingdoms c = KingdomWorldConfig.SERVER.npcKingdoms;
+            return new NpcBuildRules(NpcBuildRules.Mode.byId(c.buildMode.get()).orElse(d.mode()), c.backgroundBlocksPerTick.get(),
+                    c.backgroundChunksPerTick.get(), c.backgroundPauseTickMillis.get(), c.foundingClaimsPerTick.get());
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return d;
+        }
     }
 
     /**
@@ -73,7 +112,8 @@ public final class NpcSettings {
             return new io.github.sekerator.kingdomworld.core.npc.RulerRules(c.rulerTurnEveryDays.get(), c.rulerDecisionsPerTurn.get(),
                     c.rulerDecreesPerDay.get(), ints(c.rulerMaxChunks.get(), d.maxChunks()), c.rulerChunksPerClaim.get(), c.rulerFreeBeds.get(),
                     c.rulerStorageFullPercent.get(), roles, c.rulerTownPopulation.get(), c.rulerMaxTowns.get(), c.rulerReserveDays.get(),
-                    c.rulerSoldiersPermille.get(), c.rulerSlackPermille.get(), c.rulerRoadDistance.get(), c.rulerFestivalMood.get());
+                    c.rulerSoldiersPermille.get(), c.rulerSlackPermille.get(), c.rulerRoadDistance.get(), c.rulerFestivalMood.get(),
+                    c.rulerGrowthChunks.get());
         } catch (IllegalStateException | IllegalArgumentException e) {
             return d;
         }

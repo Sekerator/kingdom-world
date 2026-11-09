@@ -485,6 +485,9 @@ public final class RulerMind {
         } else if (canClaim && (view.has(RulerCharacter.Trait.AMBITIOUS) || view.character == RulerCharacter.BUILDER)
                 && memory.turns() % 3 == 0) {
             out.add(new Scored(20 + builder, RulerDecision.of(Kind.CLAIM, "", Math.min(rules.chunksPerClaim(), view.maxChunks - view.chunks))));
+        } else if (canClaim && rules.growthChunks() > 0) {
+            // The land grows a little every turn up to its limit, so that the borders on the map move slowly outwards.
+            out.add(new Scored(30 + builder, RulerDecision.of(Kind.CLAIM, "", Math.min(rules.growthChunks(), view.maxChunks - view.chunks))));
         }
         if (landWanted && !canClaim) {
             needs.add(new Need(NeedKind.LAND, "", 0));

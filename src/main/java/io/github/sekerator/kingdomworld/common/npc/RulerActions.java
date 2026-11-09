@@ -607,10 +607,13 @@ final class RulerActions {
     // ---------------------------------------------------------------- land and towns
 
     /**
-     * Claims free chunks next to the land, one a tick, after a look at whether players lived there.
+     * Claims free chunks next to the land, one a tick, after a look at whether players lived there: loaded chunks say it at once,
+     * the others are read from their region files off the main thread, so that no chunk is loaded or generated for it.
      */
     private static final class ClaimJob extends Job {
         private List<Long> candidates;
+        private final java.util.Map<Long, java.util.concurrent.CompletableFuture<Optional<net.minecraft.nbt.CompoundTag>>> reads =
+                new java.util.HashMap<>();
         private int claimed;
         private int index;
         private int room;
@@ -628,6 +631,11 @@ final class RulerActions {
                 int limit = NpcWork.kingdom(server, kingdomId).map(npc -> NpcSettings.rulers().maxChunks(npc.level())).orElse(held);
                 room = Math.max(0, limit - held);
                 candidates = room == 0 ? List.of() : RulerPlaces.claimable(server, kingdomId, Math.min(wanted, room) * 4);
+                for (long chunk : candidates) {
+                    LevelChunk now = level.getChunkSource().getChunkNow(ChunkKey.x(chunk), ChunkKey.z(chunk));
+                    reads.put(chunk, now != null ? java.util.concurrent.CompletableFuture.completedFuture(Optional.of(inhabited(now)))
+                            : level.getChunkSource().chunkMap.read(new ChunkPos(ChunkKey.x(chunk), ChunkKey.z(chunk))));
+                }
             }
             wanted = Math.min(wanted, room);
             if (claimed >= wanted || index >= candidates.size()) {
@@ -635,10 +643,15 @@ final class RulerActions {
                     return Outcome.fail(KingdomError.LIMIT_REACHED);
                 }
                 decision = RulerDecision.of(RulerDecision.Kind.CLAIM, "", claimed);
+                int land = KingdomWorldApi.state(server).territory().territory(kingdomId).map(Territory::size).orElse(0);
+                LOGGER.info("The ruler of {} claimed {} chunk(s) of land: {} of {}", NpcWork.kingdom(server, kingdomId)
+                        .map(npc -> npc.name().latin()).orElse("?"), claimed, land, NpcWork.kingdom(server, kingdomId)
+                        .map(npc -> NpcSettings.rulers().maxChunks(npc.level())).orElse(land));
                 return Outcome.DONE;
             }
             long chunk = candidates.get(index);
-            if (!loaded(level, List.of(chunk))) {
+            java.util.concurrent.CompletableFuture<Optional<net.minecraft.nbt.CompoundTag>> read = reads.get(chunk);
+            if (read != null && !read.isDone()) {
                 if (++waited > LOAD_TICKS) {
                     index++;
                     waited = 0;
@@ -647,8 +660,9 @@ final class RulerActions {
             }
             index++;
             waited = 0;
-            LevelChunk loaded = level.getChunkSource().getChunkNow(ChunkKey.x(chunk), ChunkKey.z(chunk));
-            if (loaded != null && loaded.getInhabitedTime() > NpcSettings.rules().maxInhabitedMinutes() * 1200L) {
+            long time = read == null || read.isCompletedExceptionally() ? 0
+                    : read.getNow(Optional.empty()).map(tag -> tag.getLong("InhabitedTime")).orElse(0L);
+            if (time > NpcSettings.rules().maxInhabitedMinutes() * 1200L) {
                 RulerPlaces.unfitChunk(kingdomId, chunk);
                 return null;
             }

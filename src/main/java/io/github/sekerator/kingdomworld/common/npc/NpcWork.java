@@ -11,7 +11,6 @@ import io.github.sekerator.kingdomworld.core.npc.NpcSite;
 import io.github.sekerator.kingdomworld.core.npc.NpcState;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -23,8 +22,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 /**
- * The kingdoms of the world on the server: their data, the plan of their places, the appearance of a kingdom when a player
- * comes near and the daily turn of their rulers. Other parts of the mod ask here whether a kingdom is one of the world.
+ * The kingdoms of the world on the server: their data, the plan of their places, their founding as data, the raising of their
+ * buildings in the world and the turns of their rulers. Other parts of the mod ask here whether a kingdom is one of the world.
  */
 public final class NpcWork {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -126,6 +125,7 @@ public final class NpcWork {
         TOWNS.clear();
         lastDay = Long.MIN_VALUE;
         NpcPlanning.reset();
+        NpcFounding.reset();
         NpcSpawner.reset();
         NpcRulers.reset();
     }
@@ -144,8 +144,9 @@ public final class NpcWork {
         }
         NpcSpawner.tick(server);
         NpcPlanning.tick(server);
+        NpcFounding.tick(server);
         if (server.getTickCount() % TRIGGER_TICKS == 0) {
-            trigger(server);
+            NpcBackground.tick(server);
             keepInStep(server);
             long day = TreasuryActions.day(server);
             if (day != lastDay) {
@@ -157,35 +158,33 @@ public final class NpcWork {
     }
 
     /**
-     * Starts the appearance of the first planned place a player came near, when none is appearing.
+     * Whether the buildings of a kingdom of the world stand in the world; a kingdom founded as data whose place is not raised
+     * yet lives on the map only.
      */
-    private static void trigger(MinecraftServer server) {
-        if (!NpcSettings.rules().generate()) {
-            return;
-        }
+    public static boolean built(MinecraftServer server, UUID kingdomId) {
         NpcState state = state(server);
-        if (state.spawning().isPresent()) {
-            return;
-        }
-        ServerLevel overworld = server.overworld();
-        double reach = NpcSettings.rules().triggerBlocks();
-        for (NpcSite site : state.sites()) {
-            if (site.status() != NpcSite.Status.PLANNED) {
-                continue;
-            }
-            for (ServerPlayer player : overworld.players()) {
-                if (player.isSpectator()) {
-                    continue;
-                }
-                double dx = player.getX() - site.x();
-                double dz = player.getZ() - site.z();
-                if (dx * dx + dz * dz <= reach * reach) {
-                    LOGGER.info("A player came near the place of a kingdom of the world: {}", site);
-                    NpcSpawner.start(server, site);
-                    return;
-                }
-            }
-        }
+        return state.kingdom(kingdomId).flatMap(kingdom -> state.site(kingdom.siteId()))
+                .map(site -> site.status() == NpcSite.Status.SPAWNED).orElse(true);
+    }
+
+    /**
+     * The citizens a kingdom of the world founded as data will have once its buildings stand, or empty for a kingdom whose
+     * buildings stand (or of players).
+     */
+    public static Optional<Integer> plannedPeople(MinecraftServer server, UUID kingdomId) {
+        NpcState state = state(server);
+        return state.kingdom(kingdomId).flatMap(kingdom -> state.site(kingdom.siteId()))
+                .filter(site -> site.status() == NpcSite.Status.FOUNDED || site.status() == NpcSite.Status.SPAWNING)
+                .map(site -> NpcSpawner.composition(site).citizens());
+    }
+
+    /**
+     * Founds a planned place as data at once, for operators and game tests.
+     *
+     * @return whether the kingdom stands as data
+     */
+    public static boolean foundNow(MinecraftServer server, NpcSite site) {
+        return !isReadOnly(server) && site.status() == NpcSite.Status.PLANNED && NpcFounding.foundNow(server, site);
     }
 
     /**
@@ -203,7 +202,11 @@ public final class NpcWork {
             NpcKingdom kingdom = state.removeKingdom(id).orElseThrow();
             forgetName(id);
             state.site(kingdom.siteId()).ifPresent(site -> {
-                if (site.status() == NpcSite.Status.SPAWNED) {
+                if (site.status() == NpcSite.Status.SPAWNING) {
+                    NpcSpawner.abandon(server, site);
+                }
+                if (site.status() == NpcSite.Status.SPAWNED || site.status() == NpcSite.Status.FOUNDED
+                        || site.status() == NpcSite.Status.SPAWNING) {
                     site.setStatus(NpcSite.Status.REMOVED);
                 }
             });
@@ -236,6 +239,19 @@ public final class NpcWork {
                             && NpcPlanning.suitable(server.overworld(), point[0], point[1], 16, false), wanted, minCity);
         }
         return plantAt(server, x, z, level, chosen);
+    }
+
+    /**
+     * Adds a place to the plan with the towns given without raising it: it is founded as data like a place of the plan; for game
+     * tests.
+     */
+    public static Optional<NpcSite> planAt(MinecraftServer server, int x, int z, io.github.sekerator.kingdomworld.core.npc.NpcLevel level,
+                                           List<int[]> towns) {
+        if (isReadOnly(server)) {
+            return Optional.empty();
+        }
+        long seed = server.overworld().getSeed() * 31 + x * 341_873_128_712L + z * 132_897_987_541L;
+        return Optional.of(state(server).addSite(x, z, level, seed, NpcSite.towns(towns)));
     }
 
     /**

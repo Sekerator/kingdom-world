@@ -18,8 +18,13 @@ import java.util.Objects;
  * its ruler with a character and traits, its size and its towns.
  */
 public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String rulerLatin, String rulerCyrillic, Gender rulerGender,
-                             RulerCharacter character, List<RulerCharacter.Trait> traits, NpcLevel level, int towns) {
+                             RulerCharacter character, List<RulerCharacter.Trait> traits, NpcLevel level, int towns, boolean raising) {
     private static final int MAX_NAME = 64;
+
+    public NpcKingdomInfo(String nameLatin, String nameCyrillic, String rulerLatin, String rulerCyrillic, Gender rulerGender,
+                          RulerCharacter character, List<RulerCharacter.Trait> traits, NpcLevel level, int towns) {
+        this(nameLatin, nameCyrillic, rulerLatin, rulerCyrillic, rulerGender, character, traits, level, towns, false);
+    }
 
     public NpcKingdomInfo {
         Objects.requireNonNull(nameLatin, "nameLatin");
@@ -36,9 +41,16 @@ public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String ruler
     }
 
     public static NpcKingdomInfo of(NpcKingdom kingdom) {
+        return of(kingdom, false);
+    }
+
+    /**
+     * @param raising whether the kingdom stands as data and its capital is still being built in the world
+     */
+    public static NpcKingdomInfo of(NpcKingdom kingdom, boolean raising) {
         return new NpcKingdomInfo(kingdom.name().latin(), kingdom.name().cyrillic(), kingdom.rulerName(CitizenNames.Alphabet.LATIN),
                 kingdom.rulerName(CitizenNames.Alphabet.CYRILLIC), kingdom.rulerGender(), kingdom.character(), kingdom.traits(), kingdom.level(),
-                kingdom.towns().size());
+                kingdom.towns().size(), raising);
     }
 
     public void encode(FriendlyByteBuf buf) {
@@ -52,6 +64,7 @@ public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String ruler
         traits.forEach(buf::writeEnum);
         buf.writeEnum(level);
         buf.writeVarInt(towns);
+        buf.writeBoolean(raising);
     }
 
     public static NpcKingdomInfo decode(FriendlyByteBuf buf) {
@@ -74,7 +87,8 @@ public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String ruler
         if (towns < 0 || towns > 64) {
             throw new DecoderException("Towns out of range: " + towns);
         }
-        return new NpcKingdomInfo(nameLatin, nameCyrillic, rulerLatin, rulerCyrillic, gender, character, traits, level, towns);
+        return new NpcKingdomInfo(nameLatin, nameCyrillic, rulerLatin, rulerCyrillic, gender, character, traits, level, towns,
+                buf.readBoolean());
     }
 
     /**

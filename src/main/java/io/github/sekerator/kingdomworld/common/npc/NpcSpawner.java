@@ -126,6 +126,10 @@ public final class NpcSpawner {
     private static final int[][] TOWN_PLOTS = {{0, -12, 0}, {12, 0, 1}, {0, 12, 2}, {-12, 0, 3}, {12, -12, 0}, {-12, 12, 2}};
 
     private static Job job;
+    /** Whether the next job starts in the background. */
+    private static boolean startBackground;
+    /** Whether the next job in the background goes on without players (an operator asked for it). */
+    private static boolean startForced;
 
     /**
      * What an appearance keeps while it runs; rebuilt from the place after a restart.
@@ -150,6 +154,12 @@ public final class NpcSpawner {
         int claimIndex;
         boolean claimedInPass;
         int claimed;
+        /** Whether the buildings go up in the background with the small budget (no player watches). */
+        boolean background;
+        /** Ticks the raising waited for the server or for players. */
+        long paused;
+        /** Whether the background goes on without players. */
+        boolean forced;
 
         Job(int siteId, NpcComposition composition) {
             this.siteId = siteId;
@@ -188,8 +198,77 @@ public final class NpcSpawner {
      * Starts the appearance of a planned place.
      */
     public static void start(MinecraftServer server, NpcSite site) {
+        start(server, site, false);
+    }
+
+    /**
+     * Starts raising a place in the world: a place only planned appears from the beginning, a place founded as data goes on with
+     * its buildings.
+     *
+     * @param background whether it goes up with the small budget of the background
+     */
+    public static void start(MinecraftServer server, NpcSite site, boolean background) {
+        if (job != null) {
+            releaseTickets(server.overworld());
+        }
         site.setStatus(NpcSite.Status.SPAWNING);
         job = null;
+        startBackground = background;
+        startForced = false;
+    }
+
+    /**
+     * Lets the raising started last go on in the background without players, for operators measuring it.
+     */
+    static void forceBackground() {
+        startForced = true;
+        if (job != null) {
+            job.forced = true;
+        }
+    }
+
+    /**
+     * Puts the raising of a place aside for another one: the place keeps its stage and step and goes on later from there.
+     */
+    static void putAside(MinecraftServer server, NpcSite site) {
+        if (job != null && job.siteId == site.id()) {
+            releaseTickets(server.overworld());
+            job = null;
+        }
+        site.setStatus(site.founded() || site.kingdomId().isPresent() ? NpcSite.Status.FOUNDED : NpcSite.Status.PLANNED);
+    }
+
+    /**
+     * Whether the running raising goes with the small budget of the background.
+     */
+    static boolean inBackground() {
+        return job != null && job.background;
+    }
+
+    /**
+     * Lets the running raising use the full budget (a player came to watch) or go back to the small one.
+     */
+    static void setBackground(boolean value) {
+        if (job != null) {
+            job.background = value;
+        }
+        startBackground = value;
+    }
+
+    /**
+     * Blocks the raising places, clears or levels in a tick at most.
+     */
+    static int blockBudget() {
+        return job != null && job.background ? Math.min(NpcSettings.build().backgroundBlocksPerTick(), NpcSettings.rules().blocksPerTick())
+                : NpcSettings.rules().blocksPerTick();
+    }
+
+    /**
+     * Chunks the raising asks for or looks through in a tick at most.
+     */
+    static int chunkBudget() {
+        return job != null && job.background ? Math.min(NpcSettings.build().backgroundChunksPerTick(), NpcSettings.rules().chunksPerTick())
+                : NpcSettings.rules().chunksPerTick();
     }
 
     /**
@@ -231,6 +310,13 @@ public final class NpcSpawner {
             if (job == null) {
                 return;
             }
+            job.background = startBackground;
+            job.forced = startForced;
+        }
+        if (job.background && NpcBackground.waiting(server, job.forced)) {
+            // The background waits for players and for short ticks; its chunks stay asked for.
+            job.paused++;
+            return;
         }
         // The tick an appearance starts in belongs to what started it (a player coming near, a command looking for land).
         if (job.ticks > 1) {
@@ -410,7 +496,7 @@ public final class NpcSpawner {
         // Tickets go out as the chunks before them come in, a few at a time, so that the server loads or generates them at its
         // own pace instead of finishing many in one tick.
         job.pending.removeIf(chunk -> level.hasChunk(chunk.x, chunk.z));
-        int waiting = Math.max(1, NpcSettings.rules().chunksPerTick());
+        int waiting = Math.max(1, chunkBudget());
         while (job.next < job.chunks.size() && job.pending.size() < waiting) {
             ChunkPos chunk = job.chunks.get(job.next++);
             if (job.ticketed.add(chunk.toLong())) {
@@ -439,7 +525,9 @@ public final class NpcSpawner {
         KingdomWorldState state = KingdomWorldApi.state(server);
         int buffer = KingdomWorldApi.rules().claimBufferChunks() + 1;
         int r = rules.landRadius(site.level());
-        if (state.territory().hasForeignLandWithin(dimension, ChunkKey.of(site.x() >> 4, site.z() >> 4), r + buffer, own)) {
+        // A kingdom founded as data holds its land already; only a place still to be founded looks at its neighbours.
+        if (state.kingdoms().get(own).isEmpty()
+                && state.territory().hasForeignLandWithin(dimension, ChunkKey.of(site.x() >> 4, site.z() >> 4), r + buffer, own)) {
             stop(level, site, "the land of another kingdom is near");
             return;
         }
@@ -515,10 +603,16 @@ public final class NpcSpawner {
      * Leaves a place alone: the tickets go, and the place is blocked with a reason.
      */
     private static void stop(ServerLevel level, NpcSite site, String reason) {
-        LOGGER.warn("The kingdom of the world at {} does not appear: {}", site, reason);
         releaseTickets(level);
-        site.block(reason);
         job = null;
+        if (site.kingdomId().isPresent() && KingdomWorldApi.kingdom(level.getServer(), site.kingdomId().get()).isPresent()) {
+            // A kingdom founded as data stays with its land and ruler; only its buildings are not raised.
+            LOGGER.warn("The buildings of the kingdom of the world at {} are not raised: {}", site, reason);
+            site.setStatus(NpcSite.Status.SPAWNED);
+            return;
+        }
+        LOGGER.warn("The kingdom of the world at {} does not appear: {}", site, reason);
+        site.block(reason);
     }
 
     private static void releaseTickets(ServerLevel level) {
@@ -547,42 +641,22 @@ public final class NpcSpawner {
                 stop(level, site, refused);
                 return;
             }
-            Set<String> taken = new java.util.HashSet<>();
-            state.kingdoms().all().forEach(kingdom -> taken.add(KingdomNames.key(kingdom.name())));
-            NpcNames.Name name = NpcNames.kingdom(site.seed(), candidate -> taken.contains(KingdomNames.key(candidate)));
-            level.setBlock(throne.below(), Blocks.STONE_BRICKS.defaultBlockState(), Block.UPDATE_ALL);
-            for (int y = 0; y < 3; y++) {
-                level.setBlock(throne.above(y), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
-            }
-            level.setBlockAndUpdate(throne, ModRegistries.THRONE.get().defaultBlockState());
-            CreateKingdomResult result = KingdomWorldApi.foundWithId(level, throne, name.latin(), color(state, site), id);
-            if (!(result instanceof CreateKingdomResult.Created)) {
+            placeThrone(level, throne);
+            String problem = createKingdom(server, level, site, id, throne);
+            if (problem != null) {
                 level.setBlockAndUpdate(throne, Blocks.AIR.defaultBlockState());
-                stop(level, site, "the kingdom was refused: " + result);
+                stop(level, site, problem);
                 return;
             }
-            List<NpcNames.Name> towns = new ArrayList<>();
-            Set<String> cities = new java.util.HashSet<>();
-            RoadWork.state(server).cities().forEach(city -> cities.add(KingdomNames.key(city.name())));
-            npc.kingdoms().forEach(other -> other.towns().forEach(town -> cities.add(KingdomNames.key(town.latin()))));
-            for (int i = 0; i < site.towns().size(); i++) {
-                NpcNames.Name town = NpcNames.town(site.seed() + i * 7919L, candidate -> cities.contains(KingdomNames.key(candidate))
-                        || taken.contains(KingdomNames.key(candidate)));
-                cities.add(KingdomNames.key(town.latin()));
-                towns.add(town);
-            }
-            NpcKingdom kingdom = NpcKingdom.create(id, site, name, towns, KingdomWorldApi.gameTime(server), TreasuryActions.day(server));
-            npc.putKingdom(kingdom);
-            NpcWork.remember(kingdom);
-            site.setKingdomId(id);
-            LOGGER.info("The kingdom of the world {} ({}) appears at {}: {} ruled by {} ({}, {})", name.latin(), name.cyrillic(),
-                    throne.toShortString(), site.level().id(), kingdom.rulerName(io.github.sekerator.kingdomworld.core.citizen.CitizenNames.Alphabet.LATIN),
-                    kingdom.character().id(), kingdom.traits());
         } else if (npc.kingdom(id).isEmpty()) {
             // The kingdom stands but its record was lost: a kingdom of the world is never left without one.
             Kingdom existing = state.kingdoms().get(id).orElseThrow();
             NpcNames.Name name = new NpcNames.Name(existing.name(), existing.name());
             npc.putKingdom(NpcKingdom.create(id, site, name, List.of(), KingdomWorldApi.gameTime(server), TreasuryActions.day(server)));
+        }
+        if (state.kingdoms().get(id).isPresent() && !level.getBlockState(throne).is(ModRegistries.THRONE.get())) {
+            // A kingdom founded as data gets its throne when its place is raised.
+            placeThrone(level, throne);
         }
         if (site.kingdomId().isEmpty()) {
             // A place appearing again (an operator spawned it anew) finds its kingdom by its id.
@@ -591,6 +665,60 @@ public final class NpcSpawner {
         if (claimLand(level, site, id, job)) {
             site.advance(SpawnStage.GROUND);
         }
+    }
+
+    /**
+     * The throne on a block of stone bricks with air above it.
+     */
+    private static void placeThrone(ServerLevel level, BlockPos throne) {
+        level.setBlock(throne.below(), Blocks.STONE_BRICKS.defaultBlockState(), Block.UPDATE_ALL);
+        for (int y = 0; y < 3; y++) {
+            level.setBlock(throne.above(y), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        }
+        level.setBlockAndUpdate(throne, ModRegistries.THRONE.get().defaultBlockState());
+    }
+
+    /**
+     * Founds the kingdom of a place with its names, its ruler and the names of its towns; no block is touched.
+     *
+     * @return why it was refused, or {@code null} once it stands
+     */
+    static String createKingdom(MinecraftServer server, ServerLevel level, NpcSite site, UUID id, BlockPos throne) {
+        return createKingdom(server, level, site, id, throne, false);
+    }
+
+    /**
+     * @param asData whether the kingdom is founded as data before its buildings are raised
+     */
+    static String createKingdom(MinecraftServer server, ServerLevel level, NpcSite site, UUID id, BlockPos throne, boolean asData) {
+        NpcState npc = NpcWork.state(server);
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        Set<String> taken = new java.util.HashSet<>();
+        state.kingdoms().all().forEach(kingdom -> taken.add(KingdomNames.key(kingdom.name())));
+        NpcNames.Name name = NpcNames.kingdom(site.seed(), candidate -> taken.contains(KingdomNames.key(candidate)));
+        CreateKingdomResult result = KingdomWorldApi.foundWithId(level, throne, name.latin(), color(state, site), id);
+        if (!(result instanceof CreateKingdomResult.Created)) {
+            return "the kingdom was refused: " + result;
+        }
+        List<NpcNames.Name> towns = new ArrayList<>();
+        Set<String> cities = new java.util.HashSet<>();
+        RoadWork.state(server).cities().forEach(city -> cities.add(KingdomNames.key(city.name())));
+        npc.kingdoms().forEach(other -> other.towns().forEach(town -> cities.add(KingdomNames.key(town.latin()))));
+        for (int i = 0; i < site.towns().size(); i++) {
+            NpcNames.Name town = NpcNames.town(site.seed() + i * 7919L, candidate -> cities.contains(KingdomNames.key(candidate))
+                    || taken.contains(KingdomNames.key(candidate)));
+            cities.add(KingdomNames.key(town.latin()));
+            towns.add(town);
+        }
+        NpcKingdom kingdom = NpcKingdom.create(id, site, name, towns, KingdomWorldApi.gameTime(server), TreasuryActions.day(server));
+        npc.putKingdom(kingdom);
+        NpcWork.remember(kingdom);
+        site.setKingdomId(id);
+        LOGGER.info(asData ? "The kingdom of the world {} ({}) is founded at {}: {} ruled by {} ({}, {})"
+                        : "The kingdom of the world {} ({}) appears at {}: {} ruled by {} ({}, {})", name.latin(), name.cyrillic(),
+                throne.toShortString(), site.level().id(), kingdom.rulerName(io.github.sekerator.kingdomworld.core.citizen.CitizenNames.Alphabet.LATIN),
+                kingdom.character().id(), kingdom.traits());
+        return null;
     }
 
     /**
@@ -650,7 +778,7 @@ public final class NpcSpawner {
         if (job.land == null) {
             job.land = landChunks(site);
         }
-        int budget = Math.max(1, NpcSettings.rules().chunksPerTick()) * CLAIMS_PER_CHUNK_BUDGET;
+        int budget = Math.max(1, chunkBudget()) * CLAIMS_PER_CHUNK_BUDGET;
         while (budget > 0) {
             if (job.claimIndex >= job.land.size()) {
                 if (!job.claimedInPass) {
@@ -719,7 +847,7 @@ public final class NpcSpawner {
         int reach = job.composition.reach();
         int margin = RAMP;
         int rows = 2 * (reach + margin) + 1;
-        int budget = NpcSettings.rules().blocksPerTick();
+        int budget = blockBudget();
         NpcGround.Soil soil = NpcGround.soilAt(level, site.x(), site.z());
         List<Box> plots = plotBoxes(job.composition, site);
         while (site.step() < rows && budget > 0) {
@@ -848,7 +976,7 @@ public final class NpcSpawner {
     private static void build(MinecraftServer server, ServerLevel level, NpcSite site, Job job) {
         UUID id = site.kingdomId().orElseThrow();
         List<NpcComposition.Plot> plots = job.composition.buildings();
-        int budget = NpcSettings.rules().blocksPerTick();
+        int budget = blockBudget();
         Materials materials = new Materials(Materials.AUTO, "");
         while (site.step() < plots.size() && budget > 0) {
             NpcComposition.Plot plot = plots.get(site.step());
@@ -1225,7 +1353,7 @@ public final class NpcSpawner {
         int rows = 2 * (TOWN_REACH + RAMP) + 1;
         int y = townHeight(level, town);
         if (sub < rows) {
-            int budget = NpcSettings.rules().blocksPerTick();
+            int budget = blockBudget();
             NpcGround.Soil soil = NpcGround.soilAt(level, town.x(), town.z());
             while (sub < rows && budget > 0) {
                 int z = town.z() - TOWN_REACH - RAMP + sub;
@@ -1267,7 +1395,7 @@ public final class NpcSpawner {
             int[] where = template.equals(NpcComposition.WELL) ? new int[]{-9, -9, 0} : TOWN_PLOTS[plot];
             int[] used = new int[1];
             if (buildAt(server, level, id, template, town.x() + where[0], y + 1, town.z() + where[1], new Placement(where[2], false),
-                    new Materials(Materials.AUTO, ""), NpcSettings.rules().blocksPerTick(), used)) {
+                    new Materials(Materials.AUTO, ""), blockBudget(), used)) {
                 site.setStep(index * 1000 + sub + 1);
             }
             return;
@@ -1287,7 +1415,7 @@ public final class NpcSpawner {
     private static void places(MinecraftServer server, ServerLevel level, NpcSite site, Job job) {
         UUID id = site.kingdomId().orElseThrow();
         List<Long> chunks = KingdomWorldApi.state(server).territory().territory(id).map(t -> List.copyOf(t.chunks())).orElse(List.of());
-        int budget = NpcSettings.rules().chunksPerTick() * 4;
+        int budget = chunkBudget() * 4;
         while (site.step() < chunks.size() && budget-- > 0) {
             long chunk = chunks.get(site.step());
             LevelChunk loaded = level.getChunkSource().getChunkNow(ChunkKey.x(chunk), ChunkKey.z(chunk));
@@ -1311,16 +1439,14 @@ public final class NpcSpawner {
         NpcWealth wealth = NpcWealth.of(job.composition, NpcSettings.rules(), wood + "_log", wood + "_planks",
                 CitizenSettings.rules().dailyNutrition());
         long day = TreasuryActions.day(server);
-        if (founded(state, id, day)) {
+        if (site.given(NpcSite.STORES) || !site.given(NpcSite.MONEY) && founded(state, id, day)) {
             // The founding was given already (the appearance runs again after a restart): nothing comes from nothing twice.
             site.advance(SpawnStage.PEOPLE);
             return;
         }
-        if (wealth.money() > 0) {
-            Outcome granted = state.economy().foundingGrant(id, wealth.money(), day);
-            if (!granted.ok()) {
-                LOGGER.warn("The founding money of {} was refused: {}", site, granted.error());
-            }
+        if (!site.given(NpcSite.MONEY)) {
+            // A kingdom founded as data got its money then; its stores come with its storehouses.
+            grantMoney(server, site, id);
         }
         WorldPos near = new WorldPos(Dimensions.id(level), site.x(), site.groundY() + 1, site.z());
         int lost = 0;
@@ -1353,9 +1479,24 @@ public final class NpcSpawner {
         }
         state.trade().setOpenToOutsiders(id, true, rules);
         state.trade().setForeignCurrency(id, true, rules);
+        site.markGiven(NpcSite.STORES);
         LOGGER.info("{} got its founding wealth: {} in the treasury, {} kinds of goods in the storehouses, the wood of the place {}", site,
                 wealth.money(), wealth.items().size(), wood);
         site.advance(SpawnStage.PEOPLE);
+    }
+
+    /**
+     * The founding money of the treasury, once.
+     */
+    static void grantMoney(MinecraftServer server, NpcSite site, UUID id) {
+        long money = NpcSettings.rules().money(site.level());
+        if (money > 0) {
+            Outcome granted = KingdomWorldApi.state(server).economy().foundingGrant(id, money, TreasuryActions.day(server));
+            if (!granted.ok()) {
+                LOGGER.warn("The founding money of {} was refused: {}", site, granted.error());
+            }
+        }
+        site.markGiven(NpcSite.MONEY);
     }
 
     /**
@@ -1489,6 +1630,19 @@ public final class NpcSpawner {
      */
     private static void law(MinecraftServer server, NpcSite site, Job job) {
         UUID id = site.kingdomId().orElseThrow();
+        if (!site.given(NpcSite.LAWS)) {
+            setLaws(server, site, id);
+        }
+        if (!ArmyWork.isReadOnly(server)) {
+            guardGates(server, site, id, job);
+        }
+        site.advance(SpawnStage.DONE);
+    }
+
+    /**
+     * The laws of the ruler by its character, set through the law like a king would, once.
+     */
+    static void setLaws(MinecraftServer server, NpcSite site, UUID id) {
         Optional<NpcKingdom> record = NpcWork.kingdom(server, id);
         if (record.isPresent() && !io.github.sekerator.kingdomworld.common.law.LawWork.isReadOnly(server)) {
             io.github.sekerator.kingdomworld.core.law.LawRules rules = io.github.sekerator.kingdomworld.common.law.LawSettings.rules();
@@ -1503,11 +1657,8 @@ public final class NpcSpawner {
             });
             LOGGER.info("The laws of {}: fines {}%, entry to large cities {}, bounty {}, slavery {}", site,
                     laws.fineMultiplierPermille() / 10, laws.entryFee(), laws.bounty(), laws.slaveryBanned() ? "banned" : "allowed");
+            site.markGiven(NpcSite.LAWS);
         }
-        if (!ArmyWork.isReadOnly(server)) {
-            guardGates(server, site, id, job);
-        }
-        site.advance(SpawnStage.DONE);
     }
 
     private static void guardGates(MinecraftServer server, NpcSite site, UUID id, Job job) {
@@ -1688,7 +1839,7 @@ public final class NpcSpawner {
                 : CityWalls.WALL_STONE)) {
             item = wall.wallClass() == Wall.WallClass.PALISADE ? "minecraft:oak_log" : "minecraft:cobblestone";
         }
-        int budget = Math.min(WALL_BLOCKS_PER_TICK, NpcSettings.rules().blocksPerTick());
+        int budget = Math.min(WALL_BLOCKS_PER_TICK, blockBudget());
         String paid = item;
         RoadWork.change(server, "pay the wall of a kingdom of the world", roads -> {
             int left = budget;
@@ -1731,8 +1882,14 @@ public final class NpcSpawner {
         }
         releaseTickets(level);
         site.setStatus(NpcSite.Status.SPAWNED);
+        RoadSync.changed();
         double average = job.ticks > 2 ? job.sumNanos / 1e6 / (job.ticks - 2) : 0;
         lastTiming = new Timing(job.ticks, average, job.maxNanos / 1e6);
+        if (job.background) {
+            LOGGER.info("The buildings of {} were raised in the background: {} ticks of work, {} ticks waited, average tick {} ms, worst tick {} ms",
+                    site, job.ticks, job.paused, String.format(java.util.Locale.ROOT, "%.2f", average),
+                    String.format(java.util.Locale.ROOT, "%.2f", job.maxNanos / 1e6));
+        }
         KingdomWorldState state = KingdomWorldApi.state(server);
         LOGGER.info("The kingdom of the world {} appeared ({}): {} buildings, {} citizens, {} soldiers, {} town(s); {} ticks, average tick "
                         + "{} ms, worst tick {} ms (at {})", state.kingdoms().get(id).map(Kingdom::name).orElse("?"), site.level().id(),

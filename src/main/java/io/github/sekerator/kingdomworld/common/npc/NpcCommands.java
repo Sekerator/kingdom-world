@@ -62,6 +62,8 @@ public final class NpcCommands {
                                         .executes(context -> spawnHere(context, size(context)))))
                         .then(Commands.literal("site")
                                 .then(Commands.argument("id", IntegerArgumentType.integer(1)).executes(NpcCommands::spawnSite)))
+                        .then(Commands.literal("background")
+                                .then(Commands.argument("id", IntegerArgumentType.integer(1)).executes(NpcCommands::raiseInBackground)))
                         .then(Commands.argument("x", IntegerArgumentType.integer())
                                 .then(Commands.argument("z", IntegerArgumentType.integer())
                                         .executes(context -> spawnAt(context, NpcLevel.SMALL))
@@ -197,6 +199,31 @@ public final class NpcCommands {
         return site.get().id();
     }
 
+    /**
+     * Raises the buildings of a place founded as data in the background now, with the small budget, whether players are on the
+     * server or not; long ticks still make it wait. For operators measuring the background.
+     */
+    private static int raiseInBackground(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        MinecraftServer server = source.getServer();
+        int id = IntegerArgumentType.getInteger(context, "id");
+        NpcState state = NpcWork.state(server);
+        Optional<NpcSite> site = state.site(id);
+        if (site.isEmpty() || site.get().status() != NpcSite.Status.FOUNDED) {
+            source.sendFailure(Component.translatable(ADMIN + "no_site", id));
+            return 0;
+        }
+        if (state.spawning().isPresent() || NpcWork.isReadOnly(server)) {
+            source.sendFailure(Component.translatable(ADMIN + "busy"));
+            return 0;
+        }
+        NpcSpawner.start(server, site.get(), true);
+        NpcSpawner.forceBackground();
+        source.sendSuccess(() -> Component.translatable(ADMIN + "background", id, NpcTexts.level(site.get().level()), site.get().x(),
+                site.get().z()), true);
+        return id;
+    }
+
     private static int spawnSite(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         MinecraftServer server = source.getServer();
@@ -211,7 +238,7 @@ public final class NpcCommands {
             source.sendFailure(Component.translatable(ADMIN + "busy"));
             return 0;
         }
-        if (site.get().status() != NpcSite.Status.PLANNED) {
+        if (site.get().status() != NpcSite.Status.PLANNED && site.get().status() != NpcSite.Status.FOUNDED) {
             site.get().restart();
         }
         NpcSpawner.start(server, site.get());

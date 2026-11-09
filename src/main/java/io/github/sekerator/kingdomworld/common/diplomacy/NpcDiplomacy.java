@@ -114,7 +114,8 @@ final class NpcDiplomacy {
         POWER.clear();
         countingKingdom = null;
         for (Kingdom kingdom : KingdomWorldApi.kingdoms(server)) {
-            if (NpcWork.isNpc(server, kingdom.id())) {
+            // A kingdom of the world whose buildings are not raised yet only grows its land: it neither treats nor fights.
+            if (NpcWork.isNpc(server, kingdom.id()) && NpcWork.built(server, kingdom.id())) {
                 QUEUE.add(kingdom.id());
             }
         }
@@ -216,7 +217,7 @@ final class NpcDiplomacy {
             offerPeace(server, state, rules, kingdom.id());
             List<DiplomacyMind.Neighbor> neighbors = new ArrayList<>();
             for (Kingdom other : kingdoms) {
-                if (other.id().equals(kingdom.id())) {
+                if (other.id().equals(kingdom.id()) || !NpcWork.built(server, other.id())) {
                     continue;
                 }
                 Optional<Capital> theirs = KingdomWorldApi.state(server).territory().territory(other.id()).map(Territory::capital);

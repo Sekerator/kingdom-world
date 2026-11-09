@@ -191,8 +191,40 @@ public final class NpcRulers {
         return count;
     }
 
+    /**
+     * Whether a ruler takes turns: its kingdom stands, as data or in the world.
+     */
     private static boolean ready(NpcState state, NpcKingdom kingdom) {
+        return state.site(kingdom.siteId()).map(NpcSite::founded).orElse(false);
+    }
+
+    /**
+     * Whether the buildings of a kingdom stand in the world, so that its ruler looks at all of it; before that it only grows its
+     * land.
+     */
+    private static boolean standing(NpcState state, NpcKingdom kingdom) {
         return state.site(kingdom.siteId()).map(site -> site.status() == NpcSite.Status.SPAWNED).orElse(false);
+    }
+
+    /**
+     * The turn of a ruler whose buildings are not raised yet: its land grows a little by the data, no chunk is loaded.
+     */
+    private static void growOnly(MinecraftServer server, NpcKingdom kingdom, long day) {
+        NpcState state = NpcWork.state(server);
+        UUID id = kingdom.kingdomId();
+        RulerMemory memory = state.ruler(id);
+        int growth = NpcSettings.rulers().growthChunks();
+        int held = KingdomWorldApi.state(server).territory().territory(id).map(t -> t.size()).orElse(0);
+        int limit = NpcSettings.rulers().maxChunks(kingdom.level());
+        boolean waiting = memory.pending().stream().anyMatch(p -> p.kind() == RulerDecision.Kind.CLAIM)
+                || job != null && job.kingdomId.equals(id);
+        if (growth > 0 && held < limit && !waiting) {
+            memory.addPending(List.of(RulerDecision.of(RulerDecision.Kind.CLAIM, "", Math.min(growth, limit - held))));
+        }
+        memory.countTurn();
+        state.putKingdom(state.kingdom(id).orElse(kingdom).withLastTurnDay(day));
+        state.rulerChanged();
+        turns++;
     }
 
     // ---------------------------------------------------------------- every tick
@@ -263,7 +295,9 @@ public final class NpcRulers {
             state.kingdom(next).ifPresent(kingdom -> {
                 doing = "the look of " + kingdom.name().latin();
                 turnTick = true;
-                if (KingdomWorldApi.kingdom(server, kingdom.kingdomId()).isPresent()) {
+                if (KingdomWorldApi.kingdom(server, kingdom.kingdomId()).isPresent() && !standing(state, kingdom)) {
+                    growOnly(server, kingdom, day);
+                } else if (KingdomWorldApi.kingdom(server, kingdom.kingdomId()).isPresent()) {
                     RulerMemory memory = state.ruler(kingdom.kingdomId());
                     countDeals(server, kingdom.kingdomId(), memory);
                     memory.fade();

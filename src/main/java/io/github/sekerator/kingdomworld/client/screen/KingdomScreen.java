@@ -136,7 +136,8 @@ public abstract class KingdomScreen extends Screen {
     protected static List<Component> npcLines(io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo npc) {
         Component ruler = io.github.sekerator.kingdomworld.common.npc.NpcTexts.ruler(npc.rulerLatin(), npc.rulerCyrillic(), npc.rulerGender());
         return List.of(Component.translatable("kingdomworld.screen.throne.npc.ruler", ruler),
-                Component.translatable("kingdomworld.screen.throne.npc.size", io.github.sekerator.kingdomworld.common.npc.NpcTexts.level(npc.level())),
+                Component.translatable(npc.raising() ? "kingdomworld.screen.throne.npc.size.raising" : "kingdomworld.screen.throne.npc.size",
+                        io.github.sekerator.kingdomworld.common.npc.NpcTexts.level(npc.level())),
                 Component.translatable("kingdomworld.screen.throne.npc.character",
                         io.github.sekerator.kingdomworld.common.npc.NpcTexts.character(npc.character()),
                         io.github.sekerator.kingdomworld.common.npc.NpcTexts.traits(npc.traits())));

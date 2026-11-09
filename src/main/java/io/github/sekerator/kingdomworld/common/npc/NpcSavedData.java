@@ -33,9 +33,11 @@ public final class NpcSavedData extends SavedData {
     public static final String DATA_NAME = KingdomWorld.MOD_ID + "_npc";
     /**
      * Current layout of the saved data. Increase it together with a migration step. Format 2 added the memories of the rulers;
-     * data of format 1 has none and is read as it is, every ruler starting with an empty memory.
+     * data of format 1 has none and is read as it is, every ruler starting with an empty memory. Format 3 added places founded as
+     * data before their buildings stand (status {@code founded}) and whether their treasury got its founding money; older data has
+     * neither and is read as it is.
      */
-    public static final int FORMAT_VERSION = 2;
+    public static final int FORMAT_VERSION = 3;
     static final String TAG_FORMAT_VERSION = "formatVersion";
 
     private static final Logger LOGGER = LogUtils.getLogger();

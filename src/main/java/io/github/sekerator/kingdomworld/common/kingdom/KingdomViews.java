@@ -110,8 +110,9 @@ public final class KingdomViews {
      */
     @org.jetbrains.annotations.Nullable
     static io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo npcInfo(MinecraftServer server, Kingdom kingdom) {
+        boolean raising = !io.github.sekerator.kingdomworld.common.npc.NpcWork.built(server, kingdom.id());
         return io.github.sekerator.kingdomworld.common.npc.NpcWork.kingdom(server, kingdom.id())
-                .map(io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo::of).orElse(null);
+                .map(npc -> io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo.of(npc, raising)).orElse(null);
     }
 
     /**
@@ -124,6 +125,15 @@ public final class KingdomViews {
     }
 
     /**
+     * The citizens of a kingdom; a kingdom of the world whose capital is still being built counts those it is built for.
+     */
+    private static int population(MinecraftServer server, KingdomWorldState state, Kingdom kingdom) {
+        int counted = state.citizens().registry().count(kingdom.id());
+        return io.github.sekerator.kingdomworld.common.npc.NpcWork.plannedPeople(server, kingdom.id()).map(planned -> Math.max(planned, counted))
+                .orElse(counted);
+    }
+
+    /**
      * Map facts about a kingdom for players looking at {@code dimension}.
      */
     public static KingdomMapInfo mapInfo(MinecraftServer server, KingdomWorldState state, Kingdom kingdom, String dimension) {
@@ -132,7 +142,7 @@ public final class KingdomViews {
         boolean hasCapital = territory.isPresent() && territory.get().dimension().equals(dimension);
         Capital capital = territory.map(Territory::capital).orElse(null);
         return new KingdomMapInfo(kingdom.id(), kingdom.name(), kingdom.color(), PlayerNames.name(server, kingdom.rulerId()),
-                members, territory.map(Territory::size).orElse(0), state.citizens().registry().count(kingdom.id()), hasCapital,
+                members, territory.map(Territory::size).orElse(0), population(server, state, kingdom), hasCapital,
                 hasCapital ? capital.chunkX() : 0, hasCapital ? capital.chunkZ() : 0, npcInfo(server, kingdom));
     }
 

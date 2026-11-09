@@ -176,6 +176,8 @@ public final class KingdomWorldConfig {
         public final War war;
         public final Siege siege;
         public final Nobility nobility;
+        /** The guide book given to new players. */
+        public final ForgeConfigSpec.BooleanValue giveGuideOnFirstJoin;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Kingdom NPCs that physically exist in the world near players.").push("npc");
@@ -480,6 +482,12 @@ public final class KingdomWorldConfig {
             war = new War(builder);
             siege = new Siege(builder);
             nobility = new Nobility(builder);
+
+            builder.comment("The guide book: chapters on founding a kingdom and on everything after it.").push("guide");
+            giveGuideOnFirstJoin = builder.comment("Whether every player gets the guide book once, the first time they join the world.",
+                            "It can always be taken again with /kingdom guide.")
+                    .define("giveOnFirstJoin", true);
+            builder.pop();
 
             builder.comment("Abstract simulation of kingdoms far from players.").push("simulation");
             simulationIntervalTicks = builder
@@ -1203,11 +1211,18 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue rulerSlackPermille;
         public final ForgeConfigSpec.IntValue rulerRoadDistance;
         public final ForgeConfigSpec.IntValue rulerFestivalMood;
+        public final ForgeConfigSpec.IntValue rulerGrowthChunks;
+        public final ForgeConfigSpec.ConfigValue<String> buildMode;
+        public final ForgeConfigSpec.IntValue backgroundBlocksPerTick;
+        public final ForgeConfigSpec.IntValue backgroundChunksPerTick;
+        public final ForgeConfigSpec.IntValue backgroundPauseTickMillis;
+        public final ForgeConfigSpec.IntValue foundingClaimsPerTick;
 
         NpcKingdoms(ForgeConfigSpec.Builder builder) {
             io.github.sekerator.kingdomworld.core.npc.NpcRules d = io.github.sekerator.kingdomworld.core.npc.NpcRules.DEFAULT;
-            builder.comment("Kingdoms of the world: their places are planned from the seed of the world in the overworld, and each one",
-                    "appears (a capital with a wall, towns, roads, citizens, soldiers, a treasury) when a player first comes near.",
+            builder.comment("Kingdoms of the world: their places are planned from the seed of the world in the overworld. Each one is",
+                    "founded as data as soon as its place is planned (throne place, land, ruler, laws, treasury: the maps show it at once),",
+                    "and its buildings (a capital with a wall, towns, roads, citizens, soldiers) are raised in the world after that.",
                     "Values given by size are in the order small, medium, large.").push("npcKingdoms");
             generate = builder.comment("Whether kingdoms of the world are planned and appear.").define("generate", d.generate());
             count = builder.comment("How many kingdoms a world plans.").defineInRange("count", d.count(), 0, 256);
@@ -1217,7 +1232,7 @@ public final class KingdomWorldConfig {
                     .defineInRange("minDistance", d.minDistance(), 256, 100_000);
             minSpawnDistance = builder.comment("The least distance of a capital from the spawn of the world, in blocks.")
                     .defineInRange("minSpawnDistance", d.minSpawnDistance(), 0, 100_000);
-            triggerChunks = builder.comment("A kingdom appears once a player comes this close to its place, in chunks.")
+            triggerChunks = builder.comment("A kingdom is raised in the world at once when a player comes this close to its place, in chunks.")
                     .defineInRange("triggerChunks", d.triggerChunks(), 2, 64);
             sizeWeights = builder.comment("How often kingdoms of each size are chosen.")
                     .defineList("sizeWeights", ints(d.sizeWeights()), value -> value instanceof Integer number && number >= 0 && number <= 1000);
@@ -1251,6 +1266,20 @@ public final class KingdomWorldConfig {
             maxInhabitedMinutes = builder.comment("A place where players spent more minutes than this (the game counts it for every chunk)",
                             "is left alone, so that a kingdom never appears over what players built.")
                     .defineInRange("maxInhabitedMinutes", d.maxInhabitedMinutes(), 0, 100_000);
+            io.github.sekerator.kingdomworld.core.npc.NpcBuildRules b = io.github.sekerator.kingdomworld.core.npc.NpcBuildRules.DEFAULT;
+            buildMode = builder.comment("When the buildings of a kingdom of the world are raised in the world:",
+                            "background: one kingdom after another while players are on the server and ticks stay short (a kingdom a player",
+                            "comes near goes first, at the full budget); approach: only when a player comes near.")
+                    .define("buildMode", b.mode().id(), value -> value instanceof String text
+                            && io.github.sekerator.kingdomworld.core.npc.NpcBuildRules.Mode.byId(text).isPresent());
+            backgroundBlocksPerTick = builder.comment("Blocks a background raising places, clears or levels in one tick at most.")
+                    .defineInRange("backgroundBlocksPerTick", b.backgroundBlocksPerTick(), 16, 100_000);
+            backgroundChunksPerTick = builder.comment("Chunks a background raising asks for or looks through in one tick at most.")
+                    .defineInRange("backgroundChunksPerTick", b.backgroundChunksPerTick(), 1, 64);
+            backgroundPauseTickMillis = builder.comment("A background raising waits while the average tick of the server is longer than this, in ms.")
+                    .defineInRange("backgroundPauseTickMillis", b.pauseTickMillis(), 1, 1000);
+            foundingClaimsPerTick = builder.comment("Chunks of land a kingdom founded as data claims in one tick at most.")
+                    .defineInRange("foundingClaimsPerTick", b.claimsPerTick(), 1, 4096);
             io.github.sekerator.kingdomworld.core.npc.RulerRules r = io.github.sekerator.kingdomworld.core.npc.RulerRules.DEFAULT;
             builder.comment("The rulers of the kingdoms of the world: they build, trade, hire and answer threats by the rules players play by.")
                     .push("rulers");
@@ -1291,6 +1320,9 @@ public final class KingdomWorldConfig {
                     .defineInRange("roadDistance", r.roadDistance(), 0, 1536);
             rulerFestivalMood = builder.comment("A feast is held when the mood of the citizens falls below this (with the life of towns).")
                     .defineInRange("festivalMood", r.festivalMood(), 0, 100);
+            rulerGrowthChunks = builder.comment("Chunks a ruler adds to its land in a turn when nothing else needs them, up to maxChunks, so that",
+                            "the borders grow slowly; claims look at the region files and never load or generate chunks. 0 turns it off.")
+                    .defineInRange("growthChunks", r.growthChunks(), 0, 64);
             builder.pop();
             builder.pop();
         }

@@ -206,7 +206,8 @@ public final class NpcState {
             }
         }
         for (NpcSite site : sites.values()) {
-            if (site.status() == NpcSite.Status.SPAWNED && (site.kingdomId().isEmpty() || !kingdoms.containsKey(site.kingdomId().get()))) {
+            boolean standing = site.status() == NpcSite.Status.SPAWNED || site.status() == NpcSite.Status.FOUNDED;
+            if (standing && (site.kingdomId().isEmpty() || !kingdoms.containsKey(site.kingdomId().get()))) {
                 problems.add(site + " appeared without a kingdom");
             }
         }

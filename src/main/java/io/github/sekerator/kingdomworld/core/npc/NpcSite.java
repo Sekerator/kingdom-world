@@ -9,16 +9,21 @@ import java.util.UUID;
 
 /**
  * A place of the plan where a kingdom of the world appears, with the towns around it and how far its appearance went. The
- * plan only writes records; the world is changed when a player comes near.
+ * plan only writes records; the kingdom is founded as data soon after and its buildings are raised in the world later.
  */
 public final class NpcSite {
     /**
      * How far a place is.
      */
     public enum Status {
-        /** Planned; the kingdom appears when a player comes near. */
+        /** Planned; the kingdom is founded as data soon after (or appears at once when a player comes near first). */
         PLANNED,
-        /** The kingdom is appearing, in steps over ticks. */
+        /**
+         * The kingdom stands as data: its throne place, land, ruler, laws and treasury exist and the maps show it, while its
+         * buildings wait to be raised in the world.
+         */
+        FOUNDED,
+        /** The kingdom is appearing in the world, in steps over ticks. */
         SPAWNING,
         /** The kingdom stands in the world. */
         SPAWNED,
@@ -59,6 +64,7 @@ public final class NpcSite {
     private int step;
     private int groundY;
     private String reason = "";
+    private int given;
     private Runnable changeListener = () -> { };
 
     public NpcSite(int id, int x, int z, NpcLevel level, long seed, List<Town> towns) {
@@ -142,6 +148,40 @@ public final class NpcSite {
         return reason;
     }
 
+    /** The founding money went to the treasury. */
+    public static final int MONEY = 1;
+    /** The laws of the ruler were set. */
+    public static final int LAWS = 2;
+    /** The stores and the market were filled. */
+    public static final int STORES = 4;
+
+    /**
+     * Whether something of the founding was given already ({@link #MONEY}, {@link #LAWS}, {@link #STORES}), so that raising the
+     * buildings later gives it no second time.
+     */
+    public boolean given(int what) {
+        return (given & what) == what;
+    }
+
+    public void markGiven(int what) {
+        given |= what;
+        changeListener.run();
+    }
+
+    /**
+     * What of the founding was given, as flags, for saving.
+     */
+    public int givenFlags() {
+        return given;
+    }
+
+    /**
+     * Whether the kingdom of the place stands as data (founded, being raised or standing in the world).
+     */
+    public boolean founded() {
+        return kingdomId != null && (status == Status.FOUNDED || status == Status.SPAWNING || status == Status.SPAWNED);
+    }
+
     public void setStatus(Status value) {
         status = Objects.requireNonNull(value, "status");
         changeListener.run();
@@ -186,13 +226,15 @@ public final class NpcSite {
         step = 0;
         kingdomId = null;
         reason = "";
+        given = 0;
         changeListener.run();
     }
 
     /**
      * Restores the progress of a place from saved data.
      */
-    public void restore(Status statusValue, UUID kingdom, SpawnStage stageValue, int stepValue, int ground, String why) {
+    public void restore(Status statusValue, UUID kingdom, SpawnStage stageValue, int stepValue, int ground, String why, int givenFlags) {
+        given = givenFlags;
         status = Objects.requireNonNull(statusValue, "status");
         kingdomId = kingdom;
         stage = Objects.requireNonNull(stageValue, "stage");
