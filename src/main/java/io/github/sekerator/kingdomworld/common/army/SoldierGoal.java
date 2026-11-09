@@ -265,7 +265,18 @@ final class SoldierGoal extends Goal {
 
     private void follow(MinecraftServer server, ServerLevel level, Order order) {
         String dimension = Dimensions.id(level);
+        if (body.citizenId() != null) {
+            // On the march the soldiers walk the way of their squad, point by point.
+            WorldPos next = ArmyWork.state(server).squadOf(body.citizenId()).map(squad -> ArmyField.nextPoint(server, squad.id())).orElse(null);
+            if (next != null) {
+                walkTo(next, dimension, 0.7);
+                return;
+            }
+        }
         switch (order.kind()) {
+            case MOVE -> stayNear(order.points().get(0), dimension, 4.0);
+            case ATTACK -> stayNear(order.points().get(0), dimension, 10.0);
+            case SCOUT -> stayNear(order.points().get(0), dimension, 8.0 + order.radius() * 8.0);
             case HOLD -> stayNear(order.points().get(0), dimension, 3.0);
             case GUARD -> stayNear(order.points().get(0), dimension, 6.0 + order.radius() * 8.0);
             case DEFEND -> stayNear(order.points().get(0), dimension, 14.0);

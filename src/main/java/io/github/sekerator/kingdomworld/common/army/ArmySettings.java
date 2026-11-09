@@ -15,6 +15,8 @@ import java.util.Map;
  */
 public final class ArmySettings {
     private static ArmyRules override;
+    private static io.github.sekerator.kingdomworld.core.army.FieldRules fieldOverride;
+    private static io.github.sekerator.kingdomworld.core.army.FieldRules fieldCached;
     private static ArmyRules cached;
     private static GearChoice.Overrides gear;
     private static List<String> ranged;
@@ -34,7 +36,42 @@ public final class ArmySettings {
         return rules;
     }
 
+    /**
+     * How squads march, see and meet in the field.
+     */
+    public static io.github.sekerator.kingdomworld.core.army.FieldRules field() {
+        if (fieldOverride != null) {
+            return fieldOverride;
+        }
+        io.github.sekerator.kingdomworld.core.army.FieldRules rules = fieldCached;
+        if (rules == null) {
+            rules = fieldFromConfig();
+            fieldCached = rules;
+        }
+        return rules;
+    }
+
+    /**
+     * Replaces the field rules, for game tests; {@code null} restores the config.
+     */
+    public static void overrideField(io.github.sekerator.kingdomworld.core.army.FieldRules rules) {
+        fieldOverride = rules;
+    }
+
+    private static io.github.sekerator.kingdomworld.core.army.FieldRules fieldFromConfig() {
+        try {
+            KingdomWorldConfig.Army c = KingdomWorldConfig.SERVER.army;
+            return new io.github.sekerator.kingdomworld.core.army.FieldRules(c.marchSpeed.get(), c.roadSpeedBonus.get(), c.sightRadius.get(),
+                    c.archerSightBonus.get(), c.postSightRadius.get(), c.scoutSightBonus.get(), c.fogSeconds.get(), c.lastSeenMinutes.get() * 1_200L,
+                    c.spyRevealMinutes.get() * 1_200L, c.engageDistance.get(), c.fieldBattleSeconds.get(),
+                    new io.github.sekerator.kingdomworld.core.combat.Flank.Rules(c.flankBonus.get(), c.rearBonus.get()));
+        } catch (RuntimeException e) {
+            return io.github.sekerator.kingdomworld.core.army.FieldRules.DEFAULT;
+        }
+    }
+
     public static void refresh() {
+        fieldCached = fieldFromConfig();
         cached = fromConfig();
         gear = null;
         ranged = null;
@@ -43,6 +80,8 @@ public final class ArmySettings {
     public static void reset() {
         cached = null;
         override = null;
+        fieldCached = null;
+        fieldOverride = null;
         gear = null;
         ranged = null;
     }

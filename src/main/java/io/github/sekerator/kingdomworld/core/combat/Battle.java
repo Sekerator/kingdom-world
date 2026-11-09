@@ -124,6 +124,14 @@ public final class Battle {
      * Fights a battle.
      */
     public static Result resolve(Side first, Side second, BattleRules rules, DoubleSupplier random) {
+        return resolve(first, 1.0, second, 1.0, rules, random);
+    }
+
+    /**
+     * Fights a battle in which a side may have an edge: the formation, a blow at the flank or the rear of an enemy tied in
+     * battle. The edge multiplies the strength of the side.
+     */
+    public static Result resolve(Side first, double firstEdge, Side second, double secondEdge, BattleRules rules, DoubleSupplier random) {
         Objects.requireNonNull(rules, "rules");
         Objects.requireNonNull(random, "random");
         boolean firstEmpty = first.isEmpty();
@@ -131,8 +139,8 @@ public final class Battle {
         if (firstEmpty && secondEmpty) {
             return Result.NONE;
         }
-        double firstPower = first.power();
-        double secondPower = second.power();
+        double firstPower = first.power() * edge(firstEdge);
+        double secondPower = second.power() * edge(secondEdge);
         if (firstEmpty || secondEmpty) {
             // Nobody to fight: the other side takes the field without a blow.
             return new Result(firstEmpty ? Winner.SECOND : Winner.FIRST, firstEmpty ? 0.0 : 1.0, firstPower, secondPower, Map.of(), 0, 0,
@@ -157,6 +165,10 @@ public final class Battle {
         double loot = loserLeft ? 0.5 : 1.0;
         return new Result(firstWins ? Winner.FIRST : Winner.SECOND, chance, firstPower, secondPower, fates, firstLost, secondLost,
                 !firstWins && loserLeft, firstWins && loserLeft, loot);
+    }
+
+    private static double edge(double value) {
+        return Double.isFinite(value) ? Math.max(0.1, Math.min(MAX_RATIO, value)) : 1.0;
     }
 
     private static void rollFates(List<Fighter> fighters, double ratio, double hardship, BattleRules rules, DoubleSupplier random,

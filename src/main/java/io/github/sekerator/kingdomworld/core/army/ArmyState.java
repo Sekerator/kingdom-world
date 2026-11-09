@@ -42,6 +42,8 @@ public final class ArmyState {
     private final Map<Long, MercenaryBand> bands = new LinkedHashMap<>();
     private final Map<UUID, Set<WorldPos>> barracks = new LinkedHashMap<>();
     private final Map<UUID, Long> offersDay = new LinkedHashMap<>();
+    /** Where squads are and march, by squad; a squad without one stands at its home or at the place of its order. */
+    private final Map<Long, March> marches = new LinkedHashMap<>();
     private long nextSquad = 1;
     private long nextBand = 1;
     private Runnable changeListener = () -> {
@@ -470,6 +472,11 @@ public final class ArmyState {
                 return Outcome.fail(KingdomError.BAD_ORDER);
             }
         }
+        for (WorldPos point : order.via()) {
+            if (!point.dimension().equals(dimension)) {
+                return Outcome.fail(KingdomError.BAD_ORDER);
+            }
+        }
         if (order.kind() == Order.Kind.FOLLOW && !world.membership().isMember(order.player(), squad.kingdomId())) {
             return Outcome.fail(KingdomError.BAD_ORDER);
         }
@@ -486,6 +493,63 @@ public final class ArmyState {
             return Outcome.fail(KingdomError.UNCHANGED);
         }
         return Outcome.DONE;
+    }
+
+    /**
+     * Changes how a squad marches and fights.
+     */
+    public Outcome setFormation(UUID actor, long squadId, io.github.sekerator.kingdomworld.core.combat.Formation formation, KingdomWorldState world) {
+        ArmySquad squad = squads.get(squadId);
+        if (squad == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_SQUAD);
+        }
+        Outcome check = checkArmy(actor, squad.kingdomId(), world);
+        if (!check.ok()) {
+            return check;
+        }
+        if (squad.formation() == formation) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        squads.put(squadId, squad.withFormation(formation));
+        changed();
+        return Outcome.DONE;
+    }
+
+    // ---------------------------------------------------------------- marches
+
+    /**
+     * Where a squad is and marches, if it ever marched.
+     */
+    public Optional<March> march(long squadId) {
+        return Optional.ofNullable(marches.get(squadId));
+    }
+
+    /**
+     * Every march of a squad that still exists.
+     */
+    public Map<Long, March> marches() {
+        marches.keySet().removeIf(id -> !squads.containsKey(id));
+        return Collections.unmodifiableMap(marches);
+    }
+
+    /**
+     * Moves a squad, without marking the data changed: marches change every second, and the saved data takes them as they
+     * are when it is saved anyway.
+     */
+    public void setMarch(long squadId, March march) {
+        if (squads.containsKey(squadId)) {
+            marches.put(squadId, march);
+        }
+    }
+
+    public void forgetMarch(long squadId) {
+        marches.remove(squadId);
+    }
+
+    public void restoreMarch(long squadId, March march) {
+        if (squads.containsKey(squadId)) {
+            marches.put(squadId, march);
+        }
     }
 
     public Outcome setOrder(UUID actor, long squadId, Order order, String dimension, KingdomWorldState world) {
@@ -773,6 +837,7 @@ public final class ArmyState {
         bands.clear();
         barracks.clear();
         offersDay.clear();
+        marches.clear();
         nextSquad = 1;
         nextBand = 1;
     }

@@ -743,6 +743,19 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.DoubleValue caravanThreat;
         public final ForgeConfigSpec.IntValue caravanThreatUnits;
         public final ForgeConfigSpec.IntValue alarmRadius;
+        public final ForgeConfigSpec.DoubleValue marchSpeed;
+        public final ForgeConfigSpec.DoubleValue roadSpeedBonus;
+        public final ForgeConfigSpec.IntValue sightRadius;
+        public final ForgeConfigSpec.DoubleValue archerSightBonus;
+        public final ForgeConfigSpec.IntValue postSightRadius;
+        public final ForgeConfigSpec.DoubleValue scoutSightBonus;
+        public final ForgeConfigSpec.IntValue fogSeconds;
+        public final ForgeConfigSpec.IntValue lastSeenMinutes;
+        public final ForgeConfigSpec.IntValue spyRevealMinutes;
+        public final ForgeConfigSpec.IntValue engageDistance;
+        public final ForgeConfigSpec.IntValue fieldBattleSeconds;
+        public final ForgeConfigSpec.DoubleValue flankBonus;
+        public final ForgeConfigSpec.DoubleValue rearBonus;
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> gearScores;
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> rangedWeapons;
 
@@ -793,6 +806,34 @@ public final class KingdomWorldConfig {
             alarmRadius = builder.comment("Blocks around a citizen or a player of the kingdom attacked by a monster on the kingdom's land",
                             "in which soldiers come to help.")
                     .defineInRange("alarmRadius", d.alarmRadius, 0, 256);
+            io.github.sekerator.kingdomworld.core.army.FieldRules f = io.github.sekerator.kingdomworld.core.army.FieldRules.DEFAULT;
+            marchSpeed = builder.comment("Blocks a squad in line marches per second far from players (a column is faster, a wedge slower).")
+                    .defineInRange("marchSpeed", f.marchSpeed(), 0.1, 100.0);
+            roadSpeedBonus = builder.comment("Share a road adds to the speed of a march; the ways of squads bend to roads that save time.")
+                    .defineInRange("roadSpeedBonus", f.roadBonus(), 0.0, 5.0);
+            sightRadius = builder.comment("Blocks a squad sees around it: squads of others show on the map of the army only in sight.")
+                    .defineInRange("sightRadius", f.sight(), 0, 1_024);
+            archerSightBonus = builder.comment("Share archers add to the sight of their squad.")
+                    .defineInRange("archerSightBonus", f.archerSight(), 0.0, 10.0);
+            postSightRadius = builder.comment("Blocks a working tower or wall of a kingdom sees around it.")
+                    .defineInRange("postSightRadius", f.postSight(), 0, 1_024);
+            scoutSightBonus = builder.comment("Share a squad with the order to scout adds to its sight.")
+                    .defineInRange("scoutSightBonus", f.scoutSight(), 0.0, 10.0);
+            fogSeconds = builder.comment("Seconds between two looks of the fog of war of a kingdom whose map of the army is open.")
+                    .defineInRange("fogSeconds", f.fogSeconds(), 1, 60);
+            lastSeenMinutes = builder.comment("Minutes a pale mark of a squad seen last stays on the map of the army.")
+                    .defineInRange("lastSeenMinutes", (int) (f.lastSeenTicks() / 1_200), 0, 10_080);
+            spyRevealMinutes = builder.comment("Minutes the squads of a kingdom stay in sight after a spy scouted it.")
+                    .defineInRange("spyRevealMinutes", (int) (f.spyTicks() / 1_200), 0, 10_080);
+            engageDistance = builder.comment("Blocks between a squad and the enemy it attacks at which a battle far from players begins.")
+                    .defineInRange("engageDistance", f.engage(), 1, 256);
+            fieldBattleSeconds = builder.comment("Seconds a battle far from players lasts before it is decided; other squads may join it",
+                            "meanwhile, and one that strikes a side or the rear of an enemy in battle gets the bonus below.")
+                    .defineInRange("fieldBattleSeconds", f.battleSeconds(), 1, 600);
+            flankBonus = builder.comment("Share a blow at the side of an enemy already in battle adds to the strength of the squad.")
+                    .defineInRange("flankBonus", f.flank().side(), 0.0, 2.0);
+            rearBonus = builder.comment("Share a blow at the rear of an enemy already in battle adds to the strength of the squad.")
+                    .defineInRange("rearBonus", f.flank().rear(), 0.0, 2.0);
             gearScores = builder.comment("Gear of soldiers: scores of items and tags that replace what their attributes say, or deny to",
                             "never take them, e.g. [\"minecraft:trident=30\", \"#forge:tools/knives=deny\"]. A melee weapon scores its",
                             "damage per second (a diamond sword about 11), armor its defense and half its toughness.")

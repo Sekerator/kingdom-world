@@ -255,6 +255,24 @@ public final class BanditWork {
             if (!near) {
                 continue;
             }
+            if (fightSquad(server, camp, squad)) {
+                return;
+            }
+        }
+    }
+
+    /**
+     * A squad fights a camp. If it wins and no robber is left, the goods of the camp go to the storehouses of its kingdom.
+     *
+     * @return whether the camp is cleared
+     */
+    public static boolean fightSquad(MinecraftServer server, BanditCamp camp, ArmySquad squad) {
+        if (camp.cleared() || ArmyWork.isReadOnly(server)) {
+            return camp.cleared();
+        }
+        BanditRules rules = RoadSettings.bandits();
+        long day = io.github.sekerator.kingdomworld.common.economy.TreasuryActions.day(server);
+        {
             var enemy = camp.side(rules, camp.bandits());
             WorldPos where = new WorldPos(camp.dimension(), camp.x(), camp.y(), camp.z());
             ArmyWork.Fought fought = ArmyWork.fight(server, squad, enemy, where);
@@ -272,9 +290,10 @@ public final class BanditWork {
             RoadSync.changed();
             if (camp.cleared()) {
                 cleared(server, camp, squad.kingdomId());
-                return;
+                return true;
             }
         }
+        return false;
     }
 
     /**

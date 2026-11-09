@@ -582,6 +582,18 @@ public final class WarWork {
     /**
      * A squad on the land of the enemy meets the defenders there. Without defenders it ravages the land unopposed.
      */
+    /**
+     * A squad told on the map of the army to attack a place of an enemy at war came there: it meets the defenders, as a
+     * squad on the land of the enemy does in the steps of the war.
+     */
+    public static void assault(MinecraftServer server, ArmySquad attacking, UUID enemy) {
+        if (isReadOnly(server) || shielded(server, enemy)) {
+            return;
+        }
+        state(server).warBetween(attacking.kingdomId(), enemy).filter(War::active)
+                .ifPresent(war -> battle(server, war, attacking, enemy, DiplomacySettings.rules(), KingdomWorldApi.gameTime(server)));
+    }
+
     static void battle(MinecraftServer server, War war, ArmySquad attacking, UUID enemy, DiplomacyRules rules, long now) {
         DiplomacyState state = state(server);
         ArmyRules armyRules = ArmySettings.rules();
@@ -621,6 +633,31 @@ public final class WarWork {
         state.record(now, "battle", winner, loser, war.id(), "");
         LOGGER.info("War #{}: a squad of {} fought one of {} far from players and {}", war.id(), name(server, attacker).getString(),
                 against.getString(), won ? "won" : "lost");
+    }
+
+    /**
+     * A battle the army fought on the map between squads of two kingdoms at war: the score, the kills and the weariness of
+     * war, as for the battles of the wars far from players.
+     */
+    public static void scoreFieldBattle(MinecraftServer server, UUID attacker, UUID defender, boolean attackerWon, int attackerKills,
+                                        int defenderKills) {
+        if (isReadOnly(server) || !fighting(server, attacker, defender)) {
+            return;
+        }
+        DiplomacyState state = state(server);
+        DiplomacyRules rules = DiplomacySettings.rules();
+        UUID winner = attackerWon ? attacker : defender;
+        UUID loser = attackerWon ? defender : attacker;
+        state.score(winner, loser, DiplomacyState.Feat.BATTLE, rules.scoreBattle());
+        for (int i = 0; i < attackerKills; i++) {
+            state.score(attacker, defender, DiplomacyState.Feat.KILL, rules.scoreKill());
+        }
+        for (int i = 0; i < defenderKills; i++) {
+            state.score(defender, attacker, DiplomacyState.Feat.KILL, rules.scoreKill());
+        }
+        state.exhaust(defender, attacker, rules.exhaustionLoss() * attackerKills, attackerKills);
+        state.exhaust(attacker, defender, rules.exhaustionLoss() * defenderKills, defenderKills);
+        state.warBetween(attacker, defender).ifPresent(war -> state.record(KingdomWorldApi.gameTime(server), "battle", winner, loser, war.id(), ""));
     }
 
     /**

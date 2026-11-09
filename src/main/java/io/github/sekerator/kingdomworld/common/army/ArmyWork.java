@@ -138,6 +138,7 @@ public final class ArmyWork {
     }
 
     public static void reset() {
+        ArmyField.reset();
         rolls = null;
         hostility = Hostility.PEACE;
         ALARMS.clear();
@@ -183,7 +184,7 @@ public final class ArmyWork {
         rolls = value;
     }
 
-    static DoubleSupplier rolls() {
+    public static DoubleSupplier rolls() {
         return rolls != null ? rolls : RANDOM::nextDouble;
     }
 
@@ -199,7 +200,7 @@ public final class ArmyWork {
     }
 
     @Nullable
-    static WorldPos capitalOf(MinecraftServer server, UUID kingdomId) {
+    public static WorldPos capitalOf(MinecraftServer server, UUID kingdomId) {
         return KingdomWorldApi.state(server).territory().territory(kingdomId).map(Territory::capital)
                 .map(capital -> new WorldPos(capital.dimension(), capital.x(), capital.y(), capital.z())).orElse(null);
     }
@@ -560,7 +561,7 @@ public final class ArmyWork {
         WorldPos capital = capitalOf(server, squad.get().kingdomId());
         String dimension = capital != null ? capital.dimension() : "minecraft:overworld";
         Outcome outcome = change(server, "give an order", army -> army.setOrder(actor, squadId, order, dimension, KingdomWorldApi.state(server)));
-        if (outcome.ok()) {
+        if (outcome.ok() && ArmyField.instantFor(server)) {
             order.anchor().ifPresent(anchor -> {
                 for (UUID member : squad.get().members()) {
                     if (CitizenBodies.body(member) == null) {
@@ -616,7 +617,23 @@ public final class ArmyWork {
         if (squad.isEmpty()) {
             return List.of();
         }
-        Order order = squad.get().order();
+        // A squad on the march is where it marches, not yet at the place of its order.
+        Optional<io.github.sekerator.kingdomworld.core.army.March> march = army.march(squad.get().id());
+        if (march.isPresent() && !march.get().arrived()) {
+            return List.of(march.get().at());
+        }
+        if (squad.get().order().kind() == Order.Kind.RETREAT) {
+            return List.of();
+        }
+        return anchorsOf(server, squad.get());
+    }
+
+    /**
+     * Places of the order of a squad: the point held, the route walked, the area guarded, the player followed, the merchant
+     * escorted.
+     */
+    public static List<WorldPos> anchorsOf(MinecraftServer server, ArmySquad squad) {
+        Order order = squad.order();
         if (order.kind() == Order.Kind.FOLLOW) {
             ServerPlayer player = server.getPlayerList().getPlayer(order.player());
             if (player == null) {
@@ -671,6 +688,7 @@ public final class ArmyWork {
         KingdomWorldState world = KingdomWorldApi.state(server);
         ArmyRules rules = ArmySettings.rules();
         keepInStep(server, army, world);
+        ArmyField.tick(server, now);
         long day = day(server);
         for (Kingdom kingdom : world.kingdoms().all()) {
             if (army.offersDay(kingdom.id()) < day) {

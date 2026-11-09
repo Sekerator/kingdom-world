@@ -4,7 +4,9 @@ import io.github.sekerator.kingdomworld.core.army.ArmySquad;
 import io.github.sekerator.kingdomworld.core.army.ArmyState;
 import io.github.sekerator.kingdomworld.core.army.Mercenary;
 import io.github.sekerator.kingdomworld.core.army.MercenaryBand;
+import io.github.sekerator.kingdomworld.core.army.March;
 import io.github.sekerator.kingdomworld.core.army.Order;
+import io.github.sekerator.kingdomworld.core.combat.Formation;
 import io.github.sekerator.kingdomworld.core.army.Soldier;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import net.minecraft.nbt.CompoundTag;
@@ -24,7 +26,9 @@ import java.util.UUID;
  *
  * <pre>
  * soldiers: [ { citizen, kingdom, experience, kills, battles, recruited } ]
- * squads: [ { id, kingdom, members: [uuid], commander?, band, order: { kind, points: [ { dim, x, y, z } ], radius, player?, deal } } ]
+ * squads: [ { id, kingdom, members: [uuid], commander?, band, formation, order: { kind, points: [ { dim, x, y, z } ], radius, player?, deal,
+ *            via: [ { dim, x, y, z } ], target } } ]
+ * marches: [ { squad, at: { dim, x, y, z }, path: [ { dim, x, y, z } ], faceX, faceZ } ]
  * bands: [ { id, kingdom, price, day, paidUntil, hired, fighters: [ { id, seed, female, level, weapon, damage, speed, ranged, armor,
  *            toughness, experience, health } ] } ]
  * barracks: [ { kingdom, dim, x, y, z } ]
@@ -38,6 +42,7 @@ final class ArmyNbt {
     static final String BANDS = "bands";
     static final String BARRACKS = "barracks";
     static final String OFFERS = "offers";
+    static final String MARCHES = "marches";
     static final String NEXT_SQUAD = "nextSquad";
     static final String NEXT_BAND = "nextBand";
 
@@ -72,9 +77,21 @@ final class ArmyNbt {
             }
             entry.putLong("band", squad.band());
             entry.put("order", writeOrder(squad.order()));
+            entry.putString("formation", squad.formation().id());
             squads.add(entry);
         }
         tag.put(SQUADS, squads);
+        ListTag marches = new ListTag();
+        for (Map.Entry<Long, March> entry : army.marches().entrySet()) {
+            CompoundTag one = new CompoundTag();
+            one.putLong("squad", entry.getKey());
+            one.put("at", writePos(entry.getValue().at()));
+            one.put("path", writePoints(entry.getValue().path()));
+            one.putDouble("faceX", entry.getValue().faceX());
+            one.putDouble("faceZ", entry.getValue().faceZ());
+            marches.add(one);
+        }
+        tag.put(MARCHES, marches);
         ListTag bands = new ListTag();
         for (MercenaryBand band : army.bands()) {
             CompoundTag entry = new CompoundTag();
@@ -139,7 +156,30 @@ final class ArmyNbt {
             tag.putUUID("player", order.player());
         }
         tag.putLong("deal", order.deal());
+        if (!order.via().isEmpty()) {
+            tag.put("via", writePoints(order.via()));
+        }
+        if (order.target() != 0) {
+            tag.putLong("target", order.target());
+        }
         return tag;
+    }
+
+    private static ListTag writePoints(List<WorldPos> points) {
+        ListTag list = new ListTag();
+        for (WorldPos point : points) {
+            list.add(writePos(point));
+        }
+        return list;
+    }
+
+    private static List<WorldPos> readPoints(CompoundTag tag, String key) {
+        List<WorldPos> points = new ArrayList<>();
+        ListTag list = tag.getList(key, Tag.TAG_COMPOUND);
+        for (int i = 0; i < list.size(); i++) {
+            points.add(readPos(list.getCompound(i)));
+        }
+        return points;
     }
 
     private static CompoundTag writePos(WorldPos pos) {
@@ -163,7 +203,8 @@ final class ArmyNbt {
         for (int i = 0; i < list.size(); i++) {
             points.add(readPos(list.getCompound(i)));
         }
-        return new Order(kind, points, tag.getInt("radius"), tag.hasUUID("player") ? tag.getUUID("player") : null, tag.getLong("deal"));
+        return new Order(kind, points, tag.getInt("radius"), tag.hasUUID("player") ? tag.getUUID("player") : null, tag.getLong("deal"),
+                readPoints(tag, "via"), tag.getLong("target"));
     }
 
     /**
@@ -205,7 +246,9 @@ final class ArmyNbt {
                 }
                 army.restoreSquad(new ArmySquad(entry.getLong("id"), uuid(entry, "kingdom"), members,
                         entry.hasUUID("commander") ? entry.getUUID("commander") : null, entry.getLong("band"),
-                        readOrder(entry.getCompound("order"))));
+                        readOrder(entry.getCompound("order")), entry.contains("formation")
+                        ? Formation.byId(entry.getString("formation")).orElseThrow(() -> new IllegalArgumentException("unknown formation"))
+                        : Formation.LINE));
             } catch (RuntimeException e) {
                 problems.add("squad #" + entry.getLong("id") + ": " + e.getMessage());
             }
@@ -222,6 +265,14 @@ final class ArmyNbt {
                 army.restoreOffersDay(uuid(entry, "kingdom"), entry.getLong("day"));
             } catch (RuntimeException e) {
                 problems.add("offers: " + e.getMessage());
+            }
+        }
+        for (CompoundTag entry : list(tag, MARCHES, problems)) {
+            try {
+                army.restoreMarch(entry.getLong("squad"), new March(readPos(entry.getCompound("at")), readPoints(entry, "path"),
+                        entry.getDouble("faceX"), entry.getDouble("faceZ")));
+            } catch (RuntimeException e) {
+                problems.add("march of #" + entry.getLong("squad") + ": " + e.getMessage());
             }
         }
         army.restoreNextIds(tag.getLong(NEXT_SQUAD), tag.getLong(NEXT_BAND));

@@ -31,7 +31,7 @@ import java.util.Optional;
 public final class ArmySavedData extends SavedData {
     public static final String DATA_NAME = KingdomWorld.MOD_ID + "_army";
     /** Current layout of the saved data. Increase it together with a migration step. */
-    public static final int FORMAT_VERSION = 1;
+    public static final int FORMAT_VERSION = 2;
     static final String TAG_FORMAT_VERSION = "formatVersion";
 
     private static final Logger LOGGER = LogUtils.getLogger();

@@ -53,7 +53,11 @@ final class NobilitySpies {
     private static void done(MinecraftServer server, NobilityState state, UUID owner, UUID target, Spy.Task task, long house, long day) {
         NobilityRules rules = NobilitySettings.rules();
         switch (task) {
-            case SCOUT -> scout(server, state, owner, target, day);
+            case SCOUT -> {
+                scout(server, state, owner, target, day);
+                // The report shows where the squads of the kingdom are, for a while.
+                io.github.sekerator.kingdomworld.common.army.ArmyField.spied(server, owner, target);
+            }
             case INCITE -> state.report(owner, new Note(day, "report.incited", List.of(Note.kingdom(target))));
             case SABOTAGE -> {
                 int spoiled = NobilityWork.spoil(server, target);
