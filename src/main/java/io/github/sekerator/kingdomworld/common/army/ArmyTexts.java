@@ -76,7 +76,7 @@ public final class ArmyTexts {
             case DEFEND -> Component.translatable(KEY + "order_text.defend", place(order.points().get(0)));
             case MOVE -> Component.translatable(KEY + "order_text.move", place(order.points().get(0)));
             case ATTACK -> order.target() != 0 ? Component.translatable(KEY + "order_text.attack_squad", order.target())
-                    : Component.translatable(KEY + "order_text.attack_place", place(order.points().get(0)));
+                    : Component.translatable(KEY + "order_text.attack", place(order.points().get(0)));
             case RETREAT -> Component.translatable(KEY + "order_text.retreat");
             case SCOUT -> Component.translatable(KEY + "order_text.scout", 2 * order.radius() + 1, 2 * order.radius() + 1,
                     place(order.points().get(0)));

@@ -252,11 +252,16 @@ public final class ClientSelfTest {
             case 100 -> {
                 ClientHooks.openKingdomMap();
                 LOGGER.info(PREFIX + "map opened: {}", minecraft.screen instanceof KingdomMapScreen);
+                io.github.sekerator.kingdomworld.client.map.ClientArmyMap.clear();
+                io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork.sendToServer(
+                        new io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Request());
             }
             case 160 -> {
                 UUID owner = ClientTerritoryCache.ownerOf(throne.getX() >> 4, throne.getZ() >> 4);
                 LOGGER.info(PREFIX + "map data: {} kingdom(s) known, throne chunk owned by the test kingdom: {}",
                         ClientTerritoryCache.kingdoms().size(), kingdomId != null && kingdomId.equals(owner));
+                LOGGER.info(PREFIX + "army on the map: answered {}, the king commands it {}", io.github.sekerator.kingdomworld.client.map.ClientArmyMap.answered(),
+                        io.github.sekerator.kingdomworld.client.map.ClientArmyMap.view().allowed());
                 server.execute(() -> {
                     ServerPlayer player = server.getPlayerList().getPlayer(playerId);
                     if (player != null) {

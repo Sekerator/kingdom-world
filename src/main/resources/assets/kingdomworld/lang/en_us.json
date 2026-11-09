@@ -3409,7 +3409,7 @@
   "kingdomworld.army.order.scout": "Scouts",
   "kingdomworld.army.order_text.move": "Marches to %s",
   "kingdomworld.army.order_text.attack_squad": "Attacks squad %s",
-  "kingdomworld.army.order_text.attack_place": "Attacks the place at %s",
+  "kingdomworld.army.order_text.attack": "Attacks the place at %s",
   "kingdomworld.army.order_text.retreat": "Goes back to the barracks",
   "kingdomworld.army.order_text.scout": "Scouts %s x %s chunks around %s",
   "kingdomworld.army.field.place": "%s %s",

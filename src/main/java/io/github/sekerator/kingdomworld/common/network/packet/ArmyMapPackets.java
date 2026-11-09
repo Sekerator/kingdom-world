@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.common.network.packet;
 
+import io.github.sekerator.kingdomworld.client.network.ClientArmyHandlers;
 import io.github.sekerator.kingdomworld.common.army.ArmyMap;
 import io.github.sekerator.kingdomworld.core.request.RequestPolicy;
 import io.github.sekerator.kingdomworld.common.network.ServerRequestGuard;
@@ -155,7 +156,7 @@ public final class ArmyMapPackets {
         }
 
         public static void handle(View message, Supplier<NetworkEvent.Context> context) {
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> io.github.sekerator.kingdomworld.client.map.ClientArmyMap.update(message));
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientArmyHandlers.handleMap(message));
         }
     }
 

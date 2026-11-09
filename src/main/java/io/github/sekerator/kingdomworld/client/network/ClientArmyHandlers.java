@@ -13,6 +13,13 @@ public final class ClientArmyHandlers {
     private ClientArmyHandlers() {
     }
 
+    /**
+     * The army on the map of the atlas.
+     */
+    public static void handleMap(io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.View view) {
+        io.github.sekerator.kingdomworld.client.map.ClientArmyMap.update(view);
+    }
+
     public static void handleTab(ArmyViews.ArmyTabView view) {
         if (Minecraft.getInstance().screen instanceof ThroneScreen throne) {
             throne.updateArmy(view);

@@ -3409,7 +3409,7 @@
   "kingdomworld.army.order.scout": "Разведывает",
   "kingdomworld.army.order_text.move": "Идёт к %s",
   "kingdomworld.army.order_text.attack_squad": "Атакует отряд %s",
-  "kingdomworld.army.order_text.attack_place": "Атакует место у %s",
+  "kingdomworld.army.order_text.attack": "Атакует место у %s",
   "kingdomworld.army.order_text.retreat": "Отходит в казарму",
   "kingdomworld.army.order_text.scout": "Разведывает %s x %s чанков у %s",
   "kingdomworld.army.field.place": "%s %s",
