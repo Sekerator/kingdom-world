@@ -2,6 +2,15 @@
 
 ## Русский
 
+### 1.2.0
+
+- **Книга «Королевства: руководство».** Каждый игрок получает её один раз при первом входе (настройка `[guide] giveOnFirstJoin`), снова берёт командой `/kingdom guide`, если книги при нём нет, крафтит из книги и золотого слитка или находит во вкладке «Инструменты» творческого режима. Своё окно с оглавлением и двенадцатью главами (основание, окно трона, жители, деньги, стройка, дороги, армия, закон, гильдия, магия, королевства мира, карта и клавиши), листание кнопками, стрелками и колесом; страницы режутся по ширине экрана на любом языке, длинный заголовок показывается целиком при наведении. Рынки книгу не покупают.
+- **Подсказки.** Поставленный трон один раз говорит, что нужна Корона основателя и ПКМ по трону; подсказки трона и короны объясняют то же и ссылаются на книгу; карта, на которой не видно ни одной столицы, называет ближайшее королевство с расстоянием и стороной света.
+- **Королевства мира с первого дня.** Каждое место плана сразу основывается как данные (трон, земля, имена, правитель, законы, казна), без загрузки и генерации чанков, с теми же проверками чужой земли и обжитости по файлам регионов; на новом мире все королевства на карте через минуту-две, в старом мире ждавшие игрока места основываются сразу после обновления. Атлас и моды карт показывают их границы, столицы, будущие города и дороги пунктиром; земля защищена с основания.
+- **Медленный рост.** Правители каждый ход прибавляют к земле по `growthChunks` чанков до `maxChunks`; заявки читают файлы регионов и не загружают чанки, поэтому растут и королевства, которых никто не посещал.
+- **Постройки в мире.** `buildMode = background` (по умолчанию): одно королевство за раз с малым бюджетом, пока на сервере есть игроки и тики короткие; королевство, к которому подошёл игрок, строится первым с полным бюджетом. `approach`: только при подходе игрока. Карточка королевства на карте пишет «столица строится». Команда оператора `admin npc spawn background <место>`.
+- Формат данных королевств мира 3 (формат 2 читается как есть), версия протокола 24: клиент и сервер должны быть одной версии.
+
 ### 1.1.0
 
 - **Командование армией на карте.** Режим «Армия» в атласе для короля и маршала: свои отряды с приказом, состоянием и временем до цели, бои; выбор кликом (Shift: несколько), приказы прямо на карте (идти, держать, патруль, охрана области, атака отряда, лагеря или города, осада, охрана каравана, разведка, отход в казарму) и маршрут с промежуточными точками для обхода во фланг и тыл.
@@ -36,6 +45,15 @@
 - **Нагрузка и баланс.** Замер нагрузки `admin perf`, тяжёлые места разнесены по тикам, жалование всех профессий по умолчанию.
 
 ## English
+
+### 1.2.0
+
+- **The book "Kingdoms: a Guide".** Every player gets it once on the first join (setting `[guide] giveOnFirstJoin`), takes it again with `/kingdom guide` when they carry none, crafts it from a book and a gold ingot, or finds it in the Tools tab of creative mode. A screen of its own with a table of contents and twelve chapters (founding, the throne screen, citizens, money, construction, roads, the army, the law, the guild, magic, kingdoms of the world, the map and keys), turned with buttons, arrows and the wheel; pages are cut to the width of the screen in any language, and a long title shows in full on hover. Markets do not buy the book.
+- **Hints.** A throne that is set up says once that a Founder's Crown and a right click on the throne are needed; the tooltips of the throne and the crown say the same and point to the book; a map with no capital in sight names the nearest kingdom with its distance and direction.
+- **Kingdoms of the world from the first day.** Every place of the plan is founded as data at once (throne, land, names, ruler, laws, treasury), without loading or generating chunks, with the same checks of foreign land and of the time players spent there by the region files; on a new world all kingdoms are on the map in a minute or two, and in an older world the places that waited for a player are founded right after the update. The atlas and map mods show their borders, capitals, towns to come and roads as dashed lines; their land is protected from the founding.
+- **Slow growth.** Rulers add `growthChunks` chunks to their land every turn up to `maxChunks`; claims read the region files and load no chunks, so kingdoms nobody visited grow too.
+- **Buildings in the world.** `buildMode = background` (default): one kingdom at a time with a small budget while players are on the server and ticks are short; a kingdom a player comes near goes first at the full budget. `approach`: only when a player comes near. The card of the kingdom on the map says that its capital is being built. Operator command `admin npc spawn background <place>`.
+- Data format of the kingdoms of the world 3 (format 2 is read as it is), protocol version 24: client and server must run the same version.
 
 ### 1.1.0
 
