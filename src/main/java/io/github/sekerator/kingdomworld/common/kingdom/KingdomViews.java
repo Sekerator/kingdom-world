@@ -159,6 +159,36 @@ public final class KingdomViews {
      */
     public static MapAreaPacket mapArea(ServerLevel level, @org.jetbrains.annotations.Nullable UUID viewer, int minX, int minZ,
                                         int width, int height) {
+        return mapArea(level, viewer, minX, minZ, width, height, 1);
+    }
+
+    /**
+     * Owners of a rectangle of squares of {@code step} by {@code step} chunks, for a map zoomed far out: a square shows the owner
+     * of the first claimed chunk found in it. Only the claims are gone through, so a large area costs as much as the land.
+     */
+    public static MapAreaPacket mapArea(ServerLevel level, @org.jetbrains.annotations.Nullable UUID viewer, int minX, int minZ,
+                                        int width, int height, int step) {
+        if (step <= 1) {
+            return chunkArea(level, viewer, minX, minZ, width, height);
+        }
+        MinecraftServer server = level.getServer();
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        String dimension = Dimensions.id(level);
+        int[] cells = new int[width * height];
+        Map<UUID, Integer> paletteIndex = new LinkedHashMap<>();
+        List<KingdomMapInfo> palette = new ArrayList<>();
+        for (Map.Entry<Long, UUID> entry : state.territory().claimsIn(dimension).entrySet()) {
+            int x = Math.floorDiv(ChunkKey.x(entry.getKey()) - minX, step);
+            int z = Math.floorDiv(ChunkKey.z(entry.getKey()) - minZ, step);
+            if (x >= 0 && z >= 0 && x < width && z < height && cells[z * width + x] == 0 && TerritorySnapshots.canSee(viewer, entry.getValue())) {
+                cells[z * width + x] = indexOf(server, state, entry.getValue(), dimension, paletteIndex, palette);
+            }
+        }
+        return new MapAreaPacket(dimension, minX, minZ, width, height, palette, cells, step);
+    }
+
+    private static MapAreaPacket chunkArea(ServerLevel level, @org.jetbrains.annotations.Nullable UUID viewer, int minX, int minZ,
+                                           int width, int height) {
         MinecraftServer server = level.getServer();
         KingdomWorldState state = KingdomWorldApi.state(server);
         String dimension = Dimensions.id(level);

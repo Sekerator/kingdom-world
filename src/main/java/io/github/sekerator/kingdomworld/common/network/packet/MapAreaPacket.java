@@ -20,15 +20,22 @@ import java.util.function.Supplier;
  * (run length, value), which keeps mostly empty or mostly uniform areas small.
  */
 public record MapAreaPacket(String dimension, int minChunkX, int minChunkZ, int width, int height,
-                            List<KingdomMapInfo> palette, int[] cells) {
+                            List<KingdomMapInfo> palette, int[] cells, int step) {
     public static final int MAX_DIMENSION_ID = 256;
 
+    public MapAreaPacket(String dimension, int minChunkX, int minChunkZ, int width, int height, List<KingdomMapInfo> palette, int[] cells) {
+        this(dimension, minChunkX, minChunkZ, width, height, palette, cells, 1);
+    }
+
+    /**
+     * @param step the side of the square of chunks one cell stands for: 1 near, more for a map zoomed far out
+     */
     public MapAreaPacket {
         Objects.requireNonNull(dimension, "dimension");
         palette = List.copyOf(palette);
         if (width < 1 || height < 1 || width > MapAreaRequestPacket.MAX_SIDE || height > MapAreaRequestPacket.MAX_SIDE
-                || cells.length != width * height) {
-            throw new IllegalArgumentException("Invalid map area " + width + "x" + height + " with " + cells.length + " cells");
+                || cells.length != width * height || !MapAreaRequestPacket.validStep(step)) {
+            throw new IllegalArgumentException("Invalid map area " + width + "x" + height + " with " + cells.length + " cells, step " + step);
         }
     }
 
@@ -47,6 +54,7 @@ public record MapAreaPacket(String dimension, int minChunkX, int minChunkZ, int 
         buf.writeVarInt(height);
         KingdomMapInfo.writeList(buf, palette);
         writeRuns(buf, cells);
+        buf.writeVarInt(step);
     }
 
     public static MapAreaPacket decode(FriendlyByteBuf buf) {
@@ -61,7 +69,11 @@ public record MapAreaPacket(String dimension, int minChunkX, int minChunkZ, int 
         }
         List<KingdomMapInfo> palette = KingdomMapInfo.readList(buf, width * height);
         int[] cells = readRuns(buf, width * height, palette.size());
-        return new MapAreaPacket(dimension, minX, minZ, width, height, palette, cells);
+        int step = buf.readVarInt();
+        if (!MapAreaRequestPacket.validStep(step)) {
+            throw new DecoderException("Invalid map area step " + step);
+        }
+        return new MapAreaPacket(dimension, minX, minZ, width, height, palette, cells, step);
     }
 
     static void writeRuns(FriendlyByteBuf buf, int[] cells) {

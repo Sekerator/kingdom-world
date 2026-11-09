@@ -1341,6 +1341,46 @@ final class ClientLayoutCheck {
                     Component.translatable("kingdomworld.life.direction.north_west")));
             return screen;
         }));
+        cases.add(new Case("map-far", () -> {
+            fillMapData();
+            // The whole ring of the kingdoms of the world in squares of 16 chunks: two kingdoms, names crowding near the middle.
+            UUID first = UUID.nameUUIDFromBytes("first".getBytes(StandardCharsets.UTF_8));
+            UUID second = UUID.nameUUIDFromBytes("second".getBytes(StandardCharsets.UTF_8));
+            List<KingdomMapInfo> palette = List.of(
+                    new KingdomMapInfo(first, LONG_KINGDOM, 0x6C3483, LONG_PLAYER, 8, 20, 187, true, 0, 0),
+                    new KingdomMapInfo(second, "Valoria", 0xB7950B, "", 1, 9, 0, true, 7, 1, LONG_NPC));
+            int side = 60;
+            int[] cells = new int[side * side];
+            for (int i = 0; i < cells.length; i++) {
+                int x = i % side - 30;
+                int z = i / side - 30;
+                cells[i] = Math.abs(x) <= 1 && Math.abs(z) <= 1 ? 1 : Math.abs(x - 12) <= 2 && Math.abs(z + 8) <= 1 ? 2 : 0;
+            }
+            ClientTerritoryCache.applyArea(new MapAreaPacket("kingdomworld:layout_check", -480, -480, side, side, palette, cells, 16));
+            KingdomMapScreen screen = new KingdomMapScreen(null);
+            screen.showForCheck(0.0, 0.0, 0.01, null, Component.empty(), false);
+            return screen;
+        }));
+        cases.add(new Case("map-kingdoms-list", () -> {
+            fillMapData();
+            KingdomMapScreen screen = new KingdomMapScreen(null);
+            screen.showForCheck(1.0, -0.5, 14.0, null, Component.empty(), false);
+            List<KingdomMapScreen.KingdomEntry> entries = new ArrayList<>();
+            String[] directions = {"north_west", "north_east", "south", "west", "here", "south_east"};
+            for (int i = 0; i < 30; i++) {
+                entries.add(new KingdomMapScreen.KingdomEntry(i % 2 == 0 ? LONG_KINGDOM : LONG_NPC.nameCyrillic(), i * 400, -i * 300, 12_340L + i * 10,
+                        directions[i % directions.length]));
+            }
+            screen.showKingdomListForCheck(entries);
+            return screen;
+        }));
+        cases.add(new Case("map-kingdoms-list-empty", () -> {
+            fillMapData();
+            KingdomMapScreen screen = new KingdomMapScreen(null);
+            screen.showForCheck(1.0, -0.5, 14.0, null, Component.empty(), false);
+            screen.showKingdomListForCheck(List.of());
+            return screen;
+        }));
         cases.add(new Case("map-find-none", () -> {
             fillMapData();
             KingdomMapScreen screen = new KingdomMapScreen(null);

@@ -119,9 +119,10 @@ final class NpcPlanning {
             LOGGER.info("Planned a kingdom of the world: {} with {} town(s)", site, site.towns().size());
         });
         judging = null;
-        state.setPlanProgress(planner.cursor(), planner.shift(), planner.done());
-        if (planner.done()) {
-            finish(state);
+        boolean done = planner.done();
+        state.setPlanProgress(planner.cursor(), planner.shift(), done);
+        if (done) {
+            LOGGER.info("The plan of the kingdoms of the world is made: {} place(s)", state.sites().size());
             return false;
         }
         return true;

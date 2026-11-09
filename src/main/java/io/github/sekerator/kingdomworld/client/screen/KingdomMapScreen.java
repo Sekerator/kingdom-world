@@ -38,6 +38,12 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     private static final int FOOTER = 36;
     private static final double MAX_CELL = 32.0;
     private static final int MAX_VISIBLE = MapAreaRequestPacket.MAX_SIDE - 8;
+    /** The most chunks the map shows across when zoomed out: the whole ring of the kingdoms of the world with room around it. */
+    private static final int MAX_SPAN = 800;
+    /** The height of a row of the list of kingdoms. */
+    private static final int LIST_ROW = 11;
+    /** Below this many pixels a chunk, towns are left out and only capitals are drawn. */
+    private static final double TOWN_CELL = 1.5;
     private static final long REQUEST_INTERVAL_MILLIS = 300L;
     private static final int PARCHMENT = 0xFFE9D9B0;
     private static final int GRID = 0x22000000;
@@ -170,7 +176,153 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     }
 
     private double minCell() {
-        return Math.max(2.0, Math.max((mapRight() - mapLeft()) / (double) MAX_VISIBLE, (mapBottom() - mapTop()) / (double) MAX_VISIBLE));
+        return Math.max(0.05, Math.min(mapRight() - mapLeft(), mapBottom() - mapTop()) / (double) MAX_SPAN);
+    }
+
+    /**
+     * The side of the squares of chunks the land is asked for and drawn in: 1 near, more when zoomed far out, so that the server
+     * sends and the screen draws about as many squares at any zoom.
+     */
+    private int step() {
+        int span = Math.max(visibleMaxX() - visibleMinX(), visibleMaxZ() - visibleMinZ()) + 1;
+        int step = 1;
+        while (span > MAX_VISIBLE * step && step < MapAreaRequestPacket.MAX_STEP) {
+            step *= 2;
+        }
+        return step;
+    }
+
+    /**
+     * A kingdom of the list: the name of its capital, where it stands, how far and in which direction from the player.
+     */
+    public record KingdomEntry(String name, int x, int z, long distance, String direction) {
+    }
+
+    /** Whether the list of kingdoms is open, and its first row shown. */
+    private boolean listing;
+    private int listOffset;
+    @Nullable
+    private List<KingdomEntry> listForCheck;
+
+    /**
+     * Every kingdom whose capital the client knows in this dimension, nearest first.
+     */
+    private List<KingdomEntry> kingdomEntries() {
+        if (listForCheck != null) {
+            return listForCheck;
+        }
+        String dimension = dimension();
+        List<KingdomEntry> entries = new java.util.ArrayList<>();
+        if (dimension == null) {
+            return entries;
+        }
+        double fromX = minecraft != null && minecraft.player != null ? minecraft.player.getX() : centerX * 16;
+        double fromZ = minecraft != null && minecraft.player != null ? minecraft.player.getZ() : centerZ * 16;
+        for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city
+                : io.github.sekerator.kingdomworld.client.map.ClientRoadCache.data().cities()) {
+            if (city.id() != 0 || !city.dimension().equals(dimension)) {
+                continue;
+            }
+            long distance = Math.round(Math.hypot(city.x() - fromX, city.z() - fromZ) / 10.0) * 10;
+            String direction = io.github.sekerator.kingdomworld.core.life.Rumors.direction((int) Math.floor(fromX), (int) Math.floor(fromZ),
+                    city.x(), city.z());
+            entries.add(new KingdomEntry(city.name(), city.x(), city.z(), distance, direction.substring(direction.lastIndexOf('.') + 1)));
+        }
+        entries.sort(java.util.Comparator.comparingLong(KingdomEntry::distance));
+        return entries;
+    }
+
+    /**
+     * Opens the list of kingdoms with these rows, for the client self-check.
+     */
+    public void showKingdomListForCheck(List<KingdomEntry> entries) {
+        listForCheck = List.copyOf(entries);
+        listing = true;
+    }
+
+    private int listWidth() {
+        return Math.min(240, mapRight() - mapLeft() - 8);
+    }
+
+    private int listLeft() {
+        return mapRight() - 4 - listWidth();
+    }
+
+    private int listRows() {
+        return Math.max(1, (mapBottom() - 4 - (mapTop() + 18)) / LIST_ROW);
+    }
+
+    private boolean insideList(double mouseX, double mouseY) {
+        return listing && mouseX >= listLeft() && mouseX < listLeft() + listWidth() && mouseY >= mapTop() + 4 && mouseY < mapBottom() - 4;
+    }
+
+    /**
+     * The list of kingdoms over the right of the map: a name (shortened, in full on hover) and how far and where; a click takes the
+     * map to the capital.
+     */
+    private void drawKingdomList(GuiGraphics graphics, int mouseX, int mouseY) {
+        List<KingdomEntry> entries = kingdomEntries();
+        int left = listLeft();
+        int width = listWidth();
+        int top = mapTop() + 4;
+        int bottom = mapBottom() - 4;
+        graphics.fill(left - 1, top - 1, left + width + 1, bottom + 1, 0xFF6B4E2A);
+        graphics.fill(left, top, left + width, bottom, 0xF0201812);
+        fittedLabel(graphics, Component.translatable("kingdomworld.screen.map.list.title", entries.size()), left + 4, top + 4, 0xFFF0D070,
+                left + width - 4);
+        int rowTop = top + 18;
+        int rows = listRows();
+        listOffset = Mth.clamp(listOffset, 0, Math.max(0, entries.size() - rows));
+        if (entries.isEmpty()) {
+            paragraph(graphics, Component.translatable("kingdomworld.screen.map.list.empty"), left + 4, rowTop, width - 8, rows, 0xFFA8A8A8);
+            return;
+        }
+        for (int i = 0; i < rows && listOffset + i < entries.size(); i++) {
+            KingdomEntry entry = entries.get(listOffset + i);
+            int y = rowTop + i * LIST_ROW;
+            Component where = Component.translatable("kingdomworld.screen.map.list.where", entry.distance(),
+                    Component.translatable("kingdomworld.screen.map.list.dir." + entry.direction()));
+            int whereWidth = font.width(where);
+            if (mouseX >= left && mouseX < left + width && mouseY >= y - 1 && mouseY < y + LIST_ROW - 1) {
+                graphics.fill(left + 1, y - 1, left + width - 1, y + LIST_ROW - 2, 0x40F0D070);
+            }
+            name(graphics, entry.name(), left + 4, y, 0xFFF0E0C0, Math.max(8, width - 14 - whereWidth));
+            label(graphics, where, left + width - 4 - whereWidth, y, 0xFFA8A8A8, left + width - 4);
+        }
+    }
+
+    /**
+     * The land of a map zoomed far out: squares of chunks in the colors of their kingdoms with borders between them.
+     */
+    private void drawCoarse(GuiGraphics graphics, int minX, int maxX, int minZ, int maxZ, int step) {
+        int startX = Math.floorDiv(minX, step) * step;
+        int startZ = Math.floorDiv(minZ, step) * step;
+        for (int z = startZ; z <= maxZ; z += step) {
+            for (int x = startX; x <= maxX; x += step) {
+                UUID owner = ClientTerritoryCache.coarseOwnerOf(x, z);
+                if (owner == null) {
+                    continue;
+                }
+                KingdomMapInfo info = ClientTerritoryCache.kingdom(owner);
+                int x0 = screenX(x);
+                int z0 = screenZ(z);
+                int x1 = Math.max(x0 + 1, screenX(x + step));
+                int z1 = Math.max(z0 + 1, screenZ(z + step));
+                mapFill(graphics, x0, z0, x1, z1, 0x99000000 | (info == null ? 0x808080 : info.color()));
+                if (!owner.equals(ClientTerritoryCache.coarseOwnerOf(x - step, z))) {
+                    mapFill(graphics, x0, z0, x0 + 1, z1, BORDER);
+                }
+                if (!owner.equals(ClientTerritoryCache.coarseOwnerOf(x + step, z))) {
+                    mapFill(graphics, x1 - 1, z0, x1, z1, BORDER);
+                }
+                if (!owner.equals(ClientTerritoryCache.coarseOwnerOf(x, z - step))) {
+                    mapFill(graphics, x0, z0, x1, z0 + 1, BORDER);
+                }
+                if (!owner.equals(ClientTerritoryCache.coarseOwnerOf(x, z + step))) {
+                    mapFill(graphics, x0, z1 - 1, x1, z1, BORDER);
+                }
+            }
+        }
     }
 
     /**
@@ -235,6 +387,17 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
                 rebuildWidgets();
             }).bounds(armyX, 3, armyWidth, 16).build());
             toggle.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomworld.screen.map.army.button.hint")));
+            if (!army) {
+                Component listLabel = Component.translatable("kingdomworld.screen.map.list.button");
+                int listWidth = buttonWidth(listLabel);
+                int listX = armyX - 2 - listWidth;
+                buttonsLeft = listX;
+                Button list = addRenderableWidget(Button.builder(listLabel, button -> {
+                    listing = !listing;
+                    listOffset = 0;
+                }).bounds(listX, 3, listWidth, 16).build());
+                list.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomworld.screen.map.list.button.hint")));
+            }
             if (army) {
                 initArmy();
             }
@@ -355,6 +518,26 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         int maxX = visibleMaxX();
         int minZ = visibleMinZ();
         int maxZ = visibleMaxZ();
+        int step = step();
+        if (step > 1) {
+            // Zoomed far out: squares of chunks, as many as near, so that the server sends little and the screen draws fast.
+            if (!force && ClientTerritoryCache.coarseCovers(step, minX, minZ, maxX, maxZ)) {
+                return;
+            }
+            long now = Util.getMillis();
+            if (!force && now - lastRequest < REQUEST_INTERVAL_MILLIS) {
+                return;
+            }
+            lastRequest = now;
+            int side = MapAreaRequestPacket.MAX_SIDE;
+            int cellsWide = Math.min(side, (maxX - minX) / step + 4);
+            int cellsHigh = Math.min(side, (maxZ - minZ) / step + 4);
+            int limit = ClaimChunkPacket.MAX_CHUNK_COORDINATE;
+            int startX = Mth.clamp(Math.floorDiv((minX + maxX) / 2, step) * step - cellsWide / 2 * step, -limit, limit - cellsWide * step);
+            int startZ = Mth.clamp(Math.floorDiv((minZ + maxZ) / 2, step) * step - cellsHigh / 2 * step, -limit, limit - cellsHigh * step);
+            KingdomWorldNetwork.sendToServer(new MapAreaRequestPacket(startX, startZ, cellsWide, cellsHigh, step));
+            return;
+        }
         if (!force && ClientTerritoryCache.covers(dimension, minX, minZ, maxX, maxZ)) {
             return;
         }
@@ -706,6 +889,10 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (insideList(mouseX, mouseY)) {
+            listOffset = Math.max(0, listOffset + (delta < 0 ? 1 : -1));
+            return true;
+        }
         if (!insideMap(mouseX, mouseY)) {
             return super.mouseScrolled(mouseX, mouseY, delta);
         }
@@ -721,6 +908,20 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (super.mouseClicked(mouseX, mouseY, button)) {
+            return true;
+        }
+        if (insideList(mouseX, mouseY)) {
+            int row = (int) Math.floor((mouseY - (mapTop() + 4 + 18) + 1) / LIST_ROW);
+            List<KingdomEntry> entries = kingdomEntries();
+            if (row >= 0 && row < listRows() && listOffset + row < entries.size()) {
+                KingdomEntry entry = entries.get(listOffset + row);
+                // The map goes to the capital and close enough to see its land.
+                centerX = entry.x() / 16.0;
+                centerZ = entry.z() / 16.0;
+                cell = Math.max(cell, Math.min(MAX_CELL, 4.0));
+                listing = false;
+                requestVisibleArea(true);
+            }
             return true;
         }
         if (insideMap(mouseX, mouseY)) {
@@ -862,8 +1063,13 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         int minZ = visibleMinZ();
         int maxZ = visibleMaxZ();
         drawGrid(graphics, minX, maxX, minZ, maxZ);
-        drawLand(graphics, minX, maxX, minZ, maxZ);
-        drawBorders(graphics, minX, maxX, minZ, maxZ);
+        int step = step();
+        if (step > 1) {
+            drawCoarse(graphics, minX, maxX, minZ, maxZ, step);
+        } else {
+            drawLand(graphics, minX, maxX, minZ, maxZ);
+            drawBorders(graphics, minX, maxX, minZ, maxZ);
+        }
         labels.clear();
         drawRoads(graphics);
         drawWalls(graphics);
@@ -889,6 +1095,9 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             mapFill(graphics, x, z, x + 1, z + size, 0xFFFFFFFF);
             mapFill(graphics, x + size - 1, z, x + size, z + size, 0xFFFFFFFF);
         }
+        if (listing) {
+            drawKingdomList(graphics, mouseX, mouseY);
+        }
         graphics.renderOutline(left - 1, top - 1, right - left + 2, bottom - top + 2, 0xFF6B4E2A);
         drawHeader(graphics);
         drawFooter(graphics, mouseX, mouseY);
@@ -913,20 +1122,23 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
                 hoverFull(PAD, 7, font.width(heading), Component.translatable("kingdomworld.screen.map.title_edit", editing.name()));
             }
         } else {
-            heading = title;
+            fittedLabel(graphics, title, PAD, 7, 0xFFF0D070, buttonsLeft - 6);
+            return;
         }
         label(graphics, heading, PAD, 7, 0xFFF0D070, buttonsLeft - 6);
     }
 
     private void drawGrid(GuiGraphics graphics, int minX, int maxX, int minZ, int maxZ) {
+        // Lines of regions closer than a few pixels are left out on a map zoomed far out.
+        boolean regions = cell * 32 >= 6;
         for (int x = minX; x <= maxX + 1; x++) {
-            boolean region = Math.floorMod(x, 32) == 0;
+            boolean region = regions && Math.floorMod(x, 32) == 0;
             if (cell >= 6 || region) {
                 mapFill(graphics, screenX(x), mapTop(), screenX(x) + 1, mapBottom(), region ? REGION_GRID : GRID);
             }
         }
         for (int z = minZ; z <= maxZ + 1; z++) {
-            boolean region = Math.floorMod(z, 32) == 0;
+            boolean region = regions && Math.floorMod(z, 32) == 0;
             if (cell >= 6 || region) {
                 mapFill(graphics, mapLeft(), screenZ(z), mapRight(), screenZ(z) + 1, region ? REGION_GRID : GRID);
             }
@@ -974,7 +1186,10 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     }
 
     private void drawCapitals(GuiGraphics graphics, int minX, int maxX, int minZ, int maxZ) {
-        for (KingdomMapInfo info : ClientTerritoryCache.kingdoms().values()) {
+        // Larger kingdoms first: where names crowd on a map zoomed out, the names of the smaller ones give way.
+        List<KingdomMapInfo> capitals = new java.util.ArrayList<>(ClientTerritoryCache.kingdoms().values());
+        capitals.sort(java.util.Comparator.comparingInt(KingdomMapInfo::chunks).reversed().thenComparing(KingdomMapInfo::name));
+        for (KingdomMapInfo info : capitals) {
             if (!info.hasCapital() || info.capitalChunkX() < minX - 4 || info.capitalChunkX() > maxX + 4
                     || info.capitalChunkZ() < minZ - 4 || info.capitalChunkZ() > maxZ + 4) {
                 continue;
@@ -998,6 +1213,11 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             int nameY = y - 17;
             if (nameY - 2 < mapTop()) {
                 nameY = y + 7;
+            }
+            int[] box = {nameX - 2, nameY - 2, nameX + nameWidth + 2, nameY + 9};
+            if (labels.stream().anyMatch(other -> box[0] < other[2] && other[0] < box[2] && box[1] < other[3] && other[1] < box[3])) {
+                hoverText(x - 5, y - 4, 11, Component.literal(info.name()));
+                continue;
             }
             graphics.fill(nameX - 2, nameY - 2, nameX + nameWidth + 2, nameY + 9, 0xC0100C08);
             name(graphics, info.name(), nameX, nameY, 0xFF000000 | FoundKingdomScreen.readable(info.color()), maxName);
@@ -1264,7 +1484,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         }
         for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city
                 : io.github.sekerator.kingdomworld.client.map.ClientRoadCache.data().cities()) {
-            if (!city.dimension().equals(dimension)) {
+            if (!city.dimension().equals(dimension) || city.id() != 0 && cell < TOWN_CELL) {
                 continue;
             }
             Component level = io.github.sekerator.kingdomworld.common.road.RoadTexts.level(city.level());

@@ -74,6 +74,13 @@ public final class WorldKingdomGameTests {
             helper.assertTrue(KingdomWorldApi.treasury(server, kingdom.id()).orElseThrow().balance() == money && founding(server, kingdom.id()) == money,
                     "The treasury does not hold its founding money");
             helper.assertTrue(NpcWork.plannedPeople(server, kingdom.id()).orElse(0) > 0, "No people are planned for the map");
+            // A map zoomed far out gets the land in squares of chunks: the square of the throne belongs to the kingdom.
+            int throneX = center.getX() >> 4;
+            int throneZ = center.getZ() >> 4;
+            io.github.sekerator.kingdomworld.common.network.packet.MapAreaPacket far =
+                    io.github.sekerator.kingdomworld.common.kingdom.KingdomViews.mapArea(level, null, throneX - 64, throneZ - 64, 16, 16, 8);
+            int owner = far.cells()[8 * 16 + 8] - 1;
+            helper.assertTrue(owner >= 0 && far.palette().get(owner).id().equals(kingdom.id()), "The far map does not show the land");
 
             // The ruler grows the land by the data, without its buildings.
             NpcKingdom record = NpcWork.kingdom(server, kingdom.id()).orElseThrow();

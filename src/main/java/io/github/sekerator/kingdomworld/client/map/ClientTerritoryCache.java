@@ -31,6 +31,13 @@ public final class ClientTerritoryCache {
     private static int areaMaxX;
     private static int areaMaxZ;
     private static int generation;
+    /** Owners of squares of chunks for a map zoomed far out: the last such area asked for. */
+    private static int coarseStep;
+    private static int coarseMinX;
+    private static int coarseMinZ;
+    private static int coarseWidth;
+    private static int coarseHeight;
+    private static UUID[] coarseOwners = new UUID[0];
 
     private ClientTerritoryCache() {
     }
@@ -46,6 +53,8 @@ public final class ClientTerritoryCache {
     public static void clear() {
         OWNERS.clear();
         KINGDOMS.clear();
+        coarseStep = 0;
+        coarseOwners = new UUID[0];
         dimension = null;
         hasArea = false;
         generation++;
@@ -87,6 +96,20 @@ public final class ClientTerritoryCache {
         for (KingdomMapInfo info : packet.palette()) {
             KINGDOMS.put(info.id(), info);
         }
+        if (packet.step() > 1) {
+            // Squares of chunks for a map zoomed far out are kept apart: the chunks known one by one stay as they are.
+            coarseStep = packet.step();
+            coarseMinX = packet.minChunkX();
+            coarseMinZ = packet.minChunkZ();
+            coarseWidth = packet.width();
+            coarseHeight = packet.height();
+            coarseOwners = new UUID[packet.width() * packet.height()];
+            for (int i = 0; i < coarseOwners.length; i++) {
+                int index = packet.cells()[i] - 1;
+                coarseOwners[i] = index < 0 ? null : packet.palette().get(index).id();
+            }
+            return;
+        }
         for (int z = 0; z < packet.height(); z++) {
             for (int x = 0; x < packet.width(); x++) {
                 int chunkX = packet.minChunkX() + x;
@@ -101,6 +124,33 @@ public final class ClientTerritoryCache {
         areaMinZ = packet.minChunkZ();
         areaMaxX = packet.minChunkX() + packet.width() - 1;
         areaMaxZ = packet.minChunkZ() + packet.height() - 1;
+    }
+
+    /**
+     * The side of the squares of chunks known for a map zoomed far out, or 0 when none are.
+     */
+    public static int coarseStep() {
+        return coarseStep;
+    }
+
+    /**
+     * Whether the squares known for a map zoomed far out have this side and cover a rectangle of chunks.
+     */
+    public static boolean coarseCovers(int step, int minX, int minZ, int maxX, int maxZ) {
+        return coarseStep == step && minX >= coarseMinX && minZ >= coarseMinZ && maxX < coarseMinX + coarseWidth * step
+                && maxZ < coarseMinZ + coarseHeight * step;
+    }
+
+    /**
+     * The owner of the square of the map zoomed far out that holds a chunk, or {@code null}.
+     */
+    public static UUID coarseOwnerOf(int chunkX, int chunkZ) {
+        if (coarseStep == 0) {
+            return null;
+        }
+        int x = Math.floorDiv(chunkX - coarseMinX, coarseStep);
+        int z = Math.floorDiv(chunkZ - coarseMinZ, coarseStep);
+        return x < 0 || z < 0 || x >= coarseWidth || z >= coarseHeight ? null : coarseOwners[z * coarseWidth + x];
     }
 
     /**
@@ -151,6 +201,7 @@ public final class ClientTerritoryCache {
         if (!newDimension.equals(dimension)) {
             OWNERS.clear();
             hasArea = false;
+            coarseStep = 0;
             dimension = newDimension;
             generation++;
         }

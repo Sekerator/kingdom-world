@@ -265,6 +265,9 @@ function Initialize-Server([string]$ModJar) {
     $serverDefaults += "[trade]`n`tcaravanBlocksPerMinute = 20.0`n"
     # The life of cities: nobody falls ill by chance and fairs open only when the smoke test opens one.
     $serverDefaults += "[life]`n`tsickChance = 0`n`tfairEveryDays = 0`n"
+    # The kingdoms of the world stand from the start: they keep 3000 blocks from the spawn, so that the kingdoms the smoke check
+    # calls up nearer (at -700 -700, 1500 and 2200 blocks out) find free land.
+    $serverDefaults += "[npcKingdoms]`n`tminSpawnDistance = 3000`n"
     # With map mods the web maps are updated every second, so that the checks do not wait for the default 5 s.
     if ($MapModsDir) { $serverDefaults += "[maps]`n`twebMapUpdateSeconds = 1`n" }
     [System.IO.File]::WriteAllText((Join-Path $defaults 'kingdomworld-server.toml'), $serverDefaults, $utf8)
@@ -738,6 +741,8 @@ Invoke-Phase 'session1' {
             $plannedCount = [int]$plan.Groups[1].Value
             $blocked = Count-Log 'The kingdom of the world at site \d+ [^\r\n]* is not founded'
             if ($founded + $blocked -ge $plannedCount) { break }
+        } elseif ($founded -ge 8) {
+            break
         }
         Start-Sleep -Seconds 2
     }
@@ -1653,7 +1658,8 @@ Invoke-Phase 'session1' {
     # chestplate): every item goes into the record of the kingdom, nothing stays with the body, and with -Pack Jack's
     # Gravestones makes no grave. The money of the kingdom only grows by what an operator gave.
     Send-ServerCommand $server 'kingdomworld admin law status'
-    if (Wait-ForLog $server 'Law data: 0 wanted, 0 confiscation\(s\), 0 court\(s\), 0 report\(s\) on the way, format 1' $CommandTimeout $ConsoleFailPattern) {
+    # Every kingdom of the world founded at the start keeps a court of its laws.
+    if (Wait-ForLog $server 'Law data: 0 wanted, 0 confiscation\(s\), \d+ court\(s\), 0 report\(s\) on the way, format 1' $CommandTimeout $ConsoleFailPattern) {
         Write-Ok '[session1] the law data is writable and empty'
     } else {
         Add-Failure '[session1] the law data is not writable or not empty'
