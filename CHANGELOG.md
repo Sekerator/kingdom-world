@@ -2,6 +2,17 @@
 
 ## Русский
 
+### 1.1.0
+
+- **Командование армией на карте.** Режим «Армия» в атласе для короля и маршала: свои отряды с приказом, состоянием и временем до цели, бои; выбор кликом (Shift: несколько), приказы прямо на карте (идти, держать, патруль, охрана области, атака отряда, лагеря или города, осада, охрана каравана, разведка, отход в казарму) и маршрут с промежуточными точками для обхода во фланг и тыл.
+- **Марш, построения и фланги.** Отряды идут по маршруту, по дорогам быстрее, путь ищется понемногу за тик; линия, колонна и клин; бой отрядов вдали от игроков длится, к нему можно присоединиться, удар сбоку или с тыла по связанному боем противнику даёт перевес (настраивается).
+- **Туман войны.** Чужие отряды видны только в зоне видимости своих отрядов, башен и стен, в области разведки или после доклада шпиона; бледные метки «последний раз видели»; видимость считает сервер.
+- **Трофеи.** Солдат несёт снаряжение убитого врага на склад; трофеи хранятся с королевством-хозяином и выкупаются после мира за половину ценности в течение 7 дней (`/kingdom trophies`).
+- **Прыжок посоха** в чужую защищённую землю только после подготовки (8 с), которую сбивает удар или шаг.
+- **Машины модов** бьют жителей только на земле их королевства.
+- **Награда за голову:** без проверки адреса (только отряд); с третьей поимки одного человека одним охотником награда не больше того, что королевство у него отобрало.
+- Версия протокола 23: клиент и сервер должны быть одной версии.
+
 ### 1.0.0
 
 Первый выпуск KingdomWorld для Minecraft 1.20.1 (Forge 47).
@@ -25,6 +36,17 @@
 - **Нагрузка и баланс.** Замер нагрузки `admin perf`, тяжёлые места разнесены по тикам, жалование всех профессий по умолчанию.
 
 ## English
+
+### 1.1.0
+
+- **Commanding the army on the map.** An "Army" mode of the atlas for the king and the marshal: own squads with their order, state and time to the target, battles; choosing with a click (Shift: several), orders right on the map (go, hold, patrol, guard an area, attack a squad, a camp or a city, siege, guard a caravan, scout, back to the barracks) and a route through points on the way to go around into a flank or the rear.
+- **Marches, formations and flanks.** Squads march along their route, faster on roads, the way searched a little each tick; line, column and wedge; a battle of squads far from players lasts, others may join it, and a blow at the side or rear of an enemy tied in battle gives an edge (configurable).
+- **The fog of war.** Squads of others show only in sight of own squads, towers and walls, in a scouted area or after the report of a spy; pale marks "last seen"; the server counts the sight.
+- **Trophies.** A soldier carries the gear of a fallen enemy to a storehouse; trophies are kept with the kingdom they belonged to and bought back after peace for half their worth within 7 days (`/kingdom trophies`).
+- **The blink of the staff** into the protected land of another kingdom only after a preparation (8 s) that a blow or a step breaks.
+- **Machines of mods** strike citizens only on the land of their kingdom.
+- **Bounties:** no check of addresses (only the party); from the third head of one player one hunter collects, the reward is no more than what the kingdom took from that player.
+- Protocol version 23: client and server must have the same version.
 
 ### 1.0.0
 
