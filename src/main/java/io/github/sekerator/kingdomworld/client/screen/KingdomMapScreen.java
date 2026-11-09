@@ -1071,6 +1071,10 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             drawBorders(graphics, minX, maxX, minZ, maxZ);
         }
         labels.clear();
+        if (listing) {
+            // Names of the map give way to the list of kingdoms drawn over it.
+            labels.add(new int[]{listLeft() - 1, mapTop() + 3, listLeft() + listWidth() + 1, mapBottom() - 3});
+        }
         drawRoads(graphics);
         drawWalls(graphics);
         drawCapitals(graphics, minX, maxX, minZ, maxZ);
