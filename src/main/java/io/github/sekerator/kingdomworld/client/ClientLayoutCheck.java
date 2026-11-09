@@ -973,6 +973,23 @@ final class ClientLayoutCheck {
                         refused ? 0xFFFF8080 : 0xFFA0E0A0, obstacles));
     }
 
+    /**
+     * Squads of the kingdom on the map, a squad of an enemy in sight, the pale mark of one seen last and a battle.
+     */
+    private static void fillArmyMap() {
+        net.minecraft.client.multiplayer.ClientLevel level = net.minecraft.client.Minecraft.getInstance().level;
+        String dimension = level != null ? level.dimension().location().toString() : "minecraft:overworld";
+        io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.View view = new io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.View(
+                true, dimension, 0x6C3483,
+                List.of(new io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Own(3, false, "move", 8, 8, 12, 1, 95, "wedge",
+                                new int[]{40, -60, 90, -40, 130, 0}),
+                        new io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Own(4, true, "hold", 40, 40, 6, 0, 0, "line", new int[0])),
+                List.of(new io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Other(9, LONG_KINGDOM, 0xB7950B, 120, 10, 20, false, 0)),
+                List.of(new io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Other(11, "Valoria", 0xB7950B, 160, -70, 8, false, 640)),
+                new int[]{110, 20});
+        io.github.sekerator.kingdomworld.client.map.ClientArmyMap.update(view);
+    }
+
     private static void fillMapData() {
         UUID first = UUID.nameUUIDFromBytes("first".getBytes(StandardCharsets.UTF_8));
         UUID second = UUID.nameUUIDFromBytes("second".getBytes(StandardCharsets.UTF_8));
@@ -1285,6 +1302,22 @@ final class ClientLayoutCheck {
             fillMapData();
             KingdomMapScreen screen = new KingdomMapScreen(null);
             screen.showForCheck(1.0, -0.5, 14.0, UUID.nameUUIDFromBytes("first".getBytes(StandardCharsets.UTF_8)), Component.empty(), false);
+            return screen;
+        }));
+        cases.add(new Case("map-army", () -> {
+            fillMapData();
+            fillArmyMap();
+            KingdomMapScreen screen = new KingdomMapScreen(null);
+            screen.showForCheck(1.0, -0.5, 14.0, null, Component.empty(), false);
+            screen.showArmyForCheck(null, List.of(3L), List.of());
+            return screen;
+        }));
+        cases.add(new Case("map-army-order", () -> {
+            fillMapData();
+            fillArmyMap();
+            KingdomMapScreen screen = new KingdomMapScreen(null);
+            screen.showForCheck(1.0, -0.5, 14.0, null, Component.empty(), false);
+            screen.showArmyForCheck("attack", List.of(3L, 4L), List.of(new int[]{40, -60}, new int[]{90, -40}));
             return screen;
         }));
         cases.add(new Case("map-view-npc-card", () -> {

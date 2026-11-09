@@ -77,6 +77,11 @@ final class MagicLayoutCases {
         LayoutCheck.actionbar(font, Component.translatable("kingdomworld.magic.cast.no_crystals", MagicTexts.energy(cost)), narrowest);
         LayoutCheck.actionbar(font, Component.translatable("kingdomworld.magic.cast.detected", 999, MagicTexts.energy(cost)), narrowest);
         LayoutCheck.actionbar(font, Component.translatable("kingdomworld.magic.cast.blink_blocked"), narrowest);
+        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.magic.cast.blink_prepare_started", 120), narrowest);
+        LayoutCheck.actionbar(font, io.github.sekerator.kingdomworld.common.magic.PlayerSpells.progress(50, 100), narrowest);
+        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.magic.cast.blink_broken_move"), narrowest);
+        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.magic.cast.blink_broken_hurt"), narrowest);
+        LayoutCheck.actionbar(font, Component.translatable("kingdomworld.magic.cast.blink_already_preparing"), narrowest);
         LayoutCheck.actionbar(font, Component.translatable("kingdomworld.magic.staff.no_spells"), narrowest);
         LayoutCheck.actionbar(font, Component.translatable("kingdomworld.magic.focus_outside"), narrowest);
         LayoutCheck.actionbar(font, Component.translatable("kingdomworld.magic.gate_closed"), narrowest);

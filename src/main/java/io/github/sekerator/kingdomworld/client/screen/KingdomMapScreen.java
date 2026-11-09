@@ -74,6 +74,19 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     private Component status = Component.empty();
     private boolean statusIsError;
     private int buttonsLeft;
+    /** Whether the map shows the army of the kingdom of the player. */
+    private boolean army;
+    /** The kind of order being given on the map, or {@code null}. */
+    @Nullable
+    private String armyOrder;
+    /** The squads chosen. */
+    private final List<Long> chosen = new java.util.ArrayList<>();
+    /** The points on the way, or of a patrol, clicked so far, in blocks. */
+    private final List<int[]> armyPoints = new java.util.ArrayList<>();
+    private int armyTicks;
+    /** The kinds of orders of the buttons of the army, in their order. */
+    private static final List<String> ARMY_ORDERS = List.of("move", "hold", "patrol", "guard", "attack", "siege", "escort", "scout", "retreat");
+    private static final List<String> FORMATIONS = List.of("line", "column", "wedge");
 
     /**
      * @param editing the kingdom whose land is edited, or {@code null} to only look
@@ -97,6 +110,9 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
 
     @Override
     public String checkName() {
+        if (army) {
+            return armyOrder != null ? "map/army-order" : "map/army";
+        }
         if (planning != null) {
             return plan != null ? "map/roads-plan" : "map/roads";
         }
@@ -171,6 +187,29 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         int doneX = width - PAD - doneWidth;
         int centerButtonX = doneX - 2 - centerWidth;
         buttonsLeft = centerButtonX;
+        if (editing == null && planning == null) {
+            Component armyLabel = Component.translatable("kingdomworld.screen.map.army." + (army ? "lands" : "button"));
+            int armyWidth = buttonWidth(Component.translatable("kingdomworld.screen.map.army.button"),
+                    Component.translatable("kingdomworld.screen.map.army.lands"));
+            int armyX = centerButtonX - 2 - armyWidth;
+            buttonsLeft = armyX;
+            Button toggle = addRenderableWidget(Button.builder(armyLabel, button -> {
+                army = !army;
+                armyOrder = null;
+                armyPoints.clear();
+                chosen.clear();
+                status = Component.empty();
+                if (army) {
+                    armyTicks = 0;
+                    KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Request());
+                }
+                rebuildWidgets();
+            }).bounds(armyX, 3, armyWidth, 16).build());
+            toggle.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomworld.screen.map.army.button.hint")));
+            if (army) {
+                initArmy();
+            }
+        }
         addRenderableWidget(Button.builder(center, button -> {
             if (minecraft != null && minecraft.player != null) {
                 centerX = minecraft.player.getX() / 16.0;
@@ -309,6 +348,307 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     @Override
     public void tick() {
         requestVisibleArea(false);
+        if (army && ++armyTicks % 40 == 0 && minecraft != null && minecraft.getConnection() != null) {
+            KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Request());
+        }
+    }
+
+    // ---------------------------------------------------------------- the army
+
+    /**
+     * Shows the army of the kingdom on the map, as for the client self-check.
+     */
+    public void showArmyForCheck(@Nullable String order, List<Long> squads, List<int[]> points) {
+        army = true;
+        armyOrder = order;
+        chosen.clear();
+        chosen.addAll(squads);
+        armyPoints.clear();
+        armyPoints.addAll(points);
+    }
+
+    private static Component armyLabel(String kind, boolean full) {
+        return Component.translatable("kingdomworld.screen.map.army." + (full ? "order." : "short.") + kind);
+    }
+
+    /**
+     * The buttons of the orders along the bottom of the map: a full name where it fits, else a letter; the full name and
+     * what to click show on hover.
+     */
+    private void initArmy() {
+        int count = ARMY_ORDERS.size() + 1;
+        int available = width - 2 * PAD;
+        int buttonWidth = Math.max(12, Math.min(64, (available - 2 * (count - 1)) / count));
+        int x = PAD;
+        int y = height - FOOTER + 2;
+        boolean full = true;
+        for (String kind : ARMY_ORDERS) {
+            full &= font.width(armyLabel(kind, true)) + io.github.sekerator.kingdomworld.client.screen.LayoutCheck.BUTTON_TEXT_MARGIN <= buttonWidth;
+        }
+        String formation = currentFormation();
+        Component formationFull = Component.translatable("kingdomworld.screen.map.army.formation." + formation);
+        full &= font.width(formationFull) + io.github.sekerator.kingdomworld.client.screen.LayoutCheck.BUTTON_TEXT_MARGIN <= buttonWidth;
+        for (String kind : ARMY_ORDERS) {
+            Button button = addRenderableWidget(Button.builder(armyLabel(kind, full), pressed -> armyButton(kind)).bounds(x, y, buttonWidth, 14).build());
+            button.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomworld.screen.map.army.order." + kind)
+                    .append("\n").append(Component.translatable("kingdomworld.screen.map.army.hint." + kind))));
+            button.active = !chosen.isEmpty();
+            x += buttonWidth + 2;
+        }
+        Button shape = addRenderableWidget(Button.builder(full ? formationFull : Component.translatable("kingdomworld.screen.map.army.short.formation"),
+                pressed -> nextFormation()).bounds(x, y, buttonWidth, 14).build());
+        shape.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomworld.screen.map.army.formation",
+                Component.translatable("kingdomworld.screen.map.army.formation." + formation))
+                .append("\n").append(Component.translatable("kingdomworld.screen.map.army.formation.hint"))));
+        shape.active = !chosen.isEmpty();
+    }
+
+    private String currentFormation() {
+        for (io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Own squad
+                : io.github.sekerator.kingdomworld.client.map.ClientArmyMap.view().own()) {
+            if (chosen.contains(squad.id())) {
+                return FORMATIONS.contains(squad.formation()) ? squad.formation() : "line";
+            }
+        }
+        return "line";
+    }
+
+    private void nextFormation() {
+        if (chosen.isEmpty()) {
+            return;
+        }
+        String next = FORMATIONS.get((FORMATIONS.indexOf(currentFormation()) + 1) % FORMATIONS.size());
+        KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Command(
+                io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Command.Action.FORMATION, List.copyOf(chosen), next,
+                new int[0], new int[0], 0, 0));
+    }
+
+    private void armyButton(String kind) {
+        if (chosen.isEmpty()) {
+            return;
+        }
+        armyPoints.clear();
+        if (kind.equals("retreat")) {
+            sendOrder(kind, new int[0], 0);
+            return;
+        }
+        armyOrder = kind;
+        status = Component.empty();
+    }
+
+    private void sendOrder(String kind, int[] points, long target) {
+        int[] via = new int[0];
+        if (!kind.equals("patrol")) {
+            via = new int[armyPoints.size() * 2];
+            for (int i = 0; i < armyPoints.size(); i++) {
+                via[2 * i] = armyPoints.get(i)[0];
+                via[2 * i + 1] = armyPoints.get(i)[1];
+            }
+        }
+        int radius = kind.equals("guard") || kind.equals("scout") ? 1 : 0;
+        KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Command(
+                io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Command.Action.ORDER, List.copyOf(chosen), kind, points, via,
+                target, radius));
+        armyOrder = null;
+        armyPoints.clear();
+    }
+
+    private int blockAtX(double mouseX) {
+        return Mth.floor((centerX + (mouseX - (mapLeft() + mapRight()) / 2.0) / cell) * 16.0);
+    }
+
+    private int blockAtZ(double mouseY) {
+        return Mth.floor((centerZ + (mouseY - (mapTop() + mapBottom()) / 2.0) / cell) * 16.0);
+    }
+
+    private static boolean near(int x, int y, double mouseX, double mouseY) {
+        return Math.abs(mouseX - x) <= 5 && Math.abs(mouseY - y) <= 5;
+    }
+
+    /**
+     * A click on the map of the army: choosing squads, the points of an order, its target.
+     */
+    private void armyClick(double mouseX, double mouseY, int button) {
+        io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.View view = io.github.sekerator.kingdomworld.client.map.ClientArmyMap.view();
+        int bx = blockAtX(mouseX);
+        int bz = blockAtZ(mouseY);
+        if (armyOrder == null) {
+            if (button != 0) {
+                return;
+            }
+            boolean add = hasShiftDown();
+            for (io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Own squad : view.own()) {
+                if (near(blockScreenX(squad.x()), blockScreenZ(squad.z()), mouseX, mouseY)) {
+                    if (!add) {
+                        chosen.clear();
+                        chosen.add(squad.id());
+                    } else if (!chosen.remove(squad.id()) && chosen.size() < io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.MAX_SQUADS) {
+                        chosen.add(squad.id());
+                    }
+                    rebuildWidgets();
+                    return;
+                }
+            }
+            if (!add && !chosen.isEmpty()) {
+                chosen.clear();
+                rebuildWidgets();
+            }
+            return;
+        }
+        int limit = io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.MAX_POINTS;
+        if (armyOrder.equals("patrol")) {
+            if (button == 0 && armyPoints.size() < limit) {
+                armyPoints.add(new int[]{bx, bz});
+            } else if (button == 1 && !armyPoints.isEmpty()) {
+                int[] route = new int[armyPoints.size() * 2];
+                for (int i = 0; i < armyPoints.size(); i++) {
+                    route[2 * i] = armyPoints.get(i)[0];
+                    route[2 * i + 1] = armyPoints.get(i)[1];
+                }
+                sendOrder("patrol", route, 0);
+            }
+            return;
+        }
+        if (button == 1) {
+            // A point on the way: around the enemy, to its flank or rear.
+            if (!armyOrder.equals("escort") && armyPoints.size() < limit) {
+                armyPoints.add(new int[]{bx, bz});
+            }
+            return;
+        }
+        if (button != 0) {
+            return;
+        }
+        if (armyOrder.equals("escort")) {
+            long now = minecraft != null && minecraft.level != null ? minecraft.level.getGameTime() : 0;
+            for (io.github.sekerator.kingdomworld.common.network.data.TradeViews.CaravanInfo caravan
+                    : io.github.sekerator.kingdomworld.client.map.ClientTradeCache.caravans()) {
+                double[] at = caravan.position(now);
+                if (near(blockScreenX(at[0]), blockScreenZ(at[1]), mouseX, mouseY)) {
+                    sendOrder("escort", new int[0], caravan.id());
+                    return;
+                }
+            }
+            return;
+        }
+        if (armyOrder.equals("attack")) {
+            List<io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Other> targets = new java.util.ArrayList<>(view.others());
+            targets.addAll(view.marks());
+            for (io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Other other : targets) {
+                if (!other.ally() && near(blockScreenX(other.x()), blockScreenZ(other.z()), mouseX, mouseY)) {
+                    sendOrder("attack", new int[]{other.x(), other.z()}, other.id());
+                    return;
+                }
+            }
+        }
+        sendOrder(armyOrder, new int[]{bx, bz}, 0);
+    }
+
+    private static String clock(int seconds) {
+        return seconds >= 3_600 ? String.format(java.util.Locale.ROOT, "%d:%02d:%02d", seconds / 3_600, seconds / 60 % 60, seconds % 60)
+                : String.format(java.util.Locale.ROOT, "%d:%02d", seconds / 60, seconds % 60);
+    }
+
+    private void marker(GuiGraphics graphics, int x, int y, int fill, int border, boolean pale) {
+        if (x - 4 < mapLeft() || x + 4 > mapRight() || y - 4 < mapTop() || y + 4 > mapBottom()) {
+            return;
+        }
+        int alpha = pale ? 0x60000000 : 0xFF000000;
+        graphics.fill(x - 4, y - 4, x + 4, y + 4, (border & 0x00FFFFFF) | alpha);
+        graphics.fill(x - 3, y - 3, x + 3, y + 3, (fill & 0x00FFFFFF) | alpha);
+    }
+
+    /**
+     * The squads of the kingdom, the squads of others in sight, the pale marks of those seen last, the battles, and the
+     * order being given.
+     */
+    private void drawArmy(GuiGraphics graphics) {
+        io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.View view = io.github.sekerator.kingdomworld.client.map.ClientArmyMap.view();
+        if (!view.allowed() || !view.dimension().equals(dimension())) {
+            return;
+        }
+        for (io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Other mark : view.marks()) {
+            int x = blockScreenX(mark.x());
+            int y = blockScreenZ(mark.z());
+            marker(graphics, x, y, mark.color(), mark.ally() ? 0xFF2E8B3A : 0xFFB02020, true);
+            hoverText(x - 4, y - 4, 8, Component.translatable("kingdomworld.screen.map.army.last_seen", mark.kingdom(), mark.size(),
+                    clock(mark.seconds())));
+        }
+        for (io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Other other : view.others()) {
+            int x = blockScreenX(other.x());
+            int y = blockScreenZ(other.z());
+            marker(graphics, x, y, other.color(), other.ally() ? 0xFF2E8B3A : 0xFFB02020, false);
+            hoverText(x - 4, y - 4, 8, Component.translatable("kingdomworld.screen.map.army." + (other.ally() ? "ally" : "enemy"), other.kingdom(),
+                    other.size()));
+        }
+        for (io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Own squad : view.own()) {
+            int x = blockScreenX(squad.x());
+            int y = blockScreenZ(squad.z());
+            boolean picked = chosen.contains(squad.id());
+            int[] path = squad.path();
+            double fromX = squad.x();
+            double fromZ = squad.z();
+            for (int i = 0; i + 1 < path.length; i += 2) {
+                line(graphics, fromX, fromZ, path[i], path[i + 1], 1, picked ? 0xFFFFE040 : 0xFF3A2A14, true);
+                fromX = path[i];
+                fromZ = path[i + 1];
+            }
+            marker(graphics, x, y, view.color(), picked ? 0xFFFFE040 : 0xFF101010, false);
+            Component state = squad.state() == 2 ? Component.translatable("kingdomworld.screen.map.army.state.battle")
+                    : squad.state() == 1 ? Component.translatable("kingdomworld.screen.map.army.state.marching", clock(squad.seconds()))
+                    : Component.translatable("kingdomworld.screen.map.army.state.standing");
+            hoverText(x - 4, y - 4, 8, Component.translatable("kingdomworld.screen.map.army.own",
+                    Component.translatable("kingdomworld.army." + (squad.band() ? "band_squad" : "squad"), squad.id()), squad.size(),
+                    Component.translatable("kingdomworld.army.order." + squad.order()), state));
+        }
+        int[] battles = view.battles();
+        for (int i = 0; i + 1 < battles.length; i += 2) {
+            int x = blockScreenX(battles[i]);
+            int y = blockScreenZ(battles[i + 1]);
+            if (x - 5 < mapLeft() || x + 5 > mapRight() || y - 5 < mapTop() || y + 5 > mapBottom()) {
+                continue;
+            }
+            for (int d = -4; d <= 4; d++) {
+                graphics.fill(x + d, y + d, x + d + 2, y + d + 2, 0xFFD02020);
+                graphics.fill(x + d, y - d, x + d + 2, y - d + 2, 0xFFD02020);
+            }
+            hoverText(x - 5, y - 5, 10, Component.translatable("kingdomworld.screen.map.army.battle"));
+        }
+        if (armyOrder != null && !armyPoints.isEmpty()) {
+            int[] previous = null;
+            for (int[] point : armyPoints) {
+                if (previous != null) {
+                    line(graphics, previous[0], previous[1], point[0], point[1], 1, 0xFFFFFFFF, true);
+                }
+                int x = blockScreenX(point[0]);
+                int y = blockScreenZ(point[1]);
+                mapFill(graphics, x - 2, y - 2, x + 2, y + 2, 0xFFFFFFFF);
+                previous = point;
+            }
+        }
+    }
+
+    /**
+     * The line under the buttons of the army: the answer of the server, else what to do now.
+     */
+    private void drawArmyFooter(GuiGraphics graphics) {
+        io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.View view = io.github.sekerator.kingdomworld.client.map.ClientArmyMap.view();
+        Component line;
+        int color = 0xFFA8A8A8;
+        if (!status.getString().isEmpty()) {
+            line = status;
+            color = statusIsError ? 0xFFFF8080 : 0xFFA0E0A0;
+        } else if (io.github.sekerator.kingdomworld.client.map.ClientArmyMap.answered() && !view.allowed()) {
+            line = Component.translatable("kingdomworld.screen.map.army.no_rights");
+            color = 0xFFFF8080;
+        } else if (armyOrder != null) {
+            line = Component.translatable("kingdomworld.screen.map.army.hint." + armyOrder);
+        } else if (chosen.isEmpty()) {
+            line = Component.translatable("kingdomworld.screen.map.army.hint.choose");
+        } else {
+            line = Component.translatable("kingdomworld.screen.map.army.hint.chosen", chosen.size());
+        }
+        paragraph(graphics, line, PAD, height - FOOTER + 20, width - 2 * PAD, 1, color);
     }
 
     // ---------------------------------------------------------------- input
@@ -369,7 +709,11 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         if (insideMap(mouseX, mouseY) && !dragging && getChildAt(mouseX, mouseY).isEmpty()) {
-            onMapClick(chunkAtX(mouseX), chunkAtZ(mouseY), button);
+            if (army) {
+                armyClick(mouseX, mouseY, button);
+            } else {
+                onMapClick(chunkAtX(mouseX), chunkAtZ(mouseY), button);
+            }
         }
         dragging = false;
         dragDistance = 0;
@@ -419,6 +763,12 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (KingdomWorldClient.MAP_KEY.matches(keyCode, scanCode)) {
             onClose();
+            return true;
+        }
+        if (army && armyOrder != null && keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
+            // Escape first drops the order being given, then closes the map.
+            armyOrder = null;
+            armyPoints.clear();
             return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
@@ -484,6 +834,9 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         drawCamps(graphics);
         drawLifeEvents(graphics);
         drawCaravans(graphics);
+        if (army) {
+            drawArmy(graphics);
+        }
         if (planning != null) {
             drawPlan(graphics);
         }
@@ -674,6 +1027,10 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     }
 
     private void drawFooter(GuiGraphics graphics, int mouseX, int mouseY) {
+        if (army) {
+            drawArmyFooter(graphics);
+            return;
+        }
         int y = height - FOOTER + 4;
         int textWidth = width - 2 * PAD;
         if (insideMap(mouseX, mouseY)) {

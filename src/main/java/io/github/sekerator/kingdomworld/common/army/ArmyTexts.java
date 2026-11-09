@@ -83,6 +83,10 @@ public final class ArmyTexts {
         };
     }
 
+    public static Component formationName(io.github.sekerator.kingdomworld.core.combat.Formation formation) {
+        return Component.translatable(KEY + "formation." + formation.id());
+    }
+
     public static Component squadName(ArmySquad squad) {
         return Component.translatable(KEY + (squad.mercenaries() ? "band_squad" : "squad"), squad.id());
     }

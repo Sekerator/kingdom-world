@@ -228,6 +228,19 @@ public final class ArmyField {
         return ArmyWork.state(server).march(squad.id()).map(march -> march.secondsLeft(speed(server, squad, march.at()))).orElse(0L);
     }
 
+    /**
+     * The edge a squad has in the battle it fights (its formation, and the flank it strikes), 0 for one not in battle.
+     */
+    public static double edgeOf(long squadId) {
+        for (Engagement battle : BATTLES.values()) {
+            Double edge = battle.first.containsKey(squadId) ? battle.first.get(squadId) : battle.second.get(squadId);
+            if (edge != null) {
+                return edge;
+            }
+        }
+        return 0.0;
+    }
+
     public static boolean engaged(long squadId) {
         for (Engagement battle : BATTLES.values()) {
             if (battle.has(squadId)) {
@@ -394,7 +407,20 @@ public final class ArmyField {
             }
             march = new March(at, path, march.faceX(), march.faceZ());
         } else {
-            march = march.step(speed(server, squad, march.at()));
+            double blocks = speed(server, squad, march.at());
+            Order order = squad.order();
+            if (order.kind() == Order.Kind.ATTACK && order.target() != 0) {
+                // A squad that falls upon an enemy stops at striking distance, so that it is clear where it strikes from.
+                WorldPos enemy = army.squad(order.target()).map(target -> positionOf(server, target)).orElse(null);
+                if (enemy != null && enemy.dimension().equals(march.at().dimension())) {
+                    double distance = Math.hypot(enemy.x() - march.at().x(), enemy.z() - march.at().z());
+                    blocks = Math.min(blocks, Math.max(0.0, distance - rules.engage() * 0.5));
+                }
+            }
+            if (blocks <= 0.0) {
+                return false;
+            }
+            march = march.step(blocks);
         }
         // The current stretch ends when only the points after it are left.
         if (legs.size() > 1 && march.path().size() <= legs.size() - 1) {

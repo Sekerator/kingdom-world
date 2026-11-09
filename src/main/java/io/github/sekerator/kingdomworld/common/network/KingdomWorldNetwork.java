@@ -2,6 +2,7 @@ package io.github.sekerator.kingdomworld.common.network;
 
 import io.github.sekerator.kingdomworld.KingdomWorld;
 import io.github.sekerator.kingdomworld.common.network.packet.ActionResultPacket;
+import io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.ArmyPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.CompanionPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.BorderCrossingPacket;
@@ -56,7 +57,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "22";
+    public static final String PROTOCOL_VERSION = "23";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -282,6 +283,12 @@ public final class KingdomWorldNetwork {
                 LifePackets.CallFestival::decode, LifePackets.CallFestival::handle);
         add(id++, LifePackets.MapSync.class, NetworkDirection.PLAY_TO_CLIENT, LifePackets.MapSync::encode,
                 LifePackets.MapSync::decode, LifePackets.MapSync::handle);
+        add(id++, ArmyMapPackets.Request.class, NetworkDirection.PLAY_TO_SERVER, ArmyMapPackets.Request::encode,
+                ArmyMapPackets.Request::decode, ArmyMapPackets.Request::handle);
+        add(id++, ArmyMapPackets.View.class, NetworkDirection.PLAY_TO_CLIENT, ArmyMapPackets.View::encode,
+                ArmyMapPackets.View::decode, ArmyMapPackets.View::handle);
+        add(id++, ArmyMapPackets.Command.class, NetworkDirection.PLAY_TO_SERVER, ArmyMapPackets.Command::encode,
+                ArmyMapPackets.Command::decode, ArmyMapPackets.Command::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

@@ -129,7 +129,7 @@ public final class PlayerSpells {
     /**
      * The line above the hotbar while a blink is prepared: a bar of ten cells and the percent.
      */
-    static Component progress(long done, long total) {
+    public static Component progress(long done, long total) {
         int percent = total <= 0 ? 100 : (int) Math.max(0, Math.min(100, done * 100 / total));
         int cells = percent / 10;
         Component bar = Component.literal("■".repeat(cells)).withStyle(ChatFormatting.AQUA)
