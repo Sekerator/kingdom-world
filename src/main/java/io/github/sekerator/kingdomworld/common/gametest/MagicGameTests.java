@@ -355,6 +355,50 @@ public final class MagicGameTests {
 
     // ---------------------------------------------------------------- spells of players
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_magic_blink_land", timeoutTicks = 200)
+    public static void aBlinkIntoTheLandOfAnotherKingdomNeedsAPreparation(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos to = helper.absolutePos(new BlockPos(8, 3, 8));
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Blink Border", UUID.randomUUID());
+        ServerPlayer player = net.minecraftforge.common.util.FakePlayerFactory.get(level, new GameProfile(UUID.randomUUID(), "kw-jumper"));
+        BlockPos stand = helper.absolutePos(new BlockPos(2, 1, 4));
+        player.setPos(stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5);
+        player.setYRot(-90.0f);
+        player.setXRot(0.0f);
+        player.getInventory().clearContent();
+        MagicRules.Builder builder = MagicSettings.configured();
+        builder.blinkDistance = 2;
+        builder.blinkPrepareSeconds = 2;
+        MagicSettings.override(builder.build());
+        MagicWork.state(server).adminLearn(player.getUUID(), PlayerSpell.BLINK, true);
+        player.getInventory().add(MonsterCrystalItem.stack(Rank.E, 2));
+        net.minecraft.world.phys.Vec3 start = player.position();
+        helper.assertTrue(PlayerSpells.intoForeignLand(player, start), "The test does not stand in the land of another kingdom");
+        // Without a preparation the jump does not happen: it only starts to prepare, and a blow breaks it.
+        helper.assertTrue(PlayerSpells.cast(player, PlayerSpell.BLINK).success(), "The preparation did not start");
+        helper.assertTrue(player.position().equals(start) && PlayerSpells.preparing(player), "A blink into foreign land went at once");
+        // A stand-in player takes no damage, so the blow is the event of the game alone.
+        net.minecraftforge.common.ForgeHooks.onLivingHurt(player, level.damageSources().generic(), 1.0f);
+        helper.assertTrue(!PlayerSpells.preparing(player), "A blow did not break the preparation");
+        helper.runAfterDelay(50, () -> {
+            helper.assertTrue(player.position().equals(start), "A broken preparation still jumped");
+            helper.assertTrue(PlayerSpells.cast(player, PlayerSpell.BLINK).success() && PlayerSpells.preparing(player), "The second preparation did not start");
+            helper.runAfterDelay(50, () -> {
+                try {
+                    helper.assertTrue(!PlayerSpells.preparing(player), "The preparation did not end");
+                    helper.assertTrue(player.position().distanceTo(start) >= 1.0, "The prepared blink did not jump");
+                } finally {
+                    PlayerSpells.forget(player.getUUID());
+                    end(helper, kingdom, from, to);
+                }
+                helper.succeed();
+            });
+        });
+    }
+
+
     @GameTest(template = EMPTY, batch = "kingdomworld_magic_staff")
     public static void theStaffSpendsTheEnergyOfACrystalThePlayerCarries(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();

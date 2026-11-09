@@ -842,6 +842,7 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue lightSeconds;
         public final ForgeConfigSpec.IntValue detectRadius;
         public final ForgeConfigSpec.IntValue blinkDistance;
+        public final ForgeConfigSpec.IntValue blinkPrepareSeconds;
         public final ForgeConfigSpec.IntValue feRate;
         public final ForgeConfigSpec.IntValue feMaxPerTick;
         public final ForgeConfigSpec.BooleanValue ironsWell;
@@ -918,6 +919,9 @@ public final class KingdomWorldConfig {
                     .defineInRange("detectRadius", d.detectRadius, 1, 128);
             blinkDistance = builder.comment("Longest jump of the blink spell, in blocks.")
                     .defineInRange("blinkDistance", d.blinkDistance, 1, 64);
+            blinkPrepareSeconds = builder.comment("Seconds a blink into the protected land of another kingdom takes to prepare.",
+                            "A blow or a step breaks the preparation; in one's own land and on nobody's land a blink is at once.")
+                    .defineInRange("blinkPrepareSeconds", d.blinkPrepareSeconds, 1, 120);
             feRate = builder.comment("Forge Energy a crystal generator gives for one unit of the kingdom's energy.",
                             "Forge Energy never turns back into energy of a kingdom.")
                     .defineInRange("feRate", d.feRate, 1, 1_000_000);

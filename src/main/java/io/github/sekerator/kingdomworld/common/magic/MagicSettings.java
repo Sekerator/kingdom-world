@@ -77,6 +77,7 @@ public final class MagicSettings {
         b.lightSeconds = c.lightSeconds.get();
         b.detectRadius = c.detectRadius.get();
         b.blinkDistance = c.blinkDistance.get();
+        b.blinkPrepareSeconds = c.blinkPrepareSeconds.get();
         b.feRate = c.feRate.get();
         b.feMaxPerTick = c.feMaxPerTick.get();
         b.ironsWell = c.ironsWell.get();

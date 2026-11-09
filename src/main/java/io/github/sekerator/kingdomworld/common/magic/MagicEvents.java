@@ -33,6 +33,7 @@ public final class MagicEvents {
         MinecraftForge.EVENT_BUS.addListener(MagicEvents::onServerStarted);
         MinecraftForge.EVENT_BUS.addListener(MagicEvents::onServerStopped);
         MinecraftForge.EVENT_BUS.addListener(MagicEvents::onLoggedOut);
+        MinecraftForge.EVENT_BUS.addListener(MagicEvents::onHurt);
     }
 
     private static void onFinalizeSpawn(MobSpawnEvent.FinalizeSpawn event) {
@@ -56,6 +57,7 @@ public final class MagicEvents {
         MinecraftServer server = event.getServer();
         int tick = server.getTickCount();
         try {
+            PlayerSpells.tickPreparations();
             if (tick % CHECK_TICKS == 0) {
                 MagicSettings.refresh();
                 MagicWork.tick(server);
@@ -100,6 +102,12 @@ public final class MagicEvents {
     private static void onServerStopped(ServerStoppedEvent event) {
         MagicSettings.reset();
         MagicWork.reset();
+    }
+
+    private static void onHurt(net.minecraftforge.event.entity.living.LivingHurtEvent event) {
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player && event.getAmount() > 0) {
+            PlayerSpells.interrupt(player, "blink_broken_hurt");
+        }
     }
 
     private static void onLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {

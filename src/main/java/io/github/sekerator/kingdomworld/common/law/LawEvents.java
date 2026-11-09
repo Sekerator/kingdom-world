@@ -10,6 +10,7 @@ import io.github.sekerator.kingdomworld.common.guild.GuildWork;
 import io.github.sekerator.kingdomworld.common.registry.ModRegistries;
 import io.github.sekerator.kingdomworld.core.guild.Contract;
 import io.github.sekerator.kingdomworld.core.guild.GuildState;
+import io.github.sekerator.kingdomworld.core.law.BountyRule;
 import io.github.sekerator.kingdomworld.core.law.CrimeKind;
 import io.github.sekerator.kingdomworld.core.law.LawState;
 import io.github.sekerator.kingdomworld.core.law.Wanted;
@@ -455,20 +456,10 @@ public final class LawEvents {
      * @return whether the death was such an execution
      */
     /**
-     * Whether a hunter and the wanted are partners: in one party of the guild, or playing from one address.
+     * Whether a hunter and the wanted are partners: in one party of the guild.
      */
     static boolean related(MinecraftServer server, ServerPlayer hunter, ServerPlayer outlaw) {
-        boolean party = CompanionWork.state(server).parties().partyOf(hunter.getUUID())
-                .map(found -> found.has(outlaw.getUUID())).orElse(false);
-        if (party) {
-            return true;
-        }
-        // Only real network addresses count: a stand-in of a check has none, and players on the host's own machine share
-        // the loopback address.
-        java.net.SocketAddress first = hunter.connection == null ? null : hunter.connection.getRemoteAddress();
-        java.net.SocketAddress second = outlaw.connection == null ? null : outlaw.connection.getRemoteAddress();
-        return first instanceof java.net.InetSocketAddress a && second instanceof java.net.InetSocketAddress b && a.getAddress() != null
-                && !a.getAddress().isLoopbackAddress() && a.getAddress().equals(b.getAddress());
+        return CompanionWork.state(server).parties().partyOf(hunter.getUUID()).map(found -> found.has(outlaw.getUUID())).orElse(false);
     }
 
     static boolean headCollected(MinecraftServer server, ServerPlayer hunter, ServerPlayer outlaw) {
@@ -491,17 +482,26 @@ public final class LawEvents {
                 LawPunish.execute(outlaw, wanted.kingdomId(), "executed_hunter");
                 hunter.sendSystemMessage(Component.translatable(KEY + "head_no_reward", outlaw.getGameProfile().getName())
                         .withStyle(ChatFormatting.GOLD));
-                LOGGER.info("{} killed {}, who is in the same party or plays from the same address: no reward", hunter.getGameProfile().getName(),
+                LOGGER.info("{} killed {}, who is in the same party: no reward", hunter.getGameProfile().getName(),
                         outlaw.getGameProfile().getName());
                 return true;
             }
-            Optional<GuildState.Progress> done = GuildWork.state(server).claimOutlaw(contract.get().id(), hunter.getUUID(),
-                    TreasuryActions.day(server), KingdomWorldApi.state(server), CompanionWork.sharing(server));
+            // From the third head of the same player, the reward is no more than what the kingdom takes from the player.
+            int before = state.captures(hunter.getUUID(), outlaw.getUUID());
+            long coins = BountyRule.reduced(before)
+                    ? io.github.sekerator.kingdomworld.common.economy.CoinStacks.count(outlaw.getInventory(), wanted.kingdomId())
+                    .value(io.github.sekerator.kingdomworld.common.trade.Purses.units(server, wanted.kingdomId())) : 0;
             state.setBounty(wanted.kingdomId(), outlaw.getUUID(), 0);
-            LawPunish.execute(outlaw, wanted.kingdomId(), "executed_hunter");
+            Optional<io.github.sekerator.kingdomworld.core.law.Confiscation> taken = LawPunish.execute(outlaw, wanted.kingdomId(), "executed_hunter");
+            long ransom = taken.map(confiscation -> LawSettings.rules().ransom(confiscation.worth())).orElse(0L);
+            long cap = BountyRule.reward(contract.get().reward(), before, ransom, coins);
+            Optional<GuildState.Progress> done = GuildWork.state(server).claimOutlaw(contract.get().id(), hunter.getUUID(),
+                    TreasuryActions.day(server), KingdomWorldApi.state(server), CompanionWork.sharing(server), cap);
+            state.countCapture(hunter.getUUID(), outlaw.getUUID());
             if (done.isPresent()) {
                 LawWork.contractDone(server, wanted.kingdomId(), hunter.getUUID());
-                hunter.sendSystemMessage(Component.translatable(KEY + "head_collected", outlaw.getGameProfile().getName(),
+                String key = cap < contract.get().reward() ? "head_collected_reduced" : "head_collected";
+                hunter.sendSystemMessage(Component.translatable(KEY + key, outlaw.getGameProfile().getName(),
                         MoneyTexts.amount(done.get().paid(), LawTexts.units(server, contract.get().currency()))).withStyle(ChatFormatting.GREEN));
             }
             LOGGER.info("{} collected the head of {} for {} (contract #{})", hunter.getGameProfile().getName(), outlaw.getGameProfile().getName(),

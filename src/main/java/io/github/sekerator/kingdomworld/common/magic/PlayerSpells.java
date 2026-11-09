@@ -31,6 +31,7 @@ import net.minecraft.world.entity.projectile.ProjectileUtil;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -45,16 +46,95 @@ public final class PlayerSpells {
     /** When each player may cast each spell again, by game time. */
     private static final Map<UUID, Map<PlayerSpell, Long>> READY = new HashMap<>();
     private static final double HEAL_REACH = 8.0;
+    /** How far a player may drift while preparing a blink, in blocks; a step farther breaks it. */
+    private static final double PREPARE_DRIFT = 0.75;
+    /** Ticks between two lines of the progress of a preparation. */
+    private static final int PROGRESS_TICKS = 5;
+    /** Blinks into the protected land of another kingdom being prepared, by player. */
+    private static final Map<UUID, Preparation> PREPARING = new HashMap<>();
+
+    /**
+     * A blink being prepared: who, since when, until when, and where the player stood.
+     */
+    private record Preparation(ServerPlayer player, long started, long ready, Vec3 from) {
+    }
 
     private PlayerSpells() {
     }
 
     public static void reset() {
         READY.clear();
+        PREPARING.clear();
     }
 
     public static void forget(UUID player) {
         READY.remove(player);
+        PREPARING.remove(player);
+    }
+
+    /**
+     * Whether a player is preparing a blink into the land of another kingdom.
+     */
+    public static boolean preparing(ServerPlayer player) {
+        return PREPARING.containsKey(player.getUUID());
+    }
+
+    /**
+     * Whether a blink to a place lands in the protected land of a kingdom the player is not a member of.
+     */
+    public static boolean intoForeignLand(ServerPlayer player, Vec3 target) {
+        UUID owner = KingdomWorldApi.ownerAt(player.serverLevel(), BlockPos.containing(target));
+        return owner != null && !KingdomWorldApi.state(player.server).membership().isMember(player.getUUID(), owner);
+    }
+
+    /**
+     * A blow breaks the preparation of a blink.
+     */
+    public static void interrupt(ServerPlayer player, String reason) {
+        if (PREPARING.remove(player.getUUID()) != null) {
+            player.displayClientMessage(Component.translatable(KEY + reason).withStyle(ChatFormatting.RED), true);
+        }
+    }
+
+    /**
+     * Every tick: the preparations go on, show their progress, break when the player moves away, and end in the blink.
+     */
+    static void tickPreparations() {
+        if (PREPARING.isEmpty()) {
+            return;
+        }
+        for (Preparation preparation : List.copyOf(PREPARING.values())) {
+            ServerPlayer player = preparation.player();
+            if (player.isRemoved() || !player.isAlive()) {
+                PREPARING.remove(player.getUUID());
+                continue;
+            }
+            if (player.position().distanceTo(preparation.from()) > PREPARE_DRIFT) {
+                interrupt(player, "blink_broken_move");
+                continue;
+            }
+            long now = player.serverLevel().getGameTime();
+            if (now >= preparation.ready()) {
+                PREPARING.remove(player.getUUID());
+                KingdomActions.Feedback feedback = cast(player, PlayerSpell.BLINK, true);
+                player.displayClientMessage(feedback.message().copy().withStyle(feedback.success() ? ChatFormatting.AQUA : ChatFormatting.RED), true);
+                continue;
+            }
+            if ((now - preparation.started()) % PROGRESS_TICKS == 0) {
+                player.displayClientMessage(progress(now - preparation.started(), preparation.ready() - preparation.started()), true);
+            }
+        }
+    }
+
+    /**
+     * The line above the hotbar while a blink is prepared: a bar of ten cells and the percent.
+     */
+    static Component progress(long done, long total) {
+        int percent = total <= 0 ? 100 : (int) Math.max(0, Math.min(100, done * 100 / total));
+        int cells = percent / 10;
+        Component bar = Component.literal("■".repeat(cells)).withStyle(ChatFormatting.AQUA)
+                .append(Component.literal("□".repeat(10 - cells)).withStyle(ChatFormatting.DARK_GRAY));
+        return Component.translatable(KEY + "blink_preparing", bar, percent).withStyle(ChatFormatting.AQUA);
     }
 
     /**
@@ -97,7 +177,17 @@ public final class PlayerSpells {
      * Casts a spell of a player; the API the staff, the commands and the game tests use.
      */
     public static KingdomActions.Feedback cast(ServerPlayer player, PlayerSpell spell) {
+        return cast(player, spell, false);
+    }
+
+    /**
+     * @param prepared whether a blink was prepared and may land in the protected land of another kingdom
+     */
+    private static KingdomActions.Feedback cast(ServerPlayer player, PlayerSpell spell, boolean prepared) {
         MagicRules rules = MagicSettings.rules();
+        if (spell == PlayerSpell.BLINK && preparing(player)) {
+            return KingdomActions.Feedback.fail(KEY + "blink_already_preparing");
+        }
         if (!MagicWork.state(player.server).knows(player.getUUID(), spell)) {
             return KingdomActions.Feedback.error(KingdomError.NOT_LEARNED);
         }
@@ -114,6 +204,12 @@ public final class PlayerSpells {
             blink = blinkTarget(player, rules.blinkDistance);
             if (blink == null) {
                 return KingdomActions.Feedback.fail(KEY + "blink_blocked");
+            }
+            if (!prepared && intoForeignLand(player, blink)) {
+                // Into the protected land of another kingdom only after a long preparation, which a blow or a step breaks.
+                long now = player.serverLevel().getGameTime();
+                PREPARING.put(player.getUUID(), new Preparation(player, now, now + rules.blinkPrepareSeconds * 20L, player.position()));
+                return KingdomActions.Feedback.ok(KEY + "blink_prepare_started", rules.blinkPrepareSeconds);
             }
         }
         if (!CrystalEnergy.spend(player, cost)) {

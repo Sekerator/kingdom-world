@@ -457,6 +457,38 @@ public final class LawGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_law_head_third")
+    public static void theThirdHeadOfOnePlayerPaysNoMoreThanTheKingdomTook(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Law Third Head", UUID.randomUUID());
+        ServerPlayer outlaw = player(helper, "kw-outlaw-again", 2, 3);
+        ServerPlayer hunter = player(helper, "kw-hunter-again", 3, 3);
+        try {
+            fund(server, kingdom, 10_000);
+            // Two heads of this player were collected by this hunter before; the outlaw carries no coins and nothing of worth.
+            LawWork.state(server).restoreCaptures(hunter.getUUID(), outlaw.getUUID(), 2);
+            LawWork.commit(server, kingdom.id(), outlaw.getUUID(), "kw-outlaw-again", CrimeKind.MURDER, 0, "");
+            Optional<Contract> contract = LawWork.bountyFor(server, kingdom.id(), outlaw.getUUID());
+            helper.assertTrue(contract.isPresent() && contract.get().reward() > 0, "No contract for the head: " + contract);
+            GuildWork.state(server).setRank(hunter.getUUID(), Rank.F, KingdomWorldApi.gameTime(server));
+            long supply = money(server, kingdom);
+            long before = funds(server, kingdom);
+            outlaw.setHealth(0.0f);
+            outlaw.die(blow(level, hunter));
+            helper.assertTrue(LawWork.state(server).wanted(kingdom.id(), outlaw.getUUID()).isEmpty(), "The outlaw is still wanted");
+            helper.assertTrue(GuildWork.state(server).contract(contract.get().id()).isEmpty(), "The contract is still on the board");
+            helper.assertTrue(KingdomWorldApi.state(server).economy().accounts().balance(hunter.getUUID(), kingdom.id()) == 0,
+                    "The third head paid more than the kingdom took");
+            helper.assertTrue(funds(server, kingdom) == before + contract.get().reward(), "The reward did not go back to the treasury");
+            helper.assertTrue(LawWork.state(server).captures(hunter.getUUID(), outlaw.getUUID()) == 3, "The head was not counted");
+            helper.assertTrue(money(server, kingdom) == supply, "The head made or lost money");
+        } finally {
+            end(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
     // ---------------------------------------------------------------- slavery
 
     @GameTest(template = EMPTY, batch = "kingdomworld_law_slavery")
@@ -672,20 +704,29 @@ public final class LawGameTests {
     }
 
     @GameTest(template = EMPTY, batch = "kingdomworld_law_machines")
-    public static void machinesStillCannotHurtCitizens(GameTestHelper helper) {
+    public static void machinesStrikeCitizensOnlyAtHome(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Law Machines", UUID.randomUUID());
         Citizen citizen = witness(helper, kingdom, 4, 4);
         try {
-            // Machines answer to the protection as before (allowFakePlayers decides), never to the law.
             net.minecraftforge.common.util.FakePlayer machine = net.minecraftforge.common.util.FakePlayerFactory.get(level,
                     new GameProfile(UUID.randomUUID(), "[kw-machine]"));
             CitizenEntity body = CitizenBodies.body(citizen.id());
-            boolean allowed = io.github.sekerator.kingdomworld.common.protection.ProtectionService.mayHurtCitizen(machine, body);
-            helper.assertTrue(LawEvents.refused(machine, body) == !allowed, "A machine is not judged by the rule of the protection");
+            // At home: a machine on the land of the kingdom strikes its citizen there.
+            machine.setPos(body.getX(), body.getY(), body.getZ());
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.protection.ProtectionService.mayHurtCitizen(machine, body),
+                    "A machine on the land of the kingdom may not strike its citizen");
+            helper.assertTrue(!LawEvents.refused(machine, body), "The law refused a machine at home");
             float before = body.getHealth();
             body.hurt(level.damageSources().playerAttack(machine), 4.0f);
-            helper.assertTrue(allowed ? body.getHealth() < before : body.getHealth() == before, "The blow of a machine broke the rule of the protection");
+            helper.assertTrue(body.getHealth() < before, "The blow of a machine at home did nothing");
+            // Away: a machine on nobody's land strikes nobody, whatever the setting of fake players says.
+            machine.setPos(body.getX() + 4000, body.getY(), body.getZ() + 4000);
+            helper.assertTrue(!io.github.sekerator.kingdomworld.common.protection.ProtectionService.mayHurtCitizen(machine, body),
+                    "A machine on nobody's land may strike a citizen");
+            float after = body.getHealth();
+            body.hurt(level.damageSources().playerAttack(machine), 4.0f);
+            helper.assertTrue(body.getHealth() == after, "A machine away from home struck a citizen");
             helper.assertTrue(LawWork.state(level.getServer()).wantedIn(kingdom.id()).isEmpty(), "A machine became wanted");
         } finally {
             end(helper, kingdom, citizen);

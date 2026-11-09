@@ -239,6 +239,14 @@ public record Contract(long id, Kind kind, UUID branch, Poster poster, UUID post
                 currency, reward, points, commissionPermille, posted, deadline, status, player, squad, squadsAllowed);
     }
 
+    /**
+     * The same contract for a smaller reward; the commission follows the reward.
+     */
+    public Contract withReward(long value) {
+        return new Contract(id, kind, branch, poster, posterId, minRank, target, targetRank, boss, count, progress, currency,
+                Math.max(0, Math.min(reward, value)), points, commissionPermille, posted, deadline, status, player, squad, squadsAllowed);
+    }
+
     public Contract takenByPlayer(UUID who) {
         return new Contract(id, kind, branch, poster, posterId, minRank, target, targetRank, boss, count, progress, currency, reward, points,
                 commissionPermille, posted, deadline, Status.TAKEN, who, 0, squadsAllowed);

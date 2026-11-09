@@ -27,7 +27,7 @@ import java.util.UUID;
  *       wanted: [ { kingdom, player, name, since, fine, commuted, bounty, crimes: [ { kind, worth, time, victim, count } ] } ],
  *       confiscations: [ { id, kingdom, kingdomName, owner, ownerName, time, day, worth, items, goods: [ item ] } ], nextConfiscation,
  *       reputation: [ { kingdom, player, value } ], trade: [ { kingdom, player, money } ], passes: [ { kingdom, player, until } ],
- *       laws: [ { kingdom, multiplier, entryFee, slavery, bounty } ], autoPay: [ player ]
+ *       laws: [ { kingdom, multiplier, entryFee, slavery, bounty } ], autoPay: [ player ], captures: [ { hunter, player, count } ]
  * </pre>
  *
  * A record that cannot be read is a problem: the data stays read-only, so that saving loses nothing. An item no mod knows any
@@ -44,6 +44,7 @@ final class LawNbt {
     private static final String PASSES = "passes";
     private static final String LAWS = "laws";
     private static final String AUTO_PAY = "autoPay";
+    private static final String CAPTURES = "captures";
     private static final String KINGDOM = "kingdom";
     private static final String PLAYER = "player";
 
@@ -141,6 +142,15 @@ final class LawNbt {
             autoPay.add(NbtUtils.createUUID(player));
         }
         root.put(AUTO_PAY, autoPay);
+        ListTag captures = new ListTag();
+        state.allCaptures().forEach((hunter, of) -> of.forEach((player, count) -> {
+            CompoundTag tag = new CompoundTag();
+            tag.putUUID("hunter", hunter);
+            tag.putUUID("player", player);
+            tag.putInt("count", count);
+            captures.add(tag);
+        }));
+        root.put(CAPTURES, captures);
     }
 
     /**
@@ -222,6 +232,13 @@ final class LawNbt {
                 } catch (RuntimeException e) {
                     problems.add("auto pay: " + e.getMessage());
                 }
+            }
+        }
+        for (CompoundTag tag : compounds(root, CAPTURES, problems)) {
+            try {
+                state.restoreCaptures(tag.getUUID("hunter"), tag.getUUID("player"), tag.getInt("count"));
+            } catch (RuntimeException e) {
+                problems.add("captures: " + e.getMessage());
             }
         }
         return problems;

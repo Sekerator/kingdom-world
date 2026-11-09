@@ -66,6 +66,8 @@ public final class MagicRules {
     public final int detectRadius;
     public final int detectSeconds;
     public final int blinkDistance;
+    /** Seconds a blink into the protected land of another kingdom takes to prepare. */
+    public final int blinkPrepareSeconds;
 
     // ---------------------------------------------------------------- machines and other magic
     /** Forge Energy a generator gives for one unit of the kingdom's energy. */
@@ -124,6 +126,7 @@ public final class MagicRules {
         detectRadius = Math.max(1, b.detectRadius);
         detectSeconds = Math.max(1, b.detectSeconds);
         blinkDistance = Math.max(1, b.blinkDistance);
+        blinkPrepareSeconds = Math.max(1, b.blinkPrepareSeconds);
         feRate = Math.max(1, b.feRate);
         feMaxPerTick = Math.max(0, b.feMaxPerTick);
         ironsWell = b.ironsWell;
@@ -241,6 +244,7 @@ public final class MagicRules {
         public int detectRadius = 24;
         public int detectSeconds = 10;
         public int blinkDistance = 8;
+        public int blinkPrepareSeconds = 8;
         public int feRate = 40;
         public int feMaxPerTick = 400;
         public boolean ironsWell = true;

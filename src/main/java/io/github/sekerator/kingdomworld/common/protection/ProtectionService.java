@@ -78,10 +78,27 @@ public final class ProtectionService {
             return true;
         }
         KingdomSavedData data = KingdomSavedData.get(level.getServer());
+        if (attacker instanceof FakePlayer machine) {
+            return machineMayHurt(data, machine, citizen);
+        }
         String dimension = Dimensions.id(level);
         long chunk = ChunkKey.of(citizen.blockPosition().getX() >> 4, citizen.blockPosition().getZ() >> 4);
         return KingdomWorldApi.accessPolicy().isAllowed(data.state().membership(), citizen.kingdomId(), subjectOf(attacker),
                 ProtectedAction.ATTACK_CITIZEN, dimension, chunk, settings());
+    }
+
+    /**
+     * A machine of another mod (a deployer and the like) strikes the citizens of a kingdom only at home: the citizen stands
+     * on the land of its kingdom, and the machine belongs to that kingdom (its owner is a member) or stands on its land too.
+     * On the land of others and on nobody's land machines strike no citizens, whatever {@code allowFakePlayers} says.
+     */
+    static boolean machineMayHurt(KingdomSavedData data, FakePlayer machine, CitizenEntity citizen) {
+        UUID kingdom = citizen.kingdomId();
+        if (!kingdom.equals(KingdomWorldApi.ownerAt(citizen.level(), citizen.blockPosition()))) {
+            return false;
+        }
+        return kingdom.equals(KingdomWorldApi.ownerAt(citizen.level(), machine.blockPosition()))
+                || data.state().membership().isMember(machine.getUUID(), kingdom);
     }
 
     public static AccessSubject subjectOf(@Nullable Entity actor) {

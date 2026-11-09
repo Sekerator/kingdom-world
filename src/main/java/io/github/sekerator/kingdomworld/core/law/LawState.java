@@ -43,6 +43,8 @@ public final class LawState {
     private final Map<UUID, Map<UUID, Long>> passes = new LinkedHashMap<>();
     private final Map<UUID, KingdomLaw> laws = new LinkedHashMap<>();
     private final Set<UUID> autoPay = new LinkedHashSet<>();
+    /** Heads a hunter collected of one player: hunter, then the player, then how many times. */
+    private final Map<UUID, Map<UUID, Integer>> captures = new LinkedHashMap<>();
     private long nextConfiscation = 1;
     private Runnable changeListener = () -> {
     };
@@ -581,6 +583,37 @@ public final class LawState {
         }
     }
 
+    // ---------------------------------------------------------------- heads collected
+
+    /**
+     * How many times a hunter collected the head of a player.
+     */
+    public int captures(UUID hunter, UUID player) {
+        Map<UUID, Integer> of = captures.get(hunter);
+        return of == null ? 0 : of.getOrDefault(player, 0);
+    }
+
+    /**
+     * Every count of heads collected: hunter, then player.
+     */
+    public Map<UUID, Map<UUID, Integer>> allCaptures() {
+        return Collections.unmodifiableMap(captures);
+    }
+
+    /**
+     * A hunter collected the head of a player once more.
+     */
+    public void countCapture(UUID hunter, UUID player) {
+        captures.computeIfAbsent(hunter, key -> new LinkedHashMap<>()).merge(player, 1, (a, b) -> (int) Math.min(Integer.MAX_VALUE, (long) a + b));
+        changed();
+    }
+
+    public void restoreCaptures(UUID hunter, UUID player, int count) {
+        if (count > 0) {
+            captures.computeIfAbsent(hunter, key -> new LinkedHashMap<>()).put(player, count);
+        }
+    }
+
     // ---------------------------------------------------------------- kingdoms
 
     /**
@@ -657,6 +690,7 @@ public final class LawState {
         passes.clear();
         laws.clear();
         autoPay.clear();
+        captures.clear();
         nextConfiscation = 1;
     }
 }

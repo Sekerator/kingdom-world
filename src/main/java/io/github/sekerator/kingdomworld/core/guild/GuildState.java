@@ -524,9 +524,21 @@ public final class GuildState {
      * done; the reward is paid as for any contract.
      */
     public Optional<Progress> claimOutlaw(long id, UUID killer, long day, KingdomWorldState world, Sharing sharing) {
+        return claimOutlaw(id, killer, day, world, sharing, Long.MAX_VALUE);
+    }
+
+    /**
+     * Pays the head of an outlaw, at most {@code cap}: what is left of the reward goes back to the one who posted it.
+     */
+    public Optional<Progress> claimOutlaw(long id, UUID killer, long day, KingdomWorldState world, Sharing sharing, long cap) {
         Contract contract = contracts.get(id);
         if (contract == null || contract.kind() != Contract.Kind.OUTLAW || !members.containsKey(killer)) {
             return Optional.empty();
+        }
+        long paid = Math.max(0, Math.min(contract.reward(), cap));
+        if (paid < contract.reward()) {
+            refund(contract, contract.reward() - paid, day, world);
+            contract = contract.withReward(paid);
         }
         Contract taken = contract.takenByPlayer(killer);
         contracts.put(id, taken);
