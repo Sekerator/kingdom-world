@@ -142,6 +142,12 @@ final class SoldierGoal extends Goal {
             }
             return;
         }
+        WorldPos store = ArmyTrophies.deliverTo(server, body);
+        if (store != null) {
+            // Trophies go to a storehouse of the kingdom before anything else but a fight.
+            walkTo(store, Dimensions.id(level), 0.8);
+            return;
+        }
         follow(server, level, order);
     }
 

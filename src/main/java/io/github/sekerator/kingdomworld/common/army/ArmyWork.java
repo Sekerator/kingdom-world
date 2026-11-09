@@ -139,6 +139,7 @@ public final class ArmyWork {
 
     public static void reset() {
         ArmyField.reset();
+        ArmyTrophies.reset();
         rolls = null;
         hostility = Hostility.PEACE;
         ALARMS.clear();

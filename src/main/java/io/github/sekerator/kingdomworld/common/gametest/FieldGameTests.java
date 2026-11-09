@@ -167,4 +167,108 @@ public final class FieldGameTests {
         }
         helper.succeed();
     }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_field_trophies", timeoutTicks = 200)
+    public static void aSoldierCarriesTheGearOfAFallenEnemyToAStorehouseAsATrophy(GameTestHelper helper) {
+        net.minecraft.server.level.ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        Kingdom[] both = WarGameTests.kingdoms(helper, "Trophies", UUID.randomUUID(), UUID.randomUUID());
+        Kingdom home = both[0];
+        Kingdom enemy = both[1];
+        io.github.sekerator.kingdomworld.common.storage.StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 4);
+        io.github.sekerator.kingdomworld.core.citizen.Citizen ours = WarGameTests.soldier(helper, home, 1);
+        io.github.sekerator.kingdomworld.core.citizen.Citizen theirs = CitizenGameTests.newcomer(helper, enemy, 4, 1);
+        try {
+            helper.assertTrue(ArmyWork.recruit(server, null, enemy.id(), theirs.id(),
+                    io.github.sekerator.kingdomworld.core.citizen.Professions.WARRIOR.id()).ok(), "The enemy was not recruited");
+            WarGameTests.war(helper, home, enemy, WarGoal.RAID);
+            io.github.sekerator.kingdomworld.common.citizen.CitizenBodies.force(ours.id(), true);
+            io.github.sekerator.kingdomworld.common.citizen.CitizenBodies.force(theirs.id(), true);
+            io.github.sekerator.kingdomworld.common.citizen.CitizenBodies.update(server);
+            io.github.sekerator.kingdomworld.common.citizen.CitizenEntity killer = io.github.sekerator.kingdomworld.common.citizen.CitizenBodies.body(ours.id());
+            io.github.sekerator.kingdomworld.common.citizen.CitizenEntity fallen = io.github.sekerator.kingdomworld.common.citizen.CitizenBodies.body(theirs.id());
+            helper.assertTrue(killer != null && fallen != null, "The soldiers got no bodies");
+            fallen.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.IRON_SWORD));
+            fallen.setItemSlot(net.minecraft.world.entity.EquipmentSlot.CHEST, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.IRON_CHESTPLATE));
+            killer.setPos(fallen.getX() + 1.0, fallen.getY(), fallen.getZ());
+            fallen.setHealth(0.0f);
+            fallen.die(level.damageSources().mobAttack(killer));
+            helper.runAfterDelay(5, () -> {
+                try {
+                    io.github.sekerator.kingdomworld.common.army.ArmyTrophies.tick(server);
+                    helper.assertTrue(io.github.sekerator.kingdomworld.common.army.ArmyTrophies.carrying(ours.id()), "The killer took nothing");
+                    int carried = 0;
+                    for (int slot = 0; slot < killer.carried().getContainerSize(); slot++) {
+                        carried += killer.carried().getItem(slot).getCount();
+                    }
+                    helper.assertTrue(carried >= 2, "The killer did not take the gear: " + carried);
+                    // At the storehouse the gear is handed in as a trophy of the enemy, not as goods of the kingdom.
+                    net.minecraft.core.BlockPos at = helper.absolutePos(new net.minecraft.core.BlockPos(1, 1, 4));
+                    killer.setPos(at.getX() + 0.5, at.getY(), at.getZ() + 0.5);
+                    io.github.sekerator.kingdomworld.common.army.ArmyTrophies.tick(server);
+                    List<io.github.sekerator.kingdomworld.common.army.TrophySavedData.Trophy> trophies =
+                            io.github.sekerator.kingdomworld.common.army.ArmyTrophies.of(server, home.id());
+                    helper.assertTrue(trophies.size() == 1 && trophies.get(0).owner().equals(enemy.id()) && trophies.get(0).holder().equals(home.id())
+                            && trophies.get(0).count() == carried && trophies.get(0).peaceDay() == 0, "The trophy was not kept: " + trophies);
+                    helper.assertTrue(CitizenGameTests.count(store, net.minecraft.world.item.Items.IRON_SWORD) == 0, "The trophy went into the storehouse");
+                    helper.assertTrue(!io.github.sekerator.kingdomworld.common.army.ArmyTrophies.carrying(ours.id()), "The killer still carries the trophy");
+                } finally {
+                    io.github.sekerator.kingdomworld.common.army.ArmyTrophies.of(server, home.id())
+                            .forEach(trophy -> io.github.sekerator.kingdomworld.common.army.TrophySavedData.get(server).remove(trophy.id()));
+                    WarGameTests.end(helper, home, List.of(enemy), List.of(), ours, theirs);
+                }
+                helper.succeed();
+            });
+        } catch (RuntimeException e) {
+            WarGameTests.end(helper, home, List.of(enemy), List.of(), ours, theirs);
+            throw e;
+        }
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_field_buyback")
+    public static void afterPeaceTheLoserBuysItsTrophiesBackForHalfTheirWorth(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        UUID enemyKing = UUID.randomUUID();
+        Kingdom[] both = WarGameTests.kingdoms(helper, "Buyback", UUID.randomUUID(), enemyKing);
+        Kingdom home = both[0];
+        Kingdom enemy = both[1];
+        io.github.sekerator.kingdomworld.common.storage.StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 4);
+        io.github.sekerator.kingdomworld.common.army.TrophySavedData data = io.github.sekerator.kingdomworld.common.army.TrophySavedData.get(server);
+        List<Long> made = new ArrayList<>();
+        try {
+            io.github.sekerator.kingdomworld.common.army.ArmyTrophies.override(new io.github.sekerator.kingdomworld.core.army.TrophyRules(50, 7));
+            long day = TreasuryActions.day(server);
+            io.github.sekerator.kingdomworld.core.economy.Economy economy = KingdomWorldApi.state(server).economy();
+            economy.adminTreasury(enemy.id(), 500, day);
+            io.github.sekerator.kingdomworld.common.army.TrophySavedData.Trophy trophy = data.add(enemy.id(), home.id(), 200, 0,
+                    List.of(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND_SWORD)));
+            made.add(trophy.id());
+            io.github.sekerator.kingdomworld.common.army.TrophySavedData.Trophy old = data.add(enemy.id(), home.id(), 80, Math.max(1, day - 10),
+                    List.of(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.IRON_HELMET)));
+            made.add(old.id());
+            ServerPlayer king = WarGameTests.player(helper, enemyKing, "kw-buyback-king", 2, 2);
+            helper.assertTrue(!io.github.sekerator.kingdomworld.common.army.ArmyTrophies.buy(king, trophy.id()).success(), "A trophy was bought back at war");
+            // No war between them: the day of peace is set; the old trophy, past its time, goes to the storehouses of the holder.
+            io.github.sekerator.kingdomworld.common.army.ArmyTrophies.daily(server);
+            helper.assertTrue(data.trophy(trophy.id()).map(found -> found.peaceDay() == day).orElse(false), "The day of peace was not set");
+            helper.assertTrue(day <= 10 || (data.trophy(old.id()).isEmpty() && CitizenGameTests.count(store, net.minecraft.world.item.Items.IRON_HELMET) == 1),
+                    "A trophy past its time did not stay with the holder");
+            long enemyFunds = economy.treasury(enemy.id()).orElseThrow().funds();
+            long enemySupply = economy.supply(enemy.id());
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.army.ArmyTrophies.buy(king, trophy.id()).success(), "The buyback failed");
+            helper.assertTrue(economy.treasury(enemy.id()).orElseThrow().funds() == enemyFunds - 100, "The buyback was not half the worth");
+            helper.assertTrue(economy.supply(enemy.id()) == enemySupply, "The buyback made or lost money");
+            boolean back = false;
+            for (int slot = 0; slot < king.getInventory().getContainerSize(); slot++) {
+                back |= king.getInventory().getItem(slot).is(net.minecraft.world.item.Items.DIAMOND_SWORD);
+            }
+            helper.assertTrue(back, "The gear did not come back");
+            helper.assertTrue(!io.github.sekerator.kingdomworld.common.army.ArmyTrophies.buy(king, trophy.id()).success(), "A trophy was bought back twice");
+        } finally {
+            made.forEach(data::remove);
+            io.github.sekerator.kingdomworld.common.army.ArmyTrophies.override(null);
+            WarGameTests.end(helper, home, List.of(enemy), List.of(enemyKing));
+        }
+        helper.succeed();
+    }
 }

@@ -132,6 +132,8 @@ public final class ArmyEvents {
         }
         ArmySettings.refresh();
         try {
+            ArmyTrophies.tick(server);
+            ArmyTrophies.daily(server);
             ArmyWork.tick(server);
         } catch (RuntimeException e) {
             LOGGER.error("KingdomWorld army tick failed", e);

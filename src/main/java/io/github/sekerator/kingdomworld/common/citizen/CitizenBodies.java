@@ -326,6 +326,8 @@ public final class CitizenBodies {
             citizen.get().setHealth(body.getHealth(), CitizenSettings.rules().woundedFraction());
             body.storeGear(io.github.sekerator.kingdomworld.common.data.KingdomSavedData.get(server).gear());
         }
+        // A soldier carrying trophies brings them home on its own.
+        io.github.sekerator.kingdomworld.common.army.ArmyTrophies.unloaded(server, body);
         for (int slot = 0; slot < body.carried().getContainerSize(); slot++) {
             ItemStack stack = body.carried().removeItemNoUpdate(slot);
             if (!stack.isEmpty()) {
@@ -345,6 +347,8 @@ public final class CitizenBodies {
             return;
         }
         ACTIVE.remove(id);
+        io.github.sekerator.kingdomworld.common.army.ArmyTrophies.onDeath(level.getServer(), body,
+                source.getEntity() instanceof CitizenEntity killer ? killer : null);
         Containers.dropContents(level, body.blockPosition(), body.carried());
         // The body drops what it held and wore itself; the stored copy of the gear goes with it.
         io.github.sekerator.kingdomworld.common.data.KingdomSavedData.get(level.getServer()).gear().takeAll(id);

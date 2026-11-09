@@ -89,6 +89,11 @@ public final class KingdomCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("kingdom");
         EconomyCommands.addPlayerCommands(root);
+        root.then(Commands.literal("trophies")
+                .executes(context -> trophies(context.getSource()))
+                .then(Commands.literal("buy").then(Commands.argument("id", com.mojang.brigadier.arguments.LongArgumentType.longArg(1))
+                        .executes(context -> run(context.getSource(), io.github.sekerator.kingdomworld.common.army.ArmyTrophies.buy(player(context),
+                                com.mojang.brigadier.arguments.LongArgumentType.getLong(context, "id")))))));
         dispatcher.register(root
                 .then(Commands.literal("info")
                         .executes(context -> info(context.getSource(), null))
@@ -136,6 +141,36 @@ public final class KingdomCommand {
                 .then(Commands.literal("dissolve")
                         .executes(context -> requestDissolve(context.getSource()))
                         .then(Commands.literal("confirm").executes(context -> confirmDissolve(context.getSource())))));
+    }
+
+    /**
+     * Trophies the kingdom of the player may buy back, and those it holds of others.
+     */
+    private static int trophies(CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        java.util.Optional<Kingdom> kingdom = KingdomWorldApi.kingdomOf(source.getServer(), player.getUUID());
+        if (kingdom.isEmpty()) {
+            source.sendFailure(KingdomActions.errorMessage(io.github.sekerator.kingdomworld.core.kingdom.KingdomError.NOT_A_MEMBER));
+            return 0;
+        }
+        java.util.List<io.github.sekerator.kingdomworld.common.army.TrophySavedData.Trophy> list =
+                io.github.sekerator.kingdomworld.common.army.ArmyTrophies.of(source.getServer(), kingdom.get().id());
+        if (list.isEmpty()) {
+            source.sendSuccess(() -> Component.translatable("kingdomworld.army.trophy.none"), false);
+            return 1;
+        }
+        io.github.sekerator.kingdomworld.core.army.TrophyRules rules = io.github.sekerator.kingdomworld.common.army.ArmyTrophies.rules();
+        for (io.github.sekerator.kingdomworld.common.army.TrophySavedData.Trophy trophy : list) {
+            boolean ours = trophy.owner().equals(kingdom.get().id());
+            UUID other = ours ? trophy.holder() : trophy.owner();
+            Component state = trophy.peaceDay() == 0 ? Component.translatable("kingdomworld.army.trophy.state.war")
+                    : Component.translatable("kingdomworld.army.trophy.state.until", trophy.peaceDay() + rules.days());
+            source.sendSuccess(() -> Component.translatable("kingdomworld.army.trophy." + (ours ? "line_ours" : "line_theirs"), trophy.id(), trophy.count(),
+                    io.github.sekerator.kingdomworld.common.diplomacy.WarWork.name(source.getServer(), other),
+                    io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(rules.price(trophy.worth()),
+                            io.github.sekerator.kingdomworld.common.trade.Purses.units(source.getServer(), trophy.owner())), state), false);
+        }
+        return list.size();
     }
 
     private static ServerPlayer player(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

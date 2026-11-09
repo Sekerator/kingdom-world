@@ -756,6 +756,8 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue fieldBattleSeconds;
         public final ForgeConfigSpec.DoubleValue flankBonus;
         public final ForgeConfigSpec.DoubleValue rearBonus;
+        public final ForgeConfigSpec.IntValue trophyBuybackPercent;
+        public final ForgeConfigSpec.IntValue trophyBuybackDays;
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> gearScores;
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> rangedWeapons;
 
@@ -834,6 +836,12 @@ public final class KingdomWorldConfig {
                     .defineInRange("flankBonus", f.flank().side(), 0.0, 2.0);
             rearBonus = builder.comment("Share a blow at the rear of an enemy already in battle adds to the strength of the squad.")
                     .defineInRange("rearBonus", f.flank().rear(), 0.0, 2.0);
+            trophyBuybackPercent = builder.comment("Gear soldiers take from the fallen of an enemy is a trophy kept with the kingdom it belonged to.",
+                            "After peace that kingdom may buy it back for this share of its worth, in percent.")
+                    .defineInRange("trophyBuybackPercent", io.github.sekerator.kingdomworld.core.army.TrophyRules.DEFAULT.percent(), 0, 1_000);
+            trophyBuybackDays = builder.comment("Game days after peace within which trophies may be bought back; then they stay with the",
+                            "kingdom that took them.")
+                    .defineInRange("trophyBuybackDays", io.github.sekerator.kingdomworld.core.army.TrophyRules.DEFAULT.days(), 0, 3_650);
             gearScores = builder.comment("Gear of soldiers: scores of items and tags that replace what their attributes say, or deny to",
                             "never take them, e.g. [\"minecraft:trident=30\", \"#forge:tools/knives=deny\"]. A melee weapon scores its",
                             "damage per second (a diamond sword about 11), armor its defense and half its toughness.")
