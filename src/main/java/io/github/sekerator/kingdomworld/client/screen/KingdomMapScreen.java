@@ -1087,10 +1087,62 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
                 ? Component.translatable("kingdomworld.screen.map.hint_roads")
                 : editing != null
                 ? Component.translatable("kingdomworld.screen.map.hint_edit")
-                : Component.translatable("kingdomworld.screen.map.hint", KingdomWorldClient.MAP_KEY.getTranslatedKeyMessage());
+                : findHint(textWidth).orElse(Component.translatable("kingdomworld.screen.map.hint", KingdomWorldClient.MAP_KEY.getTranslatedKeyMessage()));
         boolean showStatus = !status.getString().isEmpty();
         paragraph(graphics, showStatus ? status : hint, PAD, y + 11, textWidth, 2,
                 showStatus ? (statusIsError ? 0xFFFF8080 : 0xFFA0E0A0) : 0xFFA8A8A8);
+    }
+
+    /**
+     * Where to look for kingdoms when no capital is on the map: the nearest one known with its distance and direction from the
+     * player, or where kingdoms of the world lie when none is known yet; empty while a capital is in sight.
+     */
+    private java.util.Optional<Component> findHint(int textWidth) {
+        String dimension = dimension();
+        if (findHintForCheck != null) {
+            return java.util.Optional.of(findHintForCheck);
+        }
+        if (dimension == null) {
+            return java.util.Optional.empty();
+        }
+        double fromX = minecraft != null && minecraft.player != null ? minecraft.player.getX() : centerX * 16;
+        double fromZ = minecraft != null && minecraft.player != null ? minecraft.player.getZ() : centerZ * 16;
+        io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity nearest = null;
+        double best = Double.MAX_VALUE;
+        for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city
+                : io.github.sekerator.kingdomworld.client.map.ClientRoadCache.data().cities()) {
+            if (city.id() != 0 || !city.dimension().equals(dimension)) {
+                continue;
+            }
+            int chunkX = Math.floorDiv(city.x(), 16);
+            int chunkZ = Math.floorDiv(city.z(), 16);
+            if (chunkX >= visibleMinX() && chunkX <= visibleMaxX() && chunkZ >= visibleMinZ() && chunkZ <= visibleMaxZ()) {
+                return java.util.Optional.empty();
+            }
+            double distance = Math.hypot(city.x() - fromX, city.z() - fromZ);
+            if (distance < best) {
+                best = distance;
+                nearest = city;
+            }
+        }
+        if (nearest == null) {
+            return java.util.Optional.of(Component.translatable("kingdomworld.screen.map.find.none"));
+        }
+        long rounded = Math.max(100, Math.round(best / 100.0) * 100);
+        String direction = io.github.sekerator.kingdomworld.core.life.Rumors.direction((int) Math.floor(fromX), (int) Math.floor(fromZ),
+                nearest.x(), nearest.z());
+        return java.util.Optional.of(Component.translatable("kingdomworld.screen.map.find.nearest", fit(nearest.name(), textWidth / 3), rounded,
+                Component.translatable(direction)));
+    }
+
+    /** A hint of where to look for kingdoms, shown in place of the real one by the client self-check. */
+    private Component findHintForCheck;
+
+    /**
+     * Shows a hint of where to look for kingdoms, for the client self-check.
+     */
+    public void showFindHintForCheck(Component hint) {
+        findHintForCheck = hint;
     }
 
     // ---------------------------------------------------------------- roads

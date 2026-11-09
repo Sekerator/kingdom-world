@@ -137,6 +137,10 @@ public final class ItemPrices {
      * The worth of one item of the stack's kind.
      */
     public static ItemValues.Value value(MinecraftServer server, ItemStack stack) {
+        // The guide book is given away and worth nothing, so that taking it again makes no money.
+        if (stack.is(io.github.sekerator.kingdomworld.common.registry.ModRegistries.GUIDE_BOOK.get())) {
+            return new ItemValues.Value(0, ItemValues.Source.BASE);
+        }
         // A monster crystal is worth what its rank is worth.
         java.util.Optional<io.github.sekerator.kingdomworld.core.guild.Rank> crystal =
                 io.github.sekerator.kingdomworld.common.guild.MonsterCrystalItem.rank(stack);

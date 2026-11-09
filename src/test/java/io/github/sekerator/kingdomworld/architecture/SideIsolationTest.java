@@ -24,6 +24,7 @@ class SideIsolationTest {
     private static final Set<String> CLIENT_BOOTSTRAP_FILES = Set.of(
             "io/github/sekerator/kingdomworld/KingdomWorld.java",
             "io/github/sekerator/kingdomworld/common/item/KingdomAtlasItem.java",
+            "io/github/sekerator/kingdomworld/common/item/GuideBookItem.java",
             "io/github/sekerator/kingdomworld/common/construction/ArchitectRulerItem.java",
             "io/github/sekerator/kingdomworld/common/network/packet/ActionResultPacket.java",
             "io/github/sekerator/kingdomworld/common/network/packet/ArmyMapPackets.java",

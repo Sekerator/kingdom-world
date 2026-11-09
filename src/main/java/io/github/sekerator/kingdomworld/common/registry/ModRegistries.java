@@ -56,7 +56,10 @@ public final class ModRegistries {
     /** Founds a kingdom on an empty throne and is used up doing so. */
     public static final RegistryObject<Item> FOUNDER_CROWN = ITEMS.register("founder_crown",
             () -> new DescribedItem(new Item.Properties().stacksTo(1).rarity(Rarity.EPIC).fireResistant(),
-                    "item.kingdomworld.founder_crown.tooltip"));
+                    "item.kingdomworld.founder_crown.tooltip", "kingdomworld.guide.see"));
+    /** The guide book: how to found a kingdom and everything after it. */
+    public static final RegistryObject<Item> GUIDE_BOOK = ITEMS.register("guide_book",
+            () -> new io.github.sekerator.kingdomworld.common.item.GuideBookItem(new Item.Properties().stacksTo(1)));
     /** Opens the political map of kingdoms. */
     public static final RegistryObject<Item> KINGDOM_ATLAS = ITEMS.register("kingdom_atlas",
             () -> new KingdomAtlasItem(new Item.Properties().stacksTo(1)));
@@ -166,6 +169,7 @@ public final class ModRegistries {
             event.accept(MINT_ITEM);
             event.accept(MARKET_STALL_ITEM);
         } else if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) {
+            event.accept(GUIDE_BOOK);
             event.accept(FOUNDER_CROWN);
             event.accept(KINGDOM_ATLAS);
             event.accept(ARCHITECT_RULER);

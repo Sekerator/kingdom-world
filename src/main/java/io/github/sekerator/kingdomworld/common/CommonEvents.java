@@ -128,6 +128,7 @@ public final class CommonEvents {
     private static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player && !(player instanceof FakePlayer)) {
             KingdomActions.greet(player);
+            io.github.sekerator.kingdomworld.common.item.GuideBookItem.giveOnFirstJoin(player);
         }
     }
 

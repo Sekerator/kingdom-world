@@ -130,6 +130,11 @@ final class ClientLayoutCheck {
                     List.of(io.github.sekerator.kingdomworld.core.npc.RulerCharacter.Trait.JUST,
                             io.github.sekerator.kingdomworld.core.npc.RulerCharacter.Trait.THRIFTY),
                     io.github.sekerator.kingdomworld.core.npc.NpcLevel.MEDIUM, 3);
+    /** The same kingdom founded as data, its capital still being built. */
+    private static final io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo RAISING_NPC =
+            new io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo(LONG_NPC.nameLatin(), LONG_NPC.nameCyrillic(),
+                    LONG_NPC.rulerLatin(), LONG_NPC.rulerCyrillic(), LONG_NPC.rulerGender(), LONG_NPC.character(), LONG_NPC.traits(),
+                    io.github.sekerator.kingdomworld.core.npc.NpcLevel.LARGE, 3, true);
 
     private record Case(String name, Supplier<Screen> screen) {
     }
@@ -1320,6 +1325,31 @@ final class ClientLayoutCheck {
             screen.showArmyForCheck("attack", List.of(3L, 4L), List.of(new int[]{40, -60}, new int[]{90, -40}));
             return screen;
         }));
+        cases.add(new Case("guide-contents", () -> new io.github.sekerator.kingdomworld.client.screen.GuideScreen(-1, 0)));
+        cases.add(new Case("guide-contents-last", () -> new io.github.sekerator.kingdomworld.client.screen.GuideScreen(-1, Integer.MAX_VALUE)));
+        for (int chapter = 0; chapter < io.github.sekerator.kingdomworld.client.screen.GuideScreen.CHAPTERS; chapter++) {
+            int shown = chapter;
+            cases.add(new Case("guide-chapter-" + (chapter + 1), () -> new io.github.sekerator.kingdomworld.client.screen.GuideScreen(shown, 0)));
+            cases.add(new Case("guide-chapter-" + (chapter + 1) + "-last", () ->
+                    new io.github.sekerator.kingdomworld.client.screen.GuideScreen(shown, Integer.MAX_VALUE)));
+        }
+        cases.add(new Case("map-find-nearest", () -> {
+            fillMapData();
+            KingdomMapScreen screen = new KingdomMapScreen(null);
+            screen.showForCheck(400.0, -300.0, 14.0, null, Component.empty(), false);
+            screen.showFindHintForCheck(Component.translatable("kingdomworld.screen.map.find.nearest", LONG_NPC.nameCyrillic(), 5300,
+                    Component.translatable("kingdomworld.life.direction.north_west")));
+            return screen;
+        }));
+        cases.add(new Case("map-find-none", () -> {
+            fillMapData();
+            KingdomMapScreen screen = new KingdomMapScreen(null);
+            screen.showForCheck(400.0, -300.0, 14.0, null, Component.empty(), false);
+            screen.showFindHintForCheck(Component.translatable("kingdomworld.screen.map.find.none"));
+            return screen;
+        }));
+        cases.add(new Case("throne-npc-raising", () -> throne(view(KingdomView.Relation.OUTSIDER, null).withNpc(RAISING_NPC)
+                .withRuler(longRuler(false)), "overview", Component.empty())));
         cases.add(new Case("map-view-npc-card", () -> {
             fillMapData();
             KingdomMapScreen screen = new KingdomMapScreen(null);

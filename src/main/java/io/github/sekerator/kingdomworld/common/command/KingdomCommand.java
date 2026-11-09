@@ -89,6 +89,7 @@ public final class KingdomCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("kingdom");
         EconomyCommands.addPlayerCommands(root);
+        root.then(Commands.literal("guide").executes(context -> guide(context.getSource())));
         root.then(Commands.literal("trophies")
                 .executes(context -> trophies(context.getSource()))
                 .then(Commands.literal("buy").then(Commands.argument("id", com.mojang.brigadier.arguments.LongArgumentType.longArg(1))
@@ -141,6 +142,19 @@ public final class KingdomCommand {
                 .then(Commands.literal("dissolve")
                         .executes(context -> requestDissolve(context.getSource()))
                         .then(Commands.literal("confirm").executes(context -> confirmDissolve(context.getSource())))));
+    }
+
+    /**
+     * The guide book again, for a player who carries none.
+     */
+    private static int guide(CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        if (!io.github.sekerator.kingdomworld.common.item.GuideBookItem.giveAgain(player)) {
+            source.sendFailure(Component.translatable("kingdomworld.guide.already"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.translatable("kingdomworld.guide.taken"), false);
+        return 1;
     }
 
     /**

@@ -17,6 +17,10 @@ public final class ClientHooks {
     private ClientHooks() {
     }
 
+    public static void openGuide() {
+        Minecraft.getInstance().setScreen(new io.github.sekerator.kingdomworld.client.screen.GuideScreen());
+    }
+
     public static void openKingdomMap() {
         Minecraft.getInstance().setScreen(new KingdomMapScreen(null));
     }

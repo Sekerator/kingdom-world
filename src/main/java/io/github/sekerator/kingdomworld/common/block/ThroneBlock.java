@@ -84,6 +84,21 @@ public class ThroneBlock extends HorizontalDirectionalBlock {
     @Override
     public void appendHoverText(ItemStack stack, BlockGetter level, List<Component> tooltip, TooltipFlag flag) {
         tooltip.add(Component.translatable("block.kingdomworld.throne.tooltip").withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.translatable("kingdomworld.guide.see").withStyle(ChatFormatting.DARK_GRAY));
+    }
+
+    /**
+     * A player who sets up an empty throne and may found a kingdom is told once how: the throne alone is only a seat.
+     */
+    @Override
+    public void setPlacedBy(Level level, BlockPos pos, BlockState state, @org.jetbrains.annotations.Nullable net.minecraft.world.entity.LivingEntity placer,
+                            ItemStack stack) {
+        super.setPlacedBy(level, pos, state, placer, stack);
+        if (!level.isClientSide && placer instanceof ServerPlayer player && !(player instanceof net.minecraftforge.common.util.FakePlayer)
+                && io.github.sekerator.kingdomworld.common.api.KingdomWorldApi.kingdomWithThroneAt(level, pos).isEmpty()
+                && io.github.sekerator.kingdomworld.common.api.KingdomWorldApi.kingdomOf(player.server, player.getUUID()).isEmpty()) {
+            player.sendSystemMessage(Component.translatable("kingdomworld.throne.placed_hint").withStyle(ChatFormatting.GOLD));
+        }
     }
 
     @Override
