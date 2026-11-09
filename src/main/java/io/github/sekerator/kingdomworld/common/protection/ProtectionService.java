@@ -94,11 +94,47 @@ public final class ProtectionService {
      */
     static boolean machineMayHurt(KingdomSavedData data, FakePlayer machine, CitizenEntity citizen) {
         UUID kingdom = citizen.kingdomId();
-        if (!kingdom.equals(KingdomWorldApi.ownerAt(citizen.level(), citizen.blockPosition()))) {
+        if (!kingdom.equals(KingdomWorldApi.ownerAt(citizen.level(), citizen.blockPosition()))
+                || !kingdom.equals(KingdomWorldApi.ownerAt(citizen.level(), machine.blockPosition()))) {
             return false;
         }
-        return kingdom.equals(KingdomWorldApi.ownerAt(citizen.level(), machine.blockPosition()))
-                || data.state().membership().isMember(machine.getUUID(), kingdom);
+        // The machine of the kingdom: whoever set it up is a member who may strike its citizens. A machine without a known
+        // owner strikes nobody.
+        UUID owner = machineOwner(data, machine);
+        if (owner == null) {
+            return false;
+        }
+        ProtectedAction action = ProtectedAction.ATTACK_CITIZEN;
+        return action.permission() == null ? data.state().membership().isMember(owner, kingdom)
+                : data.state().membership().hasPermission(owner, kingdom, action.permission());
+    }
+
+    /**
+     * Who set a machine up, if it can be known: the player the fake player stands for, or an owner the machine of another
+     * mod keeps (a field of the type UUID whose name says so, as the deployers of Create have).
+     */
+    @Nullable
+    static UUID machineOwner(KingdomSavedData data, FakePlayer machine) {
+        if (data.state().membership().kingdomOf(machine.getUUID()).isPresent()) {
+            return machine.getUUID();
+        }
+        for (Class<?> type = machine.getClass(); type != null && type != FakePlayer.class; type = type.getSuperclass()) {
+            for (java.lang.reflect.Field field : type.getDeclaredFields()) {
+                if (field.getType() == UUID.class && field.getName().toLowerCase(java.util.Locale.ROOT).contains("owner")
+                        && !java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+                    try {
+                        field.setAccessible(true);
+                        Object value = field.get(machine);
+                        if (value instanceof UUID uuid) {
+                            return uuid;
+                        }
+                    } catch (ReflectiveOperationException | RuntimeException e) {
+                        return null;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     public static AccessSubject subjectOf(@Nullable Entity actor) {

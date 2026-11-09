@@ -418,7 +418,12 @@ public final class ArmyWork {
                     }
                     rest.add(next);
                 }
-                army.updateBand(band.get().withFighters(rest));
+                if (rest.isEmpty()) {
+                    // Nobody of the band is left: it is gone, with its squad.
+                    army.bandFell(band.get().id());
+                } else {
+                    army.updateBand(band.get().withFighters(rest));
+                }
             }
         } else {
             for (UUID member : squad.members()) {

@@ -108,6 +108,22 @@ public final class FieldGameTests {
             helper.assertTrue(done.arrived() && done.at().x() == goal[0] && done.at().z() == goal[1], "The squad did not arrive: " + done.at());
             helper.assertTrue(passedVia, "The squad did not march through the point on the way");
             helper.assertTrue(army.squad(squad.id()).orElseThrow().order().kind() == Order.Kind.MOVE, "The order did not live on");
+            // A camp of robbers the kingdom does not know answers as an empty place; a known one can be attacked.
+            int[] far = {start.x() + 6_000, start.z() + 6_000};
+            String empty = ArmyMap.apply(marshal, new ArmyMapPackets.Command(ArmyMapPackets.Command.Action.ORDER, List.of(squad.id()), "attack",
+                    new int[]{far[0] + 400, far[1]}, new int[0], 0, 0)).message().getString();
+            io.github.sekerator.kingdomworld.core.road.BanditCamp camp = io.github.sekerator.kingdomworld.common.road.BanditWork.found(server,
+                    start.dimension(), far[0], far[1], 3);
+            try {
+                io.github.sekerator.kingdomworld.common.kingdom.KingdomActions.Feedback hidden = ArmyMap.apply(marshal, new ArmyMapPackets.Command(
+                        ArmyMapPackets.Command.Action.ORDER, List.of(squad.id()), "attack", far, new int[0], 0, 0));
+                helper.assertTrue(!hidden.success() && hidden.message().getString().equals(empty), "An unknown camp answers otherwise than an empty place");
+                camp.learn(home.id());
+                helper.assertTrue(ArmyMap.apply(marshal, new ArmyMapPackets.Command(ArmyMapPackets.Command.Action.ORDER, List.of(squad.id()), "attack",
+                        far, new int[0], 0, 0)).success(), "A known camp could not be attacked");
+            } finally {
+                io.github.sekerator.kingdomworld.common.road.RoadWork.state(server).removeCamp(camp.id());
+            }
         } finally {
             finish(helper, home, both[1]);
         }
@@ -121,10 +137,13 @@ public final class FieldGameTests {
         Kingdom[] both = WarGameTests.kingdoms(helper, "Flank", king, UUID.randomUUID());
         Kingdom home = both[0];
         Kingdom enemy = both[1];
+        Kingdom third = ((io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult.Created) KingdomWorldApi.createKingdom(server,
+                "GameTest Onlooker Flank", UUID.randomUUID())).kingdom();
         try {
             ArmyField.overrideInstant(false);
             ArmySettings.overrideField(FieldRules.DEFAULT.withMarch(40.0, 600));
             ServerPlayer marshal = WarGameTests.player(helper, king, "kw-flank-king", 2, 2);
+            ServerPlayer onlooker = WarGameTests.player(helper, third.rulerId(), "kw-flank-onlooker", 3, 2);
             String dimension = marshal.level().dimension().location().toString();
             WorldPos field = new WorldPos(dimension, marshal.getBlockX() + 2_000, marshal.getBlockY(), marshal.getBlockZ());
             ArmySquad defender = band(server, enemy, 5, 1, field);
@@ -136,7 +155,7 @@ public final class FieldGameTests {
             ArmyMapPackets.View seen = ArmyMap.view(marshal);
             helper.assertTrue(seen.others().stream().anyMatch(other -> other.id() == defender.id()), "A squad in sight is not on the map");
             helper.assertTrue(seen.others().stream().noneMatch(other -> other.id() == hidden.id()), "A squad out of sight is on the map");
-            WarGameTests.war(helper, home, enemy, WarGoal.RAID);
+            io.github.sekerator.kingdomworld.core.diplomacy.War war = WarGameTests.war(helper, home, enemy, WarGoal.RAID);
             ArmyMapPackets.Command blind = new ArmyMapPackets.Command(ArmyMapPackets.Command.Action.ORDER, List.of(front.id()), "attack",
                     new int[]{field.x() + 5_000, field.z()}, new int[0], hidden.id(), 0);
             helper.assertTrue(!ArmyMap.apply(marshal, blind).success(), "A squad out of sight could be attacked");
@@ -146,6 +165,8 @@ public final class FieldGameTests {
             helper.assertTrue(ArmyMap.apply(marshal, attack).success(), "The attack was refused");
             ArmyField.step(server);
             helper.assertTrue(ArmyField.engaged(front.id()) && ArmyField.engaged(defender.id()), "The battle did not begin");
+            helper.assertTrue(ArmyMap.view(marshal).battles().length == 2, "The kingdom does not see its own battle");
+            helper.assertTrue(ArmyMap.view(onlooker).battles().length == 0, "A kingdom far away sees the battle of others");
             ArmyMapPackets.Command around = new ArmyMapPackets.Command(ArmyMapPackets.Command.Action.ORDER, List.of(rear.id()), "attack",
                     new int[]{field.x(), field.z()}, new int[]{field.x() + 60, field.z() + 40}, defender.id(), 0);
             helper.assertTrue(ArmyMap.apply(marshal, around).success(), "The second attack was refused");
@@ -163,7 +184,17 @@ public final class FieldGameTests {
             helper.assertTrue(army.squad(defender.id()).map(squad -> squad.order().kind() == Order.Kind.RETREAT || squad.order().kind() == Order.Kind.NONE)
                     .orElse(true), "The defender did not lose");
             helper.assertTrue(army.squad(front.id()).orElseThrow().order().kind() == Order.Kind.MOVE, "The attackers did not hold the field");
+            // An assault of a place of the enemy counts once a step of the war, however often it is ordered.
+            io.github.sekerator.kingdomworld.common.diplomacy.WarWork.overrideRolls(() -> 0.0);
+            ArmySquad assaulting = army.squad(front.id()).orElseThrow();
+            double before = war.score(io.github.sekerator.kingdomworld.core.diplomacy.War.Side.ATTACKER);
+            io.github.sekerator.kingdomworld.common.diplomacy.WarWork.assault(server, assaulting, enemy.id());
+            double once = war.score(io.github.sekerator.kingdomworld.core.diplomacy.War.Side.ATTACKER);
+            io.github.sekerator.kingdomworld.common.diplomacy.WarWork.assault(server, assaulting, enemy.id());
+            helper.assertTrue(once > before && war.score(io.github.sekerator.kingdomworld.core.diplomacy.War.Side.ATTACKER) == once,
+                    "Assaults ordered again added to the score: " + before + ", " + once);
         } finally {
+            KingdomWorldApi.dissolveKingdom(server, third.id());
             finish(helper, home, enemy);
         }
         helper.succeed();
@@ -196,6 +227,10 @@ public final class FieldGameTests {
             fallen.setHealth(0.0f);
             fallen.die(level.damageSources().mobAttack(killer));
             net.minecraft.world.phys.Vec3 place = fallen.position();
+            // Something a player threw down near the fight is no gear of the fallen.
+            net.minecraft.world.entity.item.ItemEntity thrown = new net.minecraft.world.entity.item.ItemEntity(level, place.x, place.y + 0.2, place.z,
+                    new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND));
+            level.addFreshEntity(thrown);
             int dropped = level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
                     new net.minecraft.world.phys.AABB(place, place).inflate(8)).size();
             helper.assertTrue(dropped > 0, "Nothing fell: the sword is " + (fallen.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND).isEmpty()
@@ -215,6 +250,7 @@ public final class FieldGameTests {
                         carried += killer.carried().getItem(slot).getCount();
                     }
                     helper.assertTrue(carried >= 2, "The killer did not take the gear: " + carried);
+                    helper.assertTrue(thrown.isAlive() && !thrown.getItem().isEmpty(), "The killer took what fell from somebody else");
                     // At the storehouse the gear is handed in as a trophy of the enemy, not as goods of the kingdom.
                     net.minecraft.core.BlockPos at = helper.absolutePos(new net.minecraft.core.BlockPos(-1, 1, -2));
                     killer.setPos(at.getX() + 0.5, at.getY(), at.getZ() + 0.5);
@@ -226,6 +262,7 @@ public final class FieldGameTests {
                     helper.assertTrue(CitizenGameTests.count(store, net.minecraft.world.item.Items.IRON_SWORD) == 0, "The trophy went into the storehouse");
                     helper.assertTrue(!io.github.sekerator.kingdomworld.common.army.ArmyTrophies.carrying(ours.id()), "The killer still carries the trophy");
                 } finally {
+                    thrown.discard();
                     io.github.sekerator.kingdomworld.common.army.ArmyTrophies.of(server, home.id())
                             .forEach(trophy -> io.github.sekerator.kingdomworld.common.army.TrophySavedData.get(server).remove(trophy.id()));
                     WarGameTests.end(helper, home, List.of(enemy), List.of(), ours, theirs);

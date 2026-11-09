@@ -66,7 +66,44 @@ public final class ArmyTrophies {
     @Nullable
     private static TrophyRules override;
 
-    private record Gathering(UUID owner, String dimension, double x, double y, double z, long until) {
+    /** Mark of an item that fell from a body when it died: the body. */
+    private static final String FELL_FROM = "kingdomworld_fell_from";
+
+    /**
+     * @param victim the body whose gear is gathered; only what fell from it is taken
+     */
+    private record Gathering(UUID owner, UUID victim, String dimension, double x, double y, double z, long until) {
+    }
+
+    /**
+     * What a body drops when it dies is marked with the body, so that its killer gathers that and nothing else.
+     */
+    public static void onDrops(net.minecraftforge.event.entity.living.LivingDropsEvent event) {
+        if (event.getEntity() instanceof CitizenEntity body && !body.level().isClientSide()) {
+            for (ItemEntity drop : event.getDrops()) {
+                drop.getPersistentData().putUUID(FELL_FROM, body.getUUID());
+            }
+        }
+    }
+
+    /**
+     * A dying body drops what it carried, marked like its gear.
+     */
+    public static void dropCarried(net.minecraft.server.level.ServerLevel level, CitizenEntity body) {
+        for (int slot = 0; slot < body.carried().getContainerSize(); slot++) {
+            ItemStack stack = body.carried().removeItemNoUpdate(slot);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            ItemEntity drop = new ItemEntity(level, body.getX(), body.getY() + 0.5, body.getZ(), stack);
+            drop.setDefaultPickUpDelay();
+            drop.getPersistentData().putUUID(FELL_FROM, body.getUUID());
+            level.addFreshEntity(drop);
+        }
+    }
+
+    private static boolean fellFrom(ItemEntity item, UUID body) {
+        return item.getPersistentData().hasUUID(FELL_FROM) && item.getPersistentData().getUUID(FELL_FROM).equals(body);
     }
 
     private ArmyTrophies() {
@@ -125,7 +162,7 @@ public final class ArmyTrophies {
             return;
         }
         UUID owner = Professions.isMilitary(victim.professionId()) ? victim.kingdomId() : carried;
-        GATHERING.put(killer.citizenId(), new Gathering(owner, Dimensions.id(victim.level()), victim.getX(), victim.getY(), victim.getZ(),
+        GATHERING.put(killer.citizenId(), new Gathering(owner, victim.getUUID(), Dimensions.id(victim.level()), victim.getX(), victim.getY(), victim.getZ(),
                 KingdomWorldApi.gameTime(server) + GATHER_TICKS));
     }
 
@@ -144,7 +181,7 @@ public final class ArmyTrophies {
             }
             AABB area = new AABB(gathering.x() - GATHER_RADIUS, gathering.y() - 3, gathering.z() - GATHER_RADIUS, gathering.x() + GATHER_RADIUS,
                     gathering.y() + 3, gathering.z() + GATHER_RADIUS);
-            List<ItemEntity> fallen = killer.level().getEntitiesOfClass(ItemEntity.class, area, item -> item.isAlive() && !item.getItem().isEmpty());
+            List<ItemEntity> fallen = killer.level().getEntitiesOfClass(ItemEntity.class, area, item -> item.isAlive() && !item.getItem().isEmpty() && fellFrom(item, gathering.victim()));
             for (ItemEntity item : fallen) {
                 if (item.distanceTo(killer) > REACH) {
                     killer.getNavigation().moveTo(item, 1.0);

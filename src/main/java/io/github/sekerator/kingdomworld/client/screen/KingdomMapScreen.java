@@ -87,6 +87,8 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     /** The kinds of orders of the buttons of the army, in their order. */
     private static final List<String> ARMY_ORDERS = List.of("move", "hold", "patrol", "guard", "attack", "siege", "escort", "scout", "retreat");
     private static final List<String> FORMATIONS = List.of("line", "column", "wedge");
+    /** Rows of the buttons of the army: two on a narrow screen, so that the words fit. */
+    private int armyRows = 1;
 
     /**
      * @param editing the kingdom whose land is edited, or {@code null} to only look
@@ -164,15 +166,42 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     }
 
     private int mapBottom() {
-        return height - FOOTER;
+        return height - footer();
     }
 
     private double minCell() {
         return Math.max(2.0, Math.max((mapRight() - mapLeft()) / (double) MAX_VISIBLE, (mapBottom() - mapTop()) / (double) MAX_VISIBLE));
     }
 
+    /**
+     * The height of the strip under the map: higher for two rows of the buttons of the army.
+     */
+    private int footer() {
+        return army && armyRows == 2 ? FOOTER + 16 : FOOTER;
+    }
+
+    private int armyButtonWidth(int perRow) {
+        return Math.max(12, Math.min(80, (width - 2 * PAD - 2 * (perRow - 1)) / perRow));
+    }
+
+    /**
+     * Whether every button of the army shows its word in rows of so many buttons.
+     */
+    private boolean armyWordsFit(int perRow) {
+        int buttonWidth = armyButtonWidth(perRow);
+        for (String kind : ARMY_ORDERS) {
+            if (font.width(armyLabel(kind, true)) + io.github.sekerator.kingdomworld.client.screen.LayoutCheck.BUTTON_TEXT_MARGIN > buttonWidth) {
+                return false;
+            }
+        }
+        return font.width(Component.translatable("kingdomworld.screen.map.army.formation.column"))
+                + io.github.sekerator.kingdomworld.client.screen.LayoutCheck.BUTTON_TEXT_MARGIN <= buttonWidth;
+    }
+
     @Override
     protected void init() {
+        int count = ARMY_ORDERS.size() + 1;
+        armyRows = army && !armyWordsFit(count) ? 2 : 1;
         LocalPlayer player = minecraft == null ? null : minecraft.player;
         if (!centered && player != null) {
             centerX = player.getX() / 16.0;
@@ -385,10 +414,11 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
      */
     private void initArmy() {
         int count = ARMY_ORDERS.size() + 1;
-        int available = width - 2 * PAD;
-        int buttonWidth = Math.max(12, Math.min(80, (available - 2 * (count - 1)) / count));
+        int perRow = armyRows == 2 ? (count + 1) / 2 : count;
+        int buttonWidth = armyButtonWidth(perRow);
         int x = PAD;
-        int y = height - FOOTER + 2;
+        int y = height - footer() + 2;
+        int placed = 0;
         String formation = currentFormation();
         Component formationFull = Component.translatable("kingdomworld.screen.map.army.formation." + formation);
         boolean shapeFits = font.width(formationFull) + io.github.sekerator.kingdomworld.client.screen.LayoutCheck.BUTTON_TEXT_MARGIN <= buttonWidth;
@@ -398,6 +428,10 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
                     .append("\n").append(Component.translatable("kingdomworld.screen.map.army.hint." + kind))));
             button.active = !chosen.isEmpty();
             x += buttonWidth + 2;
+            if (++placed == perRow) {
+                x = PAD;
+                y += 16;
+            }
         }
         Button shape = addRenderableWidget(Button.builder(shapeFits ? formationFull : Component.translatable("kingdomworld.screen.map.army.short.formation"),
                 pressed -> nextFormation()).bounds(x, y, buttonWidth, 14).build());
@@ -653,7 +687,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         } else {
             line = Component.translatable("kingdomworld.screen.map.army.hint.chosen", chosen.size());
         }
-        paragraph(graphics, line, PAD, height - FOOTER + 20, width - 2 * PAD, 1, color);
+        paragraph(graphics, line, PAD, height - footer() + 20 + (armyRows == 2 ? 16 : 0), width - 2 * PAD, 1, color);
     }
 
     // ---------------------------------------------------------------- input

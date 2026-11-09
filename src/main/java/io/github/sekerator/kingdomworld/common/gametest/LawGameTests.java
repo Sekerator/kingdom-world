@@ -706,13 +706,20 @@ public final class LawGameTests {
     @GameTest(template = EMPTY, batch = "kingdomworld_law_machines")
     public static void machinesStrikeCitizensOnlyAtHome(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Law Machines", UUID.randomUUID());
+        UUID king = UUID.randomUUID();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Law Machines", king);
         Citizen citizen = witness(helper, kingdom, 4, 4);
         try {
+            // The machine of the king: its owner is a member of the kingdom.
             net.minecraftforge.common.util.FakePlayer machine = net.minecraftforge.common.util.FakePlayerFactory.get(level,
-                    new GameProfile(UUID.randomUUID(), "[kw-machine]"));
+                    new GameProfile(king, "[kw-machine]"));
+            net.minecraftforge.common.util.FakePlayer stranger = net.minecraftforge.common.util.FakePlayerFactory.get(level,
+                    new GameProfile(UUID.randomUUID(), "[kw-stranger-machine]"));
             CitizenEntity body = CitizenBodies.body(citizen.id());
-            // At home: a machine on the land of the kingdom strikes its citizen there.
+            stranger.setPos(body.getX(), body.getY(), body.getZ());
+            helper.assertTrue(!io.github.sekerator.kingdomworld.common.protection.ProtectionService.mayHurtCitizen(stranger, body),
+                    "A machine of nobody known may strike a citizen at home");
+            // At home: a machine of the kingdom on its land strikes its citizen there.
             machine.setPos(body.getX(), body.getY(), body.getZ());
             helper.assertTrue(io.github.sekerator.kingdomworld.common.protection.ProtectionService.mayHurtCitizen(machine, body),
                     "A machine on the land of the kingdom may not strike its citizen");

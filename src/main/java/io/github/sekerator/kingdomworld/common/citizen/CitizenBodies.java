@@ -16,7 +16,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.Containers;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
@@ -349,7 +348,7 @@ public final class CitizenBodies {
         ACTIVE.remove(id);
         io.github.sekerator.kingdomworld.common.army.ArmyTrophies.onDeath(level.getServer(), body,
                 source.getEntity() instanceof CitizenEntity killer ? killer : null);
-        Containers.dropContents(level, body.blockPosition(), body.carried());
+        io.github.sekerator.kingdomworld.common.army.ArmyTrophies.dropCarried(level, body);
         // The body drops what it held and wore itself; the stored copy of the gear goes with it.
         io.github.sekerator.kingdomworld.common.data.KingdomSavedData.get(level.getServer()).gear().takeAll(id);
         BlockPos pos = body.blockPosition();

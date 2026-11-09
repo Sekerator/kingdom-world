@@ -85,6 +85,8 @@ public final class WarWork {
     /** Kingdoms game tests mark as having a player at the keyboard, or as having none, whatever the players do. */
     private static final Map<UUID, Boolean> MARKED = new java.util.HashMap<>();
     private static long lastStep = Long.MIN_VALUE;
+    /** When each kingdom last assaulted a place of each enemy from the map: attacker, then enemy. */
+    private static final Map<String, Long> ASSAULTS = new java.util.HashMap<>();
     private static long lastDay = Long.MIN_VALUE;
     private static int forgetCalls;
 
@@ -116,6 +118,7 @@ public final class WarWork {
         rolls = null;
         MARKED.clear();
         lastStep = Long.MIN_VALUE;
+        ASSAULTS.clear();
         lastDay = Long.MIN_VALUE;
         NpcDiplomacy.reset();
     }
@@ -590,8 +593,21 @@ public final class WarWork {
         if (isReadOnly(server) || shielded(server, enemy)) {
             return;
         }
+        DiplomacyRules rules = DiplomacySettings.rules();
+        long now = KingdomWorldApi.gameTime(server);
+        // As in the steps of the war: once a step per kingdom and enemy, and only by chance, so that orders given again and
+        // again do not add up score or weariness.
+        String pair = attacking.kingdomId() + ">" + enemy;
+        Long last = ASSAULTS.get(pair);
+        if (last != null && now >= last && now - last < rules.stepTicks()) {
+            return;
+        }
+        ASSAULTS.put(pair, now);
+        if (rolls().getAsDouble() >= rules.battleChance()) {
+            return;
+        }
         state(server).warBetween(attacking.kingdomId(), enemy).filter(War::active)
-                .ifPresent(war -> battle(server, war, attacking, enemy, DiplomacySettings.rules(), KingdomWorldApi.gameTime(server)));
+                .ifPresent(war -> battle(server, war, attacking, enemy, rules, now));
     }
 
     static void battle(MinecraftServer server, War war, ArmySquad attacking, UUID enemy, DiplomacyRules rules, long now) {

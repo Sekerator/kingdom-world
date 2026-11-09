@@ -97,7 +97,7 @@ public final class ArmyMap {
                 marks.add(other(server, mark.squadId(), mark.kingdomId(), mark.at(), mark.size(), allies, (int) Math.max(1, (now - mark.seen()) / 20)));
             }
         }
-        List<WorldPos> battles = ArmyField.battles(dimension);
+        List<WorldPos> battles = ArmyField.battles(server, id, dimension);
         int count = Math.min(battles.size(), ArmyMapPackets.MAX_ENTRIES);
         int[] places = new int[count * 2];
         for (int i = 0; i < count; i++) {
@@ -254,7 +254,9 @@ public final class ArmyMap {
                     yield Order.attack(at, target);
                 }
                 WorldPos place = points.get(0);
-                boolean camp = RoadWork.state(server).camps().stream().anyMatch(one -> !one.cleared() && one.dimension().equals(place.dimension())
+                // Only camps the kingdom knows: an unknown camp answers as an empty place.
+                boolean camp = RoadWork.state(server).camps().stream().anyMatch(one -> !one.cleared() && one.known().contains(kingdomId)
+                        && one.dimension().equals(place.dimension())
                         && one.distanceSqr(place.x(), place.z()) <= (double) ArmyField.PLACE_REACH * ArmyField.PLACE_REACH);
                 UUID owner = ownerAt(server, place);
                 if (!camp && (owner == null || !WarWork.hostileNow(server, kingdomId, owner))) {

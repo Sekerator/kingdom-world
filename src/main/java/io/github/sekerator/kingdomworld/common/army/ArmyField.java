@@ -251,12 +251,23 @@ public final class ArmyField {
     }
 
     /**
-     * Places of the battles going on in a dimension.
+     * Places of the battles going on in a dimension that a kingdom knows of: its own battles and those in its sight.
      */
-    public static List<WorldPos> battles(String dimension) {
+    public static List<WorldPos> battles(MinecraftServer server, UUID kingdomId, String dimension) {
         List<WorldPos> places = new ArrayList<>();
+        List<FogOfWar.Eye> eyes = null;
         for (Engagement battle : BATTLES.values()) {
-            if (battle.at.dimension().equals(dimension)) {
+            if (!battle.at.dimension().equals(dimension)) {
+                continue;
+            }
+            boolean ours = battle.firstKingdom.equals(kingdomId) || battle.secondKingdom.equals(kingdomId);
+            if (!ours) {
+                if (eyes == null) {
+                    eyes = eyes(server, kingdomId);
+                }
+                ours = eyes.stream().anyMatch(eye -> eye.sees(battle.at));
+            }
+            if (ours) {
                 places.add(battle.at);
             }
         }
@@ -494,7 +505,8 @@ public final class ArmyField {
      */
     private static void attackPlace(MinecraftServer server, ArmyState army, ArmySquad squad, WorldPos at) {
         Optional<io.github.sekerator.kingdomworld.core.road.BanditCamp> camp = RoadWork.state(server).camps().stream()
-                .filter(one -> !one.cleared() && one.dimension().equals(at.dimension()) && one.distanceSqr(at.x(), at.z()) <= (double) PLACE_REACH * PLACE_REACH)
+                .filter(one -> !one.cleared() && one.known().contains(squad.kingdomId()) && one.dimension().equals(at.dimension())
+                        && one.distanceSqr(at.x(), at.z()) <= (double) PLACE_REACH * PLACE_REACH)
                 .findFirst();
         if (camp.isPresent()) {
             io.github.sekerator.kingdomworld.common.road.BanditWork.fightSquad(server, camp.get(), squad);
@@ -607,6 +619,11 @@ public final class ArmyField {
      */
     static void decide(MinecraftServer server, Engagement battle) {
         ArmyState army = ArmyWork.state(server);
+        if (!WarWork.hostileNow(server, battle.firstKingdom, battle.secondKingdom)) {
+            // The war ended, or the players of a side went away meanwhile: the battle breaks off without a result.
+            LOGGER.info("Battle #{} at {} broke off: the kingdoms may no longer fight", battle.id, battle.at.coordinates());
+            return;
+        }
         List<ArmySquad> first = squads(army, battle.first.keySet());
         List<ArmySquad> second = squads(army, battle.second.keySet());
         if (first.isEmpty() || second.isEmpty()) {

@@ -45,6 +45,8 @@ public final class ArmyEvents {
         MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGH, false, LivingAttackEvent.class, ArmyEvents::onAttack);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOW, false, LivingHurtEvent.class, ArmyEvents::onHurt);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, LivingDeathEvent.class, ArmyEvents::onDeath);
+        MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, net.minecraftforge.event.entity.living.LivingDropsEvent.class,
+                ArmyTrophies::onDrops);
         MinecraftForge.EVENT_BUS.addListener(ArmyEvents::onServerStarted);
         MinecraftForge.EVENT_BUS.addListener(ArmyEvents::onServerStopped);
     }

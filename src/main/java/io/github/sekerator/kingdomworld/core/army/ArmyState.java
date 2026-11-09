@@ -696,6 +696,16 @@ public final class ArmyState {
      *
      * @return whether the band is left with nobody
      */
+    /**
+     * Every fighter of a band fell: the band is gone, with its squad.
+     */
+    public void bandFell(long bandId) {
+        if (bands.containsKey(bandId)) {
+            leave(bandId);
+            changed();
+        }
+    }
+
     public boolean mercenaryFell(long bandId, UUID fighterId) {
         MercenaryBand band = bands.get(bandId);
         if (band == null) {
