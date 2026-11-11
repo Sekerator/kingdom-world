@@ -164,8 +164,18 @@ public final class SiegeGameTests {
         level.setBlockAndUpdate(wallBlock, Blocks.STONE_BRICKS.defaultBlockState());
         level.setBlockAndUpdate(chest, Blocks.CHEST.defaultBlockState());
         try {
-            helper.assertTrue(!ProtectionService.isAllowed(raider, level, wallBlock, ProtectedAction.BREAK), "A foreigner breaks blocks in peace");
+            // In peace a foreigner holds no right on the land: what it breaks in the city is judged by the law as damaged
+            // property (the block is gone without drops and comes back for free), and a chest opens only for the law to watch.
+            helper.assertTrue(!ProtectionService.isAllowed(raider, level, wallBlock, ProtectedAction.BREAK), "A foreigner holds the right to break in peace");
             helper.assertTrue(!ProtectionService.isAllowed(raider, level, chest, ProtectedAction.CONTAINER), "A foreigner robs a chest in peace");
+            WarWork.markPresent(home.id(), true);
+            BlockEvent.BreakEvent inPeace = new BlockEvent.BreakEvent(level, wallBlock, level.getBlockState(wallBlock), raider);
+            MinecraftForge.EVENT_BUS.post(inPeace);
+            helper.assertTrue(inPeace.isCanceled() && level.getBlockState(wallBlock).isAir()
+                    && io.github.sekerator.kingdomworld.common.siege.SiegeRepair.waiting(server, home.id()) == 1,
+                    "A block broken in peace was not written down as damaged property");
+            helper.assertTrue(SiegeWork.forceMend(server, home.id(), 4) == 1 && level.getBlockState(wallBlock).is(Blocks.STONE_BRICKS),
+                    "A block damaged in peace did not come back for free");
             WarGameTests.war(helper, enemy, home, WarGoal.CITY);
             helper.assertTrue(ProtectionService.isAllowed(raider, level, wallBlock, ProtectedAction.BREAK), "An enemy may not break blocks in war");
             helper.assertTrue(ProtectionService.isAllowed(raider, level, wallBlock, ProtectedAction.PLACE), "An enemy may not place blocks in war");

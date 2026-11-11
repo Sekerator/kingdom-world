@@ -163,6 +163,7 @@ public final class TerritoryGameTests {
         BlockPos chest = helper.absolutePos(new BlockPos(0, 1, 0));
         BlockPos stone = helper.absolutePos(new BlockPos(2, 1, 2));
         BlockPos gate = helper.absolutePos(new BlockPos(0, 1, 2));
+        BlockPos lever = helper.absolutePos(new BlockPos(2, 2, 2));
         UUID king = UUID.randomUUID();
         UUID memberId = UUID.randomUUID();
         Kingdom kingdom = found(helper, throne, "GameTest Guarded", king);
@@ -174,10 +175,17 @@ public final class TerritoryGameTests {
             ServerPlayer stranger = player(helper, UUID.randomUUID(), "kw-stranger");
             ServerPlayer member = player(helper, memberId, "kw-member");
 
+            // Nobody of this kingdom of players is online: its blocks stay shut to strangers. With somebody there the law
+            // judges breaking in its city as damaged property instead (see the tests of the law in a city).
             helper.assertTrue(breakCancelled(level, stone, stranger), "A stranger broke a block");
             // Another's chest opens: what is taken from it is a theft the law judges (see the law tests).
             helper.assertTrue(!openDenied(chest, stranger), "A stranger cannot even open a chest");
-            helper.assertTrue(openDenied(gate, stranger), "A stranger opened a gate");
+            // Doors, trapdoors and fence gates open to everybody; switches stay with those who hold the right.
+            helper.assertTrue(!openDenied(gate, stranger), "A stranger cannot open a fence gate");
+            level.setBlock(lever, Blocks.LEVER.defaultBlockState(), 2 | 16);
+            helper.assertTrue(openDenied(lever, stranger), "A stranger pulled a lever");
+            helper.assertTrue(!openDenied(lever, member), "A subject cannot pull a lever");
+            level.setBlock(lever, Blocks.AIR.defaultBlockState(), 2 | 16);
             helper.assertTrue(!ProtectionService.isAllowed(stranger, level, stone, ProtectedAction.PLACE), "A stranger may place blocks");
 
             helper.assertTrue(!breakCancelled(level, stone, member), "A subject with the building right cannot break");

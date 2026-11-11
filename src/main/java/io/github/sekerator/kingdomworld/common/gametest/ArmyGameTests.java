@@ -227,7 +227,8 @@ public final class ArmyGameTests {
         float health = stranger.getHealth();
         helper.assertTrue(net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.entity.living.LivingAttackEvent(
                 stranger, level.damageSources().mobAttack(body), 5.0f)), "A blow of a soldier at a player was not stopped in peace");
-        body.hurt(level.damageSources().playerAttack(stranger), 1.0f);
+        // A player who did nothing is left alone however near. One who strikes the soldier is answered: that is the law's
+        // matter and has its own test (a soldier answers a blow nobody else saw).
         helper.runAfterDelay(60, () -> {
             helper.assertTrue(body.getTarget() != stranger, "The soldier took the player for a target");
             helper.assertTrue(stranger.getHealth() == health, "The player was hurt");
