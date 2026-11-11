@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.carpentry",
+  "category": "production",
+  "type": "workshop",
+  "role": "workshop",
+  "level": 1,
+  "icon": "minecraft:crafting_table",
+  "anchor": [3, 0, 10],
+  "entrance": "south"
+}

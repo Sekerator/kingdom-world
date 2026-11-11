@@ -509,7 +509,9 @@ final class CityPlan {
             return WALK;
         }
         if (reach > shape.last()) {
-            return YARD;
+            // Gardens behind the last row; where its fronts look outwards a street runs before them first.
+            boolean outwards = !shape.inward()[shape.rings().length - 1];
+            return outwards && reach <= shape.last() + 3 ? STREET : YARD;
         }
         if (Math.min(ax, az) <= AVENUE) {
             return AVENUE_GROUND;

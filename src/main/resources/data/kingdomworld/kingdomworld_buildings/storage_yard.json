@@ -1,0 +1,11 @@
+{
+  "name": "kingdomworld.building.storage_yard",
+  "category": "farming",
+  "type": "warehouse",
+  "role": "warehouse",
+  "role_params": {"containers": 20},
+  "level": 1,
+  "icon": "kingdomworld:storehouse",
+  "anchor": [10, 1, 10],
+  "entrance": "south"
+}

@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.bakery",
+  "category": "production",
+  "type": "workshop",
+  "role": "workshop",
+  "level": 1,
+  "icon": "minecraft:bread",
+  "anchor": [3, 0, 8],
+  "entrance": "south"
+}

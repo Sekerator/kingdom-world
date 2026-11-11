@@ -83,8 +83,24 @@ public final class BuildingGenerator {
         list.add(new Building("mage_tower", "magic", "mage_tower", "kingdomworld:magic_focus", 4, 0, 8, mageTower()));
         list.add(new Building("tavern", "trade", "tavern", "minecraft:barrel", 5, 0, 10, tavern(), "tavern", 1, "kingdomworld:tavern_2"));
         list.add(new Building("tavern_2", "trade", "tavern", "minecraft:barrel", 5, 0, 10, tavern2(), "tavern", 2, ""));
+        // The variants by which towns differ: more houses, the workshops of the trades, stores, the buildings of the garrison
+        // and the palaces of the kingdoms of the world.
+        list.addAll(Houses.buildings());
+        list.addAll(Workshops.buildings());
+        list.addAll(Stores.buildings());
+        list.addAll(Military.buildings());
+        list.addAll(Palaces.buildings());
         return list;
     }
+
+    /**
+     * Numbers of the role of a building that differ from those of its role: a barracks hall has twelve bunks, the large stores
+     * count more containers.
+     */
+    private static final java.util.Map<String, String> ROLE_PARAMS = java.util.Map.of(
+            "barracks_hall", "\"bunks\": 12",
+            "barn", "\"containers\": 12",
+            "storage_yard", "\"containers\": 20");
 
     /**
      * How many built-in buildings there are.
@@ -99,6 +115,7 @@ public final class BuildingGenerator {
                 + "  \"category\": \"" + building.category() + "\",\n"
                 + "  \"type\": \"" + building.type() + "\",\n"
                 + "  \"role\": \"" + building.role() + "\",\n"
+                + (ROLE_PARAMS.containsKey(building.name()) ? "  \"role_params\": {" + ROLE_PARAMS.get(building.name()) + "},\n" : "")
                 + "  \"level\": " + building.level() + ",\n"
                 + (building.upgradesTo().isEmpty() ? "" : "  \"upgrades_to\": \"" + building.upgradesTo() + "\",\n")
                 + "  \"icon\": \"" + building.icon() + "\",\n"

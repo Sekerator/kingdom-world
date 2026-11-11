@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.corner_tower",
+  "category": "defense",
+  "type": "tower",
+  "role": "tower",
+  "level": 1,
+  "icon": "minecraft:stone_brick_wall",
+  "anchor": [4, 0, 8],
+  "entrance": "south"
+}

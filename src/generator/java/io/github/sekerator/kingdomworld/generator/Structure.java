@@ -10,12 +10,15 @@ import java.util.TreeMap;
 /**
  * A building drawn block by block: a box of the given size in which every position holds a block state, written as the
  * game writes them ({@code minecraft:oak_stairs[facing=north,half=bottom]}). Positions nobody set are air, so the builders
- * clear the whole box. x runs along the front, z from the back (0) to the front, y up from the foundation (0).
+ * clear the whole box; a position left out with {@link #skip} is no part of the building at all, so that what stands there
+ * (a throne in its hall) stays. x runs along the front, z from the back (0) to the front, y up from the foundation (0).
  */
 final class Structure {
     /** Data version of Minecraft 1.20.1, so that the game reads the file without converting it. */
     static final int DATA_VERSION = 3465;
     static final String AIR = "minecraft:air";
+    /** Marks a position that is left out of the file. */
+    private static final String LEFT_OUT = "";
 
     final int sizeX;
     final int sizeY;
@@ -44,6 +47,22 @@ final class Structure {
     String get(int x, int y, int z) {
         String state = states[index(x, y, z)];
         return state == null ? AIR : state;
+    }
+
+    /**
+     * Leaves a position out of the building: nothing is built there and nothing cleared.
+     */
+    Structure skip(int x, int y, int z) {
+        states[index(x, y, z)] = LEFT_OUT;
+        return this;
+    }
+
+    /**
+     * Whether a position holds a block of the building (not air and not left out).
+     */
+    boolean solid(int x, int y, int z) {
+        String state = states[index(x, y, z)];
+        return state != null && !state.equals(LEFT_OUT) && !state.equals(AIR);
     }
 
     Structure fill(int x1, int y1, int z1, int x2, int y2, int z2, String state) {
@@ -131,6 +150,76 @@ final class Structure {
     }
 
     /**
+     * A gable roof whose ridge runs along z, so that the gable looks at the street: rows of stairs rising from the west eave
+     * ({@code x1}) and the east eave ({@code x2}) one block per row, a ridge of slabs, and the gable ends filled with
+     * {@code gable} under the roof.
+     *
+     * @param y      height of the eaves
+     * @param z1     first row of the roof, with the overhang
+     * @param z2     last row
+     * @param wallZ1 the gable wall at the back, or -1 for none
+     * @param wallZ2 the gable wall at the front, or -1 for none
+     */
+    Structure gableRoofZ(int x1, int x2, int z1, int z2, int y, String stairs, String slab, String gable, int wallZ1, int wallZ2) {
+        int row = 0;
+        while (x1 + row < x2 - row) {
+            int west = x1 + row;
+            int east = x2 - row;
+            int height = y + row;
+            fill(west, height, z1, west, height, z2, stairs + "[facing=east,half=bottom,shape=straight]");
+            fill(east, height, z1, east, height, z2, stairs + "[facing=west,half=bottom,shape=straight]");
+            if (row > 0) {
+                for (int wall : new int[]{wallZ1, wallZ2}) {
+                    if (wall >= 0 && east - west > 1) {
+                        fill(west + 1, height, wall, east - 1, height, wall, gable);
+                    }
+                }
+            }
+            row++;
+        }
+        if (x1 + row == x2 - row) {
+            int height = y + row;
+            fill(x1 + row, height, z1, x1 + row, height, z2, slab + "[type=bottom]");
+            for (int wall : new int[]{wallZ1, wallZ2}) {
+                if (wall >= 0) {
+                    set(x1 + row, height - 1, wall, gable);
+                }
+            }
+        }
+        return this;
+    }
+
+    /**
+     * A hip roof: rings of stairs rising one block per ring from the eaves on all four sides, with turned stairs at the
+     * corners, closed with slabs where the rings meet.
+     *
+     * @param y height of the eaves
+     */
+    Structure hipRoof(int x1, int x2, int z1, int z2, int y, String stairs, String slab) {
+        int ring = 0;
+        while (x2 - ring - (x1 + ring) >= 2 && z2 - ring - (z1 + ring) >= 2) {
+            int west = x1 + ring;
+            int east = x2 - ring;
+            int back = z1 + ring;
+            int front = z2 - ring;
+            int height = y + ring;
+            fill(west, height, back, east, height, back, stairs + "[facing=south,half=bottom,shape=straight]");
+            fill(west, height, front, east, height, front, stairs + "[facing=north,half=bottom,shape=straight]");
+            fill(west, height, back + 1, west, height, front - 1, stairs + "[facing=east,half=bottom,shape=straight]");
+            fill(east, height, back + 1, east, height, front - 1, stairs + "[facing=west,half=bottom,shape=straight]");
+            set(west, height, back, stairs + "[facing=south,half=bottom,shape=outer_left]");
+            set(east, height, back, stairs + "[facing=south,half=bottom,shape=outer_right]");
+            set(west, height, front, stairs + "[facing=north,half=bottom,shape=outer_right]");
+            set(east, height, front, stairs + "[facing=north,half=bottom,shape=outer_left]");
+            ring++;
+        }
+        if (x1 + ring <= x2 - ring && z1 + ring <= z2 - ring) {
+            fill(x1 + ring, y + ring, z1 + ring, x2 - ring, y + ring, z2 - ring, slab + "[type=bottom]");
+        }
+        return this;
+    }
+
+    /**
      * A door of two halves facing the given way, its lower half at {@code y}.
      */
     Structure door(int x, int y, int z, String door, String facing, String hinge) {
@@ -158,6 +247,9 @@ final class Structure {
             for (int z = 0; z < sizeZ; z++) {
                 for (int x = 0; x < sizeX; x++) {
                     String state = get(x, y, z);
+                    if (state.equals(LEFT_OUT)) {
+                        continue;
+                    }
                     Integer id = palette.get(state);
                     if (id == null) {
                         id = palette.size();
@@ -205,7 +297,7 @@ final class Structure {
     List<String> used() {
         List<String> used = new ArrayList<>();
         for (String state : states) {
-            if (state != null && !used.contains(state)) {
+            if (state != null && !state.equals(LEFT_OUT) && !used.contains(state)) {
                 used.add(state);
             }
         }

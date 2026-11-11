@@ -48,6 +48,39 @@ class NpcSiteTest {
     }
 
     @Test
+    void aPlaceKeepsItsLayoutAndLook() {
+        NpcSite old = site();
+        assertEquals(NpcSite.LAYOUT_GRID, old.layout());
+        assertFalse(old.districts());
+        assertTrue(old.look().isEmpty());
+        assertEquals("", old.wood());
+        NpcState state = new NpcState();
+        NpcSite site = state.addSite(10, 20, NpcLevel.LARGE, 5L, List.of(), NpcSite.LAYOUT_DISTRICTS, "brick", "minecraft:spruce");
+        assertTrue(site.districts());
+        assertEquals(NpcStyle.BRICK, site.look().orElseThrow());
+        assertEquals("minecraft:spruce", site.wood());
+        NpcSite unstyled = new NpcSite(2, 0, 0, NpcLevel.SMALL, 1L, List.of(), NpcSite.LAYOUT_DISTRICTS, null, null);
+        assertEquals("", unstyled.style());
+        assertEquals("", unstyled.wood());
+        assertThrows(IllegalArgumentException.class, () -> new NpcSite(3, 0, 0, NpcLevel.SMALL, 1L, List.of(), 7, "", ""));
+    }
+
+    @Test
+    void thePassOfThePlanIsKeptAndForgottenWithThePlan() {
+        NpcState state = new NpcState();
+        assertEquals(0, state.planPass());
+        state.setPlanProgress(12, 3, 2, false);
+        assertEquals(2, state.planPass());
+        state.setPlanProgress(13, 0, false);
+        assertEquals(2, state.planPass(), "the old setter keeps the pass");
+        state.resetPlan();
+        assertEquals(0, state.planPass());
+        state.restorePlan(5, 1, 3, false, 4);
+        assertEquals(3, state.planPass());
+        assertEquals(4, state.nextSiteId());
+    }
+
+    @Test
     void theStatusOfAFoundedPlaceIsReadBack() {
         assertEquals(NpcSite.Status.FOUNDED, NpcSite.Status.byId("founded").orElseThrow());
     }

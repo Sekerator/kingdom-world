@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.great_hall",
+  "category": "defense",
+  "type": "palace",
+  "role": "none",
+  "level": 1,
+  "icon": "minecraft:red_carpet",
+  "anchor": [8, 1, 20],
+  "entrance": "south"
+}

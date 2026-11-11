@@ -1,0 +1,11 @@
+{
+  "name": "kingdomworld.building.barn",
+  "category": "farming",
+  "type": "warehouse",
+  "role": "warehouse",
+  "role_params": {"containers": 12},
+  "level": 1,
+  "icon": "minecraft:hay_block",
+  "anchor": [6, 1, 10],
+  "entrance": "south"
+}

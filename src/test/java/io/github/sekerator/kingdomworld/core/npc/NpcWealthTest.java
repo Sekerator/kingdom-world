@@ -10,10 +10,30 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NpcWealthTest {
-    private static final NpcRules RULES = NpcRules.DEFAULT;
+    private static final NpcRules RULES = NpcCompositionTest.GRID_RULES;
 
     private static NpcComposition of(NpcLevel level) {
         return NpcComposition.of(level, 11L, RULES, 12, 6, 40, 20, 24);
+    }
+
+    @Test
+    void aCapitalOfDistrictsStartsWithToolsBreadAndItsMoney() {
+        for (NpcLevel level : NpcLevel.values()) {
+            NpcRules rules = NpcRules.DEFAULT;
+            NpcComposition composition = NpcComposition.districts(level, 21L, rules, rules.towns(level));
+            NpcWealth wealth = NpcWealth.of(composition, rules, "minecraft:birch_log", "minecraft:birch_planks", 6);
+            assertEquals(rules.money(level), wealth.money(), level.id());
+            int lumberjacks = composition.jobs().getOrDefault("lumberjack", 0);
+            int miners = composition.jobs().getOrDefault("miner", 0);
+            assertTrue(lumberjacks > 0 && miners > 0, level + ": " + composition.jobs());
+            assertEquals(lumberjacks, wealth.count("minecraft:iron_axe"));
+            assertEquals(miners, wealth.count("minecraft:iron_pickaxe"));
+            assertTrue(wealth.count("minecraft:bread") > 0);
+            assertEquals(composition.fields() * 16, wealth.count("minecraft:carrot"));
+            assertEquals(rules.materials(level) * 64, wealth.count("minecraft:birch_log"));
+        }
+        // The grid has no tools.
+        assertEquals(0, NpcWealth.of(of(NpcLevel.LARGE), RULES, "minecraft:oak_log", "minecraft:oak_planks", 6).count("minecraft:iron_axe"));
     }
 
     @Test

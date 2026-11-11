@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.inn",
+  "category": "trade",
+  "type": "tavern",
+  "role": "tavern",
+  "level": 1,
+  "icon": "minecraft:barrel",
+  "anchor": [9, 0, 10],
+  "entrance": "south"
+}

@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.weavery",
+  "category": "production",
+  "type": "workshop",
+  "role": "workshop",
+  "level": 1,
+  "icon": "minecraft:loom",
+  "anchor": [4, 0, 8],
+  "entrance": "south"
+}

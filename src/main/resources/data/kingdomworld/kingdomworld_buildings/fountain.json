@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.fountain",
+  "category": "decoration",
+  "type": "well",
+  "role": "well",
+  "level": 1,
+  "icon": "minecraft:stone_brick_slab",
+  "anchor": [3, 1, 6],
+  "entrance": "south"
+}

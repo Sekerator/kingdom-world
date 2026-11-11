@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.stone_cottage",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:cobblestone",
+  "anchor": [4, 0, 8],
+  "entrance": "south"
+}

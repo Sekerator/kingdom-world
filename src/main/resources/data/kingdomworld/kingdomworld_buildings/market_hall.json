@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.market_hall",
+  "category": "trade",
+  "type": "market",
+  "role": "market",
+  "level": 1,
+  "icon": "kingdomworld:market_stall",
+  "anchor": [6, 1, 10],
+  "entrance": "south"
+}

@@ -16,7 +16,11 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NpcCompositionTest {
-    private static final NpcRules RULES = NpcRules.DEFAULT;
+    /** The rules the first layout was made for, before the districts; the grid does not plan, so the quota does not matter. */
+    static final NpcRules GRID_RULES = new NpcRules(true, 8, 6000, 1200, 1000, 12, new int[]{5, 0, 3}, new int[]{5, 3, 2},
+            new int[]{3, 4, 5}, new int[]{1, 2, 3}, 200, new long[]{1500, 4000, 10000}, 10, new int[]{4, 6, 10}, new int[]{2, 4, 8},
+            2000, 4, 20, 60);
+    private static final NpcRules RULES = GRID_RULES;
     /** The thresholds of cities by default: a town takes 12 citizens and 6 buildings, a large city 40 and 20, walls 24 blocks. */
     private static final int TOWN_PEOPLE = 12;
     private static final int TOWN_BUILDINGS = 6;

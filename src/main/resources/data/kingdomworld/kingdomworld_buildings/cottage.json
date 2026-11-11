@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.cottage",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:oak_door",
+  "anchor": [3, 0, 8],
+  "entrance": "south"
+}
