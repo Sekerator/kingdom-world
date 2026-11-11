@@ -101,9 +101,13 @@ public final class SiegeEvents {
     private static void onServerStarted(net.minecraftforge.event.server.ServerStartedEvent event) {
         SiegeSavedData data = SiegeSavedData.get(event.getServer());
         io.github.sekerator.kingdomworld.core.siege.SiegeState state = data.state();
+        int peace = 0;
+        for (java.util.UUID kingdom : state.damage().all().keySet()) {
+            peace += state.damage().countFree(kingdom);
+        }
         SiegeWork.LOGGER.info("KingdomWorld sieges: {} gate(s), {} siege(s), {} hold(s), {} conquest(s) in the journal, {} kingdom(s) with war damage, "
-                + "data format {}{}", state.gates().size(), state.sieges().size(), state.holds().size(), state.conquests().size(),
-                state.damage().all().size(), SiegeSavedData.FORMAT_VERSION, data.isReadOnly() ? " (READ-ONLY)" : "");
+                + "{} block(s) damaged in peace, data format {}{}", state.gates().size(), state.sieges().size(), state.holds().size(),
+                state.conquests().size(), state.damage().all().size(), peace, SiegeSavedData.FORMAT_VERSION, data.isReadOnly() ? " (READ-ONLY)" : "");
     }
 
     private static void onServerStopped(ServerStoppedEvent event) {

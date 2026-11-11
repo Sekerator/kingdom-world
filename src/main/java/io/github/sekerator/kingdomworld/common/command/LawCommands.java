@@ -10,23 +10,31 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
+import io.github.sekerator.kingdomworld.common.citizen.CitizenBodies;
+import io.github.sekerator.kingdomworld.common.citizen.CitizenEntity;
+import io.github.sekerator.kingdomworld.common.diplomacy.WarWork;
 import io.github.sekerator.kingdomworld.common.economy.MoneyTexts;
 import io.github.sekerator.kingdomworld.common.economy.TreasuryActions;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
 import io.github.sekerator.kingdomworld.common.kingdom.KingdomActions;
 import io.github.sekerator.kingdomworld.common.law.LawActions;
+import io.github.sekerator.kingdomworld.common.law.LawActs;
+import io.github.sekerator.kingdomworld.common.law.LawAlarms;
 import io.github.sekerator.kingdomworld.common.law.LawEntry;
 import io.github.sekerator.kingdomworld.common.law.LawPunish;
 import io.github.sekerator.kingdomworld.common.law.LawSavedData;
 import io.github.sekerator.kingdomworld.common.law.LawSettings;
 import io.github.sekerator.kingdomworld.common.law.LawTexts;
 import io.github.sekerator.kingdomworld.common.law.LawWork;
+import io.github.sekerator.kingdomworld.common.siege.SiegeRepair;
 import io.github.sekerator.kingdomworld.common.trade.Purses;
+import io.github.sekerator.kingdomworld.core.citizen.Citizen;
 import io.github.sekerator.kingdomworld.core.economy.CurrencyUnits;
 import io.github.sekerator.kingdomworld.core.economy.Economy;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
 import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
+import io.github.sekerator.kingdomworld.core.law.Alarm;
 import io.github.sekerator.kingdomworld.core.law.CityGates;
 import io.github.sekerator.kingdomworld.core.law.Confiscation;
 import io.github.sekerator.kingdomworld.core.law.Crime;
@@ -38,6 +46,9 @@ import io.github.sekerator.kingdomworld.core.territory.Territory;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
@@ -54,8 +65,10 @@ import java.util.UUID;
 /**
  * Commands of the law. Operators under {@code /kingdomworld admin law}: the wanted and their crimes, pardons and fines,
  * executions with confiscation (also of a stand-in for a player who is not online, for checks), confiscated goods and their
- * ransom, reputation, debts, passes, a gate of a city and the court of a kingdom. Players under {@code /kingdom law}: their
- * window of the law. Everything goes through the same calls the game and the screens use.
+ * ransom, reputation, debts, passes, a gate of a city, the court of a kingdom, the acts of a stand-in for a player who is not
+ * online (it uses and breaks blocks and strikes a citizen as the player would), the alarms of a kingdom and its blocks
+ * damaged in peace. Players under {@code /kingdom law}: their window of the law. Everything goes through the same calls the
+ * game and the screens use.
  */
 public final class LawCommands {
     private static final String ADMIN = "commands.kingdomworld.admin.law.";
@@ -65,6 +78,8 @@ public final class LawCommands {
             name -> Component.translatable(ADMIN + "no_player", name));
     private static final DynamicCommandExceptionType NOT_ONLINE = new DynamicCommandExceptionType(
             name -> Component.translatable(ADMIN + "not_online", name));
+    private static final DynamicCommandExceptionType ABSENT = new DynamicCommandExceptionType(
+            name -> Component.translatable(ADMIN + "act.absent", name));
     private static final SuggestionProvider<CommandSourceStack> KINGDOMS = (context, builder) ->
             SharedSuggestionProvider.suggest(KingdomWorldApi.kingdoms(context.getSource().getServer()).stream()
                     .map(Kingdom::name).map(name -> name.contains(" ") ? "\"" + name + "\"" : name), builder);
@@ -206,6 +221,24 @@ public final class LawCommands {
                         .then(Commands.argument("player", StringArgumentType.string())
                                 .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
                                         .executes(LawCommands::gate))))
+                .then(Commands.literal("act")
+                        .then(Commands.argument("player", StringArgumentType.string())
+                                .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
+                                        .then(Commands.literal("at").then(Commands.argument("pos", BlockPosArgument.blockPos())
+                                                .executes(LawCommands::actAt)))
+                                        .then(Commands.literal("use").then(Commands.argument("pos", BlockPosArgument.blockPos())
+                                                .executes(LawCommands::actUse)))
+                                        .then(Commands.literal("break").then(Commands.argument("pos", BlockPosArgument.blockPos())
+                                                .executes(LawCommands::actBreak)))
+                                        .then(Commands.literal("strike").then(Commands.argument("citizen", StringArgumentType.word())
+                                                .executes(LawCommands::actStrike)))
+                                        .then(Commands.literal("leave").executes(LawCommands::actLeave)))))
+                .then(Commands.literal("alarms")
+                        .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
+                                .executes(LawCommands::alarms)))
+                .then(Commands.literal("damage")
+                        .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
+                                .executes(LawCommands::damage)))
                 .then(Commands.literal("court")
                         .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
                                 .executes(context -> court(context, "", 0))
@@ -513,6 +546,133 @@ public final class LawCommands {
         boolean in = LawEntry.onEnter(player, new CityGates.City(kingdom.id(), kingdom.id(), kingdom.name(), true));
         source.sendSuccess(() -> Component.translatable(in ? ADMIN + "gate.in" : ADMIN + "gate.out", who.name(), kingdom.name()), true);
         return in ? 1 : 0;
+    }
+
+    // ---------------------------------------------------------------- the acts of a stand-in
+
+    private static ServerPlayer actor(CommandContext<CommandSourceStack> context, Who who) throws CommandSyntaxException {
+        ServerPlayer player = LawActs.present(who.id());
+        if (player == null) {
+            throw ABSENT.create(who.name());
+        }
+        return player;
+    }
+
+    private static int actAt(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        Who who = who(context, true);
+        Kingdom kingdom = kingdom(context);
+        BlockPos pos = BlockPosArgument.getLoadedBlockPos(context, "pos");
+        if (source.getServer().getPlayerList().getPlayer(who.id()) != null) {
+            // Nobody stands in for a player who is here to act for themselves.
+            source.sendFailure(Component.translatable(ADMIN + "act.online", who.name()));
+            return 0;
+        }
+        LawActs.arrive(source.getServer(), source.getLevel(), new GameProfile(who.id(), who.name()), pos);
+        source.sendSuccess(() -> Component.translatable(ADMIN + "act.at", who.name(), pos.getX(), pos.getY(), pos.getZ(), kingdom.name()), true);
+        return 1;
+    }
+
+    private static int actUse(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        Who who = who(context, true);
+        kingdom(context);
+        BlockPos pos = BlockPosArgument.getLoadedBlockPos(context, "pos");
+        ServerPlayer player = actor(context, who);
+        LawActs.Used used = LawActs.use(player, pos);
+        String block = String.valueOf(BuiltInRegistries.BLOCK.getKey(used.block().getBlock()));
+        MutableComponent outcome = switch (used.use()) {
+            case OPENED -> Component.translatable(ADMIN + "act.opened");
+            case CLOSED -> Component.translatable(ADMIN + "act.closed");
+            case WINDOW -> used.taken().isEmpty() ? Component.translatable(ADMIN + "act.window")
+                    : Component.translatable(ADMIN + "act.took", used.taken().getCount(),
+                    String.valueOf(BuiltInRegistries.ITEM.getKey(used.taken().getItem())));
+            case NOTHING -> Component.translatable(ADMIN + "act.nothing");
+        };
+        source.sendSuccess(() -> Component.translatable(ADMIN + "act.used", who.name(), block, pos.getX(), pos.getY(), pos.getZ(), outcome), true);
+        return used.use() == LawActs.Use.NOTHING ? 0 : 1;
+    }
+
+    private static int actBreak(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        Who who = who(context, true);
+        Kingdom kingdom = kingdom(context);
+        BlockPos pos = BlockPosArgument.getLoadedBlockPos(context, "pos");
+        ServerPlayer player = actor(context, who);
+        // The law judges damaged property only while somebody of the kingdom is there to answer; on a server without
+        // players the operator answers for the kingdom for the moment of the blow, and no tick passes meanwhile.
+        Boolean marked = WarWork.marked(kingdom.id());
+        WarWork.markPresent(kingdom.id(), true);
+        LawActs.Broken broken;
+        try {
+            broken = LawActs.breakBlock(player, kingdom.id(), pos);
+        } finally {
+            WarWork.markPresent(kingdom.id(), marked);
+        }
+        String block = String.valueOf(BuiltInRegistries.BLOCK.getKey(broken.block().getBlock()));
+        if (!broken.gone()) {
+            source.sendFailure(Component.translatable(ADMIN + "act.not_broken", who.name(), block, pos.getX(), pos.getY(), pos.getZ()));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.translatable(ADMIN + "act.broke", who.name(), block, pos.getX(), pos.getY(), pos.getZ(),
+                broken.dropped(), broken.waiting(), kingdom.name()), true);
+        return 1;
+    }
+
+    private static int actStrike(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        Who who = who(context, true);
+        Kingdom kingdom = kingdom(context);
+        Citizen citizen = CitizenCommands.citizen(source, StringArgumentType.getString(context, "citizen"));
+        ServerPlayer player = actor(context, who);
+        CitizenEntity body = CitizenBodies.body(citizen.id());
+        if (body == null) {
+            source.sendFailure(Component.translatable(ADMIN + "act.no_body", citizen.shortId()));
+            return 0;
+        }
+        boolean hit = LawActs.strike(player, body);
+        int alarms = LawAlarms.active(source.getServer(), kingdom.id()).size();
+        int soldier = LawActs.nearestSoldier(kingdom.id(), player);
+        source.sendSuccess(() -> Component.translatable(hit ? ADMIN + "act.struck" : ADMIN + "act.missed", who.name(), citizen.shortId(),
+                kingdom.name(), alarms, soldier), true);
+        return hit ? 1 : 0;
+    }
+
+    private static int actLeave(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        Who who = who(context, true);
+        kingdom(context);
+        if (!LawActs.leave(who.id())) {
+            throw ABSENT.create(who.name());
+        }
+        source.sendSuccess(() -> Component.translatable(ADMIN + "act.left", who.name()), true);
+        return 1;
+    }
+
+    private static int alarms(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        Kingdom kingdom = kingdom(context);
+        MinecraftServer server = source.getServer();
+        List<Alarm> alarms = LawAlarms.active(server, kingdom.id());
+        if (alarms.isEmpty()) {
+            source.sendSuccess(() -> Component.translatable(ADMIN + "alarms.none", kingdom.name()), false);
+            return 0;
+        }
+        for (Alarm alarm : alarms) {
+            ServerPlayer offender = LawAlarms.offender(server, alarm);
+            int soldier = offender == null ? -1 : LawActs.nearestSoldier(kingdom.id(), offender);
+            source.sendSuccess(() -> Component.translatable(alarm.seen() ? ADMIN + "alarms.seen" : ADMIN + "alarms.unseen", kingdom.name(),
+                    alarm.name(), alarm.x(), alarm.y(), alarm.z(), soldier), false);
+        }
+        return alarms.size();
+    }
+
+    private static int damage(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        Kingdom kingdom = kingdom(context);
+        int waiting = SiegeRepair.waiting(source.getServer(), kingdom.id());
+        source.sendSuccess(() -> Component.translatable(ADMIN + "damage", kingdom.name(), waiting), false);
+        return waiting;
     }
 
     private static int court(CommandContext<CommandSourceStack> context, String what, long value) throws CommandSyntaxException {

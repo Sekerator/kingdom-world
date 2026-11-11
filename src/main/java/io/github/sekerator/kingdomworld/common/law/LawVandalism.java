@@ -509,7 +509,7 @@ public final class LawVandalism {
         if (now - last.at() < GONE_TICKS) {
             return false;
         }
-        ServerPlayer offender = server.getPlayerList().getPlayer(last.offender());
+        ServerPlayer offender = LawAlarms.present(server, last.offender());
         return offender == null || !offender.isAlive() || !kingdom.equals(KingdomWorldApi.ownerAt(offender.level(), offender.blockPosition()));
     }
 

@@ -13,6 +13,7 @@ import io.github.sekerator.kingdomworld.common.economy.Households;
 import io.github.sekerator.kingdomworld.common.economy.TreasuryActions;
 import io.github.sekerator.kingdomworld.common.guild.GuildWork;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
+import io.github.sekerator.kingdomworld.common.law.LawActs;
 import io.github.sekerator.kingdomworld.common.law.LawAlarms;
 import io.github.sekerator.kingdomworld.common.law.LawEvents;
 import io.github.sekerator.kingdomworld.common.law.LawPunish;
@@ -91,7 +92,8 @@ import java.util.UUID;
  * the citizens who see or hear it and they run, soldiers do not, and the fright ends; a killing calls a soldier from forty
  * blocks away, who strikes without calling out and writes the record itself; a soldier answers a blow nobody else saw; a
  * player in creative mode is answered like any other; a block of a city breaks without drops, is a crime when seen and
- * comes back, a stranger's block is taken out again, the land outside the city is free and the land of players who are
+ * comes back, a stranger's block is taken out again, the stand-in an operator acts through opens, takes, breaks and strikes
+ * by the events of a player, the land outside the city is free and the land of players who are
  * away stays shut; a theft from a house is a theft from the citizen who lives there, a theft from a storehouse next to a
  * soldier makes the thief wanted at once; a share of the wages lies in the house as coins and food. Every test runs in a
  * batch of its own, in a box walled off the caves of the world, and clears what it built.
@@ -268,6 +270,76 @@ public final class CityLawGameTests {
                     "The king cannot use the doors and levers of the kingdom");
         } finally {
             end(helper, kingdom, area, List.of(stranger));
+        }
+        helper.succeed();
+    }
+
+    // ---------------------------------------------------------------- the acts of a stand-in
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_citylaw_acts")
+    public static void aStandInOfAPlayerActsByTheEventsOfThePlayer(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos[] area = area(helper, 9, 9);
+        noon(level);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Stand In", UUID.randomUUID());
+        slowReports();
+        WarWork.markPresent(kingdom.id(), true);
+        Citizen owner = CitizenGameTests.newcomer(helper, kingdom, 6, 6);
+        CitizenEntity seeing = body(helper, owner, 3, 6, false);
+        GameProfile profile = new GameProfile(UUID.randomUUID(), "kw-stand-in");
+        ServerPlayer stranger = LawActs.arrive(server, level, profile, helper.absolutePos(new BlockPos(4, 0, 6)));
+        try {
+            helper.assertTrue(LawActs.present(profile.getId()) == stranger && LawActs.arrive(server, level, profile,
+                    helper.absolutePos(new BlockPos(4, 0, 6))) == stranger, "The stand-in is not kept between its acts");
+            BlockPos door = helper.absolutePos(new BlockPos(4, 0, 3));
+            BlockPos barrel = helper.absolutePos(new BlockPos(5, 0, 5));
+            BlockPos wall = helper.absolutePos(new BlockPos(8, 0, 8));
+            level.setBlock(door, Blocks.OAK_DOOR.defaultBlockState(), 2 | 16);
+            level.setBlock(door.above(), Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER), 2 | 16);
+            level.setBlock(barrel, Blocks.BARREL.defaultBlockState(), 2 | 16);
+            level.setBlock(wall, Blocks.STONE_BRICKS.defaultBlockState(), 2 | 16);
+            WorldPos bed = LifeGameTests.bed(helper, kingdom, new BlockPos(7, 0, 6));
+            helper.assertTrue(KingdomWorldApi.state(server).citizens().assignHome(owner, bed), "The citizen got no bed");
+            house(helper, kingdom, helper.absolutePos(new BlockPos(5, 0, 5)), helper.absolutePos(new BlockPos(8, 2, 8)));
+            ((Container) level.getBlockEntity(barrel)).setItem(0, new ItemStack(Items.BREAD, 4));
+
+            // A door opens and shuts.
+            helper.assertTrue(LawActs.use(stranger, door).use() == LawActs.Use.OPENED && level.getBlockState(door).getValue(DoorBlock.OPEN),
+                    "The stand-in did not open the door");
+            helper.assertTrue(LawActs.use(stranger, door).use() == LawActs.Use.CLOSED, "The stand-in did not shut the door");
+            // A barrel opens a window; one loaf leaves it, and that is a theft from the citizen of the house.
+            LawActs.Used used = LawActs.use(stranger, barrel);
+            helper.assertTrue(used.use() == LawActs.Use.WINDOW && used.taken().is(Items.BREAD) && used.taken().getCount() == 1,
+                    "The stand-in took " + used.taken() + " after " + used.use());
+            helper.assertTrue(((Container) level.getBlockEntity(barrel)).getItem(0).getCount() == 3 && stranger.getInventory().countItem(Items.BREAD) == 1
+                    && stranger.containerMenu == stranger.inventoryMenu, "The loaf did not move from the barrel to the stand-in");
+            LawWork.deliverNow(server);
+            Wanted wanted = LawWork.state(server).wanted(kingdom.id(), profile.getId()).orElseThrow(() -> new IllegalStateException(
+                    "What the stand-in took is no theft"));
+            helper.assertTrue(wanted.crimes().get(0).kind() == CrimeKind.THEFT && wanted.crimes().get(0).victim().equals(
+                    Victims.citizen(owner.nameSeed(), owner.gender() == Gender.FEMALE)), "The record is wrong: " + wanted.crimes());
+            // A block of the house breaks as damaged property and the law hears of it at once.
+            LawActs.Broken broken = LawActs.breakBlock(stranger, kingdom.id(), wall);
+            helper.assertTrue(broken.gone() && broken.dropped() == 0 && broken.waiting() == 1 && level.getBlockState(wall).isAir(),
+                    "The block did not break as damaged property: gone " + broken.gone() + ", dropped " + broken.dropped() + ", waiting " + broken.waiting());
+            LawWork.deliverNow(server);
+            helper.assertTrue(wanted.crimes().stream().anyMatch(crime -> crime.kind() == CrimeKind.VANDALISM), "The broken block is not on the record: "
+                    + wanted.crimes());
+            // While the stand-in is there the block waits, as it would for a player who stays.
+            helper.assertTrue(!LawVandalism.settled(server, kingdom.id(), LawWork.now(server) + 200), "The block does not wait for the stand-in to leave");
+            // A blow at a citizen raises the alarm, with the stand-in as its offender.
+            helper.assertTrue(LawActs.strike(stranger, seeing), "The blow of the stand-in did not land");
+            List<Alarm> alarms = LawAlarms.active(server, kingdom.id());
+            helper.assertTrue(alarms.size() == 1 && LawAlarms.offender(server, alarms.get(0)) == stranger, "The blow raised no alarm for the stand-in");
+            helper.assertTrue(LawActs.nearestSoldier(kingdom.id(), stranger) == -1, "A soldier is counted where none stands");
+            // Gone, the stand-in is found by nobody, and the block may come back.
+            helper.assertTrue(LawActs.leave(profile.getId()) && LawActs.present(profile.getId()) == null && !LawActs.leave(profile.getId()),
+                    "The stand-in did not leave");
+            helper.assertTrue(LawVandalism.settled(server, kingdom.id(), LawWork.now(server) + 200), "The block waits for a stand-in that left");
+        } finally {
+            LawActs.leave(profile.getId());
+            end(helper, kingdom, area, List.of(stranger), owner);
         }
         helper.succeed();
     }

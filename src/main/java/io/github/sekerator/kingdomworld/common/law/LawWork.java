@@ -151,6 +151,7 @@ public final class LawWork {
         BOUNTY_TRIES.clear();
         LawGuards.reset();
         LawAlarms.reset();
+        LawActs.reset();
         LawVandalism.reset();
         LawContainers.reset();
         LawSlavery.reset();

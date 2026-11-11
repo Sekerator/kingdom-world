@@ -10,6 +10,7 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenActions;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenBodies;
+import io.github.sekerator.kingdomworld.common.citizen.CitizenEntity;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenLife;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenTexts;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
@@ -25,6 +26,7 @@ import io.github.sekerator.kingdomworld.core.territory.Territory;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -38,7 +40,7 @@ import java.util.UUID;
 
 /**
  * Citizen commands: {@code /kingdom citizens} for everybody and {@code /kingdomworld admin citizens ...} for
- * operators (list, spawn, kill and info, mostly for tests).
+ * operators (list, spawn, kill, info and a body at a place, mostly for tests).
  */
 final class CitizenCommands {
     private static final String KEY = "commands.kingdomworld.kingdom.citizens.";
@@ -115,7 +117,61 @@ final class CitizenCommands {
                 .then(Commands.literal("info")
                         .then(Commands.argument("id", StringArgumentType.word()).suggests(CITIZEN_IDS)
                                 .executes(CitizenCommands::info)))
+                .then(Commands.literal("body")
+                        .then(Commands.argument("id", StringArgumentType.word()).suggests(CITIZEN_IDS)
+                                .then(Commands.literal("remove").executes(CitizenCommands::bodyRemove))
+                                .then(Commands.argument("pos", BlockPosArgument.blockPos())
+                                        .executes(context -> bodyPlace(context, false))
+                                        .then(Commands.literal("still").executes(context -> bodyPlace(context, true))))))
                 .then(WorkCommands.profession());
+    }
+
+    /**
+     * Gives a citizen a body at a place whether players are near or not, for checks on a server without players. A still
+     * body only stands and sees.
+     */
+    private static int bodyPlace(CommandContext<CommandSourceStack> context, boolean still) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        Citizen citizen = find(source, StringArgumentType.getString(context, "id"));
+        BlockPos pos = BlockPosArgument.getLoadedBlockPos(context, "pos");
+        CitizenBodies.force(citizen.id(), true);
+        CitizenEntity body = CitizenBodies.body(citizen.id());
+        if (body != null && body.level() == source.getLevel()) {
+            body.moveTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, body.getYRot(), 0.0f);
+            body.getNavigation().stop();
+        } else if (body == null) {
+            body = CitizenBodies.spawnAt(source.getLevel(), citizen, pos);
+        } else {
+            body = null;
+        }
+        if (body == null) {
+            CitizenBodies.force(citizen.id(), false);
+            source.sendFailure(Component.translatable(ADMIN + "body.failed", citizen.shortId(), CitizenTexts.name(citizen),
+                    pos.getX(), pos.getY(), pos.getZ()));
+            return 0;
+        }
+        body.setNoAi(still);
+        source.sendSuccess(() -> Component.translatable(ADMIN + "body.placed", citizen.shortId(), CitizenTexts.name(citizen),
+                pos.getX(), pos.getY(), pos.getZ()), true);
+        return 1;
+    }
+
+    /**
+     * Returns a citizen to the usual rules of bodies: without players near, its body leaves the world.
+     */
+    private static int bodyRemove(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        Citizen citizen = find(source, StringArgumentType.getString(context, "id"));
+        CitizenBodies.force(citizen.id(), false);
+        CitizenEntity body = CitizenBodies.body(citizen.id());
+        if (body == null) {
+            source.sendFailure(Component.translatable(ADMIN + "body.none", citizen.shortId(), CitizenTexts.name(citizen)));
+            return 0;
+        }
+        body.setNoAi(false);
+        body.discard();
+        source.sendSuccess(() -> Component.translatable(ADMIN + "body.removed", citizen.shortId(), CitizenTexts.name(citizen)), true);
+        return 1;
     }
 
     /**

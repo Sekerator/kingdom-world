@@ -146,6 +146,15 @@ public final class WarWork {
         }
     }
 
+    /**
+     * What a kingdom is marked as, or {@code null} when the question is its players'; for whoever marks it for a moment
+     * and puts the mark back.
+     */
+    @Nullable
+    public static Boolean marked(UUID kingdomId) {
+        return MARKED.get(kingdomId);
+    }
+
     public static long day(MinecraftServer server) {
         return TreasuryActions.day(server);
     }

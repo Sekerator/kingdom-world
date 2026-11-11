@@ -167,8 +167,10 @@ public final class FieldGameTests {
             helper.assertTrue(ArmyField.engaged(front.id()) && ArmyField.engaged(defender.id()), "The battle did not begin");
             helper.assertTrue(ArmyMap.view(marshal).battles().length == 2, "The kingdom does not see its own battle");
             helper.assertTrue(ArmyMap.view(onlooker).battles().length == 0, "A kingdom far away sees the battle of others");
+            // The way leads straight to the back of the defender: a way found chunk by chunk bends by half a chunk, and from a
+            // point to the side of the back line that bend would turn the blow at the rear into a blow at the flank.
             ArmyMapPackets.Command around = new ArmyMapPackets.Command(ArmyMapPackets.Command.Action.ORDER, List.of(rear.id()), "attack",
-                    new int[]{field.x(), field.z()}, new int[]{field.x() + 60, field.z() + 40}, defender.id(), 0);
+                    new int[]{field.x(), field.z()}, new int[]{field.x() + 60, field.z()}, defender.id(), 0);
             helper.assertTrue(ArmyMap.apply(marshal, around).success(), "The second attack was refused");
             for (int i = 0; i < 30 && !ArmyField.engaged(rear.id()); i++) {
                 ArmyField.step(server);

@@ -88,12 +88,21 @@ public final class LawAlarms {
      */
     @Nullable
     public static ServerPlayer offender(MinecraftServer server, Alarm alarm) {
-        ServerPlayer player = server.getPlayerList().getPlayer(alarm.offender());
-        return player != null ? player : STAND_INS.get(alarm.offender());
+        return present(server, alarm.offender());
     }
 
     /**
-     * Lets a player who is in no list of players be found as the offender of an alarm, for game tests.
+     * A player who is on the server: one in the list of players, or one somebody stands in for.
+     */
+    @Nullable
+    static ServerPlayer present(MinecraftServer server, UUID player) {
+        ServerPlayer online = server.getPlayerList().getPlayer(player);
+        return online != null ? online : STAND_INS.get(player);
+    }
+
+    /**
+     * Lets a player who is in no list of players be found as the offender of an alarm, for game tests and for the acts
+     * of a stand-in.
      */
     public static void standInForCheck(ServerPlayer player, boolean known) {
         if (known) {
