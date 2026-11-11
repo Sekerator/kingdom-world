@@ -340,6 +340,13 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
+     * Shows the choice of branch and post of a soldier of the army tab, for the layout check.
+     */
+    public void showArmyService(int soldier) {
+        army.showServiceForCheck(soldier);
+    }
+
+    /**
      * Shows the roads tab the server sent, if it belongs to the kingdom on screen.
      */
     public void updateRoads(io.github.sekerator.kingdomworld.common.network.data.RoadViews.RoadTabView roadView) {

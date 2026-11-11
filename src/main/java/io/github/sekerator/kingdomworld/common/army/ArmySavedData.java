@@ -31,7 +31,9 @@ import java.util.Optional;
 public final class ArmySavedData extends SavedData {
     public static final String DATA_NAME = KingdomWorld.MOD_ID + "_army";
     /** Current layout of the saved data. Increase it together with a migration step. */
-    public static final int FORMAT_VERSION = 2;
+    public static final int FORMAT_VERSION = 3;
+    /** The format that first knows the branches and posts of soldiers. */
+    static final int BRANCHES_VERSION = 3;
     static final String TAG_FORMAT_VERSION = "formatVersion";
 
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -112,6 +114,14 @@ public final class ArmySavedData extends SavedData {
             return;
         }
         setDirty(false);
+        if (version < BRANCHES_VERSION) {
+            // Data older than the guard and the army: soldiers whose squad holds a point, guards an area or walks a patrol
+            // are the guard, the others the army, and all of them are fighters.
+            int guards = state.assignBranchesByOrders();
+            LOGGER.info("Army data of format {} brought to format {}: {} soldier(s) serve in the guard, {} in the army", version,
+                    FORMAT_VERSION, guards, state.soldiers().size() - guards);
+            setDirty(true);
+        }
     }
 
     private void bestEffort(CompoundTag tag) {

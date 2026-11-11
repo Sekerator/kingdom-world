@@ -13,7 +13,10 @@ import java.util.UUID;
  * registry so that the data is saved.
  */
 public final class Citizen {
+    /** The full health of a citizen who is no soldier. */
     public static final float MAX_HEALTH = 20.0f;
+    /** The most health any citizen may have: soldiers and their officers have more than {@link #MAX_HEALTH}. */
+    public static final float HEALTH_LIMIT = 1024.0f;
 
     private final UUID id;
     private final UUID kingdomId;
@@ -23,6 +26,7 @@ public final class Citizen {
     private final long birthTick;
 
     private float health = MAX_HEALTH;
+    private float maxHealth = MAX_HEALTH;
     private CitizenState state = CitizenState.HEALTHY;
     private String professionId = Professions.UNEMPLOYED.id();
     private WorldPos home;
@@ -130,13 +134,43 @@ public final class Citizen {
         if (state == CitizenState.DEAD) {
             return;
         }
-        float clamped = Math.max(0.0f, Math.min(MAX_HEALTH, value));
-        CitizenState next = clamped < MAX_HEALTH * woundedFraction ? CitizenState.WOUNDED : CitizenState.HEALTHY;
+        float clamped = Math.max(0.0f, Math.min(maxHealth, value));
+        CitizenState next = clamped < maxHealth * woundedFraction ? CitizenState.WOUNDED : CitizenState.HEALTHY;
         if (clamped != health || next != state) {
             health = clamped;
             state = next;
             changed();
         }
+    }
+
+    /**
+     * The full health of this citizen: {@link #MAX_HEALTH}, more for a soldier by its branch and post.
+     */
+    public float maxHealth() {
+        return maxHealth;
+    }
+
+    /**
+     * Changes the full health of the citizen. Its health keeps its share of the full health, so that a wounded citizen
+     * stays as wounded as it was and nobody is healed by a post.
+     */
+    public void setMaxHealth(float value) {
+        float next = Float.isFinite(value) ? Math.max(1.0f, Math.min(HEALTH_LIMIT, value)) : MAX_HEALTH;
+        if (next == maxHealth) {
+            return;
+        }
+        if (state != CitizenState.DEAD) {
+            health = Math.max(0.0f, Math.min(next, health * next / maxHealth));
+        }
+        maxHealth = next;
+        changed();
+    }
+
+    /**
+     * Restores the full health, for saved data; before {@link #restore}. Does not notify.
+     */
+    public void restoreMaxHealth(float value) {
+        maxHealth = Float.isFinite(value) && value >= 1.0f ? Math.min(HEALTH_LIMIT, value) : MAX_HEALTH;
     }
 
     void markDead() {
@@ -333,7 +367,7 @@ public final class Citizen {
         if (state == CitizenState.DEAD) {
             throw new IllegalArgumentException("A dead citizen cannot be restored into the population");
         }
-        this.health = Math.max(0.0f, Math.min(MAX_HEALTH, health));
+        this.health = Math.max(0.0f, Math.min(maxHealth, health));
         this.state = Objects.requireNonNull(state, "state");
         this.professionId = Objects.requireNonNull(professionId, "professionId");
         this.home = home;

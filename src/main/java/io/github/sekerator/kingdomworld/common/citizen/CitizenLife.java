@@ -104,7 +104,11 @@ public final class CitizenLife {
         // Tools and armor of a citizen who died without a body go back to the storehouses.
         for (net.minecraft.world.item.ItemStack stack : io.github.sekerator.kingdomworld.common.data.KingdomSavedData.get(server)
                 .gear().takeAll(citizenId)) {
-            io.github.sekerator.kingdomworld.common.storage.KingdomStorage.insert(server, citizen.get().kingdomId(), stack, place);
+            // Gear a kingdom issued to an officer is gone with the officer; that of a fighter comes back as plain gear.
+            net.minecraft.world.item.ItemStack kept = io.github.sekerator.kingdomworld.common.army.ArmyKits.released(stack);
+            if (!kept.isEmpty()) {
+                io.github.sekerator.kingdomworld.common.storage.KingdomStorage.insert(server, citizen.get().kingdomId(), kept, place);
+            }
         }
         LOGGER.info("Citizen {} ({}) of kingdom {} died: {} at {} in {}", citizen.get().name(CitizenNames.Alphabet.LATIN),
                 citizen.get().shortId(), citizen.get().kingdomId(), cause.id(), record[0].place().coordinates(),

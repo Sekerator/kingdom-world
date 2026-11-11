@@ -771,6 +771,16 @@ public final class KingdomWorldState {
      * pay of every citizen is remembered for its mood.
      */
     public Economy.Payday payday(UUID kingdomId, long day, EconomyRules rules) {
+        return payday(kingdomId, day, rules, citizen -> 1_000);
+    }
+
+    /**
+     * The daily payday of a kingdom, with wages that differ from citizen to citizen within a profession.
+     *
+     * @param permille the wage of a citizen in thousandths of the wage of its profession: more for the officers of the
+     *                 guard and the army
+     */
+    public Economy.Payday payday(UUID kingdomId, long day, EconomyRules rules, java.util.function.ToIntFunction<UUID> permille) {
         Optional<Kingdom> kingdom = kingdoms.get(kingdomId);
         Optional<Treasury> treasury = economy.treasury(kingdomId);
         if (kingdom.isEmpty() || treasury.isEmpty()) {
@@ -787,7 +797,7 @@ public final class KingdomWorldState {
         List<Economy.WageClaim> claims = new ArrayList<>();
         List<Citizen> people = citizens.registry().citizensOf(kingdomId);
         for (Citizen citizen : people) {
-            claims.add(new Economy.WageClaim(citizen.id(), citizen.professionId()));
+            claims.add(new Economy.WageClaim(citizen.id(), citizen.professionId(), permille.applyAsInt(citizen.id())));
         }
         Economy.Payday payday = economy.payday(kingdomId, day, taxpayers, claims, rules);
         for (Citizen citizen : people) {

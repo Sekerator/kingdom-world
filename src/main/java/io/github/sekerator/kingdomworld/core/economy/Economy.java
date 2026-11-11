@@ -69,8 +69,28 @@ public final class Economy {
 
     /**
      * A citizen on the payroll.
+     *
+     * @param permille the wage of the citizen in thousandths of the wage of its profession: 1000 for everybody but the
+     *                 officers of the guard and the army
      */
-    public record WageClaim(UUID citizenId, String profession) {
+    public record WageClaim(UUID citizenId, String profession, int permille) {
+        public WageClaim {
+            permille = Math.max(0, Math.min(1_000_000, permille));
+        }
+
+        public WageClaim(UUID citizenId, String profession) {
+            this(citizenId, profession, 1_000);
+        }
+
+        /**
+         * A wage of the profession as this citizen gets it.
+         */
+        public long scaled(long wage) {
+            if (permille == 1_000 || wage <= 0) {
+                return Math.max(0, wage);
+            }
+            return Money.multiplyCapped((long) Math.ceil(wage * (permille / 1_000.0)), 1);
+        }
     }
 
     /**
@@ -1351,7 +1371,7 @@ public final class Economy {
 
         long[] wages = new long[claims.size()];
         for (int i = 0; i < claims.size(); i++) {
-            wages[i] = treasury.wage(claims.get(i).profession(), rules);
+            wages[i] = claims.get(i).scaled(treasury.wage(claims.get(i).profession(), rules));
         }
         long[] paid = Payroll.distribute(wages, treasury.funds());
         long due = 0;
@@ -1367,7 +1387,7 @@ public final class Economy {
                 underpaid++;
             }
             pay.put(claim.citizenId(), paid[i]);
-            percents.put(claim.citizenId(), Payroll.percent(paid[i], rules.defaultWage(claim.profession())));
+            percents.put(claim.citizenId(), Payroll.percent(paid[i], claim.scaled(rules.defaultWage(claim.profession()))));
         }
         if (!treasury.spend(total, LedgerCategory.WAGES, day)) {
             throw new IllegalStateException("Wages of " + kingdomId + " exceeded its funds");

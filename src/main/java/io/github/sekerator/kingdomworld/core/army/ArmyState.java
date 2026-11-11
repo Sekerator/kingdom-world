@@ -44,6 +44,12 @@ public final class ArmyState {
     private final Map<UUID, Long> offersDay = new LinkedHashMap<>();
     /** Where squads are and march, by squad; a squad without one stands at its home or at the place of its order. */
     private final Map<Long, March> marches = new LinkedHashMap<>();
+    /** Soldiers that fell and are not replaced yet, by kingdom and branch. */
+    private final Map<UUID, int[]> losses = new LinkedHashMap<>();
+    /** Posts of officers that fell, by kingdom, with the game day they fell on. */
+    private final Map<UUID, Map<Slot, Long>> vacancies = new LinkedHashMap<>();
+    /** The game day the staff of a kingdom was last seen to. */
+    private final Map<UUID, Long> staffDay = new LinkedHashMap<>();
     private long nextSquad = 1;
     private long nextBand = 1;
     private Runnable changeListener = () -> {
@@ -334,6 +340,227 @@ public final class ArmyState {
                 changed();
             }
         }
+    }
+
+    // ---------------------------------------------------------------- branches and posts
+
+    /**
+     * The post of an officer in a branch.
+     */
+    public record Slot(Branch branch, Post post) {
+        public Slot {
+            Objects.requireNonNull(branch, "branch");
+            Objects.requireNonNull(post, "post");
+        }
+    }
+
+    /**
+     * The soldiers of a branch of a kingdom, officers included.
+     */
+    public List<Soldier> branchOf(UUID kingdomId, Branch branch) {
+        List<Soldier> result = new ArrayList<>();
+        for (Soldier soldier : soldiers.values()) {
+            if (soldier.kingdomId().equals(kingdomId) && soldier.branch() == branch) {
+                result.add(soldier);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * The officer who holds a post in a branch of a kingdom.
+     */
+    public Optional<Soldier> officer(UUID kingdomId, Branch branch, Post post) {
+        if (!post.officer()) {
+            return Optional.empty();
+        }
+        for (Soldier soldier : soldiers.values()) {
+            if (soldier.kingdomId().equals(kingdomId) && soldier.branch() == branch && soldier.post() == post) {
+                return Optional.of(soldier);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Moves a soldier to the other branch. An officer leaves its post behind and serves as a fighter there.
+     */
+    public Outcome setBranch(UUID actor, UUID citizenId, Branch branch, KingdomWorldState world) {
+        Soldier soldier = soldiers.get(citizenId);
+        if (soldier == null) {
+            return Outcome.fail(KingdomError.NOT_A_SOLDIER);
+        }
+        Outcome check = checkArmy(actor, soldier.kingdomId(), world);
+        if (!check.ok()) {
+            return check;
+        }
+        if (soldier.branch() == branch) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        soldiers.put(citizenId, soldier.withBranch(branch).withPost(Post.FIGHTER));
+        changed();
+        return Outcome.DONE;
+    }
+
+    /**
+     * Gives a soldier a post in its branch. A branch has one vice-captain and one captain: whoever held the post before
+     * serves as a fighter again. The post is no longer vacant.
+     */
+    public Outcome appoint(UUID actor, UUID citizenId, Post post, KingdomWorldState world) {
+        Soldier soldier = soldiers.get(citizenId);
+        if (soldier == null) {
+            return Outcome.fail(KingdomError.NOT_A_SOLDIER);
+        }
+        Outcome check = checkArmy(actor, soldier.kingdomId(), world);
+        if (!check.ok()) {
+            return check;
+        }
+        if (soldier.post() == post) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        if (post.officer()) {
+            officer(soldier.kingdomId(), soldier.branch(), post)
+                    .ifPresent(holder -> soldiers.put(holder.citizenId(), holder.withPost(Post.FIGHTER)));
+            Map<Slot, Long> open = vacancies.get(soldier.kingdomId());
+            if (open != null) {
+                open.remove(new Slot(soldier.branch(), post));
+                if (open.isEmpty()) {
+                    vacancies.remove(soldier.kingdomId());
+                }
+            }
+        }
+        soldiers.put(citizenId, soldier.withPost(post));
+        changed();
+        return Outcome.DONE;
+    }
+
+    /**
+     * A soldier fell: its branch has one to replace, the post of an officer is vacant from this day, and the army forgets
+     * the soldier.
+     */
+    public void fell(UUID citizenId, long day) {
+        Soldier soldier = soldiers.get(citizenId);
+        if (soldier == null) {
+            return;
+        }
+        int[] lost = losses.computeIfAbsent(soldier.kingdomId(), k -> new int[Branch.values().length]);
+        lost[soldier.branch().ordinal()] = Math.min(ArmySquad.MAX_MEMBERS * 32, lost[soldier.branch().ordinal()] + 1);
+        if (soldier.post().officer()) {
+            vacancies.computeIfAbsent(soldier.kingdomId(), k -> new LinkedHashMap<>()).put(new Slot(soldier.branch(), soldier.post()), day);
+        }
+        forgetSoldier(citizenId);
+        changed();
+    }
+
+    /**
+     * Fallen soldiers of a branch a kingdom has not replaced yet.
+     */
+    public int losses(UUID kingdomId, Branch branch) {
+        int[] lost = losses.get(kingdomId);
+        return lost == null ? 0 : lost[branch.ordinal()];
+    }
+
+    /**
+     * A fallen soldier of a branch was replaced.
+     */
+    public void replaced(UUID kingdomId, Branch branch) {
+        int[] lost = losses.get(kingdomId);
+        if (lost == null || lost[branch.ordinal()] <= 0) {
+            return;
+        }
+        lost[branch.ordinal()]--;
+        if (lost[0] == 0 && lost[1] == 0) {
+            losses.remove(kingdomId);
+        }
+        changed();
+    }
+
+    public Map<UUID, int[]> losses() {
+        return Collections.unmodifiableMap(losses);
+    }
+
+    /**
+     * The posts of officers of a kingdom that fell, with the game day they fell on.
+     */
+    public Map<Slot, Long> vacanciesOf(UUID kingdomId) {
+        return Collections.unmodifiableMap(vacancies.getOrDefault(kingdomId, Map.of()));
+    }
+
+    public Map<UUID, Map<Slot, Long>> vacancies() {
+        return Collections.unmodifiableMap(vacancies);
+    }
+
+    /**
+     * Whether a post may be filled today: nobody holds it, the branch is large enough for it, and the days of mourning of
+     * a fallen officer are over. A post nobody fell from may be filled at once.
+     */
+    public boolean postOpen(UUID kingdomId, Branch branch, Post post, long day, ForceRules rules) {
+        if (!post.officer() || officer(kingdomId, branch, post).isPresent() || branchOf(kingdomId, branch).size() < rules.minBranch(post)) {
+            return false;
+        }
+        Long since = vacancies.getOrDefault(kingdomId, Map.of()).get(new Slot(branch, post));
+        return since == null || day - since >= rules.officerReplaceDays;
+    }
+
+    /**
+     * Who takes a vacant post of a branch: its vice-captain rises to captain, otherwise the best fighter, by experience of
+     * war, then kills, then length of service.
+     */
+    public Optional<Soldier> successor(UUID kingdomId, Branch branch, Post post) {
+        if (post == Post.CAPTAIN) {
+            Optional<Soldier> vice = officer(kingdomId, branch, Post.VICE_CAPTAIN);
+            if (vice.isPresent()) {
+                return vice;
+            }
+        }
+        Soldier best = null;
+        for (Soldier soldier : branchOf(kingdomId, branch)) {
+            if (soldier.post() != Post.FIGHTER) {
+                continue;
+            }
+            if (best == null || soldier.experience() > best.experience()
+                    || (soldier.experience() == best.experience() && (soldier.kills() > best.kills()
+                    || (soldier.kills() == best.kills() && soldier.recruited() < best.recruited())))) {
+                best = soldier;
+            }
+        }
+        return Optional.ofNullable(best);
+    }
+
+    /**
+     * The game day the staff of a kingdom was last seen to, or {@link Long#MIN_VALUE}.
+     */
+    public long staffDay(UUID kingdomId) {
+        return staffDay.getOrDefault(kingdomId, Long.MIN_VALUE);
+    }
+
+    public void setStaffDay(UUID kingdomId, long day) {
+        Long previous = staffDay.put(kingdomId, day);
+        if (previous == null || previous != day) {
+            changed();
+        }
+    }
+
+    public Map<UUID, Long> staffDays() {
+        return Collections.unmodifiableMap(staffDay);
+    }
+
+    /**
+     * Gives the soldiers of data older than the branches their branch: the guard for those whose squad holds a point,
+     * guards an area or walks a patrol, the army for the others. All of them are fighters.
+     *
+     * @return how many soldiers went to the guard
+     */
+    public int assignBranchesByOrders() {
+        int guards = 0;
+        for (Soldier soldier : List.copyOf(soldiers.values())) {
+            Branch branch = Branch.ofOrder(squadOf(soldier.citizenId()).map(squad -> squad.order().kind()).orElse(Order.Kind.NONE));
+            soldiers.put(soldier.citizenId(), soldier.withBranch(branch).withPost(Post.FIGHTER));
+            if (branch == Branch.GUARD) {
+                guards++;
+            }
+        }
+        return guards;
     }
 
     // ---------------------------------------------------------------- squads
@@ -763,6 +990,9 @@ public final class ArmyState {
         bands.values().removeIf(band -> band.kingdomId().equals(kingdomId));
         barracks.remove(kingdomId);
         offersDay.remove(kingdomId);
+        losses.remove(kingdomId);
+        vacancies.remove(kingdomId);
+        staffDay.remove(kingdomId);
         changed();
     }
 
@@ -804,6 +1034,23 @@ public final class ArmyState {
         offersDay.put(kingdomId, day);
     }
 
+    public void restoreLosses(UUID kingdomId, Branch branch, int count) {
+        if (count > 0) {
+            losses.computeIfAbsent(kingdomId, k -> new int[Branch.values().length])[branch.ordinal()] = count;
+        }
+    }
+
+    public void restoreVacancy(UUID kingdomId, Branch branch, Post post, long day) {
+        if (!post.officer()) {
+            throw new IllegalArgumentException("A fighter leaves no vacant post");
+        }
+        vacancies.computeIfAbsent(kingdomId, k -> new LinkedHashMap<>()).put(new Slot(branch, post), day);
+    }
+
+    public void restoreStaffDay(UUID kingdomId, long day) {
+        staffDay.put(kingdomId, day);
+    }
+
     public void restoreNextIds(long squad, long band) {
         nextSquad = Math.max(nextSquad, squad);
         nextBand = Math.max(nextBand, band);
@@ -835,6 +1082,13 @@ public final class ArmyState {
                 problems.add("hired band #" + band.id() + " has no squad");
             }
         }
+        Set<String> held = new HashSet<>();
+        for (Soldier soldier : soldiers.values()) {
+            if (soldier.post().officer() && !held.add(soldier.kingdomId() + "/" + soldier.branch() + "/" + soldier.post())) {
+                problems.add("two soldiers hold the post " + soldier.post().id() + " of the " + soldier.branch().id() + " of "
+                        + soldier.kingdomId());
+            }
+        }
         return problems;
     }
 
@@ -848,6 +1102,9 @@ public final class ArmyState {
         barracks.clear();
         offersDay.clear();
         marches.clear();
+        losses.clear();
+        vacancies.clear();
+        staffDay.clear();
         nextSquad = 1;
         nextBand = 1;
     }

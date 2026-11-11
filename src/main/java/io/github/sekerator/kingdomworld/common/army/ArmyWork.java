@@ -140,6 +140,7 @@ public final class ArmyWork {
     public static void reset() {
         ArmyField.reset();
         ArmyTrophies.reset();
+        ArmyRelief.reset();
         rolls = null;
         hostility = Hostility.PEACE;
         ALARMS.clear();
@@ -326,8 +327,10 @@ public final class ArmyWork {
             armor += 2.0f;
         }
         int experience = (int) Math.min(Integer.MAX_VALUE, soldier.get().experience() + citizen.get().experience());
+        // Health counts as a share of the full health of the soldier; its branch and post make it stronger than its gear.
         return Optional.of(new Fighter(citizenId, soldier.get().rank().ordinal(), damage, speed, armor, toughness, experience,
-                citizen.get().health() / Citizen.MAX_HEALTH, citizen.get().state() == CitizenState.WOUNDED));
+                citizen.get().health() / citizen.get().maxHealth(), citizen.get().state() == CitizenState.WOUNDED,
+                ArmyForce.might(server, soldier.get())));
     }
 
     /**
@@ -439,14 +442,16 @@ public final class ArmyWork {
                 if (fate == TaskRisks.Accident.DEATH) {
                     fallen.add(CitizenTexts.name(citizen.get()));
                     CitizenLife.die(server, member, CauseOfDeath.BATTLE, "", place != null ? place : citizen.get().lastPos());
-                    army.forgetSoldier(member);
+                    army.fell(member, day(server));
                     continue;
                 }
                 army.reward(member, experience, kills / survivors, 1);
                 citizen.get().addExperience((int) (experience / 2));
                 if (fate == TaskRisks.Accident.INJURY) {
                     CitizenEntity body = CitizenBodies.body(member);
-                    float health = TaskRisks.injuredHealth(citizen.get().health(), woundedFraction);
+                    // A wound takes the same share of its health from an officer as from anybody.
+                    float scale = citizen.get().maxHealth() / Citizen.MAX_HEALTH;
+                    float health = TaskRisks.injuredHealth(citizen.get().health() / scale, woundedFraction) * scale;
                     if (body != null) {
                         body.setHealth(Math.min(body.getHealth(), health));
                     }
@@ -692,12 +697,14 @@ public final class ArmyWork {
         long now = KingdomWorldApi.gameTime(server);
         expireAlarms(now);
         if (isReadOnly(server)) {
+            ArmyRelief.reset();
             return;
         }
         ArmyState army = state(server);
         KingdomWorldState world = KingdomWorldApi.state(server);
         ArmyRules rules = ArmySettings.rules();
         keepInStep(server, army, world);
+        ArmyRelief.tick(server);
         ArmyField.tick(server, now);
         long day = day(server);
         for (Kingdom kingdom : world.kingdoms().all()) {
@@ -741,8 +748,12 @@ public final class ArmyWork {
         kingdoms.forEach(army::forgetKingdom);
         for (Soldier soldier : List.copyOf(army.soldiers())) {
             Optional<Citizen> citizen = world.citizens().get(soldier.citizenId());
-            if (citizen.isEmpty() || !Professions.isMilitary(citizen.get().professionId())) {
+            if (citizen.isEmpty()) {
+                // The citizen is dead: the soldier fell, its branch has one to replace and its post is vacant.
+                army.fell(soldier.citizenId(), day(server));
+            } else if (!Professions.isMilitary(citizen.get().professionId())) {
                 army.forgetSoldier(soldier.citizenId());
+                ArmyKits.giveUp(server, citizen.get(), false);
             }
         }
         for (Citizen citizen : world.citizens().registry().all()) {
@@ -751,6 +762,7 @@ public final class ArmyWork {
                 ArmySavedData.get(server).setDirty();
             }
         }
+        ArmyForce.keepHealth(server, army, world);
         // Guards of a deal that is over come home once its last caravan is in.
         for (ArmySquad squad : List.copyOf(army.squads())) {
             if (squad.order().kind() == Order.Kind.ESCORT && !onTheRoad(server, squad)) {

@@ -56,6 +56,7 @@ public final class CitizenNbt {
     private static final String SKIN = "skin";
     private static final String BORN = "born";
     private static final String HEALTH = "health";
+    private static final String MAX_HEALTH = "maxHealth";
     private static final String STATE = "state";
     private static final String PROFESSION = "profession";
     private static final String HOME = "home";
@@ -193,6 +194,9 @@ public final class CitizenNbt {
         tag.putInt(SKIN, citizen.skin());
         tag.putLong(BORN, citizen.birthTick());
         tag.putFloat(HEALTH, citizen.health());
+        if (citizen.maxHealth() != Citizen.MAX_HEALTH) {
+            tag.putFloat(MAX_HEALTH, citizen.maxHealth());
+        }
         tag.putString(STATE, citizen.state().id());
         tag.putString(PROFESSION, citizen.professionId());
         tag.put(POS, writePos(citizen.lastPos()));
@@ -375,6 +379,10 @@ public final class CitizenNbt {
                 readPos(tag, POS, name));
         WorldPos home = tag.contains(HOME) ? readPos(tag, HOME, name) : null;
         WorldPos workplace = tag.contains(WORKPLACE) ? readPos(tag, WORKPLACE, name) : null;
+        if (tag.contains(MAX_HEALTH, Tag.TAG_FLOAT)) {
+            // Soldiers and their officers have more health than other citizens.
+            citizen.restoreMaxHealth(tag.getFloat(MAX_HEALTH));
+        }
         citizen.restore(tag.getFloat(HEALTH), state, profession, home, workplace, tag.getFloat(FOOD), tag.getInt(MOOD),
                 tag.getInt(XP), tag.getInt(WORK_CAPACITY), tag.getString(WORK_PRODUCT), tag.getDouble(WORK_PROGRESS),
                 WorkStatus.byId(tag.getString(WORK_STATUS)));

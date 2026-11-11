@@ -134,7 +134,9 @@ public final class EconomyEvents {
      */
     public static Economy.Payday payday(MinecraftServer server, Kingdom kingdom, long day) {
         KingdomWorldState state = KingdomWorldApi.state(server);
-        Economy.Payday payday = state.payday(kingdom.id(), day, EconomySettings.rules());
+        // Officers of the guard and the army are paid more than fighters.
+        Economy.Payday payday = state.payday(kingdom.id(), day, EconomySettings.rules(),
+                citizen -> io.github.sekerator.kingdomworld.common.army.ArmyStaff.wagePermille(server, citizen));
         if (payday == Economy.Payday.NONE) {
             return payday;
         }

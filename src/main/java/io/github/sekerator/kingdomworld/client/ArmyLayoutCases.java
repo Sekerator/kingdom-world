@@ -103,7 +103,9 @@ final class ArmyLayoutCases {
             };
             rows.add(new ArmyViews.SoldierRow(UUID.nameUUIDFromBytes(("soldier" + i).getBytes(StandardCharsets.UTF_8)), longName(i), i % 2 == 1,
                     SoldierRank.ofIndex(i % SoldierRank.COUNT), io.github.sekerator.kingdomworld.core.army.Soldier.MAX_EXPERIENCE, 999_999, weapon, 30, i % 5 == 4 ? CitizenState.WOUNDED : CitizenState.HEALTHY,
-                    20, i % 3 == 0 ? 0 : 99, where));
+                    1_024, i % 3 == 0 ? 0 : 99, where, i % 2 == 0 ? io.github.sekerator.kingdomworld.core.army.Branch.GUARD
+                    : io.github.sekerator.kingdomworld.core.army.Branch.ARMY,
+                    io.github.sekerator.kingdomworld.core.army.Post.values()[i % 3 == 0 ? 0 : 1 + i % 2], 1_024));
         }
         return rows;
     }
@@ -210,6 +212,17 @@ final class ArmyLayoutCases {
         add.accept("throne-army-soldiers", () -> armyTab(member, Role.MARSHAL, true, false, "soldiers", 3, 0, 0, Component.empty()));
         add.accept("throne-army-soldiers-subject", () -> armyTab(member, Role.SUBJECT, false, false, "soldiers", 0, 0, 0, Component.empty()));
         add.accept("throne-army-soldiers-empty", () -> armyTab(member, Role.KING, true, true, "soldiers", 0, 0, 0, Component.empty()));
+        // The branch and the post of a soldier: a vice-captain of the army with the longest name, and a fighter of the guard.
+        add.accept("throne-army-service", () -> {
+            ThroneScreen screen = armyTab(member, Role.MARSHAL, true, false, "soldiers", 0, 0, 0, Component.empty());
+            screen.showArmyService(1);
+            return screen;
+        });
+        add.accept("throne-army-service-fighter", () -> {
+            ThroneScreen screen = armyTab(member, Role.KING, true, false, "soldiers", 0, 0, 0, longError);
+            screen.showArmyService(0);
+            return screen;
+        });
         add.accept("throne-army-recruit", () -> armyTab(member, Role.KING, true, false, "recruit", 0, 0, 0, longError));
         add.accept("throne-army-recruit-empty", () -> armyTab(member, Role.KING, true, true, "recruit", 0, 0, 0, Component.empty()));
         add.accept("throne-army-squads", () -> armyTab(member, Role.KING, true, false, "squads", 0, 0, 0, Component.empty()));

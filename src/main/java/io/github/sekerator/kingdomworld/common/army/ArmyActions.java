@@ -18,6 +18,8 @@ import io.github.sekerator.kingdomworld.common.trade.Purses;
 import io.github.sekerator.kingdomworld.core.army.ArmyRules;
 import io.github.sekerator.kingdomworld.core.army.ArmySquad;
 import io.github.sekerator.kingdomworld.core.army.ArmyState;
+import io.github.sekerator.kingdomworld.core.army.Branch;
+import io.github.sekerator.kingdomworld.core.army.Post;
 import io.github.sekerator.kingdomworld.core.army.MercenaryBand;
 import io.github.sekerator.kingdomworld.core.army.Order;
 import io.github.sekerator.kingdomworld.core.army.Soldier;
@@ -102,7 +104,8 @@ public final class ArmyActions {
         }
         return new ArmyViews.SoldierRow(citizen.id(), CitizenTexts.name(citizen), Professions.ARCHER.id().equals(citizen.professionId()),
                 soldier.rank(), soldier.experience(), soldier.kills(), hands.get(EquipmentSlot.MAINHAND).copy(), armor, citizen.state(),
-                Math.round(citizen.health()), squad.map(ArmySquad::id).orElse(0L), where);
+                Math.round(body != null ? body.getHealth() : citizen.health()), squad.map(ArmySquad::id).orElse(0L), where, soldier.branch(),
+                soldier.post(), Math.round(ArmyForce.maxHealth(server, soldier)));
     }
 
     private static Component playerName(MinecraftServer server, @Nullable UUID player) {
@@ -174,7 +177,10 @@ public final class ArmyActions {
                 continue;
             }
             if (treasury != null) {
-                wages = Money.addCapped(wages, treasury.wage(citizen.get().professionId(), EconomySettings.rules()));
+                // An officer is paid more than a fighter.
+                wages = Money.addCapped(wages, new io.github.sekerator.kingdomworld.core.economy.Economy.WageClaim(citizen.get().id(),
+                        citizen.get().professionId(), ArmySettings.force().wagePermille(soldier.post()))
+                        .scaled(treasury.wage(citizen.get().professionId(), EconomySettings.rules())));
             }
             if (soldiers.size() < ArmyViews.MAX_ROWS) {
                 soldiers.add(soldierRow(server, citizen.get(), soldier, army));
@@ -352,6 +358,26 @@ public final class ArmyActions {
                 }
                 yield formed.outcome().ok() ? KingdomActions.Feedback.ok(KEY + "hired", ArmyTexts.squadName(formed.squad().orElseThrow()))
                         : KingdomActions.Feedback.error(formed.outcome().error());
+            }
+            case BRANCH_GUARD, BRANCH_ARMY -> {
+                if (citizen == null || !soldierOf(server, kingdom, citizen).ok()) {
+                    yield KingdomActions.Feedback.error(KingdomError.NOT_A_SOLDIER);
+                }
+                Branch branch = change.action() == ArmyPackets.TabChange.Action.BRANCH_GUARD ? Branch.GUARD : Branch.ARMY;
+                yield result(ArmyStaff.setBranch(server, who, citizen, branch), "branch_set", citizenName(server, citizen), ArmyTexts.branch(branch));
+            }
+            case POST_FIGHTER, POST_VICE_CAPTAIN, POST_CAPTAIN -> {
+                if (citizen == null || !soldierOf(server, kingdom, citizen).ok()) {
+                    yield KingdomActions.Feedback.error(KingdomError.NOT_A_SOLDIER);
+                }
+                Post post = switch (change.action()) {
+                    case POST_VICE_CAPTAIN -> Post.VICE_CAPTAIN;
+                    case POST_CAPTAIN -> Post.CAPTAIN;
+                    default -> Post.FIGHTER;
+                };
+                Branch branch = army.soldier(citizen).map(Soldier::branch).orElse(Branch.GUARD);
+                yield result(ArmyStaff.appoint(server, who, citizen, post), post.officer() ? "appointed" : "post_taken",
+                        citizenName(server, citizen), ArmyTexts.service(branch, post));
             }
             case RELEASE -> {
                 Optional<MercenaryBand> band = army.band(change.first());

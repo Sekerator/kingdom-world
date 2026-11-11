@@ -98,7 +98,17 @@ public final class ArmyPackets {
             ORDER_FOLLOW_ME,
             ESCORT,
             HIRE,
-            RELEASE
+            RELEASE,
+            /** The soldier serves in the city guard. */
+            BRANCH_GUARD,
+            /** The soldier serves in the royal army. */
+            BRANCH_ARMY,
+            /** The soldier holds no post in its branch. */
+            POST_FIGHTER,
+            /** The soldier is the vice-captain of its branch. */
+            POST_VICE_CAPTAIN,
+            /** The soldier is the captain of its branch. */
+            POST_CAPTAIN
         }
 
         public TabChange {

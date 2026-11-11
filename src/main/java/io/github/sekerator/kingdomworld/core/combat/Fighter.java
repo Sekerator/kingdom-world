@@ -15,9 +15,16 @@ import java.util.UUID;
  * @param experience  experience of the fighter
  * @param health      share of full health, from 0 to 1
  * @param wounded     whether the fighter is wounded
+ * @param might       how much stronger than a plain fighter with the same gear it is: the branch and the post of a soldier;
+ *                    1 for everybody else
  */
 public record Fighter(UUID id, int level, double weapon, double attackSpeed, float armor, float toughness, int experience, double health,
-                      boolean wounded) {
+                      boolean wounded, double might) {
+    public Fighter(UUID id, int level, double weapon, double attackSpeed, float armor, float toughness, int experience, double health,
+                   boolean wounded) {
+        this(id, level, weapon, attackSpeed, armor, toughness, experience, health, wounded, 1.0);
+    }
+
     public Fighter {
         Objects.requireNonNull(id, "id");
         level = Math.max(0, level);
@@ -27,6 +34,14 @@ public record Fighter(UUID id, int level, double weapon, double attackSpeed, flo
         toughness = Float.isFinite(toughness) ? Math.max(0.0f, toughness) : 0.0f;
         experience = Math.max(0, experience);
         health = Double.isFinite(health) ? Math.max(0.0, Math.min(1.0, health)) : 0.0;
+        might = Double.isFinite(might) && might > 0.0 ? Math.min(100.0, might) : 1.0;
+    }
+
+    /**
+     * The same fighter, stronger or weaker by its branch and post.
+     */
+    public Fighter withMight(double value) {
+        return new Fighter(id, level, weapon, attackSpeed, armor, toughness, experience, health, wounded, value);
     }
 
     /**

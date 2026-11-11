@@ -45,6 +45,9 @@ public final class ArmyEvents {
         MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGH, false, LivingAttackEvent.class, ArmyEvents::onAttack);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOW, false, LivingHurtEvent.class, ArmyEvents::onHurt);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, LivingDeathEvent.class, ArmyEvents::onDeath);
+        // Issued gear is sorted out before the trophies mark what fell.
+        MinecraftForge.EVENT_BUS.addListener(EventPriority.LOW, false, net.minecraftforge.event.entity.living.LivingDropsEvent.class,
+                ArmyKits::onDrops);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, net.minecraftforge.event.entity.living.LivingDropsEvent.class,
                 ArmyTrophies::onDrops);
         MinecraftForge.EVENT_BUS.addListener(ArmyEvents::onServerStarted);
@@ -67,6 +70,12 @@ public final class ArmyEvents {
                 && !(victim instanceof ServerPlayer wanted && io.github.sekerator.kingdomworld.common.law.LawWork.mayFight(server,
                 attacker.kingdomId(), wanted))) {
             // Soldiers do not hurt players or citizens in peace, by a blow or by a stray arrow.
+            event.setCanceled(true);
+            return;
+        }
+        CitizenEntity shielded = soldier(victim);
+        if (shielded != null && event.getAmount() > 0 && ArmyForce.blocks(shielded, event.getSource())) {
+            // The shield took the blow.
             event.setCanceled(true);
             return;
         }

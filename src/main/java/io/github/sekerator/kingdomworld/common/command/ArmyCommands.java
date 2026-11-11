@@ -78,6 +78,15 @@ public final class ArmyCommands {
                 .then(Commands.literal("dismiss")
                         .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
                                 .executes(ArmyCommands::dismissAll)))
+                .then(Commands.literal("staff")
+                        .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
+                                .executes(ArmyCommands::staff)))
+                .then(Commands.literal("branch")
+                        .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
+                                .then(Commands.literal("guard").then(Commands.argument("count", IntegerArgumentType.integer(1, 1_024))
+                                        .executes(context -> branch(context, io.github.sekerator.kingdomworld.core.army.Branch.GUARD))))
+                                .then(Commands.literal("army").then(Commands.argument("count", IntegerArgumentType.integer(1, 1_024))
+                                        .executes(context -> branch(context, io.github.sekerator.kingdomworld.core.army.Branch.ARMY))))))
                 .then(Commands.literal("weapons")
                         .then(Commands.argument("namespace", StringArgumentType.word()).executes(ArmyCommands::weapons)))
                 .then(Commands.literal("soldiers")
@@ -191,6 +200,44 @@ public final class ArmyCommands {
         int done = recruited;
         source.sendSuccess(() -> Component.translatable(ADMIN + "recruited", done, profession, kingdom.name()), true);
         return recruited;
+    }
+
+    /**
+     * Sees to the staff of a kingdom now, as a kingdom of the world does once a day: replaces fallen soldiers, fills the
+     * posts of officers and issues the kits, paid from its treasury.
+     */
+    private static int staff(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        Kingdom kingdom = kingdom(context);
+        io.github.sekerator.kingdomworld.common.army.ArmyStaff.Report report =
+                io.github.sekerator.kingdomworld.common.army.ArmyStaff.muster(source.getServer(), kingdom.id(), false);
+        source.sendSuccess(() -> Component.translatable(ADMIN + "staff", kingdom.name(), report.recruited(), report.promoted(), report.issued(),
+                report.paid()), true);
+        return report.recruited() + report.promoted() + report.issued();
+    }
+
+    /**
+     * Moves fighters of a kingdom to the guard or to the army.
+     */
+    private static int branch(CommandContext<CommandSourceStack> context, io.github.sekerator.kingdomworld.core.army.Branch branch)
+            throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        MinecraftServer server = source.getServer();
+        Kingdom kingdom = kingdom(context);
+        int count = IntegerArgumentType.getInteger(context, "count");
+        int moved = 0;
+        for (io.github.sekerator.kingdomworld.core.army.Soldier soldier : ArmyWork.state(server).branchOf(kingdom.id(), branch.other())) {
+            if (moved >= count) {
+                break;
+            }
+            if (soldier.post() == io.github.sekerator.kingdomworld.core.army.Post.FIGHTER
+                    && io.github.sekerator.kingdomworld.common.army.ArmyStaff.setBranch(server, null, soldier.citizenId(), branch).ok()) {
+                moved++;
+            }
+        }
+        int done = moved;
+        source.sendSuccess(() -> Component.translatable(ADMIN + "branch", done, kingdom.name(), branch.id()), true);
+        return moved;
     }
 
     private static int dismissAll(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

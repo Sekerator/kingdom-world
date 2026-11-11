@@ -1,6 +1,8 @@
 package io.github.sekerator.kingdomworld.common.network.data;
 
+import io.github.sekerator.kingdomworld.core.army.Branch;
 import io.github.sekerator.kingdomworld.core.army.Order;
+import io.github.sekerator.kingdomworld.core.army.Post;
 import io.github.sekerator.kingdomworld.core.army.SoldierRank;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomNames;
@@ -45,17 +47,22 @@ public final class ArmyViews {
     /**
      * A soldier.
      *
-     * @param where where it is and what it does now
-     * @param squad its squad, 0 for none
+     * @param where     where it is and what it does now
+     * @param squad     its squad, 0 for none
+     * @param branch    the guard or the army
+     * @param post      fighter, vice-captain or captain of its branch
+     * @param maxHealth its full health, by its branch, its post and the armor it wears
      */
     public record SoldierRow(UUID id, Component name, boolean archer, SoldierRank rank, long experience, int kills, ItemStack weapon, int armor,
-                             CitizenState state, int health, long squad, Component where) {
+                             CitizenState state, int health, long squad, Component where, Branch branch, Post post, int maxHealth) {
         public SoldierRow {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(name, "name");
             Objects.requireNonNull(rank, "rank");
             Objects.requireNonNull(state, "state");
             Objects.requireNonNull(where, "where");
+            Objects.requireNonNull(branch, "branch");
+            Objects.requireNonNull(post, "post");
             weapon = weapon == null ? ItemStack.EMPTY : weapon;
         }
 
@@ -72,12 +79,16 @@ public final class ArmyViews {
             buf.writeVarInt(health);
             buf.writeVarLong(squad);
             buf.writeComponent(where);
+            buf.writeEnum(branch);
+            buf.writeEnum(post);
+            buf.writeVarInt(maxHealth);
         }
 
         static SoldierRow decode(FriendlyByteBuf buf) {
             return new SoldierRow(buf.readUUID(), buf.readComponent(), buf.readBoolean(), SoldierRank.ofIndex(buf.readVarInt()), buf.readVarLong(),
                     buf.readVarInt(), buf.readItem(), buf.readVarInt(), KingdomView.readEnum(buf, CitizenState.class), buf.readVarInt(),
-                    buf.readVarLong(), buf.readComponent());
+                    buf.readVarLong(), buf.readComponent(), KingdomView.readEnum(buf, Branch.class), KingdomView.readEnum(buf, Post.class),
+                    buf.readVarInt());
         }
     }
 

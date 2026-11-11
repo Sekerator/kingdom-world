@@ -129,7 +129,8 @@ public class CitizenEntity extends PathfinderMob {
         entityData.set(COLOR, kingdomColor & 0xFFFFFF);
         setCustomName(CitizenTexts.name(citizen));
         setCustomNameVisible(false);
-        getAttribute(Attributes.MAX_HEALTH).setBaseValue(Citizen.MAX_HEALTH);
+        // A soldier has more health than other citizens, by its branch and post.
+        getAttribute(Attributes.MAX_HEALTH).setBaseValue(citizen.maxHealth());
         setHealth(Math.max(1.0f, citizen.health()));
         refresh(citizen, kingdomColor);
     }

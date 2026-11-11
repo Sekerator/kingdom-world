@@ -26,6 +26,20 @@ public final class ArmyTexts {
         return Component.translatable(KEY + "rank." + rank.id());
     }
 
+    /**
+     * The name of a branch: the city guard or the royal army.
+     */
+    public static Component branch(io.github.sekerator.kingdomworld.core.army.Branch branch) {
+        return Component.translatable(KEY + "branch." + branch.id());
+    }
+
+    /**
+     * Where and as what a soldier serves: a fighter, the vice-captain or the captain of the guard or of the army.
+     */
+    public static Component service(io.github.sekerator.kingdomworld.core.army.Branch branch, io.github.sekerator.kingdomworld.core.army.Post post) {
+        return Component.translatable(KEY + "service." + branch.id() + "." + post.id());
+    }
+
     public static MutableComponent soldiers(long count) {
         return Component.translatable(COUNT + "soldiers." + Plurals.form(count).suffix(), count);
     }

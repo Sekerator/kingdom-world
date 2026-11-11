@@ -272,6 +272,10 @@ public final class ArmyGear {
                                 List<Choice> taken, List<KingdomStorage.Found> gear) {
         EquipmentSlot equipment = equipmentSlot(slot);
         ItemStack current = hands.get(equipment);
+        if (ArmyKits.isIssued(current)) {
+            // What the kingdom issued is not swapped for something from the storehouses.
+            return true;
+        }
         double currentScore = score(current, slot);
         boolean wrongKind = slot == GearChoice.Slot.RANGED && !current.isEmpty() && currentScore <= 0
                 && score(current, GearChoice.Slot.MELEE) > 0;
@@ -316,8 +320,10 @@ public final class ArmyGear {
     public static int stowAll(MinecraftServer server, UUID kingdomId, Equipment.Hands hands, @Nullable WorldPos near) {
         int count = 0;
         for (EquipmentSlot slot : io.github.sekerator.kingdomworld.common.citizen.GearRegistry.SLOTS) {
-            ItemStack stack = hands.get(slot);
+            // Issued gear of an officer is gone with the post; that of a fighter comes back as plain gear.
+            ItemStack stack = ArmyKits.released(hands.get(slot));
             if (stack.isEmpty()) {
+                hands.set(slot, ItemStack.EMPTY);
                 continue;
             }
             int before = stack.getCount();

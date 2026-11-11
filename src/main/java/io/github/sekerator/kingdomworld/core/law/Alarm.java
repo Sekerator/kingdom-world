@@ -57,6 +57,7 @@ public final class Alarm {
     private final long started;
     private long lastCause;
     private long lastBlow = Long.MIN_VALUE / 4;
+    private long firstBlow = Long.MIN_VALUE;
     private boolean killing;
     private boolean seen;
     private final Set<UUID> guardsKilled = new LinkedHashSet<>();
@@ -122,6 +123,14 @@ public final class Alarm {
     }
 
     /**
+     * How long the fight lasts by now, in ticks: the time since the first blow or killing, 0 while nobody was struck (an
+     * alarm for a theft alone is no fight).
+     */
+    public long fightTicks(long now) {
+        return firstBlow == Long.MIN_VALUE ? 0 : Math.max(0, now - firstBlow);
+    }
+
+    /**
      * Whether the offender killed somebody since the alarm was raised.
      */
     public boolean killing() {
@@ -173,6 +182,9 @@ public final class Alarm {
         lastCause = Math.max(lastCause, now);
         if (cause == Cause.BLOW || cause == Cause.KILLING) {
             lastBlow = Math.max(lastBlow, now);
+            if (firstBlow == Long.MIN_VALUE) {
+                firstBlow = now;
+            }
         }
         if (cause == Cause.KILLING) {
             killing = true;

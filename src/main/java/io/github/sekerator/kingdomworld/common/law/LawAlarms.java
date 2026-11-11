@@ -33,7 +33,10 @@ import java.util.UUID;
  * <p>A soldier that sees the offender is a witness itself: what nobody reported yet is written into the record at once,
  * whatever became of the first witnesses.
  *
- * <p><b>For the army of later stages.</b> {@link #active} gives the alarms of a kingdom as they stand: the offender, the
+ * <p>Who of the soldiers in reach answers is decided by the army ({@code ArmyRelief}): the fighters of the guard at once,
+ * its officers and the royal army step by step.
+ *
+ * <p><b>For the army.</b> {@link #active} gives the alarms of a kingdom as they stand: the offender, the
  * place ({@link Alarm#dimension()}, {@link Alarm#x()}, {@link Alarm#y()}, {@link Alarm#z()}), when the alarm began and how
  * long it lasts ({@link Alarm#started()}, {@link Alarm#duration}), whether somebody was killed ({@link Alarm#killing()}),
  * and how many soldiers the offender killed and wounded since ({@link Alarm#guardsKilled()},
@@ -67,6 +70,40 @@ public final class LawAlarms {
         long now = LawWork.now(server);
         LawRules rules = LawSettings.rules();
         return BOOK.in(kingdomId).stream().filter(alarm -> alarm.active(now, rules)).toList();
+    }
+
+    /**
+     * Every alarm that lasts now, of all kingdoms.
+     */
+    public static List<Alarm> all(MinecraftServer server) {
+        if (BOOK.isEmpty()) {
+            return List.of();
+        }
+        long now = LawWork.now(server);
+        LawRules rules = LawSettings.rules();
+        return BOOK.all().stream().filter(alarm -> alarm.active(now, rules)).toList();
+    }
+
+    /**
+     * Whether an alarm calls the soldiers who stand at a place: in the city of the alarm (and a little beyond its wall), or
+     * within {@link LawRules#alarmRadius} blocks of it.
+     */
+    public static boolean reaches(MinecraftServer server, Alarm alarm, String dimension, int x, int z) {
+        if (!alarm.dimension().equals(dimension)) {
+            return false;
+        }
+        double dx = x - alarm.x();
+        double dz = z - alarm.z();
+        double radius = LawSettings.rules().alarmRadius;
+        if (dx * dx + dz * dz <= radius * radius) {
+            return true;
+        }
+        Optional<CityAreas.Area> city = cityOf(server, alarm);
+        if (city.isEmpty()) {
+            return false;
+        }
+        int reach = city.get().radius() + BEYOND_WALL;
+        return Math.abs(x - city.get().x()) <= reach && Math.abs(z - city.get().z()) <= reach;
     }
 
     /**
@@ -199,7 +236,9 @@ public final class LawAlarms {
             double dx = soldier.getX() - (alarm.x() + 0.5);
             double dz = soldier.getZ() - (alarm.z() + 0.5);
             double distance = dx * dx + dz * dz;
-            if (distance < bestDistance && (distance <= (double) rules.alarmRadius * rules.alarmRadius || sameCity(server, alarm, soldier))) {
+            // The guard answers at once; its officers and the army come out step by step, when the guard is hard pressed.
+            if (distance < bestDistance && (distance <= (double) rules.alarmRadius * rules.alarmRadius || sameCity(server, alarm, soldier))
+                    && io.github.sekerator.kingdomworld.common.army.ArmyRelief.answers(server, soldier, alarm)) {
                 best = alarm;
                 bestDistance = distance;
             }

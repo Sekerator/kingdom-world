@@ -28,7 +28,8 @@ public final class CombatPower {
         double weapon = 1.0 + fighter.weapon() / 8.0;
         double armor = 1.0 + fighter.armor() / 20.0;
         double skill = 1.0 + Math.min(1.0, fighter.experience() / (double) TaskRisks.VETERAN_EXPERIENCE) * 0.5;
-        double power = BASE * (fighter.level() + 1) * weapon * armor * skill;
+        // The branch and the post of a soldier make it stronger than its gear alone tells.
+        double power = BASE * (fighter.level() + 1) * weapon * armor * skill * fighter.might();
         if (fighter.attackSpeed() > 0.0) {
             // Fast weapons hit more often, slow ones harder; the damage is in the weapon already, so the speed counts mildly.
             power *= Math.max(0.75, Math.min(1.5, Math.sqrt(fighter.attackSpeed() / SWORD_SPEED)));

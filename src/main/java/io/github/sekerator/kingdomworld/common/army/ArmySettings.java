@@ -2,7 +2,11 @@ package io.github.sekerator.kingdomworld.common.army;
 
 import io.github.sekerator.kingdomworld.common.config.KingdomWorldConfig;
 import io.github.sekerator.kingdomworld.core.army.ArmyRules;
+import io.github.sekerator.kingdomworld.core.army.Branch;
+import io.github.sekerator.kingdomworld.core.army.ForceRules;
 import io.github.sekerator.kingdomworld.core.army.GearChoice;
+import io.github.sekerator.kingdomworld.core.army.Kit;
+import io.github.sekerator.kingdomworld.core.army.Post;
 import io.github.sekerator.kingdomworld.core.citizen.Professions;
 
 import java.util.ArrayList;
@@ -18,6 +22,8 @@ public final class ArmySettings {
     private static io.github.sekerator.kingdomworld.core.army.FieldRules fieldOverride;
     private static io.github.sekerator.kingdomworld.core.army.FieldRules fieldCached;
     private static ArmyRules cached;
+    private static ForceRules forceOverride;
+    private static ForceRules forceCached;
     private static GearChoice.Overrides gear;
     private static List<String> ranged;
 
@@ -70,9 +76,89 @@ public final class ArmySettings {
         }
     }
 
+    /**
+     * How strong the guard, the army and their officers are, when the army comes out and how the fallen are replaced.
+     */
+    public static ForceRules force() {
+        if (forceOverride != null) {
+            return forceOverride;
+        }
+        ForceRules rules = forceCached;
+        if (rules == null) {
+            rules = forceFromConfig();
+            forceCached = rules;
+        }
+        return rules;
+    }
+
+    /**
+     * Replaces the rules of the guard and the army, for game tests; {@code null} restores the config.
+     */
+    public static void overrideForce(ForceRules rules) {
+        forceOverride = rules;
+    }
+
+    /**
+     * The rules of the guard and the army of the config, ready to be changed by a game test.
+     */
+    public static ForceRules.Builder configuredForce() {
+        ForceRules.Builder b = new ForceRules.Builder();
+        KingdomWorldConfig.Force c = KingdomWorldConfig.SERVER.army.force;
+        int index = 0;
+        for (Branch branch : Branch.values()) {
+            for (Post post : Post.values()) {
+                List<? extends Double> body = c.bodies.get(index).get();
+                if (body.size() == 4) {
+                    b.set(branch, post, new ForceRules.Stats(number(body.get(0)), number(body.get(1)), number(body.get(2)), number(body.get(3))));
+                }
+                Kit.parse(c.kits.get(index).get()).ifPresent(kit -> b.set(branch, post, kit));
+                index++;
+            }
+        }
+        b.guardHealth = c.guardHealthMultiplier.get();
+        b.guardDamage = c.guardDamageMultiplier.get();
+        b.armyHealth = c.armyHealthMultiplier.get();
+        b.armyDamage = c.armyDamageMultiplier.get();
+        b.officerHealth = c.officerHealthMultiplier.get();
+        b.officerDamage = c.officerDamageMultiplier.get();
+        b.blockChance = c.shieldBlockChance.get();
+        b.enchantedArmor = c.officerArmorEnchanted.get();
+        b.viceLosses = c.viceLosses.get();
+        b.viceTicks = c.viceSeconds.get() * 20L;
+        b.captainLosses = c.captainLosses.get();
+        b.captainTicks = c.captainSeconds.get() * 20L;
+        b.armyLosses = c.armyLosses.get();
+        b.armyTicks = c.armySeconds.get() * 20L;
+        b.allLosses = c.allLosses.get();
+        b.armyShare = c.armyFirstShare.get();
+        b.officerOut = c.officerOutPercent.get() / 100.0;
+        b.replacePerDay = c.replacePerDay.get();
+        b.officerReplaceDays = c.officerReplaceDays.get();
+        b.viceMinBranch = c.viceMinBranch.get();
+        b.captainMinBranch = c.captainMinBranch.get();
+        b.viceWagePermille = c.viceWagePercent.get() * 10;
+        b.captainWagePermille = c.captainWagePercent.get() * 10;
+        b.enchantPercent = c.kitEnchantPercent.get();
+        return b;
+    }
+
+    /** A number of a list of the config, which reads whole numbers as integers. */
+    private static double number(Object value) {
+        return value instanceof Number number ? number.doubleValue() : 0.0;
+    }
+
+    private static ForceRules forceFromConfig() {
+        try {
+            return configuredForce().build();
+        } catch (RuntimeException e) {
+            return ForceRules.DEFAULT;
+        }
+    }
+
     public static void refresh() {
         fieldCached = fieldFromConfig();
         cached = fromConfig();
+        forceCached = forceFromConfig();
         gear = null;
         ranged = null;
     }
@@ -82,6 +168,8 @@ public final class ArmySettings {
         override = null;
         fieldCached = null;
         fieldOverride = null;
+        forceCached = null;
+        forceOverride = null;
         gear = null;
         ranged = null;
     }

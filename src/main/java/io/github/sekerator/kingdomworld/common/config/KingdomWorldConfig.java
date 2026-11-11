@@ -884,6 +884,125 @@ public final class KingdomWorldConfig {
                             "cannot be used like a bow are left alone.")
                     .defineListAllowEmpty("rangedWeapons", List.of("#forge:tools/bows", "#forge:tools/crossbows"),
                             value -> value instanceof String);
+            force = new Force(builder);
+            builder.pop();
+        }
+
+        public final Force force;
+    }
+
+    /**
+     * The city guard and the royal army: how strong their fighters and officers are, what a kingdom of the world issues
+     * them, when the army comes to the help of the guard, and how the fallen are replaced.
+     */
+    public static final class Force {
+        /** Health, added damage, added armor and knockback resistance of the six posts, the guard first, fighters first. */
+        public final List<ForgeConfigSpec.ConfigValue<List<? extends Double>>> bodies = new java.util.ArrayList<>();
+        /** The issued kits of the six posts, in the same order. */
+        public final List<ForgeConfigSpec.ConfigValue<String>> kits = new java.util.ArrayList<>();
+        public final ForgeConfigSpec.DoubleValue guardHealthMultiplier;
+        public final ForgeConfigSpec.DoubleValue guardDamageMultiplier;
+        public final ForgeConfigSpec.DoubleValue armyHealthMultiplier;
+        public final ForgeConfigSpec.DoubleValue armyDamageMultiplier;
+        public final ForgeConfigSpec.DoubleValue officerHealthMultiplier;
+        public final ForgeConfigSpec.DoubleValue officerDamageMultiplier;
+        public final ForgeConfigSpec.DoubleValue shieldBlockChance;
+        public final ForgeConfigSpec.BooleanValue officerArmorEnchanted;
+        public final ForgeConfigSpec.IntValue viceLosses;
+        public final ForgeConfigSpec.IntValue viceSeconds;
+        public final ForgeConfigSpec.IntValue captainLosses;
+        public final ForgeConfigSpec.IntValue captainSeconds;
+        public final ForgeConfigSpec.IntValue armyLosses;
+        public final ForgeConfigSpec.IntValue armySeconds;
+        public final ForgeConfigSpec.IntValue allLosses;
+        public final ForgeConfigSpec.DoubleValue armyFirstShare;
+        public final ForgeConfigSpec.IntValue officerOutPercent;
+        public final ForgeConfigSpec.IntValue replacePerDay;
+        public final ForgeConfigSpec.IntValue officerReplaceDays;
+        public final ForgeConfigSpec.IntValue viceMinBranch;
+        public final ForgeConfigSpec.IntValue captainMinBranch;
+        public final ForgeConfigSpec.IntValue viceWagePercent;
+        public final ForgeConfigSpec.IntValue captainWagePercent;
+        public final ForgeConfigSpec.IntValue kitEnchantPercent;
+
+        Force(ForgeConfigSpec.Builder builder) {
+            io.github.sekerator.kingdomworld.core.army.ForceRules.Builder d = new io.github.sekerator.kingdomworld.core.army.ForceRules.Builder();
+            builder.comment("The city guard and the royal army. Every soldier serves in one of them, as a fighter, a vice-captain or a",
+                    "captain; a kingdom has one vice-captain and one captain of each. An officer has the strength of its post only",
+                    "while it wears armor of the post: diamond or better for a vice-captain, netherite or better for a captain.").push("force");
+            String[] names = {"guard", "guardVice", "guardCaptain", "army", "armyVice", "armyCaptain"};
+            String[] whom = {"a fighter of the guard", "the vice-captain of the guard", "the captain of the guard", "a fighter of the army",
+                    "the vice-captain of the army", "the captain of the army"};
+            int index = 0;
+            for (io.github.sekerator.kingdomworld.core.army.Branch branch : io.github.sekerator.kingdomworld.core.army.Branch.values()) {
+                for (io.github.sekerator.kingdomworld.core.army.Post post : io.github.sekerator.kingdomworld.core.army.Post.values()) {
+                    io.github.sekerator.kingdomworld.core.army.ForceRules.Stats stats = d.stats(branch, post);
+                    bodies.add(builder.comment("The body of " + whom[index] + ": full health, damage added to every blow and arrow, armor",
+                                    "points besides what it wears, knockback resistance besides what it wears (0 to 1).")
+                            .defineList(names[index] + "Body", List.of(stats.health(), stats.damage(), stats.armor(), stats.knockback()),
+                                    value -> value instanceof Number number && number.doubleValue() >= 0.0 && number.doubleValue() <= 1_024.0));
+                    kits.add(builder.comment("What a kingdom of the world issues " + whom[index] + ": material of helmet, leggings and boots,",
+                                    "material of the chestplate (iron, diamond or netherite), level of Protection, material of the sword,",
+                                    "level of Sharpness, level of Power on the bow of an archer, whether a warrior carries a shield.")
+                            .define(names[index] + "Kit", d.kit(branch, post).text(),
+                                    value -> value instanceof String text && io.github.sekerator.kingdomworld.core.army.Kit.parse(text).isPresent()));
+                    index++;
+                }
+            }
+            guardHealthMultiplier = builder.comment("Multiplies the health of every soldier of the guard. Raise the multipliers in packs whose",
+                            "weapons are much stronger than those of the game.")
+                    .defineInRange("guardHealthMultiplier", d.guardHealth, 0.1, 100.0);
+            guardDamageMultiplier = builder.comment("Multiplies the damage of every soldier of the guard.")
+                    .defineInRange("guardDamageMultiplier", d.guardDamage, 0.1, 100.0);
+            armyHealthMultiplier = builder.comment("Multiplies the health of every soldier of the army.")
+                    .defineInRange("armyHealthMultiplier", d.armyHealth, 0.1, 100.0);
+            armyDamageMultiplier = builder.comment("Multiplies the damage of every soldier of the army.")
+                    .defineInRange("armyDamageMultiplier", d.armyDamage, 0.1, 100.0);
+            officerHealthMultiplier = builder.comment("Multiplies the health of vice-captains and captains, on top of that of their branch.")
+                    .defineInRange("officerHealthMultiplier", d.officerHealth, 0.1, 100.0);
+            officerDamageMultiplier = builder.comment("Multiplies the damage of vice-captains and captains, on top of that of their branch.")
+                    .defineInRange("officerDamageMultiplier", d.officerDamage, 0.1, 100.0);
+            shieldBlockChance = builder.comment("Share of the blows and arrows from the front a soldier wards off with its shield.")
+                    .defineInRange("shieldBlockChance", d.blockChance, 0.0, 0.9);
+            officerArmorEnchanted = builder.comment("Whether the armor of an officer must be enchanted, every piece, to count for its post.")
+                    .define("officerArmorEnchanted", d.enchantedArmor);
+            viceLosses = builder.comment("An alarm of a city is answered step by step. The fighters of the guard come at once. Its vice-captain",
+                            "comes when this many soldiers are killed or wounded,")
+                    .defineInRange("viceLosses", d.viceLosses, 1, 1_000);
+            viceSeconds = builder.comment("or when the fight lasts this many seconds.")
+                    .defineInRange("viceSeconds", (int) (d.viceTicks / 20), 1, 36_000);
+            captainLosses = builder.comment("The captain of the guard comes when this many soldiers are out, when its vice-captain is out,")
+                    .defineInRange("captainLosses", d.captainLosses, 1, 1_000);
+            captainSeconds = builder.comment("or when the fight lasts this many seconds.")
+                    .defineInRange("captainSeconds", (int) (d.captainTicks / 20), 1, 36_000);
+            armyLosses = builder.comment("The royal army comes out with its vice-captain when this many soldiers are out, when the captain of",
+                            "the guard is out,")
+                    .defineInRange("armyLosses", d.armyLosses, 1, 1_000);
+            armySeconds = builder.comment("or when the fight lasts this many seconds.")
+                    .defineInRange("armySeconds", (int) (d.armyTicks / 20), 1, 36_000);
+            allLosses = builder.comment("The captain of the army comes with everybody left when this many soldiers are out, or when its",
+                            "vice-captain is out.")
+                    .defineInRange("allLosses", d.allLosses, 1, 1_000);
+            armyFirstShare = builder.comment("Share of the fighters of the army that come out first, with its vice-captain.")
+                    .defineInRange("armyFirstShare", d.armyShare, 0.0, 1.0);
+            officerOutPercent = builder.comment("An officer counts as out of the fight when it is dead or below this percent of its health.")
+                    .defineInRange("officerOutPercent", (int) Math.round(d.officerOut * 100), 0, 100);
+            replacePerDay = builder.comment("Fallen soldiers a kingdom of the world replaces a day: a massacre is felt, and the kingdom recovers.")
+                    .defineInRange("replacePerDay", d.replacePerDay, 0, 64);
+            officerReplaceDays = builder.comment("Game days after which the best fighter of a branch takes the post of a fallen officer",
+                            "in a kingdom of the world.")
+                    .defineInRange("officerReplaceDays", d.officerReplaceDays, 0, 365);
+            viceMinBranch = builder.comment("Soldiers a branch of a kingdom of the world needs to have a vice-captain.")
+                    .defineInRange("viceMinBranch", d.viceMinBranch, 1, 1_024);
+            captainMinBranch = builder.comment("Soldiers a branch of a kingdom of the world needs to have a captain.")
+                    .defineInRange("captainMinBranch", d.captainMinBranch, 1, 1_024);
+            viceWagePercent = builder.comment("The daily wage of a vice-captain, in percent of the wage of a soldier.")
+                    .defineInRange("viceWagePercent", d.viceWagePermille / 10, 100, 100_000);
+            captainWagePercent = builder.comment("The daily wage of a captain, in percent of the wage of a soldier.")
+                    .defineInRange("captainWagePercent", d.captainWagePermille / 10, 100, 100_000);
+            kitEnchantPercent = builder.comment("A kingdom of the world pays for the gear it issues: the worth of every piece, and this percent of",
+                            "it more for every level of its enchantment.")
+                    .defineInRange("kitEnchantPercent", d.enchantPercent, 0, 10_000);
             builder.pop();
         }
     }

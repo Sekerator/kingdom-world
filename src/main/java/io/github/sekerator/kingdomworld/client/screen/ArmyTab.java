@@ -7,6 +7,8 @@ import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.ArmyViews;
 import io.github.sekerator.kingdomworld.common.network.packet.ArmyPackets;
 import io.github.sekerator.kingdomworld.common.trade.TradeTexts;
+import io.github.sekerator.kingdomworld.core.army.Branch;
+import io.github.sekerator.kingdomworld.core.army.Post;
 import io.github.sekerator.kingdomworld.core.army.SoldierRank;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
 import io.github.sekerator.kingdomworld.core.citizen.Gender;
@@ -78,6 +80,10 @@ final class ArmyTab {
     private long ordering;
     /** The deal whose guards are being chosen, 0 for none. */
     private long escorting;
+    /** The soldier whose branch and post are being chosen, {@code null} for none. */
+    @Nullable
+    private UUID serving;
+    private int serviceWidth;
 
     private int modeWidth;
     private int formWidth;
@@ -110,6 +116,9 @@ final class ArmyTab {
         if (escorting != 0 && value.deals().stream().noneMatch(deal -> deal.id() == escorting)) {
             escorting = 0;
         }
+        if (serving != null && served() == null) {
+            serving = null;
+        }
     }
 
     void setMode(Mode value) {
@@ -117,6 +126,53 @@ final class ArmyTab {
         scroll = 0;
         ordering = 0;
         escorting = 0;
+        serving = null;
+    }
+
+    /**
+     * The soldier whose branch and post are being chosen.
+     */
+    @Nullable
+    private ArmyViews.SoldierRow served() {
+        if (view == null || serving == null) {
+            return null;
+        }
+        for (ArmyViews.SoldierRow row : view.soldierRows()) {
+            if (row.id().equals(serving)) {
+                return row;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * What may be decided about the service of a soldier: the other branch, and the posts of its branch.
+     */
+    private static List<Choice> serviceChoices(ArmyViews.SoldierRow row) {
+        return List.of(row.branch() == Branch.GUARD ? new Choice(ArmyPackets.TabChange.Action.BRANCH_ARMY, "service.to_army")
+                        : new Choice(ArmyPackets.TabChange.Action.BRANCH_GUARD, "service.to_guard"),
+                new Choice(ArmyPackets.TabChange.Action.POST_VICE_CAPTAIN, "service.vice_captain"),
+                new Choice(ArmyPackets.TabChange.Action.POST_CAPTAIN, "service.captain"),
+                new Choice(ArmyPackets.TabChange.Action.POST_FIGHTER, "service.fighter"));
+    }
+
+    private static boolean holds(ArmyViews.SoldierRow row, ArmyPackets.TabChange.Action action) {
+        return switch (action) {
+            case POST_VICE_CAPTAIN -> row.post() == Post.VICE_CAPTAIN;
+            case POST_CAPTAIN -> row.post() == Post.CAPTAIN;
+            case POST_FIGHTER -> row.post() == Post.FIGHTER;
+            default -> false;
+        };
+    }
+
+    /**
+     * Shows the choice of branch and post of a soldier, for the layout check.
+     */
+    void showServiceForCheck(int index) {
+        setMode(Mode.SOLDIERS);
+        if (view != null && index < view.soldierRows().size()) {
+            serving = view.soldierRows().get(index).id();
+        }
     }
 
     /**
@@ -134,7 +190,7 @@ final class ArmyTab {
     }
 
     String checkName() {
-        return "army-" + mode.id() + (ordering != 0 ? "-order" : "") + (escorting != 0 ? "-escort" : "");
+        return "army-" + mode.id() + (ordering != 0 ? "-order" : "") + (escorting != 0 ? "-escort" : "") + (serving != null ? "-service" : "");
     }
 
     private static Component modeLabel(Mode value) {
@@ -164,11 +220,15 @@ final class ArmyTab {
         backWidth = screen.buttonWidth(Component.translatable(KEY + "back"));
         clearWidth = screen.buttonWidth(Component.translatable(KEY + "clear_guard"));
         pickWidth = screen.buttonWidth(Component.literal("[x]"), Component.literal("[ ]"));
+        serviceWidth = screen.buttonWidth(Component.translatable(KEY + "service"));
         int orders = 0;
         for (Choice choice : ORDERS) {
             orders = Math.max(orders, screen.buttonWidth(Component.translatable(KEY + choice.key())));
         }
-        int rows = 150 + Math.max(Math.max(dismissWidth, orderWidth), Math.max(warriorWidth + GAP + archerWidth,
+        for (String key : List.of("service.to_army", "service.to_guard", "service.vice_captain", "service.captain", "service.fighter")) {
+            orders = Math.max(orders, screen.buttonWidth(Component.translatable(KEY + key)));
+        }
+        int rows = 150 + Math.max(Math.max(dismissWidth + GAP + serviceWidth, orderWidth), Math.max(warriorWidth + GAP + archerWidth,
                 Math.max(Math.max(hireWidth, releaseWidth), guardWidth)));
         int messages = 0;
         for (String key : List.of("loading", "no_soldiers", "no_candidates", "no_squads", "no_mercenaries", "no_deals")) {
@@ -227,6 +287,10 @@ final class ArmyTab {
         if (escorting != 0) {
             return guardCandidates().size();
         }
+        ArmyViews.SoldierRow served = served();
+        if (served != null) {
+            return serviceChoices(served).size();
+        }
         return switch (mode) {
             case OVERVIEW -> 0;
             case SOLDIERS -> view.soldierRows().size();
@@ -253,13 +317,27 @@ final class ArmyTab {
         int rows = visibleRows(top, panelHeight);
         scroll = Math.max(0, Math.min(scroll, rowCount() - rows));
         boolean manage = view.canManage();
-        if (ordering != 0 || escorting != 0) {
+        ArmyViews.SoldierRow served = served();
+        if (ordering != 0 || escorting != 0 || served != null) {
             screen.add(Button.builder(Component.translatable(KEY + "back"), b -> {
                 ordering = 0;
                 escorting = 0;
+                serving = null;
                 scroll = 0;
                 screen.rebuild();
             }).bounds(right - backWidth, buttonsY(top), backWidth, ROW - 2).build());
+        }
+        if (served != null) {
+            List<Choice> choices = serviceChoices(served);
+            for (int i = 0; i < rows && scroll + i < choices.size(); i++) {
+                Choice choice = choices.get(scroll + i);
+                Button button = screen.add(Button.builder(Component.translatable(KEY + choice.key()),
+                                b -> send(choice.action(), 0, 0, List.of(served.id())))
+                        .bounds(x, listTop(top) + i * ROW, right - x, ROW - 2).build());
+                button.setTooltip(Tooltip.create(Component.translatable(KEY + choice.key() + ".hint")));
+                button.active = manage && !holds(served, choice.action());
+            }
+            return;
         }
         if (ordering != 0) {
             long squad = ordering;
@@ -318,6 +396,12 @@ final class ArmyTab {
                     }
                     screen.add(Button.builder(Component.translatable(KEY + "dismiss"), b -> send(ArmyPackets.TabChange.Action.DISMISS, 0, 0,
                             List.of(row.id()))).bounds(right - dismissWidth, y, dismissWidth, ROW - 2).build());
+                    screen.add(Button.builder(Component.translatable(KEY + "service"), b -> {
+                        serving = row.id();
+                        scroll = 0;
+                        screen.rebuild();
+                    }).bounds(right - dismissWidth - GAP - serviceWidth, y, serviceWidth, ROW - 2).build())
+                            .setTooltip(Tooltip.create(Component.translatable(KEY + "service.hint")));
                 }
             }
             case RECRUIT -> {
@@ -388,6 +472,7 @@ final class ArmyTab {
             chosen.clear();
         }
         ordering = 0;
+        serving = null;
     }
 
     boolean scroll(int top, int panelHeight, double delta) {
@@ -426,15 +511,17 @@ final class ArmyTab {
             screen.label(graphics, Component.translatable(KEY + "loading"), x, buttonsY(top) + 4, 0xFFB8B8B8, right);
             return;
         }
-        if (mode == Mode.OVERVIEW && ordering == 0 && escorting == 0) {
+        ArmyViews.SoldierRow served = served();
+        if (mode == Mode.OVERVIEW && ordering == 0 && escorting == 0 && served == null) {
             renderOverview(graphics, x, right, top);
             return;
         }
         int rows = visibleRows(top, panelHeight);
         int count = rowCount();
         int listTop = listTop(top);
-        if (ordering != 0 || escorting != 0) {
-            Component head = ordering != 0 ? Component.translatable(KEY + "ordering", ordering)
+        if (ordering != 0 || escorting != 0 || served != null) {
+            Component head = served != null ? Component.translatable(KEY + "serving", served.name(), ArmyTexts.service(served.branch(), served.post()))
+                    : ordering != 0 ? Component.translatable(KEY + "ordering", ordering)
                     : Component.translatable(KEY + "escorting", escorting);
             int headX = x + modeWidth + 6;
             int headRight = right - backWidth - 4 - (escorting != 0 ? clearWidth + GAP : 0);
@@ -451,7 +538,7 @@ final class ArmyTab {
             text(graphics, Component.translatable(KEY + key), x, listTop + 5, 0xFFB8B8B8, right - x, null);
             return;
         }
-        for (int i = 0; i < rows && scroll + i < count && ordering == 0; i++) {
+        for (int i = 0; i < rows && scroll + i < count && ordering == 0 && served == null; i++) {
             int y = listTop + i * ROW;
             if (escorting != 0) {
                 renderSquad(graphics, x, right - assignWidth - 4, y, guardCandidates().get(scroll + i));
@@ -499,31 +586,33 @@ final class ArmyTab {
         }
     }
 
-    private static int rankColor(SoldierRank rank) {
-        return switch (rank) {
-            case RECRUIT -> 0xFFB8B8B8;
-            case PRIVATE -> 0xFFE8E8E8;
-            case CORPORAL -> 0xFF80D080;
-            case SERGEANT -> 0xFF60B0F0;
-            case LIEUTENANT -> 0xFFD080F0;
+    /**
+     * The color of the service of a soldier: the guard, the army, and their officers.
+     */
+    private static int serviceColor(Branch branch, Post post) {
+        return switch (post) {
+            case FIGHTER -> branch == Branch.GUARD ? 0xFFA8D8A8 : 0xFF90B8F0;
+            case VICE_CAPTAIN -> 0xFFD080F0;
             case CAPTAIN -> 0xFFF0C040;
         };
     }
 
     private void renderSoldier(GuiGraphics graphics, int x, int right, int y, ArmyViews.SoldierRow row) {
         int nameX = x + pickWidth + 4;
-        int buttons = view.canManage() ? dismissWidth + 4 : 0;
+        int buttons = view.canManage() ? dismissWidth + GAP + serviceWidth + 4 : 0;
         int gearX = right - buttons - 44;
-        Component rank = ArmyTexts.rank(row.rank());
-        int rankWidth = Math.min(screen.font().width(rank), 70);
-        text(graphics, rank, nameX, y + 4, rankColor(row.rank()), rankWidth, null);
+        // The branch and the post come first; the rank by experience is in the hint.
+        Component service = ArmyTexts.service(row.branch(), row.post());
+        int rankWidth = Math.min(screen.font().width(service), 70);
+        text(graphics, service, nameX, y + 4, serviceColor(row.branch(), row.post()), rankWidth, null);
         int textX = nameX + rankWidth + 4;
         Component where = row.where();
         int whereColor = row.state() == CitizenState.WOUNDED ? 0xFFFF9070 : 0xFFA0E0A0;
         int room = Math.max(0, gearX - 4 - textX);
         int whereWidth = Math.min(screen.font().width(where), room / 2);
         Component hint = Component.translatable(KEY + "soldier_hint", row.name(), CitizenTexts.profession(row.archer() ? "archer" : "warrior",
-                Gender.MALE), row.experience(), ArmyTexts.enemies(row.kills()), row.health(), row.armor());
+                Gender.MALE), service, ArmyTexts.rank(row.rank()), row.experience(), ArmyTexts.enemies(row.kills()), row.health(),
+                row.maxHealth(), row.armor());
         text(graphics, row.name(), textX, y + 4, 0xFFFFFFFF, room - whereWidth - 4, hint);
         text(graphics, where, gearX - 4 - whereWidth, y + 4, whereColor, whereWidth, null);
         if (!row.weapon().isEmpty()) {
@@ -600,6 +689,9 @@ final class ArmyTab {
         }
         if (escorting != 0) {
             return Component.translatable(KEY + "hint.escort");
+        }
+        if (serving != null) {
+            return Component.translatable(KEY + "hint.service");
         }
         if (!view.canManage()) {
             return Component.translatable(KEY + "read_only_hint");

@@ -127,6 +127,10 @@ public final class CitizenBodies {
             if (active && distance != Integer.MAX_VALUE) {
                 distance = Math.max(0, distance - 1);
             }
+            // A soldier an alarm calls comes before other citizens while bodies are scarce.
+            if (distance != Integer.MAX_VALUE && io.github.sekerator.kingdomworld.common.army.ArmyRelief.isCalled(citizen.id())) {
+                distance = -1;
+            }
             if (!forced && distance <= rules.activationChunks()
                     && io.github.sekerator.kingdomworld.common.siege.SiegeWork.overBudget(server, citizen, siegeBodies)) {
                 // Soldiers of a siege beyond its budget of bodies fight far from players.
@@ -181,6 +185,9 @@ public final class CitizenBodies {
         }
         BlockPos pos = body.blockPosition();
         citizen.setLastPos(new WorldPos(Dimensions.id(body.level()), pos.getX(), pos.getY(), pos.getZ()));
+        // The strength of a soldier follows its branch, its post and the armor it wears; before the health is copied, so
+        // that the record gets the health of the body as it is now.
+        io.github.sekerator.kingdomworld.common.army.ArmyForce.apply(server, body, citizen);
         citizen.setHealth(body.getHealth(), CitizenSettings.rules().woundedFraction());
         body.storeGear(io.github.sekerator.kingdomworld.common.data.KingdomSavedData.get(server).gear());
         body.refresh(citizen, kingdomColor(server, citizen.kingdomId()));
@@ -232,6 +239,7 @@ public final class CitizenBodies {
         body.moveTo(spot.getX() + 0.5, spot.getY(), spot.getZ() + 0.5, level.getRandom().nextFloat() * 360.0f, 0.0f);
         body.bind(citizen, kingdomColor(level.getServer(), citizen.kingdomId()));
         body.equip(io.github.sekerator.kingdomworld.common.data.KingdomSavedData.get(level.getServer()).gear());
+        io.github.sekerator.kingdomworld.common.army.ArmyForce.apply(level.getServer(), body, citizen);
         ACTIVE.put(citizen.id(), body);
         if (!level.addFreshEntity(body)) {
             ACTIVE.remove(citizen.id(), body);

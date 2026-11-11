@@ -2,6 +2,8 @@ package io.github.sekerator.kingdomworld.common.army;
 
 import io.github.sekerator.kingdomworld.core.army.ArmySquad;
 import io.github.sekerator.kingdomworld.core.army.ArmyState;
+import io.github.sekerator.kingdomworld.core.army.Branch;
+import io.github.sekerator.kingdomworld.core.army.Post;
 import io.github.sekerator.kingdomworld.core.army.Mercenary;
 import io.github.sekerator.kingdomworld.core.army.MercenaryBand;
 import io.github.sekerator.kingdomworld.core.army.March;
@@ -25,7 +27,10 @@ import java.util.UUID;
  * caller keeps the whole data read-only.
  *
  * <pre>
- * soldiers: [ { citizen, kingdom, experience, kills, battles, recruited } ]
+ * soldiers: [ { citizen, kingdom, experience, kills, battles, recruited, branch, post } ]
+ * losses: [ { kingdom, branch, count } ]
+ * vacancies: [ { kingdom, branch, post, day } ]
+ * staff: [ { kingdom, day } ]
  * squads: [ { id, kingdom, members: [uuid], commander?, band, formation, order: { kind, points: [ { dim, x, y, z } ], radius, player?, deal,
  *            via: [ { dim, x, y, z } ], target } } ]
  * marches: [ { squad, at: { dim, x, y, z }, path: [ { dim, x, y, z } ], faceX, faceZ } ]
@@ -43,6 +48,9 @@ final class ArmyNbt {
     static final String BARRACKS = "barracks";
     static final String OFFERS = "offers";
     static final String MARCHES = "marches";
+    static final String LOSSES = "losses";
+    static final String VACANCIES = "vacancies";
+    static final String STAFF = "staff";
     static final String NEXT_SQUAD = "nextSquad";
     static final String NEXT_BAND = "nextBand";
 
@@ -59,9 +67,44 @@ final class ArmyNbt {
             entry.putInt("kills", soldier.kills());
             entry.putInt("battles", soldier.battles());
             entry.putLong("recruited", soldier.recruited());
+            entry.putString("branch", soldier.branch().id());
+            entry.putString("post", soldier.post().id());
             soldiers.add(entry);
         }
         tag.put(SOLDIERS, soldiers);
+        ListTag losses = new ListTag();
+        for (Map.Entry<UUID, int[]> entry : army.losses().entrySet()) {
+            for (Branch branch : Branch.values()) {
+                if (entry.getValue()[branch.ordinal()] > 0) {
+                    CompoundTag one = new CompoundTag();
+                    one.putUUID("kingdom", entry.getKey());
+                    one.putString("branch", branch.id());
+                    one.putInt("count", entry.getValue()[branch.ordinal()]);
+                    losses.add(one);
+                }
+            }
+        }
+        tag.put(LOSSES, losses);
+        ListTag vacancies = new ListTag();
+        for (Map.Entry<UUID, Map<ArmyState.Slot, Long>> entry : army.vacancies().entrySet()) {
+            for (Map.Entry<ArmyState.Slot, Long> slot : entry.getValue().entrySet()) {
+                CompoundTag one = new CompoundTag();
+                one.putUUID("kingdom", entry.getKey());
+                one.putString("branch", slot.getKey().branch().id());
+                one.putString("post", slot.getKey().post().id());
+                one.putLong("day", slot.getValue());
+                vacancies.add(one);
+            }
+        }
+        tag.put(VACANCIES, vacancies);
+        ListTag staff = new ListTag();
+        for (Map.Entry<UUID, Long> entry : army.staffDays().entrySet()) {
+            CompoundTag one = new CompoundTag();
+            one.putUUID("kingdom", entry.getKey());
+            one.putLong("day", entry.getValue());
+            staff.add(one);
+        }
+        tag.put(STAFF, staff);
         ListTag squads = new ListTag();
         for (ArmySquad squad : army.squads()) {
             CompoundTag entry = new CompoundTag();
@@ -216,10 +259,39 @@ final class ArmyNbt {
         List<String> problems = new ArrayList<>();
         for (CompoundTag entry : list(tag, SOLDIERS, problems)) {
             try {
+                // Data older than the branches names none: such soldiers get theirs by the orders of their squads.
+                Branch branch = entry.contains("branch") ? Branch.byId(entry.getString("branch"))
+                        .orElseThrow(() -> new IllegalArgumentException("unknown branch '" + entry.getString("branch") + "'")) : Branch.GUARD;
+                Post post = entry.contains("post") ? Post.byId(entry.getString("post"))
+                        .orElseThrow(() -> new IllegalArgumentException("unknown post '" + entry.getString("post") + "'")) : Post.FIGHTER;
                 army.restoreSoldier(new Soldier(uuid(entry, "citizen"), uuid(entry, "kingdom"), entry.getLong("experience"),
-                        entry.getInt("kills"), entry.getInt("battles"), entry.getLong("recruited")));
+                        entry.getInt("kills"), entry.getInt("battles"), entry.getLong("recruited"), branch, post));
             } catch (RuntimeException e) {
                 problems.add("soldier: " + e.getMessage());
+            }
+        }
+        for (CompoundTag entry : list(tag, LOSSES, problems)) {
+            try {
+                army.restoreLosses(uuid(entry, "kingdom"), Branch.byId(entry.getString("branch"))
+                        .orElseThrow(() -> new IllegalArgumentException("unknown branch")), entry.getInt("count"));
+            } catch (RuntimeException e) {
+                problems.add("losses: " + e.getMessage());
+            }
+        }
+        for (CompoundTag entry : list(tag, VACANCIES, problems)) {
+            try {
+                army.restoreVacancy(uuid(entry, "kingdom"), Branch.byId(entry.getString("branch"))
+                                .orElseThrow(() -> new IllegalArgumentException("unknown branch")),
+                        Post.byId(entry.getString("post")).orElseThrow(() -> new IllegalArgumentException("unknown post")), entry.getLong("day"));
+            } catch (RuntimeException e) {
+                problems.add("vacancy: " + e.getMessage());
+            }
+        }
+        for (CompoundTag entry : list(tag, STAFF, problems)) {
+            try {
+                army.restoreStaffDay(uuid(entry, "kingdom"), entry.getLong("day"));
+            } catch (RuntimeException e) {
+                problems.add("staff: " + e.getMessage());
             }
         }
         for (CompoundTag entry : list(tag, BANDS, problems)) {

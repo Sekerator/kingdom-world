@@ -221,7 +221,12 @@ final class SoldierGoal extends Goal {
         double dy = aim.getY(0.3333) - arrow.getY();
         double dz = aim.getZ() - body.getZ();
         double flat = Math.sqrt(dx * dx + dz * dz);
-        arrow.shoot(dx, dy + flat * 0.2, dz, ArmyGear.isCrossbow(weapon) ? 2.2f : 1.6f, 4.0f);
+        float velocity = ArmyGear.isCrossbow(weapon) ? 2.2f : 1.6f;
+        if (body.getServer() != null) {
+            // The arrows of a soldier are as strong as its branch and post make its blows.
+            ArmyForce.arrow(body.getServer(), body, arrow, velocity);
+        }
+        arrow.shoot(dx, dy + flat * 0.2, dz, velocity, 4.0f);
         body.swing(InteractionHand.MAIN_HAND);
         body.level().playSound(null, body.getX(), body.getY(), body.getZ(), ArmyGear.isCrossbow(weapon) ? SoundEvents.CROSSBOW_SHOOT
                 : SoundEvents.ARROW_SHOOT, SoundSource.NEUTRAL, 1.0f, 1.0f / (body.getRandom().nextFloat() * 0.4f + 0.8f));
