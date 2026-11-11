@@ -441,6 +441,13 @@ function Send-ServerCommand([object]$Server, [string]$Command) {
     $Server.Stdin.WriteLine($Command)
 }
 
+# Sends a command and waits for an answer that was not in the log before it, for commands a part sends more than once.
+function Invoke-ServerCommand([object]$Server, [string]$Command, [string]$Pattern, [int]$TimeoutSeconds = 20) {
+    $seen = Count-Log $Pattern
+    Send-ServerCommand $Server $Command
+    return Wait-ForNewLog $Server $Pattern $TimeoutSeconds $seen
+}
+
 # For lines the server writes while it starts and for what goes on from before the part began: the whole log is read.
 function Wait-ForStartLog([object]$Server, [string]$Pattern, [int]$TimeoutSeconds, [string]$FailPattern = '') {
     $mark = $script:LogMark
@@ -720,6 +727,18 @@ $script:LawGoods = $null
 $script:LawDebt = -1
 $script:LawReputation = $null
 $script:LawMoney = -1
+# The law of the cities: strangers who never log in and act through stand-ins, the house they visit, the citizen who lives
+# in it, the records their acts left and the block broken right before the stop.
+$script:LawGuest = '00000000-0000-4000-8000-00000000a004'
+$script:LawBurglar = '00000000-0000-4000-8000-00000000a005'
+$script:LawVandal = '00000000-0000-4000-8000-00000000a006'
+$script:LawBrawler = '00000000-0000-4000-8000-00000000a007'
+$script:LawLastVandal = '00000000-0000-4000-8000-00000000a008'
+$script:LawHouse = $null
+$script:LawResident = $null
+$script:LawRobbed = $null
+$script:LawRecords = @()
+$script:LawLastBreak = $null
 # The life of cities: the tavern, its innkeeper, an ill citizen and the money after the festival.
 $script:TavernId = $null
 $script:InnkeeperId = $null
@@ -1712,7 +1731,7 @@ Invoke-Phase 'run1' {
         # Gravestones makes no grave. The money of the kingdom only grows by what an operator gave.
         Send-ServerCommand $server 'kingdomworld admin law status'
         # Every kingdom of the world founded at the start keeps a court of its laws.
-        if (Wait-ForLog $server 'Law data: 0 wanted, 0 confiscation\(s\), \d+ court\(s\), 0 report\(s\) on the way, format 1' $CommandTimeout $ConsoleFailPattern) {
+        if (Wait-ForLog $server 'Law data: 0 wanted, 0 confiscation\(s\), \d+ court\(s\), 0 report\(s\) on the way, format 2' $CommandTimeout $ConsoleFailPattern) {
             Write-Ok '[run1] the law data is writable and empty'
         } else {
             Add-Failure '[run1] the law data is not writable or not empty'
@@ -2161,6 +2180,152 @@ Invoke-Phase 'run1' {
         }
     }
 
+    # The law of the cities. A small house is built on levelled ground of chunks [0, 1] and [1, 1], inside the square of the
+    # capital, and a newcomer moves in. Strangers who never log in act through stand-ins, by the same events a player raises:
+    # one opens the door of the house and shuts it; one takes a loaf from its barrel, which is a theft from the citizen who
+    # lives there; one breaks a block of its wall, which drops nothing, is written down and comes back once the stranger has
+    # left; one strikes the resident, which raises the alarm and brings a soldier of the kingdom running. The records stay
+    # for the restart. The house (anchor 6 70 31) has its door at 6 71 30, its barrel at 8 71 25 and its floor at y = 70.
+    Invoke-Part $server 'the law of the cities: open doors, the goods of a house, damaged property and the alarm' {
+        if ($script:CitizenIds.Count -eq 0) { return }
+        Send-ServerCommand $server 'fill 0 69 22 31 69 31 minecraft:stone'
+        Send-ServerCommand $server 'fill 0 70 22 31 86 31 minecraft:air'
+        Start-Sleep -Seconds 2
+        Send-ServerCommand $server "kingdomworld admin build place $KingdomName kingdomworld:small_house 6 70 31"
+        $laid = Wait-ForLog $server 'Construction #(\d+) laid out: .* at 6 70 31, \d+ steps' $CommandTimeout $ConsoleFailPattern
+        if ($laid) {
+            Send-ServerCommand $server "kingdomworld admin build finish $($laid.Groups[1].Value)"
+            $built = Wait-ForLog $server "Construction #$($laid.Groups[1].Value) finished at once; building #(\d+) is in the register" $CommandTimeout $ConsoleFailPattern
+            if ($built) { $script:LawHouse = $built.Groups[1].Value }
+        }
+        if (-not $script:LawHouse) {
+            Add-Failure '[run1] the house of the checks of the law could not be built'
+            return
+        }
+        $count = $script:CitizenIds.Count + 1
+        Send-ServerCommand $server "kingdomworld admin citizens spawn 1 $KingdomName"
+        [void](Wait-ForLog $server "Spawned 1 citizen\(s\) in $KingdomName" $CommandTimeout $ConsoleFailPattern)
+        $all = Get-CitizenList $server $count 'run1'
+        if ($all) {
+            $script:LawResident = @($all | Where-Object { $script:CitizenIds -notcontains $_ })[0]
+            $script:CitizenIds = @($all)
+        }
+        if (-not $script:LawResident) {
+            Add-Failure '[run1] no newcomer came for the house of the checks of the law'
+            return
+        }
+        $resident = $script:LawResident
+
+        # Doors are open to everybody: a stranger inside the house opens its door and shuts it again.
+        $guest = $script:LawGuest
+        $usedDoor = "$guest used (\S+) at 6 71 30: ([^\r\n]+)"
+        [void](Invoke-ServerCommand $server "kingdomworld admin law act $guest $KingdomName at 6 71 29" "$guest stands at 6 71 29")
+        $opened = Invoke-ServerCommand $server "kingdomworld admin law act $guest $KingdomName use 6 71 30" $usedDoor
+        $isOpen = Invoke-ServerCommand $server 'execute if block 6 71 30 #minecraft:doors[open=true]' 'Test (passed|failed)'
+        $shut = Invoke-ServerCommand $server "kingdomworld admin law act $guest $KingdomName use 6 71 30" $usedDoor
+        [void](Invoke-ServerCommand $server "kingdomworld admin law act $guest $KingdomName leave" "$guest left")
+        if ($opened -and $opened.Groups[1].Value -like '*door' -and $opened.Groups[2].Value -eq 'it is open now' -and $isOpen `
+                -and $isOpen.Groups[1].Value -eq 'passed' -and $shut -and $shut.Groups[2].Value -eq 'it is shut now') {
+            Write-Ok "[run1] a stranger opened the door of a house of the city ($($opened.Groups[1].Value)) and shut it again"
+        } else {
+            Add-Failure "[run1] a stranger could not open and shut the door of a house: '$(if ($opened) { $opened.Value })', '$(if ($shut) { $shut.Value })'"
+        }
+
+        # The goods of a house are its citizen's: a loaf taken from the barrel under the eyes of the resident is a theft from
+        # the resident, by name.
+        $inHouse = Invoke-ServerCommand $server "kingdomworld admin citizens body $resident 6 71 28 still" "Citizen $resident \([^\r\n]*\) has a body at 6 71 28"
+        if (-not $inHouse) { Add-Failure '[run1] the resident got no body in the house' }
+        Send-ServerCommand $server 'item replace block 8 71 25 container.0 with minecraft:bread 4'
+        $burglar = $script:LawBurglar
+        [void](Invoke-ServerCommand $server "kingdomworld admin law act $burglar $KingdomName at 7 71 26" "$burglar stands at 7 71 26")
+        $took = Invoke-ServerCommand $server "kingdomworld admin law act $burglar $KingdomName use 8 71 25" "$burglar used (\S+) at 8 71 25: ([^\r\n]+)"
+        [void](Invoke-ServerCommand $server "kingdomworld admin law act $burglar $KingdomName leave" "$burglar left")
+        [void](Invoke-ServerCommand $server 'kingdomworld admin law report' '\d+ report\(s\) delivered')
+        $theft = Invoke-ServerCommand $server "kingdomworld admin law wanted $KingdomName" "$burglar in ${KingdomName}: theft from the house of ([^;\r\n]+?) worth "
+        if ($took -and $took.Groups[2].Value -eq 'a window opened, taken 1 of minecraft:bread' -and $theft) {
+            $script:LawRobbed = $theft.Groups[1].Value
+            $script:LawRecords += 'theft'
+            Write-Ok "[run1] a loaf taken from the barrel of a house is a theft from the house of $($script:LawRobbed)"
+        } else {
+            Add-Failure "[run1] the theft from a house was not written down on its citizen: '$(if ($took) { $took.Value })', record: $([bool]$theft)"
+        }
+
+        # Damaged property: a block of the wall breaks without a drop and is written down; it waits while the stranger is
+        # there and comes back for free when the stranger has left.
+        $vandal = $script:LawVandal
+        $waitingPattern = "Blocks of $KingdomName damaged in peace that wait to be put back: (\d+)"
+        [void](Invoke-ServerCommand $server "kingdomworld admin law act $vandal $KingdomName at 4 71 28" "$vandal stands at 4 71 28")
+        $broke = Invoke-ServerCommand $server "kingdomworld admin law act $vandal $KingdomName break 3 71 27" "$vandal broke (\S+) at 3 71 27: the block is gone, items fallen (\d+), blocks that wait to be put back (\d+) in $KingdomName"
+        [void](Invoke-ServerCommand $server 'kingdomworld admin law report' '\d+ report\(s\) delivered')
+        $crime = Invoke-ServerCommand $server "kingdomworld admin law wanted $KingdomName" "$vandal in ${KingdomName}: damaged property worth "
+        $hole = Invoke-ServerCommand $server 'execute if block 3 71 27 minecraft:air' 'Test (passed|failed)'
+        if ($broke -and $broke.Groups[2].Value -eq '0' -and $broke.Groups[3].Value -eq '1' -and $crime -and $hole -and $hole.Groups[1].Value -eq 'passed') {
+            $script:LawRecords += 'vandalism'
+            Write-Ok "[run1] a broken block of the house ($($broke.Groups[1].Value)) dropped nothing, is written down and is damaged property on the record"
+        } else {
+            Add-Failure "[run1] the broken block of a house was not damaged property: '$(if ($broke) { $broke.Value })', record: $([bool]$crime)"
+        }
+        [void](Invoke-ServerCommand $server "kingdomworld admin law act $vandal $KingdomName leave" "$vandal left")
+        if ($broke) {
+            $left = $null
+            $deadline = (Get-Date).AddSeconds(45)
+            do {
+                Start-Sleep -Seconds 2
+                $left = Invoke-ServerCommand $server "kingdomworld admin law damage $KingdomName" $waitingPattern
+            } while ((-not $left -or $left.Groups[1].Value -ne '0') -and (Get-Date) -lt $deadline)
+            $whole = Invoke-ServerCommand $server "execute if block 3 71 27 $($broke.Groups[1].Value)" 'Test (passed|failed)'
+            if ($left -and $left.Groups[1].Value -eq '0' -and $whole -and $whole.Groups[1].Value -eq 'passed') {
+                Write-Ok '[run1] the block came back for free once the stranger had left'
+            } else {
+                Add-Failure "[run1] the broken block did not come back: waiting $(if ($left) { $left.Groups[1].Value } else { '?' })"
+            }
+        }
+
+        # The alarm: a blow at the resident in the open raises it, and a warrior of the kingdom who stood away comes running.
+        $brawler = $script:LawBrawler
+        [void](Invoke-ServerCommand $server "kingdomworld admin citizens body $resident 14 70 26 still" "Citizen $resident \([^\r\n]*\) has a body at 14 70 26")
+        [void](Invoke-ServerCommand $server "kingdomworld admin army soldiers $KingdomName" "Soldiers of ${KingdomName}: (\d+)")
+        Sync-Server $server
+        $warrior = [regex]::Match((Get-LatestLog), '([0-9a-f]{8}): \S*warrior, rank ')
+        if ($warrior.Success) {
+            $soldier = $warrior.Groups[1].Value
+            [void](Invoke-ServerCommand $server "kingdomworld admin citizens body $soldier 29 70 26" "Citizen $soldier \([^\r\n]*\) has a body at 29 70 26")
+            [void](Invoke-ServerCommand $server "kingdomworld admin law act $brawler $KingdomName at 15 70 26" "$brawler stands at 15 70 26")
+            $struck = Invoke-ServerCommand $server "kingdomworld admin law act $brawler $KingdomName strike $resident" "$brawler struck citizen $resident of ${KingdomName}: alarms (\d+), the nearest soldier (-?\d+) block\(s\) away"
+            $alarmPattern = "Alarm in $KingdomName for $brawler at -?\d+ -?\d+ -?\d+: [^\r\n]*the nearest soldier (-?\d+) block\(s\) away"
+            $nearest = -1
+            $deadline = (Get-Date).AddSeconds(45)
+            do {
+                Start-Sleep -Seconds 1
+                $alarm = Invoke-ServerCommand $server "kingdomworld admin law alarms $KingdomName" $alarmPattern 5
+                if ($alarm) { $nearest = [int]$alarm.Groups[1].Value }
+            } while (($nearest -lt 0 -or $nearest -gt 4) -and (Get-Date) -lt $deadline)
+            [void](Invoke-ServerCommand $server 'kingdomworld admin law report' '\d+ report\(s\) delivered')
+            $assault = Invoke-ServerCommand $server "kingdomworld admin law wanted $KingdomName" "$brawler in ${KingdomName}: assault on "
+            if ($struck -and [int]$struck.Groups[1].Value -ge 1 -and [int]$struck.Groups[2].Value -ge 8 -and $nearest -ge 0 -and $nearest -le 4) {
+                Write-Ok "[run1] a blow at a citizen raised the alarm and a soldier came running: $($struck.Groups[2].Value) -> $nearest block(s) from the offender"
+            } else {
+                Add-Failure "[run1] the alarm did not bring a soldier: '$(if ($struck) { $struck.Value })', the nearest soldier at the end $nearest block(s) away"
+            }
+            if ($assault) {
+                $script:LawRecords += 'assault'
+                Write-Ok '[run1] the blow is on the record of the kingdom'
+            } else {
+                Add-Failure '[run1] the blow at a citizen is not on the record'
+            }
+            [void](Invoke-ServerCommand $server "kingdomworld admin law act $brawler $KingdomName leave" "$brawler left")
+            [void](Invoke-ServerCommand $server "kingdomworld admin citizens body $soldier remove" "The body of citizen $soldier ")
+        } else {
+            Add-Warning "[run1] $KingdomName has no warrior for the check of the alarm"
+        }
+        [void](Invoke-ServerCommand $server "kingdomworld admin citizens body $resident remove" "The body of citizen $resident ")
+        # No body may stay behind: the lists of citizens of the parts that follow count them.
+        $bodies = Invoke-ServerCommand $server "kingdomworld admin citizens list $KingdomName" "Citizens of ${KingdomName}: \d+ \((\d+) present in the world\)"
+        if (-not $bodies -or $bodies.Groups[1].Value -ne '0') {
+            Add-Failure "[run1] bodies of the checks of the law stayed in the world: $(if ($bodies) { $bodies.Groups[1].Value } else { '?' })"
+        }
+    }
+
     # Kingdoms of the world: those of the first day stand as data, a large one appears at the word of an operator with every
     # tick of it measured, then six small ones; their rulers take turns and wage wars. All of it stays for the restart.
     Invoke-Part $server 'kingdoms of the world, their rulers and wars' {
@@ -2542,7 +2707,7 @@ Invoke-Phase 'run1' {
 
     # One more kingdom of the world appears at the word of an operator away from the other kingdoms, and the server stops
     # in the middle of its appearance; the second launch checks that it ends without copies and that its money adds up.
-    # It is called last: the stop comes right after it claims its land.
+    # It is called last but for one command of the law: the stop comes right after it claims its land.
     Invoke-Part $server 'a kingdom of the world left in the middle of its appearance' {
         Send-ServerCommand $server "kingdomworld admin npc spawn $NpcX $NpcZ large"
         $spawning = Wait-ForLog $server 'Place #(\d+): a kingdom of the world \(large\) appears at (-?\d+), (-?\d+) with towns: (\d+)' $CommandTimeout $ConsoleFailPattern
@@ -2556,6 +2721,21 @@ Invoke-Phase 'run1' {
             }
         } else {
             Add-Failure '[run1] admin npc spawn did not start a kingdom of the world'
+        }
+    }
+
+    # A moment before the stop a stranger breaks one more block of the house and stays inside: the block waits for the
+    # stranger to leave, so its record is still there when the server stops and must come back from the saved data.
+    Invoke-Part $server 'a block of a city broken right before the stop' {
+        if (-not $script:LawHouse) { return }
+        $vandal = $script:LawLastVandal
+        [void](Invoke-ServerCommand $server "kingdomworld admin law act $vandal $KingdomName at 8 71 28" "$vandal stands at 8 71 28")
+        $broke = Invoke-ServerCommand $server "kingdomworld admin law act $vandal $KingdomName break 9 71 27" "$vandal broke (\S+) at 9 71 27: the block is gone, items fallen (\d+), blocks that wait to be put back (\d+) in $KingdomName"
+        if ($broke -and $broke.Groups[2].Value -eq '0' -and [int]$broke.Groups[3].Value -ge 1) {
+            $script:LawLastBreak = $broke.Groups[1].Value
+            Write-Ok "[run1] a block of the house ($($script:LawLastBreak)) is broken and written down right before the stop"
+        } else {
+            Add-Failure "[run1] the block of the house did not break before the stop: '$(if ($broke) { $broke.Value })'"
         }
     }
 
@@ -2592,8 +2772,8 @@ Invoke-Phase 'run2' {
 
     Invoke-Part $server 'the siege after the restart' {
         if (-not $script:SiegeWarId) { return }
-        if (Wait-ForStartLog $server 'KingdomWorld sieges: \d+ gate\(s\), (\d+) siege\(s\), (\d+) hold\(s\), .*data format 1' 10) {
-            Write-Ok '[run2] the sieges are loaded in data format 1'
+        if (Wait-ForStartLog $server 'KingdomWorld sieges: \d+ gate\(s\), (\d+) siege\(s\), (\d+) hold\(s\), .*data format 2' 10) {
+            Write-Ok '[run2] the sieges are loaded in data format 2'
         } else {
             Add-Failure '[run2] the sieges were not loaded as expected'
         }
@@ -3021,10 +3201,12 @@ Invoke-Phase 'run2' {
         # The law survived the restart: the wanted, the confiscated goods, the debt, the reputation and the pass are the same, and
         # the money adds up. Then the murderer buys the goods back at the throne for half their worth and gets all 18 items.
         if ($script:LawConfiscation) {
-            if (Wait-ForStartLog $server 'KingdomWorld law: 1 wanted, 1 confiscation\(s\), \d+ court\(s\), data format 1' 10) {
-                Write-Ok '[run2] the law was loaded after the restart'
+            # One record of the blow by command, and those the strangers of the law of the cities left.
+            $wantedCount = 1 + $script:LawRecords.Count
+            if (Wait-ForStartLog $server "KingdomWorld law: $wantedCount wanted, 1 confiscation\(s\), \d+ court\(s\), data format 2" 10) {
+                Write-Ok "[run2] the law was loaded after the restart in data format 2: $wantedCount wanted, one confiscation"
             } else {
-                Add-Failure '[run2] the law was not loaded with one wanted and one confiscation'
+                Add-Failure "[run2] the law was not loaded with $wantedCount wanted and one confiscation in data format 2"
             }
             $seen = Count-Log '#\d+ of \S+ in \S+: (\d+) item\(s\) worth (\d+), ransom (\d+)'
             Send-ServerCommand $server 'kingdomworld admin law confiscated'
@@ -3062,6 +3244,21 @@ Invoke-Phase 'run2' {
                 Write-Ok '[run2] the record of the blow is still there'
             } else {
                 Add-Failure '[run2] the record of the blow was lost in the restart'
+            }
+            # What the new data format keeps: whose house a theft was from, by the name of its citizen, and damaged property.
+            if ($script:LawRecords.Count -gt 0) {
+                Sync-Server $server
+                $log = Get-LatestLog
+                $kept = @()
+                $robbed = [regex]::Match($log, "$($script:LawBurglar) in ${KingdomName}: theft from the house of ([^;\r\n]+?) worth ")
+                if ($robbed.Success -and $robbed.Groups[1].Value -eq $script:LawRobbed) { $kept += 'theft' }
+                if ($log -match "$($script:LawVandal) in ${KingdomName}: damaged property worth ") { $kept += 'vandalism' }
+                if ($log -match "$($script:LawBrawler) in ${KingdomName}: assault on ") { $kept += 'assault' }
+                if (($kept -join ', ') -eq ($script:LawRecords -join ', ')) {
+                    Write-Ok "[run2] the records of the law of the cities outlived the restart: $($kept -join ', ')$(if ($script:LawRobbed) { "; the theft still names the house of $($script:LawRobbed)" })"
+                } else {
+                    Add-Failure "[run2] the records of the law of the cities changed in the restart: $($script:LawRecords -join ', ') -> $($kept -join ', ')"
+                }
             }
             $before = Get-KingdomMoney $server $KingdomName
             $ransom = if ($goods) { [int64]$goods.Groups[3].Value } else { 0 }
@@ -3255,6 +3452,33 @@ Invoke-Phase 'run2' {
         if (Wait-ForLog $server 'bond truce' $CommandTimeout $ConsoleFailPattern) { Write-Ok '[run2] a truce follows the peace' } else { Add-Failure '[run2] no truce after the peace' }
         Send-ServerCommand $server 'kingdomworld admin war status'
         [void](Wait-ForLog $server 'Diplomacy: \d+ treaty\(ies\)' $CommandTimeout $ConsoleFailPattern)
+    }
+
+    # The block broken right before the stop: its record was read from the saved data when the server started, and with
+    # the stranger gone (a stand-in does not outlive a restart) the block is put back for free. Looked at after the wars
+    # of SmokeTest are over, so that no enemy near its cities holds the mending back.
+    Invoke-Part $server 'the block of a city broken before the stop' {
+        if (-not $script:LawLastBreak) { return }
+        $loaded = Wait-ForStartLog $server 'KingdomWorld sieges: [^\r\n]*?(\d+) block\(s\) damaged in peace, data format 2' 10
+        if ($loaded -and [int]$loaded.Groups[1].Value -ge 1) {
+            Write-Ok "[run2] the record of the block broken before the stop outlived the restart ($($loaded.Groups[1].Value) block(s) damaged in peace were loaded)"
+        } else {
+            Add-Failure "[run2] the record of the block broken before the stop was not loaded: '$(if ($loaded) { $loaded.Value })'"
+        }
+        $waitingPattern = "Blocks of $KingdomName damaged in peace that wait to be put back: (\d+)"
+        $left = $null
+        $deadline = (Get-Date).AddSeconds(45)
+        do {
+            $left = Invoke-ServerCommand $server "kingdomworld admin law damage $KingdomName" $waitingPattern
+            if ($left -and $left.Groups[1].Value -eq '0') { break }
+            Start-Sleep -Seconds 2
+        } while ((Get-Date) -lt $deadline)
+        $whole = Invoke-ServerCommand $server "execute if block 9 71 27 $($script:LawLastBreak)" 'Test (passed|failed)'
+        if ($left -and $left.Groups[1].Value -eq '0' -and $whole -and $whole.Groups[1].Value -eq 'passed') {
+            Write-Ok '[run2] the block broken before the stop came back for free after the restart'
+        } else {
+            Add-Failure "[run2] the block broken before the stop did not come back: waiting $(if ($left) { $left.Groups[1].Value } else { '?' })"
+        }
     }
 
     Invoke-Part $server 'the kingdom of the world that was appearing' {
