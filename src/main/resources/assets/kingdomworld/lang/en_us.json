@@ -3898,6 +3898,8 @@
   "kingdomworld.guide.see": "More in the book \"Kingdoms: a Guide\" (/kingdom guide)",
   "kingdomworld.throne.placed_hint": "Take the Founder's Crown and right-click the throne to found a kingdom",
   "kingdomworld.screen.throne.npc.size.raising": "Ancient kingdom: %s, its capital is being built",
+  "kingdomworld.screen.throne.npc.people": "People: %s, %s",
+  "kingdomworld.screen.throne.npc.people.raising": "Expected: about %s, %s",
   "kingdomworld.screen.map.find.nearest": "Nearest kingdom: %s, about %s blocks %s",
   "kingdomworld.screen.map.find.none": "No kingdom is known yet: kingdoms of the world lie far from the spawn of the world",
   "commands.kingdomworld.admin.npc.status.founded": "founded, waits for its buildings",

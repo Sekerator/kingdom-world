@@ -3898,6 +3898,8 @@
   "kingdomworld.guide.see": "Подробнее в книге «Королевства: руководство» (/kingdom guide)",
   "kingdomworld.throne.placed_hint": "Возьмите Корону основателя и нажмите ПКМ по трону, чтобы основать королевство",
   "kingdomworld.screen.throne.npc.size.raising": "Древнее королевство: %s, столица строится",
+  "kingdomworld.screen.throne.npc.people": "Население: %s, %s",
+  "kingdomworld.screen.throne.npc.people.raising": "Ожидается: %s, %s",
   "kingdomworld.screen.map.find.nearest": "Ближайшее королевство: %s, около %s блоков %s",
   "kingdomworld.screen.map.find.none": "Королевств пока не видно: королевства мира лежат далеко от точки появления мира",
   "commands.kingdomworld.admin.npc.status.founded": "основано, ждёт построек",

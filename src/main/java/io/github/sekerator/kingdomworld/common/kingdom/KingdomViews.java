@@ -106,13 +106,36 @@ public final class KingdomViews {
     }
 
     /**
-     * What players see of a kingdom of the world, or {@code null} for a kingdom of players.
+     * What players see of a kingdom of the world, or {@code null} for a kingdom of players: while its capital is being built,
+     * the people and soldiers it is planned for, then the citizens and soldiers it has.
      */
     @org.jetbrains.annotations.Nullable
-    static io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo npcInfo(MinecraftServer server, Kingdom kingdom) {
-        boolean raising = !io.github.sekerator.kingdomworld.common.npc.NpcWork.built(server, kingdom.id());
-        return io.github.sekerator.kingdomworld.common.npc.NpcWork.kingdom(server, kingdom.id())
-                .map(npc -> io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo.of(npc, raising)).orElse(null);
+    public static io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo npcInfo(MinecraftServer server, Kingdom kingdom) {
+        return npcInfo(server, kingdom.id());
+    }
+
+    /**
+     * What players see of the kingdom of the world {@code kingdomId}, or {@code null} for a kingdom of players.
+     */
+    @org.jetbrains.annotations.Nullable
+    public static io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo npcInfo(MinecraftServer server, UUID kingdomId) {
+        io.github.sekerator.kingdomworld.core.npc.NpcState npcState = io.github.sekerator.kingdomworld.common.npc.NpcWork.state(server);
+        return npcState.kingdom(kingdomId).map(npc -> {
+            Optional<io.github.sekerator.kingdomworld.core.npc.NpcSite> site = npcState.site(npc.siteId());
+            // As NpcWork.built: a kingdom without its place counts as standing.
+            boolean raising = site.map(s -> s.status() != io.github.sekerator.kingdomworld.core.npc.NpcSite.Status.SPAWNED).orElse(false);
+            int people;
+            int soldiers;
+            if (raising) {
+                io.github.sekerator.kingdomworld.core.npc.NpcComposition planned = io.github.sekerator.kingdomworld.common.npc.NpcSpawner.composition(site.get());
+                people = planned.citizens();
+                soldiers = planned.soldiers();
+            } else {
+                people = KingdomWorldApi.state(server).citizens().registry().count(kingdomId);
+                soldiers = io.github.sekerator.kingdomworld.common.army.ArmyWork.state(server).soldiersOf(kingdomId).size();
+            }
+            return io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo.of(npc, raising, people, soldiers);
+        }).orElse(null);
     }
 
     /**
@@ -127,10 +150,10 @@ public final class KingdomViews {
     /**
      * The citizens of a kingdom; a kingdom of the world whose capital is still being built counts those it is built for.
      */
-    private static int population(MinecraftServer server, KingdomWorldState state, Kingdom kingdom) {
+    private static int population(KingdomWorldState state, Kingdom kingdom,
+                                  @org.jetbrains.annotations.Nullable io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo npc) {
         int counted = state.citizens().registry().count(kingdom.id());
-        return io.github.sekerator.kingdomworld.common.npc.NpcWork.plannedPeople(server, kingdom.id()).map(planned -> Math.max(planned, counted))
-                .orElse(counted);
+        return npc != null && npc.raising() ? Math.max(npc.people(), counted) : counted;
     }
 
     /**
@@ -141,9 +164,10 @@ public final class KingdomViews {
         int members = state.membership().kingdom(kingdom.id()).map(KingdomMembers::size).orElse(0);
         boolean hasCapital = territory.isPresent() && territory.get().dimension().equals(dimension);
         Capital capital = territory.map(Territory::capital).orElse(null);
+        io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo npc = npcInfo(server, kingdom);
         return new KingdomMapInfo(kingdom.id(), kingdom.name(), kingdom.color(), PlayerNames.name(server, kingdom.rulerId()),
-                members, territory.map(Territory::size).orElse(0), population(server, state, kingdom), hasCapital,
-                hasCapital ? capital.chunkX() : 0, hasCapital ? capital.chunkZ() : 0, npcInfo(server, kingdom));
+                members, territory.map(Territory::size).orElse(0), population(state, kingdom, npc), hasCapital,
+                hasCapital ? capital.chunkX() : 0, hasCapital ? capital.chunkZ() : 0, npc);
     }
 
     /**

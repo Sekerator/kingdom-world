@@ -122,19 +122,21 @@ final class ClientLayoutCheck {
         return CitizenNames.alphabetFor(Minecraft.getInstance().getLanguageManager().getSelected()) == CitizenNames.Alphabet.CYRILLIC;
     }
 
-    /** A kingdom of the world with the longest names, leaning and traits there are. */
+    /** The widest count of people or soldiers a kingdom of the world is shown with: five digits in the longest plural form. */
+    private static final int WIDE_COUNT = 99_999;
+    /** A kingdom of the world with the longest names, leaning and traits there are, and five digit people and soldiers. */
     private static final io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo LONG_NPC =
             new io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo("Serebrozemye XIV", "Сереброземье XIV", "Dobroslaslava",
                     "Доброславслава", io.github.sekerator.kingdomworld.core.citizen.Gender.FEMALE,
                     io.github.sekerator.kingdomworld.core.npc.RulerCharacter.BUILDER,
                     List.of(io.github.sekerator.kingdomworld.core.npc.RulerCharacter.Trait.JUST,
                             io.github.sekerator.kingdomworld.core.npc.RulerCharacter.Trait.THRIFTY),
-                    io.github.sekerator.kingdomworld.core.npc.NpcLevel.MEDIUM, 3);
-    /** The same kingdom founded as data, its capital still being built. */
+                    io.github.sekerator.kingdomworld.core.npc.NpcLevel.MEDIUM, 3, false, WIDE_COUNT, WIDE_COUNT);
+    /** The same kingdom founded as data, large, its capital still being built, with the people and soldiers it expects. */
     private static final io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo RAISING_NPC =
             new io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo(LONG_NPC.nameLatin(), LONG_NPC.nameCyrillic(),
                     LONG_NPC.rulerLatin(), LONG_NPC.rulerCyrillic(), LONG_NPC.rulerGender(), LONG_NPC.character(), LONG_NPC.traits(),
-                    io.github.sekerator.kingdomworld.core.npc.NpcLevel.LARGE, 3, true);
+                    io.github.sekerator.kingdomworld.core.npc.NpcLevel.LARGE, 3, true, WIDE_COUNT, WIDE_COUNT);
 
     private record Case(String name, Supplier<Screen> screen) {
     }
@@ -996,11 +998,18 @@ final class ClientLayoutCheck {
     }
 
     private static void fillMapData() {
+        fillMapData(LONG_NPC);
+    }
+
+    /**
+     * The land of the atlas with a kingdom of players and the kingdom of the world {@code npc}.
+     */
+    private static void fillMapData(io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo npc) {
         UUID first = UUID.nameUUIDFromBytes("first".getBytes(StandardCharsets.UTF_8));
         UUID second = UUID.nameUUIDFromBytes("second".getBytes(StandardCharsets.UTF_8));
         List<KingdomMapInfo> palette = List.of(
                 new KingdomMapInfo(first, LONG_KINGDOM, 0x6C3483, LONG_PLAYER, 8, 20, 187, true, 0, 0),
-                new KingdomMapInfo(second, "Valoria", 0xB7950B, "", 1, 9, 0, true, 7, 1, LONG_NPC));
+                new KingdomMapInfo(second, "Valoria", 0xB7950B, "", 1, 9, 0, true, 7, 1, npc));
         int width = 20;
         int height = 12;
         int[] cells = new int[width * height];
@@ -1367,9 +1376,14 @@ final class ClientLayoutCheck {
             screen.showForCheck(1.0, -0.5, 14.0, null, Component.empty(), false);
             List<KingdomMapScreen.KingdomEntry> entries = new ArrayList<>();
             String[] directions = {"north_west", "north_east", "south", "west", "here", "south_east"};
+            // Kingdoms of the world of every size, raised and still raising, with five digit people and soldiers, and kingdoms of players.
+            io.github.sekerator.kingdomworld.core.npc.NpcLevel[] levels = io.github.sekerator.kingdomworld.core.npc.NpcLevel.values();
             for (int i = 0; i < 30; i++) {
+                io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapKingdom kingdom = i % 4 == 3 ? null
+                        : new io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapKingdom(levels[i % levels.length], WIDE_COUNT,
+                        WIDE_COUNT, i % 2 == 0);
                 entries.add(new KingdomMapScreen.KingdomEntry(i % 2 == 0 ? LONG_KINGDOM : LONG_NPC.nameCyrillic(), i * 400, -i * 300, 12_340L + i * 10,
-                        directions[i % directions.length]));
+                        directions[i % directions.length], kingdom));
             }
             screen.showKingdomListForCheck(entries);
             return screen;
@@ -1392,6 +1406,12 @@ final class ClientLayoutCheck {
                 .withRuler(longRuler(false)), "overview", Component.empty())));
         cases.add(new Case("map-view-npc-card", () -> {
             fillMapData();
+            KingdomMapScreen screen = new KingdomMapScreen(null);
+            screen.showForCheck(6.0, -5.0, 14.0, UUID.nameUUIDFromBytes("second".getBytes(StandardCharsets.UTF_8)), Component.empty(), false);
+            return screen;
+        }));
+        cases.add(new Case("map-view-npc-card-raising", () -> {
+            fillMapData(RAISING_NPC);
             KingdomMapScreen screen = new KingdomMapScreen(null);
             screen.showForCheck(6.0, -5.0, 14.0, UUID.nameUUIDFromBytes("second".getBytes(StandardCharsets.UTF_8)), Component.empty(), false);
             return screen;

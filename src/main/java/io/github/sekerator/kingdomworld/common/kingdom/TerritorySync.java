@@ -30,7 +30,7 @@ import java.util.UUID;
  *       dimension at the end of the tick;</li>
  *   <li>every half second each player's chunk is checked, and crossing into or out of a kingdom's land is
  *       reported to that player;</li>
- *   <li>every five seconds the map facts of kingdoms (name, color, ruler, capital) are compared with what was sent,
+ *   <li>every five seconds the map facts of kingdoms (name, color, ruler, capital, what is shown of a kingdom of the world) are compared with what was sent,
  *       and changed ones go to all players as a delta without chunks, so maps rename and recolor land.</li>
  * </ul>
  * Players only receive kingdoms the {@link TerritorySnapshots#visibility() map visibility} lets them see.
@@ -163,7 +163,8 @@ public final class TerritorySync {
     }
 
     /**
-     * Sends the map facts of kingdoms whose name, color, ruler or capital changed since the last check.
+     * Sends the map facts of kingdoms whose name, color, ruler, capital or facts of a kingdom of the world changed since the last
+     * check.
      */
     private static void sendChangedInfo(MinecraftServer server) {
         if (server.getPlayerList().getPlayerCount() == 0 && LAST_INFO.isEmpty()) {
@@ -180,8 +181,9 @@ public final class TerritorySync {
             present.add(kingdom.id());
             String dimension = territory.get().dimension();
             KingdomMapInfo info = KingdomViews.mapInfo(server, state, kingdom, dimension);
+            // What players see of a kingdom of the world counts too, so that a kingdom raised or grown shows its new numbers.
             List<Object> key = List.of(info.name(), info.color(), info.rulerName(), info.hasCapital(), info.capitalChunkX(),
-                    info.capitalChunkZ(), dimension);
+                    info.capitalChunkZ(), dimension, Optional.ofNullable(info.npc()));
             List<Object> old = LAST_INFO.put(kingdom.id(), key);
             if (old != null && !old.equals(key)) {
                 changed.computeIfAbsent(dimension, d -> new ArrayList<>()).add(info);

@@ -131,7 +131,7 @@ public abstract class KingdomScreen extends Screen {
     }
 
     /**
-     * The lines about a kingdom of the world: its ruler, its size and the character of its ruler.
+     * The lines about a kingdom of the world: its ruler, its size, the character of its ruler, and its people and soldiers.
      */
     protected static List<Component> npcLines(io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo npc) {
         Component ruler = io.github.sekerator.kingdomworld.common.npc.NpcTexts.ruler(npc.rulerLatin(), npc.rulerCyrillic(), npc.rulerGender());
@@ -140,7 +140,18 @@ public abstract class KingdomScreen extends Screen {
                         io.github.sekerator.kingdomworld.common.npc.NpcTexts.level(npc.level())),
                 Component.translatable("kingdomworld.screen.throne.npc.character",
                         io.github.sekerator.kingdomworld.common.npc.NpcTexts.character(npc.character()),
-                        io.github.sekerator.kingdomworld.common.npc.NpcTexts.traits(npc.traits())));
+                        io.github.sekerator.kingdomworld.common.npc.NpcTexts.traits(npc.traits())),
+                npcPeople(npc.raising(), npc.people(), npc.soldiers()));
+    }
+
+    /**
+     * The people and soldiers of a kingdom of the world: those it is expected to have while its capital is being built, the real
+     * ones once it stands.
+     */
+    protected static Component npcPeople(boolean raising, int people, int soldiers) {
+        return Component.translatable(raising ? "kingdomworld.screen.throne.npc.people.raising" : "kingdomworld.screen.throne.npc.people",
+                io.github.sekerator.kingdomworld.common.life.LifeTexts.citizens(people),
+                io.github.sekerator.kingdomworld.common.army.ArmyTexts.soldiers(soldiers));
     }
 
     /**

@@ -193,10 +193,15 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
-     * A kingdom of the list: the name of its capital, where it stands, how far and in which direction from the player.
+     * A kingdom of the list: the name of its capital, where it stands, how far and in which direction from the player, and how
+     * large it is when it is a kingdom of the world ({@code null} for a kingdom of players).
      */
-    public record KingdomEntry(String name, int x, int z, long distance, String direction) {
+    public record KingdomEntry(String name, int x, int z, long distance, String direction,
+                               @Nullable io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapKingdom kingdom) {
     }
+
+    /** The narrowest a name of the list is cut to before the size of the kingdom gives way to it. */
+    private static final int LIST_NAME_MIN = 40;
 
     /** Whether the list of kingdoms is open, and its first row shown. */
     private boolean listing;
@@ -226,7 +231,15 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             long distance = Math.round(Math.hypot(city.x() - fromX, city.z() - fromZ) / 10.0) * 10;
             String direction = io.github.sekerator.kingdomworld.core.life.Rumors.direction((int) Math.floor(fromX), (int) Math.floor(fromZ),
                     city.x(), city.z());
-            entries.add(new KingdomEntry(city.name(), city.x(), city.z(), distance, direction.substring(direction.lastIndexOf('.') + 1)));
+            io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapKingdom kingdom = city.kingdom();
+            if (kingdom == null) {
+                // A capital the maps of the server have not looked at again yet: the land of the kingdom tells it, if it reached the client.
+                KingdomMapInfo info = ClientTerritoryCache.kingdom(city.kingdomId());
+                kingdom = info == null || info.npc() == null ? null
+                        : io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapKingdom.of(info.npc());
+            }
+            entries.add(new KingdomEntry(city.name(), city.x(), city.z(), distance, direction.substring(direction.lastIndexOf('.') + 1),
+                    kingdom));
         }
         entries.sort(java.util.Comparator.comparingLong(KingdomEntry::distance));
         return entries;
@@ -257,8 +270,8 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
-     * The list of kingdoms over the right of the map: a name (shortened, in full on hover) and how far and where; a click takes the
-     * map to the capital.
+     * The list of kingdoms over the right of the map: a name (shortened, in full on hover), how large a kingdom of the world is, and
+     * how far and where; hovering a kingdom of the world tells its people and soldiers; a click takes the map to the capital.
      */
     private void drawKingdomList(GuiGraphics graphics, int mouseX, int mouseY) {
         List<KingdomEntry> entries = kingdomEntries();
@@ -286,9 +299,42 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             if (mouseX >= left && mouseX < left + width && mouseY >= y - 1 && mouseY < y + LIST_ROW - 1) {
                 graphics.fill(left + 1, y - 1, left + width - 1, y + LIST_ROW - 2, 0x40F0D070);
             }
-            name(graphics, entry.name(), left + 4, y, 0xFFF0E0C0, Math.max(8, width - 14 - whereWidth));
-            label(graphics, where, left + width - 4 - whereWidth, y, 0xFFA8A8A8, left + width - 4);
+            int whereX = left + width - 4 - whereWidth;
+            int nameRoom = Math.max(8, width - 14 - whereWidth);
+            io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapKingdom kingdom = entry.kingdom();
+            boolean sizeShown = false;
+            if (kingdom != null) {
+                // The size stands before the distance; where the row is too narrow for it, it gives way and is told on hover.
+                Component size = io.github.sekerator.kingdomworld.common.npc.NpcTexts.level(kingdom.level());
+                int sizeWidth = font.width(size);
+                int sizeX = whereX - 6 - sizeWidth;
+                if (sizeX - 6 - (left + 4) >= LIST_NAME_MIN) {
+                    nameRoom = sizeX - 6 - (left + 4);
+                    label(graphics, size, sizeX, y, sizeColor(kingdom.level()), whereX - 6);
+                    sizeShown = true;
+                }
+            }
+            name(graphics, entry.name(), left + 4, y, 0xFFF0E0C0, nameRoom);
+            label(graphics, where, whereX, y, 0xFFA8A8A8, left + width - 4);
+            if (kingdom != null) {
+                if (!sizeShown) {
+                    hoverText(left + 4, y, width - 8, Component.translatable("kingdomworld.screen.throne.npc.size",
+                            io.github.sekerator.kingdomworld.common.npc.NpcTexts.level(kingdom.level())));
+                }
+                hoverText(left + 4, y, width - 8, npcPeople(kingdom.raising(), kingdom.people(), kingdom.soldiers()));
+            }
         }
+    }
+
+    /**
+     * The color of the size of a kingdom of the world in the list: the larger, the brighter.
+     */
+    private static int sizeColor(io.github.sekerator.kingdomworld.core.npc.NpcLevel level) {
+        return switch (level) {
+            case LARGE -> 0xFFF0C040;
+            case MEDIUM -> 0xFFD8C8A0;
+            case SMALL -> 0xFFB0A890;
+        };
     }
 
     /**

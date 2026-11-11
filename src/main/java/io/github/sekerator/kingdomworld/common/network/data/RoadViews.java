@@ -351,8 +351,16 @@ public final class RoadViews {
 
     /**
      * A city on the map; id 0 stands for a capital, which the maps draw from the kingdoms and only add the level to.
+     *
+     * @param kingdom the size of the kingdom of the world a capital belongs to, from the first minute of the world; {@code null}
+     *                for other cities and for kingdoms of players
      */
-    public record MapCity(long id, UUID kingdomId, String name, String dimension, int x, int z, int color, CityLevel level) {
+    public record MapCity(long id, UUID kingdomId, String name, String dimension, int x, int z, int color, CityLevel level,
+                          @Nullable MapKingdom kingdom) {
+        public MapCity(long id, UUID kingdomId, String name, String dimension, int x, int z, int color, CityLevel level) {
+            this(id, kingdomId, name, dimension, x, z, color, level, null);
+        }
+
         void encode(FriendlyByteBuf buf) {
             buf.writeVarLong(id);
             buf.writeUUID(kingdomId);
@@ -362,11 +370,52 @@ public final class RoadViews {
             buf.writeInt(z);
             buf.writeInt(color);
             buf.writeEnum(level);
+            buf.writeBoolean(kingdom != null);
+            if (kingdom != null) {
+                kingdom.encode(buf);
+            }
         }
 
         static MapCity decode(FriendlyByteBuf buf) {
             return new MapCity(buf.readVarLong(), buf.readUUID(), buf.readUtf(NAME), buf.readUtf(NAME), buf.readInt(), buf.readInt(), buf.readInt(),
-                    readEnum(buf, CityLevel.class));
+                    readEnum(buf, CityLevel.class), buf.readBoolean() ? MapKingdom.decode(buf) : null);
+        }
+    }
+
+    /**
+     * How large a kingdom of the world is, for the list of kingdoms of the atlas: its level and its people and soldiers, those it
+     * is expected to have while its capital is being built and the real ones once it stands.
+     */
+    public record MapKingdom(io.github.sekerator.kingdomworld.core.npc.NpcLevel level, int people, int soldiers, boolean raising) {
+        public MapKingdom {
+            java.util.Objects.requireNonNull(level, "level");
+            if (people < 0 || people > NpcKingdomInfo.MAX_COUNT || soldiers < 0 || soldiers > NpcKingdomInfo.MAX_COUNT) {
+                throw new IllegalArgumentException("Kingdom of the world out of range");
+            }
+        }
+
+        /**
+         * The size of the kingdom of the world players are shown.
+         */
+        public static MapKingdom of(NpcKingdomInfo info) {
+            return new MapKingdom(info.level(), info.people(), info.soldiers(), info.raising());
+        }
+
+        void encode(FriendlyByteBuf buf) {
+            buf.writeEnum(level);
+            buf.writeVarInt(people);
+            buf.writeVarInt(soldiers);
+            buf.writeBoolean(raising);
+        }
+
+        static MapKingdom decode(FriendlyByteBuf buf) {
+            io.github.sekerator.kingdomworld.core.npc.NpcLevel level = readEnum(buf, io.github.sekerator.kingdomworld.core.npc.NpcLevel.class);
+            int people = buf.readVarInt();
+            int soldiers = buf.readVarInt();
+            if (people < 0 || people > NpcKingdomInfo.MAX_COUNT || soldiers < 0 || soldiers > NpcKingdomInfo.MAX_COUNT) {
+                throw new IllegalArgumentException("People out of range: " + people + ", " + soldiers);
+            }
+            return new MapKingdom(level, people, soldiers, buf.readBoolean());
         }
     }
 

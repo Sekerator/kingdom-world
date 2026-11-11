@@ -87,8 +87,12 @@ public final class RoadSync {
         List<RoadViews.MapCity> cityList = new ArrayList<>();
         for (CityWalls.Place place : CityWalls.places(server)) {
             int[] counts = CityWalls.counts(server, place);
+            // The capital of a kingdom of the world tells how large it is, so that the list of kingdoms shows it before its land is seen.
+            io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo npc = place.cityId() == 0
+                    ? io.github.sekerator.kingdomworld.common.kingdom.KingdomViews.npcInfo(server, place.kingdomId()) : null;
             cityList.add(new RoadViews.MapCity(place.cityId(), place.kingdomId(), place.name(), place.dimension(), place.x(), place.z(),
-                    color(server, place.kingdomId()), CityLevel.of(counts[0], counts[1], RoadSettings.rules())));
+                    color(server, place.kingdomId()), CityLevel.of(counts[0], counts[1], RoadSettings.rules()),
+                    npc == null ? null : RoadViews.MapKingdom.of(npc)));
         }
         List<RoadViews.MapRoad> roadList = new ArrayList<>();
         for (Road road : state.roads()) {
@@ -222,7 +226,7 @@ public final class RoadSync {
             String name = city.id() == 0 ? io.github.sekerator.kingdomworld.common.npc.NpcWork.localKingdom(city.kingdomId(), city.name(), language)
                     : io.github.sekerator.kingdomworld.common.npc.NpcWork.localCity(city.name(), language);
             named.add(name.equals(city.name()) ? city : new RoadViews.MapCity(city.id(), city.kingdomId(), name, city.dimension(), city.x(),
-                    city.z(), city.color(), city.level()));
+                    city.z(), city.color(), city.level(), city.kingdom()));
         }
         return new RoadViews.MapData(named, roads, camps, walls);
     }

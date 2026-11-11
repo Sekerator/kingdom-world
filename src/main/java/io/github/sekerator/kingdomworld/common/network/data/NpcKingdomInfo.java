@@ -15,15 +15,24 @@ import java.util.Objects;
 
 /**
  * What players see of a kingdom of the world on the overview of the throne and on the atlas: its names in both alphabets,
- * its ruler with a character and traits, its size and its towns.
+ * its ruler with a character and traits, its size and its towns, and its people and soldiers: those it is expected to have
+ * while its capital is being built, the real ones once it stands.
  */
 public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String rulerLatin, String rulerCyrillic, Gender rulerGender,
-                             RulerCharacter character, List<RulerCharacter.Trait> traits, NpcLevel level, int towns, boolean raising) {
+                             RulerCharacter character, List<RulerCharacter.Trait> traits, NpcLevel level, int towns, boolean raising,
+                             int people, int soldiers) {
+    /** The most people or soldiers a kingdom of the world is shown with. */
+    public static final int MAX_COUNT = 100_000;
     private static final int MAX_NAME = 64;
 
     public NpcKingdomInfo(String nameLatin, String nameCyrillic, String rulerLatin, String rulerCyrillic, Gender rulerGender,
                           RulerCharacter character, List<RulerCharacter.Trait> traits, NpcLevel level, int towns) {
         this(nameLatin, nameCyrillic, rulerLatin, rulerCyrillic, rulerGender, character, traits, level, towns, false);
+    }
+
+    public NpcKingdomInfo(String nameLatin, String nameCyrillic, String rulerLatin, String rulerCyrillic, Gender rulerGender,
+                          RulerCharacter character, List<RulerCharacter.Trait> traits, NpcLevel level, int towns, boolean raising) {
+        this(nameLatin, nameCyrillic, rulerLatin, rulerCyrillic, rulerGender, character, traits, level, towns, raising, 0, 0);
     }
 
     public NpcKingdomInfo {
@@ -35,7 +44,7 @@ public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String ruler
         Objects.requireNonNull(character, "character");
         Objects.requireNonNull(level, "level");
         traits = List.copyOf(traits);
-        if (traits.size() > 2 || towns < 0) {
+        if (traits.size() > 2 || towns < 0 || people < 0 || people > MAX_COUNT || soldiers < 0 || soldiers > MAX_COUNT) {
             throw new IllegalArgumentException("Kingdom of the world out of range");
         }
     }
@@ -48,9 +57,22 @@ public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String ruler
      * @param raising whether the kingdom stands as data and its capital is still being built in the world
      */
     public static NpcKingdomInfo of(NpcKingdom kingdom, boolean raising) {
+        return of(kingdom, raising, 0, 0);
+    }
+
+    /**
+     * @param raising  whether the kingdom stands as data and its capital is still being built in the world
+     * @param people   the citizens it is expected to have while raising, else the ones it has; kept within {@link #MAX_COUNT}
+     * @param soldiers the soldiers it is expected to have while raising, else the ones it has; kept within {@link #MAX_COUNT}
+     */
+    public static NpcKingdomInfo of(NpcKingdom kingdom, boolean raising, int people, int soldiers) {
         return new NpcKingdomInfo(kingdom.name().latin(), kingdom.name().cyrillic(), kingdom.rulerName(CitizenNames.Alphabet.LATIN),
                 kingdom.rulerName(CitizenNames.Alphabet.CYRILLIC), kingdom.rulerGender(), kingdom.character(), kingdom.traits(), kingdom.level(),
-                kingdom.towns().size(), raising);
+                kingdom.towns().size(), raising, bounded(people), bounded(soldiers));
+    }
+
+    private static int bounded(int count) {
+        return Math.max(0, Math.min(MAX_COUNT, count));
     }
 
     public void encode(FriendlyByteBuf buf) {
@@ -65,6 +87,8 @@ public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String ruler
         buf.writeEnum(level);
         buf.writeVarInt(towns);
         buf.writeBoolean(raising);
+        buf.writeVarInt(people);
+        buf.writeVarInt(soldiers);
     }
 
     public static NpcKingdomInfo decode(FriendlyByteBuf buf) {
@@ -87,8 +111,14 @@ public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String ruler
         if (towns < 0 || towns > 64) {
             throw new DecoderException("Towns out of range: " + towns);
         }
-        return new NpcKingdomInfo(nameLatin, nameCyrillic, rulerLatin, rulerCyrillic, gender, character, traits, level, towns,
-                buf.readBoolean());
+        boolean raising = buf.readBoolean();
+        int people = buf.readVarInt();
+        int soldiers = buf.readVarInt();
+        if (people < 0 || people > MAX_COUNT || soldiers < 0 || soldiers > MAX_COUNT) {
+            throw new DecoderException("People out of range: " + people + ", " + soldiers);
+        }
+        return new NpcKingdomInfo(nameLatin, nameCyrillic, rulerLatin, rulerCyrillic, gender, character, traits, level, towns, raising,
+                people, soldiers);
     }
 
     /**
