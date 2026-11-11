@@ -338,6 +338,10 @@ public class CitizenEntity extends PathfinderMob {
                 && io.github.sekerator.kingdomworld.common.life.DayGoal.shouldWake(this)) {
             stopSleeping();
         }
+        if (!level().isClientSide && fearUntil > 0 && !isFrightened()) {
+            // The fright ran out, whether the body ever ran or not (asleep, held still): it is kept near its home again.
+            calmDown();
+        }
         if (!level().isClientSide && isAlive() && getHealth() < getMaxHealth()) {
             // Slow natural healing; faster asleep, much faster next to an infirmary with room.
             int interval = CitizenCare.isInInfirmary(this) ? 40 : isSleeping() ? 100 : 200;

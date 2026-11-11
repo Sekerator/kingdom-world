@@ -78,8 +78,9 @@ public final class LawEntry {
         }
         LawState state = LawWork.state(server);
         long now = LawWork.now(server);
-        if (state.wanted(city.kingdomId(), player.getUUID()).isPresent() && LawGuards.catchable(server, player)) {
-            // The guards at the gate stop the wanted as any guard does.
+        if (state.wanted(city.kingdomId(), player.getUUID()).isPresent() && LawGuards.catchable(server, player) && !player.isCreative()) {
+            // The guards at the gate stop the wanted as any guard does. A player in creative mode cannot be made to pay and
+            // is chased only while an alarm lasts, so the gate lets such a player through like a guard on its round does.
             LawGuards.hail(server, null, player, city.kingdomId(), now);
             return false;
         }
