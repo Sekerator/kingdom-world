@@ -47,6 +47,10 @@ final class ClientNpcShowcase {
     private static final int SETTLE = 100;
     /** Ticks the appearance may take at most. */
     private static final int MAX_WAIT = 36_000;
+    /** The shot from the avenue of the large capital: the player stands among its citizens, and the ticks are measured. */
+    private static final String STREET = "npc-capital-street";
+    /** Ticks the player stands on the avenue before that shot, so that the citizens around have their bodies. */
+    private static final int STREET_WAIT = 600;
 
     private record Shot(String name, double x, double y, double z, float yaw, float pitch) {
     }
@@ -111,7 +115,11 @@ final class ClientNpcShowcase {
             hold(minecraft);
             wait--;
             if (wait == 0) {
-                shoot(index < shots.size() ? shots.get(index).name() : "atlas-kingdom");
+                String name = index < shots.size() ? shots.get(index).name() : "atlas-kingdom";
+                if (name.equals(STREET)) {
+                    measure(server, playerId);
+                }
+                shoot(name);
             }
             return;
         }
@@ -125,6 +133,7 @@ final class ClientNpcShowcase {
         minecraft.options.hideGui = true;
         minecraft.getToasts().clear();
         minecraft.gui.getChat().clearMessages(false);
+        boolean street = index < shots.size() && shots.get(index).name().equals(STREET);
         if (index < shots.size()) {
             Shot shot = shots.get(index);
             teleport(server, playerId, shot);
@@ -134,7 +143,31 @@ final class ClientNpcShowcase {
             minecraft.setScreen(atlas);
             atlas.showForCheck(atlasX / 16.0, atlasZ / 16.0, 3.0, null, net.minecraft.network.chat.Component.empty(), false);
         }
-        wait = SETTLE;
+        wait = street ? STREET_WAIT : SETTLE;
+    }
+
+    /**
+     * Says in the log how long the ticks of the server were while the player stood inside the large capital, and how many
+     * citizens had bodies around it.
+     */
+    private void measure(IntegratedServer server, UUID playerId) {
+        server.execute(() -> {
+            ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+            if (player == null) {
+                return;
+            }
+            long sum = 0;
+            long worst = 0;
+            for (long nanos : server.tickTimes) {
+                sum += nanos;
+                worst = Math.max(worst, nanos);
+            }
+            int bodies = player.serverLevel().getEntitiesOfClass(io.github.sekerator.kingdomworld.common.citizen.CitizenEntity.class,
+                    player.getBoundingBox().inflate(128.0, 64.0, 128.0)).size();
+            LOGGER.info(PREFIX + "inside the large capital with {} citizen bodies around: average tick {} ms, worst tick {} ms over {} ticks",
+                    bodies, String.format(java.util.Locale.ROOT, "%.2f", sum / 1e6 / server.tickTimes.length),
+                    String.format(java.util.Locale.ROOT, "%.2f", worst / 1e6), server.tickTimes.length);
+        });
     }
 
     private void hold(Minecraft minecraft) {
