@@ -42,6 +42,12 @@ public record NpcWealth(long money, Map<String, Integer> items) {
         add(items, "minecraft:cobblestone", stacks * 64);
         add(items, "minecraft:iron_ingot", stacks * 4);
         add(items, "minecraft:wheat_seeds", composition.fields() * 16);
+        if (composition.districts()) {
+            // Those who fell trees and break stone start with their tools, and the fields of carrots with seed carrots.
+            add(items, "minecraft:iron_axe", composition.jobs().getOrDefault("lumberjack", 0));
+            add(items, "minecraft:iron_pickaxe", composition.jobs().getOrDefault("miner", 0));
+            add(items, "minecraft:carrot", composition.fields() * 16);
+        }
         int soldiers = composition.soldiers();
         int warriors = (soldiers + 1) / 2;
         int archers = soldiers - warriors;

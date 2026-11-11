@@ -67,16 +67,16 @@ public final class LifeFairs {
             return false;
         }
         for (BuildingEffects.Effect effect : BuildingEffects.working(server, place.kingdomId(), BuildingRoles.MARKET)) {
-            if (near(place, effect.building().anchor())) {
+            if (near(server, place, effect.building().anchor())) {
                 return true;
             }
         }
         return false;
     }
 
-    private static boolean near(CityWalls.Place place, WorldPos pos) {
-        return pos.dimension().equals(place.dimension()) && Math.abs(pos.x() - place.x()) <= CityWalls.AREA
-                && Math.abs(pos.z() - place.z()) <= CityWalls.AREA;
+    private static boolean near(MinecraftServer server, CityWalls.Place place, WorldPos pos) {
+        int area = CityWalls.area(server, place);
+        return pos.dimension().equals(place.dimension()) && Math.abs(pos.x() - place.x()) <= area && Math.abs(pos.z() - place.z()) <= area;
     }
 
     /**
@@ -89,7 +89,7 @@ public final class LifeFairs {
         LifeState life = LifeWork.state(server);
         long today = LifeWork.today(server);
         for (CityWalls.Place place : CityWalls.places(server)) {
-            if (life.fairDay(key(place)) == today && near(place, pos)) {
+            if (life.fairDay(key(place)) == today && near(server, place, pos)) {
                 return Optional.of(place);
             }
         }

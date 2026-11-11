@@ -21,6 +21,7 @@ public final class NpcState {
     private int nextSiteId = 1;
     private int planCursor;
     private int planShift;
+    private int planPass;
     private boolean planned;
     private Runnable changeListener = () -> { };
 
@@ -40,10 +41,21 @@ public final class NpcState {
     }
 
     /**
-     * Adds a place to the plan with the next number.
+     * Adds a place of the first layout to the plan with the next number.
      */
     public NpcSite addSite(int x, int z, NpcLevel level, long seed, List<NpcSite.Town> towns) {
-        NpcSite site = new NpcSite(nextSiteId++, x, z, level, seed, towns);
+        return addSite(x, z, level, seed, towns, NpcSite.LAYOUT_GRID, "", "");
+    }
+
+    /**
+     * Adds a place to the plan with the next number.
+     *
+     * @param layout how its capital is laid out
+     * @param style  the id of its look, or empty
+     * @param wood   the wood that grows there, or empty
+     */
+    public NpcSite addSite(int x, int z, NpcLevel level, long seed, List<NpcSite.Town> towns, int layout, String style, String wood) {
+        NpcSite site = new NpcSite(nextSiteId++, x, z, level, seed, towns, layout, style, wood);
         site.setChangeListener(changeListener);
         sites.put(site.id(), site);
         changeListener.run();
@@ -59,6 +71,13 @@ public final class NpcState {
     }
 
     /**
+     * The pass over the candidates the plan is on: 0 at first, more once it asks less of a place.
+     */
+    public int planPass() {
+        return planPass;
+    }
+
+    /**
      * Whether the plan was made to its end.
      */
     public boolean planned() {
@@ -66,8 +85,13 @@ public final class NpcState {
     }
 
     public void setPlanProgress(int cursor, int shift, boolean done) {
+        setPlanProgress(cursor, shift, planPass, done);
+    }
+
+    public void setPlanProgress(int cursor, int shift, int pass, boolean done) {
         planCursor = Math.max(0, cursor);
         planShift = Math.max(0, shift);
+        planPass = Math.max(0, pass);
         planned = done;
         changeListener.run();
     }
@@ -85,6 +109,7 @@ public final class NpcState {
         gone.forEach(sites::remove);
         planCursor = 0;
         planShift = 0;
+        planPass = 0;
         planned = false;
         changeListener.run();
         return gone.size();
@@ -178,8 +203,13 @@ public final class NpcState {
     }
 
     public void restorePlan(int cursor, int shift, boolean done, int nextId) {
+        restorePlan(cursor, shift, 0, done, nextId);
+    }
+
+    public void restorePlan(int cursor, int shift, int pass, boolean done, int nextId) {
         planCursor = Math.max(0, cursor);
         planShift = Math.max(0, shift);
+        planPass = Math.max(0, pass);
         planned = done;
         nextSiteId = Math.max(nextSiteId, nextId);
     }

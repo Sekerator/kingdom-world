@@ -233,10 +233,14 @@ public final class NpcWork {
         if (towns) {
             int wanted = NpcSettings.rules().towns(level);
             int minCity = Math.max(64, io.github.sekerator.kingdomworld.common.road.RoadSettings.rules().minCityDistance());
-            chosen = io.github.sekerator.kingdomworld.core.npc.SitePlanner.chooseTowns(
-                    io.github.sekerator.kingdomworld.core.npc.SitePlanner.townCandidates(x, z, seed, NpcSettings.rules().townDistance()),
-                    point -> !NpcPlanning.nearKingdom(server, point[0], point[1], 48)
-                            && NpcPlanning.suitable(server.overworld(), point[0], point[1], 16, false), wanted, minCity);
+            List<int[]> candidates = new ArrayList<>();
+            for (int[] town : io.github.sekerator.kingdomworld.core.npc.SitePlanner.townCandidates(x, z, seed,
+                    NpcSettings.rules().townDistance())) {
+                candidates.add(NpcPlanning.centred(town));
+            }
+            chosen = io.github.sekerator.kingdomworld.core.npc.SitePlanner.chooseTowns(candidates,
+                    point -> !NpcPlanning.nearKingdom(server, point[0], point[1], 64)
+                            && NpcPlanning.suitable(server.overworld(), point[0], point[1], 28, false), wanted, Math.max(minCity, 112));
         }
         return plantAt(server, x, z, level, chosen);
     }
@@ -247,6 +251,19 @@ public final class NpcWork {
      */
     public static Optional<NpcSite> planAt(MinecraftServer server, int x, int z, io.github.sekerator.kingdomworld.core.npc.NpcLevel level,
                                            List<int[]> towns) {
+        if (isReadOnly(server)) {
+            return Optional.empty();
+        }
+        long seed = server.overworld().getSeed() * 31 + x * 341_873_128_712L + z * 132_897_987_541L;
+        return Optional.of(NpcPlanning.addSite(server, x, z, level, seed, towns));
+    }
+
+    /**
+     * Adds a place of the first layout (a grid of plots around the square of the throne) to the plan without raising it, as
+     * worlds made before the districts have them; for game tests.
+     */
+    public static Optional<NpcSite> planGridAt(MinecraftServer server, int x, int z, io.github.sekerator.kingdomworld.core.npc.NpcLevel level,
+                                               List<int[]> towns) {
         if (isReadOnly(server)) {
             return Optional.empty();
         }
@@ -265,7 +282,7 @@ public final class NpcWork {
         }
         NpcState state = state(server);
         long seed = server.overworld().getSeed() * 31 + x * 341_873_128_712L + z * 132_897_987_541L;
-        NpcSite site = state.addSite(x, z, level, seed, NpcSite.towns(towns));
+        NpcSite site = NpcPlanning.addSite(server, x, z, level, seed, towns);
         if (state.spawning().isEmpty()) {
             NpcSpawner.start(server, site);
         }
@@ -309,17 +326,29 @@ public final class NpcWork {
      * The nearest point to a place whose land suits a capital, looking in rings up to a distance; the place itself if none does.
      */
     public static int[] nearestSuitable(MinecraftServer server, int x, int z, int maxDistance) {
+        return nearestSuitable(server, x, z, maxDistance, io.github.sekerator.kingdomworld.core.npc.NpcLevel.SMALL);
+    }
+
+    /**
+     * The nearest point to a place whose land suits a capital of a level; the place itself if none does within the distance.
+     */
+    public static int[] nearestSuitable(MinecraftServer server, int x, int z, int maxDistance,
+                                        io.github.sekerator.kingdomworld.core.npc.NpcLevel kingdom) {
         ServerLevel level = server.overworld();
-        if (NpcPlanning.suitable(level, x, z, 40, true)) {
-            return new int[]{x, z};
-        }
-        for (int ring = 1; ring * SEARCH_STEP <= maxDistance; ring++) {
-            for (int i = 0; i < 8 * ring; i++) {
-                double angle = i * Math.PI * 2 / (8 * ring);
-                int cx = x + (int) Math.round(Math.cos(angle) * ring * SEARCH_STEP);
-                int cz = z + (int) Math.round(Math.sin(angle) * ring * SEARCH_STEP);
-                if (!NpcPlanning.nearKingdom(server, cx, cz, 128) && NpcPlanning.suitable(level, cx, cz, 40, true)) {
-                    return new int[]{cx, cz};
+        int land = NpcCity.landRadius(kingdom, NpcSite.LAYOUT_DISTRICTS) * 16 + 16;
+        // The plan asks less of a place on its later passes; an operator takes the best place near where it stands.
+        for (int relax = 0; relax <= 2; relax++) {
+            if (NpcPlanning.suitableCapital(level, x, z, kingdom, relax)) {
+                return new int[]{x, z};
+            }
+            for (int ring = 1; ring * SEARCH_STEP <= maxDistance; ring++) {
+                for (int i = 0; i < 8 * ring; i++) {
+                    double angle = i * Math.PI * 2 / (8 * ring);
+                    int cx = x + (int) Math.round(Math.cos(angle) * ring * SEARCH_STEP);
+                    int cz = z + (int) Math.round(Math.sin(angle) * ring * SEARCH_STEP);
+                    if (!NpcPlanning.nearKingdom(server, cx, cz, land) && NpcPlanning.suitableCapital(level, cx, cz, kingdom, relax)) {
+                        return new int[]{cx, cz};
+                    }
                 }
             }
         }
@@ -330,7 +359,14 @@ public final class NpcWork {
      * Whether the land around a point suits a capital, judged as the plan judges it; for the showcase of the client.
      */
     public static boolean suitableLand(ServerLevel level, int x, int z) {
-        return NpcPlanning.suitable(level, x, z, 40, true);
+        return suitableLand(level, x, z, io.github.sekerator.kingdomworld.core.npc.NpcLevel.SMALL);
+    }
+
+    /**
+     * Whether the land around a point suits a capital of a level, judged as the plan judges it on its second pass.
+     */
+    public static boolean suitableLand(ServerLevel level, int x, int z, io.github.sekerator.kingdomworld.core.npc.NpcLevel kingdom) {
+        return NpcPlanning.suitableCapital(level, x, z, kingdom, 1);
     }
 
     // ---------------------------------------------------------------- texts

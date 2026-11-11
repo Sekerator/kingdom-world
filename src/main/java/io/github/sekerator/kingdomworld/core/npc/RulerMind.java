@@ -492,7 +492,9 @@ public final class RulerMind {
         if (landWanted && !canClaim) {
             needs.add(new Need(NeedKind.LAND, "", 0));
         }
-        if (view.population >= rules.townPopulation() && view.towns < rules.maxTowns() && view.townSpot && spare >= 500) {
+        // A town more for every so many citizens: a kingdom that appeared with its towns founds the next one only once it grew.
+        if (view.population >= (long) rules.townPopulation() * (view.towns + 1) && view.towns < rules.maxTowns() && view.townSpot
+                && spare >= 500) {
             int bonus = builder + (view.has(RulerCharacter.Trait.AMBITIOUS) ? 10 : 0);
             out.add(new Scored(45 + bonus, RulerDecision.of(Kind.TOWN, "", 1)));
         }

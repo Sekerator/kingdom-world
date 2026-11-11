@@ -38,6 +38,7 @@ final class NpcNbt {
         CompoundTag plan = new CompoundTag();
         plan.putInt("cursor", state.planCursor());
         plan.putInt("shift", state.planShift());
+        plan.putInt("pass", state.planPass());
         plan.putBoolean("done", state.planned());
         plan.putInt("next", state.nextSiteId());
         tag.put("plan", plan);
@@ -49,6 +50,9 @@ final class NpcNbt {
             entry.putInt("z", site.z());
             entry.putString("level", site.level().id());
             entry.putLong("seed", site.seed());
+            entry.putInt("layout", site.layout());
+            entry.putString("style", site.style());
+            entry.putString("wood", site.wood());
             int[] towns = new int[site.towns().size() * 2];
             for (int i = 0; i < site.towns().size(); i++) {
                 towns[2 * i] = site.towns().get(i).x();
@@ -117,7 +121,10 @@ final class NpcNbt {
                 for (int t = 0; t + 1 < towns.length; t += 2) {
                     list.add(new NpcSite.Town(towns[t], towns[t + 1]));
                 }
-                NpcSite site = new NpcSite(entry.getInt("id"), entry.getInt("x"), entry.getInt("z"), level, entry.getLong("seed"), list);
+                // Places saved before the districts have no layout: they keep the grid they were planned with.
+                int layout = entry.contains("layout") ? entry.getInt("layout") : NpcSite.LAYOUT_GRID;
+                NpcSite site = new NpcSite(entry.getInt("id"), entry.getInt("x"), entry.getInt("z"), level, entry.getLong("seed"), list, layout,
+                        entry.getString("style"), entry.getString("wood"));
                 NpcSite.Status status = NpcSite.Status.byId(entry.getString("status"))
                         .orElseThrow(() -> new IllegalArgumentException("status"));
                 SpawnStage stage = SpawnStage.byId(entry.getString("stage")).orElseThrow(() -> new IllegalArgumentException("stage"));
@@ -130,7 +137,8 @@ final class NpcNbt {
                 problems.add("site " + i + ": " + e.getMessage());
             }
         }
-        state.restorePlan(plan.getInt("cursor"), plan.getInt("shift"), plan.getBoolean("done"), Math.max(plan.getInt("next"), maxId + 1));
+        state.restorePlan(plan.getInt("cursor"), plan.getInt("shift"), plan.getInt("pass"), plan.getBoolean("done"),
+                Math.max(plan.getInt("next"), maxId + 1));
         ListTag kingdoms = tag.getList("kingdoms", Tag.TAG_COMPOUND);
         for (int i = 0; i < kingdoms.size(); i++) {
             CompoundTag entry = kingdoms.getCompound(i);

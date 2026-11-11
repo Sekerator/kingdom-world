@@ -107,7 +107,8 @@ final class NpcBackground {
     /**
      * The place still to be raised that is nearest to a player.
      *
-     * @param close whether only a place within the distance of raising at once counts; otherwise only places founded as data
+     * @param close whether only a place within the distance of raising at once counts; otherwise only places founded as data,
+     *              the large kingdoms before the small ones
      */
     private static Optional<NpcSite> nearest(MinecraftServer server, NpcState state, boolean close) {
         ServerLevel overworld = server.overworld();
@@ -131,7 +132,9 @@ final class NpcBackground {
             if (close && distance > reach * reach) {
                 continue;
             }
-            if (best == null || distance < bestDistance) {
+            // In the background the large kingdoms go before the small ones; among equals the nearest to a player.
+            boolean larger = !close && best != null && site.level().ordinal() != best.level().ordinal();
+            if (best == null || (larger ? site.level().ordinal() > best.level().ordinal() : distance < bestDistance)) {
                 best = site;
                 bestDistance = distance;
             }

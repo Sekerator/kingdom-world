@@ -275,6 +275,9 @@ public final class NpcSpawner {
      * The composition of the kingdom of a place, from its seed and the rules of the server.
      */
     public static NpcComposition composition(NpcSite site) {
+        if (site.districts()) {
+            return NpcComposition.districts(site.level(), site.seed(), NpcSettings.rules(), site.towns().size());
+        }
         RoadRules roads = RoadSettings.rules();
         // The capital is laid out for walls of at least the default radius; a wall of a smaller one leaves out what stands in its way.
         // The work is planned for the towns the place has: a place without room for its towns gets no work for their people.
@@ -371,7 +374,11 @@ public final class NpcSpawner {
                             io.github.sekerator.kingdomworld.common.road.RoadBuilding.placeNow(server, road);
                         }
                     }
-                    RoadWork.state(server).wallOf(0, id).ifPresent(wall -> CityWalls.placeNow(server, wall));
+                    for (Wall wall : List.copyOf(RoadWork.state(server).walls())) {
+                        if (wall.kingdomId().equals(id)) {
+                            CityWalls.placeNow(server, wall);
+                        }
+                    }
                 });
             }
             step(server, server.overworld(), site, job);
@@ -427,17 +434,18 @@ public final class NpcSpawner {
         Set<Long> keys = new LinkedHashSet<>();
         int cx = site.x() >> 4;
         int cz = site.z() >> 4;
-        int r = NpcSettings.rules().landRadius(site.level()) + 1;
+        int r = NpcCity.landRadius(site) + 1;
         for (int dx = -r; dx <= r; dx++) {
             for (int dz = -r; dz <= r; dz++) {
                 keys.add(ChunkPos.asLong(cx + dx, cz + dz));
             }
         }
+        int around = NpcCity.townRadius(site) + 1;
         for (NpcSite.Town town : site.towns()) {
             int tx = town.x() >> 4;
             int tz = town.z() >> 4;
-            for (int dx = -2; dx <= 2; dx++) {
-                for (int dz = -2; dz <= 2; dz++) {
+            for (int dx = -around; dx <= around; dx++) {
+                for (int dz = -around; dz <= around; dz++) {
                     keys.add(ChunkPos.asLong(tx + dx, tz + dz));
                 }
             }
@@ -524,7 +532,7 @@ public final class NpcSpawner {
         String dimension = Dimensions.id(level);
         KingdomWorldState state = KingdomWorldApi.state(server);
         int buffer = KingdomWorldApi.rules().claimBufferChunks() + 1;
-        int r = rules.landRadius(site.level());
+        int r = NpcCity.landRadius(site);
         // A kingdom founded as data holds its land already; only a place still to be founded looks at its neighbours.
         if (state.kingdoms().get(own).isEmpty()
                 && state.territory().hasForeignLandWithin(dimension, ChunkKey.of(site.x() >> 4, site.z() >> 4), r + buffer, own)) {
@@ -555,7 +563,8 @@ public final class NpcSpawner {
             site.retainTowns(kept);
         }
         if (site.groundY() == 0) {
-            site.setGroundY(plazaHeight(level, site.x(), site.z()));
+            site.setGroundY(site.districts() ? wideHeight(level, site.x(), site.z(), NpcComposition.districtWall(site.level()))
+                    : plazaHeight(level, site.x(), site.z()));
         }
         site.advance(SpawnStage.FOUND);
     }
@@ -567,7 +576,7 @@ public final class NpcSpawner {
     private static String townProblem(ServerLevel level, KingdomWorldState state, NpcSite site, NpcSite.Town town, UUID own, int buffer,
                                       long limit) {
         String dimension = Dimensions.id(level);
-        int r = NpcSettings.rules().landRadius(site.level());
+        int r = NpcCity.landRadius(site);
         for (long key : NpcPlanning.townChunks(site.x() >> 4, site.z() >> 4, r, town.x(), town.z())) {
             int x = ChunkPos.getX(key);
             int z = ChunkPos.getZ(key);
@@ -592,6 +601,24 @@ public final class NpcSpawner {
         List<Integer> heights = new ArrayList<>();
         for (int dx = -PLAZA; dx <= PLAZA; dx += PLAZA) {
             for (int dz = -PLAZA; dz <= PLAZA; dz += PLAZA) {
+                heights.add(NpcGround.groundAt(level, x + dx, z + dz));
+            }
+        }
+        heights.sort(Integer::compare);
+        return Math.max(heights.get(heights.size() / 2), level.getSeaLevel());
+    }
+
+    /**
+     * The height a wide square is levelled to: the middle of the heights of the ground over all of it, so that about as much is
+     * cut as is filled.
+     *
+     * @param reach half the side of the square
+     */
+    static int wideHeight(ServerLevel level, int x, int z, int reach) {
+        List<Integer> heights = new ArrayList<>();
+        int step = Math.max(4, reach / 4);
+        for (int dx = -reach; dx <= reach; dx += step) {
+            for (int dz = -reach; dz <= reach; dz += step) {
                 heights.add(NpcGround.groundAt(level, x + dx, z + dz));
             }
         }
@@ -806,7 +833,8 @@ public final class NpcSpawner {
         Set<Long> keys = new LinkedHashSet<>();
         int cx = site.x() >> 4;
         int cz = site.z() >> 4;
-        int r = NpcSettings.rules().landRadius(site.level());
+        int r = NpcCity.landRadius(site);
+        int around = NpcCity.townRadius(site);
         for (int ring = 1; ring <= r; ring++) {
             for (int dx = -ring; dx <= ring; dx++) {
                 for (int dz = -ring; dz <= ring; dz++) {
@@ -820,9 +848,14 @@ public final class NpcSpawner {
             int tx = town.x() >> 4;
             int tz = town.z() >> 4;
             keys.addAll(corridor(cx, cz, tx, tz));
-            for (int dx = -1; dx <= 1; dx++) {
-                for (int dz = -1; dz <= 1; dz++) {
-                    keys.add(ChunkPos.asLong(tx + dx, tz + dz));
+            // The square of a town ring by ring from its town hall, so that every chunk is claimed next to land already held.
+            for (int ring = 0; ring <= around; ring++) {
+                for (int dx = -ring; dx <= ring; dx++) {
+                    for (int dz = -ring; dz <= ring; dz++) {
+                        if (Math.max(Math.abs(dx), Math.abs(dz)) == ring) {
+                            keys.add(ChunkPos.asLong(tx + dx, tz + dz));
+                        }
+                    }
                 }
             }
         }
@@ -844,6 +877,10 @@ public final class NpcSpawner {
      */
     private static void ground(MinecraftServer server, ServerLevel level, NpcSite site, Job job) {
         UUID id = site.kingdomId().orElseThrow();
+        if (job.composition.districts()) {
+            groundOfDistricts(level, site, job, id);
+            return;
+        }
         int reach = job.composition.reach();
         int margin = RAMP;
         int rows = 2 * (reach + margin) + 1;
@@ -875,6 +912,39 @@ public final class NpcSpawner {
         }
         if (site.step() >= rows) {
             decoratePlaza(level, site, id);
+            site.advance(SpawnStage.BUILD);
+        }
+    }
+
+    /**
+     * Levels the ground of a capital of districts column by column, as many as the budget allows in a tick: inside the wall to the
+     * height of the throne with streets, avenues and the square paved by the plan, and a slope outside it.
+     */
+    private static void groundOfDistricts(ServerLevel level, NpcSite site, Job job, UUID id) {
+        NpcComposition composition = job.composition;
+        int reach = composition.reach();
+        int side = 2 * (reach + RAMP) + 1;
+        int total = side * side;
+        int budget = blockBudget();
+        // The soil is looked at outside the levelled ground, where the land stays as it was.
+        NpcGround.Soil soil = NpcGround.soilAt(level, site.x() + reach + RAMP + 3, site.z());
+        int step = site.step();
+        while (step < total && budget > 0) {
+            int dx = step % side - reach - RAMP;
+            int dz = step / side - reach - RAMP;
+            int x = site.x() + dx;
+            int z = site.z() + dz;
+            int out = Math.max(Math.abs(dx), Math.abs(dz)) - reach;
+            BlockState top = NpcCity.surface(site, composition, dx, dz, soil);
+            if (out > 0 && top == soil.top()) {
+                budget -= Math.max(1, ramp(level, id, x, z, site.groundY(), out, soil));
+            } else {
+                budget -= Math.max(1, NpcGround.level(level, id, x, z, site.groundY(), top, soil.fill()));
+            }
+            step++;
+        }
+        site.setStep(step);
+        if (step >= total) {
             site.advance(SpawnStage.BUILD);
         }
     }
@@ -940,7 +1010,7 @@ public final class NpcSpawner {
             if (template.isEmpty()) {
                 continue;
             }
-            Placement placement = new Placement(plot.facing(), false);
+            Placement placement = new Placement(plot.facing(), plot.mirror());
             BlockPos anchor = anchor(template.get(), site.x() + plot.x(), site.groundY() + 1, site.z() + plot.z(), placement);
             boxes.add(template.get().box(anchor, placement));
         }
@@ -977,12 +1047,12 @@ public final class NpcSpawner {
         UUID id = site.kingdomId().orElseThrow();
         List<NpcComposition.Plot> plots = job.composition.buildings();
         int budget = blockBudget();
-        Materials materials = new Materials(Materials.AUTO, "");
+        Materials materials = NpcCity.materials(site);
         while (site.step() < plots.size() && budget > 0) {
             NpcComposition.Plot plot = plots.get(site.step());
             int[] used = new int[1];
             boolean standing = buildAt(server, level, id, plot.template(), site.x() + plot.x(), site.groundY() + 1, site.z() + plot.z(),
-                    new Placement(plot.facing(), false), materials, budget, used);
+                    new Placement(plot.facing(), plot.mirror()), materials, budget, used);
             budget -= Math.max(1, used[0]);
             if (standing) {
                 site.setStep(site.step() + 1);
@@ -1054,6 +1124,10 @@ public final class NpcSpawner {
         UUID id = site.kingdomId().orElseThrow();
         int y = site.groundY() + 1;
         NpcComposition composition = job.composition;
+        if (composition.districts()) {
+            workOfDistricts(server, level, site, composition, id);
+            return;
+        }
         List<int[]> outside = outsideSpots(site, composition);
         int fields = composition.fields();
         int step = site.step();
@@ -1101,6 +1175,88 @@ public final class NpcSpawner {
         }
         professionsInBuildings(server, id, composition);
         site.advance(SpawnStage.TOWNS);
+    }
+
+    /**
+     * The places of work of a capital of districts, a step a tick: the posts and the treasury on the square of the palace, the
+     * fields (carrots, every third one wheat for the bakers), the posts of woodcutters and miners outside the wall, the lamps of
+     * the avenues, the trees of the greens, and at last the professions of the posts inside the buildings.
+     */
+    private static void workOfDistricts(MinecraftServer server, ServerLevel level, NpcSite site, NpcComposition composition, UUID id) {
+        int y = site.groundY() + 1;
+        int fields = composition.fields();
+        int step = site.step();
+        if (step == 0) {
+            List<NpcCity.Place> places = NpcCity.places(composition);
+            Map<String, Integer> posts = new java.util.HashMap<>();
+            for (NpcCity.Place place : places) {
+                posts.merge(place.what(), 1, Integer::sum);
+            }
+            Map<String, Integer> seen = new java.util.HashMap<>();
+            for (NpcCity.Place place : places) {
+                BlockPos at = new BlockPos(site.x() + place.x(), y, site.z() + place.z());
+                switch (place.what()) {
+                    case "guild_desk" -> place(level, id, at, GuildRegistries.GUILD_DESK.get().defaultBlockState());
+                    case "mint" -> place(level, id, at, ModRegistries.MINT.get().defaultBlockState());
+                    case "bank" -> place(level, id, at, ModRegistries.BANK.get().defaultBlockState());
+                    default -> {
+                        int index = seen.merge(place.what(), 1, Integer::sum) - 1;
+                        post(level, id, at, place.what(), share(composition.jobs().getOrDefault(place.what(), 0), posts.get(place.what()), index));
+                    }
+                }
+            }
+            site.setStep(1);
+            return;
+        }
+        if (step <= fields) {
+            int[] spot = composition.fieldSpots().get(step - 1);
+            field(level, id, site.x() + spot[0], site.z() + spot[1], (step - 1) % 3 == 2 ? Blocks.WHEAT : Blocks.CARROTS);
+            site.setStep(step + 1);
+            return;
+        }
+        if (step == fields + 1) {
+            List<int[]> outer = NpcCity.outerPosts(composition);
+            int each = composition.level() == io.github.sekerator.kingdomworld.core.npc.NpcLevel.LARGE ? 2 : 1;
+            for (int i = 0; i < each; i++) {
+                int[] wood = outer.get(2 * i);
+                BlockPos at = new BlockPos(site.x() + wood[0], NpcGround.groundAt(level, site.x() + wood[0], site.z() + wood[1]) + 1,
+                        site.z() + wood[1]);
+                post(level, id, at, "lumberjack", share(composition.jobs().getOrDefault("lumberjack", 0), each, i));
+                grove(level, id, at, site);
+                int[] mine = outer.get(2 * i + 1);
+                post(level, id, new BlockPos(site.x() + mine[0], NpcGround.groundAt(level, site.x() + mine[0], site.z() + mine[1]) + 1,
+                        site.z() + mine[1]), "miner", share(composition.jobs().getOrDefault("miner", 0), each, i));
+            }
+            site.setStep(step + 1);
+            return;
+        }
+        if (step == fields + 2) {
+            for (int[] lamp : NpcCity.lamps(composition)) {
+                NpcCity.lamp(level, id, site, new BlockPos(site.x() + lamp[0], y, site.z() + lamp[1]));
+            }
+            site.setStep(step + 1);
+            return;
+        }
+        if (step == fields + 3) {
+            for (int[] green : NpcCity.greens(composition)) {
+                NpcCity.tree(level, id, site, new BlockPos(site.x() + green[0], y, site.z() + green[1]));
+            }
+            site.setStep(step + 1);
+            return;
+        }
+        professionsByRole(server, level, id);
+        site.advance(SpawnStage.TOWNS);
+    }
+
+    /**
+     * The seats of one of several posts of a profession: the workers shared between the posts, the first ones taking what does
+     * not divide.
+     */
+    private static int share(int workers, int posts, int index) {
+        if (posts <= 0) {
+            return 0;
+        }
+        return workers / posts + (index < workers % posts ? 1 : 0);
     }
 
     /**
@@ -1204,6 +1360,14 @@ public final class NpcSpawner {
      * A field of nine by nine with water in the middle, wheat on farmland and two composters for farmers.
      */
     private static void field(ServerLevel level, UUID id, int cx, int cz) {
+        field(level, id, cx, cz, Blocks.WHEAT);
+    }
+
+    /**
+     * A field of a crop.
+     */
+    private static void field(ServerLevel level, UUID id, int cx, int cz, Block planted) {
+        CropBlock crop = (CropBlock) planted;
         int y = NpcGround.groundAt(level, cx, cz);
         for (int dx = -5; dx <= 5; dx++) {
             for (int dz = -5; dz <= 5; dz++) {
@@ -1218,8 +1382,8 @@ public final class NpcSpawner {
                     continue;
                 }
                 if (NpcGround.set(level, id, at, Blocks.FARMLAND.defaultBlockState().setValue(FarmBlock.MOISTURE, FarmBlock.MAX_MOISTURE))) {
-                    int age = Math.floorMod(cx * 31 + cz * 17 + dx * 7 + dz * 13, CropBlock.MAX_AGE + 1);
-                    NpcGround.set(level, id, at.above(), ((CropBlock) Blocks.WHEAT).getStateForAge(age));
+                    int age = Math.floorMod(cx * 31 + cz * 17 + dx * 7 + dz * 13, crop.getMaxAge() + 1);
+                    NpcGround.set(level, id, at.above(), crop.getStateForAge(age));
                 }
             }
         }
@@ -1236,7 +1400,7 @@ public final class NpcSpawner {
      * Saplings of the wood of the place around the lumberjack's post, so that it always has trees to fell.
      */
     private static void grove(ServerLevel level, UUID id, BlockPos post, NpcSite site) {
-        Block sapling = sapling(level, post);
+        Block sapling = site.districts() ? saplingOf(NpcCity.wood(site)) : sapling(level, post);
         for (int dx = -6; dx <= 6; dx += 4) {
             for (int dz = -6; dz <= 6; dz += 4) {
                 if (Math.abs(dx) < 3 && Math.abs(dz) < 3) {
@@ -1255,7 +1419,10 @@ public final class NpcSpawner {
     }
 
     private static Block sapling(ServerLevel level, BlockPos pos) {
-        String wood = TemplateMaterials.woodAt(level, pos);
+        return saplingOf(TemplateMaterials.woodAt(level, pos));
+    }
+
+    private static Block saplingOf(String wood) {
         if (!wood.isEmpty()) {
             Block block = ForgeRegistries.BLOCKS.getValue(ResourceLocation.tryParse(wood + "_sapling"));
             if (block != null && block != Blocks.AIR) {
@@ -1283,7 +1450,13 @@ public final class NpcSpawner {
      * A post of work with its profession and as many seats as the kingdom has workers of it.
      */
     private static void post(ServerLevel level, UUID id, BlockPos pos, String profession, NpcComposition composition) {
-        int seats = composition.jobs().getOrDefault(profession, 0);
+        post(level, id, pos, profession, composition.jobs().getOrDefault(profession, 0));
+    }
+
+    /**
+     * A post of work with its profession and seats; none where nobody works at it.
+     */
+    private static void post(ServerLevel level, UUID id, BlockPos pos, String profession, int seats) {
         if (seats <= 0) {
             return;
         }
@@ -1332,6 +1505,53 @@ public final class NpcSpawner {
         }
     }
 
+    /** Workers at the post of a workshop, a market or a tower of mages of a capital of districts. */
+    private static final int SEATS_IN_BUILDING = 2;
+
+    /**
+     * Gives the posts inside the buildings of a kingdom their professions by what each building is for and what stands in it
+     * ({@link NpcCity#profession}), whatever template it was built from.
+     */
+    private static void professionsByRole(MinecraftServer server, ServerLevel level, UUID id) {
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        int max = GatheringSettings.rules().maxSeats();
+        for (Building building : state.construction().buildingsOf(id)) {
+            if (building.role().isEmpty()) {
+                continue;
+            }
+            Box box = building.box();
+            List<WorkPost> inside = new ArrayList<>();
+            for (WorkPost post : state.citizens().posts().all()) {
+                WorldPos at = post.pos();
+                if (post.kingdomId().equals(id) && at.x() >= box.minX() && at.x() <= box.maxX() && at.y() >= box.minY() && at.y() <= box.maxY()
+                        && at.z() >= box.minZ() && at.z() <= box.maxZ()) {
+                    inside.add(post);
+                }
+            }
+            if (inside.isEmpty()) {
+                continue;
+            }
+            Set<Block> blocks = new java.util.HashSet<>();
+            BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+            for (int x = box.minX(); x <= box.maxX(); x++) {
+                for (int y = box.minY(); y <= box.maxY(); y++) {
+                    for (int z = box.minZ(); z <= box.maxZ(); z++) {
+                        blocks.add(level.getBlockState(pos.set(x, y, z)).getBlock());
+                    }
+                }
+            }
+            String profession = NpcCity.profession(building.role(), blocks::contains);
+            if (profession.isEmpty()) {
+                continue;
+            }
+            int seats = "innkeeper".equals(profession) ? 1 : SEATS_IN_BUILDING;
+            for (WorkPost post : inside) {
+                state.setPostProfession(null, post.pos(), profession);
+                state.setPostSeats(null, post.pos(), Math.max(1, Math.min(seats, max)), max);
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- towns
 
     /**
@@ -1350,6 +1570,10 @@ public final class NpcSpawner {
             return;
         }
         NpcSite.Town town = site.towns().get(index);
+        if (job.composition.districts()) {
+            townOfDistricts(server, level, site, job.composition, id, town, index, sub);
+            return;
+        }
         int rows = 2 * (TOWN_REACH + RAMP) + 1;
         int y = townHeight(level, town);
         if (sub < rows) {
@@ -1403,8 +1627,90 @@ public final class NpcSpawner {
         site.setStep((index + 1) * 1000);
     }
 
+    /**
+     * A town of a kingdom of districts in steps: its ground is levelled row by row with its square and its street, its town
+     * hall is founded, its buildings are put up along the street and its field is sown.
+     */
+    private static void townOfDistricts(MinecraftServer server, ServerLevel level, NpcSite site, NpcComposition composition, UUID id,
+                                        NpcSite.Town town, int index, int sub) {
+        int reach = composition.townReach();
+        int rows = 2 * (reach + RAMP) + 1;
+        int y = townHeight(level, site, town);
+        if (sub < rows) {
+            int budget = blockBudget();
+            NpcGround.Soil soil = NpcGround.soilAt(level, town.x() + reach + RAMP + 3, town.z());
+            BlockState path = soil == NpcGround.Soil.GRASS ? Blocks.DIRT_PATH.defaultBlockState() : Blocks.GRAVEL.defaultBlockState();
+            while (sub < rows && budget > 0) {
+                int dz = sub - reach - RAMP;
+                for (int dx = -reach - RAMP; dx <= reach + RAMP; dx++) {
+                    int out = Math.max(Math.abs(dx), Math.abs(dz)) - reach;
+                    if (out > 0) {
+                        budget -= Math.max(1, ramp(level, id, town.x() + dx, town.z() + dz, y, out, soil));
+                        continue;
+                    }
+                    boolean square = Math.abs(dx) <= 4 && Math.abs(dz) <= 4;
+                    boolean street = Math.abs(dz) <= 5 && Math.abs(dx) <= reach - 3;
+                    BlockState top = square ? Blocks.COBBLESTONE.defaultBlockState() : street ? path : soil.top();
+                    budget -= Math.max(1, NpcGround.level(level, id, town.x() + dx, town.z() + dz, y, top, soil.fill()));
+                }
+                sub++;
+            }
+            site.setStep(index * 1000 + sub);
+            return;
+        }
+        if (sub == rows) {
+            BlockPos hall = new BlockPos(town.x(), y + 1, town.z());
+            Optional<City> existing = RoadWork.state(server).cityAt(Dimensions.id(level), hall.getX(), hall.getY(), hall.getZ());
+            if (existing.isEmpty()) {
+                String name = NpcWork.kingdom(server, id).filter(k -> index < k.towns().size()).map(k -> k.towns().get(index).latin())
+                        .orElse(null);
+                Outcome founded = RoadWork.foundCity(level, null, id, hall, name);
+                if (founded.ok()) {
+                    level.setBlock(hall, RoadRegistries.TOWN_HALL.get().defaultBlockState(), Block.UPDATE_ALL);
+                } else {
+                    LOGGER.warn("The town {} of {} was not founded: {}", index + 1, site, founded.error());
+                }
+            }
+            site.setStep(index * 1000 + sub + 1);
+            return;
+        }
+        List<NpcComposition.Plot> plots = composition.town(index);
+        int plot = sub - rows - 1;
+        if (plot < plots.size()) {
+            NpcComposition.Plot at = plots.get(plot);
+            int[] used = new int[1];
+            if (buildAt(server, level, id, at.template(), town.x() + at.x(), y + 1, town.z() + at.z(), new Placement(at.facing(), at.mirror()),
+                    NpcCity.materials(site), blockBudget(), used)) {
+                site.setStep(index * 1000 + sub + 1);
+            }
+            return;
+        }
+        List<int[]> fields = composition.townFields();
+        int field = plot - plots.size();
+        if (field < fields.size()) {
+            field(level, id, town.x() + fields.get(field)[0], town.z() + fields.get(field)[1], Blocks.CARROTS);
+            site.setStep(index * 1000 + sub + 1);
+            return;
+        }
+        site.setStep((index + 1) * 1000);
+    }
+
     private static int townHeight(ServerLevel level, NpcSite.Town town) {
         return plazaHeight(level, town.x(), town.z());
+    }
+
+    /**
+     * The height of the ground of a town of a place: of its whole ground where the kingdom is laid out in districts, since its
+     * towns are wider than their square.
+     */
+    private static int townHeight(ServerLevel level, NpcSite site, NpcSite.Town town) {
+        if (!site.districts()) {
+            return townHeight(level, town);
+        }
+        Optional<City> city = RoadWork.state(level.getServer()).citiesOf(site.kingdomId().orElse(null)).stream()
+                .filter(c -> Math.abs(c.x() - town.x()) <= 2 && Math.abs(c.z() - town.z()) <= 2).findFirst();
+        // Once the town hall stands its height is the height of the town: the ground around it was levelled to it.
+        return city.map(c -> c.y() - 1).orElseGet(() -> wideHeight(level, town.x(), town.z(), 24));
     }
 
     // ---------------------------------------------------------------- places, wealth and people
@@ -1435,7 +1741,7 @@ public final class NpcSpawner {
     private static void wealth(MinecraftServer server, ServerLevel level, NpcSite site, Job job) {
         UUID id = site.kingdomId().orElseThrow();
         KingdomWorldState state = KingdomWorldApi.state(server);
-        String wood = woodOf(level, new BlockPos(site.x(), site.groundY(), site.z()));
+        String wood = site.districts() ? NpcCity.wood(site) : woodOf(level, new BlockPos(site.x(), site.groundY(), site.z()));
         NpcWealth wealth = NpcWealth.of(job.composition, NpcSettings.rules(), wood + "_log", wood + "_planks",
                 CitizenSettings.rules().dailyNutrition());
         long day = TreasuryActions.day(server);
@@ -1529,6 +1835,10 @@ public final class NpcSpawner {
         UUID id = site.kingdomId().orElseThrow();
         KingdomWorldState state = KingdomWorldApi.state(server);
         int have = state.citizens().registry().citizensOf(id).size();
+        if (job.composition.districts()) {
+            peopleOfDistricts(server, level, site, job, id, have);
+            return;
+        }
         int capital = 0;
         for (NpcComposition.Plot plot : job.composition.buildings()) {
             capital += NpcComposition.beds(plot.template());
@@ -1586,6 +1896,79 @@ public final class NpcSpawner {
         site.advance(SpawnStage.ARMY);
     }
 
+    /**
+     * The citizens of a kingdom of districts: each arrives before its own house and takes the bed there, the posts then take
+     * the citizens without work nearest to them, and the farmers come from those who live nearest to the fields: two for every
+     * town from its own people, the rest from the houses of the capital furthest from the palace.
+     */
+    private static void peopleOfDistricts(MinecraftServer server, ServerLevel level, NpcSite site, Job job, UUID id, int have) {
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        NpcComposition composition = job.composition;
+        List<int[]> arrivals = NpcCity.arrivals(site, composition);
+        if (have < arrivals.size()) {
+            String dimension = Dimensions.id(level);
+            for (int i = 0; i < CITIZENS_PER_TICK && have < arrivals.size(); i++, have++) {
+                int[] at = arrivals.get(have);
+                int y = at[2] < 0 ? site.groundY() + 1 : townHeight(level, site, site.towns().get(at[2])) + 1;
+                if (CitizenLife.arrive(server, id, new WorldPos(dimension, at[0], y, at[1]), false).isEmpty()) {
+                    break;
+                }
+            }
+            return;
+        }
+        for (WorkPost post : state.citizens().posts().all()) {
+            if (!post.kingdomId().equals(id) || !post.hasProfession()) {
+                continue;
+            }
+            while (post.freeSeats() > 0 && state.hire(null, post.pos()).outcome().ok()) {
+                // One citizen after another.
+            }
+        }
+        int soldiers = composition.soldiers();
+        int townFarmers = 2 * composition.townFields().size();
+        for (NpcSite.Town town : site.towns()) {
+            List<Citizen> near = new ArrayList<>();
+            for (Citizen citizen : state.citizens().registry().citizensOf(id)) {
+                WorldPos at = citizen.home() != null ? citizen.home() : citizen.lastPos();
+                if (at != null && Math.abs(at.x() - town.x()) <= composition.townReach() && Math.abs(at.z() - town.z()) <= composition.townReach()) {
+                    near.add(citizen);
+                }
+            }
+            farmers(server, state, id, near, townFarmers, soldiers);
+        }
+        List<Citizen> capital = new ArrayList<>();
+        for (Citizen citizen : state.citizens().registry().citizensOf(id)) {
+            WorldPos at = citizen.home() != null ? citizen.home() : citizen.lastPos();
+            if (at != null && Math.abs(at.x() - site.x()) <= composition.reach() && Math.abs(at.z() - site.z()) <= composition.reach()) {
+                capital.add(citizen);
+            }
+        }
+        capital.sort(Comparator.comparingInt((Citizen citizen) -> {
+            WorldPos at = citizen.home() != null ? citizen.home() : citizen.lastPos();
+            return -Math.max(Math.abs(at.x() - site.x()), Math.abs(at.z() - site.z()));
+        }).thenComparing(citizen -> citizen.id().toString()));
+        farmers(server, state, id, capital, 2 * composition.fields(), soldiers);
+        site.advance(SpawnStage.ARMY);
+    }
+
+    /**
+     * Makes farmers of the first citizens without work of a list, as long as the kingdom keeps enough people without work for
+     * its soldiers.
+     */
+    private static void farmers(MinecraftServer server, KingdomWorldState state, UUID id, List<Citizen> from, int wanted, int soldiers) {
+        int made = 0;
+        for (Citizen citizen : from) {
+            if (made >= wanted || unemployed(state, id) <= soldiers) {
+                break;
+            }
+            if (citizen.professionId().equals(Professions.UNEMPLOYED.id())
+                    && state.setProfession(null, citizen.id(), Professions.FARMER.id()).ok()) {
+                CitizenActions.afterProfessionChange(server, citizen);
+                made++;
+            }
+        }
+    }
+
     private static int unemployed(KingdomWorldState state, UUID id) {
         int count = 0;
         for (Citizen citizen : state.citizens().registry().citizensOf(id)) {
@@ -1604,7 +1987,7 @@ public final class NpcSpawner {
         UUID id = site.kingdomId().orElseThrow();
         KingdomWorldState state = KingdomWorldApi.state(server);
         if (ArmyWork.isReadOnly(server)) {
-            site.advance(SpawnStage.ROADS);
+            site.advance(afterArmy(job.composition));
             return;
         }
         ArmyState army = ArmyWork.state(server);
@@ -1621,7 +2004,15 @@ public final class NpcSpawner {
                 }
             }
         }
-        site.advance(SpawnStage.ROADS);
+        site.advance(afterArmy(job.composition));
+    }
+
+    /**
+     * The stage after the soldiers: a capital of districts gets its wall first and its roads start at the gates of the wall; a
+     * capital of the first layout gets its roads first and its wall has gates where they cross it.
+     */
+    private static SpawnStage afterArmy(NpcComposition composition) {
+        return composition.districts() ? SpawnStage.WALL : SpawnStage.ROADS;
     }
 
     /**
@@ -1721,8 +2112,20 @@ public final class NpcSpawner {
     private static void roads(MinecraftServer server, ServerLevel level, NpcSite site, Job job) {
         UUID id = site.kingdomId().orElseThrow();
         int index = site.step();
-        if (index >= site.towns().size() || RoadWork.isReadOnly(server)) {
-            site.advance(SpawnStage.WALL);
+        boolean districts = job.composition.districts();
+        if (RoadWork.isReadOnly(server)) {
+            site.advance(districts ? SpawnStage.LAW : SpawnStage.WALL);
+            return;
+        }
+        if (index >= site.towns().size()) {
+            if (districts && job.composition.townWall() > 0 && index < 2 * site.towns().size()) {
+                // The roads stand: now the palisades of the towns, each with a gate where its road comes in.
+                if (townWall(server, level, site, job, id, index - site.towns().size())) {
+                    site.setStep(index + 1);
+                }
+                return;
+            }
+            site.advance(districts ? SpawnStage.LAW : SpawnStage.WALL);
             return;
         }
         NpcSite.Town town = site.towns().get(index);
@@ -1747,7 +2150,18 @@ public final class NpcSpawner {
             return;
         }
         RoadClass roadClass = RoadClass.byId(job.composition.roadClass()).orElse(RoadClass.PATH);
-        Outcome started = RoadPlanning.startAndBuild(level, id, site.x(), site.z(), town.x(), town.z(), roadClass, Road.Mode.OWN);
+        Outcome started;
+        Optional<NpcComposition.Gate> gate = districts ? NpcCity.gateTowards(job.composition, town.x() - site.x(), town.z() - site.z())
+                : Optional.empty();
+        if (gate.isPresent()) {
+            // The road starts two blocks outside the gate nearest to the town: under the roof of the palace no way begins.
+            int fromX = site.x() + gate.get().x() + 2 * Integer.signum(gate.get().x());
+            int fromZ = site.z() + gate.get().z() + 2 * Integer.signum(gate.get().z());
+            started = RoadPlanning.startAndBuildFrom(level, id, Endpoint.capital(id, fromX, fromZ), town.x(), town.z(), roadClass,
+                    Road.Mode.OWN);
+        } else {
+            started = RoadPlanning.startAndBuild(level, id, site.x(), site.z(), town.x(), town.z(), roadClass, Road.Mode.OWN);
+        }
         if (started.ok()) {
             job.searching = true;
         } else {
@@ -1819,25 +2233,43 @@ public final class NpcSpawner {
             site.advance(SpawnStage.LAW);
             return;
         }
+        boolean districts = job.composition.districts();
+        SpawnStage next = districts ? SpawnStage.ROADS : SpawnStage.LAW;
         Optional<Wall> existing = RoadWork.state(server).wallOf(0, id);
         if (existing.isEmpty()) {
             Wall[] made = new Wall[1];
             Wall.WallClass wallClass = job.composition.stoneWall() ? Wall.WallClass.STONE : Wall.WallClass.PALISADE;
-            Outcome built = CityWalls.build(server, null, id, 0, wallClass, made);
+            Outcome built = districts ? CityWalls.build(server, null, id, 0, wallClass, made, job.composition.wallRadius())
+                    : CityWalls.build(server, null, id, 0, wallClass, made);
             if (!built.ok() || made[0] == null) {
                 LOGGER.warn("The wall of {} was refused: {}", site, built.error());
-                site.advance(SpawnStage.LAW);
+                site.advance(next);
                 return;
+            }
+            if (districts) {
+                NpcCity.cutGates(server, site, job.composition, id);
             }
             existing = Optional.of(made[0]);
         }
         Wall wall = existing.get();
-        String item = wall.wallClass() == Wall.WallClass.PALISADE ? woodOf(level, new BlockPos(site.x(), site.groundY(), site.z())) + "_log"
-                : "minecraft:stone_bricks";
+        if (payWall(server, level, site, wall)) {
+            RoadSync.changed();
+            site.advance(next);
+        }
+    }
+
+    /**
+     * Pays a part of a wall within the budget of blocks, with the wood or stone of the place.
+     *
+     * @return whether the wall is all paid
+     */
+    private static boolean payWall(MinecraftServer server, ServerLevel level, NpcSite site, Wall wall) {
+        boolean palisade = wall.wallClass() == Wall.WallClass.PALISADE;
+        String item = palisade ? (site.districts() ? NpcCity.wood(site) : woodOf(level, new BlockPos(site.x(), site.groundY(), site.z()))) + "_log"
+                : site.districts() ? NpcCity.wallStone(site) : "minecraft:stone_bricks";
         Item wanted = ForgeRegistries.ITEMS.getValue(ResourceLocation.tryParse(item));
-        if (!(wanted instanceof BlockItem) || !new ItemStack(wanted).is(wall.wallClass() == Wall.WallClass.PALISADE ? CityWalls.WALL_WOOD
-                : CityWalls.WALL_STONE)) {
-            item = wall.wallClass() == Wall.WallClass.PALISADE ? "minecraft:oak_log" : "minecraft:cobblestone";
+        if (!(wanted instanceof BlockItem) || !new ItemStack(wanted).is(palisade ? CityWalls.WALL_WOOD : CityWalls.WALL_STONE)) {
+            item = palisade ? "minecraft:oak_log" : "minecraft:cobblestone";
         }
         int budget = Math.min(WALL_BLOCKS_PER_TICK, blockBudget());
         String paid = item;
@@ -1855,10 +2287,33 @@ public final class NpcSpawner {
             }
             return Outcome.DONE;
         });
-        if (wall.allPaid()) {
-            RoadSync.changed();
-            site.advance(SpawnStage.LAW);
+        return wall.allPaid();
+    }
+
+    /**
+     * The palisade of a town of a kingdom of districts: laid out around its town hall with a gate where its road comes in, then
+     * paid a part a tick.
+     *
+     * @return whether the palisade is paid, or cannot be built
+     */
+    private static boolean townWall(MinecraftServer server, ServerLevel level, NpcSite site, Job job, UUID id, int index) {
+        NpcSite.Town town = site.towns().get(index);
+        Optional<City> city = RoadWork.state(server).citiesOf(id).stream()
+                .filter(c -> Math.abs(c.x() - town.x()) <= 2 && Math.abs(c.z() - town.z()) <= 2).findFirst();
+        if (city.isEmpty()) {
+            return true;
         }
+        Optional<Wall> existing = RoadWork.state(server).wallOf(city.get().id(), id);
+        if (existing.isEmpty()) {
+            Wall[] made = new Wall[1];
+            Outcome built = CityWalls.build(server, null, id, city.get().id(), Wall.WallClass.PALISADE, made, job.composition.townWall());
+            if (!built.ok() || made[0] == null) {
+                LOGGER.warn("The palisade of the town {} of {} was refused: {}", index + 1, site, built.error());
+                return true;
+            }
+            existing = Optional.of(made[0]);
+        }
+        return payWall(server, level, site, existing.get());
     }
 
     /**
@@ -1874,12 +2329,18 @@ public final class NpcSpawner {
                 }
             }
         }
-        Optional<Wall> wall = RoadWork.state(server).wallOf(0, id);
-        standing &= wall.isEmpty() || wall.get().built();
+        for (Wall wall : RoadWork.state(server).walls()) {
+            if (wall.kingdomId().equals(id)) {
+                standing &= wall.built();
+            }
+        }
         if (!standing && site.step() < PLACE_WAIT_TICKS) {
             site.setStep(site.step() + 1);
             return;
         }
+        // While the land is still loaded, everyone finds a workplace and looks at it: a farmer who never saw its field would
+        // harvest nothing until a player came by.
+        io.github.sekerator.kingdomworld.common.citizen.CitizenSimulation.settle(server, id);
         releaseTickets(level);
         site.setStatus(NpcSite.Status.SPAWNED);
         RoadSync.changed();

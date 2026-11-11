@@ -332,7 +332,7 @@ final class RulerActions {
             }
             long started = System.nanoTime();
             KingdomWorldState.ConstructionChange change = ConstructionWork.lay(level, null, kingdomId, spot.template(), anchor, spot.placement(),
-                    new Materials(RulerPlaces.wood(server, kingdomId), ""));
+                    RulerPlaces.materials(server, kingdomId));
             part = "lay " + (System.nanoTime() - started) / 1_000_000L + " ms";
             if (change.construction().isPresent()) {
                 ensureBuilder(server, level, npc);

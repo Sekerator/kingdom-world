@@ -40,16 +40,22 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Where a ruler of the world puts what it decides on, from the data of its kingdom: free plots of the grid of its capital (the
- * gardens, levelled when the kingdom appeared), plots beyond its wall along the streets of the grid, chunks of free land next to
- * its own and places for new towns. Places that turned out unfit when the world was looked at are remembered until a restart.
+ * Where a ruler of the world puts what it decides on, from the data of its kingdom: free ground inside the wall of its capital
+ * (the gardens of the grid or the free lots of the districts, levelled when the kingdom appeared), plots beyond its wall and
+ * fields, chunks of free land next to its own and places for new towns. Places that turned out unfit when the world was looked
+ * at are remembered until a restart. Which template a ruler builds follows from the role it wants: every template of the role
+ * may come up, by turns, so that the houses a ruler adds differ like those the kingdom appeared with.
  */
 final class RulerPlaces {
     private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
-    /** Templates a ruler builds for a role, before any other template of that role. */
-    private static final Map<String, String> PREFERRED = Map.of("house", NpcComposition.LARGE_HOUSE, "warehouse", NpcComposition.STOREHOUSE,
-            "market", NpcComposition.MARKET, "well", NpcComposition.WELL, "workshop", NpcComposition.WORKSHOP, "barracks", NpcComposition.BARRACKS,
-            "tower", NpcComposition.WATCHTOWER, "mage_tower", NpcComposition.MAGE_TOWER);
+    /** Kinds of the templates of the plans a ruler does not put up by itself: they belong to the wall and the palace. */
+    private static final Set<io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind> NOT_BY_RULERS = Set.of(
+            io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.GATEHOUSE,
+            io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.CORNER_TOWER,
+            io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.HALL,
+            io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.CASTLE,
+            io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.DRILL_YARD,
+            io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.STORAGE_YARD);
     /** Blocks a plot beyond the wall keeps from fields, roads and the wall. */
     private static final int KEEP_CLEAR = 3;
     /** What a template costs with a wood; templates do not change while the server runs. */
@@ -77,8 +83,29 @@ final class RulerPlaces {
      * What a template costs with the wood of a kingdom.
      */
     static Map<String, Integer> cost(BuildingTemplate template, String wood) {
-        return COSTS.computeIfAbsent(template.id() + "|" + template.fingerprint() + "|" + wood,
-                key -> Map.copyOf(TemplateMaterials.apply(template, new Materials(wood, "")).items()));
+        return cost(template, new Materials(wood, ""));
+    }
+
+    /**
+     * What a template costs built of the wood and stone of a kingdom.
+     */
+    static Map<String, Integer> cost(BuildingTemplate template, Materials materials) {
+        return COSTS.computeIfAbsent(template.id() + "|" + template.fingerprint() + "|" + materials.key(),
+                key -> Map.copyOf(TemplateMaterials.apply(template, materials).items()));
+    }
+
+    /**
+     * The wood and stone a ruler builds with: the style of its kingdom where it has one, else the wood of the buildings that
+     * stand.
+     */
+    static Materials materials(MinecraftServer server, UUID kingdomId) {
+        Optional<NpcSite> site = NpcWork.kingdom(server, kingdomId).flatMap(npc -> NpcWork.state(server).site(npc.siteId()));
+        if (site.isPresent() && site.get().districts()) {
+            Materials own = NpcCity.materials(site.get());
+            // Costs are counted for a wood that is named: the templates' own woods count as they are.
+            return own;
+        }
+        return new Materials(wood(server, kingdomId), "");
     }
 
     static void unfit(UUID kingdomId, BlockPos anchor) {
@@ -103,29 +130,25 @@ final class RulerPlaces {
      * lowest level.
      */
     static Optional<BuildingTemplate> template(String role) {
-        String preferred = PREFERRED.get(role);
-        if (preferred != null) {
-            Optional<BuildingTemplate> found = BuildingTemplates.get(preferred).filter(t -> usable(t) && role.equals(t.role()));
-            if (found.isPresent()) {
-                return found;
-            }
-        }
         return BuildingTemplates.all().stream().filter(t -> role.equals(t.role()) && usable(t))
                 .min(Comparator.comparingInt(BuildingTemplate::level).thenComparing(t -> t.id().toString()));
     }
 
     /**
-     * The templates of a role at its first level, the ruler's own choice first.
+     * The templates of a role at its first level, by id.
      */
     static List<BuildingTemplate> templates(String role) {
         List<BuildingTemplate> list = new ArrayList<>();
-        template(role).ifPresent(list::add);
-        BuildingTemplates.all().stream().filter(t -> role.equals(t.role()) && t.level() <= 1 && usable(t) && !list.contains(t))
+        BuildingTemplates.all().stream().filter(t -> role.equals(t.role()) && t.level() <= 1 && usable(t))
                 .sorted(Comparator.comparing(t -> t.id().toString())).forEach(list::add);
         return list;
     }
 
     private static boolean usable(BuildingTemplate template) {
+        if (io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.get(template.id().toString())
+                .map(entry -> NOT_BY_RULERS.contains(entry.kind())).orElse(false)) {
+            return false;
+        }
         return template.owner() == null && template.available() && BuildingTemplates.problem(template, ConstructionSettings.rules()) == null;
     }
 
@@ -135,19 +158,27 @@ final class RulerPlaces {
      */
     static void options(MinecraftServer server, NpcKingdom npc, RulerView view, Map<String, Long> counts) {
         UUID id = npc.kingdomId();
-        String wood = wood(server, id);
+        Materials materials = materials(server, id);
         for (String role : RulerMind.wantedRoles(view, NpcSettings.rulers())) {
             if (!view.knownRoles.contains(role)) {
                 continue;
             }
-            // Of the first-level templates of the role, the one whose missing materials cost least; the ruler's own choice on a tie.
-            BuildingTemplate best = null;
+            // Of the first-level templates of the role, those whose missing materials cost about the least; among them the next
+            // one in turn for every building of the role that stands, so that a ruler does not build the same house every time.
+            List<BuildingTemplate> candidates = templates(role);
+            long[] missing = new long[candidates.size()];
             long least = Long.MAX_VALUE;
-            for (BuildingTemplate candidate : templates(role)) {
-                long missing = RulerSnapshots.missingWorth(server, counts, cost(candidate, wood));
-                if (missing < least) {
-                    least = missing;
-                    best = candidate;
+            for (int i = 0; i < candidates.size(); i++) {
+                missing[i] = RulerSnapshots.missingWorth(server, counts, cost(candidates.get(i), materials));
+                least = Math.min(least, missing[i]);
+            }
+            BuildingTemplate best = null;
+            int turn = view.roles.getOrDefault(role, 0);
+            for (int i = 0; i < candidates.size() && best == null; i++) {
+                int index = Math.floorMod(turn + i, candidates.size());
+                if (missing[index] <= least + Math.max(40, least / 4)) {
+                    best = candidates.get(index);
+                    least = missing[index];
                 }
             }
             if (best == null) {
@@ -186,22 +217,43 @@ final class RulerPlaces {
             builders.add(new io.github.sekerator.kingdomworld.core.citizen.WorldPos(dimension, post.getX(), post.getY(), post.getZ()));
         }
         int reach = Math.max(8, ConstructionSettings.rules().builderRadius() - 4);
-        for (int[] cell : NpcSpawner.gardenPlots(composition)) {
-            Optional<Spot> spot = spot(state, id, dimension, template, site.x() + cell[0] * NpcComposition.SPACING, y,
-                    site.z() + cell[1] * NpcComposition.SPACING, NpcComposition.facing(cell[0], cell[1]), true, unfit, builders, reach);
-            if (spot.isPresent()) {
-                return spot;
+        int first;
+        List<int[]> outside;
+        if (composition.districts()) {
+            for (NpcComposition.Lot lot : composition.lots()) {
+                Optional<Spot> spot = spot(state, id, dimension, template, site.x() + lot.x(), y, site.z() + lot.z(), lot.facing(), true, unfit,
+                        builders, reach);
+                if (spot.isPresent()) {
+                    return spot;
+                }
             }
+            // Beyond the wall and the fields, on the grid of the plots of old.
+            first = (composition.outerReach() + NpcComposition.PLOT / 2 + 1 + KEEP_CLEAR + NpcComposition.SPACING - 1) / NpcComposition.SPACING;
+            outside = new ArrayList<>();
+            for (int[] spot : composition.fieldSpots()) {
+                outside.add(new int[]{site.x() + spot[0], site.z() + spot[1]});
+            }
+            for (int[] spot : NpcCity.outerPosts(composition)) {
+                outside.add(new int[]{site.x() + spot[0], site.z() + spot[1]});
+            }
+        } else {
+            for (int[] cell : NpcSpawner.gardenPlots(composition)) {
+                Optional<Spot> spot = spot(state, id, dimension, template, site.x() + cell[0] * NpcComposition.SPACING, y,
+                        site.z() + cell[1] * NpcComposition.SPACING, NpcComposition.facing(cell[0], cell[1]), true, unfit, builders, reach);
+                if (spot.isPresent()) {
+                    return spot;
+                }
+            }
+            RoadRules roads = RoadSettings.rules();
+            int wall = switch (site.level()) {
+                case SMALL -> roads.wallRadius();
+                case MEDIUM -> roads.wallRadius() * 3 / 2;
+                case LARGE -> roads.wallRadius() * 2;
+            };
+            first = Math.max(composition.rings() + 1, (wall + NpcComposition.PLOT / 2 + 1 + KEEP_CLEAR + NpcComposition.SPACING - 1)
+                    / NpcComposition.SPACING);
+            outside = NpcSpawner.outsideSpots(site, composition);
         }
-        RoadRules roads = RoadSettings.rules();
-        int wall = switch (site.level()) {
-            case SMALL -> roads.wallRadius();
-            case MEDIUM -> roads.wallRadius() * 3 / 2;
-            case LARGE -> roads.wallRadius() * 2;
-        };
-        int first = Math.max(composition.rings() + 1, (wall + NpcComposition.PLOT / 2 + 1 + KEEP_CLEAR + NpcComposition.SPACING - 1)
-                / NpcComposition.SPACING);
-        List<int[]> outside = NpcSpawner.outsideSpots(site, composition);
         List<int[]> cells = roadCells(server, id);
         for (int ring = first; ring <= first + 1; ring++) {
             for (int gx = -ring; gx <= ring; gx++) {

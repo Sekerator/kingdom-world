@@ -328,6 +328,10 @@ public final class SiegeEvents {
         return state.getBlock() instanceof net.minecraft.world.level.block.FenceGateBlock || state.is(net.minecraft.world.level.block.Blocks.IRON_BARS)
                 || state.is(net.minecraft.tags.BlockTags.LOGS) || state.is(net.minecraft.tags.BlockTags.STONE_BRICKS)
                 || state.is(net.minecraft.world.level.block.Blocks.COBBLESTONE) || state.is(net.minecraft.world.level.block.Blocks.STONE)
-                || state.is(net.minecraft.world.level.block.Blocks.MOSSY_COBBLESTONE);
+                || state.is(net.minecraft.world.level.block.Blocks.MOSSY_COBBLESTONE)
+                // Walls are built of every stone of the tag of wall stones: the kingdoms of the world build in brick, sandstone,
+                // deepslate and mud bricks too.
+                || new net.minecraft.world.item.ItemStack(state.getBlock().asItem())
+                        .is(io.github.sekerator.kingdomworld.common.road.CityWalls.WALL_STONE);
     }
 }

@@ -132,7 +132,8 @@ public final class NpcSettings {
             KingdomWorldConfig.NpcKingdoms c = KingdomWorldConfig.SERVER.npcKingdoms;
             int[] money = ints(c.startingMoney.get(), new int[]{(int) d.money()[0], (int) d.money()[1], (int) d.money()[2]});
             return new NpcRules(c.generate.get(), c.count.get(), c.radius.get(), c.minDistance.get(), c.minSpawnDistance.get(),
-                    c.triggerChunks.get(), ints(c.sizeWeights.get(), d.sizeWeights()), ints(c.landRadius.get(), d.landRadius()),
+                    c.triggerChunks.get(), ints(c.sizeQuota.get(), d.sizeQuota()), ints(c.sizeWeights.get(), d.sizeWeights()),
+                    ints(c.landRadius.get(), d.landRadius()),
                     ints(c.towns.get(), d.towns()), c.townDistance.get(), new long[]{money[0], money[1], money[2]}, c.startingFoodDays.get(),
                     ints(c.startingMaterials.get(), d.materials()), ints(c.soldiers.get(), d.soldiers()), c.blocksPerTick.get(),
                     c.chunksPerTick.get(), c.maxInhabitedMinutes.get(), d.attemptsPerSite());

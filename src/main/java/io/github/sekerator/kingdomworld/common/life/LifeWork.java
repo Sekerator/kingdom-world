@@ -518,8 +518,11 @@ public final class LifeWork {
         CityWalls.Place best = null;
         double bestDistance = Double.MAX_VALUE;
         for (CityWalls.Place place : CityWalls.places(server)) {
-            if (!place.kingdomId().equals(kingdomId) || !place.dimension().equals(pos.dimension())
-                    || Math.abs(place.x() - pos.x()) > CityWalls.AREA || Math.abs(place.z() - pos.z()) > CityWalls.AREA) {
+            if (!place.kingdomId().equals(kingdomId) || !place.dimension().equals(pos.dimension())) {
+                continue;
+            }
+            int area = CityWalls.area(server, place);
+            if (Math.abs(place.x() - pos.x()) > area || Math.abs(place.z() - pos.z()) > area) {
                 continue;
             }
             double distance = Math.pow(place.x() - pos.x(), 2) + Math.pow(place.z() - pos.z(), 2);

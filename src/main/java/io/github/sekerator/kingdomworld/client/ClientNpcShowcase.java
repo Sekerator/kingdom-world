@@ -201,7 +201,7 @@ final class ClientNpcShowcase {
                 double angle = i * Math.PI * 2 / (8 * ring);
                 int x = player.getBlockX() + (int) Math.round(Math.cos(angle) * ring * 96);
                 int z = player.getBlockZ() + (int) Math.round(Math.sin(angle) * ring * 96);
-                if (NpcWork.suitableLand(level, x, z)) {
+                if (NpcWork.suitableLand(level, x, z, NpcLevel.LARGE)) {
                     spot = new int[]{x, z};
                 }
             }

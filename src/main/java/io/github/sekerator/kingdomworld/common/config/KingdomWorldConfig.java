@@ -1210,6 +1210,7 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue minDistance;
         public final ForgeConfigSpec.IntValue minSpawnDistance;
         public final ForgeConfigSpec.IntValue triggerChunks;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> sizeQuota;
         public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> sizeWeights;
         public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> landRadius;
         public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> towns;
@@ -1259,12 +1260,18 @@ public final class KingdomWorldConfig {
                     .defineInRange("minSpawnDistance", d.minSpawnDistance(), 0, 100_000);
             triggerChunks = builder.comment("A kingdom is raised in the world at once when a player comes this close to its place, in chunks.")
                     .defineInRange("triggerChunks", d.triggerChunks(), 2, 64);
-            sizeWeights = builder.comment("How often kingdoms of each size are chosen.")
+            sizeQuota = builder.comment("How many kingdoms of each size a new world gets: the plan looks for the large ones first and",
+                            "gives a place to a smaller kingdom only when no land flat and wide enough is found. count is the total.")
+                    .defineList("sizeQuota", ints(d.sizeQuota()), value -> value instanceof Integer number && number >= 0 && number <= 256);
+            sizeWeights = builder.comment("How often kingdoms of each size are chosen beyond the quota (when count is larger than its sum).")
                     .defineList("sizeWeights", ints(d.sizeWeights()), value -> value instanceof Integer number && number >= 0 && number <= 1000);
-            landRadius = builder.comment("The land of the capital, in chunks around the chunk of the throne, by size.")
-                    .defineList("landRadius", ints(d.landRadius()), value -> value instanceof Integer number && number >= 1 && number <= 8);
+            landRadius = builder.comment("The land of the capital, in chunks around the chunk of the throne, by size. A capital laid out",
+                            "in districts takes at least what its wall and fields need (4, 5 and 7 chunks).")
+                    .defineList("landRadius", ints(d.landRadius()), value -> value instanceof Integer number && number >= 1
+                            && number <= io.github.sekerator.kingdomworld.core.npc.NpcRules.MAX_LAND_RADIUS);
             towns = builder.comment("Towns around the capital, by size.")
-                    .defineList("towns", ints(d.towns()), value -> value instanceof Integer number && number >= 0 && number <= 4);
+                    .defineList("towns", ints(d.towns()), value -> value instanceof Integer number && number >= 0
+                            && number <= io.github.sekerator.kingdomworld.core.npc.NpcRules.MAX_TOWNS);
             townDistance = builder.comment("How far towns lie from the capital, in blocks.")
                     .defineInRange("townDistance", d.townDistance(), 64, 1_000);
             startingMoney = builder.comment("The money of the treasury when a kingdom appears, by size; journaled as its founding.")
@@ -1329,7 +1336,8 @@ public final class KingdomWorldConfig {
                             "A role the server does not know (for example the tavern before the life of towns) is skipped.")
                     .defineList("roles", roles, value -> value instanceof String text
                             && io.github.sekerator.kingdomworld.core.npc.RulerRules.RoleWant.parse(text).isPresent());
-            rulerTownPopulation = builder.comment("A kingdom with at least this many citizens founds a new town with a town hall and a road to it.")
+            rulerTownPopulation = builder.comment("A kingdom founds a new town with a town hall and a road to it once it has this many citizens",
+                            "for the capital and for every town it has already.")
                     .defineInRange("townPopulation", r.townPopulation(), 1, 10_000);
             rulerMaxTowns = builder.comment("Towns a kingdom of the world has at most.")
                     .defineInRange("maxTowns", r.maxTowns(), 0, 6);

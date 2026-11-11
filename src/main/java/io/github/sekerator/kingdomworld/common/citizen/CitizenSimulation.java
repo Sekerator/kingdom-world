@@ -215,6 +215,24 @@ public final class CitizenSimulation {
     }
 
     /**
+     * Gives every citizen of a kingdom its bed and workplace now and lets each look at its workplace while the land is
+     * loaded, instead of waiting for the next step: a kingdom that just appeared starts work at once, far from players too.
+     */
+    public static void settle(MinecraftServer server, UUID kingdomId) {
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        Citizens citizens = state.citizens();
+        for (Citizen citizen : List.copyOf(citizens.registry().citizensOf(kingdomId))) {
+            findPlaces(server, citizens, citizen);
+            survey(server, citizen);
+        }
+        for (WorkPost post : citizens.posts().postsOf(kingdomId)) {
+            if (post.hasProfession() && post.yield().isEmpty() && !ZoneSurveys.pending(post.pos())) {
+                ZoneSurveys.request(post.pos());
+            }
+        }
+    }
+
+    /**
      * Lets the profession look at a loaded workplace, so that the abstract work has something to go on.
      */
     static void survey(MinecraftServer server, Citizen citizen) {

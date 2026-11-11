@@ -170,7 +170,7 @@ final class SiegeHolds {
             } else {
                 boolean open = abstractGates(server, state, war, seat, rules, ticks);
                 a = siege.isPresent() && open && besiegersFarAway(server, attackers, seat) > 0;
-                d = defendedFarAway(server, defenders, seat.dimension(), seat.x(), seat.z(), SQUAD_REACH);
+                d = defendedFarAway(server, defenders, seat.dimension(), seat.x(), seat.z(), reach(server, seat));
             }
             if (a && siege.isEmpty()) {
                 siege = start(server, state, war, seat, now, 0);
@@ -206,7 +206,7 @@ final class SiegeHolds {
         }
         for (UUID attacker : war.members(War.Side.ATTACKER)) {
             for (ArmySquad squad : ArmyWork.state(server).squadsOf(attacker)) {
-                if (squad.order().kind() == Order.Kind.SIEGE && near(squad.order().points().get(0), seat, SQUAD_REACH)) {
+                if (squad.order().kind() == Order.Kind.SIEGE && near(squad.order().points().get(0), seat, reach(server, seat))) {
                     return start(server, state, war, seat, now, 0);
                 }
             }
@@ -276,11 +276,20 @@ final class SiegeHolds {
     /**
      * Soldiers of squads besieging a city far from players.
      */
+    /**
+     * How far from the seat of a city a squad still stands at it: {@value #SQUAD_REACH} blocks, or a little beyond the wall of
+     * the city where the wall is wider, so that the gates of a large capital are part of it.
+     */
+    private static int reach(MinecraftServer server, SiegeWork.Seat seat) {
+        return Math.max(SQUAD_REACH, RoadWork.state(server).wallOf(seat.city(), seat.kingdomId()).map(wall -> wall.radius() + 8).orElse(0));
+    }
+
     private static int besiegersFarAway(MinecraftServer server, Set<UUID> attackers, SiegeWork.Seat seat) {
         int soldiers = 0;
         for (UUID attacker : attackers) {
             for (ArmySquad squad : ArmyWork.state(server).squadsOf(attacker)) {
-                if (squad.order().kind() == Order.Kind.SIEGE && !ArmyWork.hasBodies(squad) && near(squad.order().points().get(0), seat, SQUAD_REACH)) {
+                if (squad.order().kind() == Order.Kind.SIEGE && !ArmyWork.hasBodies(squad)
+                        && near(squad.order().points().get(0), seat, reach(server, seat))) {
                     soldiers += squad.members().size();
                 }
             }

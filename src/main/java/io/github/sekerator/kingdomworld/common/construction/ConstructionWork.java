@@ -644,9 +644,9 @@ public final class ConstructionWork {
      */
     private static void placeParts(ServerLevel level, Construction construction, BuildingTemplate template, int main) {
         BlockPos mainPos = template.blocks().get(main).pos();
-        for (int i = 0; i < template.blocks().size(); i++) {
+        for (int i : parts(template)) {
             BuildingTemplate.Block block = template.blocks().get(i);
-            if (template.costs().get(i).kind() != BlockCost.Kind.PART || !block.pos().offset(TemplateBlocks.mainOf(block.state())).equals(mainPos)) {
+            if (!block.pos().offset(TemplateBlocks.mainOf(block.state())).equals(mainPos)) {
                 continue;
             }
             BlockPos at = template.place(block.pos(), blockPos(construction.anchor()), construction.placement());
@@ -657,6 +657,30 @@ public final class ConstructionWork {
                 io.github.sekerator.kingdomworld.common.citizen.CitizenSites.onPlaced(level, at, wanted);
             }
         }
+    }
+
+    /**
+     * The blocks of a template that are second parts of others, by the template itself (not by what it holds): a large template
+     * is not gone through for every block placed. Forgotten when too many gather.
+     */
+    private static final Map<BuildingTemplate, int[]> PARTS = new java.util.IdentityHashMap<>();
+
+    private static synchronized int[] parts(BuildingTemplate template) {
+        int[] found = PARTS.get(template);
+        if (found == null) {
+            List<Integer> list = new ArrayList<>();
+            for (int i = 0; i < template.costs().size(); i++) {
+                if (template.costs().get(i).kind() == BlockCost.Kind.PART) {
+                    list.add(i);
+                }
+            }
+            found = list.stream().mapToInt(Integer::intValue).toArray();
+            if (PARTS.size() >= 512) {
+                PARTS.clear();
+            }
+            PARTS.put(template, found);
+        }
+        return found;
     }
 
     // ---------------------------------------------------------------- the work of the builders

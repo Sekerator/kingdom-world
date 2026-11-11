@@ -17,7 +17,7 @@ import java.util.Optional;
  * @param freeBeds           a house is laid out once no more than this many beds are free
  * @param storageFullPercent a storehouse is laid out once the storehouses are this full
  * @param roles              the buildings a kingdom wants by the level of its capital, in the order they are built
- * @param townPopulation     a kingdom with at least this many citizens founds a new town
+ * @param townPopulation     a kingdom founds a new town once it has this many citizens for its capital and for every town it has
  * @param maxTowns           towns a kingdom of the world has at most
  * @param reserveDays        days of expenses a ruler keeps in its treasury; below that it counts itself poor
  * @param soldiersPermille   soldiers for every thousand citizens a ruler of no particular leaning keeps
@@ -30,9 +30,9 @@ import java.util.Optional;
 public record RulerRules(int turnEveryDays, int decisionsPerTurn, int decreesPerDay, int[] maxChunks, int chunksPerClaim, int freeBeds,
                          int storageFullPercent, List<RoleWant> roles, int townPopulation, int maxTowns, int reserveDays,
                          int soldiersPermille, int slackPermille, int roadDistance, int festivalMood, int growthChunks) {
-    public static final RulerRules DEFAULT = new RulerRules(1, 3, 2, new int[]{96, 160, 256}, 4, 1, 85,
+    public static final RulerRules DEFAULT = new RulerRules(1, 3, 2, new int[]{224, 352, 640}, 4, 1, 85,
             RoleWant.parse(List.of("warehouse=1,1,2", "market=1,1,1", "well=1,2,3", "workshop=1,2,3", "barracks=1,1,2", "tower=1,2,4",
-                    "tavern=0,1,1", "mage_tower=0,0,1")), 40, 4, 5, 100, 100, 1200, 35, 2);
+                    "tavern=0,1,1", "mage_tower=0,0,1")), 40, 6, 5, 100, 100, 1200, 35, 2);
 
     /**
      * How many buildings of a role a kingdom wants at each level of its capital.

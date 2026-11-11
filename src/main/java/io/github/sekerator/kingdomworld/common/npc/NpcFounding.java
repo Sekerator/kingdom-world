@@ -82,15 +82,17 @@ final class NpcFounding {
             }
         }
         if (current == null) {
+            // The largest kingdoms are founded first: their land is the widest and shows on the maps first.
+            NpcSite next = null;
             for (NpcSite site : state.sites()) {
-                if (site.status() == NpcSite.Status.PLANNED) {
-                    current = new Founding(site.id());
-                    break;
+                if (site.status() == NpcSite.Status.PLANNED && (next == null || site.level().ordinal() > next.level().ordinal())) {
+                    next = site;
                 }
             }
-            if (current == null) {
+            if (next == null) {
                 return;
             }
+            current = new Founding(next.id());
         }
         NpcSite site = state.site(current.siteId).orElseThrow();
         ServerLevel level = server.overworld();
@@ -157,7 +159,7 @@ final class NpcFounding {
                 }
                 if (state.kingdoms().get(id).isEmpty()) {
                     long limit = rules.maxInhabitedMinutes() * 1200L;
-                    int r = rules.landRadius(site.level());
+                    int r = NpcCity.landRadius(site);
                     int cx = site.x() >> 4;
                     int cz = site.z() >> 4;
                     for (int dx = -r; dx <= r; dx++) {
@@ -187,7 +189,8 @@ final class NpcFounding {
             }
             case 2 -> {
                 if (site.groundY() == 0) {
-                    site.setGroundY(groundHeight(level, site.x(), site.z()));
+                    site.setGroundY(site.districts() ? NpcPlanning.capitalHeight(level, site.x(), site.z(), site.level())
+                            : groundHeight(level, site.x(), site.z()));
                 }
                 BlockPos throne = NpcSpawner.thronePos(site);
                 if (state.kingdoms().get(id).isEmpty()) {
@@ -239,7 +242,7 @@ final class NpcFounding {
             return "kingdoms may not be founded in " + dimension;
         }
         long chunk = ChunkKey.of(site.x() >> 4, site.z() >> 4);
-        int r = NpcSettings.rules().landRadius(site.level());
+        int r = NpcCity.landRadius(site);
         int buffer = kingdomRules.claimBufferChunks() + 1;
         if (state.territory().ownerOf(dimension, chunk) != null
                 || state.territory().hasForeignLandWithin(dimension, chunk, Math.max(r + buffer, kingdomRules.minChunksFromOtherKingdom()), own)) {
@@ -251,7 +254,7 @@ final class NpcFounding {
     private static String townProblem(KingdomWorldState state, NpcSite site, NpcSite.Town town, UUID own, Founding founding, long limit,
                                       String dimension) {
         int buffer = KingdomWorldApi.rules().claimBufferChunks() + 1;
-        int r = NpcSettings.rules().landRadius(site.level());
+        int r = NpcCity.landRadius(site);
         for (long key : NpcPlanning.townChunks(site.x() >> 4, site.z() >> 4, r, town.x(), town.z())) {
             int x = ChunkPos.getX(key);
             int z = ChunkPos.getZ(key);
@@ -271,7 +274,7 @@ final class NpcFounding {
      */
     private static List<Long> chunksToRead(NpcSite site) {
         java.util.Set<Long> keys = new java.util.LinkedHashSet<>();
-        int r = NpcSettings.rules().landRadius(site.level());
+        int r = NpcCity.landRadius(site);
         int cx = site.x() >> 4;
         int cz = site.z() >> 4;
         for (int dx = -r; dx <= r; dx++) {

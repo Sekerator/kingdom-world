@@ -161,11 +161,27 @@ public final class RoadPlanning {
      */
     public static Outcome startAndBuild(ServerLevel level, UUID kingdomId, int fromX, int fromZ, int toX, int toZ, RoadClass roadClass,
                                         Road.Mode mode) {
-        return start(level, null, kingdomId, fromX, fromZ, toX, toZ, roadClass, mode);
+        return start(level, null, kingdomId, null, fromX, fromZ, toX, toZ, roadClass, mode);
+    }
+
+    /**
+     * Starts the search for the way of a road that begins exactly at a place given (the gate of a capital whose throne stands
+     * under a roof) and is built in a class as soon as the way is found.
+     *
+     * @param from where the road begins: the search starts at its coordinates
+     */
+    public static Outcome startAndBuildFrom(ServerLevel level, UUID kingdomId, Endpoint from, int toX, int toZ, RoadClass roadClass,
+                                            Road.Mode mode) {
+        return start(level, null, kingdomId, from, from.x(), from.z(), toX, toZ, roadClass, mode);
     }
 
     private static Outcome start(ServerLevel level, @Nullable UUID player, UUID kingdomId, int fromX, int fromZ, int toX, int toZ,
                                  @Nullable RoadClass buildClass, @Nullable Road.Mode buildMode) {
+        return start(level, player, kingdomId, null, fromX, fromZ, toX, toZ, buildClass, buildMode);
+    }
+
+    private static Outcome start(ServerLevel level, @Nullable UUID player, UUID kingdomId, @Nullable Endpoint given, int fromX, int fromZ,
+                                 int toX, int toZ, @Nullable RoadClass buildClass, @Nullable Road.Mode buildMode) {
         MinecraftServer server = level.getServer();
         if (KingdomWorldApi.kingdom(server, kingdomId).isEmpty()) {
             return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
@@ -186,7 +202,7 @@ public final class RoadPlanning {
         }
         RoadRules rules = RoadSettings.rules();
         String dimension = Dimensions.id(level);
-        Endpoint from = endpoint(server, dimension, fromX, fromZ);
+        Endpoint from = given != null ? given : endpoint(server, dimension, fromX, fromZ);
         Endpoint to = endpoint(server, dimension, toX, toZ);
         double dx = to.x() - from.x();
         double dz = to.z() - from.z();

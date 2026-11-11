@@ -52,11 +52,19 @@ public final class NpcSite {
     public record Town(int x, int z) {
     }
 
+    /** The first layout: a grid of plots around the throne on its square. */
+    public static final int LAYOUT_GRID = 1;
+    /** The layout of districts: a palace around the throne, avenues to the gates, streets with buildings of many kinds. */
+    public static final int LAYOUT_DISTRICTS = 2;
+
     private final int id;
     private final int x;
     private final int z;
     private final NpcLevel level;
     private final long seed;
+    private final int layout;
+    private final String style;
+    private final String wood;
     private final List<Town> towns = new ArrayList<>();
     private Status status = Status.PLANNED;
     private UUID kingdomId;
@@ -67,15 +75,33 @@ public final class NpcSite {
     private int given;
     private Runnable changeListener = () -> { };
 
+    /**
+     * A place of the first layout, as worlds made before the districts have them.
+     */
     public NpcSite(int id, int x, int z, NpcLevel level, long seed, List<Town> towns) {
+        this(id, x, z, level, seed, towns, LAYOUT_GRID, "", "");
+    }
+
+    /**
+     * @param layout how the capital is laid out: {@link #LAYOUT_GRID} or {@link #LAYOUT_DISTRICTS}
+     * @param style  the id of the look of the kingdom ({@link NpcStyle}), or empty for the look of the templates
+     * @param wood   the wood species that grows at the place, or empty if none is known
+     */
+    public NpcSite(int id, int x, int z, NpcLevel level, long seed, List<Town> towns, int layout, String style, String wood) {
         if (id < 1) {
             throw new IllegalArgumentException("Site id must be positive");
+        }
+        if (layout != LAYOUT_GRID && layout != LAYOUT_DISTRICTS) {
+            throw new IllegalArgumentException("Unknown layout " + layout);
         }
         this.id = id;
         this.x = x;
         this.z = z;
         this.level = Objects.requireNonNull(level, "level");
         this.seed = seed;
+        this.layout = layout;
+        this.style = style == null ? "" : style;
+        this.wood = wood == null ? "" : wood;
         this.towns.addAll(towns);
     }
 
@@ -101,6 +127,38 @@ public final class NpcSite {
 
     public long seed() {
         return seed;
+    }
+
+    /**
+     * How the capital is laid out; a place keeps the layout it was planned with, so that a kingdom half raised goes on as it began.
+     */
+    public int layout() {
+        return layout;
+    }
+
+    public boolean districts() {
+        return layout == LAYOUT_DISTRICTS;
+    }
+
+    /**
+     * The id of the look of the kingdom, or empty.
+     */
+    public String style() {
+        return style;
+    }
+
+    /**
+     * The look of the kingdom, if it has one of its own.
+     */
+    public Optional<NpcStyle> look() {
+        return NpcStyle.byId(style);
+    }
+
+    /**
+     * The wood species that grows at the place (for example {@code minecraft:birch}), or empty.
+     */
+    public String wood() {
+        return wood;
     }
 
     public List<Town> towns() {

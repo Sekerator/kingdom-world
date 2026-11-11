@@ -9,7 +9,8 @@ package io.github.sekerator.kingdomworld.core.npc;
  * @param minDistance         the least distance between two capitals, in blocks
  * @param minSpawnDistance    the least distance of a capital from the spawn of the world, in blocks
  * @param triggerChunks       a kingdom appears once a player comes this close to its place, in chunks
- * @param sizeWeights         how often each level is chosen
+ * @param sizeQuota           how many kingdoms of each level the plan makes first; the largest are looked for first
+ * @param sizeWeights         how often each level is chosen for the kingdoms beyond the quota
  * @param landRadius          the land around the capital, in chunks from the chunk of the throne
  * @param towns               towns around the capital
  * @param townDistance        how far towns lie from the capital, in blocks
@@ -24,16 +25,23 @@ package io.github.sekerator.kingdomworld.core.npc;
  * @param attemptsPerSite     candidate places the plan looks at for every kingdom at most
  */
 public record NpcRules(boolean generate, int count, int radius, int minDistance, int minSpawnDistance, int triggerChunks,
-                       int[] sizeWeights, int[] landRadius, int[] towns, int townDistance, long[] money, int foodDays,
+                       int[] sizeQuota, int[] sizeWeights, int[] landRadius, int[] towns, int townDistance, long[] money, int foodDays,
                        int[] materials, int[] soldiers, int blocksPerTick, int chunksPerTick, int maxInhabitedMinutes,
                        int attemptsPerSite) {
-    public static final NpcRules DEFAULT = new NpcRules(true, 8, 6000, 1200, 1000, 12, new int[]{5, 3, 2}, new int[]{3, 4, 5},
-            new int[]{1, 2, 3}, 200, new long[]{1500, 4000, 10000}, 10, new int[]{4, 6, 10}, new int[]{2, 4, 8}, 2000, 4, 20, 60);
+    /** The widest land of a capital the rules take, in chunks from the chunk of the throne. */
+    public static final int MAX_LAND_RADIUS = 12;
+    /** The most towns a kingdom is planned with. */
+    public static final int MAX_TOWNS = 6;
+
+    public static final NpcRules DEFAULT = new NpcRules(true, 8, 6000, 1200, 1000, 12, new int[]{5, 0, 3}, new int[]{5, 3, 2},
+            new int[]{4, 6, 7}, new int[]{2, 3, 4}, 260, new long[]{6000, 15000, 40000}, 10, new int[]{6, 10, 16}, new int[]{2, 4, 8},
+            2000, 4, 20, 60);
 
     public NpcRules {
+        sizeQuota = three(sizeQuota, 0, 256);
         sizeWeights = three(sizeWeights, 0, 1000);
-        landRadius = three(landRadius, 1, 8);
-        towns = three(towns, 0, 4);
+        landRadius = three(landRadius, 1, MAX_LAND_RADIUS);
+        towns = three(towns, 0, MAX_TOWNS);
         materials = three(materials, 0, 64);
         soldiers = three(soldiers, 0, 32);
         if (money == null || money.length != 3) {
@@ -86,6 +94,18 @@ public record NpcRules(boolean generate, int count, int radius, int minDistance,
     @Override
     public int[] sizeWeights() {
         return sizeWeights.clone();
+    }
+
+    @Override
+    public int[] sizeQuota() {
+        return sizeQuota.clone();
+    }
+
+    /**
+     * How many kingdoms of a level the plan makes before it draws levels by their weights.
+     */
+    public int quota(NpcLevel level) {
+        return sizeQuota[level.ordinal()];
     }
 
     /**

@@ -76,6 +76,7 @@ public final class Wall {
     private final List<Road.Section> sections = new ArrayList<>();
     private final List<Block> blocks = new ArrayList<>();
     private final long created;
+    private final int radius;
     private long buildingId;
     private final java.util.Set<Long> placedBlocks = new java.util.HashSet<>();
 
@@ -97,6 +98,11 @@ public final class Wall {
         }
         this.cells = List.copyOf(plain);
         this.created = created;
+        int reach = 0;
+        for (RouteCell cell : this.cells) {
+            reach = Math.max(reach, Math.max(Math.abs(cell.x() - centerX), Math.abs(cell.z() - centerZ)));
+        }
+        this.radius = reach;
         for (int gate : gates) {
             if (gate >= 0 && gate < this.cells.size()) {
                 this.gates.add(gate);
@@ -339,11 +345,10 @@ public final class Wall {
         return Math.abs(x - centerX) < radius && Math.abs(z - centerZ) < radius;
     }
 
+    /**
+     * The radius of the square of the wall: how far its furthest block lies from its middle.
+     */
     public int radius() {
-        int radius = 0;
-        for (RouteCell cell : cells) {
-            radius = Math.max(radius, Math.max(Math.abs(cell.x() - centerX), Math.abs(cell.z() - centerZ)));
-        }
         return radius;
     }
 }

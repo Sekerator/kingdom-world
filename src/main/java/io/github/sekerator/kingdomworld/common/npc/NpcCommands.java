@@ -188,7 +188,7 @@ public final class NpcCommands {
             source.sendFailure(Component.translatable(ADMIN + "busy"));
             return 0;
         }
-        int[] land = NpcWork.nearestSuitable(server, x, z, SEARCH);
+        int[] land = NpcWork.nearestSuitable(server, x, z, SEARCH, level);
         Optional<NpcSite> site = NpcWork.plant(server, land[0], land[1], level, true);
         if (site.isEmpty()) {
             source.sendFailure(Component.translatable("commands.kingdomworld.admin.read_only"));

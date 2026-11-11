@@ -74,7 +74,7 @@ public final class CityWalls {
      * repairs, demolitions and automatic repairs of buildings by template leave them alone.
      */
     public static final String CATEGORY = "city_wall";
-    /** Blocks around a city that count for its level. */
+    /** Blocks around a city that count for its level at least; a wall with a wider radius counts all it holds. */
     public static final int AREA = 64;
     /** Where each player was last: the kingdom and city it is in, or none. */
     private static final Map<UUID, String> INSIDE = new HashMap<>();
@@ -140,24 +140,46 @@ public final class CityWalls {
      * Citizens living around a city and buildings standing around it.
      */
     public static int[] counts(MinecraftServer server, Place place) {
+        int area = area(server, place);
         int people = 0;
         for (Citizen citizen : KingdomWorldApi.state(server).citizens().registry().citizensOf(place.kingdomId())) {
             WorldPos at = citizen.home() != null ? citizen.home() : citizen.lastPos();
-            if (at != null && near(place, at)) {
+            if (at != null && near(place, at, area)) {
                 people++;
             }
         }
         int buildings = 0;
         for (Building building : KingdomWorldApi.state(server).construction().buildingsOf(place.kingdomId())) {
-            if (!isFortification(building) && near(place, building.anchor())) {
+            if (!isFortification(building) && near(place, building.anchor(), area)) {
                 buildings++;
             }
         }
         return new int[]{people, buildings};
     }
 
-    private static boolean near(Place place, WorldPos pos) {
-        return pos.dimension().equals(place.dimension()) && Math.abs(pos.x() - place.x()) <= AREA && Math.abs(pos.z() - place.z()) <= AREA;
+    /**
+     * How far around a city its people and buildings count as its own, in blocks: {@value #AREA}, or the radius of its wall if
+     * that is wider, so that a large capital loses none of what stands inside its wall.
+     */
+    public static int area(MinecraftServer server, Place place) {
+        return area(server, place.kingdomId(), place.cityId());
+    }
+
+    public static int area(MinecraftServer server, UUID kingdomId, long cityId) {
+        return Math.max(AREA, RoadWork.state(server).wallOf(cityId, kingdomId).map(Wall::radius).orElse(0));
+    }
+
+    private static boolean near(Place place, WorldPos pos, int area) {
+        return pos.dimension().equals(place.dimension()) && Math.abs(pos.x() - place.x()) <= area && Math.abs(pos.z() - place.z()) <= area;
+    }
+
+    /**
+     * The radius a wall of a city is laid out with: that of the level of the city, and never less than the wall it has, so that
+     * a capital with a wall of its own radius keeps it when the wall is ordered again.
+     */
+    private static int radiusOf(MinecraftServer server, UUID kingdomId, long cityId) {
+        int byLevel = level(server, kingdomId, cityId).wallRadius(RoadSettings.rules());
+        return Math.max(byLevel, RoadWork.state(server).wallOf(cityId, kingdomId).map(Wall::radius).orElse(0));
     }
 
     /**
@@ -235,7 +257,7 @@ public final class CityWalls {
         if (level == null) {
             return Outcome.fail(KingdomError.UNKNOWN_CITY);
         }
-        int radius = level(server, kingdomId, cityId).wallRadius(RoadSettings.rules());
+        int radius = radiusOf(server, kingdomId, cityId);
         // A later order for the same city takes the place of one still being read.
         LAYOUTS.put(place.get().key(), new Layout(actor, kingdomId, cityId, wallClass, place.get(), radius, new RoadTerrain(level)));
         return Outcome.DONE;
@@ -280,6 +302,17 @@ public final class CityWalls {
      * @param actor the player, who needs the right to run construction; {@code null} for an operator
      */
     public static Outcome build(MinecraftServer server, @Nullable UUID actor, UUID kingdomId, long cityId, Wall.WallClass wallClass, Wall[] made) {
+        return build(server, actor, kingdomId, cityId, wallClass, made, 0);
+    }
+
+    /**
+     * Lays out the wall of a city with a radius of its own: the capital of a kingdom of the world is as wide as its plan, whatever
+     * the level of the city says.
+     *
+     * @param ownRadius the radius, or 0 for that of the level of the city
+     */
+    public static Outcome build(MinecraftServer server, @Nullable UUID actor, UUID kingdomId, long cityId, Wall.WallClass wallClass, Wall[] made,
+                                int ownRadius) {
         if (!RoadWork.mayManage(server, actor, kingdomId)) {
             return Outcome.fail(KingdomError.NO_PERMISSION);
         }
@@ -291,7 +324,7 @@ public final class CityWalls {
         if (level == null) {
             return Outcome.fail(KingdomError.UNKNOWN_CITY);
         }
-        int radius = level(server, kingdomId, cityId).wallRadius(RoadSettings.rules());
+        int radius = ownRadius > 0 ? ownRadius : radiusOf(server, kingdomId, cityId);
         RoadTerrain terrain = new RoadTerrain(level);
         terrain.allow(Integer.MAX_VALUE);
         List<RouteCell> ring = WallContour.ring(terrain, place.get().x(), place.get().z(), radius);
@@ -395,6 +428,33 @@ public final class CityWalls {
             RoadSync.changed();
         }
         return outcome;
+    }
+
+    /**
+     * Cuts a gate of the plan of a capital into its wall at a place on its ring, before the wall is built: the avenues of a
+     * capital of the world end at gates whatever roads come later.
+     *
+     * @return whether the wall has a gate there now
+     */
+    public static boolean gateOfPlan(MinecraftServer server, UUID kingdomId, long cityId, int x, int z) {
+        Optional<Wall> wall = RoadWork.state(server).wallOf(cityId, kingdomId);
+        if (wall.isEmpty()) {
+            return false;
+        }
+        int cell = wall.get().nearestCell(x, z);
+        RouteCell at = wall.get().cells().get(cell);
+        if (Math.abs(at.x() - x) > 2 || Math.abs(at.z() - z) > 2) {
+            return false;
+        }
+        if (wall.get().inGate(cell)) {
+            return true;
+        }
+        Outcome outcome = RoadWork.change(server, "cut a gate of the plan", state -> {
+            wall.get().addGate(cell);
+            state.changed();
+            return Outcome.DONE;
+        });
+        return outcome.ok();
     }
 
     /**
