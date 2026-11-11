@@ -122,15 +122,18 @@ public final class ArmyStaff {
         long day = ArmyWork.day(server);
         int recruited = replace(server, kingdomId, army, rules);
         int promoted = 0;
+        int issued = 0;
+        long paid = 0;
         for (Branch branch : Branch.values()) {
             for (Post post : new Post[]{Post.CAPTAIN, Post.VICE_CAPTAIN}) {
-                if (promote(server, kingdomId, branch, post, day, free)) {
+                ArmyKits.Issued kit = promote(server, kingdomId, branch, post, day, free);
+                if (kit != null) {
                     promoted++;
+                    issued += kit.pieces();
+                    paid += kit.paid();
                 }
             }
         }
-        int issued = 0;
-        long paid = 0;
         for (Soldier soldier : army.soldiersOf(kingdomId)) {
             Optional<Citizen> citizen = world.citizens().get(soldier.citizenId());
             if (citizen.isEmpty() || ArmyWork.isAwayFromHome(server, soldier.citizenId())) {
@@ -178,29 +181,32 @@ public final class ArmyStaff {
     /**
      * Fills a post that is open: the vice-captain rises to captain, otherwise the best fighter of the branch takes it. The
      * kingdom pays the kit of the post; a kit it cannot pay leaves the post vacant.
+     *
+     * @return what the new officer was issued, or {@code null} if the post was not filled
      */
-    private static boolean promote(MinecraftServer server, UUID kingdomId, Branch branch, Post post, long day, boolean free) {
+    @Nullable
+    private static ArmyKits.Issued promote(MinecraftServer server, UUID kingdomId, Branch branch, Post post, long day, boolean free) {
         ArmyState army = ArmyWork.state(server);
         KingdomWorldState world = KingdomWorldApi.state(server);
         if (!army.postOpen(kingdomId, branch, post, day, ArmySettings.force())) {
-            return false;
+            return null;
         }
         Optional<Soldier> best = army.successor(kingdomId, branch, post);
         Optional<Citizen> citizen = best.flatMap(soldier -> world.citizens().get(soldier.citizenId()));
         if (citizen.isEmpty()) {
-            return false;
+            return null;
         }
         Soldier promoted = best.get().withPost(post);
         long price = free ? 0 : ArmyKits.missingPrice(server, citizen.get(), promoted);
         if (price > 0 && world.economy().treasury(kingdomId).map(treasury -> treasury.funds() < price).orElse(true)) {
             LOGGER.debug("The post of {} of the {} of {} stays vacant: its kit costs {}", post.id(), branch.id(), kingdomId, price);
-            return false;
+            return null;
         }
         if (!army.appoint(null, promoted.citizenId(), post, world).ok()) {
-            return false;
+            return null;
         }
-        ArmyKits.issue(server, citizen.get(), promoted, free);
+        ArmyKits.Issued kit = ArmyKits.issue(server, citizen.get(), promoted, free);
         LOGGER.info("Soldier {} of {} is the {} of the {} now", citizen.get().shortId(), kingdomId, post.id(), branch.id());
-        return true;
+        return kit;
     }
 }
