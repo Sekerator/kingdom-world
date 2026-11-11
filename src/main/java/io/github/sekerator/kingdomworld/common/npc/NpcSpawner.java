@@ -241,7 +241,7 @@ public final class NpcSpawner {
     /**
      * Whether the running raising goes with the small budget of the background.
      */
-    static boolean inBackground() {
+    public static boolean inBackground() {
         return job != null && job.background;
     }
 

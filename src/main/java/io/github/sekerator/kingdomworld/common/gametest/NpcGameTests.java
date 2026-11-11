@@ -69,6 +69,8 @@ public final class NpcGameTests {
     private static final int HALF = 60;
     /** Steps the appearance of a small kingdom takes at most. */
     static final int STEPS = 4_000;
+    /** Ticks of the server the appearance of a small kingdom takes at most, with the wait for its wall. */
+    private static final int TICKS = STEPS + 3_000;
 
     private NpcGameTests() {
     }
@@ -370,6 +372,40 @@ public final class NpcGameTests {
         } finally {
             cleanUp(helper, site, center);
         }
+    }
+
+    /**
+     * A kingdom an operator calls for appears by the ticks of the server while nobody is online: it keeps the full budget (the
+     * small one of the background waits for players) and comes to its end.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_npc_ticks", timeoutTicks = TICKS + 100)
+    public static void aKingdomCalledByAnOperatorAppearsOnAnEmptyServer(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos center = platform(helper);
+        NpcSite site = plant(helper, center);
+        long started = server.getTickCount();
+        helper.onEachTick(() -> {
+            String problem = null;
+            if (site.status() == NpcSite.Status.SPAWNING) {
+                if (NpcSpawner.inBackground()) {
+                    problem = "The appearance went on with the small budget of the background with nobody online, at " + site.stage().id();
+                } else if (server.getTickCount() - started > TICKS) {
+                    problem = "The appearance did not end in " + TICKS + " ticks: " + site.stage().id() + " step " + site.step();
+                } else {
+                    return;
+                }
+            } else if (site.status() != NpcSite.Status.SPAWNED) {
+                problem = "The appearance did not end: " + site + " at " + site.stage().id() + " " + site.reason();
+            } else if (!level.getBlockState(NpcSpawner.thronePos(site)).is(ModRegistries.THRONE.get())) {
+                problem = "No throne once the kingdom appeared";
+            }
+            cleanUp(helper, site, center);
+            if (problem != null) {
+                helper.fail(problem);
+            }
+            helper.succeed();
+        });
     }
 
     // ---------------------------------------------------------------- players

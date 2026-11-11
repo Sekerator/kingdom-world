@@ -66,7 +66,9 @@ final class NpcBackground {
             boolean watched = watched(server, site);
             if (watched && NpcSpawner.inBackground()) {
                 NpcSpawner.setBackground(false);
-            } else if (!watched && !NpcSpawner.inBackground() && rules.background()) {
+            } else if (!watched && !NpcSpawner.inBackground() && rules.background() && playersOnline(server)) {
+                // The full budget gives way to the small one only while players are online and none of them watches:
+                // on an empty server no tick of a player suffers, and the small budget would wait for players forever.
                 NpcSpawner.setBackground(true);
             }
             return;
