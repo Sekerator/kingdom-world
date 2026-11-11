@@ -65,6 +65,7 @@ public final class ProtectionEvents {
         MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGH, ProtectionEvents::onBreak);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGH, ProtectionEvents::onPlace);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGH, ProtectionEvents::onRightClickBlock);
+        MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGH, ProtectionEvents::onRightClickItem);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGH, ProtectionEvents::onEntityInteract);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGH, ProtectionEvents::onEntityInteractSpecific);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGH, ProtectionEvents::onAttackEntity);
@@ -188,8 +189,36 @@ public final class ProtectionEvents {
     }
 
     /**
+     * A boat or a spawn egg is used with no block clicked: the item itself looks where the player looks and puts its entity
+     * there. Such a click never asks about a clicked block, so it is asked here, by the same look: on the land of a kingdom
+     * it needs the right to build.
+     */
+    private static void onRightClickItem(PlayerInteractEvent.RightClickItem event) {
+        Level level = event.getLevel();
+        Player player = event.getEntity();
+        if (level.isClientSide || !io.github.sekerator.kingdomworld.common.law.LawVandalism.placesEntityInSight(event.getItemStack())) {
+            return;
+        }
+        net.minecraft.world.phys.Vec3 from = player.getEyePosition();
+        net.minecraft.world.phys.Vec3 to = from.add(player.getLookAngle().scale(player.getBlockReach()));
+        BlockHitResult hit = level.clip(new net.minecraft.world.level.ClipContext(from, to, net.minecraft.world.level.ClipContext.Block.OUTLINE,
+                net.minecraft.world.level.ClipContext.Fluid.ANY, player));
+        if (hit.getType() != HitResult.Type.BLOCK) {
+            return;
+        }
+        BlockPos pos = hit.getBlockPos();
+        if (!ProtectionService.isAllowed(player, level, pos, ProtectedAction.USE_ITEM)
+                || !ProtectionService.isAllowed(player, level, pos.relative(hit.getDirection()), ProtectedAction.USE_ITEM)) {
+            event.setCanceled(true);
+            event.setCancellationResult(InteractionResult.FAIL);
+            ProtectionService.notifyDenied(player, level, pos);
+        }
+    }
+
+    /**
      * Whether a player may use the item in hand on or next to a block: with the right to build anything, and without it in
-     * peace only an item that is a block the law lets a stranger place. Buckets, fire and tools stay refused.
+     * peace only an item that is a plain block the law lets a stranger place. Buckets, fire, tools, machines and items that
+     * become entities stay refused.
      */
     private static boolean mayUseItem(Player player, Level level, BlockPos pos, net.minecraft.world.item.ItemStack stack) {
         return ProtectionService.isAllowed(player, level, pos, ProtectedAction.USE_ITEM)

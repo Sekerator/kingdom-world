@@ -22,8 +22,9 @@ import java.util.UUID;
  */
 public final class WarDamage {
     /**
-     * Most damaged blocks kept for one kingdom; the oldest beyond go unmended. A record is two short texts and a few
-     * numbers, about 300 bytes with its place in the map, so a kingdom whose city is being torn down holds 5 MB at most.
+     * Most damaged blocks kept for one kingdom. Beyond that the oldest damage of war goes unmended, and damage of peace is
+     * refused: a city whose book is full cannot be damaged further until it is mended. A record is two short texts and a
+     * few numbers, about 300 bytes with its place in the map, so a kingdom whose city is being torn down holds 5 MB at most.
      */
     public static final int MAX_PER_KINGDOM = 16_384;
 
@@ -71,21 +72,42 @@ public final class WarDamage {
     private final Map<UUID, LinkedHashMap<String, Entry>> broken = new LinkedHashMap<>();
 
     /**
-     * Records a broken block.
+     * Records a damaged block. A book that is full takes no more damage of peace: nothing gives way to it, so whoever asks
+     * must not break what cannot be written down. Damage of war pushes out the oldest damage of war, as it always did, and
+     * is lost only when the whole book is damage of peace.
      *
-     * @return whether it is new (not recorded before)
+     * @return whether it is new (not recorded before, and the book had room)
      */
     public boolean record(Entry entry) {
-        LinkedHashMap<String, Entry> of = broken.computeIfAbsent(entry.kingdom(), k -> new LinkedHashMap<>());
-        if (of.containsKey(entry.key())) {
+        LinkedHashMap<String, Entry> of = broken.get(entry.kingdom());
+        if (of != null && of.containsKey(entry.key())) {
             return false;
         }
-        of.put(entry.key(), entry);
-        while (of.size() > MAX_PER_KINGDOM) {
-            String first = of.keySet().iterator().next();
-            of.remove(first);
+        if (of != null && of.size() >= MAX_PER_KINGDOM) {
+            if (entry.free()) {
+                return false;
+            }
+            String oldestOfWar = null;
+            for (Entry kept : of.values()) {
+                if (!kept.free()) {
+                    oldestOfWar = kept.key();
+                    break;
+                }
+            }
+            if (oldestOfWar == null) {
+                return false;
+            }
+            of.remove(oldestOfWar);
         }
+        broken.computeIfAbsent(entry.kingdom(), k -> new LinkedHashMap<>()).put(entry.key(), entry);
         return true;
+    }
+
+    /**
+     * How many more records the book of a kingdom takes.
+     */
+    public int room(UUID kingdom) {
+        return Math.max(0, MAX_PER_KINGDOM - count(kingdom));
     }
 
     /**

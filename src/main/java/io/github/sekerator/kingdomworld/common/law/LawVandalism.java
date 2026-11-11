@@ -48,20 +48,30 @@ import java.util.UUID;
  * <li>Inside a city of the kingdom, and at a registered building, a wall or a road of the kingdom anywhere on its land, a
  * block is property. Breaking it is a crime, damaged property: the block drops nothing, is written down as it stood and is
  * put back for free once the offender is gone or kept still (see {@link SiegeRepair}); if somebody saw it, the fine
- * follows the worth of the blocks, and blocks broken one after another make one crime. A block a stranger places there is
+ * follows the worth of the blocks, and blocks broken one after another make one crime. Whatever cannot stay without the
+ * block (a torch, a rail, a door, a crop on it, sand over it) goes with it, drops nothing either, is written down after
+ * it and comes back after it: damaged property gives no item and loses no block. A block a stranger places there is
  * written down too and taken out again.</li>
  * <li>On the rest of the land blocks are broken and placed freely: no crime, nothing put back.</li>
  * </ul>
  *
  * <p>Still refused in peace: the land of a kingdom of players none of whom is there, the throne, the working blocks of the
- * mod, workplaces, containers, beds and every other block that keeps data, the leaves of city gates, and placing pistons,
- * explosives and fire. Nothing here asks about war: land open by war never comes this far.
+ * mod, workplaces, containers, beds and every other block that keeps data, the leaves of city gates; a block that a frame
+ * or a painting hangs on, that holds up a block with data or more than {@link #CASCADE} blocks; any block while the book
+ * of damage of the kingdom is full or cannot be written, since nothing is broken that cannot be written down. A stranger
+ * places plain blocks only: nothing that holds goods or keeps data, nothing of redstone, no rails, pistons, explosives or
+ * fire, and no entities (boats, minecarts, armor stands, frames). Nothing here asks about war: land open by war never comes
+ * this far.
  */
 public final class LawVandalism {
     /** Ticks between two hints that a broken block was property. */
     private static final long HINT_TICKS = 600;
     /** Ticks after its last damage an offender who left the land of a kingdom is taken to be gone. */
     private static final long GONE_TICKS = 100;
+    /** Most blocks one broken block may take out of the world, itself among them; a block that would take more does not break. */
+    static final int CASCADE = 64;
+    /** A change of a block the clients see and the neighbours do not hear of. */
+    private static final int SILENT = net.minecraft.world.level.block.Block.UPDATE_CLIENTS | net.minecraft.world.level.block.Block.UPDATE_KNOWN_SHAPE;
 
     /**
      * What the law makes of a block a player breaks.
@@ -98,8 +108,14 @@ public final class LawVandalism {
     private static final Map<UUID, Pending> PENDING = new HashMap<>();
     private static final Map<UUID, Damage> LAST = new HashMap<>();
     private static final Map<UUID, Long> HINTS = new HashMap<>();
-    /** The columns of each road with the height of the road there, by the id of the road. */
-    private static final Map<Long, Long2IntOpenHashMap> ROADS = new HashMap<>();
+    /**
+     * The columns of a road with the height of the road there, and the blocks of the road they were worked out from.
+     */
+    private record RoadColumns(List<RoadLayout.Block> source, Long2IntOpenHashMap heights) {
+    }
+
+    /** The columns of each road, by the id of the road. */
+    private static final Map<Long, RoadColumns> ROADS = new HashMap<>();
 
     private LawVandalism() {
     }
@@ -138,11 +154,37 @@ public final class LawVandalism {
     }
 
     /**
-     * Whether a block may not be placed by a stranger: it moves, blows up or burns what is not its own.
+     * Whether a block is plain enough for a stranger to place: it holds nothing and keeps no data (no chest, barrel, hopper,
+     * dropper, dispenser, furnace or sign: a hopper under a chest of the kingdom would empty it with no theft on any
+     * record, a dispenser would pour what a bucket may not), gives and carries no signal (no torch of redstone, lever,
+     * button, plate, observer, repeater, dust or rail: they would work the mechanisms of the kingdom), and neither moves,
+     * blows up, burns nor flows.
      */
-    static boolean dangerous(BlockState state) {
-        return state.getBlock() instanceof PistonBaseBlock || state.getBlock() instanceof TntBlock || state.getBlock() instanceof BaseFireBlock
-                || !state.getFluidState().isEmpty() && state.getBlock() instanceof net.minecraft.world.level.block.LiquidBlock;
+    static boolean plain(BlockState state) {
+        net.minecraft.world.level.block.Block block = state.getBlock();
+        if (state.hasBlockEntity() || state.isSignalSource()) {
+            return false;
+        }
+        if (block instanceof PistonBaseBlock || block instanceof TntBlock || block instanceof BaseFireBlock
+                || block instanceof net.minecraft.world.level.block.LiquidBlock) {
+            return false;
+        }
+        return !(block instanceof net.minecraft.world.level.block.BaseRailBlock || block instanceof net.minecraft.world.level.block.RedStoneWireBlock
+                || block instanceof net.minecraft.world.level.block.DiodeBlock || block instanceof net.minecraft.world.level.block.ButtonBlock
+                || block instanceof net.minecraft.world.level.block.LeverBlock
+                || block instanceof net.minecraft.world.level.block.BasePressurePlateBlock
+                || block instanceof net.minecraft.world.level.block.TripWireBlock
+                || block instanceof net.minecraft.world.level.block.TripWireHookBlock);
+    }
+
+    /**
+     * Whether an item puts an entity into the world where the player looks, with no block clicked: a boat, a spawn egg.
+     * Such a click passes the rules of clicked blocks, so land protection asks about it apart. Minecarts, armor stands,
+     * frames, paintings and crystals are put on a clicked block and are refused there with every other item that is no
+     * plain block.
+     */
+    public static boolean placesEntityInSight(ItemStack stack) {
+        return stack.getItem() instanceof net.minecraft.world.item.BoatItem || stack.getItem() instanceof net.minecraft.world.item.SpawnEggItem;
     }
 
     /**
@@ -171,8 +213,13 @@ public final class LawVandalism {
             if (!road.dimension().equals(dimension)) {
                 continue;
             }
-            Long2IntOpenHashMap columns = ROADS.computeIfAbsent(road.id(), id -> columns(road));
-            int height = columns.get(column);
+            // Worked out anew when the road got other blocks: a road laid again or widened is property as it lies now.
+            RoadColumns known = ROADS.get(road.id());
+            if (known == null || known.source() != road.blocks()) {
+                known = new RoadColumns(road.blocks(), columns(road));
+                ROADS.put(road.id(), known);
+            }
+            int height = known.heights().get(column);
             if (height != Integer.MIN_VALUE && Math.abs(pos.getY() - height) <= 1) {
                 return true;
             }
@@ -213,10 +260,47 @@ public final class LawVandalism {
             // Somebody the law of this kingdom does not judge and who holds no right to build: as before.
             return Verdict.REFUSED;
         }
-        long worth = Math.max(1, LawPunish.worth(server, kingdom, new ItemStack(state.getBlock().asItem())));
-        SiegeRepair.damaged(server, kingdom, serverLevel, pos, state);
-        // Gone without drops: what comes back for free must not be carried away, or every block would be endless.
-        serverLevel.destroyBlock(pos, false, actor);
+        int room = SiegeRepair.room(server, kingdom);
+        if (room <= 0 && !SiegeRepair.isRecorded(server, kingdom, serverLevel, pos)) {
+            // The book of damage is full or cannot be written: what cannot be written down is not broken.
+            return Verdict.REFUSED;
+        }
+        long worth = 0;
+        // Nothing drops while the block and what stood on it leave the world: the game keeps drops back while blocks are
+        // being restored, and that is what this is, the other way round. What comes back for free must not be carried
+        // away, or every block would be endless.
+        boolean restoring = serverLevel.restoringBlockSnapshots;
+        serverLevel.restoringBlockSnapshots = true;
+        try {
+            List<Gone> gone = takeOut(serverLevel, pos, state);
+            if (gone == null) {
+                return Verdict.REFUSED;
+            }
+            int fresh = 0;
+            for (Gone block : gone) {
+                fresh += SiegeRepair.isRecorded(server, kingdom, serverLevel, block.pos()) ? 0 : 1;
+            }
+            if (fresh > room) {
+                putBack(serverLevel, gone);
+                return Verdict.REFUSED;
+            }
+            // Written down in the order they come back: the block first, then what stood on it.
+            for (Gone block : gone) {
+                SiegeRepair.damaged(server, kingdom, serverLevel, block.pos(), block.state());
+                worth = io.github.sekerator.kingdomworld.core.economy.Money.addCapped(worth,
+                        Math.max(1, LawPunish.worth(server, kingdom, new ItemStack(block.state().getBlock().asItem()))));
+            }
+            // Only now the neighbours hear of it: fences let go, water flows in, signals change.
+            for (Gone block : gone) {
+                serverLevel.markAndNotifyBlock(block.pos(), serverLevel.getChunkAt(block.pos()), block.state(),
+                        serverLevel.getBlockState(block.pos()), net.minecraft.world.level.block.Block.UPDATE_ALL, 512);
+            }
+        } finally {
+            serverLevel.restoringBlockSnapshots = restoring;
+        }
+        serverLevel.levelEvent(2001, pos, net.minecraft.world.level.block.Block.getId(state));
+        serverLevel.gameEvent(net.minecraft.world.level.gameevent.GameEvent.BLOCK_DESTROY, pos,
+                net.minecraft.world.level.gameevent.GameEvent.Context.of(actor, state));
         long now = LawWork.now(server);
         LAST.put(kingdom, new Damage(now, actor.getUUID()));
         Pending pending = PENDING.get(actor.getUUID());
@@ -232,6 +316,91 @@ public final class LawVandalism {
         pending.last = pos.immutable();
         hint(actor, kingdom, now);
         return Verdict.DAMAGED;
+    }
+
+    /**
+     * A block taken out of the world, as it stood.
+     */
+    private record Gone(BlockPos pos, BlockState state) {
+    }
+
+    /**
+     * Takes a block out of the world with everything that cannot stay without it: what stands, hangs or leans on it (a
+     * torch, a rail, a carpet, a door, a crop), the other half of a block of two, what would fall (sand, gravel), and so
+     * on along the chain. Each is set to air (or its water) without a word to its neighbours, so nothing pops off and
+     * nothing falls; the caller tells the neighbours once all is out.
+     *
+     * @return the blocks taken out, the broken one first and each support before what stood on it; {@code null}, with
+     *         everything put back, when the block may not break: a frame or a painting hangs on one of them, one of them
+     *         keeps data or never breaks, or there are more than {@link #CASCADE}
+     */
+    @org.jetbrains.annotations.Nullable
+    private static List<Gone> takeOut(ServerLevel level, BlockPos pos, BlockState state) {
+        if (holdsEntity(level, pos)) {
+            return null;
+        }
+        List<Gone> gone = new java.util.ArrayList<>();
+        remove(level, pos, state, gone);
+        for (int i = 0; i < gone.size(); i++) {
+            Gone from = gone.get(i);
+            for (net.minecraft.core.Direction direction : net.minecraft.core.Direction.values()) {
+                BlockPos next = from.pos().relative(direction);
+                BlockState there = level.getBlockState(next);
+                if (there.isAir() || !goesWith(level, from, direction, next, there)) {
+                    continue;
+                }
+                if (gone.size() >= CASCADE || keptWhole(next, there) || holdsEntity(level, next)) {
+                    putBack(level, gone);
+                    return null;
+                }
+                remove(level, next, there, gone);
+            }
+        }
+        return gone;
+    }
+
+    /**
+     * Whether a block cannot stay once its neighbour is out: it is the other half of it, it would fall into the hole, or
+     * the game says it does not survive there.
+     */
+    private static boolean goesWith(ServerLevel level, Gone from, net.minecraft.core.Direction direction, BlockPos next, BlockState there) {
+        var half = net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF;
+        if (from.state().hasProperty(half) && there.getBlock() == from.state().getBlock() && there.hasProperty(half)
+                && direction == (from.state().getValue(half) == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
+                ? net.minecraft.core.Direction.UP : net.minecraft.core.Direction.DOWN)) {
+            return true;
+        }
+        if (direction == net.minecraft.core.Direction.UP && there.getBlock() instanceof net.minecraft.world.level.block.FallingBlock) {
+            return true;
+        }
+        return !there.canSurvive(level, next);
+    }
+
+    private static void remove(ServerLevel level, BlockPos pos, BlockState state, List<Gone> gone) {
+        gone.add(new Gone(pos.immutable(), state));
+        level.setBlock(pos, state.getFluidState().createLegacyBlock(), SILENT);
+    }
+
+    private static void putBack(ServerLevel level, List<Gone> gone) {
+        for (int i = gone.size() - 1; i >= 0; i--) {
+            level.setBlock(gone.get(i).pos(), gone.get(i).state(), SILENT);
+        }
+    }
+
+    /**
+     * Whether a frame, a painting or a knot of a lead holds on to a block: such a block does not break, or the thing would
+     * fall with what is in it.
+     */
+    private static boolean holdsEntity(ServerLevel level, BlockPos pos) {
+        net.minecraft.world.phys.AABB block = new net.minecraft.world.phys.AABB(pos);
+        return !level.getEntitiesOfClass(net.minecraft.world.entity.decoration.HangingEntity.class, block.inflate(1.0), hanging -> {
+            if (hanging.getPos().equals(pos)) {
+                return true;
+            }
+            // Pushed half a block into the wall it hangs on, the thing reaches every block that holds it.
+            net.minecraft.core.Vec3i into = hanging.getDirection().getOpposite().getNormal();
+            return hanging.getBoundingBox().move(into.getX() * 0.5, into.getY() * 0.5, into.getZ() * 0.5).intersects(block.deflate(0.01));
+        }).isEmpty();
     }
 
     private static void hint(ServerPlayer actor, UUID kingdom, long now) {
@@ -267,12 +436,13 @@ public final class LawVandalism {
      */
     public static boolean mayPlace(Player player, Level level, BlockPos pos, BlockState placed) {
         UUID kingdom = KingdomWorldApi.ownerAt(level, pos);
-        return kingdom != null && level instanceof ServerLevel && judged(player, level, kingdom) && !dangerous(placed);
+        return kingdom != null && level instanceof ServerLevel && judged(player, level, kingdom) && plain(placed);
     }
 
     /**
      * Whether a player without the right to build may use the item in hand to place a block at a place: only items that
-     * are blocks, and no dangerous ones. Buckets, fire, tools and everything else stay refused.
+     * are plain blocks. Containers and machines, everything of redstone, buckets, fire, tools, and items that become
+     * entities (minecarts, boats, armor stands, frames, crystals) stay refused.
      */
     public static boolean mayPlace(Player player, Level level, BlockPos pos, ItemStack stack) {
         return stack.getItem() instanceof BlockItem item && mayPlace(player, level, pos, item.getBlock().defaultBlockState());
@@ -294,8 +464,11 @@ public final class LawVandalism {
         MinecraftServer server = actor.server;
         UUID kingdom = KingdomWorldApi.ownerAt(level, pos);
         if (isProperty(server, kingdom, serverLevel, pos)) {
-            // In a city the block of a stranger does not stay: it is taken out when the place is put in order.
-            SiegeRepair.placed(server, kingdom, serverLevel, pos, before, placed);
+            // In a city the block of a stranger does not stay: it is taken out when the place is put in order. A block
+            // that cannot be written down (the book of damage is full or cannot be written) is not placed at all.
+            if (!SiegeRepair.placed(server, kingdom, serverLevel, pos, before, placed)) {
+                return false;
+            }
             LAST.put(kingdom, new Damage(LawWork.now(server), actor.getUUID()));
         }
         return true;

@@ -81,14 +81,41 @@ class PeaceDamageTest {
     }
 
     @Test
-    void aKingdomKeepsManyRecordsAndDropsTheOldestBeyondThat() {
+    void aFullBookTakesNoMoreDamageOfPeaceAndNothingGivesWayToIt() {
         WarDamage damage = new WarDamage();
         assertTrue(WarDamage.MAX_PER_KINGDOM >= 16_000, "Enough for a city square torn up block by block");
-        for (int i = 0; i < WarDamage.MAX_PER_KINGDOM + 5; i++) {
-            damage.record(WarDamage.Entry.inPeace(kingdom, OVERWORLD, i, "s", "", i));
+        assertEquals(WarDamage.MAX_PER_KINGDOM, damage.room(kingdom));
+        for (int i = 0; i < WarDamage.MAX_PER_KINGDOM; i++) {
+            assertTrue(damage.record(WarDamage.Entry.inPeace(kingdom, OVERWORLD, i, "s", "", i)));
         }
+        assertEquals(0, damage.room(kingdom));
+        assertFalse(damage.record(WarDamage.Entry.inPeace(kingdom, OVERWORLD, WarDamage.MAX_PER_KINGDOM, "s", "", 9)),
+                "Whoever asks must not break what cannot be written down");
         assertEquals(WarDamage.MAX_PER_KINGDOM, damage.count(kingdom));
-        assertFalse(damage.contains(kingdom, OVERWORLD, 0));
-        assertTrue(damage.contains(kingdom, OVERWORLD, WarDamage.MAX_PER_KINGDOM + 4));
+        assertTrue(damage.contains(kingdom, OVERWORLD, 0), "The oldest record waits for its mending");
+        assertFalse(damage.contains(kingdom, OVERWORLD, WarDamage.MAX_PER_KINGDOM));
+        // A stranger's block over a place already on the book needs no room.
+        assertTrue(damage.placedOver(kingdom, OVERWORLD, 0, "dirt"));
+        // A book full of damage of peace has nothing of war to push out: the block of war goes unmended.
+        assertFalse(damage.record(new WarDamage.Entry(7, kingdom, OVERWORLD, -1, "stone", "minecraft:stone", 0, 9)));
+        // Mending makes room again.
+        assertTrue(damage.mended(kingdom, OVERWORLD, 0));
+        assertEquals(1, damage.room(kingdom));
+        assertTrue(damage.record(WarDamage.Entry.inPeace(kingdom, OVERWORLD, WarDamage.MAX_PER_KINGDOM, "s", "", 9)));
+    }
+
+    @Test
+    void damageOfWarPushesOutOnlyTheOldestDamageOfWar() {
+        WarDamage damage = new WarDamage();
+        damage.record(WarDamage.Entry.inPeace(kingdom, OVERWORLD, -5, "glass", "", 0));
+        for (int i = 0; i < WarDamage.MAX_PER_KINGDOM - 1; i++) {
+            damage.record(new WarDamage.Entry(7, kingdom, OVERWORLD, i, "s", "i", 0, i));
+        }
+        assertEquals(0, damage.room(kingdom));
+        assertTrue(damage.record(new WarDamage.Entry(7, kingdom, OVERWORLD, WarDamage.MAX_PER_KINGDOM, "s", "i", 0, 9)));
+        assertEquals(WarDamage.MAX_PER_KINGDOM, damage.count(kingdom));
+        assertTrue(damage.contains(kingdom, OVERWORLD, -5), "Damage of peace does not give way to a war");
+        assertFalse(damage.contains(kingdom, OVERWORLD, 0), "The oldest damage of war gives way");
+        assertTrue(damage.contains(kingdom, OVERWORLD, WarDamage.MAX_PER_KINGDOM));
     }
 }

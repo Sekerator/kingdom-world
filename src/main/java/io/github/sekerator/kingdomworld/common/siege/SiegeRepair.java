@@ -52,6 +52,8 @@ import java.util.UUID;
 public final class SiegeRepair {
     /** Blocks put back for one kingdom in a second. */
     static final int PER_SECOND = 4;
+    /** Game ticks a block damaged in peace waits for what it stood on to come back before it is given up: a game day. */
+    static final long WAIT_FOR_SUPPORT = 24_000;
     /** Game ticks between two orders of the same item by a ruler of the world. */
     private static final long ORDER_EVERY = 12_000;
 
@@ -135,10 +137,26 @@ public final class SiegeRepair {
     // ---------------------------------------------------------------- damage in peace
 
     /**
-     * Writes down a block of a kingdom a player broke in peace, as it stood, to put it back for free. A block of two halves
-     * (a door, a tall plant) is written down whole, since the other half goes with the broken one.
+     * How many more blocks damaged in peace the book of a kingdom takes: none while the data cannot be written. Whoever
+     * breaks a block of a city asks first, so that nothing is broken that cannot be written down and put back.
+     */
+    public static int room(MinecraftServer server, UUID kingdom) {
+        return SiegeWork.isReadOnly(server) ? 0 : SiegeWork.state(server).damage().room(kingdom);
+    }
+
+    /**
+     * Whether a place of a kingdom is on the book already: what is broken there now needs no room, the first state is kept.
+     */
+    public static boolean isRecorded(MinecraftServer server, UUID kingdom, ServerLevel level, BlockPos pos) {
+        return SiegeWork.state(server).damage().contains(kingdom, Dimensions.id(level), pos.asLong());
+    }
+
+    /**
+     * Writes down a block of a kingdom a player broke in peace, as it stood, to put it back for free. Blocks that go with
+     * it are written down by the caller after it, in the order they are to come back.
      *
-     * @return whether it was written down (not if the place has a record already)
+     * @return whether the place is on the book now: written down, or recorded before; not if the book is full or cannot
+     *         be written
      */
     public static boolean damaged(MinecraftServer server, UUID kingdom, ServerLevel level, BlockPos pos, BlockState state) {
         if (state.isAir() || SiegeWork.isReadOnly(server)) {
@@ -146,36 +164,37 @@ public final class SiegeRepair {
         }
         String dimension = Dimensions.id(level);
         SiegeState siege = SiegeWork.state(server);
-        long now = KingdomWorldApi.gameTime(server);
-        boolean added = siege.damage().record(WarDamage.Entry.inPeace(kingdom, dimension, pos.asLong(), NbtUtils.writeBlockState(state).toString(),
-                "", now));
-        BlockPos other = otherHalf(pos, state);
-        if (other != null) {
-            BlockState half = level.getBlockState(other);
-            if (half.getBlock() == state.getBlock()) {
-                siege.damage().record(WarDamage.Entry.inPeace(kingdom, dimension, other.asLong(), NbtUtils.writeBlockState(half).toString(), "", now));
-            }
+        if (siege.damage().contains(kingdom, dimension, pos.asLong())) {
+            return true;
         }
-        siege.changed();
+        boolean added = siege.damage().record(WarDamage.Entry.inPeace(kingdom, dimension, pos.asLong(), NbtUtils.writeBlockState(state).toString(),
+                "", KingdomWorldApi.gameTime(server)));
+        if (added) {
+            siege.changed();
+        }
         return added;
     }
 
     /**
      * Writes down a block a stranger placed in a city in peace, with what it covered: it is taken out again when the place
      * is mended, and falls there as an item.
+     *
+     * @return whether it was written down; not if the book is full or cannot be written, and then the block may not stay
      */
-    public static void placed(MinecraftServer server, UUID kingdom, ServerLevel level, BlockPos pos, BlockState before, BlockState placed) {
+    public static boolean placed(MinecraftServer server, UUID kingdom, ServerLevel level, BlockPos pos, BlockState before, BlockState placed) {
         if (SiegeWork.isReadOnly(server)) {
-            return;
+            return false;
         }
         String dimension = Dimensions.id(level);
         SiegeState siege = SiegeWork.state(server);
         String now = NbtUtils.writeBlockState(placed).toString();
-        if (!siege.damage().placedOver(kingdom, dimension, pos.asLong(), now)) {
-            siege.damage().record(WarDamage.Entry.inPeace(kingdom, dimension, pos.asLong(), NbtUtils.writeBlockState(before).toString(), now,
-                    KingdomWorldApi.gameTime(server)));
+        boolean written = siege.damage().placedOver(kingdom, dimension, pos.asLong(), now)
+                || siege.damage().record(WarDamage.Entry.inPeace(kingdom, dimension, pos.asLong(), NbtUtils.writeBlockState(before).toString(), now,
+                KingdomWorldApi.gameTime(server)));
+        if (written) {
+            siege.changed();
         }
-        siege.changed();
+        return written;
     }
 
     /**
@@ -195,15 +214,6 @@ public final class SiegeRepair {
      */
     public static int waiting(MinecraftServer server, UUID kingdom) {
         return SiegeWork.state(server).damage().countFree(kingdom);
-    }
-
-    @Nullable
-    private static BlockPos otherHalf(BlockPos pos, BlockState state) {
-        if (!state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF)) {
-            return null;
-        }
-        return state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF)
-                == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER ? pos.above() : pos.below();
     }
 
     // ---------------------------------------------------------------- putting back
@@ -280,6 +290,15 @@ public final class SiegeRepair {
                             && !level.getEntitiesOfClass(net.minecraft.world.entity.player.Player.class, new net.minecraft.world.phys.AABB(pos),
                             player -> !player.isSpectator()).isEmpty()) {
                         // Somebody stands in the place: the block waits rather than wall a player in.
+                        continue;
+                    }
+                    if (!wanted.canSurvive(level, pos) || wanted.getBlock() instanceof net.minecraft.world.level.block.FallingBlock
+                            && net.minecraft.world.level.block.FallingBlock.isFree(level.getBlockState(pos.below()))) {
+                        // What it stood on is not back yet: a torch waits for its wall, sand for the block under it. The
+                        // support was written down first and comes first; a thing whose support never comes is given up.
+                        if (now - entry.time() > WAIT_FOR_SUPPORT) {
+                            changed |= damage.mended(kingdom, entry.dimension(), entry.pos());
+                        }
                         continue;
                     }
                     // Without telling the neighbours to look at their shape: the other half of a door comes in its own turn.

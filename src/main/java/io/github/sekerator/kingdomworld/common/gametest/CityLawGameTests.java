@@ -543,6 +543,194 @@ public final class CityLawGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_citylaw_placing")
+    public static void aStrangerPlacesOnlyPlainBlocksAndNoMachinesOrEntities(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos[] area = area(helper, 9, 9);
+        noon(level);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Plain Blocks", UUID.randomUUID());
+        WarWork.markPresent(kingdom.id(), true);
+        ServerPlayer stranger = player(helper, "kw-placer", 3, 4);
+        List<String> wrong = new java.util.ArrayList<>();
+        try {
+            BlockPos spot = helper.absolutePos(new BlockPos(6, 0, 6));
+            // A hopper under a chest of the kingdom would draw its goods out with no theft on any record.
+            BlockPos chest = helper.absolutePos(new BlockPos(5, 1, 5));
+            BlockPos hopper = chest.below();
+            level.setBlock(chest, Blocks.CHEST.defaultBlockState(), 2 | 16);
+            BlockSnapshot before = BlockSnapshot.create(level.dimension(), level, hopper);
+            level.setBlock(hopper, Blocks.HOPPER.defaultBlockState(), 2 | 16);
+            if (!MinecraftForge.EVENT_BUS.post(new BlockEvent.EntityPlaceEvent(before, level.getBlockState(hopper.below()), stranger))) {
+                wrong.add("a hopper was placed under a chest of the kingdom");
+            }
+            level.setBlock(hopper, Blocks.AIR.defaultBlockState(), 2 | 16);
+            if (SiegeRepair.waiting(server, kingdom.id()) != 0) {
+                wrong.add("a refused block was written down");
+            }
+            // Nothing that holds goods or data, nothing that gives or carries a signal, nothing that moves or burns.
+            for (net.minecraft.world.item.Item item : List.of(Items.HOPPER, Items.CHEST, Items.TRAPPED_CHEST, Items.BARREL, Items.DISPENSER,
+                    Items.DROPPER, Items.FURNACE, Items.SHULKER_BOX, Items.OAK_SIGN, Items.REDSTONE_TORCH, Items.REDSTONE_BLOCK, Items.REDSTONE,
+                    Items.LEVER, Items.STONE_BUTTON, Items.STONE_PRESSURE_PLATE, Items.OBSERVER, Items.REPEATER, Items.COMPARATOR,
+                    Items.DAYLIGHT_DETECTOR, Items.TRIPWIRE_HOOK, Items.TARGET, Items.ACTIVATOR_RAIL, Items.DETECTOR_RAIL, Items.POWERED_RAIL,
+                    Items.RAIL, Items.PISTON, Items.STICKY_PISTON, Items.TNT)) {
+                if (LawVandalism.mayPlace(stranger, level, spot, new ItemStack(item))) {
+                    wrong.add("may place " + item);
+                }
+            }
+            for (net.minecraft.world.item.Item item : List.of(Items.COBBLESTONE, Items.OAK_PLANKS, Items.GLASS, Items.DIRT, Items.TORCH,
+                    Items.OAK_STAIRS, Items.OAK_FENCE)) {
+                if (!LawVandalism.mayPlace(stranger, level, spot, new ItemStack(item))) {
+                    wrong.add("may not place " + item);
+                }
+            }
+            // Things that become entities: a click on a block with them is refused.
+            BlockPos rail = helper.absolutePos(new BlockPos(7, 0, 5));
+            level.setBlock(rail, Blocks.RAIL.defaultBlockState(), 2 | 16);
+            for (net.minecraft.world.item.Item item : List.of(Items.MINECART, Items.HOPPER_MINECART, Items.CHEST_MINECART, Items.TNT_MINECART,
+                    Items.ARMOR_STAND, Items.ITEM_FRAME, Items.PAINTING, Items.END_CRYSTAL, Items.OAK_BOAT, Items.PIG_SPAWN_EGG)) {
+                stranger.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(item));
+                if (click(stranger, rail).getUseItem() != Event.Result.DENY) {
+                    wrong.add("a click on a block uses " + item);
+                }
+            }
+            // A boat and a spawn egg are also used with no block clicked, where the player looks: here, down at the land.
+            stranger.setXRot(90.0f);
+            for (net.minecraft.world.item.Item item : List.of(Items.OAK_BOAT, Items.OAK_CHEST_BOAT, Items.PIG_SPAWN_EGG)) {
+                stranger.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(item));
+                PlayerInteractEvent.RightClickItem used = new PlayerInteractEvent.RightClickItem(stranger, InteractionHand.MAIN_HAND);
+                MinecraftForge.EVENT_BUS.post(used);
+                if (!used.isCanceled()) {
+                    wrong.add("a click in the air uses " + item + " on the land");
+                }
+            }
+            // A plain thing in hand used in the air is nobody's business.
+            stranger.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.BREAD));
+            PlayerInteractEvent.RightClickItem eaten = new PlayerInteractEvent.RightClickItem(stranger, InteractionHand.MAIN_HAND);
+            MinecraftForge.EVENT_BUS.post(eaten);
+            if (eaten.isCanceled()) {
+                wrong.add("bread cannot be eaten on the land of a kingdom");
+            }
+            helper.assertTrue(wrong.isEmpty(), "A stranger places more than plain blocks: " + String.join("; ", wrong));
+        } finally {
+            end(helper, kingdom, area, List.of(stranger));
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_citylaw_cascade")
+    public static void whatStoodOnABrokenBlockGoesWithItDropsNothingAndComesBack(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos[] area = area(helper, 9, 9);
+        noon(level);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Whole Town", UUID.randomUUID());
+        WarWork.markPresent(kingdom.id(), true);
+        ServerPlayer vandal = player(helper, "kw-breaker", 3, 3);
+        List<String> wrong = new java.util.ArrayList<>();
+        BlockState bricks = Blocks.STONE_BRICKS.defaultBlockState();
+        BlockPos underTorch = helper.absolutePos(new BlockPos(5, 0, 5));
+        BlockPos underSand = helper.absolutePos(new BlockPos(7, 0, 5));
+        BlockPos underDoor = helper.absolutePos(new BlockPos(5, 0, 7));
+        BlockPos underFrame = helper.absolutePos(new BlockPos(7, 0, 7));
+        BlockPos underSign = helper.absolutePos(new BlockPos(3, 0, 7));
+        BlockState lower = Blocks.OAK_DOOR.defaultBlockState();
+        BlockState upper = lower.setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER);
+        net.minecraft.world.entity.decoration.ItemFrame frame = new net.minecraft.world.entity.decoration.ItemFrame(level, underFrame.east(),
+                Direction.EAST);
+        // Items an earlier test left in the caves around would count as dropped here.
+        level.getEntitiesOfClass(ItemEntity.class, new AABB(area[0], area[1]).inflate(4.0)).forEach(ItemEntity::discard);
+        try {
+            for (BlockPos pos : List.of(underTorch, underSand, underDoor, underFrame, underSign)) {
+                level.setBlock(pos, bricks, 2 | 16);
+            }
+            level.setBlock(underTorch.above(), Blocks.TORCH.defaultBlockState(), 2 | 16);
+            level.setBlock(underSand.above(), Blocks.SAND.defaultBlockState(), 2 | 16);
+            level.setBlock(underSand.above(2), Blocks.SAND.defaultBlockState(), 2 | 16);
+            level.setBlock(underDoor.above(), lower, 2 | 16);
+            level.setBlock(underDoor.above(2), upper, 2 | 16);
+            level.setBlock(underSign.above(), Blocks.OAK_SIGN.defaultBlockState(), 2 | 16);
+            frame.setItem(new ItemStack(Items.DIAMOND), false);
+            level.addFreshEntity(frame);
+
+            // A torch stands on the block: both go, nothing falls, both are written down.
+            boolean refused = breakRefused(level, underTorch, vandal);
+            if (!refused || !level.getBlockState(underTorch).isAir() || !level.getBlockState(underTorch.above()).isAir()) {
+                wrong.add("the block under a torch and the torch are not both gone");
+            }
+            if (SiegeRepair.waiting(server, kingdom.id()) != 2) {
+                wrong.add("a block and its torch made " + SiegeRepair.waiting(server, kingdom.id()) + " record(s), not 2");
+            }
+            // Sand lies on the block: it does not fall, it goes and comes back with the block.
+            breakRefused(level, underSand, vandal);
+            if (!level.getBlockState(underSand.above()).isAir() || !level.getBlockState(underSand.above(2)).isAir()) {
+                wrong.add("the sand over a broken block stays to fall");
+            }
+            if (SiegeRepair.waiting(server, kingdom.id()) != 5) {
+                wrong.add("after the sand " + SiegeRepair.waiting(server, kingdom.id()) + " record(s), not 5");
+            }
+            // A door stands on the block: both halves go with it.
+            breakRefused(level, underDoor, vandal);
+            if (!level.getBlockState(underDoor.above()).isAir() || !level.getBlockState(underDoor.above(2)).isAir()) {
+                wrong.add("the door on a broken block stays");
+            }
+            if (SiegeRepair.waiting(server, kingdom.id()) != 8) {
+                wrong.add("after the door " + SiegeRepair.waiting(server, kingdom.id()) + " record(s), not 8");
+            }
+            // A frame hangs on the block, a sign stands on another: those blocks do not break at all.
+            if (!breakRefused(level, underFrame, vandal) || !level.getBlockState(underFrame).is(Blocks.STONE_BRICKS) || !frame.isAlive()) {
+                wrong.add("a block with a frame on it broke");
+            }
+            if (!breakRefused(level, underSign, vandal) || !level.getBlockState(underSign).is(Blocks.STONE_BRICKS)
+                    || !level.getBlockState(underSign.above()).is(Blocks.OAK_SIGN)) {
+                wrong.add("a block with a sign on it broke");
+            }
+            if (!itemsNear(level, underDoor).isEmpty() || !itemsNear(level, underTorch).isEmpty() || !itemsNear(level, underSand).isEmpty()) {
+                wrong.add("damaged property dropped " + level.getEntitiesOfClass(ItemEntity.class, new AABB(area[0], area[1]).inflate(2.0))
+                        .stream().map(item -> item.getItem().toString()).toList());
+            }
+            if (!level.getEntitiesOfClass(net.minecraft.world.entity.item.FallingBlockEntity.class, new AABB(area[0], area[1]).inflate(2.0)).isEmpty()) {
+                wrong.add("sand is falling");
+            }
+            // Everything comes back, the block before what stands on it.
+            for (int i = 0; i < 4; i++) {
+                SiegeWork.forceMend(server, kingdom.id(), 64);
+            }
+            if (!level.getBlockState(underTorch).is(Blocks.STONE_BRICKS) || !level.getBlockState(underTorch.above()).is(Blocks.TORCH)) {
+                wrong.add("the block and its torch did not come back");
+            }
+            if (!level.getBlockState(underSand).is(Blocks.STONE_BRICKS) || !level.getBlockState(underSand.above()).is(Blocks.SAND)
+                    || !level.getBlockState(underSand.above(2)).is(Blocks.SAND)) {
+                wrong.add("the block and its sand did not come back");
+            }
+            if (!level.getBlockState(underDoor).is(Blocks.STONE_BRICKS) || !level.getBlockState(underDoor.above()).equals(lower)
+                    || !level.getBlockState(underDoor.above(2)).equals(upper)) {
+                wrong.add("the block and its door did not come back");
+            }
+            if (SiegeRepair.waiting(server, kingdom.id()) != 0) {
+                wrong.add("records are left after the mending: " + SiegeRepair.waiting(server, kingdom.id()));
+            }
+            // A book of damage that is full takes no more: the block does not break until the city is mended.
+            io.github.sekerator.kingdomworld.core.siege.WarDamage damage = SiegeWork.state(server).damage();
+            for (int i = 0; damage.count(kingdom.id()) < io.github.sekerator.kingdomworld.core.siege.WarDamage.MAX_PER_KINGDOM; i++) {
+                damage.record(io.github.sekerator.kingdomworld.core.siege.WarDamage.Entry.inPeace(kingdom.id(), "kingdomworld:nowhere", i, "", "", 0));
+            }
+            if (!breakRefused(level, underTorch, vandal) || !level.getBlockState(underTorch).is(Blocks.STONE_BRICKS)
+                    || damage.count(kingdom.id()) != io.github.sekerator.kingdomworld.core.siege.WarDamage.MAX_PER_KINGDOM) {
+                wrong.add("a block broke though the book of damage is full");
+            }
+            if (damage.at(kingdom.id(), "kingdomworld:nowhere", 0).isEmpty()) {
+                wrong.add("the oldest record gave way to a new one");
+            }
+            helper.assertTrue(wrong.isEmpty(), "Damaged property loses blocks or gives items: " + String.join("; ", wrong));
+        } finally {
+            frame.discard();
+            SiegeWork.state(server).damage().forget(kingdom.id());
+            end(helper, kingdom, area, List.of(vandal));
+        }
+        helper.succeed();
+    }
+
     // ---------------------------------------------------------------- houses and storehouses
 
     @GameTest(template = EMPTY, batch = "kingdomworld_citylaw_house")
