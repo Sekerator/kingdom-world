@@ -177,6 +177,10 @@ public final class CitizenSimulation {
             }
             return body.isAlive();
         }
+        if (change > 0.0f) {
+            // A soldier with more health heals by the same share of it as anybody.
+            change *= citizen.maxHealth() / Citizen.MAX_HEALTH;
+        }
         float health = citizen.health() + change;
         if (health <= 0.0f && rules.starvationCanKill()) {
             CitizenLife.die(server, citizen.id(), CauseOfDeath.STARVATION, "", citizen.lastPos());

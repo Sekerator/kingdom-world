@@ -348,7 +348,8 @@ public class CitizenEntity extends PathfinderMob {
             int interval = CitizenCare.isInInfirmary(this) ? 40 : isSleeping() ? 100 : 200;
             if (++regenerationTimer >= interval) {
                 regenerationTimer = 0;
-                heal(1.0f);
+                // A point for a citizen; a soldier with more health heals by the same share of it.
+                heal(Math.max(1.0f, getMaxHealth() / Citizen.MAX_HEALTH));
             }
         }
     }

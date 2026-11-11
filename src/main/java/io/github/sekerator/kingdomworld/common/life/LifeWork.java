@@ -337,9 +337,10 @@ public final class LifeWork {
                 tavernNear(server, citizen.kingdomId(), home).ifPresent(tavern -> enjoyTavern(server, citizen, tavern));
             }
             if (phase == DaySchedule.Phase.NIGHT && citizen.home() != null && !keepsWatch(citizen.professionId())
-                    && citizen.food() >= CitizenNeeds.HUNGRY_BELOW && citizen.health() < Citizen.MAX_HEALTH) {
-                // Sleep heals a little more than the day.
-                citizen.setHealth(citizen.health() + 0.5f * interval / CitizenNeeds.REFERENCE_STEP_TICKS, CitizenSettings.rules().woundedFraction());
+                    && citizen.food() >= CitizenNeeds.HUNGRY_BELOW && citizen.health() < citizen.maxHealth()) {
+                // Sleep heals a little more than the day, by the same share of the full health for everybody.
+                citizen.setHealth(citizen.health() + 0.5f * interval / CitizenNeeds.REFERENCE_STEP_TICKS * citizen.maxHealth() / Citizen.MAX_HEALTH,
+                        CitizenSettings.rules().woundedFraction());
             }
         }
         return usedInfirmary;

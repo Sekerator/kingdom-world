@@ -154,14 +154,25 @@ public final class ArmyKits {
     }
 
     /**
-     * Whether a slot holds the piece the kit asks for: the same item, issued for the same kind of post.
+     * Whether a slot holds the piece the kit asks for: the same item with the same enchantment, issued for the same kind of
+     * post.
      */
     private static boolean holds(ItemStack current, Kit.Piece piece, boolean officer) {
         if (mark(current) != (officer ? OFFICER : FIGHTER)) {
             return false;
         }
         ResourceLocation id = ForgeRegistries.ITEMS.getKey(current.getItem());
-        return id != null && id.toString().equals(piece.item());
+        if (id == null || !id.toString().equals(piece.item())) {
+            return false;
+        }
+        if (!piece.enchanted()) {
+            return true;
+        }
+        // The same item with another level of its enchantment is the piece of another branch or of an older config.
+        ResourceLocation enchantmentId = ResourceLocation.tryParse(piece.enchantment());
+        Enchantment enchantment = enchantmentId == null ? null : ForgeRegistries.ENCHANTMENTS.getValue(enchantmentId);
+        return enchantment == null || net.minecraft.world.item.enchantment.EnchantmentHelper.getItemEnchantmentLevel(enchantment, current)
+                == piece.level();
     }
 
     /**

@@ -1160,7 +1160,7 @@ Invoke-Phase 'run1' {
             Send-ServerCommand $server 'gamerule doDaylightCycle false'
             Send-ServerCommand $server 'time set 1000'
             Send-ServerCommand $server 'kingdomworld admin army status'
-            if (Wait-ForLog $server 'Army data is writable, format 2' $CommandTimeout $ConsoleFailPattern) {
+            if (Wait-ForLog $server 'Army data is writable, format 3' $CommandTimeout $ConsoleFailPattern) {
                 Write-Ok '[run1] the army data is writable'
             } else {
                 Add-Failure '[run1] the army data is not writable'
