@@ -731,6 +731,54 @@ public final class CityLawGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_citylaw_frame_outside", timeoutTicks = 300)
+    public static void aBlockThatHoldsAFrameDoesNotBreakOutsideTheCityEither(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos[] area = area(helper, 9, 9);
+        noon(level);
+        UUID king = UUID.randomUUID();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Far Wall", king);
+        WarWork.markPresent(kingdom.id(), true);
+        ServerPlayer stranger = player(helper, "kw-frame-thief", 3, 4);
+        // Land of the kingdom outside its city, two chunks east of the capital: the wall of a house nobody registered.
+        BlockPos throne = helper.absolutePos(new BlockPos(2, 0, 2));
+        ChunkPos far = new ChunkPos(new ChunkPos(throne).x + 2, new ChunkPos(throne).z);
+        BlockPos wall = new BlockPos(far.getMinBlockX() + 8, throne.getY(), throne.getZ());
+        helper.assertTrue(KingdomWorldApi.claimChunk(level, far, kingdom.id(), king).ok(), "No land outside the city");
+        // The frame must be in the world for the server, so the chunk is kept loaded with its entities.
+        level.setChunkForced(far.x, far.z, true);
+        helper.runAfterDelay(40, () -> {
+            BlockState wallBefore = level.getBlockState(wall);
+            BlockState airBefore = level.getBlockState(wall.east());
+            level.setBlock(wall, Blocks.STONE_BRICKS.defaultBlockState(), 2 | 16);
+            level.setBlock(wall.east(), Blocks.AIR.defaultBlockState(), 2 | 16);
+            net.minecraft.world.entity.decoration.ItemFrame frame = new net.minecraft.world.entity.decoration.ItemFrame(level, wall.east(),
+                    Direction.EAST);
+            frame.setItem(new ItemStack(Items.DIAMOND), false);
+            try {
+                helper.assertTrue(level.addFreshEntity(frame) && level.getEntitiesOfClass(net.minecraft.world.entity.decoration.ItemFrame.class,
+                        new AABB(wall).inflate(2.0)).contains(frame), "The frame is not in the world");
+                helper.assertTrue(!LawVandalism.isProperty(server, kingdom.id(), level, wall), "The far wall counts as the city");
+                // Outside the city blocks break freely, but not one a frame hangs on: its goods would fall to the breaker
+                // with no theft on any record.
+                helper.assertTrue(breakRefused(level, wall, stranger) && level.getBlockState(wall).is(Blocks.STONE_BRICKS) && frame.isAlive(),
+                        "A block that holds a frame broke outside the city");
+                helper.assertTrue(SiegeRepair.waiting(server, kingdom.id()) == 0, "A refused block was written down");
+                // Without the frame the same block breaks as any block out there.
+                frame.discard();
+                helper.assertTrue(!breakRefused(level, wall, stranger), "A plain block outside the city cannot be broken");
+            } finally {
+                frame.discard();
+                level.setBlock(wall, wallBefore, 2 | 16);
+                level.setBlock(wall.east(), airBefore, 2 | 16);
+                level.setChunkForced(far.x, far.z, false);
+                end(helper, kingdom, area, List.of(stranger));
+            }
+            helper.succeed();
+        });
+    }
+
     // ---------------------------------------------------------------- houses and storehouses
 
     @GameTest(template = EMPTY, batch = "kingdomworld_citylaw_house")

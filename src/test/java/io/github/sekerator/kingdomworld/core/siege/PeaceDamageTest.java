@@ -105,6 +105,26 @@ class PeaceDamageTest {
     }
 
     @Test
+    void landThatChangesHandsTakesItsRecordsEvenIntoAFullBook() {
+        WarDamage damage = new WarDamage();
+        UUID winner = UUID.randomUUID();
+        for (int i = 0; i < WarDamage.MAX_PER_KINGDOM; i++) {
+            damage.record(WarDamage.Entry.inPeace(winner, OVERWORLD, i, "s", "", i));
+        }
+        damage.record(WarDamage.Entry.inPeace(kingdom, OVERWORLD, -1, "glass", "", 1));
+        damage.record(new WarDamage.Entry(7, kingdom, OVERWORLD, -2, "stone", "minecraft:stone", 3, 2));
+        damage.record(WarDamage.Entry.inPeace(kingdom, OVERWORLD, -3, "dirt", "", 3));
+        damage.move(kingdom, winner, entry -> entry.pos() != -3);
+        assertEquals(WarDamage.MAX_PER_KINGDOM + 2, damage.count(winner), "No record is lost because the land changed hands");
+        assertTrue(damage.at(winner, OVERWORLD, -1).orElseThrow().free());
+        assertFalse(damage.at(winner, OVERWORLD, -2).orElseThrow().free());
+        assertTrue(damage.contains(winner, OVERWORLD, 0), "Nothing of the new owner gave way");
+        assertEquals(1, damage.count(kingdom), "What lies outside the land handed over stays");
+        assertEquals(0, damage.room(winner), "A book over its limit takes no new damage until it is mended");
+        assertFalse(damage.record(WarDamage.Entry.inPeace(winner, OVERWORLD, -9, "s", "", 9)));
+    }
+
+    @Test
     void damageOfWarPushesOutOnlyTheOldestDamageOfWar() {
         WarDamage damage = new WarDamage();
         damage.record(WarDamage.Entry.inPeace(kingdom, OVERWORLD, -5, "glass", "", 0));

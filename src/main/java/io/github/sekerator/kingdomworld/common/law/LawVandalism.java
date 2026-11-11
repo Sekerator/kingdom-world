@@ -52,7 +52,8 @@ import java.util.UUID;
  * block (a torch, a rail, a door, a crop on it, sand over it) goes with it, drops nothing either, is written down after
  * it and comes back after it: damaged property gives no item and loses no block. A block a stranger places there is
  * written down too and taken out again.</li>
- * <li>On the rest of the land blocks are broken and placed freely: no crime, nothing put back.</li>
+ * <li>On the rest of the land blocks are broken and placed freely: no crime, nothing put back. Only a block a frame or a
+ * painting hangs on stays whole there too, so that what a frame holds never falls to a breaker.</li>
  * </ul>
  *
  * <p>Still refused in peace: the land of a kingdom of players none of whom is there, the throne, the working blocks of the
@@ -254,7 +255,10 @@ public final class LawVandalism {
         ServerPlayer actor = (ServerPlayer) player;
         MinecraftServer server = actor.server;
         if (SiegeRepair.isPlacedByStranger(server, kingdom, serverLevel, pos, state) || !isProperty(server, kingdom, serverLevel, pos)) {
-            return Verdict.FREE;
+            // Free to break, as on nobody's land, but a frame or a painting stays protected wherever it hangs: the block
+            // that holds one does not break, nor one that sand with such a thing on it rests on, or the goods in the frame
+            // would fall to the breaker with no theft on any record.
+            return holdsEntityAbove(serverLevel, pos) ? Verdict.REFUSED : Verdict.FREE;
         }
         if (!LawWork.isCrime(server, actor, kingdom, CrimeKind.VANDALISM, Permission.BUILD, false)) {
             // Somebody the law of this kingdom does not judge and who holds no right to build: as before.
@@ -401,6 +405,23 @@ public final class LawVandalism {
             net.minecraft.core.Vec3i into = hanging.getDirection().getOpposite().getNormal();
             return hanging.getBoundingBox().move(into.getX() * 0.5, into.getY() * 0.5, into.getZ() * 0.5).intersects(block.deflate(0.01));
         }).isEmpty();
+    }
+
+    /**
+     * Whether a frame or a painting holds on to a block, or to the sand and gravel that lie on it and would fall with it.
+     */
+    private static boolean holdsEntityAbove(ServerLevel level, BlockPos pos) {
+        if (holdsEntity(level, pos)) {
+            return true;
+        }
+        BlockPos.MutableBlockPos above = pos.mutable().move(net.minecraft.core.Direction.UP);
+        for (int i = 0; i < CASCADE && level.getBlockState(above).getBlock() instanceof net.minecraft.world.level.block.FallingBlock; i++) {
+            if (holdsEntity(level, above)) {
+                return true;
+            }
+            above.move(net.minecraft.core.Direction.UP);
+        }
+        return false;
     }
 
     private static void hint(ServerPlayer actor, UUID kingdom, long now) {

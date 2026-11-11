@@ -134,9 +134,14 @@ public final class ProtectionEvents {
                 }
             }
             for (BlockSnapshot snapshot : multi.getReplacedBlockSnapshots()) {
-                if (!ProtectionService.isAllowed(player, level, snapshot.getPos(), ProtectedAction.PLACE)) {
-                    io.github.sekerator.kingdomworld.common.law.LawVandalism.places(player, level, snapshot.getPos(), snapshot.getReplacedBlock(),
-                            snapshot.getCurrentBlock());
+                if (!ProtectionService.isAllowed(player, level, snapshot.getPos(), ProtectedAction.PLACE)
+                        && !io.github.sekerator.kingdomworld.common.law.LawVandalism.places(player, level, snapshot.getPos(),
+                        snapshot.getReplacedBlock(), snapshot.getCurrentBlock())) {
+                    // A part could not be written down (the book of damage of the city is full): the whole thing is not
+                    // placed. A part written down before it mends to what stood there, which the game puts back now.
+                    event.setCanceled(true);
+                    ProtectionService.notifyDenied(player, level, snapshot.getPos());
+                    return;
                 }
             }
         } else if (!ProtectionService.isAllowed(player, level, event.getPos(), ProtectedAction.PLACE)

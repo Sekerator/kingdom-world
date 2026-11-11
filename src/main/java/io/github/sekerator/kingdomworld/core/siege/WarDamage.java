@@ -230,8 +230,10 @@ public final class WarDamage {
         for (Entry entry : List.copyOf(of.values())) {
             if (inArea.test(entry)) {
                 of.remove(entry.key());
-                record(new Entry(entry.war(), to, entry.dimension(), entry.pos(), entry.state(), entry.item(), entry.building(), entry.time(),
-                        entry.free(), entry.placed()));
+                // Handed over whole, even into a book that is full: this is no new damage, and a block must not be lost
+                // because its land changed hands. The book of the new owner takes no more until it is mended.
+                broken.computeIfAbsent(to, k -> new LinkedHashMap<>()).putIfAbsent(entry.key(), new Entry(entry.war(), to, entry.dimension(),
+                        entry.pos(), entry.state(), entry.item(), entry.building(), entry.time(), entry.free(), entry.placed()));
             }
         }
         if (of.isEmpty()) {
