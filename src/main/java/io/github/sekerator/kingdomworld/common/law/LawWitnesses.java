@@ -25,7 +25,7 @@ final class LawWitnesses {
      * @param soldier  whether a soldier saw it: soldiers report at once
      * @param citizens citizen ids of the witnesses among the citizens
      * @param players  ids of the subjects who saw it
-     * @param bodies   the bodies of the citizens, who cry out and run to the guards
+     * @param bodies   the bodies of the citizens, who are frightened and run: to a soldier when one is in reach
      */
     record Seen(boolean soldier, List<UUID> citizens, List<UUID> players, List<CitizenEntity> bodies) {
         boolean none() {
@@ -76,26 +76,5 @@ final class LawWitnesses {
             players.add(player.getUUID());
         }
         return new Seen(soldier, citizens, players, bodies);
-    }
-
-    /**
-     * A citizen who saw a crime runs to the nearest soldier of its kingdom.
-     */
-    static void runToGuards(CitizenEntity body) {
-        if (body.kingdomId() == null || !(body.level() instanceof ServerLevel level)) {
-            return;
-        }
-        CitizenEntity nearest = null;
-        double best = Double.MAX_VALUE;
-        for (CitizenEntity soldier : LawWork.soldiersNear(level, body.blockPosition(), body.kingdomId(), 48.0)) {
-            double distance = soldier.distanceToSqr(body);
-            if (distance < best) {
-                best = distance;
-                nearest = soldier;
-            }
-        }
-        if (nearest != null) {
-            body.getNavigation().moveTo(nearest, 0.9);
-        }
     }
 }

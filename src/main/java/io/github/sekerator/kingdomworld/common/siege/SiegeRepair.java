@@ -42,6 +42,12 @@ import java.util.UUID;
  * builders of the kingdom put them back from the storehouses after the peace (or earlier, when no enemy was near for a while).
  * Every block put back is paid with its item. A ruler of the world orders what is missing from its workshops; players see
  * in the diplomacy tab what is missing. Blocks built outside the register are a risk of war and are not mended.
+ *
+ * <p>Damage done in peace is kept in the same record and mended by the same hand, by other rules: a block of a city, a
+ * building, a wall or a road that a player broke as damaged property is written down as it stood, whatever it was, and
+ * comes back for free once the offender is gone or kept still for a while; a block a stranger placed in a city is written
+ * down with what it covered, and is taken out again and dropped as an item. The law decides what counts
+ * ({@link io.github.sekerator.kingdomworld.common.law.LawVandalism}).
  */
 public final class SiegeRepair {
     /** Blocks put back for one kingdom in a second. */
@@ -126,6 +132,80 @@ public final class SiegeRepair {
         return added;
     }
 
+    // ---------------------------------------------------------------- damage in peace
+
+    /**
+     * Writes down a block of a kingdom a player broke in peace, as it stood, to put it back for free. A block of two halves
+     * (a door, a tall plant) is written down whole, since the other half goes with the broken one.
+     *
+     * @return whether it was written down (not if the place has a record already)
+     */
+    public static boolean damaged(MinecraftServer server, UUID kingdom, ServerLevel level, BlockPos pos, BlockState state) {
+        if (state.isAir() || SiegeWork.isReadOnly(server)) {
+            return false;
+        }
+        String dimension = Dimensions.id(level);
+        SiegeState siege = SiegeWork.state(server);
+        long now = KingdomWorldApi.gameTime(server);
+        boolean added = siege.damage().record(WarDamage.Entry.inPeace(kingdom, dimension, pos.asLong(), NbtUtils.writeBlockState(state).toString(),
+                "", now));
+        BlockPos other = otherHalf(pos, state);
+        if (other != null) {
+            BlockState half = level.getBlockState(other);
+            if (half.getBlock() == state.getBlock()) {
+                siege.damage().record(WarDamage.Entry.inPeace(kingdom, dimension, other.asLong(), NbtUtils.writeBlockState(half).toString(), "", now));
+            }
+        }
+        siege.changed();
+        return added;
+    }
+
+    /**
+     * Writes down a block a stranger placed in a city in peace, with what it covered: it is taken out again when the place
+     * is mended, and falls there as an item.
+     */
+    public static void placed(MinecraftServer server, UUID kingdom, ServerLevel level, BlockPos pos, BlockState before, BlockState placed) {
+        if (SiegeWork.isReadOnly(server)) {
+            return;
+        }
+        String dimension = Dimensions.id(level);
+        SiegeState siege = SiegeWork.state(server);
+        String now = NbtUtils.writeBlockState(placed).toString();
+        if (!siege.damage().placedOver(kingdom, dimension, pos.asLong(), now)) {
+            siege.damage().record(WarDamage.Entry.inPeace(kingdom, dimension, pos.asLong(), NbtUtils.writeBlockState(before).toString(), now,
+                    KingdomWorldApi.gameTime(server)));
+        }
+        siege.changed();
+    }
+
+    /**
+     * Whether the block at a place is one a stranger placed there in peace, which nobody answers for breaking.
+     */
+    public static boolean isPlacedByStranger(MinecraftServer server, UUID kingdom, ServerLevel level, BlockPos pos, BlockState state) {
+        Optional<WarDamage.Entry> entry = SiegeWork.state(server).damage().at(kingdom, Dimensions.id(level), pos.asLong());
+        if (entry.isEmpty() || entry.get().placed().isEmpty()) {
+            return false;
+        }
+        BlockState placed = parse(level, entry.get().placed());
+        return placed != null && placed.getBlock() == state.getBlock();
+    }
+
+    /**
+     * How many blocks of a kingdom wait to be put back for free, for checks.
+     */
+    public static int waiting(MinecraftServer server, UUID kingdom) {
+        return SiegeWork.state(server).damage().countFree(kingdom);
+    }
+
+    @Nullable
+    private static BlockPos otherHalf(BlockPos pos, BlockState state) {
+        if (!state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF)) {
+            return null;
+        }
+        return state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF)
+                == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER ? pos.above() : pos.below();
+    }
+
     // ---------------------------------------------------------------- putting back
 
     static void tick(MinecraftServer server, SiegeRules rules, long now) {
@@ -142,16 +222,26 @@ public final class SiegeRepair {
             if (atWar && !quiet) {
                 continue;
             }
-            mend(server, kingdom, PER_SECOND, now);
+            // What was damaged in peace waits until the offender is gone or kept still for a while.
+            boolean settled = io.github.sekerator.kingdomworld.common.law.LawVandalism.settled(server, kingdom, now);
+            mend(server, kingdom, PER_SECOND, now, settled);
         }
     }
 
     /**
-     * Puts back up to some broken blocks of a kingdom, paid from its storehouses.
+     * Puts back up to some damaged blocks of a kingdom: those broken in a war paid from its storehouses, those damaged in
+     * peace for free.
      *
      * @return the blocks put back
      */
     static int mend(MinecraftServer server, UUID kingdom, int most, long now) {
+        return mend(server, kingdom, most, now, true);
+    }
+
+    /**
+     * @param peace whether what was damaged in peace is put back now too
+     */
+    static int mend(MinecraftServer server, UUID kingdom, int most, long now, boolean peace) {
         SiegeState state = SiegeWork.state(server);
         WarDamage damage = state.damage();
         Map<String, Integer> missing = new LinkedHashMap<>();
@@ -161,6 +251,9 @@ public final class SiegeRepair {
             if (done >= most) {
                 break;
             }
+            if (entry.free() && !peace) {
+                continue;
+            }
             ServerLevel level = SiegeWork.level(server, entry.dimension());
             BlockPos pos = BlockPos.of(entry.pos());
             if (level == null || !level.isLoaded(pos)) {
@@ -168,7 +261,33 @@ public final class SiegeRepair {
             }
             BlockState wanted = parse(level, entry.state());
             BlockState there = level.getBlockState(pos);
+            if (entry.free() && !entry.placed().isEmpty()) {
+                BlockState foreign = parse(level, entry.placed());
+                if (foreign != null && foreign.getBlock() == there.getBlock() && !there.isAir()) {
+                    // What a stranger placed comes out and lies there as an item: it was never the city's.
+                    level.destroyBlock(pos, true);
+                    there = level.getBlockState(pos);
+                    done++;
+                }
+            }
             if (wanted == null || there.equals(wanted)) {
+                changed |= damage.mended(kingdom, entry.dimension(), entry.pos());
+                continue;
+            }
+            if (entry.free()) {
+                if (there.isAir() || there.canBeReplaced()) {
+                    if (!wanted.getCollisionShape(level, pos).isEmpty()
+                            && !level.getEntitiesOfClass(net.minecraft.world.entity.player.Player.class, new net.minecraft.world.phys.AABB(pos),
+                            player -> !player.isSpectator()).isEmpty()) {
+                        // Somebody stands in the place: the block waits rather than wall a player in.
+                        continue;
+                    }
+                    // Without telling the neighbours to look at their shape: the other half of a door comes in its own turn.
+                    level.setBlock(pos, wanted, net.minecraft.world.level.block.Block.UPDATE_CLIENTS
+                            | net.minecraft.world.level.block.Block.UPDATE_KNOWN_SHAPE);
+                    done++;
+                }
+                // Else something else stands there now, built over by whoever may: it is not torn down.
                 changed |= damage.mended(kingdom, entry.dimension(), entry.pos());
                 continue;
             }

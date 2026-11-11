@@ -4,6 +4,7 @@ import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.army.ArmyWork;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenEntity;
 import io.github.sekerator.kingdomworld.core.army.Order;
+import io.github.sekerator.kingdomworld.core.law.Alarm;
 import io.github.sekerator.kingdomworld.core.law.LawRules;
 import io.github.sekerator.kingdomworld.core.law.Wanted;
 import net.minecraft.ChatFormatting;
@@ -27,6 +28,9 @@ import java.util.UUID;
  * the guard opens the window to pay the fine). Who neither gives up nor leaves the land in {@link LawRules#hailTicks} is
  * attacked: beaten down to little health for petty crimes, killed for a murder. Players away from the keyboard or offline
  * are never touched; their record waits.
+ *
+ * <p>An alarm ({@link LawAlarms}) calls every soldier of the kingdom near its place, guards and soldiers without an order
+ * alike: they run to the offender and, while the attack goes on or after a killing, strike without calling out.
  */
 final class LawGuards {
     /** How far a guard looks for the wanted, in blocks. */
@@ -63,19 +67,28 @@ final class LawGuards {
     }
 
     /**
-     * Whether guards may stop a player at all: online, at the keyboard, alive, not in creative or spectator mode.
+     * Whether guards may stop a player at all: online, at the keyboard, alive and no spectator. A player in creative mode is
+     * dealt with as any other while the config says so; the blows do such a player no harm.
      */
     static boolean catchable(MinecraftServer server, ServerPlayer player) {
-        return !(player instanceof FakePlayer) && player.isAlive() && !player.isCreative() && !player.isSpectator() && !player.hasDisconnected()
-                && !LawWork.isAway(player);
+        return LawAlarms.answers(player) && player.isAlive() && !player.hasDisconnected() && !LawWork.isAway(player);
     }
 
     /**
-     * The wanted player a guard deals with now, if any: the first time it calls out, later it attacks.
+     * The player a soldier deals with now for the law, if any. An alarm of its kingdom calls every soldier near, with an
+     * order or without: it runs to the offender, and strikes at once while the attack goes on or after a killing. Otherwise
+     * a guard deals with the wanted it sees: the first time it calls out, later it attacks.
      */
     @Nullable
     static LawWork.Pursuit pursue(MinecraftServer server, CitizenEntity guard) {
-        if (LawWork.isReadOnly(server) || !isGuard(server, guard)) {
+        if (LawWork.isReadOnly(server) || !LawWork.isSoldier(guard) || guard.kingdomId() == null) {
+            return null;
+        }
+        LawWork.Pursuit called = answer(server, guard);
+        if (called != null) {
+            return called;
+        }
+        if (!isGuard(server, guard)) {
             return null;
         }
         UUID kingdom = guard.kingdomId();
@@ -83,7 +96,10 @@ final class LawGuards {
         double bestDistance = SEARCH * SEARCH;
         for (ServerPlayer player : guard.serverLevel().players()) {
             double distance = guard.distanceToSqr(player);
-            if (distance >= bestDistance || !catchable(server, player) || LawWork.state(server).wanted(kingdom, player.getUUID()).isEmpty()
+            // A player in creative mode cannot be made to pay, so the chase ends with the alarm: a guard on its round does not
+            // start it anew for an old record.
+            if (distance >= bestDistance || player.isCreative() || !catchable(server, player)
+                    || LawWork.state(server).wanted(kingdom, player.getUUID()).isEmpty()
                     || !kingdom.equals(KingdomWorldApi.ownerAt(player.level(), player.blockPosition())) || !guard.hasLineOfSight(player)) {
                 continue;
             }
@@ -93,13 +109,49 @@ final class LawGuards {
         if (best == null) {
             return null;
         }
+        return callOut(server, guard, best, kingdom, false);
+    }
+
+    /**
+     * A soldier that sees a wanted player calls out the first time and attacks once the time to give up is over.
+     */
+    private static LawWork.Pursuit callOut(MinecraftServer server, CitizenEntity guard, ServerPlayer player, UUID kingdom, boolean urgent) {
         long now = LawWork.now(server);
-        Hail hail = HAILS.get(best.getUUID());
+        Hail hail = HAILS.get(player.getUUID());
         if (hail == null || !hail.kingdom().equals(kingdom)) {
-            hail(server, guard, best, kingdom, now);
-            return new LawWork.Pursuit(best, false);
+            hail(server, guard, player, kingdom, now);
+            return new LawWork.Pursuit(player, false, urgent);
         }
-        return new LawWork.Pursuit(best, now - hail.at() >= LawSettings.rules().hailTicks);
+        return new LawWork.Pursuit(player, now - hail.at() >= LawSettings.rules().hailTicks, urgent);
+    }
+
+    /**
+     * What a soldier does about an alarm of its kingdom in reach: it runs to the offender. Seeing the offender, it is a
+     * witness itself; then it strikes at once while the attack goes on or after a killing, and calls out as a guard does
+     * when the matter is petty or the blows stopped.
+     */
+    @Nullable
+    private static LawWork.Pursuit answer(MinecraftServer server, CitizenEntity soldier) {
+        Alarm alarm = LawAlarms.callFor(server, soldier);
+        if (alarm == null) {
+            return null;
+        }
+        ServerPlayer offender = LawAlarms.offender(server, alarm);
+        if (offender == null || offender.level() != soldier.level() || !catchable(server, offender)) {
+            return null;
+        }
+        UUID kingdom = alarm.kingdomId();
+        boolean sees = soldier.distanceToSqr(offender) < SEARCH * SEARCH && soldier.hasLineOfSight(offender);
+        if (sees) {
+            LawAlarms.sees(server, kingdom, offender);
+        }
+        if (alarm.violent(LawWork.now(server), LawSettings.rules())) {
+            return new LawWork.Pursuit(offender, true, true);
+        }
+        if (sees && LawWork.state(server).wanted(kingdom, offender.getUUID()).isPresent()) {
+            return callOut(server, soldier, offender, kingdom, true);
+        }
+        return new LawWork.Pursuit(offender, false, true);
     }
 
     /**
@@ -126,8 +178,15 @@ final class LawGuards {
      * on the land of the kingdom.
      */
     static boolean pursues(MinecraftServer server, UUID kingdom, Player player) {
+        if (LawWork.isReadOnly(server)) {
+            return false;
+        }
+        if (LawAlarms.strikes(server, kingdom, player)) {
+            // An attack that goes on, or a killing: nobody calls out first.
+            return true;
+        }
         Hail hail = HAILS.get(player.getUUID());
-        if (hail == null || !hail.kingdom().equals(kingdom) || LawWork.isReadOnly(server)) {
+        if (hail == null || !hail.kingdom().equals(kingdom)) {
             return false;
         }
         if (LawWork.now(server) - hail.at() < LawSettings.rules().hailTicks) {

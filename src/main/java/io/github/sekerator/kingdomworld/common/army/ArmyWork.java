@@ -233,13 +233,17 @@ public final class ArmyWork {
         }
         if (target instanceof Player player) {
             if (!(player instanceof ServerPlayer serverPlayer) || player instanceof FakePlayer || !isOnline(server, serverPlayer)
-                    || isAway(serverPlayer) || player.isCreative()
-                    || player.isSpectator()) {
+                    || isAway(serverPlayer) || player.isSpectator()) {
                 return false;
             }
-            if (io.github.sekerator.kingdomworld.common.law.LawWork.pursued(server, kingdomId, player)) {
-                // The guards fight a wanted player who did not give up: subjects of the kingdom too.
+            if (io.github.sekerator.kingdomworld.common.law.LawWork.catchable(server, serverPlayer)
+                    && io.github.sekerator.kingdomworld.common.law.LawWork.pursued(server, kingdomId, player)) {
+                // The guards fight a wanted player who did not give up, and whoever an alarm is raised for: subjects of the
+                // kingdom too, and a player in creative mode while the law answers such players (the blows do no harm).
                 return true;
+            }
+            if (player.isCreative()) {
+                return false;
             }
             UUID theirs = KingdomWorldApi.state(server).membership().kingdomOf(player.getUUID()).orElse(null);
             return !kingdomId.equals(theirs) && hostility.isEnemy(kingdomId, player.getUUID(), theirs);

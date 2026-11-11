@@ -106,6 +106,7 @@ public final class CityWalls {
         FROM.clear();
         LAYOUTS.clear();
         seconds = 0;
+        CityAreas.reset();
     }
 
     // ---------------------------------------------------------------- cities

@@ -4,6 +4,7 @@ import com.mojang.logging.LogUtils;
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.army.ArmyWork;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenEntity;
+import io.github.sekerator.kingdomworld.common.citizen.CitizenFear;
 import io.github.sekerator.kingdomworld.common.economy.TreasuryActions;
 import io.github.sekerator.kingdomworld.common.guild.GuildWork;
 import io.github.sekerator.kingdomworld.common.kingdom.KingdomActions;
@@ -13,8 +14,10 @@ import io.github.sekerator.kingdomworld.core.guild.Contract;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
 import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
+import io.github.sekerator.kingdomworld.core.law.Alarm;
 import io.github.sekerator.kingdomworld.core.law.CityGates;
 import io.github.sekerator.kingdomworld.core.law.CrimeKind;
+import io.github.sekerator.kingdomworld.core.law.Victims;
 import io.github.sekerator.kingdomworld.core.law.LawPolicy;
 import io.github.sekerator.kingdomworld.core.law.LawRules;
 import io.github.sekerator.kingdomworld.core.law.LawState;
@@ -62,6 +65,8 @@ public final class LawWork {
     private static final LawPolicy POLICY = new LawPolicy();
     /** Ticks between two tries to post a contract for a head the treasury could not pay. */
     private static final long BOUNTY_RETRY_TICKS = 1_200;
+    /** How far a witness looks for a soldier of its kingdom to run to, in blocks. */
+    private static final double GUARD_REACH = 48.0;
 
     /**
      * A crime somebody saw and runs to tell the guards. Thefts reported by the same witnesses before they arrive add up.
@@ -145,6 +150,8 @@ public final class LawWork {
         LAST_DEED.clear();
         BOUNTY_TRIES.clear();
         LawGuards.reset();
+        LawAlarms.reset();
+        LawVandalism.reset();
         LawContainers.reset();
         LawSlavery.reset();
         LawPunish.resetSentences();
@@ -222,9 +229,24 @@ public final class LawWork {
         }
         LawRules rules = LawSettings.rules();
         long now = now(server);
-        LawWitnesses.Seen seen = LawWitnesses.find(player.serverLevel(), player, kingdom, victimEntity, rules);
         String name = player.getGameProfile().getName();
-        if (seen.none()) {
+        // A blow at a citizen or a soldier, or its death, raises the alarm at once: the one struck saw it. The record still
+        // needs somebody to tell the guards, or a soldier to see the offender.
+        boolean violence = victimEntity instanceof CitizenEntity && (kind == CrimeKind.ASSAULT || kind == CrimeKind.MURDER);
+        if (violence) {
+            LawAlarms.raise(player, kingdom, where, kind == CrimeKind.MURDER ? Alarm.Cause.KILLING : Alarm.Cause.BLOW);
+        }
+        // A soldier that is struck is a witness of the blow at itself.
+        boolean struckSoldier = violence && kind == CrimeKind.ASSAULT && victimEntity instanceof CitizenEntity struck && struck.isAlive()
+                && kingdom.equals(struck.kingdomId()) && isSoldier(struck);
+        LawWitnesses.Seen seen = LawWitnesses.find(player.serverLevel(), player, kingdom, victimEntity, rules);
+        // A soldier at a storehouse notices a theft from it without looking at the thief.
+        boolean watched = kind == CrimeKind.THEFT && Victims.isTreasury(victim) && rules.storehouseWatchBlocks > 0
+                && !soldiersNear(player.serverLevel(), where, kingdom, rules.storehouseWatchBlocks).isEmpty();
+        if (seen.none() && !struckSoldier && !watched) {
+            if (violence) {
+                LawAlarms.unseen(kingdom, player.getUUID(), new Alarm.Deed(kind, victim, worth, victimEntity.getUUID().toString()));
+            }
             LOGGER.debug("Nobody saw {} commit {} in {}", name, kind.id(), kingdom);
             return false;
         }
@@ -237,12 +259,16 @@ public final class LawWork {
             }
             LAST_DEED.put(key, now);
         }
-        if (seen.soldier()) {
+        if (seen.soldier() || struckSoldier || watched) {
             commit(server, kingdom, player.getUUID(), name, kind, worth, victim);
+            if (watched) {
+                LawAlarms.raise(player, kingdom, where, Alarm.Cause.THEFT);
+            }
             return true;
         }
         for (Report report : REPORTS) {
-            if (report.kingdom.equals(kingdom) && report.offender.equals(player.getUUID()) && report.kind == kind && kind == CrimeKind.THEFT) {
+            if (report.kingdom.equals(kingdom) && report.offender.equals(player.getUUID()) && report.kind == kind && kind.adds()
+                    && report.victim.equals(victim == null ? "" : victim)) {
                 report.worth = io.github.sekerator.kingdomworld.core.economy.Money.addCapped(report.worth, worth);
                 report.citizens.addAll(seen.citizens());
                 report.players.addAll(seen.players());
@@ -251,18 +277,44 @@ public final class LawWork {
         }
         long delay = rules.reportMinTicks + (rules.reportMaxTicks > rules.reportMinTicks
                 ? RANDOM.nextInt(rules.reportMaxTicks - rules.reportMinTicks + 1) : 0);
-        Report report = new Report(kingdom, player.getUUID(), name, kind, worth, victim, now + delay);
+        Report report = new Report(kingdom, player.getUUID(), name, kind, worth, victim == null ? "" : victim, now + delay);
         report.citizens.addAll(seen.citizens());
         report.players.addAll(seen.players());
         REPORTS.add(report);
+        // The witnesses are frightened; those who have a soldier of their kingdom to run to run there and tell.
+        boolean ran = false;
+        boolean cried = false;
         for (CitizenEntity body : seen.bodies()) {
-            body.level().playSound(null, body.getX(), body.getY(), body.getZ(), SoundEvents.VILLAGER_NO, SoundSource.NEUTRAL, 1.0f, 1.2f);
-            LawWitnesses.runToGuards(body);
+            if (!cried) {
+                cried = true;
+                body.level().playSound(null, body.getX(), body.getY(), body.getZ(), SoundEvents.VILLAGER_NO, SoundSource.NEUTRAL, 1.0f, 1.2f);
+            }
+            ran |= CitizenFear.runToGuard(body, player, soldiersNear(player.serverLevel(), body.blockPosition(), kingdom, GUARD_REACH));
         }
-        player.displayClientMessage(Component.translatable(KEY + "witness_ran").withStyle(ChatFormatting.GOLD), true);
+        if (ran) {
+            player.displayClientMessage(Component.translatable(KEY + "witness_ran").withStyle(ChatFormatting.GOLD), true);
+        }
         LOGGER.debug("{} saw {} commit {} in {}; report in {} ticks", seen.citizens().size() + seen.players().size(), name, kind.id(),
                 kingdom, delay);
         return true;
+    }
+
+    /**
+     * A soldier saw the offender of an alarm: what witnesses still carry to the guards about this offender is written into
+     * the record now, whether those witnesses live or not.
+     */
+    static void reportNow(MinecraftServer server, UUID kingdomId, UUID offender) {
+        List<Report> known = new ArrayList<>();
+        for (Iterator<Report> it = REPORTS.iterator(); it.hasNext(); ) {
+            Report report = it.next();
+            if (report.kingdom.equals(kingdomId) && report.offender.equals(offender)) {
+                it.remove();
+                known.add(report);
+            }
+        }
+        for (Report report : known) {
+            commit(server, report.kingdom, report.offender, report.name, report.kind, report.worth, report.victim);
+        }
     }
 
     /**
@@ -357,6 +409,7 @@ public final class LawWork {
     public static void cleared(MinecraftServer server, Wanted wanted, boolean tell, String reasonKey) {
         withdrawBounty(server, wanted);
         LawGuards.forget(wanted.player());
+        LawAlarms.end(wanted.kingdomId(), wanted.player());
         LawSync.dirty(wanted.player());
         if (tell) {
             ServerPlayer online = server.getPlayerList().getPlayer(wanted.player());
@@ -454,6 +507,8 @@ public final class LawWork {
         LawPunish.expireConfiscations(server, day, rules);
         LawSlavery.tick(server, rules);
         LawGuards.tick(server, now);
+        LawAlarms.tick(server, now);
+        LawVandalism.tick(server, now);
         LAST_DEED.values().removeIf(at -> now - at > rules.mergeTicks);
     }
 
@@ -544,15 +599,17 @@ public final class LawWork {
     }
 
     /**
-     * What a guard does about a wanted player near it.
+     * What a soldier does about a player for the law.
      *
-     * @param attack whether the time to give up is over
+     * @param attack whether the soldier strikes now: the time to give up is over, or an alarm leaves no time for it
+     * @param urgent whether an alarm called the soldier: it runs, however far the player is
      */
-    public record Pursuit(ServerPlayer player, boolean attack) {
+    public record Pursuit(ServerPlayer player, boolean attack, boolean urgent) {
     }
 
     /**
-     * The wanted player a guard deals with now: the first time it calls out, later it attacks. {@code null} for none.
+     * The player a soldier deals with now for the law: the offender of an alarm of its kingdom in reach, or for a guard a
+     * wanted player it sees (the first time it calls out, later it attacks). {@code null} for none.
      */
     @Nullable
     public static Pursuit pursuit(MinecraftServer server, CitizenEntity guard) {
@@ -560,8 +617,16 @@ public final class LawWork {
     }
 
     /**
+     * Whether a wounded soldier stays in the fight: an alarm of its kingdom lasts close by.
+     */
+    public static boolean holdsOut(CitizenEntity soldier) {
+        MinecraftServer server = soldier.getServer();
+        return server != null && isSoldier(soldier) && LawAlarms.holdsOut(server, soldier);
+    }
+
+    /**
      * Whether a guard of a kingdom may strike a player for the law now: the player can be stopped and was called out long
-     * enough ago.
+     * enough ago, or an alarm lets the soldiers strike at once.
      */
     public static boolean mayFight(MinecraftServer server, UUID kingdomId, ServerPlayer player) {
         return LawGuards.catchable(server, player) && LawGuards.pursues(server, kingdomId, player);
@@ -575,7 +640,8 @@ public final class LawWork {
     }
 
     /**
-     * Whether guards may stop a player at all: online, at the keyboard, alive, not in creative or spectator mode.
+     * Whether guards may stop a player at all: online, at the keyboard, alive and no spectator; in creative mode only while
+     * the config lets the guards answer such players.
      */
     public static boolean catchable(MinecraftServer server, ServerPlayer player) {
         return LawGuards.catchable(server, player);

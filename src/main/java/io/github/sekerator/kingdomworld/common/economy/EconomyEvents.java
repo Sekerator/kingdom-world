@@ -73,6 +73,7 @@ public final class EconomyEvents {
         lastSent = null;
         EconomySettings.reset();
         MinterBehavior.reset();
+        Households.reset();
         ItemPrices.invalidate();
     }
 
@@ -119,6 +120,11 @@ public final class EconomyEvents {
                     payday(server, kingdom, day);
                 }
             }
+            try {
+                Households.tick(server);
+            } catch (RuntimeException e) {
+                LOGGER.error("KingdomWorld could not lay in what the houses of citizens keep", e);
+            }
         }
         syncCurrencies(server);
     }
@@ -132,6 +138,8 @@ public final class EconomyEvents {
         if (payday == Economy.Payday.NONE) {
             return payday;
         }
+        // Of every wage a share goes home with the citizen; the rest leaves the world.
+        Households.onPayday(server, kingdom.id(), payday);
         CurrencyUnits units = state.economy().units(kingdom.id()).orElse(CurrencyUnits.DEFAULT);
         for (Economy.TaxPaid tax : payday.taxes()) {
             if (tax.tax() > 0 && tax.paid() >= tax.tax() && tax.debt() == 0) {

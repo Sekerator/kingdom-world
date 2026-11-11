@@ -43,6 +43,11 @@ public final class CitizenEvents {
         MinecraftForge.EVENT_BUS.addListener(CitizenEvents::onChunkLoad);
         MinecraftForge.EVENT_BUS.addListener(io.github.sekerator.kingdomworld.common.citizen.work.HerderBehavior::onDrops);
         MinecraftForge.EVENT_BUS.addListener(CitizenEvents::onReload);
+        // After the law and the protection had their say: only blows that landed frighten.
+        MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, net.minecraftforge.event.entity.living.LivingHurtEvent.class,
+                CitizenFear::onHurt);
+        MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, net.minecraftforge.event.entity.living.LivingDeathEvent.class,
+                CitizenFear::onDeath);
     }
 
     /**
@@ -115,6 +120,7 @@ public final class CitizenEvents {
      */
     public static void reset() {
         CitizenBodies.reset();
+        CitizenFear.reset();
         CitizenCare.reset();
         CitizenSites.reset();
         CitizenSettings.reset();

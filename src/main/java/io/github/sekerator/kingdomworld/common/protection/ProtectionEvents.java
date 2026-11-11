@@ -94,8 +94,23 @@ public final class ProtectionEvents {
         }
         if (!ProtectionService.isAllowed(player, level, pos, ProtectedAction.BREAK)) {
             if (player != null && io.github.sekerator.kingdomworld.common.law.LawEvents.harvest(player, level, pos, event.getState())) {
-                // Taking a ripe crop is a theft now rather than refused; the field itself stays protected.
+                // Taking a ripe crop is a theft now rather than refused.
                 return;
+            }
+            if (player != null) {
+                // In peace the land of another kingdom is not locked: outside its cities blocks break freely, inside them
+                // breaking is a crime the law judges. The law removes a damaged block itself, without drops.
+                switch (io.github.sekerator.kingdomworld.common.law.LawVandalism.breaks(player, level, pos, event.getState())) {
+                    case FREE -> {
+                        return;
+                    }
+                    case DAMAGED -> {
+                        event.setCanceled(true);
+                        return;
+                    }
+                    case REFUSED -> {
+                    }
+                }
             }
             event.setCanceled(true);
             ProtectionService.notifyDenied(player, level, pos);
@@ -107,14 +122,26 @@ public final class ProtectionEvents {
             return;
         }
         if (event instanceof BlockEvent.EntityMultiPlaceEvent multi) {
+            // First whether every part may be placed, then the law is told of each: a refused part refuses the whole.
             for (BlockSnapshot snapshot : multi.getReplacedBlockSnapshots()) {
-                if (!ProtectionService.isAllowed(player, level, snapshot.getPos(), ProtectedAction.PLACE)) {
+                if (!ProtectionService.isAllowed(player, level, snapshot.getPos(), ProtectedAction.PLACE)
+                        && !io.github.sekerator.kingdomworld.common.law.LawVandalism.mayPlace(player, level, snapshot.getPos(),
+                        snapshot.getCurrentBlock())) {
                     event.setCanceled(true);
                     ProtectionService.notifyDenied(player, level, snapshot.getPos());
                     return;
                 }
             }
-        } else if (!ProtectionService.isAllowed(player, level, event.getPos(), ProtectedAction.PLACE)) {
+            for (BlockSnapshot snapshot : multi.getReplacedBlockSnapshots()) {
+                if (!ProtectionService.isAllowed(player, level, snapshot.getPos(), ProtectedAction.PLACE)) {
+                    io.github.sekerator.kingdomworld.common.law.LawVandalism.places(player, level, snapshot.getPos(), snapshot.getReplacedBlock(),
+                            snapshot.getCurrentBlock());
+                }
+            }
+        } else if (!ProtectionService.isAllowed(player, level, event.getPos(), ProtectedAction.PLACE)
+                // In peace a stranger may place blocks on the land of a kingdom; in its cities they are taken out again.
+                && !io.github.sekerator.kingdomworld.common.law.LawVandalism.places(player, level, event.getPos(),
+                event.getBlockSnapshot().getReplacedBlock(), event.getPlacedBlock())) {
             event.setCanceled(true);
             ProtectionService.notifyDenied(player, level, event.getPos());
         }
@@ -127,8 +154,11 @@ public final class ProtectionEvents {
         }
         Player player = event.getEntity();
         BlockPos pos = event.getPos();
-        ProtectedAction blockAction = classify(level, pos, level.getBlockState(pos));
+        BlockState state = level.getBlockState(pos);
+        ProtectedAction blockAction = classify(level, pos, state);
         boolean denied = false;
+        // Whether the click opens the block itself: a door, or a container the player may open or the law lets open.
+        boolean opens = blockAction == null ? isOpenable(state) : blockAction == ProtectedAction.CONTAINER;
         if (blockAction != null && !ProtectionService.isAllowed(player, level, pos, blockAction)) {
             if (blockAction == ProtectedAction.CONTAINER && io.github.sekerator.kingdomworld.common.law.LawEvents.judges(player, level)) {
                 // Another's container opens: what is taken from it is a theft, judged by the law. The item in hand is still
@@ -137,20 +167,33 @@ public final class ProtectionEvents {
             } else {
                 event.setUseBlock(Event.Result.DENY);
                 denied = true;
+                opens = false;
             }
         }
         if (!event.getItemStack().isEmpty()) {
             Direction face = event.getFace() != null ? event.getFace() : event.getHitVec().getDirection();
             BlockPos target = pos.relative(face);
-            if (!ProtectionService.isAllowed(player, level, pos, ProtectedAction.USE_ITEM)
-                    || !ProtectionService.isAllowed(player, level, target, ProtectedAction.USE_ITEM)) {
+            if (!mayUseItem(player, level, pos, event.getItemStack()) || !mayUseItem(player, level, target, event.getItemStack())) {
                 event.setUseItem(Event.Result.DENY);
-                denied = true;
+                // A plain click on a door or a container opens it and leaves the item in the hand alone: nothing was refused
+                // that the player asked for, so nothing is said. A sneaking click uses the item, and that is refused aloud.
+                if (!opens || player.isSecondaryUseActive()) {
+                    denied = true;
+                }
             }
         }
         if (denied) {
             ProtectionService.notifyDenied(player, level, pos);
         }
+    }
+
+    /**
+     * Whether a player may use the item in hand on or next to a block: with the right to build anything, and without it in
+     * peace only an item that is a block the law lets a stranger place. Buckets, fire and tools stay refused.
+     */
+    private static boolean mayUseItem(Player player, Level level, BlockPos pos, net.minecraft.world.item.ItemStack stack) {
+        return ProtectionService.isAllowed(player, level, pos, ProtectedAction.USE_ITEM)
+                || io.github.sekerator.kingdomworld.common.law.LawVandalism.mayPlace(player, level, pos, stack);
     }
 
     /**
@@ -161,7 +204,9 @@ public final class ProtectionEvents {
         if (blockEntity != null && hasInventory(blockEntity)) {
             return ProtectedAction.CONTAINER;
         }
-        if (isInteractive(state)) {
+        // Doors, trapdoors and fence gates open to everybody on any land, so that nobody is shut in or out of a house. The
+        // leaves of a city gate are no doors: they open and close by the rules of the gate.
+        if (isMechanism(state) || isOpenable(state) && io.github.sekerator.kingdomworld.common.siege.SiegeGates.isLeafPlace(pos)) {
             return ProtectedAction.INTERACT;
         }
         return null;
@@ -172,11 +217,17 @@ public final class ProtectionEvents {
                 || blockEntity.getCapability(ForgeCapabilities.ITEM_HANDLER).isPresent();
     }
 
-    private static boolean isInteractive(BlockState state) {
+    /**
+     * Whether a block is a door, a trapdoor or a fence gate.
+     */
+    public static boolean isOpenable(BlockState state) {
         return state.is(BlockTags.DOORS) || state.is(BlockTags.TRAPDOORS) || state.is(BlockTags.FENCE_GATES)
-                || state.is(BlockTags.BUTTONS)
                 || state.getBlock() instanceof DoorBlock || state.getBlock() instanceof TrapDoorBlock
-                || state.getBlock() instanceof FenceGateBlock || state.getBlock() instanceof ButtonBlock
+                || state.getBlock() instanceof FenceGateBlock;
+    }
+
+    private static boolean isMechanism(BlockState state) {
+        return state.is(BlockTags.BUTTONS) || state.getBlock() instanceof ButtonBlock
                 || state.getBlock() instanceof LeverBlock || state.getBlock() instanceof DiodeBlock
                 || state.getBlock() instanceof DaylightDetectorBlock || state.getBlock() instanceof NoteBlock;
     }

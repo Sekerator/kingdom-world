@@ -34,7 +34,9 @@ import java.util.UUID;
  * What a soldier's body does: fight the monsters that threaten (those that hurt it, that attacked the people of its kingdom
  * nearby, that roam the land it holds or guards or that come near the player it follows), otherwise carry out the order of
  * its squad, or train at a barracks. A warrior fights with the vanilla melee goal; an archer keeps its distance and shoots
- * arrows from the bow or crossbow it holds, which nobody can pick up. Players and citizens are never targets in peace.
+ * arrows from the bow or crossbow it holds, which nobody can pick up. Players and citizens are never targets in peace,
+ * except a player the law is after: an alarm of the kingdom calls every soldier near, with an order or without, to run to
+ * the offender and strike.
  */
 final class SoldierGoal extends Goal {
     private static final double SEARCH = 16.0;
@@ -42,6 +44,12 @@ final class SoldierGoal extends Goal {
     private static final int EQUIP_TICKS = 600;
     private static final int TRAIN_TICKS = 1_200;
     private static final double SHOOT_RANGE = 15.0;
+    /** How near a soldier an alarm called takes the offender as its target, in blocks; farther away it only runs up. */
+    private static final double ENGAGE = 28.0;
+    /** The pace of a soldier that runs to an alarm. */
+    private static final double RUN = 0.9;
+    /** How far a soldier without an order looks for a barracks of its kingdom, in blocks. */
+    private static final double BARRACKS_REACH = 160.0;
 
     private final CitizenEntity body;
     private final boolean archer;
@@ -51,6 +59,8 @@ final class SoldierGoal extends Goal {
     /** A wanted player a guard called out and walks to while the player may still give up. */
     @Nullable
     private ServerPlayer approach;
+    /** Whether an alarm called the soldier to the player it approaches: it runs, however far. */
+    private boolean urgent;
     private boolean meleeRunning;
     private int searchCooldown;
     private int equipCooldown = 40;
@@ -69,7 +79,9 @@ final class SoldierGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        return ProfessionBehaviors.fights(body) && body.kingdomId() != null && body.citizenId() != null && body.serverLevel() != null;
+        // A wounded soldier leaves its duty to be cared for, but not while an alarm of its kingdom lasts close by.
+        return (ProfessionBehaviors.fights(body) || io.github.sekerator.kingdomworld.common.law.LawWork.holdsOut(body))
+                && body.kingdomId() != null && body.citizenId() != null && body.serverLevel() != null;
     }
 
     @Override
@@ -134,11 +146,17 @@ final class SoldierGoal extends Goal {
             fight();
             return;
         }
-        if (approach != null && approach.isAlive() && approach.level() == level && body.distanceToSqr(approach) < 32.0 * 32.0) {
+        if (approach != null && approach.isAlive() && approach.level() == level && (urgent || body.distanceToSqr(approach) < 32.0 * 32.0)) {
             body.getLookControl().setLookAt(approach, 30.0f, 30.0f);
             if (body.distanceToSqr(approach) > 3.0 * 3.0 && --pathCooldown <= 0) {
-                pathCooldown = 10;
-                body.getNavigation().moveTo(approach, 0.75);
+                if (!urgent) {
+                    pathCooldown = 10;
+                    body.getNavigation().moveTo(approach, 0.75);
+                } else if (PathBudget.tryAcquire()) {
+                    // An alarm: the soldier runs, however far; a long way is found piece by piece, a path a second.
+                    pathCooldown = body.distanceToSqr(approach) > ENGAGE * ENGAGE ? 20 : 10;
+                    body.getNavigation().moveTo(approach, RUN);
+                }
             }
             return;
         }
@@ -217,11 +235,15 @@ final class SoldierGoal extends Goal {
         // A guard deals with the wanted first: it calls out, then attacks whoever did not give up.
         io.github.sekerator.kingdomworld.common.law.LawWork.Pursuit pursuit = io.github.sekerator.kingdomworld.common.law.LawWork.pursuit(server, body);
         approach = null;
+        urgent = false;
         if (pursuit != null) {
-            if (pursuit.attack() && ArmyWork.mayAttack(server, kingdom, pursuit.player())) {
+            // From afar the soldier first runs up; it takes the player as its target once near enough to keep it.
+            if (pursuit.attack() && body.distanceToSqr(pursuit.player()) <= ENGAGE * ENGAGE
+                    && ArmyWork.mayAttack(server, kingdom, pursuit.player())) {
                 return pursuit.player();
             }
             approach = pursuit.player();
+            urgent = pursuit.urgent();
         }
         LivingEntity attacker = body.getLastHurtByMob();
         if (attacker != null && body.tickCount - body.getLastHurtByMobTimestamp() < 200 && body.distanceToSqr(attacker) < SEARCH * SEARCH * 4
@@ -371,7 +393,8 @@ final class SoldierGoal extends Goal {
     private void train(MinecraftServer server, ServerLevel level) {
         String dimension = Dimensions.id(level);
         WorldPos nearest = null;
-        double best = 48.0 * 48.0;
+        // Far enough to find the way back from the other end of the city after an alarm.
+        double best = BARRACKS_REACH * BARRACKS_REACH;
         for (WorldPos barracks : ArmyWork.state(server).barracksOf(body.kingdomId())) {
             if (!barracks.dimension().equals(dimension)) {
                 continue;

@@ -1,7 +1,10 @@
 package io.github.sekerator.kingdomworld.common.law;
 
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
+import io.github.sekerator.kingdomworld.core.construction.Building;
+import io.github.sekerator.kingdomworld.core.construction.BuildingRoles;
 import io.github.sekerator.kingdomworld.core.law.CrimeKind;
+import io.github.sekerator.kingdomworld.core.law.Victims;
 import io.github.sekerator.kingdomworld.core.membership.Permission;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -25,6 +28,8 @@ import java.util.UUID;
  * Taking from another's container on the land of a kingdom. Opening is no longer refused: while the container is open the
  * server compares what lies in it with what lay there, and what the player took (not what was moved about or put in) is a
  * theft by its worth. Thefts close together make one crime. Containers a player placed on the land belong to that player.
+ * The record names whose goods were taken: a citizen's from the chest of its house, the treasury's from a storehouse (fined
+ * higher, and noticed at once by a soldier near the storehouse).
  */
 final class LawContainers {
     /** Where the owner of a container a player placed on the land of a kingdom is kept. */
@@ -163,7 +168,36 @@ final class LawContainers {
         }
         long worth = LawPunish.worth(player.server, kingdom, taken);
         boolean owner = open.owner != null && open.owner.equals(player.getUUID());
-        LawWork.deed(player, open.pos, kingdom, CrimeKind.THEFT, worth, "", Permission.CONTAINERS, owner, null);
+        String victim = open.owner != null ? "" : victimOf(player, open.pos, kingdom);
+        LawWork.deed(player, open.pos, kingdom, CrimeKind.THEFT, worth, victim, Permission.CONTAINERS, owner, null);
+    }
+
+    /**
+     * Whose goods a container of a kingdom holds: the treasury's in a storehouse (the storehouse block, or a chest of a
+     * warehouse), a citizen's in the house the citizen lives in, nobody's in particular anywhere else.
+     */
+    static String victimOf(ServerPlayer player, BlockPos pos, UUID kingdom) {
+        Level level = player.level();
+        MinecraftServer server = player.server;
+        if (level.getBlockState(pos).is(io.github.sekerator.kingdomworld.common.registry.ModRegistries.STOREHOUSE.get())) {
+            return Victims.TREASURY;
+        }
+        String dimension = io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level);
+        for (Building building : KingdomWorldApi.state(server).construction().buildingsOf(kingdom)) {
+            if (!building.dimension().equals(dimension) || !building.box().contains(pos.getX(), pos.getY(), pos.getZ())) {
+                continue;
+            }
+            if (BuildingRoles.WAREHOUSE.equals(building.role())) {
+                return Victims.TREASURY;
+            }
+            if (BuildingRoles.HOUSE.equals(building.role())) {
+                return io.github.sekerator.kingdomworld.common.economy.Households.residentOf(server, building)
+                        .map(citizen -> Victims.citizen(citizen.nameSeed(),
+                                citizen.gender() == io.github.sekerator.kingdomworld.core.citizen.Gender.FEMALE)).orElse("");
+            }
+            return "";
+        }
+        return "";
     }
 
     /**

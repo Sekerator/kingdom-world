@@ -95,7 +95,8 @@ public final class CitizenGoals {
 
         @Override
         protected boolean wanted() {
-            return body.needsCare();
+            // A wounded soldier does not walk off while an alarm of its kingdom lasts close by.
+            return body.needsCare() && !io.github.sekerator.kingdomworld.common.law.LawWork.holdsOut(body);
         }
 
         @Override
@@ -109,7 +110,8 @@ public final class CitizenGoals {
     }
 
     /**
-     * Wanders about near home in the morning, by day and in the evening of its own day; at night it sleeps.
+     * Wanders about near home when it is free: a citizen without work all day, a worker after its hours and on a festival.
+     * At night it sleeps, and in its hours a worker stays at its work.
      */
     public static final class StrollNearHomeGoal extends WaterAvoidingRandomStrollGoal {
         private final CitizenEntity body;
@@ -121,9 +123,17 @@ public final class CitizenGoals {
 
         @Override
         public boolean canUse() {
-            return (body.citizenId() == null || body.getServer() == null
-                    || io.github.sekerator.kingdomworld.common.life.LifeWork.phase(body.getServer(), body.citizenId())
-                    != io.github.sekerator.kingdomworld.core.life.DaySchedule.Phase.NIGHT) && super.canUse();
+            if (body.citizenId() != null && body.getServer() != null) {
+                if (io.github.sekerator.kingdomworld.common.life.LifeWork.phase(body.getServer(), body.citizenId())
+                        == io.github.sekerator.kingdomworld.core.life.DaySchedule.Phase.NIGHT) {
+                    return false;
+                }
+                boolean hasWork = io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehaviors.get(body.professionId()).isPresent();
+                if (hasWork && io.github.sekerator.kingdomworld.common.life.LifeWork.works(body)) {
+                    return false;
+                }
+            }
+            return super.canUse();
         }
     }
 }

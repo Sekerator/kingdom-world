@@ -13,6 +13,7 @@ import io.github.sekerator.kingdomworld.core.guild.GuildState;
 import io.github.sekerator.kingdomworld.core.law.BountyRule;
 import io.github.sekerator.kingdomworld.core.law.CrimeKind;
 import io.github.sekerator.kingdomworld.core.law.LawState;
+import io.github.sekerator.kingdomworld.core.law.Victims;
 import io.github.sekerator.kingdomworld.core.law.Wanted;
 import io.github.sekerator.kingdomworld.core.membership.Permission;
 import net.minecraft.ChatFormatting;
@@ -194,8 +195,9 @@ public final class LawEvents {
     private static void onLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         UUID player = event.getEntity().getUUID();
         if (event.getEntity() instanceof ServerPlayer leaving) {
-            // What was taken before leaving is a theft all the same.
+            // What was taken or broken before leaving is a crime all the same.
             LawContainers.forget(leaving);
+            LawVandalism.reportNow(leaving);
         }
         LawPunish.forgetSentence(player);
         LawActions.forgetEntry(player);
@@ -213,6 +215,14 @@ public final class LawEvents {
         if (player instanceof ServerPlayer server && !(player instanceof FakePlayer)) {
             LawContainers.aboutToOpen(server, pos, LawContainers.ownerOf(level, pos));
         }
+    }
+
+    /**
+     * Whether a player placed the container at a place on the land of a kingdom: it is that player's, not the kingdom's and
+     * not a citizen's.
+     */
+    public static boolean placedByPlayer(Level level, BlockPos pos) {
+        return LawContainers.ownerOf(level, pos) != null;
     }
 
     /**
@@ -367,7 +377,26 @@ public final class LawEvents {
             return;
         }
         UUID land = KingdomWorldApi.ownerAt(citizen.level(), citizen.blockPosition());
-        LawWork.deed(player, citizen.blockPosition(), land != null ? land : citizen.kingdomId(), CrimeKind.ASSAULT, 0, "", null, false, citizen);
+        UUID kingdom = land != null ? land : citizen.kingdomId();
+        LawWork.deed(player, citizen.blockPosition(), kingdom, CrimeKind.ASSAULT, 0, victim(citizen), null, false, citizen);
+        if (LawWork.isSoldier(citizen) && citizen.citizenId() != null
+                && citizen.getHealth() - event.getAmount() < citizen.getMaxHealth()
+                * io.github.sekerator.kingdomworld.common.citizen.CitizenSettings.rules().woundedFraction()) {
+            LawAlarms.guardHurt(kingdom, player.getUUID(), citizen.citizenId(), false);
+        }
+    }
+
+    /**
+     * A citizen as the victim a record names.
+     */
+    private static String victim(CitizenEntity citizen) {
+        MinecraftServer server = citizen.getServer();
+        if (server == null || citizen.citizenId() == null) {
+            return "";
+        }
+        return KingdomWorldApi.state(server).citizens().get(citizen.citizenId())
+                .map(record -> Victims.citizen(record.nameSeed(), record.gender() == io.github.sekerator.kingdomworld.core.citizen.Gender.FEMALE))
+                .orElse("");
     }
 
     /**
@@ -383,6 +412,9 @@ public final class LawEvents {
         if (LawWork.isReadOnly(server)) {
             return;
         }
+        // A soldier that strikes sees whom it strikes: what an alarm still keeps unreported is on the record before the blow
+        // lands, so that the blow is a beating or an execution by the law and never a plain killing.
+        LawAlarms.sees(server, body.kingdomId(), player);
         Optional<Wanted> wanted = LawWork.state(server).wanted(body.kingdomId(), player.getUUID());
         if (wanted.isEmpty() || wanted.get().executable()) {
             return;
@@ -409,8 +441,11 @@ public final class LawEvents {
             } else if (victim instanceof CitizenEntity citizen && citizen.kingdomId() != null && killer instanceof ServerPlayer murderer
                     && !(murderer instanceof FakePlayer)) {
                 UUID land = KingdomWorldApi.ownerAt(citizen.level(), citizen.blockPosition());
-                LawWork.deed(murderer, citizen.blockPosition(), land != null ? land : citizen.kingdomId(), CrimeKind.MURDER, 0, "", null, false,
-                        citizen);
+                UUID kingdom = land != null ? land : citizen.kingdomId();
+                LawWork.deed(murderer, citizen.blockPosition(), kingdom, CrimeKind.MURDER, 0, victim(citizen), null, false, citizen);
+                if (LawWork.isSoldier(citizen) && citizen.citizenId() != null) {
+                    LawAlarms.guardHurt(kingdom, murderer.getUUID(), citizen.citizenId(), true);
+                }
             }
         } catch (RuntimeException e) {
             LOGGER.error("KingdomWorld law could not judge the death of {}", victim.getName().getString(), e);

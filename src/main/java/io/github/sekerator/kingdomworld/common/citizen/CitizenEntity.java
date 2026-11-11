@@ -47,6 +47,8 @@ public class CitizenEntity extends PathfinderMob {
     private static final EntityDataAccessor<Integer> COLOR = SynchedEntityData.defineId(CitizenEntity.class, EntityDataSerializers.INT);
     /** Slots for what a worker carries to the storehouse. */
     public static final int CARRY_SLOTS = 9;
+    /** How far from its home a calm body goes, in blocks. */
+    public static final int HOME_RANGE = 32;
 
     /** The record this body shows; {@code null} on the client and for bodies nobody admitted. */
     private UUID citizenId;
@@ -61,6 +63,17 @@ public class CitizenEntity extends PathfinderMob {
     private CitizenState healthState = CitizenState.HEALTHY;
     private final SimpleContainer carried = new SimpleContainer(CARRY_SLOTS);
     private int regenerationTimer;
+    /** Game time until which the body is frightened and runs; 0 while it is calm. Never saved: bodies are not. */
+    private long fearUntil;
+    @Nullable
+    private UUID threatId;
+    @Nullable
+    private net.minecraft.world.phys.Vec3 threatPos;
+    /** Whether this fright still has to frighten the bodies around, which it does once. */
+    private boolean spreadsFear;
+    /** A guard the body runs to rather than home: a witness that tells the guards. */
+    @Nullable
+    private UUID guardId;
 
     public CitizenEntity(EntityType<? extends CitizenEntity> type, Level level) {
         super(type, level);
@@ -91,6 +104,7 @@ public class CitizenEntity extends PathfinderMob {
     @Override
     protected void registerGoals() {
         goalSelector.addGoal(0, new FloatGoal(this));
+        goalSelector.addGoal(1, new io.github.sekerator.kingdomworld.common.citizen.goal.FearGoal(this));
         goalSelector.addGoal(1, CitizenGoals.fleeMonsters(this));
         goalSelector.addGoal(2, new CitizenGoals.SeekCareGoal(this));
         goalSelector.addGoal(3, new OpenDoorGoal(this, true));
@@ -154,11 +168,102 @@ public class CitizenEntity extends PathfinderMob {
         this.workplace = toBlockPos(citizen.workplace());
         this.healthState = citizen.state();
         entityData.set(COLOR, kingdomColor & 0xFFFFFF);
-        if (home != null) {
-            restrictTo(home, 32);
+        restrictToHome();
+    }
+
+    /**
+     * Keeps the body near its home, except while it is frightened: a body that runs for its life runs as far as it must.
+     */
+    private void restrictToHome() {
+        if (home != null && !isFrightened()) {
+            restrictTo(home, HOME_RANGE);
         } else {
             clearRestriction();
         }
+    }
+
+    // ---------------------------------------------------------------- fright
+
+    /**
+     * Frightens the body: it drops what it does and runs from the threat until {@code ticks} after the last cause. A body
+     * asleep wakes up. A new cause while it runs only makes the fright last longer.
+     *
+     * @param threat  who frightened it
+     * @param spreads whether the body frightens those around it once, as one that saw the blow does
+     */
+    public void frighten(net.minecraft.world.entity.Entity threat, int ticks, boolean spreads) {
+        if (level().isClientSide || ticks <= 0 || !isAlive()) {
+            return;
+        }
+        boolean calm = !isFrightened();
+        fearUntil = Math.max(fearUntil, level().getGameTime() + ticks);
+        threatId = threat.getUUID();
+        threatPos = threat.position();
+        if (calm) {
+            spreadsFear = spreads;
+            guardId = null;
+            clearRestriction();
+        }
+        if (isSleeping()) {
+            stopSleeping();
+        }
+    }
+
+    public boolean isFrightened() {
+        return fearUntil > 0 && level().getGameTime() < fearUntil;
+    }
+
+    /**
+     * The fright is over: the body is kept near its home again.
+     */
+    public void calmDown() {
+        fearUntil = 0;
+        threatId = null;
+        threatPos = null;
+        spreadsFear = false;
+        guardId = null;
+        restrictToHome();
+    }
+
+    /**
+     * Where the threat is now, as far as the body knows: the place of whoever frightened it while that one is near, else
+     * where it was last.
+     */
+    @Nullable
+    public net.minecraft.world.phys.Vec3 threatPosition() {
+        if (threatId != null && level() instanceof ServerLevel server) {
+            net.minecraft.world.entity.Entity threat = server.getEntity(threatId);
+            if (threat != null && threat.isAlive() && threat.distanceToSqr(this) < 64.0 * 64.0) {
+                threatPos = threat.position();
+            }
+        }
+        return threatPos;
+    }
+
+    @Nullable
+    public UUID threatId() {
+        return threatId;
+    }
+
+    /**
+     * Whether the body still has to frighten those around it; asking uses the one time up.
+     */
+    public boolean takeFearSpread() {
+        boolean spreads = spreadsFear;
+        spreadsFear = false;
+        return spreads;
+    }
+
+    /**
+     * The guard this body runs to, if it is a witness that tells the guards.
+     */
+    @Nullable
+    public UUID fearGuard() {
+        return guardId;
+    }
+
+    public void setFearGuard(@Nullable UUID guard) {
+        guardId = guard;
     }
 
     @Nullable
@@ -296,7 +401,9 @@ public class CitizenEntity extends PathfinderMob {
 
     @Override
     public void checkDespawn() {
-        // Bodies are created and removed by CitizenBodies only.
+        // Bodies are created and removed by CitizenBodies only. The game counts here how long a mob did nothing and stops
+        // its wandering after five seconds; a body lives while players are near, so the count starts anew every tick.
+        setNoActionTime(0);
     }
 
     @Override
