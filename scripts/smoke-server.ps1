@@ -2367,6 +2367,16 @@ Invoke-Phase 'run1' {
         } else {
             Add-Failure "[run1] $($script:WorldFounding) (every place of the plan expected within 120 s)"
         }
+        # A new world gets its kingdoms by quota: three large and five small ones, whatever the seed.
+        $sizes = [regex]::Match((Get-WholeLog), 'The plan of the kingdoms of the world is made: (\d+) place\(s\): (\d+) large, (\d+) medium, (\d+) small')
+        if ($sizes.Success -and [int]$sizes.Groups[2].Value -eq 3 -and [int]$sizes.Groups[3].Value -eq 0 -and [int]$sizes.Groups[4].Value -eq 5) {
+            Write-Ok '[run1] the plan of the world has 3 large and 5 small kingdoms'
+        } elseif ($sizes.Success) {
+            Add-Failure "[run1] the plan of the world has $($sizes.Groups[2].Value) large, $($sizes.Groups[3].Value) medium and $($sizes.Groups[4].Value) small kingdoms (3 large and 5 small expected)"
+            foreach ($pass in [regex]::Matches((Get-WholeLog), 'The plan of the kingdoms of the world has [^\r\n]*')) { Write-Host "    $($pass.Value)" }
+        } else {
+            Add-Failure '[run1] the plan of the world did not say how large its kingdoms are'
+        }
         # Their rulers grow the land a little every turn, by the data alone.
         for ($turn = 1; $turn -le 3; $turn++) {
             $claims = Count-Log 'The ruler of .+? claimed \d+ chunk\(s\) of land'
@@ -2381,8 +2391,8 @@ Invoke-Phase 'run1' {
             Add-Failure '[run1] no ruler of the world grew its land in three turns'
         }
         Send-ServerCommand $server 'kingdomworld admin npc status'
-        if (Wait-ForLog $server 'Kingdoms of the world: \d+ places? in the plan, \d+ kingdoms?, generation on, data format 3' $CommandTimeout $ConsoleFailPattern) {
-            Write-Ok '[run1] the kingdoms of the world are planned (data format 3)'
+        if (Wait-ForLog $server 'Kingdoms of the world: \d+ places? in the plan, \d+ kingdoms?, generation on, data format 4' $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok '[run1] the kingdoms of the world are planned (data format 4)'
         } else {
             Add-Failure '[run1] admin npc status did not answer'
         }
@@ -2811,7 +2821,7 @@ Invoke-Phase 'run2' {
     Invoke-Part $server 'the memory of the rulers after the restart' {
         if (-not $script:RulerSite) { return }
         $site = $script:RulerSite
-        if (Wait-ForStartLog $server 'KingdomWorld kingdoms of the world: .*data format 3' 10) { Write-Ok '[run2] the kingdoms of the world are loaded in data format 3' } else { Add-Failure '[run2] the data format of the kingdoms of the world is not 3' }
+        if (Wait-ForStartLog $server 'KingdomWorld kingdoms of the world: .*data format 4' 10) { Write-Ok '[run2] the kingdoms of the world are loaded in data format 4' } else { Add-Failure '[run2] the data format of the kingdoms of the world is not 4' }
         Send-ServerCommand $server "kingdomworld admin npc decisions $site"
         $decisions = Wait-ForLog $server ': (\d+) decrees?, (\d+) turn\(s\), waiting: ' $CommandTimeout $ConsoleFailPattern
         if ($decisions -and [int]$decisions.Groups[2].Value -ge $script:RulerTurns -and [int]$decisions.Groups[1].Value -ge [Math]::Min(1, $script:RulerDecrees)) {
@@ -3511,8 +3521,8 @@ Invoke-Phase 'run2' {
         } else {
             $treasury = [int64]$state.Groups[1].Value
             $founding = [int64]$state.Groups[2].Value
-            if ($founding -eq 10000 -and $treasury -le $founding -and $treasury -gt 0) {
-                Write-Ok "[run2] the money adds up: the founding gave 10000 once, the treasury holds $treasury"
+            if ($founding -eq 40000 -and $treasury -le $founding -and $treasury -gt 0) {
+                Write-Ok "[run2] the money adds up: the founding gave 40000 once, the treasury holds $treasury"
             } else {
                 Add-Failure "[run2] the money does not add up: founding $founding, treasury $treasury"
             }

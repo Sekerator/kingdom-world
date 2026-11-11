@@ -35,8 +35,10 @@ import java.util.UUID;
 /**
  * The kingdoms of the world part of the client self-check ({@code -PclientSelfTest=npc}): in a copy of a test world a large
  * kingdom of the world appears on suitable land near the player the way it appears for any player (over ticks, with its towns
- * and roads), then the camera flies over it and saves screenshots of the capital, the wall, a gate, the market, the road to a
- * town, the town and the atlas into the folder {@code world} of the screenshot folder. The kingdom stays in the world.
+ * and roads) and after it a small one some way off, then the camera flies over them and saves screenshots into the folder
+ * {@code world} of the screenshot folder: the large capital from above and from its avenue, its castle from outside and its
+ * throne hall, a street of houses, the wall, a gate, the market, the road to a town and the town, the small capital from above
+ * and from its street, the same view of both capitals to compare their styles, and the atlas. The kingdoms stay in the world.
  */
 final class ClientNpcShowcase {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -54,6 +56,8 @@ final class ClientNpcShowcase {
     private volatile boolean started;
     private volatile boolean ready;
     private volatile int siteId = -1;
+    /** The small kingdom shown beside the large one: -1 before it is planted, 0 if there is none. */
+    private volatile int smallId = -1;
     private volatile List<Shot> shots = List.of();
     private volatile double atlasX;
     private volatile double atlasZ;
@@ -189,7 +193,7 @@ final class ClientNpcShowcase {
         level.setDayTime(6_000);
         level.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DAYLIGHT).set(false, server);
         Optional<NpcSite> appeared = NpcWork.state(server).sites().stream()
-                .filter(site -> site.status() == NpcSite.Status.SPAWNED && site.level() == NpcLevel.LARGE).findFirst();
+                .filter(site -> site.status() == NpcSite.Status.SPAWNED && site.level() == NpcLevel.LARGE && site.districts()).findFirst();
         if (appeared.isPresent()) {
             siteId = appeared.get().id();
             started = true;
@@ -243,10 +247,26 @@ final class ClientNpcShowcase {
         UUID kingdom = site.kingdomId().get();
         ServerLevel level = server.overworld();
         BlockPos throne = NpcSpawner.thronePos(site);
+        // A small kingdom some way off, of another style: it appears once the large one stands.
+        if (smallId < 0) {
+            smallId = plantSmall(server, level, site);
+            return;
+        }
+        Optional<NpcSite> small = smallId > 0 ? NpcWork.state(server).site(smallId) : Optional.empty();
+        if (small.isPresent() && small.get().status() != NpcSite.Status.SPAWNED && small.get().status() != NpcSite.Status.BLOCKED) {
+            return;
+        }
         List<Shot> list = new ArrayList<>();
         int y = throne.getY();
-        list.add(new Shot("npc-capital", throne.getX() + 0.5, y + 55, throne.getZ() + 75.5, 180.0f, 38.0f));
-        list.add(new Shot("npc-capital-square", throne.getX() + 0.5, y + 14, throne.getZ() + 22.5, 180.0f, 30.0f));
+        int radius = RoadWork.state(server).wallOf(0, kingdom).map(wall -> wall.radius()).orElse(NpcSpawner.composition(site).reach());
+        // The whole capital from above, from the south; then from its avenue at the height of a walker, towards the palace.
+        list.add(new Shot("npc-capital", throne.getX() + 0.5, y + radius * 1.5, throne.getZ() + radius * 1.35, 180.0f, 50.0f));
+        list.add(new Shot("npc-capital-street", throne.getX() + 0.5, y + 2.2, throne.getZ() + radius - 18.5, 180.0f, 2.0f));
+        list.add(new Shot("npc-palace", throne.getX() + 34.5, y + 16, throne.getZ() + 44.5, 142.0f, 20.0f));
+        list.add(new Shot("npc-throne-hall", throne.getX() + 0.5, y + 1.6, throne.getZ() + 5.8, 180.0f, 4.0f));
+        // A street of houses on the west side, between two rows that look at each other.
+        list.add(new Shot("npc-houses", throne.getX() - 54.5, y + 4.5, throne.getZ() + 40.5, 180.0f, 10.0f));
+        list.add(new Shot("npc-style-1", throne.getX() + 9.5, y + 9, throne.getZ() + radius - 10.5, 172.0f, 12.0f));
         RoadWork.state(server).wallOf(0, kingdom).ifPresent(wall -> {
             int r = wall.radius();
             list.add(new Shot("npc-wall", wall.centerX() + r + 14.5, y + 12, wall.centerZ() + r + 14.5, 135.0f, 18.0f));
@@ -278,8 +298,18 @@ final class ClientNpcShowcase {
             float roadYaw = (float) Math.toDegrees(Math.atan2(-(ahead.x() - middle.x()), ahead.z() - middle.z()));
             list.add(new Shot("npc-road-to-town", middle.x() + 0.5, middle.y() + 10, middle.z() + 0.5, roadYaw, 25.0f));
             RouteCell end = road.cells().get(road.cells().size() - 1);
-            list.add(new Shot("npc-town", end.x() + 0.5, end.y() + 30, end.z() + 40.5, 180.0f, 35.0f));
+            list.add(new Shot("npc-town", end.x() + 0.5, end.y() + 38, end.z() + 42.5, 180.0f, 42.0f));
             break;
+        }
+        if (small.isPresent() && small.get().status() == NpcSite.Status.SPAWNED) {
+            BlockPos other = NpcSpawner.thronePos(small.get());
+            int reach = small.get().kingdomId().flatMap(id -> RoadWork.state(server).wallOf(0, id)).map(wall -> wall.radius())
+                    .orElse(NpcSpawner.composition(small.get()).reach());
+            list.add(new Shot("npc-small-capital", other.getX() + 0.5, other.getY() + reach * 1.6, other.getZ() + reach * 1.4, 180.0f, 50.0f));
+            list.add(new Shot("npc-small-street", other.getX() + 0.5, other.getY() + 2.2, other.getZ() + reach - 12.5, 180.0f, 2.0f));
+            list.add(new Shot("npc-style-2", other.getX() + 9.5, other.getY() + 9, other.getZ() + reach - 6.5, 172.0f, 12.0f));
+        } else if (small.isPresent()) {
+            LOGGER.warn(PREFIX + "the small kingdom of the world was left alone: {}", small.get().reason());
         }
         atlasX = throne.getX();
         atlasZ = throne.getZ();
@@ -287,5 +317,27 @@ final class ClientNpcShowcase {
         int ground = level.getHeight(Heightmap.Types.MOTION_BLOCKING, throne.getX(), throne.getZ());
         LOGGER.info(PREFIX + "the kingdom of the world stands at {} (ground {}); {} shot(s)", throne.toShortString(), ground, list.size());
         ready = true;
+    }
+
+    /**
+     * On the server: a small kingdom of the world planted some way east of the large one, or one that stands already.
+     *
+     * @return the number of its place, or 0 if none could be planted
+     */
+    private int plantSmall(IntegratedServer server, ServerLevel level, NpcSite large) {
+        Optional<NpcSite> standing = NpcWork.state(server).sites().stream()
+                .filter(site -> site.status() == NpcSite.Status.SPAWNED && site.level() == NpcLevel.SMALL && site.districts()).findFirst();
+        if (standing.isPresent()) {
+            return standing.get().id();
+        }
+        int[] spot = NpcWork.nearestSuitable(server, large.x() + 720, large.z(), 384, NpcLevel.SMALL);
+        Optional<NpcSite> site = NpcWork.plant(server, spot[0], spot[1], NpcLevel.SMALL, true);
+        if (site.isEmpty()) {
+            LOGGER.warn(PREFIX + "the small kingdom of the world could not be planted");
+            return 0;
+        }
+        LOGGER.info(PREFIX + "a small kingdom of the world appears at {} {} with {} town(s), style {}", spot[0], spot[1],
+                site.get().towns().size(), site.get().style());
+        return site.get().id();
     }
 }
