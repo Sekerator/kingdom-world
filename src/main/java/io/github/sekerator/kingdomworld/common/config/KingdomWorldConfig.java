@@ -66,6 +66,7 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.BooleanValue protectFromExplosions;
         public final ForgeConfigSpec.BooleanValue protectFromFire;
         public final ForgeConfigSpec.BooleanValue allowFakePlayers;
+        public final ForgeConfigSpec.ConfigValue<String> peaceBreaking;
         public final ForgeConfigSpec.IntValue citizenActivationChunks;
         public final ForgeConfigSpec.IntValue growthFoodDays;
         public final ForgeConfigSpec.IntValue growthIntervalMinutes;
@@ -95,6 +96,9 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue maxPollTax;
         public final ForgeConfigSpec.IntValue maxWage;
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> wages;
+        public final ForgeConfigSpec.IntValue householdSharePercent;
+        public final ForgeConfigSpec.LongValue householdCoinsMax;
+        public final ForgeConfigSpec.IntValue householdFood;
         public final ForgeConfigSpec.DoubleValue moodWorkEffect;
         public final ForgeConfigSpec.LongValue payConfirmAbove;
         public final ForgeConfigSpec.BooleanValue mintToVault;
@@ -295,6 +299,19 @@ public final class KingdomWorldConfig {
                             "less makes them unhappy, up to twice as much makes them happier. Kings change the wages within maxWage.")
                     .defineListAllowEmpty("wages", io.github.sekerator.kingdomworld.core.economy.EconomyRules.DEFAULT_WAGES,
                             value -> value instanceof String text && io.github.sekerator.kingdomworld.core.economy.EconomyRules.parseWage(text).isPresent());
+            householdSharePercent = builder
+                    .comment("Share of every wage paid that the citizen takes home, in percent: it lies in the chest of the house as",
+                            "coins and buys a little food from the storehouses. The rest of the wage leaves the world. 0 keeps the",
+                            "houses empty.")
+                    .defineInRange("householdSharePercent", io.github.sekerator.kingdomworld.core.economy.HouseholdRules.DEFAULT.sharePercent(), 0, 100);
+            householdCoinsMax = builder
+                    .comment("Most money the chest of a house keeps as coins, in copper coins; what goes beyond leaves the world.")
+                    .defineInRange("householdCoinsMax", io.github.sekerator.kingdomworld.core.economy.HouseholdRules.DEFAULT.coinsMax(), 0L,
+                            1_000_000L);
+            householdFood = builder
+                    .comment("Items of food the chest of a house keeps at most; it is bought from the storehouses a little at a time,",
+                            "and only while they hold more than a reserve for every citizen.")
+                    .defineInRange("householdFood", io.github.sekerator.kingdomworld.core.economy.HouseholdRules.DEFAULT.foodItems(), 0, 64);
             moodWorkEffect = builder
                     .comment("How much mood changes the pace of work: 0.2 lets happy citizens work up to 20 percent faster and",
                             "miserable ones up to 20 percent slower. 0 turns it off.")
@@ -532,7 +549,8 @@ public final class KingdomWorldConfig {
 
             builder.comment("Protection of kingdom land against outsiders and members without the matching right.").push("protection");
             protectInteractions = builder
-                    .comment("Also protect doors, trapdoors, gates, buttons, levers, item frames and armor stands.")
+                    .comment("Also protect buttons, levers, repeaters, note blocks, item frames and armor stands. Doors, trapdoors and",
+                            "fence gates open to everybody; only the leaves of a city gate follow the rules of the gate.")
                     .define("protectInteractions", true);
             protectFromExplosions = builder
                     .comment("Explosions do not destroy blocks in kingdom land.")
@@ -543,6 +561,13 @@ public final class KingdomWorldConfig {
             allowFakePlayers = builder
                     .comment("Machines of other mods that act as fake players (Create deployers and the like) may act in kingdom land.")
                     .define("allowFakePlayers", true);
+            peaceBreaking = builder
+                    .comment("What breaking and placing blocks on the land of another kingdom is in peace. \"crime\": it is possible; in a",
+                            "city and at buildings, walls and roads of the kingdom a broken block drops nothing, is a crime (damaged",
+                            "property) and is put back, and blocks placed there are taken out again. \"forbidden\": it is refused, as",
+                            "before version 1.3. The throne, containers, beds, working blocks, land of a kingdom whose players are all",
+                            "away, explosions, fire, buckets and pistons across the border stay protected either way.")
+                    .defineInList("peaceBreaking", "crime", java.util.List.of("crime", "forbidden"));
             builder.pop();
 
             builder.comment("Map mods: land for client maps (JourneyMap, Xaero's maps) and web maps of the server (BlueMap, Dynmap).")
@@ -1522,6 +1547,19 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.LongValue maxEntryFee;
         public final ForgeConfigSpec.LongValue maxBounty;
         public final ForgeConfigSpec.IntValue slaveryWarnBlocks;
+        public final ForgeConfigSpec.IntValue fearSeconds;
+        public final ForgeConfigSpec.IntValue fearSightRadius;
+        public final ForgeConfigSpec.IntValue fearHearRadius;
+        public final ForgeConfigSpec.IntValue fearSpreadRadius;
+        public final ForgeConfigSpec.IntValue alarmSeconds;
+        public final ForgeConfigSpec.IntValue alarmRadius;
+        public final ForgeConfigSpec.IntValue ongoingSeconds;
+        public final ForgeConfigSpec.BooleanValue pursueCreative;
+        public final ForgeConfigSpec.IntValue vandalismFinePercent;
+        public final ForgeConfigSpec.IntValue vandalismReputation;
+        public final ForgeConfigSpec.IntValue restoreQuietSeconds;
+        public final ForgeConfigSpec.IntValue treasuryFinePercent;
+        public final ForgeConfigSpec.IntValue storehouseWatchBlocks;
 
         Law(ForgeConfigSpec.Builder builder) {
             io.github.sekerator.kingdomworld.core.law.LawRules.Builder d = new io.github.sekerator.kingdomworld.core.law.LawRules.Builder();
@@ -1581,6 +1619,35 @@ public final class KingdomWorldConfig {
             maxBounty = builder.comment("Highest reward for a head a king may set.").defineInRange("maxBounty", d.maxBounty, 0L, 1_000_000_000_000L);
             slaveryWarnBlocks = builder.comment("An owner with slaves is warned this many blocks before the land of a kingdom that forbids them.")
                     .defineInRange("slaveryWarnBlocks", d.slaveryWarnBlocks, 0, 256);
+            fearSeconds = builder.comment("Seconds a frightened citizen keeps running after the last blow it saw or heard. Soldiers and",
+                    "adventurers never run. 0 switches the fright off.").defineInRange("fearSeconds", d.fearTicks / 20, 0, 600);
+            fearSightRadius = builder.comment("How far a citizen sees a blow at a citizen or a soldier that frightens it, in blocks.")
+                    .defineInRange("fearSightRadius", d.fearSightRadius, 0, 64);
+            fearHearRadius = builder.comment("How far a citizen hears such a blow without seeing it, in blocks.")
+                    .defineInRange("fearHearRadius", d.fearHearRadius, 0, 64);
+            fearSpreadRadius = builder.comment("How far a running citizen frightens the others around it, once, in blocks.")
+                    .defineInRange("fearSpreadRadius", d.fearSpreadRadius, 0, 32);
+            alarmSeconds = builder.comment("Seconds an alarm lasts after the last blow or killing of the offender. While it lasts the soldiers",
+                    "of the city run to the place and chase the offender on the land of the kingdom.")
+                    .defineInRange("alarmSeconds", d.alarmTicks / 20, 1, 3_600);
+            alarmRadius = builder.comment("How far from the place of an alarm soldiers answer it at least, in blocks. A city answers as a whole:",
+                    "its wall and a little beyond count when that is more.").defineInRange("alarmRadius", d.alarmRadius, 16, 256);
+            ongoingSeconds = builder.comment("Seconds after a blow in which an attack counts as going on: the soldiers strike without calling out.",
+                    "After a killing they never call out while the alarm lasts.").defineInRange("ongoingSeconds", d.ongoingTicks / 20, 0, 600);
+            pursueCreative = builder.comment("Guards and soldiers answer a player in creative mode as any other: they run up, surround and",
+                    "strike. Their blows do no harm, so nothing is taken; the record stays until an operator pardons the player",
+                    "(/kingdomworld admin law pardon).").define("pursueCreative", d.pursueCreative);
+            vandalismFinePercent = builder.comment("Fine for breaking blocks of a city, a building, a wall or a road of a kingdom, in percent of",
+                    "their worth.").defineInRange("vandalismFinePercent", d.vandalismFinePercent, 0, 10_000);
+            vandalismReputation = builder.comment("Reputation damaged property costs.")
+                    .defineInRange("vandalismReputation", d.vandalismReputation, -100, 0);
+            restoreQuietSeconds = builder.comment("Seconds without new damage after which the broken blocks of a city are put back, a few a",
+                    "second and for free. They come back at once when the offender left the land.")
+                    .defineInRange("restoreQuietSeconds", d.restoreQuietTicks / 20, 0, 3_600);
+            treasuryFinePercent = builder.comment("Fine for a theft from the storehouses of a kingdom, in percent of the fine for a common theft.")
+                    .defineInRange("treasuryFinePercent", d.treasuryFinePercent, 100, 10_000);
+            storehouseWatchBlocks = builder.comment("A soldier this near a storehouse notices a theft from it at once, without seeing the thief.")
+                    .defineInRange("storehouseWatchBlocks", d.storehouseWatchBlocks, 0, 64);
             builder.pop();
         }
     }

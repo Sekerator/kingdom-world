@@ -93,8 +93,14 @@ final class LawLayoutCases {
         CrimeKind[] kinds = CrimeKind.values();
         for (int i = 0; i < count; i++) {
             CrimeKind kind = kinds[i % kinds.length];
-            rows.add(new LawViews.CrimeRow(kind, kind == CrimeKind.THEFT ? MUCH : 0, kind == CrimeKind.THEFT || kind == CrimeKind.TRESPASS ? ""
-                    : LONG_PLAYER, i % 2 == 0 ? 99_999 : 1));
+            // The longest lines: a theft from the house of a citizen and from the treasury, damaged property with its worth.
+            String victim = switch (kind) {
+                case THEFT -> (i / kinds.length) % 2 == 0 ? io.github.sekerator.kingdomworld.core.law.Victims.citizen(7919 * (i + 1), i % 2 == 1)
+                        : io.github.sekerator.kingdomworld.core.law.Victims.TREASURY;
+                case TRESPASS, VANDALISM -> "";
+                case ASSAULT, MURDER -> LONG_PLAYER;
+            };
+            rows.add(new LawViews.CrimeRow(kind, kind.adds() ? MUCH : 0, victim, i % 2 == 0 ? 99_999 : 1));
         }
         return rows;
     }

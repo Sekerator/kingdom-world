@@ -30,8 +30,11 @@ import java.util.Optional;
  */
 public final class SiegeSavedData extends SavedData {
     public static final String DATA_NAME = KingdomWorld.MOD_ID + "_siege";
-    /** Current layout of the saved data. Increase it together with a migration step. */
-    public static final int FORMAT_VERSION = 1;
+    /**
+     * Current layout of the saved data. Increase it together with a migration step. Format 2 adds to a damaged block whether
+     * it comes back for free (damaged in peace) and what a stranger placed over it; format 1 has neither and reads as it is.
+     */
+    public static final int FORMAT_VERSION = 2;
     static final String TAG_FORMAT_VERSION = "formatVersion";
 
     private static final Logger LOGGER = LogUtils.getLogger();

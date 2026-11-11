@@ -6,31 +6,61 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
- * The blocks of buildings and walls of a kingdom broken in a war, so that its builders put them back from the storehouses
- * after the war (or earlier, when no enemy was near for a while). Only the first state of a place is kept: a block broken,
- * placed again by the enemy and broken again is mended to what the kingdom built. Blocks players built outside the register
- * of buildings are not recorded; they are a risk of war.
+ * The damaged blocks of a kingdom, so that they are put back. There are two kinds. Blocks of buildings and walls broken in a
+ * war are mended by the builders from the storehouses after the war (or earlier, when no enemy was near for a while);
+ * blocks players built outside the register of buildings are not recorded then, they are a risk of war. Blocks of a city,
+ * a building, a wall or a road broken in peace (damaged property, a crime) are recorded as they stood, whatever they were,
+ * and come back for free once the offender is gone; a block a stranger placed in a city is recorded with what it covered
+ * and is taken out again.
+ *
+ * <p>Only the first state of a place is kept: a block broken, placed again by somebody else and broken again is mended to
+ * what the kingdom had there.
  */
 public final class WarDamage {
-    /** Most broken blocks kept for one kingdom; the oldest beyond go unmended. */
-    public static final int MAX_PER_KINGDOM = 4_096;
+    /**
+     * Most damaged blocks kept for one kingdom; the oldest beyond go unmended. A record is two short texts and a few
+     * numbers, about 300 bytes with its place in the map, so a kingdom whose city is being torn down holds 5 MB at most.
+     */
+    public static final int MAX_PER_KINGDOM = 16_384;
 
     /**
-     * A broken block.
+     * A damaged block.
      *
+     * @param war      the war it was broken in, 0 in peace
      * @param state    the block state as the world writes it, to put it back
-     * @param item     the item it is made from, to pay for it
-     * @param building the building of the register it belongs to, 0 for a city wall without one
+     * @param item     the item it is made from, to pay for it; empty when it is put back for free
+     * @param building the building of the register it belongs to, 0 for a city wall without one and for anything else
+     * @param free     whether the block comes back for free: damaged in peace, not in a war
+     * @param placed   the block state a stranger placed there since, to take it out; empty for none
      */
-    public record Entry(long war, UUID kingdom, String dimension, long pos, String state, String item, long building, long time) {
+    public record Entry(long war, UUID kingdom, String dimension, long pos, String state, String item, long building, long time, boolean free,
+                        String placed) {
         public Entry {
             Objects.requireNonNull(kingdom, "kingdom");
             Objects.requireNonNull(dimension, "dimension");
             state = state == null ? "" : state;
             item = item == null ? "" : item;
+            placed = placed == null ? "" : placed;
+        }
+
+        /**
+         * A block broken in a war, mended from the storehouses.
+         */
+        public Entry(long war, UUID kingdom, String dimension, long pos, String state, String item, long building, long time) {
+            this(war, kingdom, dimension, pos, state, item, building, time, false, "");
+        }
+
+        /**
+         * A block damaged in peace, put back for free.
+         *
+         * @param placed what a stranger placed there, empty when the block was only broken
+         */
+        public static Entry inPeace(UUID kingdom, String dimension, long pos, String state, String placed, long time) {
+            return new Entry(0, kingdom, dimension, pos, state, "", 0, time, true, placed);
         }
 
         String key() {
@@ -58,9 +88,47 @@ public final class WarDamage {
         return true;
     }
 
+    /**
+     * A stranger placed a block where a record is kept: the record remembers it, to take it out when the place is mended.
+     *
+     * @return whether a record of the place exists
+     */
+    public boolean placedOver(UUID kingdom, String dimension, long pos, String placed) {
+        LinkedHashMap<String, Entry> of = broken.get(kingdom);
+        Entry entry = of == null ? null : of.get(dimension + "@" + pos);
+        if (entry == null) {
+            return false;
+        }
+        of.put(entry.key(), new Entry(entry.war(), entry.kingdom(), entry.dimension(), entry.pos(), entry.state(), entry.item(), entry.building(),
+                entry.time(), entry.free(), placed));
+        return true;
+    }
+
+    public Optional<Entry> at(UUID kingdom, String dimension, long pos) {
+        LinkedHashMap<String, Entry> of = broken.get(kingdom);
+        return of == null ? Optional.empty() : Optional.ofNullable(of.get(dimension + "@" + pos));
+    }
+
     public List<Entry> of(UUID kingdom) {
         LinkedHashMap<String, Entry> of = broken.get(kingdom);
         return of == null ? List.of() : List.copyOf(of.values());
+    }
+
+    /**
+     * How many blocks of a kingdom wait to be put back for free.
+     */
+    public int countFree(UUID kingdom) {
+        LinkedHashMap<String, Entry> of = broken.get(kingdom);
+        if (of == null) {
+            return 0;
+        }
+        int count = 0;
+        for (Entry entry : of.values()) {
+            if (entry.free()) {
+                count++;
+            }
+        }
+        return count;
     }
 
     public int count(UUID kingdom) {
@@ -140,7 +208,8 @@ public final class WarDamage {
         for (Entry entry : List.copyOf(of.values())) {
             if (inArea.test(entry)) {
                 of.remove(entry.key());
-                record(new Entry(entry.war(), to, entry.dimension(), entry.pos(), entry.state(), entry.item(), entry.building(), entry.time()));
+                record(new Entry(entry.war(), to, entry.dimension(), entry.pos(), entry.state(), entry.item(), entry.building(), entry.time(),
+                        entry.free(), entry.placed()));
             }
         }
         if (of.isEmpty()) {

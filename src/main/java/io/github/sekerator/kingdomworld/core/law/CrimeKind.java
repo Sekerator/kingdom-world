@@ -15,7 +15,12 @@ public enum CrimeKind {
     /** Killed a citizen of the kingdom or a player on its land. */
     MURDER,
     /** Got into a city past its gates or without paying for the entry. */
-    TRESPASS;
+    TRESPASS,
+    /**
+     * Damaged property: broke blocks of a city, a building, a wall or a road of the kingdom. The blocks come back; the fine
+     * follows their worth.
+     */
+    VANDALISM;
 
     public String id() {
         return name().toLowerCase(Locale.ROOT);
@@ -23,6 +28,14 @@ public enum CrimeKind {
 
     public boolean petty() {
         return this != MURDER;
+    }
+
+    /**
+     * Whether acts of this kind close together make one crime whose worth adds up: thefts, and blocks broken one after
+     * another, so that a hundred blocks are not a hundred crimes.
+     */
+    public boolean adds() {
+        return this == THEFT || this == VANDALISM;
     }
 
     public static Optional<CrimeKind> byId(String id) {

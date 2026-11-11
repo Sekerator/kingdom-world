@@ -64,6 +64,33 @@ public final class LawRules {
     public final long maxBounty;
     /** Blocks from the border of a kingdom that forbids slaves at which an owner is warned. */
     public final int slaveryWarnBlocks;
+    /** Ticks a frightened citizen keeps running after the last blow it saw or heard. */
+    public final int fearTicks;
+    /** How far a citizen sees violence that frightens it, in blocks (a line of sight is needed). */
+    public final int fearSightRadius;
+    /** How far a citizen hears violence without seeing it, in blocks. */
+    public final int fearHearRadius;
+    /** How far a running citizen frightens the others once, in blocks. */
+    public final int fearSpreadRadius;
+    /** Ticks an alarm lasts after the last blow, killing or theft that feeds it. */
+    public final int alarmTicks;
+    /** How far from the place of an alarm soldiers answer it at least, in blocks; a city answers as a whole. */
+    public final int alarmRadius;
+    /** Ticks after a blow in which the attack counts as going on: the guards strike without calling out. */
+    public final int ongoingTicks;
+    /** Whether guards and soldiers answer a player in creative mode as any other (their blows do no harm). */
+    public final boolean pursueCreative;
+    /** Whether breaking blocks on the land of another kingdom in peace is a crime in its cities rather than refused. */
+    public final boolean breakingIsCrime;
+    /** Fine for damaged property, in percent of the worth of the broken blocks. */
+    public final int vandalismFinePercent;
+    public final int vandalismReputation;
+    /** Ticks without a new damage after which the blocks of a city are put back. */
+    public final int restoreQuietTicks;
+    /** The fine for a theft from the storehouses of the kingdom, in percent of the fine for a common theft. */
+    public final int treasuryFinePercent;
+    /** How near a storehouse a soldier notices a theft from it without seeing the thief, in blocks. */
+    public final int storehouseWatchBlocks;
 
     private LawRules(Builder b) {
         witnessRadius = Math.max(1, b.witnessRadius);
@@ -97,6 +124,20 @@ public final class LawRules {
         passTicks = Math.max(1, b.passTicks);
         maxBounty = clamp(b.maxBounty);
         slaveryWarnBlocks = Math.max(0, b.slaveryWarnBlocks);
+        fearTicks = Math.max(0, b.fearTicks);
+        fearSightRadius = Math.max(0, b.fearSightRadius);
+        fearHearRadius = Math.max(0, b.fearHearRadius);
+        fearSpreadRadius = Math.max(0, b.fearSpreadRadius);
+        alarmTicks = Math.max(20, b.alarmTicks);
+        alarmRadius = Math.max(16, b.alarmRadius);
+        ongoingTicks = Math.max(0, b.ongoingTicks);
+        pursueCreative = b.pursueCreative;
+        breakingIsCrime = b.breakingIsCrime;
+        vandalismFinePercent = Math.max(0, b.vandalismFinePercent);
+        vandalismReputation = b.vandalismReputation;
+        restoreQuietTicks = Math.max(0, b.restoreQuietTicks);
+        treasuryFinePercent = Math.max(100, b.treasuryFinePercent);
+        storehouseWatchBlocks = Math.max(0, b.storehouseWatchBlocks);
     }
 
     private static long clamp(long value) {
@@ -137,6 +178,25 @@ public final class LawRules {
     }
 
     /**
+     * The fine for a theft from the storehouses of the kingdom: the fine of a common theft raised by
+     * {@link #treasuryFinePercent}.
+     */
+    public long treasuryFine(long worth) {
+        long common = theftFine(worth);
+        return common <= 0 ? 0 : Math.max(common, Money.share(common, treasuryFinePercent, 100));
+    }
+
+    /**
+     * The fine for broken blocks worth this much, before the multiplier of the court.
+     */
+    public long vandalismFine(long worth) {
+        if (worth <= 0) {
+            return 0;
+        }
+        return Math.max(1, Money.share(worth, vandalismFinePercent, 100));
+    }
+
+    /**
      * Rules with every number settable, for the config and for tests.
      */
     public static final class Builder {
@@ -171,6 +231,20 @@ public final class LawRules {
         public long passTicks = CitizenNeeds.TICKS_PER_DAY;
         public long maxBounty = 1_000_000;
         public int slaveryWarnBlocks = 32;
+        public int fearTicks = 360;
+        public int fearSightRadius = 16;
+        public int fearHearRadius = 10;
+        public int fearSpreadRadius = 5;
+        public int alarmTicks = 1_200;
+        public int alarmRadius = 64;
+        public int ongoingTicks = 200;
+        public boolean pursueCreative = true;
+        public boolean breakingIsCrime = true;
+        public int vandalismFinePercent = 200;
+        public int vandalismReputation = -5;
+        public int restoreQuietTicks = 600;
+        public int treasuryFinePercent = 150;
+        public int storehouseWatchBlocks = 8;
 
         public LawRules build() {
             return new LawRules(this);

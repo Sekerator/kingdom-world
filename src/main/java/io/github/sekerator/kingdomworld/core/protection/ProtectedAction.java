@@ -12,7 +12,7 @@ public enum ProtectedAction {
     USE_ITEM(Permission.BUILD),
     /** Open a block with an inventory. */
     CONTAINER(Permission.CONTAINERS),
-    /** Doors, buttons, levers, item frames, armor stands. */
+    /** Buttons, levers, repeaters, item frames, armor stands and the leaves of city gates. Doors open to everybody. */
     INTERACT(Permission.INTERACT),
     /**
      * Hurting a citizen of the kingdom. In peacetime only members of that kingdom may; war adds an exemption.

@@ -103,6 +103,13 @@ public final class SiegeNbt {
                 d.putString("item", entry.item());
                 d.putLong("building", entry.building());
                 d.putLong("time", entry.time());
+                // Format 2: damage done in peace is put back for free, and remembers a block a stranger placed over it.
+                if (entry.free()) {
+                    d.putBoolean("free", true);
+                }
+                if (!entry.placed().isEmpty()) {
+                    d.putString("placed", entry.placed());
+                }
                 damage.add(d);
             }
         }
@@ -224,7 +231,8 @@ public final class SiegeNbt {
             CompoundTag d = damage.getCompound(i);
             try {
                 state.damage().record(new WarDamage.Entry(d.getLong("war"), d.getUUID("kingdom"), d.getString("dimension"), d.getLong("pos"),
-                        d.getString("state"), d.getString("item"), d.getLong("building"), d.getLong("time")));
+                        d.getString("state"), d.getString("item"), d.getLong("building"), d.getLong("time"), d.getBoolean("free"),
+                        d.getString("placed")));
             } catch (RuntimeException e) {
                 problems.add("damage " + i + ": " + e.getMessage());
             }

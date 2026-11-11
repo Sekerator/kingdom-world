@@ -105,7 +105,7 @@ public final class LawPolicy {
         if (offender.owner()) {
             return false;
         }
-        if (offender.hasRight() && kind == CrimeKind.THEFT) {
+        if (offender.hasRight() && kind.adds()) {
             return false;
         }
         for (Exemption exemption : exemptions) {

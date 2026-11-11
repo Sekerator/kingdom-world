@@ -78,6 +78,20 @@ public final class LawSettings {
         b.maxEntryFee = c.maxEntryFee.get();
         b.maxBounty = c.maxBounty.get();
         b.slaveryWarnBlocks = c.slaveryWarnBlocks.get();
+        b.fearTicks = c.fearSeconds.get() * 20;
+        b.fearSightRadius = c.fearSightRadius.get();
+        b.fearHearRadius = c.fearHearRadius.get();
+        b.fearSpreadRadius = c.fearSpreadRadius.get();
+        b.alarmTicks = c.alarmSeconds.get() * 20;
+        b.alarmRadius = c.alarmRadius.get();
+        b.ongoingTicks = c.ongoingSeconds.get() * 20;
+        b.pursueCreative = c.pursueCreative.get();
+        b.breakingIsCrime = !"forbidden".equals(KingdomWorldConfig.SERVER.peaceBreaking.get());
+        b.vandalismFinePercent = c.vandalismFinePercent.get();
+        b.vandalismReputation = c.vandalismReputation.get();
+        b.restoreQuietTicks = c.restoreQuietSeconds.get() * 20;
+        b.treasuryFinePercent = c.treasuryFinePercent.get();
+        b.storehouseWatchBlocks = c.storehouseWatchBlocks.get();
         return b;
     }
 

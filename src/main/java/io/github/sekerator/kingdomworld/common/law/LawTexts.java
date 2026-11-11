@@ -5,6 +5,7 @@ import io.github.sekerator.kingdomworld.core.economy.CurrencyUnits;
 import io.github.sekerator.kingdomworld.core.economy.Plurals;
 import io.github.sekerator.kingdomworld.core.law.Crime;
 import io.github.sekerator.kingdomworld.core.law.CrimeKind;
+import io.github.sekerator.kingdomworld.core.law.Victims;
 import io.github.sekerator.kingdomworld.core.law.Wanted;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -28,16 +29,36 @@ public final class LawTexts {
      * One crime on a record: «кража на 25 м. (3 раза)», «нападение на Радомира», «убийство Радомира».
      */
     public static MutableComponent crime(Crime crime, CurrencyUnits units) {
+        Component victim = victim(crime.victim());
         MutableComponent text = switch (crime.kind()) {
-            case THEFT -> Component.translatable(KEY + "record.theft", MoneyTexts.amount(crime.worth(), units));
-            case ASSAULT -> crime.victim().isEmpty() ? crime(CrimeKind.ASSAULT) : Component.translatable(KEY + "record.assault", crime.victim());
-            case MURDER -> crime.victim().isEmpty() ? crime(CrimeKind.MURDER) : Component.translatable(KEY + "record.murder", crime.victim());
+            case THEFT -> Victims.isTreasury(crime.victim())
+                    ? Component.translatable(KEY + "record.theft_treasury", MoneyTexts.amount(crime.worth(), units))
+                    : victim == null ? Component.translatable(KEY + "record.theft", MoneyTexts.amount(crime.worth(), units))
+                    : Component.translatable(KEY + "record.theft_from", victim, MoneyTexts.amount(crime.worth(), units));
+            case ASSAULT -> victim == null ? crime(CrimeKind.ASSAULT) : Component.translatable(KEY + "record.assault", victim);
+            case MURDER -> victim == null ? crime(CrimeKind.MURDER) : Component.translatable(KEY + "record.murder", victim);
             case TRESPASS -> crime(CrimeKind.TRESPASS);
+            case VANDALISM -> Component.translatable(KEY + "record.vandalism", MoneyTexts.amount(crime.worth(), units));
         };
         if (crime.count() > 1) {
             text = Component.translatable(KEY + "record.times", text, times(crime.count()));
         }
         return text;
+    }
+
+    /**
+     * Who suffered, as a record keeps it: the name of a citizen in the alphabet of the reader, the name of a player as it
+     * is, or {@code null} when the record names nobody.
+     */
+    @org.jetbrains.annotations.Nullable
+    public static Component victim(String victim) {
+        java.util.Optional<Victims.CitizenName> citizen = Victims.citizen(victim);
+        if (citizen.isPresent()) {
+            return io.github.sekerator.kingdomworld.common.citizen.CitizenTexts.name(citizen.get().nameSeed(),
+                    citizen.get().female() ? io.github.sekerator.kingdomworld.core.citizen.Gender.FEMALE
+                            : io.github.sekerator.kingdomworld.core.citizen.Gender.MALE);
+        }
+        return Victims.isName(victim) ? Component.literal(victim) : null;
     }
 
     public static MutableComponent times(long count) {

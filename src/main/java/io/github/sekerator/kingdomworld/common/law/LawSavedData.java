@@ -36,8 +36,12 @@ import java.util.Optional;
  */
 public final class LawSavedData extends SavedData {
     public static final String DATA_NAME = KingdomWorld.MOD_ID + "_law";
-    /** Current layout of the saved data. Increase it together with a migration step. */
-    public static final int FORMAT_VERSION = 1;
+    /**
+     * Current layout of the saved data. Increase it together with a migration step. Format 2 knows the crime of damaged
+     * property and writes into a crime who suffered from it: a citizen (by the seed of its name) or the treasury. Format 1
+     * holds neither, so its records read as they are: a theft without a victim stays a common theft.
+     */
+    public static final int FORMAT_VERSION = 2;
     static final String TAG_FORMAT_VERSION = "formatVersion";
 
     private static final Logger LOGGER = LogUtils.getLogger();

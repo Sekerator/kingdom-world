@@ -211,6 +211,7 @@ public final class LawState {
                 case ASSAULT -> rules.assaultReputation;
                 case MURDER -> rules.murderReputation;
                 case TRESPASS -> rules.trespassReputation;
+                case VANDALISM -> rules.vandalismReputation;
             };
             changeReputation(kingdomId, player, drop);
         }

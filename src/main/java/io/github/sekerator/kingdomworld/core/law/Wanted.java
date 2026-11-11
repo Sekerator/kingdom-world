@@ -10,8 +10,8 @@ import java.util.UUID;
 
 /**
  * A player wanted by one kingdom: the crimes on record and what the court made of them. Petty crimes cost a fine (twice
- * the worth for a theft); a murder costs the life of the murderer unless the court replaced it with a fine. Changed only
- * through {@link LawState}.
+ * the worth for a theft and for damaged property, more for a theft from the storehouses of the kingdom); a murder costs the
+ * life of the murderer unless the court replaced it with a fine. Changed only through {@link LawState}.
  */
 public final class Wanted {
     /** Most crimes kept on one record; later acts add to the last crime of their kind. */
@@ -118,9 +118,10 @@ public final class Wanted {
         long sum = 0;
         for (Crime crime : crimes) {
             long part = switch (crime.kind()) {
-                case THEFT -> rules.theftFine(crime.worth());
+                case THEFT -> Victims.isTreasury(crime.victim()) ? rules.treasuryFine(crime.worth()) : rules.theftFine(crime.worth());
                 case ASSAULT -> Money.multiplyCapped(rules.assaultFine, crime.count());
                 case TRESPASS -> rules.trespassFine;
+                case VANDALISM -> rules.vandalismFine(crime.worth());
                 case MURDER -> commuted ? rules.murderFine : 0;
             };
             sum = Money.addCapped(sum, part);
@@ -148,8 +149,8 @@ public final class Wanted {
     boolean add(CrimeKind kind, long worth, String victim, long now, int mergeTicks) {
         for (int i = crimes.size() - 1; i >= 0; i--) {
             Crime crime = crimes.get(i);
-            boolean same = crime.kind() == kind && (kind == CrimeKind.THEFT || kind == CrimeKind.ASSAULT && crime.victim().equals(victim == null
-                    ? "" : victim));
+            // Thefts from one victim, blocks broken one after another and blows at one victim are one crime each.
+            boolean same = crime.kind() == kind && (kind.adds() || kind == CrimeKind.ASSAULT) && crime.victim().equals(victim == null ? "" : victim);
             if (same && now - crime.time() <= mergeTicks) {
                 crimes.set(i, crime.and(worth, now));
                 fineOverride = -1;
