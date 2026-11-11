@@ -260,7 +260,9 @@ public final class Equipment {
         if (current.isEmpty() || need.matches(current)) {
             return;
         }
-        ItemStack rest = KingdomStorage.insert(server, kingdomId, current, near);
-        hands.set(slot, rest);
+        // Gear a kingdom issued to a soldier never reaches the storehouses with its mark: that of an officer is gone with the
+        // post, that of a fighter goes back as plain gear.
+        ItemStack plain = io.github.sekerator.kingdomworld.common.army.ArmyKits.released(current);
+        hands.set(slot, plain.isEmpty() ? ItemStack.EMPTY : KingdomStorage.insert(server, kingdomId, plain, near));
     }
 }

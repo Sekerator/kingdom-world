@@ -387,6 +387,19 @@ public final class LawEvents {
     }
 
     /**
+     * A player struck a citizen whose shield took the blow. No harm was done, but it is an assault all the same: the alarm
+     * is raised and the fight counts from this blow, as if it had landed.
+     */
+    public static void wardedOff(CitizenEntity citizen, ServerPlayer player) {
+        if (citizen.level().isClientSide || citizen.kingdomId() == null || player instanceof FakePlayer) {
+            return;
+        }
+        UUID land = KingdomWorldApi.ownerAt(citizen.level(), citizen.blockPosition());
+        UUID kingdom = land != null ? land : citizen.kingdomId();
+        LawWork.deed(player, citizen.blockPosition(), kingdom, CrimeKind.ASSAULT, 0, victim(citizen), null, false, citizen);
+    }
+
+    /**
      * A citizen as the victim a record names.
      */
     private static String victim(CitizenEntity citizen) {

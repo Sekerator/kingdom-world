@@ -107,13 +107,20 @@ public final class ArmySavedData extends SavedData {
             bestEffort(tag);
             return;
         }
-        List<String> problems = ArmyNbt.read(tag, state);
+        List<String> notes = new java.util.ArrayList<>();
+        List<String> problems = ArmyNbt.read(tag, state, notes);
+        // Two soldiers on one post is what a stand-in for an unknown post cannot cause: a stand-in is always a fighter.
         problems.addAll(state.verify());
+        for (String note : notes) {
+            LOGGER.warn("Army data: {}", note);
+        }
         if (!problems.isEmpty()) {
             lock(tag, problems.size() + " unreadable part(s): " + String.join("; ", problems));
             return;
         }
-        setDirty(false);
+        // A branch or a post this version does not know is no reason to shut the whole army: the soldier is kept with a
+        // stand-in, and the data is saved as it is understood now.
+        setDirty(!notes.isEmpty());
         if (version < BRANCHES_VERSION) {
             // Data older than the guard and the army: soldiers whose squad holds a point, guards an area or walks a patrol
             // are the guard, the others the army, and all of them are fighters.

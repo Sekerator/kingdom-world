@@ -645,6 +645,156 @@ public final class GuardArmyGameTests {
         helper.succeed();
     }
 
+    // ---------------------------------------------------------------- issued gear and other professions
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_guardarmy_profession")
+    public static void issuedGearNeverReachesTheStorehousesWithItsMarkWhenAProfessionChanges(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos[] area = area(helper, 9, 9);
+        noon(level);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Changed Trade", UUID.randomUUID());
+        CitizenGameTests.storehouse(helper, 1, 1, 1);
+        fund(helper, kingdom, 50_000_000L);
+        Citizen officer = soldier(helper, kingdom, 4, 4);
+        Citizen fighter = soldier(helper, kingdom, 6, 4);
+        helper.assertTrue(ArmyStaff.appoint(server, null, officer.id(), Post.CAPTAIN).ok(), "The soldier got no post");
+        helper.assertTrue(ArmyKits.issue(server, officer, record(server, officer), false).whole()
+                && ArmyKits.issue(server, fighter, record(server, fighter), false).whole(), "The soldiers got no kits");
+        java.util.function.LongSupplier marked = () -> KingdomStorage.count(server, kingdom.id(), ArmyKits::isIssued);
+        java.util.function.ToLongFunction<Item> stored = item -> KingdomStorage.count(server, kingdom.id(), stack -> stack.is(item));
+        helper.assertTrue(marked.getAsLong() == 0 && ArmyKits.isOfficerIssue(ArmyWork.hands(server, officer.id()).get(EquipmentSlot.MAINHAND))
+                && ArmyKits.isOfficerIssue(ArmyWork.hands(server, officer.id()).get(EquipmentSlot.OFFHAND)), "The captain holds no issued gear");
+        // A warrior becomes an archer: what it held does not suit the new work and leaves its hands. The sword and the
+        // shield of the post are gone; they do not lie in a storehouse for anybody to take.
+        helper.assertTrue(ArmyWork.recruit(server, null, kingdom.id(), officer.id(), "archer").ok(), "The captain did not become an archer");
+        helper.assertTrue(marked.getAsLong() == 0 && stored.applyAsLong(Items.NETHERITE_SWORD) == 0 && stored.applyAsLong(Items.SHIELD) == 0,
+                "Issued gear of an officer lies in the storehouses: " + marked.getAsLong() + " marked, "
+                        + stored.applyAsLong(Items.NETHERITE_SWORD) + " sword(s), " + stored.applyAsLong(Items.SHIELD) + " shield(s)");
+        helper.assertTrue(!ArmyKits.isIssued(ArmyWork.hands(server, officer.id()).get(EquipmentSlot.MAINHAND))
+                && ArmyWork.hands(server, officer.id()).get(EquipmentSlot.OFFHAND).isEmpty(), "The captain still holds the gear of a warrior");
+        helper.assertTrue(record(server, officer).post() == Post.CAPTAIN
+                && ArmyKits.isOfficerIssue(ArmyWork.hands(server, officer.id()).get(EquipmentSlot.CHEST)), "The captain lost its post or its armor");
+        // The gear of a fighter comes back as plain gear: one sword and one shield, without the mark of the issue.
+        helper.assertTrue(ArmyWork.recruit(server, null, kingdom.id(), fighter.id(), "archer").ok(), "The fighter did not become an archer");
+        ItemStack inHand = ArmyWork.hands(server, fighter.id()).get(EquipmentSlot.MAINHAND);
+        helper.assertTrue(marked.getAsLong() == 0 && !ArmyKits.isIssued(inHand), "Gear of a fighter kept the mark of the issue");
+        helper.assertTrue(stored.applyAsLong(Items.IRON_SWORD) + (inHand.is(Items.IRON_SWORD) ? 1 : 0) == 1
+                && stored.applyAsLong(Items.SHIELD) == 1, "The sword and the shield of the fighter did not come back: "
+                + stored.applyAsLong(Items.IRON_SWORD) + " sword(s), " + stored.applyAsLong(Items.SHIELD) + " shield(s)");
+        // Somebody else gives the captain peaceful work, as a ruler or an operator may: none of its issued gear is left,
+        // on it or in the storehouses.
+        KingdomWorldApi.state(server).citizens().setProfession(officer, io.github.sekerator.kingdomworld.core.citizen.Professions.FARMER.id());
+        io.github.sekerator.kingdomworld.common.citizen.CitizenActions.afterProfessionChange(server, officer);
+        ArmyWork.tick(server);
+        helper.assertTrue(ArmyWork.state(server).soldier(officer.id()).isEmpty(), "A farmer is still a soldier");
+        for (EquipmentSlot slot : io.github.sekerator.kingdomworld.common.citizen.GearRegistry.SLOTS) {
+            helper.assertTrue(!ArmyKits.isIssued(ArmyWork.hands(server, officer.id()).get(slot)), "A farmer wears issued gear in " + slot);
+        }
+        helper.assertTrue(marked.getAsLong() == 0 && stored.applyAsLong(Items.NETHERITE_CHESTPLATE) == 0
+                && stored.applyAsLong(Items.NETHERITE_HELMET) == 0, "Issued armor of an officer lies in the storehouses");
+        helper.assertTrue(officer.maxHealth() == Citizen.MAX_HEALTH, "A farmer has the health of a soldier: " + officer.maxHealth());
+        end(helper, kingdom, area, List.of(), officer, fighter);
+        helper.succeed();
+    }
+
+    // ---------------------------------------------------------------- shields
+
+    /**
+     * A soldier with a shield that looks east, where the players of these tests stand.
+     */
+    private static CitizenEntity shieldBearer(GameTestHelper helper, Citizen citizen, int x, int z) {
+        CitizenEntity body = body(helper, citizen, x, z, false);
+        body.setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.SHIELD));
+        body.setYRot(-90.0f);
+        body.setYHeadRot(-90.0f);
+        return body;
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_guardarmy_shield_law")
+    public static void aBlowAShieldTookIsAnAssaultAllTheSame(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos[] area = area(helper, 9, 9);
+        noon(level);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Shield Wall", UUID.randomUUID());
+        LawRules.Builder law = LawSettings.configured();
+        law.reportMinTicks = 1_000_000;
+        law.reportMaxTicks = 1_000_000;
+        LawSettings.override(law.build());
+        ForceRules.Builder force = ArmySettings.configuredForce();
+        force.blockChance = 0.9;
+        ArmySettings.overrideForce(force.build());
+        Citizen guard = soldier(helper, kingdom, 4, 4);
+        CitizenEntity body = shieldBearer(helper, guard, 4, 4);
+        List<ServerPlayer> players = new ArrayList<>();
+        boolean warded = false;
+        // Nine blows in ten are warded off; every blow comes from a player nobody has seen before, so that the first one
+        // the shield takes is the only thing the law knows of that player.
+        for (int i = 0; i < 40 && !warded; i++) {
+            ServerPlayer striker = player(helper, UUID.randomUUID(), "kw-striker-" + i, 6, 4);
+            players.add(striker);
+            body.invulnerableTime = 0;
+            body.setHealth(body.getMaxHealth());
+            int worn = body.getItemBySlot(EquipmentSlot.OFFHAND).getDamageValue();
+            helper.assertTrue(LawAlarms.of(server, kingdom.id(), striker.getUUID()).isEmpty(), "An alarm for a player who did nothing");
+            body.hurt(level.damageSources().playerAttack(striker), 2.0f);
+            if (body.getHealth() < body.getMaxHealth()) {
+                continue;
+            }
+            warded = true;
+            helper.assertTrue(body.getItemBySlot(EquipmentSlot.OFFHAND).getDamageValue() == worn + 1, "The shield that took the blow did not wear");
+            Alarm alarm = LawAlarms.of(server, kingdom.id(), striker.getUUID()).orElseThrow(() -> new IllegalStateException(
+                    "A blow the shield took raised no alarm"));
+            helper.assertTrue(alarm.violent(LawWork.now(server), LawSettings.rules()) && alarm.fightTicks(LawWork.now(server) + 20) == 20,
+                    "The fight does not count from the blow the shield took");
+            Wanted wanted = LawWork.state(server).wanted(kingdom.id(), striker.getUUID()).orElseThrow(() -> new IllegalStateException(
+                    "A blow at a soldier the shield took is no crime"));
+            helper.assertTrue(wanted.crimes().size() == 1 && wanted.crimes().get(0).kind() == io.github.sekerator.kingdomworld.core.law.CrimeKind.ASSAULT,
+                    "The record is wrong: " + wanted.crimes());
+            helper.assertTrue(ArmyWork.mayAttack(server, kingdom.id(), striker), "The soldier may not answer a blow its shield took");
+        }
+        helper.assertTrue(warded, "No blow of forty was warded off at nine chances in ten");
+        end(helper, kingdom, area, players, guard);
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_guardarmy_shield_once")
+    public static void theShieldIsTriedOnceForABlowThatLands(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos[] area = area(helper, 9, 9);
+        noon(level);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest One Blow", UUID.randomUUID());
+        noShields();
+        Citizen guard = soldier(helper, kingdom, 4, 4);
+        CitizenEntity body = shieldBearer(helper, guard, 4, 4);
+        ServerPlayer striker = player(helper, UUID.randomUUID(), "kw-flurry", 6, 4);
+        striker.setGameMode(GameType.CREATIVE);
+        // A blow lands. For half a second the body takes no other, though the game asks about every attack.
+        body.hurt(level.damageSources().playerAttack(striker), 2.0f);
+        float health = body.getHealth();
+        int worn = body.getItemBySlot(EquipmentSlot.OFFHAND).getDamageValue();
+        helper.assertTrue(health < body.getMaxHealth() && body.invulnerableTime > 10, "The blow did not land");
+        ForceRules.Builder force = ArmySettings.configuredForce();
+        force.blockChance = 0.9;
+        ArmySettings.overrideForce(force.build());
+        for (int i = 0; i < 60; i++) {
+            body.hurt(level.damageSources().playerAttack(striker), 2.0f);
+        }
+        // None of them was a blow: the shield did not wear and the chance was not tried sixty times.
+        helper.assertTrue(body.getHealth() == health, "A blow landed on a body that takes none: " + body.getHealth());
+        helper.assertTrue(body.getItemBySlot(EquipmentSlot.OFFHAND).getDamageValue() == worn, "The shield wore by "
+                + (body.getItemBySlot(EquipmentSlot.OFFHAND).getDamageValue() - worn) + " for attacks that were no blows");
+        // The next blow that would land is warded off or lands, once.
+        body.invulnerableTime = 0;
+        body.hurt(level.damageSources().playerAttack(striker), 2.0f);
+        int after = body.getItemBySlot(EquipmentSlot.OFFHAND).getDamageValue();
+        helper.assertTrue(after == worn + 1, "One blow wore the shield by " + (after - worn));
+        end(helper, kingdom, area, List.of(striker), guard);
+        helper.succeed();
+    }
+
     // ---------------------------------------------------------------- old data
 
     @GameTest(template = EMPTY, batch = "kingdomworld_guardarmy_data")
@@ -695,6 +845,34 @@ public final class GuardArmyGameTests {
             helper.assertTrue(soldier.post() == Post.FIGHTER, "Old data made an officer");
         }
         helper.assertTrue(migrated.save(new CompoundTag()).getInt("formatVersion") == 3, "Taken over data is not saved in format 3");
+        // A branch or a post this version does not know shuts nothing: the soldier is kept, as a fighter of the guard.
+        CompoundTag strange = saved.copy();
+        ListTag odd = strange.getList("soldiers", Tag.TAG_COMPOUND);
+        for (int i = 0; i < odd.size(); i++) {
+            if (odd.getCompound(i).getUUID("citizen").equals(idle.id())) {
+                odd.getCompound(i).putString("branch", "navy");
+                odd.getCompound(i).putString("post", "admiral");
+            }
+        }
+        CompoundTag lostAtSea = new CompoundTag();
+        lostAtSea.putUUID("kingdom", kingdom.id());
+        lostAtSea.putString("branch", "navy");
+        lostAtSea.putInt("count", 5);
+        strange.getList("losses", Tag.TAG_COMPOUND).add(lostAtSea);
+        ArmySavedData kept = ArmySavedData.load(strange);
+        helper.assertTrue(!kept.isReadOnly(), "An unknown branch shut the whole army: " + kept.readOnlyReason());
+        helper.assertTrue(kept.state().soldiersOf(kingdom.id()).size() == ArmyWork.state(server).soldiersOf(kingdom.id()).size(),
+                "A soldier was lost with its unknown branch");
+        helper.assertTrue(kept.state().soldier(idle.id()).map(soldier -> soldier.branch() == Branch.GUARD && soldier.post() == Post.FIGHTER)
+                .orElse(false), "A soldier of an unknown branch and post is no fighter of the guard");
+        helper.assertTrue(kept.state().soldier(holding.id()).map(soldier -> soldier.branch() == Branch.GUARD).orElse(false)
+                && kept.state().soldier(marching.id()).isPresent() && kept.state().squadsOf(kingdom.id()).size() == 2,
+                "The other soldiers and their squads did not come through");
+        helper.assertTrue(kept.state().losses(kingdom.id(), Branch.GUARD) == 1 && kept.state().losses(kingdom.id(), Branch.ARMY) == 0,
+                "The fallen of an unknown branch were counted somewhere");
+        // What was understood with a stand-in is saved as it is understood.
+        helper.assertTrue(kept.isDirty() && kept.save(new CompoundTag()).getList("soldiers", Tag.TAG_COMPOUND).stream()
+                .noneMatch(entry -> ((CompoundTag) entry).getString("branch").equals("navy")), "The stand-in is not saved");
         // Data of a newer format is kept as it is.
         CompoundTag newer = saved.copy();
         newer.putInt("formatVersion", 4);

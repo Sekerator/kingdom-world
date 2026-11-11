@@ -43,6 +43,7 @@ public final class ArmyEvents {
     public static void register() {
         MinecraftForge.EVENT_BUS.addListener(ArmyEvents::onServerTick);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGH, false, LivingAttackEvent.class, ArmyEvents::onAttack);
+        MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, LivingAttackEvent.class, ArmyEvents::onShield);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOW, false, LivingHurtEvent.class, ArmyEvents::onHurt);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, LivingDeathEvent.class, ArmyEvents::onDeath);
         // Issued gear is sorted out before the trophies mark what fell.
@@ -73,12 +74,6 @@ public final class ArmyEvents {
             event.setCanceled(true);
             return;
         }
-        CitizenEntity shielded = soldier(victim);
-        if (shielded != null && event.getAmount() > 0 && ArmyForce.blocks(shielded, event.getSource())) {
-            // The shield took the blow.
-            event.setCanceled(true);
-            return;
-        }
         Entity source = event.getSource().getEntity();
         if (source instanceof Mob mob && source instanceof Enemy && !(source instanceof CitizenEntity)) {
             UUID kingdom = null;
@@ -90,6 +85,26 @@ public final class ArmyEvents {
             if (kingdom != null && kingdom.equals(KingdomWorldApi.ownerAt(victim.level(), victim.blockPosition()))) {
                 ArmyWork.raiseAlarm(kingdom, mob, KingdomWorldApi.gameTime(server));
             }
+        }
+    }
+
+    /**
+     * A soldier wards a blow off with its shield. Last of all who hear of an attack: a blow somebody refused is no blow, and
+     * the monsters and the law have heard of the attack by now. A blow of a player the shield took is an assault all the
+     * same, so the law is told of it.
+     */
+    private static void onShield(LivingAttackEvent event) {
+        LivingEntity victim = event.getEntity();
+        if (victim.level().isClientSide() || victim.getServer() == null || event.getAmount() <= 0) {
+            return;
+        }
+        CitizenEntity shielded = soldier(victim);
+        if (shielded == null || !ArmyForce.blocks(shielded, event.getSource())) {
+            return;
+        }
+        event.setCanceled(true);
+        if (event.getSource().getEntity() instanceof ServerPlayer striker) {
+            io.github.sekerator.kingdomworld.common.law.LawEvents.wardedOff(shielded, striker);
         }
     }
 

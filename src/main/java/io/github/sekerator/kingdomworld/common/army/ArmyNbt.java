@@ -19,6 +19,7 @@ import net.minecraft.nbt.Tag;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -256,15 +257,39 @@ final class ArmyNbt {
      * @return what could not be read
      */
     static List<String> read(CompoundTag tag, ArmyState army) {
+        return read(tag, army, new ArrayList<>());
+    }
+
+    /**
+     * Reads everything that can be read into an empty army.
+     *
+     * @param notes what was read with a stand-in for a value this version does not know: a soldier of an unknown branch
+     *              serves in the guard, one with an unknown post is a fighter, and nobody is lost for it
+     * @return what could not be read
+     */
+    static List<String> read(CompoundTag tag, ArmyState army, List<String> notes) {
         List<String> problems = new ArrayList<>();
         for (CompoundTag entry : list(tag, SOLDIERS, problems)) {
             try {
+                UUID citizen = uuid(entry, "citizen");
                 // Data older than the branches names none: such soldiers get theirs by the orders of their squads.
-                Branch branch = entry.contains("branch") ? Branch.byId(entry.getString("branch"))
-                        .orElseThrow(() -> new IllegalArgumentException("unknown branch '" + entry.getString("branch") + "'")) : Branch.GUARD;
-                Post post = entry.contains("post") ? Post.byId(entry.getString("post"))
-                        .orElseThrow(() -> new IllegalArgumentException("unknown post '" + entry.getString("post") + "'")) : Post.FIGHTER;
-                army.restoreSoldier(new Soldier(uuid(entry, "citizen"), uuid(entry, "kingdom"), entry.getLong("experience"),
+                Branch branch = Branch.GUARD;
+                if (entry.contains("branch")) {
+                    Optional<Branch> known = Branch.byId(entry.getString("branch"));
+                    if (known.isEmpty()) {
+                        notes.add("soldier " + citizen + " serves in an unknown branch '" + entry.getString("branch") + "': it is a guard now");
+                    }
+                    branch = known.orElse(Branch.GUARD);
+                }
+                Post post = Post.FIGHTER;
+                if (entry.contains("post")) {
+                    Optional<Post> known = Post.byId(entry.getString("post"));
+                    if (known.isEmpty()) {
+                        notes.add("soldier " + citizen + " holds an unknown post '" + entry.getString("post") + "': it is a fighter now");
+                    }
+                    post = known.orElse(Post.FIGHTER);
+                }
+                army.restoreSoldier(new Soldier(citizen, uuid(entry, "kingdom"), entry.getLong("experience"),
                         entry.getInt("kills"), entry.getInt("battles"), entry.getLong("recruited"), branch, post));
             } catch (RuntimeException e) {
                 problems.add("soldier: " + e.getMessage());
@@ -272,17 +297,26 @@ final class ArmyNbt {
         }
         for (CompoundTag entry : list(tag, LOSSES, problems)) {
             try {
-                army.restoreLosses(uuid(entry, "kingdom"), Branch.byId(entry.getString("branch"))
-                        .orElseThrow(() -> new IllegalArgumentException("unknown branch")), entry.getInt("count"));
+                Optional<Branch> branch = Branch.byId(entry.getString("branch"));
+                if (branch.isEmpty()) {
+                    // A count of the fallen of a branch nobody knows replaces nobody: it is left out, and no soldier with it.
+                    notes.add("losses of an unknown branch '" + entry.getString("branch") + "' are left out");
+                    continue;
+                }
+                army.restoreLosses(uuid(entry, "kingdom"), branch.get(), entry.getInt("count"));
             } catch (RuntimeException e) {
                 problems.add("losses: " + e.getMessage());
             }
         }
         for (CompoundTag entry : list(tag, VACANCIES, problems)) {
             try {
-                army.restoreVacancy(uuid(entry, "kingdom"), Branch.byId(entry.getString("branch"))
-                                .orElseThrow(() -> new IllegalArgumentException("unknown branch")),
-                        Post.byId(entry.getString("post")).orElseThrow(() -> new IllegalArgumentException("unknown post")), entry.getLong("day"));
+                Optional<Branch> branch = Branch.byId(entry.getString("branch"));
+                Optional<Post> post = Post.byId(entry.getString("post"));
+                if (branch.isEmpty() || post.isEmpty() || !post.get().officer()) {
+                    notes.add("a vacant post '" + entry.getString("post") + "' of the branch '" + entry.getString("branch") + "' is left out");
+                    continue;
+                }
+                army.restoreVacancy(uuid(entry, "kingdom"), branch.get(), post.get(), entry.getLong("day"));
             } catch (RuntimeException e) {
                 problems.add("vacancy: " + e.getMessage());
             }

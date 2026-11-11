@@ -185,12 +185,18 @@ public final class ArmyForce {
 
     /**
      * Whether a soldier wards a blow off with its shield: a blow or an arrow from the front that a shield can stop, by the
-     * chance of the config. An axe gets through and keeps the shield down for a while, as it does with players.
+     * chance of the config, tried once for every blow that would land. An axe gets through and keeps the shield down for a
+     * while, as it does with players.
      */
     static boolean blocks(CitizenEntity body, DamageSource source) {
         double chance = ArmySettings.force().blockChance;
         if (chance <= 0.0 || !ArmyGear.isShield(body.getItemBySlot(EquipmentSlot.OFFHAND)) || source.is(DamageTypeTags.BYPASSES_SHIELD)
                 || !Professions.isMilitary(body.professionId())) {
+            return false;
+        }
+        if (body.invulnerableTime > 10 && !source.is(DamageTypeTags.BYPASSES_COOLDOWN)) {
+            // Right after a blow the body takes no other: the game asks about every such attack, but none of them is a
+            // blow to ward off, so the shield neither wears nor is the chance tried again.
             return false;
         }
         Vec3 from = source.getSourcePosition();
