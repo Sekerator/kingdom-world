@@ -47,8 +47,13 @@ import java.util.UUID;
 public final class RulerGameTests {
     /** Steps of the jobs of rulers a test runs at most. */
     private static final int JOB_STEPS = 400;
-    /** Blocks east of the place where a kingdom of players is founded: as close as the rules of founding allow. */
-    private static final int NEIGHBOURS = 136;
+    /**
+     * Blocks east of a place where a kingdom of players is founded: as close as the rules of founding allow, a chunk beyond the
+     * land of the capital and the distance kingdoms keep.
+     */
+    private static int neighboursAt(NpcSite site) {
+        return (NpcGameTests.landRadius(site) + KingdomWorldApi.rules().minChunksFromOtherKingdom() + 1) * 16 + 16;
+    }
 
     private RulerGameTests() {
     }
@@ -89,15 +94,36 @@ public final class RulerGameTests {
                         null);
             }
         }
+        // A capital of districts keeps bunks of its barracks free for soldiers to come: newcomers take them and every other free
+        // bed, so that the beds are taken.
+        int free = io.github.sekerator.kingdomworld.common.npc.NpcSettings.rulers().freeBeds();
+        io.github.sekerator.kingdomworld.core.citizen.WorldPos square = new io.github.sekerator.kingdomworld.core.citizen.WorldPos(
+                io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level), site.x(), site.groundY() + 1, site.z());
+        for (int i = 0; i < 64; i++) {
+            io.github.sekerator.kingdomworld.common.citizen.CitizenActions.Summary summary =
+                    io.github.sekerator.kingdomworld.common.citizen.CitizenActions.summary(server, id);
+            if (summary.bedsTotal() - summary.bedsUsed() <= free
+                    || io.github.sekerator.kingdomworld.common.citizen.CitizenLife.arrive(server, id, square, false).isEmpty()) {
+                break;
+            }
+        }
+        io.github.sekerator.kingdomworld.common.citizen.CitizenActions.Summary taken =
+                io.github.sekerator.kingdomworld.common.citizen.CitizenActions.summary(server, id);
+        // The rooms of the tavern are for guests: no citizen takes them, though they count among the beds of the kingdom.
+        int guests = taken.bedsTotal() - taken.bedsUsed();
+        helper.assertTrue(guests <= free + 4, "Beds are still free: " + taken.bedsUsed() + " of " + taken.bedsTotal());
+        if (guests > free) {
+            io.github.sekerator.kingdomworld.core.npc.RulerRules r = io.github.sekerator.kingdomworld.common.npc.NpcSettings.rulers();
+            io.github.sekerator.kingdomworld.common.npc.NpcSettings.overrideRulers(new io.github.sekerator.kingdomworld.core.npc.RulerRules(
+                    r.turnEveryDays(), r.decisionsPerTurn(), r.decreesPerDay(), r.maxChunks(), r.chunksPerClaim(), guests,
+                    r.storageFullPercent(), r.roles(), r.townPopulation(), r.maxTowns(), r.reserveDays(), r.soldiersPermille(),
+                    r.slackPermille(), r.roadDistance(), r.festivalMood(), r.growthChunks()));
+        }
         boolean laid = false;
-        for (int turn = 0; turn < 4 && !laid; turn++) {
-            Optional<RulerMind.Plan> plan = NpcRulers.turn(server, NpcWork.kingdom(server, id).orElse(npc), day, true);
-            helper.assertTrue(plan.isPresent(), "The ruler took no turn");
-            NpcRulers.runJobs(server, JOB_STEPS);
-            boolean wanted = plan.get().decisions().stream().anyMatch(d -> d.kind() == RulerDecision.Kind.BUILD && d.subject().equals("house"))
-                    || plan.get().needs().stream().anyMatch(n -> n.kind() == RulerMemory.NeedKind.BUILDING && n.subject().equals("house"));
-            helper.assertTrue(wanted || turn > 0, "The beds are taken but the ruler wants no house: " + plan.get());
-            laid = house(server, id).isPresent();
+        try {
+            laid = layOutAHouse(helper, server, id, npc, day);
+        } finally {
+            io.github.sekerator.kingdomworld.common.npc.NpcSettings.overrideRulers(null);
         }
         helper.assertTrue(laid, "No house was laid out: " + NpcWork.state(server).ruler(id).needs() + "; " + NpcRulers.lastBuilds(id));
         Construction house = house(server, id).orElseThrow();
@@ -119,6 +145,25 @@ public final class RulerGameTests {
         });
     }
 
+    /**
+     * Turns of a ruler whose beds are taken until a house is laid out, four at most.
+     *
+     * @return whether a house was laid out
+     */
+    private static boolean layOutAHouse(GameTestHelper helper, MinecraftServer server, UUID id, NpcKingdom npc, long day) {
+        boolean laid = false;
+        for (int turn = 0; turn < 4 && !laid; turn++) {
+            Optional<RulerMind.Plan> plan = NpcRulers.turn(server, NpcWork.kingdom(server, id).orElse(npc), day, true);
+            helper.assertTrue(plan.isPresent(), "The ruler took no turn");
+            NpcRulers.runJobs(server, JOB_STEPS);
+            boolean wanted = plan.get().decisions().stream().anyMatch(d -> d.kind() == RulerDecision.Kind.BUILD && d.subject().equals("house"))
+                    || plan.get().needs().stream().anyMatch(n -> n.kind() == RulerMemory.NeedKind.BUILDING && n.subject().equals("house"));
+            helper.assertTrue(wanted || turn > 0, "The beds are taken but the ruler wants no house: " + plan.get());
+            laid = house(server, id).isPresent();
+        }
+        return laid;
+    }
+
     private static Optional<Construction> house(MinecraftServer server, UUID id) {
         return KingdomWorldApi.state(server).construction().of(id).stream()
                 .filter(c -> BuildingTemplates.get(c.templateId()).map(t -> t.role().equals("house")).orElse(false)).findFirst();
@@ -133,7 +178,7 @@ public final class RulerGameTests {
         NpcKingdom npc = appear(helper, site);
         UUID id = npc.kingdomId();
         KingdomWorldState state = KingdomWorldApi.state(server);
-        UUID neighbour = neighbours(helper, center.offset(NEIGHBOURS, 1, 0), "GameTest Border", UUID.randomUUID());
+        UUID neighbour = neighbours(helper, center.offset(neighboursAt(site), 1, 0), "GameTest Border", UUID.randomUUID());
         String dimension = state.territory().territory(id).orElseThrow().dimension();
         Set<Long> theirs = new HashSet<>(state.territory().territory(neighbour).orElseThrow().chunks());
         // Players lived just west of the land of the kingdom.
@@ -152,7 +197,7 @@ public final class RulerGameTests {
                 problem[0] = landProblem(state, after, before, lived, theirs, neighbour, dimension, id, limit);
                 level.getChunk(ChunkKey.x(lived), ChunkKey.z(lived)).setInhabitedTime(0);
                 KingdomWorldApi.dissolveKingdom(server, neighbour);
-                level.setBlockAndUpdate(center.offset(NEIGHBOURS, 1, 0), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState());
+                level.setBlockAndUpdate(center.offset(neighboursAt(site), 1, 0), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState());
                 NpcGameTests.cleanUp(helper, site, center);
             }
             helper.assertTrue(problem[0].isEmpty(), problem[0]);
@@ -197,7 +242,7 @@ public final class RulerGameTests {
             NpcKingdom npc = appear(helper, site);
             UUID id = npc.kingdomId();
             UUID king = UUID.randomUUID();
-            others = neighbours(helper, center.offset(NEIGHBOURS, 1, 0), "GameTest Traders", king);
+            others = neighbours(helper, center.offset(neighboursAt(site), 1, 0), "GameTest Traders", king);
             UUID traders = others;
             KingdomWorldState state = KingdomWorldApi.state(server);
             long day = TreasuryActions.day(server);
@@ -224,7 +269,9 @@ public final class RulerGameTests {
             if (others != null) {
                 KingdomWorldApi.dissolveKingdom(server, others);
             }
-            level.setBlockAndUpdate(center.offset(NEIGHBOURS, 1, 0), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState());
+            if (site != null) {
+                level.setBlockAndUpdate(center.offset(neighboursAt(site), 1, 0), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState());
+            }
             NpcGameTests.cleanUp(helper, site, center);
         }
     }

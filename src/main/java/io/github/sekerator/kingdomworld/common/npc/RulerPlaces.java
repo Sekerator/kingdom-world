@@ -227,9 +227,14 @@ final class RulerPlaces {
                     return spot;
                 }
             }
-            // Beyond the wall and the fields, on the grid of the plots of old.
-            first = (composition.outerReach() + NpcComposition.PLOT / 2 + 1 + KEEP_CLEAR + NpcComposition.SPACING - 1) / NpcComposition.SPACING;
+            // Beyond the wall, on the grid of the plots of old, between the fields and the outer posts and clear of the ways out of
+            // the gates: beyond the fields all would lie off the land and out of reach of the builders.
+            first = (composition.wallRadius() + NpcComposition.PLOT / 2 + 1 + KEEP_CLEAR + NpcComposition.SPACING - 1) / NpcComposition.SPACING;
             outside = new ArrayList<>();
+            for (NpcComposition.Gate gate : composition.gates()) {
+                int out = composition.wallRadius() + NpcComposition.SPACING;
+                outside.add(new int[]{site.x() + Integer.signum(gate.x()) * out, site.z() + Integer.signum(gate.z()) * out});
+            }
             for (int[] spot : composition.fieldSpots()) {
                 outside.add(new int[]{site.x() + spot[0], site.z() + spot[1]});
             }

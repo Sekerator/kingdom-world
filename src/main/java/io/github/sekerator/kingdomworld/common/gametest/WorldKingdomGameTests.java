@@ -67,13 +67,16 @@ public final class WorldKingdomGameTests {
             Kingdom kingdom = NpcGameTests.kingdomOf(helper, site);
             helper.assertTrue(site.status() == NpcSite.Status.FOUNDED && !NpcWork.built(server, kingdom.id()), "Not waiting for its buildings: " + site);
             helper.assertTrue(!level.getBlockState(NpcSpawner.thronePos(site)).is(ModRegistries.THRONE.get()), "A throne stands before the buildings");
-            int radius = NpcSettings.rules().landRadius(NpcLevel.SMALL);
+            helper.assertTrue(site.districts(), "A new place is not laid out in districts: " + site.layout());
+            int radius = NpcGameTests.landRadius(site);
             int held = land(server, kingdom.id());
-            helper.assertTrue(held == (2 * radius + 1) * (2 * radius + 1), "Land of " + held + " chunks");
+            helper.assertTrue(held == (2 * radius + 1) * (2 * radius + 1), "Land of " + held + " chunks for the radius " + radius);
             long money = NpcSettings.rules().money(NpcLevel.SMALL);
             helper.assertTrue(KingdomWorldApi.treasury(server, kingdom.id()).orElseThrow().balance() == money && founding(server, kingdom.id()) == money,
                     "The treasury does not hold its founding money");
-            helper.assertTrue(NpcWork.plannedPeople(server, kingdom.id()).orElse(0) > 0, "No people are planned for the map");
+            int planned = NpcSpawner.composition(site).citizens();
+            helper.assertTrue(planned > 0 && NpcWork.plannedPeople(server, kingdom.id()).orElse(0) == planned, "The people planned for the map are "
+                    + NpcWork.plannedPeople(server, kingdom.id()) + " instead of " + planned);
             // A map zoomed far out gets the land in squares of chunks: the square of the throne belongs to the kingdom.
             int throneX = center.getX() >> 4;
             int throneZ = center.getZ() >> 4;
@@ -107,7 +110,15 @@ public final class WorldKingdomGameTests {
             helper.assertTrue(NpcWork.built(server, kingdom.id()), "The kingdom does not count as built");
             helper.assertTrue(founding(server, kingdom.id()) == money, "The founding money came twice: " + founding(server, kingdom.id()));
             helper.assertTrue(land(server, kingdom.id()) >= grown, "Land was lost while the buildings were raised");
-            helper.assertTrue(!KingdomWorldApi.state(server).construction().buildingsOf(kingdom.id()).isEmpty(), "No buildings");
+            int buildings = 0;
+            for (io.github.sekerator.kingdomworld.core.construction.Building building
+                    : KingdomWorldApi.state(server).construction().buildingsOf(kingdom.id())) {
+                buildings += io.github.sekerator.kingdomworld.common.road.CityWalls.isFortification(building) ? 0 : 1;
+            }
+            helper.assertTrue(buildings == NpcSpawner.composition(site).buildings().size(), "Buildings " + buildings + " of "
+                    + NpcSpawner.composition(site).buildings().size());
+            helper.assertTrue(KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdom.id()).size()
+                    == NpcSpawner.composition(site).citizens(), "The citizens are not those planned for the map");
             helper.succeed();
         } finally {
             NpcGameTests.cleanUp(helper, site, center);

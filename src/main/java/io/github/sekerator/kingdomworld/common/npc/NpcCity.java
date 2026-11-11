@@ -8,7 +8,6 @@ import io.github.sekerator.kingdomworld.core.npc.NpcLevel;
 import io.github.sekerator.kingdomworld.core.npc.NpcRules;
 import io.github.sekerator.kingdomworld.core.npc.NpcSite;
 import io.github.sekerator.kingdomworld.core.npc.NpcStyle;
-import io.github.sekerator.kingdomworld.core.npc.TemplateCatalog;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -368,14 +367,6 @@ final class NpcCity {
             case "mage_tower" -> "mage";
             default -> "";
         };
-    }
-
-    /**
-     * Whether a template of the plans is a palace: the throne stands in it, so its floor lies level with the ground.
-     */
-    static boolean palace(String template) {
-        return TemplateCatalog.get(template).map(entry -> entry.kind() == TemplateCatalog.Kind.HALL || entry.kind() == TemplateCatalog.Kind.CASTLE)
-                .orElse(false);
     }
 
     /**

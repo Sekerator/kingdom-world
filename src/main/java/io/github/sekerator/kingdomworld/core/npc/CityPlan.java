@@ -277,8 +277,9 @@ final class CityPlan {
         }
         int soldiers = Math.min(rules.soldiers(level), bunks + townBunks);
         int citizens = homes + townHomes + soldiers;
-        // A field of carrots feeds about twenty, one of wheat half as many through the baker: every third field is wheat.
-        int fields = Math.max(1, (int) Math.ceil((homes + soldiers) * 1.25 / 18.0));
+        // A field of carrots feeds about twenty, one of wheat half as many through the baker: every third field is wheat. The
+        // fields are counted for full barracks: newcomers take the free bunks, and a garrison eats as the citizens do.
+        int fields = Math.max(1, (int) Math.ceil((homes + bunks) * 1.25 / 18.0));
         Map<String, Integer> jobs = new LinkedHashMap<>();
         int left = citizens - soldiers;
         left = job(jobs, "farmer", 2 * (fields + towns), left);
