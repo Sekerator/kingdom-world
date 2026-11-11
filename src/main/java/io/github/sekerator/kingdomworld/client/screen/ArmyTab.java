@@ -9,7 +9,6 @@ import io.github.sekerator.kingdomworld.common.network.packet.ArmyPackets;
 import io.github.sekerator.kingdomworld.common.trade.TradeTexts;
 import io.github.sekerator.kingdomworld.core.army.Branch;
 import io.github.sekerator.kingdomworld.core.army.Post;
-import io.github.sekerator.kingdomworld.core.army.SoldierRank;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
 import io.github.sekerator.kingdomworld.core.citizen.Gender;
 import net.minecraft.ChatFormatting;
