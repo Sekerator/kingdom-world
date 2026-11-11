@@ -194,7 +194,7 @@ public record NpcComposition(int layout, NpcLevel level, long seed, List<Plot> b
      * The radius of the palisade of a town of this kingdom, or 0 if its towns have none.
      */
     public int townWall() {
-        return layout == NpcSite.LAYOUT_DISTRICTS && level == NpcLevel.LARGE ? CityPlan.TOWN_WALL : 0;
+        return layout == NpcSite.LAYOUT_DISTRICTS ? districtTownWall(level) : 0;
     }
 
     /**
@@ -230,6 +230,13 @@ public record NpcComposition(int layout, NpcLevel level, long seed, List<Plot> b
      */
     public static int districtWall(NpcLevel level) {
         return CityPlan.shape(level).wall();
+    }
+
+    /**
+     * The radius of the palisade of the towns of a kingdom of districts of a level, or 0 if its towns have none.
+     */
+    public static int districtTownWall(NpcLevel level) {
+        return level == NpcLevel.LARGE ? CityPlan.TOWN_WALL : 0;
     }
 
     /**

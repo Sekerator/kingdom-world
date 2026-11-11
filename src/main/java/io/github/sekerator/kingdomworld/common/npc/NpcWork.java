@@ -179,6 +179,22 @@ public final class NpcWork {
     }
 
     /**
+     * The radius the plan of a kingdom of the world gives the wall of its capital or of its towns, in blocks: that of a capital
+     * laid out in districts once its buildings are raised or being raised, whether its wall stands yet or not; 0 for a kingdom of
+     * players, a kingdom of the first layout, one that waits for its buildings, and towns without a palisade.
+     *
+     * @param capital whether the capital is asked for, or a town
+     */
+    public static int planRadius(MinecraftServer server, UUID kingdomId, boolean capital) {
+        NpcState state = state(server);
+        return state.kingdom(kingdomId).flatMap(kingdom -> state.site(kingdom.siteId()))
+                .filter(site -> site.districts() && (site.status() == NpcSite.Status.SPAWNED || site.status() == NpcSite.Status.SPAWNING))
+                .map(site -> capital ? io.github.sekerator.kingdomworld.core.npc.NpcComposition.districtWall(site.level())
+                        : io.github.sekerator.kingdomworld.core.npc.NpcComposition.districtTownWall(site.level()))
+                .orElse(0);
+    }
+
+    /**
      * Founds a planned place as data at once, for operators and game tests.
      *
      * @return whether the kingdom stands as data

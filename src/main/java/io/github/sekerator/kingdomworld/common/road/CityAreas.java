@@ -1,7 +1,6 @@
 package io.github.sekerator.kingdomworld.common.road;
 
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
-import io.github.sekerator.kingdomworld.core.road.RoadRules;
 import io.github.sekerator.kingdomworld.core.road.Wall;
 import net.minecraft.server.MinecraftServer;
 
@@ -15,7 +14,8 @@ import java.util.UUID;
 /**
  * Where the cities of each kingdom lie, for questions asked on every block event and every blow: whether a place is inside
  * a city of a kingdom. A city with a wall is the square of its wall with the wall itself; a city without one is the square
- * its wall would take at its level (a village, a town, a large city). The squares are worked out once in
+ * its wall would take at its level (a village, a town, a large city), or by the plan of a capital of a kingdom of the world
+ * where that is wider. The squares are worked out once in
  * {@value #REFRESH_TICKS} ticks, so that asking costs a look into a short list.
  */
 public final class CityAreas {
@@ -81,14 +81,13 @@ public final class CityAreas {
             return areas;
         }
         builtSignature = signature;
-        RoadRules rules = RoadSettings.rules();
         Map<UUID, List<Area>> built = new HashMap<>();
         for (CityWalls.Place place : CityWalls.places(server)) {
             Optional<Wall> wall = RoadWork.state(server).wallOf(place.cityId(), place.kingdomId());
             Area area = wall.map(found -> new Area(place.kingdomId(), place.cityId(), found.dimension(), found.centerX(), found.centerZ(),
                             found.radius(), true))
                     .orElseGet(() -> new Area(place.kingdomId(), place.cityId(), place.dimension(), place.x(), place.z(),
-                            CityWalls.level(server, place.kingdomId(), place.cityId()).wallRadius(rules), false));
+                            CityWalls.radiusOf(server, place.kingdomId(), place.cityId()), false));
             built.computeIfAbsent(place.kingdomId(), k -> new ArrayList<>()).add(area);
         }
         areas = built;

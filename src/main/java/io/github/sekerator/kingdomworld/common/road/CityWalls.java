@@ -174,12 +174,15 @@ public final class CityWalls {
     }
 
     /**
-     * The radius a wall of a city is laid out with: that of the level of the city, and never less than the wall it has, so that
-     * a capital with a wall of its own radius keeps it when the wall is ordered again.
+     * The radius of the square of a city: that of its wall if it has one, else the radius a wall of it would be laid out with.
+     * That is the radius of the level of the city, and for a capital or a town of a kingdom of the world laid out in districts
+     * never less than the radius of its plan, so that such a capital is one city from wall to wall before its wall stands, and
+     * keeps its radius when the wall is ordered again.
      */
-    private static int radiusOf(MinecraftServer server, UUID kingdomId, long cityId) {
+    public static int radiusOf(MinecraftServer server, UUID kingdomId, long cityId) {
         int byLevel = level(server, kingdomId, cityId).wallRadius(RoadSettings.rules());
-        return Math.max(byLevel, RoadWork.state(server).wallOf(cityId, kingdomId).map(Wall::radius).orElse(0));
+        int byPlan = io.github.sekerator.kingdomworld.common.npc.NpcWork.planRadius(server, kingdomId, cityId == 0);
+        return Math.max(Math.max(byLevel, byPlan), RoadWork.state(server).wallOf(cityId, kingdomId).map(Wall::radius).orElse(0));
     }
 
     /**
