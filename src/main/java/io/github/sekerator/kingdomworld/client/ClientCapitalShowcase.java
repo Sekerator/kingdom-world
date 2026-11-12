@@ -48,8 +48,8 @@ final class ClientCapitalShowcase {
     /** Ticks to wait after moving the camera before the screenshot, so that the chunks are drawn. */
     private static final int SETTLE = 70;
     /** Blocks between two buildings of a row and between two rows. */
-    private static final int GAP = 9;
-    private static final int ROW_GAP = 22;
+    private static final int GAP = 14;
+    private static final int ROW_GAP = 64;
 
     /**
      * A building to put up: its template and the materials of its look, and how its shots are named.
@@ -390,15 +390,17 @@ final class ClientCapitalShowcase {
         list.add(look(row + "-" + item.label() + "-side", cx - distance * 0.9, target + distance * 0.3, cz + distance * 0.55, cx, target, cz));
         if (entry == null || entry.kind() != TemplateCatalog.Kind.CASTLE) {
             // Inside, from the first free place behind the front wall, looking at the back of the ground floor.
-            BlockPos inside = inside(level, x1, z1, template, ground);
+            int[] inside = inside(level, x1, z1, template, ground);
             if (inside != null) {
-                list.add(look(row + "-" + item.label() + "-inside", inside.getX() + 0.5, inside.getY() + 1.6, inside.getZ() + 0.5, inside.getX() + 0.5,
-                        inside.getY() + 0.9, z1 + 0.5));
+                // Stand a step back against the front wall, look at the far end of the view, a little down.
+                list.add(look(row + "-" + item.label() + "-inside", inside[0] + 0.5, inside[1] + 1.6, inside[2] + 0.9, inside[0] + 0.5,
+                        inside[1] + 1.0, inside[2] - inside[3] + 0.5));
             }
         }
         if (entry != null && entry.kind() == TemplateCatalog.Kind.CASTLE) {
             double far = size * 1.9 + 20;
-            list.add(look(row + "-" + item.label() + "-far", cx + far * 0.35, ground + 6, cz + far, cx, ground + height * 0.55, cz));
+            // From afar and a little above, over the low houses of the rows in front.
+            list.add(look(row + "-" + item.label() + "-far", cx + far * 0.35, ground + 12 + far * 0.2, cz + far, cx, ground + height * 0.5, cz));
             list.add(look(row + "-" + item.label() + "-top", cx + 0.5, ground + height + size * 1.1, cz + size * 0.55, cx, ground, cz));
             double tx = x1 + (template.sizeX() - 1) / 2 + 0.5;
             double tz = z1 + (template.sizeZ() - 1) / 2 + 0.5;
@@ -409,39 +411,67 @@ final class ClientCapitalShowcase {
             }
             List<TemplateCatalog.Spot> gate = entry.points("castle_gate");
             if (!gate.isEmpty()) {
+                // In the court: from the gate northwards out of the passage under the open sky, looking at the keep.
                 TemplateCatalog.Spot spot = gate.get(0);
-                list.add(look(row + "-" + item.label() + "-court", tx + spot.x() + 0.5, ground + spot.y() + 3.5, tz + spot.z() - 1, tx,
-                        ground + height * 0.45, tz - depth * 0.15));
+                BlockPos at = new BlockPos((int) Math.floor(tx + spot.x()), ground + spot.y(), (int) Math.floor(tz + spot.z()));
+                int steps = 0;
+                while (steps < 16 && !open(level, at)) {
+                    at = at.north();
+                    steps++;
+                }
+                at = at.north(3);
+                list.add(look(row + "-" + item.label() + "-court", at.getX() + 0.5, at.getY() + 2.6, at.getZ() + 0.5, tx, ground + 7, tz));
             }
         }
     }
 
     /**
-     * Where one stands inside a building just behind its front: going in from the front edge along the middle and the two
-     * columns beside it, the first place with a floor and room for a body under a roof, at the layers of the street and the
-     * two above it.
+     * Where one stands inside a building to see most of its ground floor: of the places in its front half with a floor,
+     * room for a body and a roof over it, at the layers of the street and the two above it, the one with the longest free
+     * view toward the back at the height of the eyes; its x, y and z, and in the fourth number how far the view goes.
      */
-    private static BlockPos inside(ServerLevel level, int x1, int z1, BuildingTemplate template, int ground) {
+    private static int[] inside(ServerLevel level, int x1, int z1, BuildingTemplate template, int ground) {
         int middle = x1 + (template.sizeX() - 1) / 2;
-        for (int depth = 2; depth < template.sizeZ() - 2; depth++) {
+        int[] best = null;
+        for (int depth = 2; depth < Math.max(3, template.sizeZ() / 2); depth++) {
             int z = z1 + template.sizeZ() - 1 - depth;
-            for (int dx : new int[]{0, 1, -1, 2, -2}) {
+            for (int dx = -3; dx <= 3; dx++) {
                 for (int y = ground; y <= ground + 2; y++) {
                     BlockPos feet = new BlockPos(middle + dx, y, z);
-                    boolean free = level.getBlockState(feet).getCollisionShape(level, feet).isEmpty()
-                            && level.getBlockState(feet.above()).getCollisionShape(level, feet.above()).isEmpty();
-                    boolean floor = !level.getBlockState(feet.below()).getCollisionShape(level, feet.below()).isEmpty();
+                    if (!free(level, feet) || !free(level, feet.above()) || free(level, feet.below()) || !level.getBlockState(feet).isAir()) {
+                        continue;
+                    }
                     boolean roof = false;
                     for (int up = 2; up < 12 && !roof; up++) {
                         roof = !level.getBlockState(feet.above(up)).isAir();
                     }
-                    if (free && floor && roof && level.getBlockState(feet).isAir()) {
-                        return feet;
+                    int view = 0;
+                    while (view < 24 && free(level, feet.above().north(view + 1))) {
+                        view++;
+                    }
+                    if (roof && (best == null || view > best[3])) {
+                        best = new int[]{feet.getX(), feet.getY(), feet.getZ(), view};
                     }
                 }
             }
         }
-        return null;
+        return best != null && best[3] >= 3 ? best : null;
+    }
+
+    /**
+     * Whether nothing stands over a place up to twenty layers.
+     */
+    private static boolean open(ServerLevel level, BlockPos pos) {
+        for (int up = 1; up <= 20; up++) {
+            if (!level.getBlockState(pos.above(up)).isAir()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean free(ServerLevel level, BlockPos pos) {
+        return level.getBlockState(pos).getCollisionShape(level, pos).isEmpty();
     }
 
     /**
