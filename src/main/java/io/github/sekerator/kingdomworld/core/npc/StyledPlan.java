@@ -705,21 +705,21 @@ public final class StyledPlan {
         int soldiers = inCapital + inTownBunks + inTownHomes;
         int citizens = homes + townHomes + inCapital + inTownBunks;
         int fields = Math.max(1, (int) Math.ceil((homes + bunks) * 1.5 / 18.0));
-        Map<String, Integer> jobs = new LinkedHashMap<>();
-        int left = citizens - soldiers;
-        left = job(jobs, "farmer", 2 * (fields + 2 * towns), left);
-        left = job(jobs, "merchant", 2 * markets, left);
-        left = job(jobs, "innkeeper", taverns, left);
-        left = job(jobs, "crafter", (small ? 1 : 2) * workshops + towns, left);
+        Map<String, Integer> work = new LinkedHashMap<>();
+        work.put("farmer", 2 * (fields + 2 * towns));
+        work.put("merchant", 2 * markets);
+        work.put("innkeeper", taverns);
+        work.put("crafter", (small ? 1 : 2) * workshops + towns);
         // Every styled capital has a guild house with its registrar, a treasury with its minter and a tower of mages: they are
         // staffed before the work outside the buildings.
-        left = job(jobs, "registrar", 1, left);
-        left = job(jobs, "minter", 1, left);
-        left = job(jobs, "mage", 2 * mages, left);
-        left = job(jobs, "builder", large ? 4 : small ? 1 : 2, left);
-        left = job(jobs, "lumberjack", large ? 6 : small ? 2 : 4, left);
-        left = job(jobs, "miner", large ? 6 : small ? 2 : 3, left);
-        job(jobs, "carrier", large ? 6 : small ? 2 : 4, left);
+        work.put("registrar", 1);
+        work.put("minter", 1);
+        work.put("mage", 2 * mages);
+        work.put("builder", large ? 4 : small ? 1 : 2);
+        work.put("lumberjack", large ? 6 : small ? 2 : 4);
+        work.put("miner", large ? 6 : small ? 2 : 3);
+        work.put("carrier", large ? 6 : small ? 2 : 4);
+        Map<String, Integer> jobs = jobs(work, citizens - soldiers);
 
         List<Post> posts = posts(shape, plots, gatePlots);
         List<int[]> fieldSpots = fieldSpots(shape, fields);
@@ -733,12 +733,36 @@ public final class StyledPlan {
                 extras.gardens());
     }
 
-    private static int job(Map<String, Integer> jobs, String profession, int wanted, int left) {
-        int count = Math.max(0, Math.min(wanted, left));
-        if (count > 0) {
-            jobs.merge(profession, count, Integer::sum);
+    /**
+     * The workers of a capital by profession: as many as wanted while there are people, in the order of the need. A capital
+     * whose houses hold fewer people than its work wants (the large ones of the styles with roomy houses) gives every
+     * profession one worker first, so that its last trades (the miners and the carriers) are not left without anybody; the
+     * rest goes in the order of the need. With people enough it is the same as filling the professions one after another.
+     *
+     * @param wanted the workers wanted by profession, in the order of the need
+     * @param people the citizens who are not soldiers
+     */
+    static Map<String, Integer> jobs(Map<String, Integer> wanted, int people) {
+        Map<String, Integer> jobs = new LinkedHashMap<>();
+        int left = Math.max(0, people);
+        for (Map.Entry<String, Integer> profession : wanted.entrySet()) {
+            if (profession.getValue() > 0 && left > 0) {
+                jobs.put(profession.getKey(), 1);
+                left--;
+            }
         }
-        return left - count;
+        for (Map.Entry<String, Integer> profession : wanted.entrySet()) {
+            Integer given = jobs.get(profession.getKey());
+            if (given == null) {
+                continue;
+            }
+            int more = Math.min(profession.getValue() - given, left);
+            if (more > 0) {
+                jobs.put(profession.getKey(), given + more);
+                left -= more;
+            }
+        }
+        return jobs;
     }
 
     /**

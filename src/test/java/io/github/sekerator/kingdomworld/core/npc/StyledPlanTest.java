@@ -463,6 +463,47 @@ class StyledPlanTest {
     }
 
     @Test
+    void everyTradeHasPeopleEvenWhereTheHousesHoldFew() {
+        // Without towns a large capital of the styles with roomy houses has fewer people than its work wants.
+        List<String> trades = List.of("farmer", "merchant", "innkeeper", "crafter", "registrar", "minter", "mage", "builder", "lumberjack",
+                "miner", "carrier");
+        for (String style : TemplateCatalog.STYLES) {
+            for (NpcLevel level : NpcLevel.values()) {
+                for (Rank rank : ranks(level)) {
+                    for (long seed = 1; seed <= SEEDS; seed++) {
+                        NpcComposition composition = NpcComposition.styled(level, seed, style, rank, RULES, 0);
+                        String at = style + " " + level + " " + rank + " " + seed + ": ";
+                        for (String trade : trades) {
+                            assertTrue(composition.jobs().getOrDefault(trade, 0) > 0, at + "nobody is a " + trade + " " + composition.jobs());
+                        }
+                        int workers = composition.jobs().values().stream().mapToInt(Integer::intValue).sum();
+                        assertTrue(workers <= composition.citizens() - composition.soldiers(), at + workers + " workers");
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    void theWorkIsGivenInTheOrderOfTheNeedWithOneOfEachFirst() {
+        Map<String, Integer> wanted = new java.util.LinkedHashMap<>();
+        wanted.put("farmer", 6);
+        wanted.put("merchant", 0);
+        wanted.put("crafter", 4);
+        wanted.put("miner", 3);
+        wanted.put("carrier", 2);
+        // People enough: everybody wanted, in the order of the need.
+        assertEquals(List.of("farmer", "crafter", "miner", "carrier"), List.copyOf(StyledPlan.jobs(wanted, 20).keySet()));
+        assertEquals(Map.of("farmer", 6, "crafter", 4, "miner", 3, "carrier", 2), StyledPlan.jobs(wanted, 20));
+        assertEquals(Map.of("farmer", 6, "crafter", 4, "miner", 3, "carrier", 2), StyledPlan.jobs(wanted, 15));
+        // Too few: one of each first, then the rest by the need.
+        assertEquals(Map.of("farmer", 6, "crafter", 2, "miner", 1, "carrier", 1), StyledPlan.jobs(wanted, 10));
+        assertEquals(Map.of("farmer", 1, "crafter", 1, "miner", 1, "carrier", 1), StyledPlan.jobs(wanted, 4));
+        assertEquals(Map.of("farmer", 1, "crafter", 1), StyledPlan.jobs(wanted, 2));
+        assertEquals(Map.of(), StyledPlan.jobs(wanted, 0));
+    }
+
+    @Test
     void theBuildersAndCarriersHaveTheirSeats() {
         every(c -> {
             NpcComposition composition = c.composition();
