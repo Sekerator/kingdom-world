@@ -297,6 +297,15 @@ public final class ProvinceSavedData extends SavedData {
         return server.getWorldPath(LevelResource.ROOT).resolve("data").resolve(DATA_NAME + ".dat");
     }
 
+    /**
+     * Saves the provinces as the game does, only the file is written by {@link io.github.sekerator.kingdomworld.common.data.AsyncSave}
+     * off the server thread.
+     */
+    @Override
+    public void save(java.io.File file) {
+        io.github.sekerator.kingdomworld.common.data.AsyncSave.save(this, file, DATA_NAME);
+    }
+
     @Override
     public CompoundTag save(CompoundTag tag) {
         if (preserved != null) {

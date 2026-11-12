@@ -337,6 +337,14 @@ public final class KingdomSavedData extends SavedData {
         return server.getWorldPath(LevelResource.ROOT).resolve("data").resolve(DATA_NAME + ".dat");
     }
 
+    /**
+     * Saves the data as the game does, only the file is written by {@link AsyncSave} off the server thread.
+     */
+    @Override
+    public void save(java.io.File file) {
+        AsyncSave.save(this, file, DATA_NAME);
+    }
+
     @Override
     public CompoundTag save(CompoundTag tag) {
         if (preserved != null) {
