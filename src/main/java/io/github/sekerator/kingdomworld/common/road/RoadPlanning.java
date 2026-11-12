@@ -50,6 +50,10 @@ public final class RoadPlanning {
     private static final long PLAN_TICKS = 20L * 60 * 15;
     /** Searches running at once at most. */
     private static final int MAX_JOBS = 4;
+    /** Time the searches for roads take in a tick at most, besides the slice under way. */
+    private static final long SEARCH_NANOS = 5_000_000L;
+    /** Steps of a search between two looks at the time. */
+    private static final int SEARCH_SLICE = 100;
 
     /**
      * A way found for a road.
@@ -217,6 +221,21 @@ public final class RoadPlanning {
         return Outcome.DONE;
     }
 
+    /** Whether searches read the chunks they need at once instead of asking for them and waiting. */
+    static boolean loadNow;
+
+    /**
+     * Searches on with the chunks read at once, for a raising run to its end without ticks (game tests).
+     */
+    public static void tickSearchNow(MinecraftServer server) {
+        loadNow = true;
+        try {
+            tickSearch(server);
+        } finally {
+            loadNow = false;
+        }
+    }
+
     /**
      * Searches on. Called every tick.
      */
@@ -230,12 +249,23 @@ public final class RoadPlanning {
         int share = Math.max(1, rules.nodesPerTick() / JOBS.size());
         int chunks = Math.max(1, rules.chunksPerTick() / JOBS.size());
         Iterator<Job> iterator = JOBS.values().iterator();
+        long started = System.nanoTime();
         while (iterator.hasNext()) {
             Job job = iterator.next();
+            if (System.nanoTime() - started > SEARCH_NANOS) {
+                // The time of the tick is spent: the others search on in the next one.
+                break;
+            }
             job.terrain.allow(chunks);
-            RouteSearch.Status status;
+            RouteSearch.Status status = RouteSearch.Status.RUNNING;
             try {
-                status = job.search.step(share);
+                // A slice at a time, so that a search over rough ground stops when the time of the tick is spent.
+                for (int done = 0; done < share && status == RouteSearch.Status.RUNNING; done += SEARCH_SLICE) {
+                    status = job.search.step(Math.min(SEARCH_SLICE, share - done));
+                    if (System.nanoTime() - started > SEARCH_NANOS) {
+                        break;
+                    }
+                }
             } catch (RuntimeException e) {
                 LOGGER.error("The search for the way of a road failed", e);
                 iterator.remove();

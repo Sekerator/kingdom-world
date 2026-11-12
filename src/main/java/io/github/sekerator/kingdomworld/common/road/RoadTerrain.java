@@ -23,6 +23,9 @@ import java.util.UUID;
  * Only a few chunks a tick are loaded or generated for the first time; the search waits for the rest.
  */
 final class RoadTerrain implements Terrain {
+    /** Chunks a search asks the game for; the ticket lapses by itself after half a minute. */
+    private static final net.minecraft.server.level.TicketType<ChunkPos> TICKET = net.minecraft.server.level.TicketType.create(
+            "kingdomworld_road_terrain", java.util.Comparator.comparingLong(ChunkPos::toLong), 600);
     private final ServerLevel level;
     private final Map<Long, Column[]> chunks = new HashMap<>();
     private int loadsLeft = Integer.MAX_VALUE;
@@ -48,18 +51,28 @@ final class RoadTerrain implements Terrain {
         long key = ChunkPos.asLong(chunkX, chunkZ);
         Column[] columns = chunks.get(key);
         if (columns == null) {
-            if (loadsLeft <= 0) {
+            ChunkAccess loaded = level.getChunkSource().getChunkNow(chunkX, chunkZ);
+            if (loaded == null && RoadPlanning.loadNow && loadsLeft > 0) {
+                loadsLeft--;
+                loaded = level.getChunk(chunkX, chunkZ, ChunkStatus.FULL, true);
+            }
+            if (loaded == null) {
+                // The chunk is asked for and read once the game has loaded or generated it, off the tick: the search waits for it
+                // instead of loading it in the tick.
+                if (loadsLeft > 0) {
+                    loadsLeft--;
+                    ChunkPos chunk = new ChunkPos(chunkX, chunkZ);
+                    level.getChunkSource().addRegionTicket(TICKET, chunk, 0, chunk);
+                }
                 return null;
             }
-            loadsLeft--;
-            columns = read(chunkX, chunkZ);
+            columns = read(loaded, chunkX, chunkZ);
             chunks.put(key, columns);
         }
         return columns[(x & 15) * 16 + (z & 15)];
     }
 
-    private Column[] read(int chunkX, int chunkZ) {
-        ChunkAccess chunk = level.getChunk(chunkX, chunkZ, ChunkStatus.FULL, true);
+    private Column[] read(ChunkAccess chunk, int chunkX, int chunkZ) {
         UUID owner = KingdomWorldApi.ownerOfChunk(level, chunkX, chunkZ);
         Column[] columns = new Column[256];
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();

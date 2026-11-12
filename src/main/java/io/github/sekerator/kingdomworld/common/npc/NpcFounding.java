@@ -189,8 +189,16 @@ final class NpcFounding {
             }
             case 2 -> {
                 if (site.groundY() == 0) {
-                    site.setGroundY(site.districts() ? NpcPlanning.capitalHeight(level, site.x(), site.z(), site.level())
-                            : groundHeight(level, site.x(), site.z()));
+                    if (site.districts()) {
+                        // The height of a capital of districts takes many columns of the generator: a part a tick.
+                        java.util.OptionalInt height = NpcPlanning.capitalHeightSome(level, site.x(), site.z(), site.level());
+                        if (height.isEmpty()) {
+                            return;
+                        }
+                        site.setGroundY(height.getAsInt());
+                    } else {
+                        site.setGroundY(groundHeight(level, site.x(), site.z()));
+                    }
                 }
                 BlockPos throne = NpcSpawner.thronePos(site);
                 if (state.kingdoms().get(id).isEmpty()) {

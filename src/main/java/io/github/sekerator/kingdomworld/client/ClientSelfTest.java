@@ -71,6 +71,7 @@ public final class ClientSelfTest {
     private static ClientRoadShowcase roadShowcase;
     private static ClientSiegeShowcase siegeShowcase;
     private static ClientNpcShowcase npcShowcase;
+    private static ClientBackgroundCheck backgroundCheck;
     private static ClientLifeShowcase lifeShowcase;
     private static volatile BlockPos throne;
     private static volatile UUID kingdomId;
@@ -197,6 +198,18 @@ public final class ClientSelfTest {
                     LOGGER.error(PREFIX + "siege showcase failed, exiting with code 1");
                     System.exit(1);
                 }
+                LOGGER.info(PREFIX + "finished");
+                quit = true;
+            }
+            return;
+        }
+        if ("background".equals(MODE) && minecraft.player != null && minecraft.getSingleplayerServer() != null) {
+            if (backgroundCheck == null) {
+                LOGGER.info(PREFIX + "background appearance check started");
+                backgroundCheck = new ClientBackgroundCheck();
+            }
+            backgroundCheck.tick();
+            if (backgroundCheck.finished()) {
                 LOGGER.info(PREFIX + "finished");
                 quit = true;
             }

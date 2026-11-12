@@ -164,6 +164,8 @@ public final class NpcSpawner {
         int claimed;
         /** Whether the buildings go up in the background with the small budget (no player watches). */
         boolean background;
+        /** The share of the blocks of the rules a step places now, as the time of the steps allows. */
+        double scale = 0.25;
         /** Ticks the raising waited for the server or for players. */
         long paused;
         /** Whether the background goes on without players. */
@@ -269,8 +271,30 @@ public final class NpcSpawner {
      * Blocks the raising places, clears or levels in a tick at most.
      */
     static int blockBudget() {
-        return job != null && job.background ? Math.min(NpcSettings.build().backgroundBlocksPerTick(), NpcSettings.rules().blocksPerTick())
+        int configured = job != null && job.background ? Math.min(NpcSettings.build().backgroundBlocksPerTick(), NpcSettings.rules().blocksPerTick())
                 : NpcSettings.rules().blocksPerTick();
+        // What the blocks cost differs from stage to stage and from place to place (a hall of many blocks with light and
+        // contents, a field, a forest to clear): the budget follows the time the steps took.
+        return job == null ? configured : Math.max(MIN_BLOCKS, (int) Math.round(configured * job.scale));
+    }
+
+    /** The time a step of the work of an appearance aims at. */
+    private static final long STEP_NANOS = 8_000_000L;
+    /** Blocks a step may always place, however slow the blocks were. */
+    private static final int MIN_BLOCKS = 64;
+    /** The largest share of the blocks of the rules a step places: a step of many cheap blocks may meet a costly building next. */
+    private static final double MAX_SCALE = 0.5;
+
+    /**
+     * Follows the time a step of the work took: a step that took longer than {@link #STEP_NANOS} halves the blocks of the next
+     * ones, a quick one gives them back a quarter at a time.
+     */
+    private static void pace(Job job, long nanos) {
+        if (nanos > STEP_NANOS) {
+            job.scale = Math.max(0.01, job.scale * Math.max(0.1, 0.5 * STEP_NANOS / (double) nanos));
+        } else if (nanos < STEP_NANOS / 2) {
+            job.scale = Math.min(MAX_SCALE, job.scale * 1.25);
+        }
     }
 
     /**
@@ -354,6 +378,7 @@ public final class NpcSpawner {
     // ---------------------------------------------------------------- every tick
 
     static void tick(MinecraftServer server) {
+        releaseSome(server.overworld());
         Optional<NpcSite> spawning = NpcWork.state(server).spawning();
         if (spawning.isEmpty()) {
             if (job != null) {
@@ -409,7 +434,9 @@ public final class NpcSpawner {
         Job running = job;
         running.idle = false;
         try {
+            long started = System.nanoTime();
             step(server, level, site, running);
+            pace(running, System.nanoTime() - started);
             // The last step of an appearance lets the job go.
             running.lastWaited = !running.loaded || running.idle;
         } catch (RuntimeException e) {
@@ -438,7 +465,8 @@ public final class NpcSpawner {
                 }
             }
             if (site.stage() == SpawnStage.ROADS && job.searching) {
-                RoadPlanning.tickSearch(server);
+                // No tick passes between these steps: the search reads its chunks at once.
+                RoadPlanning.tickSearchNow(server);
             }
             if (site.stage() == SpawnStage.DONE) {
                 site.kingdomId().ifPresent(id -> {
@@ -454,6 +482,8 @@ public final class NpcSpawner {
                     }
                 });
             }
+            // Game tests measure no ticks: the whole budget every step.
+            job.scale = 1.0;
             step(server, server.overworld(), site, job);
         }
     }
@@ -719,13 +749,27 @@ public final class NpcSpawner {
         if (job == null) {
             return;
         }
-        for (long key : job.ticketed) {
-            ChunkPos chunk = new ChunkPos(key);
-            level.getChunkSource().removeRegionTicket(TICKET, chunk, 0, chunk);
-        }
+        // The chunks of an appearance are let go a few a tick: the game saves a chunk it lets go of in the tick it unloads it,
+        // and hundreds let go at once would be saved in a few long ticks.
+        RELEASING.addAll(job.ticketed);
         job.ticketed.clear();
         job.pending.clear();
         job.next = 0;
+    }
+
+    /** Chunks of appearances that ended, whose tickets go a few a tick. */
+    private static final java.util.ArrayDeque<Long> RELEASING = new java.util.ArrayDeque<>();
+    /** Ticks between two chunks let go of: a chunk the game unloads it saves in the same tick. */
+    private static final int RELEASE_EVERY = 2;
+
+    /**
+     * Lets go of a chunk of an appearance that ended every few ticks.
+     */
+    static void releaseSome(ServerLevel level) {
+        if (level.getServer().getTickCount() % RELEASE_EVERY == 0 && !RELEASING.isEmpty()) {
+            ChunkPos chunk = new ChunkPos(RELEASING.poll());
+            level.getChunkSource().removeRegionTicket(TICKET, chunk, 0, chunk);
+        }
     }
 
     // ---------------------------------------------------------------- the kingdom and its land
