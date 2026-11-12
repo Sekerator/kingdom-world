@@ -12,7 +12,14 @@ import io.github.sekerator.kingdomworld.core.construction.Construction;
 import io.github.sekerator.kingdomworld.core.construction.Materials;
 import io.github.sekerator.kingdomworld.core.construction.Placement;
 import io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult;
+import io.github.sekerator.kingdomworld.core.npc.ArchitecturalStyles;
 import io.github.sekerator.kingdomworld.core.npc.BuildingLooks;
+import io.github.sekerator.kingdomworld.core.npc.GuildHouses;
+import io.github.sekerator.kingdomworld.core.npc.NpcComposition;
+import io.github.sekerator.kingdomworld.core.npc.NpcLevel;
+import io.github.sekerator.kingdomworld.core.npc.NpcRules;
+import io.github.sekerator.kingdomworld.core.npc.NpcSite;
+import io.github.sekerator.kingdomworld.core.npc.StyledPlan;
 import io.github.sekerator.kingdomworld.core.npc.TemplateCatalog;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import net.minecraft.client.Minecraft;
@@ -20,11 +27,14 @@ import net.minecraft.client.Screenshot;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraftforge.registries.ForgeRegistries;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 
@@ -38,11 +48,14 @@ import java.util.UUID;
 /**
  * The buildings of the architectural styles of the kingdoms of the world, shown in a flat test world
  * ({@code -PclientSelfTest=capital}): for every style its castles, the houses of its guilds by rank, a street of its houses
- * twice over, each house in the look its plot would give it, and the other buildings of its towns; then a part of a capital
- * of every style laid out as its plan will lay it out (castle, square, guild, mage tower, an avenue of houses). Every building is shot
- * from the front, from the side and inside, every row along its fronts and from above, the castles also from afar, from
- * their courts and their throne halls from inside. Screenshots go to the folder {@code styles} of the
- * screenshot folder. Meant for a flat copy of a test world: the buildings stay.
+ * twice over, each house in the look its plot would give it, and the other buildings of its towns; then the capital of every
+ * style laid out by its plan ({@link NpcComposition#styled}): every building on its plot in the look of its plot, the ground,
+ * trees, front gardens and fields of the plan and a plain wall. Every building is shot from the front, from the side and
+ * inside, every row along its fronts and from above, the castles also from afar, from their courts and their throne halls from
+ * inside, every capital from above, along its avenue, from its square and along its outer street. Screenshots go to the folder
+ * {@code styles} of the screenshot folder. Meant for a flat copy of a test world: the buildings stay.
+ *
+ * <p>The capitals are small unless the rows name another size: {@code -PclientSelfTest=capital-terem@capital,large}.
  */
 final class ClientCapitalShowcase {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -103,6 +116,20 @@ final class ClientCapitalShowcase {
         return only.isEmpty() || only.contains(style);
     }
 
+    /**
+     * Whether the capitals of the styles are shown: unless the rows named leave them out.
+     */
+    private boolean capitalsShown() {
+        return rowsOnly.isEmpty() || rowsOnly.contains("capital");
+    }
+
+    /**
+     * The size of the capitals shown: small unless the rows name {@code medium} or {@code large}.
+     */
+    private NpcLevel capitalSize() {
+        return rowsOnly.contains("large") ? NpcLevel.LARGE : rowsOnly.contains("medium") ? NpcLevel.MEDIUM : NpcLevel.SMALL;
+    }
+
     boolean finished() {
         return finished;
     }
@@ -133,7 +160,8 @@ final class ClientCapitalShowcase {
             return;
         }
         if (!ready) {
-            if (ticks > 2_400) {
+            // The capitals of all the styles are put up in one go on the server: the client waits for it.
+            if (ticks > 7_200) {
                 LOGGER.error(PREFIX + "the buildings of the capital were not built in time");
                 failed = true;
                 finished = true;
@@ -301,9 +329,17 @@ final class ClientCapitalShowcase {
         }
         UUID kingdom = created.kingdom().id();
         ChunkPos from = new ChunkPos(new BlockPos(start.getX() - 40, ground, start.getZ() - 40));
-        // South of the rows, every style once more as a part of a capital: castle, square, guild, mage tower and an avenue.
+        // South of the rows, the capital of every style as its plan lays it out, side by side.
         int capitals = z;
-        ChunkPos to = new ChunkPos(new BlockPos(Math.max(maxX, start.getX() + 140 * TemplateCatalog.STYLES.size()) + 40, ground, z + 200));
+        NpcLevel size = capitalSize();
+        int wall = NpcComposition.capitalWall(size, NpcSite.LAYOUT_STYLED);
+        int spacing = 2 * wall + 40;
+        int shownStyles = 0;
+        for (String style : TemplateCatalog.STYLES) {
+            shownStyles += shown(style) && capitalsShown() ? 1 : 0;
+        }
+        int capitalsEnd = shownStyles == 0 ? z : capitals + 50 + 2 * wall + 40;
+        ChunkPos to = new ChunkPos(new BlockPos(Math.max(maxX, start.getX() + 60 + spacing * shownStyles) + 40, ground, Math.max(z, capitalsEnd) + 40));
         for (int cx = from.x; cx <= to.x; cx++) {
             for (int cz = from.z; cz <= to.z; cz++) {
                 KingdomWorldApi.claimChunk(level, new ChunkPos(cx, cz), kingdom, null);
@@ -366,8 +402,8 @@ final class ClientCapitalShowcase {
         }
         int column = 0;
         for (String style : TemplateCatalog.STYLES) {
-            if (shown(style) && (rowsOnly.isEmpty() || rowsOnly.contains("capital"))) {
-                capital(level, server, kingdom, style, start.getX() + 60 + 140 * column, capitals + 50, ground, list);
+            if (shown(style) && capitalsShown()) {
+                capital(level, server, kingdom, style, size, start.getX() + 60 + wall + spacing * column, capitals + 50 + wall, ground, list);
                 column++;
             }
         }
@@ -377,19 +413,18 @@ final class ClientCapitalShowcase {
     }
 
     /**
-     * Lays out and finishes a building with its anchor at a place, turned to face the given way (0 south, 1 west, 2 north,
-     * 3 east); false if it could not be built.
+     * Lays out and finishes a building with its anchor at a place, turned and mirrored as the placement says; false if it could
+     * not be built.
      */
-    private boolean build(ServerLevel level, IntegratedServer server, UUID kingdom, BuildingTemplate template, BlockPos anchor, int facing,
-                          Materials materials) {
+    private boolean build(ServerLevel level, IntegratedServer server, UUID kingdom, BuildingTemplate template, BlockPos anchor,
+                          Placement placement, Materials materials) {
         int reach = Math.max(template.sizeX(), template.sizeZ()) + 2;
         for (int cx = (anchor.getX() - reach) >> 4; cx <= (anchor.getX() + reach) >> 4; cx++) {
             for (int cz = (anchor.getZ() - reach) >> 4; cz <= (anchor.getZ() + reach) >> 4; cz++) {
                 level.getChunk(cx, cz);
             }
         }
-        KingdomWorldState.ConstructionChange change = ConstructionWork.lay(level, null, kingdom, template, anchor, new Placement(facing, false),
-                materials);
+        KingdomWorldState.ConstructionChange change = ConstructionWork.lay(level, null, kingdom, template, anchor, placement, materials);
         if (change.construction().isEmpty() || ConstructionWork.finishNow(server, change.construction().get()).isEmpty()) {
             LOGGER.error(PREFIX + "{} was not built in the capital of its style: {}", template.id(), change.outcome());
             failed = true;
@@ -399,104 +434,191 @@ final class ClientCapitalShowcase {
     }
 
     /**
-     * A part of a capital of a style laid out the way its plan will lay it out: the castle at the north, a paved square
-     * before its gate, the guild house and the mage tower facing the castle across the square on either side of the mouth of
-     * an avenue, and houses facing each other along the avenue, the richest nearest the square; lamps and trees. Shot from
-     * above, along the avenue and from a corner of the square.
-     *
-     * @param ox the middle of the front of the castle
-     * @param oz the line of the front of the castle
+     * A block by its id, or a fallback for an id the game does not know.
      */
-    private void capital(ServerLevel level, IntegratedServer server, UUID kingdom, String style, int ox, int oz, int ground, List<Shot> list) {
-        List<TemplateCatalog.Entry> castles = TemplateCatalog.ofStyle(style, TemplateCatalog.Kind.CASTLE);
-        if (castles.isEmpty()) {
+    private static BlockState block(String id, Block fallback) {
+        ResourceLocation key = id == null || id.isEmpty() ? null : ResourceLocation.tryParse(id);
+        Block block = key == null ? null : ForgeRegistries.BLOCKS.getValue(key);
+        return block == null || block == Blocks.AIR ? fallback.defaultBlockState() : block.defaultBlockState();
+    }
+
+    /**
+     * The look of a building on a plot of a styled capital, as the raising of a kingdom of the world gives it: a template of the
+     * style wears the look of the quarter of its plot, one of all styles (a market, a well) the public look; the seed of the
+     * look comes from the place of the plot.
+     */
+    private static Materials plotLook(String style, long seed, NpcComposition.Plot plot) {
+        boolean styled = TemplateCatalog.get(plot.template()).map(entry -> !entry.style().isEmpty()).orElse(false);
+        BuildingLooks.Quarter quarter = BuildingLooks.Quarter.PUBLIC;
+        if (styled) {
+            for (BuildingLooks.Quarter candidate : BuildingLooks.Quarter.values()) {
+                if (candidate.name().toLowerCase(java.util.Locale.ROOT).equals(plot.quarter())) {
+                    quarter = candidate;
+                }
+            }
+        }
+        long plotSeed = seed ^ (0x9E3779B97F4A7C15L) ^ (plot.x() * 0xBF58476D1CE4E5B9L) ^ (plot.z() * 0x94D049BB133111EBL);
+        return BuildingLooks.of(style, "minecraft:oak", "red", quarter, plotSeed);
+    }
+
+    /**
+     * The capital of a style laid out by its plan, the throne at a place: the ground of the plan (the square and the avenues
+     * paved, the streets of cobbles, the way along the wall, greens), every building of the plan on its plot in the look of its
+     * plot, the throne in the castle and the bank in the treasury, the trees, the front gardens and the fields inside the wall
+     * of the plan, and a plain wall with its gates open. Shot from above, along its south avenue, from a corner of its square
+     * and along the street before its outer ring.
+     *
+     * @param ox the throne, east
+     * @param oz the throne, south
+     */
+    private void capital(ServerLevel level, IntegratedServer server, UUID kingdom, String style, NpcLevel size, int ox, int oz, int ground,
+                         List<Shot> list) {
+        if (!ArchitecturalStyles.known(style)) {
             return;
         }
         long seed = style.hashCode() * 31L + 17;
-        BuildingTemplate castle = BuildingTemplates.get(castles.get(Math.min(1, castles.size() - 1)).id()).orElse(null);
-        if (castle == null) {
-            return;
-        }
-        boolean wooden = style.equals("terem");
-        net.minecraft.world.level.block.state.BlockState paving = (wooden ? Blocks.SPRUCE_PLANKS : Blocks.STONE_BRICKS).defaultBlockState();
-        net.minecraft.world.level.block.state.BlockState avenue = (wooden ? Blocks.STRIPPED_SPRUCE_WOOD : Blocks.COBBLESTONE).defaultBlockState();
-        if (build(level, server, kingdom, castle, new BlockPos(ox, ground, oz), 0, BuildingLooks.of(style, "minecraft:oak", "red",
-                BuildingLooks.Quarter.CASTLE, seed))) {
-            placeMarks(level, castle, ox - castle.anchor().getX(), ground - castle.anchor().getY(), oz - castle.anchor().getZ());
-        }
-        // The square before the castle.
-        int square = 18;
-        for (int x = ox - 24; x <= ox + 24; x++) {
-            for (int z = oz + 1; z <= oz + square; z++) {
-                level.setBlock(new BlockPos(x, ground - 1, z), paving, Block.UPDATE_CLIENTS);
+        NpcComposition composition = NpcComposition.styled(size, seed, style, GuildHouses.highest(size), NpcRules.DEFAULT, 0);
+        StyledPlan.Shape shape = StyledPlan.shape(size);
+        int wall = composition.wallRadius();
+        for (int cx = (ox - wall - 2) >> 4; cx <= (ox + wall + 2) >> 4; cx++) {
+            for (int cz = (oz - wall - 2) >> 4; cz <= (oz + wall + 2) >> 4; cz++) {
+                level.getChunk(cx, cz);
             }
         }
-        // The guild house and the mage tower across the square, facing the castle.
-        int deepest = 0;
-        TemplateCatalog.Entry guild = TemplateCatalog.guildHouse(style, TemplateCatalog.Kind.GUILD, TemplateCatalog.Rank.S).orElse(null);
-        TemplateCatalog.Entry mages = TemplateCatalog.guildHouse(style, TemplateCatalog.Kind.MAGE_TOWER, TemplateCatalog.Rank.S).orElse(null);
-        if (guild != null) {
-            BuildingTemplates.get(guild.id()).ifPresent(template -> build(level, server, kingdom, template,
-                    new BlockPos(ox - 5 - (template.sizeX() + 1) / 2, ground, oz + square + 1), 2,
-                    BuildingLooks.of(style, "minecraft:oak", "red", BuildingLooks.Quarter.GUILD, seed + 1)));
-            deepest = Math.max(deepest, guild.depth());
+        // The ground of the plan, on the surface of the flat world.
+        BlockState paving = block(ArchitecturalStyles.paving(style), Blocks.STONE_BRICKS);
+        BlockState cobbles = block(ArchitecturalStyles.cobbles(style), Blocks.COBBLESTONE);
+        BlockState path = Blocks.DIRT_PATH.defaultBlockState();
+        BlockState grass = Blocks.GRASS_BLOCK.defaultBlockState();
+        for (int dx = -wall; dx <= wall; dx++) {
+            for (int dz = -wall; dz <= wall; dz++) {
+                int kind = composition.ground(dx, dz);
+                BlockState top = kind == NpcComposition.GROUND_SQUARE || kind == NpcComposition.GROUND_AVENUE ? paving
+                        : kind == NpcComposition.GROUND_STREET ? cobbles : kind == NpcComposition.GROUND_WALK ? path : grass;
+                level.setBlock(new BlockPos(ox + dx, ground - 1, oz + dz), top, Block.UPDATE_CLIENTS);
+            }
         }
-        if (mages != null) {
-            BuildingTemplates.get(mages.id()).ifPresent(template -> build(level, server, kingdom, template,
-                    new BlockPos(ox + 5 + (template.sizeX() + 1) / 2, ground, oz + square + 1), 2,
-                    BuildingLooks.of(style, "minecraft:oak", "red", BuildingLooks.Quarter.MAGES, seed + 2)));
-            deepest = Math.max(deepest, mages.depth());
+        // The fields inside the wall.
+        for (int[] spot : composition.fieldSpots()) {
+            if (Math.max(Math.abs(spot[0]), Math.abs(spot[1])) + 5 < wall) {
+                field(level, new BlockPos(ox + spot[0], ground - 1, oz + spot[1]));
+            }
         }
-        // The avenue southwards between them, houses on both sides facing it, the richest first.
-        List<TemplateCatalog.Entry> houses = new ArrayList<>();
-        for (TemplateCatalog.Kind kind : new TemplateCatalog.Kind[]{TemplateCatalog.Kind.NOBLE_HOUSE, TemplateCatalog.Kind.MERCHANT_HOUSE,
-                TemplateCatalog.Kind.CRAFT_HOUSE, TemplateCatalog.Kind.POOR_HOUSE}) {
-            houses.addAll(TemplateCatalog.ofStyle(style, kind));
-        }
-        int[] cursor = {oz + square + deepest + 3, oz + square + deepest + 3};
-        long houseSeed = seed * 7;
-        for (int i = 0; i < houses.size(); i++) {
-            TemplateCatalog.Entry entry = houses.get(i);
-            BuildingTemplate template = BuildingTemplates.get(entry.id()).orElse(null);
-            if (template == null) {
+        // The buildings, in the order of the plan.
+        int built = 0;
+        for (NpcComposition.Plot plot : composition.buildings()) {
+            BuildingTemplate template = BuildingTemplates.get(plot.template()).orElse(null);
+            if (template == null || !template.available()) {
+                LOGGER.error(PREFIX + "{} of the plan of the {} capital is no available template", plot.template(), style);
+                failed = true;
                 continue;
             }
-            int side = i % 2;
-            int along = cursor[side] + template.sizeX() / 2;
-            BlockPos anchor = new BlockPos(side == 0 ? ox - 5 : ox + 5, ground, along);
-            build(level, server, kingdom, template, anchor, side == 0 ? 3 : 1, BuildingLooks.of(style, "minecraft:oak", "red",
-                    quarter(entry.kind()), houseSeed += 104_729));
-            cursor[side] += template.sizeX() + 2 + (i % 3);
-        }
-        int end = Math.max(cursor[0], cursor[1]) + 4;
-        for (int x = ox - 4; x <= ox + 4; x++) {
-            for (int z = oz + square + 1; z <= end; z++) {
-                level.setBlock(new BlockPos(x, ground - 1, z), avenue, Block.UPDATE_CLIENTS);
+            Placement placement = new Placement(plot.facing(), plot.mirror());
+            io.github.sekerator.kingdomworld.core.construction.Box box = template.box(BlockPos.ZERO, placement);
+            int midX = Math.floorDiv(box.minX() + box.maxX(), 2);
+            int midZ = Math.floorDiv(box.minZ() + box.maxZ(), 2);
+            BlockPos anchor = new BlockPos(ox + plot.x() - midX, ground, oz + plot.z() - midZ);
+            if (build(level, server, kingdom, template, anchor, placement, plotLook(style, seed, plot))) {
+                built++;
             }
         }
-        // Lamps along the avenue and at the corners of the square, trees on the square.
-        for (int z = oz + 4; z <= end; z += 8) {
-            for (int x : new int[]{ox - 4, ox + 4}) {
-                if (z <= oz + square && Math.abs(x - ox) < 20) {
-                    continue;
-                }
-                lamp(level, new BlockPos(x, ground, z));
-            }
+        level.setBlock(new BlockPos(ox, ground, oz), ModRegistries.THRONE.get().defaultBlockState().setValue(ThroneBlock.FACING, Direction.SOUTH),
+                Block.UPDATE_ALL);
+        StyledPlan.bank(composition).ifPresent(bank -> level.setBlock(new BlockPos(ox + bank[0], ground + bank[2], oz + bank[1]),
+                ModRegistries.BANK.get().defaultBlockState(), Block.UPDATE_ALL));
+        for (int[] tree : composition.trees()) {
+            tree(level, new BlockPos(ox + tree[0], ground, oz + tree[1]));
         }
-        for (int x : new int[]{ox - 22, ox + 22}) {
-            lamp(level, new BlockPos(x, ground, oz + 2));
-            tree(level, new BlockPos(x, ground, oz + square - 3));
+        for (int[] garden : composition.gardens()) {
+            garden(level, ox, oz, ground, garden);
         }
-        double middle = oz + (end - oz) * 0.4;
-        list.add(look(style + "-capital-above", ox + 48, ground + 42, middle + 22, ox, ground + 6, middle - 6));
-        list.add(look(style + "-capital-avenue", ox + 0.5, ground + 2.2, end - 1.5, ox + 0.5, ground + 14, oz - 25));
-        list.add(look(style + "-capital-square", ox + 13.5, ground + 4, oz + square - 2.5, ox - 4, ground + 12, oz - 18));
+        plainWall(level, composition, style, ox, oz, ground);
+        LOGGER.info(PREFIX + "the {} {} capital of the plan: {} of {} buildings, {} trees, {} front gardens", size.id(), style, built,
+                composition.buildings().size(), composition.trees().size(), composition.gardens().size());
+        String name = style + "-capital";
+        int square = (shape.precinct() + shape.rings()[0]) / 2;
+        list.add(new Shot(name + "-above", ox + 0.5, ground + wall * 1.4, oz + wall * 1.3, 180.0f, 48.0f));
+        list.add(look(name + "-avenue", ox + 0.5, ground + 2.2, oz + wall - 16.5, ox + 0.5, ground + 14, oz + 0.5));
+        list.add(look(name + "-square", ox + square + 0.5, ground + 4, oz + square + 0.5, ox + 0.5, ground + 14, oz + 0.5));
+        // Along the street before the fronts of the outer ring on the south side, from the gate square to the east.
+        int street = shape.last() + 2;
+        list.add(look(name + "-street", ox + StyledPlan.GATE_CLEAR + 0.5, ground + 3, oz + street + 0.5, ox + wall - 8.5, ground + 3,
+                oz + street - 1.5));
     }
 
-    private static void lamp(ServerLevel level, BlockPos at) {
-        level.setBlock(at, Blocks.SPRUCE_FENCE.defaultBlockState(), Block.UPDATE_ALL);
-        level.setBlock(at.above(), Blocks.SPRUCE_FENCE.defaultBlockState(), Block.UPDATE_ALL);
-        level.setBlock(at.above(2), Blocks.LANTERN.defaultBlockState(), Block.UPDATE_ALL);
+    /**
+     * A field of wheat around its water, eleven by eleven, on the surface.
+     */
+    private static void field(ServerLevel level, BlockPos middle) {
+        for (int dx = -5; dx <= 5; dx++) {
+            for (int dz = -5; dz <= 5; dz++) {
+                BlockPos soil = middle.offset(dx, 0, dz);
+                if (dx == 0 && dz == 0) {
+                    level.setBlock(soil, Blocks.WATER.defaultBlockState(), Block.UPDATE_CLIENTS);
+                    continue;
+                }
+                level.setBlock(soil, Blocks.FARMLAND.defaultBlockState().setValue(net.minecraft.world.level.block.FarmBlock.MOISTURE, 7),
+                        Block.UPDATE_CLIENTS);
+                level.setBlock(soil.above(), Blocks.WHEAT.defaultBlockState().setValue(net.minecraft.world.level.block.CropBlock.AGE, 7),
+                        Block.UPDATE_CLIENTS);
+            }
+        }
+    }
+
+    /**
+     * A front garden: a fence along the street with an opening before the door, flowers between it and the house.
+     *
+     * @param garden {minX, minZ, maxX, maxZ, facing, door} from the throne
+     */
+    private static void garden(ServerLevel level, int ox, int oz, int ground, int[] garden) {
+        int facing = garden[4];
+        boolean alongX = facing == 0 || facing == 2;
+        for (int x = garden[0]; x <= garden[2]; x++) {
+            for (int z = garden[1]; z <= garden[3]; z++) {
+                int along = alongX ? x : z;
+                if (garden.length > 5 && along == garden[5]) {
+                    continue;
+                }
+                boolean street = switch (facing) {
+                    case 0 -> z == garden[3];
+                    case 1 -> x == garden[0];
+                    case 2 -> z == garden[1];
+                    default -> x == garden[2];
+                };
+                BlockPos pos = new BlockPos(ox + x, ground, oz + z);
+                if (!level.getBlockState(pos).isAir()) {
+                    continue;
+                }
+                BlockState state = street ? Blocks.OAK_FENCE.defaultBlockState()
+                        : (Math.floorMod(along, 2) == 0 ? Blocks.POPPY : Blocks.DANDELION).defaultBlockState();
+                level.setBlock(pos, state, Block.UPDATE_ALL);
+            }
+        }
+    }
+
+    /**
+     * A plain wall of the plan: stone of the style around a medium or large capital, a palisade of its wood around a small one,
+     * five blocks high, open at the gates of the plan.
+     */
+    private static void plainWall(ServerLevel level, NpcComposition composition, String style, int ox, int oz, int ground) {
+        int r = composition.wallRadius();
+        String wood = BuildingLooks.styleWood(style);
+        BlockState stone = composition.stoneWall() ? block(ArchitecturalStyles.wallBlock(style), Blocks.STONE_BRICKS)
+                : block((wood.isEmpty() ? "minecraft:oak" : wood) + "_log", Blocks.OAK_LOG);
+        for (int i = -r; i <= r; i++) {
+            for (int[] at : new int[][]{{i, -r}, {i, r}, {-r, i}, {r, i}}) {
+                boolean gate = false;
+                for (NpcComposition.Gate opening : composition.gates()) {
+                    gate |= Math.abs(at[0] - opening.x()) <= 2 && Math.abs(at[1] - opening.z()) <= 2;
+                }
+                if (gate) {
+                    continue;
+                }
+                for (int y = 0; y < 5; y++) {
+                    level.setBlock(new BlockPos(ox + at[0], ground + y, oz + at[1]), stone, Block.UPDATE_CLIENTS);
+                }
+            }
+        }
     }
 
     private static void tree(ServerLevel level, BlockPos at) {

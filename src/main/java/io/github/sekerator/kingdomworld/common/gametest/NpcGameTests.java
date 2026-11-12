@@ -23,22 +23,28 @@ import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.construction.Box;
 import io.github.sekerator.kingdomworld.core.construction.Building;
+import io.github.sekerator.kingdomworld.core.construction.Construction;
+import io.github.sekerator.kingdomworld.core.construction.Materials;
 import io.github.sekerator.kingdomworld.core.economy.LedgerCategory;
 import io.github.sekerator.kingdomworld.core.economy.Treasury;
 import io.github.sekerator.kingdomworld.core.economy.TreasuryJournal;
 import io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.membership.Role;
+import io.github.sekerator.kingdomworld.core.npc.ArchitecturalStyles;
+import io.github.sekerator.kingdomworld.core.npc.GuildHouses;
 import io.github.sekerator.kingdomworld.core.npc.NpcComposition;
 import io.github.sekerator.kingdomworld.core.npc.NpcLevel;
 import io.github.sekerator.kingdomworld.core.npc.NpcRules;
 import io.github.sekerator.kingdomworld.core.npc.NpcSite;
 import io.github.sekerator.kingdomworld.core.npc.SpawnStage;
+import io.github.sekerator.kingdomworld.core.npc.StyledPlan;
 import io.github.sekerator.kingdomworld.core.npc.TemplateCatalog;
 import io.github.sekerator.kingdomworld.core.road.Wall;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import io.github.sekerator.kingdomworld.core.territory.Territory;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
@@ -50,13 +56,16 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -68,14 +77,17 @@ import java.util.UUID;
  * houses and at work, soldiers, a treasury that agrees with its founding; every variant of a building works as its role. A
  * capital of the first layout, as old worlds have them, still rises as before. The appearance leaves the land and the buildings
  * of others alone; a restart in the middle and a second appearance of the same place make nothing twice; its market sells to a
- * player; a player becomes its subject. Every test runs in a batch of its own and takes down what it built.
+ * player; a player becomes its subject. A capital in an architectural style, as new worlds have them, rises whole with the
+ * castle of its style around the throne, the institutions on its square and their workers at their places, the posts of its
+ * castle, and goes on after a restart in the middle of its castle with the same plan and looks; no two kingdoms of a world
+ * share a style while one is free. Every test runs in a batch of its own and takes down what it built.
  */
 @GameTestHolder(KingdomWorld.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class NpcGameTests {
     static final String EMPTY = "empty";
-    /** The height of the top of the platform. */
-    static final int PLATFORM = 290;
+    /** The height of the top of the platform: the highest castle and guild house of a style (48 layers) fit above it. */
+    static final int PLATFORM = 230;
     /**
      * Half the side of the platform for a small kingdom, in blocks: the fields and the posts of woodcutters and miners of a small
      * capital of districts with the groves around them, and the ramp around its levelled ground.
@@ -83,12 +95,23 @@ public final class NpcGameTests {
     static final int HALF = NpcComposition.districtReach(NpcLevel.SMALL) + 10;
     /** Half the side of the platform for a large kingdom. */
     static final int LARGE_HALF = NpcComposition.districtReach(NpcLevel.LARGE) + 10;
-    /** Blocks over the platform that are cleared before and after a test: the castle of a large capital is the highest building. */
-    private static final int HEIGHT = 30;
+    /** Half the side of the platform for a small styled kingdom. */
+    static final int HALF3 = NpcComposition.capitalReach(NpcLevel.SMALL, NpcSite.LAYOUT_STYLED) + 10;
+    /** Half the side of the platform for a large styled kingdom. */
+    static final int LARGE_HALF3 = NpcComposition.capitalReach(NpcLevel.LARGE, NpcSite.LAYOUT_STYLED) + 10;
+    /**
+     * Blocks over the platform that are cleared before and after a test: the castles and the great guild houses of the styles
+     * are the highest buildings, 48 layers from the one under the street.
+     */
+    private static final int HEIGHT = 56;
     /** Steps the appearance of a small kingdom takes at most. */
     static final int STEPS = 4_000;
     /** Steps the appearance of a large kingdom takes at most. */
     static final int LARGE_STEPS = 12_000;
+    /** Steps the appearance of a small styled kingdom takes at most: its castle and its square are larger. */
+    static final int STYLED_STEPS = 8_000;
+    /** Steps the appearance of a large styled kingdom takes at most. */
+    static final int LARGE_STYLED_STEPS = 24_000;
     /** Ticks of the server the appearance of a small kingdom takes at most, with the wait for its wall. */
     private static final int TICKS = STEPS + 3_000;
     private static final String SMALL_HOUSE = NpcComposition.SMALL_HOUSE;
@@ -169,18 +192,44 @@ public final class NpcGameTests {
     }
 
     /**
-     * A small kingdom of the world appearing on the platform, without towns.
+     * A small kingdom of the world of districts appearing on the platform, without towns.
      */
     static NpcSite plant(GameTestHelper helper, BlockPos center) {
         return plant(helper, center, NpcLevel.SMALL);
     }
 
+    /**
+     * A kingdom of the world of districts ({@link NpcSite#LAYOUT_DISTRICTS}) of a size appearing on the platform, without towns:
+     * the layout of the worlds made before the architectural styles, whose numbers the tests of the platform of {@link #HALF}
+     * keep.
+     */
     static NpcSite plant(GameTestHelper helper, BlockPos center, NpcLevel size) {
+        return plant(helper, center, size, NpcSite.LAYOUT_DISTRICTS, "");
+    }
+
+    /**
+     * A styled kingdom of the world ({@link NpcSite#LAYOUT_STYLED}) of a size appearing on the platform of {@link #HALF3} or
+     * {@link #LARGE_HALF3}, without towns.
+     *
+     * @param style its architectural style, or empty for the one the plan would choose; the styles held by the kingdoms other
+     *              tests left in the world change that choice, so a test that needs a style names it
+     */
+    static NpcSite plantStyled(GameTestHelper helper, BlockPos center, NpcLevel size, String style) {
+        return plant(helper, center, size, NpcSite.LAYOUT_STYLED, style);
+    }
+
+    private static NpcSite plant(GameTestHelper helper, BlockPos center, NpcLevel size, int layout, String style) {
         MinecraftServer server = helper.getLevel().getServer();
         helper.assertTrue(NpcWork.state(server).spawning().isEmpty(), "Another kingdom of the world is appearing");
-        NpcSite site = NpcWork.plant(server, center.getX(), center.getZ(), size, false).orElse(null);
+        NpcSite site = NpcWork.plantAt(server, center.getX(), center.getZ(), size, List.of(), layout, style).orElse(null);
         helper.assertTrue(site != null, "The data of the kingdoms of the world is read-only");
-        helper.assertTrue(site.districts(), "A new place is not laid out in districts: " + site.layout());
+        helper.assertTrue(site.layout() == layout && site.districts(), "The place is not of the layout " + layout + ": " + site.layout());
+        if (layout == NpcSite.LAYOUT_STYLED) {
+            helper.assertTrue(ArchitecturalStyles.known(site.style()) && (style.isEmpty() || site.style().equals(style)),
+                    "The styled place has the style '" + site.style() + "'");
+            helper.assertTrue(GuildHouses.parse(site.guildRank()).isPresent(), "The styled place keeps no rank of its guild: '"
+                    + site.guildRank() + "'");
+        }
         return site;
     }
 
@@ -348,6 +397,158 @@ public final class NpcGameTests {
         helper.assertTrue(idle * 2 < citizens.size(), idle + " of " + citizens.size() + " citizens are without work");
     }
 
+    /**
+     * Asserts that every building of a kingdom with a role that works does work as its role, and that the posts in its
+     * workshops, markets and taverns are for the profession their blocks call for: a smithy of any style for a smith, a bakery
+     * for a cook, other workshops for crafters.
+     */
+    private static void assertRolesWork(GameTestHelper helper, MinecraftServer server, UUID id) {
+        BuildingEffects.changed();
+        Set<String> working = Set.of("house", "workshop", "warehouse", "barracks", "tavern", "market");
+        Set<String> seen = new HashSet<>();
+        for (Building building : buildings(server, id)) {
+            String role = building.role();
+            seen.add(role);
+            if (working.contains(role)) {
+                BuildingEffects.Effect effect = BuildingEffects.of(server, building).orElse(null);
+                helper.assertTrue(effect != null && effect.works(), building.templateId() + " at " + building.anchor() + " does not work as a "
+                        + role + ": " + (effect == null ? "-" : effect.status()));
+            }
+            String expected = switch (role) {
+                // The smithies of the styles have the anvil and the furnace of the plain one, the bakery its oven.
+                case "workshop" -> building.templateId().endsWith("smithy") ? "smith"
+                        : building.templateId().endsWith("bakery") ? "cook" : "crafter";
+                case "market" -> "merchant";
+                case "tavern" -> "innkeeper";
+                default -> "";
+            };
+            if (expected.isEmpty()) {
+                continue;
+            }
+            List<WorkPost> posts = postsIn(server, id, building.box());
+            helper.assertTrue(!posts.isEmpty(), building.templateId() + " has no post of work");
+            for (WorkPost post : posts) {
+                helper.assertTrue(post.professionId().equals(expected), "The post in " + building.templateId() + " is for "
+                        + post.professionId() + " instead of " + expected);
+            }
+        }
+        helper.assertTrue(seen.containsAll(working), "Roles of the capital: " + seen);
+    }
+
+    // ---------------------------------------------------------------- styled capitals
+
+    private static Optional<TemplateCatalog.Kind> kindOf(String template) {
+        return TemplateCatalog.get(template).map(TemplateCatalog.Entry::kind);
+    }
+
+    /**
+     * The buildings of a kind that stand in a kingdom.
+     */
+    private static List<Building> ofKind(MinecraftServer server, UUID kingdom, TemplateCatalog.Kind kind) {
+        List<Building> list = new ArrayList<>();
+        for (Building building : buildings(server, kingdom)) {
+            if (kindOf(building.templateId()).filter(kind::equals).isPresent()) {
+                list.add(building);
+            }
+        }
+        return list;
+    }
+
+    /**
+     * Where a post of the plan of a capital puts the feet of who stands there: {x, z} on the street, {x, z, y} y layers above it.
+     */
+    static BlockPos feet(NpcSite site, int[] point) {
+        return new BlockPos(site.x() + point[0], site.groundY() + 1 + (point.length > 2 ? point[2] : 0), site.z() + point[1]);
+    }
+
+    /**
+     * Whether one can stand at a place: nothing to bump into at the feet but a carpet and nothing at the head, a floor under
+     * the feet.
+     */
+    private static boolean standable(ServerLevel level, BlockPos feet) {
+        VoxelShape at = level.getBlockState(feet).getCollisionShape(level, feet);
+        boolean low = at.isEmpty() || at.max(Direction.Axis.Y) <= 0.125;
+        boolean head = level.getBlockState(feet.above()).getCollisionShape(level, feet.above()).isEmpty();
+        boolean floor = !at.isEmpty() || level.getBlockState(feet.below()).isFaceSturdy(level, feet.below(), Direction.UP);
+        return low && head && floor;
+    }
+
+    /**
+     * Asserts that the castle of the style and size of a capital is its first plot, at the throne, and stands around the
+     * throne with a roof over it; gives the castle.
+     */
+    private static Building assertCastle(GameTestHelper helper, NpcSite site, Kingdom kingdom, NpcComposition composition) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        String castle = TemplateCatalog.ofStyle(site.style(), TemplateCatalog.Kind.CASTLE).get(site.level().ordinal()).id();
+        NpcComposition.Plot first = composition.buildings().get(0);
+        helper.assertTrue(first.template().equals(castle) && first.x() == 0 && first.z() == 0 && first.facing() == 0,
+                "The first plot of the plan is " + first + " instead of " + castle + " at the throne");
+        BlockPos throne = NpcSpawner.thronePos(site);
+        helper.assertTrue(level.getBlockState(throne).is(ModRegistries.THRONE.get()), "No throne in the castle: " + level.getBlockState(throne));
+        Building building = buildings(server, kingdom.id()).stream().filter(b -> b.templateId().equals(castle)
+                && b.box().contains(throne.getX(), throne.getY(), throne.getZ())).findFirst().orElse(null);
+        helper.assertTrue(building != null, "The castle " + castle + " does not stand around the throne " + throne.toShortString());
+        helper.assertTrue(level.getBlockState(throne.above()).isAir(), "Something stands on the throne: " + level.getBlockState(throne.above()));
+        boolean roof = false;
+        for (int y = throne.getY() + 2; y <= building.box().maxY() && !roof; y++) {
+            roof = !level.getBlockState(new BlockPos(throne.getX(), y, throne.getZ())).isAir();
+        }
+        helper.assertTrue(roof, "No roof of the castle over the throne");
+        return building;
+    }
+
+    /**
+     * Asserts that a post of the castle is in the plan with at least so many points, every one inside the ground of the castle.
+     */
+    private static NpcComposition.Post assertCastlePost(GameTestHelper helper, NpcComposition composition, Building castle, NpcSite site,
+                                                        String name, int least) {
+        NpcComposition.Post post = composition.post(name).orElse(null);
+        helper.assertTrue(post != null && post.points().size() >= least, "The castle has no post " + name + " of " + least
+                + " point(s) or more: " + post);
+        for (int[] point : post.points()) {
+            BlockPos at = feet(site, point);
+            helper.assertTrue(castle.box().minX() <= at.getX() && at.getX() <= castle.box().maxX() && castle.box().minZ() <= at.getZ()
+                    && at.getZ() <= castle.box().maxZ(), "The post " + name + " at " + at.toShortString() + " lies outside the castle "
+                    + castle.box());
+        }
+        return post;
+    }
+
+    /**
+     * Asserts that the posts of work of a profession inside the buildings of a kind (and of a template ending so, if given) have
+     * that profession and a worker at them.
+     */
+    private static void assertWorkersIn(GameTestHelper helper, MinecraftServer server, UUID kingdom, TemplateCatalog.Kind kind, String ending,
+                                        String profession) {
+        List<Building> standing = ofKind(server, kingdom, kind);
+        standing.removeIf(building -> !building.templateId().endsWith(ending));
+        helper.assertTrue(!standing.isEmpty(), "No building of the kind " + kind + " ending with '" + ending + "' stands");
+        for (Building building : standing) {
+            List<WorkPost> posts = postsIn(server, kingdom, building.box());
+            boolean staffed = posts.stream().anyMatch(post -> post.professionId().equals(profession) && !post.workers().isEmpty());
+            StringBuilder found = new StringBuilder();
+            posts.forEach(post -> found.append(' ').append(post.professionId()).append('/').append(post.workers().size()).append(" of ")
+                    .append(post.seats()));
+            helper.assertTrue(staffed, building.templateId() + " has no " + profession + " at work; its posts:" + found);
+        }
+    }
+
+    /**
+     * Whether two lists of points hold the same points in the same order.
+     */
+    private static boolean samePoints(List<int[]> a, List<int[]> b) {
+        if (a.size() != b.size()) {
+            return false;
+        }
+        for (int i = 0; i < a.size(); i++) {
+            if (!Arrays.equals(a.get(i), b.get(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     // ---------------------------------------------------------------- appearance
 
     @GameTest(template = EMPTY, batch = "kingdomworld_npc_appear", timeoutTicks = 200)
@@ -446,35 +647,7 @@ public final class NpcGameTests {
             site = plant(helper, center);
             Kingdom kingdom = raise(helper, site, STEPS);
             UUID id = kingdom.id();
-            BuildingEffects.changed();
-            Set<String> working = Set.of("house", "workshop", "warehouse", "barracks", "tavern", "market");
-            Set<String> seen = new HashSet<>();
-            for (Building building : buildings(server, id)) {
-                String role = building.role();
-                seen.add(role);
-                if (working.contains(role)) {
-                    BuildingEffects.Effect effect = BuildingEffects.of(server, building).orElse(null);
-                    helper.assertTrue(effect != null && effect.works(), building.templateId() + " at " + building.anchor() + " does not work as a "
-                            + role + ": " + (effect == null ? "-" : effect.status()));
-                }
-                String expected = switch (role) {
-                    case "workshop" -> building.templateId().equals("kingdomworld:smithy") ? "smith"
-                            : building.templateId().equals("kingdomworld:bakery") ? "cook" : "crafter";
-                    case "market" -> "merchant";
-                    case "tavern" -> "innkeeper";
-                    default -> "";
-                };
-                if (expected.isEmpty()) {
-                    continue;
-                }
-                List<WorkPost> posts = postsIn(server, id, building.box());
-                helper.assertTrue(!posts.isEmpty(), building.templateId() + " has no post of work");
-                for (WorkPost post : posts) {
-                    helper.assertTrue(post.professionId().equals(expected), "The post in " + building.templateId() + " is for "
-                            + post.professionId() + " instead of " + expected);
-                }
-            }
-            helper.assertTrue(seen.containsAll(working), "Roles of the capital: " + seen);
+            assertRolesWork(helper, server, id);
             // Citizens live in the houses of other kinds as well as in the first two.
             Set<String> homes = new HashSet<>();
             for (Citizen citizen : KingdomWorldApi.state(server).citizens().registry().citizensOf(id)) {
@@ -651,8 +824,8 @@ public final class NpcGameTests {
             level.setBlockAndUpdate(planks.above(), Blocks.CHEST.defaultBlockState());
             level.getChunk(townChunk.x, townChunk.z).setInhabitedTime(10L * 60 * 60 * 20);
             helper.assertTrue(NpcWork.state(server).spawning().isEmpty(), "Another kingdom of the world is appearing");
-            site = NpcWork.plantAt(server, center.getX(), center.getZ(), NpcLevel.SMALL, List.of(new int[]{town.getX(), town.getZ()}))
-                    .orElse(null);
+            site = NpcWork.plantAt(server, center.getX(), center.getZ(), NpcLevel.SMALL, List.of(new int[]{town.getX(), town.getZ()}),
+                    NpcSite.LAYOUT_DISTRICTS, "").orElse(null);
             helper.assertTrue(site != null && site.towns().size() == 1, "The place has no town to check");
             NpcSpawner.runNow(server, site, STEPS);
             helper.assertTrue(site.status() == NpcSite.Status.SPAWNED, "The capital did not appear: " + site + " " + site.reason());
@@ -692,8 +865,9 @@ public final class NpcGameTests {
                     && copy.kingdomId().equals(site.kingdomId()) && reread.state().isNpc(site.kingdomId().orElseThrow()),
                     "The progress did not survive saving: " + copy);
             helper.assertTrue(copy.layout() == site.layout() && copy.style().equals(site.style()) && copy.wood().equals(site.wood())
-                            && copy.groundY() == site.groundY(),
-                    "The look of the place did not survive saving: " + copy.layout() + " " + copy.style() + " " + copy.wood());
+                            && copy.groundY() == site.groundY() && copy.guildRank().equals(site.guildRank()),
+                    "The look of the place did not survive saving: " + copy.layout() + " " + copy.style() + " " + copy.wood() + " '"
+                            + copy.guildRank() + "'");
             helper.assertTrue(NpcSpawner.composition(copy).buildings().equals(planned.buildings()), "The plan changed after saving");
             NpcSpawner.resetForTests();
             Kingdom kingdom = raise(helper, site, STEPS);
@@ -765,6 +939,264 @@ public final class NpcGameTests {
             }
             helper.succeed();
         });
+    }
+
+    // ---------------------------------------------------------------- the capitals of the styles
+
+    /**
+     * A small styled capital, as new worlds have them, rises whole: the castle of its style and size around the throne, the
+     * guild house and the mage tower of its rank, the treasury, the court, the infirmary, the yards and the decorations of the
+     * square, their workers at their places, the bank in the treasury and the posts of the castle.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_npc_styled", timeoutTicks = 200)
+    public static void aStyledSmallCapitalRisesWhole(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos center = platform(helper, HALF3);
+        NpcSite site = null;
+        try {
+            site = plantStyled(helper, center, NpcLevel.SMALL, "");
+            Kingdom kingdom = raise(helper, site, STYLED_STEPS);
+            UUID id = kingdom.id();
+            KingdomWorldState state = KingdomWorldApi.state(server);
+            NpcComposition composition = NpcSpawner.composition(site);
+            helper.assertTrue(composition.styled() && composition.style().equals(site.style()), "The plan is not of the style "
+                    + site.style() + ": layout " + composition.layout() + " " + composition.style());
+            helper.assertTrue(composition.wallRadius() == NpcComposition.capitalWall(NpcLevel.SMALL, NpcSite.LAYOUT_STYLED),
+                    "The wall of the plan has the radius " + composition.wallRadius());
+            int chunks = state.territory().territory(id).map(Territory::size).orElse(0);
+            int radius = landRadius(site);
+            helper.assertTrue(chunks == (2 * radius + 1) * (2 * radius + 1), "Land of " + chunks + " chunks for the radius " + radius);
+            assertWhole(helper, site, kingdom, composition);
+            Building castle = assertCastle(helper, site, kingdom, composition);
+            // The institutions of the square, each once, the guild house and the mage tower of the rank of the place.
+            TemplateCatalog.Rank rank = GuildHouses.fitting(site.level(), GuildHouses.of(site));
+            String style = site.style();
+            for (TemplateCatalog.Kind kind : List.of(TemplateCatalog.Kind.GUILD, TemplateCatalog.Kind.MAGE_TOWER, TemplateCatalog.Kind.TREASURY,
+                    TemplateCatalog.Kind.COURT, TemplateCatalog.Kind.INFIRMARY)) {
+                List<Building> standing = ofKind(server, id, kind);
+                helper.assertTrue(standing.size() == 1, standing.size() + " building(s) of the kind " + kind + " stand");
+                if (kind == TemplateCatalog.Kind.GUILD || kind == TemplateCatalog.Kind.MAGE_TOWER) {
+                    TemplateCatalog.Rank shown = TemplateCatalog.get(standing.get(0).templateId()).flatMap(TemplateCatalog.Entry::guildRank)
+                            .orElse(null);
+                    helper.assertTrue(shown == rank, standing.get(0).templateId() + " is of the rank " + shown + " instead of " + rank);
+                    helper.assertTrue(TemplateCatalog.get(standing.get(0).templateId()).map(entry -> entry.style().equals(style))
+                            .orElse(false), standing.get(0).templateId() + " is not of the style " + style);
+                }
+            }
+            helper.assertTrue(!ofKind(server, id, TemplateCatalog.Kind.TAVERN).isEmpty(), "No tavern stands");
+            List<Building> yards = ofKind(server, id, TemplateCatalog.Kind.YARD);
+            helper.assertTrue(yards.stream().anyMatch(b -> b.templateId().endsWith("_builders_yard"))
+                    && yards.stream().anyMatch(b -> b.templateId().endsWith("_carters_yard")), "The yards stand not: " + yards.size());
+            Set<String> decorations = new HashSet<>();
+            ofKind(server, id, TemplateCatalog.Kind.DECORATION).forEach(building -> decorations.add(building.templateId()));
+            helper.assertTrue(decorations.size() >= 3, "The square has " + decorations + " for decorations");
+            helper.assertTrue(ofKind(server, id, TemplateCatalog.Kind.WALL_GATE).size() == composition.gates().size(),
+                    "Gates of the wall standing: " + ofKind(server, id, TemplateCatalog.Kind.WALL_GATE).size() + " of " + composition.gates().size());
+            Set<String> roles = new HashSet<>();
+            buildings(server, id).forEach(building -> roles.add(building.role()));
+            for (String role : List.of("house", "warehouse", "workshop", "market", "well", "barracks", "tower", "tavern")) {
+                helper.assertTrue(roles.contains(role), "No building with the role " + role + ": " + roles);
+            }
+            assertRolesWork(helper, server, id);
+            // The workers at their places: in the guild house, the treasury, the yards, the mage tower.
+            assertWorkersIn(helper, server, id, TemplateCatalog.Kind.GUILD, "", "registrar");
+            assertWorkersIn(helper, server, id, TemplateCatalog.Kind.TREASURY, "", "minter");
+            assertWorkersIn(helper, server, id, TemplateCatalog.Kind.YARD, "_builders_yard", "builder");
+            assertWorkersIn(helper, server, id, TemplateCatalog.Kind.YARD, "_carters_yard", "carrier");
+            assertWorkersIn(helper, server, id, TemplateCatalog.Kind.MAGE_TOWER, "", "mage");
+            Set<String> professions = new HashSet<>();
+            state.citizens().registry().citizensOf(id).forEach(citizen -> professions.add(citizen.professionId()));
+            for (String profession : List.of("registrar", "minter", "mage", "builder", "carrier", "merchant", "innkeeper", "smith", "farmer",
+                    "warrior")) {
+                helper.assertTrue(professions.contains(profession), "Nobody is a " + profession + ": " + professions);
+            }
+            // The bank in the treasury.
+            int[] bank = StyledPlan.bank(composition).orElse(null);
+            helper.assertTrue(bank != null, "The plan has no place for the bank");
+            BlockPos bankPos = new BlockPos(site.x() + bank[0], site.groundY() + 1 + bank[2], site.z() + bank[1]);
+            Building treasury = ofKind(server, id, TemplateCatalog.Kind.TREASURY).get(0);
+            helper.assertTrue(level.getBlockState(bankPos).is(ModRegistries.BANK.get()) && treasury.box().contains(bankPos.getX(), bankPos.getY(),
+                    bankPos.getZ()), "No bank in the treasury at " + bankPos.toShortString() + ": " + level.getBlockState(bankPos));
+            // The guards of the hall have room by the throne; the gates of the wall and the castle have their posts.
+            NpcComposition.Post hall = assertCastlePost(helper, composition, castle, site, "palace_hall", 4);
+            helper.assertTrue(hall.points().size() == 4 && hall.points().stream().anyMatch(p -> p[0] == -2 && p[1] == 3)
+                    && hall.points().stream().anyMatch(p -> p[0] == 2 && p[1] == 3), "The hall of the castle has not its four places");
+            for (int[] point : hall.points()) {
+                BlockPos at = feet(site, point);
+                helper.assertTrue(standable(level, at), "The guard of the hall at " + at.toShortString() + " has no room: "
+                        + level.getBlockState(at.below()) + " " + level.getBlockState(at) + " " + level.getBlockState(at.above()));
+            }
+            assertCastlePost(helper, composition, castle, site, "palace_door", 1);
+            assertCastlePost(helper, composition, castle, site, "castle_gate", 2);
+            assertCastlePost(helper, composition, castle, site, "castle_wall", 4);
+            assertCastlePost(helper, composition, castle, site, "treasury", 1);
+            long gates = composition.posts().stream().filter(post -> post.name().startsWith("gate_")).count();
+            helper.assertTrue(gates == composition.gates().size(), gates + " posts of gates for " + composition.gates().size() + " gates");
+            helper.succeed();
+        } finally {
+            cleanUp(helper, site, center, HALF3);
+        }
+    }
+
+    /**
+     * A large styled capital rises with the large castle of its style, a gate on every side, the barracks of the royal guard and
+     * the posts of its castle, which its guard holds while it has soldiers left for them. One test a run: the heaviest.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_npc_styled_large", timeoutTicks = 200)
+    public static void aStyledLargeCapitalRises(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos center = platform(helper, LARGE_HALF3);
+        // The garrison of the rules of a new world, whatever the config of the test world keeps from older versions.
+        NpcSettings.override(NpcRules.DEFAULT);
+        NpcSite site = null;
+        try {
+            site = plantStyled(helper, center, NpcLevel.LARGE, "");
+            long started = System.nanoTime();
+            Kingdom kingdom = raise(helper, site, LARGE_STYLED_STEPS);
+            long millis = (System.nanoTime() - started) / 1_000_000;
+            NpcComposition composition = NpcSpawner.composition(site);
+            helper.assertTrue(composition.styled(), "The plan is not styled");
+            helper.assertTrue(composition.buildings().size() >= 55, "A large styled capital of " + composition.buildings().size() + " buildings");
+            helper.assertTrue(composition.gates().size() == 4, "Gates of the plan: " + composition.gates().size());
+            assertWhole(helper, site, kingdom, composition);
+            Building castle = assertCastle(helper, site, kingdom, composition);
+            helper.assertTrue(ofKind(server, kingdom.id(), TemplateCatalog.Kind.WALL_GATE).size() == 4, "Gates of the wall standing: "
+                    + ofKind(server, kingdom.id(), TemplateCatalog.Kind.WALL_GATE).size());
+            helper.assertTrue(!ofKind(server, kingdom.id(), TemplateCatalog.Kind.ROYAL_BARRACKS).isEmpty(), "No barracks of the royal guard");
+            helper.assertTrue(ofKind(server, kingdom.id(), TemplateCatalog.Kind.GUILD).size() == 1
+                    && ofKind(server, kingdom.id(), TemplateCatalog.Kind.MAGE_TOWER).size() == 1, "The guild house or the mage tower is missing");
+            assertCastlePost(helper, composition, castle, site, "castle_gate", 2);
+            assertCastlePost(helper, composition, castle, site, "castle_wall", 4);
+            assertCastlePost(helper, composition, castle, site, "treasury", 1);
+            // A large kingdom without towns has guards left after the posts of the capital: the castle gets its own.
+            GuardArmyGameTests.assertCastleDuties(helper, site, kingdom.id());
+            com.mojang.logging.LogUtils.getLogger().info("A large styled capital ({}, guild rank {}) of {} buildings rose in {} ms", site.style(),
+                    site.guildRank(), composition.buildings().size(), millis);
+            helper.succeed();
+        } finally {
+            NpcSettings.override(null);
+            cleanUp(helper, site, center, LARGE_HALF3);
+        }
+    }
+
+    /**
+     * A styled capital stopped by a restart in the middle of its castle goes on with the same plan: its layout, style, rank and
+     * wood are saved, the half-built castle is finished as it was laid out, with its look, and nothing stands twice.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_npc_styled_again", timeoutTicks = 200)
+    public static void aStyledCapitalGoesOnAfterARestart(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos center = platform(helper, HALF3);
+        NpcSite site = null;
+        try {
+            site = plantStyled(helper, center, NpcLevel.SMALL, "");
+            NpcComposition planned = NpcSpawner.composition(site);
+            String castle = planned.buildings().get(0).template();
+            // Tick by tick up to the castle half done: laid out, some of its blocks placed.
+            Construction half = null;
+            for (int i = 0; i < STYLED_STEPS && half == null && site.status() == NpcSite.Status.SPAWNING; i++) {
+                NpcSpawner.runNow(server, site, 1);
+                if (site.stage() == SpawnStage.BUILD && site.kingdomId().isPresent()) {
+                    half = KingdomWorldApi.state(server).construction().of(site.kingdomId().get()).stream()
+                            .filter(construction -> construction.templateId().equals(castle)).findFirst().orElse(null);
+                }
+            }
+            helper.assertTrue(half != null && site.stage() == SpawnStage.BUILD && site.step() == 0, "The castle is not half built: "
+                    + site.stage().id() + " step " + site.step() + " " + half);
+            Materials look = half.materials();
+            helper.assertTrue(!look.look().isEmpty(), "The castle was laid out without the look of its style: " + look);
+            // A restart: what is kept in memory goes, the saved data is read again.
+            CompoundTag saved = NpcSavedData.get(server).save(new CompoundTag());
+            NpcSavedData reread = NpcSavedData.load(saved);
+            NpcSite copy = reread.state().site(site.id()).orElse(null);
+            helper.assertTrue(!reread.isReadOnly() && copy != null && copy.stage() == SpawnStage.BUILD && copy.step() == site.step()
+                    && copy.kingdomId().equals(site.kingdomId()), "The progress did not survive saving: " + copy);
+            helper.assertTrue(copy.layout() == NpcSite.LAYOUT_STYLED && copy.style().equals(site.style()) && copy.wood().equals(site.wood())
+                            && copy.guildRank().equals(site.guildRank()) && copy.groundY() == site.groundY(),
+                    "The place did not survive saving: " + copy.layout() + " " + copy.style() + " " + copy.wood() + " '" + copy.guildRank() + "'");
+            NpcComposition again = NpcSpawner.composition(copy);
+            helper.assertTrue(again.buildings().equals(planned.buildings()) && samePoints(again.trees(), planned.trees())
+                    && samePoints(again.gardens(), planned.gardens()), "The plan changed after saving");
+            NpcSpawner.resetForTests();
+            Kingdom kingdom = raise(helper, site, STYLED_STEPS);
+            NpcComposition composition = NpcSpawner.composition(site);
+            helper.assertTrue(composition.buildings().equals(planned.buildings()), "The plan changed after the restart");
+            String problem = plotProblem(server, site, composition, kingdom.id());
+            helper.assertTrue(problem.isEmpty(), "After the restart: " + problem);
+            helper.assertTrue(KingdomWorldApi.state(server).construction().of(kingdom.id()).isEmpty(), "Constructions were left: "
+                    + KingdomWorldApi.state(server).construction().of(kingdom.id()).size());
+            WorldPos anchor = half.anchor();
+            Building built = buildings(server, kingdom.id()).stream().filter(b -> b.templateId().equals(castle) && b.anchor().x() == anchor.x()
+                    && b.anchor().z() == anchor.z()).findFirst().orElse(null);
+            helper.assertTrue(built != null, "The castle was not finished where it was laid out at " + anchor);
+            helper.assertTrue(built.materials().equals(look), "The castle changed its look with the restart: " + look + " -> " + built.materials());
+            for (Building building : buildings(server, kingdom.id())) {
+                boolean styled = TemplateCatalog.get(building.templateId()).map(entry -> !entry.style().isEmpty()).orElse(false);
+                helper.assertTrue(!styled || !building.materials().look().isEmpty(), building.templateId() + " stands without a look");
+            }
+            int citizens = KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdom.id()).size();
+            helper.assertTrue(citizens - fromAbroad(server, kingdom.id()) == composition.citizens(), "Citizens after the restart: " + citizens
+                    + " of " + composition.citizens());
+            helper.assertTrue(level.getBlockState(NpcSpawner.thronePos(site)).is(ModRegistries.THRONE.get()), "No throne after the restart");
+            helper.succeed();
+        } finally {
+            cleanUp(helper, site, center, HALF3);
+        }
+    }
+
+    /**
+     * The kingdoms of a world take the styles no other kingdom holds while there are such: planted one after another, they get
+     * every free style once; when all are held a ninth one takes one of them again, and a style comes free with its kingdom
+     * gone. The places are only planned, far from everything, and removed at the end.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_npc_styles", timeoutTicks = 100)
+    public static void stylesDoNotRepeatInAWorld(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        BlockPos origin = helper.absolutePos(BlockPos.ZERO);
+        List<NpcSite> planted = new ArrayList<>();
+        try {
+            // Other tests may have left kingdoms in the world: what they hold is not free.
+            Set<String> taken = new HashSet<>(NpcWork.state(server).takenStyles());
+            List<String> free = new ArrayList<>(ArchitecturalStyles.IDS);
+            free.removeAll(taken);
+            Set<String> given = new java.util.LinkedHashSet<>();
+            int[] next = {0};
+            java.util.function.Supplier<NpcSite> plan = () -> {
+                int n = next[0]++;
+                NpcSite site = NpcWork.planAt(server, origin.getX() + 60_000 + n * 4_000, origin.getZ() - 60_000, NpcLevel.SMALL, List.of(),
+                        NpcSite.LAYOUT_STYLED, "").orElse(null);
+                helper.assertTrue(site != null && site.styled() && ArchitecturalStyles.known(site.style()), "No styled place was planned: " + site);
+                planted.add(site);
+                return site;
+            };
+            for (int i = 0; i < free.size(); i++) {
+                NpcSite site = plan.get();
+                helper.assertTrue(!taken.contains(site.style()) && given.add(site.style()), "A kingdom took the style " + site.style()
+                        + " another one holds: taken " + taken + ", given " + given);
+            }
+            helper.assertTrue(given.size() == free.size() && NpcWork.state(server).takenStyles().containsAll(ArchitecturalStyles.IDS),
+                    "Not every style is held: " + NpcWork.state(server).takenStyles());
+            if (!planted.isEmpty()) {
+                // The style of a kingdom that is gone is free again, and the next kingdom takes it.
+                NpcSite first = planted.get(0);
+                helper.assertTrue(NpcWork.remove(server, first.id(), false).ok(), "The first place was not removed");
+                NpcSite after = plan.get();
+                helper.assertTrue(after.style().equals(first.style()), "The free style " + first.style() + " went to nobody: " + after.style());
+            }
+            // Every style held: one of them again.
+            NpcSite ninth = plan.get();
+            helper.assertTrue(ArchitecturalStyles.known(ninth.style()), "A kingdom beyond the eighth has no style: " + ninth.style());
+            helper.succeed();
+        } finally {
+            for (NpcSite site : planted) {
+                if (site.status() != NpcSite.Status.REMOVED) {
+                    NpcWork.remove(server, site.id(), false);
+                }
+            }
+        }
     }
 
     // ---------------------------------------------------------------- players

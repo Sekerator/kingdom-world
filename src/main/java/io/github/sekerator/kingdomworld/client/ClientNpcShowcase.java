@@ -35,10 +35,13 @@ import java.util.UUID;
 /**
  * The kingdoms of the world part of the client self-check ({@code -PclientSelfTest=npc}): in a copy of a test world a large
  * kingdom of the world appears on suitable land near the player the way it appears for any player (over ticks, with its towns
- * and roads) and after it a small one some way off, then the camera flies over them and saves screenshots into the folder
- * {@code world} of the screenshot folder: the large capital from above and from its avenue, its castle from outside and its
- * throne hall, a street of houses, the wall, a gate, the market, the road to a town and the town, the small capital from above
- * and from its street, the same view of both capitals to compare their styles, and the atlas. The kingdoms stay in the world.
+ * and roads) and after it a small one some way off, each in the architectural style the plan gives it, then the camera flies
+ * over them and saves screenshots into the folder {@code world} of the screenshot folder: the large capital from above and
+ * from its avenue, its castle from outside and from its court, its throne hall, the guild house, the mage tower, the treasury
+ * and its bank, the court, a street of the nobles by the square, a street of craftsmen and one of the poor by the wall, the
+ * wall, a gate, the market, the road to a town and the town, the small capital from above and from its street, the same view of
+ * both capitals to compare their styles, and the atlas. The places of the shots come from the plan of each capital; a building
+ * is framed from where it is seen whole. The kingdoms stay in the world.
  */
 final class ClientNpcShowcase {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -72,12 +75,25 @@ final class ClientNpcShowcase {
     }
 
     /**
+     * A building a shot frames: its ground in the world, the layer of the street, its height above it and where its front
+     * looks (0 south, 1 west, 2 north, 3 east).
+     */
+    private record Frame(int minX, int minZ, int maxX, int maxZ, int ground, int height, int facing) {
+    }
+
+    /** Where a front looking each way faces: {dx, dz} by facing 0 south, 1 west, 2 north, 3 east. */
+    private static final int[][] OUT = {{0, 1}, {-1, 0}, {0, -1}, {1, 0}};
+
+    /**
      * Shots of soldiers rather than of a place, and the posts of the garrison whose squads they show: the camera of such a
      * shot is put where the most of those soldiers are in plain sight.
      */
     private static final java.util.Map<String, List<String>> AIMED = java.util.Map.of(
             "garrison-stores", List.of("stores", "stores_round"),
+            "garrison-captain", List.of("palace_hall"),
             "garrison-army", List.of("reserve"));
+    /** Shots of a building, by name: the camera stands where the front of the building is seen whole, as far as it may. */
+    private final java.util.Map<String, Frame> frames = new java.util.concurrent.ConcurrentHashMap<>();
 
     private final Path folder;
     private int ticks;
@@ -406,12 +422,14 @@ final class ClientNpcShowcase {
     private static void garrisonShots(IntegratedServer server, NpcSite site, UUID kingdom, BlockPos throne, List<Shot> list) {
         io.github.sekerator.kingdomworld.core.npc.NpcComposition composition = NpcSpawner.composition(site);
         int y = site.groundY() + 1;
+        // The first point of a post; a point above the street (up the steps of a gate) stands that much higher.
         java.util.function.Function<String, double[]> at = name -> composition.post(name).filter(post -> !post.points().isEmpty())
-                .map(post -> new double[]{site.x() + post.points().get(0)[0] + 0.5, site.z() + post.points().get(0)[1] + 0.5}).orElse(null);
+                .map(post -> new double[]{site.x() + post.points().get(0)[0] + 0.5, site.z() + post.points().get(0)[1] + 0.5,
+                        post.points().get(0).length > 2 ? post.points().get(0)[2] : 0}).orElse(null);
         double[] gate = at.apply("gate_south");
         if (gate != null) {
             // From inside the city, towards the gate and the two guards before it.
-            list.add(towards("garrison-gate", gate[0], y + 3.0, gate[1] - 11.0, gate[0], y + 1.0, gate[1]));
+            list.add(towards("garrison-gate", gate[0], y + gate[2] + 3.0, gate[1] - 11.0, gate[0], y + gate[2] + 1.0, gate[1]));
         }
         double[] stores = at.apply("stores");
         double[] round = at.apply("stores_round");
@@ -426,7 +444,8 @@ final class ClientNpcShowcase {
         }
         double[] hall = at.apply("palace_hall");
         if (hall != null) {
-            list.add(towards("garrison-captain", hall[0] + 2.0, y + 1.8, hall[1] + 6.0, hall[0], y + 1.2, hall[1]));
+            // Planned only: the camera goes where the guards of the hall are seen.
+            list.add(towards("garrison-captain", hall[0] + 2.0, y + hall[2] + 1.8, hall[1] + 3.0, hall[0], y + hall[2] + 1.2, hall[1]));
         }
         for (Building building : KingdomWorldApi.state(server).construction().buildingsOf(kingdom)) {
             if (building.role().equals("barracks")) {
@@ -490,7 +509,7 @@ final class ClientNpcShowcase {
         server.execute(() -> {
             ServerPlayer player = server.getPlayerList().getPlayer(playerId);
             if (player != null) {
-                Shot from = aimed(server, player, shot);
+                Shot from = framed(player, aimed(server, player, shot));
                 this.yaw = from.yaw();
                 this.pitch = from.pitch();
                 player.serverLevel().setDayTime(6_000);
@@ -578,6 +597,80 @@ final class ClientNpcShowcase {
         return new Shot(shot.name(), best.x, best.y - 1.62, best.z, planned.yaw(), planned.pitch());
     }
 
+    /**
+     * A shot of a building from where its front is seen whole: of the free places before it, from far to near and from low to
+     * high, the first from which the middle, the top, the foot and both sides of its front are in plain sight, else the one
+     * that sees the most of them. A shot of no building stays as it was planned.
+     */
+    private Shot framed(ServerPlayer player, Shot shot) {
+        Frame frame = frames.get(shot.name());
+        if (frame == null) {
+            return shot;
+        }
+        ServerLevel level = player.serverLevel();
+        int[] out = OUT[Math.floorMod(frame.facing(), 4)];
+        boolean alongX = out[0] == 0;
+        double midX = (frame.minX() + frame.maxX() + 1) / 2.0;
+        double midZ = (frame.minZ() + frame.maxZ() + 1) / 2.0;
+        // Half a block before the middle of the front.
+        double fx = out[0] > 0 ? frame.maxX() + 1.5 : out[0] < 0 ? frame.minX() - 0.5 : midX;
+        double fz = out[1] > 0 ? frame.maxZ() + 1.5 : out[1] < 0 ? frame.minZ() - 0.5 : midZ;
+        double width = alongX ? frame.maxX() - frame.minX() + 1 : frame.maxZ() - frame.minZ() + 1;
+        int height = frame.height();
+        double sideX = alongX ? width * 0.4 : 0.0;
+        double sideZ = alongX ? 0.0 : width * 0.4;
+        List<net.minecraft.world.phys.Vec3> targets = List.of(
+                new net.minecraft.world.phys.Vec3(fx, frame.ground() + height * 0.15, fz),
+                new net.minecraft.world.phys.Vec3(fx, frame.ground() + height * 0.5, fz),
+                new net.minecraft.world.phys.Vec3(fx, frame.ground() + height * 0.85, fz),
+                new net.minecraft.world.phys.Vec3(fx - sideX, frame.ground() + height * 0.35, fz - sideZ),
+                new net.minecraft.world.phys.Vec3(fx + sideX, frame.ground() + height * 0.35, fz + sideZ));
+        net.minecraft.world.phys.Vec3 best = null;
+        int bestSeen = 0;
+        double size = Math.max(width, height);
+        // A low building (a market square) is looked at from a little above, over a wall or a fence before it.
+        double tall = Math.max(height, 12);
+        search:
+        for (double far : new double[]{1.3, 1.05, 0.85, 0.65, 0.5, 0.35}) {
+            double distance = Math.max(8.0, far * size + 4.0);
+            for (double lift : new double[]{0.3, 0.55, 0.8, 1.05}) {
+                for (double side : new double[]{0.0, 0.35, -0.35}) {
+                    net.minecraft.world.phys.Vec3 eye = new net.minecraft.world.phys.Vec3(fx + out[0] * distance + (alongX ? side * width : 0.0),
+                            frame.ground() + 1.6 + tall * lift, fz + out[1] * distance + (alongX ? 0.0 : side * width));
+                    boolean room = true;
+                    for (int y = (int) Math.floor(eye.y - 1.62); y <= (int) Math.floor(eye.y + 0.3) && room; y++) {
+                        room = level.getBlockState(BlockPos.containing(eye.x, y, eye.z)).isAir();
+                    }
+                    if (!room) {
+                        continue;
+                    }
+                    int seen = 0;
+                    for (net.minecraft.world.phys.Vec3 target : targets) {
+                        seen += level.clip(new net.minecraft.world.level.ClipContext(eye, target, net.minecraft.world.level.ClipContext.Block.VISUAL,
+                                net.minecraft.world.level.ClipContext.Fluid.NONE, player)).getType()
+                                == net.minecraft.world.phys.HitResult.Type.MISS ? 1 : 0;
+                    }
+                    if (seen > bestSeen) {
+                        bestSeen = seen;
+                        best = eye;
+                    }
+                    if (seen == targets.size()) {
+                        break search;
+                    }
+                }
+            }
+        }
+        if (best == null) {
+            LOGGER.warn(PREFIX + "the front of {} is seen from nowhere; the shot stays as planned", shot.name());
+            return shot;
+        }
+        LOGGER.info(PREFIX + "the shot of {} sees {} of {} points of its front from {} blocks", shot.name(), bestSeen, targets.size(),
+                String.format(java.util.Locale.ROOT, "%.0f", Math.hypot(best.x - fx, best.z - fz)));
+        Shot planned = towards(shot.name(), best.x, best.y, best.z, fx, frame.ground() + height * 0.45, fz);
+        // The feet of the player stand an eye height below the camera.
+        return new Shot(shot.name(), best.x, best.y - 1.62, best.z, planned.yaw(), planned.pitch());
+    }
+
     private void shoot(String name) {
         Minecraft minecraft = Minecraft.getInstance();
         Path file = folder.resolve(name + ".png");
@@ -605,8 +698,9 @@ final class ClientNpcShowcase {
         ServerLevel level = player.serverLevel();
         level.setDayTime(6_000);
         level.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DAYLIGHT).set(false, server);
+        // A styled capital, as new worlds have them; those of districts a copy of an older world keeps are left alone.
         Optional<NpcSite> appeared = NpcWork.state(server).sites().stream()
-                .filter(site -> site.status() == NpcSite.Status.SPAWNED && site.level() == NpcLevel.LARGE && site.districts()).findFirst();
+                .filter(site -> site.status() == NpcSite.Status.SPAWNED && site.level() == NpcLevel.LARGE && site.styled()).findFirst();
         if (appeared.isPresent()) {
             siteId = appeared.get().id();
             started = true;
@@ -636,7 +730,8 @@ final class ClientNpcShowcase {
         // The player watches from above while it appears, keeping the chunks around loaded like a player passing by.
         player.teleportTo(level, spot[0] + 0.5, level.getHeight(Heightmap.Types.MOTION_BLOCKING, spot[0], spot[1]) + 60, spot[1] - 80.5, 0, 40);
         started = true;
-        LOGGER.info(PREFIX + "a kingdom of the world appears at {} {} with {} town(s)", spot[0], spot[1], site.get().towns().size());
+        LOGGER.info(PREFIX + "a kingdom of the world appears at {} {} with {} town(s), style {}, guild rank {}", spot[0], spot[1],
+                site.get().towns().size(), site.get().style(), site.get().guildRank());
     }
 
     /**
@@ -671,15 +766,33 @@ final class ClientNpcShowcase {
         }
         List<Shot> list = new ArrayList<>();
         int y = throne.getY();
-        int radius = RoadWork.state(server).wallOf(0, kingdom).map(wall -> wall.radius()).orElse(NpcSpawner.composition(site).reach());
+        io.github.sekerator.kingdomworld.core.npc.NpcComposition composition = NpcSpawner.composition(site);
+        int radius = RoadWork.state(server).wallOf(0, kingdom).map(wall -> wall.radius()).orElse(composition.reach());
         // The whole capital from above, from the south; then from its avenue at the height of a walker, towards the palace, from
         // where the market opens beside it.
         list.add(new Shot("npc-capital", throne.getX() + 0.5, y + radius * 1.5, throne.getZ() + radius * 1.35, 180.0f, 50.0f));
         list.add(new Shot("npc-capital-street", throne.getX() + 0.5, y + 2.2, throne.getZ() + radius - 18.5, 180.0f, 2.0f));
-        list.add(new Shot("npc-palace", throne.getX() + 34.5, y + 16, throne.getZ() + 44.5, 142.0f, 20.0f));
-        list.add(new Shot("npc-throne-hall", throne.getX() + 0.5, y + 1.6, throne.getZ() + 5.8, 180.0f, 4.0f));
-        // A street of houses on the west side, between two rows that look at each other.
-        list.add(new Shot("npc-houses", throne.getX() - 54.5, y + 4.5, throne.getZ() + 40.5, 180.0f, 10.0f));
+        castleShots(server, level, site, composition, kingdom, throne, list);
+        // The institutions on the square, each framed from before its front.
+        frame("npc-guild", server, site, composition, kingdom, io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.GUILD, list);
+        frame("npc-mage-tower", server, site, composition, kingdom, io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.MAGE_TOWER,
+                list);
+        frame("npc-treasury", server, site, composition, kingdom, io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.TREASURY,
+                list);
+        Shot bank = bankShot(site, composition);
+        if (bank != null) {
+            list.add(bank);
+        }
+        frame("npc-court", server, site, composition, kingdom, io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.COURT, list);
+        // The streets of the quarters: the nobles by the square, the craftsmen in the outer ring, the poor by the wall.
+        for (String[] row : new String[][]{{"npc-noble-street", "noble"}, {"npc-houses", "craft"}, {"npc-poor-street", "poor"}}) {
+            Shot street = rowShot(row[0], site, composition, row[1]);
+            if (street != null) {
+                list.add(street);
+            } else {
+                LOGGER.warn(PREFIX + "the capital has no row of the quarter {} for the shot {}", row[1], row[0]);
+            }
+        }
         list.add(styleShot("npc-style-1", throne, radius));
         RoadWork.state(server).wallOf(0, kingdom).ifPresent(wall -> {
             int r = wall.radius();
@@ -696,13 +809,8 @@ final class ClientNpcShowcase {
             float gateYaw = (float) Math.toDegrees(Math.atan2(-(gate.x() - outX), gate.z() - outZ));
             list.add(new Shot("npc-gate", outX + 0.5, gate.y() + 6, outZ + 0.5, gateYaw, 15.0f));
         }
-        for (Building building : KingdomWorldApi.state(server).construction().buildingsOf(kingdom)) {
-            if (building.role().equals("market")) {
-                list.add(new Shot("npc-market", building.box().minX() + 5.5, building.anchor().y() + 9,
-                        building.box().maxZ() + 9.5, 180.0f, 32.0f));
-                break;
-            }
-        }
+        // The market square, framed from the street before it.
+        frame("npc-market", server, site, composition, kingdom, io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.MARKET, list);
         for (Road road : RoadWork.state(server).roads()) {
             if (!road.kingdomId().equals(kingdom) || road.cells().size() < 40) {
                 continue;
@@ -759,7 +867,196 @@ final class ClientNpcShowcase {
      */
     private static Shot styleShot(String name, BlockPos throne, int radius) {
         double inside = radius - 12;
-        return new Shot(name, throne.getX() - inside + 0.5, throne.getY() + 18, throne.getZ() + inside + 0.5, 225.0f, 30.0f);
+        // Over the roofs of the houses by the wall, the castle and the great houses of the square ahead.
+        return new Shot(name, throne.getX() - inside + 0.5, throne.getY() + 26, throne.getZ() + inside + 0.5, 225.0f, 30.0f);
+    }
+
+    /**
+     * The building that stands on a plot of the plan of a capital, if it stands.
+     */
+    private static Optional<Building> standing(IntegratedServer server, NpcSite site, UUID kingdom,
+                                               io.github.sekerator.kingdomworld.core.npc.NpcComposition.Plot plot) {
+        int x = site.x() + plot.x();
+        int z = site.z() + plot.z();
+        int y = site.groundY() + 1;
+        for (Building building : KingdomWorldApi.state(server).construction().buildingsOf(kingdom)) {
+            if (building.templateId().equals(plot.template()) && building.box().contains(x, y, z)) {
+                return Optional.of(building);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * A shot that frames the first standing building of a kind of the plan of a capital from before its front; the place of
+     * the camera is worked out when it goes there ({@link #framed}).
+     */
+    private void frame(String name, IntegratedServer server, NpcSite site, io.github.sekerator.kingdomworld.core.npc.NpcComposition composition,
+                       UUID kingdom, io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind kind, List<Shot> list) {
+        for (io.github.sekerator.kingdomworld.core.npc.NpcComposition.Plot plot : composition.buildings()) {
+            boolean ofKind = io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.get(plot.template()).map(entry -> entry.kind() == kind)
+                    .orElse(false);
+            Optional<Building> building = ofKind ? standing(server, site, kingdom, plot) : Optional.empty();
+            if (building.isEmpty()) {
+                continue;
+            }
+            io.github.sekerator.kingdomworld.core.construction.Box box = building.get().box();
+            int ground = site.groundY() + 1;
+            int height = Math.max(4, box.maxY() - ground + 1);
+            int facing = Math.floorMod(plot.facing(), 4);
+            frames.put(name, new Frame(box.minX(), box.minZ(), box.maxX(), box.maxZ(), ground, height, facing));
+            // As planned: before the middle of its front, half its height up; the frame finds a better place.
+            int[] out = OUT[facing];
+            double midX = (box.minX() + box.maxX() + 1) / 2.0;
+            double midZ = (box.minZ() + box.maxZ() + 1) / 2.0;
+            double halfX = (box.maxX() - box.minX() + 1) / 2.0;
+            double halfZ = (box.maxZ() - box.minZ() + 1) / 2.0;
+            list.add(towards(name, midX + out[0] * (halfX + 12), ground + height * 0.5, midZ + out[1] * (halfZ + 12), midX, ground + height * 0.4,
+                    midZ));
+            return;
+        }
+        LOGGER.warn(PREFIX + "no building of the kind {} stands for the shot {}", kind, name);
+    }
+
+    /**
+     * The castle of a capital: from afar and above, framed; from its court, out of its gate towards the keep; and its throne hall
+     * from the south end of the places of the guards of the hall, towards the throne.
+     */
+    private void castleShots(IntegratedServer server, ServerLevel level, NpcSite site,
+                             io.github.sekerator.kingdomworld.core.npc.NpcComposition composition, UUID kingdom, BlockPos throne, List<Shot> list) {
+        int y = throne.getY();
+        io.github.sekerator.kingdomworld.core.npc.NpcComposition.Plot castle = composition.buildings().get(0);
+        Optional<Building> standing = standing(server, site, kingdom, castle);
+        if (standing.isPresent()) {
+            io.github.sekerator.kingdomworld.core.construction.Box box = standing.get().box();
+            int height = Math.max(4, box.maxY() - y + 1);
+            frames.put("npc-palace", new Frame(box.minX(), box.minZ(), box.maxX(), box.maxZ(), y, height, Math.floorMod(castle.facing(), 4)));
+            double half = (box.maxX() - box.minX() + 1) / 2.0;
+            list.add(towards("npc-palace", throne.getX() + half * 1.8 + 0.5, y + height + 10, throne.getZ() + half * 2.4 + 0.5,
+                    throne.getX() + 0.5, y + height * 0.4, throne.getZ() + 0.5));
+        } else {
+            list.add(new Shot("npc-palace", throne.getX() + 34.5, y + 16, throne.getZ() + 44.5, 142.0f, 20.0f));
+        }
+        // The court: from the gate of the castle into the open, three steps more, looking at the keep over the throne.
+        composition.post("castle_gate").filter(post -> !post.points().isEmpty()).ifPresent(post -> {
+            int[] gate = post.points().get(0);
+            int[] in = OUT[(Math.floorMod(castle.facing(), 4) + 2) % 4];
+            BlockPos at = new BlockPos(site.x() + gate[0], y + (gate.length > 2 ? gate[2] : 0), site.z() + gate[1]);
+            int steps = 0;
+            while (steps < 16 && !open(level, at)) {
+                at = at.offset(in[0], 0, in[1]);
+                steps++;
+            }
+            at = at.offset(in[0] * 3, 0, in[1] * 3);
+            list.add(towards("npc-castle-court", at.getX() + 0.5, at.getY() + 1.0, at.getZ() + 0.5, throne.getX() + 0.5, y + 9, throne.getZ() + 0.5));
+        });
+        // The throne hall: from the south end of the places of its guards, towards the throne and the height of the hall.
+        int south = 3;
+        Optional<io.github.sekerator.kingdomworld.core.npc.NpcComposition.Post> hall = composition.post("palace_hall");
+        if (hall.isPresent()) {
+            for (int[] point : hall.get().points()) {
+                south = Math.max(south, point[1]);
+            }
+        }
+        list.add(towards("npc-throne-hall", throne.getX() + 0.5, y + 0.2, throne.getZ() + south + 1.5, throne.getX() + 0.5, y + 3.5,
+                throne.getZ() + 0.5));
+    }
+
+    /**
+     * Inside the treasury of a styled capital: from its door towards its bank.
+     */
+    private static Shot bankShot(NpcSite site, io.github.sekerator.kingdomworld.core.npc.NpcComposition composition) {
+        for (io.github.sekerator.kingdomworld.core.npc.NpcComposition.Plot plot : composition.buildings()) {
+            io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Entry entry = io.github.sekerator.kingdomworld.core.npc.TemplateCatalog
+                    .get(plot.template()).orElse(null);
+            if (entry == null || entry.kind() != io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.TREASURY
+                    || entry.points("door").isEmpty() || entry.points("bank").isEmpty()) {
+                continue;
+            }
+            io.github.sekerator.kingdomworld.core.construction.Placement placement = new io.github.sekerator.kingdomworld.core.construction.Placement(
+                    plot.facing(), plot.mirror());
+            io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Spot door = entry.points("door").get(0);
+            io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Spot bank = entry.points("bank").get(0);
+            int[] d = placement.apply(door.x(), door.y(), door.z());
+            int[] b = placement.apply(bank.x(), bank.y(), bank.z());
+            double dx = b[0] - d[0];
+            double dz = b[2] - d[2];
+            double length = Math.max(1.0, Math.hypot(dx, dz));
+            // A step and a half in from the door.
+            double x = site.x() + plot.x() + d[0] + 0.5 + dx / length * 1.5;
+            double z = site.z() + plot.z() + d[2] + 0.5 + dz / length * 1.5;
+            int floor = site.groundY() + 1 + d[1];
+            return towards("npc-bank", x, floor, z, site.x() + plot.x() + b[0] + 0.5, site.groundY() + 1 + b[1] + 0.6,
+                    site.z() + plot.z() + b[2] + 0.5);
+        }
+        return null;
+    }
+
+    /**
+     * A street of a quarter of a capital: along the half-row with the most houses of the quarter, from before its first house
+     * nearest the avenue towards its last one, a little above the street before their fronts.
+     */
+    private static Shot rowShot(String name, NpcSite site, io.github.sekerator.kingdomworld.core.npc.NpcComposition composition, String quarter) {
+        java.util.Map<String, List<io.github.sekerator.kingdomworld.core.npc.NpcComposition.Plot>> rows = new java.util.LinkedHashMap<>();
+        for (io.github.sekerator.kingdomworld.core.npc.NpcComposition.Plot plot : composition.buildings()) {
+            if (!plot.quarter().equals(quarter)) {
+                continue;
+            }
+            boolean ns = plot.facing() == 0 || plot.facing() == 2;
+            int across = ns ? plot.z() : plot.x();
+            int along = ns ? plot.x() : plot.z();
+            rows.computeIfAbsent(plot.facing() + ":" + Integer.signum(across) + ":" + Integer.signum(along), key -> new ArrayList<>()).add(plot);
+        }
+        List<io.github.sekerator.kingdomworld.core.npc.NpcComposition.Plot> row = null;
+        for (List<io.github.sekerator.kingdomworld.core.npc.NpcComposition.Plot> candidate : rows.values()) {
+            if (row == null || candidate.size() > row.size()) {
+                row = candidate;
+            }
+        }
+        if (row == null || row.size() < 2) {
+            return null;
+        }
+        int facing = Math.floorMod(row.get(0).facing(), 4);
+        boolean ns = facing == 0 || facing == 2;
+        int[] out = OUT[facing];
+        int outAcross = ns ? out[1] : out[0];
+        row.sort(java.util.Comparator.comparingInt(plot -> Math.abs(ns ? plot.x() : plot.z())));
+        // The line before the fronts: before the front of the house nearest the street.
+        int front = outAcross > 0 ? Integer.MIN_VALUE : Integer.MAX_VALUE;
+        for (io.github.sekerator.kingdomworld.core.npc.NpcComposition.Plot plot : row) {
+            int[] box = io.github.sekerator.kingdomworld.core.npc.NpcComposition.footprint(plot);
+            int face = switch (facing) {
+                case 0 -> box[3];
+                case 1 -> box[0];
+                case 2 -> box[1];
+                default -> box[2];
+            };
+            front = outAcross > 0 ? Math.max(front, face) : Math.min(front, face);
+        }
+        int firstAlong = ns ? row.get(0).x() : row.get(0).z();
+        int lastAlong = ns ? row.get(row.size() - 1).x() : row.get(row.size() - 1).z();
+        int sign = lastAlong >= firstAlong ? 1 : -1;
+        double fromAlong = firstAlong - sign * 6.0;
+        double fromAcross = front + outAcross * 3.0;
+        double toAcross = front + outAcross * 1.0;
+        int ground = site.groundY() + 1;
+        double fromX = site.x() + (ns ? fromAlong : fromAcross) + 0.5;
+        double fromZ = site.z() + (ns ? fromAcross : fromAlong) + 0.5;
+        double toX = site.x() + (ns ? lastAlong : toAcross) + 0.5;
+        double toZ = site.z() + (ns ? toAcross : lastAlong) + 0.5;
+        return towards(name, fromX, ground + 2.5, fromZ, toX, ground + 3.0, toZ);
+    }
+
+    /**
+     * Whether nothing stands over a place up to twenty layers.
+     */
+    private static boolean open(ServerLevel level, BlockPos pos) {
+        for (int up = 1; up <= 20; up++) {
+            if (!level.getBlockState(pos.above(up)).isAir()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -769,7 +1066,7 @@ final class ClientNpcShowcase {
      */
     private int plantSmall(IntegratedServer server, ServerLevel level, NpcSite large) {
         Optional<NpcSite> standing = NpcWork.state(server).sites().stream()
-                .filter(site -> site.status() == NpcSite.Status.SPAWNED && site.level() == NpcLevel.SMALL && site.districts()).findFirst();
+                .filter(site -> site.status() == NpcSite.Status.SPAWNED && site.level() == NpcLevel.SMALL && site.styled()).findFirst();
         if (standing.isPresent()) {
             return standing.get().id();
         }

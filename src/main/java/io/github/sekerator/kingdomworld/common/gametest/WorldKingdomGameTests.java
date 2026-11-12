@@ -56,11 +56,14 @@ public final class WorldKingdomGameTests {
     public static void aKingdomOfTheWorldStandsAsDataFirstAndIsRaisedLater(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
-        BlockPos center = NpcGameTests.platform(helper);
+        // A new world plans styled capitals: the platform holds one.
+        BlockPos center = NpcGameTests.platform(helper, NpcGameTests.HALF3);
         NpcSite site = null;
         try {
             site = NpcWork.planAt(server, center.getX(), center.getZ(), NpcLevel.SMALL, List.of()).orElse(null);
             helper.assertTrue(site != null, "The data of the kingdoms of the world is read-only");
+            helper.assertTrue(site.styled() && site.layout() == NpcSite.LAYOUT_STYLED, "A new place is not styled: layout " + site.layout()
+                    + ", style " + site.style());
             // The platform stands where the generator knows no ground: the square is levelled to it.
             site.setGroundY(NpcGameTests.PLATFORM);
             helper.assertTrue(NpcWork.foundNow(server, site), "The kingdom was not founded as data: " + site + " " + site.reason());
@@ -68,7 +71,10 @@ public final class WorldKingdomGameTests {
             helper.assertTrue(site.status() == NpcSite.Status.FOUNDED && !NpcWork.built(server, kingdom.id()), "Not waiting for its buildings: " + site);
             helper.assertTrue(!level.getBlockState(NpcSpawner.thronePos(site)).is(ModRegistries.THRONE.get()), "A throne stands before the buildings");
             helper.assertTrue(site.districts(), "A new place is not laid out in districts: " + site.layout());
+            // The land of a styled capital holds its wall, its fields and its outer posts.
             int radius = NpcGameTests.landRadius(site);
+            int least = (io.github.sekerator.kingdomworld.core.npc.NpcComposition.capitalReach(NpcLevel.SMALL, NpcSite.LAYOUT_STYLED) + 15) / 16;
+            helper.assertTrue(radius >= least, "The land radius " + radius + " does not hold the capital (" + least + ")");
             int held = land(server, kingdom.id());
             helper.assertTrue(held == (2 * radius + 1) * (2 * radius + 1), "Land of " + held + " chunks for the radius " + radius);
             long money = NpcSettings.rules().money(NpcLevel.SMALL);
@@ -101,7 +107,7 @@ public final class WorldKingdomGameTests {
             helper.assertTrue(grown == held + 2, "The land grew from " + held + " to " + grown);
 
             // Raising the buildings later gives nothing twice.
-            NpcSpawner.runNow(server, site, NpcGameTests.STEPS);
+            NpcSpawner.runNow(server, site, NpcGameTests.STYLED_STEPS);
             helper.assertTrue(site.status() == NpcSite.Status.SPAWNED, "The buildings were not raised: " + site + " at " + site.stage().id() + " "
                     + site.reason());
             helper.assertTrue(level.getBlockState(NpcSpawner.thronePos(site)).is(ModRegistries.THRONE.get()), "No throne once the buildings stand");
@@ -122,7 +128,7 @@ public final class WorldKingdomGameTests {
                     "The citizens are not those planned for the map");
             helper.succeed();
         } finally {
-            NpcGameTests.cleanUp(helper, site, center);
+            NpcGameTests.cleanUp(helper, site, center, NpcGameTests.HALF3);
         }
     }
 

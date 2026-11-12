@@ -41,10 +41,10 @@ import java.util.TreeMap;
 import java.util.UUID;
 
 /**
- * Game tests of a kingdom of the world living by itself: a small and a large capital of districts without towns rise and then
- * live thirty game days with no player near, the way the server keeps them far from players: every day the payday, a turn of
- * the ruler and the steps of the citizens. Their people stay alive and fed and their treasury stays above zero. A line of
- * numbers per kingdom is logged at the start and after ten, twenty and thirty days.
+ * Game tests of a kingdom of the world living by itself: a small and a large styled capital without towns, as new worlds have
+ * them, rise and then live thirty game days with no player near, the way the server keeps them far from players: every day the
+ * payday, a turn of the ruler and the steps of the citizens. Their people stay alive and fed and their treasury stays above
+ * zero. A line of numbers per kingdom is logged at the start and after ten, twenty and thirty days.
  */
 @GameTestHolder(KingdomWorld.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -64,18 +64,18 @@ public final class NpcLifeGameTests {
 
     @GameTest(template = NpcGameTests.EMPTY, batch = "kingdomworld_npc_life_small", timeoutTicks = TIMEOUT)
     public static void aSmallKingdomOfTheWorldLivesThirtyDaysByItself(GameTestHelper helper) {
-        live(helper, NpcLevel.SMALL, NpcGameTests.HALF, NpcGameTests.STEPS);
+        live(helper, NpcLevel.SMALL, NpcGameTests.HALF3, NpcGameTests.STYLED_STEPS);
     }
 
     @GameTest(template = NpcGameTests.EMPTY, batch = "kingdomworld_npc_life_large", timeoutTicks = TIMEOUT)
     public static void aLargeKingdomOfTheWorldLivesThirtyDaysByItself(GameTestHelper helper) {
-        live(helper, NpcLevel.LARGE, NpcGameTests.LARGE_HALF, NpcGameTests.LARGE_STEPS);
+        live(helper, NpcLevel.LARGE, NpcGameTests.LARGE_HALF3, NpcGameTests.LARGE_STYLED_STEPS);
     }
 
     /**
-     * Raises a capital of a size and lets it live: when a game day begins (the clock of the world jumps to it) the payday and a
-     * turn of the ruler, then a step of the citizens every server tick, so that what the server does in its ticks between them
-     * (the buildings a ruler lays out, the looks at workplaces) goes on as it would.
+     * Raises a styled capital of a size, its style the one the plan gives it, and lets it live: when a game day begins (the clock
+     * of the world jumps to it) the payday and a turn of the ruler, then a step of the citizens every server tick, so that what
+     * the server does in its ticks between them (the buildings a ruler lays out, the looks at workplaces) goes on as it would.
      */
     private static void live(GameTestHelper helper, NpcLevel size, int half, int raiseSteps) {
         MinecraftServer server = helper.getLevel().getServer();
@@ -85,9 +85,9 @@ public final class NpcLifeGameTests {
         NpcSettings.overrideRulers(RulerRules.DEFAULT);
         NpcSite site = null;
         try {
-            site = NpcGameTests.plant(helper, center, size);
+            site = NpcGameTests.plantStyled(helper, center, size, "");
             Kingdom kingdom = NpcGameTests.raise(helper, site, raiseSteps);
-            Life life = new Life(helper, site, center, half, kingdom.id(), size.id(), citizens(server, kingdom.id()).size());
+            Life life = new Life(helper, site, center, half, kingdom.id(), size.id() + " " + site.style(), citizens(server, kingdom.id()).size());
             log(server, life.name, life.id, 0, life.decrees);
             helper.runAfterDelay(1, life::tick);
         } catch (RuntimeException | Error e) {

@@ -802,18 +802,57 @@ public final class GuardArmyGameTests {
                 + ": " + ArmyWork.state(server).duties().values()));
     }
 
+    /**
+     * Where a post of the plan of a capital stands in the world: {x, z} on the street, {x, z, y} y layers above it.
+     */
+    private static WorldPos at(String dimension, io.github.sekerator.kingdomworld.core.npc.NpcSite site, int[] point) {
+        BlockPos feet = NpcGameTests.feet(site, point);
+        return new WorldPos(dimension, feet.getX(), feet.getY(), feet.getZ());
+    }
+
+    /**
+     * Asserts that the guard of a styled capital with soldiers left after the posts of the capital holds the posts of its
+     * castle: two at the gate of the castle, the treasury, and a round along the points of the wall of the castle in their order.
+     */
+    static void assertCastleDuties(GameTestHelper helper, io.github.sekerator.kingdomworld.core.npc.NpcSite site, UUID id) {
+        MinecraftServer server = helper.getLevel().getServer();
+        String dimension = Dimensions.id(helper.getLevel());
+        io.github.sekerator.kingdomworld.core.npc.NpcComposition composition =
+                io.github.sekerator.kingdomworld.common.npc.NpcSpawner.composition(site);
+        io.github.sekerator.kingdomworld.common.npc.NpcGarrison.station(server, id);
+        int[] gatePoint = composition.post("castle_gate").orElseThrow().points().get(0);
+        ArmySquad gate = post(helper, server, id, "castle_gate");
+        helper.assertTrue(gate.members().size() == 2 && gate.order().equals(Order.guard(at(dimension, site, gatePoint), 0)),
+                "The gate of the castle is not guarded by two: " + gate.members().size() + " " + gate.order());
+        int[] treasuryPoint = composition.post("treasury").orElseThrow().points().get(0);
+        ArmySquad treasury = post(helper, server, id, "treasury");
+        helper.assertTrue(!treasury.members().isEmpty() && treasury.order().equals(Order.hold(at(dimension, site, treasuryPoint))),
+                "The treasury of the castle is not held: " + treasury.members().size() + " " + treasury.order());
+        List<int[]> wallPoints = composition.post("castle_wall").orElseThrow().points();
+        int corners = Math.min(wallPoints.size(), Order.MAX_POINTS);
+        ArmySquad wall = post(helper, server, id, "castle_wall");
+        helper.assertTrue(wall.members().size() >= 2 && wall.order().kind() == Order.Kind.PATROL
+                && wall.order().points().size() == corners, "No round of two on the wall of the castle: " + wall.members().size()
+                + " " + wall.order());
+        for (int i = 0; i < corners; i++) {
+            helper.assertTrue(wall.order().points().get(i).equals(at(dimension, site, wallPoints.get(i))), "The round of the wall of the "
+                    + "castle goes through " + wall.order().points().get(i) + " instead of its point " + i);
+        }
+    }
+
     @GameTest(template = EMPTY, batch = "kingdomworld_guardarmy_garrison", timeoutTicks = 200)
     public static void theGarrisonOfARaisedCapitalStandsAtItsPosts(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
-        BlockPos center = NpcGameTests.platform(helper);
+        // A small styled capital, as new worlds have them.
+        BlockPos center = NpcGameTests.platform(helper, NpcGameTests.HALF3);
         io.github.sekerator.kingdomworld.common.npc.NpcSettings.override(io.github.sekerator.kingdomworld.core.npc.NpcRules.DEFAULT);
         io.github.sekerator.kingdomworld.core.npc.NpcSite site = null;
         try {
             helper.assertTrue(io.github.sekerator.kingdomworld.common.npc.NpcWork.state(server).spawning().isEmpty(),
                     "Another kingdom of the world is appearing");
-            site = NpcGameTests.plant(helper, center);
-            Kingdom kingdom = NpcGameTests.raise(helper, site, NpcGameTests.STEPS);
+            site = NpcGameTests.plantStyled(helper, center, io.github.sekerator.kingdomworld.core.npc.NpcLevel.SMALL, "");
+            Kingdom kingdom = NpcGameTests.raise(helper, site, NpcGameTests.STYLED_STEPS);
             UUID id = kingdom.id();
             ArmyState army = ArmyWork.state(server);
             io.github.sekerator.kingdomworld.core.npc.NpcComposition composition =
@@ -866,9 +905,9 @@ public final class GuardArmyGameTests {
             }
             // Two inside the storehouse, a round about it with the vice-captain, two at every gate, the captain in the hall.
             ArmySquad stores = post(helper, server, id, "stores");
-            int[] at = composition.post("stores").orElseThrow().points().get(0);
-            helper.assertTrue(stores.members().size() == 2 && stores.order().equals(Order.hold(new WorldPos(dimension, site.x() + at[0],
-                    site.groundY() + 1, site.z() + at[1]))), "The storehouse is not held by two: " + stores.members().size() + " " + stores.order());
+            int[] storesPoint = composition.post("stores").orElseThrow().points().get(0);
+            helper.assertTrue(stores.members().size() == 2 && stores.order().equals(Order.hold(at(dimension, site, storesPoint))),
+                    "The storehouse is not held by two: " + stores.members().size() + " " + stores.order());
             ArmySquad round = post(helper, server, id, "stores_round");
             helper.assertTrue(round.members().size() >= 2 && round.order().kind() == Order.Kind.PATROL && round.order().points().size() == 4
                     && round.members().contains(army.officer(id, Branch.GUARD, Post.VICE_CAPTAIN).orElseThrow().citizenId()),
@@ -885,6 +924,9 @@ public final class GuardArmyGameTests {
             helper.assertTrue(gates == 2, "A small capital has " + gates + " gates with posts");
             helper.assertTrue(post(helper, server, id, "palace_hall").members().contains(army.officer(id, Branch.GUARD, Post.CAPTAIN)
                     .orElseThrow().citizenId()), "The captain of the guard is not in the hall of the palace");
+            // The posts of the castle come after those: the ten of the guard of a small capital are taken by the posts above.
+            helper.assertTrue(composition.post("castle_gate").isPresent() && composition.post("treasury").isPresent()
+                    && composition.post("castle_wall").isPresent(), "The castle of the capital names no posts of its own");
             // The army in reserve: the barracks with its vice-captain, the palace with its captain.
             ArmySquad reserve = post(helper, server, id, "reserve");
             ArmySquad palace = post(helper, server, id, "reserve_palace");
@@ -911,23 +953,27 @@ public final class GuardArmyGameTests {
                     .orElse(false), "The posts were lost with the saved data");
         } finally {
             io.github.sekerator.kingdomworld.common.npc.NpcSettings.override(null);
-            NpcGameTests.cleanUp(helper, site, center);
+            NpcGameTests.cleanUp(helper, site, center, NpcGameTests.HALF3);
         }
         helper.succeed();
     }
 
+    /**
+     * The ruler of a styled kingdom raises a camp of its army in its style beyond its capital.
+     */
     @GameTest(template = EMPTY, batch = "kingdomworld_guardarmy_camp", timeoutTicks = 3000)
     public static void aRulerRaisesACampOfItsArmyOnItsOwnLand(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
-        BlockPos center = NpcGameTests.platform(helper);
+        BlockPos center = NpcGameTests.platform(helper, NpcGameTests.HALF3);
         io.github.sekerator.kingdomworld.common.npc.NpcSettings.override(io.github.sekerator.kingdomworld.core.npc.NpcRules.DEFAULT);
         helper.assertTrue(io.github.sekerator.kingdomworld.common.npc.NpcWork.state(server).spawning().isEmpty(),
                 "Another kingdom of the world is appearing");
-        io.github.sekerator.kingdomworld.core.npc.NpcSite site = NpcGameTests.plant(helper, center);
+        io.github.sekerator.kingdomworld.core.npc.NpcSite site = NpcGameTests.plantStyled(helper, center,
+                io.github.sekerator.kingdomworld.core.npc.NpcLevel.SMALL, "");
         UUID id;
         try {
-            id = NpcGameTests.raise(helper, site, NpcGameTests.STEPS).id();
+            id = NpcGameTests.raise(helper, site, NpcGameTests.STYLED_STEPS).id();
             io.github.sekerator.kingdomworld.core.npc.NpcKingdom npc = io.github.sekerator.kingdomworld.common.npc.NpcWork.kingdom(server, id)
                     .orElseThrow();
             // The army beyond the capital waits at its barracks until the ruler raises a camp for it.
@@ -939,7 +985,7 @@ public final class GuardArmyGameTests {
             io.github.sekerator.kingdomworld.common.npc.NpcRulers.carryOutNow(server, npc, camp);
         } catch (RuntimeException e) {
             io.github.sekerator.kingdomworld.common.npc.NpcSettings.override(null);
-            NpcGameTests.cleanUp(helper, site, center);
+            NpcGameTests.cleanUp(helper, site, center, NpcGameTests.HALF3);
             throw e;
         }
         UUID kingdomId = id;
@@ -975,7 +1021,7 @@ public final class GuardArmyGameTests {
                 int reach = NpcGameTests.landRadius(placed) * 16;
                 helper.assertTrue(Math.max(Math.abs(raised.x() - placed.x()), Math.abs(raised.z() - placed.z())) > reach,
                         "The camp lies inside the land of the capital: " + raised);
-                // Its buildings: the drill yard, two barracks, a barn and two watchtowers.
+                // Its buildings in the style of the kingdom: the drill yard, two barracks, a store and a watchtower.
                 java.util.Map<String, Integer> found = new java.util.HashMap<>();
                 for (io.github.sekerator.kingdomworld.core.construction.Building building : KingdomWorldApi.state(server).construction()
                         .buildingsOf(kingdomId)) {
@@ -983,11 +1029,13 @@ public final class GuardArmyGameTests {
                         found.merge(building.templateId(), 1, Integer::sum);
                     }
                 }
+                String style = placed.styled() ? placed.style() : "";
+                java.util.Map<String, Integer> wanted = new java.util.HashMap<>();
                 for (io.github.sekerator.kingdomworld.core.npc.ArmyCamp.Building plan : io.github.sekerator.kingdomworld.core.npc.ArmyCamp
-                        .buildings()) {
-                    helper.assertTrue(found.getOrDefault("kingdomworld:" + plan.template(), found.getOrDefault(plan.template(), 0)) > 0,
-                            "The camp lacks " + plan.template() + ": " + found);
+                        .buildings(style)) {
+                    wanted.merge(plan.template(), 1, Integer::sum);
                 }
+                helper.assertTrue(found.equals(wanted), "The camp of the style '" + style + "' has " + found + " instead of " + wanted);
                 // The squads of the army beyond the capital stand in the camp, quartered there, each under its sergeant.
                 ArmyState army = ArmyWork.state(server);
                 int inCamp = 0;
@@ -1012,7 +1060,7 @@ public final class GuardArmyGameTests {
                 helper.succeed();
             } finally {
                 io.github.sekerator.kingdomworld.common.npc.NpcSettings.override(null);
-                NpcGameTests.cleanUp(helper, placed, center);
+                NpcGameTests.cleanUp(helper, placed, center, NpcGameTests.HALF3);
             }
         });
     }

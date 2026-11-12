@@ -156,6 +156,7 @@ function Write-Summary {
     Write-Host "Logs: $SmokeLogDir"
     foreach ($w in $script:Warnings) { Write-Host "  warning: $w" -ForegroundColor Yellow }
     if (Get-Variable -Name WorldFounding -Scope Script -ErrorAction SilentlyContinue) { Write-Host "Kingdoms of the world: $($script:WorldFounding)" }
+    if ((Get-Variable -Name NpcLoad -Scope Script -ErrorAction SilentlyContinue) -and $script:NpcLoad) { Write-Host "Raising of a large styled capital: $($script:NpcLoad)" }
     if (Get-Variable -Name BackgroundRaise -Scope Script -ErrorAction SilentlyContinue) { Write-Host "Buildings raised in the background: $($script:BackgroundRaise)" }
     if (Get-Variable -Name RulerLoad -Scope Script -ErrorAction SilentlyContinue) { Write-Host "Turns of the rulers: $($script:RulerLoad)" }
     if (Get-Variable -Name WarLoad -Scope Script -ErrorAction SilentlyContinue) { Write-Host "Wars: $($script:WarLoad)" }
@@ -1990,10 +1991,10 @@ Invoke-Phase 'run1' {
         # house from the storehouse on a flat place of chunk [2, 0], and the restart comes half way.
         Send-ServerCommand $server 'kingdomworld admin build templates'
         $templates = Wait-ForLog $server 'Building templates: (\d+)' $CommandTimeout $ConsoleFailPattern
-        if ($templates -and [int]$templates.Groups[1].Value -ge 9) {
+        if ($templates -and [int]$templates.Groups[1].Value -ge 248) {
             Write-Ok "[run1] $($templates.Groups[1].Value) building templates loaded"
         } else {
-            Add-Failure '[run1] the building templates (8 built-in and the data pack one) did not load'
+            Add-Failure "[run1] the building templates (247 built-in and the data pack one) did not load: $(if ($templates) { $templates.Groups[1].Value } else { 'no answer' })"
         }
         if (Wait-ForLog $server 'kingdomworld:small_house \(Small house\): 9.9.9, blocks \d+, items \d+, can be built' $CommandTimeout $ConsoleFailPattern) {
             Write-Ok '[run1] the small house can be built'
@@ -2491,8 +2492,10 @@ Invoke-Phase 'run1' {
         if (-not $second) {
             Add-Failure '[run1] the second large kingdom of the world did not appear in time'
         } else {
+            # A new world plans styled capitals: this is the raising of a large one, its castle, its square and its guild house.
             $script:NpcLoad = "$($second.Groups[6].Value) ticks, average $($second.Groups[7].Value) ms, worst $($second.Groups[8].Value) ms (at $($second.Groups[9].Value))"
             Write-Ok "[run1] $($second.Groups[1].Value) appeared from the start: $($second.Groups[2].Value) buildings, $($second.Groups[3].Value) citizens, $($second.Groups[4].Value) soldiers, $($second.Groups[5].Value) town(s); $($script:NpcLoad)"
+            Write-Host "    worst tick of the raising of a large styled capital: $($second.Groups[8].Value) ms (at $($second.Groups[9].Value))"
             if ([double]$second.Groups[8].Value -gt 50) {
                 Add-Failure "[run1] a tick of the appearance of a large kingdom took $($second.Groups[8].Value) ms"
             }
@@ -2766,6 +2769,14 @@ Invoke-Phase 'run1' {
         } else {
             Add-Failure "[run1] the posts of the garrison are not held: $posts"
         }
+        # The castle of a styled capital names its gate, its treasury and a round on its wall; they come after the posts of the
+        # capital and its towns, so a kingdom with towns may have no guard left for them.
+        $castlePosts = @([regex]::Matches($posts, '(castle_gate|treasury|castle_wall)=(\d+)') | ForEach-Object { $_.Value })
+        if ($castlePosts.Count -gt 0) {
+            Write-Ok "[run1] the castle of the capital is guarded: $($castlePosts -join ', ')"
+        } else {
+            Write-Host "    the castle of the capital has no guard of its own: the posts of the capital and its towns took all $guards"
+        }
         $script:GarrisonPosts = "$guards/$ofArmy/$posts"
         # An alarm that lasts brings the officers of the guard out, one after the other: a stranger strikes a guard near the
         # throne, and strikes again while the fight drags on.
@@ -2781,7 +2792,9 @@ Invoke-Phase 'run1' {
         }
         $guard = $warrior.Groups[1].Value
         $rioter = 'smoke_rioter'
-        # Nobody is near that capital: its hall is kept loaded for the check, as a player in it would keep it.
+        # Nobody is near that capital: its hall is kept loaded for the check, as a player in it would keep it. The guard stands
+        # three blocks south of the throne and the rioter beside it: the carpet before the throne in the throne hall of the castle
+        # of every style, with room above and a floor under it.
         Send-ServerCommand $server "forceload add $tx $tz"
         Sync-Server $server
         [void](Invoke-ServerCommand $server "kingdomworld admin citizens body $guard $tx $ty $($tz + 3) still" "Citizen $guard \([^\r\n]*\) has a body at ")
@@ -2993,7 +3006,7 @@ Invoke-Phase 'run2' {
     Invoke-Part $server 'the memory of the rulers after the restart' {
         if (-not $script:RulerSite) { return }
         $site = $script:RulerSite
-        if (Wait-ForStartLog $server 'KingdomWorld kingdoms of the world: .*data format 5' 10) { Write-Ok '[run2] the kingdoms of the world are loaded in data format 5' } else { Add-Failure '[run2] the data format of the kingdoms of the world is not 4' }
+        if (Wait-ForStartLog $server 'KingdomWorld kingdoms of the world: .*data format 5' 10) { Write-Ok '[run2] the kingdoms of the world are loaded in data format 5' } else { Add-Failure '[run2] the data format of the kingdoms of the world is not 5' }
         Send-ServerCommand $server "kingdomworld admin npc decisions $site"
         $decisions = Wait-ForLog $server ': (\d+) decrees?, (\d+) turn\(s\), waiting: ' $CommandTimeout $ConsoleFailPattern
         if ($decisions -and [int]$decisions.Groups[2].Value -ge $script:RulerTurns -and [int]$decisions.Groups[1].Value -ge [Math]::Min(1, $script:RulerDecrees)) {
