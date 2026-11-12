@@ -43,13 +43,14 @@ import java.util.UUID;
  *
  * <p>A capital of districts names its posts: two guards at every gate, two inside the storehouse and a round about it,
  * the hall of the palace with the captain of the guard, the door of the palace, the square, and a round along the wall.
- * Every town has a few guards of its own. The royal army is far larger than the guard ({@link RoyalArmy}): a part of it stands
- * in reserve at the barracks, its captain with some of it at the palace, and the rest lives in the camps of the kingdom
- * ({@link NpcCamps}) in squads of {@link #ARMY_SQUAD}, each under its sergeant, the most experienced soldier of the squad. Until a
- * camp stands, or when there is no land for one, those squads wait at the barracks of the capital. The army is not taken
- * from the people: its recruits come from abroad, all of them at the founding and {@link NpcRules#armyPerDay} a day after.
- * A capital of the first layout has no named posts: its gates, a storehouse of the register of buildings and the throne
- * stand in for them.
+ * The castle of a styled capital adds the gate of the castle, its treasury and a round on the walk of its wall, when guards
+ * are left for them. Every town has a few guards of its own. The royal army is far larger than the guard
+ * ({@link RoyalArmy}): a part of it stands in reserve at the barracks, its captain with some of it at the palace, and the
+ * rest lives in the camps of the kingdom ({@link NpcCamps}) in squads of {@link #ARMY_SQUAD}, each under its sergeant, the
+ * most experienced soldier of the squad. Until a camp stands, or when there is no land for one, those squads wait at the
+ * barracks of the capital. The army is not taken from the people: its recruits come from abroad, all of them at the
+ * founding and {@link NpcRules#armyPerDay} a day after. A capital of the first layout has no named posts: its gates, a
+ * storehouse of the register of buildings and the throne stand in for them.
  *
  * <p>The posts are reckoned anew every time, not once: a gate that is gone loses its guards, a new one gets some, and a
  * post that lost soldiers is filled from the less important ones. Squads the ruler sent elsewhere (a road patrol, the
@@ -325,8 +326,12 @@ public final class NpcGarrison {
 
     // ---------------------------------------------------------------- the posts
 
+    /**
+     * A point of a post: {x, z} from the throne on the street, or {x, z, y} with y layers above the street (on a wall walk).
+     */
     private static WorldPos at(String dimension, NpcSite site, int[] point) {
-        return new WorldPos(dimension, site.x() + point[0], site.groundY() + 1, site.z() + point[1]);
+        int above = point.length > 2 ? point[2] : 0;
+        return new WorldPos(dimension, site.x() + point[0], site.groundY() + 1 + above, site.z() + point[1]);
     }
 
     private static List<WorldPos> route(String dimension, NpcSite site, List<int[]> points) {
@@ -372,6 +377,9 @@ public final class NpcGarrison {
         NpcRules rules = NpcSettings.rules();
         NpcComposition composition = NpcSpawner.composition(site);
         List<Duty> duties = new ArrayList<>();
+        // The posts of a castle come last of the guard, after those of the capital and of its towns, which keep their guards: a
+        // small capital has none left for them.
+        List<Duty> castle = new ArrayList<>();
         WorldPos palace = throne;
         if (!composition.posts().isEmpty()) {
             // A capital of districts names its posts.
@@ -396,6 +404,16 @@ public final class NpcGarrison {
             square.ifPresent(post -> duties.add(new Duty("square", Order.hold(at(dimension, site, post.points().get(0))), 2, 4, Branch.GUARD, null)));
             wall.ifPresent(post -> duties.add(new Duty("wall_round", Order.patrol(route(dimension, site, post.points())), 3,
                     ArmySquad.MAX_MEMBERS, Branch.GUARD, null)));
+            // The castle of a styled capital names its gate, its treasury and the walk of its wall.
+            Optional<NpcComposition.Post> castleGate = composition.post("castle_gate").filter(post -> !post.points().isEmpty());
+            Optional<NpcComposition.Post> treasury = composition.post("treasury").filter(post -> !post.points().isEmpty());
+            Optional<NpcComposition.Post> castleWall = composition.post("castle_wall").filter(post -> post.points().size() >= 2);
+            castleGate.ifPresent(post -> castle.add(new Duty("castle_gate", Order.guard(at(dimension, site, post.points().get(0)), 0), 2, 2,
+                    Branch.GUARD, null)));
+            treasury.ifPresent(post -> castle.add(new Duty("treasury", Order.hold(at(dimension, site, post.points().get(0))), 1, 2, Branch.GUARD,
+                    null)));
+            castleWall.ifPresent(post -> castle.add(new Duty("castle_wall", Order.patrol(route(dimension, site, post.points())), 2, 3,
+                    Branch.GUARD, null)));
             if (door.isPresent()) {
                 palace = at(dimension, site, door.get().points().get(0));
             }
@@ -426,6 +444,7 @@ public final class NpcGarrison {
                 }
             }
         }
+        duties.addAll(castle);
         // The army in reserve: at the barracks with its vice-captain, and at the palace with its captain.
         WorldPos barracks = building(server, kingdomId, BuildingRoles.BARRACKS, throne).map(Building::anchor).orElse(throne);
         int capital = Math.max(1, rules.army(site.level()));

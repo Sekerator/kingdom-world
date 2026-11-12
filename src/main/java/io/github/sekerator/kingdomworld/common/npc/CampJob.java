@@ -8,6 +8,7 @@ import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
 import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
 import io.github.sekerator.kingdomworld.core.npc.ArmyCamp;
 import io.github.sekerator.kingdomworld.core.npc.NpcKingdom;
+import io.github.sekerator.kingdomworld.core.npc.NpcSite;
 import io.github.sekerator.kingdomworld.core.npc.RulerDecision;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
@@ -200,9 +201,14 @@ final class CampJob extends RulerActions.Job {
                 return null;
             }
             case 4 -> {
-                List<ArmyCamp.Building> buildings = ArmyCamp.buildings();
+                // A kingdom of an architectural style raises its camps in its style with the look of its public buildings; the
+                // style of a place never changes, so the buildings a restart finds standing are those of the same templates.
+                Optional<NpcSite> site = NpcWork.state(server).site(npc.siteId());
+                String style = site.filter(NpcSite::styled).map(NpcSite::style).orElse("");
+                List<ArmyCamp.Building> buildings = ArmyCamp.buildings(style);
                 int budget = NpcSpawner.blockBudget();
-                Materials materials = NpcWork.state(server).site(npc.siteId()).map(NpcCity::materials).orElse(Materials.NONE);
+                Materials materials = site.map(place -> place.styled() ? NpcCity.publicMaterials(server, place) : NpcCity.materials(place))
+                        .orElse(Materials.NONE);
                 long started = System.nanoTime();
                 while (building < buildings.size() && budget > 0 && System.nanoTime() - started < STEP_NANOS) {
                     ArmyCamp.Building plan = buildings.get(building);

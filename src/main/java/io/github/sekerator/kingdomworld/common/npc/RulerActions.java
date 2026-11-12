@@ -254,8 +254,10 @@ public final class RulerActions {
     // ---------------------------------------------------------------- buildings
 
     private static Result build(MinecraftServer server, NpcKingdom npc, RulerDecision decision) {
+        String style = RulerPlaces.style(server, npc.kingdomId());
         Optional<BuildingTemplate> template = io.github.sekerator.kingdomworld.common.construction.BuildingTemplates.get(decision.target())
-                .filter(t -> decision.subject().equals(t.role())).or(() -> RulerPlaces.template(decision.subject()));
+                .filter(t -> decision.subject().equals(t.role()) && RulerPlaces.usable(t, style))
+                .or(() -> RulerPlaces.template(decision.subject(), style));
         if (template.isEmpty()) {
             return Result.failed(KingdomError.UNKNOWN_TEMPLATE, decision);
         }
@@ -336,7 +338,7 @@ public final class RulerActions {
             }
             long started = System.nanoTime();
             KingdomWorldState.ConstructionChange change = ConstructionWork.lay(level, null, kingdomId, spot.template(), anchor, spot.placement(),
-                    RulerPlaces.materials(server, kingdomId));
+                    RulerPlaces.materials(server, kingdomId, spot.template().id().toString(), anchor));
             part = "lay " + (System.nanoTime() - started) / 1_000_000L + " ms";
             if (change.construction().isPresent()) {
                 ensureBuilder(server, level, npc);

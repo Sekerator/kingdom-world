@@ -17,6 +17,7 @@ import io.github.sekerator.kingdomworld.core.npc.NpcComposition;
 import io.github.sekerator.kingdomworld.core.npc.NpcKingdom;
 import io.github.sekerator.kingdomworld.core.npc.NpcSite;
 import io.github.sekerator.kingdomworld.core.npc.RulerMind;
+import io.github.sekerator.kingdomworld.core.npc.RulerTemplates;
 import io.github.sekerator.kingdomworld.core.npc.RulerView;
 import io.github.sekerator.kingdomworld.core.road.Road;
 import io.github.sekerator.kingdomworld.core.road.RoadRules;
@@ -48,14 +49,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 final class RulerPlaces {
     private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
-    /** Kinds of the templates of the plans a ruler does not put up by itself: they belong to the wall and the palace. */
-    private static final Set<io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind> NOT_BY_RULERS = Set.of(
-            io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.GATEHOUSE,
-            io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.CORNER_TOWER,
-            io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.HALL,
-            io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.CASTLE,
-            io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.DRILL_YARD,
-            io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.STORAGE_YARD);
     /** Blocks a plot beyond the wall keeps from fields, roads and the wall. */
     private static final int KEEP_CLEAR = 3;
     /** What a template costs with a wood; templates do not change while the server runs. */
@@ -94,18 +87,69 @@ final class RulerPlaces {
                 key -> Map.copyOf(TemplateMaterials.apply(template, materials).items()));
     }
 
+    private static Optional<NpcSite> site(MinecraftServer server, UUID kingdomId) {
+        return NpcWork.kingdom(server, kingdomId).flatMap(npc -> NpcWork.state(server).site(npc.siteId()));
+    }
+
     /**
-     * The wood and stone a ruler builds with: the style of its kingdom where it has one, else the wood of the buildings that
-     * stand.
+     * The architectural style of a kingdom of the world whose capital was laid out in one, else empty: its ruler builds in that
+     * style and in no other.
+     */
+    static String style(MinecraftServer server, UUID kingdomId) {
+        return site(server, kingdomId).filter(NpcSite::styled).map(NpcSite::style).orElse("");
+    }
+
+    /**
+     * The wood and stone a ruler builds with: the style of its kingdom where it has one (the look of its public buildings for a
+     * kingdom of an architectural style), else the wood of the buildings that stand. Costs of the buildings a ruler weighs are
+     * counted with these.
      */
     static Materials materials(MinecraftServer server, UUID kingdomId) {
-        Optional<NpcSite> site = NpcWork.kingdom(server, kingdomId).flatMap(npc -> NpcWork.state(server).site(npc.siteId()));
+        Optional<NpcSite> site = site(server, kingdomId);
+        if (site.isPresent() && site.get().styled()) {
+            return NpcCity.publicMaterials(server, site.get());
+        }
         if (site.isPresent() && site.get().districts()) {
             Materials own = NpcCity.materials(site.get());
             // Costs are counted for a wood that is named: the templates' own woods count as they are.
             return own;
         }
         return new Materials(wood(server, kingdomId), "");
+    }
+
+    /**
+     * The materials a ruler lays out a building of a template with at an anchor: in a kingdom of an architectural style the look
+     * of the style for the quarter of the kind of the template, drawn from the seed of the place and the anchor, so that its
+     * houses differ like those of its capital; else {@link #materials(MinecraftServer, UUID)}. The look is fixed when the
+     * construction is laid out.
+     */
+    static Materials materials(MinecraftServer server, UUID kingdomId, String templateId, BlockPos anchor) {
+        Optional<NpcSite> site = site(server, kingdomId).filter(NpcSite::styled);
+        if (site.isEmpty() || !io.github.sekerator.kingdomworld.core.npc.BuildingLooks.styles().contains(site.get().style())) {
+            return materials(server, kingdomId);
+        }
+        io.github.sekerator.kingdomworld.core.npc.BuildingLooks.Quarter quarter = io.github.sekerator.kingdomworld.core.npc.TemplateCatalog
+                .get(templateId).map(entry -> RulerTemplates.quarter(entry.kind()))
+                .orElse(io.github.sekerator.kingdomworld.core.npc.BuildingLooks.Quarter.PUBLIC);
+        String cloth = KingdomWorldApi.kingdom(server, kingdomId)
+                .map(kingdom -> io.github.sekerator.kingdomworld.core.kingdom.KingdomColors.dye(kingdom.color())).orElse("");
+        Materials wanted = io.github.sekerator.kingdomworld.core.npc.BuildingLooks.of(site.get().style(), site.get().wood(), cloth, quarter,
+                site.get().seed() ^ anchor.asLong());
+        return known(wanted);
+    }
+
+    /**
+     * Materials the game knows: a wood, a stone or a look it does not know is left out, the rest kept.
+     */
+    private static Materials known(Materials wanted) {
+        if (TemplateMaterials.known(wanted)) {
+            return wanted;
+        }
+        io.github.sekerator.kingdomworld.core.construction.MaterialTable table = TemplateMaterials.table();
+        String wood = wanted.wood().isEmpty() || Materials.AUTO.equals(wanted.wood()) || table.hasWood(wanted.wood()) ? wanted.wood() : "";
+        String stone = wanted.stone().isEmpty() || table.hasStone(wanted.stone()) ? wanted.stone() : "";
+        String look = table.knows(wanted.appearance()) ? wanted.look() : "";
+        return new Materials(wood, stone, look);
     }
 
     static void unfit(UUID kingdomId, BlockPos anchor) {
@@ -130,27 +174,34 @@ final class RulerPlaces {
     }
 
     /**
-     * The template a ruler builds for a role: its own choice for the roles it knows, else the first template of the role at the
-     * lowest level.
+     * The template a ruler of a kingdom of a style builds for a role: its own choice for the roles it knows, else the first
+     * template of the role at the lowest level.
+     *
+     * @param style the style of the kingdom ({@link #style(MinecraftServer, UUID)})
      */
-    static Optional<BuildingTemplate> template(String role) {
-        return BuildingTemplates.all().stream().filter(t -> role.equals(t.role()) && usable(t))
+    static Optional<BuildingTemplate> template(String role, String style) {
+        return BuildingTemplates.all().stream().filter(t -> role.equals(t.role()) && usable(t, style))
                 .min(Comparator.comparingInt(BuildingTemplate::level).thenComparing(t -> t.id().toString()));
     }
 
     /**
-     * The templates of a role at its first level, by id.
+     * The templates of a role at its first level a ruler of a kingdom of a style may build, by id.
+     *
+     * @param style the style of the kingdom ({@link #style(MinecraftServer, UUID)})
      */
-    static List<BuildingTemplate> templates(String role) {
+    static List<BuildingTemplate> templates(String role, String style) {
         List<BuildingTemplate> list = new ArrayList<>();
-        BuildingTemplates.all().stream().filter(t -> role.equals(t.role()) && t.level() <= 1 && usable(t))
+        BuildingTemplates.all().stream().filter(t -> role.equals(t.role()) && t.level() <= 1 && usable(t, style))
                 .sorted(Comparator.comparing(t -> t.id().toString())).forEach(list::add);
         return list;
     }
 
-    private static boolean usable(BuildingTemplate template) {
-        if (io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.get(template.id().toString())
-                .map(entry -> NOT_BY_RULERS.contains(entry.kind())).orElse(false)) {
+    /**
+     * Whether a ruler of a kingdom of a style may build a template: one of its style or a plain one the plan of a capital does
+     * not keep for itself ({@link RulerTemplates}), that no player owns and that the rules of construction allow.
+     */
+    static boolean usable(BuildingTemplate template, String style) {
+        if (!RulerTemplates.usable(template.id().toString(), style)) {
             return false;
         }
         return template.owner() == null && template.available() && BuildingTemplates.problem(template, ConstructionSettings.rules()) == null;
@@ -165,13 +216,14 @@ final class RulerPlaces {
         Materials materials = materials(server, id);
         boolean districts = NpcWork.state(server).site(npc.siteId()).map(io.github.sekerator.kingdomworld.core.npc.NpcSite::districts)
                 .orElse(false);
+        String style = style(server, id);
         for (String role : RulerMind.wantedRoles(view, NpcSettings.rulers())) {
             if (!view.knownRoles.contains(role)) {
                 continue;
             }
             // Of the first-level templates of the role, those whose missing materials cost about the least; among them the next
             // one in turn for every building of the role that stands, so that a ruler does not build the same house every time.
-            List<BuildingTemplate> candidates = templates(role);
+            List<BuildingTemplate> candidates = templates(role, style);
             if (!districts) {
                 // The plots of the old grid are eleven blocks wide with streets of two between them: a wider building would
                 // shut the street.
@@ -226,7 +278,7 @@ final class RulerPlaces {
         state.citizens().posts().postsOf(id, Professions.BUILDER.id()).forEach(post -> builders.add(post.pos()));
         if (builders.isEmpty()) {
             // A kingdom without a builder gets one at the square of its throne when it lays out a building.
-            BlockPos post = builderPost(site);
+            BlockPos post = builderPost(site, composition);
             builders.add(new io.github.sekerator.kingdomworld.core.citizen.WorldPos(dimension, post.getX(), post.getY(), post.getZ()));
         }
         int reach = Math.max(8, ConstructionSettings.rules().builderRadius() - 4);
@@ -300,6 +352,20 @@ final class RulerPlaces {
      * Where the post of the builder of a kingdom of the world stands on the square of its throne.
      */
     static BlockPos builderPost(NpcSite site) {
+        return site.styled() ? builderPost(site, NpcSpawner.composition(site)) : builderPost(site, null);
+    }
+
+    /**
+     * Where the post of the builder of a kingdom of the world stands on the square of its throne: by the throne, or in a styled
+     * capital, whose castle stands around the throne, on the square before the south-west corner of the castle.
+     *
+     * @param composition the plan of the capital, or {@code null} for a capital that is not styled
+     */
+    static BlockPos builderPost(NpcSite site, @org.jetbrains.annotations.Nullable NpcComposition composition) {
+        if (composition != null && composition.styled()) {
+            int out = composition.precinct() + 3;
+            return new BlockPos(site.x() - out, site.groundY() + 1, site.z() + out);
+        }
         return new BlockPos(site.x() - 5, site.groundY() + 1, site.z() - 5);
     }
 
