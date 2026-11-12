@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.gothic_smithy",
+  "category": "production",
+  "type": "workshop",
+  "role": "workshop",
+  "level": 1,
+  "icon": "minecraft:anvil",
+  "anchor": [6, 0, 10],
+  "entrance": "south"
+}

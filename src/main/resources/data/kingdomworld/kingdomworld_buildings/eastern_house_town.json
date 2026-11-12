@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.eastern_house_town",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:white_stained_glass_pane",
+  "anchor": [4, 0, 12],
+  "entrance": "south"
+}

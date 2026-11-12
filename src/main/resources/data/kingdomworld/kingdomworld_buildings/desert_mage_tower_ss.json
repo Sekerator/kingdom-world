@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.desert_mage_tower_ss",
+  "category": "production",
+  "type": "mage_tower",
+  "role": "mage_tower",
+  "level": 1,
+  "icon": "kingdomworld:magic_focus",
+  "anchor": [12, 0, 24],
+  "entrance": "south"
+}

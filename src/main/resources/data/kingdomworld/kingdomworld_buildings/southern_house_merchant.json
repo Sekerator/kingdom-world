@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.southern_house_merchant",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:decorated_pot",
+  "anchor": [5, 0, 12],
+  "entrance": "south"
+}

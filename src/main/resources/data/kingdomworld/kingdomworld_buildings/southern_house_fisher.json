@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.southern_house_fisher",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:cod",
+  "anchor": [2, 0, 6],
+  "entrance": "south"
+}

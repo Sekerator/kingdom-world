@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.nordic_house_merchant",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:emerald",
+  "anchor": [6, 0, 14],
+  "entrance": "south"
+}

@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.desert_castle_medium",
+  "category": "defense",
+  "type": "palace",
+  "role": "none",
+  "level": 1,
+  "icon": "minecraft:chiseled_sandstone",
+  "anchor": [20, 1, 40],
+  "entrance": "south"
+}

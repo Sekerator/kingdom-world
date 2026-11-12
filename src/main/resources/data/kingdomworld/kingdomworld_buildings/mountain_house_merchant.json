@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.mountain_house_merchant",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:gold_ingot",
+  "anchor": [6, 0, 14],
+  "entrance": "south"
+}

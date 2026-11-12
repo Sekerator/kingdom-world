@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.desert_house_hut",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:mud_bricks",
+  "anchor": [2, 0, 6],
+  "entrance": "south"
+}

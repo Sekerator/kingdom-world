@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.eastern_house_farmer",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:hay_block",
+  "anchor": [5, 0, 8],
+  "entrance": "south"
+}

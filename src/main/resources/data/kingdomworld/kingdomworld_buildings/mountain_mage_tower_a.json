@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.mountain_mage_tower_a",
+  "category": "production",
+  "type": "mage_tower",
+  "role": "mage_tower",
+  "level": 1,
+  "icon": "kingdomworld:magic_focus",
+  "anchor": [7, 0, 14],
+  "entrance": "south"
+}

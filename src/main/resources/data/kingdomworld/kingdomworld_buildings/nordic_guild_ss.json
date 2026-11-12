@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.nordic_guild_ss",
+  "category": "trade",
+  "type": "guild",
+  "role": "none",
+  "level": 1,
+  "icon": "kingdomworld:guild_desk",
+  "anchor": [17, 0, 36],
+  "entrance": "south"
+}

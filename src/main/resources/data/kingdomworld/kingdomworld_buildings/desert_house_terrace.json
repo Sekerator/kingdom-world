@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.desert_house_terrace",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:oak_trapdoor",
+  "anchor": [4, 0, 10],
+  "entrance": "south"
+}

@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.gothic_house_merchant",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:purple_banner",
+  "anchor": [5, 0, 12],
+  "entrance": "south"
+}

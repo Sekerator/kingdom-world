@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.gothic_house_hovel",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:cobbled_deepslate",
+  "anchor": [2, 0, 6],
+  "entrance": "south"
+}

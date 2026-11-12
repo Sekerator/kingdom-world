@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.gothic_house_manor",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:iron_bars",
+  "anchor": [6, 0, 14],
+  "entrance": "south"
+}

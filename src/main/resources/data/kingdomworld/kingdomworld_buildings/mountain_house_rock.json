@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.mountain_house_rock",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:stone",
+  "anchor": [5, 0, 12],
+  "entrance": "south"
+}

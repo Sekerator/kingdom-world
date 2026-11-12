@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.southern_castle_medium",
+  "category": "defense",
+  "type": "palace",
+  "role": "none",
+  "level": 1,
+  "icon": "minecraft:smooth_sandstone",
+  "anchor": [20, 1, 40],
+  "entrance": "south"
+}

@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.eastern_house_shack",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:spruce_planks",
+  "anchor": [2, 0, 6],
+  "entrance": "south"
+}

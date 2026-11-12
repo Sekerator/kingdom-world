@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.eastern_house_noble",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:red_concrete",
+  "anchor": [6, 0, 14],
+  "entrance": "south"
+}

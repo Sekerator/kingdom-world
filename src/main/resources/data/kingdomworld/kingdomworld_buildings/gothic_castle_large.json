@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.gothic_castle_large",
+  "category": "defense",
+  "type": "palace",
+  "role": "none",
+  "level": 1,
+  "icon": "minecraft:wither_skeleton_skull",
+  "anchor": [23, 1, 46],
+  "entrance": "south"
+}

@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.southern_guild_b",
+  "category": "trade",
+  "type": "guild",
+  "role": "none",
+  "level": 1,
+  "icon": "kingdomworld:guild_desk",
+  "anchor": [6, 0, 14],
+  "entrance": "south"
+}

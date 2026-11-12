@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.mountain_house_forge",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:iron_ingot",
+  "anchor": [6, 0, 12],
+  "entrance": "south"
+}

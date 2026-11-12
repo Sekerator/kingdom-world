@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.southern_house_narrow",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:iron_bars",
+  "anchor": [3, 0, 10],
+  "entrance": "south"
+}

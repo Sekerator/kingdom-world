@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.mountain_house_dugout",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:moss_block",
+  "anchor": [4, 0, 8],
+  "entrance": "south"
+}

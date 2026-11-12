@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.eastern_house_merchant",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:red_nether_brick_wall",
+  "anchor": [5, 0, 12],
+  "entrance": "south"
+}

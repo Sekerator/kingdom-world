@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.nordic_mage_tower_a",
+  "category": "production",
+  "type": "mage_tower",
+  "role": "mage_tower",
+  "level": 1,
+  "icon": "kingdomworld:magic_focus",
+  "anchor": [6, 0, 18],
+  "entrance": "south"
+}

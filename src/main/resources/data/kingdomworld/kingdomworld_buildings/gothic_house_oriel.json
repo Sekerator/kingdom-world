@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.gothic_house_oriel",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:glass_pane",
+  "anchor": [5, 0, 10],
+  "entrance": "south"
+}

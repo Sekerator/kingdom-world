@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.southern_house_court",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:flowering_azalea_leaves",
+  "anchor": [5, 0, 10],
+  "entrance": "south"
+}

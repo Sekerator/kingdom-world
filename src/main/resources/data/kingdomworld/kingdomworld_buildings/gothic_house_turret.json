@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.gothic_house_turret",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:deepslate_tiles",
+  "anchor": [6, 0, 12],
+  "entrance": "south"
+}

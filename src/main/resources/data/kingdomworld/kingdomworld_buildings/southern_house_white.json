@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.southern_house_white",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:white_concrete",
+  "anchor": [3, 0, 8],
+  "entrance": "south"
+}

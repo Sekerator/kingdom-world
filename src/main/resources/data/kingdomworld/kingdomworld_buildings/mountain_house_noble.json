@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.mountain_house_noble",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:gilded_blackstone",
+  "anchor": [6, 0, 14],
+  "entrance": "south"
+}

@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.gothic_wall_gate",
+  "category": "defense",
+  "type": "gatehouse",
+  "role": "tower",
+  "level": 1,
+  "icon": "minecraft:deepslate_bricks",
+  "anchor": [11, 0, 10],
+  "entrance": "south"
+}

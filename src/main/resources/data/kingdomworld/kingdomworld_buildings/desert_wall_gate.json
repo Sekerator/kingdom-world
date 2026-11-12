@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.desert_wall_gate",
+  "category": "defense",
+  "type": "gatehouse",
+  "role": "tower",
+  "level": 1,
+  "icon": "minecraft:chiseled_sandstone",
+  "anchor": [11, 0, 10],
+  "entrance": "south"
+}

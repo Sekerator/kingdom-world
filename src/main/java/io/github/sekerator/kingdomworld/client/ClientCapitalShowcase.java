@@ -80,12 +80,22 @@ final class ClientCapitalShowcase {
     private boolean finished;
     private boolean failed;
 
-    /** The one style to show ({@code -PclientSelfTest=capital-terem}), or empty for all of them. */
-    private final String only;
+    /**
+     * The styles to show, separated by commas ({@code -PclientSelfTest=capital-terem} or {@code capital-nordic,southern}),
+     * or empty for all of them.
+     */
+    private final List<String> only;
 
     ClientCapitalShowcase(Path folder, String only) {
         this.folder = folder.resolve("styles");
-        this.only = only;
+        this.only = java.util.Arrays.stream(only.split(",")).map(String::trim).filter(style -> !style.isEmpty()).toList();
+    }
+
+    /**
+     * Whether a style is shown: every one when no styles were named.
+     */
+    private boolean shown(String style) {
+        return only.isEmpty() || only.contains(style);
     }
 
     boolean finished() {
@@ -214,7 +224,7 @@ final class ClientCapitalShowcase {
         List<Row> rows = new ArrayList<>();
         long[] seed = {1};
         for (String style : TemplateCatalog.STYLES) {
-            if (!only.isEmpty() && !only.equals(style)) {
+            if (!shown(style)) {
                 continue;
             }
             rows.add(new Row(style + "-castles", items(style, seed, "", TemplateCatalog.Kind.CASTLE)));
@@ -349,7 +359,7 @@ final class ClientCapitalShowcase {
         }
         int column = 0;
         for (String style : TemplateCatalog.STYLES) {
-            if (only.isEmpty() || only.equals(style)) {
+            if (shown(style)) {
                 capital(level, server, kingdom, style, start.getX() + 60 + 140 * column, capitals + 50, ground, list);
                 column++;
             }

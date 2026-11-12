@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.eastern_house_garden",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:andesite_wall",
+  "anchor": [5, 0, 14],
+  "entrance": "south"
+}

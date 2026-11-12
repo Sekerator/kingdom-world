@@ -176,6 +176,147 @@ public final class BuildingLooks {
                 List.of("minecraft:spruce", "minecraft:oak"),
                 List.of("minecraft:dark_prismarine", "minecraft:bamboo", "minecraft:waxed_weathered_cut_copper")));
         STYLE_MATERIALS.put("terem", new String[]{"minecraft:spruce", "minecraft:polished_diorite"});
+        // The timber north: dark staves on rough stone, shingle roofs with darker needles over them, boards painted red,
+        // ochre or white.
+        STYLE_PALETTES.put("nordic", palette(
+                List.of("", "", "minecraft:mossy_cobblestone", "minecraft:cobbled_deepslate", "minecraft:stone_bricks"),
+                List.of("minecraft:spruce", "minecraft:dark_oak", "minecraft:oak"),
+                List.of("minecraft:spruce", "minecraft:spruce", "minecraft:dark_oak", "minecraft:deepslate_tiles", "minecraft:dark_oak",
+                        "minecraft:mossy_cobblestone"),
+                List.of("minecraft:dark_oak", "minecraft:deepslate_tiles", "minecraft:spruce"),
+                List.of("minecraft:mossy_cobblestone", "minecraft:cobblestone", "minecraft:cobbled_deepslate", "minecraft:andesite"),
+                List.of("minecraft:dark_oak", "minecraft:spruce", "minecraft:stone"),
+                List.of("", "minecraft:chiseled_stone_bricks"),
+                List.of("minecraft:red_terracotta", "minecraft:yellow_terracotta", "minecraft:white_terracotta", "minecraft:brown_terracotta"),
+                List.of("minecraft:dark_oak", "minecraft:spruce", "minecraft:birch", Look.REMOVED),
+                List.of("minecraft:cobblestone", "minecraft:stone_bricks", "minecraft:mossy_cobblestone", Look.REMOVED),
+                List.of("minecraft:brown_terracotta", "minecraft:terracotta", "minecraft:gray_terracotta")).great(
+                List.of("minecraft:spruce", "minecraft:dark_oak"),
+                List.of("minecraft:dark_oak", "minecraft:deepslate_tiles", "minecraft:polished_blackstone",
+                        "minecraft:waxed_oxidized_cut_copper"),
+                List.of("minecraft:spruce", "minecraft:dark_oak"),
+                List.of("minecraft:dark_oak", "minecraft:deepslate_tiles", "minecraft:waxed_oxidized_cut_copper"),
+                List.of("minecraft:dark_oak", "minecraft:spruce"),
+                List.of("minecraft:deepslate_tiles", "minecraft:dark_prismarine", "minecraft:waxed_oxidized_cut_copper", "minecraft:dark_oak")));
+        STYLE_MATERIALS.put("nordic", new String[]{"minecraft:dark_oak", "minecraft:cobblestone"});
+        // The Mediterranean south: whitewashed render over pale dressed stone, low roofs of clay tiles, domes of brick or green
+        // copper, green shutters.
+        STYLE_PALETTES.put("southern", palette(
+                List.of("", "", "minecraft:sandstone", "minecraft:polished_diorite", "minecraft:end_stone_bricks"),
+                List.of("minecraft:oak", "minecraft:spruce", "minecraft:dark_oak"),
+                List.of("minecraft:bricks", "minecraft:mangrove", "minecraft:acacia", "minecraft:granite", "minecraft:mangrove",
+                        "minecraft:red_sandstone"),
+                List.of("minecraft:bricks", "minecraft:waxed_oxidized_cut_copper", "minecraft:granite", "minecraft:waxed_weathered_cut_copper"),
+                List.of("minecraft:polished_granite", "minecraft:stone_bricks", "minecraft:smooth_sandstone", "minecraft:andesite"),
+                List.of("minecraft:smooth_quartz", "minecraft:polished_diorite", "minecraft:smooth_sandstone"),
+                List.of("minecraft:chiseled_quartz_block", "minecraft:chiseled_sandstone"),
+                List.of("minecraft:white_concrete", "minecraft:calcite", "minecraft:yellow_terracotta", "minecraft:orange_terracotta",
+                        "minecraft:white_terracotta"),
+                List.of("minecraft:warped", "minecraft:spruce", "minecraft:birch", Look.REMOVED),
+                List.of("minecraft:bricks", "minecraft:smooth_sandstone", "minecraft:sandstone", Look.REMOVED),
+                List.of("minecraft:white_terracotta", "minecraft:terracotta", "minecraft:light_gray_terracotta")).great(
+                List.of("minecraft:bricks", "minecraft:granite", "minecraft:mangrove"),
+                List.of("minecraft:bricks", "minecraft:waxed_oxidized_cut_copper", "minecraft:granite", "minecraft:waxed_cut_copper"),
+                List.of("minecraft:bricks", "minecraft:red_sandstone"),
+                List.of("minecraft:waxed_oxidized_cut_copper", "minecraft:bricks", "minecraft:waxed_weathered_cut_copper"),
+                List.of("minecraft:granite", "minecraft:bricks"),
+                List.of("minecraft:waxed_oxidized_cut_copper", "minecraft:dark_prismarine", "minecraft:waxed_cut_copper", "minecraft:bricks")));
+        STYLE_MATERIALS.put("southern", new String[]{"minecraft:oak", "minecraft:smooth_sandstone"});
+        // The desert: sandstone and mud brick under flat roofs, frames of red sandstone, domes of turquoise tiles, gilt copper
+        // or white.
+        STYLE_PALETTES.put("desert", palette(
+                List.of("", "", "minecraft:mud_bricks", "minecraft:mud_bricks", "minecraft:smooth_sandstone"),
+                List.of("minecraft:acacia", "minecraft:jungle", "minecraft:spruce"),
+                List.of("minecraft:smooth_sandstone", "minecraft:acacia", "minecraft:jungle", "minecraft:sandstone", "minecraft:acacia",
+                        "minecraft:mud_bricks"),
+                List.of("minecraft:prismarine_bricks", "minecraft:waxed_cut_copper", "minecraft:smooth_quartz", "minecraft:dark_prismarine"),
+                List.of("minecraft:red_sandstone", "minecraft:smooth_red_sandstone", "minecraft:mud_bricks", "minecraft:granite"),
+                List.of("minecraft:smooth_red_sandstone", "minecraft:smooth_sandstone", "minecraft:sandstone"),
+                List.of("minecraft:chiseled_sandstone", "minecraft:chiseled_red_sandstone"),
+                List.of("minecraft:white_terracotta", "minecraft:smooth_sandstone", "minecraft:orange_terracotta", "minecraft:calcite",
+                        "minecraft:white_concrete"),
+                List.of("minecraft:acacia", "minecraft:jungle", "minecraft:dark_oak", Look.REMOVED),
+                List.of("minecraft:sandstone", "minecraft:mud_bricks", "minecraft:smooth_sandstone", Look.REMOVED),
+                List.of("minecraft:terracotta", "minecraft:brown_terracotta", "minecraft:white_terracotta")).great(
+                List.of("minecraft:smooth_sandstone", "minecraft:sandstone"),
+                List.of("minecraft:prismarine_bricks", "minecraft:waxed_cut_copper", "minecraft:smooth_quartz", "minecraft:dark_prismarine"),
+                List.of("minecraft:smooth_sandstone", "minecraft:acacia"),
+                List.of("minecraft:waxed_cut_copper", "minecraft:prismarine_bricks", "minecraft:smooth_quartz"),
+                List.of("minecraft:smooth_sandstone", "minecraft:sandstone"),
+                List.of("minecraft:dark_prismarine", "minecraft:prismarine_bricks", "minecraft:waxed_cut_copper", "minecraft:smooth_quartz")));
+        STYLE_MATERIALS.put("desert", new String[]{"minecraft:acacia", "minecraft:sandstone"});
+        // The far east: dark timber and white plaster on platforms of stone under great roofs of grey-black tiles or green
+        // copper, finials of gold-like copper, shutters of bamboo.
+        STYLE_PALETTES.put("eastern", palette(
+                List.of("", "", "minecraft:cobblestone", "minecraft:polished_andesite", "minecraft:mossy_stone_bricks"),
+                List.of("minecraft:spruce", "minecraft:dark_oak", "minecraft:mangrove"),
+                List.of("minecraft:deepslate_tiles", "minecraft:spruce", "minecraft:dark_oak", "minecraft:blackstone",
+                        "minecraft:dark_prismarine", "minecraft:waxed_oxidized_cut_copper"),
+                List.of("minecraft:waxed_cut_copper", "minecraft:deepslate_tiles", "minecraft:dark_prismarine",
+                        "minecraft:waxed_exposed_cut_copper"),
+                List.of("minecraft:cobblestone", "minecraft:mossy_cobblestone", "minecraft:andesite", "minecraft:stone"),
+                List.of("minecraft:polished_blackstone", "minecraft:stone", "minecraft:polished_andesite"),
+                List.of("minecraft:chiseled_polished_blackstone", "minecraft:chiseled_stone_bricks"),
+                List.of("minecraft:white_concrete", "minecraft:calcite", "minecraft:white_terracotta", "minecraft:smooth_quartz"),
+                List.of("minecraft:dark_oak", "minecraft:spruce", "minecraft:bamboo", Look.REMOVED),
+                List.of("minecraft:stone_bricks", "minecraft:cobblestone", "minecraft:polished_andesite", Look.REMOVED),
+                List.of("minecraft:terracotta", "minecraft:light_gray_terracotta", "minecraft:white_terracotta")).great(
+                List.of("minecraft:deepslate_tiles", "minecraft:waxed_oxidized_cut_copper", "minecraft:blackstone"),
+                List.of("minecraft:waxed_cut_copper", "minecraft:waxed_exposed_cut_copper", "minecraft:dark_prismarine",
+                        "minecraft:deepslate_tiles"),
+                List.of("minecraft:deepslate_tiles", "minecraft:dark_prismarine"),
+                List.of("minecraft:waxed_cut_copper", "minecraft:dark_prismarine", "minecraft:deepslate_tiles"),
+                List.of("minecraft:waxed_oxidized_cut_copper", "minecraft:deepslate_tiles"),
+                List.of("minecraft:waxed_cut_copper", "minecraft:waxed_oxidized_cut_copper", "minecraft:dark_prismarine")));
+        STYLE_MATERIALS.put("eastern", new String[]{"minecraft:dark_oak", ""});
+        // The dark gothic: deepslate ashlar under steep roofs of slate, needles of slate, green copper or blackstone, grey
+        // panels between the stone.
+        STYLE_PALETTES.put("gothic", palette(
+                List.of("", "", "minecraft:cobbled_deepslate", "minecraft:polished_blackstone_bricks", "minecraft:deepslate_tiles"),
+                List.of("minecraft:dark_oak", "minecraft:spruce", "minecraft:mangrove"),
+                List.of("minecraft:deepslate_tiles", "minecraft:dark_oak", "minecraft:spruce", "minecraft:blackstone", "minecraft:spruce",
+                        "minecraft:dark_prismarine"),
+                List.of("minecraft:deepslate_tiles", "minecraft:waxed_oxidized_cut_copper", "minecraft:dark_prismarine",
+                        "minecraft:polished_blackstone"),
+                List.of("minecraft:cobbled_deepslate", "minecraft:blackstone", "minecraft:cobblestone", "minecraft:mossy_cobblestone"),
+                List.of("minecraft:polished_deepslate", "minecraft:stone", "minecraft:polished_blackstone"),
+                List.of("minecraft:chiseled_deepslate", "minecraft:chiseled_polished_blackstone"),
+                List.of("minecraft:light_gray_terracotta", "minecraft:gray_terracotta", "minecraft:white_terracotta", "minecraft:calcite"),
+                List.of("minecraft:dark_oak", "minecraft:spruce", "minecraft:crimson", Look.REMOVED),
+                List.of("minecraft:cobbled_deepslate", "minecraft:deepslate_bricks", "minecraft:blackstone", Look.REMOVED),
+                List.of("minecraft:gray_terracotta", "minecraft:light_gray_terracotta", "minecraft:brown_terracotta")).great(
+                List.of("minecraft:deepslate_tiles", "minecraft:blackstone"),
+                List.of("minecraft:deepslate_tiles", "minecraft:waxed_oxidized_cut_copper", "minecraft:dark_prismarine",
+                        "minecraft:polished_blackstone"),
+                List.of("minecraft:deepslate_tiles", "minecraft:blackstone"),
+                List.of("minecraft:waxed_oxidized_cut_copper", "minecraft:deepslate_tiles", "minecraft:dark_prismarine"),
+                List.of("minecraft:dark_prismarine", "minecraft:deepslate_tiles"),
+                List.of("minecraft:dark_prismarine", "minecraft:waxed_oxidized_cut_copper", "minecraft:polished_blackstone",
+                        "minecraft:deepslate_tiles")));
+        STYLE_MATERIALS.put("gothic", new String[]{"minecraft:dark_oak", "minecraft:deepslate_bricks"});
+        // The mountains: heavy stone bricks on rough footings, low roofs of slate or stone slabs, pyramids of slate, blackstone
+        // or copper.
+        STYLE_PALETTES.put("mountain", palette(
+                List.of("", "", "minecraft:cobblestone", "minecraft:andesite", "minecraft:deepslate_bricks"),
+                List.of("minecraft:spruce", "minecraft:dark_oak", "minecraft:oak"),
+                List.of("minecraft:deepslate_tiles", "minecraft:spruce", "minecraft:dark_oak", "minecraft:cobblestone", "minecraft:spruce",
+                        "minecraft:cobbled_deepslate"),
+                List.of("minecraft:deepslate_tiles", "minecraft:polished_blackstone", "minecraft:waxed_cut_copper", "minecraft:blackstone"),
+                List.of("minecraft:cobblestone", "minecraft:cobbled_deepslate", "minecraft:mossy_cobblestone", "minecraft:andesite"),
+                List.of("minecraft:polished_andesite", "minecraft:stone", "minecraft:polished_blackstone"),
+                List.of("", "minecraft:chiseled_deepslate"),
+                List.of("minecraft:white_terracotta", "minecraft:light_gray_terracotta", "minecraft:calcite", "minecraft:gray_terracotta"),
+                List.of("minecraft:spruce", "minecraft:dark_oak", "minecraft:oak", Look.REMOVED),
+                List.of("minecraft:cobblestone", "minecraft:stone_bricks", "minecraft:cobbled_deepslate", Look.REMOVED),
+                List.of("minecraft:light_gray_terracotta", "minecraft:terracotta", "minecraft:brown_terracotta")).great(
+                List.of("minecraft:deepslate_tiles", "minecraft:cobblestone", "minecraft:cobbled_deepslate"),
+                List.of("minecraft:deepslate_tiles", "minecraft:polished_blackstone", "minecraft:waxed_cut_copper", "minecraft:blackstone"),
+                List.of("minecraft:deepslate_tiles", "minecraft:spruce"),
+                List.of("minecraft:waxed_cut_copper", "minecraft:polished_blackstone", "minecraft:deepslate_tiles"),
+                List.of("minecraft:deepslate_tiles", "minecraft:cobbled_deepslate"),
+                List.of("minecraft:waxed_cut_copper", "minecraft:dark_prismarine", "minecraft:polished_blackstone",
+                        "minecraft:waxed_oxidized_cut_copper")));
+        STYLE_MATERIALS.put("mountain", new String[]{"minecraft:spruce", ""});
     }
 
     /** Colours of the cloth of houses: awnings, curtains, beds. */

@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.mountain_tavern",
+  "category": "trade",
+  "type": "tavern",
+  "role": "tavern",
+  "level": 1,
+  "icon": "minecraft:barrel",
+  "anchor": [10, 0, 16],
+  "entrance": "south"
+}

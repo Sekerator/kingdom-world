@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.desert_house_merchant",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:cyan_carpet",
+  "anchor": [5, 0, 10],
+  "entrance": "south"
+}

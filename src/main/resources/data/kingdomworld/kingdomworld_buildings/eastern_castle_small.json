@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.eastern_castle_small",
+  "category": "defense",
+  "type": "palace",
+  "role": "none",
+  "level": 1,
+  "icon": "minecraft:red_concrete",
+  "anchor": [15, 1, 30],
+  "entrance": "south"
+}

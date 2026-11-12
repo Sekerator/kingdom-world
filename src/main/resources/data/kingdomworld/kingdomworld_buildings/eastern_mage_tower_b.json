@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.eastern_mage_tower_b",
+  "category": "production",
+  "type": "mage_tower",
+  "role": "mage_tower",
+  "level": 1,
+  "icon": "kingdomworld:magic_focus",
+  "anchor": [6, 0, 12],
+  "entrance": "south"
+}

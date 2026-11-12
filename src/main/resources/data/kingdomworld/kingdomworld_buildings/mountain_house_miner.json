@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.mountain_house_miner",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:iron_pickaxe",
+  "anchor": [4, 0, 10],
+  "entrance": "south"
+}

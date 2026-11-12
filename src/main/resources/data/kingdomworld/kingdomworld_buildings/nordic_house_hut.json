@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.nordic_house_hut",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:moss_block",
+  "anchor": [3, 0, 8],
+  "entrance": "south"
+}

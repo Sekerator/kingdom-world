@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.desert_house_court",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:light_blue_glazed_terracotta",
+  "anchor": [6, 0, 12],
+  "entrance": "south"
+}

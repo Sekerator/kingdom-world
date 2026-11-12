@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.gothic_house_narrow",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:spruce_door",
+  "anchor": [4, 0, 12],
+  "entrance": "south"
+}

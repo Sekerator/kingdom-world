@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.mountain_wall_gate",
+  "category": "defense",
+  "type": "gatehouse",
+  "role": "tower",
+  "level": 1,
+  "icon": "minecraft:polished_blackstone_bricks",
+  "anchor": [11, 0, 10],
+  "entrance": "south"
+}
