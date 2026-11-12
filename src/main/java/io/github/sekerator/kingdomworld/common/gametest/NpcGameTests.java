@@ -546,7 +546,8 @@ public final class NpcGameTests {
             }
             helper.assertTrue(homeless == 0, homeless + " citizens without a home");
             int soldiers = ArmyWork.state(server).soldiersOf(kingdom.id()).size();
-            helper.assertTrue(soldiers == NpcSettings.rules().soldiers(NpcLevel.SMALL), "Soldiers: " + soldiers);
+            helper.assertTrue(soldiers - fromAbroad(server, kingdom.id()) == NpcSettings.rules().soldiers(NpcLevel.SMALL), "Soldiers: "
+                    + soldiers + " (" + fromAbroad(server, kingdom.id()) + " of the royal army from abroad)");
             long money = NpcSettings.rules().money(NpcLevel.SMALL);
             helper.assertTrue(KingdomWorldApi.treasury(server, kingdom.id()).orElseThrow().balance() == money
                     && founding(server, kingdom.id()) == money, "The treasury does not agree with its founding");

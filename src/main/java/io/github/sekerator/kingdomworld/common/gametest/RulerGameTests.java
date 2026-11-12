@@ -113,8 +113,20 @@ public final class RulerGameTests {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         BlockPos center = NpcGameTests.platform(helper);
-        NpcSite site = NpcGameTests.plant(helper, center);
-        NpcKingdom npc = appear(helper, site);
+        // A kingdom whose army the capital holds: no camp is raised meanwhile, the beds and the house are all that matter here.
+        io.github.sekerator.kingdomworld.core.npc.NpcRules d = io.github.sekerator.kingdomworld.core.npc.NpcRules.DEFAULT;
+        io.github.sekerator.kingdomworld.common.npc.NpcSettings.override(new io.github.sekerator.kingdomworld.core.npc.NpcRules(d.generate(), d.count(), d.radius(), d.minDistance(),
+                d.minSpawnDistance(), d.triggerChunks(), d.sizeQuota(), d.sizeWeights(), d.landRadius(), d.towns(), d.townDistance(), d.money(),
+                d.foodDays(), d.materials(), d.soldiers(), d.blocksPerTick(), d.chunksPerTick(), d.maxInhabitedMinutes(), d.attemptsPerSite(),
+                d.guards(), d.army(), d.townGuards(), d.army(), d.army(), d.armyPerDay(), d.campSoldiers(), d.campBodies(), d.armyBodies()));
+        NpcSite site;
+        NpcKingdom npc;
+        try {
+            site = NpcGameTests.plant(helper, center);
+            npc = appear(helper, site);
+        } finally {
+            io.github.sekerator.kingdomworld.common.npc.NpcSettings.override(null);
+        }
         UUID id = npc.kingdomId();
         long day = TreasuryActions.day(server);
         // A ring of land around the kingdom, so that its plots beyond the wall are its own (claims of rulers need ticks).

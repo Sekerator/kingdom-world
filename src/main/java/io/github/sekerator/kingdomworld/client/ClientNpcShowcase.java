@@ -57,6 +57,16 @@ final class ClientNpcShowcase {
     private static final int ALARM_WAIT = 900;
     /** Ticks after the camera moved before the alarm is raised, so that the bodies around have appeared. */
     private static final int ALARM_LEAD = 100;
+    /** The camp of the royal army from above. */
+    private static final String CAMP = "army-camp";
+    /** The squads of the camp in their ranks on the drill yard; the ticks are measured while the player stands there. */
+    private static final String FORMATION = "army-formation";
+    private static final int FORMATION_WAIT = 400;
+    /** The armies of the large and the small kingdom meet near the player; the ticks are measured while they fight. */
+    private static final String BATTLE = "army-battle";
+    private static final int BATTLE_WAIT = 900;
+    /** The squads on the map of the army during the war. */
+    private static final String WAR_MAP = "army-war-map";
 
     private record Shot(String name, double x, double y, double z, float yaw, float pitch) {
     }
@@ -89,6 +99,13 @@ final class ClientNpcShowcase {
     private volatile UUID garrisonKingdom;
     /** The lengths of the ticks of the server while the alarm lasted, a hundred at a time. */
     private final List<long[]> alarmTicks = new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** The same while the armies fought. */
+    private final List<long[]> battleTicks = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private final ClientArmyScenes army = new ClientArmyScenes();
+    private volatile UUID smallKingdom;
+    private volatile WorldPos battleField;
+    /** What the large kingdom sees on the map of its army, built by the server for the shot of the map. */
+    private volatile io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.View warView;
 
     ClientNpcShowcase(Path folder) {
         this.folder = folder.resolve("world");
@@ -133,6 +150,24 @@ final class ClientNpcShowcase {
             hold(minecraft);
             wait--;
             String name = index < shots.size() ? shots.get(index).name() : "atlas-kingdom";
+            if (name.equals(BATTLE) && wait % 100 == 0) {
+                server.execute(() -> {
+                    battleTicks.add(server.tickTimes.clone());
+                    ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+                    if (player != null) {
+                        player.resetLastActionTime();
+                    }
+                });
+            }
+            if (name.equals(WAR_MAP)) {
+                // The screen asks the server for the map of the army of the player, who commands none: the view of the kingdom
+                // is put back every tick.
+                server.execute(() -> warView = io.github.sekerator.kingdomworld.common.army.ArmyMap.view(server,
+                        KingdomWorldApi.kingdom(server, garrisonKingdom), battleField.dimension()));
+                if (warView != null) {
+                    io.github.sekerator.kingdomworld.client.map.ClientArmyMap.update(warView);
+                }
+            }
             if (name.equals(ALARM)) {
                 if (wait == ALARM_WAIT - ALARM_LEAD) {
                     server.execute(() -> raiseAlarm(server, playerId));
@@ -155,6 +190,12 @@ final class ClientNpcShowcase {
                 if (name.equals(ALARM)) {
                     measureAlarm(server, playerId);
                 }
+                if (name.equals(FORMATION)) {
+                    measureCamp(server, playerId);
+                }
+                if (name.equals(BATTLE)) {
+                    measureBattle(server, playerId);
+                }
                 shoot(name);
             }
             return;
@@ -169,8 +210,21 @@ final class ClientNpcShowcase {
         minecraft.options.hideGui = true;
         minecraft.getToasts().clear();
         minecraft.gui.getChat().clearMessages(false);
+        if (minecraft.screen instanceof KingdomMapScreen) {
+            minecraft.setScreen(null);
+        }
         boolean street = index < shots.size() && shots.get(index).name().equals(STREET);
-        if (index < shots.size()) {
+        String next = index < shots.size() ? shots.get(index).name() : "";
+        if (next.equals(BATTLE)) {
+            server.execute(() -> ClientArmyScenes.battle(server, garrisonKingdom, smallKingdom, battleField));
+        }
+        if (next.equals(WAR_MAP)) {
+            yaw = Float.NaN;
+            KingdomMapScreen map = new KingdomMapScreen(null);
+            minecraft.setScreen(map);
+            map.showForCheck(battleField.x() / 16.0, battleField.z() / 16.0, 4.0, null, net.minecraft.network.chat.Component.empty(), false);
+            map.showArmyForCheck(null, List.of(), List.of());
+        } else if (index < shots.size()) {
             Shot shot = shots.get(index);
             teleport(server, playerId, shot);
         } else {
@@ -179,7 +233,8 @@ final class ClientNpcShowcase {
             minecraft.setScreen(atlas);
             atlas.showForCheck(atlasX / 16.0, atlasZ / 16.0, 3.0, null, net.minecraft.network.chat.Component.empty(), false);
         }
-        wait = street ? STREET_WAIT : index < shots.size() && shots.get(index).name().equals(ALARM) ? ALARM_WAIT : SETTLE;
+        wait = street ? STREET_WAIT : next.equals(ALARM) ? ALARM_WAIT : next.equals(FORMATION) ? FORMATION_WAIT
+                : next.equals(BATTLE) ? BATTLE_WAIT : SETTLE;
     }
 
     /**
@@ -263,6 +318,68 @@ final class ClientNpcShowcase {
                             + "50 ms of {}", step, near, ofArmy, soldiers.size(), citizens.size(), ofGarrison,
                     String.format(java.util.Locale.ROOT, "%.2f", count == 0 ? 0.0 : sum / 1e6 / count),
                     String.format(java.util.Locale.ROOT, "%.2f", worst / 1e6), slow, count);
+        });
+    }
+
+    private static String millis(long nanos) {
+        return String.format(java.util.Locale.ROOT, "%.2f", nanos / 1e6);
+    }
+
+    /**
+     * Says in the log how long the ticks of the server were while the player stood in the camp of the army in peace.
+     */
+    private void measureCamp(IntegratedServer server, UUID playerId) {
+        server.execute(() -> {
+            ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+            if (player == null) {
+                return;
+            }
+            long sum = 0;
+            long worst = 0;
+            int slow = 0;
+            for (long nanos : server.tickTimes) {
+                sum += nanos;
+                worst = Math.max(worst, nanos);
+                slow += nanos > 50_000_000L ? 1 : 0;
+            }
+            int[] soldiers = ClientArmyScenes.bodies(player, garrisonKingdom, garrisonKingdom, 64.0);
+            int citizens = player.serverLevel().getEntitiesOfClass(io.github.sekerator.kingdomworld.common.citizen.CitizenEntity.class,
+                    player.getBoundingBox().inflate(128.0, 64.0, 128.0)).size();
+            LOGGER.info(PREFIX + "in the camp of the army of the large kingdom in peace: {} soldier(s) with a body within 64 blocks, {} citizen "
+                            + "bodies around, average tick {} ms, worst tick {} ms, {} tick(s) over 50 ms of {}", soldiers[0], citizens,
+                    millis(sum / Math.max(1, server.tickTimes.length)), millis(worst), slow, server.tickTimes.length);
+        });
+    }
+
+    /**
+     * Says in the log how long the ticks of the server were while the armies fought near the player.
+     */
+    private void measureBattle(IntegratedServer server, UUID playerId) {
+        server.execute(() -> {
+            ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+            if (player == null || smallKingdom == null) {
+                return;
+            }
+            battleTicks.add(server.tickTimes.clone());
+            long sum = 0;
+            long worst = 0;
+            int count = 0;
+            int slow = 0;
+            for (long[] hundred : battleTicks) {
+                for (long nanos : hundred) {
+                    sum += nanos;
+                    worst = Math.max(worst, nanos);
+                    count++;
+                    slow += nanos > 50_000_000L ? 1 : 0;
+                }
+            }
+            int[] soldiers = ClientArmyScenes.bodies(player, garrisonKingdom, smallKingdom, 64.0);
+            io.github.sekerator.kingdomworld.core.army.ArmyState state = io.github.sekerator.kingdomworld.common.army.ArmyWork.state(server);
+            LOGGER.info(PREFIX + "battle of the large and the small kingdom near the player: {} soldier(s) with a body within 64 blocks ({} and {}), "
+                            + "armies of {} and {}, average tick {} ms, worst tick {} ms, {} tick(s) over 50 ms of {}", soldiers[0], soldiers[1],
+                    soldiers[2], state.branchOf(garrisonKingdom, io.github.sekerator.kingdomworld.core.army.Branch.ARMY).size(),
+                    state.branchOf(smallKingdom, io.github.sekerator.kingdomworld.core.army.Branch.ARMY).size(),
+                    millis(count == 0 ? 0 : sum / count), millis(worst), slow, count);
         });
     }
 
@@ -591,8 +708,24 @@ final class ClientNpcShowcase {
             list.add(new Shot("npc-town", end.x() + 0.5, end.y() + 38, end.z() + 42.5, 180.0f, 42.0f));
             break;
         }
+        // The royal army: its camp goes up before its shots are planned.
+        if (!army.campReady(server, kingdom)) {
+            return;
+        }
         garrisonKingdom = kingdom;
         garrisonShots(server, site, kingdom, throne, list);
+        io.github.sekerator.kingdomworld.core.npc.ArmyCamp camp = ClientArmyScenes.camp(server, kingdom);
+        if (camp != null) {
+            list.add(new Shot(CAMP, camp.x() + 0.5, camp.y() + 38, camp.z() + 44.5, 180.0f, 40.0f));
+            list.add(new Shot(FORMATION, camp.x() + 0.5, camp.y() + 3.2, camp.z() + 7.5, 180.0f, 12.0f));
+            smallKingdom = small.flatMap(NpcSite::kingdomId).orElse(null);
+            if (smallKingdom != null) {
+                WorldPos field = ClientArmyScenes.field(server, camp);
+                battleField = field;
+                list.add(new Shot(BATTLE, field.x() + 0.5, field.y() + 12, field.z() + 26.5, 180.0f, 24.0f));
+                list.add(new Shot(WAR_MAP, field.x() + 0.5, field.y() + 60, field.z() + 0.5, 0.0f, 90.0f));
+            }
+        }
         if (small.isPresent() && small.get().status() == NpcSite.Status.SPAWNED) {
             BlockPos other = NpcSpawner.thronePos(small.get());
             int reach = small.get().kingdomId().flatMap(id -> RoadWork.state(server).wallOf(0, id)).map(wall -> wall.radius())

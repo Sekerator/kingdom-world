@@ -2396,8 +2396,8 @@ Invoke-Phase 'run1' {
             Add-Failure '[run1] no ruler of the world grew its land in three turns'
         }
         Send-ServerCommand $server 'kingdomworld admin npc status'
-        if (Wait-ForLog $server 'Kingdoms of the world: \d+ places? in the plan, \d+ kingdoms?, generation on, data format 4' $CommandTimeout $ConsoleFailPattern) {
-            Write-Ok '[run1] the kingdoms of the world are planned (data format 4)'
+        if (Wait-ForLog $server 'Kingdoms of the world: \d+ places? in the plan, \d+ kingdoms?, generation on, data format 5' $CommandTimeout $ConsoleFailPattern) {
+            Write-Ok '[run1] the kingdoms of the world are planned (data format 5)'
         } else {
             Add-Failure '[run1] admin npc status did not answer'
         }
@@ -2667,9 +2667,10 @@ Invoke-Phase 'run1' {
         $guards = [int]$garrison.Groups[1].Value
         $ofArmy = [int]$garrison.Groups[2].Value
         $posts = $garrison.Groups[5].Value
-        # A large kingdom: thirty of the guard with the guards of its towns, twenty of the army, two officers of each.
-        if ($guards -ge 30 -and $ofArmy -eq 20 -and $garrison.Groups[3].Value -eq '4') {
-            Write-Ok "[run1] the kingdom of the world keeps a garrison: $guards of the guard, $ofArmy of the army, 4 officers"
+        # A large kingdom: thirty of the guard with the guards of its towns, a royal army of a hundred to two hundred, larger
+        # than the guard, two officers of each.
+        if ($guards -ge 30 -and $ofArmy -ge 100 -and $ofArmy -le 200 -and $ofArmy -gt $guards -and $garrison.Groups[3].Value -eq '4') {
+            Write-Ok "[run1] the kingdom of the world keeps a garrison: $guards of the guard, $ofArmy of the royal army, 4 officers"
         } else {
             Add-Failure "[run1] the garrison of the kingdom of the world is not whole: $($garrison.Value)"
         }
@@ -2903,7 +2904,7 @@ Invoke-Phase 'run2' {
     Invoke-Part $server 'the memory of the rulers after the restart' {
         if (-not $script:RulerSite) { return }
         $site = $script:RulerSite
-        if (Wait-ForStartLog $server 'KingdomWorld kingdoms of the world: .*data format 4' 10) { Write-Ok '[run2] the kingdoms of the world are loaded in data format 4' } else { Add-Failure '[run2] the data format of the kingdoms of the world is not 4' }
+        if (Wait-ForStartLog $server 'KingdomWorld kingdoms of the world: .*data format 5' 10) { Write-Ok '[run2] the kingdoms of the world are loaded in data format 5' } else { Add-Failure '[run2] the data format of the kingdoms of the world is not 4' }
         Send-ServerCommand $server "kingdomworld admin npc decisions $site"
         $decisions = Wait-ForLog $server ': (\d+) decrees?, (\d+) turn\(s\), waiting: ' $CommandTimeout $ConsoleFailPattern
         if ($decisions -and [int]$decisions.Groups[2].Value -ge $script:RulerTurns -and [int]$decisions.Groups[1].Value -ge [Math]::Min(1, $script:RulerDecrees)) {

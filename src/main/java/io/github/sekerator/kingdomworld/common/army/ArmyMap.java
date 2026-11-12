@@ -57,9 +57,17 @@ public final class ArmyMap {
         if (kingdom.isEmpty() || ArmyWork.isReadOnly(player.server)) {
             return ArmyMapPackets.View.NONE;
         }
-        MinecraftServer server = player.server;
+        return view(player.server, kingdom, Dimensions.id(player.level()));
+    }
+
+    /**
+     * What a kingdom sees in a dimension: its own squads, those of others in sight and the battles going on.
+     */
+    public static ArmyMapPackets.View view(MinecraftServer server, Optional<Kingdom> kingdom, String dimension) {
+        if (kingdom.isEmpty()) {
+            return ArmyMapPackets.View.NONE;
+        }
         UUID id = kingdom.get().id();
-        String dimension = Dimensions.id(player.level());
         ArmyState army = ArmyWork.state(server);
         List<ArmyMapPackets.Own> own = new ArrayList<>();
         for (ArmySquad squad : army.squadsOf(id)) {

@@ -115,6 +115,12 @@ public final class GatheringGameTests {
                 level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2 | 16);
             }
         }
+        // A container that goes drops what it held: the storehouses of a kingdom drop thousands of items, which would lie in
+        // the world for five minutes and weigh on every test that measures ticks after this one.
+        for (net.minecraft.world.entity.item.ItemEntity item : level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
+                new net.minecraft.world.phys.AABB(from, to).inflate(2.0))) {
+            item.discard();
+        }
     }
 
     /**

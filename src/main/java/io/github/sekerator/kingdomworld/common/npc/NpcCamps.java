@@ -344,7 +344,8 @@ public final class NpcCamps {
     /**
      * Whether a soldier serves in the royal army of a kingdom of the world beyond its capital: in a camp, waiting at the
      * capital for one, marching, or just come from abroad. Such a soldier sleeps in the tents of the army, needs no bed and
-     * lives as well housed as one who has. The reserve of the army at the capital sleeps in the bunks of its barracks.
+     * lives as well housed as one who has. The reserve of the army at the capital sleeps in the bunks of its barracks while
+     * they hold it.
      */
     public static boolean quartered(MinecraftServer server, UUID citizenId) {
         ArmyState army = ArmyWork.state(server);
@@ -353,7 +354,9 @@ public final class NpcCamps {
                 || !NpcWork.isNpc(server, soldier.get().kingdomId())) {
             return false;
         }
-        return !army.squadOf(citizenId).flatMap(squad -> army.duty(squad.id())).map(duty -> duty.startsWith("reserve")).orElse(false);
+        boolean reserve = army.squadOf(citizenId).flatMap(squad -> army.duty(squad.id())).map(duty -> duty.startsWith("reserve")).orElse(false);
+        // A reserve the bunks of the capital cannot hold (a capital of the first layout has few) lives in tents as well.
+        return !reserve || KingdomWorldApi.state(server).citizens().get(citizenId).map(citizen -> citizen.home() == null).orElse(false);
     }
 
     /**

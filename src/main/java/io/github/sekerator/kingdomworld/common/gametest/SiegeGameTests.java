@@ -536,6 +536,12 @@ public final class SiegeGameTests {
             all.addAll(side);
         }
         CitizenBodies.update(server);
+        // What else ticks in the world weighs on the measure: items left lying by other tests are told.
+        int items = 0;
+        for (net.minecraft.world.entity.Entity entity : level.getAllEntities()) {
+            items += entity instanceof net.minecraft.world.entity.item.ItemEntity ? 1 : 0;
+        }
+        SiegeWork.LOGGER.info("Siege load: {} item(s) lie in the world of the tests", items);
         long[] sum = new long[3];
         int start = server.getTickCount();
         helper.onEachTick(() -> {
