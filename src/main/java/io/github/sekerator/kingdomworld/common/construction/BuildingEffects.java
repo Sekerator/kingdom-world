@@ -304,15 +304,16 @@ public final class BuildingEffects {
 
     /**
      * The free bed a homeless citizen who is no soldier gets: the nearest one in a working house, else the nearest one
-     * outside a house whose role rests. The bunks of barracks are not offered.
+     * outside a house whose role rests, and a bunk of a barracks only when nothing else is left.
      */
     public static Optional<Site> freeBed(MinecraftServer server, UUID kingdomId, WorldPos near) {
         return freeBed(server, kingdomId, near, false);
     }
 
     /**
-     * The free bed a homeless citizen gets. A soldier takes a bunk of a barracks first, then a bed as anybody; the bunks
-     * stay with the garrison, so nobody else is offered one.
+     * The free bed a homeless citizen gets. A soldier takes a bunk of a barracks first, then a bed as anybody. The bunks are
+     * kept for the garrison: they are not counted among the beds newcomers come for, and a citizen who is no soldier takes
+     * one only as the last bed of the kingdom.
      */
     public static Optional<Site> freeBed(MinecraftServer server, UUID kingdomId, WorldPos near, boolean soldier) {
         Site best = null;
@@ -323,10 +324,9 @@ public final class BuildingEffects {
                 continue;
             }
             boolean bunk = inBarracks(server, kingdomId, bed.pos());
-            if (bunk && !soldier) {
-                continue;
-            }
-            int rank = bunk ? 2 : inHouse(server, kingdomId, bed.pos()) ? 1 : 0;
+            // A bunk is the first choice of a soldier and the last of anybody else: a citizen sleeps there only when the
+            // kingdom has no other bed left, and newcomers are never invited for the sake of free bunks.
+            int rank = bunk ? (soldier ? 3 : 0) : inHouse(server, kingdomId, bed.pos()) ? 2 : 1;
             double distance = near == null || !near.dimension().equals(bed.pos().dimension()) ? Double.MAX_VALUE / 2 : near.distanceSqr(bed.pos());
             if (best == null || rank > bestRank || (rank == bestRank && distance < bestDistance)) {
                 best = bed;

@@ -1338,6 +1338,11 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue startingFoodDays;
         public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> startingMaterials;
         public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> soldiers;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> guards;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> army;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> townGuards;
+        public final ForgeConfigSpec.IntValue garrisonWagePercent;
+        public final ForgeConfigSpec.IntValue citizenTaxPercent;
         public final ForgeConfigSpec.IntValue blocksPerTick;
         public final ForgeConfigSpec.IntValue chunksPerTick;
         public final ForgeConfigSpec.IntValue maxInhabitedMinutes;
@@ -1405,7 +1410,26 @@ public final class KingdomWorldConfig {
                                     d.materials(io.github.sekerator.kingdomworld.core.npc.NpcLevel.MEDIUM),
                                     d.materials(io.github.sekerator.kingdomworld.core.npc.NpcLevel.LARGE)}),
                             value -> value instanceof Integer number && number >= 0 && number <= 64);
-            soldiers = builder.comment("Soldiers of a kingdom when it appears, by size.")
+            guards = builder.comment("The garrison of a kingdom, by size (small, medium, large): soldiers of the city guard of its capital,",
+                            "officers included. A kingdom appears with them, its ruler keeps that many and replaces the fallen.")
+                    .defineList("guards", ints(io.github.sekerator.kingdomworld.core.npc.NpcRules.GUARDS),
+                            value -> value instanceof Integer number && number >= 0 && number <= 256);
+            army = builder.comment("Soldiers of the royal army of a kingdom, officers included, by size. The army stands in reserve at the",
+                            "barracks and the palace and comes out when the guard is hard pressed.")
+                    .defineList("army", ints(io.github.sekerator.kingdomworld.core.npc.NpcRules.ARMY),
+                            value -> value instanceof Integer number && number >= 0 && number <= 256);
+            townGuards = builder.comment("Soldiers of the guard every town of a kingdom has besides, by size.")
+                    .defineList("townGuards", ints(io.github.sekerator.kingdomworld.core.npc.NpcRules.TOWN_GUARDS),
+                            value -> value instanceof Integer number && number >= 0 && number <= 16);
+            garrisonWagePercent = builder.comment("The wage of a soldier of a kingdom of the world, in percent of the wage of a soldier: its",
+                            "garrison lives in the barracks and eats from the storehouses. Officers get their multiple of it.")
+                    .defineInRange("garrisonWagePercent", 10, 1, 100);
+            citizenTaxPercent = builder.comment("Share of the wages a kingdom of the world pays its peaceful citizens that comes back to its",
+                            "treasury as their tax, in percent. A citizen takes a fifth of its wage home, so the tax is never more than",
+                            "the rest: no money is made.")
+                    .defineInRange("citizenTaxPercent", 80, 0, 80);
+            soldiers = builder.comment("Soldiers of a kingdom of the first layout (planned before the capitals of districts) when it appears,",
+                            "by size.")
                     .defineList("soldiers", ints(new int[]{d.soldiers(io.github.sekerator.kingdomworld.core.npc.NpcLevel.SMALL),
                                     d.soldiers(io.github.sekerator.kingdomworld.core.npc.NpcLevel.MEDIUM),
                                     d.soldiers(io.github.sekerator.kingdomworld.core.npc.NpcLevel.LARGE)}),

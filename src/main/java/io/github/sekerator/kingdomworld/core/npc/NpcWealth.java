@@ -48,6 +48,11 @@ public record NpcWealth(long money, Map<String, Integer> items) {
             add(items, "minecraft:iron_pickaxe", composition.jobs().getOrDefault("miner", 0));
             add(items, "minecraft:carrot", composition.fields() * 16);
         }
+        if (composition.districts()) {
+            // Its garrison gets the kits of its branches and posts at the founding: those are its gear, and the storehouses
+            // keep their room for goods.
+            return new NpcWealth(rules.money(level), items);
+        }
         int soldiers = composition.soldiers();
         int warriors = (soldiers + 1) / 2;
         int archers = soldiers - warriors;

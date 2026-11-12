@@ -50,6 +50,8 @@ public final class ArmyState {
     private final Map<UUID, Map<Slot, Long>> vacancies = new LinkedHashMap<>();
     /** The game day the staff of a kingdom was last seen to. */
     private final Map<UUID, Long> staffDay = new LinkedHashMap<>();
+    /** The post of the garrison a squad stands at, by squad: a gate, the storehouse, the hall of the palace and so on. */
+    private final Map<Long, String> duties = new LinkedHashMap<>();
     private long nextSquad = 1;
     private long nextBand = 1;
     private Runnable changeListener = () -> {
@@ -318,6 +320,25 @@ public final class ArmyState {
     }
 
     /**
+     * Takes a soldier out of its squad; it stays a soldier. A squad left with nobody is gone.
+     */
+    public void leaveSquad(UUID citizenId) {
+        for (ArmySquad squad : List.copyOf(squads.values())) {
+            if (!squad.members().contains(citizenId)) {
+                continue;
+            }
+            List<UUID> rest = new ArrayList<>(squad.members());
+            rest.remove(citizenId);
+            if (rest.isEmpty()) {
+                squads.remove(squad.id());
+            } else {
+                squads.put(squad.id(), squad.withMembers(rest, citizenId.equals(squad.commander()) ? null : squad.commander()));
+            }
+            changed();
+        }
+    }
+
+    /**
      * A soldier gained experience, kills and battles.
      */
     public void reward(UUID citizenId, long experience, int kills, int battles) {
@@ -543,6 +564,53 @@ public final class ArmyState {
 
     public Map<UUID, Long> staffDays() {
         return Collections.unmodifiableMap(staffDay);
+    }
+
+    /**
+     * The post of the garrison a squad stands at, if it stands at one.
+     */
+    public Optional<String> duty(long squadId) {
+        return squads.containsKey(squadId) ? Optional.ofNullable(duties.get(squadId)) : Optional.empty();
+    }
+
+    /**
+     * Puts a squad on a post of the garrison, or takes it off with {@code null}.
+     */
+    public void setDuty(long squadId, String duty) {
+        if (!squads.containsKey(squadId)) {
+            return;
+        }
+        String previous = duty == null || duty.isEmpty() ? duties.remove(squadId) : duties.put(squadId, duty);
+        if (!Objects.equals(previous, duty == null || duty.isEmpty() ? null : duty)) {
+            changed();
+        }
+    }
+
+    /**
+     * The squad of a kingdom that stands at a post of the garrison.
+     */
+    public Optional<ArmySquad> squadOfDuty(UUID kingdomId, String duty) {
+        for (Map.Entry<Long, String> entry : duties.entrySet()) {
+            ArmySquad squad = squads.get(entry.getKey());
+            if (squad != null && squad.kingdomId().equals(kingdomId) && entry.getValue().equals(duty)) {
+                return Optional.of(squad);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * The posts of every squad that still exists.
+     */
+    public Map<Long, String> duties() {
+        duties.keySet().removeIf(id -> !squads.containsKey(id));
+        return Collections.unmodifiableMap(duties);
+    }
+
+    public void restoreDuty(long squadId, String duty) {
+        if (squads.containsKey(squadId) && duty != null && !duty.isEmpty()) {
+            duties.put(squadId, duty);
+        }
     }
 
     /**
@@ -1105,6 +1173,7 @@ public final class ArmyState {
         losses.clear();
         vacancies.clear();
         staffDay.clear();
+        duties.clear();
         nextSquad = 1;
         nextBand = 1;
     }

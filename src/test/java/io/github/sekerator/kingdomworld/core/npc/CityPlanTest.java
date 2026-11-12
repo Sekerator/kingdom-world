@@ -201,16 +201,27 @@ class CityPlanTest {
                 NpcComposition composition = of(level, seed(i));
                 String at = level + " seed " + i + ": ";
                 int townHomes = 0;
+                int townBunks = 0;
                 for (int t = 0; t < composition.towns(); t++) {
                     for (Plot plot : composition.town(t)) {
-                        if (!NpcComposition.bunks(plot.template())) {
+                        if (NpcComposition.bunks(plot.template())) {
+                            townBunks += NpcComposition.beds(plot.template());
+                        } else {
                             townHomes += NpcComposition.beds(plot.template());
                         }
                     }
                 }
                 assertEquals(RULES.towns(level), composition.towns());
-                assertEquals(composition.homes() + townHomes + composition.soldiers(), composition.citizens(), at);
-                assertEquals(RULES.soldiers(level), composition.soldiers(), at);
+                // The garrison of the capital, the guard and the army, is whole and sleeps in the barracks of the capital.
+                int inCapital = RULES.guards(level) + RULES.army(level);
+                assertTrue(composition.bunks() - townBunks >= inCapital, at + "bunks " + (composition.bunks() - townBunks) + " for " + inCapital);
+                // The guards of the towns sleep in the barracks of the towns, or in their houses where a town has none.
+                int ofTowns = composition.towns() * RULES.townGuards(level);
+                int inTownBunks = Math.min(ofTowns, townBunks);
+                int inTownHomes = townBunks > 0 ? 0 : Math.min(ofTowns, townHomes / 3);
+                assertEquals(inCapital + inTownBunks + inTownHomes, composition.soldiers(), at);
+                assertEquals(composition.homes() + townHomes + inCapital + inTownBunks, composition.citizens(), at + "a bed for everybody");
+                assertEquals(ofTowns, inTownBunks + inTownHomes, at + "every town has its guards");
                 if (level == NpcLevel.SMALL) {
                     assertTrue(composition.bunks() >= 16, at + "bunks " + composition.bunks());
                 }

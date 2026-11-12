@@ -2035,6 +2035,10 @@ public final class NpcSpawner {
                 }
             }
         }
+        // The guard and the army, their officers and the kits of their posts.
+        NpcGarrison.found(server, site, job.composition);
+        // The soldiers moved into the bunks of the barracks: whoever has no bed yet takes one of those they left.
+        io.github.sekerator.kingdomworld.common.citizen.CitizenSimulation.settle(server, id);
         site.advance(afterArmy(job.composition));
     }
 
@@ -2083,55 +2087,12 @@ public final class NpcSpawner {
         }
     }
 
+    /**
+     * The soldiers take their posts: the gates, the storehouse, the palace, the square, the rounds and the towns for the
+     * guard, the barracks and the palace for the army in reserve. The posts are reckoned again every day of the ruler.
+     */
     private static void guardGates(MinecraftServer server, NpcSite site, UUID id, Job job) {
-        ArmyState army = ArmyWork.state(server);
-        if (!army.squadsOf(id).isEmpty()) {
-            return;
-        }
-        List<UUID> soldiers = new ArrayList<>();
-        for (Soldier soldier : army.soldiersOf(id)) {
-            soldiers.add(soldier.citizenId());
-        }
-        if (soldiers.isEmpty()) {
-            return;
-        }
-        String dimension = Dimensions.id(server.overworld());
-        List<WorldPos> places = new ArrayList<>(CityWalls.gates(server, id, 0));
-        for (City city : RoadWork.state(server).citiesOf(id)) {
-            places.add(new WorldPos(city.dimension(), city.x(), city.y(), city.z()));
-        }
-        if (places.isEmpty()) {
-            places.add(new WorldPos(dimension, site.x(), site.groundY() + 1, site.z()));
-        }
-        var rules = ArmySettings.rules();
-        int squads = Math.max(1, Math.min(Math.min(places.size(), rules.maxSquads()), soldiers.size()));
-        List<List<UUID>> groups = new ArrayList<>();
-        for (int i = 0; i < squads; i++) {
-            groups.add(new ArrayList<>());
-        }
-        for (int i = 0; i < soldiers.size(); i++) {
-            List<UUID> group = groups.get(i % squads);
-            if (group.size() < rules.maxSquadSize()) {
-                group.add(soldiers.get(i));
-            }
-        }
-        for (int i = 0; i < squads; i++) {
-            // A gate is guarded close by: the radius of a guarded area is counted in chunks.
-            formAndOrder(server, id, groups.get(i), Order.guard(places.get(i), 1));
-        }
-    }
-
-    private static void formAndOrder(MinecraftServer server, UUID id, List<UUID> members, Order order) {
-        ArmyState.Formed formed = ArmyWork.state(server).formSquad(null, id, members, ArmySettings.rules(), KingdomWorldApi.state(server));
-        if (!formed.outcome().ok()) {
-            LOGGER.warn("A squad of a kingdom of the world was not formed: {}", formed.outcome().error());
-            return;
-        }
-        ArmySquad squad = formed.squad().orElseThrow();
-        Outcome ordered = ArmyWork.order(server, null, squad.id(), order);
-        if (!ordered.ok()) {
-            LOGGER.warn("A squad of a kingdom of the world got no order: {}", ordered.error());
-        }
+        NpcGarrison.station(server, id);
     }
 
     // ---------------------------------------------------------------- roads and the wall

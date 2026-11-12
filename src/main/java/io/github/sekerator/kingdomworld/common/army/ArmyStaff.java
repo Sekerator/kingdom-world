@@ -49,7 +49,12 @@ public final class ArmyStaff {
      * The wage of a citizen in thousandths of the wage of its profession: more for an officer of the guard or the army.
      */
     public static int wagePermille(MinecraftServer server, UUID citizenId) {
-        return ArmyWork.state(server).soldier(citizenId).map(soldier -> ArmySettings.force().wagePermille(soldier.post())).orElse(1_000);
+        return ArmyWork.state(server).soldier(citizenId).map(soldier -> {
+            int permille = ArmySettings.force().wagePermille(soldier.post());
+            // The garrison of a kingdom of the world lives in the barracks and eats from the storehouses: its pay is small.
+            return io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, soldier.kingdomId())
+                    ? Math.max(1, (int) Math.round(permille * (ArmySettings.garrisonWagePermille() / 1_000.0))) : permille;
+        }).orElse(1_000);
     }
 
     // ---------------------------------------------------------------- decisions of a king, a marshal or an operator
@@ -99,10 +104,21 @@ public final class ArmyStaff {
      * Sees to the staff of a kingdom once a game day; a second call on the same day does nothing.
      */
     public static Report daily(MinecraftServer server, UUID kingdomId) {
+        return daily(server, kingdomId, -1, -1);
+    }
+
+    /**
+     * Sees to the staff of a kingdom once a game day and brings its garrison nearer to its size: a few recruits a day, so
+     * that a kingdom that lost soldiers, or one raised with a smaller garrison, fills its ranks by and by.
+     *
+     * @param guards soldiers the guard should have, officers included; negative to replace only the fallen
+     * @param army   soldiers the army should have
+     */
+    public static Report daily(MinecraftServer server, UUID kingdomId, int guards, int army) {
         if (ArmyWork.isReadOnly(server) || ArmyWork.state(server).staffDay(kingdomId) >= ArmyWork.day(server)) {
             return Report.NOTHING;
         }
-        return muster(server, kingdomId, false);
+        return muster(server, kingdomId, false, guards, army);
     }
 
     /**
@@ -113,6 +129,16 @@ public final class ArmyStaff {
      *             wealth
      */
     public static Report muster(MinecraftServer server, UUID kingdomId, boolean free) {
+        return muster(server, kingdomId, free, -1, -1);
+    }
+
+    /**
+     * Sees to the staff of a kingdom now, filling its garrison up to a size.
+     *
+     * @param guards soldiers the guard should have, officers included; negative to replace only the fallen
+     * @param wantedArmy soldiers the army should have
+     */
+    public static Report muster(MinecraftServer server, UUID kingdomId, boolean free, int guards, int wantedArmy) {
         if (ArmyWork.isReadOnly(server) || KingdomWorldApi.kingdom(server, kingdomId).isEmpty()) {
             return Report.NOTHING;
         }
@@ -120,7 +146,7 @@ public final class ArmyStaff {
         KingdomWorldState world = KingdomWorldApi.state(server);
         ForceRules rules = ArmySettings.force();
         long day = ArmyWork.day(server);
-        int recruited = replace(server, kingdomId, army, rules);
+        int recruited = replace(server, kingdomId, army, rules, guards < 0 ? null : new int[]{guards, Math.max(0, wantedArmy)});
         int promoted = 0;
         int issued = 0;
         long paid = 0;
@@ -152,13 +178,17 @@ public final class ArmyStaff {
     }
 
     /**
-     * Replaces fallen soldiers by citizens without work, a few a day, each into the branch that lost one.
+     * Replaces fallen soldiers by citizens without work, a few a day, each into the branch that lost one; or, with a size
+     * of the garrison given, fills each branch up to its size.
+     *
+     * @param wanted the sizes of the guard and of the army, or {@code null} to replace only the fallen
      */
-    private static int replace(MinecraftServer server, UUID kingdomId, ArmyState army, ForceRules rules) {
+    private static int replace(MinecraftServer server, UUID kingdomId, ArmyState army, ForceRules rules, @Nullable int[] wanted) {
         WorldPos capital = ArmyWork.capitalOf(server, kingdomId);
         int recruited = 0;
         for (Branch branch : Branch.values()) {
-            while (recruited < rules.replacePerDay && army.losses(kingdomId, branch) > 0) {
+            while (recruited < rules.replacePerDay && (wanted == null ? army.losses(kingdomId, branch) > 0
+                    : army.branchOf(kingdomId, branch).size() < wanted[branch.ordinal()])) {
                 Optional<Citizen> recruit = capital == null ? Optional.empty() : ArmyActions.nearestUnemployed(server, kingdomId, capital);
                 if (recruit.isEmpty()) {
                     return recruited;

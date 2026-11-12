@@ -518,6 +518,12 @@ public final class NpcRulers {
                 finish(server, id, bought, Outcome.DONE, day);
             }
         }
+        // Workers who stand idle for want of a tool get one bought, poor or not: without tools a kingdom earns nothing.
+        for (RulerDecision bought : RulerActions.tools(server, id)) {
+            finish(server, id, bought, Outcome.DONE, day);
+        }
+        // The garrison: the fallen are replaced, the posts of officers filled and the soldiers put on their posts.
+        NpcGarrison.daily(server, id);
         List<RulerDecision> fresh = new ArrayList<>();
         for (RulerDecision decision : plan.decisions()) {
             boolean waiting = memory.pending().stream().anyMatch(p -> p.kind() == decision.kind() && p.subject().equals(decision.subject())

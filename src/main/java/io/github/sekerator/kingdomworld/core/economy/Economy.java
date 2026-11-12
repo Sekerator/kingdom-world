@@ -642,6 +642,26 @@ public final class Economy {
     }
 
     /**
+     * The peaceful citizens of a kingdom of the world pay a tax out of the wages they were just paid. The caller sees to it
+     * that the tax is no more than the part of those wages that would leave the world: no money is made.
+     */
+    public Outcome citizenTax(UUID kingdomId, long amount, long day) {
+        Treasury treasury = treasuries.get(kingdomId);
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (!Money.isPayment(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (!treasury.canReceive(amount)) {
+            return Outcome.fail(KingdomError.TOO_MUCH_MONEY);
+        }
+        treasury.receive(amount, LedgerCategory.TAXES, day);
+        changed();
+        return Outcome.DONE;
+    }
+
+    /**
      * The army pays mercenaries from the treasury: the money leaves the world.
      */
     public Outcome armyPayment(UUID kingdomId, long amount, long day) {

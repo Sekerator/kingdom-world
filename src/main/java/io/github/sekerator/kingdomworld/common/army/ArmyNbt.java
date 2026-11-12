@@ -32,6 +32,7 @@ import java.util.UUID;
  * losses: [ { kingdom, branch, count } ]
  * vacancies: [ { kingdom, branch, post, day } ]
  * staff: [ { kingdom, day } ]
+ * duties: [ { squad, duty } ]
  * squads: [ { id, kingdom, members: [uuid], commander?, band, formation, order: { kind, points: [ { dim, x, y, z } ], radius, player?, deal,
  *            via: [ { dim, x, y, z } ], target } } ]
  * marches: [ { squad, at: { dim, x, y, z }, path: [ { dim, x, y, z } ], faceX, faceZ } ]
@@ -52,6 +53,7 @@ final class ArmyNbt {
     static final String LOSSES = "losses";
     static final String VACANCIES = "vacancies";
     static final String STAFF = "staff";
+    static final String DUTIES = "duties";
     static final String NEXT_SQUAD = "nextSquad";
     static final String NEXT_BAND = "nextBand";
 
@@ -106,6 +108,14 @@ final class ArmyNbt {
             staff.add(one);
         }
         tag.put(STAFF, staff);
+        ListTag duties = new ListTag();
+        for (Map.Entry<Long, String> entry : army.duties().entrySet()) {
+            CompoundTag one = new CompoundTag();
+            one.putLong("squad", entry.getKey());
+            one.putString("duty", entry.getValue());
+            duties.add(one);
+        }
+        tag.put(DUTIES, duties);
         ListTag squads = new ListTag();
         for (ArmySquad squad : army.squads()) {
             CompoundTag entry = new CompoundTag();
@@ -380,6 +390,10 @@ final class ArmyNbt {
             } catch (RuntimeException e) {
                 problems.add("march of #" + entry.getLong("squad") + ": " + e.getMessage());
             }
+        }
+        for (CompoundTag entry : list(tag, DUTIES, problems)) {
+            // A post of a squad that is gone is nobody's post.
+            army.restoreDuty(entry.getLong("squad"), entry.getString("duty"));
         }
         army.restoreNextIds(tag.getLong(NEXT_SQUAD), tag.getLong(NEXT_BAND));
         return problems;

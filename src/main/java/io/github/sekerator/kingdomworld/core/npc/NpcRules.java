@@ -17,17 +17,26 @@ package io.github.sekerator.kingdomworld.core.npc;
  * @param money               the money of the treasury when the kingdom appears
  * @param foodDays            the food in the storehouses when it appears, in days of food for every citizen
  * @param materials           stacks of each building material in the storehouses when it appears
- * @param soldiers            soldiers of the kingdom when it appears
+ * @param soldiers            soldiers of a kingdom of the first layout when it appears
  * @param blocksPerTick       blocks the appearance places or levels in a tick at most
  * @param chunksPerTick       chunks the appearance looks through in a tick at most
  * @param maxInhabitedMinutes a place where players spent more time than this (the game counts it for every chunk) is
  *                            left alone, so that a kingdom never appears over what players built
  * @param attemptsPerSite     candidate places the plan looks at for every kingdom at most
+ * @param guards              soldiers of the city guard of the capital, officers included, by size
+ * @param army                soldiers of the royal army, officers included, by size
+ * @param townGuards          soldiers of the guard every town of the kingdom has besides, by size
  */
 public record NpcRules(boolean generate, int count, int radius, int minDistance, int minSpawnDistance, int triggerChunks,
                        int[] sizeQuota, int[] sizeWeights, int[] landRadius, int[] towns, int townDistance, long[] money, int foodDays,
                        int[] materials, int[] soldiers, int blocksPerTick, int chunksPerTick, int maxInhabitedMinutes,
-                       int attemptsPerSite) {
+                       int attemptsPerSite, int[] guards, int[] army, int[] townGuards) {
+    /** The garrison of a kingdom by size: the guard of its capital, its army, and the guards of each of its towns. */
+    public static final int[] GUARDS = {10, 18, 30};
+    public static final int[] ARMY = {6, 10, 20};
+    public static final int[] TOWN_GUARDS = {2, 2, 4};
+    /** The most soldiers of one branch the rules take. */
+    public static final int MAX_GARRISON = 256;
     /** The widest land of a capital the rules take, in chunks from the chunk of the throne. */
     public static final int MAX_LAND_RADIUS = 12;
     /** The most towns a kingdom is planned with. */
@@ -37,7 +46,21 @@ public record NpcRules(boolean generate, int count, int radius, int minDistance,
             new int[]{4, 6, 7}, new int[]{2, 3, 4}, 260, new long[]{6000, 15000, 40000}, 10, new int[]{4, 10, 16}, new int[]{2, 4, 8},
             2000, 4, 20, 60);
 
+    /**
+     * Rules with the garrisons of the defaults.
+     */
+    public NpcRules(boolean generate, int count, int radius, int minDistance, int minSpawnDistance, int triggerChunks, int[] sizeQuota,
+                    int[] sizeWeights, int[] landRadius, int[] towns, int townDistance, long[] money, int foodDays, int[] materials,
+                    int[] soldiers, int blocksPerTick, int chunksPerTick, int maxInhabitedMinutes, int attemptsPerSite) {
+        this(generate, count, radius, minDistance, minSpawnDistance, triggerChunks, sizeQuota, sizeWeights, landRadius, towns, townDistance,
+                money, foodDays, materials, soldiers, blocksPerTick, chunksPerTick, maxInhabitedMinutes, attemptsPerSite, GUARDS, ARMY,
+                TOWN_GUARDS);
+    }
+
     public NpcRules {
+        guards = three(guards, 0, MAX_GARRISON);
+        army = three(army, 0, MAX_GARRISON);
+        townGuards = three(townGuards, 0, 16);
         sizeQuota = three(sizeQuota, 0, 256);
         sizeWeights = three(sizeWeights, 0, 1000);
         landRadius = three(landRadius, 1, MAX_LAND_RADIUS);
@@ -89,6 +112,36 @@ public record NpcRules(boolean generate, int count, int radius, int minDistance,
 
     public int soldiers(NpcLevel level) {
         return soldiers[level.ordinal()];
+    }
+
+    /** Soldiers of the guard of the capital, officers included. */
+    public int guards(NpcLevel level) {
+        return guards[level.ordinal()];
+    }
+
+    /** Soldiers of the royal army, officers included. */
+    public int army(NpcLevel level) {
+        return army[level.ordinal()];
+    }
+
+    /** Soldiers of the guard of every town. */
+    public int townGuards(NpcLevel level) {
+        return townGuards[level.ordinal()];
+    }
+
+    @Override
+    public int[] guards() {
+        return guards.clone();
+    }
+
+    @Override
+    public int[] army() {
+        return army.clone();
+    }
+
+    @Override
+    public int[] townGuards() {
+        return townGuards.clone();
     }
 
     @Override

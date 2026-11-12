@@ -513,7 +513,7 @@ public final class ArmyWork {
             return Outcome.fail(KingdomError.ON_EXPEDITION);
         }
         Outcome outcome = change(server, "recruit a soldier", army -> army.recruit(actor, kingdomId, citizenId, professionId,
-                KingdomWorldApi.gameTime(server), ArmySettings.rules(), KingdomWorldApi.state(server)));
+                KingdomWorldApi.gameTime(server), ArmySettings.rulesFor(server, kingdomId), KingdomWorldApi.state(server)));
         if (!outcome.ok()) {
             return outcome;
         }

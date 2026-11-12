@@ -248,7 +248,10 @@ final class RulerSnapshots {
         // Wages are due every day whether or not a week has gone by: the expenses are at least today's payroll.
         long payroll = 0;
         for (Citizen citizen : state.citizens().registry().citizensOf(id)) {
-            payroll += treasury.wage(citizen.professionId(), economy);
+            // Officers are paid a multiple of the wage of a soldier, the garrison of a kingdom of the world a part of it.
+            payroll += new io.github.sekerator.kingdomworld.core.economy.Economy.WageClaim(citizen.id(), citizen.professionId(),
+                    io.github.sekerator.kingdomworld.common.army.ArmyStaff.wagePermille(server, citizen.id()))
+                    .scaled(treasury.wage(citizen.professionId(), economy));
         }
         view.expenses = Math.max(view.expenses, payroll);
         view.soldierWage = treasury.wage(Professions.WARRIOR.id(), economy);
@@ -348,6 +351,8 @@ final class RulerSnapshots {
         }
         ArmyState army = ArmyWork.state(server);
         view.soldiers = army.soldiersOf(id).size();
+        // The garrison of a kingdom of the world has a set size; its staff, not the ruler's mood, fills the ranks.
+        view.garrison = true;
         for (ArmySquad squad : army.squadsOf(id)) {
             switch (squad.order().kind()) {
                 case PATROL -> view.patrols++;

@@ -231,12 +231,13 @@ public final class ArmyKits {
             ItemStack old = released(current);
             if (!old.isEmpty()) {
                 ItemStack rest = KingdomStorage.insert(server, citizen.kingdomId(), old, citizen.lastPos());
-                if (!rest.isEmpty() && !isIssued(current)) {
+                if (!rest.isEmpty() && !isIssued(current) && !free) {
                     // No room for a piece of the soldier's own: it stays, and nothing is paid.
                     whole = false;
                     continue;
                 }
-                // An issued piece of another post that finds no room in the storehouses is given up.
+                // An issued piece of another post that finds no room in the storehouses is given up; so is what a soldier
+                // took from the first stores of a kingdom at its founding, when the kit of its post takes its place.
             }
             if (price > 0 && !KingdomWorldApi.state(server).economy().armyPayment(citizen.kingdomId(), price, day).ok()) {
                 hands.set(slot, ItemStack.EMPTY);

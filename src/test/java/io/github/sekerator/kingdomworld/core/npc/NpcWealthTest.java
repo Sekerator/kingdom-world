@@ -62,7 +62,9 @@ class NpcWealthTest {
         for (NpcLevel level : NpcLevel.values()) {
             NpcComposition composition = of(level);
             NpcWealth wealth = NpcWealth.of(composition, RULES, "minecraft:oak_log", "minecraft:oak_planks", 6);
-            int soldiers = composition.soldiers();
+            // The garrison of a capital of districts gets the kits of its branches and posts at the founding (the army issues
+            // them): its wealth holds no other gear of soldiers. A kingdom of the first layout arms its handful from its stores.
+            int soldiers = composition.districts() ? 0 : composition.soldiers();
             int weapons = wealth.count("minecraft:stone_sword") + wealth.count("minecraft:iron_sword") + wealth.count("minecraft:bow");
             assertEquals(soldiers, weapons, level.id());
             int archers = wealth.count("minecraft:bow");

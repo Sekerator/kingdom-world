@@ -43,6 +43,28 @@ public final class ArmySettings {
     }
 
     /**
+     * The rules for the army of one kingdom: a kingdom of the world keeps a garrison larger than the limits of players
+     * allow.
+     */
+    public static ArmyRules rulesFor(net.minecraft.server.MinecraftServer server, java.util.UUID kingdomId) {
+        ArmyRules rules = rules();
+        return io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, kingdomId)
+                ? rules.withLimits(ArmyRules.WORLD_SOLDIERS, ArmyRules.WORLD_SQUADS, ArmyRules.WORLD_SQUAD_SIZE) : rules;
+    }
+
+    /**
+     * The wage of a soldier of a kingdom of the world, in thousandths of the wage of a soldier: its garrison lives in the
+     * barracks and eats from the storehouses.
+     */
+    public static int garrisonWagePermille() {
+        try {
+            return KingdomWorldConfig.SERVER.npcKingdoms.garrisonWagePercent.get() * 10;
+        } catch (RuntimeException e) {
+            return 100;
+        }
+    }
+
+    /**
      * How squads march, see and meet in the field.
      */
     public static io.github.sekerator.kingdomworld.core.army.FieldRules field() {

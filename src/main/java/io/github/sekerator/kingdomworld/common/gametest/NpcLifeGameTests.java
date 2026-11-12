@@ -186,6 +186,20 @@ public final class NpcLifeGameTests {
         helper.assertTrue(starved == 0, starved + " citizens are at the floor of their health from hunger");
         long funds = KingdomWorldApi.treasury(server, id).map(Treasury::funds).orElse(0L);
         helper.assertTrue(funds > 0, "The treasury is empty: " + funds);
+        // The garrison is kept whole and led: the guard and the army of the capital with their four officers, and the
+        // kingdom can pay them, so its treasury does not run dry.
+        io.github.sekerator.kingdomworld.core.npc.NpcLevel size = NpcWork.state(server).kingdom(id).orElseThrow().level();
+        io.github.sekerator.kingdomworld.core.army.ArmyState army = io.github.sekerator.kingdomworld.common.army.ArmyWork.state(server);
+        int soldiers = army.soldiersOf(id).size();
+        int garrison = NpcRules.DEFAULT.guards(size) + NpcRules.DEFAULT.army(size);
+        helper.assertTrue(soldiers >= garrison, "The garrison shrank: " + soldiers + " of " + garrison);
+        for (io.github.sekerator.kingdomworld.core.army.Branch branch : io.github.sekerator.kingdomworld.core.army.Branch.values()) {
+            helper.assertTrue(army.officer(id, branch, io.github.sekerator.kingdomworld.core.army.Post.CAPTAIN).isPresent()
+                    && army.officer(id, branch, io.github.sekerator.kingdomworld.core.army.Post.VICE_CAPTAIN).isPresent(),
+                    "The " + branch.id() + " has lost an officer");
+        }
+        helper.assertTrue(funds * 3 >= NpcRules.DEFAULT.money(size), "The treasury is running dry: " + funds + " of "
+                + NpcRules.DEFAULT.money(size));
     }
 
     private static void log(MinecraftServer server, String name, UUID id, int day, Map<String, Integer> decrees) {

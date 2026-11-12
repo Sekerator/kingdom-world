@@ -130,6 +130,36 @@ public final class EconomyEvents {
     }
 
     /**
+     * A kingdom of the world has no subjects among the players to tax: its peaceful citizens pay a tax out of the wages they
+     * just got. The tax is a share of what they were paid, never more than the part of a wage that does not go home with
+     * the citizen and would leave the world, so no money is made. Soldiers pay none: their pay is small already.
+     */
+    private static void citizenTax(MinecraftServer server, KingdomWorldState state, Kingdom kingdom, Economy.Payday payday, long day) {
+        if (!io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, kingdom.id())) {
+            return;
+        }
+        int percent;
+        try {
+            percent = io.github.sekerator.kingdomworld.common.config.KingdomWorldConfig.SERVER.npcKingdoms.citizenTaxPercent.get();
+        } catch (RuntimeException e) {
+            percent = 80;
+        }
+        percent = Math.max(0, Math.min(100 - Households.rules().sharePercent(), percent));
+        long paid = 0;
+        for (java.util.Map.Entry<java.util.UUID, Long> entry : payday.pay().entrySet()) {
+            boolean soldier = state.citizens().get(entry.getKey())
+                    .map(citizen -> io.github.sekerator.kingdomworld.core.citizen.Professions.isMilitary(citizen.professionId())).orElse(true);
+            if (!soldier) {
+                paid += entry.getValue();
+            }
+        }
+        long tax = paid * percent / 100;
+        if (tax > 0) {
+            state.economy().citizenTax(kingdom.id(), tax, day);
+        }
+    }
+
+    /**
      * Holds the payday of a kingdom now, if it was not held today, and tells everybody concerned.
      */
     public static Economy.Payday payday(MinecraftServer server, Kingdom kingdom, long day) {
@@ -142,6 +172,7 @@ public final class EconomyEvents {
         }
         // Of every wage a share goes home with the citizen; the rest leaves the world.
         Households.onPayday(server, kingdom.id(), payday);
+        citizenTax(server, state, kingdom, payday, day);
         CurrencyUnits units = state.economy().units(kingdom.id()).orElse(CurrencyUnits.DEFAULT);
         for (Economy.TaxPaid tax : payday.taxes()) {
             if (tax.tax() > 0 && tax.paid() >= tax.tax() && tax.debt() == 0) {

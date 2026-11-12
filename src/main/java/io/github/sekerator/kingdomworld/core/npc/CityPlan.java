@@ -276,8 +276,14 @@ final class CityPlan {
                 }
             }
         }
-        int soldiers = Math.min(rules.soldiers(level), bunks + townBunks);
-        int citizens = homes + townHomes + soldiers;
+        // The guard of the capital and the army sleep in the barracks of the capital. The guards of a town sleep in its
+        // barracks, or in its houses where it has none: there they take the beds of citizens, never more than a third.
+        int inCapital = Math.min(rules.guards(level) + rules.army(level), bunks);
+        int ofTowns = towns * rules.townGuards(level);
+        int inTownBunks = Math.min(ofTowns, townBunks);
+        int inTownHomes = townBunks > 0 ? 0 : Math.min(ofTowns, townHomes / 3);
+        int soldiers = inCapital + inTownBunks + inTownHomes;
+        int citizens = homes + townHomes + inCapital + inTownBunks;
         // A field of carrots feeds about twenty, one of wheat half as many through the baker: every third field is wheat. The
         // fields are counted for full barracks: newcomers take the free bunks, and a garrison eats as the citizens do.
         int fields = Math.max(1, (int) Math.ceil((homes + bunks) * 1.5 / 18.0));

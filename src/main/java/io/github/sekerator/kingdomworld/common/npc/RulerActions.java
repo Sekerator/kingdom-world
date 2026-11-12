@@ -604,6 +604,72 @@ final class RulerActions {
         return ordered;
     }
 
+    /** The tool a profession cannot work without, as a kingdom buys it. */
+    private static final java.util.Map<String, String> TOOLS = java.util.Map.of("lumberjack", "minecraft:stone_axe", "miner",
+            "minecraft:stone_pickaxe", "fisher", "minecraft:fishing_rod");
+    /** Tools a kingdom buys in a day at most. */
+    private static final int TOOLS_PER_DAY = 6;
+
+    /**
+     * Workers who stand idle because the storehouses have no tool for them get one bought from abroad, straight into the
+     * storehouses and paid from the treasury at the price of an import: without tools a kingdom fells no wood and digs no
+     * ore, and a kingdom of the world does not always have a smith. It buys the plain tools of stone, which cost little; better
+     * ones are for its smiths to make. A tool is bought only while the treasury holds three times its price.
+     *
+     * @return the tools bought, as decrees
+     */
+    static List<RulerDecision> tools(MinecraftServer server, UUID id) {
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        if (KingdomWorldApi.isReadOnly(server)) {
+            return List.of();
+        }
+        java.util.Map<String, Integer> lacking = new java.util.LinkedHashMap<>();
+        for (Citizen citizen : state.citizens().registry().citizensOf(id)) {
+            String tool = TOOLS.get(citizen.professionId());
+            if (tool != null && citizen.workStatus() == io.github.sekerator.kingdomworld.core.citizen.WorkStatus.NO_TOOL) {
+                lacking.merge(tool, 1, Integer::sum);
+            }
+        }
+        if (lacking.isEmpty()) {
+            return List.of();
+        }
+        io.github.sekerator.kingdomworld.core.trade.TradeRules rules = TradeSettings.rules();
+        long day = TreasuryActions.day(server);
+        io.github.sekerator.kingdomworld.core.citizen.WorldPos capital = io.github.sekerator.kingdomworld.common.army.ArmyWork.capitalOf(server, id);
+        List<RulerDecision> bought = new ArrayList<>();
+        int left = TOOLS_PER_DAY;
+        for (java.util.Map.Entry<String, Integer> entry : lacking.entrySet()) {
+            net.minecraft.world.item.Item item = io.github.sekerator.kingdomworld.common.trade.GoodsStacks.item(entry.getKey());
+            if (item == null || item == net.minecraft.world.item.Items.AIR) {
+                continue;
+            }
+            double worth = io.github.sekerator.kingdomworld.common.trade.MarketStock.worth(server, item).amount();
+            long each = Math.max(1L, io.github.sekerator.kingdomworld.core.trade.Prices.importCost(worth, 1, rules));
+            int count = 0;
+            for (int i = 0; i < entry.getValue() && left > 0; i++) {
+                if (state.economy().treasury(id).map(treasury -> treasury.funds() < each * 3).orElse(true)) {
+                    break;
+                }
+                net.minecraft.world.item.ItemStack tool = new net.minecraft.world.item.ItemStack(item);
+                if (!io.github.sekerator.kingdomworld.common.storage.KingdomStorage.insert(server, id, tool.copy(), capital).isEmpty()) {
+                    // No room in the storehouses: nothing is bought.
+                    break;
+                }
+                if (!state.economy().importPayment(id, each, day).ok()) {
+                    // Paid for or not at all: the tool that could not be paid goes back out of the storehouses.
+                    io.github.sekerator.kingdomworld.common.trade.MarketStock.take(server, id, item, 1, capital);
+                    break;
+                }
+                count++;
+                left--;
+            }
+            if (count > 0) {
+                bought.add(RulerDecision.of(RulerDecision.Kind.IMPORT, entry.getKey(), count).withExtra(each * count));
+            }
+        }
+        return bought;
+    }
+
     // ---------------------------------------------------------------- land and towns
 
     /**

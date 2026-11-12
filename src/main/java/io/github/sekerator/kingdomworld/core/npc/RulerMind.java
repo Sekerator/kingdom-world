@@ -391,7 +391,8 @@ public final class RulerMind {
         long reserve = reserve(view, rules);
         long spare = spare(view, rules);
         boolean threat = threatened(view);
-        int soldiers = soldiersWanted(view, rules);
+        // A kingdom with a garrison keeps it: its size is set by the size of the kingdom, and its staff fills the ranks.
+        int soldiers = view.garrison ? view.soldiers : soldiersWanted(view, rules);
         if (poor) {
             hardTimes(view, rules, candidates, soldiers);
             needs.add(new Need(NeedKind.MONEY, "", Math.max(0, reserve - view.balance)));
@@ -412,7 +413,7 @@ public final class RulerMind {
     private static void hardTimes(RulerView view, RulerRules rules, List<Scored> out, int soldiers) {
         int keep = threatened(view) ? Math.min(view.soldiers, 2) : Math.min(view.soldiers, 1);
         keep = Math.min(keep, soldiers);
-        if (view.soldiers > keep) {
+        if (view.soldiers > keep && !view.garrison) {
             out.add(new Scored(100, RulerDecision.of(Kind.DISMISS, "", Math.max(1, (view.soldiers - keep + 1) / 2))));
         }
         if (view.constructions > view.paused || !view.buying.isEmpty()) {

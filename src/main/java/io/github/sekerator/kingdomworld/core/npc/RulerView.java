@@ -134,6 +134,8 @@ public final class RulerView {
     public boolean townSpot;
 
     public int soldiers;
+    /** Whether the kingdom keeps a garrison of a set size: its ruler neither hires soldiers nor lets them go. */
+    public boolean garrison;
     public long soldierWage = 15;
     public int patrols;
     public int roads;
