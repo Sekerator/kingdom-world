@@ -78,6 +78,9 @@ public final class ArmyCommands {
                 .then(Commands.literal("dismiss")
                         .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
                                 .executes(ArmyCommands::dismissAll)))
+                .then(Commands.literal("garrison")
+                        .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
+                                .executes(ArmyCommands::garrison)))
                 .then(Commands.literal("staff")
                         .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
                                 .executes(ArmyCommands::staff)))
@@ -200,6 +203,41 @@ public final class ArmyCommands {
         int done = recruited;
         source.sendSuccess(() -> Component.translatable(ADMIN + "recruited", done, profession, kingdom.name()), true);
         return recruited;
+    }
+
+    /**
+     * The garrison of a kingdom in one line: the guard and the army, their officers, how many soldiers stand at every post,
+     * how far the answer to every alarm has gone, and where the throne stands.
+     */
+    private static int garrison(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        MinecraftServer server = source.getServer();
+        Kingdom kingdom = kingdom(context);
+        io.github.sekerator.kingdomworld.core.army.ArmyState army = ArmyWork.state(server);
+        int guards = army.branchOf(kingdom.id(), io.github.sekerator.kingdomworld.core.army.Branch.GUARD).size();
+        int ofArmy = army.branchOf(kingdom.id(), io.github.sekerator.kingdomworld.core.army.Branch.ARMY).size();
+        int officers = 0;
+        for (io.github.sekerator.kingdomworld.core.army.Soldier soldier : army.soldiersOf(kingdom.id())) {
+            officers += soldier.post().officer() ? 1 : 0;
+        }
+        java.util.Map<String, Integer> posts = new java.util.TreeMap<>();
+        for (io.github.sekerator.kingdomworld.core.army.ArmySquad squad : army.squadsOf(kingdom.id())) {
+            army.duty(squad.id()).ifPresent(duty -> posts.put(duty, squad.members().size()));
+        }
+        StringBuilder standing = new StringBuilder();
+        posts.forEach((duty, count) -> standing.append(standing.length() > 0 ? " " : "").append(duty).append('=').append(count));
+        StringBuilder alarms = new StringBuilder();
+        for (io.github.sekerator.kingdomworld.core.law.Alarm alarm : io.github.sekerator.kingdomworld.common.law.LawAlarms.active(server,
+                kingdom.id())) {
+            alarms.append(alarms.length() > 0 ? " " : "").append(alarm.name()).append('=')
+                    .append(io.github.sekerator.kingdomworld.common.army.ArmyRelief.step(kingdom.id(), alarm.offender()));
+        }
+        io.github.sekerator.kingdomworld.core.citizen.WorldPos throne = ArmyWork.capitalOf(server, kingdom.id());
+        int count = posts.size();
+        source.sendSuccess(() -> Component.translatable(ADMIN + "garrison", kingdom.name(), guards, ofArmy, officers, count,
+                standing.length() == 0 ? "-" : standing.toString(), alarms.length() == 0 ? "-" : alarms.toString(),
+                throne == null ? 0 : throne.x(), throne == null ? 0 : throne.y(), throne == null ? 0 : throne.z()), false);
+        return guards + ofArmy;
     }
 
     /**

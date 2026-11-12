@@ -51,6 +51,12 @@ final class ClientNpcShowcase {
     private static final String STREET = "npc-capital-street";
     /** Ticks the player stands on the avenue before that shot, so that the citizens around have their bodies. */
     private static final int STREET_WAIT = 600;
+    /** The shot of the alarm: the player stands on the square, wounds guards, and the whole garrison comes. */
+    private static final String ALARM = "garrison-alarm";
+    /** Ticks the alarm lasts before its shot: long enough for the army and its captain to come out. */
+    private static final int ALARM_WAIT = 900;
+    /** Ticks after the camera moved before the alarm is raised, so that the bodies around have appeared. */
+    private static final int ALARM_LEAD = 100;
 
     private record Shot(String name, double x, double y, double z, float yaw, float pitch) {
     }
@@ -71,6 +77,8 @@ final class ClientNpcShowcase {
     private boolean failed;
     private float yaw = Float.NaN;
     private float pitch = Float.NaN;
+    /** The lengths of the ticks of the server while the alarm lasted, a hundred at a time. */
+    private final List<long[]> alarmTicks = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     ClientNpcShowcase(Path folder) {
         this.folder = folder.resolve("world");
@@ -114,10 +122,28 @@ final class ClientNpcShowcase {
         if (wait > 0) {
             hold(minecraft);
             wait--;
+            String name = index < shots.size() ? shots.get(index).name() : "atlas-kingdom";
+            if (name.equals(ALARM)) {
+                if (wait == ALARM_WAIT - ALARM_LEAD) {
+                    server.execute(() -> raiseAlarm(server, playerId));
+                } else if (wait < ALARM_WAIT - ALARM_LEAD && wait % 100 == 0) {
+                    // The server keeps the lengths of its last hundred ticks: taken every hundred ticks they cover the alarm.
+                    server.execute(() -> {
+                        alarmTicks.add(server.tickTimes.clone());
+                        ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+                        if (player != null) {
+                            // The player of a showcase touches no key: it must not count as away from the keyboard.
+                            player.resetLastActionTime();
+                        }
+                    });
+                }
+            }
             if (wait == 0) {
-                String name = index < shots.size() ? shots.get(index).name() : "atlas-kingdom";
                 if (name.equals(STREET)) {
                     measure(server, playerId);
+                }
+                if (name.equals(ALARM)) {
+                    measureAlarm(server, playerId);
                 }
                 shoot(name);
             }
@@ -143,7 +169,137 @@ final class ClientNpcShowcase {
             minecraft.setScreen(atlas);
             atlas.showForCheck(atlasX / 16.0, atlasZ / 16.0, 3.0, null, net.minecraft.network.chat.Component.empty(), false);
         }
-        wait = street ? STREET_WAIT : SETTLE;
+        wait = street ? STREET_WAIT : index < shots.size() && shots.get(index).name().equals(ALARM) ? ALARM_WAIT : SETTLE;
+    }
+
+    /**
+     * On the server: the player on the square wounds the twelve nearest fighters of the guard, so that the alarm goes
+     * through all its steps and the whole garrison, guard and army, comes to the player.
+     */
+    private void raiseAlarm(IntegratedServer server, UUID playerId) {
+        ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+        if (player == null) {
+            return;
+        }
+        player.resetLastActionTime();
+        io.github.sekerator.kingdomworld.core.army.ArmyState army = io.github.sekerator.kingdomworld.common.army.ArmyWork.state(server);
+        List<io.github.sekerator.kingdomworld.common.citizen.CitizenEntity> guards = new ArrayList<>(player.serverLevel().getEntitiesOfClass(
+                io.github.sekerator.kingdomworld.common.citizen.CitizenEntity.class, player.getBoundingBox().inflate(160.0, 48.0, 160.0),
+                body -> body.isAlive() && body.citizenId() != null && army.soldier(body.citizenId())
+                        .map(soldier -> soldier.branch() == io.github.sekerator.kingdomworld.core.army.Branch.GUARD
+                                && soldier.post() == io.github.sekerator.kingdomworld.core.army.Post.FIGHTER).orElse(false)));
+        guards.sort(java.util.Comparator.comparingDouble(body -> body.distanceToSqr(player)));
+        int wounded = 0;
+        for (io.github.sekerator.kingdomworld.common.citizen.CitizenEntity guard : guards) {
+            if (wounded >= 12) {
+                break;
+            }
+            float before = guard.getHealth();
+            guard.invulnerableTime = 0;
+            guard.hurt(player.damageSources().playerAttack(player), guard.getMaxHealth() * 0.6f);
+            if (guard.getHealth() < before) {
+                wounded++;
+            }
+        }
+        alarmTicks.clear();
+        LOGGER.info(PREFIX + "alarm on the square of the large capital: {} guard(s) wounded of {} with a body around, {} soldier(s) in the kingdom",
+                wounded, guards.size(), guards.isEmpty() ? 0 : army.soldiersOf(guards.get(0).kingdomId()).size());
+    }
+
+    /**
+     * Says in the log how long the ticks of the server were while the garrison ran to the player, and how many soldiers
+     * came.
+     */
+    private void measureAlarm(IntegratedServer server, UUID playerId) {
+        server.execute(() -> {
+            ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+            if (player == null) {
+                return;
+            }
+            alarmTicks.add(server.tickTimes.clone());
+            long sum = 0;
+            long worst = 0;
+            int count = 0;
+            int slow = 0;
+            for (long[] hundred : alarmTicks) {
+                for (long nanos : hundred) {
+                    sum += nanos;
+                    worst = Math.max(worst, nanos);
+                    count++;
+                    slow += nanos > 50_000_000L ? 1 : 0;
+                }
+            }
+            io.github.sekerator.kingdomworld.core.army.ArmyState army = io.github.sekerator.kingdomworld.common.army.ArmyWork.state(server);
+            List<io.github.sekerator.kingdomworld.common.citizen.CitizenEntity> soldiers = player.serverLevel().getEntitiesOfClass(
+                    io.github.sekerator.kingdomworld.common.citizen.CitizenEntity.class, player.getBoundingBox().inflate(160.0, 48.0, 160.0),
+                    body -> body.isAlive() && body.citizenId() != null && army.soldier(body.citizenId()).isPresent());
+            int near = 0;
+            int ofArmy = 0;
+            for (io.github.sekerator.kingdomworld.common.citizen.CitizenEntity body : soldiers) {
+                if (body.distanceToSqr(player) <= 24.0 * 24.0) {
+                    near++;
+                    ofArmy += army.soldier(body.citizenId()).map(soldier -> soldier.branch()
+                            == io.github.sekerator.kingdomworld.core.army.Branch.ARMY ? 1 : 0).orElse(0);
+                }
+            }
+            String step = soldiers.isEmpty() ? "-" : io.github.sekerator.kingdomworld.common.army.ArmyRelief.step(soldiers.get(0).kingdomId(),
+                    playerId).toString();
+            LOGGER.info(PREFIX + "alarm in the large capital, step {}: {} soldier(s) within 24 blocks of the player ({} of the army) of {} with a "
+                            + "body, average tick {} ms, worst tick {} ms, {} tick(s) over 50 ms of {}", step, near, ofArmy, soldiers.size(),
+                    String.format(java.util.Locale.ROOT, "%.2f", count == 0 ? 0.0 : sum / 1e6 / count),
+                    String.format(java.util.Locale.ROOT, "%.2f", worst / 1e6), slow, count);
+        });
+    }
+
+    /**
+     * A shot from a place towards another.
+     */
+    private static Shot towards(String name, double x, double y, double z, double toX, double toY, double toZ) {
+        double flat = Math.max(0.001, Math.hypot(toX - x, toZ - z));
+        return new Shot(name, x, y, z, (float) Math.toDegrees(Math.atan2(-(toX - x), toZ - z)), (float) -Math.toDegrees(Math.atan2(toY - y, flat)));
+    }
+
+    /**
+     * The garrison at its posts: the guards of a gate, the post at the storehouse, the captain in the hall of the palace, the
+     * army at the barracks, and last the alarm on the square.
+     */
+    private static void garrisonShots(IntegratedServer server, NpcSite site, UUID kingdom, BlockPos throne, List<Shot> list) {
+        io.github.sekerator.kingdomworld.core.npc.NpcComposition composition = NpcSpawner.composition(site);
+        int y = site.groundY() + 1;
+        java.util.function.Function<String, double[]> at = name -> composition.post(name).filter(post -> !post.points().isEmpty())
+                .map(post -> new double[]{site.x() + post.points().get(0)[0] + 0.5, site.z() + post.points().get(0)[1] + 0.5}).orElse(null);
+        double[] gate = at.apply("gate_south");
+        if (gate != null) {
+            // From inside the city, towards the gate and the two guards before it.
+            list.add(towards("garrison-gate", gate[0], y + 3.0, gate[1] - 11.0, gate[0], y + 1.0, gate[1]));
+        }
+        double[] stores = at.apply("stores");
+        double[] round = at.apply("stores_round");
+        if (stores != null && round != null) {
+            double dx = round[0] - stores[0];
+            double dz = round[1] - stores[1];
+            double length = Math.max(1.0, Math.hypot(dx, dz));
+            list.add(towards("garrison-stores", round[0] + dx / length * 6.0, y + 5.0, round[1] + dz / length * 6.0, stores[0], y + 1.0, stores[1]));
+        }
+        double[] hall = at.apply("palace_hall");
+        if (hall != null) {
+            list.add(towards("garrison-captain", hall[0] + 2.0, y + 1.8, hall[1] + 6.0, hall[0], y + 1.2, hall[1]));
+        }
+        for (Building building : KingdomWorldApi.state(server).construction().buildingsOf(kingdom)) {
+            if (building.role().equals("barracks")) {
+                double dx = building.anchor().x() - throne.getX();
+                double dz = building.anchor().z() - throne.getZ();
+                double length = Math.max(1.0, Math.hypot(dx, dz));
+                // From the side of the palace, over the heads of the army in reserve.
+                list.add(towards("garrison-army", building.anchor().x() - dx / length * 12.0, y + 6.0, building.anchor().z() - dz / length * 12.0,
+                        building.anchor().x() + 0.5, y + 1.0, building.anchor().z() + 0.5));
+                break;
+            }
+        }
+        double[] square = at.apply("square");
+        if (square != null) {
+            list.add(new Shot(ALARM, square[0], y + 2.6, square[1] + 7.0, 180.0f, 14.0f));
+        }
     }
 
     /**
@@ -336,6 +492,7 @@ final class ClientNpcShowcase {
             list.add(new Shot("npc-town", end.x() + 0.5, end.y() + 38, end.z() + 42.5, 180.0f, 42.0f));
             break;
         }
+        garrisonShots(server, site, kingdom, throne, list);
         if (small.isPresent() && small.get().status() == NpcSite.Status.SPAWNED) {
             BlockPos other = NpcSpawner.thronePos(small.get());
             int reach = small.get().kingdomId().flatMap(id -> RoadWork.state(server).wallOf(0, id)).map(wall -> wall.radius())

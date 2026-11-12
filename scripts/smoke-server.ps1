@@ -747,6 +747,7 @@ $script:EconomyRaw = $null
 $script:TradeMoney = $null
 $script:MinerId = $null
 $script:NpcName = $null
+$script:GarrisonPosts = $null
 $script:WarId = $null
 $script:WarScore = $null
 $script:WarNumbers = $null
@@ -2650,6 +2651,81 @@ Invoke-Phase 'run1' {
         }
     }
 
+    Invoke-Part $server 'the guard and the army of a kingdom of the world' {
+        if (-not $script:NpcName) {
+            Add-Warning '[run1] no kingdom of the world to check the garrison of'
+            return
+        }
+        $npc = '"' + $script:NpcName + '"'
+        $npcPattern = [regex]::Escape($script:NpcName)
+        $garrisonPattern = "Garrison of ${npcPattern}: guard (\d+), army (\d+), officers (\d+) of 4, posts (\d+): ([^;\r\n]*); alarms: ([^;\r\n]*); throne at (-?\d+) (-?\d+) (-?\d+)"
+        $garrison = Invoke-ServerCommand $server "kingdomworld admin army garrison $npc" $garrisonPattern
+        if (-not $garrison) {
+            Add-Failure '[run1] the garrison of the kingdom of the world was not listed'
+            return
+        }
+        $guards = [int]$garrison.Groups[1].Value
+        $ofArmy = [int]$garrison.Groups[2].Value
+        $posts = $garrison.Groups[5].Value
+        # A large kingdom: thirty of the guard with the guards of its towns, twenty of the army, two officers of each.
+        if ($guards -ge 30 -and $ofArmy -eq 20 -and $garrison.Groups[3].Value -eq '4') {
+            Write-Ok "[run1] the kingdom of the world keeps a garrison: $guards of the guard, $ofArmy of the army, 4 officers"
+        } else {
+            Add-Failure "[run1] the garrison of the kingdom of the world is not whole: $($garrison.Value)"
+        }
+        $gates = [regex]::Matches($posts, 'gate_\w+=(\d+)')
+        $gatesHeld = @($gates | Where-Object { [int]$_.Groups[1].Value -ge 2 }).Count
+        $round = [regex]::Match($posts, 'stores_round=(\d+)')
+        if ($posts -match '(^| )stores=2( |$)' -and $round.Success -and [int]$round.Groups[1].Value -ge 2 -and $gates.Count -ge 2 -and $gatesHeld -eq $gates.Count -and $posts -match 'palace_hall=' -and $posts -match 'reserve=') {
+            Write-Ok "[run1] the garrison stands at its posts: two inside the storehouse, a round of $($round.Groups[1].Value) about it, two or more at each of $($gates.Count) gates, the hall of the palace, the army in reserve"
+        } else {
+            Add-Failure "[run1] the posts of the garrison are not held: $posts"
+        }
+        $script:GarrisonPosts = "$guards/$ofArmy/$posts"
+        # An alarm that lasts brings the officers of the guard out, one after the other: a stranger strikes a guard near the
+        # throne, and strikes again while the fight drags on.
+        $tx = [int]$garrison.Groups[7].Value
+        $ty = [int]$garrison.Groups[8].Value
+        $tz = [int]$garrison.Groups[9].Value
+        [void](Invoke-ServerCommand $server "kingdomworld admin army soldiers $npc" "Soldiers of ${npcPattern}: (\d+)")
+        Sync-Server $server
+        $warrior = [regex]::Match((Get-LatestLog), '([0-9a-f]{8}): \S*warrior, rank ')
+        if (-not $warrior.Success) {
+            Add-Warning '[run1] the kingdom of the world has no warrior for the check of the steps of an alarm'
+            return
+        }
+        $guard = $warrior.Groups[1].Value
+        $rioter = 'smoke_rioter'
+        # Nobody is near that capital: its hall is kept loaded for the check, as a player in it would keep it.
+        Send-ServerCommand $server "forceload add $tx $tz"
+        Sync-Server $server
+        [void](Invoke-ServerCommand $server "kingdomworld admin citizens body $guard $tx $ty $($tz + 3) still" "Citizen $guard \([^\r\n]*\) has a body at ")
+        [void](Invoke-ServerCommand $server "kingdomworld admin law act $rioter $npc at $($tx + 1) $ty $($tz + 4)" "$rioter stands at ")
+        $struck = Invoke-ServerCommand $server "kingdomworld admin law act $rioter $npc strike $guard" "$rioter struck citizen $guard of ${npcPattern}: alarms (\d+)"
+        $steps = @()
+        foreach ($wanted in @('GUARD_VICE', 'GUARD_CAPTAIN')) {
+            $reached = $null
+            $deadline = (Get-Date).AddSeconds(35)
+            do {
+                Start-Sleep -Seconds 2
+                $now = Invoke-ServerCommand $server "kingdomworld admin army garrison $npc" $garrisonPattern 5
+                if ($now -and $now.Groups[6].Value -match "$rioter=(\w+)") { $reached = $Matches[1] }
+            } while ($reached -ne $wanted -and $reached -ne 'ARMY' -and $reached -ne 'ARMY_CAPTAIN' -and (Get-Date) -lt $deadline)
+            $steps += "$reached"
+            # The fight goes on: another blow keeps the alarm alive.
+            [void](Invoke-ServerCommand $server "kingdomworld admin law act $rioter $npc strike $guard" "$rioter struck citizen $guard of ${npcPattern}: alarms (\d+)" 5)
+        }
+        if ($struck -and $steps[0] -eq 'GUARD_VICE' -and $steps[1] -match 'GUARD_CAPTAIN|ARMY') {
+            Write-Ok "[run1] an alarm that lasts called the vice-captain of the guard and then its captain: $($steps -join ', ')"
+        } else {
+            Add-Failure "[run1] the alarm did not go through its steps: '$(if ($struck) { $struck.Value })', steps $($steps -join ', ')"
+        }
+        [void](Invoke-ServerCommand $server "kingdomworld admin law act $rioter $npc leave" "$rioter left")
+        [void](Invoke-ServerCommand $server "kingdomworld admin citizens body $guard remove" "The body of citizen $guard ")
+        Send-ServerCommand $server "forceload remove $tx $tz"
+        Sync-Server $server
+    }
+
     # Read right before the stop, to compare after the restart: the nobility, the roads, the money and the score of the war.
     Invoke-Part $server 'what the restart must keep' {
         if ($script:NpcName) {
@@ -2832,6 +2908,20 @@ Invoke-Phase 'run2' {
             Write-Ok "[run2] the ruler remembers its $($decisions.Groups[1].Value) decree(s) and $($decisions.Groups[2].Value) turn(s) after the restart"
         } else {
             Add-Failure '[run2] the memory of the ruler was lost in the restart'
+        }
+    }
+
+    Invoke-Part $server 'the garrison after the restart' {
+        if (-not $script:NpcName -or -not $script:GarrisonPosts) { return }
+        $npc = '"' + $script:NpcName + '"'
+        $npcPattern = [regex]::Escape($script:NpcName)
+        $garrison = Invoke-ServerCommand $server "kingdomworld admin army garrison $npc" "Garrison of ${npcPattern}: guard (\d+), army (\d+), officers (\d+) of 4, posts (\d+): ([^;\r\n]*); alarms: ([^;\r\n]*); throne at "
+        $after = if ($garrison) { "$($garrison.Groups[1].Value)/$($garrison.Groups[2].Value)/$($garrison.Groups[5].Value)" } else { '' }
+        # Branches, posts of officers and the posts of the squads are saved with the army; an alarm is not.
+        if ($garrison -and $after -eq $script:GarrisonPosts -and $garrison.Groups[3].Value -eq '4' -and $garrison.Groups[6].Value -eq '-') {
+            Write-Ok "[run2] the garrison stands as before the restart: $after"
+        } else {
+            Add-Failure "[run2] the garrison changed with the restart: '$($script:GarrisonPosts)' -> '$after', officers $(if ($garrison) { $garrison.Groups[3].Value }), alarms $(if ($garrison) { $garrison.Groups[6].Value })"
         }
     }
 
