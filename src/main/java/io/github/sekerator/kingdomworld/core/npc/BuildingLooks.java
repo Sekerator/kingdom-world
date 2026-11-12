@@ -48,6 +48,9 @@ public final class BuildingLooks {
     }
 
     private static final Map<NpcStyle, Palette> PALETTES = new EnumMap<>(NpcStyle.class);
+    /** The palettes of the architectural styles, by id; their wood and stone where the style has its own. */
+    private static final Map<String, Palette> STYLE_PALETTES = new java.util.LinkedHashMap<>();
+    private static final Map<String, String[]> STYLE_MATERIALS = new java.util.LinkedHashMap<>();
 
     static {
         PALETTES.put(NpcStyle.STONE, palette(
@@ -117,6 +120,27 @@ public final class BuildingLooks {
                 List.of("minecraft:terracotta", "minecraft:brown_terracotta", "minecraft:white_terracotta")));
     }
 
+    static {
+        // Stone with half-timbering: slate roofs and spires on the public buildings, houses of every roof.
+        STYLE_PALETTES.put("classic", PALETTES.get(NpcStyle.STONE));
+        STYLE_MATERIALS.put("classic", new String[]{"", ""});
+        // The wooden terem: roofs of shingles, domes of green copper, of bronze or of shingles, footings of rubble.
+        STYLE_PALETTES.put("terem", palette(
+                List.of("", "", "minecraft:polished_diorite", "minecraft:cobblestone", "minecraft:stone_bricks"),
+                List.of("minecraft:oak", "minecraft:dark_oak", "minecraft:spruce"),
+                List.of("minecraft:dark_oak", "minecraft:spruce", "minecraft:oak", "minecraft:deepslate_tiles", "minecraft:mangrove",
+                        "minecraft:waxed_oxidized_cut_copper"),
+                List.of("minecraft:waxed_oxidized_cut_copper", "minecraft:waxed_cut_copper", "minecraft:spruce"),
+                List.of("", "minecraft:mossy_cobblestone", "minecraft:stone_bricks", "minecraft:cobbled_deepslate"),
+                List.of("", "minecraft:stone", "minecraft:polished_diorite"),
+                List.of("", "minecraft:chiseled_stone_bricks"),
+                List.of("", "minecraft:calcite", "minecraft:white_concrete", "minecraft:light_gray_terracotta"),
+                List.of("minecraft:spruce", "minecraft:dark_oak", "minecraft:birch", Look.REMOVED),
+                List.of("", "minecraft:stone_bricks", "minecraft:cobblestone", Look.REMOVED),
+                List.of("", "minecraft:calcite", "minecraft:white_terracotta")));
+        STYLE_MATERIALS.put("terem", new String[]{"minecraft:spruce", ""});
+    }
+
     /** Colours of the cloth of houses: awnings, curtains, beds. */
     private static final List<String> CLOTHS = List.of("red", "blue", "green", "yellow", "orange", "cyan", "purple", "brown", "white",
             "light_blue", "lime", "magenta");
@@ -149,13 +173,37 @@ public final class BuildingLooks {
      * @param seed    the seed of its plot
      */
     public static Materials of(NpcStyle style, String wood, String cloth, Quarter quarter, long seed) {
-        Palette palette = PALETTES.get(style);
-        String placeWood = style.wood().isEmpty() ? wood : style.wood();
+        return of(PALETTES.get(style), style.wood(), style.stone(), wood, cloth, quarter, seed);
+    }
+
+    /**
+     * The materials of a building of an architectural style (see {@link TemplateCatalog#STYLES}).
+     *
+     * @throws IllegalArgumentException for a style without a palette
+     */
+    public static Materials of(String style, String wood, String cloth, Quarter quarter, long seed) {
+        Palette palette = STYLE_PALETTES.get(style);
+        if (palette == null) {
+            throw new IllegalArgumentException("No palette of the style " + style);
+        }
+        String[] materials = STYLE_MATERIALS.get(style);
+        return of(palette, materials[0], materials[1], wood, cloth, quarter, seed);
+    }
+
+    /**
+     * The architectural styles that have a palette.
+     */
+    public static List<String> styles() {
+        return List.copyOf(STYLE_PALETTES.keySet());
+    }
+
+    private static Materials of(Palette palette, String styleWood, String styleStone, String wood, String cloth, Quarter quarter, long seed) {
+        String placeWood = styleWood.isEmpty() ? wood : styleWood;
         Map<Look.Part, String> parts = new EnumMap<>(Look.Part.class);
         if (quarter == Quarter.PUBLIC) {
             palette.parts().forEach((part, choices) -> parts.put(part, choices.get(0)));
             parts.put(Look.Part.CLOTH, cloth);
-            return new Materials(placeWood, style.stone(), Look.of(parts));
+            return new Materials(placeWood, styleStone, Look.of(parts));
         }
         SplittableRandom random = new SplittableRandom(seed ^ 0x4C4F4F4BL * (quarter.ordinal() + 1));
         String walls = pick(random, palette.walls());
@@ -191,7 +239,7 @@ public final class BuildingLooks {
             default -> {
             }
         }
-        String stone = walls.isEmpty() ? style.stone() : walls;
+        String stone = walls.isEmpty() ? styleStone : walls;
         return new Materials(houseWood, stone, Look.of(parts));
     }
 

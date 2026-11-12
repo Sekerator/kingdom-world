@@ -61,6 +61,17 @@ class BuildingLooksTest {
                 assertTrue(materials.stone().isEmpty() || table.hasStone(materials.stone()), style + " stone " + materials.stone());
             }
         }
+        for (String style : BuildingLooks.styles()) {
+            for (BuildingLooks.Quarter quarter : BuildingLooks.Quarter.values()) {
+                for (long seed = 0; seed < 60; seed++) {
+                    Materials materials = BuildingLooks.of(style, "minecraft:oak", "red", quarter, seed * 7919);
+                    assertTrue(table.knows(materials.appearance()), style + ": " + materials.look());
+                    assertTrue(materials.wood().isEmpty() || table.hasWood(materials.wood()), style + " wood " + materials.wood());
+                    assertTrue(materials.stone().isEmpty() || table.hasStone(materials.stone()), style + " stone " + materials.stone());
+                }
+            }
+        }
+        assertTrue(BuildingLooks.styles().containsAll(TemplateCatalog.STYLES), "every style of the templates has a palette");
     }
 
     @Test

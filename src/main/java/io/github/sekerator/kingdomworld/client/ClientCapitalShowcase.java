@@ -2,7 +2,6 @@ package io.github.sekerator.kingdomworld.client;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.logging.LogUtils;
-import io.github.sekerator.kingdomworld.KingdomWorld;
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.block.ThroneBlock;
 import io.github.sekerator.kingdomworld.common.construction.BuildingTemplate;
@@ -14,7 +13,6 @@ import io.github.sekerator.kingdomworld.core.construction.Materials;
 import io.github.sekerator.kingdomworld.core.construction.Placement;
 import io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult;
 import io.github.sekerator.kingdomworld.core.npc.BuildingLooks;
-import io.github.sekerator.kingdomworld.core.npc.NpcStyle;
 import io.github.sekerator.kingdomworld.core.npc.TemplateCatalog;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import net.minecraft.client.Minecraft;
@@ -37,11 +35,11 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * The buildings of the capitals of kingdoms of the world, shown in a flat test world ({@code -PclientSelfTest=capital}):
- * the castles in the looks of their styles, the buildings of the institutions, the towers, yards and monuments, and streets
- * of houses of every quarter, each house in the look its plot would give it, then a street of the same houses in the style
- * of another kingdom. Every building is shot from the front and the side, every street along its fronts and from above,
- * the castles also from afar and their throne halls from inside. Screenshots go to the folder {@code capital} of the
+ * The buildings of the architectural styles of the kingdoms of the world, shown in a flat test world
+ * ({@code -PclientSelfTest=capital}): for every style its castles, the houses of its guilds by rank, a street of its houses
+ * twice over, each house in the look its plot would give it, and the other buildings of its towns. Every building is shot
+ * from the front, from the side and inside, every row along its fronts and from above, the castles also from afar, from
+ * their courts and their throne halls from inside. Screenshots go to the folder {@code capital} of the
  * screenshot folder. Meant for a flat copy of a test world: the buildings stay.
  */
 final class ClientCapitalShowcase {
@@ -170,85 +168,56 @@ final class ClientCapitalShowcase {
 
     // ---------------------------------------------------------------- what is shown
 
-    private static Materials look(NpcStyle style, BuildingLooks.Quarter quarter, long seed) {
-        return BuildingLooks.of(style, "minecraft:oak", quarter == BuildingLooks.Quarter.PUBLIC ? "red" : "red", quarter, seed);
-    }
-
-    private static Item item(String name, NpcStyle style, BuildingLooks.Quarter quarter, long seed) {
-        return new Item(KingdomWorld.MOD_ID + ":" + name, look(style, quarter, seed), name + "-" + style.id());
+    /**
+     * The quarter whose look a house of a kind wears.
+     */
+    private static BuildingLooks.Quarter quarter(TemplateCatalog.Kind kind) {
+        return switch (kind) {
+            case POOR_HOUSE -> BuildingLooks.Quarter.POOR;
+            case CRAFT_HOUSE -> BuildingLooks.Quarter.CRAFT;
+            case MERCHANT_HOUSE -> BuildingLooks.Quarter.MERCHANT;
+            case NOBLE_HOUSE -> BuildingLooks.Quarter.NOBLE;
+            default -> BuildingLooks.Quarter.PUBLIC;
+        };
     }
 
     /**
-     * The templates of a kind of the catalog, in the order of the table.
+     * The buildings of a style of the given kinds, each in the look of its quarter.
      */
-    private static List<String> names(TemplateCatalog.Kind... kinds) {
-        List<String> names = new ArrayList<>();
-        for (TemplateCatalog.Entry entry : TemplateCatalog.all()) {
-            for (TemplateCatalog.Kind kind : kinds) {
-                if (entry.kind() == kind && !entry.upgrade()) {
-                    names.add(entry.id().substring(entry.id().indexOf(':') + 1));
-                }
+    private static List<Item> items(String style, long[] seed, String suffix, TemplateCatalog.Kind... kinds) {
+        List<Item> items = new ArrayList<>();
+        for (TemplateCatalog.Kind kind : kinds) {
+            for (TemplateCatalog.Entry entry : TemplateCatalog.ofStyle(style, kind)) {
+                String name = entry.id().substring(entry.id().indexOf(':') + 1);
+                Materials materials = BuildingLooks.of(style, "minecraft:oak", "red", quarter(kind), seed[0]);
+                seed[0] += 7_919;
+                items.add(new Item(entry.id(), materials, name + suffix));
             }
         }
-        return names;
+        return items;
     }
 
+    /**
+     * For every architectural style: its castles, the houses of its guilds by rank, its houses twice over with other looks,
+     * and the other buildings of its towns and capitals.
+     */
     private static List<Row> rows() {
         List<Row> rows = new ArrayList<>();
-        // The castles, each in the look of a style, and the great castle once more in another.
-        NpcStyle[] castleStyles = {NpcStyle.STONE, NpcStyle.BRICK, NpcStyle.DEEPSLATE, NpcStyle.SANDSTONE, NpcStyle.MUD};
-        List<Item> castles = new ArrayList<>();
-        int turn = 0;
-        for (String name : names(TemplateCatalog.Kind.CASTLE)) {
-            if (!name.equals("castle")) {
-                castles.add(item(name, castleStyles[turn++ % castleStyles.length], BuildingLooks.Quarter.PUBLIC, 0));
-            }
+        long[] seed = {1};
+        for (String style : TemplateCatalog.STYLES) {
+            rows.add(new Row(style + "-castles", items(style, seed, "", TemplateCatalog.Kind.CASTLE)));
+            rows.add(new Row(style + "-guilds", items(style, seed, "", TemplateCatalog.Kind.GUILD, TemplateCatalog.Kind.MAGE_TOWER)));
+            TemplateCatalog.Kind[] houses = {TemplateCatalog.Kind.POOR_HOUSE, TemplateCatalog.Kind.CRAFT_HOUSE,
+                    TemplateCatalog.Kind.MERCHANT_HOUSE, TemplateCatalog.Kind.NOBLE_HOUSE};
+            List<Item> street = new ArrayList<>(items(style, seed, "", houses));
+            street.addAll(items(style, seed, "-b", houses));
+            rows.add(new Row(style + "-houses", street));
+            rows.add(new Row(style + "-town", items(style, seed, "", TemplateCatalog.Kind.WORKSHOP, TemplateCatalog.Kind.TAVERN,
+                    TemplateCatalog.Kind.WALL_GATE, TemplateCatalog.Kind.TREASURY, TemplateCatalog.Kind.COURT, TemplateCatalog.Kind.INFIRMARY,
+                    TemplateCatalog.Kind.YARD, TemplateCatalog.Kind.DECORATION, TemplateCatalog.Kind.BARBICAN, TemplateCatalog.Kind.CASTLE_WARD,
+                    TemplateCatalog.Kind.ROYAL_BARRACKS)));
         }
-        rows.add(new Row("castles", castles));
-        List<Item> ward = new ArrayList<>();
-        for (String name : names(TemplateCatalog.Kind.BARBICAN, TemplateCatalog.Kind.CASTLE_WARD, TemplateCatalog.Kind.ROYAL_BARRACKS)) {
-            ward.add(item(name, NpcStyle.DEEPSLATE, BuildingLooks.Quarter.PUBLIC, 0));
-        }
-        rows.add(new Row("ward", ward));
-        List<Item> institutions = new ArrayList<>();
-        for (String name : names(TemplateCatalog.Kind.GUILD, TemplateCatalog.Kind.TREASURY, TemplateCatalog.Kind.COURT,
-                TemplateCatalog.Kind.INFIRMARY)) {
-            institutions.add(item(name, NpcStyle.STONE, BuildingLooks.Quarter.PUBLIC, 0));
-        }
-        for (String name : names(TemplateCatalog.Kind.GUILD, TemplateCatalog.Kind.TREASURY, TemplateCatalog.Kind.COURT,
-                TemplateCatalog.Kind.INFIRMARY)) {
-            institutions.add(item(name, NpcStyle.BRICK, BuildingLooks.Quarter.PUBLIC, 0));
-        }
-        rows.add(new Row("institutions", institutions));
-        List<Item> landmarks = new ArrayList<>();
-        for (String name : names(TemplateCatalog.Kind.MAGE_TOWER, TemplateCatalog.Kind.YARD, TemplateCatalog.Kind.DECORATION)) {
-            if (!name.equals("mage_tower")) {
-                landmarks.add(item(name, NpcStyle.STONE, BuildingLooks.Quarter.PUBLIC, 0));
-            }
-        }
-        rows.add(new Row("landmarks", landmarks));
-        // Streets: the houses of every quarter, each in the look of its plot.
-        long seed = 1;
-        for (NpcStyle style : new NpcStyle[]{NpcStyle.STONE, NpcStyle.BRICK, NpcStyle.SANDSTONE}) {
-            List<Item> noble = new ArrayList<>();
-            for (String name : names(TemplateCatalog.Kind.NOBLE_HOUSE, TemplateCatalog.Kind.MERCHANT_HOUSE)) {
-                boolean rich = TemplateCatalog.of(KingdomWorld.MOD_ID + ":" + name).kind() == TemplateCatalog.Kind.NOBLE_HOUSE;
-                noble.add(item(name, style, rich ? BuildingLooks.Quarter.NOBLE : BuildingLooks.Quarter.MERCHANT, seed++ * 7_919));
-            }
-            rows.add(new Row("street-rich-" + style.id(), noble));
-            List<Item> plain = new ArrayList<>();
-            for (String name : names(TemplateCatalog.Kind.CRAFT_HOUSE, TemplateCatalog.Kind.POOR_HOUSE)) {
-                boolean poor = TemplateCatalog.of(KingdomWorld.MOD_ID + ":" + name).kind() == TemplateCatalog.Kind.POOR_HOUSE;
-                plain.add(item(name, style, poor ? BuildingLooks.Quarter.POOR : BuildingLooks.Quarter.CRAFT, seed++ * 7_919));
-            }
-            // The same houses once more, with other plots: a street is no row of twins.
-            for (String name : names(TemplateCatalog.Kind.CRAFT_HOUSE, TemplateCatalog.Kind.POOR_HOUSE)) {
-                boolean poor = TemplateCatalog.of(KingdomWorld.MOD_ID + ":" + name).kind() == TemplateCatalog.Kind.POOR_HOUSE;
-                plain.add(new Item(KingdomWorld.MOD_ID + ":" + name, look(style, poor ? BuildingLooks.Quarter.POOR : BuildingLooks.Quarter.CRAFT,
-                        seed++ * 104_729), name + "-" + style.id() + "-b"));
-            }
-            rows.add(new Row("street-plain-" + style.id(), plain));
-        }
+        rows.removeIf(row -> row.items().isEmpty());
         return rows;
     }
 
@@ -397,6 +366,11 @@ final class ClientCapitalShowcase {
         list.add(look(row + "-" + item.label(), cx + distance * 0.45, target + distance * 0.42, cz + distance * 0.95, cx, target, cz));
         list.add(look(row + "-" + item.label() + "-side", cx - distance * 0.9, target + distance * 0.3, cz + distance * 0.55, cx, target, cz));
         TemplateCatalog.Entry entry = TemplateCatalog.get(template.id().toString()).orElse(null);
+        if (entry == null || entry.kind() != TemplateCatalog.Kind.CASTLE) {
+            // Inside, from just behind the front wall looking at the back of the ground floor.
+            double floor = ground + 1.6;
+            list.add(look(row + "-" + item.label() + "-inside", cx, floor, z1 + depth * 0.78, cx, floor - 0.7, z1 + depth * 0.2));
+        }
         if (entry != null && entry.kind() == TemplateCatalog.Kind.CASTLE) {
             double far = size * 1.9 + 20;
             list.add(look(row + "-" + item.label() + "-far", cx + far * 0.35, ground + 6, cz + far, cx, ground + height * 0.55, cz));
