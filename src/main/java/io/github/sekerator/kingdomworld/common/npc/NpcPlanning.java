@@ -57,11 +57,22 @@ final class NpcPlanning {
     /** Town candidates judged in a tick at most, while the time of the tick lasts. */
     private static final int TOWNS_PER_TICK = 8;
     /** Time a tick spends on the plan at most: candidates the noise judges at once are gone through several a tick. */
-    private static final long BUDGET_NANOS = 22_000_000L;
+    private static final long BUDGET_NANOS = 12_000_000L;
     /** Time a tick spends on the plan at least, however long the tick was before the plan came to it. */
     private static final long MIN_BUDGET_NANOS = 3_000_000L;
     /** The plan takes what is left of a tick up to this length. */
-    private static final long TICK_AIM_NANOS = 30_000_000L;
+    private static final long TICK_AIM_NANOS = 25_000_000L;
+    /**
+     * Threads that ask the generator for the heights of many columns at once (the whole land of a candidate, its towns, the
+     * height of a capital), off the ticks of the server: the generator answers any thread, as it does while it generates
+     * chunks on its own threads.
+     */
+    private static final java.util.concurrent.ExecutorService NOISE = java.util.concurrent.Executors.newFixedThreadPool(2, runnable -> {
+        Thread thread = new Thread(runnable, "KingdomWorld plan");
+        thread.setDaemon(true);
+        thread.setPriority(Thread.NORM_PRIORITY - 1);
+        return thread;
+    });
     /** What the plan took so far: ticks with work, their time in all, the longest. */
     private static long planTicks;
     private static long planNanos;
@@ -86,6 +97,8 @@ final class NpcPlanning {
         List<List<CompletableFuture<Optional<CompoundTag>>>> townReads;
         /** The heights the generator gave for columns of the candidate: {ground under water, surface}, by column. */
         final java.util.Map<Long, int[]> columns = new java.util.HashMap<>();
+        /** Columns asked of the generator off the tick, by column. */
+        final java.util.Map<Long, CompletableFuture<int[]>> asked = new java.util.HashMap<>();
 
         Judging(SitePlanner.Candidate candidate) {
             this.candidate = candidate;
@@ -98,6 +111,7 @@ final class NpcPlanning {
     static void reset() {
         planner = null;
         judging = null;
+        CAPITAL_HEIGHTS.clear();
         planTicks = 0;
         planNanos = 0;
         planWorst = 0;
@@ -128,30 +142,77 @@ final class NpcPlanning {
     }
 
     /**
-     * The heights of the generator at a column of the current candidate, {ground under water, surface}, looked up once; {@code
-     * null} once the time of the tick is spent, so that the candidate is judged on in the next tick.
+     * The heights of the generator at a column of the current candidate, {ground under water, surface}, looked up once: at once
+     * while the time of the tick lasts, else off the tick; {@code null} while the answer is not there, so that the candidate is
+     * judged on in a later tick.
      *
      * @param surface whether the surface is needed too, or the ground alone
      */
     @javax.annotation.Nullable
     private static int[] column(ServerLevel level, @javax.annotation.Nullable Judging judging, int x, int z, boolean surface) {
-        ChunkGenerator generator = level.getChunkSource().getGenerator();
-        RandomState random = level.getChunkSource().randomState();
         long key = BlockPos.asLong(x, 0, z);
         int[] known = judging == null ? null : judging.columns.get(key);
         if (known != null && (!surface || known[1] != Integer.MIN_VALUE)) {
             return known;
         }
-        if (judging != null && System.nanoTime() > deadline) {
-            return null;
+        if (judging != null) {
+            CompletableFuture<int[]> asked = judging.asked.get(key);
+            if (asked != null) {
+                if (!asked.isDone()) {
+                    return null;
+                }
+                judging.asked.remove(key);
+                if (!asked.isCompletedExceptionally()) {
+                    known = asked.join();
+                    judging.columns.put(key, known);
+                    if (!surface || known[1] != Integer.MIN_VALUE) {
+                        return known;
+                    }
+                }
+            }
+            if (System.nanoTime() > deadline) {
+                ask(level, judging, key, x, z, surface, known);
+                return null;
+            }
         }
-        int floor = known != null ? known[0] : generator.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, level, random);
-        int top = surface ? generator.getBaseHeight(x, z, Heightmap.Types.WORLD_SURFACE_WG, level, random) : Integer.MIN_VALUE;
-        int[] heights = {floor, top};
+        int[] heights = heights(level, x, z, surface, known);
         if (judging != null) {
             judging.columns.put(key, heights);
         }
         return heights;
+    }
+
+    /**
+     * Asks the generator for a column off the tick, unless it is asked already.
+     */
+    private static void ask(ServerLevel level, Judging judging, long key, int x, int z, boolean surface, @javax.annotation.Nullable int[] known) {
+        if (!judging.asked.containsKey(key)) {
+            judging.asked.put(key, CompletableFuture.supplyAsync(() -> heights(level, x, z, surface, known), NOISE));
+        }
+    }
+
+    /**
+     * Asks the generator off the tick for the columns of a part of the land that is looked at whole.
+     */
+    private static void prefetch(ServerLevel level, Judging judging, List<int[]> points, boolean surface) {
+        for (int[] point : points) {
+            long key = BlockPos.asLong(point[0], 0, point[1]);
+            int[] known = judging.columns.get(key);
+            if (known == null || surface && known[1] == Integer.MIN_VALUE) {
+                ask(level, judging, key, point[0], point[1], surface, known);
+            }
+        }
+    }
+
+    /**
+     * The heights the generator gives for a column: {ground under water, surface (or {@link Integer#MIN_VALUE} if not asked)}.
+     */
+    private static int[] heights(ServerLevel level, int x, int z, boolean surface, @javax.annotation.Nullable int[] known) {
+        ChunkGenerator generator = level.getChunkSource().getGenerator();
+        RandomState random = level.getChunkSource().randomState();
+        int floor = known != null ? known[0] : generator.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, level, random);
+        int top = surface ? generator.getBaseHeight(x, z, Heightmap.Types.WORLD_SURFACE_WG, level, random) : Integer.MIN_VALUE;
+        return new int[]{floor, top};
     }
 
     /**
@@ -284,7 +345,7 @@ final class NpcPlanning {
             }
             Boolean suits = suitableCapital(level, candidate.x(), candidate.z(), candidate.level(), candidate.relax(), judging);
             if (suits == null) {
-                // The time of the tick is spent: the candidate is looked at on in the next one.
+                // Its columns are not answered yet: the candidate is looked at on in a later tick.
                 return Optional.empty();
             }
             if (!suits) {
@@ -319,6 +380,11 @@ final class NpcPlanning {
         }
         int wanted = rules.towns(candidate.level());
         int minCity = io.github.sekerator.kingdomworld.common.road.RoadSettings.rules().minCityDistance();
+        // The columns of the next towns are asked off the tick at once.
+        for (int i = judging.townIndex; i < Math.min(judging.townCandidates.size(), judging.townIndex + TOWNS_PER_TICK); i++) {
+            int[] town = judging.townCandidates.get(i);
+            prefetch(level, judging, townPoints(town[0], town[1]), true);
+        }
         for (int i = 0; i < TOWNS_PER_TICK && judging.townIndex < judging.townCandidates.size() && judging.towns.size() < wanted; i++) {
             if (i > 0 && System.nanoTime() > deadline) {
                 // The next town is looked at in the next tick.
@@ -327,7 +393,7 @@ final class NpcPlanning {
             int[] town = judging.townCandidates.get(judging.townIndex);
             Boolean suits = nearKingdom(server, town[0], town[1], 64) ? Boolean.FALSE : suitableTown(level, judging, town[0], town[1]);
             if (suits == null) {
-                // The time of the tick is spent: this town is looked at on in the next one.
+                // Its columns are not answered yet: this town is looked at on in a later tick.
                 return Optional.empty();
             }
             judging.townIndex++;
@@ -482,6 +548,16 @@ final class NpcPlanning {
         }
         int wet = 0;
         List<Integer> heights = new ArrayList<>();
+        if (judging != null) {
+            // The whole land is looked at: its columns are asked off the tick at once.
+            List<int[]> grid = new ArrayList<>();
+            for (int dx = -reach; dx <= reach; dx += step) {
+                for (int dz = -reach; dz <= reach; dz += step) {
+                    grid.add(new int[]{x + dx, z + dz});
+                }
+            }
+            prefetch(level, judging, grid, true);
+        }
         for (int dx = -reach; dx <= reach; dx += step) {
             for (int dz = -reach; dz <= reach; dz += step) {
                 int[] column = column(level, judging, x + dx, z + dz, true);
@@ -506,17 +582,11 @@ final class NpcPlanning {
         return !heights.isEmpty() && heights.get(heights.size() - 1 - trim) - heights.get(trim) <= allowed;
     }
 
-    /**
-     * The height the ground of a capital of districts is levelled to, from the generator: the middle of the heights over all of
-     * it, not below the sea, so that about as much is cut as is filled.
-     */
-    /** The heights of the columns of a capital looked at so far, by the place of its throne, while its height is worked out. */
-    private static final java.util.Map<Long, List<Integer>> CAPITAL_HEIGHTS = new java.util.HashMap<>();
-    /** Time the height of a capital takes in a tick at most. */
-    private static final long HEIGHT_NANOS = 4_000_000L;
+    /** The heights of the columns of a capital asked of the generator off the tick, by the place of its throne. */
+    private static final java.util.Map<Long, List<CompletableFuture<Integer>>> CAPITAL_HEIGHTS = new java.util.HashMap<>();
 
     /**
-     * The height of a capital worked out a part a tick: empty until all its columns are looked at.
+     * The height of a capital, its columns asked of the generator off the tick: empty until all of them are answered.
      */
     static java.util.OptionalInt capitalHeightSome(ServerLevel level, int x, int z, NpcLevel kingdom) {
         ChunkGenerator generator = level.getChunkSource().getGenerator();
@@ -524,27 +594,40 @@ final class NpcPlanning {
         int reach = NpcComposition.districtWall(kingdom);
         int step = Math.max(4, reach / 4);
         long key = BlockPos.asLong(x, 0, z);
-        List<Integer> heights = CAPITAL_HEIGHTS.computeIfAbsent(key, k -> new ArrayList<>());
-        int side = 2 * reach / step + 1;
-        long start = System.nanoTime();
-        int index = 0;
-        for (int dx = -reach; dx <= reach; dx += step) {
-            for (int dz = -reach; dz <= reach; dz += step) {
-                if (index++ < heights.size()) {
-                    continue;
+        List<CompletableFuture<Integer>> asked = CAPITAL_HEIGHTS.computeIfAbsent(key, k -> {
+            List<CompletableFuture<Integer>> list = new ArrayList<>();
+            for (int dx = -reach; dx <= reach; dx += step) {
+                for (int dz = -reach; dz <= reach; dz += step) {
+                    int cx = x + dx;
+                    int cz = z + dz;
+                    list.add(CompletableFuture.supplyAsync(() -> generator.getBaseHeight(cx, cz, Heightmap.Types.OCEAN_FLOOR_WG, level, random) - 1,
+                            NOISE));
                 }
-                if (System.nanoTime() - start > HEIGHT_NANOS) {
-                    return java.util.OptionalInt.empty();
-                }
-                heights.add(generator.getBaseHeight(x + dx, z + dz, Heightmap.Types.OCEAN_FLOOR_WG, level, random) - 1);
+            }
+            return list;
+        });
+        for (CompletableFuture<Integer> height : asked) {
+            if (!height.isDone()) {
+                return java.util.OptionalInt.empty();
             }
         }
         CAPITAL_HEIGHTS.remove(key);
-        List<Integer> sorted = new ArrayList<>(heights);
+        for (CompletableFuture<Integer> height : asked) {
+            if (height.isCompletedExceptionally()) {
+                // The generator failed off the tick: the height is worked out at once.
+                return java.util.OptionalInt.of(capitalHeight(level, x, z, kingdom));
+            }
+        }
+        List<Integer> sorted = new ArrayList<>();
+        asked.forEach(height -> sorted.add(height.join()));
         sorted.sort(Integer::compare);
         return java.util.OptionalInt.of(Math.max(sorted.get(sorted.size() / 2), level.getSeaLevel()));
     }
 
+    /**
+     * The height the ground of a capital of districts is levelled to, from the generator: the middle of the heights over all of
+     * it, not below the sea, so that about as much is cut as is filled.
+     */
     static int capitalHeight(ServerLevel level, int x, int z, NpcLevel kingdom) {
         ChunkGenerator generator = level.getChunkSource().getGenerator();
         RandomState random = level.getChunkSource().randomState();
@@ -561,14 +644,8 @@ final class NpcPlanning {
     }
 
     /**
-     * Whether the land around a point suits a capital of the first layout or a town, by the noise of the generator.
-     *
-     * @param radius   how far around the point the ground is looked at
-     * @param thorough whether to look at more columns (for a capital)
-     */
-    /**
      * Whether the land around a town of a candidate suits it, as {@link #suitable} looks at it, with the columns remembered;
-     * {@code null} while the time of the tick runs out first.
+     * {@code null} while its columns are not answered yet.
      */
     @javax.annotation.Nullable
     private static Boolean suitableTown(ServerLevel level, Judging judging, int x, int z) {
@@ -577,13 +654,7 @@ final class NpcPlanning {
         int sea = generator.getSeaLevel();
         int min = Integer.MAX_VALUE;
         int max = Integer.MIN_VALUE;
-        List<int[]> points = new ArrayList<>();
-        points.add(new int[]{x, z});
-        for (int i = 0; i < 8; i++) {
-            double angle = i * Math.PI / 4;
-            points.add(new int[]{x + (int) Math.round(Math.cos(angle) * 28), z + (int) Math.round(Math.sin(angle) * 28)});
-        }
-        for (int[] point : points) {
+        for (int[] point : townPoints(x, z)) {
             int[] column = column(level, judging, point[0], point[1], true);
             if (column == null) {
                 return null;
@@ -602,6 +673,25 @@ final class NpcPlanning {
         return allowed(biome);
     }
 
+    /**
+     * The columns the land of a town is looked at by: its middle and eight around it.
+     */
+    private static List<int[]> townPoints(int x, int z) {
+        List<int[]> points = new ArrayList<>();
+        points.add(new int[]{x, z});
+        for (int i = 0; i < 8; i++) {
+            double angle = i * Math.PI / 4;
+            points.add(new int[]{x + (int) Math.round(Math.cos(angle) * 28), z + (int) Math.round(Math.sin(angle) * 28)});
+        }
+        return points;
+    }
+
+    /**
+     * Whether the land around a point suits a capital of the first layout or a town, by the noise of the generator.
+     *
+     * @param radius   how far around the point the ground is looked at
+     * @param thorough whether to look at more columns (for a capital)
+     */
     static boolean suitable(ServerLevel level, int x, int z, int radius, boolean thorough) {
         ChunkGenerator generator = level.getChunkSource().getGenerator();
         RandomState random = level.getChunkSource().randomState();

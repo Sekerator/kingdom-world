@@ -127,6 +127,8 @@ public final class NpcSpawner {
     private static final Map<String, ConstructionWork.Laying> LAYING = new java.util.HashMap<>();
     /** Time a step gives the laying out of a building. */
     private static final long LAY_NANOS = 8_000_000L;
+    /** Time a step gives the citizens who join the army. */
+    private static final long ARMY_NANOS = 6_000_000L;
     /** Blocks of the wall paid in a tick at most: the roads place the paid columns once a second, all at once. */
     private static final int WALL_BLOCKS_PER_TICK = 48;
     /** Columns of ramp around a levelled square, so that it does not end with a step a road cannot climb. */
@@ -2152,14 +2154,21 @@ public final class NpcSpawner {
         ArmyState army = ArmyWork.state(server);
         int want = job.composition.soldiers();
         int have = army.soldiersOf(id).size();
+        // Citizens join a part a tick, while the time of the step lasts; the rest join in the next ticks.
+        long started = System.nanoTime();
+        int joined = 0;
         for (Citizen citizen : List.copyOf(state.citizens().registry().citizensOf(id))) {
             if (have >= want) {
                 break;
+            }
+            if (joined > 0 && System.nanoTime() - started > ARMY_NANOS) {
+                return;
             }
             if (citizen.professionId().equals(Professions.UNEMPLOYED.id())) {
                 String profession = have % 2 == 0 ? Professions.WARRIOR.id() : Professions.ARCHER.id();
                 if (ArmyWork.recruit(server, null, id, citizen.id(), profession).ok()) {
                     have++;
+                    joined++;
                 }
             }
         }
