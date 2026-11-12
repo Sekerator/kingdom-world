@@ -293,6 +293,49 @@ public final class BuildingGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_roles_bunks")
+    public static void theBunksOfAKingdomOfPlayersAreBedsLikeAnyOther(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos[] area = area(helper);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Bunk Sleepers", UUID.randomUUID());
+        String foot = "minecraft:red_bed[facing=north,part=foot,occupied=false]";
+        String head = "minecraft:red_bed[facing=north,part=head,occupied=false]";
+        BuildingTemplate house = template("test_role_bunk_house", BuildingRoles.HOUSE, 1, "", List.of(foot, head), new int[][]{{0, 2, 0}, {0, 1, 1}});
+        BuildingTemplate barracks = template("test_role_bunk_barracks", BuildingRoles.BARRACKS, 1, "", List.of("kingdomworld:barracks", foot, head),
+                new int[][]{{2, 0, 0}, {0, 2, 1}, {0, 1, 2}});
+        Citizen citizen = null;
+        try {
+            Building home = build(helper, kingdom, house, new BlockPos(6, 0, 6));
+            Building bunks = build(helper, kingdom, barracks, new BlockPos(2, 0, 9));
+            BuildingEffects.changed();
+            helper.assertTrue(BuildingEffects.of(server, bunks).orElseThrow().works(), "The barracks does not work: "
+                    + BuildingEffects.of(server, bunks).orElseThrow().status());
+            // The king decides who sleeps where: the bunk is a bed for newcomers like the bed of the house.
+            helper.assertTrue(BuildingEffects.freeBeds(server, kingdom.id())[0] == 2, "The bunk of the barracks is not offered to newcomers: "
+                    + BuildingEffects.freeBeds(server, kingdom.id())[0] + " free bed(s)");
+            citizen = CitizenGameTests.newcomer(helper, kingdom, 1, 1);
+            CitizenSimulation.step(server, kingdom.id());
+            Citizen record = KingdomWorldApi.state(server).citizens().get(citizen.id()).orElseThrow();
+            WorldPos bed = record.home();
+            helper.assertTrue(bed != null && home.box().contains(bed.x(), bed.y(), bed.z()), "The newcomer does not live in the house: " + bed);
+            helper.assertTrue(BuildingEffects.freeBeds(server, kingdom.id())[0] == 1, "The free bunk is not counted for newcomers");
+            helper.assertTrue(CitizenSimulation.growthCheck(server, kingdom.id()) != CitizenNeeds.GrowthCheck.NO_FREE_BED,
+                    "The free bunk brings no newcomers");
+            // A soldier the king recruits stays where it lives.
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.army.ArmyWork.recruit(server, null, kingdom.id(), citizen.id(), "warrior").ok(),
+                    "The citizen was not recruited");
+            WorldPos after = record.home();
+            helper.assertTrue(after != null && home.box().contains(after.x(), after.y(), after.z()), "The recruit moved out of its house: " + after);
+        } finally {
+            if (citizen != null) {
+                CitizenGameTests.finish(helper, kingdom, citizen);
+            }
+            end(helper, kingdom, area[0], area[1], house.id(), barracks.id());
+        }
+        helper.succeed();
+    }
+
     @GameTest(template = EMPTY, batch = "kingdomworld_roles_army_magic")
     public static void theRolesOfTheArmyAndTheMagesNeedTheirBlocks(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();

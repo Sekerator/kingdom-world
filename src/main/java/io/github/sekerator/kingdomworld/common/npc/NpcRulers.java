@@ -97,6 +97,7 @@ public final class NpcRulers {
     }
 
     static void reset() {
+        RulerActions.resetTools();
         DUE.clear();
         LAST_VIEWS.clear();
         job = null;

@@ -303,27 +303,36 @@ public final class BuildingEffects {
     }
 
     /**
+     * Whether the bunks of the barracks of a kingdom are kept for its soldiers: in a kingdom of the world, whose ruler keeps
+     * a garrison. In a kingdom of players a bunk is a bed like any other, and the king decides who sleeps where.
+     */
+    public static boolean keepsBunks(MinecraftServer server, UUID kingdomId) {
+        return io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, kingdomId);
+    }
+
+    /**
      * The free bed a homeless citizen who is no soldier gets: the nearest one in a working house, else the nearest one
-     * outside a house whose role rests, and a bunk of a barracks only when nothing else is left.
+     * outside a house whose role rests; in a kingdom of the world a bunk of a barracks only when nothing else is left.
      */
     public static Optional<Site> freeBed(MinecraftServer server, UUID kingdomId, WorldPos near) {
         return freeBed(server, kingdomId, near, false);
     }
 
     /**
-     * The free bed a homeless citizen gets. A soldier takes a bunk of a barracks first, then a bed as anybody. The bunks are
-     * kept for the garrison: they are not counted among the beds newcomers come for, and a citizen who is no soldier takes
-     * one only as the last bed of the kingdom.
+     * The free bed a homeless citizen gets. In a kingdom of the world a soldier takes a bunk of a barracks first, then a bed as
+     * anybody; the bunks are kept for the garrison: they are not counted among the beds newcomers come for, and a citizen who
+     * is no soldier takes one only as the last bed of the kingdom. In a kingdom of players a bunk is a bed like any other.
      */
     public static Optional<Site> freeBed(MinecraftServer server, UUID kingdomId, WorldPos near, boolean soldier) {
         Site best = null;
         double bestDistance = Double.MAX_VALUE;
         int bestRank = -1;
+        boolean keeps = keepsBunks(server, kingdomId);
         for (Site bed : KingdomWorldApi.state(server).citizens().sites().sitesOf(kingdomId, SiteKinds.BED)) {
             if (!bed.isFree() || !bedUsable(server, kingdomId, bed.pos())) {
                 continue;
             }
-            boolean bunk = inBarracks(server, kingdomId, bed.pos());
+            boolean bunk = keeps && inBarracks(server, kingdomId, bed.pos());
             // A bunk is the first choice of a soldier and the last of anybody else: a citizen sleeps there only when the
             // kingdom has no other bed left, and newcomers are never invited for the sake of free bunks.
             int rank = bunk ? (soldier ? 3 : 0) : inHouse(server, kingdomId, bed.pos()) ? 2 : 1;
@@ -338,21 +347,26 @@ public final class BuildingEffects {
     }
 
     /**
-     * The nearest free bunk of a working barracks, for a soldier who sleeps elsewhere.
+     * The nearest free bunk of a working barracks, for a soldier of a kingdom of the world who sleeps elsewhere; none in a
+     * kingdom of players.
      */
     public static Optional<Site> freeBunk(MinecraftServer server, UUID kingdomId, WorldPos near) {
+        if (!keepsBunks(server, kingdomId)) {
+            return Optional.empty();
+        }
         return freeBed(server, kingdomId, near, true).filter(bed -> inBarracks(server, kingdomId, bed.pos()));
     }
 
     /**
-     * Free beds for newcomers: {free beds that may be offered, of those the beds in working houses}. The bunks of barracks
-     * are not counted: they wait for soldiers.
+     * Free beds for newcomers: {free beds that may be offered, of those the beds in working houses}. In a kingdom of the world
+     * the bunks of barracks are not counted: they wait for soldiers.
      */
     public static int[] freeBeds(MinecraftServer server, UUID kingdomId) {
         int free = 0;
         int inHouses = 0;
+        boolean keeps = keepsBunks(server, kingdomId);
         for (Site bed : KingdomWorldApi.state(server).citizens().sites().sitesOf(kingdomId, SiteKinds.BED)) {
-            if (!bed.isFree() || !bedUsable(server, kingdomId, bed.pos()) || inBarracks(server, kingdomId, bed.pos())) {
+            if (!bed.isFree() || !bedUsable(server, kingdomId, bed.pos()) || (keeps && inBarracks(server, kingdomId, bed.pos()))) {
                 continue;
             }
             free++;

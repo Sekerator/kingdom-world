@@ -81,7 +81,7 @@ import java.util.UUID;
  * as the actor. Most decisions take one tick; laying out a building, claiming land and founding a town are jobs that load the
  * chunks they need and go on a step a tick.
  */
-final class RulerActions {
+public final class RulerActions {
     private static final Logger LOGGER = LogUtils.getLogger();
     static final TicketType<ChunkPos> TICKET = TicketType.create("kingdomworld_ruler", Comparator.comparingLong(ChunkPos::toLong));
     /** Ticks a job waits for its chunks before it gives up. */
@@ -604,37 +604,57 @@ final class RulerActions {
         return ordered;
     }
 
-    /** The tool a profession cannot work without, as a kingdom buys it. */
-    private static final java.util.Map<String, String> TOOLS = java.util.Map.of("lumberjack", "minecraft:stone_axe", "miner",
-            "minecraft:stone_pickaxe", "fisher", "minecraft:fishing_rod");
+    /** The tool a profession cannot work without: what a kingdom buys, and what of the storehouses serves as well. */
+    private record Tool(String item, io.github.sekerator.kingdomworld.common.citizen.work.Equipment.ToolNeed need) {
+    }
+
+    private static final java.util.Map<String, Tool> TOOLS = java.util.Map.of(
+            "lumberjack", new Tool("minecraft:stone_axe", io.github.sekerator.kingdomworld.common.citizen.work.Equipment.ToolNeed.AXE),
+            "miner", new Tool("minecraft:stone_pickaxe", io.github.sekerator.kingdomworld.common.citizen.work.Equipment.ToolNeed.PICKAXE),
+            "fisher", new Tool("minecraft:fishing_rod", io.github.sekerator.kingdomworld.common.citizen.work.Equipment.ToolNeed.FISHING_ROD));
     /** Tools a kingdom buys in a day at most. */
     private static final int TOOLS_PER_DAY = 6;
+    /** The day each kingdom last bought tools: once a day, however many turns its ruler takes. */
+    private static final java.util.Map<UUID, Long> TOOLS_DAY = new java.util.HashMap<>();
+
+    static void resetTools() {
+        TOOLS_DAY.clear();
+    }
 
     /**
      * Workers who stand idle because the storehouses have no tool for them get one bought from abroad, straight into the
      * storehouses and paid from the treasury at the price of an import: without tools a kingdom fells no wood and digs no
      * ore, and a kingdom of the world does not always have a smith. It buys the plain tools of stone, which cost little; better
-     * ones are for its smiths to make. A tool is bought only while the treasury holds three times its price.
+     * ones are for its smiths to make. A tool is bought only while the treasury holds three times its price, only for workers
+     * the tools already in the storehouses do not cover (they take them at their next work), and once a day.
      *
      * @return the tools bought, as decrees
      */
-    static List<RulerDecision> tools(MinecraftServer server, UUID id) {
+    public static List<RulerDecision> tools(MinecraftServer server, UUID id) {
         KingdomWorldState state = KingdomWorldApi.state(server);
-        if (KingdomWorldApi.isReadOnly(server)) {
+        long day = TreasuryActions.day(server);
+        if (KingdomWorldApi.isReadOnly(server) || Long.valueOf(day).equals(TOOLS_DAY.get(id))) {
             return List.of();
         }
-        java.util.Map<String, Integer> lacking = new java.util.LinkedHashMap<>();
+        java.util.Map<Tool, Integer> idle = new java.util.LinkedHashMap<>();
         for (Citizen citizen : state.citizens().registry().citizensOf(id)) {
-            String tool = TOOLS.get(citizen.professionId());
+            Tool tool = TOOLS.get(citizen.professionId());
             if (tool != null && citizen.workStatus() == io.github.sekerator.kingdomworld.core.citizen.WorkStatus.NO_TOOL) {
-                lacking.merge(tool, 1, Integer::sum);
+                idle.merge(tool, 1, Integer::sum);
+            }
+        }
+        java.util.Map<String, Integer> lacking = new java.util.LinkedHashMap<>();
+        for (java.util.Map.Entry<Tool, Integer> entry : idle.entrySet()) {
+            long stocked = io.github.sekerator.kingdomworld.common.storage.KingdomStorage.count(server, id, entry.getKey().need()::matches);
+            if (entry.getValue() > stocked) {
+                lacking.put(entry.getKey().item(), (int) (entry.getValue() - stocked));
             }
         }
         if (lacking.isEmpty()) {
             return List.of();
         }
+        TOOLS_DAY.put(id, day);
         io.github.sekerator.kingdomworld.core.trade.TradeRules rules = TradeSettings.rules();
-        long day = TreasuryActions.day(server);
         io.github.sekerator.kingdomworld.core.citizen.WorldPos capital = io.github.sekerator.kingdomworld.common.army.ArmyWork.capitalOf(server, id);
         List<RulerDecision> bought = new ArrayList<>();
         int left = TOOLS_PER_DAY;

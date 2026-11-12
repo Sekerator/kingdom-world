@@ -525,11 +525,12 @@ public final class ArmyWork {
     }
 
     /**
-     * A soldier who sleeps in a house moves into a free bunk of a barracks, if there is one: the bed in the house is free
-     * for somebody else.
+     * A soldier of a kingdom of the world who sleeps in a house moves into a free bunk of a barracks, if there is one: the bed
+     * in the house is free for somebody else. A soldier of a kingdom of players stays where it lives: its king decides.
      */
     public static void billet(MinecraftServer server, Citizen citizen) {
-        if (isReadOnly(server) || (citizen.home() != null
+        if (isReadOnly(server) || !io.github.sekerator.kingdomworld.common.construction.BuildingEffects.keepsBunks(server, citizen.kingdomId())
+                || (citizen.home() != null
                 && io.github.sekerator.kingdomworld.common.construction.BuildingEffects.inBarracks(server, citizen.kingdomId(), citizen.home()))) {
             return;
         }

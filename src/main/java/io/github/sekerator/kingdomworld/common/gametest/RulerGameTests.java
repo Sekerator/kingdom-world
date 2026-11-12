@@ -77,6 +77,37 @@ public final class RulerGameTests {
         return ((CreateKingdomResult.Created) result).kingdom().id();
     }
 
+    @GameTest(template = NpcGameTests.EMPTY, batch = "kingdomworld_ruler_tools")
+    public static void aRulerBuysOnceADayTheToolsTheStorehousesLack(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Tool Buyers", UUID.randomUUID());
+        List<io.github.sekerator.kingdomworld.core.citizen.Citizen> miners = new java.util.ArrayList<>();
+        try {
+            io.github.sekerator.kingdomworld.common.storage.StorehouseInventory storehouse = CitizenGameTests.storehouse(helper, 4, 1, 4);
+            storehouse.insertItem(0, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE_PICKAXE), false);
+            helper.assertTrue(state.economy().adminTreasury(kingdom.id(), 10_000, TreasuryActions.day(server)).ok(), "The treasury took no money");
+            for (int i = 0; i < 3; i++) {
+                io.github.sekerator.kingdomworld.core.citizen.Citizen miner = CitizenGameTests.newcomer(helper, kingdom, 1 + i, 1);
+                state.citizens().setProfession(miner, "miner");
+                miner.setWorkStatus(io.github.sekerator.kingdomworld.core.citizen.WorkStatus.NO_TOOL);
+                miners.add(miner);
+            }
+            // Three miners stand idle and the storehouse holds one pickaxe: two more are bought.
+            long bought = io.github.sekerator.kingdomworld.common.npc.RulerActions.tools(server, kingdom.id()).stream()
+                    .mapToLong(RulerDecision::amount).sum();
+            int stocked = CitizenGameTests.count(storehouse, net.minecraft.world.item.Items.STONE_PICKAXE);
+            helper.assertTrue(bought == 2 && stocked == 3, "Bought " + bought + " pickaxe(s), " + stocked + " in the storehouse");
+            // The ruler looks again the same day: nothing more is bought.
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.npc.RulerActions.tools(server, kingdom.id()).isEmpty()
+                    && CitizenGameTests.count(storehouse, net.minecraft.world.item.Items.STONE_PICKAXE) == 3, "Tools were bought twice in a day");
+        } finally {
+            CitizenGameTests.finish(helper, kingdom, miners.toArray(new io.github.sekerator.kingdomworld.core.citizen.Citizen[0]));
+            helper.setBlock(new BlockPos(4, 1, 4), net.minecraft.world.level.block.Blocks.AIR);
+        }
+        helper.succeed();
+    }
+
     @GameTest(template = NpcGameTests.EMPTY, batch = "kingdomworld_ruler_house", timeoutTicks = 2400)
     public static void aRulerWhoseBedsAreTakenLaysOutAHouseAndBuildersBuildIt(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
