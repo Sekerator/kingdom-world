@@ -78,8 +78,12 @@ final class ClientCapitalShowcase {
     private boolean finished;
     private boolean failed;
 
-    ClientCapitalShowcase(Path folder) {
+    /** The one style to show ({@code -PclientSelfTest=capital-terem}), or empty for all of them. */
+    private final String only;
+
+    ClientCapitalShowcase(Path folder, String only) {
         this.folder = folder.resolve("styles");
+        this.only = only;
     }
 
     boolean finished() {
@@ -201,10 +205,13 @@ final class ClientCapitalShowcase {
      * For every architectural style: its castles, the houses of its guilds by rank, its houses twice over with other looks,
      * and the other buildings of its towns and capitals.
      */
-    private static List<Row> rows() {
+    private List<Row> rows() {
         List<Row> rows = new ArrayList<>();
         long[] seed = {1};
         for (String style : TemplateCatalog.STYLES) {
+            if (!only.isEmpty() && !only.equals(style)) {
+                continue;
+            }
             rows.add(new Row(style + "-castles", items(style, seed, "", TemplateCatalog.Kind.CASTLE)));
             rows.add(new Row(style + "-guilds", items(style, seed, "", TemplateCatalog.Kind.GUILD, TemplateCatalog.Kind.MAGE_TOWER)));
             TemplateCatalog.Kind[] houses = {TemplateCatalog.Kind.POOR_HOUSE, TemplateCatalog.Kind.CRAFT_HOUSE,
@@ -232,6 +239,11 @@ final class ClientCapitalShowcase {
             return;
         }
         ServerLevel level = player.serverLevel();
+        for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
+            if (player.getInventory().getItem(slot).is(ModRegistries.BLUEPRINT.get())) {
+                player.getInventory().setItem(slot, net.minecraft.world.item.ItemStack.EMPTY);
+            }
+        }
         KingdomWorldApi.kingdomOf(server, playerId).ifPresent(old -> KingdomWorldApi.dissolveKingdom(server, old.id()));
         KingdomWorldApi.findKingdom(server, "Capital Showcase").ifPresent(old -> KingdomWorldApi.dissolveKingdom(server, old.id()));
         BlockPos start = player.blockPosition();
@@ -291,6 +303,11 @@ final class ClientCapitalShowcase {
                 }
                 // Fronts on the line of the street, the anchor in the middle of the front edge at the height of the street.
                 BlockPos anchor = new BlockPos(x + template.anchor().getX(), ground, front - (template.sizeZ() - 1 - template.anchor().getZ()));
+                for (int cx = (x - 1) >> 4; cx <= (x + template.sizeX() + 1) >> 4; cx++) {
+                    for (int cz = (front - template.sizeZ() - 1) >> 4; cz <= (front + 1) >> 4; cz++) {
+                        level.getChunk(cx, cz);
+                    }
+                }
                 KingdomWorldState.ConstructionChange change = ConstructionWork.lay(level, null, kingdom, template, anchor, Placement.NONE,
                         item.materials());
                 if (change.construction().isEmpty()) {
@@ -311,7 +328,7 @@ final class ClientCapitalShowcase {
                 int z1 = front - template.sizeZ() + 1;
                 int bottom = ground - template.anchor().getY();
                 placeMarks(level, template, x1, bottom, z1);
-                shots(list, row.name(), item, template, x1, z1, bottom, ground);
+                shots(level, list, row.name(), item, template, x1, z1, bottom, ground);
                 tallest = Math.max(tallest, template.sizeY() - template.anchor().getY());
                 x += template.sizeX() + GAP;
             }
@@ -354,7 +371,8 @@ final class ClientCapitalShowcase {
      * The shots of one building: from the front and a little to the east, from the west side, and for a castle from afar
      * and its throne hall from inside.
      */
-    private static void shots(List<Shot> list, String row, Item item, BuildingTemplate template, int x1, int z1, int bottom, int ground) {
+    private static void shots(ServerLevel level, List<Shot> list, String row, Item item, BuildingTemplate template, int x1, int z1, int bottom,
+                              int ground) {
         double width = template.sizeX();
         double depth = template.sizeZ();
         double height = template.sizeY() - template.anchor().getY();
@@ -371,9 +389,12 @@ final class ClientCapitalShowcase {
         }
         list.add(look(row + "-" + item.label() + "-side", cx - distance * 0.9, target + distance * 0.3, cz + distance * 0.55, cx, target, cz));
         if (entry == null || entry.kind() != TemplateCatalog.Kind.CASTLE) {
-            // Inside, from just behind the front wall looking at the back of the ground floor.
-            double floor = ground + 1.6;
-            list.add(look(row + "-" + item.label() + "-inside", cx, floor, z1 + depth * 0.78, cx, floor - 0.7, z1 + depth * 0.2));
+            // Inside, from the first free place behind the front wall, looking at the back of the ground floor.
+            BlockPos inside = inside(level, x1, z1, template, ground);
+            if (inside != null) {
+                list.add(look(row + "-" + item.label() + "-inside", inside.getX() + 0.5, inside.getY() + 1.6, inside.getZ() + 0.5, inside.getX() + 0.5,
+                        inside.getY() + 0.9, z1 + 0.5));
+            }
         }
         if (entry != null && entry.kind() == TemplateCatalog.Kind.CASTLE) {
             double far = size * 1.9 + 20;
@@ -393,6 +414,34 @@ final class ClientCapitalShowcase {
                         ground + height * 0.45, tz - depth * 0.15));
             }
         }
+    }
+
+    /**
+     * Where one stands inside a building just behind its front: going in from the front edge along the middle and the two
+     * columns beside it, the first place with a floor and room for a body under a roof, at the layers of the street and the
+     * two above it.
+     */
+    private static BlockPos inside(ServerLevel level, int x1, int z1, BuildingTemplate template, int ground) {
+        int middle = x1 + (template.sizeX() - 1) / 2;
+        for (int depth = 2; depth < template.sizeZ() - 2; depth++) {
+            int z = z1 + template.sizeZ() - 1 - depth;
+            for (int dx : new int[]{0, 1, -1, 2, -2}) {
+                for (int y = ground; y <= ground + 2; y++) {
+                    BlockPos feet = new BlockPos(middle + dx, y, z);
+                    boolean free = level.getBlockState(feet).getCollisionShape(level, feet).isEmpty()
+                            && level.getBlockState(feet.above()).getCollisionShape(level, feet.above()).isEmpty();
+                    boolean floor = !level.getBlockState(feet.below()).getCollisionShape(level, feet.below()).isEmpty();
+                    boolean roof = false;
+                    for (int up = 2; up < 12 && !roof; up++) {
+                        roof = !level.getBlockState(feet.above(up)).isAir();
+                    }
+                    if (free && floor && roof && level.getBlockState(feet).isAir()) {
+                        return feet;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     /**

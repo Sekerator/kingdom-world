@@ -393,8 +393,8 @@ final class Terem {
      * square): rings narrowing by one block on every side, the eaves one layer high and every other ring two (a full block
      * under a stair), so that the tent climbs twice as high as it draws in; with {@code sides} 8 its rings are eight-sided.
      * A tent nine or more wide gets a little window (slukh) under a carved hood on each of its four faces. On its point a
-     * needle with a gilt ball, or an onion dome of the given width (3, 5 or 7) on a neck of three layers. Built of the
-     * spires and solid.
+     * needle with a gilt ball, or an onion dome of the given width (3, 5 or 7) on a neck of three layers. The tent is of
+     * shingles (the roof of the look), the onion and its neck of the spire, and both are solid.
      *
      * @param y         the layer of the eaves (the layer above the top course of the walls under it)
      * @param sides     4 or 8
@@ -432,7 +432,9 @@ final class Terem {
             }
             for (int j = 0; j < rise; j++) {
                 int kind = j == rise - 1 && r > stop ? STEP : FULL;
-                layer = body(s, area, cx, layer, cz, new int[][]{{r, kind}}, k == 0 ? eaves : plan, DOME);
+                // Shingles (the roof of the look) for the tent, the spire of the look for the neck of its onion.
+                Kit.Roof material = r == stop && bulb != null ? DOME : ROOF;
+                layer = body(s, area, cx, layer, cz, new int[][]{{r, kind}}, k == 0 ? eaves : plan, material);
             }
         }
         if (dormers >= 0) {

@@ -124,12 +124,13 @@ public final class BuildingLooks {
         // Stone with half-timbering: slate roofs and spires on the public buildings, houses of every roof.
         STYLE_PALETTES.put("classic", PALETTES.get(NpcStyle.STONE));
         STYLE_MATERIALS.put("classic", new String[]{"", ""});
-        // The wooden terem: roofs of shingles, domes of green copper, of bronze or of shingles, footings of rubble.
+        // The wooden terem: roofs and tents of shingles, onion domes of green copper, of bronze or of shingles, footings of
+        // rubble.
         STYLE_PALETTES.put("terem", palette(
                 List.of("", "", "minecraft:polished_diorite", "minecraft:cobblestone", "minecraft:stone_bricks"),
                 List.of("minecraft:oak", "minecraft:dark_oak", "minecraft:spruce"),
-                List.of("minecraft:dark_oak", "minecraft:spruce", "minecraft:oak", "minecraft:deepslate_tiles", "minecraft:mangrove",
-                        "minecraft:waxed_oxidized_cut_copper"),
+                List.of("minecraft:spruce", "minecraft:dark_oak", "minecraft:oak", "minecraft:dark_oak", "minecraft:mangrove",
+                        "minecraft:spruce"),
                 List.of("minecraft:waxed_oxidized_cut_copper", "minecraft:waxed_cut_copper", "minecraft:spruce"),
                 List.of("", "minecraft:mossy_cobblestone", "minecraft:stone_bricks", "minecraft:cobbled_deepslate"),
                 List.of("", "minecraft:stone", "minecraft:polished_diorite"),
