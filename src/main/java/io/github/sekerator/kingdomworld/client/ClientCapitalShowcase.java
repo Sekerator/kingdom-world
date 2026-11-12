@@ -470,9 +470,10 @@ final class ClientCapitalShowcase {
             lamp(level, new BlockPos(x, ground, oz + 2));
             tree(level, new BlockPos(x, ground, oz + square - 3));
         }
-        list.add(look(style + "-capital-above", ox + 40, ground + 55, end + 20, ox, ground + 4, oz + (end - oz) / 3.0));
+        double middle = oz + (end - oz) * 0.4;
+        list.add(look(style + "-capital-above", ox + 48, ground + 42, middle + 22, ox, ground + 6, middle - 6));
         list.add(look(style + "-capital-avenue", ox + 0.5, ground + 2.2, end - 1.5, ox + 0.5, ground + 14, oz - 25));
-        list.add(look(style + "-capital-square", ox + 21.5, ground + 4, oz + square - 1.5, ox - 6, ground + 12, oz - 18));
+        list.add(look(style + "-capital-square", ox + 13.5, ground + 4, oz + square - 2.5, ox - 4, ground + 12, oz - 18));
     }
 
     private static void lamp(ServerLevel level, BlockPos at) {
