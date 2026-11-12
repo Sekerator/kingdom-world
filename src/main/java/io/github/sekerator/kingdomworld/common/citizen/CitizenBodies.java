@@ -7,6 +7,7 @@ import io.github.sekerator.kingdomworld.common.registry.ModRegistries;
 import io.github.sekerator.kingdomworld.common.storage.KingdomStorage;
 import io.github.sekerator.kingdomworld.core.citizen.ActiveSelection;
 import io.github.sekerator.kingdomworld.core.citizen.Citizen;
+import io.github.sekerator.kingdomworld.core.citizen.CitizenRegistry;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenRules;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
@@ -113,7 +114,7 @@ public final class CitizenBodies {
         List<ActiveSelection.Candidate> candidates = new ArrayList<>();
         Map<UUID, Integer> siegeBodies = new HashMap<>();
         var guild = io.github.sekerator.kingdomworld.common.guild.GuildSavedData.get(server).state();
-        for (Citizen citizen : state.citizens().registry().all()) {
+        for (Citizen citizen : mayHaveBodies(server, state, players, rules)) {
             boolean forced = FORCED.contains(citizen.id());
             if ((players.isEmpty() && !forced) || guild.isAway(citizen.id())
                     || io.github.sekerator.kingdomworld.common.army.ArmyWork.isAwayFromHome(server, citizen.id())) {
@@ -130,7 +131,7 @@ public final class CitizenBodies {
             int distance = ActiveSelection.distance(anchors, players);
             // A little slack for bodies that exist already, so that a player at the edge does not make them flicker.
             if (active && distance != Integer.MAX_VALUE) {
-                distance = Math.max(0, distance - 1);
+                distance = Math.max(0, distance - ActiveSelection.KEEP_SLACK);
             }
             // A soldier an alarm calls comes before other citizens while bodies are scarce, one that has a body already first.
             if (distance != Integer.MAX_VALUE && io.github.sekerator.kingdomworld.common.army.ArmyRelief.isCalled(citizen.id())) {
@@ -170,6 +171,42 @@ public final class CitizenBodies {
                 spawned++;
             }
         }
+    }
+
+    /**
+     * The citizens the selection looks at, in the order of the population, which the budgets of sieges count in: those
+     * with a home, workplace or last position near a player, soldiers whose squad is near one, soldiers an alarm calls, and
+     * those with a body or kept regardless of players. Nobody else can get a body: every anchor of such a citizen is
+     * farther from every player than the activation distance and the slack of those with a body.
+     */
+    private static List<Citizen> mayHaveBodies(MinecraftServer server, KingdomWorldState state,
+                                               List<ActiveSelection.PlayerSpot> players, CitizenRules rules) {
+        CitizenRegistry registry = state.citizens().registry();
+        if (players.isEmpty()) {
+            return registry.inOrder(FORCED);
+        }
+        int reach = ActiveSelection.reach(rules.activationChunks());
+        if (reach == Integer.MAX_VALUE) {
+            // Everybody is near enough, even with no player in its dimension.
+            return List.copyOf(registry.all());
+        }
+        Set<UUID> ids = new HashSet<>(FORCED);
+        ids.addAll(ACTIVE.keySet());
+        for (ActiveSelection.PlayerSpot player : players) {
+            registry.near(player.dimension(), player.chunkX(), player.chunkZ(), reach, ids);
+        }
+        for (io.github.sekerator.kingdomworld.core.army.ArmySquad squad
+                : io.github.sekerator.kingdomworld.common.army.ArmyWork.state(server).squads()) {
+            for (UUID member : squad.members()) {
+                if (!ids.contains(member) && ActiveSelection.distance(
+                        io.github.sekerator.kingdomworld.common.army.ArmyWork.anchors(server, member), players) <= reach) {
+                    ids.add(member);
+                }
+            }
+        }
+        // A soldier an alarm calls is near enough with a player anywhere in the dimension of one of its anchors.
+        ids.addAll(io.github.sekerator.kingdomworld.common.army.ArmyRelief.called());
+        return registry.inOrder(ids);
     }
 
     /**

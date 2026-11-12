@@ -102,6 +102,13 @@ public final class ArmyRelief {
     }
 
     /**
+     * The soldiers an alarm calls now; a view that changes once a second.
+     */
+    public static Set<UUID> called() {
+        return java.util.Collections.unmodifiableSet(CALLED);
+    }
+
+    /**
      * Whether a soldier answers an alarm of its kingdom at the step the alarm has come to.
      */
     public static boolean answers(MinecraftServer server, CitizenEntity soldier, Alarm alarm) {

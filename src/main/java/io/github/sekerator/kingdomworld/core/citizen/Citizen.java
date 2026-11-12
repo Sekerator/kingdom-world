@@ -2,6 +2,7 @@ package io.github.sekerator.kingdomworld.core.citizen;
 
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /**
  * A citizen of a kingdom: the authoritative record. A citizen near players also has a body in the world, which
@@ -43,6 +44,8 @@ public final class Citizen {
 
     private Runnable changeListener = () -> {
     };
+    private Consumer<Citizen> placeListener = citizen -> {
+    };
 
     /**
      * @param skin      index of the look, interpreted by the client
@@ -63,8 +66,19 @@ public final class Citizen {
         this.changeListener = Objects.requireNonNull(listener, "listener");
     }
 
+    /**
+     * Hears every change of the home, workplace or last position, so that the registry can keep its citizens by place.
+     */
+    void setPlaceListener(Consumer<Citizen> listener) {
+        this.placeListener = Objects.requireNonNull(listener, "listener");
+    }
+
     private void changed() {
         changeListener.run();
+    }
+
+    private void moved() {
+        placeListener.accept(this);
     }
 
     // ---------------------------------------------------------------- identity
@@ -205,6 +219,7 @@ public final class Citizen {
     void setHome(WorldPos value) {
         if (!Objects.equals(home, value)) {
             home = value;
+            moved();
             changed();
         }
     }
@@ -216,6 +231,7 @@ public final class Citizen {
     void setWorkplace(WorldPos value) {
         if (!Objects.equals(workplace, value)) {
             workplace = value;
+            moved();
             changed();
         }
     }
@@ -228,6 +244,7 @@ public final class Citizen {
         Objects.requireNonNull(value, "value");
         if (!value.equals(lastPos)) {
             lastPos = value;
+            moved();
             changed();
         }
     }
@@ -359,7 +376,8 @@ public final class Citizen {
     }
 
     /**
-     * Restores the fields that are not part of the constructor, for saved data. Does not notify.
+     * Restores the fields that are not part of the constructor, for saved data. Does not notify the change listener; the
+     * place listener hears the new places all the same.
      */
     public void restore(float health, CitizenState state, String professionId, WorldPos home, WorldPos workplace,
                         float food, int mood, int experience, int workCapacity, String workProduct, double workProgress,
@@ -379,6 +397,7 @@ public final class Citizen {
         this.workProduct = workProduct == null ? "" : workProduct;
         this.workProgress = Double.isFinite(workProgress) ? Math.max(0.0, workProgress) : 0.0;
         this.workStatus = workStatus == null ? WorkStatus.NONE : workStatus;
+        moved();
     }
 
     @Override

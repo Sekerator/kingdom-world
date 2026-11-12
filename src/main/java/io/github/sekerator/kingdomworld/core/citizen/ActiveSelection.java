@@ -13,6 +13,11 @@ import java.util.UUID;
  * allows, those nearest to a player win. Everybody else lives on in the abstract simulation.
  */
 public final class ActiveSelection {
+    /**
+     * Chunks of slack on the activation distance for a citizen that has a body already, so that a player at the edge does
+     * not make the body flicker.
+     */
+    public static final int KEEP_SLACK = 1;
 
     /**
      * Where a player is, in chunks.
@@ -55,6 +60,14 @@ public final class ActiveSelection {
     }
 
     private ActiveSelection() {
+    }
+
+    /**
+     * How far from a player, in chunks, an anchor of a citizen may be at most for the citizen to get or keep a body: the
+     * activation distance and the slack of those that have a body.
+     */
+    public static int reach(int activationChunks) {
+        return activationChunks > Integer.MAX_VALUE - KEEP_SLACK ? Integer.MAX_VALUE : activationChunks + KEEP_SLACK;
     }
 
     /**

@@ -4,6 +4,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,7 +19,8 @@ import java.util.UUID;
  *
  * <p>Places (home, workplace) are kept consistent by
  * {@link io.github.sekerator.kingdomworld.core.state.KingdomWorldState}. Every change notifies the change
- * listener. Not thread safe.
+ * listener. The citizens are also kept by place (see {@link #near}), and every change of a home, workplace or last
+ * position moves them there. Not thread safe.
  */
 public final class CitizenRegistry {
     /** Entries each chronicle keeps; older ones are forgotten. */
@@ -30,6 +32,8 @@ public final class CitizenRegistry {
     private final Map<UUID, Map<UUID, Citizen>> byKingdom = new LinkedHashMap<>();
     private final Map<UUID, Long> lastArrival = new LinkedHashMap<>();
     private final Map<UUID, Deque<DeathRecord>> chronicles = new LinkedHashMap<>();
+    /** The living citizens by the places they are near, numbered in the order of {@link #all()}. */
+    private final CitizenCells cells = new CitizenCells();
     private Runnable changeListener = () -> {
     };
 
@@ -72,6 +76,36 @@ public final class CitizenRegistry {
 
     public int size() {
         return byId.size();
+    }
+
+    /**
+     * Adds to {@code into} the ids of the citizens whose home, workplace or last position lies within {@code radius} chunks
+     * of a chunk (the larger of the distances along x and z, as in {@link ActiveSelection#distance}), and maybe of some a
+     * little farther away.
+     */
+    public void near(String dimension, int chunkX, int chunkZ, int radius, Collection<UUID> into) {
+        cells.near(dimension, chunkX, chunkZ, radius, into);
+    }
+
+    /**
+     * The living citizens among the ids, each once, in the order of {@link #all()}; ids of nobody living are left out.
+     */
+    public List<Citizen> inOrder(Collection<UUID> ids) {
+        List<Citizen> result = new ArrayList<>(ids.size());
+        for (UUID id : ids) {
+            Citizen citizen = byId.get(id);
+            if (citizen != null) {
+                result.add(citizen);
+            }
+        }
+        result.sort(Comparator.comparingLong(citizen -> cells.order(citizen.id())));
+        List<Citizen> once = new ArrayList<>(result.size());
+        for (Citizen citizen : result) {
+            if (once.isEmpty() || once.get(once.size() - 1) != citizen) {
+                once.add(citizen);
+            }
+        }
+        return once;
     }
 
     /**
@@ -170,6 +204,9 @@ public final class CitizenRegistry {
         }
         citizen.setChangeListener(() -> {
         });
+        citizen.setPlaceListener(gone -> {
+        });
+        cells.remove(id);
         changed();
         return Optional.of(citizen);
     }
@@ -266,5 +303,14 @@ public final class CitizenRegistry {
         byId.put(citizen.id(), citizen);
         byKingdom.computeIfAbsent(citizen.kingdomId(), k -> new LinkedHashMap<>()).put(citizen.id(), citizen);
         citizen.setChangeListener(this::changed);
+        // A new id goes to the end of byId and gets the next number here, so both keep the same order.
+        citizen.setPlaceListener(this::moved);
+        moved(citizen);
+    }
+
+    private void moved(Citizen citizen) {
+        if (byId.get(citizen.id()) == citizen) {
+            cells.place(citizen.id(), citizen.home(), citizen.workplace(), citizen.lastPos());
+        }
     }
 }
