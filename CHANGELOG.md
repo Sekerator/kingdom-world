@@ -2,6 +2,17 @@
 
 ## Русский
 
+### 1.4.0
+
+Этап 15 «Большие государства», первая часть: основа под обширные земли королевств мира и их тысячи жителей. В игре пока почти ничего не видно: новые провинции появляются только командами оператора, план мира включит следующая часть.
+
+- **Провинции под землёй.** Кроме заявленных чанков землёй теперь бывают провинции: большие области, которыми королевство владеет целиком. Владелец чанка это тот, кто его заявил, иначе владелец его провинции. Провинция защищена как заявленная земля, буфер и расстояние основания держатся и от неё, заявка рядом со своей провинцией разрешена, предел чанков считает только заявки. При аннексии провинции проигравшего уходят победителю, при роспуске королевства становятся ничьими. Хранятся в `kingdomworld_provinces.dat`, формат 1; без файла всё как раньше. Команды `admin province fill|give|info|clear`, `admin land info|unlock`. Моды карт получают провинции через API, а смену владельца провинции почанково, по 4096 чанков за тик.
+- **Планировщик больших государств.** Новый пакет `core.land` раскладывает по обзору местности государства (рост от семян по цене пути, река ложится в нейтральную полосу между ними), провинции и дикие провинции нейтральной земли, границы почанково по воде и плавными изгибами, места поселений по размеру государства (крупное 4-8 крупных городов, 10-15 небольших, 30-40 деревень и посёлков) и дороги между ними. 8 крупных государств на 60 тысяч клеток раскладываются за десятые доли секунды.
+- **Склады, здания и города без переборов мира.** Голодный житель, загрузка чанка, уют дома, выбор кровати, проверка имущества, области городов и карта дорог больше не перебирают все склады, здания, стены и дороги мира: индексы по чанкам и версии. Состояния зданий пересчитываются по 64 за тик по кругу. На нагруженном чистом сервере средний тик 8,9 -> 5,9 мс, тиков дольше 50 мс вдвое меньше.
+- **Шаг жителей по частям.** Шаг королевства больше не идёт целиком в одном тике: начало (план мастерских и резервы стройки этого королевства), затем жители по 128 за тик и не дольше 2 мс на все шаги, затем конец. Если пришёл срок следующего шага, а прежний ещё идёт, следующий ждёт.
+- **Тела по близости.** Выбор жителей, которым дать тело, смотрит только клетки рядом с игроками (и армию, вызванных и закреплённых), а не всех жителей мира.
+- **Запись вне потока.** Файлы королевств и провинций пишутся на диск отдельным потоком через временный файл с атомарной заменой: сервер не ждёт диска, ошибка записи оставляет старый файл и повторяется при следующем сохранении, остановка сервера и `save-all flush` дожидаются записи. Формат файла королевств не менялся.
+
 ### 1.3.0
 
 - **Двери открыты всем.** Двери, люки и калитки на земле любого королевства открывает любой игрок, в любом режиме игры, изнутри и снаружи: в доме, таверне, казарме и башне больше нельзя оказаться запертым. Створки городских ворот по-прежнему живут по правилам ворот; кнопки, рычаги, повторители, рамки и стойки защищены, как раньше. Клик по двери или сундуку с предметом в руке не показывает отказ «Это земли королевства».
@@ -76,6 +87,17 @@
 - **Нагрузка и баланс.** Замер нагрузки `admin perf`, тяжёлые места разнесены по тикам, жалование всех профессий по умолчанию.
 
 ## English
+
+### 1.4.0
+
+Stage 15 "Large states", first part: the ground for the wide lands of the kingdoms of the world and their thousands of citizens. Little shows in the game yet: provinces appear only by operator commands; the next part turns on the plan of the world.
+
+- **Provinces under the land.** Besides claimed chunks, land can now be held as provinces: large areas a kingdom holds as a whole. The owner of a chunk is the kingdom that claimed it, otherwise the holder of its province. A province is protected like claimed land, the buffer and the founding distance keep away from it, a claim beside an own province is allowed, and the chunk limit counts claims only. An annexation hands the provinces of the loser to the winner; those of a dissolved kingdom become nobody's. They are kept in `kingdomworld_provinces.dat`, format 1; without the file everything is as before. Commands `admin province fill|give|info|clear`, `admin land info|unlock`. Map mods get provinces through the API, and a province changing hands chunk by chunk, 4096 chunks a tick.
+- **The planner of large states.** The new package `core.land` lays out over a survey of the land the states (grown from seeds by the cost of the way, a river falls into the neutral strip between them), their provinces and the wild provinces of the neutral land, borders chunk by chunk along water and in soft bends, the places of settlements by the size of a state (a large one 4-8 large cities, 10-15 small towns, 30-40 villages and hamlets) and the roads between them. 8 large states on 60 thousand cells are laid out in a few tenths of a second.
+- **Storehouses, buildings and cities without scans of the world.** A hungry citizen, a loaded chunk, the comfort of a home, the choice of a bed, the check of property, the areas of cities and the map of roads no longer look at every storehouse, building, wall and road of the world: indexes by chunk and version counters. The states of buildings are worked out again 64 a tick in turn. On a busy clean server the average tick went from 8.9 to 5.9 ms, and ticks over 50 ms halved.
+- **The step of citizens in slices.** The step of a kingdom no longer runs whole in one tick: its beginning (the plan of the workshops and what the constructions of that kingdom set aside), then the citizens 128 a tick and at most 2 ms for all steps, then its end. A step that comes due while the last one is still under way waits for it.
+- **Bodies by nearness.** The choice of citizens who get a body looks only at the cells near players (and the army, the summoned and the forced ones), not at every citizen of the world.
+- **Writing off the server thread.** The files of the kingdoms and the provinces are written by a thread of their own through a temporary file put in place in one move: the server does not wait for the disk, a write that fails leaves the old file and is written again at the next save, and a stopping server and `save-all flush` wait for the writer. The format of the file of the kingdoms is unchanged.
 
 ### 1.3.0
 
