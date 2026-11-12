@@ -40,6 +40,7 @@ public final class TerritoryIndex {
     private final List<TerritoryListener> chunkListeners = new CopyOnWriteArrayList<>();
     private final Deque<Sweep> sweeps = new ArrayDeque<>();
     private ProvinceMap provinces;
+    private long version;
     private Runnable changeListener = () -> {
     };
 
@@ -83,6 +84,16 @@ public final class TerritoryIndex {
     public void attachProvinces(ProvinceMap map) {
         provinces = map;
         sweeps.clear();
+        version++;
+    }
+
+    /**
+     * Grows whenever a claim is made, given up or moved, a kingdom loses its land, or a province changes hands, is filled or
+     * cleared through the index: what is sorted by the owners of chunks compares it. Changes made on a {@link ProvinceMap}
+     * directly show in its own {@link ProvinceMap#version()}.
+     */
+    public long version() {
+        return version;
     }
 
     public Optional<ProvinceMap> provinceMap() {
@@ -299,6 +310,7 @@ public final class TerritoryIndex {
         }
         Territory territory = new Territory(kingdomId, capital);
         territories.put(kingdomId, territory);
+        version++;
         for (long chunk : all) {
             territory.chunks.add(chunk);
             map.put(chunk, kingdomId);
@@ -326,6 +338,7 @@ public final class TerritoryIndex {
         }
         map.put(chunk, kingdomId);
         territory.chunks.add(chunk);
+        version++;
         changeListener.run();
         notifyListeners(territory.dimension(), chunk, null, kingdomId);
     }
@@ -345,6 +358,7 @@ public final class TerritoryIndex {
         }
         territory.chunks.remove(chunk);
         removeOwner(territory.dimension(), chunk);
+        version++;
         changeListener.run();
         notifyListeners(territory.dimension(), chunk, kingdomId, null);
     }
@@ -361,6 +375,7 @@ public final class TerritoryIndex {
             for (long chunk : territory.chunks) {
                 removeOwner(territory.dimension(), chunk);
             }
+            version++;
             changeListener.run();
             for (long chunk : territory.chunks) {
                 notifyListeners(territory.dimension(), chunk, kingdomId, null);
@@ -391,6 +406,7 @@ public final class TerritoryIndex {
             return false;
         }
         map.setOwner(id, owner, day);
+        version++;
         for (ProvinceListener listener : provinceListeners) {
             listener.onProvinceChanged(map.dimension(), id, old, owner);
         }
@@ -416,6 +432,7 @@ public final class TerritoryIndex {
         int minZ = Math.min(z1, z2);
         int width = Math.abs(x2 - x1) + 1;
         int height = Math.abs(z2 - z1) + 1;
+        version++;
         if (chunkListeners.isEmpty()) {
             return map.fill(id, x1, z1, x2, z2);
         }
@@ -454,6 +471,7 @@ public final class TerritoryIndex {
             throw new IllegalArgumentException("No province " + id);
         }
         UUID old = map.owner(id);
+        version++;
         if (old != null) {
             map.setOwner(id, null, map.acquiredDay(id));
             for (ProvinceListener listener : provinceListeners) {

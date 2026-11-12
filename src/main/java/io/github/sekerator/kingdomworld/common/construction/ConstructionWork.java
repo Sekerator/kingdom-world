@@ -1225,7 +1225,7 @@ public final class ConstructionWork {
         KingdomWorldApi.state(server).construction().putBuilding(building.withIntegrity(percent, KingdomWorldApi.gameTime(server), missing));
         INTEGRITY.remove(building.id());
         MISSING.remove(building.id());
-        BuildingEffects.changed();
+        BuildingEffects.changed(building.id());
         return percent;
     }
 
@@ -1274,7 +1274,7 @@ public final class ConstructionWork {
             INTEGRITY.remove(building.id());
             MISSING.remove(building.id());
             integrityTurn++;
-            BuildingEffects.changed();
+            BuildingEffects.changed(building.id());
         }
     }
 }

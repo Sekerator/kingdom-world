@@ -73,6 +73,8 @@ public final class BuildingEffects {
     private static Map<UUID, Integer> workingHouses = new HashMap<>();
     /** Every building in turn, for the states worked out again a few a tick. */
     private static List<Slot> slots = List.of();
+    /** The place of every building among the effects. */
+    private static Map<Long, Slot> slotById = Map.of();
     private static int cursor;
     private static final java.util.Set<String> DIRTY_ROLES = new java.util.HashSet<>();
     private static boolean dirty = true;
@@ -97,6 +99,7 @@ public final class BuildingEffects {
         indexes = Map.of();
         workingHouses = new HashMap<>();
         slots = List.of();
+        slotById = Map.of();
         cursor = 0;
         DIRTY_ROLES.clear();
         dirty = true;
@@ -112,6 +115,19 @@ public final class BuildingEffects {
      */
     public static void changed() {
         dirty = true;
+    }
+
+    /**
+     * One building changed but stands as it stood (its integrity or its damage): its state alone is worked out again at once.
+     */
+    public static void changed(long buildingId) {
+        MinecraftServer server = madeFor;
+        Slot slot = slotById.get(buildingId);
+        if (dirty || server == null || slot == null) {
+            dirty = true;
+            return;
+        }
+        redo(server, KingdomWorldApi.state(server), ConstructionSettings.buildings().roleThreshold(), effects, slot);
     }
 
     /**
@@ -158,7 +174,13 @@ public final class BuildingEffects {
     private static void redo(MinecraftServer server, KingdomWorldState state, int threshold, Map<UUID, List<Effect>> current, Slot slot) {
         List<Effect> list = current.get(slot.kingdomId());
         Effect old = list.get(slot.index());
-        Effect fresh = effect(server, state, old.building(), threshold);
+        // The building as the register holds it now: its integrity and damage change without making the effects anew.
+        Optional<Building> now = state.construction().building(old.building().id());
+        if (now.isEmpty()) {
+            dirty = true;
+            return;
+        }
+        Effect fresh = effect(server, state, now.get(), threshold);
         list.set(slot.index(), fresh);
         boolean was = old.works() && BuildingRoles.HOUSE.equals(old.building().role());
         boolean is = fresh.works() && BuildingRoles.HOUSE.equals(fresh.building().role());
@@ -221,10 +243,13 @@ public final class BuildingEffects {
         Map<UUID, List<Effect>> result = new HashMap<>();
         Map<UUID, Integer> houses = new HashMap<>();
         List<Slot> order = new ArrayList<>();
+        Map<Long, Slot> byId = new HashMap<>();
         for (Building building : state.construction().buildings()) {
             Effect effect = effect(server, state, building, threshold);
             List<Effect> list = result.computeIfAbsent(building.kingdomId(), id -> new ArrayList<>());
-            order.add(new Slot(building.kingdomId(), list.size()));
+            Slot slot = new Slot(building.kingdomId(), list.size());
+            order.add(slot);
+            byId.put(building.id(), slot);
             list.add(effect);
             if (effect.works() && BuildingRoles.HOUSE.equals(building.role())) {
                 houses.merge(building.kingdomId(), 1, Integer::sum);
@@ -244,6 +269,7 @@ public final class BuildingEffects {
         indexes = made;
         workingHouses = houses;
         slots = order;
+        slotById = byId;
         cursor = cursor >= order.size() ? 0 : cursor;
     }
 

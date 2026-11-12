@@ -74,16 +74,12 @@ public final class KingdomStorage {
     }
 
     /**
-     * A cheap mark of the land of all kingdoms: claims made or given up, kingdoms founded or gone and provinces changing
-     * hands change it, so that a storehouse whose land changed in the middle of a tick is sorted out anew.
+     * A mark of the land of all kingdoms: every claim made, given up or moved and every province changing hands changes it, so
+     * that a storehouse whose land changed in the middle of a tick is sorted out anew.
      */
     private static long landPrint(TerritoryIndex territory) {
-        long print = territory.territories().size();
-        for (String dimension : territory.dimensions()) {
-            print = print * 31 + territory.claimsIn(dimension).size();
-        }
         long provinces = territory.provinceMap().map(map -> map.version()).orElse(0L);
-        return print * 31 + provinces;
+        return territory.version() * 31 + provinces;
     }
 
     /**

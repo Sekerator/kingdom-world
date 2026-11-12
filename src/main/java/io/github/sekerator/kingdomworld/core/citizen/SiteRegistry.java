@@ -20,6 +20,8 @@ import java.util.UUID;
 public final class SiteRegistry {
     private final Map<WorldPos, Site> byPos = new LinkedHashMap<>();
     private final Map<UUID, Map<String, Set<WorldPos>>> byKingdom = new LinkedHashMap<>();
+    /** The positions of the places of every chunk, in the order the places were first recorded there. */
+    private final ChunkBuckets<WorldPos> byChunk = new ChunkBuckets<>();
     private Runnable changeListener = () -> {
     };
 
@@ -96,9 +98,22 @@ public final class SiteRegistry {
     }
 
     /**
-     * Places in one chunk of a dimension, of any kingdom.
+     * Places in one chunk of a dimension, of any kingdom, in the order they were recorded.
      */
     public List<Site> sitesInChunk(String dimension, long chunk) {
+        List<WorldPos> positions = byChunk.get(dimension, chunk);
+        List<Site> result = new ArrayList<>(positions.size());
+        for (WorldPos pos : positions) {
+            result.add(byPos.get(pos));
+        }
+        return result;
+    }
+
+    /**
+     * Places in one chunk found by looking at every place, as {@link #sitesInChunk} answered before it had an index; for the
+     * tests of the index.
+     */
+    List<Site> sitesInChunkByLooking(String dimension, long chunk) {
         List<Site> result = new ArrayList<>();
         for (Site site : byPos.values()) {
             if (site.pos().chunk() == chunk && site.pos().dimension().equals(dimension)) {
@@ -134,6 +149,9 @@ public final class SiteRegistry {
         }
         if (existing != null) {
             unindex(existing);
+        } else {
+            // A place put over another one keeps the place of the old one in its chunk, as in the map of all places.
+            byChunk.add(pos.dimension(), pos.chunk(), pos);
         }
         Site site = new Site(pos, kind, kingdomId, null);
         byPos.put(pos, site);
@@ -149,6 +167,7 @@ public final class SiteRegistry {
             return Optional.empty();
         }
         unindex(site);
+        byChunk.remove(pos.dimension(), pos.chunk(), pos);
         changeListener.run();
         return Optional.of(site);
     }
@@ -165,6 +184,7 @@ public final class SiteRegistry {
         List<Site> removed = sitesOf(kingdomId);
         for (Site site : removed) {
             byPos.remove(site.pos());
+            byChunk.remove(site.pos().dimension(), site.pos().chunk(), site.pos());
         }
         if (byKingdom.remove(kingdomId) != null) {
             changeListener.run();
@@ -182,6 +202,7 @@ public final class SiteRegistry {
             throw new IllegalArgumentException("Two places at " + site.pos());
         }
         byPos.put(site.pos(), site);
+        byChunk.add(site.pos().dimension(), site.pos().chunk(), site.pos());
         byKingdom.computeIfAbsent(site.kingdomId(), k -> new LinkedHashMap<>())
                 .computeIfAbsent(site.kind(), k -> new LinkedHashSet<>()).add(site.pos());
     }

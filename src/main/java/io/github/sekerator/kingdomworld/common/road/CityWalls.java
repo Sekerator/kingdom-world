@@ -815,7 +815,7 @@ public final class CityWalls {
         int percent = counted == 0 ? 100 : (int) Math.round(100.0 * standing / counted);
         ConstructionBook book = KingdomWorldApi.state(server).construction();
         book.building(wall.buildingId()).ifPresent(building -> book.putBuilding(building.withIntegrity(percent, KingdomWorldApi.gameTime(server))));
-        BuildingEffects.changed();
+        BuildingEffects.changed(wall.buildingId());
     }
 
     /**

@@ -190,9 +190,22 @@ public final class ConstructionBook {
     public void putBuilding(Building building) {
         Building old = buildings.put(building.id(), building);
         if (!building.equals(old)) {
-            version++;
+            if (old == null || reshaped(old, building)) {
+                version++;
+            }
             changed();
         }
+    }
+
+    /**
+     * Whether a building changed what the indexes of buildings rest on: its kingdom, place, box, template, role or level. Its
+     * integrity and the map of its damage do not count: a siege marks them block by block.
+     */
+    private static boolean reshaped(Building old, Building building) {
+        return !old.kingdomId().equals(building.kingdomId()) || !java.util.Objects.equals(old.box(), building.box())
+                || !java.util.Objects.equals(old.anchor(), building.anchor()) || !java.util.Objects.equals(old.placement(), building.placement())
+                || !java.util.Objects.equals(old.templateId(), building.templateId()) || !java.util.Objects.equals(old.role(), building.role())
+                || old.level() != building.level() || old.fingerprint() != building.fingerprint();
     }
 
     public Optional<Building> removeBuilding(long id) {
