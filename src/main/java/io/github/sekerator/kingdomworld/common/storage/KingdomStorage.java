@@ -29,7 +29,61 @@ import java.util.function.ToIntFunction;
  */
 public final class KingdomStorage {
 
+    /** The storehouses of every kingdom, as sorted out in {@link #byKingdom}. */
+    private static Map<UUID, List<StorehouseInventory>> sorted = Map.of();
+    private static StorehouseRegistry sortedFrom;
+    private static long sortedVersion = -1;
+    private static long sortedTick = -1;
+    private static long sortedLand = Long.MIN_VALUE;
+
     private KingdomStorage() {
+    }
+
+    /**
+     * The kingdom a storehouse belongs to: the owner of the land it stands on. The one place where this is decided.
+     */
+    @Nullable
+    public static UUID owner(TerritoryIndex territory, WorldPos pos) {
+        return territory.ownerOf(pos.dimension(), pos.chunk());
+    }
+
+    /**
+     * The storehouses of every kingdom, in the order of the register: sorted out once a tick, and again when a storehouse
+     * is made or taken away.
+     */
+    private static Map<UUID, List<StorehouseInventory>> byKingdom(MinecraftServer server, KingdomSavedData data) {
+        StorehouseRegistry registry = data.storehouses();
+        long tick = server.getTickCount();
+        TerritoryIndex territory = data.state().territory();
+        long land = landPrint(territory);
+        if (registry != sortedFrom || registry.version() != sortedVersion || tick != sortedTick || land != sortedLand) {
+            Map<UUID, List<StorehouseInventory>> result = new HashMap<>();
+            for (StorehouseInventory inventory : registry.all()) {
+                UUID owner = owner(territory, inventory.pos());
+                if (owner != null) {
+                    result.computeIfAbsent(owner, id -> new ArrayList<>()).add(inventory);
+                }
+            }
+            sorted = result;
+            sortedFrom = registry;
+            sortedVersion = registry.version();
+            sortedTick = tick;
+            sortedLand = land;
+        }
+        return sorted;
+    }
+
+    /**
+     * A cheap mark of the land of all kingdoms: claims made or given up, kingdoms founded or gone and provinces changing
+     * hands change it, so that a storehouse whose land changed in the middle of a tick is sorted out anew.
+     */
+    private static long landPrint(TerritoryIndex territory) {
+        long print = territory.territories().size();
+        for (String dimension : territory.dimensions()) {
+            print = print * 31 + territory.claimsIn(dimension).size();
+        }
+        long provinces = territory.provinceMap().map(map -> map.version()).orElse(0L);
+        return print * 31 + provinces;
     }
 
     /**
@@ -37,14 +91,7 @@ public final class KingdomStorage {
      */
     public static List<StorehouseInventory> storehouses(MinecraftServer server, UUID kingdomId, @Nullable WorldPos near) {
         KingdomSavedData data = KingdomSavedData.get(server);
-        TerritoryIndex territory = data.state().territory();
-        List<StorehouseInventory> result = new ArrayList<>();
-        for (StorehouseInventory inventory : data.storehouses().all()) {
-            WorldPos pos = inventory.pos();
-            if (kingdomId.equals(territory.ownerOf(pos.dimension(), pos.chunk()))) {
-                result.add(inventory);
-            }
-        }
+        List<StorehouseInventory> result = new ArrayList<>(byKingdom(server, data).getOrDefault(kingdomId, List.of()));
         // The containers of the warehouses of the kingdom count as storehouses while their place is loaded.
         result.addAll(io.github.sekerator.kingdomworld.common.construction.BuildingEffects.containers(server, kingdomId));
         if (near != null) {

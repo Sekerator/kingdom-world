@@ -7,6 +7,7 @@ import io.github.sekerator.kingdomworld.core.citizen.Site;
 import io.github.sekerator.kingdomworld.core.citizen.SiteKinds;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.construction.Building;
+import io.github.sekerator.kingdomworld.core.construction.BuildingIndex;
 import io.github.sekerator.kingdomworld.core.construction.BuildingRole;
 import io.github.sekerator.kingdomworld.core.construction.BuildingRoles;
 import io.github.sekerator.kingdomworld.core.construction.Construction;
@@ -62,20 +63,46 @@ public final class BuildingEffects {
         }
     }
 
+    /** Buildings whose state is worked out again in a tick, besides those marked for it. */
+    static final int REFRESH_PER_TICK = 64;
+
     private static Map<UUID, List<Effect>> effects = Map.of();
+    /** Where the buildings of each kingdom stand, in the order of their effects. */
+    private static Map<UUID, BuildingIndex> indexes = Map.of();
+    /** Working houses of each kingdom. */
+    private static Map<UUID, Integer> workingHouses = new HashMap<>();
+    /** Every building in turn, for the states worked out again a few a tick. */
+    private static List<Slot> slots = List.of();
+    private static int cursor;
+    private static final java.util.Set<String> DIRTY_ROLES = new java.util.HashSet<>();
     private static boolean dirty = true;
     private static long madeAt = -1;
+    private static long refreshedAt = -1;
+    private static long madeVersion = -1;
     private static MinecraftServer madeFor;
     /** Positions of the containers of each warehouse, as last seen. */
     private static final Map<Long, List<BlockPos>> CONTAINERS = new HashMap<>();
+
+    /**
+     * A building among the effects: its kingdom and its place in the list of the kingdom.
+     */
+    private record Slot(UUID kingdomId, int index) {
+    }
 
     private BuildingEffects() {
     }
 
     public static void reset() {
         effects = Map.of();
+        indexes = Map.of();
+        workingHouses = new HashMap<>();
+        slots = List.of();
+        cursor = 0;
+        DIRTY_ROLES.clear();
         dirty = true;
         madeAt = -1;
+        refreshedAt = -1;
+        madeVersion = -1;
         madeFor = null;
         CONTAINERS.clear();
     }
@@ -88,12 +115,55 @@ public final class BuildingEffects {
     }
 
     /**
-     * Every few seconds the states are worked out again and the containers of warehouses looked for.
+     * Every tick the states of a few buildings are worked out again, in turn, so that every building is looked at again
+     * within a few ticks without any tick doing them all; every few seconds the containers of warehouses are looked for, and
+     * the warehouses are worked out again at once.
      */
     public static void tick(MinecraftServer server, long tick) {
         if (tick % 200 == 0) {
-            dirty = true;
             surveyWarehouses(server);
+            DIRTY_ROLES.add(BuildingRoles.WAREHOUSE);
+        }
+        refresh(server, REFRESH_PER_TICK);
+    }
+
+    /**
+     * Works out again the state of the buildings of the roles marked first, then of {@code count} buildings in turn.
+     */
+    static void refresh(MinecraftServer server, int count) {
+        Map<UUID, List<Effect>> current = all(server);
+        refreshedAt = server.getTickCount();
+        if (slots.isEmpty()) {
+            DIRTY_ROLES.clear();
+            return;
+        }
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        int threshold = ConstructionSettings.buildings().roleThreshold();
+        if (!DIRTY_ROLES.isEmpty()) {
+            for (Slot slot : slots) {
+                Effect old = current.get(slot.kingdomId()).get(slot.index());
+                if (DIRTY_ROLES.contains(old.building().role())) {
+                    redo(server, state, threshold, current, slot);
+                }
+            }
+            DIRTY_ROLES.clear();
+        }
+        for (int i = 0; i < Math.min(count, slots.size()); i++) {
+            cursor = cursor % slots.size();
+            redo(server, state, threshold, current, slots.get(cursor));
+            cursor++;
+        }
+    }
+
+    private static void redo(MinecraftServer server, KingdomWorldState state, int threshold, Map<UUID, List<Effect>> current, Slot slot) {
+        List<Effect> list = current.get(slot.kingdomId());
+        Effect old = list.get(slot.index());
+        Effect fresh = effect(server, state, old.building(), threshold);
+        list.set(slot.index(), fresh);
+        boolean was = old.works() && BuildingRoles.HOUSE.equals(old.building().role());
+        boolean is = fresh.works() && BuildingRoles.HOUSE.equals(fresh.building().role());
+        if (was != is) {
+            workingHouses.merge(slot.kingdomId(), is ? 1 : -1, Integer::sum);
         }
     }
 
@@ -128,55 +198,110 @@ public final class BuildingEffects {
         return Optional.empty();
     }
 
+    /**
+     * The effects of all kingdoms. They are made anew when the register of buildings changed, and also when the server went a
+     * long time without working any of them out again; otherwise they are worked out again a few a tick.
+     */
     private static Map<UUID, List<Effect>> all(MinecraftServer server) {
         long now = server.getTickCount();
-        if (dirty || server != madeFor || now - madeAt > 100 || now < madeAt) {
-            effects = make(server);
+        long version = KingdomWorldApi.state(server).construction().version();
+        if (dirty || server != madeFor || now < madeAt || version != madeVersion || now - Math.max(madeAt, refreshedAt) > 200) {
+            make(server);
             dirty = false;
             madeAt = now;
+            madeVersion = version;
             madeFor = server;
         }
         return effects;
     }
 
-    private static Map<UUID, List<Effect>> make(MinecraftServer server) {
+    private static void make(MinecraftServer server) {
         KingdomWorldState state = KingdomWorldApi.state(server);
         int threshold = ConstructionSettings.buildings().roleThreshold();
         Map<UUID, List<Effect>> result = new HashMap<>();
-        Map<UUID, List<Site>> beds = new HashMap<>();
+        Map<UUID, Integer> houses = new HashMap<>();
+        List<Slot> order = new ArrayList<>();
         for (Building building : state.construction().buildings()) {
-            boolean demolishing = state.construction().forBuilding(building.id()).map(c -> c.kind() == Construction.Kind.DEMOLISH).orElse(false);
-            boolean onLand = onLand(state, building);
-            BuildingRoles.Status status = BuildingRoles.status(building, threshold, demolishing, onLand);
-            int bedCount = 0;
-            int residents = 0;
-            if (BuildingRoles.HOUSE.equals(building.role())) {
-                for (Site bed : beds.computeIfAbsent(building.kingdomId(), id -> state.citizens().sites().sitesOf(id, SiteKinds.BED))) {
-                    if (inside(building, bed.pos())) {
+            Effect effect = effect(server, state, building, threshold);
+            List<Effect> list = result.computeIfAbsent(building.kingdomId(), id -> new ArrayList<>());
+            order.add(new Slot(building.kingdomId(), list.size()));
+            list.add(effect);
+            if (effect.works() && BuildingRoles.HOUSE.equals(building.role())) {
+                houses.merge(building.kingdomId(), 1, Integer::sum);
+            }
+        }
+        Map<UUID, BuildingIndex> made = new HashMap<>();
+        for (Map.Entry<UUID, List<Effect>> kingdom : result.entrySet()) {
+            List<BuildingIndex.Entry> entries = new ArrayList<>();
+            for (Effect effect : kingdom.getValue()) {
+                Building building = effect.building();
+                double radius = BuildingRoles.WELL.equals(building.role()) ? effect.param(BuildingRoles.RADIUS) : -1;
+                entries.add(new BuildingIndex.Entry(building.dimension(), building.box(), radius));
+            }
+            made.put(kingdom.getKey(), new BuildingIndex(entries));
+        }
+        effects = result;
+        indexes = made;
+        workingHouses = houses;
+        slots = order;
+        cursor = cursor >= order.size() ? 0 : cursor;
+    }
+
+    /**
+     * The state of a building as it is now: its role met or lacking, the beds inside a house and those taken.
+     */
+    private static Effect effect(MinecraftServer server, KingdomWorldState state, Building building, int threshold) {
+        boolean demolishing = state.construction().forBuilding(building.id()).map(c -> c.kind() == Construction.Kind.DEMOLISH).orElse(false);
+        boolean onLand = onLand(state, building);
+        BuildingRoles.Status status = BuildingRoles.status(building, threshold, demolishing, onLand);
+        int bedCount = 0;
+        int residents = 0;
+        if (BuildingRoles.HOUSE.equals(building.role())) {
+            for (long chunk : building.box().chunks()) {
+                for (Site bed : state.citizens().sites().sitesInChunk(building.dimension(), chunk)) {
+                    if (SiteKinds.BED.equals(bed.kind()) && building.kingdomId().equals(bed.kingdomId()) && inside(building, bed.pos())) {
                         bedCount++;
                         if (!bed.isFree()) {
                             residents++;
                         }
                     }
                 }
-                if (bedCount == 0 && status == BuildingRoles.Status.ACTIVE) {
-                    status = BuildingRoles.Status.LACKING;
-                }
             }
-            if (BuildingRoles.BARRACKS.equals(building.role()) && status == BuildingRoles.Status.ACTIVE && !holdsBarracks(server, building)) {
+            if (bedCount == 0 && status == BuildingRoles.Status.ACTIVE) {
                 status = BuildingRoles.Status.LACKING;
             }
-            if (BuildingRoles.MAGE_TOWER.equals(building.role()) && status == BuildingRoles.Status.ACTIVE && !holdsFocus(server, building)) {
+        }
+        if (BuildingRoles.BARRACKS.equals(building.role()) && status == BuildingRoles.Status.ACTIVE && !holdsBarracks(server, building)) {
+            status = BuildingRoles.Status.LACKING;
+        }
+        if (BuildingRoles.MAGE_TOWER.equals(building.role()) && status == BuildingRoles.Status.ACTIVE && !holdsFocus(server, building)) {
+            status = BuildingRoles.Status.LACKING;
+        }
+        if (BuildingRoles.WAREHOUSE.equals(building.role()) && status == BuildingRoles.Status.ACTIVE) {
+            List<BlockPos> seen = CONTAINERS.get(building.id());
+            if (seen != null && seen.isEmpty()) {
                 status = BuildingRoles.Status.LACKING;
             }
-            if (BuildingRoles.WAREHOUSE.equals(building.role()) && status == BuildingRoles.Status.ACTIVE) {
-                List<BlockPos> seen = CONTAINERS.get(building.id());
-                if (seen != null && seen.isEmpty()) {
-                    status = BuildingRoles.Status.LACKING;
-                }
-            }
-            result.computeIfAbsent(building.kingdomId(), id -> new ArrayList<>())
-                    .add(new Effect(building, status, params(building), bedCount, residents));
+        }
+        return new Effect(building, status, params(building), bedCount, residents);
+    }
+
+    /**
+     * The effects of a kingdom whose buildings hold a position, in their order.
+     */
+    private static List<Effect> holding(MinecraftServer server, UUID kingdomId, WorldPos pos) {
+        List<Effect> list = all(server).get(kingdomId);
+        BuildingIndex index = indexes.get(kingdomId);
+        if (list == null || index == null || pos == null) {
+            return List.of();
+        }
+        int[] found = index.containing(pos.dimension(), pos.x(), pos.y(), pos.z());
+        if (found.length == 0) {
+            return List.of();
+        }
+        List<Effect> result = new ArrayList<>(found.length);
+        for (int i : found) {
+            result.add(list.get(i));
         }
         return result;
     }
@@ -218,17 +343,21 @@ public final class BuildingEffects {
         }
         double house = 0;
         double well = 0;
-        for (Effect effect : of(server, kingdomId)) {
-            if (!effect.works()) {
-                continue;
-            }
-            String role = effect.building().role();
-            if (BuildingRoles.HOUSE.equals(role) && inside(effect.building(), home)) {
+        for (Effect effect : holding(server, kingdomId, home)) {
+            if (effect.works() && BuildingRoles.HOUSE.equals(effect.building().role())) {
                 house = Math.max(house, effect.param(BuildingRoles.COMFORT));
-            } else if (BuildingRoles.WELL.equals(role) && effect.building().dimension().equals(home.dimension())) {
-                double radius = effect.param(BuildingRoles.RADIUS);
-                if (ConstructionWork.distanceSqr(effect.building().box(), home) <= radius * radius) {
-                    well = Math.max(well, effect.param(BuildingRoles.MOOD));
+            }
+        }
+        List<Effect> list = all(server).get(kingdomId);
+        BuildingIndex index = indexes.get(kingdomId);
+        if (list != null && index != null) {
+            for (int i : index.wellsNear(home.dimension(), home.x(), home.z())) {
+                Effect effect = list.get(i);
+                if (effect.works() && BuildingRoles.WELL.equals(effect.building().role()) && effect.building().dimension().equals(home.dimension())) {
+                    double radius = effect.param(BuildingRoles.RADIUS);
+                    if (ConstructionWork.distanceSqr(effect.building().box(), home) <= radius * radius) {
+                        well = Math.max(well, effect.param(BuildingRoles.MOOD));
+                    }
                 }
             }
         }
@@ -246,14 +375,9 @@ public final class BuildingEffects {
         if (io.github.sekerator.kingdomworld.common.life.LifeWork.playerBed(server, bed)) {
             return false;
         }
-        Effect holder = null;
-        boolean anyHouse = false;
-        for (Effect effect : of(server, kingdomId)) {
-            if (inside(effect.building(), bed)) {
-                holder = effect;
-            }
-            anyHouse |= effect.works() && BuildingRoles.HOUSE.equals(effect.building().role());
-        }
+        List<Effect> holders = holding(server, kingdomId, bed);
+        Effect holder = holders.isEmpty() ? null : holders.get(holders.size() - 1);
+        boolean anyHouse = workingHouses.getOrDefault(kingdomId, 0) > 0;
         if (holder != null) {
             if (BuildingRoles.TAVERN.equals(holder.building().role())) {
                 return false;
@@ -270,8 +394,8 @@ public final class BuildingEffects {
         if (io.github.sekerator.kingdomworld.common.life.LifeWork.playerBed(server, bed)) {
             return true;
         }
-        for (Effect effect : of(server, kingdomId)) {
-            if (BuildingRoles.TAVERN.equals(effect.building().role()) && inside(effect.building(), bed)) {
+        for (Effect effect : holding(server, kingdomId, bed)) {
+            if (BuildingRoles.TAVERN.equals(effect.building().role())) {
                 return true;
             }
         }
@@ -282,8 +406,8 @@ public final class BuildingEffects {
      * Whether a bed lies inside a working house.
      */
     public static boolean inHouse(MinecraftServer server, UUID kingdomId, WorldPos bed) {
-        for (Effect effect : of(server, kingdomId)) {
-            if (effect.works() && BuildingRoles.HOUSE.equals(effect.building().role()) && inside(effect.building(), bed)) {
+        for (Effect effect : holding(server, kingdomId, bed)) {
+            if (effect.works() && BuildingRoles.HOUSE.equals(effect.building().role())) {
                 return true;
             }
         }
@@ -294,8 +418,8 @@ public final class BuildingEffects {
      * Whether a bed is a bunk of a working barracks: such beds are kept for the soldiers of the kingdom.
      */
     public static boolean inBarracks(MinecraftServer server, UUID kingdomId, WorldPos bed) {
-        for (Effect effect : of(server, kingdomId)) {
-            if (effect.works() && BuildingRoles.BARRACKS.equals(effect.building().role()) && inside(effect.building(), bed)) {
+        for (Effect effect : holding(server, kingdomId, bed)) {
+            if (effect.works() && BuildingRoles.BARRACKS.equals(effect.building().role())) {
                 return true;
             }
         }
@@ -384,8 +508,8 @@ public final class BuildingEffects {
      */
     public static double workshopSpeed(MinecraftServer server, WorldPos post) {
         double speed = 1.0;
-        for (Effect effect : of(server, ownerOf(server, post))) {
-            if (effect.works() && BuildingRoles.WORKSHOP.equals(effect.building().role()) && inside(effect.building(), post)) {
+        for (Effect effect : holding(server, ownerOf(server, post), post)) {
+            if (effect.works() && BuildingRoles.WORKSHOP.equals(effect.building().role())) {
                 speed = Math.max(speed, effect.param(BuildingRoles.SPEED));
             }
         }
@@ -397,8 +521,8 @@ public final class BuildingEffects {
      */
     public static int extraSeats(MinecraftServer server, WorldPos post) {
         int seats = 0;
-        for (Effect effect : of(server, ownerOf(server, post))) {
-            if (effect.works() && BuildingRoles.MARKET.equals(effect.building().role()) && inside(effect.building(), post)) {
+        for (Effect effect : holding(server, ownerOf(server, post), post)) {
+            if (effect.works() && BuildingRoles.MARKET.equals(effect.building().role())) {
                 seats = Math.max(seats, (int) Math.round(effect.param(BuildingRoles.MERCHANTS)));
             }
         }
@@ -470,8 +594,8 @@ public final class BuildingEffects {
             return 1.0;
         }
         double speed = 1.0;
-        for (Effect effect : of(server, ownerOf(server, post))) {
-            if (effect.works() && BuildingRoles.MAGE_TOWER.equals(effect.building().role()) && inside(effect.building(), post)) {
+        for (Effect effect : holding(server, ownerOf(server, post), post)) {
+            if (effect.works() && BuildingRoles.MAGE_TOWER.equals(effect.building().role())) {
                 speed = Math.max(speed, effect.param(BuildingRoles.SPEED));
             }
         }

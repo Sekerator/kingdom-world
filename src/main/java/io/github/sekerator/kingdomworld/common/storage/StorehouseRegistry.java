@@ -24,6 +24,10 @@ public final class StorehouseRegistry {
     private static final String ITEMS = "items";
 
     private final Map<WorldPos, StorehouseInventory> byPos = new LinkedHashMap<>();
+    /** The storehouses of every chunk, so that a chunk is looked at without the whole world. */
+    private final io.github.sekerator.kingdomworld.core.citizen.ChunkBuckets<StorehouseInventory> byChunk =
+            new io.github.sekerator.kingdomworld.core.citizen.ChunkBuckets<>();
+    private long version;
     private Runnable changeListener = () -> {
     };
 
@@ -47,6 +51,8 @@ public final class StorehouseRegistry {
             inventory = new StorehouseInventory(pos);
             inventory.setChangeListener(changeListener);
             byPos.put(pos, inventory);
+            byChunk.add(pos.dimension(), pos.chunk(), inventory);
+            version++;
             changeListener.run();
         }
         return inventory;
@@ -55,6 +61,8 @@ public final class StorehouseRegistry {
     public Optional<StorehouseInventory> remove(WorldPos pos) {
         StorehouseInventory inventory = byPos.remove(pos);
         if (inventory != null) {
+            byChunk.remove(pos.dimension(), pos.chunk(), inventory);
+            version++;
             inventory.setChangeListener(() -> {
             });
             changeListener.run();
@@ -64,6 +72,20 @@ public final class StorehouseRegistry {
 
     public Collection<StorehouseInventory> all() {
         return Collections.unmodifiableCollection(byPos.values());
+    }
+
+    /**
+     * The storehouses of a chunk, in the order they were made; a view that must not outlive a change of the storehouses.
+     */
+    public List<StorehouseInventory> inChunk(String dimension, long chunk) {
+        return byChunk.get(dimension, chunk);
+    }
+
+    /**
+     * Grows whenever a storehouse is made or taken away: lists built from the storehouses compare it.
+     */
+    public long version() {
+        return version;
     }
 
     public int size() {
@@ -109,6 +131,8 @@ public final class StorehouseRegistry {
                 }
                 inventory.setChangeListener(changeListener);
                 byPos.put(pos, inventory);
+                byChunk.add(pos.dimension(), pos.chunk(), inventory);
+                version++;
             } catch (RuntimeException e) {
                 problems.add("storehouse #" + i + ": " + e.getMessage());
             }

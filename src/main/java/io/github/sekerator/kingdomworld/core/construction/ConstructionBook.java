@@ -25,6 +25,8 @@ public final class ConstructionBook {
     private long nextBlueprint = 1;
     /** Counts changes of the saved blueprints, so that the templates made of them are made again. */
     private int blueprintRevision;
+    /** Counts changes of the register of buildings and of the constructions that work on a building of it. */
+    private long version;
     private Runnable changeListener = () -> {
     };
 
@@ -37,6 +39,15 @@ public final class ConstructionBook {
 
     private void changed() {
         changeListener.run();
+    }
+
+    /**
+     * Grows whenever a building enters the register, is replaced by a different one or leaves it, and whenever a construction
+     * that works on a building of the register (an upgrade, a repair, a demolition) is added or removed: what is worked out
+     * from the buildings compares it to know when to work it out again. The progress of a construction does not count.
+     */
+    public long version() {
+        return version;
     }
 
     // ---------------------------------------------------------------- constructions
@@ -96,6 +107,9 @@ public final class ConstructionBook {
                 clear, steps, kind, building, materials, skip);
         construction.setChangeListener(changeListener);
         constructions.put(construction.id(), construction);
+        if (construction.building() > 0) {
+            version++;
+        }
         changed();
         return construction;
     }
@@ -107,6 +121,9 @@ public final class ConstructionBook {
         }
         removed.setChangeListener(() -> {
         });
+        if (removed.building() > 0) {
+            version++;
+        }
         changed();
         return Optional.of(removed);
     }
@@ -146,6 +163,7 @@ public final class ConstructionBook {
                 cut(role), level, construction.materials(), construction.anchor(), construction.placement(), construction.box(),
                 construction.fingerprint(), builtTime, admin, 100, builtTime, false, new java.util.BitSet());
         buildings.put(building.id(), building);
+        version++;
         changed();
         return building;
     }
@@ -172,6 +190,7 @@ public final class ConstructionBook {
     public void putBuilding(Building building) {
         Building old = buildings.put(building.id(), building);
         if (!building.equals(old)) {
+            version++;
             changed();
         }
     }
@@ -179,6 +198,7 @@ public final class ConstructionBook {
     public Optional<Building> removeBuilding(long id) {
         Building removed = buildings.remove(id);
         if (removed != null) {
+            version++;
             changed();
         }
         return Optional.ofNullable(removed);
@@ -239,7 +259,11 @@ public final class ConstructionBook {
             }
             return false;
         });
-        boolean any = !removed.isEmpty() | buildings.values().removeIf(building -> building.kingdomId().equals(kingdomId));
+        boolean anyBuilding = buildings.values().removeIf(building -> building.kingdomId().equals(kingdomId));
+        if (anyBuilding || removed.stream().anyMatch(construction -> construction.building() > 0)) {
+            version++;
+        }
+        boolean any = !removed.isEmpty() | anyBuilding;
         if (blueprints.values().removeIf(blueprint -> blueprint.kingdomId().equals(kingdomId))) {
             any = true;
             blueprintRevision++;
@@ -264,6 +288,9 @@ public final class ConstructionBook {
         construction.setChangeListener(changeListener);
         constructions.put(construction.id(), construction);
         nextConstruction = Math.max(nextConstruction, construction.id() + 1);
+        if (construction.building() > 0) {
+            version++;
+        }
     }
 
     /**
@@ -275,6 +302,7 @@ public final class ConstructionBook {
         }
         buildings.put(building.id(), building);
         nextBuilding = Math.max(nextBuilding, building.id() + 1);
+        version++;
     }
 
     public void restoreCounters(long constructions, long buildings) {

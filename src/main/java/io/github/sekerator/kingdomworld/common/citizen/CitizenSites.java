@@ -189,7 +189,7 @@ public final class CitizenSites {
             }
         }
         // Storehouse contents whose block vanished go into the world.
-        for (StorehouseInventory inventory : List.copyOf(data.storehouses().all())) {
+        for (StorehouseInventory inventory : List.copyOf(data.storehouses().inChunk(dimension, key))) {
             WorldPos pos = inventory.pos();
             if (pos.chunk() == key && pos.dimension().equals(dimension)) {
                 BlockPos blockPos = new BlockPos(pos.x(), pos.y(), pos.z());

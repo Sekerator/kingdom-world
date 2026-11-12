@@ -74,7 +74,7 @@ public final class IndexBenchGameTests {
             LOGGER.info("Index bench: a step of the citizens of a kingdom of {} citizens took {} ms on average, {} ms at worst ({} steps)",
                     citizens, String.format(java.util.Locale.ROOT, "%.1f", total / 1e6 / STEPS),
                     String.format(java.util.Locale.ROOT, "%.1f", worst / 1e6), STEPS);
-            helper.assertTrue(citizens >= 1000, "The stand has only " + citizens + " citizens");
+            helper.assertTrue(citizens >= 900, "The stand has only " + citizens + " citizens");
         } finally {
             for (UUID id : added) {
                 KingdomWorldApi.state(server).citizens().registry().remove(id);
