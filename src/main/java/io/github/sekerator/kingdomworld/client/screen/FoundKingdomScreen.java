@@ -26,6 +26,7 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
     private static final int STATUS_LINES = 3;
 
     private final BlockPos throne;
+    private final String suggestedStyle;
     private int color;
     private int panelWidth;
     private EditBox nameBox;
@@ -36,9 +37,17 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
     private boolean waiting;
 
     public FoundKingdomScreen(BlockPos throne, int suggestedColor) {
+        this(throne, suggestedColor, "");
+    }
+
+    /**
+     * @param suggestedStyle the architectural style the land of the throne suggests, or empty
+     */
+    public FoundKingdomScreen(BlockPos throne, int suggestedColor, String suggestedStyle) {
         super(Component.translatable("kingdomworld.screen.found.title"));
         this.throne = throne;
         this.color = suggestedColor;
+        this.suggestedStyle = suggestedStyle == null ? "" : suggestedStyle;
     }
 
     @Override
@@ -117,7 +126,7 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
         status = Component.translatable("kingdomworld.screen.found.waiting");
         statusIsError = false;
         updateButtons();
-        KingdomWorldNetwork.sendToServer(new FoundKingdomPacket(throne, KingdomNames.normalize(nameBox.getValue()), color));
+        KingdomWorldNetwork.sendToServer(new FoundKingdomPacket(throne, KingdomNames.normalize(nameBox.getValue()), color, 0));
     }
 
     @Override

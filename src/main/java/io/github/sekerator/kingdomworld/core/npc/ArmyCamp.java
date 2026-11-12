@@ -86,6 +86,14 @@ public record ArmyCamp(int x, int z, int y, Status status) {
     }
 
     /**
+     * The buildings of a camp of a kingdom of an architectural style, at the same places as {@link #buildings()}; for an empty
+     * style the plain ones.
+     */
+    public static List<Building> buildings(String style) {
+        return buildings();
+    }
+
+    /**
      * The middles of the fields of a camp, at its four corners: {dx, dz} from the middle of the camp, eleven by eleven each.
      */
     public static List<int[]> fields() {

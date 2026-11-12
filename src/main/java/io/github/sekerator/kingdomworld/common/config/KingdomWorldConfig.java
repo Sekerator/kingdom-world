@@ -59,6 +59,7 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> allowedDimensions;
         public final ForgeConfigSpec.IntValue minChunksFromOtherKingdom;
         public final ForgeConfigSpec.IntValue initialClaimRadius;
+        public final ForgeConfigSpec.IntValue styleChangeCost;
         public final ForgeConfigSpec.IntValue baseMaxChunks;
         public final ForgeConfigSpec.IntValue chunksPerMember;
         public final ForgeConfigSpec.IntValue claimBufferChunks;
@@ -532,6 +533,9 @@ public final class KingdomWorldConfig {
             initialClaimRadius = builder
                     .comment("A new kingdom owns the square of this radius around the throne's chunk; 1 means 3x3 chunks.")
                     .defineInRange("initialClaimRadius", 1, 0, 8);
+            styleChangeCost = builder
+                    .comment("What changing the architectural style of a kingdom on the throne costs its treasury, in copper coins.")
+                    .defineInRange("styleChangeCost", 2000, 0, 1_000_000_000);
             builder.pop();
 
             builder.comment("Kingdom land.").push("territory");

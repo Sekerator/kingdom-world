@@ -56,6 +56,11 @@ public final class NpcSite {
     public static final int LAYOUT_GRID = 1;
     /** The layout of districts: a palace around the throne, avenues to the gates, streets with buildings of many kinds. */
     public static final int LAYOUT_DISTRICTS = 2;
+    /**
+     * The styled layout: a capital of districts in one of the architectural styles ({@link TemplateCatalog#STYLES}), with its
+     * castle, institutions and quarters.
+     */
+    public static final int LAYOUT_STYLED = 3;
 
     private final int id;
     private final int x;
@@ -65,6 +70,7 @@ public final class NpcSite {
     private final int layout;
     private final String style;
     private final String wood;
+    private final String guildRank;
     private final List<Town> towns = new ArrayList<>();
     private Status status = Status.PLANNED;
     private UUID kingdomId;
@@ -88,6 +94,17 @@ public final class NpcSite {
      * @param wood   the wood species that grows at the place, or empty if none is known
      */
     public NpcSite(int id, int x, int z, NpcLevel level, long seed, List<Town> towns, int layout, String style, String wood) {
+        this(id, x, z, level, seed, towns, layout, style, wood, "");
+    }
+
+    /**
+     * @param layout    how the capital is laid out
+     * @param style     the id of the look of the kingdom, or empty
+     * @param wood      the wood species that grows at the place, or empty if none is known
+     * @param guildRank the rank of the guild house and the mage tower of a styled capital, or empty
+     */
+    public NpcSite(int id, int x, int z, NpcLevel level, long seed, List<Town> towns, int layout, String style, String wood,
+                   String guildRank) {
         if (id < 1) {
             throw new IllegalArgumentException("Site id must be positive");
         }
@@ -102,6 +119,7 @@ public final class NpcSite {
         this.layout = layout;
         this.style = style == null ? "" : style;
         this.wood = wood == null ? "" : wood;
+        this.guildRank = guildRank == null ? "" : guildRank;
         this.towns.addAll(towns);
     }
 
@@ -138,6 +156,20 @@ public final class NpcSite {
 
     public boolean districts() {
         return layout == LAYOUT_DISTRICTS;
+    }
+
+    /**
+     * Whether the capital is laid out in an architectural style ({@link #LAYOUT_STYLED}).
+     */
+    public boolean styled() {
+        return layout == LAYOUT_STYLED;
+    }
+
+    /**
+     * The rank of the guild house and the mage tower of a styled capital ({@code b}, {@code a}, {@code s}, {@code ss}), or empty.
+     */
+    public String guildRank() {
+        return guildRank;
     }
 
     /**

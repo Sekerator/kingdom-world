@@ -29,10 +29,14 @@ import java.util.SplittableRandom;
  * @param lots       free ground for buildings to come, levelled with the capital
  * @param fieldSpots the middles of the fields outside the wall and, after them, of the posts of woodcutters and miners
  * @param bunks      beds for soldiers in the barracks of the capital and the towns
+ * @param style      the architectural style of a styled capital, or empty
+ * @param trees      where the trees of a styled capital stand, {x, z} from the throne
+ * @param gardens    the front gardens of a styled capital, {minX, minZ, maxX, maxZ, facing} from the throne
  */
 public record NpcComposition(int layout, NpcLevel level, long seed, List<Plot> buildings, int rings, int towns, int townHouses,
                              boolean stoneWall, String roadClass, int citizens, Map<String, Integer> jobs, int soldiers, int fields,
-                             int wallRadius, List<Gate> gates, List<Post> posts, List<Lot> lots, List<int[]> fieldSpots, int bunks) {
+                             int wallRadius, List<Gate> gates, List<Post> posts, List<Lot> lots, List<int[]> fieldSpots, int bunks,
+                             String style, List<int[]> trees, List<int[]> gardens) {
     /** Blocks between the centres of two plots of the capital of the first layout. */
     public static final int SPACING = 13;
     /** The widest building on a plot of the first layout, in blocks. */
@@ -127,6 +131,19 @@ public record NpcComposition(int layout, NpcLevel level, long seed, List<Plot> b
         posts = List.copyOf(posts);
         lots = List.copyOf(lots);
         fieldSpots = List.copyOf(fieldSpots);
+        style = style == null ? "" : style;
+        trees = List.copyOf(trees);
+        gardens = List.copyOf(gardens);
+    }
+
+    /**
+     * A composition without a style, trees or gardens: the first layout and the capital of districts.
+     */
+    public NpcComposition(int layout, NpcLevel level, long seed, List<Plot> buildings, int rings, int towns, int townHouses,
+                          boolean stoneWall, String roadClass, int citizens, Map<String, Integer> jobs, int soldiers, int fields,
+                          int wallRadius, List<Gate> gates, List<Post> posts, List<Lot> lots, List<int[]> fieldSpots, int bunks) {
+        this(layout, level, seed, buildings, rings, towns, townHouses, stoneWall, roadClass, citizens, jobs, soldiers, fields, wallRadius,
+                gates, posts, lots, fieldSpots, bunks, "", List.of(), List.of());
     }
 
     /**
@@ -259,6 +276,54 @@ public record NpcComposition(int layout, NpcLevel level, long seed, List<Plot> b
      */
     public static NpcComposition districts(NpcLevel level, long seed, NpcRules rules, int townsAtMost) {
         return CityPlan.make(level, seed, rules, townsAtMost);
+    }
+
+    /**
+     * The composition of a kingdom of a level in the styled layout ({@link NpcSite#LAYOUT_STYLED}), whose place has room for
+     * {@code townsAtMost} towns.
+     *
+     * @param style the architectural style of the kingdom
+     * @param rank  the rank of its guild house and mage tower
+     */
+    public static NpcComposition styled(NpcLevel level, long seed, String style, TemplateCatalog.Rank rank, NpcRules rules,
+                                        int townsAtMost) {
+        return new NpcComposition(NpcSite.LAYOUT_STYLED, level, seed, List.of(), 0, 0, 0, true, "path", 0, Map.of(), 0, 0,
+                capitalWall(level, NpcSite.LAYOUT_STYLED), List.of(), List.of(), List.of(), List.of(), 0, style, List.of(), List.of());
+    }
+
+    /**
+     * The radius of the wall of a capital of a level and layout, in blocks; 0 for the first layout, whose wall follows the level
+     * of the capital as a city.
+     */
+    public static int capitalWall(NpcLevel level, int layout) {
+        return switch (layout) {
+            case NpcSite.LAYOUT_GRID -> 0;
+            case NpcSite.LAYOUT_STYLED -> StyledPlan.shape(level).wall();
+            default -> districtWall(level);
+        };
+    }
+
+    /**
+     * How far the fields and outer posts of a capital of a level and layout reach from the throne, in blocks; 0 for the first
+     * layout.
+     */
+    public static int capitalReach(NpcLevel level, int layout) {
+        return switch (layout) {
+            case NpcSite.LAYOUT_GRID -> 0;
+            case NpcSite.LAYOUT_STYLED -> capitalWall(level, layout) + 18;
+            default -> districtReach(level);
+        };
+    }
+
+    /**
+     * The seats of one of several posts of a profession: the workers shared between the posts, the first ones taking what does
+     * not divide.
+     */
+    public static int share(int workers, int posts, int index) {
+        if (posts <= 0) {
+            return 0;
+        }
+        return workers / posts + (index < workers % posts ? 1 : 0);
     }
 
     /**
@@ -450,6 +515,13 @@ public record NpcComposition(int layout, NpcLevel level, long seed, List<Plot> b
 
     public boolean districts() {
         return layout == NpcSite.LAYOUT_DISTRICTS;
+    }
+
+    /**
+     * Whether the capital is laid out in an architectural style ({@link NpcSite#LAYOUT_STYLED}).
+     */
+    public boolean styled() {
+        return layout == NpcSite.LAYOUT_STYLED;
     }
 
     public int buildingsOf(String template) {

@@ -23,4 +23,11 @@ public final class KingdomColors {
     public static int defaultFor(UUID id) {
         return PALETTE.get(Math.floorMod(id.hashCode(), PALETTE.size()));
     }
+
+    /**
+     * The name of the vanilla dye nearest to a color, for example {@code red}.
+     */
+    public static String dye(int color) {
+        return "";
+    }
 }

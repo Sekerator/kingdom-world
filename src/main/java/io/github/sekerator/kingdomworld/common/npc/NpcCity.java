@@ -10,6 +10,7 @@ import io.github.sekerator.kingdomworld.core.npc.NpcSite;
 import io.github.sekerator.kingdomworld.core.npc.NpcStyle;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -98,6 +99,30 @@ final class NpcCity {
     }
 
     /**
+     * The materials of a building on a plot of the capital of a place, with the look of its style and quarter for a styled
+     * capital.
+     */
+    static Materials materials(MinecraftServer server, NpcSite site, NpcComposition.Plot plot) {
+        return materials(site);
+    }
+
+    /**
+     * The materials of a building on a plot of a town of a place.
+     *
+     * @param town the number of the town, from 0
+     */
+    static Materials townMaterials(MinecraftServer server, NpcSite site, int town, NpcComposition.Plot plot) {
+        return materials(site);
+    }
+
+    /**
+     * The materials of the public buildings of a place (its camps of the army among them).
+     */
+    static Materials publicMaterials(MinecraftServer server, NpcSite site) {
+        return materials(site);
+    }
+
+    /**
      * The wood species of a place for palisades, groves and stores: that of its style or land, oak if neither is known.
      */
     static String wood(NpcSite site) {
@@ -181,9 +206,13 @@ final class NpcCity {
     /**
      * A place of work or of the treasury on the square of the palace.
      *
-     * @param what a profession for a post of work, or {@code guild_desk}, {@code mint} or {@code bank}
+     * @param what  a profession for a post of work, or {@code guild_desk}, {@code mint} or {@code bank}
+     * @param seats the workers a post of work takes
      */
-    record Place(String what, int x, int z) {
+    record Place(String what, int x, int z, int seats) {
+        Place(String what, int x, int z) {
+            this(what, x, z, 0);
+        }
     }
 
     /**

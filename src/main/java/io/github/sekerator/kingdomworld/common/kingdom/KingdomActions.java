@@ -131,7 +131,7 @@ public final class KingdomActions {
             return;
         }
         int color = KingdomColors.PALETTE.get(level.getRandom().nextInt(KingdomColors.PALETTE.size()));
-        KingdomWorldNetwork.sendToPlayer(player, new OpenFoundingScreenPacket(pos, color));
+        KingdomWorldNetwork.sendToPlayer(player, new OpenFoundingScreenPacket(pos, color, 0));
     }
 
     @Nullable
@@ -145,13 +145,29 @@ public final class KingdomActions {
     }
 
     public static void foundFromThrone(ServerPlayer player, BlockPos throne, String name, int color) {
-        reply(player, found(player, throne, name, color));
+        foundFromThrone(player, throne, name, color, "");
+    }
+
+    /**
+     * @param style the architectural style of the new kingdom, or empty while none was chosen
+     */
+    public static void foundFromThrone(ServerPlayer player, BlockPos throne, String name, int color, String style) {
+        reply(player, found(player, throne, name, color, style));
     }
 
     /**
      * Founds a kingdom on the empty throne at {@code throne}, using up the crown the player holds.
      */
     public static Feedback found(ServerPlayer player, BlockPos throne, String name, int color) {
+        return found(player, throne, name, color, "");
+    }
+
+    /**
+     * Founds a kingdom of an architectural style on the empty throne at {@code throne}, using up the crown the player holds.
+     *
+     * @param style the style its buildings follow, or empty while none was chosen
+     */
+    public static Feedback found(ServerPlayer player, BlockPos throne, String name, int color, String style) {
         ServerLevel level = player.serverLevel();
         if (player.isSpectator() || !level.isLoaded(throne)
                 || player.distanceToSqr(Vec3.atCenterOf(throne)) > MAX_THRONE_DISTANCE_SQR) {
@@ -167,7 +183,7 @@ public final class KingdomActions {
         if (hand == null) {
             return Feedback.fail("kingdomworld.throne.needs_crown");
         }
-        CreateKingdomResult result = KingdomWorldApi.foundKingdom(level, throne, name, color, player.getUUID());
+        CreateKingdomResult result = KingdomWorldApi.foundKingdom(level, throne, name, color, player.getUUID(), style);
         if (result instanceof CreateKingdomResult.Created created) {
             Kingdom kingdom = created.kingdom();
             if (!player.getAbilities().instabuild) {

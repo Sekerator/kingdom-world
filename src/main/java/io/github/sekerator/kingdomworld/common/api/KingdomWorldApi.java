@@ -248,6 +248,18 @@ public final class KingdomWorldApi {
      */
     public static CreateKingdomResult foundKingdom(ServerLevel level, BlockPos throne, String name, int color,
                                                    @Nullable UUID founder) {
+        return foundKingdom(level, throne, name, color, founder, "");
+    }
+
+    /**
+     * Founds a kingdom of an architectural style whose throne stands at {@code throne}, checking every founding rule. Does not
+     * check or place the throne block and does not consume a crown; callers do that.
+     *
+     * @param founder the player who becomes king, or {@code null} for a kingdom without a ruler
+     * @param style   the style its buildings follow, or empty while none was chosen
+     */
+    public static CreateKingdomResult foundKingdom(ServerLevel level, BlockPos throne, String name, int color,
+                                                   @Nullable UUID founder, String style) {
         MinecraftServer server = level.getServer();
         KingdomWorldState state = writable(server, "found kingdom " + name);
         if (state == null) {
@@ -256,7 +268,7 @@ public final class KingdomWorldApi {
         UUID id = newKingdomId(state.kingdoms());
         economyDefaults(state);
         Capital capital = new Capital(Dimensions.id(level), throne.getX(), throne.getY(), throne.getZ());
-        return state.found(id, name, color & Kingdom.MAX_COLOR, founder, capital, gameTime(server), rules());
+        return state.found(id, name, color & Kingdom.MAX_COLOR, founder, capital, gameTime(server), rules(), style);
     }
 
     /**

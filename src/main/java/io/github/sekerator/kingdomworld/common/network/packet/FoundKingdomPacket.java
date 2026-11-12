@@ -12,10 +12,12 @@ import net.minecraftforge.network.NetworkEvent;
 import java.util.function.Supplier;
 
 /**
- * Client to server: found a kingdom on the empty throne at {@code throne} with the given name and color.
+ * Client to server: found a kingdom on the empty throne at {@code throne} with the given name, color and architectural style.
  * The server checks the throne, the distance to it, the crown in hand and every founding rule.
+ *
+ * @param style the index of the style among the architectural styles
  */
-public record FoundKingdomPacket(BlockPos throne, String name, int color) {
+public record FoundKingdomPacket(BlockPos throne, String name, int color, int style) {
     /** Raw names may carry extra whitespace that normalization removes. */
     public static final int MAX_RAW_NAME = 64;
     public static final RequestPolicy POLICY = new RequestPolicy("found_kingdom", 0, 3, 10_000L);
@@ -24,10 +26,11 @@ public record FoundKingdomPacket(BlockPos throne, String name, int color) {
         buf.writeBlockPos(throne);
         buf.writeUtf(name, MAX_RAW_NAME);
         buf.writeInt(color);
+        buf.writeVarInt(style);
     }
 
     public static FoundKingdomPacket decode(FriendlyByteBuf buf) {
-        return new FoundKingdomPacket(buf.readBlockPos(), buf.readUtf(MAX_RAW_NAME), buf.readInt());
+        return new FoundKingdomPacket(buf.readBlockPos(), buf.readUtf(MAX_RAW_NAME), buf.readInt(), buf.readVarInt());
     }
 
     public static void handle(FoundKingdomPacket message, Supplier<NetworkEvent.Context> context) {

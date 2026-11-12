@@ -57,7 +57,20 @@ public final class NpcState {
      * @param wood   the wood that grows there, or empty
      */
     public NpcSite addSite(int x, int z, NpcLevel level, long seed, List<NpcSite.Town> towns, int layout, String style, String wood) {
-        NpcSite site = new NpcSite(nextSiteId++, x, z, level, seed, towns, layout, style, wood);
+        return addSite(x, z, level, seed, towns, layout, style, wood, "");
+    }
+
+    /**
+     * Adds a place to the plan with the next number.
+     *
+     * @param layout    how its capital is laid out
+     * @param style     the id of its look, or empty
+     * @param wood      the wood that grows there, or empty
+     * @param guildRank the rank of the guild house and the mage tower of a styled capital, or empty
+     */
+    public NpcSite addSite(int x, int z, NpcLevel level, long seed, List<NpcSite.Town> towns, int layout, String style, String wood,
+                           String guildRank) {
+        NpcSite site = new NpcSite(nextSiteId++, x, z, level, seed, towns, layout, style, wood, guildRank);
         site.setChangeListener(changeListener);
         sites.put(site.id(), site);
         changeListener.run();

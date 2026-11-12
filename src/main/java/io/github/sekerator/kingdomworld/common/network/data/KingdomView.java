@@ -23,14 +23,17 @@ import java.util.UUID;
  *
  * @param capital    the throne position, or {@code null} for a kingdom without land
  * @param viewerRole the viewer's position, or {@code null} if the viewer is not a member
+ * @param style      the architectural style of the kingdom, or empty
+ * @param styleFee   what changing the style costs the treasury
  */
 public record KingdomView(UUID id, String name, int color, String rulerName, int memberCount, int chunks,
                           int chunkLimit, int population, @Nullable BlockPos capital, Relation relation, @Nullable Role viewerRole,
                           EnumSet<Permission> viewerPermissions, List<MemberEntry> members,
                           List<PendingEntry> applications, Map<Role, EnumSet<Permission>> rights, @Nullable NpcKingdomInfo npc,
-                          @Nullable RulerInfo ruler) {
+                          @Nullable RulerInfo ruler, String style, long styleFee) {
     public static final int MAX_MEMBERS = 1000;
     public static final int MAX_APPLICATIONS = 100;
+    public static final int MAX_STYLE = 32;
 
     /**
      * How the viewer relates to the kingdom.
@@ -61,6 +64,7 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
     public KingdomView {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(relation, "relation");
+        style = style == null ? "" : style;
         viewerPermissions = viewerPermissions.isEmpty() ? EnumSet.noneOf(Permission.class) : EnumSet.copyOf(viewerPermissions);
         members = List.copyOf(members);
         applications = List.copyOf(applications);
@@ -88,11 +92,22 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
     }
 
     /**
+     * A view without a style.
+     */
+    public KingdomView(UUID id, String name, int color, String rulerName, int memberCount, int chunks, int chunkLimit, int population,
+                       @Nullable BlockPos capital, Relation relation, @Nullable Role viewerRole, EnumSet<Permission> viewerPermissions,
+                       List<MemberEntry> members, List<PendingEntry> applications, Map<Role, EnumSet<Permission>> rights,
+                       @Nullable NpcKingdomInfo npc, @Nullable RulerInfo ruler) {
+        this(id, name, color, rulerName, memberCount, chunks, chunkLimit, population, capital, relation, viewerRole, viewerPermissions, members,
+                applications, rights, npc, ruler, "", 0L);
+    }
+
+    /**
      * The same view of a kingdom of the world.
      */
     public KingdomView withNpc(@Nullable NpcKingdomInfo info) {
         return new KingdomView(id, name, color, rulerName, memberCount, chunks, chunkLimit, population, capital, relation, viewerRole,
-                viewerPermissions, members, applications, rights, info, ruler);
+                viewerPermissions, members, applications, rights, info, ruler, style, styleFee);
     }
 
     /**
@@ -100,7 +115,7 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
      */
     public KingdomView withRuler(@Nullable RulerInfo info) {
         return new KingdomView(id, name, color, rulerName, memberCount, chunks, chunkLimit, population, capital, relation, viewerRole,
-                viewerPermissions, members, applications, rights, npc, info);
+                viewerPermissions, members, applications, rights, npc, info, style, styleFee);
     }
 
     public boolean can(Permission permission) {
@@ -146,6 +161,8 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
         });
         NpcKingdomInfo.write(buf, npc);
         RulerInfo.write(buf, ruler);
+        buf.writeUtf(style, MAX_STYLE);
+        buf.writeVarLong(styleFee);
     }
 
     public static KingdomView decode(FriendlyByteBuf buf) {
@@ -180,8 +197,10 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
         }
         NpcKingdomInfo npc = NpcKingdomInfo.read(buf);
         RulerInfo rulerInfo = RulerInfo.read(buf);
+        String style = buf.readUtf(MAX_STYLE);
+        long styleFee = buf.readVarLong();
         return new KingdomView(id, name, color, ruler, memberCount, chunks, chunkLimit, population, capital, relation, role,
-                permissions, members, applications, rights, npc, rulerInfo);
+                permissions, members, applications, rights, npc, rulerInfo, style, styleFee);
     }
 
     static int readSize(FriendlyByteBuf buf, int max) {

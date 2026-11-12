@@ -294,6 +294,17 @@ public final class NpcWork {
     }
 
     /**
+     * Adds a place of a layout and style to the plan with the towns given without raising it; for game tests.
+     *
+     * @param layout {@link NpcSite#LAYOUT_DISTRICTS} or {@link NpcSite#LAYOUT_STYLED}
+     * @param style  the style of the place, or empty to choose it as the plan does
+     */
+    public static Optional<NpcSite> planAt(MinecraftServer server, int x, int z, io.github.sekerator.kingdomworld.core.npc.NpcLevel level,
+                                           List<int[]> towns, int layout, String style) {
+        return planAt(server, x, z, level, towns);
+    }
+
+    /**
      * Adds a place of the first layout (a grid of plots around the square of the throne) to the plan without raising it, as
      * worlds made before the districts have them; for game tests.
      */
@@ -323,6 +334,18 @@ public final class NpcWork {
         }
         LOGGER.info("An operator planted a kingdom of the world: {}", site);
         return Optional.of(site);
+    }
+
+    /**
+     * Adds a place of a layout and style to the plan with the towns given and starts its appearance at once (when no other one
+     * is appearing); for game tests.
+     *
+     * @param layout {@link NpcSite#LAYOUT_DISTRICTS} or {@link NpcSite#LAYOUT_STYLED}
+     * @param style  the style of the place, or empty to choose it as the plan does
+     */
+    public static Optional<NpcSite> plantAt(MinecraftServer server, int x, int z, io.github.sekerator.kingdomworld.core.npc.NpcLevel level,
+                                            List<int[]> towns, int layout, String style) {
+        return plantAt(server, x, z, level, towns);
     }
 
     /**

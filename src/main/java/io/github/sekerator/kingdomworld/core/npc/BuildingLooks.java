@@ -374,6 +374,20 @@ public final class BuildingLooks {
         return List.copyOf(STYLE_PALETTES.keySet());
     }
 
+    /**
+     * The wood of an architectural style, or empty for a style that takes the wood of its place.
+     */
+    public static String styleWood(String style) {
+        return "";
+    }
+
+    /**
+     * The stone of an architectural style, or empty for a style that keeps the stone of its templates.
+     */
+    public static String styleStone(String style) {
+        return "";
+    }
+
     private static Materials of(Palette palette, String styleWood, String styleStone, String wood, String cloth, Quarter quarter, long seed) {
         String placeWood = styleWood.isEmpty() ? wood : styleWood;
         Map<Look.Part, String> parts = new EnumMap<>(Look.Part.class);

@@ -21,7 +21,7 @@ import java.util.function.Supplier;
  * @param target a kingdom id for {@link Action#VIEW}, {@link Action#APPLY} and the answers to invitations, a
  *               player id for actions on members and applicants, {@code null} otherwise
  * @param value  extra argument: the role for {@link Action#SET_ROLE}, the encoded right for
- *               {@link Action#SET_PERMISSION}
+ *               {@link Action#SET_PERMISSION}, the index of the architectural style for {@link Action#SET_STYLE}
  */
 public record KingdomActionPacket(Action action, @Nullable UUID target, int value) {
     public static final RequestPolicy POLICY = new RequestPolicy("kingdom_action", 0, 20, 10_000L);
@@ -38,7 +38,8 @@ public record KingdomActionPacket(Action action, @Nullable UUID target, int valu
         SET_PERMISSION,
         ABDICATE,
         LEAVE,
-        DISSOLVE
+        DISSOLVE,
+        SET_STYLE
     }
 
     public static KingdomActionPacket setPermission(Role role, Permission permission, boolean granted) {

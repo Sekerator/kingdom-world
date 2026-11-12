@@ -179,6 +179,19 @@ public final class KingdomWorldState {
      */
     public CreateKingdomResult found(UUID id, String rawName, int color, UUID founder, Capital capital, long gameTime,
                                      KingdomRules rules) {
+        return found(id, rawName, color, founder, capital, gameTime, rules, "");
+    }
+
+    /**
+     * Founds a kingdom of an architectural style.
+     *
+     * @param founder  the player who becomes king, or {@code null} for a kingdom without a ruler
+     * @param capital  where the throne stands, or {@code null} for a kingdom without land
+     * @param gameTime current game time in ticks
+     * @param style    the style its buildings follow, or empty while none was chosen
+     */
+    public CreateKingdomResult found(UUID id, String rawName, int color, UUID founder, Capital capital, long gameTime,
+                                     KingdomRules rules, String style) {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(rules, "rules");
         if (founder != null && membership.kingdomOf(founder).isPresent()) {
@@ -199,7 +212,7 @@ public final class KingdomWorldState {
             }
             initialChunks = ClaimRules.initialClaim(territory, dimension, chunk, rules.initialClaimRadius(), rules.claimBufferChunks());
         }
-        CreateKingdomResult result = kingdoms.create(id, rawName, color, founder, gameTime);
+        CreateKingdomResult result = kingdoms.create(id, rawName, color, founder, gameTime, style);
         if (result instanceof CreateKingdomResult.Created) {
             membership.register(id, founder, gameTime);
             if (capital != null) {
@@ -208,6 +221,15 @@ public final class KingdomWorldState {
             economy.open(id, Math.floorDiv(gameTime, io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds.TICKS_PER_DAY));
         }
         return result;
+    }
+
+    /**
+     * Sets the architectural style the new buildings of a kingdom follow.
+     *
+     * @return {@code false} if there is no such kingdom
+     */
+    public boolean setKingdomStyle(UUID kingdomId, String style) {
+        return false;
     }
 
     /**

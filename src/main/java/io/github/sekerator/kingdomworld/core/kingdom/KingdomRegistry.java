@@ -50,6 +50,15 @@ public final class KingdomRegistry {
      * @param createdGameTime current game time in ticks
      */
     public CreateKingdomResult create(UUID id, String rawName, int color, UUID rulerId, long createdGameTime) {
+        return create(id, rawName, color, rulerId, createdGameTime, "");
+    }
+
+    /**
+     * Founds a new kingdom of an architectural style after validating the name and uniqueness.
+     *
+     * @param style the style its buildings follow, or empty while none was chosen
+     */
+    public CreateKingdomResult create(UUID id, String rawName, int color, UUID rulerId, long createdGameTime, String style) {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(rawName, "rawName");
         String name = KingdomNames.normalize(rawName);
@@ -63,7 +72,7 @@ public final class KingdomRegistry {
         if (isNameTaken(name)) {
             return new CreateKingdomResult.Rejected(CreateKingdomResult.Error.NAME_TAKEN);
         }
-        Kingdom kingdom = new Kingdom(id, name, color, rulerId, createdGameTime);
+        Kingdom kingdom = new Kingdom(id, name, color, rulerId, createdGameTime, style);
         put(kingdom);
         changeListener.run();
         return new CreateKingdomResult.Created(kingdom);

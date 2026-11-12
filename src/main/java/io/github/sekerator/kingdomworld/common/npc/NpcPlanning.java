@@ -674,6 +674,13 @@ public final class NpcPlanning {
      * it, not below the sea, so that about as much is cut as is filled.
      */
     static int capitalHeight(ServerLevel level, int x, int z, NpcLevel kingdom) {
+        return capitalHeight(level, x, z, kingdom, NpcSite.LAYOUT_DISTRICTS);
+    }
+
+    /**
+     * The height the ground of a capital of a layout is levelled to, from the generator.
+     */
+    static int capitalHeight(ServerLevel level, int x, int z, NpcLevel kingdom, int layout) {
         ChunkGenerator generator = level.getChunkSource().getGenerator();
         RandomState random = level.getChunkSource().randomState();
         int reach = NpcComposition.districtWall(kingdom);

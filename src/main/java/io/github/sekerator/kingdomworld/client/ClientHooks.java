@@ -30,7 +30,14 @@ public final class ClientHooks {
     }
 
     public static void openFounding(BlockPos throne, int suggestedColor) {
-        Minecraft.getInstance().setScreen(new FoundKingdomScreen(throne, suggestedColor));
+        openFounding(throne, suggestedColor, "");
+    }
+
+    /**
+     * @param suggestedStyle the architectural style the land of the throne suggests, or empty
+     */
+    public static void openFounding(BlockPos throne, int suggestedColor, String suggestedStyle) {
+        Minecraft.getInstance().setScreen(new FoundKingdomScreen(throne, suggestedColor, suggestedStyle));
     }
 
     public static void openThrone(KingdomView view) {
