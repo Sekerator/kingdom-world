@@ -61,6 +61,13 @@ public final class NpcEvents {
         NpcSavedData data = NpcSavedData.get(server);
         NpcState state = data.state();
         NpcWork.loaded(server);
+        // The templates of the buildings are worked out with the server, not in the tick a kingdom of the world lays out its first
+        // building: with all their blocks it takes the time of a couple of ticks.
+        try {
+            io.github.sekerator.kingdomworld.common.construction.BuildingTemplates.all();
+        } catch (RuntimeException e) {
+            LOGGER.error("KingdomWorld could not work out the templates of the buildings at the start", e);
+        }
         long planned = state.sites().stream().filter(site -> site.status() == NpcSite.Status.PLANNED).count();
         long spawned = state.sites().stream().filter(site -> site.status() == NpcSite.Status.SPAWNED).count();
         long founded = state.sites().stream().filter(site -> site.status() == NpcSite.Status.FOUNDED).count();

@@ -18,7 +18,9 @@ import java.util.UUID;
  * of them stand (or {@link #MAX_MINUTES} minutes pass): the average, the worst and how many took longer than 50 ms. The ticks
  * are measured three times: as the game times them (without the handlers of the end of a tick, where the mods do their work),
  * whole, from the first handler of a tick to its last one, and as the game alone and the appearance made them (the whole tick
- * without the work of other systems of the mod: the rulers, the armies, the production of the kingdoms that stand).
+ * without the work of other systems of the mod: the rulers, the armies, the production of the kingdoms that stand), and the
+ * last once more without the pauses of the garbage collector (the client and the integrated server share one, and its pause
+ * lands in whatever tick it comes in).
  */
 final class ClientBackgroundCheck {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -43,6 +45,9 @@ final class ClientBackgroundCheck {
     /** The ticks as the game alone and the appearance made them, in all and in the current minute. */
     private final Stats work = new Stats();
     private final Stats workMinute = new Stats();
+    /** The same without the pauses of the garbage collector, in all and in the current minute. */
+    private final Stats noGc = new Stats();
+    private final Stats noGcMinute = new Stats();
 
     /** Sums of ticks: all of them, and those without the tick of the autosave. */
     private static final class Stats {
@@ -146,6 +151,9 @@ final class ClientBackgroundCheck {
                 long own = PerfCommands.workTick(nextWhole);
                 work.add(own, save);
                 workMinute.add(own, save);
+                long clean = Math.max(0, own - Math.max(0, PerfCommands.gcOfTick(nextWhole)));
+                noGc.add(clean, save);
+                noGcMinute.add(clean, save);
             }
         }
         int planned = 0;
@@ -158,14 +166,17 @@ final class ClientBackgroundCheck {
         boolean all = NpcWork.state(server).planned() && planned > 0 && standing == planned && NpcWork.state(server).spawning().isEmpty();
         if (gameMinute.count >= 1200 || all) {
             LOGGER.info(PREFIX + "background, minute {}: {} of {} kingdom(s) stand; as the game times the ticks: {}; whole ticks: {}; the game and "
-                    + "the appearance: {}", elapsed / 1200 + 1, standing, planned, gameMinute, wholeMinute, workMinute);
+                    + "the appearance: {}; the same without the garbage collector: {}", elapsed / 1200 + 1, standing, planned, gameMinute, wholeMinute,
+                    workMinute, noGcMinute);
             gameMinute.clear();
             wholeMinute.clear();
             workMinute.clear();
+            noGcMinute.clear();
         }
         if (all || elapsed >= MAX_MINUTES * 1200) {
             LOGGER.info(PREFIX + "background appearance {} after {} s: {} of {} kingdom(s) stand; as the game times the ticks: {}; whole ticks: {}; "
-                    + "the game and the appearance: {}", all ? "done" : "not done", elapsed / 20, standing, planned, game, whole, work);
+                    + "the game and the appearance: {}; the same without the garbage collector: {}", all ? "done" : "not done", elapsed / 20, standing,
+                    planned, game, whole, work, noGc);
             done = true;
         }
     }
