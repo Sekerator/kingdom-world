@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.classic_house_porch",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:oak_fence",
+  "anchor": [4, 0, 10],
+  "entrance": "south"
+}

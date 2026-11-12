@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.terem_mage_tower_s",
+  "category": "production",
+  "type": "mage_tower",
+  "role": "mage_tower",
+  "level": 1,
+  "icon": "kingdomworld:magic_focus",
+  "anchor": [8, 0, 16],
+  "entrance": "south"
+}

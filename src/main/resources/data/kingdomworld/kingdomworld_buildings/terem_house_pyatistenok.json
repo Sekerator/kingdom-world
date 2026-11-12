@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.terem_house_pyatistenok",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:spruce_door",
+  "anchor": [4, 0, 10],
+  "entrance": "south"
+}

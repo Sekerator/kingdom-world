@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.terem_house_boyar",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:birch_log",
+  "anchor": [6, 0, 14],
+  "entrance": "south"
+}

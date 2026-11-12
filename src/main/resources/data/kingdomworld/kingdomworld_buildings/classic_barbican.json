@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.classic_barbican",
+  "category": "defense",
+  "type": "gatehouse",
+  "role": "tower",
+  "level": 1,
+  "icon": "minecraft:iron_bars",
+  "anchor": [12, 3, 20],
+  "entrance": "south"
+}

@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.classic_park",
+  "category": "decoration",
+  "type": "park",
+  "role": "none",
+  "level": 1,
+  "icon": "minecraft:oak_sapling",
+  "anchor": [8, 1, 16],
+  "entrance": "south"
+}

@@ -219,6 +219,92 @@ final class Furnish {
         s.set(hx, y + 3, hz, Kit.CLOTH);
     }
 
+    // ---------------------------------------------------------------- what a finished building may hold
+
+    private static boolean container(String state) {
+        String id = States.id(state);
+        return id.equals("minecraft:chest") || id.equals("minecraft:trapped_chest") || id.equals("minecraft:barrel");
+    }
+
+    private static boolean stove(String state) {
+        String id = States.id(state);
+        return id.equals("minecraft:furnace") || id.equals("minecraft:smoker") || id.equals("minecraft:blast_furnace");
+    }
+
+    /**
+     * Whether a position touches a post of work on its own layer (sides and corners).
+     */
+    private static boolean byPost(Structure s, int x, int y, int z) {
+        for (int dz = -1; dz <= 1; dz++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                if ((dx != 0 || dz != 0) && s.inside(x + dx, y, z + dz) && s.get(x + dx, y, z + dz).startsWith("kingdomworld:work_post")) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * A building whose furniture counts only where it should: the containers beside its posts of work and at most
+     * {@code containers} others stay, the rest become crates without an inventory; at most {@code stoves} furnaces,
+     * smokers and blast furnaces stay, the rest become stone counters; at most two lecterns, the rest bookshelves;
+     * composters, the places of farmers, become hay. The positions are taken from the bottom up, so the ground floor keeps
+     * what stays.
+     */
+    static Structure tidy(Structure s, int containers, int stoves) {
+        int keptContainers = 0;
+        int keptStoves = 0;
+        int lecterns = 0;
+        for (int y = 0; y < s.sizeY; y++) {
+            for (int z = 0; z < s.sizeZ; z++) {
+                for (int x = 0; x < s.sizeX; x++) {
+                    String state = s.get(x, y, z);
+                    String id = States.id(state);
+                    if (container(state)) {
+                        if (byPost(s, x, y, z)) {
+                            continue;
+                        }
+                        if (keptContainers < containers) {
+                            keptContainers++;
+                        } else {
+                            s.set(x, y, z, id.equals("minecraft:barrel") ? "minecraft:stripped_spruce_wood[axis=y]" : "minecraft:stripped_oak_wood[axis=y]");
+                        }
+                    } else if (stove(state)) {
+                        if (keptStoves < stoves) {
+                            keptStoves++;
+                        } else {
+                            s.set(x, y, z, Kit.TRIM);
+                        }
+                    } else if (id.equals("minecraft:lectern")) {
+                        if (lecterns < 2) {
+                            lecterns++;
+                        } else {
+                            s.set(x, y, z, "minecraft:bookshelf");
+                        }
+                    } else if (id.equals("minecraft:composter")) {
+                        s.set(x, y, z, "minecraft:hay_block[axis=y]");
+                    }
+                }
+            }
+        }
+        return s;
+    }
+
+    /**
+     * The buildings of a style with their furniture tidied by what they are: a home keeps one container and one stove, a
+     * workshop or a tavern its stoves, a castle the chests of its treasury.
+     */
+    static java.util.List<BuildingGenerator.Building> tidy(java.util.List<BuildingGenerator.Building> buildings) {
+        for (BuildingGenerator.Building building : buildings) {
+            String role = building.role();
+            boolean work = role.equals("workshop") || role.equals("tavern");
+            int containers = role.equals("house") ? 1 : building.type().equals("palace") ? 4 : 2;
+            tidy(building.structure(), containers, work ? 8 : building.type().equals("palace") ? 2 : 1);
+        }
+        return buildings;
+    }
+
     // ---------------------------------------------------------------- directions
 
     static int[] step(String facing) {

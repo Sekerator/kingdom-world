@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.classic_builders_yard",
+  "category": "production",
+  "type": "yard",
+  "role": "none",
+  "level": 1,
+  "icon": "minecraft:bricks",
+  "anchor": [8, 0, 12],
+  "entrance": "south"
+}

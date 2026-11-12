@@ -5,6 +5,7 @@ import io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -58,5 +59,42 @@ class TemplateCatalogTest {
         assertTrue(NpcComposition.bunks("kingdomworld:barracks"));
         assertFalse(NpcComposition.bunks("kingdomworld:large_house"));
         assertEquals("warehouse", TemplateCatalog.of("kingdomworld:storage_yard").role());
+    }
+
+    @Test
+    void everyStyleHasItsCastlesGuildsTowersAndHouses() {
+        for (String style : TemplateCatalog.STYLES) {
+            assertEquals(3, TemplateCatalog.ofStyle(style, Kind.CASTLE).size(), "castles of " + style);
+            int houses = 0;
+            for (Kind kind : List.of(Kind.POOR_HOUSE, Kind.CRAFT_HOUSE, Kind.MERCHANT_HOUSE, Kind.NOBLE_HOUSE)) {
+                assertFalse(TemplateCatalog.ofStyle(style, kind).isEmpty(), style + " has no " + kind);
+                houses += TemplateCatalog.ofStyle(style, kind).size();
+            }
+            assertTrue(houses >= 6, style + " has only " + houses + " houses");
+            assertFalse(TemplateCatalog.ofStyle(style, Kind.WORKSHOP).isEmpty(), style + " has no smithy");
+            assertFalse(TemplateCatalog.ofStyle(style, Kind.TAVERN).isEmpty(), style + " has no tavern");
+            assertFalse(TemplateCatalog.ofStyle(style, Kind.WALL_GATE).isEmpty(), style + " has no town gate");
+            for (Kind kind : List.of(Kind.GUILD, Kind.MAGE_TOWER)) {
+                int previous = 0;
+                for (TemplateCatalog.Rank rank : TemplateCatalog.Rank.values()) {
+                    Entry house = TemplateCatalog.guildHouse(style, kind, rank).orElse(null);
+                    assertTrue(house != null, style + " has no " + kind + " of rank " + rank);
+                    assertEquals(rank, house.rank());
+                    assertEquals(style, house.style());
+                    // A higher rank is a bigger house.
+                    assertTrue(house.width() * house.depth() > previous, house.id() + " is no bigger than the rank below");
+                    previous = house.width() * house.depth();
+                }
+            }
+        }
+        // The houses of all styles together: more than fourteen to choose from.
+        int all = 0;
+        for (Kind kind : List.of(Kind.POOR_HOUSE, Kind.CRAFT_HOUSE, Kind.MERCHANT_HOUSE, Kind.NOBLE_HOUSE)) {
+            all += TemplateCatalog.variants(kind).size();
+        }
+        assertTrue(all >= 14, "houses: " + all);
+        // The templates of before belong to no style and no rank.
+        assertEquals("", TemplateCatalog.of("kingdomworld:castle").style());
+        assertTrue(TemplateCatalog.of("kingdomworld:mage_tower").guildRank().isEmpty());
     }
 }

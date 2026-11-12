@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.classic_clock_tower",
+  "category": "decoration",
+  "type": "clock_tower",
+  "role": "none",
+  "level": 1,
+  "icon": "minecraft:clock",
+  "anchor": [4, 0, 8],
+  "entrance": "south"
+}

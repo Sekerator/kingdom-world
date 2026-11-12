@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.classic_house_craftsman",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:crafting_table",
+  "anchor": [5, 0, 10],
+  "entrance": "south"
+}

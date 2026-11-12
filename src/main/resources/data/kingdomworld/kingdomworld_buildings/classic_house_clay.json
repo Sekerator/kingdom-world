@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.classic_house_clay",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:white_terracotta",
+  "anchor": [3, 0, 6],
+  "entrance": "south"
+}

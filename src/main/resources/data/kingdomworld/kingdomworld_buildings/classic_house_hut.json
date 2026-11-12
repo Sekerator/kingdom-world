@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.classic_house_hut",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:oak_log",
+  "anchor": [2, 0, 6],
+  "entrance": "south"
+}

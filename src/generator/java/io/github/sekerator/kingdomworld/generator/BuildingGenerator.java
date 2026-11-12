@@ -119,6 +119,45 @@ public final class BuildingGenerator {
         list.addAll(Stores.buildings());
         list.addAll(Military.buildings());
         list.addAll(Palaces.buildings());
+        // The architectural styles of the kingdoms of the world. A building of a style is drawn once; its look (roof, plaster,
+        // cloth, shutters, chimney...) is given when it is laid. Its furniture is tidied so that only beds of homes and the
+        // stores of its households and workers count.
+        list.addAll(Furnish.tidy(classic()));
+        list.addAll(Furnish.tidy(terem()));
+        return list;
+    }
+
+    /**
+     * The style of stone with half-timbering: three castles and the outer ward of the great one, the houses of the guilds by
+     * rank, the buildings of the institutions, yards and monuments, the houses of four quarters, a smithy, an inn and a town
+     * gate.
+     */
+    static List<Building> classic() {
+        List<Building> list = new ArrayList<>();
+        list.addAll(SmallCastle.buildings());
+        list.addAll(MediumCastle.buildings());
+        list.addAll(GreatCastle.buildings());
+        list.addAll(CastleWard.buildings());
+        list.addAll(ClassicGuilds.buildings());
+        list.addAll(Institutions.buildings());
+        list.addAll(Yards.buildings());
+        list.addAll(Decorations.buildings());
+        list.addAll(PoorHouses.buildings());
+        list.addAll(CraftHouses.buildings());
+        list.addAll(RichHouses.buildings());
+        list.addAll(ClassicTown.buildings());
+        return list;
+    }
+
+    /**
+     * The wooden style of the terem: a kremlin in three sizes, the houses of the guilds by rank, six houses, a smithy, a
+     * tavern and a town gate, drawn with the shapes of {@link Terem}.
+     */
+    static List<Building> terem() {
+        List<Building> list = new ArrayList<>();
+        list.addAll(TeremCastle.buildings());
+        list.addAll(TeremGuilds.buildings());
+        list.addAll(TeremTown.buildings());
         return list;
     }
 

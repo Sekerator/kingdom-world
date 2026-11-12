@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.classic_stables",
+  "category": "farming",
+  "type": "stables",
+  "role": "none",
+  "level": 1,
+  "icon": "minecraft:hay_block",
+  "anchor": [7, 0, 20],
+  "entrance": "south"
+}

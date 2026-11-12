@@ -171,6 +171,124 @@ public final class TemplateCatalog {
         add("inn", Kind.TAVERN, 13, 11, 0);
         add("great_hall", Kind.HALL, 17, 21, 0);
         add("castle", Kind.CASTLE, 35, 35, 0);
+        // The style of stone with half-timbering.
+        add("classic_castle_small", Kind.CASTLE, 31, 31, 0,
+                "door 0 0 15; castle_gate -1 0 11, 1 0 11; palace_door -1 0 4, 1 0 4; " +
+                "palace_hall -2 0 3, 2 0 3, -1 0 2, 1 0 2; treasury -3 0 -2; " +
+                "castle_wall -12 6 -5, -12 6 5, -6 6 -12, 6 6 -12, 12 6 -5, 12 6 5, 0 6 14, 0 6 11");
+        add("classic_castle_medium", Kind.CASTLE, 41, 41, 0,
+                "palace_hall -2 0 3, 2 0 3, -2 0 5, 2 0 5; palace_door 0 0 6; castle_gate -1 0 17, 1 0 17; " +
+                "treasury -2 0 -5; " +
+                "castle_wall -18 7 -8, -18 7 8, 18 7 -8, 18 7 8, -7 7 -17, 7 7 -17, -10 7 18, 10 7 18; door 0 0 20");
+        add("classic_castle_large", Kind.CASTLE, 47, 47, 0,
+                "palace_hall -2 0 3, 2 0 3, -1 0 5, 1 0 5; palace_door -1 0 6, 1 0 6; castle_gate -1 0 19, 1 0 19; " +
+                "castle_wall -18 8 -8, -18 8 8, 18 8 -8, 18 8 8, -10 8 -18, 10 8 -18, -11 8 18, 11 8 18; " +
+                "treasury 0 0 -6; door 0 0 23");
+        add("classic_barbican", Kind.BARBICAN, 25, 21, 0,
+                "castle_gate -1 0 -2, 1 0 -2; castle_wall -11 6 -1, 11 6 -1; door 0 0 9");
+        add("classic_stables", Kind.CASTLE_WARD, 15, 21, 0,
+                "door 0 1 4");
+        add("classic_guard_barracks", Kind.ROYAL_BARRACKS, 17, 21, 16,
+                "door 0 1 5; guard -1 1 3, 1 1 3");
+        add("classic_garden", Kind.CASTLE_WARD, 17, 17, 0,
+                "door 0 0 8");
+        add("classic_guild_b", Kind.GUILD, 13, 15, 0,
+                "door 0 1 4; guard -2 1 -1");
+        add("classic_guild_a", Kind.GUILD, 19, 19, 0,
+                "door -2 1 5; guard 1 1 -1");
+        add("classic_guild_s", Kind.GUILD, 23, 25, 0,
+                "door 0 1 -2; guard 5 1 -6");
+        add("classic_guild_ss", Kind.GUILD, 31, 33, 0,
+                "door 0 1 -5; guard 6 1 -10");
+        add("classic_mage_tower_b", Kind.MAGE_TOWER, 11, 11, 1,
+                "door 0 1 2");
+        add("classic_mage_tower_a", Kind.MAGE_TOWER, 13, 13, 2,
+                "door 0 1 3");
+        add("classic_mage_tower_s", Kind.MAGE_TOWER, 17, 17, 3,
+                "door 0 1 6");
+        add("classic_mage_tower_ss", Kind.MAGE_TOWER, 25, 25, 4,
+                "door 0 1 6");
+        add("classic_treasury", Kind.TREASURY, 17, 17, 0,
+                "door 0 2 4; bank 0 2 -3; guard 3 2 1");
+        add("classic_court", Kind.COURT, 19, 19, 4,
+                "door -3 0 9; guard -3 1 6, -2 1 -2; cells 4 1 0");
+        add("classic_infirmary", Kind.INFIRMARY, 17, 13, 0,
+                "door -4 0 6");
+        add("classic_builders_yard", Kind.YARD, 17, 13, 0,
+                "door 0 0 6");
+        add("classic_carters_yard", Kind.YARD, 17, 15, 0,
+                "door 0 0 7");
+        add("classic_monument", Kind.DECORATION, 9, 9, 0,
+                "door 0 0 4");
+        add("classic_chapel", Kind.DECORATION, 13, 21, 0,
+                "door 0 0 10");
+        add("classic_clock_tower", Kind.DECORATION, 9, 9, 0,
+                "door 0 0 4");
+        add("classic_park", Kind.DECORATION, 17, 17, 0,
+                "door 0 0 8");
+        add("classic_house_hut", Kind.POOR_HOUSE, 5, 7, 1);
+        add("classic_house_clay", Kind.POOR_HOUSE, 7, 7, 2);
+        add("classic_house_shack", Kind.POOR_HOUSE, 7, 9, 2);
+        add("classic_house_cottage", Kind.POOR_HOUSE, 9, 9, 3);
+        add("classic_house_jettied", Kind.CRAFT_HOUSE, 7, 11, 2);
+        add("classic_house_craftsman", Kind.CRAFT_HOUSE, 11, 11, 2);
+        add("classic_house_mansard", Kind.CRAFT_HOUSE, 9, 11, 3);
+        add("classic_house_porch", Kind.CRAFT_HOUSE, 9, 11, 3);
+        add("classic_house_shop", Kind.MERCHANT_HOUSE, 9, 13, 3,
+                "door 0 0 5");
+        add("classic_house_turret", Kind.MERCHANT_HOUSE, 11, 11, 3,
+                "door -2 0 4");
+        add("classic_house_manor", Kind.NOBLE_HOUSE, 13, 15, 4,
+                "door 0 0 1; gate 0 0 7");
+        add("classic_house_mansion", Kind.NOBLE_HOUSE, 13, 13, 4,
+                "door -3 0 5");
+        add("classic_smithy", Kind.WORKSHOP, 11, 13, 0,
+                "door 0 1 4");
+        add("classic_tavern", Kind.TAVERN, 13, 15, 0,
+                "door 0 0 5");
+        add("classic_wall_gate", Kind.WALL_GATE, 23, 11, 0,
+                "door 0 0 5; castle_gate -1 0 0, 1 0 0; castle_wall -10 6 1, 10 6 1");
+        // The style of the wooden terem.
+        add("terem_castle_small", Kind.CASTLE, 31, 31, 0,
+                "door 0 0 15; castle_wall -11 5 1, -7 5 -11, -7 5 11, 7 5 -11, 7 5 11, 0 5 12; " +
+                "castle_gate -1 0 11, 1 0 11; treasury 4 0 -2; palace_hall -2 0 3, 2 0 3, -2 0 1, 2 0 1; " +
+                "palace_door -1 0 4, 1 0 4");
+        add("terem_castle_medium", Kind.CASTLE, 41, 41, 0,
+                "door 0 0 20; castle_wall -15 5 10, 15 5 10, -11 5 -15, -11 5 15, 11 5 -15, 11 5 15, 0 5 16; " +
+                "castle_gate -1 0 15, 1 0 15; treasury 5 0 -1; palace_hall -2 0 3, 2 0 3, -2 0 1, 2 0 1; " +
+                "palace_door -1 0 6, 1 0 6");
+        add("terem_castle_large", Kind.CASTLE, 47, 47, 0,
+                "door 0 0 23; castle_wall -18 6 11, 18 6 11, -13 6 -18, -13 6 18, 13 6 -18, 13 6 18, 0 6 19; " +
+                "castle_gate -1 0 18, 1 0 18; treasury 6 0 -1; palace_hall -2 0 3, 2 0 3, -2 0 1, 2 0 1; " +
+                "palace_door -1 0 7, 1 0 7");
+        add("terem_guild_b", Kind.GUILD, 13, 15, 0,
+                "door -3 3 4; guard 2 3 -1");
+        add("terem_guild_a", Kind.GUILD, 19, 19, 0,
+                "door -6 3 5; guard 1 3 -3");
+        add("terem_guild_s", Kind.GUILD, 23, 25, 0,
+                "door 0 3 0; guard 6 3 -6");
+        add("terem_guild_ss", Kind.GUILD, 31, 33, 0,
+                "door 0 3 -2; guard 8 3 -9");
+        add("terem_mage_tower_b", Kind.MAGE_TOWER, 11, 11, 1,
+                "door 0 1 3");
+        add("terem_mage_tower_a", Kind.MAGE_TOWER, 13, 15, 2,
+                "door 0 1 4");
+        add("terem_mage_tower_s", Kind.MAGE_TOWER, 17, 17, 3,
+                "door -3 1 2");
+        add("terem_mage_tower_ss", Kind.MAGE_TOWER, 25, 25, 4,
+                "door 0 1 0");
+        add("terem_house_izba", Kind.CRAFT_HOUSE, 7, 9, 2);
+        add("terem_house_pyatistenok", Kind.CRAFT_HOUSE, 9, 11, 3);
+        add("terem_house_merchant", Kind.MERCHANT_HOUSE, 11, 11, 3);
+        add("terem_house_tower", Kind.MERCHANT_HOUSE, 9, 11, 3);
+        add("terem_house_boyar", Kind.NOBLE_HOUSE, 13, 15, 4);
+        add("terem_house_hut", Kind.POOR_HOUSE, 5, 7, 1);
+        add("terem_smithy", Kind.WORKSHOP, 13, 11, 0,
+                "door -3 1 4");
+        add("terem_tavern", Kind.TAVERN, 13, 15, 0,
+                "door 0 3 3");
+        add("terem_wall_gate", Kind.WALL_GATE, 23, 11, 0,
+                "door 0 0 5; castle_gate -1 1 0, 1 1 0; castle_wall -8 6 -1, 8 6 -1");
     }
 
     private TemplateCatalog() {

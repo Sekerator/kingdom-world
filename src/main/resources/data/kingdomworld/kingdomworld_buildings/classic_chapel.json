@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.classic_chapel",
+  "category": "decoration",
+  "type": "chapel",
+  "role": "none",
+  "level": 1,
+  "icon": "minecraft:bell",
+  "anchor": [6, 0, 20],
+  "entrance": "south"
+}

@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.terem_house_hut",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:moss_block",
+  "anchor": [2, 0, 6],
+  "entrance": "south"
+}

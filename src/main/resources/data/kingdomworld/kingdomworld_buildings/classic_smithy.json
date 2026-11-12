@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.classic_smithy",
+  "category": "production",
+  "type": "workshop",
+  "role": "workshop",
+  "level": 1,
+  "icon": "minecraft:anvil",
+  "anchor": [5, 0, 12],
+  "entrance": "south"
+}

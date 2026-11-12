@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.terem_house_merchant",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:yellow_banner",
+  "anchor": [5, 0, 10],
+  "entrance": "south"
+}

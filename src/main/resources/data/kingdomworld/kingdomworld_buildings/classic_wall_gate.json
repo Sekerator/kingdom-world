@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.classic_wall_gate",
+  "category": "defense",
+  "type": "gatehouse",
+  "role": "tower",
+  "level": 1,
+  "icon": "minecraft:iron_bars",
+  "anchor": [11, 1, 10],
+  "entrance": "south"
+}

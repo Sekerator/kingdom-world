@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.classic_monument",
+  "category": "decoration",
+  "type": "monument",
+  "role": "none",
+  "level": 1,
+  "icon": "minecraft:gold_block",
+  "anchor": [4, 1, 8],
+  "entrance": "south"
+}

@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.terem_guild_s",
+  "category": "trade",
+  "type": "guild",
+  "role": "none",
+  "level": 1,
+  "icon": "kingdomworld:guild_desk",
+  "anchor": [11, 0, 24],
+  "entrance": "south"
+}

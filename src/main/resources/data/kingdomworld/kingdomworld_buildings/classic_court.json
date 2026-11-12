@@ -1,0 +1,11 @@
+{
+  "name": "kingdomworld.building.classic_court",
+  "category": "defense",
+  "type": "court",
+  "role": "barracks",
+  "role_params": {"bunks": 4},
+  "level": 1,
+  "icon": "minecraft:bell",
+  "anchor": [9, 1, 18],
+  "entrance": "south"
+}

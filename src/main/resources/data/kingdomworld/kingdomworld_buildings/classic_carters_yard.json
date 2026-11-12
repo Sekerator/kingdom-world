@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.classic_carters_yard",
+  "category": "farming",
+  "type": "yard",
+  "role": "none",
+  "level": 1,
+  "icon": "minecraft:barrel",
+  "anchor": [8, 0, 14],
+  "entrance": "south"
+}

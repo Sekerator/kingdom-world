@@ -1,0 +1,11 @@
+{
+  "name": "kingdomworld.building.classic_guard_barracks",
+  "category": "defense",
+  "type": "barracks",
+  "role": "barracks",
+  "role_params": {"bunks": 16},
+  "level": 1,
+  "icon": "kingdomworld:barracks",
+  "anchor": [8, 0, 20],
+  "entrance": "south"
+}

@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.classic_house_shack",
+  "category": "housing",
+  "type": "house",
+  "role": "house",
+  "level": 1,
+  "icon": "minecraft:spruce_planks",
+  "anchor": [3, 0, 8],
+  "entrance": "south"
+}

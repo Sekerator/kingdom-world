@@ -39,7 +39,7 @@ import java.util.UUID;
  * ({@code -PclientSelfTest=capital}): for every style its castles, the houses of its guilds by rank, a street of its houses
  * twice over, each house in the look its plot would give it, and the other buildings of its towns. Every building is shot
  * from the front, from the side and inside, every row along its fronts and from above, the castles also from afar, from
- * their courts and their throne halls from inside. Screenshots go to the folder {@code capital} of the
+ * their courts and their throne halls from inside. Screenshots go to the folder {@code styles} of the
  * screenshot folder. Meant for a flat copy of a test world: the buildings stay.
  */
 final class ClientCapitalShowcase {
@@ -79,7 +79,7 @@ final class ClientCapitalShowcase {
     private boolean failed;
 
     ClientCapitalShowcase(Path folder) {
-        this.folder = folder.resolve("capital");
+        this.folder = folder.resolve("styles");
     }
 
     boolean finished() {
@@ -364,8 +364,12 @@ final class ClientCapitalShowcase {
         double size = Math.max(Math.max(width, depth), height);
         double distance = size * 0.95 + 8;
         list.add(look(row + "-" + item.label(), cx + distance * 0.45, target + distance * 0.42, cz + distance * 0.95, cx, target, cz));
-        list.add(look(row + "-" + item.label() + "-side", cx - distance * 0.9, target + distance * 0.3, cz + distance * 0.55, cx, target, cz));
         TemplateCatalog.Entry entry = TemplateCatalog.get(template.id().toString()).orElse(null);
+        if (item.label().endsWith("-b")) {
+            // The second house of a kind: only its look matters.
+            return;
+        }
+        list.add(look(row + "-" + item.label() + "-side", cx - distance * 0.9, target + distance * 0.3, cz + distance * 0.55, cx, target, cz));
         if (entry == null || entry.kind() != TemplateCatalog.Kind.CASTLE) {
             // Inside, from just behind the front wall looking at the back of the ground floor.
             double floor = ground + 1.6;
