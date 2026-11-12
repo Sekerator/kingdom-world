@@ -34,6 +34,7 @@ public final class RoadState {
     private long nextRoad = 1;
     private long nextCrossing = 1;
     private long nextCamp = 1;
+    private long version;
     private Runnable listener = () -> {
     };
 
@@ -135,8 +136,20 @@ public final class RoadState {
         listener = Objects.requireNonNull(value, "listener");
     }
 
+    /**
+     * Marks a change of the cities, roads, walls, crossings, camps or routes: the version grows and the listener hears of it.
+     */
     public void changed() {
+        version++;
         listener.run();
+    }
+
+    /**
+     * Grows with every {@link #changed()}: what is built from the roads and cities (the graph of the caravans, the areas of the
+     * cities, the maps of the players) compares it to know when to build again.
+     */
+    public long version() {
+        return version;
     }
 
     // ---------------------------------------------------------------- cities

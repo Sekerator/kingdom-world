@@ -140,21 +140,51 @@ public final class CityWalls {
      * Citizens living around a city and buildings standing around it.
      */
     public static int[] counts(MinecraftServer server, Place place) {
-        int area = area(server, place);
-        int people = 0;
-        for (Citizen citizen : KingdomWorldApi.state(server).citizens().registry().citizensOf(place.kingdomId())) {
-            WorldPos at = citizen.home() != null ? citizen.home() : citizen.lastPos();
-            if (at != null && near(place, at, area)) {
-                people++;
+        return counts(server, List.of(place))[0];
+    }
+
+    /**
+     * Citizens living around and buildings standing around each of some cities, as {@link #counts(MinecraftServer, Place)}
+     * gives them, in the order of the cities: the people and buildings of each kingdom are gone through once for all of its
+     * cities, and one standing near two cities counts for both.
+     */
+    public static int[][] counts(MinecraftServer server, List<Place> places) {
+        int[][] result = new int[places.size()][2];
+        Map<UUID, List<Integer>> byKingdom = new LinkedHashMap<>();
+        for (int i = 0; i < places.size(); i++) {
+            byKingdom.computeIfAbsent(places.get(i).kingdomId(), k -> new ArrayList<>()).add(i);
+        }
+        for (Map.Entry<UUID, List<Integer>> entry : byKingdom.entrySet()) {
+            List<Integer> mine = entry.getValue();
+            Place[] cities = new Place[mine.size()];
+            int[] areas = new int[mine.size()];
+            for (int i = 0; i < cities.length; i++) {
+                cities[i] = places.get(mine.get(i));
+                areas[i] = area(server, cities[i]);
+            }
+            for (Citizen citizen : KingdomWorldApi.state(server).citizens().registry().citizensOf(entry.getKey())) {
+                WorldPos at = citizen.home() != null ? citizen.home() : citizen.lastPos();
+                if (at == null) {
+                    continue;
+                }
+                for (int i = 0; i < cities.length; i++) {
+                    if (near(cities[i], at, areas[i])) {
+                        result[mine.get(i)][0]++;
+                    }
+                }
+            }
+            for (Building building : KingdomWorldApi.state(server).construction().buildingsOf(entry.getKey())) {
+                if (isFortification(building)) {
+                    continue;
+                }
+                for (int i = 0; i < cities.length; i++) {
+                    if (near(cities[i], building.anchor(), areas[i])) {
+                        result[mine.get(i)][1]++;
+                    }
+                }
             }
         }
-        int buildings = 0;
-        for (Building building : KingdomWorldApi.state(server).construction().buildingsOf(place.kingdomId())) {
-            if (!isFortification(building) && near(place, building.anchor(), area)) {
-                buildings++;
-            }
-        }
-        return new int[]{people, buildings};
+        return result;
     }
 
     /**
@@ -180,7 +210,14 @@ public final class CityWalls {
      * keeps its radius when the wall is ordered again.
      */
     public static int radiusOf(MinecraftServer server, UUID kingdomId, long cityId) {
-        int byLevel = level(server, kingdomId, cityId).wallRadius(RoadSettings.rules());
+        return radiusOf(server, kingdomId, cityId, level(server, kingdomId, cityId));
+    }
+
+    /**
+     * The radius of the square of a city whose level is known already, from {@link #counts(MinecraftServer, List)}.
+     */
+    static int radiusOf(MinecraftServer server, UUID kingdomId, long cityId, CityLevel level) {
+        int byLevel = level.wallRadius(RoadSettings.rules());
         int byPlan = io.github.sekerator.kingdomworld.common.npc.NpcWork.planRadius(server, kingdomId, cityId == 0);
         return Math.max(Math.max(byLevel, byPlan), RoadWork.state(server).wallOf(cityId, kingdomId).map(Wall::radius).orElse(0));
     }
@@ -189,10 +226,14 @@ public final class CityWalls {
      * The level of a city (0 for the capital): a village, a town or a large city.
      */
     public static CityLevel level(MinecraftServer server, UUID kingdomId, long cityId) {
-        return place(server, kingdomId, cityId).map(place -> {
-            int[] counts = counts(server, place);
-            return CityLevel.of(counts[0], counts[1], RoadSettings.rules());
-        }).orElse(CityLevel.VILLAGE);
+        return place(server, kingdomId, cityId).map(place -> level(counts(server, place))).orElse(CityLevel.VILLAGE);
+    }
+
+    /**
+     * The level of a city by its counts from {@link #counts(MinecraftServer, Place)}.
+     */
+    static CityLevel level(int[] counts) {
+        return CityLevel.of(counts[0], counts[1], RoadSettings.rules());
     }
 
     /**
@@ -901,8 +942,10 @@ public final class CityWalls {
 
     static Map<String, Integer> levels(MinecraftServer server) {
         Map<String, Integer> result = new LinkedHashMap<>();
-        for (Place place : places(server)) {
-            result.put(place.key(), level(server, place.kingdomId(), place.cityId()).ordinal());
+        List<Place> places = places(server);
+        int[][] counts = counts(server, places);
+        for (int i = 0; i < places.size(); i++) {
+            result.put(places.get(i).key(), level(counts[i]).ordinal());
         }
         return result;
     }

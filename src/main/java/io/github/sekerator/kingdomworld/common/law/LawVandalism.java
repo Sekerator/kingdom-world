@@ -10,14 +10,19 @@ import io.github.sekerator.kingdomworld.common.road.CityAreas;
 import io.github.sekerator.kingdomworld.common.road.RoadWork;
 import io.github.sekerator.kingdomworld.common.siege.SiegeGates;
 import io.github.sekerator.kingdomworld.common.siege.SiegeRepair;
+import io.github.sekerator.kingdomworld.core.construction.Box;
 import io.github.sekerator.kingdomworld.core.construction.Building;
+import io.github.sekerator.kingdomworld.core.construction.ConstructionBook;
 import io.github.sekerator.kingdomworld.core.law.CrimeKind;
 import io.github.sekerator.kingdomworld.core.law.LawRules;
 import io.github.sekerator.kingdomworld.core.membership.Permission;
+import io.github.sekerator.kingdomworld.core.road.CellIndex;
 import io.github.sekerator.kingdomworld.core.road.Road;
 import io.github.sekerator.kingdomworld.core.road.RoadLayout;
+import io.github.sekerator.kingdomworld.core.road.RoadState;
 import io.github.sekerator.kingdomworld.core.road.Wall;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -35,6 +40,7 @@ import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.registries.ForgeRegistries;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -110,13 +116,29 @@ public final class LawVandalism {
     private static final Map<UUID, Damage> LAST = new HashMap<>();
     private static final Map<UUID, Long> HINTS = new HashMap<>();
     /**
-     * The columns of a road with the height of the road there, and the blocks of the road they were worked out from.
+     * The columns of a road with the height of the road there, the chunks they lie in (packed as columns of chunks), and the
+     * blocks of the road they were worked out from.
      */
-    private record RoadColumns(List<RoadLayout.Block> source, Long2IntOpenHashMap heights) {
+    private record RoadColumns(List<RoadLayout.Block> source, Long2IntOpenHashMap heights, long[] chunks) {
     }
 
     /** The columns of each road, by the id of the road. */
     private static final Map<Long, RoadColumns> ROADS = new HashMap<>();
+
+    /**
+     * The walls of a kingdom and its roads sorted into chunks, as the roads and walls of the world stood at one version.
+     */
+    private record Works(List<Wall> walls, CellIndex<Road> roads) {
+    }
+
+    /** The walls and roads of each kingdom asked about since the roads and walls last changed. */
+    private static final Map<UUID, Works> WORKS = new HashMap<>();
+    private static RoadState worksOf;
+    private static long worksVersion;
+    /** The registered buildings of each kingdom asked about since the register last changed, sorted into chunks. */
+    private static final Map<UUID, CellIndex<Building>> BUILDINGS = new HashMap<>();
+    private static ConstructionBook buildingsOf;
+    private static long buildingsVersion;
 
     private LawVandalism() {
     }
@@ -126,6 +148,10 @@ public final class LawVandalism {
         LAST.clear();
         HINTS.clear();
         ROADS.clear();
+        WORKS.clear();
+        worksOf = null;
+        BUILDINGS.clear();
+        buildingsOf = null;
     }
 
     // ---------------------------------------------------------------- what may be done
@@ -190,37 +216,33 @@ public final class LawVandalism {
 
     /**
      * Whether a place belongs to what a kingdom built: it lies in one of its cities, in the box of one of its registered
-     * buildings, in one of its walls or on one of its roads.
+     * buildings, in one of its walls or on one of its roads. Only the buildings and roads of the kingdom in the chunk of the
+     * place and the walls of the kingdom are asked.
      */
     public static boolean isProperty(MinecraftServer server, UUID kingdom, ServerLevel level, BlockPos pos) {
         String dimension = Dimensions.id(level);
         if (CityAreas.inCity(server, kingdom, dimension, pos.getX(), pos.getZ())) {
             return true;
         }
-        for (Building building : KingdomWorldApi.state(server).construction().buildingsOf(kingdom)) {
+        for (Building building : buildings(server, kingdom).at(dimension, pos.getX(), pos.getZ())) {
             if (building.box() != null && building.anchor().dimension().equals(dimension)
                     && building.box().contains(pos.getX(), pos.getY(), pos.getZ())) {
                 return true;
             }
         }
+        Works works = works(server, kingdom);
         long at = pos.asLong();
-        for (Wall wall : RoadWork.state(server).walls()) {
-            if (wall.kingdomId().equals(kingdom) && wall.dimension().equals(dimension) && wall.placedHere(at)) {
+        for (Wall wall : works.walls()) {
+            if (wall.dimension().equals(dimension) && wall.placedHere(at)) {
                 return true;
             }
         }
         long column = column(pos.getX(), pos.getZ());
-        for (Road road : RoadWork.state(server).roadsOf(kingdom)) {
+        for (Road road : works.roads().at(dimension, pos.getX(), pos.getZ())) {
             if (!road.dimension().equals(dimension)) {
                 continue;
             }
-            // Worked out anew when the road got other blocks: a road laid again or widened is property as it lies now.
-            RoadColumns known = ROADS.get(road.id());
-            if (known == null || known.source() != road.blocks()) {
-                known = new RoadColumns(road.blocks(), columns(road));
-                ROADS.put(road.id(), known);
-            }
-            int height = known.heights().get(column);
+            int height = columnsOf(road).heights().get(column);
             if (height != Integer.MIN_VALUE && Math.abs(pos.getY() - height) <= 1) {
                 return true;
             }
@@ -228,17 +250,87 @@ public final class LawVandalism {
         return false;
     }
 
+    /**
+     * The registered buildings of a kingdom by the chunks their boxes cover, sorted again once the register changed.
+     */
+    private static CellIndex<Building> buildings(MinecraftServer server, UUID kingdom) {
+        ConstructionBook book = KingdomWorldApi.state(server).construction();
+        if (book != buildingsOf || book.version() != buildingsVersion) {
+            BUILDINGS.clear();
+            buildingsOf = book;
+            buildingsVersion = book.version();
+        }
+        CellIndex<Building> index = BUILDINGS.get(kingdom);
+        if (index == null) {
+            index = new CellIndex<>(4);
+            for (Building building : book.buildingsOf(kingdom)) {
+                Box box = building.box();
+                if (box != null) {
+                    index.add(building.anchor().dimension(), box.minX(), box.minZ(), box.maxX(), box.maxZ(), building);
+                }
+            }
+            BUILDINGS.put(kingdom, index);
+        }
+        return index;
+    }
+
+    /**
+     * The walls of a kingdom and the roads it planned or builds a part of by the chunks their blocks lie in, sorted again once
+     * the roads and walls of the world changed.
+     */
+    private static Works works(MinecraftServer server, UUID kingdom) {
+        RoadState state = RoadWork.state(server);
+        if (state != worksOf || state.version() != worksVersion) {
+            WORKS.clear();
+            worksOf = state;
+            worksVersion = state.version();
+        }
+        Works works = WORKS.get(kingdom);
+        if (works == null) {
+            List<Wall> walls = new ArrayList<>();
+            for (Wall wall : state.walls()) {
+                if (wall.kingdomId().equals(kingdom)) {
+                    walls.add(wall);
+                }
+            }
+            CellIndex<Road> roads = new CellIndex<>(4);
+            for (Road road : state.roadsOf(kingdom)) {
+                for (long chunk : columnsOf(road).chunks()) {
+                    roads.addCell(road.dimension(), (int) (chunk >> 32), (int) chunk, road);
+                }
+            }
+            works = new Works(walls, roads);
+            WORKS.put(kingdom, works);
+        }
+        return works;
+    }
+
+    /**
+     * The columns of a road, worked out anew when the road got other blocks: a road laid again or widened is property as it
+     * lies now.
+     */
+    private static RoadColumns columnsOf(Road road) {
+        RoadColumns known = ROADS.get(road.id());
+        if (known == null || known.source() != road.blocks()) {
+            known = columns(road);
+            ROADS.put(road.id(), known);
+        }
+        return known;
+    }
+
     private static long column(int x, int z) {
         return ((long) x << 32) | (z & 0xFFFF_FFFFL);
     }
 
-    private static Long2IntOpenHashMap columns(Road road) {
+    private static RoadColumns columns(Road road) {
         Long2IntOpenHashMap columns = new Long2IntOpenHashMap();
         columns.defaultReturnValue(Integer.MIN_VALUE);
+        LongOpenHashSet chunks = new LongOpenHashSet();
         for (RoadLayout.Block block : road.blocks()) {
             columns.put(column(block.x(), block.z()), block.y());
+            chunks.add(column(block.x() >> 4, block.z() >> 4));
         }
-        return columns;
+        return new RoadColumns(road.blocks(), columns, chunks.toLongArray());
     }
 
     // ---------------------------------------------------------------- breaking

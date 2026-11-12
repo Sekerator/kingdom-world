@@ -19,6 +19,8 @@ public final class KingdomRegistry {
     private final Map<String, UUID> idsByNameKey = new HashMap<>();
     private Runnable changeListener = () -> {
     };
+    /** Counts changes of the kingdoms. */
+    private long version;
 
     public enum AddResult {
         ADDED,
@@ -28,6 +30,14 @@ public final class KingdomRegistry {
 
     public void setChangeListener(Runnable listener) {
         this.changeListener = Objects.requireNonNull(listener, "listener");
+    }
+
+    /**
+     * Grows whenever a kingdom is founded, added, changed or removed: what is worked out from the list of kingdoms compares it
+     * to know when to work it out again.
+     */
+    public long version() {
+        return version;
     }
 
     /**
@@ -116,6 +126,7 @@ public final class KingdomRegistry {
         if (removed == null) {
             return Optional.empty();
         }
+        version++;
         idsByNameKey.remove(KingdomNames.key(removed.name()));
         changeListener.run();
         return Optional.of(removed);
@@ -150,6 +161,7 @@ public final class KingdomRegistry {
     }
 
     private void put(Kingdom kingdom) {
+        version++;
         byId.put(kingdom.id(), kingdom);
         idsByNameKey.put(KingdomNames.key(kingdom.name()), kingdom.id());
     }
