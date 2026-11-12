@@ -393,6 +393,7 @@ KingdomWorld: мод для Minecraft 1.20.1 (Forge) о королевствах
 
 - Свои замеры систем в том же прогоне: ход правителей худший 2,4 мс, шаг войн 6,7 мс, день дворов 1,7 мс.
 - После кэша мест работы (последняя правка) 10 минут той же нагрузки на чистом сервере: обработчики тика в среднем 0,34 мс, худший 31 мс, ни одного дольше 50 мс.
+- Тревога в крупной столице мира (показ клиента `-PclientSelfTest=npc`, встроенный сервер): игрок на площади ранит 12 стражей, тревога доходит до капитана армии, через 40 секунд у игрока 59 солдат из 62 (20 из них армия), тел солдат 61: тик сервера в среднем 15,8 мс, худший 48,3 мс, ни одного дольше 50 мс из 900. Без тревоги внутри той же столицы 137 тел жителей: 15,5 мс, худший 38,3 мс.
 - Что облегчено: солдат смотрит склады один раз на всё снаряжение, а не на каждый слот; таблица цен строится заново внутри `/reload`, а не в первом тике после него; правитель за взгляд считает не больше одной новой цены улучшения здания; поиск мест работы в чанках помнит ответ для каждого состояния блока (самое частое место мода в записи JFR).
 
 ### Баланс
@@ -1052,6 +1053,7 @@ Measured with the smoke check and `-Load` (9-10 kingdoms of the world with house
 
 - The systems' own timings in the same run: the worst turn of rulers 2.4 ms, a step of wars 6.7 ms, a day of courts 1.7 ms.
 - After the cache of workplaces (the last change) 10 minutes of the same load on a clean server: tick handlers 0.34 ms on average, worst 31 ms, none over 50 ms.
+- An alarm in a large capital of the world (the client showcase `-PclientSelfTest=npc`, an integrated server): the player on the square wounds 12 guards, the alarm goes up to the captain of the army, and after 40 seconds 59 of 62 soldiers stand by the player (20 of them of the army), 61 soldiers with a body: a server tick of 15.8 ms on average, the worst 48.3 ms, none over 50 ms of 900. Without an alarm inside the same capital, 137 bodies of citizens: 15.5 ms, the worst 38.3 ms.
 - Made lighter: a soldier looks through the storehouses once for all its gear instead of once a slot; the price table is built again inside `/reload`, not in the first tick after it; a ruler works out at most one new cost of an upgrade a look; the search for workplaces in chunks remembers the answer for each block state (the busiest place of the mod in a JFR recording).
 
 ### Balance

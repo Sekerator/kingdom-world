@@ -61,6 +61,14 @@ final class ClientNpcShowcase {
     private record Shot(String name, double x, double y, double z, float yaw, float pitch) {
     }
 
+    /**
+     * Shots of soldiers rather than of a place, and the posts of the garrison whose squads they show: the camera of such a
+     * shot is put where the most of those soldiers are in plain sight.
+     */
+    private static final java.util.Map<String, List<String>> AIMED = java.util.Map.of(
+            "garrison-stores", List.of("stores", "stores_round"),
+            "garrison-army", List.of("reserve"));
+
     private final Path folder;
     private int ticks;
     private volatile boolean started;
@@ -75,8 +83,10 @@ final class ClientNpcShowcase {
     private int wait;
     private boolean finished;
     private boolean failed;
-    private float yaw = Float.NaN;
-    private float pitch = Float.NaN;
+    private volatile float yaw = Float.NaN;
+    private volatile float pitch = Float.NaN;
+    /** The large kingdom, whose garrison the shots of soldiers look for. */
+    private volatile UUID garrisonKingdom;
     /** The lengths of the ticks of the server while the alarm lasted, a hundred at a time. */
     private final List<long[]> alarmTicks = new java.util.concurrent.CopyOnWriteArrayList<>();
 
@@ -235,7 +245,11 @@ final class ClientNpcShowcase {
                     body -> body.isAlive() && body.citizenId() != null && army.soldier(body.citizenId()).isPresent());
             int near = 0;
             int ofArmy = 0;
+            int ofGarrison = 0;
+            java.util.Set<UUID> citizens = new java.util.HashSet<>();
             for (io.github.sekerator.kingdomworld.common.citizen.CitizenEntity body : soldiers) {
+                citizens.add(body.citizenId());
+                ofGarrison += body.kingdomId() != null && body.kingdomId().equals(garrisonKingdom) ? 1 : 0;
                 if (body.distanceToSqr(player) <= 24.0 * 24.0) {
                     near++;
                     ofArmy += army.soldier(body.citizenId()).map(soldier -> soldier.branch()
@@ -245,7 +259,8 @@ final class ClientNpcShowcase {
             String step = soldiers.isEmpty() ? "-" : io.github.sekerator.kingdomworld.common.army.ArmyRelief.step(soldiers.get(0).kingdomId(),
                     playerId).toString();
             LOGGER.info(PREFIX + "alarm in the large capital, step {}: {} soldier(s) within 24 blocks of the player ({} of the army) of {} with a "
-                            + "body, average tick {} ms, worst tick {} ms, {} tick(s) over 50 ms of {}", step, near, ofArmy, soldiers.size(),
+                            + "body ({} citizen(s), {} of the garrison of the capital), average tick {} ms, worst tick {} ms, {} tick(s) over "
+                            + "50 ms of {}", step, near, ofArmy, soldiers.size(), citizens.size(), ofGarrison,
                     String.format(java.util.Locale.ROOT, "%.2f", count == 0 ? 0.0 : sum / 1e6 / count),
                     String.format(java.util.Locale.ROOT, "%.2f", worst / 1e6), slow, count);
         });
@@ -279,7 +294,10 @@ final class ClientNpcShowcase {
             double dx = round[0] - stores[0];
             double dz = round[1] - stores[1];
             double length = Math.max(1.0, Math.hypot(dx, dz));
+            // The two inside are found by the shot itself; the round about the storehouse is seen from outside.
             list.add(towards("garrison-stores", round[0] + dx / length * 6.0, y + 5.0, round[1] + dz / length * 6.0, stores[0], y + 1.0, stores[1]));
+            list.add(towards("garrison-stores-round", round[0] + dx / length * 6.0, y + 5.0, round[1] + dz / length * 6.0, stores[0], y + 1.0,
+                    stores[1]));
         }
         double[] hall = at.apply("palace_hall");
         if (hall != null) {
@@ -347,11 +365,92 @@ final class ClientNpcShowcase {
         server.execute(() -> {
             ServerPlayer player = server.getPlayerList().getPlayer(playerId);
             if (player != null) {
+                Shot from = aimed(server, player, shot);
+                this.yaw = from.yaw();
+                this.pitch = from.pitch();
                 player.serverLevel().setDayTime(6_000);
-                player.teleportTo(player.serverLevel(), shot.x(), shot.y(), shot.z(), shot.yaw(), shot.pitch());
+                player.teleportTo(player.serverLevel(), from.x(), from.y(), from.z(), from.yaw(), from.pitch());
                 player.setDeltaMovement(0, 0, 0);
             }
         });
+    }
+
+    /**
+     * A shot of soldiers from where they are seen best: of the free places around the soldiers of its posts, the one with
+     * the most of them in plain sight, the nearer the better. A shot of a place, and a shot whose soldiers are not found or
+     * not seen from anywhere, stays as it was planned.
+     */
+    private Shot aimed(IntegratedServer server, ServerPlayer player, Shot shot) {
+        List<String> posts = AIMED.get(shot.name());
+        UUID kingdom = garrisonKingdom;
+        if (posts == null || kingdom == null) {
+            return shot;
+        }
+        ServerLevel level = player.serverLevel();
+        io.github.sekerator.kingdomworld.core.army.ArmyState army = io.github.sekerator.kingdomworld.common.army.ArmyWork.state(server);
+        List<net.minecraft.world.phys.Vec3> soldiers = new ArrayList<>();
+        for (String post : posts) {
+            army.squadOfDuty(kingdom, post).ifPresent(squad -> {
+                for (UUID member : squad.members()) {
+                    KingdomWorldApi.state(server).citizens().get(member).map(citizen -> citizen.lastPos()).ifPresent(pos ->
+                            soldiers.add(new net.minecraft.world.phys.Vec3(pos.x() + 0.5, pos.y() + 1.2, pos.z() + 0.5)));
+                }
+            });
+            if (!soldiers.isEmpty()) {
+                break;
+            }
+        }
+        if (soldiers.isEmpty()) {
+            LOGGER.warn(PREFIX + "no soldier of {} to aim the shot of {} at", posts, shot.name());
+            return shot;
+        }
+        double midX = 0;
+        double midY = 0;
+        double midZ = 0;
+        for (net.minecraft.world.phys.Vec3 soldier : soldiers) {
+            midX += soldier.x / soldiers.size();
+            midY += soldier.y / soldiers.size();
+            midZ += soldier.z / soldiers.size();
+        }
+        net.minecraft.world.phys.Vec3 best = null;
+        int bestSeen = 0;
+        for (double distance : new double[]{7.0, 5.0, 9.0, 11.0, 13.0, 4.0}) {
+            for (double height : new double[]{2.0, 3.5, 1.0, 5.0, 7.0}) {
+                for (int turn = 0; turn < 16; turn++) {
+                    double angle = Math.PI * 2.0 * turn / 16.0;
+                    net.minecraft.world.phys.Vec3 eye = new net.minecraft.world.phys.Vec3(midX + Math.cos(angle) * distance, midY + height,
+                            midZ + Math.sin(angle) * distance);
+                    // Room for the whole player, from its feet an eye height below the camera to the top of its head.
+                    boolean room = true;
+                    for (int y = (int) Math.floor(eye.y - 1.62); y <= (int) Math.floor(eye.y + 0.3) && room; y++) {
+                        room = level.getBlockState(BlockPos.containing(eye.x, y, eye.z)).isAir();
+                    }
+                    if (!room) {
+                        continue;
+                    }
+                    int seen = 0;
+                    for (net.minecraft.world.phys.Vec3 soldier : soldiers) {
+                        seen += level.clip(new net.minecraft.world.level.ClipContext(eye, soldier, net.minecraft.world.level.ClipContext.Block.VISUAL,
+                                net.minecraft.world.level.ClipContext.Fluid.NONE, player)).getType()
+                                == net.minecraft.world.phys.HitResult.Type.MISS ? 1 : 0;
+                    }
+                    if (seen > bestSeen) {
+                        bestSeen = seen;
+                        best = eye;
+                    }
+                }
+            }
+        }
+        if (best == null) {
+            LOGGER.warn(PREFIX + "the {} soldier(s) of {} are seen from nowhere; the shot of {} stays as planned", soldiers.size(), posts,
+                    shot.name());
+            return shot;
+        }
+        LOGGER.info(PREFIX + "the shot of {} looks at {} soldier(s) of {}, {} of them in plain sight", shot.name(), soldiers.size(), posts,
+                bestSeen);
+        // The feet of the player stand an eye height below the camera.
+        Shot planned = towards(shot.name(), best.x, best.y, best.z, midX, midY, midZ);
+        return new Shot(shot.name(), best.x, best.y - 1.62, best.z, planned.yaw(), planned.pitch());
     }
 
     private void shoot(String name) {
@@ -492,6 +591,7 @@ final class ClientNpcShowcase {
             list.add(new Shot("npc-town", end.x() + 0.5, end.y() + 38, end.z() + 42.5, 180.0f, 42.0f));
             break;
         }
+        garrisonKingdom = kingdom;
         garrisonShots(server, site, kingdom, throne, list);
         if (small.isPresent() && small.get().status() == NpcSite.Status.SPAWNED) {
             BlockPos other = NpcSpawner.thronePos(small.get());
