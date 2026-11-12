@@ -1795,9 +1795,12 @@ Invoke-Phase 'run1' {
             }
         }
         $lawAfter = Get-KingdomMoney $server $KingdomName
-        if ($lawBefore -ge 0 -and $lawAfter -eq $lawBefore + 100) {
+        # The minter strikes coins from what the smelter makes all the while (copper coins by fives, silver ones by twenties): that
+        # is money of the mint, come in the same moment, and no money of the law.
+        $lawStruck = $lawAfter - $lawBefore - 100
+        if ($lawBefore -ge 0 -and $lawStruck -ge 0 -and $lawStruck -le 400 -and $lawStruck % 5 -eq 0) {
             $script:LawMoney = $lawAfter
-            Write-Ok "[run1] the law made no money: $lawBefore + 100 given = $lawAfter"
+            Write-Ok "[run1] the law made no money: $lawBefore + 100 given + $lawStruck struck by the minter meanwhile = $lawAfter"
         } else {
             Add-Failure "[run1] the law changed the money: $lawBefore -> $lawAfter (100 was given)"
         }

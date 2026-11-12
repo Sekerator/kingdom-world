@@ -159,6 +159,8 @@ final class RulerPlaces {
     static void options(MinecraftServer server, NpcKingdom npc, RulerView view, Map<String, Long> counts) {
         UUID id = npc.kingdomId();
         Materials materials = materials(server, id);
+        boolean districts = NpcWork.state(server).site(npc.siteId()).map(io.github.sekerator.kingdomworld.core.npc.NpcSite::districts)
+                .orElse(false);
         for (String role : RulerMind.wantedRoles(view, NpcSettings.rulers())) {
             if (!view.knownRoles.contains(role)) {
                 continue;
@@ -166,6 +168,13 @@ final class RulerPlaces {
             // Of the first-level templates of the role, those whose missing materials cost about the least; among them the next
             // one in turn for every building of the role that stands, so that a ruler does not build the same house every time.
             List<BuildingTemplate> candidates = templates(role);
+            if (!districts) {
+                // The plots of the old grid are eleven blocks wide with streets of two between them: a wider building would
+                // shut the street.
+                candidates.removeIf(template -> io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.get(template.id().toString())
+                        .map(entry -> Math.max(entry.width(), entry.depth()) > io.github.sekerator.kingdomworld.core.npc.NpcComposition.PLOT)
+                        .orElse(false));
+            }
             long[] missing = new long[candidates.size()];
             long least = Long.MAX_VALUE;
             for (int i = 0; i < candidates.size(); i++) {

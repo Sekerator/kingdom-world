@@ -519,8 +519,23 @@ public final class ArmyWork {
         }
         Citizen citizen = KingdomWorldApi.state(server).citizens().get(citizenId).orElseThrow();
         io.github.sekerator.kingdomworld.common.citizen.CitizenActions.afterProfessionChange(server, citizen);
+        billet(server, citizen);
         equip(server, citizen);
         return Outcome.DONE;
+    }
+
+    /**
+     * A soldier who sleeps in a house moves into a free bunk of a barracks, if there is one: the bed in the house is free
+     * for somebody else.
+     */
+    public static void billet(MinecraftServer server, Citizen citizen) {
+        if (isReadOnly(server) || (citizen.home() != null
+                && io.github.sekerator.kingdomworld.common.construction.BuildingEffects.inBarracks(server, citizen.kingdomId(), citizen.home()))) {
+            return;
+        }
+        io.github.sekerator.kingdomworld.common.construction.BuildingEffects.freeBunk(server, citizen.kingdomId(),
+                        citizen.home() != null ? citizen.home() : citizen.lastPos())
+                .ifPresent(bunk -> KingdomWorldApi.state(server).citizens().assignHome(citizen, bunk.pos()));
     }
 
     /**

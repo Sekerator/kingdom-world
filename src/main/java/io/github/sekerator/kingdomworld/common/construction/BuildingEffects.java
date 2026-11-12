@@ -291,36 +291,68 @@ public final class BuildingEffects {
     }
 
     /**
-     * The free bed a homeless citizen gets: the nearest one in a working house, else the nearest one outside a house
-     * whose role rests.
+     * Whether a bed is a bunk of a working barracks: such beds are kept for the soldiers of the kingdom.
+     */
+    public static boolean inBarracks(MinecraftServer server, UUID kingdomId, WorldPos bed) {
+        for (Effect effect : of(server, kingdomId)) {
+            if (effect.works() && BuildingRoles.BARRACKS.equals(effect.building().role()) && inside(effect.building(), bed)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The free bed a homeless citizen who is no soldier gets: the nearest one in a working house, else the nearest one
+     * outside a house whose role rests. The bunks of barracks are not offered.
      */
     public static Optional<Site> freeBed(MinecraftServer server, UUID kingdomId, WorldPos near) {
+        return freeBed(server, kingdomId, near, false);
+    }
+
+    /**
+     * The free bed a homeless citizen gets. A soldier takes a bunk of a barracks first, then a bed as anybody; the bunks
+     * stay with the garrison, so nobody else is offered one.
+     */
+    public static Optional<Site> freeBed(MinecraftServer server, UUID kingdomId, WorldPos near, boolean soldier) {
         Site best = null;
         double bestDistance = Double.MAX_VALUE;
-        boolean bestInHouse = false;
+        int bestRank = -1;
         for (Site bed : KingdomWorldApi.state(server).citizens().sites().sitesOf(kingdomId, SiteKinds.BED)) {
             if (!bed.isFree() || !bedUsable(server, kingdomId, bed.pos())) {
                 continue;
             }
-            boolean house = inHouse(server, kingdomId, bed.pos());
+            boolean bunk = inBarracks(server, kingdomId, bed.pos());
+            if (bunk && !soldier) {
+                continue;
+            }
+            int rank = bunk ? 2 : inHouse(server, kingdomId, bed.pos()) ? 1 : 0;
             double distance = near == null || !near.dimension().equals(bed.pos().dimension()) ? Double.MAX_VALUE / 2 : near.distanceSqr(bed.pos());
-            if (best == null || (house && !bestInHouse) || (house == bestInHouse && distance < bestDistance)) {
+            if (best == null || rank > bestRank || (rank == bestRank && distance < bestDistance)) {
                 best = bed;
                 bestDistance = distance;
-                bestInHouse = house;
+                bestRank = rank;
             }
         }
         return Optional.ofNullable(best);
     }
 
     /**
-     * Free beds for newcomers: {free beds that may be offered, of those the beds in working houses}.
+     * The nearest free bunk of a working barracks, for a soldier who sleeps elsewhere.
+     */
+    public static Optional<Site> freeBunk(MinecraftServer server, UUID kingdomId, WorldPos near) {
+        return freeBed(server, kingdomId, near, true).filter(bed -> inBarracks(server, kingdomId, bed.pos()));
+    }
+
+    /**
+     * Free beds for newcomers: {free beds that may be offered, of those the beds in working houses}. The bunks of barracks
+     * are not counted: they wait for soldiers.
      */
     public static int[] freeBeds(MinecraftServer server, UUID kingdomId) {
         int free = 0;
         int inHouses = 0;
         for (Site bed : KingdomWorldApi.state(server).citizens().sites().sitesOf(kingdomId, SiteKinds.BED)) {
-            if (!bed.isFree() || !bedUsable(server, kingdomId, bed.pos())) {
+            if (!bed.isFree() || !bedUsable(server, kingdomId, bed.pos()) || inBarracks(server, kingdomId, bed.pos())) {
                 continue;
             }
             free++;

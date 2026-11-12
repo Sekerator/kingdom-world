@@ -200,8 +200,10 @@ public final class CitizenSimulation {
      */
     static void findPlaces(MinecraftServer server, Citizens citizens, Citizen citizen) {
         if (citizen.home() == null) {
-            // A bed in a house comes first; beds in houses whose role rests are not offered.
-            io.github.sekerator.kingdomworld.common.construction.BuildingEffects.freeBed(server, citizen.kingdomId(), citizen.lastPos())
+            // A bed in a house comes first; beds in houses whose role rests are not offered. A soldier takes a bunk of a
+            // barracks first, and nobody else gets one.
+            io.github.sekerator.kingdomworld.common.construction.BuildingEffects.freeBed(server, citizen.kingdomId(), citizen.lastPos(),
+                            Professions.isMilitary(citizen.professionId()))
                     .ifPresent(bed -> citizens.assignHome(citizen, bed.pos()));
         }
         Optional<Profession> profession = Professions.REGISTRY.byId(citizen.professionId());

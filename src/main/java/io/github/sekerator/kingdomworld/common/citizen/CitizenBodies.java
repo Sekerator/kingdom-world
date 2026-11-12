@@ -140,7 +140,10 @@ public final class CitizenBodies {
                 candidates.add(new ActiveSelection.Candidate(citizen.id(), distance, forced));
             }
         }
-        Set<UUID> selected = new HashSet<>(ActiveSelection.select(candidates, rules.activationChunks(), rules.maxActive()));
+        // In the order of the selection: citizens kept regardless of players first, then soldiers an alarm calls, then the
+        // nearest to players.
+        List<UUID> ordered = ActiveSelection.select(candidates, rules.activationChunks(), rules.maxActive());
+        Set<UUID> selected = new HashSet<>(ordered);
 
         for (Map.Entry<UUID, CitizenEntity> entry : List.copyOf(ACTIVE.entrySet())) {
             if (!selected.contains(entry.getKey())) {
@@ -148,15 +151,15 @@ public final class CitizenBodies {
             }
         }
         int spawned = 0;
-        for (UUID id : selected) {
-            if (spawned >= MAX_SPAWNS_PER_UPDATE) {
-                break;
+        for (UUID id : ordered) {
+            // A citizen kept regardless of players gets its body at once, however many bodies the others wait for.
+            boolean forced = FORCED.contains(id);
+            if (ACTIVE.containsKey(id) || (spawned >= MAX_SPAWNS_PER_UPDATE && !forced)) {
+                continue;
             }
-            if (!ACTIVE.containsKey(id)) {
-                Optional<Citizen> citizen = state.citizens().get(id);
-                if (citizen.isPresent() && spawn(server, citizen.get()) != null) {
-                    spawned++;
-                }
+            Optional<Citizen> citizen = state.citizens().get(id);
+            if (citizen.isPresent() && spawn(server, citizen.get()) != null && !forced) {
+                spawned++;
             }
         }
     }

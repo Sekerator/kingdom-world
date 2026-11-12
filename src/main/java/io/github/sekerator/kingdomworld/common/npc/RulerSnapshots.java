@@ -194,8 +194,11 @@ final class RulerSnapshots {
     private static void people(MinecraftServer server, KingdomWorldState state, UUID id, RulerView view) {
         CitizenActions.Summary summary = CitizenActions.summary(server, id);
         view.population = summary.population();
+        // Beds a newcomer may be offered: the bunks of barracks wait for soldiers and the rooms of taverns for guests, so a
+        // kingdom with empty bunks still needs houses.
         view.bedsUsed = summary.bedsUsed();
-        view.bedsTotal = summary.bedsTotal();
+        view.bedsTotal = summary.bedsUsed()
+                + io.github.sekerator.kingdomworld.common.construction.BuildingEffects.freeBeds(server, id)[0];
         view.foodDays = Math.min(99, summary.foodDays());
         view.mood = summary.mood();
         int unemployed = 0;
