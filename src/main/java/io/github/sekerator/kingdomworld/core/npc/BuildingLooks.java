@@ -18,11 +18,17 @@ import java.util.SplittableRandom;
  */
 public final class BuildingLooks {
     /**
-     * Where a building stands, as far as its look goes.
+     * Where a building stands, as far as its look goes, and for the great buildings of a capital what they are.
      */
     public enum Quarter {
-        /** The castle, the buildings of the institutions, towers and monuments: the look of the style. */
+        /** The buildings of the institutions, towers and monuments: the look of the style. */
         PUBLIC,
+        /** The castle: the look of the style with the roofs and spires the kingdom chose for it. */
+        CASTLE,
+        /** The house of the adventurers' guild: its own roofs and spires. */
+        GUILD,
+        /** The tower of the mages' guild: its own roofs and spires. */
+        MAGES,
         /** The houses of the nobles by the castle. */
         NOBLE,
         /** The houses of the merchants by the market. */
@@ -44,7 +50,23 @@ public final class BuildingLooks {
      *               take them), the first, fourth and sixth of stone or metal (the nobles take them)
      * @param clay   plaster of the poor
      */
-    private record Palette(List<String> walls, List<String> woods, Map<Look.Part, List<String>> parts, List<String> clay) {
+    private record Palette(List<String> walls, List<String> woods, Map<Look.Part, List<String>> parts, List<String> clay,
+                           Map<Quarter, List<String>> roofs, Map<Quarter, List<String>> spires) {
+        /**
+         * This palette with the roofs and spires the great buildings choose from by their seed.
+         */
+        Palette great(List<String> castleRoofs, List<String> castleSpires, List<String> guildRoofs, List<String> guildSpires,
+                      List<String> mageRoofs, List<String> mageSpires) {
+            Map<Quarter, List<String>> roofs = new EnumMap<>(Quarter.class);
+            Map<Quarter, List<String>> spires = new EnumMap<>(Quarter.class);
+            roofs.put(Quarter.CASTLE, castleRoofs);
+            spires.put(Quarter.CASTLE, castleSpires);
+            roofs.put(Quarter.GUILD, guildRoofs);
+            spires.put(Quarter.GUILD, guildSpires);
+            roofs.put(Quarter.MAGES, mageRoofs);
+            spires.put(Quarter.MAGES, mageSpires);
+            return new Palette(walls, woods, parts, clay, roofs, spires);
+        }
     }
 
     private static final Map<NpcStyle, Palette> PALETTES = new EnumMap<>(NpcStyle.class);
@@ -122,24 +144,38 @@ public final class BuildingLooks {
 
     static {
         // Stone with half-timbering: slate roofs and spires on the public buildings, houses of every roof.
-        STYLE_PALETTES.put("classic", PALETTES.get(NpcStyle.STONE));
+        STYLE_PALETTES.put("classic", PALETTES.get(NpcStyle.STONE).great(
+                List.of("minecraft:deepslate_tiles", "minecraft:dark_oak", "minecraft:deepslate_tiles"),
+                List.of("minecraft:dark_prismarine", "minecraft:deepslate_tiles", "minecraft:waxed_oxidized_cut_copper",
+                        "minecraft:polished_blackstone_bricks", "minecraft:waxed_weathered_cut_copper"),
+                List.of("minecraft:mangrove", "minecraft:dark_oak", "minecraft:deepslate_tiles"),
+                List.of("minecraft:bricks", "minecraft:waxed_cut_copper", "minecraft:deepslate_tiles", "minecraft:mangrove"),
+                List.of("minecraft:deepslate_tiles", "minecraft:dark_oak", "minecraft:spruce"),
+                List.of("minecraft:crimson", "minecraft:nether_bricks", "minecraft:warped", "minecraft:dark_prismarine")));
         STYLE_MATERIALS.put("classic", new String[]{"", ""});
-        // The wooden terem: roofs and tents of shingles, onion domes of green copper, of bronze or of shingles, footings of
-        // rubble.
+        // The wooden terem: white stone, light shingles on roofs and tents, onion domes of copper, gold, blue or green.
         STYLE_PALETTES.put("terem", palette(
-                List.of("", "", "minecraft:polished_diorite", "minecraft:cobblestone", "minecraft:stone_bricks"),
+                List.of("", "", "minecraft:diorite", "minecraft:cobblestone", "minecraft:stone_bricks"),
                 List.of("minecraft:oak", "minecraft:dark_oak", "minecraft:spruce"),
-                List.of("minecraft:spruce", "minecraft:dark_oak", "minecraft:oak", "minecraft:dark_oak", "minecraft:mangrove",
+                List.of("minecraft:oak", "minecraft:spruce", "minecraft:dark_oak", "minecraft:oak", "minecraft:mangrove",
                         "minecraft:spruce"),
-                List.of("minecraft:waxed_oxidized_cut_copper", "minecraft:waxed_cut_copper", "minecraft:spruce"),
-                List.of("", "minecraft:mossy_cobblestone", "minecraft:stone_bricks", "minecraft:cobbled_deepslate"),
-                List.of("", "minecraft:stone", "minecraft:polished_diorite"),
+                List.of("minecraft:waxed_cut_copper", "minecraft:bamboo", "minecraft:dark_prismarine", "minecraft:waxed_weathered_cut_copper",
+                        "minecraft:waxed_oxidized_cut_copper"),
+                List.of("minecraft:diorite", "minecraft:cobblestone", "minecraft:mossy_cobblestone", "minecraft:stone_bricks"),
+                List.of("minecraft:smooth_quartz", "minecraft:polished_diorite", "minecraft:stone"),
                 List.of("", "minecraft:chiseled_stone_bricks"),
                 List.of("", "minecraft:calcite", "minecraft:white_concrete", "minecraft:light_gray_terracotta"),
                 List.of("minecraft:spruce", "minecraft:dark_oak", "minecraft:birch", Look.REMOVED),
-                List.of("", "minecraft:stone_bricks", "minecraft:cobblestone", Look.REMOVED),
-                List.of("", "minecraft:calcite", "minecraft:white_terracotta")));
-        STYLE_MATERIALS.put("terem", new String[]{"minecraft:spruce", ""});
+                List.of("minecraft:cobblestone", "minecraft:stone_bricks", "minecraft:mud_bricks", Look.REMOVED),
+                List.of("", "minecraft:calcite", "minecraft:white_terracotta")).great(
+                List.of("minecraft:oak", "minecraft:spruce"),
+                List.of("minecraft:waxed_cut_copper", "minecraft:bamboo", "minecraft:dark_prismarine", "minecraft:waxed_weathered_cut_copper",
+                        "minecraft:waxed_oxidized_cut_copper"),
+                List.of("minecraft:oak", "minecraft:dark_oak"),
+                List.of("minecraft:dark_prismarine", "minecraft:waxed_oxidized_cut_copper", "minecraft:waxed_cut_copper"),
+                List.of("minecraft:spruce", "minecraft:oak"),
+                List.of("minecraft:dark_prismarine", "minecraft:bamboo", "minecraft:waxed_weathered_cut_copper")));
+        STYLE_MATERIALS.put("terem", new String[]{"minecraft:spruce", "minecraft:polished_diorite"});
     }
 
     /** Colours of the cloth of houses: awnings, curtains, beds. */
@@ -161,7 +197,7 @@ public final class BuildingLooks {
         parts.put(Look.Part.PLASTER, plaster);
         parts.put(Look.Part.SHUTTER, shutters);
         parts.put(Look.Part.CHIMNEY, chimneys);
-        return new Palette(walls, woods, parts, clay);
+        return new Palette(walls, woods, parts, clay, Map.of(), Map.of());
     }
 
     /**
@@ -201,9 +237,20 @@ public final class BuildingLooks {
     private static Materials of(Palette palette, String styleWood, String styleStone, String wood, String cloth, Quarter quarter, long seed) {
         String placeWood = styleWood.isEmpty() ? wood : styleWood;
         Map<Look.Part, String> parts = new EnumMap<>(Look.Part.class);
-        if (quarter == Quarter.PUBLIC) {
+        if (quarter.ordinal() <= Quarter.MAGES.ordinal()) {
             palette.parts().forEach((part, choices) -> parts.put(part, choices.get(0)));
             parts.put(Look.Part.CLOTH, cloth);
+            // The castle, the guild and the tower of the mages choose their roofs and spires by their seed, so that they are
+            // not of one colour with each other nor with the castles of other kingdoms.
+            SplittableRandom great = new SplittableRandom(seed ^ 0x47524541L * (quarter.ordinal() + 1));
+            List<String> roofs = palette.roofs().get(quarter);
+            List<String> spires = palette.spires().get(quarter);
+            if (roofs != null) {
+                parts.put(Look.Part.ROOF, pick(great, roofs));
+            }
+            if (spires != null) {
+                parts.put(Look.Part.SPIRE, pick(great, spires));
+            }
             return new Materials(placeWood, styleStone, Look.of(parts));
         }
         SplittableRandom random = new SplittableRandom(seed ^ 0x4C4F4F4BL * (quarter.ordinal() + 1));

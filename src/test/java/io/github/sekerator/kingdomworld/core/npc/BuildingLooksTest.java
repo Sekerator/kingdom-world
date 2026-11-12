@@ -94,10 +94,8 @@ class BuildingLooksTest {
     @Test
     void housesOfOneQuarterDiffer() {
         for (NpcStyle style : NpcStyle.values()) {
-            for (BuildingLooks.Quarter quarter : BuildingLooks.Quarter.values()) {
-                if (quarter == BuildingLooks.Quarter.PUBLIC) {
-                    continue;
-                }
+            for (BuildingLooks.Quarter quarter : List.of(BuildingLooks.Quarter.NOBLE, BuildingLooks.Quarter.MERCHANT,
+                    BuildingLooks.Quarter.CRAFT, BuildingLooks.Quarter.POOR)) {
                 Set<Materials> looks = new HashSet<>();
                 Set<String> roofs = new HashSet<>();
                 Set<String> plasters = new HashSet<>();
@@ -132,5 +130,21 @@ class BuildingLooksTest {
             }
         }
         assertTrue(poorWithout > 60, "poor houses without shutters or chimney: " + poorWithout + " of 200");
+    }
+
+    @Test
+    void theGreatBuildingsOfAStyleTakeTheirOwnRoofsAndSpires() {
+        for (String style : BuildingLooks.styles()) {
+            for (BuildingLooks.Quarter quarter : List.of(BuildingLooks.Quarter.CASTLE, BuildingLooks.Quarter.GUILD, BuildingLooks.Quarter.MAGES)) {
+                Set<String> spires = new HashSet<>();
+                for (long seed = 0; seed < 40; seed++) {
+                    Materials materials = BuildingLooks.of(style, "minecraft:oak", "blue", quarter, seed * 104_729);
+                    assertEquals(materials, BuildingLooks.of(style, "minecraft:oak", "blue", quarter, seed * 104_729));
+                    assertEquals("blue", materials.appearance().get(Look.Part.CLOTH));
+                    spires.add(materials.appearance().get(Look.Part.SPIRE));
+                }
+                assertTrue(spires.size() >= 3, style + " " + quarter + " spires " + spires);
+            }
+        }
     }
 }
