@@ -22,7 +22,7 @@ import java.util.UUID;
  * Built by the server for one viewer; lists are cut to {@link #MAX_ROWS}.
  */
 public final class ArmyViews {
-    public static final int MAX_ROWS = 64;
+    public static final int MAX_ROWS = 256;
 
     private ArmyViews() {
     }

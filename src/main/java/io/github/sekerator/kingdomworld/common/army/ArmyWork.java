@@ -809,7 +809,8 @@ public final class ArmyWork {
             }
             LAST_SKIRMISH.put(squad.id(), now);
             WorldPos at = squad.order().anchor().orElse(null);
-            if (at == null || hasBodies(squad) || !isNight(server, at) || rolls().getAsDouble() >= rules.skirmishChance()) {
+            if (at == null || hasBodies(squad) || !isNight(server, at) || rolls().getAsDouble() >= rules.skirmishChance()
+                    || io.github.sekerator.kingdomworld.common.npc.NpcCamps.sheltered(server, squad)) {
                 continue;
             }
             int units = 1 + (int) Math.floor(rolls().getAsDouble() * 5);

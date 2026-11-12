@@ -415,7 +415,8 @@ public final class LifeWork {
             return KingdomActions.Feedback.fail(LifeTexts.KEY + "festival.too_soon", LifeTexts.days(Math.max(1,
                     Festivals.daysUntilNext(festival.called(), today, rules))));
         }
-        int people = KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdomId).size();
+        // The royal army of a kingdom of the world keeps to its camps and takes no part in the feast of the town.
+        int people = io.github.sekerator.kingdomworld.common.npc.NpcCamps.townsfolk(server, kingdomId);
         long cost = Festivals.cost(people, rules);
         var economy = KingdomWorldApi.state(server).economy();
         long day = TreasuryActions.day(server);

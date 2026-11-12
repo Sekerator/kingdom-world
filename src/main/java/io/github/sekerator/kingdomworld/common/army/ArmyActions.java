@@ -166,7 +166,7 @@ public final class ArmyActions {
             return Optional.empty();
         }
         ArmyState army = ArmyWork.state(server);
-        ArmyRules rules = ArmySettings.rules();
+        ArmyRules rules = ArmySettings.rulesFor(server, kingdomId);
         long today = ArmyWork.day(server);
         List<ArmyViews.SoldierRow> soldiers = new ArrayList<>();
         long wages = 0;

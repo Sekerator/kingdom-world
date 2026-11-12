@@ -119,7 +119,12 @@ public final class CitizenSimulation {
             if (wanted > 0) {
                 citizen.setFood(citizen.food() + KingdomStorage.eat(server, kingdomId, wanted, citizen.lastPos()));
             }
-            findPlaces(server, citizens, citizen);
+            // A soldier of a royal army beyond the capital sleeps in the tents of its camp and looks for no bed.
+            boolean quartered = citizen.home() == null && Professions.isMilitary(citizen.professionId())
+                    && io.github.sekerator.kingdomworld.common.npc.NpcCamps.quartered(server, citizen.id());
+            if (!quartered) {
+                findPlaces(server, citizens, citizen);
+            }
 
             boolean inInfirmary = citizen.state() == CitizenState.WOUNDED && treated < infirmaryRoom;
             if (inInfirmary) {
@@ -133,7 +138,7 @@ public final class CitizenSimulation {
                 treated++;
             }
             int comfort = io.github.sekerator.kingdomworld.common.construction.BuildingEffects.comfort(server, kingdomId, citizen.home());
-            int target = CitizenNeeds.targetMood(new CitizenNeeds.MoodInputs(citizen.food(), citizen.home() != null,
+            int target = CitizenNeeds.targetMood(new CitizenNeeds.MoodInputs(citizen.food(), citizen.home() != null || quartered,
                     citizen.state() == CitizenState.WOUNDED, recentDeaths, citizen.payPercent(), comfort,
                     io.github.sekerator.kingdomworld.common.life.LifeWork.mood(server, citizen), unrest));
             citizen.setMood(CitizenNeeds.nextMood(citizen.mood(), target));
@@ -147,6 +152,8 @@ public final class CitizenSimulation {
             }
         }
         CarrierBehavior.stepAbstractly(server, kingdomId, interval);
+        // The soldiers of the camps of a royal army work their fields.
+        io.github.sekerator.kingdomworld.common.npc.NpcCamps.farm(server, kingdomId, interval);
         io.github.sekerator.kingdomworld.common.trade.TradeWork.exportStep(server, kingdomId, interval);
         for (WorkPost post : citizens.posts().postsOf(kingdomId)) {
             PostWork.refreshStatus(server, post);
@@ -266,12 +273,25 @@ public final class CitizenSimulation {
         int[] freeBeds = io.github.sekerator.kingdomworld.common.construction.BuildingEffects.freeBeds(server, kingdomId);
         long last = registry.lastArrival(kingdomId);
         long since = last == CitizenRegistry.NEVER ? Long.MAX_VALUE : now - last;
-        CitizenNeeds.GrowthCheck check = CitizenNeeds.checkGrowth(people.size(), freeBeds[0], freeBeds[1],
+        CitizenNeeds.GrowthCheck check = CitizenNeeds.checkGrowth(people.size() - royalArmy(server, kingdomId), people.size(),
+                freeBeds[0], freeBeds[1],
                 KingdomStorage.totalNutrition(server, kingdomId), since, averageMood(people), rules);
         if (check == CitizenNeeds.GrowthCheck.READY) {
             Capital capital = territory.get().capital();
             CitizenLife.arrive(server, kingdomId, new WorldPos(capital.dimension(), capital.x(), capital.y(), capital.z()), true);
         }
+    }
+
+    /**
+     * The soldiers of the royal army of a kingdom of the world: they come from abroad and do not count against the most
+     * citizens a kingdom has.
+     */
+    private static int royalArmy(MinecraftServer server, UUID kingdomId) {
+        if (!io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, kingdomId)) {
+            return 0;
+        }
+        return io.github.sekerator.kingdomworld.common.army.ArmyWork.state(server)
+                .branchOf(kingdomId, io.github.sekerator.kingdomworld.core.army.Branch.ARMY).size();
     }
 
     /**
@@ -298,7 +318,8 @@ public final class CitizenSimulation {
         int[] freeBeds = io.github.sekerator.kingdomworld.common.construction.BuildingEffects.freeBeds(server, kingdomId);
         long last = registry.lastArrival(kingdomId);
         long since = last == CitizenRegistry.NEVER ? Long.MAX_VALUE : KingdomWorldApi.gameTime(server) - last;
-        return CitizenNeeds.checkGrowth(people.size(), freeBeds[0], freeBeds[1], KingdomStorage.totalNutrition(server, kingdomId), since,
+        return CitizenNeeds.checkGrowth(people.size() - royalArmy(server, kingdomId), people.size(), freeBeds[0], freeBeds[1],
+                KingdomStorage.totalNutrition(server, kingdomId), since,
                 averageMood(people), CitizenSettings.rules());
     }
 }

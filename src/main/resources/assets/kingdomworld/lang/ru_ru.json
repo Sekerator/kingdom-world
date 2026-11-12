@@ -3111,6 +3111,8 @@
   "kingdomworld.ruler.decree.claim.female": "заняла новые земли: %s",
   "kingdomworld.ruler.decree.town": "основал город %s",
   "kingdomworld.ruler.decree.town.female": "основала город %s",
+  "kingdomworld.ruler.decree.camp": "разбил лагерь королевской армии",
+  "kingdomworld.ruler.decree.camp.female": "разбила лагерь королевской армии",
   "kingdomworld.ruler.decree.order": "велел мастерским держать в запасе: %s",
   "kingdomworld.ruler.decree.order.female": "велела мастерским держать в запасе: %s",
   "kingdomworld.ruler.decree.tax": "назначил подушную подать %s и торговый сбор %s%%",

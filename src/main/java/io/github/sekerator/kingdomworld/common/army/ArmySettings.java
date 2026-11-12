@@ -56,6 +56,14 @@ public final class ArmySettings {
      * The wage of a soldier of a kingdom of the world, in thousandths of the wage of a soldier: its garrison lives in the
      * barracks and eats from the storehouses.
      */
+    public static int armyWagePermille() {
+        try {
+            return KingdomWorldConfig.SERVER.npcKingdoms.armyWagePercent.get() * 10;
+        } catch (RuntimeException e) {
+            return 20;
+        }
+    }
+
     public static int garrisonWagePermille() {
         try {
             return KingdomWorldConfig.SERVER.npcKingdoms.garrisonWagePercent.get() * 10;

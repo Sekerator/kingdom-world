@@ -47,6 +47,17 @@ public final class CitizenLife {
      * @return the newcomer, or empty if the data is read-only
      */
     public static Optional<Citizen> arrive(MinecraftServer server, UUID kingdomId, WorldPos place, boolean announce) {
+        return arrive(server, kingdomId, place, announce, true);
+    }
+
+    /**
+     * A new citizen arrives at {@code place}, with a random name and look.
+     *
+     * @param bed whether it moves into the free bed nearest to the place; a recruit of a royal army from abroad lives in a camp
+     *            and takes none
+     * @return the newcomer, or empty if the data is read-only
+     */
+    public static Optional<Citizen> arrive(MinecraftServer server, UUID kingdomId, WorldPos place, boolean announce, boolean bed) {
         RandomSource random = server.overworld().getRandom();
         long now = KingdomWorldApi.gameTime(server);
         Citizen citizen = new Citizen(UUID.randomUUID(), kingdomId, random.nextInt(),
@@ -59,8 +70,10 @@ public final class CitizenLife {
             state.citizens().add(citizen);
             state.citizens().registry().markArrival(kingdomId, now);
             // The same beds the simulation offers: a house first, never a room of a tavern or the bed of a player.
-            io.github.sekerator.kingdomworld.common.construction.BuildingEffects.freeBed(server, kingdomId, place)
-                    .ifPresent(bed -> state.citizens().assignHome(citizen, bed.pos()));
+            if (bed) {
+                io.github.sekerator.kingdomworld.common.construction.BuildingEffects.freeBed(server, kingdomId, place)
+                        .ifPresent(free -> state.citizens().assignHome(citizen, free.pos()));
+            }
             return Outcome.DONE;
         });
         if (!outcome.ok()) {

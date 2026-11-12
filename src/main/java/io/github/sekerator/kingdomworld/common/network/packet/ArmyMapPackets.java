@@ -21,7 +21,7 @@ import java.util.function.Supplier;
  */
 public final class ArmyMapPackets {
     /** Most squads one command moves. */
-    public static final int MAX_SQUADS = 16;
+    public static final int MAX_SQUADS = 32;
     /** Most points of one command: the route of a patrol, or the points on the way. */
     public static final int MAX_POINTS = 8;
     /** Most entries of one kind in a view. */

@@ -191,6 +191,18 @@ public final class CitizenNeeds {
      */
     public static GrowthCheck checkGrowth(int population, int freeBeds, int freeHouseBeds, long nutrition, long ticksSinceArrival,
                                           int averageMood, CitizenRules rules) {
+        return checkGrowth(population, population, freeBeds, freeHouseBeds, nutrition, ticksSinceArrival, averageMood, rules);
+    }
+
+    /**
+     * Whether a newcomer arrives now.
+     *
+     * @param population the citizens that count against {@link CitizenRules#maxPerKingdom()}: a royal army of a kingdom of the
+     *                   world, which comes from abroad and lives in camps, does not
+     * @param eaters     all who eat from the storehouses, the army included
+     */
+    public static GrowthCheck checkGrowth(int population, int eaters, int freeBeds, int freeHouseBeds, long nutrition, long ticksSinceArrival,
+                                          int averageMood, CitizenRules rules) {
         if (population >= rules.maxPerKingdom()) {
             return GrowthCheck.FULL;
         }
@@ -198,7 +210,7 @@ public final class CitizenNeeds {
             return GrowthCheck.NO_FREE_BED;
         }
         // The newcomer eats too, so the stock must last for the population after the arrival.
-        if (foodDays(nutrition, population + 1, rules.dailyNutrition()) < rules.growthFoodDays()) {
+        if (foodDays(nutrition, Math.max(population, eaters) + 1, rules.dailyNutrition()) < rules.growthFoodDays()) {
             return GrowthCheck.NOT_ENOUGH_FOOD;
         }
         long interval = growthInterval(rules.growthIntervalTicks(), averageMood);

@@ -31,9 +31,12 @@ public record ArmyRules(int maxSoldiers, int maxSquads, int maxSquadSize, int tr
                         int advanceDays, int maxMercenaries, double skirmishChance, double monsterStrength, double caravanThreat,
                         int caravanThreatUnits, int alarmRadius) {
     public static final ArmyRules DEFAULT = new Builder().build();
-    /** What a kingdom of the world may keep at least, whatever the limits of players say: its garrison is larger. */
-    public static final int WORLD_SOLDIERS = 160;
-    public static final int WORLD_SQUADS = 48;
+    /**
+     * What a kingdom of the world may keep at least, whatever the limits of players say: its guard and its royal army are
+     * larger.
+     */
+    public static final int WORLD_SOLDIERS = 480;
+    public static final int WORLD_SQUADS = 64;
     public static final int WORLD_SQUAD_SIZE = ArmySquad.MAX_MEMBERS;
 
     /**
@@ -71,9 +74,9 @@ public record ArmyRules(int maxSoldiers, int maxSquads, int maxSquadSize, int tr
      * Rules built step by step, from the defaults.
      */
     public static final class Builder {
-        public int maxSoldiers = 64;
-        public int maxSquads = 16;
-        public int maxSquadSize = 12;
+        public int maxSoldiers = 256;
+        public int maxSquads = 32;
+        public int maxSquadSize = 24;
         public int trainingPerMinute = 2;
         public long trainingCap = SoldierRank.SERGEANT.experience();
         public int barracksCapacity = 8;

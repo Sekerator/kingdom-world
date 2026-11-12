@@ -37,7 +37,7 @@ public final class NpcSavedData extends SavedData {
      * data before their buildings stand (status {@code founded}) and whether their treasury got its founding money; older data has
      * neither and is read as it is.
      */
-    public static final int FORMAT_VERSION = 4;
+    public static final int FORMAT_VERSION = 5;
     static final String TAG_FORMAT_VERSION = "formatVersion";
 
     private static final Logger LOGGER = LogUtils.getLogger();

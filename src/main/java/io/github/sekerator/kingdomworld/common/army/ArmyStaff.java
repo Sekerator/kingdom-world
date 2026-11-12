@@ -51,9 +51,14 @@ public final class ArmyStaff {
     public static int wagePermille(MinecraftServer server, UUID citizenId) {
         return ArmyWork.state(server).soldier(citizenId).map(soldier -> {
             int permille = ArmySettings.force().wagePermille(soldier.post());
-            // The garrison of a kingdom of the world lives in the barracks and eats from the storehouses: its pay is small.
-            return io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, soldier.kingdomId())
-                    ? Math.max(1, (int) Math.round(permille * (ArmySettings.garrisonWagePermille() / 1_000.0))) : permille;
+            if (!io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, soldier.kingdomId())) {
+                return permille;
+            }
+            // The garrison of a kingdom of the world lives in the barracks and eats from the storehouses: its pay is small. The
+            // royal army beyond the capital lives in its camps on what their fields grow, and its pay is smaller still.
+            int share = io.github.sekerator.kingdomworld.common.npc.NpcCamps.quartered(server, citizenId)
+                    ? ArmySettings.armyWagePermille() : ArmySettings.garrisonWagePermille();
+            return Math.max(1, (int) Math.round(permille * (share / 1_000.0)));
         }).orElse(1_000);
     }
 

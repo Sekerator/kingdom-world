@@ -206,6 +206,18 @@ public final class NpcGameTests {
      * The land around the capital of a place, in chunks from the chunk of the throne: what the rules give, and for a capital of
      * districts at least what its fields and outer posts take.
      */
+    /**
+     * The soldiers of the royal army of a kingdom who came from abroad and live beyond its capital: they are not of the plan of
+     * the capital.
+     */
+    static int fromAbroad(MinecraftServer server, UUID kingdomId) {
+        int army = ArmyWork.state(server).branchOf(kingdomId, io.github.sekerator.kingdomworld.core.army.Branch.ARMY).size();
+        // A capital of districts plans its reserve of the army; a capital of the first layout plans none.
+        int planned = NpcWork.state(server).kingdom(kingdomId).flatMap(npc -> NpcWork.state(server).site(npc.siteId()))
+                .filter(NpcSite::districts).map(site -> NpcSettings.rules().army(site.level())).orElse(0);
+        return Math.max(0, army - planned);
+    }
+
     static int landRadius(NpcSite site) {
         int configured = NpcSettings.rules().landRadius(site.level());
         if (!site.districts()) {
@@ -313,12 +325,15 @@ public final class NpcGameTests {
                     "The gate at " + passage.toShortString() + " is closed by " + level.getBlockState(passage));
         }
         List<Citizen> citizens = KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdom.id());
-        helper.assertTrue(citizens.size() == composition.citizens(), "Citizens " + citizens.size() + " instead of " + composition.citizens());
+        int abroad = fromAbroad(server, kingdom.id());
+        helper.assertTrue(citizens.size() - abroad == composition.citizens(), "Citizens " + citizens.size() + " (" + abroad
+                + " of the royal army from abroad) instead of " + composition.citizens());
         Set<UUID> soldiers = new HashSet<>();
         for (Soldier soldier : ArmyWork.state(server).soldiersOf(kingdom.id())) {
             soldiers.add(soldier.citizenId());
         }
-        helper.assertTrue(soldiers.size() == composition.soldiers(), "Soldiers " + soldiers.size() + " instead of " + composition.soldiers());
+        helper.assertTrue(soldiers.size() - abroad == composition.soldiers(), "Soldiers " + soldiers.size() + " (" + abroad
+                + " of the royal army from abroad) instead of " + composition.soldiers());
         int homeless = 0;
         int idle = 0;
         for (Citizen citizen : citizens) {
@@ -522,10 +537,12 @@ public final class NpcGameTests {
             for (NpcComposition.Plot plot : composition.buildings()) {
                 beds += NpcComposition.beds(plot.template());
             }
-            helper.assertTrue(citizens.size() == beds, "Citizens " + citizens.size() + " for " + beds + " beds");
+            helper.assertTrue(citizens.size() - fromAbroad(server, kingdom.id()) == beds, "Citizens " + citizens.size() + " for " + beds
+                    + " beds");
             int homeless = 0;
             for (Citizen citizen : citizens) {
-                homeless += citizen.home() == null ? 1 : 0;
+                // The royal army from abroad lives in the tents of its camps.
+                homeless += citizen.home() == null && !io.github.sekerator.kingdomworld.common.npc.NpcCamps.quartered(server, citizen.id()) ? 1 : 0;
             }
             helper.assertTrue(homeless == 0, homeless + " citizens without a home");
             int soldiers = ArmyWork.state(server).soldiersOf(kingdom.id()).size();
@@ -685,7 +702,7 @@ public final class NpcGameTests {
             helper.assertTrue(problem.isEmpty(), "After the restart: " + problem);
             int buildings = buildings(server, kingdom.id()).size();
             int citizens = KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdom.id()).size();
-            helper.assertTrue(citizens == composition.citizens(), "Citizens after the restart: " + citizens);
+            helper.assertTrue(citizens - fromAbroad(server, kingdom.id()) == composition.citizens(), "Citizens after the restart: " + citizens);
             int soldiers = ArmyWork.state(server).soldiersOf(kingdom.id()).size();
             long balance = KingdomWorldApi.treasury(server, kingdom.id()).orElseThrow().balance();
             long bread = KingdomStorage.count(server, kingdom.id(), stack -> stack.is(Items.BREAD));

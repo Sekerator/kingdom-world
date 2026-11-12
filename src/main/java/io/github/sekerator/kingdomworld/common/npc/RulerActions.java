@@ -210,6 +210,8 @@ public final class RulerActions {
                 case REPAIR -> repair(server, id, decision);
                 case CLAIM -> Result.working(new ClaimJob(id, decision));
                 case TOWN -> town(server, npc, decision);
+                case CAMP -> NpcCamps.place(decision).<Result>map(place -> Result.working(new CampJob(npc, decision, place[0], place[1])))
+                        .orElse(Result.failed(KingdomError.BAD_ORDER, decision));
                 case ORDER -> order(server, id, decision);
                 case TAX -> tax(server, id, decision);
                 case WAGE -> wage(server, id, decision);
@@ -935,7 +937,7 @@ public final class RulerActions {
     /**
      * The time players spent in a loaded chunk, as a region file keeps it.
      */
-    private static net.minecraft.nbt.CompoundTag inhabited(LevelChunk chunk) {
+    static net.minecraft.nbt.CompoundTag inhabited(LevelChunk chunk) {
         net.minecraft.nbt.CompoundTag tag = new net.minecraft.nbt.CompoundTag();
         tag.putLong("InhabitedTime", chunk.getInhabitedTime());
         return tag;
@@ -945,7 +947,7 @@ public final class RulerActions {
      * The height of the square of a town as the spawner judges it (the middle of nine columns around it, not below the sea),
      * from chunks that are loaded already; {@code null} while one of them is not, so that no chunk is waited for.
      */
-    private static Integer heightNow(ServerLevel level, int x, int z) {
+    static Integer heightNow(ServerLevel level, int x, int z) {
         List<Integer> heights = new ArrayList<>();
         int reach = NpcSpawner.PLAZA;
         for (int dx = -reach; dx <= reach; dx += reach) {
@@ -1231,7 +1233,7 @@ public final class RulerActions {
         if (free.size() >= 2) {
             ArmyState.Formed[] formed = new ArmyState.Formed[1];
             ArmyWork.change(server, "form a squad of a kingdom of the world", state -> {
-                formed[0] = state.formSquad(null, id, free, ArmySettings.rules(), KingdomWorldApi.state(server));
+                formed[0] = state.formSquad(null, id, free, ArmySettings.rulesFor(server, id), KingdomWorldApi.state(server));
                 return formed[0].outcome();
             });
             if (formed[0] != null && formed[0].squad().isPresent()) {

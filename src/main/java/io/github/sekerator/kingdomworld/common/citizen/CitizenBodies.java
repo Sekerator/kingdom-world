@@ -132,9 +132,9 @@ public final class CitizenBodies {
             if (active && distance != Integer.MAX_VALUE) {
                 distance = Math.max(0, distance - 1);
             }
-            // A soldier an alarm calls comes before other citizens while bodies are scarce.
+            // A soldier an alarm calls comes before other citizens while bodies are scarce, one that has a body already first.
             if (distance != Integer.MAX_VALUE && io.github.sekerator.kingdomworld.common.army.ArmyRelief.isCalled(citizen.id())) {
-                distance = -1;
+                distance = active ? -2 : -1;
             }
             if (!forced && distance <= rules.activationChunks()
                     && io.github.sekerator.kingdomworld.common.siege.SiegeWork.overBudget(server, citizen, siegeBodies)) {
@@ -142,12 +142,15 @@ public final class CitizenBodies {
                 continue;
             }
             if (forced || distance <= rules.activationChunks()) {
-                candidates.add(new ActiveSelection.Candidate(citizen.id(), distance, forced));
+                candidates.add(new ActiveSelection.Candidate(citizen.id(), distance, forced,
+                        io.github.sekerator.kingdomworld.common.npc.NpcCamps.bodyGroup(server, citizen)));
             }
         }
         // In the order of the selection: citizens kept regardless of players first, then soldiers an alarm calls, then the
-        // nearest to players.
-        List<UUID> ordered = ActiveSelection.select(candidates, rules.activationChunks(), rules.maxActive());
+        // nearest to players; the royal armies of the kingdoms of the world with what is left, within their own budget.
+        io.github.sekerator.kingdomworld.core.npc.NpcRules npcRules = io.github.sekerator.kingdomworld.common.npc.NpcSettings.rules();
+        List<UUID> ordered = ActiveSelection.select(candidates, rules.activationChunks(), rules.maxActive(),
+                new ActiveSelection.Budget(npcRules.campBodies(), npcRules.armyBodies()));
         Set<UUID> selected = new HashSet<>(ordered);
 
         for (Map.Entry<UUID, CitizenEntity> entry : List.copyOf(ACTIVE.entrySet())) {

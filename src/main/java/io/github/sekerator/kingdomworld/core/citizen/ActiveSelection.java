@@ -28,8 +28,30 @@ public final class ActiveSelection {
      *
      * @param distance chunks to the nearest player, {@link Integer#MAX_VALUE} if no player is in its dimension
      * @param forced   keeps a body regardless of players (game tests, operators)
+     * @param group    the group of a budget of bodies it belongs to (a camp of a royal army), or empty for the citizens and
+     *                 the guard, who come first
      */
-    public record Candidate(UUID id, int distance, boolean forced) {
+    public record Candidate(UUID id, int distance, boolean forced, String group) {
+        public Candidate(UUID id, int distance, boolean forced) {
+            this(id, distance, forced, "");
+        }
+
+        public Candidate {
+            group = group == null ? "" : group;
+        }
+    }
+
+    /**
+     * The bodies the groups of candidates get at most: every group {@code perGroup}, all of them together {@code total}. The
+     * candidates of no group come first, so that a group never takes the body of one of them.
+     */
+    public record Budget(int perGroup, int total) {
+        public static final Budget NONE = new Budget(Integer.MAX_VALUE, Integer.MAX_VALUE);
+
+        public Budget {
+            perGroup = Math.max(0, perGroup);
+            total = Math.max(0, total);
+        }
     }
 
     private ActiveSelection() {
@@ -77,6 +99,15 @@ public final class ActiveSelection {
      * at most {@code maxActive} in total.
      */
     public static List<UUID> select(Collection<Candidate> candidates, int activationChunks, int maxActive) {
+        return select(candidates, activationChunks, maxActive, Budget.NONE);
+    }
+
+    /**
+     * The citizens that get a body: forced ones first, then those of no group within {@code activationChunks}, nearest
+     * first, and with what is left of {@code maxActive} the candidates of groups, nearest first, within the budget of their
+     * groups.
+     */
+    public static List<UUID> select(Collection<Candidate> candidates, int activationChunks, int maxActive, Budget budget) {
         List<Candidate> eligible = new ArrayList<>();
         for (Candidate candidate : candidates) {
             if (candidate.forced() || candidate.distance() <= activationChunks) {
@@ -87,10 +118,29 @@ public final class ActiveSelection {
                 .thenComparingInt(Candidate::distance)
                 .thenComparing(Candidate::id));
         List<UUID> result = new ArrayList<>(Math.min(eligible.size(), Math.max(0, maxActive)));
+        List<Candidate> grouped = new ArrayList<>();
         for (Candidate candidate : eligible) {
             if (result.size() >= maxActive) {
                 break;
             }
+            if (!candidate.forced() && !candidate.group().isEmpty()) {
+                grouped.add(candidate);
+                continue;
+            }
+            result.add(candidate.id());
+        }
+        java.util.Map<String, Integer> perGroup = new java.util.HashMap<>();
+        int total = 0;
+        for (Candidate candidate : grouped) {
+            if (result.size() >= maxActive || total >= budget.total()) {
+                break;
+            }
+            int used = perGroup.getOrDefault(candidate.group(), 0);
+            if (used >= budget.perGroup()) {
+                continue;
+            }
+            perGroup.put(candidate.group(), used + 1);
+            total++;
             result.add(candidate.id());
         }
         return result;

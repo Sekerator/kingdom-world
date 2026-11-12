@@ -1348,6 +1348,7 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue armyBodies;
         public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> townGuards;
         public final ForgeConfigSpec.IntValue garrisonWagePercent;
+        public final ForgeConfigSpec.IntValue armyWagePercent;
         public final ForgeConfigSpec.IntValue citizenTaxPercent;
         public final ForgeConfigSpec.IntValue blocksPerTick;
         public final ForgeConfigSpec.IntValue chunksPerTick;
@@ -1452,6 +1453,9 @@ public final class KingdomWorldConfig {
             garrisonWagePercent = builder.comment("The wage of a soldier of a kingdom of the world, in percent of the wage of a soldier: its",
                             "garrison lives in the barracks and eats from the storehouses. Officers get their multiple of it.")
                     .defineInRange("garrisonWagePercent", 10, 1, 100);
+            armyWagePercent = builder.comment("The wage of a soldier of the royal army of a kingdom of the world who lives in a camp, in percent",
+                            "of the wage of a soldier: the camp feeds it from its fields.")
+                    .defineInRange("armyWagePercent", 2, 1, 100);
             citizenTaxPercent = builder.comment("Share of the wages a kingdom of the world pays its peaceful citizens that comes back to its",
                             "treasury as their tax, in percent. A citizen takes a fifth of its wage home, so the tax is never more than",
                             "the rest: no money is made.")

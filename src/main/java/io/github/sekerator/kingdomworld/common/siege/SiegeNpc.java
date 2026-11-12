@@ -89,8 +89,9 @@ final class SiegeNpc {
         List<ArmySquad> squads = new ArrayList<>();
         for (ArmySquad squad : ArmyWork.state(server).squadsOf(attacker)) {
             Order.Kind kind = squad.order().kind();
-            if (!squad.members().isEmpty() && (kind == Order.Kind.NONE || kind == Order.Kind.HOLD || kind == Order.Kind.PATROL
-                    || kind == Order.Kind.GUARD)) {
+            // The guard and the reserve at the capital stay home.
+            if (!squad.members().isEmpty() && !io.github.sekerator.kingdomworld.common.npc.NpcGarrison.keepsHome(server, squad)
+                    && (kind == Order.Kind.NONE || kind == Order.Kind.HOLD || kind == Order.Kind.PATROL || kind == Order.Kind.GUARD)) {
                 squads.add(squad);
             }
         }
@@ -179,6 +180,23 @@ final class SiegeNpc {
      */
     private static void defend(MinecraftServer server, Siege siege) {
         WorldPos city = new WorldPos(siege.dimension(), siege.x(), siege.y(), siege.z());
+        // A royal army sends its camps to relieve the city, all but a reserve of a third.
+        List<ArmySquad> field = io.github.sekerator.kingdomworld.common.npc.NpcGarrison.fieldArmy(server, siege.defender());
+        boolean relieving = ArmyWork.state(server).squadsOf(siege.defender()).stream()
+                .anyMatch(squad -> squad.order().kind() == Order.Kind.DEFEND && squad.order().points().get(0).equals(city));
+        if (!field.isEmpty() && !relieving) {
+            int send = io.github.sekerator.kingdomworld.common.npc.NpcGarrison.sendable(field.size());
+            int soldiers = 0;
+            for (int i = 0; i < send; i++) {
+                if (ArmyWork.order(server, null, field.get(i).id(), Order.defend(city)).ok()) {
+                    soldiers += field.get(i).members().size();
+                }
+            }
+            SiegeWork.LOGGER.info("Ruler of {} sends {} squad(s) of its army, {} soldier(s), to relieve {}",
+                    WarWork.name(server, siege.defender()).getString(), send, soldiers,
+                    SiegeTexts.cityName(server, siege.defender(), siege.city()));
+            return;
+        }
         List<ArmySquad> free = new ArrayList<>();
         for (ArmySquad squad : ArmyWork.state(server).squadsOf(siege.defender())) {
             Order order = squad.order();

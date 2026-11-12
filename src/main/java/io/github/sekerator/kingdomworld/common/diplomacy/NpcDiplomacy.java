@@ -275,14 +275,17 @@ final class NpcDiplomacy {
             return;
         }
         ArmyState army = ArmyWork.state(server);
+        io.github.sekerator.kingdomworld.core.army.ArmyRules rules = ArmySettings.rulesFor(server, kingdomId);
         List<UUID> free = new ArrayList<>();
         for (Soldier soldier : army.soldiersOf(kingdomId)) {
-            if (army.squadOf(soldier.citizenId()).isEmpty() && free.size() < ArmySquad.MAX_MEMBERS) {
+            if (army.squadOf(soldier.citizenId()).isEmpty()) {
                 free.add(soldier.citizenId());
             }
         }
-        if (!free.isEmpty()) {
-            ArmyWork.change(server, "form a squad for a war", state -> state.formSquad(null, kingdomId, free, ArmySettings.rules(),
+        // Soldiers without a squad form squads as large as the rules allow.
+        for (int from = 0; from < free.size(); from += rules.maxSquadSize()) {
+            List<UUID> part = List.copyOf(free.subList(from, Math.min(free.size(), from + rules.maxSquadSize())));
+            ArmyWork.change(server, "form a squad for a war", state -> state.formSquad(null, kingdomId, part, rules,
                     KingdomWorldApi.state(server)).outcome());
         }
         if (!attack) {
@@ -292,11 +295,29 @@ final class NpcDiplomacy {
         if (target == null) {
             return;
         }
+        // A royal army marches out squad by squad from its camps and leaves a reserve of a third at home; the guard and the
+        // reserve at the capital stay.
+        List<ArmySquad> field = io.github.sekerator.kingdomworld.common.npc.NpcGarrison.fieldArmy(server, kingdomId);
+        if (!field.isEmpty()) {
+            int send = io.github.sekerator.kingdomworld.common.npc.NpcGarrison.sendable(field.size());
+            int soldiers = 0;
+            for (int i = 0; i < send; i++) {
+                if (ArmyWork.order(server, null, field.get(i).id(), Order.hold(target)).ok()) {
+                    soldiers += field.get(i).members().size();
+                }
+            }
+            LOGGER.info("Ruler of {} sends {} squad(s) of its army, {} soldier(s), against {} and keeps {} in reserve",
+                    WarWork.name(server, kingdomId).getString(), send, soldiers, WarWork.name(server, enemy).getString(), field.size() - send);
+            return;
+        }
         // Squads at home go first, then those on patrol or guard; escorts stay with their caravans.
         List<ArmySquad> home = new ArrayList<>();
         List<ArmySquad> watching = new ArrayList<>();
         for (ArmySquad squad : army.squadsOf(kingdomId)) {
             Order.Kind kind = squad.order().kind();
+            if (io.github.sekerator.kingdomworld.common.npc.NpcGarrison.keepsHome(server, squad)) {
+                continue;
+            }
             if (kind == Order.Kind.NONE) {
                 home.add(squad);
             } else if (kind == Order.Kind.PATROL || kind == Order.Kind.GUARD) {

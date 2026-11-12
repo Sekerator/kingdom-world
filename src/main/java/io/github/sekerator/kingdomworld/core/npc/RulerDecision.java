@@ -71,7 +71,9 @@ public record RulerDecision(Kind kind, String subject, long amount, long extra, 
         /** Appoints a subject to a position. */
         APPOINT(true),
         /** Stops a building that costs too much for now. */
-        PAUSE(false);
+        PAUSE(false),
+        /** Raises a camp of the royal army; the place is in {@link #target()} as "x,z". */
+        CAMP(true);
 
         private final boolean important;
 

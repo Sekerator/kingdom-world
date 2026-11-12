@@ -18,6 +18,8 @@ public final class NpcState {
     private final Map<Integer, NpcSite> sites = new LinkedHashMap<>();
     private final Map<UUID, NpcKingdom> kingdoms = new LinkedHashMap<>();
     private final Map<UUID, RulerMemory> rulers = new LinkedHashMap<>();
+    /** The camps of the royal army of every kingdom. */
+    private final Map<UUID, List<ArmyCamp>> camps = new LinkedHashMap<>();
     private int nextSiteId = 1;
     private int planCursor;
     private int planShift;
@@ -146,7 +148,50 @@ public final class NpcState {
         changeListener.run();
     }
 
+    // ---------------------------------------------------------------- camps of the army
+
+    /**
+     * The camps of the royal army of a kingdom, in the order they were planned.
+     */
+    public List<ArmyCamp> camps(UUID kingdomId) {
+        return List.copyOf(camps.getOrDefault(kingdomId, List.of()));
+    }
+
+    public Map<UUID, List<ArmyCamp>> allCamps() {
+        return Collections.unmodifiableMap(camps);
+    }
+
+    /**
+     * Adds a camp to a kingdom or replaces the one at the same place.
+     */
+    public void putCamp(UUID kingdomId, ArmyCamp camp) {
+        List<ArmyCamp> list = new ArrayList<>(camps.getOrDefault(kingdomId, List.of()));
+        list.removeIf(other -> other.x() == camp.x() && other.z() == camp.z());
+        list.add(camp);
+        camps.put(kingdomId, List.copyOf(list));
+        changeListener.run();
+    }
+
+    public void removeCamp(UUID kingdomId, int x, int z) {
+        List<ArmyCamp> list = new ArrayList<>(camps.getOrDefault(kingdomId, List.of()));
+        if (list.removeIf(camp -> camp.x() == x && camp.z() == z)) {
+            if (list.isEmpty()) {
+                camps.remove(kingdomId);
+            } else {
+                camps.put(kingdomId, List.copyOf(list));
+            }
+            changeListener.run();
+        }
+    }
+
+    public void restoreCamps(UUID kingdomId, List<ArmyCamp> list) {
+        if (!list.isEmpty()) {
+            camps.put(kingdomId, List.copyOf(list));
+        }
+    }
+
     public Optional<NpcKingdom> removeKingdom(UUID kingdomId) {
+        camps.remove(kingdomId);
         rulers.remove(kingdomId);
         rulers.values().forEach(memory -> memory.forgetRelation(kingdomId));
         NpcKingdom removed = kingdoms.remove(kingdomId);

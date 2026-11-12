@@ -118,7 +118,8 @@ public final class WorldKingdomGameTests {
             helper.assertTrue(buildings == NpcSpawner.composition(site).buildings().size(), "Buildings " + buildings + " of "
                     + NpcSpawner.composition(site).buildings().size());
             helper.assertTrue(KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdom.id()).size()
-                    == NpcSpawner.composition(site).citizens(), "The citizens are not those planned for the map");
+                    - NpcGameTests.fromAbroad(server, kingdom.id()) == NpcSpawner.composition(site).citizens(),
+                    "The citizens are not those planned for the map");
             helper.succeed();
         } finally {
             NpcGameTests.cleanUp(helper, site, center);

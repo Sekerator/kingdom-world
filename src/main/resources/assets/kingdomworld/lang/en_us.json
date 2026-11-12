@@ -3111,6 +3111,8 @@
   "kingdomworld.ruler.decree.claim.female": "claimed new land: %s",
   "kingdomworld.ruler.decree.town": "founded the town %s",
   "kingdomworld.ruler.decree.town.female": "founded the town %s",
+  "kingdomworld.ruler.decree.camp": "raised a camp of the royal army",
+  "kingdomworld.ruler.decree.camp.female": "raised a camp of the royal army",
   "kingdomworld.ruler.decree.order": "told the workshops to keep %s in store",
   "kingdomworld.ruler.decree.order.female": "told the workshops to keep %s in store",
   "kingdomworld.ruler.decree.tax": "set the poll tax at %s and the sales tax at %s%%",

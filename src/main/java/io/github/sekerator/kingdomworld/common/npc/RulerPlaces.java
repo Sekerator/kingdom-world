@@ -112,6 +112,10 @@ final class RulerPlaces {
         UNFIT.computeIfAbsent(kingdomId, id -> ConcurrentHashMap.newKeySet()).add(anchor.asLong());
     }
 
+    static boolean isUnfit(UUID kingdomId, BlockPos anchor) {
+        return UNFIT.getOrDefault(kingdomId, Set.of()).contains(anchor.asLong());
+    }
+
     /**
      * The wood of the buildings of a kingdom, as a species ({@code minecraft:spruce}); oak if none is known.
      */

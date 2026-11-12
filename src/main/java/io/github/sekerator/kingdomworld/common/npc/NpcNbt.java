@@ -26,7 +26,7 @@ import java.util.UUID;
  * plan: { cursor, shift, done, next }
  * sites: [ { id, x, z, level, seed, towns: [x, z, ...], status, kingdom?, stage, step, ground, reason, given (format 3: 1 money, 2 laws, 4 stores) } ]
  * kingdoms: [ { kingdom, site, level, latin, cyrillic, character, traits: [id], ruler, gender, towns: [ { latin, cyrillic } ],
- *              founded, turn } ]
+ *              founded, turn, camps (format 5): [ { x, z, y, status } ] } ]
  * rulers: see {@link RulerNbt} (format 2)
  * </pre>
  */
@@ -93,6 +93,18 @@ final class NpcNbt {
             entry.put("towns", towns);
             entry.putLong("founded", kingdom.founded());
             entry.putLong("turn", kingdom.lastTurnDay());
+            ListTag camps = new ListTag();
+            for (io.github.sekerator.kingdomworld.core.npc.ArmyCamp camp : state.camps(kingdom.kingdomId())) {
+                CompoundTag place = new CompoundTag();
+                place.putInt("x", camp.x());
+                place.putInt("z", camp.z());
+                place.putInt("y", camp.y());
+                place.putString("status", camp.status().id());
+                camps.add(place);
+            }
+            if (!camps.isEmpty()) {
+                entry.put("camps", camps);
+            }
             kingdoms.add(entry);
         }
         tag.put("kingdoms", kingdoms);
@@ -166,9 +178,19 @@ final class NpcNbt {
                 if (latin.isEmpty()) {
                     throw new IllegalArgumentException("name");
                 }
+                List<io.github.sekerator.kingdomworld.core.npc.ArmyCamp> camps = new ArrayList<>();
+                ListTag campTags = entry.getList("camps", Tag.TAG_COMPOUND);
+                for (int c = 0; c < campTags.size(); c++) {
+                    CompoundTag place = campTags.getCompound(c);
+                    String status = place.getString("status");
+                    camps.add(new io.github.sekerator.kingdomworld.core.npc.ArmyCamp(place.getInt("x"), place.getInt("z"), place.getInt("y"),
+                            io.github.sekerator.kingdomworld.core.npc.ArmyCamp.Status.byId(status)
+                                    .orElseThrow(() -> new IllegalArgumentException("camp status " + status))));
+                }
                 state.restoreKingdom(new NpcKingdom(entry.getUUID("kingdom"), entry.getInt("site"), level,
                         new NpcNames.Name(latin, entry.getString("cyrillic")), character, traits, entry.getInt("ruler"), gender, towns,
                         entry.getLong("founded"), entry.getLong("turn")));
+                state.restoreCamps(entry.getUUID("kingdom"), camps);
             } catch (RuntimeException e) {
                 problems.add("kingdom " + i + ": " + e.getMessage());
             }

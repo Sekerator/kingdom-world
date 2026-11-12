@@ -58,6 +58,8 @@ public final class NpcRulers {
     private static final Deque<UUID> DUE = new ArrayDeque<>();
     private static final Map<UUID, RulerView> LAST_VIEWS = new ConcurrentHashMap<>();
     private static RulerActions.Job job;
+    /** The camp of an army being raised: a job of its own, beside the job of a ruler, so that neither waits for the other. */
+    private static RulerActions.Job campJob;
     /** A turn whose snapshot is half made: the rest is made and the decisions taken in the next tick. */
     private static Turning turning;
 
@@ -101,6 +103,7 @@ public final class NpcRulers {
         DUE.clear();
         LAST_VIEWS.clear();
         job = null;
+        campJob = null;
         turning = null;
         cursor = 0;
         answerCursor = 0;
@@ -267,6 +270,10 @@ public final class NpcRulers {
     private static boolean work(MinecraftServer server) {
         NpcState state = NpcWork.state(server);
         long day = TreasuryActions.day(server);
+        // A camp goes up every other tick beside whatever else the rulers do.
+        if (campJob != null && server.getTickCount() % 2 == 0) {
+            campJob = step(server, campJob, day) ? null : campJob;
+        }
         if (turning != null) {
             Turning current = turning;
             turning = null;
@@ -344,8 +351,13 @@ public final class NpcRulers {
      */
     public static boolean runJobs(MinecraftServer server, int steps) {
         long day = TreasuryActions.day(server);
-        for (int i = 0; i < steps && job != null; i++) {
-            stepJob(server, day);
+        for (int i = 0; i < steps && (job != null || campJob != null); i++) {
+            if (job != null) {
+                stepJob(server, day);
+            }
+            if (campJob != null) {
+                campJob = step(server, campJob, day) ? null : campJob;
+            }
         }
         return job == null;
     }
@@ -358,6 +370,14 @@ public final class NpcRulers {
             LOGGER.error("The ruler of {} could not carry out {}", kingdom.name().latin(), decision, e);
             return;
         }
+        if (result.job() != null && decision.kind() == RulerDecision.Kind.CAMP) {
+            // One camp at a time in the world; the ruler decides again tomorrow while another is raised.
+            if (campJob == null) {
+                campJob = result.job();
+                campJob = step(server, campJob, day) ? null : campJob;
+            }
+            return;
+        }
         if (result.job() != null) {
             job = result.job();
             stepJob(server, day);
@@ -367,7 +387,17 @@ public final class NpcRulers {
     }
 
     private static void stepJob(MinecraftServer server, long day) {
-        RulerActions.Job current = job;
+        if (step(server, job, day)) {
+            job = null;
+        }
+    }
+
+    /**
+     * One step of a job.
+     *
+     * @return whether the job is over: its chunks are released and the decision is remembered
+     */
+    private static boolean step(MinecraftServer server, RulerActions.Job current, long day) {
         ServerLevel level = server.overworld();
         Optional<NpcKingdom> kingdom = NpcWork.kingdom(server, current.kingdomId);
         Optional<io.github.sekerator.kingdomworld.core.territory.Territory> territory = KingdomWorldApi.state(server).territory()
@@ -389,11 +419,11 @@ public final class NpcRulers {
             }
         }
         if (outcome == null) {
-            return;
+            return false;
         }
         current.release(level);
-        job = null;
         finish(server, current.kingdomId, current.decision, outcome, day);
+        return true;
     }
 
     /**
@@ -526,7 +556,13 @@ public final class NpcRulers {
         // The garrison: the fallen are replaced, the posts of officers filled and the soldiers put on their posts.
         NpcGarrison.daily(server, id);
         List<RulerDecision> fresh = new ArrayList<>();
-        for (RulerDecision decision : plan.decisions()) {
+        List<RulerDecision> decided = new ArrayList<>(plan.decisions());
+        // The army beyond the capital lives in camps: the ruler raises the next one it lacks.
+        RulerDecision camp = NpcCamps.decision(server, kingdom);
+        if (camp != null) {
+            decided.add(camp);
+        }
+        for (RulerDecision decision : decided) {
             boolean waiting = memory.pending().stream().anyMatch(p -> p.kind() == decision.kind() && p.subject().equals(decision.subject())
                     && p.target().equals(decision.target()));
             boolean working = job != null && job.kingdomId.equals(id) && job.decision.kind() == decision.kind()

@@ -819,9 +819,11 @@ public final class GuardArmyGameTests {
             io.github.sekerator.kingdomworld.core.npc.NpcComposition composition =
                     io.github.sekerator.kingdomworld.common.npc.NpcSpawner.composition(site);
             String dimension = Dimensions.id(level);
-            // A small kingdom: ten of the guard and six of the army, officers among them, in the kits of their posts, and the
-            // kits cost the treasury nothing at the founding.
-            helper.assertTrue(army.branchOf(id, Branch.GUARD).size() == 10 && army.branchOf(id, Branch.ARMY).size() == 6,
+            // A small kingdom: ten of the guard and a royal army of fifty to a hundred, far larger, officers among them, in the
+            // kits of their posts, and the kits cost the treasury nothing at the founding.
+            int royal = io.github.sekerator.kingdomworld.common.npc.NpcGarrison.royalArmy(server, id);
+            helper.assertTrue(royal >= 50 && royal <= 100, "A small kingdom wants an army of " + royal);
+            helper.assertTrue(army.branchOf(id, Branch.GUARD).size() == 10 && army.branchOf(id, Branch.ARMY).size() == royal,
                     "The garrison is " + army.branchOf(id, Branch.GUARD).size() + " and " + army.branchOf(id, Branch.ARMY).size());
             for (Branch branch : Branch.values()) {
                 for (Post post : new Post[]{Post.VICE_CAPTAIN, Post.CAPTAIN}) {
@@ -835,11 +837,32 @@ public final class GuardArmyGameTests {
             }
             long money = io.github.sekerator.kingdomworld.core.npc.NpcRules.DEFAULT.money(io.github.sekerator.kingdomworld.core.npc.NpcLevel.SMALL);
             helper.assertTrue(funds(server, kingdom) == money, "The kits of the founding were paid: " + funds(server, kingdom) + " of " + money);
-            // Every soldier sleeps in a bunk of the barracks.
+            // The guard and the reserve of the army sleep in bunks of the barracks; the rest of the army lives in the tents of
+            // the army, in squads under their sergeants, and needs no bed.
+            int quartered = 0;
             for (Soldier soldier : army.soldiersOf(id)) {
                 Citizen citizen = KingdomWorldApi.state(server).citizens().get(soldier.citizenId()).orElseThrow();
+                if (io.github.sekerator.kingdomworld.common.npc.NpcCamps.quartered(server, soldier.citizenId())) {
+                    quartered++;
+                    helper.assertTrue(soldier.branch() == Branch.ARMY && citizen.home() == null, "A soldier of a camp took a bed");
+                    continue;
+                }
                 helper.assertTrue(citizen.home() != null && io.github.sekerator.kingdomworld.common.construction.BuildingEffects.inBarracks(server,
                         id, citizen.home()), "A soldier sleeps outside the barracks");
+            }
+            helper.assertTrue(quartered == royal - 6, "Of the army " + quartered + " live beyond the capital");
+            for (ArmySquad squad : army.squadsOf(id)) {
+                String duty = army.duty(squad.id()).orElse("");
+                if (!duty.startsWith("field") && !duty.startsWith("camp")) {
+                    continue;
+                }
+                long most = squad.members().stream().mapToLong(member -> army.soldier(member).orElseThrow().experience()).max().orElse(0);
+                helper.assertTrue(squad.members().size() <= 20 && army.soldier(squad.commander()).orElseThrow().experience() == most
+                        && io.github.sekerator.kingdomworld.common.npc.NpcGarrison.sergeant(server, squad.commander()),
+                        "The squad " + duty + " of " + squad.members().size() + " is not under its sergeant");
+                // Far from players a battle counts every soldier of the squad, not only those with a body.
+                helper.assertTrue(ArmyWork.side(server, squad).fighters().size() == squad.members().size(), "A battle would count "
+                        + ArmyWork.side(server, squad).fighters().size() + " of " + squad.members().size());
             }
             // Two inside the storehouse, a round about it with the vice-captain, two at every gate, the captain in the hall.
             ArmySquad stores = post(helper, server, id, "stores");
@@ -893,6 +916,107 @@ public final class GuardArmyGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_guardarmy_camp", timeoutTicks = 3000)
+    public static void aRulerRaisesACampOfItsArmyOnItsOwnLand(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos center = NpcGameTests.platform(helper);
+        io.github.sekerator.kingdomworld.common.npc.NpcSettings.override(io.github.sekerator.kingdomworld.core.npc.NpcRules.DEFAULT);
+        helper.assertTrue(io.github.sekerator.kingdomworld.common.npc.NpcWork.state(server).spawning().isEmpty(),
+                "Another kingdom of the world is appearing");
+        io.github.sekerator.kingdomworld.core.npc.NpcSite site = NpcGameTests.plant(helper, center);
+        UUID id;
+        try {
+            id = NpcGameTests.raise(helper, site, NpcGameTests.STEPS).id();
+            io.github.sekerator.kingdomworld.core.npc.NpcKingdom npc = io.github.sekerator.kingdomworld.common.npc.NpcWork.kingdom(server, id)
+                    .orElseThrow();
+            // The army beyond the capital waits at its barracks until the ruler raises a camp for it.
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.npc.NpcCamps.built(server, id).isEmpty(), "A camp stands already");
+            io.github.sekerator.kingdomworld.core.npc.RulerDecision camp = io.github.sekerator.kingdomworld.common.npc.NpcCamps.decision(server,
+                    npc);
+            helper.assertTrue(camp != null && camp.kind() == io.github.sekerator.kingdomworld.core.npc.RulerDecision.Kind.CAMP,
+                    "The ruler wants no camp: " + camp);
+            io.github.sekerator.kingdomworld.common.npc.NpcRulers.carryOutNow(server, npc, camp);
+        } catch (RuntimeException e) {
+            io.github.sekerator.kingdomworld.common.npc.NpcSettings.override(null);
+            NpcGameTests.cleanUp(helper, site, center);
+            throw e;
+        }
+        UUID kingdomId = id;
+        io.github.sekerator.kingdomworld.core.npc.NpcSite placed = site;
+        int[] ticks = {0};
+        boolean[] over = {false};
+        helper.onEachTick(() -> {
+            if (over[0]) {
+                return;
+            }
+            ticks[0]++;
+            // A step a tick, as the server goes: its chunks load meanwhile.
+            io.github.sekerator.kingdomworld.common.npc.NpcRulers.runJobs(server, 1);
+            List<io.github.sekerator.kingdomworld.core.npc.ArmyCamp> built = io.github.sekerator.kingdomworld.common.npc.NpcCamps.built(server,
+                    kingdomId);
+            if (built.isEmpty() && ticks[0] < 2800) {
+                return;
+            }
+            over[0] = true;
+            try {
+                helper.assertTrue(!built.isEmpty(), "No camp was raised: " + io.github.sekerator.kingdomworld.common.npc.NpcWork.state(server)
+                        .camps(kingdomId));
+                io.github.sekerator.kingdomworld.core.npc.ArmyCamp raised = built.get(0);
+                String dimension = Dimensions.id(level);
+                // On its own land, beyond the land the kingdom appeared with.
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int dz = -1; dz <= 1; dz++) {
+                        long chunk = io.github.sekerator.kingdomworld.core.territory.ChunkKey.of((raised.x() >> 4) + dx, (raised.z() >> 4) + dz);
+                        helper.assertTrue(kingdomId.equals(KingdomWorldApi.state(server).territory().ownerOf(dimension, chunk)),
+                                "The camp stands on land that is not the kingdom's");
+                    }
+                }
+                int reach = NpcGameTests.landRadius(placed) * 16;
+                helper.assertTrue(Math.max(Math.abs(raised.x() - placed.x()), Math.abs(raised.z() - placed.z())) > reach,
+                        "The camp lies inside the land of the capital: " + raised);
+                // Its buildings: the drill yard, two barracks, a barn and two watchtowers.
+                java.util.Map<String, Integer> found = new java.util.HashMap<>();
+                for (io.github.sekerator.kingdomworld.core.construction.Building building : KingdomWorldApi.state(server).construction()
+                        .buildingsOf(kingdomId)) {
+                    if (Math.abs(building.anchor().x() - raised.x()) <= 30 && Math.abs(building.anchor().z() - raised.z()) <= 30) {
+                        found.merge(building.templateId(), 1, Integer::sum);
+                    }
+                }
+                for (io.github.sekerator.kingdomworld.core.npc.ArmyCamp.Building plan : io.github.sekerator.kingdomworld.core.npc.ArmyCamp
+                        .buildings()) {
+                    helper.assertTrue(found.getOrDefault("kingdomworld:" + plan.template(), found.getOrDefault(plan.template(), 0)) > 0,
+                            "The camp lacks " + plan.template() + ": " + found);
+                }
+                // The squads of the army beyond the capital stand in the camp, quartered there, each under its sergeant.
+                ArmyState army = ArmyWork.state(server);
+                int inCamp = 0;
+                for (ArmySquad squad : army.squadsOf(kingdomId)) {
+                    String duty = army.duty(squad.id()).orElse("");
+                    if (!duty.startsWith("camp")) {
+                        continue;
+                    }
+                    WorldPos at = squad.order().points().get(0);
+                    helper.assertTrue(Math.abs(at.x() - raised.x()) <= io.github.sekerator.kingdomworld.core.npc.ArmyCamp.REACH
+                            && Math.abs(at.z() - raised.z()) <= io.github.sekerator.kingdomworld.core.npc.ArmyCamp.REACH,
+                            "The squad " + duty + " stands outside the camp: " + at);
+                    for (UUID member : squad.members()) {
+                        helper.assertTrue(io.github.sekerator.kingdomworld.common.npc.NpcCamps.quartered(server, member), "A soldier of the camp has "
+                                + "no quarters");
+                        inCamp++;
+                    }
+                }
+                int beyond = io.github.sekerator.kingdomworld.common.npc.NpcGarrison.royalArmy(server, kingdomId) - 6;
+                helper.assertTrue(inCamp == Math.min(beyond, io.github.sekerator.kingdomworld.core.npc.NpcRules.DEFAULT.campSoldiers()),
+                        "The camp holds " + inCamp + " of " + beyond);
+                helper.succeed();
+            } finally {
+                io.github.sekerator.kingdomworld.common.npc.NpcSettings.override(null);
+                NpcGameTests.cleanUp(helper, placed, center);
+            }
+        });
+    }
+
     @GameTest(template = EMPTY, batch = "kingdomworld_guardarmy_oldkingdom", timeoutTicks = 200)
     public static void aKingdomRaisedBeforeGetsPostsAndFillsItsRanksByAndBy(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -902,11 +1026,19 @@ public final class GuardArmyGameTests {
         try {
             helper.assertTrue(io.github.sekerator.kingdomworld.common.npc.NpcWork.state(server).spawning().isEmpty(),
                     "Another kingdom of the world is appearing");
-            // A kingdom of the first layout: no named posts, a handful of soldiers.
+            // A kingdom of the first layout raised before the royal armies: no named posts, a handful of soldiers.
+            io.github.sekerator.kingdomworld.core.npc.NpcRules d = io.github.sekerator.kingdomworld.core.npc.NpcRules.DEFAULT;
+            io.github.sekerator.kingdomworld.common.npc.NpcSettings.override(new io.github.sekerator.kingdomworld.core.npc.NpcRules(
+                    d.generate(), d.count(), d.radius(), d.minDistance(), d.minSpawnDistance(), d.triggerChunks(), d.sizeQuota(),
+                    d.sizeWeights(), d.landRadius(), d.towns(), d.townDistance(), d.money(), d.foodDays(), d.materials(), d.soldiers(),
+                    d.blocksPerTick(), d.chunksPerTick(), d.maxInhabitedMinutes(), d.attemptsPerSite(), d.guards(), d.army(), d.townGuards(),
+                    new int[]{0, 0, 0}, new int[]{0, 0, 0}, d.armyPerDay(), d.campSoldiers(), d.campBodies(), d.armyBodies()));
             site = io.github.sekerator.kingdomworld.common.npc.NpcWork.planGridAt(server, center.getX(), center.getZ(),
                     io.github.sekerator.kingdomworld.core.npc.NpcLevel.SMALL, List.of()).orElse(null);
             helper.assertTrue(site != null, "The data of the kingdoms of the world is read-only");
             Kingdom kingdom = NpcGameTests.raise(helper, site, NpcGameTests.STEPS);
+            // The large armies come with this version: the kingdom fills its army by and by.
+            io.github.sekerator.kingdomworld.common.npc.NpcSettings.override(d);
             UUID id = kingdom.id();
             ArmyState army = ArmyWork.state(server);
             int before = army.soldiersOf(id).size();
@@ -926,11 +1058,13 @@ public final class GuardArmyGameTests {
             } else {
                 helper.assertTrue(first.order().equals(Order.guard(gates.get(0), 0)), "The soldiers do not guard the first gate: " + first.order());
             }
-            // The ranks fill by and by: two recruits a day from the citizens without work, never half of the people.
+            // The ranks fill by and by: the guard by two recruits a day from the citizens without work, never half of the
+            // people, and the royal army by five recruits a day from abroad.
             int[] wanted = io.github.sekerator.kingdomworld.common.npc.NpcGarrison.wanted(server, id);
             int people = KingdomWorldApi.state(server).citizens().registry().citizensOf(id).size();
-            helper.assertTrue(wanted[0] + wanted[1] > before && wanted[0] + wanted[1] <= people / 2, "The garrison wanted is " + wanted[0] + " and "
-                    + wanted[1] + " for " + people + " people");
+            helper.assertTrue(wanted[0] > before && wanted[0] <= people / 2 && wanted[1] >= 50 && wanted[1] <= 100, "The garrison wanted is "
+                    + wanted[0] + " and " + wanted[1] + " for " + people + " people");
+            int perDay = ArmySettings.force().replacePerDay + d.armyPerDay();
             BlockPos throne = io.github.sekerator.kingdomworld.common.npc.NpcSpawner.thronePos(site);
             WorldPos place = new WorldPos(Dimensions.id(level), throne.getX(), throne.getY(), throne.getZ() + 3);
             for (int i = 0; i < 5; i++) {
@@ -940,19 +1074,21 @@ public final class GuardArmyGameTests {
             army.setStaffDay(id, ArmyWork.day(server) - 1);
             io.github.sekerator.kingdomworld.common.npc.NpcGarrison.daily(server, id);
             int after = army.soldiersOf(id).size();
-            helper.assertTrue(after == before + ArmySettings.force().replacePerDay, "The ranks grew by " + (after - before) + " in a day");
+            helper.assertTrue(after == before + perDay && army.branchOf(id, Branch.ARMY).size() == d.armyPerDay(), "The ranks grew by "
+                    + (after - before) + " in a day, the army is " + army.branchOf(id, Branch.ARMY).size());
             // The same day again changes nothing; the next day brings the next recruits, and every one of them has a post.
             io.github.sekerator.kingdomworld.common.npc.NpcGarrison.daily(server, id);
             helper.assertTrue(army.soldiersOf(id).size() == after, "The ranks grew twice in a day");
             army.setStaffDay(id, ArmyWork.day(server) - 1);
             io.github.sekerator.kingdomworld.common.npc.NpcGarrison.daily(server, id);
-            helper.assertTrue(army.soldiersOf(id).size() == after + ArmySettings.force().replacePerDay, "The ranks did not grow the next day");
+            helper.assertTrue(army.soldiersOf(id).size() == after + perDay, "The ranks did not grow the next day");
             for (Soldier soldier : army.soldiersOf(id)) {
                 helper.assertTrue(army.squadOf(soldier.citizenId()).flatMap(squad -> army.duty(squad.id())).isPresent(), "A recruit has no post");
                 helper.assertTrue(ArmyKits.isIssued(ArmyWork.hands(server, soldier.citizenId()).get(EquipmentSlot.CHEST)), "A soldier has no kit");
             }
             helper.assertTrue(army.squadOfDuty(id, "palace_hall").isPresent(), "The recruits did not take the post at the throne");
         } finally {
+            io.github.sekerator.kingdomworld.common.npc.NpcSettings.override(null);
             NpcGameTests.cleanUp(helper, site, center);
         }
         helper.succeed();

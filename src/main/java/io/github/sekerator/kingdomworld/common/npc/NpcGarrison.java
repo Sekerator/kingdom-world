@@ -23,6 +23,7 @@ import io.github.sekerator.kingdomworld.core.npc.NpcComposition;
 import io.github.sekerator.kingdomworld.core.npc.NpcLevel;
 import io.github.sekerator.kingdomworld.core.npc.NpcRules;
 import io.github.sekerator.kingdomworld.core.npc.NpcSite;
+import io.github.sekerator.kingdomworld.core.npc.RoyalArmy;
 import io.github.sekerator.kingdomworld.core.road.City;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import net.minecraft.server.MinecraftServer;
@@ -42,9 +43,13 @@ import java.util.UUID;
  *
  * <p>A capital of districts names its posts: two guards at every gate, two inside the storehouse and a round about it,
  * the hall of the palace with the captain of the guard, the door of the palace, the square, and a round along the wall.
- * Every town has a few guards of its own. The army stands in reserve at the barracks, its captain with a part of it at the
- * palace. A capital of the first layout has no named posts: its gates, a storehouse of the register of buildings and the
- * throne stand in for them.
+ * Every town has a few guards of its own. The royal army is far larger than the guard ({@link RoyalArmy}): a part of it stands
+ * in reserve at the barracks, its captain with some of it at the palace, and the rest lives in the camps of the kingdom
+ * ({@link NpcCamps}) in squads of {@link #ARMY_SQUAD}, each under its sergeant, the most experienced soldier of the squad. Until a
+ * camp stands, or when there is no land for one, those squads wait at the barracks of the capital. The army is not taken
+ * from the people: its recruits come from abroad, all of them at the founding and {@link NpcRules#armyPerDay} a day after.
+ * A capital of the first layout has no named posts: its gates, a storehouse of the register of buildings and the throne
+ * stand in for them.
  *
  * <p>The posts are reckoned anew every time, not once: a gate that is gone loses its guards, a new one gets some, and a
  * post that lost soldiers is filled from the less important ones. Squads the ruler sent elsewhere (a road patrol, the
@@ -52,8 +57,14 @@ import java.util.UUID;
  */
 public final class NpcGarrison {
     private static final Logger LOGGER = LogUtils.getLogger();
-    /** Most soldiers of the people of a kingdom, in a hundred: the rest works. */
+    /** Most soldiers of the guard of the people of a kingdom, in a hundred: the rest works. */
     private static final int MOST_PERCENT = 50;
+    /** Food points a loaf of bread gives. */
+    private static final int BREAD_NUTRITION = 5;
+    /** Soldiers of a squad of the army beyond the capital, its sergeant included. */
+    static final int ARMY_SQUAD = 20;
+    /** The prefix of the posts of the army that waits at the capital for a camp. */
+    static final String FIELD = "field";
 
     /**
      * A post of the garrison.
@@ -78,8 +89,8 @@ public final class NpcGarrison {
     // ---------------------------------------------------------------- how many
 
     /**
-     * The soldiers a kingdom should have: {the guard with the guards of its towns, the army}. Never more than half of its
-     * people serve.
+     * The soldiers a kingdom should have: {the guard with the guards of its towns, the royal army}. The guard is taken from
+     * the people and never more than half of them serve; the army comes from abroad.
      */
     public static int[] wanted(MinecraftServer server, UUID kingdomId) {
         Optional<NpcSite> site = site(server, kingdomId);
@@ -89,13 +100,72 @@ public final class NpcGarrison {
         NpcRules rules = NpcSettings.rules();
         NpcLevel level = site.get().level();
         int guards = rules.guards(level) + RoadWork.state(server).citiesOf(kingdomId).size() * rules.townGuards(level);
-        int army = rules.army(level);
-        int most = KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdomId).size() * MOST_PERCENT / 100;
-        if (guards + army > most) {
-            army = Math.min(army, most / 3);
-            guards = Math.max(0, most - army);
+        ArmyState army = ArmyWork.state(server);
+        int people = 0;
+        for (Citizen citizen : KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdomId)) {
+            people += army.soldier(citizen.id()).map(soldier -> soldier.branch() == Branch.ARMY ? 0 : 1).orElse(1);
         }
-        return new int[]{guards, army};
+        return new int[]{Math.min(guards, people * MOST_PERCENT / 100), royalArmy(server, kingdomId)};
+    }
+
+    /**
+     * The royal army a kingdom should have, by its size, its seed and its ruler.
+     */
+    public static int royalArmy(MinecraftServer server, UUID kingdomId) {
+        Optional<io.github.sekerator.kingdomworld.core.npc.NpcKingdom> npc = NpcWork.state(server).kingdom(kingdomId);
+        Optional<NpcSite> site = site(server, kingdomId);
+        if (npc.isEmpty() || site.isEmpty()) {
+            return 0;
+        }
+        return RoyalArmy.size(NpcSettings.rules(), npc.get().level(), site.get().seed(), npc.get().character(), npc.get().traits());
+    }
+
+    /**
+     * Recruits from abroad join the royal army: they arrive at a camp of the kingdom (at the barracks of its capital while
+     * there is none), with no bed of their own, and become warriors and archers, two warriors to an archer. Nothing is paid
+     * and nothing taken from the people; their gear comes from the staff.
+     *
+     * @return how many joined
+     */
+    static int enlist(MinecraftServer server, UUID kingdomId, int count) {
+        if (count <= 0 || ArmyWork.isReadOnly(server) || KingdomWorldApi.isReadOnly(server)) {
+            return 0;
+        }
+        WorldPos throne = ArmyWork.capitalOf(server, kingdomId);
+        if (throne == null) {
+            return 0;
+        }
+        List<io.github.sekerator.kingdomworld.core.npc.ArmyCamp> camps = NpcCamps.built(server, kingdomId);
+        WorldPos barracks = building(server, kingdomId, BuildingRoles.BARRACKS, throne).map(Building::anchor).orElse(throne);
+        ArmyState army = ArmyWork.state(server);
+        KingdomWorldState world = KingdomWorldApi.state(server);
+        ArmyRules rules = ArmySettings.rulesFor(server, kingdomId);
+        int joined = 0;
+        for (int i = 0; i < count; i++) {
+            io.github.sekerator.kingdomworld.core.npc.ArmyCamp camp = camps.isEmpty() ? null : camps.get(i % camps.size());
+            WorldPos place = camp == null ? barracks : new WorldPos(throne.dimension(), camp.x(), camp.y() + 1, camp.z());
+            Optional<Citizen> recruit = io.github.sekerator.kingdomworld.common.citizen.CitizenLife.arrive(server, kingdomId, place, false, false);
+            if (recruit.isEmpty()) {
+                break;
+            }
+            int size = army.branchOf(kingdomId, Branch.ARMY).size();
+            String profession = size % 3 == 2 ? io.github.sekerator.kingdomworld.core.citizen.Professions.ARCHER.id()
+                    : io.github.sekerator.kingdomworld.core.citizen.Professions.WARRIOR.id();
+            UUID id = recruit.get().id();
+            io.github.sekerator.kingdomworld.core.kingdom.Outcome outcome = ArmyWork.change(server, "enlist a soldier of the royal army",
+                    state -> state.recruit(null, kingdomId, id, profession, KingdomWorldApi.gameTime(server), rules, world));
+            if (!outcome.ok()) {
+                // No room in the army: the newcomer stays a citizen without work.
+                LOGGER.debug("A recruit of {} was not taken into the army: {}", kingdomId, outcome.error());
+                break;
+            }
+            army.setBranch(null, id, Branch.ARMY, world);
+            if (army.losses(kingdomId, Branch.ARMY) > 0) {
+                army.replaced(kingdomId, Branch.ARMY);
+            }
+            joined++;
+        }
+        return joined;
     }
 
     // ---------------------------------------------------------------- at the founding
@@ -145,13 +215,30 @@ public final class NpcGarrison {
         for (Soldier soldier : soldiers) {
             world.citizens().get(soldier.citizenId()).ifPresent(citizen -> ArmyWork.billet(server, citizen));
         }
+        // The royal army beyond the soldiers of the plan comes from abroad, all of it at once, with bread for as many days as
+        // the kingdom has for its people: like its gear, a part of the wealth of the kingdom at its founding.
+        int enlisted = enlist(server, id, royalArmy(server, id) - army.branchOf(id, Branch.ARMY).size());
+        long nutrition = (long) enlisted * NpcSettings.rules().foodDays()
+                * io.github.sekerator.kingdomworld.common.citizen.CitizenSettings.rules().dailyNutrition();
+        int bread = (int) Math.ceil(nutrition / (double) BREAD_NUTRITION);
+        while (bread > 0) {
+            int count = Math.min(64, bread);
+            io.github.sekerator.kingdomworld.common.storage.KingdomStorage.insert(server, id,
+                    new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.BREAD, count), throne);
+            bread -= count;
+        }
+        for (Soldier soldier : army.branchOf(id, Branch.ARMY)) {
+            if (army.soldier(soldier.citizenId()).map(known -> known.experience() < 300).orElse(false)) {
+                army.reward(soldier.citizenId(), 300 - soldier.experience(), 0, 0);
+            }
+        }
         ArmyStaff.Report report = ArmyStaff.muster(server, id, true);
         for (Branch branch : Branch.values()) {
             army.officer(id, branch, Post.VICE_CAPTAIN).ifPresent(officer -> army.reward(officer.citizenId(), 1_200, 0, 0));
             army.officer(id, branch, Post.CAPTAIN).ifPresent(officer -> army.reward(officer.citizenId(), 2_700, 0, 0));
         }
-        LOGGER.info("Garrison of {}: {} of the guard, {} of the army, {} officer(s), {} piece(s) of gear", id,
-                army.branchOf(id, Branch.GUARD).size(), army.branchOf(id, Branch.ARMY).size(), report.promoted(), report.issued());
+        LOGGER.info("Garrison of {}: {} of the guard, {} of the army ({} recruit(s) from abroad), {} officer(s), {} piece(s) of gear", id,
+                army.branchOf(id, Branch.GUARD).size(), army.branchOf(id, Branch.ARMY).size(), enlisted, report.promoted(), report.issued());
     }
 
     // ---------------------------------------------------------------- every day
@@ -165,7 +252,18 @@ public final class NpcGarrison {
             return;
         }
         int[] wanted = wanted(server, kingdomId);
-        ArmyStaff.daily(server, kingdomId, wanted[0], wanted[1]);
+        ArmyState army = ArmyWork.state(server);
+        // The army fills up from abroad a few a day (a kingdom that appeared before the large armies, or lost soldiers in a
+        // war); the staff sees to the guard, the officers and the kits of all.
+        if (army.staffDay(kingdomId) < ArmyWork.day(server)) {
+            int lacking = wanted[1] - army.branchOf(kingdomId, Branch.ARMY).size();
+            int joined = enlist(server, kingdomId, Math.min(NpcSettings.rules().armyPerDay(), lacking));
+            if (joined > 0) {
+                LOGGER.info("{} recruit(s) from abroad joined the army of {}: {} of {}", joined, kingdomId,
+                        army.branchOf(kingdomId, Branch.ARMY).size(), wanted[1]);
+            }
+        }
+        ArmyStaff.daily(server, kingdomId, wanted[0], army.branchOf(kingdomId, Branch.ARMY).size());
         station(server, kingdomId);
     }
 
@@ -274,8 +372,25 @@ public final class NpcGarrison {
         }
         // The army in reserve: at the barracks with its vice-captain, and at the palace with its captain.
         WorldPos barracks = building(server, kingdomId, BuildingRoles.BARRACKS, throne).map(Building::anchor).orElse(throne);
-        duties.add(new Duty("reserve", Order.guard(barracks, 0), ArmySquad.MAX_MEMBERS, ArmySquad.MAX_MEMBERS, Branch.ARMY, Post.VICE_CAPTAIN));
-        duties.add(new Duty("reserve_palace", Order.guard(palace, 0), 0, 6, Branch.ARMY, Post.CAPTAIN));
+        int capital = Math.max(1, rules.army(site.level()));
+        int atPalace = Math.min(6, 1 + capital / 3);
+        duties.add(new Duty("reserve", Order.guard(barracks, 0), 0, Math.max(1, capital - atPalace), Branch.ARMY, Post.VICE_CAPTAIN));
+        duties.add(new Duty("reserve_palace", Order.guard(palace, 0), 0, atPalace, Branch.ARMY, Post.CAPTAIN));
+        // The rest of the army in squads in the camps, as many squads as the army needs; those the camps cannot hold wait at
+        // the barracks of the capital.
+        int beyond = Math.max(0, royalArmy(server, kingdomId) - capital);
+        int squads = (beyond + ARMY_SQUAD - 1) / ARMY_SQUAD;
+        int perCamp = (NpcSettings.rules().campSoldiers() + ARMY_SQUAD - 1) / ARMY_SQUAD;
+        List<List<WorldPos>> camps = NpcCamps.squadPlaces(server, kingdomId, dimension, perCamp);
+        int placed = 0;
+        for (int c = 0; c < camps.size() && placed < squads; c++) {
+            for (int n = 0; n < perCamp && placed < squads; n++, placed++) {
+                duties.add(new Duty(NpcCamps.DUTY + c + "_" + n, Order.guard(camps.get(c).get(n), 0), 0, ARMY_SQUAD, Branch.ARMY, null));
+            }
+        }
+        for (int n = 0; placed < squads; n++, placed++) {
+            duties.add(new Duty(FIELD + "_" + n, Order.guard(barracks, 0), 0, ARMY_SQUAD, Branch.ARMY, null));
+        }
         return duties;
     }
 
@@ -308,6 +423,7 @@ public final class NpcGarrison {
         for (Branch branch : Branch.values()) {
             moved += fill(server, kingdomId, branch, duties, rules);
         }
+        sergeants(server, kingdomId);
         // Every squad of a post does what the post asks, unless the ruler sent it elsewhere for now.
         for (Duty duty : duties) {
             army.squadOfDuty(kingdomId, duty.id()).ifPresent(squad -> {
@@ -387,16 +503,20 @@ public final class NpcGarrison {
                 moved++;
             }
         }
-        // Who is left over: the army to its reserve (a part of it with its captain), the guard to the posts with room.
+        // Who is left over: the army to its posts in their order (the reserve, the palace with the captain, the squads of the
+        // camps), the guard to the posts with room.
         if (branch == Branch.ARMY) {
-            Duty reserve = duties.get(0);
-            Duty palace = duties.size() > 1 ? duties.get(1) : reserve;
-            boolean captain = army.officer(kingdomId, branch, Post.CAPTAIN).isPresent();
             for (UUID soldier : idle) {
-                Duty to = captain && members(army, kingdomId, palace) < Math.min(palace.most(), 1 + army.branchOf(kingdomId, branch).size() / 3)
-                        ? palace : reserve;
-                if (assign(server, kingdomId, to, soldier, rules)) {
-                    moved++;
+                for (Duty duty : duties) {
+                    if (duty.officer() == Post.CAPTAIN && army.officer(kingdomId, branch, Post.CAPTAIN).isEmpty()) {
+                        continue;
+                    }
+                    if (members(army, kingdomId, duty) < duty.most()) {
+                        if (assign(server, kingdomId, duty, soldier, rules)) {
+                            moved++;
+                        }
+                        break;
+                    }
                 }
             }
             return moved;
@@ -416,6 +536,77 @@ public final class NpcGarrison {
             }
         }
         return moved;
+    }
+
+    /**
+     * Every squad of the army beyond the capital is under its sergeant: the most experienced fighter of the squad commands it.
+     */
+    private static void sergeants(MinecraftServer server, UUID kingdomId) {
+        ArmyState army = ArmyWork.state(server);
+        KingdomWorldState world = KingdomWorldApi.state(server);
+        for (ArmySquad squad : army.squadsOf(kingdomId)) {
+            Optional<String> duty = army.duty(squad.id());
+            if (duty.isEmpty() || !(duty.get().startsWith(NpcCamps.DUTY) || duty.get().startsWith(FIELD))) {
+                continue;
+            }
+            UUID best = null;
+            long most = -1;
+            for (UUID member : squad.members()) {
+                long experience = army.soldier(member).map(Soldier::experience).orElse(0L);
+                if (experience > most) {
+                    best = member;
+                    most = experience;
+                }
+            }
+            if (best != null && !best.equals(squad.commander())) {
+                army.setCommander(null, squad.id(), best, world);
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- war
+
+    /**
+     * The squads of the royal army a ruler of the world takes to a war: those of the camps and those waiting at the capital
+     * for a camp, while they stand at their posts. The guard, its posts and the reserve of the army at the capital stay home.
+     */
+    public static List<ArmySquad> fieldArmy(MinecraftServer server, UUID kingdomId) {
+        ArmyState army = ArmyWork.state(server);
+        List<ArmySquad> squads = new ArrayList<>();
+        for (ArmySquad squad : army.squadsOf(kingdomId)) {
+            Optional<String> duty = army.duty(squad.id());
+            Order.Kind kind = squad.order().kind();
+            if (duty.isPresent() && (duty.get().startsWith(NpcCamps.DUTY) || duty.get().startsWith(FIELD))
+                    && (kind == Order.Kind.GUARD || kind == Order.Kind.NONE)) {
+                squads.add(squad);
+            }
+        }
+        return squads;
+    }
+
+    /**
+     * Whether a squad stands at a post of the guard or in the reserve of the army at the capital: a ruler never sends it away.
+     */
+    public static boolean keepsHome(MinecraftServer server, ArmySquad squad) {
+        return ArmyWork.state(server).duty(squad.id())
+                .map(duty -> !duty.startsWith(NpcCamps.DUTY) && !duty.startsWith(FIELD)).orElse(false);
+    }
+
+    /**
+     * Of the squads of the field army, how many a ruler sends away: all but a reserve of a third.
+     */
+    public static int sendable(int squads) {
+        return squads - squads / 3;
+    }
+
+    /**
+     * Whether a soldier is the sergeant of a squad of the army beyond the capital.
+     */
+    public static boolean sergeant(MinecraftServer server, UUID citizenId) {
+        ArmyState army = ArmyWork.state(server);
+        return army.squadOf(citizenId).filter(squad -> citizenId.equals(squad.commander()))
+                .flatMap(squad -> army.duty(squad.id()))
+                .map(duty -> duty.startsWith(NpcCamps.DUTY) || duty.startsWith(FIELD)).orElse(false);
     }
 
     /**

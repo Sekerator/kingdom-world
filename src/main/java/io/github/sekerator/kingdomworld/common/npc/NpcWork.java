@@ -128,6 +128,7 @@ public final class NpcWork {
         NpcFounding.reset();
         NpcSpawner.reset();
         NpcRulers.reset();
+        NpcCamps.reset();
     }
 
     static void loaded(MinecraftServer server) {

@@ -31,7 +31,7 @@ public final class NpcEvents {
 
             @Override
             public long cost(MinecraftServer server, java.util.UUID kingdomId) {
-                int people = io.github.sekerator.kingdomworld.common.api.KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdomId).size();
+                int people = NpcCamps.townsfolk(server, kingdomId);
                 return io.github.sekerator.kingdomworld.core.life.Festivals.cost(people, io.github.sekerator.kingdomworld.common.life.LifeSettings.rules());
             }
         });

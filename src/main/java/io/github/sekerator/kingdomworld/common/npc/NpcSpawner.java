@@ -1095,7 +1095,7 @@ public final class NpcSpawner {
      * @param used gets the blocks done, for the budget
      * @return whether the building stands (or cannot be put up at all)
      */
-    private static boolean buildAt(MinecraftServer server, ServerLevel level, UUID id, String templateId, int centerX, int y, int centerZ,
+    static boolean buildAt(MinecraftServer server, ServerLevel level, UUID id, String templateId, int centerX, int y, int centerZ,
                                    Placement placement, Materials materials, int budget, int[] used) {
         Optional<BuildingTemplate> template = BuildingTemplates.get(templateId);
         if (template.isEmpty() || !template.get().available()) {
