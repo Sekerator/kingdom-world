@@ -66,6 +66,51 @@ class NpcSiteTest {
     }
 
     @Test
+    void aStyledPlaceNeedsAnArchitecturalStyleAndKeepsItsGuildRank() {
+        NpcState state = new NpcState();
+        NpcSite site = state.addSite(10, 20, NpcLevel.LARGE, 5L, List.of(), NpcSite.LAYOUT_STYLED, "gothic", "minecraft:spruce", "ss");
+        assertEquals(NpcSite.LAYOUT_STYLED, site.layout());
+        assertTrue(site.styled());
+        assertTrue(site.districts(), "a styled capital is a capital of districts");
+        assertEquals("gothic", site.style());
+        assertTrue(site.look().isEmpty(), "an architectural style is no look of the second layout");
+        assertEquals("ss", site.guildRank());
+        assertEquals("minecraft:spruce", site.wood());
+        NpcSite noRank = new NpcSite(2, 0, 0, NpcLevel.SMALL, 1L, List.of(), NpcSite.LAYOUT_STYLED, "terem", "");
+        assertEquals("", noRank.guildRank());
+        assertTrue(noRank.styled());
+        NpcSite districts = new NpcSite(3, 0, 0, NpcLevel.SMALL, 1L, List.of(), NpcSite.LAYOUT_DISTRICTS, "stone", "");
+        assertTrue(districts.districts());
+        assertFalse(districts.styled());
+        assertEquals("", districts.guildRank());
+        assertFalse(site().styled());
+        assertThrows(IllegalArgumentException.class, () -> new NpcSite(4, 0, 0, NpcLevel.SMALL, 1L, List.of(), NpcSite.LAYOUT_STYLED, "", ""));
+        assertThrows(IllegalArgumentException.class, () -> new NpcSite(4, 0, 0, NpcLevel.SMALL, 1L, List.of(), NpcSite.LAYOUT_STYLED, null, ""));
+        assertThrows(IllegalArgumentException.class,
+                () -> new NpcSite(4, 0, 0, NpcLevel.SMALL, 1L, List.of(), NpcSite.LAYOUT_STYLED, "brick", "", "a"));
+        assertThrows(IllegalArgumentException.class, () -> new NpcSite(4, 0, 0, NpcLevel.SMALL, 1L, List.of(), 7, "classic", ""));
+        assertThrows(IllegalArgumentException.class, () -> new NpcSite(4, 0, 0, NpcLevel.SMALL, 1L, List.of(), 0, "", ""));
+    }
+
+    @Test
+    void thePlanKnowsTheStylesAndTheRankSSItsLivingPlacesHold() {
+        NpcState state = new NpcState();
+        NpcSite gothic = state.addSite(0, 0, NpcLevel.LARGE, 1L, List.of(), NpcSite.LAYOUT_STYLED, "gothic", "", "ss");
+        NpcSite terem = state.addSite(5000, 0, NpcLevel.SMALL, 2L, List.of(), NpcSite.LAYOUT_STYLED, "terem", "", "b");
+        state.addSite(9000, 0, NpcLevel.MEDIUM, 3L, List.of(), NpcSite.LAYOUT_DISTRICTS, "stone", "");
+        assertEquals(java.util.Set.of("gothic", "terem"), state.takenStyles(), "a look of the second layout holds no style");
+        assertTrue(state.holdsGuildRank("ss"));
+        terem.setKingdomId(UUID.randomUUID());
+        terem.setStatus(NpcSite.Status.SPAWNED);
+        gothic.block("players live there");
+        assertEquals(java.util.Set.of("terem"), state.takenStyles(), "a place left alone frees its style");
+        assertFalse(state.holdsGuildRank("ss"), "and its rank");
+        assertTrue(state.holdsGuildRank("b"));
+        terem.setStatus(NpcSite.Status.REMOVED);
+        assertTrue(state.takenStyles().isEmpty());
+    }
+
+    @Test
     void thePassOfThePlanIsKeptAndForgottenWithThePlan() {
         NpcState state = new NpcState();
         assertEquals(0, state.planPass());

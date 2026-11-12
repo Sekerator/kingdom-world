@@ -90,7 +90,16 @@ public record ArmyCamp(int x, int z, int y, Status status) {
      * style the plain ones.
      */
     public static List<Building> buildings(String style) {
-        return buildings();
+        if (!ArchitecturalStyles.known(style)) {
+            return buildings();
+        }
+        String prefix = "kingdomworld:" + style + "_camp_";
+        return List.of(
+                new Building(prefix + "yard", 0, 0, 0),
+                new Building(prefix + "barracks", 0, -13, 2),
+                new Building(prefix + "barracks", 0, 13, 0),
+                new Building(prefix + "store", 15, 0, 3),
+                new Building(prefix + "tower", -15, 0, 1));
     }
 
     /**

@@ -12,10 +12,12 @@ import java.util.SplittableRandom;
  * throne, its towns, the class of its wall and roads, its citizens and their work. The same for the same seed, so that a
  * raising interrupted by a restart goes on with the same buildings in the same places.
  *
- * <p>There are two layouts, and a place keeps the one it was planned with. The first ({@link NpcSite#LAYOUT_GRID}) is a grid
+ * <p>There are three layouts, and a place keeps the one it was planned with. The first ({@link NpcSite#LAYOUT_GRID}) is a grid
  * of plots {@value #SPACING} blocks apart around the square of the throne, ring {@code k} holding {@code 8k} plots, every
  * front towards the throne. The second ({@link NpcSite#LAYOUT_DISTRICTS}) is a capital of districts: a palace around the
- * throne, avenues to the gates, streets with buildings of many kinds on them ({@link CityPlan}).
+ * throne, avenues to the gates, streets with buildings of many kinds on them ({@link CityPlan}). The third
+ * ({@link NpcSite#LAYOUT_STYLED}) is a capital of districts in an architectural style: the castle of the style, the
+ * institutions on its square, quarters by wealth ({@link StyledPlan}); it counts as a capital of districts too.
  *
  * @param layout     the layout the composition was made for
  * @param seed       the seed of the place
@@ -31,7 +33,9 @@ import java.util.SplittableRandom;
  * @param bunks      beds for soldiers in the barracks of the capital and the towns
  * @param style      the architectural style of a styled capital, or empty
  * @param trees      where the trees of a styled capital stand, {x, z} from the throne
- * @param gardens    the front gardens of a styled capital, {minX, minZ, maxX, maxZ, facing} from the throne
+ * @param gardens    the front gardens of a styled capital, {minX, minZ, maxX, maxZ, facing, door} from the throne: the strip
+ *                   between the street and the front of a house set back from it, where its front looks, and where along the
+ *                   street the opening of its fence is (x for a front looking north or south, z for one looking east or west)
  */
 public record NpcComposition(int layout, NpcLevel level, long seed, List<Plot> buildings, int rings, int towns, int townHouses,
                              boolean stoneWall, String roadClass, int citizens, Map<String, Integer> jobs, int soldiers, int fields,
@@ -105,7 +109,8 @@ public record NpcComposition(int layout, NpcLevel level, long seed, List<Plot> b
     /**
      * A post of the guards: a place to stand, or the corners of a round to walk.
      *
-     * @param points the places, as {x, z} from the throne
+     * @param points the places, as {x, z} from the throne, or {x, z, y} for a place y layers above the street (on the wall of a
+     *               castle, up the steps of a gate)
      */
     public record Post(String name, List<int[]> points) {
         public Post {
@@ -194,6 +199,9 @@ public record NpcComposition(int layout, NpcLevel level, long seed, List<Plot> b
      * @param index the number of the town, from 0
      */
     public List<Plot> town(int index) {
+        if (layout == NpcSite.LAYOUT_STYLED) {
+            return StyledPlan.town(level, seed, style, index);
+        }
         if (layout == NpcSite.LAYOUT_DISTRICTS) {
             return CityPlan.town(level, seed, index);
         }
@@ -211,14 +219,14 @@ public record NpcComposition(int layout, NpcLevel level, long seed, List<Plot> b
      * The radius of the palisade of a town of this kingdom, or 0 if its towns have none.
      */
     public int townWall() {
-        return layout == NpcSite.LAYOUT_DISTRICTS ? districtTownWall(level) : 0;
+        return districts() ? districtTownWall(level) : 0;
     }
 
     /**
      * How far the levelled ground of a town reaches from its town hall.
      */
     public int townReach() {
-        return layout == NpcSite.LAYOUT_DISTRICTS ? CityPlan.TOWN_WALL : 18;
+        return districts() ? CityPlan.TOWN_WALL : 18;
     }
 
     /**
@@ -226,7 +234,7 @@ public record NpcComposition(int layout, NpcLevel level, long seed, List<Plot> b
      */
     public List<int[]> townFields() {
         // One behind each row, on opposite sides of the way into the town.
-        return layout == NpcSite.LAYOUT_DISTRICTS ? List.of(new int[]{-10, -CityPlan.TOWN_FIELD}, new int[]{10, CityPlan.TOWN_FIELD}) : List.of();
+        return districts() ? List.of(new int[]{-10, -CityPlan.TOWN_FIELD}, new int[]{10, CityPlan.TOWN_FIELD}) : List.of();
     }
 
     /**
@@ -287,8 +295,7 @@ public record NpcComposition(int layout, NpcLevel level, long seed, List<Plot> b
      */
     public static NpcComposition styled(NpcLevel level, long seed, String style, TemplateCatalog.Rank rank, NpcRules rules,
                                         int townsAtMost) {
-        return new NpcComposition(NpcSite.LAYOUT_STYLED, level, seed, List.of(), 0, 0, 0, true, "path", 0, Map.of(), 0, 0,
-                capitalWall(level, NpcSite.LAYOUT_STYLED), List.of(), List.of(), List.of(), List.of(), 0, style, List.of(), List.of());
+        return StyledPlan.make(level, seed, style, rank, rules, townsAtMost);
     }
 
     /**
@@ -513,8 +520,12 @@ public record NpcComposition(int layout, NpcLevel level, long seed, List<Plot> b
         return gx < 0 ? 3 : 1;
     }
 
+    /**
+     * Whether the capital is laid out in districts, a palace or castle at the throne behind a wall with gates: the second
+     * layout and the styled one.
+     */
     public boolean districts() {
-        return layout == NpcSite.LAYOUT_DISTRICTS;
+        return layout == NpcSite.LAYOUT_DISTRICTS || layout == NpcSite.LAYOUT_STYLED;
     }
 
     /**
@@ -573,20 +584,31 @@ public record NpcComposition(int layout, NpcLevel level, long seed, List<Plot> b
      * them.
      */
     public int outerReach() {
+        if (styled()) {
+            return StyledPlan.outerReach(StyledPlan.shape(level));
+        }
         return districts() ? CityPlan.outerReach(CityPlan.shape(level)) : reach() + 20;
     }
 
     /**
-     * What the ground of the capital of districts is at a column: one of the grounds of {@link CityPlan}.
+     * What the ground of the capital of districts is at a column: one of the grounds of {@link CityPlan}, of the plan of a
+     * styled capital for one.
      */
     public int ground(int x, int z) {
+        if (styled()) {
+            return StyledPlan.ground(StyledPlan.shape(level), x, z);
+        }
         return CityPlan.ground(CityPlan.shape(level), x, z);
     }
 
     /**
-     * Half the side of the ground of the palace, in blocks; 0 in the first layout.
+     * Half the side of the ground of the palace, in blocks (of the castle and one more for a styled capital); 0 in the first
+     * layout.
      */
     public int precinct() {
+        if (styled()) {
+            return StyledPlan.shape(level).precinct();
+        }
         return districts() ? CityPlan.shape(level).precinct() : 0;
     }
 

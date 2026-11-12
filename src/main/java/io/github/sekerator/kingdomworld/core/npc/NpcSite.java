@@ -89,8 +89,9 @@ public final class NpcSite {
     }
 
     /**
-     * @param layout how the capital is laid out: {@link #LAYOUT_GRID} or {@link #LAYOUT_DISTRICTS}
-     * @param style  the id of the look of the kingdom ({@link NpcStyle}), or empty for the look of the templates
+     * @param layout how the capital is laid out: {@link #LAYOUT_GRID}, {@link #LAYOUT_DISTRICTS} or {@link #LAYOUT_STYLED}
+     * @param style  the id of the look of the kingdom ({@link NpcStyle}), the id of its architectural style for the styled layout,
+     *               or empty for the look of the templates
      * @param wood   the wood species that grows at the place, or empty if none is known
      */
     public NpcSite(int id, int x, int z, NpcLevel level, long seed, List<Town> towns, int layout, String style, String wood) {
@@ -99,17 +100,22 @@ public final class NpcSite {
 
     /**
      * @param layout    how the capital is laid out
-     * @param style     the id of the look of the kingdom, or empty
+     * @param style     the id of the look of the kingdom, or of its architectural style ({@link TemplateCatalog#STYLES}) for the
+     *                  styled layout, which needs one
      * @param wood      the wood species that grows at the place, or empty if none is known
      * @param guildRank the rank of the guild house and the mage tower of a styled capital, or empty
+     * @throws IllegalArgumentException for an unknown layout, or a styled layout without a known architectural style
      */
     public NpcSite(int id, int x, int z, NpcLevel level, long seed, List<Town> towns, int layout, String style, String wood,
                    String guildRank) {
         if (id < 1) {
             throw new IllegalArgumentException("Site id must be positive");
         }
-        if (layout != LAYOUT_GRID && layout != LAYOUT_DISTRICTS) {
+        if (layout != LAYOUT_GRID && layout != LAYOUT_DISTRICTS && layout != LAYOUT_STYLED) {
             throw new IllegalArgumentException("Unknown layout " + layout);
+        }
+        if (layout == LAYOUT_STYLED && (style == null || !TemplateCatalog.STYLES.contains(style))) {
+            throw new IllegalArgumentException("A styled place needs an architectural style, not '" + style + "'");
         }
         this.id = id;
         this.x = x;
@@ -154,8 +160,12 @@ public final class NpcSite {
         return layout;
     }
 
+    /**
+     * Whether the capital is laid out in districts: a palace or castle at the throne, a wall with gates, avenues and a square.
+     * Styled capitals ({@link #LAYOUT_STYLED}) are capitals of districts too.
+     */
     public boolean districts() {
-        return layout == LAYOUT_DISTRICTS;
+        return layout == LAYOUT_DISTRICTS || layout == LAYOUT_STYLED;
     }
 
     /**
@@ -173,14 +183,14 @@ public final class NpcSite {
     }
 
     /**
-     * The id of the look of the kingdom, or empty.
+     * The id of the look of the kingdom, the id of its architectural style for a styled capital, or empty.
      */
     public String style() {
         return style;
     }
 
     /**
-     * The look of the kingdom, if it has one of its own.
+     * The look of the kingdom, if it has one of its own; none for a styled capital, whose style is no look of {@link NpcStyle}.
      */
     public Optional<NpcStyle> look() {
         return NpcStyle.byId(style);

@@ -147,4 +147,25 @@ class BuildingLooksTest {
             }
         }
     }
+
+    @Test
+    void theWoodAndStoneOfAStyleAreThoseOfItsPublicBuildings() throws IOException {
+        MaterialTable table = vanilla();
+        for (String style : TemplateCatalog.STYLES) {
+            String wood = BuildingLooks.styleWood(style);
+            String stone = BuildingLooks.styleStone(style);
+            assertTrue(wood.isEmpty() || table.hasWood(wood), style + " wood " + wood);
+            assertTrue(stone.isEmpty() || table.hasStone(stone), style + " stone " + stone);
+            Materials materials = BuildingLooks.of(style, "minecraft:birch", "red", BuildingLooks.Quarter.PUBLIC, 5);
+            assertEquals(wood.isEmpty() ? "minecraft:birch" : wood, materials.wood(), style);
+            assertEquals(stone, materials.stone(), style);
+        }
+        assertEquals("minecraft:spruce", BuildingLooks.styleWood("terem"));
+        assertEquals("minecraft:polished_diorite", BuildingLooks.styleStone("terem"));
+        assertEquals("minecraft:deepslate_bricks", BuildingLooks.styleStone("gothic"));
+        assertEquals("", BuildingLooks.styleWood("classic"));
+        assertEquals("", BuildingLooks.styleWood("brick"), "the looks of the second layout are no architectural styles");
+        assertEquals("", BuildingLooks.styleStone(""));
+        assertEquals("", BuildingLooks.styleStone(null));
+    }
 }

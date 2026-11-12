@@ -77,6 +77,36 @@ public final class NpcState {
         return site;
     }
 
+    /**
+     * The architectural styles the styled places of the plan hold, of those planned, founded, appearing or standing (a place
+     * left alone or removed holds none): a new kingdom of the world takes another one while there is one.
+     */
+    public java.util.Set<String> takenStyles() {
+        java.util.Set<String> taken = new java.util.LinkedHashSet<>();
+        for (NpcSite site : sites.values()) {
+            if (site.styled() && live(site)) {
+                taken.add(site.style());
+            }
+        }
+        return taken;
+    }
+
+    /**
+     * Whether a place planned, founded, appearing or standing keeps a guild of a rank ({@code ss} for the only guild of rank SS).
+     */
+    public boolean holdsGuildRank(String rank) {
+        for (NpcSite site : sites.values()) {
+            if (live(site) && site.guildRank().equals(rank)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean live(NpcSite site) {
+        return site.status() != NpcSite.Status.BLOCKED && site.status() != NpcSite.Status.REMOVED;
+    }
+
     public int planCursor() {
         return planCursor;
     }

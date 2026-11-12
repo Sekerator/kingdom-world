@@ -37,6 +37,24 @@ class NpcWealthTest {
     }
 
     @Test
+    void aStyledCapitalStartsWithToolsAndSeedCarrots() {
+        for (NpcLevel level : NpcLevel.values()) {
+            NpcRules rules = NpcRules.DEFAULT;
+            NpcComposition composition = NpcComposition.styled(level, 21L, "eastern", GuildHouses.defaultOf(level), rules, rules.towns(level));
+            NpcWealth wealth = NpcWealth.of(composition, rules, "minecraft:spruce_log", "minecraft:spruce_planks", 6);
+            assertEquals(rules.money(level), wealth.money(), level.id());
+            int lumberjacks = composition.jobs().getOrDefault("lumberjack", 0);
+            int miners = composition.jobs().getOrDefault("miner", 0);
+            assertTrue(lumberjacks > 0 && miners > 0, level + ": " + composition.jobs());
+            assertEquals(lumberjacks, wealth.count("minecraft:iron_axe"));
+            assertEquals(miners, wealth.count("minecraft:iron_pickaxe"));
+            assertEquals(composition.fields() * 16, wealth.count("minecraft:carrot"));
+            assertEquals(0, wealth.count("minecraft:iron_sword") + wealth.count("minecraft:stone_sword") + wealth.count("minecraft:bow"),
+                    "the garrison gets its kits as that of a capital of districts");
+        }
+    }
+
+    @Test
     void theTreasuryAndTheStoresGrowWithTheKingdom() {
         NpcWealth small = NpcWealth.of(of(NpcLevel.SMALL), RULES, "minecraft:spruce_log", "minecraft:spruce_planks", 6);
         NpcWealth large = NpcWealth.of(of(NpcLevel.LARGE), RULES, "minecraft:spruce_log", "minecraft:spruce_planks", 6);
