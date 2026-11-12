@@ -2422,8 +2422,9 @@ Invoke-Phase 'run1' {
         $founded = 0
         $plannedCount = -1
         # The plan takes what is left of short ticks and asks the generator for most of its columns off the ticks: a world whose
-        # plan needs its third pass takes up to about two minutes for it.
-        $foundingLimit = 180
+        # plan needs its third pass takes up to about two minutes for it. A styled capital asks for a wider square of level land
+        # than a capital of districts did, so the plan often finds its places only on its third or fourth pass: four minutes.
+        $foundingLimit = 240
         $waited = Get-Date
         while (((Get-Date) - $waited).TotalSeconds -lt $foundingLimit) {
             $log = Get-WholeLog
@@ -2448,7 +2449,9 @@ Invoke-Phase 'run1' {
             if ($elapsed -lt -43200) { $elapsed += 86400 }
             if ($elapsed -lt 0) { $elapsed = 0 }
         }
-        $script:WorldFounding = "$founded of $plannedCount kingdoms of the world founded, the last $elapsed s after the start"
+        $passes = @([regex]::Matches($log, 'asks less of a place \(pass (\d+) of \d+\)'))
+        $lastPass = if ($passes.Count -gt 0) { $passes[-1].Groups[1].Value } else { '1' }
+        $script:WorldFounding = "$founded of $plannedCount kingdoms of the world founded, the last $elapsed s after the start (plan made on pass $lastPass)"
         # The plan has as many places as the land of the world gives (8 are asked for, a place without land that suits is left
         # out): every place of the plan is founded, or 8 are while the plan is still being made.
         $everyPlace = ($plannedCount -ge 1 -and $founded -ge $plannedCount) -or $founded -ge 8
