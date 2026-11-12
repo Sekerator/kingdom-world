@@ -307,6 +307,24 @@ public final class ConstructionWork {
                                                            io.github.sekerator.kingdomworld.core.construction.Materials chosen) {
         io.github.sekerator.kingdomworld.core.construction.Materials materials = TemplateMaterials.resolve(chosen, level, anchor);
         BuildingTemplate template = TemplateMaterials.apply(base, materials);
+        KingdomWorldState.ConstructionChange refused = refusal(level, actor, kingdomId, template, anchor, placement);
+        if (refused != null) {
+            return refused;
+        }
+        Survey survey = survey(level, template, anchor, placement);
+        if (survey.error() != null) {
+            return new KingdomWorldState.ConstructionChange(Outcome.fail(survey.error()), Optional.empty());
+        }
+        BuildPlan plan = plan(template, anchor, placement, survey.clear());
+        return record(level, actor, kingdomId, template, anchor, placement, materials, survey, plan);
+    }
+
+    /**
+     * Why a construction of a template may not be laid out at a place before its blocks are looked at, or {@code null} if it may.
+     */
+    @Nullable
+    private static KingdomWorldState.ConstructionChange refusal(ServerLevel level, @Nullable UUID actor, UUID kingdomId, BuildingTemplate template,
+                                                              BlockPos anchor, Placement placement) {
         MinecraftServer server = level.getServer();
         if (template.owner() != null && !template.owner().equals(kingdomId)) {
             return new KingdomWorldState.ConstructionChange(Outcome.fail(KingdomError.UNKNOWN_TEMPLATE), Optional.empty());
@@ -321,17 +339,20 @@ public final class ConstructionWork {
         // The kingdom, the right and the land first: a place outside the kingdom is refused as such, whatever stands there.
         Outcome allowed = KingdomWorldApi.state(server).checkLay(actor, kingdomId, worldPos(level, anchor).dimension(),
                 template.box(anchor, placement), rules);
-        if (!allowed.ok()) {
-            return new KingdomWorldState.ConstructionChange(allowed, Optional.empty());
-        }
-        Survey survey = survey(level, template, anchor, placement);
-        if (survey.error() != null) {
-            return new KingdomWorldState.ConstructionChange(Outcome.fail(survey.error()), Optional.empty());
-        }
-        BuildPlan plan = plan(template, anchor, placement, survey.clear());
+        return allowed.ok() ? null : new KingdomWorldState.ConstructionChange(allowed, Optional.empty());
+    }
+
+    /**
+     * Enters a construction looked at and planned into the state of the kingdoms.
+     */
+    private static KingdomWorldState.ConstructionChange record(ServerLevel level, @Nullable UUID actor, UUID kingdomId, BuildingTemplate template,
+                                                             BlockPos anchor, Placement placement,
+                                                             io.github.sekerator.kingdomworld.core.construction.Materials materials, Survey survey,
+                                                             BuildPlan plan) {
+        MinecraftServer server = level.getServer();
         KingdomWorldState.ConstructionChange change = KingdomWorldApi.state(server).layConstruction(actor, kingdomId, template.id().toString(),
                 template.fingerprint(), worldPos(level, anchor), placement, template.box(anchor, placement), survey.clear(), plan.size(),
-                KingdomWorldApi.gameTime(server), rules, Construction.Kind.BUILD, 0, materials, new java.util.BitSet());
+                KingdomWorldApi.gameTime(server), ConstructionSettings.rules(), Construction.Kind.BUILD, 0, materials, new java.util.BitSet());
         change.construction().ifPresent(construction -> {
             PLANS.put(construction.id(), plan);
             refreshReservations(server);
@@ -339,6 +360,84 @@ public final class ConstructionWork {
                     plan.size(), plan.clears());
         });
         return change;
+    }
+
+    /**
+     * A construction laid out over ticks, as {@link #lay} lays it out at once: the parts that cost most for a large building (the
+     * plans of the constructions that stand, which the reservations look at; the wood and stone of the place; the blocks of the
+     * place; the order of the steps) go on while the time a call is given lasts, and the rest in the next call. A small
+     * building is laid out in one call.
+     */
+    public static final class Laying {
+        private final ServerLevel level;
+        private final UUID kingdomId;
+        private final BuildingTemplate base;
+        private final BlockPos anchor;
+        private final Placement placement;
+        private final io.github.sekerator.kingdomworld.core.construction.Materials chosen;
+        private int stage;
+        private int warmIndex;
+        private io.github.sekerator.kingdomworld.core.construction.Materials materials;
+        private BuildingTemplate template;
+        private Survey survey;
+        private BuildPlan plan;
+
+        public Laying(ServerLevel level, UUID kingdomId, BuildingTemplate base, BlockPos anchor, Placement placement,
+                      io.github.sekerator.kingdomworld.core.construction.Materials chosen) {
+            this.level = level;
+            this.kingdomId = kingdomId;
+            this.base = base;
+            this.anchor = anchor;
+            this.placement = placement;
+            this.chosen = chosen;
+        }
+
+        /**
+         * Goes on with the laying out while the time lasts.
+         *
+         * @param nanos the time of this call; at least one part is done
+         * @return what came of it once the construction is laid out or refused, or empty while parts remain
+         */
+        public Optional<KingdomWorldState.ConstructionChange> step(long nanos) {
+            long started = System.nanoTime();
+            do {
+                switch (stage) {
+                    case 0 -> {
+                        List<Construction> all = List.copyOf(KingdomWorldApi.state(level.getServer()).construction().all());
+                        while (warmIndex < all.size() && System.nanoTime() - started < nanos) {
+                            plan(all.get(warmIndex++));
+                        }
+                        if (warmIndex >= all.size()) {
+                            stage = 1;
+                        }
+                    }
+                    case 1 -> {
+                        materials = TemplateMaterials.resolve(chosen, level, anchor);
+                        template = TemplateMaterials.apply(base, materials);
+                        KingdomWorldState.ConstructionChange refused = refusal(level, null, kingdomId, template, anchor, placement);
+                        if (refused != null) {
+                            return Optional.of(refused);
+                        }
+                        stage = 2;
+                    }
+                    case 2 -> {
+                        survey = survey(level, template, anchor, placement);
+                        if (survey.error() != null) {
+                            return Optional.of(new KingdomWorldState.ConstructionChange(Outcome.fail(survey.error()), Optional.empty()));
+                        }
+                        stage = 3;
+                    }
+                    case 3 -> {
+                        plan = plan(template, anchor, placement, survey.clear());
+                        stage = 4;
+                    }
+                    default -> {
+                        return Optional.of(record(level, null, kingdomId, template, anchor, placement, materials, survey, plan));
+                    }
+                }
+            } while (System.nanoTime() - started < nanos);
+            return Optional.empty();
+        }
     }
 
     // ---------------------------------------------------------------- materials

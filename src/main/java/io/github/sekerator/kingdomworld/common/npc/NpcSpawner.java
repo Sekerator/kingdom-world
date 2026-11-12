@@ -123,6 +123,10 @@ public final class NpcSpawner {
     private static final int CLAIMS_PER_CHUNK_BUDGET = 2;
     /** Blocks of a building done in a tick at least, so that a small budget still moves on. */
     private static final int BLOCKS_PER_PART = 64;
+    /** Buildings being laid out over several ticks, by kingdom, template and place. */
+    private static final Map<String, ConstructionWork.Laying> LAYING = new java.util.HashMap<>();
+    /** Time a step gives the laying out of a building. */
+    private static final long LAY_NANOS = 8_000_000L;
     /** Blocks of the wall paid in a tick at most: the roads place the paid columns once a second, all at once. */
     private static final int WALL_BLOCKS_PER_TICK = 48;
     /** Columns of ramp around a levelled square, so that it does not end with a step a road cannot climb. */
@@ -198,6 +202,7 @@ public final class NpcSpawner {
 
     static void reset() {
         job = null;
+        LAYING.clear();
     }
 
     /**
@@ -205,6 +210,7 @@ public final class NpcSpawner {
      */
     public static void resetForTests() {
         job = null;
+        LAYING.clear();
     }
 
     public static Timing lastTiming() {
@@ -426,19 +432,23 @@ public final class NpcSpawner {
                 nanos = server.tickTimes[Math.floorMod(last, server.tickTimes.length)];
             }
             job.sumNanos += nanos;
+            // The garbage collector holds the whole server whenever it comes: its pause in a tick is not the work of the tick, and
+            // the worst tick of an appearance is told without it, as the turns of the rulers are.
+            long gc = Math.min(nanos, PerfCommands.lastGc());
+            long work = nanos - gc;
             if (job.lastWaited) {
-                if (nanos > SLOW_TICK_NANOS) {
-                    LOGGER.info("A tick in which the chunks of {} were loading took {} ms", site, String.format(java.util.Locale.ROOT, "%.1f",
-                            nanos / 1e6));
+                if (work > SLOW_TICK_NANOS) {
+                    LOGGER.info("A tick in which the chunks of {} were loading took {} ms ({} ms of it the garbage collector)", site,
+                            String.format(java.util.Locale.ROOT, "%.1f", nanos / 1e6), gc / 1_000_000L);
                 }
             } else {
-                if (nanos > job.maxNanos) {
-                    job.maxNanos = nanos;
+                if (work > job.maxNanos) {
+                    job.maxNanos = work;
                     job.worstStage = job.lastStage;
                 }
-                if (nanos > SLOW_TICK_NANOS) {
-                    LOGGER.info("A tick of the appearance of {} took {} ms at {} step {}", site, String.format(java.util.Locale.ROOT, "%.1f",
-                            nanos / 1e6), job.lastStage.id(), site.step());
+                if (work > SLOW_TICK_NANOS) {
+                    LOGGER.info("A tick of the appearance of {} took {} ms ({} ms of it the garbage collector) at {} step {}", site,
+                            String.format(java.util.Locale.ROOT, "%.1f", nanos / 1e6), gc / 1_000_000L, job.lastStage.id(), site.step());
                 }
             }
         }
@@ -1223,7 +1233,18 @@ public final class NpcSpawner {
             }
         }
         if (construction == null) {
-            KingdomWorldState.ConstructionChange change = ConstructionWork.lay(level, null, id, template.get(), anchor, placement, materials);
+            // A large building (a castle of thousands of blocks) is laid out over several ticks, a small one in this one.
+            String key = id + "/" + templateId + "/" + anchor.asLong();
+            ConstructionWork.Laying laying = LAYING.computeIfAbsent(key, k -> new ConstructionWork.Laying(level, id, template.get(), anchor, placement,
+                    materials));
+            Optional<KingdomWorldState.ConstructionChange> laid = laying.step(LAY_NANOS);
+            if (laid.isEmpty()) {
+                // The time of the step is spent: the rest of the budget goes too.
+                used[0] = Math.max(1, budget);
+                return false;
+            }
+            LAYING.remove(key);
+            KingdomWorldState.ConstructionChange change = laid.get();
             if (change.construction().isEmpty()) {
                 LOGGER.warn("{} of a kingdom of the world was not laid out at {}: {}", templateId, anchor.toShortString(), change.outcome().error());
                 return true;

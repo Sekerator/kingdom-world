@@ -45,7 +45,11 @@ public final class PerfCommands {
     /** Of each whole tick: the time of the game alone (without any handler of the tick) and of the work counted with {@link #countWork}. */
     private static final long[] WHOLE_GAME = new long[WHOLE.length];
     private static final long[] WHOLE_WORK = new long[WHOLE.length];
+    /** Of each whole tick: the time the garbage collector held the server in it. */
+    private static final long[] WHOLE_GC = new long[WHOLE.length];
     private static int wholeCount;
+    /** The time of the garbage collector so far when the current tick began, in ms. */
+    private static long gcStart;
     /** The work counted in the current tick. */
     private static long work;
 
@@ -105,6 +109,28 @@ public final class PerfCommands {
     }
 
     /**
+     * The time the garbage collector held the server in the tick counted as number {@code n}, or -1 once it is no longer kept.
+     */
+    public static long gcOfTick(int n) {
+        return wholeTick(n) < 0 ? -1 : WHOLE_GC[n % WHOLE.length];
+    }
+
+    /**
+     * The time the garbage collector held the server in the last tick that ended, or 0.
+     */
+    public static long lastGc() {
+        return Math.max(0, gcOfTick(wholeCount - 1));
+    }
+
+    private static long collected() {
+        long total = 0;
+        for (java.lang.management.GarbageCollectorMXBean bean : java.lang.management.ManagementFactory.getGarbageCollectorMXBeans()) {
+            total += Math.max(0, bean.getCollectionTime());
+        }
+        return total;
+    }
+
+    /**
      * Starts timing the ticks; called once when the mod sets up its events.
      */
     public static void register() {
@@ -117,6 +143,7 @@ public final class PerfCommands {
         if (event.phase == TickEvent.Phase.START) {
             tickStart = now;
             handlers = 0;
+            gcStart = collected();
         }
         handlersStart = now;
     }
@@ -132,6 +159,7 @@ public final class PerfCommands {
         WHOLE_TICK[wholeCount % WHOLE.length] = event.getServer().getTickCount();
         WHOLE_GAME[wholeCount % WHOLE.length] = Math.max(0, tick - handlers);
         WHOLE_WORK[wholeCount % WHOLE.length] = work;
+        WHOLE_GC[wholeCount % WHOLE.length] = Math.max(0, collected() - gcStart) * 1_000_000L;
         work = 0;
         wholeCount++;
         ticks++;

@@ -23,11 +23,20 @@ import java.util.UUID;
  * Only a few chunks a tick are loaded or generated for the first time; the search waits for the rest.
  */
 final class RoadTerrain implements Terrain {
-    /** Chunks a search asks the game for; the ticket lapses by itself after half a minute. */
+    /** Ticks a ticket of a search lasts: half a minute. */
+    private static final int TICKET_TICKS = 600;
+    /** Chunks a search asks the game for; the ticket lapses by itself. */
     private static final net.minecraft.server.level.TicketType<ChunkPos> TICKET = net.minecraft.server.level.TicketType.create(
-            "kingdomworld_road_terrain", java.util.Comparator.comparingLong(ChunkPos::toLong), 600);
+            "kingdomworld_road_terrain", java.util.Comparator.comparingLong(ChunkPos::toLong), TICKET_TICKS);
     private final ServerLevel level;
     private final Map<Long, Column[]> chunks = new HashMap<>();
+    /** Chunks asked for that the game has not loaded yet, with the time they were asked for. */
+    private final Map<Long, Long> asked = new HashMap<>();
+    /**
+     * Chunks a search waits for at once: the game finishes a chunk it loaded or generated on the main thread, and many asked
+     * for together come in together, in one long tick.
+     */
+    private static final int ASKED_AT_ONCE = 3;
     private int loadsLeft = Integer.MAX_VALUE;
 
     RoadTerrain(ServerLevel level) {
@@ -59,17 +68,35 @@ final class RoadTerrain implements Terrain {
             if (loaded == null) {
                 // The chunk is asked for and read once the game has loaded or generated it, off the tick: the search waits for it
                 // instead of loading it in the tick.
-                if (loadsLeft > 0) {
+                if (loadsLeft > 0 && ask(key, chunkX, chunkZ)) {
                     loadsLeft--;
-                    ChunkPos chunk = new ChunkPos(chunkX, chunkZ);
-                    level.getChunkSource().addRegionTicket(TICKET, chunk, 0, chunk);
                 }
                 return null;
             }
             columns = read(loaded, chunkX, chunkZ);
             chunks.put(key, columns);
+            asked.remove(key);
         }
         return columns[(x & 15) * 16 + (z & 15)];
+    }
+
+    /**
+     * Asks the game for a chunk, unless it was asked for already or as many as may wait at once are loading.
+     *
+     * @return whether the chunk was asked for now
+     */
+    private boolean ask(long key, int chunkX, int chunkZ) {
+        long now = level.getGameTime();
+        // A chunk loaded meanwhile is waited for no more, and one whose ticket lapsed before it came is asked for again.
+        asked.values().removeIf(at -> now - at >= TICKET_TICKS);
+        asked.keySet().removeIf(other -> level.getChunkSource().getChunkNow(ChunkPos.getX(other), ChunkPos.getZ(other)) != null);
+        if (asked.containsKey(key) || asked.size() >= ASKED_AT_ONCE) {
+            return false;
+        }
+        asked.put(key, now);
+        ChunkPos chunk = new ChunkPos(chunkX, chunkZ);
+        level.getChunkSource().addRegionTicket(TICKET, chunk, 0, chunk);
+        return true;
     }
 
     private Column[] read(ChunkAccess chunk, int chunkX, int chunkZ) {
