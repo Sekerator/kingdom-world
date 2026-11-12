@@ -193,11 +193,11 @@ public final class BuildingLooks {
                 List.of("minecraft:brown_terracotta", "minecraft:terracotta", "minecraft:gray_terracotta")).great(
                 List.of("minecraft:spruce", "minecraft:dark_oak"),
                 List.of("minecraft:dark_oak", "minecraft:deepslate_tiles", "minecraft:polished_blackstone",
-                        "minecraft:waxed_oxidized_cut_copper"),
+                        "minecraft:polished_blackstone"),
                 List.of("minecraft:spruce", "minecraft:dark_oak"),
-                List.of("minecraft:dark_oak", "minecraft:deepslate_tiles", "minecraft:waxed_oxidized_cut_copper"),
+                List.of("minecraft:dark_oak", "minecraft:deepslate_tiles", "minecraft:polished_blackstone"),
                 List.of("minecraft:dark_oak", "minecraft:spruce"),
-                List.of("minecraft:deepslate_tiles", "minecraft:dark_prismarine", "minecraft:waxed_oxidized_cut_copper", "minecraft:dark_oak")));
+                List.of("minecraft:deepslate_tiles", "minecraft:blackstone", "minecraft:polished_blackstone", "minecraft:dark_oak")));
         STYLE_MATERIALS.put("nordic", new String[]{"minecraft:dark_oak", "minecraft:cobblestone"});
         // The Mediterranean south: whitewashed render over pale dressed stone, low roofs of clay tiles, domes of brick or green
         // copper, green shutters.
@@ -276,8 +276,8 @@ public final class BuildingLooks {
                 List.of("minecraft:dark_oak", "minecraft:spruce", "minecraft:mangrove"),
                 List.of("minecraft:deepslate_tiles", "minecraft:dark_oak", "minecraft:spruce", "minecraft:blackstone", "minecraft:spruce",
                         "minecraft:dark_prismarine"),
-                List.of("minecraft:deepslate_tiles", "minecraft:waxed_oxidized_cut_copper", "minecraft:dark_prismarine",
-                        "minecraft:polished_blackstone"),
+                List.of("minecraft:deepslate_tiles", "minecraft:polished_deepslate", "minecraft:polished_blackstone",
+                        "minecraft:waxed_oxidized_cut_copper"),
                 List.of("minecraft:cobbled_deepslate", "minecraft:blackstone", "minecraft:cobblestone", "minecraft:mossy_cobblestone"),
                 List.of("minecraft:polished_deepslate", "minecraft:stone", "minecraft:polished_blackstone"),
                 List.of("minecraft:chiseled_deepslate", "minecraft:chiseled_polished_blackstone"),
@@ -286,13 +286,12 @@ public final class BuildingLooks {
                 List.of("minecraft:cobbled_deepslate", "minecraft:deepslate_bricks", "minecraft:blackstone", Look.REMOVED),
                 List.of("minecraft:gray_terracotta", "minecraft:light_gray_terracotta", "minecraft:brown_terracotta")).great(
                 List.of("minecraft:deepslate_tiles", "minecraft:blackstone"),
-                List.of("minecraft:deepslate_tiles", "minecraft:waxed_oxidized_cut_copper", "minecraft:dark_prismarine",
-                        "minecraft:polished_blackstone"),
+                List.of("minecraft:deepslate_tiles", "minecraft:polished_deepslate", "minecraft:polished_blackstone",
+                        "minecraft:waxed_oxidized_cut_copper"),
                 List.of("minecraft:deepslate_tiles", "minecraft:blackstone"),
-                List.of("minecraft:waxed_oxidized_cut_copper", "minecraft:deepslate_tiles", "minecraft:dark_prismarine"),
+                List.of("minecraft:polished_deepslate", "minecraft:deepslate_tiles", "minecraft:blackstone"),
                 List.of("minecraft:dark_prismarine", "minecraft:deepslate_tiles"),
-                List.of("minecraft:dark_prismarine", "minecraft:waxed_oxidized_cut_copper", "minecraft:polished_blackstone",
-                        "minecraft:deepslate_tiles")));
+                List.of("minecraft:polished_blackstone", "minecraft:deepslate_tiles", "minecraft:dark_prismarine", "minecraft:polished_deepslate")));
         STYLE_MATERIALS.put("gothic", new String[]{"minecraft:dark_oak", "minecraft:deepslate_bricks"});
         // The mountains: heavy stone bricks on rough footings, low roofs of slate or stone slabs, pyramids of slate, blackstone
         // or copper.

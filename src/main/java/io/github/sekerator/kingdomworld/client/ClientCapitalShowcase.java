@@ -85,10 +85,15 @@ final class ClientCapitalShowcase {
      * or empty for all of them.
      */
     private final List<String> only;
+    /** The rows to show (houses, guilds, castles, town, capital), all of them when empty: {@code capital-nordic@houses}. */
+    private final List<String> rowsOnly;
 
     ClientCapitalShowcase(Path folder, String only) {
         this.folder = folder.resolve("styles");
-        this.only = java.util.Arrays.stream(only.split(",")).map(String::trim).filter(style -> !style.isEmpty()).toList();
+        String styles = only.contains("@") ? only.substring(0, only.indexOf('@')) : only;
+        String rows = only.contains("@") ? only.substring(only.indexOf('@') + 1) : "";
+        this.only = java.util.Arrays.stream(styles.split(",")).map(String::trim).filter(style -> !style.isEmpty()).toList();
+        this.rowsOnly = java.util.Arrays.stream(rows.split(",")).map(String::trim).filter(row -> !row.isEmpty()).toList();
     }
 
     /**
@@ -239,7 +244,8 @@ final class ClientCapitalShowcase {
                     TemplateCatalog.Kind.YARD, TemplateCatalog.Kind.DECORATION, TemplateCatalog.Kind.BARBICAN, TemplateCatalog.Kind.CASTLE_WARD,
                     TemplateCatalog.Kind.ROYAL_BARRACKS)));
         }
-        rows.removeIf(row -> row.items().isEmpty());
+        rows.removeIf(row -> row.items().isEmpty()
+                || !rowsOnly.isEmpty() && rowsOnly.stream().noneMatch(name -> row.name().endsWith("-" + name)));
         return rows;
     }
 
@@ -352,14 +358,15 @@ final class ClientCapitalShowcase {
             int last = x - GAP;
             // Along the street, from its west end at the height of the eyes and from above its middle.
             double middle = (first + last) / 2.0;
-            list.add(new Shot(row.name() + "-street", first - 6.5, ground + 4.5, front + 6.5, -100.0f, 9.0f));
+            // Along the street from before its west end, so that a row of different houses shows, none of them close.
+            list.add(look(row.name() + "-street", first - 12.5, ground + 7, front + 14.5, first + 45, ground + 3, front - 4));
             list.add(new Shot(row.name() + "-street-back", last + 6.5, ground + 2.6, front + 5.5, 100.0f, 4.0f));
             double height = Math.max(30, (last - first) * 0.35);
             list.add(new Shot(row.name() + "-above", middle, ground + tallest + height, front + height * 0.9, 180.0f, 42.0f));
         }
         int column = 0;
         for (String style : TemplateCatalog.STYLES) {
-            if (shown(style)) {
+            if (shown(style) && (rowsOnly.isEmpty() || rowsOnly.contains("capital"))) {
                 capital(level, server, kingdom, style, start.getX() + 60 + 140 * column, capitals + 50, ground, list);
                 column++;
             }

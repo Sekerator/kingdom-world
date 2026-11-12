@@ -41,7 +41,8 @@ import java.util.UUID;
  *       scales and saves screenshots (see {@link ClientLayoutCheck}); a problem ends the client with exit code 1.</li>
  *   <li>{@code buildings}: in a copy of a test world, builds every built-in building template and saves screenshots of
  *       them and of the outline of a blueprint (see {@link ClientBuildingShowcase}).</li>
- *   <li>{@code capital}, or {@code capital-terem} and the like for one style ({@code capital-nordic,southern} for several):
+ *   <li>{@code capital}, or {@code capital-terem} and the like for one style ({@code capital-nordic,southern} for several,
+ *       {@code capital-nordic@houses,capital} for some rows only):
  *       in a flat copy of a test world, builds the buildings of the architectural styles of the kingdoms of the world,
  *       each in the look of its quarter, and saves screenshots of every building, every row and the throne halls (see {@link ClientCapitalShowcase}).</li>
  *   <li>{@code life}: in a copy of a test world, builds the tavern with an innkeeper, guests and beds beside it and saves
