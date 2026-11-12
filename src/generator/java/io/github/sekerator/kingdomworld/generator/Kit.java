@@ -9,7 +9,10 @@ package io.github.sekerator.kingdomworld.generator;
  * <li>the wall: the family of stone bricks, which becomes the stone of the place;</li>
  * <li>rough stone for footings, quoins and the cores of towers: the family of cobblestone;</li>
  * <li>trim for cornices, bands and sills: the family of polished andesite; carved stone for keystones;</li>
- * <li>the roof: one of the roofs below (stairs, slabs and the full block under them), never used in a wall;</li>
+ * <li>the roof: one of the wooden roofs below (stairs, slabs and the planks under them), never used in a wall; the three of
+ * them all become the roof of the look, they only differ where a building is laid without one;</li>
+ * <li>the spires: the slate roof below, for the cones and tented roofs of towers and turrets, so that towers may differ from
+ * the roofs of halls;</li>
  * <li>plaster between the timbers of a frame: white terracotta;</li>
  * <li>cloth of the colour of the kingdom: red wool, carpets and banners;</li>
  * <li>shutters: spruce trapdoors; a chimney that a house may do without: the family of bricks;</li>
@@ -52,7 +55,7 @@ final class Kit {
     static final Roof TILE = new Roof("minecraft:mangrove_planks", "minecraft:mangrove_stairs", "minecraft:mangrove_slab");
     /** Blue-green shingles. */
     static final Roof TEAL = new Roof("minecraft:warped_planks", "minecraft:warped_stairs", "minecraft:warped_slab");
-    /** Dark slate, the roof of castles and towers. */
+    /** Dark slate: the spires, cones and tented roofs of towers and turrets, never anything else. */
     static final Roof SLATE = new Roof("minecraft:dark_prismarine", "minecraft:dark_prismarine_stairs", "minecraft:dark_prismarine_slab");
 
     private Kit() {

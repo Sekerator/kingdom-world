@@ -203,6 +203,9 @@ public final class ConstructionNbt {
         tag.putLong("building", construction.building());
         tag.putString("wood", construction.materials().wood());
         tag.putString("stone", construction.materials().stone());
+        if (!construction.materials().look().isEmpty()) {
+            tag.putString("look", construction.materials().look());
+        }
         tag.putLongArray("skip", construction.skip().toLongArray());
         writeItems(tag, "removed", construction.removed());
         return tag;
@@ -219,6 +222,9 @@ public final class ConstructionNbt {
         tag.putInt("level", building.level());
         tag.putString("wood", building.materials().wood());
         tag.putString("stone", building.materials().stone());
+        if (!building.materials().look().isEmpty()) {
+            tag.putString("look", building.materials().look());
+        }
         writePlace(tag, building.anchor(), building.placement(), building.box());
         tag.putLong("fingerprint", building.fingerprint());
         tag.putLong("built", building.builtTime());
@@ -332,7 +338,7 @@ public final class ConstructionNbt {
         }
         Construction construction = new Construction(id, tag.getUUID("kingdom"), tag.getString("template"), tag.getLong("fingerprint"),
                 anchor(tag), new Placement(tag.getInt("rotation"), tag.getBoolean("mirror")), box(tag), tag.getLong("created"), clear, steps,
-                Construction.Kind.byId(tag.getString("kind")), building, new Materials(tag.getString("wood"), tag.getString("stone")),
+                Construction.Kind.byId(tag.getString("kind")), building, new Materials(tag.getString("wood"), tag.getString("stone"), tag.getString("look")),
                 BitSet.valueOf(tag.getLongArray("skip")));
         Map<String, Integer> delivered = readItems(tag, "delivered");
         Map<String, Long> orders = new LinkedHashMap<>();
@@ -360,7 +366,7 @@ public final class ConstructionNbt {
         }
         return new Building(tag.getLong("id"), tag.getUUID("kingdom"), tag.getString("template"), cut(tag.getString("type")),
                 cut(tag.getString("category")), cut(tag.getString("role")), tag.contains("level") ? tag.getInt("level") : 1,
-                new Materials(tag.getString("wood"), tag.getString("stone")), anchor(tag),
+                new Materials(tag.getString("wood"), tag.getString("stone"), tag.getString("look")), anchor(tag),
                 new Placement(tag.getInt("rotation"), tag.getBoolean("mirror")), box(tag), tag.getLong("fingerprint"), tag.getLong("built"),
                 tag.getBoolean("admin"), tag.contains("integrity") ? tag.getInt("integrity") : -1,
                 tag.contains("checked") ? tag.getLong("checked") : -1, tag.getBoolean("autoRepair"), BitSet.valueOf(tag.getLongArray("damaged")));

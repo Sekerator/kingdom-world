@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.logging.LogUtils;
+import io.github.sekerator.kingdomworld.KingdomWorld;
 import io.github.sekerator.kingdomworld.core.construction.BlockCost;
 import io.github.sekerator.kingdomworld.core.construction.ConstructionRules;
 import io.github.sekerator.kingdomworld.core.construction.Facing;
@@ -107,6 +108,13 @@ public final class BuildingTemplates {
     }
 
     /**
+     * The size up to which the mod's own templates can always be built, whatever the limits of the server say: the limits
+     * are there for the templates of data packs and the blueprints of players, and a castle of the mod must not vanish from
+     * a capital because a server kept the limits of an older version.
+     */
+    public static final int BUILT_IN_SIZE = 48;
+
+    /**
      * Why a template cannot be built under the rules of the server, or {@code null} if it can.
      */
     @Nullable
@@ -114,7 +122,9 @@ public final class BuildingTemplates {
         if (template.problem() != null) {
             return template.problem();
         }
-        if (!rules.fits(template.sizeX(), template.sizeY(), template.sizeZ())) {
+        boolean builtIn = template.id().getNamespace().equals(KingdomWorld.MOD_ID) && !template.id().getPath().startsWith("test_")
+                && template.sizeX() <= BUILT_IN_SIZE && template.sizeY() <= BUILT_IN_SIZE && template.sizeZ() <= BUILT_IN_SIZE;
+        if (!builtIn && !rules.fits(template.sizeX(), template.sizeY(), template.sizeZ())) {
             return Component.translatable(KEY + "too_big", template.sizeX(), template.sizeY(), template.sizeZ(), rules.maxWidth(),
                     rules.maxHeight(), rules.maxLength());
         }

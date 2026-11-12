@@ -45,10 +45,11 @@ public final class BuildingGenerator {
      * A template with its description.
      *
      * @param roleParams the numbers of its role that differ from those of the role, as the body of a JSON object, or empty
-     * @param points     named places inside it (x, y, z in its own box): where a guard stands, where a block is put later
+     * @param points     named places inside it, each a list of positions (x, y, z in its own box, y the layer the feet are in):
+     *                   where a guard stands, where a block is put later
      */
     record Building(String name, String category, String type, String icon, int anchorX, int anchorY, int anchorZ, Structure structure,
-                    String role, int level, String upgradesTo, String roleParams, Map<String, int[]> points) {
+                    String role, int level, String upgradesTo, String roleParams, Map<String, List<int[]>> points) {
         Building(String name, String category, String type, String icon, int anchorX, int anchorY, int anchorZ, Structure structure,
                  String role, int level, String upgradesTo) {
             this(name, category, type, icon, anchorX, anchorY, anchorZ, structure, role, level, upgradesTo,
@@ -67,11 +68,12 @@ public final class BuildingGenerator {
         }
 
         /**
-         * This building with one more named place.
+         * This building with one more position of a named place.
          */
         Building at(String point, int x, int y, int z) {
-            Map<String, int[]> more = new LinkedHashMap<>(points);
-            more.put(point, new int[]{x, y, z});
+            Map<String, List<int[]>> more = new LinkedHashMap<>();
+            points.forEach((key, list) -> more.put(key, new ArrayList<>(list)));
+            more.computeIfAbsent(point, key -> new ArrayList<>()).add(new int[]{x, y, z});
             return new Building(name, category, type, icon, anchorX, anchorY, anchorZ, structure, role, level, upgradesTo, roleParams, more);
         }
     }

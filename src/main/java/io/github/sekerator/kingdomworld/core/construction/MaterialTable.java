@@ -19,12 +19,39 @@ import java.util.function.Predicate;
  * slab of its name ({@code ns:deepslate_bricks}, {@code ns:deepslate_brick_stairs}, ...). So the woods and stones of mods
  * work as long as their blocks are named the way the game names its own. A block the chosen species or stone lacks stays
  * as the template has it.
+ *
+ * <p>With a {@link Look} the blocks that stand for its parts are replaced by the parts it names (see {@link Look.Part}), the
+ * stone of the materials takes the place of the stone bricks only, and the other stones of the template stay.
  */
 public final class MaterialTable {
     /** The kinds of blocks of a wood species and how they are named, the species name standing for {@code %s}. */
     private static final Map<String, List<String>> WOOD = new LinkedHashMap<>();
     /** The kinds of blocks of a stone, by suffix after the stem of its name. */
     private static final List<String> STONE = List.of("", "_stairs", "_slab", "_wall");
+    /** The block that stands for nothing: a part of a look that is left out. */
+    public static final String AIR = "minecraft:air";
+    /** The woods whose planks, stairs and slabs stand for the roof of a look. */
+    private static final Set<String> ROOF_WOODS = Set.of("minecraft:dark_oak", "minecraft:mangrove", "minecraft:warped");
+    /** The stone of the walls of a template, the one the stone of the materials replaces when a look is given. */
+    static final String WALL_STONE = "minecraft:stone_bricks";
+    /** The stones that stand for parts of a look. */
+    private static final Map<String, Look.Part> STONE_PARTS = Map.of(
+            "minecraft:cobblestone", Look.Part.ROUGH,
+            "minecraft:polished_andesite", Look.Part.TRIM,
+            "minecraft:bricks", Look.Part.CHIMNEY);
+    /** The blocks of dark prismarine that stand for the spires of a look, by kind. */
+    private static final Map<String, String> SPIRE = Map.of(
+            "minecraft:dark_prismarine", "", "minecraft:dark_prismarine_stairs", "_stairs", "minecraft:dark_prismarine_slab", "_slab");
+    private static final String CARVED = "minecraft:chiseled_stone_bricks";
+    private static final String PLASTER = "minecraft:white_terracotta";
+    private static final String SHUTTER = "minecraft:spruce_trapdoor";
+    /** The red blocks that stand for the cloth of a look, by the part of their name after the colour. */
+    private static final Map<String, String> CLOTH = Map.of(
+            "minecraft:red_wool", "_wool", "minecraft:red_carpet", "_carpet", "minecraft:red_banner", "_banner",
+            "minecraft:red_wall_banner", "_wall_banner", "minecraft:red_bed", "_bed");
+    /** The colours of dye of the game. */
+    public static final List<String> COLORS = List.of("white", "orange", "magenta", "light_blue", "yellow", "lime", "pink", "gray",
+            "light_gray", "cyan", "purple", "blue", "brown", "green", "red", "black");
 
     static {
         WOOD.put("planks", List.of("%s_planks"));
@@ -53,6 +80,8 @@ public final class MaterialTable {
     /** Block to {species or stone, kind}. */
     private final Map<String, String[]> woodOf = new HashMap<>();
     private final Map<String, String[]> stoneOf = new HashMap<>();
+    /** Every block of the game. */
+    private final Set<String> ids = new HashSet<>();
 
     private MaterialTable() {
     }
@@ -64,6 +93,7 @@ public final class MaterialTable {
     public static MaterialTable of(Collection<String> blocks, Predicate<String> stoneBase) {
         MaterialTable table = new MaterialTable();
         Set<String> all = new HashSet<>(blocks);
+        table.ids.addAll(all);
         List<String> sorted = new ArrayList<>(all);
         sorted.sort(MaterialTable::order);
         for (String id : sorted) {
@@ -182,6 +212,19 @@ public final class MaterialTable {
      * The block that stands for a block of a template when it is built of other materials, or the block itself.
      */
     public String substitute(String block, Materials materials) {
+        return substitute(block, materials, materials.appearance());
+    }
+
+    /**
+     * The same with the look already read, for templates of many blocks.
+     */
+    public String substitute(String block, Materials materials, Look look) {
+        if (!look.isEmpty()) {
+            String part = part(block, look);
+            if (part != null) {
+                return part;
+            }
+        }
         if (!materials.wood().isEmpty() && !Materials.AUTO.equals(materials.wood())) {
             String[] wood = woodOf.get(block);
             if (wood != null) {
@@ -192,13 +235,122 @@ public final class MaterialTable {
         }
         if (!materials.stone().isEmpty()) {
             String[] stone = stoneOf.get(block);
-            if (stone != null) {
+            // With a look the stone of the materials is that of the walls; the template's other stones are parts of the look
+            // or accents and stay.
+            if (stone != null && (look.isEmpty() || stone[0].equals(WALL_STONE))) {
                 Map<String, String> target = stones.get(materials.stone());
                 String replacement = target == null ? null : target.get(stone[1]);
                 return replacement == null ? block : replacement;
             }
         }
         return block;
+    }
+
+    /**
+     * The block a part of a look puts in the place of a block that stands for it, or {@code null} when the block stands for
+     * no part the look names.
+     */
+    private String part(String block, Look look) {
+        String[] wood = woodOf.get(block);
+        if (wood != null && ROOF_WOODS.contains(wood[0]) && !look.get(Look.Part.ROOF).isEmpty()) {
+            String kind = switch (wood[1]) {
+                case "planks" -> "";
+                case "stairs" -> "_stairs";
+                case "slab" -> "_slab";
+                default -> null;
+            };
+            if (kind != null) {
+                return member(look.get(Look.Part.ROOF), kind, block);
+            }
+        }
+        String spire = SPIRE.get(block);
+        if (spire != null && !look.get(Look.Part.SPIRE).isEmpty()) {
+            return member(look.get(Look.Part.SPIRE), spire, block);
+        }
+        String[] stone = stoneOf.get(block);
+        if (stone != null) {
+            Look.Part part = STONE_PARTS.get(stone[0]);
+            if (part != null && !look.get(part).isEmpty()) {
+                String value = look.get(part);
+                if (Look.REMOVED.equals(value)) {
+                    return part.removable() ? AIR : block;
+                }
+                return member(value, stone[1], block);
+            }
+        }
+        if (block.equals(SHUTTER) && !look.get(Look.Part.SHUTTER).isEmpty()) {
+            String value = look.get(Look.Part.SHUTTER);
+            if (Look.REMOVED.equals(value)) {
+                return AIR;
+            }
+            Map<String, String> target = woods.get(value);
+            return target == null ? block : target.getOrDefault("trapdoor", block);
+        }
+        if (block.equals(CARVED) && ids.contains(look.get(Look.Part.CARVED))) {
+            return look.get(Look.Part.CARVED);
+        }
+        if (block.equals(PLASTER) && ids.contains(look.get(Look.Part.PLASTER))) {
+            return look.get(Look.Part.PLASTER);
+        }
+        String cloth = CLOTH.get(block);
+        if (cloth != null && COLORS.contains(look.get(Look.Part.CLOTH))) {
+            String colored = "minecraft:" + look.get(Look.Part.CLOTH) + cloth;
+            return ids.contains(colored) ? colored : block;
+        }
+        return null;
+    }
+
+    /**
+     * The block of a material of the given kind ({@code ""} the full block, {@code _stairs}, {@code _slab}, {@code _wall}):
+     * of a wood species its planks, stairs, slab or fence; of a stone of the table its own; else a block named the way the
+     * game names stairs and slabs after their block. The block of the template when the material has no such block.
+     */
+    String member(String material, String kind, String fallback) {
+        Map<String, String> wood = woods.get(material);
+        if (wood != null) {
+            String found = wood.get(switch (kind) {
+                case "" -> "planks";
+                case "_stairs" -> "stairs";
+                case "_slab" -> "slab";
+                default -> "fence";
+            });
+            return found == null ? fallback : found;
+        }
+        Map<String, String> stone = stones.get(material);
+        if (stone != null) {
+            return stone.getOrDefault(kind, fallback);
+        }
+        String named = kind.isEmpty() ? material : stem(material) + kind;
+        return ids.contains(named) ? named : fallback;
+    }
+
+    /**
+     * Whether a look names only what the game has: woods and stones (or blocks with stairs and slabs) for the roof, the spires,
+     * the footing, the trim and the chimney, blocks for the carving and the plaster, a colour for the cloth, a wood for the
+     * shutters; parts that may be left out may be {@link Look#REMOVED}.
+     */
+    public boolean knows(Look look) {
+        for (Map.Entry<Look.Part, String> entry : look.parts().entrySet()) {
+            Look.Part part = entry.getKey();
+            String value = entry.getValue();
+            if (Look.REMOVED.equals(value)) {
+                if (!part.removable()) {
+                    return false;
+                }
+                continue;
+            }
+            boolean known = switch (part) {
+                case ROOF, SPIRE, ROUGH, TRIM, CHIMNEY -> woods.containsKey(value) || stones.containsKey(value)
+                        || ids.contains(value) && ids.contains(stem(value) + "_stairs") && ids.contains(stem(value) + "_slab");
+                case CARVED, PLASTER -> ids.contains(value);
+                case CLOTH -> COLORS.contains(value);
+                case SHUTTER -> woods.containsKey(value) && woods.get(value).containsKey("trapdoor");
+            };
+            if (!known) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

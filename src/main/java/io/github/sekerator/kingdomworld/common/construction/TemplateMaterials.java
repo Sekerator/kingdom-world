@@ -1,6 +1,7 @@
 package io.github.sekerator.kingdomworld.common.construction;
 
 import io.github.sekerator.kingdomworld.core.construction.BlockCost;
+import io.github.sekerator.kingdomworld.core.construction.Look;
 import io.github.sekerator.kingdomworld.core.construction.Materials;
 import io.github.sekerator.kingdomworld.core.construction.MaterialTable;
 import io.github.sekerator.kingdomworld.core.construction.TemplateCost;
@@ -29,7 +30,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * Templates built of other wood and stone: the table of which block stands for which comes from all blocks of the game
  * (see {@link MaterialTable}), so the woods and stones of mods work too; a block the chosen material lacks stays as the
  * template has it, and every block keeps the properties it shares with the one it replaces (facing, half, shape). Used by
- * the server for plans and costs and by the client for the outline of a blueprint. Made again when tags change.
+ * the server for plans and costs and by the client for the outline of a blueprint. Made again when tags change. A look
+ * (see {@link Look}) replaces the blocks that stand for its parts, and may leave some of them out.
  */
 public final class TemplateMaterials {
     private static volatile MaterialTable table;
@@ -86,11 +88,12 @@ public final class TemplateMaterials {
      * The state that stands for a state of a template when it is built of other materials.
      */
     public static BlockState substitute(BlockState state, Materials materials) {
-        if (materials.none()) {
-            return state;
-        }
+        return materials.none() ? state : substitute(state, materials, materials.appearance());
+    }
+
+    private static BlockState substitute(BlockState state, Materials materials, Look look) {
         String id = TemplateBlocks.blockId(state);
-        String target = table().substitute(id, materials);
+        String target = table().substitute(id, materials, look);
         if (target.equals(id)) {
             return state;
         }
@@ -123,9 +126,10 @@ public final class TemplateMaterials {
      * A template built of other materials: the same id, fingerprint and description, other blocks and costs.
      */
     public static BuildingTemplate apply(BuildingTemplate template, Materials materials) {
-        if (materials.none() || (materials.stone().isEmpty() && Materials.AUTO.equals(materials.wood()))) {
+        if (materials.none() || (materials.stone().isEmpty() && materials.look().isEmpty() && Materials.AUTO.equals(materials.wood()))) {
             return template;
         }
+        Look look = materials.appearance();
         String key = template.id() + "#" + template.fingerprint() + "#" + materials.key();
         BuildingTemplate cached = CACHE.get(key);
         if (cached != null) {
@@ -134,7 +138,7 @@ public final class TemplateMaterials {
         List<BuildingTemplate.Block> blocks = new ArrayList<>(template.blocks().size());
         List<BlockCost> costs = new ArrayList<>(template.blocks().size());
         for (BuildingTemplate.Block block : template.blocks()) {
-            BlockState state = substitute(block.state(), materials);
+            BlockState state = substitute(block.state(), materials, look);
             blocks.add(new BuildingTemplate.Block(block.pos(), state));
             costs.add(TemplateBlocks.cost(state));
         }
@@ -167,7 +171,20 @@ public final class TemplateMaterials {
             wood = "";
         }
         String stone = materials.stone().isEmpty() || table().hasStone(materials.stone()) ? materials.stone() : "";
-        return new Materials(wood, stone);
+        return new Materials(wood, stone, known(materials.appearance()));
+    }
+
+    /**
+     * The parts of a look the game knows; the others are left to the template.
+     */
+    private static Look known(Look look) {
+        Look result = look;
+        for (Map.Entry<Look.Part, String> part : look.parts().entrySet()) {
+            if (!table().knows(Look.NONE.with(part.getKey(), part.getValue()))) {
+                result = result.with(part.getKey(), "");
+            }
+        }
+        return result;
     }
 
     /**
@@ -176,7 +193,7 @@ public final class TemplateMaterials {
     public static boolean known(Materials materials) {
         boolean wood = materials.wood().isEmpty() || Materials.AUTO.equals(materials.wood()) || table().hasWood(materials.wood());
         boolean stone = materials.stone().isEmpty() || table().hasStone(materials.stone());
-        return wood && stone;
+        return wood && stone && table().knows(materials.appearance());
     }
 
     /**
