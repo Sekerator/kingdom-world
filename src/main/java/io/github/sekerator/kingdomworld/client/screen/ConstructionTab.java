@@ -10,6 +10,8 @@ import io.github.sekerator.kingdomworld.common.network.packet.ConstructionPacket
 import io.github.sekerator.kingdomworld.core.construction.BuildingRoles;
 import io.github.sekerator.kingdomworld.core.construction.Construction;
 import io.github.sekerator.kingdomworld.core.construction.Materials;
+import io.github.sekerator.kingdomworld.core.npc.ArchitecturalStyles;
+import io.github.sekerator.kingdomworld.core.npc.TemplateCatalog;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -42,6 +44,10 @@ final class ConstructionTab {
     private static final int GAP = 2;
     private static final int CELL = 16;
     private static final String KEY = "kingdomworld.screen.construction.";
+    private static final int ALL_STYLES = -2;
+    private static final int OWN_STYLE = -1;
+    /** The bar at the left edge of a row of the catalog in the style of the kingdom. */
+    private static final int OWN_STYLE_COLOR = 0xFFE0B040;
 
     enum Mode {
         CATALOG,
@@ -70,8 +76,13 @@ final class ConstructionTab {
     /** The wood and the stone chosen for blueprints, as indices into the choices. */
     private int wood;
     private int stone;
+    /**
+     * The style the catalog shows: {@link #ALL_STYLES}, {@link #OWN_STYLE} or the index of an architectural style.
+     */
+    private int filter = ALL_STYLES;
 
     private int modeWidth;
+    private int filterWidth;
     private int takeWidth;
     private int backWidth;
     private int priorityWidth;
@@ -130,6 +141,75 @@ final class ConstructionTab {
     void chooseForCheck(int woodIndex, int stoneIndex) {
         wood = Math.max(0, Math.min(woodChoices().size() - 1, woodIndex));
         stone = Math.max(0, Math.min(stoneChoices().size() - 1, stoneIndex));
+    }
+
+    /**
+     * Filters the catalog by style, for the layout check: 0 shows all, 1 the style of the kingdom, 2 and on each architectural
+     * style in turn.
+     */
+    void filterForCheck(int index) {
+        filter = index <= 0 ? ALL_STYLES : index == 1 ? OWN_STYLE : Math.min(ArchitecturalStyles.IDS.size() - 1, index - 2);
+        scroll = 0;
+    }
+
+    // ---------------------------------------------------------------- styles
+
+    /**
+     * The architectural style of the kingdom, or empty while the server sent none.
+     */
+    private String kingdomStyle() {
+        return screen.view() == null ? "" : screen.view().style();
+    }
+
+    /**
+     * The architectural style of a template, or empty for one that suits every style.
+     */
+    private static String styleOf(String templateId) {
+        return TemplateCatalog.get(templateId).map(TemplateCatalog.Entry::style).orElse("");
+    }
+
+    /**
+     * The filter that follows {@code value}: all, the kingdom's own style when it has one, then every style.
+     */
+    private int nextFilter(int value) {
+        if (value == ALL_STYLES) {
+            return kingdomStyle().isEmpty() ? 0 : OWN_STYLE;
+        }
+        if (value == OWN_STYLE) {
+            return 0;
+        }
+        return value + 1 < ArchitecturalStyles.IDS.size() ? value + 1 : ALL_STYLES;
+    }
+
+    private static Component filterLabel(int value) {
+        if (value == ALL_STYLES) {
+            return Component.translatable(KEY + "filter.all");
+        }
+        if (value == OWN_STYLE) {
+            return Component.translatable(KEY + "filter.own");
+        }
+        return Component.translatable(KEY + "filter.style", StylePicker.name(ArchitecturalStyles.id(value)));
+    }
+
+    private boolean shows(String style) {
+        if (filter == ALL_STYLES) {
+            return true;
+        }
+        if (filter == OWN_STYLE) {
+            return !kingdomStyle().isEmpty() && style.equals(kingdomStyle());
+        }
+        return style.equals(ArchitecturalStyles.id(filter));
+    }
+
+    /**
+     * The order of the groups of the catalog: the style of the kingdom first, then the templates of every style, then the other
+     * styles in their order.
+     */
+    private int group(String style) {
+        if (!style.isEmpty() && style.equals(kingdomStyle())) {
+            return 0;
+        }
+        return style.isEmpty() ? 1 : 2 + Math.max(0, ArchitecturalStyles.index(style));
     }
 
     // ---------------------------------------------------------------- texts
@@ -269,7 +349,8 @@ final class ConstructionTab {
     // ---------------------------------------------------------------- the entries shown
 
     /**
-     * The templates of the view in the mode: the catalog of the data packs, or the kingdom's own blueprints.
+     * The templates of the view in the mode: the catalog of the data packs, those of the style of the kingdom first and
+     * filtered by style, or the kingdom's own blueprints in the order the server sent them.
      */
     private List<ConstructionView.Template> templates() {
         List<ConstructionView.Template> result = new ArrayList<>();
@@ -277,9 +358,13 @@ final class ConstructionTab {
             return result;
         }
         for (ConstructionView.Template entry : view.templates()) {
-            if (entry.own() == (mode == Mode.OWN)) {
+            if (entry.own() == (mode == Mode.OWN) && (mode != Mode.CATALOG || shows(styleOf(entry.id())))) {
                 result.add(entry);
             }
+        }
+        if (mode == Mode.CATALOG) {
+            // The sort keeps the order of the server inside a group.
+            result.sort(java.util.Comparator.comparingInt(entry -> group(styleOf(entry.id()))));
         }
         return result;
     }
@@ -346,7 +431,13 @@ final class ConstructionTab {
         orderWidth = Math.max(screen.buttonWidth(orderLabel(true)), screen.buttonWidth(orderLabel(false)));
         cancelWidth = screen.buttonWidth(Component.translatable(KEY + "cancel"));
         confirmWidth = screen.buttonWidth(Component.translatable(KEY + "confirm"));
+        filterWidth = Math.max(screen.buttonWidth(filterLabel(ALL_STYLES)), screen.buttonWidth(filterLabel(OWN_STYLE)));
+        for (int i = 0; i < ArchitecturalStyles.IDS.size(); i++) {
+            filterWidth = Math.max(filterWidth, screen.buttonWidth(filterLabel(i)));
+        }
         int top = modeWidth + 8 + font.width(Component.translatable(KEY + "summary.buildings", 512, 99_999));
+        // The catalog has the filter of styles beside the button of the view.
+        top = Math.max(top, modeWidth + GAP + filterWidth + 8 + font.width(Component.translatable(KEY + "summary.catalog", 512)));
         int detail = takeWidth + GAP + backWidth;
         int controls = Math.max(priorityWidth + GAP + pauseWidth, orderWidth + GAP + cancelWidth);
         int messages = 0;
@@ -450,6 +541,17 @@ final class ConstructionTab {
                 scroll = 0;
                 screen.rebuild();
             }).bounds(x, buttonsY(top), modeWidth, ROW - 2).build());
+            if (mode == Mode.CATALOG) {
+                if (filter == OWN_STYLE && kingdomStyle().isEmpty()) {
+                    filter = ALL_STYLES;
+                }
+                Button filterButton = screen.add(Button.builder(filterLabel(filter), b -> {
+                    filter = nextFilter(filter);
+                    scroll = 0;
+                    screen.rebuild();
+                }).bounds(x + modeWidth + GAP, buttonsY(top), filterWidth, ROW - 2).build());
+                filterButton.setTooltip(Tooltip.create(Component.translatable(KEY + "filter.hint")));
+            }
             int rows = visibleRows(top, panelHeight);
             scroll = Math.max(0, Math.min(scroll, rowCount() - rows));
             return;
@@ -718,7 +820,7 @@ final class ConstructionTab {
             }
             return;
         }
-        int summaryX = x + modeWidth + 8;
+        int summaryX = x + modeWidth + 8 + (mode == Mode.CATALOG ? GAP + filterWidth : 0);
         screen.name(graphics, summary().getString(), summaryX, buttonsY(top) + 5, 0xFFD0D0D0, right - summaryX);
         int rows = visibleRows(top, panelHeight);
         int count = rowCount();
@@ -749,8 +851,15 @@ final class ConstructionTab {
     }
 
     private void renderTemplateRow(GuiGraphics graphics, Font font, ConstructionView.Template entry, int x, int right, int y) {
+        String style = entry.own() ? "" : styleOf(entry.id());
+        if (!style.isEmpty() && style.equals(kingdomStyle())) {
+            graphics.fill(x - 5, y + 2, x - 3, y + ROW - 3, OWN_STYLE_COLOR);
+        }
         graphics.renderItem(entry.icon(), x, y + 1);
         Component info = Component.translatable(KEY + "row.template", category(entry.category()), size(entry));
+        if (!style.isEmpty()) {
+            info = Component.translatable(KEY + "row.template", Component.translatable(KEY + "row.style", StylePicker.name(style)), info);
+        }
         int infoWidth = Math.min(font.width(info), (right - x) / 2);
         int infoX = right - infoWidth;
         screen.name(graphics, info.getString(), infoX, y + 5, 0xFFB0B0B0, infoWidth);

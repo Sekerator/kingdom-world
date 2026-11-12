@@ -324,7 +324,19 @@ final class ClientLayoutCheck {
         return rights;
     }
 
+    /** The style of the kingdom of most checks: the one with the longest name in Russian. */
+    private static final String LONG_STYLE = "classic";
+    /** What changing the style costs by default. */
+    private static final long STYLE_FEE = 2_000L;
+
     private static KingdomView view(KingdomView.Relation relation, Role role) {
+        return view(relation, role, LONG_STYLE);
+    }
+
+    /**
+     * A kingdom with the longest names, many members and applications, building in the given architectural style.
+     */
+    private static KingdomView view(KingdomView.Relation relation, Role role, String style) {
         boolean member = relation == KingdomView.Relation.MEMBER;
         List<KingdomView.MemberEntry> members = new ArrayList<>();
         List<KingdomView.PendingEntry> applications = new ArrayList<>();
@@ -344,7 +356,38 @@ final class ClientLayoutCheck {
         }
         return new KingdomView(UUID.randomUUID(), LONG_KINGDOM, 0x6C3483, LONG_PLAYER, 8, 10, 53, 187,
                 new BlockPos(-30_000_000, 319, 29_999_999), relation, member ? role : null, permissions, members, applications,
-                member ? defaultRights() : Map.of());
+                member ? defaultRights() : Map.of(), null, null, style, STYLE_FEE);
+    }
+
+    /**
+     * The founding screen with the style of {@code shown} chosen where the land suggests {@code suggested}, a name and an answer
+     * of the server.
+     */
+    private static FoundKingdomScreen founding(String suggested, String shown, String name, Component status, boolean error) {
+        FoundKingdomScreen screen = new FoundKingdomScreen(BlockPos.ZERO, 0x1F618D, suggested);
+        screen.showStyleForCheck(io.github.sekerator.kingdomworld.core.npc.ArchitecturalStyles.index(shown));
+        screen.fillForCheck(name, status, error);
+        return screen;
+    }
+
+    /**
+     * The overview of a king with the choice of a new style open on {@code shown}.
+     */
+    private static ThroneScreen styleChoice(String shown, Component status) {
+        ThroneScreen screen = throne(view(KingdomView.Relation.MEMBER, Role.KING), "overview", status);
+        screen.showStyleForCheck(io.github.sekerator.kingdomworld.core.npc.ArchitecturalStyles.index(shown));
+        return screen;
+    }
+
+    /**
+     * The catalog of a kingdom in the style {@code style}, filtered by style: 0 all, 1 its own, 2 and on each style.
+     */
+    private static ThroneScreen catalogFiltered(String style, int filter) {
+        ThroneScreen screen = throne(view(KingdomView.Relation.MEMBER, Role.KING, style), "construction", Component.empty());
+        screen.updateConstruction(constructionView(screen.kingdomId(), true, false));
+        screen.showConstruction("catalog", "", 0);
+        screen.filterConstruction(filter);
+        return screen;
     }
 
     private static ThroneScreen throne(KingdomView view, String tab, Component status) {
@@ -876,6 +919,17 @@ final class ClientLayoutCheck {
                         73_728, i == 2 ? 9 : 0, problem, i % 3 == 0 ? Component.translatable("kingdomworld.building.role.warehouse") : Component.empty(),
                         16, i % 2 == 0 ? Component.literal(LONG_KINGDOM) : Component.empty(), 0));
             }
+            // Templates of the architectural styles, which the catalog puts in groups, marks and filters by style.
+            String[] styled = {"terem_castle_small", "classic_house_manor", "mountain_house_noble", "terem_house_boyar", "classic_castle_large",
+                    "nordic_house_longhouse", "gothic_house_turret", "classic_smithy", "terem_tavern"};
+            for (int i = 0; i < styled.length; i++) {
+                boolean castle = styled[i].contains("_castle_");
+                templates.add(new io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Template("kingdomworld:" + styled[i],
+                        Component.translatable("kingdomworld.building." + styled[i]), castle ? "defense" : "housing",
+                        new ItemStack(castle ? Items.STONE_BRICKS : Items.OAK_DOOR), castle ? 47 : 13, castle ? 48 : 12, castle ? 47 : 15, cost,
+                        73_728, 0, Component.empty(), castle ? Component.empty() : Component.translatable("kingdomworld.building.role.house"),
+                        1, Component.empty(), 0));
+            }
             // The kingdom's own blueprints with long names, one that cannot be built any more.
             for (int i = 0; i < 9; i++) {
                 templates.add(new io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Template("kingdomworld:custom/" + (i + 1),
@@ -1055,7 +1109,19 @@ final class ClientLayoutCheck {
             screen.fillForCheck(LONG_KINGDOM, Component.translatable("kingdomworld.kingdom.error.read_only"), true);
             return screen;
         }));
+        // The choice of the style: the one the land suggests with its mark, others without, the longest name and caption.
+        cases.add(new Case("founding-suggested", () -> founding("classic", "classic", LONG_KINGDOM,
+                Component.translatable("kingdomworld.screen.found.waiting"), false)));
+        cases.add(new Case("founding-style-terem", () -> founding("classic", "terem", "Abc!", Component.empty(), false)));
+        cases.add(new Case("founding-style-mountain", () -> founding("mountain", "mountain", LONG_KINGDOM,
+                Component.translatable("kingdomworld.kingdom.error.read_only"), true)));
         cases.add(new Case("throne-king-overview", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "overview", longError)));
+        cases.add(new Case("throne-king-overview-style", () -> styleChoice("mountain", Component.empty())));
+        cases.add(new Case("throne-king-overview-style-error", () -> styleChoice(LONG_STYLE, longError)));
+        cases.add(new Case("throne-king-overview-style-changed", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "overview",
+                Component.translatable("kingdomworld.style.changed", Component.translatable("kingdomworld.style." + LONG_STYLE),
+                        io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(STYLE_FEE,
+                                io.github.sekerator.kingdomworld.core.economy.CurrencyUnits.DEFAULT)))));
         cases.add(new Case("throne-king-members", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "members", Component.empty())));
         cases.add(new Case("throne-king-rights", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "rights", Component.empty())));
         cases.add(new Case("throne-subject-overview", () -> throne(view(KingdomView.Relation.MEMBER, Role.SUBJECT), "overview", Component.empty())));
@@ -1232,6 +1298,9 @@ final class ClientLayoutCheck {
         cases.add(new Case("post-builder-idle", () -> post(postView("builder", WorkStatus.NO_MATERIALS, false, 16, false, false), longError)));
         cases.add(new Case("throne-construction-catalog", () -> construction(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "catalog",
                 "", 0, Component.empty())));
+        cases.add(new Case("throne-construction-catalog-filter-own", () -> catalogFiltered("terem", 1)));
+        cases.add(new Case("throne-construction-catalog-filter-style", () -> catalogFiltered("terem",
+                2 + io.github.sekerator.kingdomworld.core.npc.ArchitecturalStyles.index(LONG_STYLE))));
         cases.add(new Case("throne-construction-template", () -> construction(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "catalog",
                 "kingdomworld:storehouse2", 0, Component.translatable("kingdomworld.construction.blueprint_taken", Component.literal(LONG_KINGDOM)))));
         cases.add(new Case("throne-construction-template-unavailable", () -> construction(view(KingdomView.Relation.MEMBER, Role.STEWARD), true,

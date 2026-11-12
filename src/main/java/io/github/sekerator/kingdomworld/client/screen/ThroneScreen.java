@@ -1,7 +1,10 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
 import io.github.sekerator.kingdomworld.client.ClientHooks;
+import io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory;
+import io.github.sekerator.kingdomworld.common.economy.MoneyTexts;
 import io.github.sekerator.kingdomworld.common.kingdom.PlayerNames;
+import io.github.sekerator.kingdomworld.common.network.data.CurrencyInfo;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.CatalogView;
 import io.github.sekerator.kingdomworld.common.network.data.CitizenView;
@@ -12,8 +15,10 @@ import io.github.sekerator.kingdomworld.common.network.data.StorageView;
 import io.github.sekerator.kingdomworld.common.network.packet.StoragePackets;
 import io.github.sekerator.kingdomworld.common.network.packet.CitizenRequestPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomActionPacket;
+import io.github.sekerator.kingdomworld.core.economy.CurrencyUnits;
 import io.github.sekerator.kingdomworld.core.membership.Permission;
 import io.github.sekerator.kingdomworld.core.membership.Role;
+import io.github.sekerator.kingdomworld.core.npc.ArchitecturalStyles;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -53,6 +58,11 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private static final int GAP = 2;
     /** The gap between narrow tabs, which have to fit in two rows on the smallest screens. */
     private static final int TAB_GAP = 1;
+    /** The column of the picture of a style in the overview, as wide as the one of the founding screen. */
+    private static final int STYLE_COLUMN = 126;
+    /** The least room beside the picture of a style for the current style and what the shown one is like. */
+    private static final int STYLE_TEXT = 140;
+    private static final int STYLE_BUTTON_HEIGHT = 14;
     private static final List<Permission> EDITABLE_RIGHTS = List.of(Permission.BUILD, Permission.CONTAINERS,
             Permission.INTERACT, Permission.RECRUIT, Permission.TERRITORY, Permission.MANAGE_CITIZENS, Permission.MANAGE_PRODUCTION,
             Permission.MANAGE_TREASURY, Permission.MANAGE_MARKET, Permission.MANAGE_TRADE, Permission.MANAGE_GUILD,
@@ -147,6 +157,13 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private int rightsColumn;
     private int rightsVisible;
     private int arrowWidth;
+    /** The choice of a new style for the kingdom, open in the overview for its king, or {@code null}. */
+    @org.jetbrains.annotations.Nullable
+    private StylePicker stylePicker;
+    /** Whether a change of the style was asked and the answer of the server is awaited. */
+    private boolean styleSent;
+    private int changeStyleWidth;
+    private int confirmStyleWidth;
 
     public ThroneScreen(KingdomView view) {
         super(Component.literal(view.name()));
@@ -170,6 +187,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             case LAW -> law.checkName();
             case DIPLOMACY -> diplomacy.checkName();
             case NOBILITY -> nobility.checkName();
+            case OVERVIEW -> stylePicker != null ? "overview-style" : "overview";
             default -> tab.name().toLowerCase(Locale.ROOT);
         };
         return "throne/" + name + "/" + view.relation().name().toLowerCase(Locale.ROOT);
@@ -187,6 +205,9 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         this.view = newView;
         if (newView.relation() != KingdomView.Relation.MEMBER) {
             tab = Tab.OVERVIEW;
+        }
+        if (!canChangeStyle()) {
+            stylePicker = null;
         }
         rebuildWidgets();
     }
@@ -415,6 +436,27 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
      */
     public void showConstruction(String mode, String template, long site) {
         construction.showForCheck(ConstructionTab.Mode.valueOf(mode.toUpperCase(Locale.ROOT)), template, site);
+    }
+
+    /**
+     * Filters the catalog of the construction tab by style: 0 shows all, 1 the style of the kingdom, 2 and on each
+     * architectural style in turn; for the layout check.
+     */
+    public void filterConstruction(int index) {
+        construction.filterForCheck(index);
+    }
+
+    /**
+     * Opens the choice of a new style in the overview with the style of this index shown, when the viewer may change the
+     * style; for the layout check.
+     */
+    public void showStyleForCheck(int index) {
+        if (canChangeStyle()) {
+            stylePicker = new StylePicker(index, -1);
+        }
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
     }
 
     /**
@@ -707,6 +749,9 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private void openTab(Tab target) {
         tab = target;
         scroll = 0;
+        if (target != Tab.OVERVIEW) {
+            stylePicker = null;
+        }
         if (target == Tab.CITIZENS) {
             requestCitizens();
         }
@@ -809,8 +854,105 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             lines.add(Component.translatable("kingdomworld.screen.throne.capital",
                     view.capital().getX(), view.capital().getY(), view.capital().getZ()));
         }
+        Component style = styleLine();
+        if (style != null) {
+            lines.add(style);
+        }
         lines.addAll(rulerLines());
         return lines;
+    }
+
+    // ---------------------------------------------------------------- style
+
+    /**
+     * Whether the viewer may change the style of the kingdom: only the king of a kingdom of players; a kingdom of the world keeps
+     * the style of its capital.
+     */
+    private boolean canChangeStyle() {
+        return isMember() && view.viewerRole() == Role.KING && view.npc() == null;
+    }
+
+    /**
+     * The line of the architectural style of the kingdom, or {@code null} while the server sent none.
+     */
+    @org.jetbrains.annotations.Nullable
+    private Component styleLine() {
+        return view.style().isEmpty() ? null : Component.translatable("kingdomworld.screen.throne.style", StylePicker.name(view.style()));
+    }
+
+    /**
+     * Where the line of the style stands among the lines of the overview, or -1 without one: last before those of a ruler.
+     */
+    private int styleLineIndex() {
+        return styleLine() == null ? -1 : overviewLines().size() - rulerLines().size() - 1;
+    }
+
+    /**
+     * The step between the lines of the overview: those of a ruler of the world come closer together, as on the card of the
+     * atlas, and closer still when the kingdom has every line.
+     */
+    private static int overviewStep(int lines, int rulerLines) {
+        if (rulerLines == 0) {
+            return 14;
+        }
+        return lines > 11 ? 10 : 11;
+    }
+
+    /**
+     * What changing the style costs, in the coins of the kingdom.
+     */
+    private Component styleFee() {
+        CurrencyUnits units = CurrencyDirectory.get(view.id()).map(CurrencyInfo::units).orElse(CurrencyUnits.DEFAULT);
+        return MoneyTexts.amount(view.styleFee(), units);
+    }
+
+    private Component confirmStyleLabel() {
+        return Component.translatable("kingdomworld.screen.throne.style.confirm", styleFee());
+    }
+
+    private void openStylePicker() {
+        stylePicker = new StylePicker(Math.max(0, ArchitecturalStyles.index(view.style())), -1);
+        rebuildWidgets();
+    }
+
+    /**
+     * The choice of a new style in the overview: the picture with its arrows on the left; the current style, what the shown
+     * one is like and the way back beside it; the button that builds in the shown style for the fee in place of leaving the
+     * kingdom at the bottom.
+     */
+    private void initStylePicker(int left, int top) {
+        int y = top + contentOffset + CONTENT_TOP + 4;
+        stylePicker.layout(left + PAD, y, STYLE_COLUMN, StylePicker.PICTURE_WIDTH, StylePicker.PICTURE_HEIGHT, false);
+        for (Button arrow : stylePicker.buttons(this::rebuildWidgets)) {
+            addRenderableWidget(arrow);
+        }
+        Component back = Component.translatable("gui.back");
+        int backWidth = buttonWidth(back);
+        addRenderableWidget(Button.builder(back, button -> {
+            stylePicker = null;
+            rebuildWidgets();
+        }).bounds(left + panelWidth - PAD - backWidth, y + StylePicker.PICTURE_HEIGHT + StylePicker.ROW_GAP, backWidth, StylePicker.ARROW)
+                .build());
+        String id = stylePicker.id();
+        int width = Math.min(confirmStyleWidth, panelWidth - 2 * PAD - doneWidth - GAP);
+        Button confirmButton = addRenderableWidget(Button.builder(confirmStyleLabel(), button ->
+                confirm(Component.translatable("kingdomworld.screen.throne.style.question", StylePicker.name(id), styleFee()), () -> {
+                    styleSent = true;
+                    send(KingdomActionPacket.Action.SET_STYLE, null, ArchitecturalStyles.index(id));
+                })).bounds(left + PAD, top + panelHeight - 26, width, 20).build());
+        confirmButton.active = !id.equals(view.style());
+    }
+
+    private void renderStylePicker(GuiGraphics graphics, int left, int top, int right) {
+        stylePicker.render(this, graphics, font);
+        int x = left + PAD + STYLE_COLUMN + PAD;
+        int y = top + CONTENT_TOP + 4;
+        Component current = styleLine();
+        if (current != null) {
+            fittedLabel(graphics, current, x, y, 0xFFF0D070, right - PAD);
+            y += 14;
+        }
+        paragraph(graphics, StylePicker.caption(stylePicker.id()), x, y, right - PAD - x, 4, 0xFFD0D0D0);
     }
 
     /**
@@ -973,12 +1115,25 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         for (Component line : overviewLines()) {
             overview = Math.max(overview, font.width(line));
         }
+        changeStyleWidth = buttonWidth(Component.translatable("kingdomworld.screen.throne.style.change"));
+        confirmStyleWidth = buttonWidth(confirmStyleLabel());
+        Component style = styleLine();
+        if (style != null && canChangeStyle()) {
+            // The button that changes the style stands at the end of its line.
+            overview = Math.max(overview, font.width(style) + 4 + changeStyleWidth);
+        }
+        if (canChangeStyle()) {
+            overview = Math.max(overview, STYLE_COLUMN + PAD + STYLE_TEXT - 4);
+        }
         int bottom = doneWidth + PAD;
         for (Component action : overviewActions()) {
             bottom += buttonWidth(action) + GAP;
         }
         if (isMember()) {
             bottom += buttonWidth(Component.translatable("kingdomworld.screen.throne.tab.territory")) + GAP;
+        }
+        if (canChangeStyle()) {
+            bottom = Math.max(bottom, doneWidth + PAD + confirmStyleWidth + GAP);
         }
         int inner = Math.max(Math.max(tabs, members), Math.max(Math.max(applications, rights), Math.max(overview + 4, bottom)));
         if (isMember()) {
@@ -1081,6 +1236,18 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     }
 
     private void initOverview(int left, int top) {
+        if (stylePicker != null && canChangeStyle()) {
+            initStylePicker(left, top);
+            return;
+        }
+        stylePicker = null;
+        int styleIndex = styleLineIndex();
+        if (styleIndex >= 0 && canChangeStyle()) {
+            List<Component> lines = overviewLines();
+            int styleY = top + contentOffset + CONTENT_TOP + 4 + styleIndex * overviewStep(lines.size(), rulerLines().size());
+            addRenderableWidget(Button.builder(Component.translatable("kingdomworld.screen.throne.style.change"), button -> openStylePicker())
+                    .bounds(left + panelWidth - PAD - changeStyleWidth, styleY - 3, changeStyleWidth, STYLE_BUTTON_HEIGHT).build());
+        }
         int y = top + panelHeight - 26;
         int x = left + PAD;
         List<Component> actions = overviewActions();
@@ -1366,6 +1533,16 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             return;
         }
         closeOnSuccess = false;
+        if (styleSent) {
+            // The kingdom builds in the new style: the choice closes and the overview shows it.
+            styleSent = false;
+            if (success) {
+                stylePicker = null;
+                if (minecraft != null) {
+                    rebuildWidgets();
+                }
+            }
+        }
         status = message;
         // A message with a color of its own (news from the server, such as a proposal) keeps it; otherwise green or red.
         net.minecraft.network.chat.TextColor own = message.getStyle().getColor();
@@ -1459,27 +1636,45 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             bottomText = nobility.hint();
             color = 0xFFB8B8B8;
         }
+        if (bottomText.getString().isEmpty() && tab == Tab.OVERVIEW && stylePicker != null) {
+            bottomText = Component.translatable("kingdomworld.screen.throne.style.hint");
+            color = 0xFFB8B8B8;
+        }
         paragraph(graphics, bottomText, left + PAD, top + panelHeight - BOTTOM_AREA + 2, panelWidth - 2 * PAD, STATUS_LINES, color);
     }
 
     private void renderOverview(GuiGraphics graphics, int left, int top, int right) {
+        if (stylePicker != null) {
+            renderStylePicker(graphics, left, top, right);
+            return;
+        }
         int x = left + PAD + 4;
         int y = top + CONTENT_TOP + 4;
         int index = 0;
         List<Component> lines = overviewLines();
         int rulerFirst = lines.size() - rulerLines().size();
-        // The lines of a ruler of the world come closer together, as on the card of the atlas.
-        int step = rulerFirst < lines.size() ? 11 : 14;
-        // While a message of the status is shown, the lines of the ruler that would run into it wait until it goes.
+        int styleIndex = styleLineIndex();
+        int step = overviewStep(lines.size(), lines.size() - rulerFirst);
+        // While a message of the status is shown, the lines of the ruler that would run into it wait until it goes; they never
+        // run into the buttons.
+        int buttonsTop = top - contentOffset + panelHeight - 26;
         int statusTop = status.getString().isEmpty() ? Integer.MAX_VALUE : top - contentOffset + panelHeight - BOTTOM_AREA + 2;
+        int limit = Math.min(statusTop, buttonsTop - 1);
         for (Component line : lines) {
-            if (index >= rulerFirst && y + 9 > statusTop) {
+            if (index >= rulerFirst && y + 9 > limit) {
                 break;
             }
-            fittedLabel(graphics, line, x, y, index >= rulerFirst ? 0xFFD8E8C8 : 0xFFE8E8E8, right - PAD);
-            int width = Math.min(font.width(line), right - PAD - x);
+            // The line of the style ends before the button that changes it.
+            int lineRight = index == styleIndex && canChangeStyle() ? right - PAD - changeStyleWidth - 4 : right - PAD;
+            fittedLabel(graphics, line, x, y, index >= rulerFirst ? 0xFFD8E8C8 : 0xFFE8E8E8, lineRight);
+            int width = Math.min(font.width(line), lineRight - x);
             if (view.npc() != null && index == 1) {
                 hoverText(x, y, width, npcHint());
+            }
+            if (index == styleIndex) {
+                for (Component hover : StylePicker.captionLines(font, view.style())) {
+                    hoverText(x, y, width, hover);
+                }
             }
             if (index >= rulerFirst) {
                 for (Component hover : rulerHover(index - rulerFirst)) {
@@ -1491,7 +1686,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         }
         int relationY = y + (step == 14 ? 6 : 4);
         boolean statusShown = !status.getString().isEmpty() && relationY + 9 > top - contentOffset + panelHeight - BOTTOM_AREA + 2;
-        if (!statusShown) {
+        if (!statusShown && relationY + 9 <= buttonsTop) {
             fittedLabel(graphics, relationText(), x, relationY, 0xFFF0D070, right - PAD);
         }
     }

@@ -5,6 +5,7 @@ import io.github.sekerator.kingdomworld.common.network.packet.FoundKingdomPacket
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomColors;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomNames;
 import io.github.sekerator.kingdomworld.core.kingdom.NameProblem;
+import io.github.sekerator.kingdomworld.core.npc.ArchitecturalStyles;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -15,20 +16,36 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Founding a kingdom on an empty throne: a name, checked with the same rules the server uses, and a color.
+ * Founding a kingdom on an empty throne: a name, checked with the same rules the server uses, a color and the architectural
+ * style its buildings will have, the one the land of the throne suggests chosen at first. Colors and the style stand side by
+ * side under the name; on a screen too narrow for that the picture of the style goes under the colors.
  * The server checks everything again and answers with the throne screen or an error.
  */
 public class FoundKingdomScreen extends KingdomScreen implements ResultListener {
-    private static final int MIN_PANEL_WIDTH = 260;
-    private static final int PANEL_HEIGHT = 194;
+    /** Two columns of at least the row of colors, with the gaps around and between them. */
+    private static final int MIN_COLUMN = 126;
+    private static final int MIN_PANEL_WIDTH = 2 * MIN_COLUMN + 3 * PAD;
+    /** Fits the smallest screen the game allows, 240 high. */
+    private static final int PANEL_HEIGHT = 232;
     private static final int SWATCH = 14;
     private static final int SWATCH_GAP = 2;
     private static final int STATUS_LINES = 3;
+    private static final int COLUMNS_TOP = 60;
+    private static final int CHOICE_TOP = 72;
+    /** Where the picture of the style stands when it goes under the colors. */
+    private static final int NARROW_PICTURE_TOP = 104;
+    private static final int PREVIEW_TOP = 160;
+    private static final int STATUS_TOP = 172;
 
     private final BlockPos throne;
     private final String suggestedStyle;
+    private final StylePicker picker;
     private int color;
     private int panelWidth;
+    /** The width of each of the two columns, of the colors and of the style. */
+    private int column;
+    /** Whether the picture of the style stands under the colors instead of beside them. */
+    private boolean narrow;
     private EditBox nameBox;
     private Button foundButton;
     private String pendingName = "";
@@ -48,11 +65,27 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
         this.throne = throne;
         this.color = suggestedColor;
         this.suggestedStyle = suggestedStyle == null ? "" : suggestedStyle;
+        int suggested = ArchitecturalStyles.index(this.suggestedStyle);
+        this.picker = new StylePicker(Math.max(0, suggested), suggested);
     }
 
     @Override
     public String checkName() {
         return "founding";
+    }
+
+    /**
+     * The style the land of the throne suggests, or empty.
+     */
+    public String suggestedStyle() {
+        return suggestedStyle;
+    }
+
+    /**
+     * The style chosen now.
+     */
+    public String style() {
+        return picker.id();
     }
 
     private int left() {
@@ -68,6 +101,11 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
                 KingdomNames.MIN_LENGTH, KingdomNames.MAX_LENGTH);
     }
 
+    private static int swatchRow() {
+        int perRow = KingdomColors.PALETTE.size() / 2;
+        return perRow * (SWATCH + SWATCH_GAP) - SWATCH_GAP;
+    }
+
     @Override
     protected void init() {
         Component found = Component.translatable("kingdomworld.screen.found.confirm");
@@ -77,7 +115,13 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
         for (NameProblem problem : NameProblem.values()) {
             needed = Math.max(needed, font.width(problemText(problem)));
         }
-        panelWidth = Math.min(Math.max(MIN_PANEL_WIDTH, needed + 2 * PAD + 4), width - 8);
+        int columnNeeded = Math.max(Math.max(MIN_COLUMN, swatchRow()), StylePicker.rowWidth(font));
+        columnNeeded = Math.max(columnNeeded, font.width(Component.translatable("kingdomworld.screen.found.color")) + 2);
+        columnNeeded = Math.max(columnNeeded, font.width(Component.translatable("kingdomworld.screen.found.style")) + 2);
+        int twoColumns = 2 * columnNeeded + 3 * PAD;
+        panelWidth = Math.min(Math.max(Math.max(MIN_PANEL_WIDTH, twoColumns), needed + 2 * PAD + 4), width - 8);
+        column = (panelWidth - 3 * PAD) / 2;
+        narrow = column < columnNeeded;
 
         String previous = nameBox == null ? pendingName : nameBox.getValue();
         int left = left();
@@ -89,6 +133,15 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
         nameBox.setResponder(value -> updateButtons());
         addRenderableWidget(nameBox);
         setInitialFocus(nameBox);
+        if (narrow) {
+            picker.layout(left + PAD, top + NARROW_PICTURE_TOP, panelWidth - 2 * PAD, StylePicker.SMALL_PICTURE_WIDTH,
+                    StylePicker.SMALL_PICTURE_HEIGHT, true);
+        } else {
+            picker.layout(styleX(), top + CHOICE_TOP, column, StylePicker.PICTURE_WIDTH, StylePicker.PICTURE_HEIGHT, false);
+        }
+        for (Button arrow : picker.buttons(() -> { })) {
+            addRenderableWidget(arrow);
+        }
         foundButton = addRenderableWidget(Button.builder(found, button -> submit())
                 .bounds(left + PAD + 2, top + PANEL_HEIGHT - 28, buttons, 20).build());
         addRenderableWidget(Button.builder(cancel, button -> onClose())
@@ -106,6 +159,13 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
         }
         status = message;
         statusIsError = error;
+    }
+
+    /**
+     * Shows the style of this index among the architectural styles, used by the client self-check.
+     */
+    public void showStyleForCheck(int index) {
+        picker.select(index);
     }
 
     private Optional<NameProblem> problem() {
@@ -126,7 +186,7 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
         status = Component.translatable("kingdomworld.screen.found.waiting");
         statusIsError = false;
         updateButtons();
-        KingdomWorldNetwork.sendToServer(new FoundKingdomPacket(throne, KingdomNames.normalize(nameBox.getValue()), color, 0));
+        KingdomWorldNetwork.sendToServer(new FoundKingdomPacket(throne, KingdomNames.normalize(nameBox.getValue()), color, picker.index()));
     }
 
     @Override
@@ -137,15 +197,29 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
         updateButtons();
     }
 
+    /**
+     * Where the column of the colors starts: the left one beside the style, or the whole panel when the style goes under it.
+     */
+    private int colorsX() {
+        return left() + PAD;
+    }
+
+    private int colorsWidth() {
+        return narrow ? panelWidth - 2 * PAD : column;
+    }
+
+    private int styleX() {
+        return left() + 2 * PAD + column;
+    }
+
     private int swatchX(int index) {
         int perRow = KingdomColors.PALETTE.size() / 2;
-        int rowWidth = perRow * (SWATCH + SWATCH_GAP) - SWATCH_GAP;
-        return left() + (panelWidth - rowWidth) / 2 + (index % perRow) * (SWATCH + SWATCH_GAP);
+        return colorsX() + (colorsWidth() - swatchRow()) / 2 + (index % perRow) * (SWATCH + SWATCH_GAP);
     }
 
     private int swatchY(int index) {
         int perRow = KingdomColors.PALETTE.size() / 2;
-        return top() + 72 + (index / perRow) * (SWATCH + SWATCH_GAP);
+        return top() + CHOICE_TOP + (index / perRow) * (SWATCH + SWATCH_GAP);
     }
 
     @Override
@@ -171,7 +245,13 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
         graphics.renderOutline(left, top, panelWidth, PANEL_HEIGHT, 0xFFC8A040);
         centeredLabel(graphics, title, width / 2, top + 8, 0xFFE8C860, left + PAD, right - PAD);
         label(graphics, Component.translatable("kingdomworld.screen.found.name"), left + PAD + 2, top + 24, 0xFFE0E0E0, right - PAD);
-        label(graphics, Component.translatable("kingdomworld.screen.found.color"), left + PAD + 2, top + 60, 0xFFE0E0E0, right - PAD);
+        int colorsLabel = swatchX(0);
+        label(graphics, Component.translatable("kingdomworld.screen.found.color"), colorsLabel, top + COLUMNS_TOP, 0xFFE0E0E0,
+                narrow ? right - PAD : colorsX() + column);
+        if (!narrow) {
+            label(graphics, Component.translatable("kingdomworld.screen.found.style"), picker.pictureX(), top + COLUMNS_TOP, 0xFFE0E0E0,
+                    styleX() + column);
+        }
         for (int i = 0; i < KingdomColors.PALETTE.size(); i++) {
             int x = swatchX(i);
             int y = swatchY(i);
@@ -181,17 +261,19 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
             }
             graphics.fill(x, y, x + SWATCH, y + SWATCH, 0xFF000000 | swatchColor);
         }
+        picker.render(this, graphics, font);
         Optional<NameProblem> problem = problem();
         String name = KingdomNames.normalize(nameBox.getValue());
         if (problem.isPresent() && !name.isEmpty()) {
-            centeredLabel(graphics, problemText(problem.get()), width / 2, top + 110, 0xFFFF8080, left + PAD, right - PAD);
+            centeredLabel(graphics, problemText(problem.get()), width / 2, top + PREVIEW_TOP, 0xFFFF8080, left + PAD, right - PAD);
         } else if (!name.isEmpty()) {
             // The preview stands on a dark plate so that every kingdom color stays readable.
             int previewWidth = font.width(fit(name, panelWidth - 2 * PAD - 8));
-            graphics.fill(width / 2 - previewWidth / 2 - 3, top + 108, width / 2 + previewWidth / 2 + 3, top + 120, 0xFF100C08);
-            centeredName(graphics, name, width / 2, top + 110, 0xFF000000 | readable(color), panelWidth - 2 * PAD - 8);
+            graphics.fill(width / 2 - previewWidth / 2 - 3, top + PREVIEW_TOP - 2, width / 2 + previewWidth / 2 + 3, top + PREVIEW_TOP + 10,
+                    0xFF100C08);
+            centeredName(graphics, name, width / 2, top + PREVIEW_TOP, 0xFF000000 | readable(color), panelWidth - 2 * PAD - 8);
         }
-        paragraph(graphics, status, left + PAD + 2, top + 124, panelWidth - 2 * PAD - 4, STATUS_LINES,
+        paragraph(graphics, status, left + PAD + 2, top + STATUS_TOP, panelWidth - 2 * PAD - 4, STATUS_LINES,
                 statusIsError ? 0xFFFF8080 : 0xFFA0E0A0);
     }
 

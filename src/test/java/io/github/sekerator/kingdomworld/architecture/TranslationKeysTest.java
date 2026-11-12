@@ -362,6 +362,42 @@ class TranslationKeysTest {
         assertEquals(Plurals.Form.N5, Plurals.form(8));
     }
 
+    /**
+     * Every architectural style has a name and a caption in both languages, the Russian ones in Cyrillic, all names differ, and
+     * the texts of choosing and changing a style exist with the arguments the code gives them.
+     */
+    @Test
+    void stylesHaveNamesAndCaptions() {
+        Set<String> englishNames = new TreeSet<>();
+        Set<String> russianNames = new TreeSet<>();
+        for (String style : io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.STYLES) {
+            for (String key : List.of("kingdomworld.style." + style, "kingdomworld.style." + style + ".caption")) {
+                assertTrue(english.containsKey(key) && russian.containsKey(key), "Missing: " + key);
+                assertTrue(CYRILLIC.matcher(russian.get(key)).find(), key + " is not Russian: " + russian.get(key));
+                assertEquals(0, argumentCount(english.get(key)), key);
+            }
+            englishNames.add(english.get("kingdomworld.style." + style));
+            russianNames.add(russian.get("kingdomworld.style." + style));
+        }
+        int styles = io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.STYLES.size();
+        assertEquals(styles, englishNames.size(), "Two styles share a name in English: " + englishNames);
+        assertEquals(styles, russianNames.size(), "Two styles share a name in Russian: " + russianNames);
+        Map<String, Integer> arguments = Map.ofEntries(Map.entry("kingdomworld.screen.found.style", 0),
+                Map.entry("kingdomworld.screen.style.previous", 0), Map.entry("kingdomworld.screen.style.next", 0),
+                Map.entry("kingdomworld.screen.style.suggested", 0), Map.entry("kingdomworld.screen.throne.style", 1),
+                Map.entry("kingdomworld.screen.throne.style.change", 0), Map.entry("kingdomworld.screen.throne.style.confirm", 1),
+                Map.entry("kingdomworld.screen.throne.style.question", 2), Map.entry("kingdomworld.screen.throne.style.hint", 0),
+                Map.entry("kingdomworld.style.changed", 2), Map.entry("kingdomworld.style.same", 0), Map.entry("kingdomworld.style.unknown", 0),
+                Map.entry("kingdomworld.screen.construction.filter.all", 0), Map.entry("kingdomworld.screen.construction.filter.own", 0),
+                Map.entry("kingdomworld.screen.construction.filter.style", 1), Map.entry("kingdomworld.screen.construction.filter.hint", 0),
+                Map.entry("kingdomworld.screen.construction.row.style", 1));
+        arguments.forEach((key, count) -> {
+            assertTrue(english.containsKey(key) && russian.containsKey(key), "Missing: " + key);
+            assertEquals(count, argumentCount(english.get(key)), key + " in en_us");
+            assertEquals(count, argumentCount(russian.get(key)), key + " in ru_ru");
+        });
+    }
+
     @Test
     void argumentCounting() {
         assertEquals(2, argumentCount("%s and %s"));
@@ -703,6 +739,11 @@ class TranslationKeysTest {
             for (Plurals.Form form : Plurals.Form.values()) {
                 used.add("kingdomworld.count." + word + "." + form.suffix());
             }
+        }
+        // Architectural styles: the name of each and what it is like, built from its id.
+        for (String style : io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.STYLES) {
+            used.add("kingdomworld.style." + style);
+            used.add("kingdomworld.style." + style + ".caption");
         }
         // Rulers of the world: decrees of kings and queens, roles, reasons for declining a deal, needs and attitudes.
         for (io.github.sekerator.kingdomworld.core.npc.RulerDecision.Kind kind : io.github.sekerator.kingdomworld.core.npc.RulerDecision.Kind.values()) {

@@ -537,10 +537,11 @@ public final class ClientSelfTest {
             case 390 -> {
                 // The list in the corner comes once a second.
                 LOGGER.info(PREFIX + "lines in the corner of the screen: {}", PartyHud.lines().size());
-                minecraft.setScreen(new FoundKingdomScreen(throne, 0x336699));
+                minecraft.setScreen(new FoundKingdomScreen(throne, 0x336699, "terem"));
             }
             case 393 -> {
-                LOGGER.info(PREFIX + "founding screen shown: {}", minecraft.screen instanceof FoundKingdomScreen);
+                LOGGER.info(PREFIX + "founding screen shown: {}, style {}", minecraft.screen instanceof FoundKingdomScreen,
+                        minecraft.screen instanceof FoundKingdomScreen founding ? founding.style() : "");
                 minecraft.setScreen(null);
                 server.execute(() -> cleanUp(server));
             }

@@ -39,7 +39,8 @@ public final class ClientPacketHandlers {
     }
 
     public static void handleOpenFounding(OpenFoundingScreenPacket packet) {
-        ClientHooks.openFounding(packet.throne(), packet.suggestedColor());
+        ClientHooks.openFounding(packet.throne(), packet.suggestedColor(),
+                io.github.sekerator.kingdomworld.core.npc.ArchitecturalStyles.id(packet.suggestedStyle()));
     }
 
     public static void handleKingdomView(KingdomViewPacket packet) {
