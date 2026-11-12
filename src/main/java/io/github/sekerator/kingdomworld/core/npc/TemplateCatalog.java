@@ -51,6 +51,8 @@ public final class TemplateCatalog {
         INFIRMARY(""),
         /** The yards of the builders and of the carriers, each with the post of its workers. */
         YARD(""),
+        /** A piece of a town wall with its gate tower. */
+        WALL_GATE("tower"),
         /** Monuments, chapels, clock towers and parks: the face of a capital, without a role. */
         DECORATION(""),
         /** Houses of the quarters of a capital, each a kind of its own, so that the plans of towns and of old capitals stay. */
@@ -81,6 +83,20 @@ public final class TemplateCatalog {
     }
 
     /**
+     * The rank of a guild whose house a template is: the higher, the bigger and richer the house.
+     */
+    public enum Rank {
+        B, A, S, SS;
+
+        public String id() {
+            return name().toLowerCase(java.util.Locale.ROOT);
+        }
+    }
+
+    /** The architectural styles of the kingdoms of the world that have templates of their own. */
+    public static final List<String> STYLES = List.of("classic", "terem");
+
+    /**
      * A template.
      *
      * @param id      its id, for example {@code kingdomworld:cottage}
@@ -89,12 +105,19 @@ public final class TemplateCatalog {
      * @param beds    beds in it for those who live there (the rooms of a tavern are for guests)
      * @param upgrade whether it is a building a level higher, which stands only where a ruler improved a lower one
      * @param points  its named places
+     * @param style   the architectural style it belongs to, empty for the templates of all styles
+     * @param rank    the rank of the guild whose house it is, or {@code null}
      */
-    public record Entry(String id, Kind kind, int width, int depth, int beds, boolean upgrade, Map<String, List<Spot>> points) {
+    public record Entry(String id, Kind kind, int width, int depth, int beds, boolean upgrade, Map<String, List<Spot>> points, String style,
+                        Rank rank) {
         public Entry {
             Map<String, List<Spot>> copy = new LinkedHashMap<>();
             points.forEach((name, spots) -> copy.put(name, List.copyOf(spots)));
             points = Collections.unmodifiableMap(copy);
+        }
+
+        public Optional<Rank> guildRank() {
+            return Optional.ofNullable(rank);
         }
 
         public String role() {
@@ -161,11 +184,36 @@ public final class TemplateCatalog {
      * A template with named places, written {@code "name x y z, x y z; name x y z"}.
      */
     private static void add(String name, Kind kind, int width, int depth, int beds, String points) {
-        ENTRIES.put(NS + name, new Entry(NS + name, kind, width, depth, beds, false, points(points)));
+        ENTRIES.put(NS + name, new Entry(NS + name, kind, width, depth, beds, false, points(points), styleOf(name), rankOf(name, kind)));
     }
 
     private static void upgrade(String name, Kind kind, int width, int depth, int beds) {
-        ENTRIES.put(NS + name, new Entry(NS + name, kind, width, depth, beds, true, Map.of()));
+        ENTRIES.put(NS + name, new Entry(NS + name, kind, width, depth, beds, true, Map.of(), "", null));
+    }
+
+    /**
+     * The style a template belongs to, by the first word of its name.
+     */
+    static String styleOf(String name) {
+        int underscore = name.indexOf('_');
+        String first = underscore < 0 ? name : name.substring(0, underscore);
+        return STYLES.contains(first) ? first : "";
+    }
+
+    /**
+     * The rank of the house of a guild, by the last word of its name.
+     */
+    static Rank rankOf(String name, Kind kind) {
+        if (kind != Kind.GUILD && kind != Kind.MAGE_TOWER) {
+            return null;
+        }
+        String last = name.substring(name.lastIndexOf('_') + 1);
+        for (Rank rank : Rank.values()) {
+            if (rank.id().equals(last)) {
+                return rank;
+            }
+        }
+        return null;
     }
 
     static Map<String, List<Spot>> points(String text) {
@@ -218,6 +266,27 @@ public final class TemplateCatalog {
             }
         }
         return list;
+    }
+
+    /**
+     * The templates of a style and kind, in the order of the table.
+     */
+    public static List<Entry> ofStyle(String style, Kind kind) {
+        List<Entry> list = new ArrayList<>();
+        for (Entry entry : ENTRIES.values()) {
+            if (entry.kind() == kind && entry.style().equals(style) && !entry.upgrade()) {
+                list.add(entry);
+            }
+        }
+        return list;
+    }
+
+    /**
+     * The house of a guild of a style for a rank: the adventurers' guild for {@link Kind#GUILD}, the mages' guild (its tower)
+     * for {@link Kind#MAGE_TOWER}.
+     */
+    public static Optional<Entry> guildHouse(String style, Kind kind, Rank rank) {
+        return ofStyle(style, kind).stream().filter(entry -> entry.rank() == rank).findFirst();
     }
 
     /**
