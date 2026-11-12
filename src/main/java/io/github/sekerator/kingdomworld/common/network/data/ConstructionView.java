@@ -18,7 +18,8 @@ import java.util.UUID;
  */
 public record ConstructionView(UUID kingdomId, boolean canManage, int maxConstructions, List<Template> templates, List<Site> sites,
                                List<Building> buildings, int maxBlueprints, long fortification) {
-    public static final int MAX_TEMPLATES = 256;
+    /** Most templates of the catalog sent: the built-in ones of all styles and the blueprints of the kingdom. */
+    public static final int MAX_TEMPLATES = 512;
     public static final int MAX_COST = 64;
     public static final int MAX_SITES = 64;
     public static final int MAX_MISSING = 24;
