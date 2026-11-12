@@ -16,8 +16,10 @@ import java.util.UUID;
  * for a buyer.
  *
  * <p>Looking up the province of a chunk is a probe of the map of tiles (the last tile is remembered) and a read of an array:
- * nothing is allocated. Holders change through {@link TerritoryIndex#transferProvince}, which tells the listeners. Not thread
- * safe: the server reads and changes it on its thread.
+ * nothing is allocated. Holders change through {@link TerritoryIndex#transferProvince}, which tells the listeners.
+ *
+ * <p>Server thread only, reads included: the remembered tile is changed by every lookup, so a lookup from another thread may
+ * read the tile of another chunk.
  */
 public final class ProvinceMap {
     /** Chunks across a tile. */
@@ -185,6 +187,19 @@ public final class ProvinceMap {
         }
         for (int id = 1; id < byId.length; id++) {
             if (byId[id] != null && owner.equals(ownerById[id])) {
+                list.add(id);
+            }
+        }
+        return list;
+    }
+
+    /**
+     * The provinces whose holder is not among the known kingdoms, in the order of their numbers. Nothing is changed.
+     */
+    public List<Integer> heldByUnknown(java.util.function.Predicate<UUID> known) {
+        List<Integer> list = new ArrayList<>();
+        for (int id = 1; id < byId.length; id++) {
+            if (byId[id] != null && ownerById[id] != null && !known.test(ownerById[id])) {
                 list.add(id);
             }
         }

@@ -88,8 +88,9 @@ public final class KingdomWorldApi {
     }
 
     /**
-     * Owner of the chunk containing {@code pos}. Fast enough for per-block checks. Always {@code null} on a
-     * client level, which has no kingdom data.
+     * Owner of the chunk containing {@code pos}: the kingdom that claimed it, otherwise the holder of its province. Fast enough
+     * for per-block checks. Always {@code null} on a client level, which has no kingdom data. Server thread only: the lookup of
+     * provinces remembers its last tile and is not safe from other threads.
      */
     @Nullable
     public static UUID ownerAt(Level level, BlockPos pos) {
@@ -132,7 +133,7 @@ public final class KingdomWorldApi {
     }
 
     /**
-     * The province of the chunk containing {@code pos}, if there is one. Always empty on a client level.
+     * The province of the chunk containing {@code pos}, if there is one. Always empty on a client level. Server thread only.
      */
     public static Optional<Province> provinceAt(Level level, BlockPos pos) {
         if (!(level instanceof ServerLevel serverLevel)) {

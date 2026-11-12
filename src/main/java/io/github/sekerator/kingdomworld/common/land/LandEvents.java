@@ -3,7 +3,6 @@ package io.github.sekerator.kingdomworld.common.land;
 import com.mojang.logging.LogUtils;
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
-import io.github.sekerator.kingdomworld.core.territory.Province;
 import io.github.sekerator.kingdomworld.core.territory.ProvinceMap;
 import io.github.sekerator.kingdomworld.core.territory.TerritoryIndex;
 import net.minecraft.server.MinecraftServer;
@@ -12,6 +11,7 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import org.slf4j.Logger;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -64,17 +64,16 @@ public final class LandEvents {
     }
 
     /**
-     * A holder that is no kingdom any more lets its province go; a claim inside a province of another kingdom stays a claim,
-     * with a word in the log.
+     * Words in the log, nothing changed: provinces held by kingdoms the data of the kingdoms does not know (the data failed to
+     * load, or was put back from a copy) keep their holders, so that they are theirs again once the kingdoms are back; a claim
+     * inside a province of another kingdom stays a claim.
      */
     private static void check(MinecraftServer server, ProvinceMap map, TerritoryIndex territory) {
         KingdomWorldState state = KingdomWorldApi.state(server);
-        for (Province province : map.provinces()) {
-            UUID owner = map.owner(province.id());
-            if (owner != null && state.kingdoms().get(owner).isEmpty()) {
-                LOGGER.warn("Province {} was held by {}, which is no kingdom any more: it belongs to nobody now", province.id(), owner);
-                map.restore(province.id(), null, map.acquiredDay(province.id()), map.hold(province.id()).orElse(null));
-            }
+        List<Integer> unknown = map.heldByUnknown(owner -> state.kingdoms().get(owner).isPresent());
+        if (!unknown.isEmpty()) {
+            LOGGER.warn("{} province(s) are held by kingdoms that are not in the data of the kingdoms (first: {}); they keep their holders "
+                    + "and nothing is saved over them", unknown.size(), unknown.subList(0, Math.min(8, unknown.size())));
         }
         int under = 0;
         for (Map.Entry<Long, UUID> claim : territory.claimsIn(map.dimension()).entrySet()) {

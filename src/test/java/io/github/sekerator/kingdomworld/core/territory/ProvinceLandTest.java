@@ -288,6 +288,29 @@ class ProvinceLandTest {
     }
 
     @Test
+    void provincesOfKingdomsNotKnownKeepTheirHoldersAndAreNotSavedOver() {
+        ProvinceMap map = new ProvinceMap(WORLD);
+        TerritoryIndex index = index(map);
+        province(map, 1, 0, 0, 4, 4);
+        province(map, 2, 10, 0, 14, 4);
+        province(map, 3, 20, 0, 24, 4);
+        UUID known = new UUID(8, 1);
+        UUID lost = new UUID(8, 2);
+        index.transferProvince(1, known, 5);
+        index.transferProvince(2, lost, 6);
+        int[] changes = {0};
+        map.setChangeListener(() -> changes[0]++);
+        long version = map.version();
+        assertEquals(List.of(2), map.heldByUnknown(known::equals), "only the province of the kingdom not known is named");
+        assertEquals(lost, map.owner(2), "the holder stays");
+        assertEquals(6, map.acquiredDay(2));
+        assertEquals(lost, index.ownerOf(WORLD, ChunkKey.of(12, 2)));
+        assertEquals(version, map.version(), "the provinces did not change");
+        assertEquals(0, changes[0], "nothing was marked for saving");
+        assertEquals(List.of(), map.heldByUnknown(owner -> true));
+    }
+
+    @Test
     void theOwnerOfAChunkIsFoundFast() {
         ProvinceMap map = new ProvinceMap(WORLD);
         TerritoryIndex index = index(map);
