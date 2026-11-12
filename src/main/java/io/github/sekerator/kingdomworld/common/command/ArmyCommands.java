@@ -216,10 +216,7 @@ public final class ArmyCommands {
         io.github.sekerator.kingdomworld.core.army.ArmyState army = ArmyWork.state(server);
         int guards = army.branchOf(kingdom.id(), io.github.sekerator.kingdomworld.core.army.Branch.GUARD).size();
         int ofArmy = army.branchOf(kingdom.id(), io.github.sekerator.kingdomworld.core.army.Branch.ARMY).size();
-        int officers = 0;
-        for (io.github.sekerator.kingdomworld.core.army.Soldier soldier : army.soldiersOf(kingdom.id())) {
-            officers += soldier.post().officer() ? 1 : 0;
-        }
+        int officers = (int) army.soldiersOf(kingdom.id()).stream().filter(soldier -> soldier.post().officer()).count();
         java.util.Map<String, Integer> posts = new java.util.TreeMap<>();
         for (io.github.sekerator.kingdomworld.core.army.ArmySquad squad : army.squadsOf(kingdom.id())) {
             army.duty(squad.id()).ifPresent(duty -> posts.put(duty, squad.members().size()));
