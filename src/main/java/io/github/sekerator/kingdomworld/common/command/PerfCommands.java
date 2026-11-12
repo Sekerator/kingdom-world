@@ -36,8 +36,43 @@ public final class PerfCommands {
     private static long handlerSum;
     private static long handlerWorst;
     private static long handlerSlow;
+    /**
+     * The whole length of the last ticks, from the first handler of START to the last one of END, with the number of each
+     * tick: the game's own times of the ticks are taken before the handlers of END, and leave their work out.
+     */
+    private static final long[] WHOLE = new long[1_200];
+    private static final int[] WHOLE_TICK = new int[WHOLE.length];
+    private static int wholeCount;
 
     private PerfCommands() {
+    }
+
+    /**
+     * How many whole ticks were counted since the server started.
+     */
+    public static int wholeTicks() {
+        return wholeCount;
+    }
+
+    /**
+     * The whole length of the tick counted as number {@code n} (from 0), or -1 once it is no longer kept.
+     */
+    public static long wholeTick(int n) {
+        return n < 0 || n >= wholeCount || wholeCount - n > WHOLE.length ? -1 : WHOLE[n % WHOLE.length];
+    }
+
+    /**
+     * The number the server gave the tick counted as number {@code n}.
+     */
+    public static int wholeTickNumber(int n) {
+        return n < 0 || n >= wholeCount || wholeCount - n > WHOLE.length ? -1 : WHOLE_TICK[n % WHOLE.length];
+    }
+
+    /**
+     * The whole length of the last tick that ended, or -1 if none did.
+     */
+    public static long lastWholeTick() {
+        return wholeTick(wholeCount - 1);
     }
 
     /**
@@ -64,6 +99,9 @@ public final class PerfCommands {
             return;
         }
         long tick = now - tickStart;
+        WHOLE[wholeCount % WHOLE.length] = tick;
+        WHOLE_TICK[wholeCount % WHOLE.length] = event.getServer().getTickCount();
+        wholeCount++;
         ticks++;
         tickSum += tick;
         tickWorst = Math.max(tickWorst, tick);
@@ -75,6 +113,13 @@ public final class PerfCommands {
             com.mojang.logging.LogUtils.getLogger().info("A slow tick of the tick handlers: {} ms at tick {} ({} into its minute)", ms(handlers),
                     event.getServer().getTickCount(), event.getServer().getTickCount() % 1_200);
         }
+    }
+
+    /**
+     * Time since the current server tick began (its first handler): work that takes what is left of a tick asks it.
+     */
+    public static long sinceTickStart() {
+        return tickStart == 0 ? 0 : System.nanoTime() - tickStart;
     }
 
     public static void reset() {

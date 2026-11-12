@@ -54,10 +54,18 @@ final class NpcPlanning {
     private static final int ROUGHNESS_PER_PASS = 3;
     /** Columns of water or shore a capital of districts may have on the later passes of the plan: a brook is filled in. */
     private static final int WET_PER_PASS = 2;
-    /** Town candidates judged in a tick. */
-    private static final int TOWNS_PER_TICK = 2;
+    /** Town candidates judged in a tick at most, while the time of the tick lasts. */
+    private static final int TOWNS_PER_TICK = 8;
     /** Time a tick spends on the plan at most: candidates the noise judges at once are gone through several a tick. */
-    private static final long BUDGET_NANOS = 4_000_000L;
+    private static final long BUDGET_NANOS = 22_000_000L;
+    /** Time a tick spends on the plan at least, however long the tick was before the plan came to it. */
+    private static final long MIN_BUDGET_NANOS = 3_000_000L;
+    /** The plan takes what is left of a tick up to this length. */
+    private static final long TICK_AIM_NANOS = 30_000_000L;
+    /** What the plan took so far: ticks with work, their time in all, the longest. */
+    private static long planTicks;
+    private static long planNanos;
+    private static long planWorst;
 
     private static SitePlanner planner;
     private static Judging judging;
@@ -90,19 +98,32 @@ final class NpcPlanning {
     static void reset() {
         planner = null;
         judging = null;
+        planTicks = 0;
+        planNanos = 0;
+        planWorst = 0;
     }
 
     static void tick(MinecraftServer server) {
-        long start = System.nanoTime();
+        if (!NpcSettings.rules().generate() || NpcWork.state(server).planned()) {
+            return;
+        }
         // A step that waits for region files ends the tick; steps the noise answers at once go on while the budget lasts, and a
-        // step that runs out of it in the middle of a candidate goes on with it in the next tick.
-        deadline = start + BUDGET_NANOS;
+        // step that runs out of it in the middle of a candidate goes on with it in the next tick. The budget is what is left of
+        // a short tick: a tick that was long already gives the plan little.
+        long start = System.nanoTime();
+        long budget = Math.max(MIN_BUDGET_NANOS, Math.min(BUDGET_NANOS, TICK_AIM_NANOS
+                - io.github.sekerator.kingdomworld.common.command.PerfCommands.sinceTickStart()));
+        deadline = start + budget;
         try {
-            while (step(server) && System.nanoTime() - start < BUDGET_NANOS) {
+            while (step(server) && System.nanoTime() < deadline) {
                 // next candidate
             }
         } finally {
             deadline = Long.MAX_VALUE;
+            long spent = System.nanoTime() - start;
+            planTicks++;
+            planNanos += spent;
+            planWorst = Math.max(planWorst, spent);
         }
     }
 
@@ -202,6 +223,8 @@ final class NpcPlanning {
         }
         LOGGER.info("The plan of the kingdoms of the world is made: {} place(s): {} large, {} medium, {} small", state.sites().size(),
                 count[NpcLevel.LARGE.ordinal()], count[NpcLevel.MEDIUM.ordinal()], count[NpcLevel.SMALL.ordinal()]);
+        LOGGER.info("The plan took {} tick(s) with work, {} ms in all, at most {} ms in a tick", planTicks, planNanos / 1_000_000,
+                String.format(java.util.Locale.ROOT, "%.1f", planWorst / 1e6));
         if (state.sites().size() < rules.count()) {
             LOGGER.warn("The plan has {} place(s) of the {} wanted: the land within {} blocks of the spawn has no more room that suits",
                     state.sites().size(), rules.count(), rules.radius());
@@ -425,7 +448,13 @@ final class NpcPlanning {
         int wetAllowed = WET_PER_PASS * Math.min(relax, 3);
         // The cheap looks first: the biome of the throne, then the middle, the corners and the sides of the square. Most land
         // falls here, and the whole grid is looked at only where these nine columns are dry and about level.
-        if (!allowed(biomeAt(level, x, z))) {
+        int[] throne = column(level, judging, x, z, false);
+        if (throne == null) {
+            return null;
+        }
+        RandomState random = level.getChunkSource().randomState();
+        if (!allowed(generator.getBiomeSource().getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(throne[0]), QuartPos.fromBlock(z),
+                random.sampler()))) {
             return false;
         }
         int low = Integer.MAX_VALUE;

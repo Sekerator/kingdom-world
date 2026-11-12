@@ -160,7 +160,10 @@ public final class RouteSearch {
         long rz = (z - fromZ) & 0x1F_FFFFL;
         long ry = (y + 2048) & 0xFFFL;
         long rr = Math.min(run, 63) & 0x3FL;
-        return rx << 39 | rz << 18 | ry << 6 | rr;
+        // Neighbouring cells differ in a few bits of the fields, and the hash of a Long folds its halves onto each other: the
+        // cells of a search fell into few buckets of the map. The key is scrambled one to one, so that it spreads them.
+        long mixed = (rx << 39 | rz << 18 | ry << 6 | rr) * 0x9E37_79B9_7F4A_7C15L;
+        return mixed ^ (mixed >>> 29);
     }
 
     private boolean atGoal(Node node) {

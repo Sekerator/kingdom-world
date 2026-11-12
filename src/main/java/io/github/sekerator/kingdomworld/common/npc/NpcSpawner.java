@@ -6,6 +6,7 @@ import io.github.sekerator.kingdomworld.common.army.ArmySettings;
 import io.github.sekerator.kingdomworld.common.army.ArmyWork;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenActions;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenLife;
+import io.github.sekerator.kingdomworld.common.command.PerfCommands;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenSettings;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenSites;
 import io.github.sekerator.kingdomworld.common.citizen.work.GatheringSettings;
@@ -114,6 +115,8 @@ public final class NpcSpawner {
     private static final long SLOW_TICK_NANOS = 50_000_000L;
     /** Ticks between two saves of the world by the game itself. */
     private static final int AUTOSAVE_TICKS = 6_000;
+    /** A tick that took this long before the background came to it is left to the rest of the server. */
+    private static final long LATE_TICK_NANOS = 20_000_000L;
     /** Time of a tick the looks at the workplaces of a kingdom that just stood take at most, before its chunks go. */
     private static final long SURVEY_NANOS = 10_000_000L;
     /** Chunks of land claimed in a tick for every chunk the rules let an appearance look through. */
@@ -168,6 +171,8 @@ public final class NpcSpawner {
         double scale = 0.25;
         /** Ticks the raising waited for the server or for players. */
         long paused;
+        /** Whether the background did nothing in the last tick: that tick is not its own. */
+        boolean pausedLast;
         /** Whether the background goes on without players. */
         boolean forced;
         /** Work posts still to be looked at before the chunks go; null before the kingdom settles. */
@@ -399,9 +404,11 @@ public final class NpcSpawner {
             job.background = startBackground;
             job.forced = startForced;
         }
-        if (job.background && NpcBackground.waiting(server, job.forced)) {
-            // The background waits for players and for short ticks; its chunks stay asked for.
+        if (job.background && (NpcBackground.waiting(server, job.forced) || PerfCommands.sinceTickStart() > LATE_TICK_NANOS)) {
+            // The background waits for players and for short ticks, and goes on in the next tick when this one took long before
+            // the work came to it; its chunks stay asked for.
             job.paused++;
+            job.pausedLast = true;
             return;
         }
         // The tick an appearance starts in belongs to what started it (a player coming near, a command looking for land), and the
@@ -409,8 +416,14 @@ public final class NpcSpawner {
         // game to load or generate its chunks is the game's own: it is counted in the average and told of in the log, but it is
         // not the worst tick of the work of the appearance (the chunks are asked for a few at a time for that reason).
         int last = server.getTickCount() - 1;
-        if (job.ticks > 1 && last % AUTOSAVE_TICKS != 0) {
-            long nanos = server.tickTimes[Math.floorMod(last, server.tickTimes.length)];
+        boolean own = !job.pausedLast;
+        job.pausedLast = false;
+        if (own && job.ticks > 1 && last % AUTOSAVE_TICKS != 0) {
+            // The whole last tick, with the handlers of END in which this work runs: the game's own time of a tick leaves them out.
+            long nanos = PerfCommands.lastWholeTick();
+            if (nanos < 0) {
+                nanos = server.tickTimes[Math.floorMod(last, server.tickTimes.length)];
+            }
             job.sumNanos += nanos;
             if (job.lastWaited) {
                 if (nanos > SLOW_TICK_NANOS) {
