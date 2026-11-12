@@ -199,8 +199,8 @@ public final class NpcGarrison {
 
     // ---------------------------------------------------------------- at the founding
 
-    /** Recruits from abroad who join the army in a tick of the appearance of a kingdom at most. */
-    private static final int ENLIST_PER_TICK = 16;
+    /** Recruits from abroad who join the army in a tick of the appearance of a kingdom at most: each comes with a kit and bread. */
+    private static final int ENLIST_PER_TICK = 4;
 
     /**
      * The soldiers of the plan of a capital who become its army at the founding: a part of those who live in the capital.

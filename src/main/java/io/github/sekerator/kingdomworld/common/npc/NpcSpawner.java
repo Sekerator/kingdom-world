@@ -2172,6 +2172,10 @@ public final class NpcSpawner {
                 }
             }
         }
+        if (joined > 0) {
+            // The recruits from abroad come in the next ticks, not in the one citizens joined in.
+            return;
+        }
         // The royal army comes from abroad a part a tick; then the guard and the army, their officers and the kits of their posts.
         if (!NpcGarrison.enlistSome(server, site)) {
             return;
