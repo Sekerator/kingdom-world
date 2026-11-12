@@ -350,7 +350,7 @@ public final class ProtectionEvents {
             return;
         }
         String dimension = Dimensions.id(level);
-        if (territory.claimsIn(dimension).isEmpty()) {
+        if (!territory.hasLand(dimension)) {
             return;
         }
         event.getAffectedBlocks().removeIf(pos -> isClaimed(territory, dimension, pos)
@@ -374,7 +374,7 @@ public final class ProtectionEvents {
         }
         TerritoryIndex territory = ProtectionService.territory(level);
         String dimension = Dimensions.id(level);
-        if (territory == null || territory.claimsIn(dimension).isEmpty()) {
+        if (territory == null || !territory.hasLand(dimension)) {
             return;
         }
         if (movesForeignBlocks(territory, dimension, event)) {

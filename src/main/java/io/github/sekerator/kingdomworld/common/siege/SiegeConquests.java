@@ -248,10 +248,23 @@ final class SiegeConquests {
         }
         int moved = 0;
         if (conquest.kind() == Conquest.Kind.ANNEX) {
+            // The provinces of the loser go to the winner whole, one event a province, before its claims are taken off.
+            int provinces = 0;
+            if (KingdomWorldApi.kingdom(server, conquest.winner()).isPresent()) {
+                long day = Math.floorDiv(KingdomWorldApi.gameTime(server), io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds.TICKS_PER_DAY);
+                for (int province : territory.provincesOf(conquest.loser())) {
+                    territory.transferProvince(province, conquest.winner(), day);
+                    provinces++;
+                }
+            }
+            if (provinces > 0) {
+                SiegeWork.LOGGER.info("Conquest #{}: {} province(s) of {} went to {}", conquest.id(), provinces,
+                        WarWork.name(server, conquest.loser()).getString(), WarWork.name(server, conquest.winner()).getString());
+            }
             List<Long> all = new ArrayList<>(territory.remove(conquest.loser()));
             if (sameWorld) {
                 for (long chunk : all) {
-                    if (territory.ownerOf(dimension, chunk) == null) {
+                    if (territory.claimOwner(dimension, chunk) == null) {
                         territory.assign(conquest.winner(), chunk);
                         moved++;
                     }
@@ -259,7 +272,8 @@ final class SiegeConquests {
             }
         } else {
             for (long chunk : chunks) {
-                if (chunk == capital || !conquest.loser().equals(territory.ownerOf(dimension, chunk))) {
+                // Only claims move chunk by chunk; land held as a province changes hands with its province.
+                if (chunk == capital || !conquest.loser().equals(territory.claimOwner(dimension, chunk))) {
                     continue;
                 }
                 if (!sameWorld) {

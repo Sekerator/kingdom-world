@@ -105,13 +105,13 @@ public final class NobilitySecession {
         NpcNames.Name name = NpcNames.kingdom(seed, candidate -> taken.contains(KingdomNames.key(candidate)));
         UUID id = UUID.nameUUIDFromBytes(("kingdomworld:seceded:" + from + ":" + city.id() + ":" + day).getBytes(java.nio.charset.StandardCharsets.UTF_8));
         BlockPos throne = thronePlace(level, new BlockPos(city.x(), city.y(), city.z()));
-        if (from.equals(world.territory().ownerOf(city.dimension(), chunk))) {
+        if (from.equals(world.territory().claimOwner(city.dimension(), chunk))) {
             world.territory().release(from, chunk);
         }
         CreateKingdomResult result = world.found(id, name.latin(), KingdomColors.PALETTE.get((int) Math.floorMod(seed, KingdomColors.PALETTE.size())),
                 null, null, KingdomWorldApi.gameTime(server), KingdomWorldApi.rules());
         if (!(result instanceof CreateKingdomResult.Created)) {
-            if (world.territory().ownerOf(city.dimension(), chunk) == null) {
+            if (world.territory().claimOwner(city.dimension(), chunk) == null) {
                 world.territory().assign(from, chunk);
             }
             return Optional.empty();

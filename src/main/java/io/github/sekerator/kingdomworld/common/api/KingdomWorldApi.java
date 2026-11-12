@@ -16,6 +16,9 @@ import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import io.github.sekerator.kingdomworld.core.territory.Capital;
 import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
 import io.github.sekerator.kingdomworld.core.territory.ChunkLimitPolicy;
+import io.github.sekerator.kingdomworld.core.territory.Province;
+import io.github.sekerator.kingdomworld.core.territory.ProvinceListener;
+import io.github.sekerator.kingdomworld.core.territory.ProvinceMap;
 import io.github.sekerator.kingdomworld.core.territory.TerritoryListener;
 import net.minecraft.Util;
 import net.minecraft.core.BlockPos;
@@ -41,8 +44,10 @@ import java.util.function.Function;
  * read-only (see {@link KingdomSavedData}) every change is refused with {@link KingdomError#READ_ONLY} or
  * {@link CreateKingdomResult.Error#READ_ONLY} and logged at ERROR.
  *
- * <p>Map integrations can read all claims with {@link #claims(MinecraftServer, String)} and follow changes with
- * {@link #addTerritoryListener(MinecraftServer, TerritoryListener)}.
+ * <p>Map integrations can read all claims with {@link #claims(MinecraftServer, String)}, the provinces with
+ * {@link #provinces(MinecraftServer)} and {@link #provinceAt(Level, BlockPos)}, and follow changes with
+ * {@link #addTerritoryListener(MinecraftServer, TerritoryListener)}. The owner of a chunk ({@link #ownerAt(Level, BlockPos)}) is
+ * the kingdom that claimed it, otherwise the holder of its province.
  */
 public final class KingdomWorldApi {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -112,18 +117,55 @@ public final class KingdomWorldApi {
 
     /**
      * Every claimed chunk of a dimension ({@link ChunkKey} to kingdom id). Read-only view, valid on the
-     * server thread.
+     * server thread. Land held as provinces is not in it: see {@link #provinces(MinecraftServer)}.
      */
     public static Map<Long, UUID> claims(MinecraftServer server, String dimension) {
         return state(server).territory().claimsIn(dimension);
     }
 
     /**
+     * Every province of the world, in the order of their numbers; empty in a world without provinces. Their holders come from
+     * {@link #provinceOwner(MinecraftServer, int)}.
+     */
+    public static List<Province> provinces(MinecraftServer server) {
+        return state(server).territory().provinceMap().map(ProvinceMap::provinces).orElse(List.of());
+    }
+
+    /**
+     * The province of the chunk containing {@code pos}, if there is one. Always empty on a client level.
+     */
+    public static Optional<Province> provinceAt(Level level, BlockPos pos) {
+        if (!(level instanceof ServerLevel serverLevel)) {
+            return Optional.empty();
+        }
+        var territory = state(serverLevel.getServer()).territory();
+        int id = territory.provinceAt(Dimensions.id(level), ChunkKey.of(pos.getX() >> 4, pos.getZ() >> 4));
+        return id == 0 ? Optional.empty() : territory.provinceMap().flatMap(map -> map.province(id));
+    }
+
+    /**
+     * The kingdom holding a province, or {@code null} for a province of nobody (a wild one) or no province.
+     */
+    @Nullable
+    public static UUID provinceOwner(MinecraftServer server, int province) {
+        return state(server).territory().provinceMap().map(map -> map.owner(province)).orElse(null);
+    }
+
+    /**
      * Follows chunk ownership changes, for example to update a map integration. Listeners run on the server
-     * thread right after the change.
+     * thread: right after a claim changes, and for a province that changed hands chunk by chunk over the next ticks,
+     * {@value io.github.sekerator.kingdomworld.common.land.LandEvents#CHUNKS_PER_TICK} chunks a tick.
      */
     public static void addTerritoryListener(MinecraftServer server, TerritoryListener listener) {
         state(server).territory().addListener(listener);
+        state(server).territory().addProvinceChunkListener(listener);
+    }
+
+    /**
+     * Follows provinces changing hands: one event for a province, however large.
+     */
+    public static void addProvinceListener(MinecraftServer server, ProvinceListener listener) {
+        state(server).territory().addProvinceListener(listener);
     }
 
     public static boolean isReadOnly(MinecraftServer server) {

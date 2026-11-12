@@ -3973,5 +3973,20 @@
   "kingdomworld.screen.map.list.dir.south": "Ю",
   "kingdomworld.screen.map.list.dir.south_west": "ЮЗ",
   "kingdomworld.screen.map.list.dir.west": "З",
-  "kingdomworld.screen.map.list.dir.north_west": "СЗ"
+  "kingdomworld.screen.map.list.dir.north_west": "СЗ",
+  "commands.kingdomworld.admin.province.filled": "Провинция %s: изменено чанков %s; в ней %s чанков, владелец %s",
+  "commands.kingdomworld.admin.province.given": "Провинция %s теперь у %s",
+  "commands.kingdomworld.admin.province.unchanged": "Провинция %s уже была у %s",
+  "commands.kingdomworld.admin.province.info": "Чанк %s в провинции %s (%s), владелец %s: чанков %s, середина %s %s, соседей %s",
+  "commands.kingdomworld.admin.province.none_here": "Чанк %s не входит ни в одну провинцию",
+  "commands.kingdomworld.admin.province.cleared": "Провинция %s упразднена: её %s чанков теперь вне провинций",
+  "commands.kingdomworld.admin.province.unknown": "Провинции %s нет",
+  "commands.kingdomworld.admin.province.too_large": "Одна заливка берёт не больше %s чанков; здесь %s",
+  "commands.kingdomworld.admin.province.unknown_owner": "Королевства «%s» нет",
+  "commands.kingdomworld.admin.province.nobody": "никто",
+  "commands.kingdomworld.admin.land.info": "Провинции в %s: %s (у владельцев %s), плиток %s, около %s КБ; моды карт ещё не узнали чанки %s провинций; формат %s%s",
+  "commands.kingdomworld.admin.land.unlocked": "Данные провинций разблокированы; оригинал сохранён в %s",
+  "commands.kingdomworld.admin.land.not_locked": "Данные провинций не были только для чтения",
+  "commands.kingdomworld.admin.land.unlock_failed": "Не удалось сохранить копию данных провинций: %s",
+  "commands.kingdomworld.admin.land.read_only": "Данные провинций только для чтения (%s): исправьте файл или выполните /kingdomworld admin land unlock"
 }

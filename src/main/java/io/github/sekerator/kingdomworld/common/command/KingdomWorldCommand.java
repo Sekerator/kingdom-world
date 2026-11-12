@@ -58,6 +58,8 @@ import java.util.UUID;
  * /kingdomworld admin owner &lt;chunkX&gt; &lt;chunkZ&gt;
  * /kingdomworld admin bypass
  * /kingdomworld admin data status|unlock
+ * /kingdomworld admin province fill|give|info|clear (see LandCommands)
+ * /kingdomworld admin land info|unlock
  * /kingdomworld admin citizens list [kingdom]|spawn &lt;count&gt; [kingdom]|kill &lt;id&gt;|info &lt;id&gt;
  * </pre>
  *
@@ -152,6 +154,8 @@ public final class KingdomWorldCommand {
                         .then(io.github.sekerator.kingdomworld.common.siege.SiegeCommands.adminCommand())
                         .then(io.github.sekerator.kingdomworld.common.nobility.NobilityCommands.adminCommand())
                         .then(PerfCommands.adminCommand())
+                        .then(io.github.sekerator.kingdomworld.common.land.LandCommands.province())
+                        .then(io.github.sekerator.kingdomworld.common.land.LandCommands.land())
                         .then(Commands.literal("data")
                                 .then(Commands.literal("status").executes(context -> dataStatus(context.getSource())))
                                 .then(Commands.literal("unlock").executes(context -> dataUnlock(context.getSource()))))));

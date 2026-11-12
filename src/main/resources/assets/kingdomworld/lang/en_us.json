@@ -3973,5 +3973,20 @@
   "kingdomworld.screen.map.list.dir.south": "S",
   "kingdomworld.screen.map.list.dir.south_west": "SW",
   "kingdomworld.screen.map.list.dir.west": "W",
-  "kingdomworld.screen.map.list.dir.north_west": "NW"
+  "kingdomworld.screen.map.list.dir.north_west": "NW",
+  "commands.kingdomworld.admin.province.filled": "Province %s: %s chunk(s) changed; it has %s chunk(s) and is held by %s",
+  "commands.kingdomworld.admin.province.given": "Province %s is held by %s now",
+  "commands.kingdomworld.admin.province.unchanged": "Province %s was held by %s already",
+  "commands.kingdomworld.admin.province.info": "Chunk %s lies in province %s (%s), held by %s: %s chunk(s), its middle at %s %s, %s neighbour(s)",
+  "commands.kingdomworld.admin.province.none_here": "Chunk %s lies in no province",
+  "commands.kingdomworld.admin.province.cleared": "Province %s is given up: its %s chunk(s) lie in no province now",
+  "commands.kingdomworld.admin.province.unknown": "There is no province %s",
+  "commands.kingdomworld.admin.province.too_large": "One fill takes at most %s chunks; this one is %s",
+  "commands.kingdomworld.admin.province.unknown_owner": "There is no kingdom '%s'",
+  "commands.kingdomworld.admin.province.nobody": "nobody",
+  "commands.kingdomworld.admin.land.info": "Provinces in %s: %s (%s held), %s tile(s), about %s KB; chunks of %s province(s) still to tell map mods; format %s%s",
+  "commands.kingdomworld.admin.land.unlocked": "Province data unlocked; the original is backed up to %s",
+  "commands.kingdomworld.admin.land.not_locked": "Province data was not read-only",
+  "commands.kingdomworld.admin.land.unlock_failed": "Could not back up the province data: %s",
+  "commands.kingdomworld.admin.land.read_only": "Province data is read-only (%s): fix the file or run /kingdomworld admin land unlock"
 }
