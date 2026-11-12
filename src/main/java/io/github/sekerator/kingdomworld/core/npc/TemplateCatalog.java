@@ -248,6 +248,14 @@ public final class TemplateCatalog {
                 "door 0 0 5");
         add("classic_wall_gate", Kind.WALL_GATE, 23, 11, 0,
                 "door 0 0 5; castle_gate -1 0 0, 1 0 0; castle_wall -10 6 1, 10 6 1");
+        add("classic_camp_barracks", Kind.BARRACKS_HALL, 13, 11, 12,
+                "door 0 1 5");
+        add("classic_camp_yard", Kind.DRILL_YARD, 13, 11, 0,
+                "door 0 0 5");
+        add("classic_camp_store", Kind.STOREHOUSE, 13, 11, 0,
+                "door 0 0 5");
+        add("classic_camp_tower", Kind.TOWER, 7, 7, 0,
+                "door 0 1 3");
         // The style of the wooden terem.
         add("terem_castle_small", Kind.CASTLE, 31, 31, 0,
                 "door 0 0 15; castle_wall -11 5 1, -7 5 -11, -7 5 11, 7 5 -11, 7 5 11, 0 5 12; " +
@@ -289,6 +297,14 @@ public final class TemplateCatalog {
                 "door 0 3 3");
         add("terem_wall_gate", Kind.WALL_GATE, 23, 11, 0,
                 "door 0 0 5; castle_gate -1 1 0, 1 1 0; castle_wall -8 6 -1, 8 6 -1");
+        add("terem_camp_barracks", Kind.BARRACKS_HALL, 13, 11, 12,
+                "door 0 0 5");
+        add("terem_camp_yard", Kind.DRILL_YARD, 13, 11, 0,
+                "door 0 0 5");
+        add("terem_camp_store", Kind.STOREHOUSE, 13, 11, 0,
+                "door -1 2 3");
+        add("terem_camp_tower", Kind.TOWER, 7, 7, 0,
+                "door 0 0 2");
         // The style of the north.
         add("nordic_castle_small", Kind.CASTLE, 31, 31, 0,
                 "door 0 0 15; castle_wall -12 5 -3, 12 5 -3, -12 5 5, 12 5 5, -7 5 12, 7 5 12, -7 5 -12, 7 5 -12; " +
@@ -330,6 +346,14 @@ public final class TemplateCatalog {
                 "door -1 1 8");
         add("nordic_wall_gate", Kind.WALL_GATE, 23, 11, 0,
                 "door 0 0 5; castle_gate -1 1 -1, 1 1 -1; castle_wall -8 5 -1, 8 5 -1");
+        add("nordic_camp_barracks", Kind.BARRACKS_HALL, 13, 11, 12,
+                "door 0 0 5");
+        add("nordic_camp_yard", Kind.DRILL_YARD, 13, 11, 0,
+                "door 0 0 5");
+        add("nordic_camp_store", Kind.STOREHOUSE, 13, 11, 0,
+                "door -1 0 5");
+        add("nordic_camp_tower", Kind.TOWER, 7, 7, 0,
+                "door 0 1 3");
         // The style of the south.
         add("southern_castle_small", Kind.CASTLE, 31, 31, 0,
                 "door 0 0 15; castle_gate -1 0 11, 1 0 11; " +
@@ -371,6 +395,14 @@ public final class TemplateCatalog {
                 "door 0 1 3");
         add("southern_wall_gate", Kind.WALL_GATE, 23, 11, 0,
                 "door 0 1 5; castle_gate -1 1 0, 1 1 0; castle_wall -10 7 0, 10 7 0");
+        add("southern_camp_barracks", Kind.BARRACKS_HALL, 13, 11, 12,
+                "door 0 1 4");
+        add("southern_camp_yard", Kind.DRILL_YARD, 13, 11, 0,
+                "door 0 0 4");
+        add("southern_camp_store", Kind.STOREHOUSE, 13, 11, 0,
+                "door 0 0 4");
+        add("southern_camp_tower", Kind.TOWER, 7, 7, 0,
+                "door 0 1 3");
         // The style of the desert.
         add("desert_castle_small", Kind.CASTLE, 31, 31, 0,
                 "door 0 0 15; castle_gate -1 0 14, 1 0 14; treasury 4 0 1; palace_hall -2 0 3, 2 0 3, -2 0 1, 2 0 1; " +
@@ -411,6 +443,14 @@ public final class TemplateCatalog {
                 "door 0 1 5");
         add("desert_wall_gate", Kind.WALL_GATE, 23, 11, 0,
                 "door 0 0 5; castle_gate -1 1 0, 1 1 0; castle_wall -3 13 1, 3 13 1");
+        add("desert_camp_barracks", Kind.BARRACKS_HALL, 13, 11, 12,
+                "door 0 1 5");
+        add("desert_camp_yard", Kind.DRILL_YARD, 13, 11, 0,
+                "door 0 0 5");
+        add("desert_camp_store", Kind.STOREHOUSE, 13, 11, 0,
+                "door 0 0 5");
+        add("desert_camp_tower", Kind.TOWER, 7, 7, 0,
+                "door 0 1 3");
         // The style of the east.
         add("eastern_castle_small", Kind.CASTLE, 31, 31, 0,
                 "door 0 0 15; castle_wall -12 4 -6, 12 4 -6, -12 4 0, 12 4 0, 0 4 12, -6 4 12, 6 4 12; " +
@@ -452,6 +492,14 @@ public final class TemplateCatalog {
                 "door 0 1 3");
         add("eastern_wall_gate", Kind.WALL_GATE, 23, 11, 0,
                 "door 0 0 5; castle_gate -1 1 0, 1 1 0; castle_wall -8 6 0, 8 6 0");
+        add("eastern_camp_barracks", Kind.BARRACKS_HALL, 13, 11, 12,
+                "door 0 1 5");
+        add("eastern_camp_yard", Kind.DRILL_YARD, 13, 11, 0,
+                "door 0 0 5");
+        add("eastern_camp_store", Kind.STOREHOUSE, 13, 11, 0,
+                "door 0 0 5");
+        add("eastern_camp_tower", Kind.TOWER, 7, 7, 0,
+                "door 0 0 3");
         // The style gothic.
         add("gothic_castle_small", Kind.CASTLE, 31, 31, 0,
                 "door 0 0 15; castle_gate -1 0 12, 1 0 12; palace_hall -2 0 3, 2 0 3, -2 0 1, 2 0 1; " +
@@ -493,6 +541,14 @@ public final class TemplateCatalog {
                 "door -3 0 7");
         add("gothic_wall_gate", Kind.WALL_GATE, 23, 11, 0,
                 "door 0 0 5; castle_gate -1 1 0, 1 1 0; castle_wall -8 8 0, 8 8 0");
+        add("gothic_camp_barracks", Kind.BARRACKS_HALL, 13, 11, 12,
+                "door 0 0 5");
+        add("gothic_camp_yard", Kind.DRILL_YARD, 13, 11, 0,
+                "door 0 0 5");
+        add("gothic_camp_store", Kind.STOREHOUSE, 13, 11, 0,
+                "door 0 0 5");
+        add("gothic_camp_tower", Kind.TOWER, 7, 7, 0,
+                "door 0 0 3");
         // The style of the mountains.
         add("mountain_castle_small", Kind.CASTLE, 31, 31, 0,
                 "door 0 0 15; treasury -3 0 -2; palace_hall -2 0 3, 2 0 3, -2 0 1, 2 0 1; palace_door -1 0 4, 1 0 4; " +
@@ -534,6 +590,14 @@ public final class TemplateCatalog {
                 "door -3 1 6");
         add("mountain_wall_gate", Kind.WALL_GATE, 23, 11, 0,
                 "door 0 1 5; castle_gate -1 1 0, 1 1 0; castle_wall -2 16 -1, 2 16 -1");
+        add("mountain_camp_barracks", Kind.BARRACKS_HALL, 13, 11, 12,
+                "door 0 1 5");
+        add("mountain_camp_yard", Kind.DRILL_YARD, 13, 11, 0,
+                "door 0 0 5");
+        add("mountain_camp_store", Kind.STOREHOUSE, 13, 11, 0,
+                "door 0 0 5");
+        add("mountain_camp_tower", Kind.TOWER, 7, 7, 0,
+                "door 0 1 3");
     }
 
     private TemplateCatalog() {

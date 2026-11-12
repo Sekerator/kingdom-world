@@ -1,0 +1,11 @@
+{
+  "name": "kingdomworld.building.mountain_camp_store",
+  "category": "farming",
+  "type": "warehouse",
+  "role": "warehouse",
+  "role_params": {"containers": 12},
+  "level": 1,
+  "icon": "kingdomworld:storehouse",
+  "anchor": [6, 1, 10],
+  "entrance": "south"
+}

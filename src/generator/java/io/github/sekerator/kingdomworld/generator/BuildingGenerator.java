@@ -135,8 +135,8 @@ public final class BuildingGenerator {
 
     /**
      * The style of stone with half-timbering: three castles and the outer ward of the great one, the houses of the guilds by
-     * rank, the buildings of the institutions, yards and monuments, the houses of four quarters, a smithy, an inn and a town
-     * gate.
+     * rank, the buildings of the institutions, yards and monuments, the houses of four quarters, a smithy, an inn, a town
+     * gate and an army camp.
      */
     static List<Building> classic() {
         List<Building> list = new ArrayList<>();
@@ -152,96 +152,104 @@ public final class BuildingGenerator {
         list.addAll(CraftHouses.buildings());
         list.addAll(RichHouses.buildings());
         list.addAll(ClassicTown.buildings());
+        list.addAll(ClassicCamp.buildings());
         return list;
     }
 
     /**
      * The wooden style of the terem: a kremlin in three sizes, the houses of the guilds by rank, six houses, a smithy, a
-     * tavern and a town gate, drawn with the shapes of {@link Terem}.
+     * tavern, a town gate and an army camp, drawn with the shapes of {@link Terem}.
      */
     static List<Building> terem() {
         List<Building> list = new ArrayList<>();
         list.addAll(TeremCastle.buildings());
         list.addAll(TeremGuilds.buildings());
         list.addAll(TeremTown.buildings());
+        list.addAll(TeremCamp.buildings());
         return list;
     }
 
     /**
      * The timber style of the north: the hold of a jarl in three sizes, the houses of the guilds by rank, six houses from the
-     * turf hut to the homestead of a chieftain, a smithy, a mead tavern and a town gate, dark staves under steep shingle roofs
-     * with dragon heads, drawn with the shapes of {@link Nordic}.
+     * turf hut to the homestead of a chieftain, a smithy, a mead tavern, a town gate and an army camp, dark staves under steep
+     * shingle roofs with dragon heads, drawn with the shapes of {@link Nordic}.
      */
     static List<Building> nordic() {
         List<Building> list = new ArrayList<>();
         list.addAll(NordicCastle.buildings());
         list.addAll(NordicGuilds.buildings());
         list.addAll(NordicTown.buildings());
+        list.addAll(NordicCamp.buildings());
         return list;
     }
 
     /**
      * The style of the Mediterranean south: a palazzo fortress in three sizes, the houses of the guilds by rank, six houses
-     * from the fisherman's cottage to the villa, a smithy, a tavern and a town gate, whitewashed cubes under low roofs of red
-     * tiles with arcades, loggias and bell towers, drawn with the shapes of {@link Southern}.
+     * from the fisherman's cottage to the villa, a smithy, a tavern, a town gate and an army camp, whitewashed cubes under low
+     * roofs of red tiles with arcades, loggias and bell towers, drawn with the shapes of {@link Southern}.
      */
     static List<Building> southern() {
         List<Building> list = new ArrayList<>();
         list.addAll(SouthernCastle.buildings());
         list.addAll(SouthernGuilds.buildings());
         list.addAll(SouthernTown.buildings());
+        list.addAll(SouthernCamp.buildings());
         return list;
     }
 
     /**
      * The style of sandstone and mud brick of the desert: a kasbah in three sizes, the houses of the guilds by rank, six
-     * houses from the mud hut to the house of a noble, a smithy, a caravan tavern and a town gate, flat roofs with merlons,
-     * domes, minarets and wind towers, drawn with the shapes of {@link Desert}.
+     * houses from the mud hut to the house of a noble, a smithy, a caravan tavern, a town gate and an army camp, flat roofs
+     * with merlons, domes, minarets and wind towers, drawn with the shapes of {@link Desert}.
      */
     static List<Building> desert() {
         List<Building> list = new ArrayList<>();
         list.addAll(DesertCastle.buildings());
         list.addAll(DesertGuilds.buildings());
         list.addAll(DesertTown.buildings());
+        list.addAll(DesertCamp.buildings());
         return list;
     }
 
     /**
      * The style of the far east: a castle with a tall keep in three sizes, the houses of the guilds by rank, six houses from
-     * the shack to the residence of a noble, a smithy, an inn and a town gate, dark timber and white plaster on stone
-     * platforms under great curving roofs, drawn with the shapes of {@link Eastern}.
+     * the shack to the residence of a noble, a smithy, an inn, a town gate and an army camp, dark timber and white plaster on
+     * stone platforms under great curving roofs, drawn with the shapes of {@link Eastern}.
      */
     static List<Building> eastern() {
         List<Building> list = new ArrayList<>();
         list.addAll(EasternCastle.buildings());
         list.addAll(EasternGuilds.buildings());
         list.addAll(EasternTown.buildings());
+        list.addAll(EasternCamp.buildings());
         return list;
     }
 
     /**
      * The dark gothic of slate and needles: a cathedral castle in three sizes, the houses of the guilds by rank, six houses
-     * from the rubble hovel to the manor of a noble, a smithy, a tavern and a town gate, tall and narrow under very steep
-     * roofs with pointed windows, buttresses and spires, drawn with the shapes of {@link Gothic}.
+     * from the rubble hovel to the manor of a noble, a smithy, a tavern, a town gate and an army camp, tall and narrow under
+     * very steep roofs with pointed windows, buttresses and spires, drawn with the shapes of {@link Gothic}.
      */
     static List<Building> gothic() {
         List<Building> list = new ArrayList<>();
         list.addAll(GothicCastle.buildings());
         list.addAll(GothicGuilds.buildings());
         list.addAll(GothicTown.buildings());
+        list.addAll(GothicCamp.buildings());
         return list;
     }
 
     /**
      * The stone style of the mountains: a hold cut out of the rock in three sizes, the houses of the guilds by rank, six
-     * houses from the miner's dugout to the hall of a noble family, a smithy, a tavern and a town gate, massive and low on
-     * battered feet with carved faces of forefathers and glowing braziers, drawn with the shapes of {@link Mountain}.
+     * houses from the miner's dugout to the hall of a noble family, a smithy, a tavern, a town gate and an army camp, massive
+     * and low on battered feet with carved faces of forefathers and glowing braziers, drawn with the shapes of {@link Mountain}.
      */
     static List<Building> mountain() {
         List<Building> list = new ArrayList<>();
         list.addAll(MountainCastle.buildings());
         list.addAll(MountainGuilds.buildings());
         list.addAll(MountainTown.buildings());
+        list.addAll(MountainCamp.buildings());
         return list;
     }
 

@@ -1,0 +1,10 @@
+{
+  "name": "kingdomworld.building.gothic_camp_tower",
+  "category": "defense",
+  "type": "tower",
+  "role": "tower",
+  "level": 1,
+  "icon": "minecraft:oak_fence",
+  "anchor": [3, 0, 6],
+  "entrance": "south"
+}

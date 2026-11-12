@@ -1,0 +1,11 @@
+{
+  "name": "kingdomworld.building.southern_camp_barracks",
+  "category": "defense",
+  "type": "barracks",
+  "role": "barracks",
+  "role_params": {"bunks": 12},
+  "level": 1,
+  "icon": "kingdomworld:barracks",
+  "anchor": [6, 0, 10],
+  "entrance": "south"
+}
