@@ -65,6 +65,8 @@ final class SoldierGoal extends Goal {
     private int searchCooldown;
     private int equipCooldown = 40;
     private int pathCooldown;
+    /** Blocks of one stretch of a long way. */
+    private static final double STRETCH = 24.0;
     private int shootCooldown;
     private int trainCooldown = TRAIN_TICKS;
     private int swingCooldown;
@@ -387,8 +389,24 @@ final class SoldierGoal extends Goal {
             return;
         }
         pathCooldown = 40;
+        double x = point.x() + 0.5;
+        double y = point.y();
+        double z = point.z() + 0.5;
+        // A far point (the next point of a march, a distant post) may lie in chunks nobody loaded, and the way to it would load
+        // them on the spot, one soldier after another: the way is walked a stretch at a time, within the chunks around.
+        double dx = x - body.getX();
+        double dz = z - body.getZ();
+        double length = Math.sqrt(dx * dx + dz * dz);
+        if (length > STRETCH) {
+            x = body.getX() + dx / length * STRETCH;
+            z = body.getZ() + dz / length * STRETCH;
+            y = body.getY();
+        }
+        if (!body.level().hasChunkAt(BlockPos.containing(x, y, z))) {
+            return;
+        }
         if (body.getNavigation().isDone() && PathBudget.tryAcquire()) {
-            body.getNavigation().moveTo(point.x() + 0.5, point.y(), point.z() + 0.5, speed);
+            body.getNavigation().moveTo(x, y, z, speed);
         }
     }
 

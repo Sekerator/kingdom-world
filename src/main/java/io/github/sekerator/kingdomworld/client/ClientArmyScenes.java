@@ -92,7 +92,7 @@ final class ClientArmyScenes {
      * capital and the field army of the small one against the large capital, and both are put on the field near the player,
      * the large army west of it and the small one east, so that they meet there.
      */
-    static void battle(IntegratedServer server, UUID large, UUID small, WorldPos field) {
+    static List<Long> battle(IntegratedServer server, UUID large, UUID small, WorldPos field) {
         if (WarWork.state(server).warBetween(large, small).isEmpty()) {
             io.github.sekerator.kingdomworld.core.kingdom.Outcome declared = DiplomacyActions.declareByOperator(server, large, small,
                     WarGoal.RAID, true);
@@ -103,18 +103,20 @@ final class ClientArmyScenes {
         WarWork.state(server).warBetween(large, small).ifPresent(war -> WarWork.startNow(server, war));
         WorldPos largeCapital = ArmyWork.capitalOf(server, large);
         WorldPos smallCapital = ArmyWork.capitalOf(server, small);
-        int sent = place(server, large, smallCapital, field, -APART / 2);
-        int met = place(server, small, largeCapital, field, APART / 2);
-        LOGGER.info(PREFIX + "war between the large and the small kingdom: {} squad(s) against {} on the field at {}", sent, met,
+        List<Long> sent = place(server, large, smallCapital, field, -APART / 2);
+        List<Long> met = place(server, small, largeCapital, field, APART / 2);
+        LOGGER.info(PREFIX + "war between the large and the small kingdom: {} squad(s) against {} on the field at {}", sent.size(), met.size(),
                 field.coordinates());
+        return sent;
     }
 
     /**
      * The squads a kingdom sends, standing on the field in a line across the way, marching on.
      */
-    private static int place(IntegratedServer server, UUID kingdom, WorldPos target, WorldPos field, int dx) {
+    private static List<Long> place(IntegratedServer server, UUID kingdom, WorldPos target, WorldPos field, int dx) {
+        List<Long> placed = new ArrayList<>();
         if (target == null) {
-            return 0;
+            return placed;
         }
         ArmyState army = ArmyWork.state(server);
         List<ArmySquad> squads = new ArrayList<>(NpcGarrison.fieldArmy(server, kingdom));
@@ -129,8 +131,9 @@ final class ClientArmyScenes {
             ArmyWork.order(server, null, squad.id(), Order.hold(target));
             int across = (i - sent / 2) * 4;
             army.setMarch(squad.id(), March.standing(new WorldPos(field.dimension(), field.x() + dx, field.y(), field.z() + across)));
+            placed.add(squad.id());
         }
-        return sent;
+        return placed;
     }
 
     /**

@@ -104,6 +104,7 @@ final class ClientNpcShowcase {
     private final ClientArmyScenes army = new ClientArmyScenes();
     private volatile UUID smallKingdom;
     private volatile WorldPos battleField;
+    private volatile List<Long> battleSquads = List.of();
     /** What the large kingdom sees on the map of its army, built by the server for the shot of the map. */
     private volatile io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.View warView;
 
@@ -222,14 +223,15 @@ final class ClientNpcShowcase {
         server.execute(() -> io.github.sekerator.kingdomworld.common.npc.NpcSettings.override(measured
                 ? io.github.sekerator.kingdomworld.common.npc.NpcSettings.rules().withGenerate(false) : null));
         if (next.equals(BATTLE)) {
-            server.execute(() -> ClientArmyScenes.battle(server, garrisonKingdom, smallKingdom, battleField));
+            server.execute(() -> battleSquads = List.copyOf(ClientArmyScenes.battle(server, garrisonKingdom, smallKingdom, battleField)));
         }
         if (next.equals(WAR_MAP)) {
             yaw = Float.NaN;
             KingdomMapScreen map = new KingdomMapScreen(null);
             minecraft.setScreen(map);
-            map.showForCheck(battleField.x() / 16.0, battleField.z() / 16.0, 6.0, null, net.minecraft.network.chat.Component.empty(), false);
-            map.showArmyForCheck(null, List.of(), List.of());
+            map.showForCheck(battleField.x() / 16.0, battleField.z() / 16.0, 4.0, null, net.minecraft.network.chat.Component.empty(), false);
+            // The squads the large kingdom sent are chosen, so that the map names them.
+            map.showArmyForCheck(null, battleSquads, List.of());
         } else if (index < shots.size()) {
             Shot shot = shots.get(index);
             teleport(server, playerId, shot);
