@@ -57,7 +57,14 @@ public final class StatePlanner {
      * The plan of the states of a world.
      */
     public static StatePlan plan(SurveyRaster raster, StateRules rules, long seed) {
-        return new Run(raster, rules, seed).plan();
+        return new Run(raster, rules, seed, null).plan();
+    }
+
+    /**
+     * The plan with the seeds of the first states given, the largest first, where they are not -1; those seeds never move.
+     */
+    static StatePlan plan(SurveyRaster raster, StateRules rules, long seed, int[] fixedSeeds) {
+        return new Run(raster, rules, seed, fixedSeeds).plan();
     }
 
     /**
@@ -89,11 +96,13 @@ public final class StatePlanner {
         private final boolean[] free;
         private final int[] rowLand;
         private final int[][] gap;
+        private final int[] fixed;
 
-        Run(SurveyRaster raster, StateRules rules, long seed) {
+        Run(SurveyRaster raster, StateRules rules, long seed, int[] fixed) {
             this.raster = raster;
             this.rules = rules;
             this.seed = seed;
+            this.fixed = fixed == null ? new int[0] : fixed.clone();
             this.cells = raster.cells();
             this.spawnZone = new boolean[cells];
             this.free = new boolean[cells];
@@ -168,7 +177,7 @@ public final class StatePlanner {
             int[] seedCells = new int[count];
             java.util.Arrays.fill(seedCells, -1);
             for (int s = 0; s < count; s++) {
-                seedCells[s] = streams[s].next(s, seedCells, radii);
+                seedCells[s] = s < fixed.length && fixed[s] >= 0 ? fixed[s] : streams[s].next(s, seedCells, radii);
             }
             List<Integer> placed = new ArrayList<>();
             for (int s = 0; s < count; s++) {
@@ -207,7 +216,8 @@ public final class StatePlanner {
                 }
                 boolean moved = false;
                 for (int i = 0; i < n; i++) {
-                    if (growth.counts[i] < CRAMPED * goals[i] && moves[i] < MAX_MOVES) {
+                    boolean pinned = placed.get(i) < fixed.length && fixed[placed.get(i)] >= 0;
+                    if (!pinned && growth.counts[i] < CRAMPED * goals[i] && moves[i] < MAX_MOVES) {
                         int next = streams[placed.get(i)].next(i, cellsOfSeed, reach);
                         if (next >= 0) {
                             cellsOfSeed[i] = next;
@@ -234,17 +244,58 @@ public final class StatePlanner {
         }
 
         /**
-         * The land of all states grown at once from their seeds.
+         * The land of all states grown at once from their seeds. First the states grow side by side until they meet or have
+         * their targets, so that where two meet the border lies where the way was dearest (a river costs a state twelve steps
+         * to cross, and the other comes up to its bank meanwhile). Then the gap is cut out of both sides of every such border
+         * alike, and the states that lost land grow on where no other state is near.
          */
         private Growth grow(int[] seedCells, int[] goals) {
             int n = seedCells.length;
             int[] owner = new int[cells];
-            int[] near = new int[cells];
             int[] counts = new int[n];
             LongHeap heap = new LongHeap(4096);
             for (int s = 0; s < n; s++) {
                 heap.add(LandMath.pack(0, s, seedCells[s]));
             }
+            spread(heap, owner, null, counts, goals);
+            cut(owner);
+            int[] near = new int[cells];
+            keep(owner, near, seedCells);
+            java.util.Arrays.fill(counts, 0);
+            int width = raster.width();
+            for (int cell = 0; cell < cells; cell++) {
+                if (owner[cell] != 0) {
+                    counts[owner[cell] - 1]++;
+                }
+            }
+            heap.clear();
+            for (int cell = 0; cell < cells; cell++) {
+                int s = owner[cell] - 1;
+                if (s < 0 || counts[s] >= goals[s]) {
+                    continue;
+                }
+                int cx = cell % width;
+                int cz = cell / width;
+                for (int d = 0; d < 4; d++) {
+                    int x = cx + LandMath.DX4[d];
+                    int z = cz + LandMath.DZ4[d];
+                    if (raster.contains(x, z)) {
+                        int next = z * width + x;
+                        if (owner[next] == 0 && open(near, next, s)) {
+                            heap.add(LandMath.pack(raster.terrain(next).cost(), s, next));
+                        }
+                    }
+                }
+            }
+            spread(heap, owner, near, counts, goals);
+            return new Growth(owner, counts);
+        }
+
+        /**
+         * Claims cells in the order of the cost of the way until every state has its target or no way is left; with
+         * {@code near}, no state comes within the gap of another.
+         */
+        private void spread(LongHeap heap, int[] owner, int[] near, int[] counts, int[] goals) {
             int width = raster.width();
             while (!heap.isEmpty()) {
                 long entry = heap.poll();
@@ -255,24 +306,15 @@ public final class StatePlanner {
                 }
                 owner[cell] = s + 1;
                 counts[s]++;
-                int cx = cell % width;
-                int cz = cell / width;
-                for (int[] offset : gap) {
-                    int x = cx + offset[0];
-                    int z = cz + offset[1];
-                    if (raster.contains(x, z)) {
-                        int other = z * width + x;
-                        if (near[other] == 0) {
-                            near[other] = s + 1;
-                        } else if (near[other] != s + 1) {
-                            near[other] = -1;
-                        }
-                    }
+                if (near != null) {
+                    stamp(near, cell, s);
                 }
                 if (counts[s] >= goals[s]) {
                     continue;
                 }
                 int cost = LandMath.cost(entry);
+                int cx = cell % width;
+                int cz = cell / width;
                 for (int d = 0; d < 4; d++) {
                     int x = cx + LandMath.DX4[d];
                     int z = cz + LandMath.DZ4[d];
@@ -285,11 +327,139 @@ public final class StatePlanner {
                     }
                 }
             }
-            return new Growth(owner, counts);
+        }
+
+        /**
+         * Cuts the gap out of both sides of every border alike: a cell closer to the land of another state than half the gap is
+         * given up.
+         */
+        private void cut(int[] owner) {
+            int width = raster.width();
+            double half = gapCells() / 2;
+            boolean[] lose = new boolean[cells];
+            for (int cell = 0; cell < cells; cell++) {
+                int s = owner[cell];
+                if (s == 0) {
+                    continue;
+                }
+                int cx = cell % width;
+                int cz = cell / width;
+                for (int[] offset : gap) {
+                    double ex = Math.max(0, Math.abs(offset[0]) - 1);
+                    double ez = Math.max(0, Math.abs(offset[1]) - 1);
+                    if (ex * ex + ez * ez >= half * half) {
+                        continue;
+                    }
+                    int x = cx + offset[0];
+                    int z = cz + offset[1];
+                    if (raster.contains(x, z)) {
+                        int other = owner[z * width + x];
+                        if (other != 0 && other != s) {
+                            lose[cell] = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            for (int cell = 0; cell < cells; cell++) {
+                if (lose[cell]) {
+                    owner[cell] = 0;
+                }
+            }
+        }
+
+        /**
+         * Keeps of every state the land joined to its seed (or its largest piece, if the seed was cut away) and nothing within
+         * the gap of a state before it, and marks the land near every state that is left.
+         */
+        private void keep(int[] owner, int[] near, int[] seedCells) {
+            int width = raster.width();
+            int n = seedCells.length;
+            int[] piece = new int[cells];
+            int[] queue = new int[cells];
+            int pieces = 0;
+            for (int s = 0; s < n; s++) {
+                // Land within the gap of the states kept before is given up.
+                for (int cell = 0; cell < cells; cell++) {
+                    if (owner[cell] == s + 1 && !open(near, cell, s)) {
+                        owner[cell] = 0;
+                    }
+                }
+                int best = -1;
+                int bestSize = 0;
+                boolean seedKept = owner[seedCells[s]] == s + 1;
+                for (int start = 0; start < cells; start++) {
+                    if (owner[start] != s + 1 || piece[start] != 0) {
+                        continue;
+                    }
+                    int label = ++pieces;
+                    int head = 0;
+                    int tail = 0;
+                    queue[tail++] = start;
+                    piece[start] = label;
+                    boolean hasSeed = false;
+                    while (head < tail) {
+                        int cell = queue[head++];
+                        hasSeed |= cell == seedCells[s];
+                        int cx = cell % width;
+                        int cz = cell / width;
+                        for (int d = 0; d < 4; d++) {
+                            int x = cx + LandMath.DX4[d];
+                            int z = cz + LandMath.DZ4[d];
+                            if (raster.contains(x, z)) {
+                                int next = z * width + x;
+                                if (owner[next] == s + 1 && piece[next] == 0) {
+                                    piece[next] = label;
+                                    queue[tail++] = next;
+                                }
+                            }
+                        }
+                    }
+                    if (seedKept ? hasSeed : tail > bestSize) {
+                        best = label;
+                        bestSize = seedKept ? Integer.MAX_VALUE : tail;
+                    }
+                }
+                for (int cell = 0; cell < cells; cell++) {
+                    if (owner[cell] == s + 1) {
+                        if (piece[cell] != best) {
+                            owner[cell] = 0;
+                        } else {
+                            stamp(near, cell, s);
+                        }
+                    }
+                }
+            }
+        }
+
+        private void stamp(int[] near, int cell, int s) {
+            int width = raster.width();
+            int cx = cell % width;
+            int cz = cell / width;
+            for (int[] offset : gap) {
+                int x = cx + offset[0];
+                int z = cz + offset[1];
+                if (raster.contains(x, z)) {
+                    int other = z * width + x;
+                    if (near[other] == 0) {
+                        near[other] = s + 1;
+                    } else if (near[other] != s + 1) {
+                        near[other] = -1;
+                    }
+                }
+            }
+        }
+
+        /**
+         * The gap between the cells of two states, edge to edge, in cells: the gap of the rules and the reach of the drawn
+         * borders on both sides.
+         */
+        private double gapCells() {
+            return (rules.gapBlocks() + 2.0 * BorderRefiner.REACH) / SurveyRaster.CELL;
         }
 
         private boolean open(int[] near, int cell, int state) {
-            return free[cell] && (near[cell] == 0 || near[cell] == state + 1);
+            return free[cell] && (near == null || near[cell] == 0 || near[cell] == state + 1);
         }
 
         /**
