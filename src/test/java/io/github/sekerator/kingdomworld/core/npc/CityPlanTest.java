@@ -305,10 +305,23 @@ class CityPlanTest {
             for (int i = 0; i < SEEDS; i++) {
                 NpcComposition composition = of(level, seed(i));
                 assertEquals(level == NpcLevel.LARGE, composition.townWall() > 0, level.id());
-                assertEquals(1, composition.townFields().size());
+                // Two fields, one behind each row; each lies inside the ground of the town.
+                assertEquals(2, composition.townFields().size());
+                for (int[] field : composition.townFields()) {
+                    assertTrue(Math.abs(field[0]) + 5 < composition.townReach() && Math.abs(field[1]) + 5 < composition.townReach(),
+                            level + " seed " + i + ": a field of a town outside its ground");
+                }
                 for (int t = 0; t < composition.towns(); t++) {
                     List<Plot> town = composition.town(t);
                     String at = level + " seed " + i + " town " + t + ": ";
+                    for (Plot plot : town) {
+                        int[] ground = NpcComposition.footprint(plot);
+                        for (int[] field : composition.townFields()) {
+                            boolean apart = ground[2] < field[0] - 5 || ground[0] > field[0] + 5 || ground[3] < field[1] - 5
+                                    || ground[1] > field[1] + 5;
+                            assertTrue(apart, at + plot.template() + " stands on a field");
+                        }
+                    }
                     Set<Kind> kinds = new HashSet<>();
                     Set<String> roles = new HashSet<>();
                     for (Plot plot : town) {

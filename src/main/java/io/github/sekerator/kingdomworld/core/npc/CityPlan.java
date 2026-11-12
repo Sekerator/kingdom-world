@@ -283,7 +283,7 @@ final class CityPlan {
         int fields = Math.max(1, (int) Math.ceil((homes + bunks) * 1.5 / 18.0));
         Map<String, Integer> jobs = new LinkedHashMap<>();
         int left = citizens - soldiers;
-        left = job(jobs, "farmer", 2 * (fields + towns), left);
+        left = job(jobs, "farmer", 2 * (fields + 2 * towns), left);
         left = job(jobs, "merchant", 2 * markets, left);
         left = job(jobs, "innkeeper", taverns, left);
         left = job(jobs, "crafter", 2 * workshops + towns, left);

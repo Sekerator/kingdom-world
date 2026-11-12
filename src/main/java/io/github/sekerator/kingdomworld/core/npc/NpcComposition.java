@@ -208,7 +208,8 @@ public record NpcComposition(int layout, NpcLevel level, long seed, List<Plot> b
      * The middles of the fields of a town, in blocks from its town hall.
      */
     public List<int[]> townFields() {
-        return layout == NpcSite.LAYOUT_DISTRICTS ? List.of(new int[]{0, -CityPlan.TOWN_FIELD}) : List.of();
+        // One behind each row, on opposite sides of the way into the town.
+        return layout == NpcSite.LAYOUT_DISTRICTS ? List.of(new int[]{-10, -CityPlan.TOWN_FIELD}, new int[]{10, CityPlan.TOWN_FIELD}) : List.of();
     }
 
     /**
