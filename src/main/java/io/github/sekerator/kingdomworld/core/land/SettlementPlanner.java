@@ -16,8 +16,8 @@ import java.util.SplittableRandom;
  * province with a city, then into the heart, then a second one to a province with a city. Villages and hamlets stand two to five around the capital, the cities and the
  * towns, 300 to 700 blocks from them. The frontier and the wild provinces stay empty.
  *
- * <p>A settlement stands on open land or a desert never generated nor land of a player, with its own province on every side of
- * its cell, which keeps it 64 blocks from the border of the province however the border is drawn, and the distances of its rank
+ * <p>A settlement stands on open land or a desert (a village or a hamlet on hills too) never generated nor land of a player,
+ * with its own province on every side of its cell, which keeps it 64 blocks from the border of the province however the border is drawn, and the distances of its rank
  * from every other settlement. Every place comes with up to three cells around it that keep the same rules, for when the world
  * turns the place down.
  */
@@ -230,7 +230,7 @@ public final class SettlementPlanner {
             int best = -1;
             double bestDistance = Double.MAX_VALUE;
             for (int cell : provinceCells[province]) {
-                if (!valid(s, cell) || !apart(cell, tier, -1)) {
+                if (!valid(s, cell, tier) || !apart(cell, tier, -1)) {
                     continue;
                 }
                 double distance = distance(cell, center);
@@ -252,7 +252,7 @@ public final class SettlementPlanner {
             int best = -1;
             double bestScore = Double.NEGATIVE_INFINITY;
             for (int cell : provinceCells[province]) {
-                if (!valid(s, cell) || !apart(cell, tier, -1)) {
+                if (!valid(s, cell, tier) || !apart(cell, tier, -1)) {
                     continue;
                 }
                 double score = Math.min(cap, nearest(cell)) - 0.01 * distance(cell, center);
@@ -283,7 +283,7 @@ public final class SettlementPlanner {
                     }
                     int cell = raster.index(px + dx, pz + dz);
                     double from = Math.hypot(raster.centerX(cell) - parent.x(), raster.centerZ(cell) - parent.z());
-                    if (from < rules.childMin() || from > rules.childMax() || !valid(s, cell) || !apart(cell, tier, -1)) {
+                    if (from < rules.childMin() || from > rules.childMax() || !valid(s, cell, tier) || !apart(cell, tier, -1)) {
                         continue;
                     }
                     double jitter = LandMath.unit(LandMath.mix(seed, slots.size(), cell)) * 80;
@@ -298,11 +298,15 @@ public final class SettlementPlanner {
         }
 
         /**
-         * Whether a settlement of a state may stand on a cell: open land or a desert, never generated nor land of a player, in
-         * the heart or a core province of the state, with the same province on every side and no probed water around.
+         * Whether a settlement of a state may stand on a cell: open land or a desert (a village or a hamlet on hills too), never
+         * generated nor land of a player, in the heart or a core province of the state, with the same province on every side
+         * and no probed water around.
          */
-        private boolean valid(int s, int cell) {
-            if (!raster.terrain(cell).settles() || raster.generated(cell) || raster.player(cell) || states.stateAt(cell) != s) {
+        private boolean valid(int s, int cell, Tier tier) {
+            TerrainClass terrain = raster.terrain(cell);
+            boolean small = tier == Tier.VILLAGE || tier == Tier.HAMLET;
+            if (!(terrain.settles() || (small && terrain == TerrainClass.HILLS)) || raster.generated(cell) || raster.player(cell)
+                    || states.stateAt(cell) != s) {
                 return false;
             }
             int province = plan.provinceAt(cell);
@@ -422,7 +426,7 @@ public final class SettlementPlanner {
                         continue;
                     }
                     int cell = raster.index(cx + dx, cz + dz);
-                    if (!valid(slot.state(), cell) || !apart(cell, slot.tier(), slot.index())) {
+                    if (!valid(slot.state(), cell, slot.tier()) || !apart(cell, slot.tier(), slot.index())) {
                         continue;
                     }
                     boolean child = slot.tier() == Tier.VILLAGE || slot.tier() == Tier.HAMLET;

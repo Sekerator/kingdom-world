@@ -15,7 +15,7 @@ class SettlementPlannerTest {
      * The provinces of a world of three large, two medium and three small states.
      */
     static ProvincePlan provinces(long seed) {
-        SurveyRaster raster = SyntheticLand.world(seed, StateRules.RADIUS, 0.05);
+        SurveyRaster raster = SyntheticLand.world(seed, StateRules.RADIUS, 0.08);
         StatePlan states = StatePlanner.plan(raster, StateRules.defaults(0, 0).withQuota(3, 2, 3), seed);
         return ProvincePlanner.plan(states, ProvinceRules.DEFAULT, seed);
     }
@@ -75,7 +75,7 @@ class SettlementPlannerTest {
                 assertEquals(slot.index(), plan.seat(slot.province()), "the capital is the seat of the heart");
                 continue;
             }
-            assertTrue(raster.terrain(slot.cell()).settles(), "settlements stand on land");
+            assertTrue(standsOn(slot.tier(), raster.terrain(slot.cell())), "settlements stand on land");
             assertTrue(slot.parent() >= 0 && plan.slot(slot.parent()).tier().above(slot.tier()), "a settlement belongs to a higher one");
             if (slot.tier() == Tier.CITY) {
                 assertEquals(ProvinceKind.CORE, province.kind());
@@ -91,7 +91,7 @@ class SettlementPlannerTest {
             assertBorderAway(land, slot.x(), slot.z(), slot.province());
             assertTrue(slot.alternates().size() <= RULES.alternates());
             for (SettlementSlot.Spot spot : slot.alternates()) {
-                assertTrue(raster.terrain(spot.cell()).settles());
+                assertTrue(standsOn(slot.tier(), raster.terrain(spot.cell())));
                 assertEquals(slot.state(), provinces.stateOf(spot.province()));
                 if (slot.tier() == Tier.CITY || slot.tier() == Tier.TOWN) {
                     assertEquals(slot.province(), spot.province());
@@ -138,6 +138,10 @@ class SettlementPlannerTest {
                 }
             }
         }
+    }
+
+    private static boolean standsOn(Tier tier, TerrainClass terrain) {
+        return terrain.settles() || ((tier == Tier.VILLAGE || tier == Tier.HAMLET) && terrain == TerrainClass.HILLS);
     }
 
     private static void assertInRange(int value, int[] range, String what) {
