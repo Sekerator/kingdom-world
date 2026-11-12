@@ -2035,7 +2035,10 @@ public final class NpcSpawner {
                 }
             }
         }
-        // The guard and the army, their officers and the kits of their posts.
+        // The royal army comes from abroad a part a tick; then the guard and the army, their officers and the kits of their posts.
+        if (!NpcGarrison.enlistSome(server, site)) {
+            return;
+        }
         NpcGarrison.found(server, site, job.composition);
         // The soldiers moved into the bunks of the barracks: whoever has no bed yet takes one of those they left.
         io.github.sekerator.kingdomworld.common.citizen.CitizenSimulation.settle(server, id);

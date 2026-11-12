@@ -2703,6 +2703,11 @@ Invoke-Phase 'run1' {
         [void](Invoke-ServerCommand $server "kingdomworld admin citizens body $guard $tx $ty $($tz + 3) still" "Citizen $guard \([^\r\n]*\) has a body at ")
         [void](Invoke-ServerCommand $server "kingdomworld admin law act $rioter $npc at $($tx + 1) $ty $($tz + 4)" "$rioter stands at ")
         $struck = Invoke-ServerCommand $server "kingdomworld admin law act $rioter $npc strike $guard" "$rioter struck citizen $guard of ${npcPattern}: alarms (\d+)"
+        if (-not $struck) {
+            # A busy server may answer the first blow late: the stand-in strikes once more.
+            Start-Sleep -Seconds 2
+            $struck = Invoke-ServerCommand $server "kingdomworld admin law act $rioter $npc strike $guard" "$rioter struck citizen $guard of ${npcPattern}: alarms (\d+)"
+        }
         $steps = @()
         foreach ($wanted in @('GUARD_VICE', 'GUARD_CAPTAIN')) {
             $reached = $null

@@ -128,6 +128,14 @@ public final class NpcGarrison {
      * @return how many joined
      */
     static int enlist(MinecraftServer server, UUID kingdomId, int count) {
+        return enlist(server, kingdomId, count, false);
+    }
+
+    /**
+     * @param kit whether every recruit gets the kit of its post at once, for nothing: at the founding the gear of the army is a
+     *            part of the wealth of the kingdom
+     */
+    static int enlist(MinecraftServer server, UUID kingdomId, int count, boolean kit) {
         if (count <= 0 || ArmyWork.isReadOnly(server) || KingdomWorldApi.isReadOnly(server)) {
             return 0;
         }
@@ -163,12 +171,64 @@ public final class NpcGarrison {
             if (army.losses(kingdomId, Branch.ARMY) > 0) {
                 army.replaced(kingdomId, Branch.ARMY);
             }
+            if (kit) {
+                army.soldier(id).ifPresent(soldier -> io.github.sekerator.kingdomworld.common.army.ArmyKits.issue(server, recruit.get(), soldier,
+                        true));
+            }
             joined++;
+        }
+        if (kit && joined > 0) {
+            // Recruits who come at the founding bring bread for as many days as the kingdom has for its people: like their gear,
+            // a part of the wealth of the kingdom at its founding.
+            long nutrition = (long) joined * NpcSettings.rules().foodDays()
+                    * io.github.sekerator.kingdomworld.common.citizen.CitizenSettings.rules().dailyNutrition();
+            int bread = (int) Math.ceil(nutrition / (double) BREAD_NUTRITION);
+            while (bread > 0) {
+                int loaves = Math.min(64, bread);
+                io.github.sekerator.kingdomworld.common.storage.KingdomStorage.insert(server, kingdomId,
+                        new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.BREAD, loaves), throne);
+                bread -= loaves;
+            }
         }
         return joined;
     }
 
     // ---------------------------------------------------------------- at the founding
+
+    /** Recruits from abroad who join the army in a tick of the appearance of a kingdom at most. */
+    private static final int ENLIST_PER_TICK = 16;
+
+    /**
+     * The soldiers of the plan of a capital who become its army at the founding: a part of those who live in the capital.
+     */
+    private static int plannedArmy(NpcSite site, int planned) {
+        NpcRules rules = NpcSettings.rules();
+        NpcLevel level = site.level();
+        int inCapital = Math.min(planned, rules.guards(level) + rules.army(level));
+        // A capital of the first layout was planned for a handful of soldiers: all of them are its guard.
+        return site.districts() ? inCapital * rules.army(level) / Math.max(1, rules.guards(level) + rules.army(level)) : 0;
+    }
+
+    /**
+     * While a kingdom appears, the recruits of its royal army come from abroad a part a tick, each with the kit of its post, so
+     * that no tick of the appearance takes long.
+     *
+     * @return whether the army from abroad is whole, so that the garrison may be founded
+     */
+    static boolean enlistSome(MinecraftServer server, NpcSite site) {
+        UUID id = site.kingdomId().orElse(null);
+        if (id == null || ArmyWork.isReadOnly(server) || KingdomWorldApi.isReadOnly(server)) {
+            return true;
+        }
+        ArmyState army = ArmyWork.state(server);
+        // Until the founding the soldiers of the plan serve in the guard and the recruits from abroad in the army.
+        int lacking = royalArmy(server, id) - plannedArmy(site, army.branchOf(id, Branch.GUARD).size()) - army.branchOf(id, Branch.ARMY).size();
+        if (lacking <= 0) {
+            return true;
+        }
+        int joined = enlist(server, id, Math.min(ENLIST_PER_TICK, lacking), true);
+        return joined <= 0 || joined >= lacking;
+    }
 
     /**
      * The soldiers of a kingdom that just appeared become its guard and its army, the best of them officers, and get the
@@ -181,7 +241,8 @@ public final class NpcGarrison {
         }
         ArmyState army = ArmyWork.state(server);
         KingdomWorldState world = KingdomWorldApi.state(server);
-        List<Soldier> soldiers = new ArrayList<>(army.soldiersOf(id));
+        // The soldiers of the plan; the recruits from abroad who came while the kingdom appeared serve in the army already.
+        List<Soldier> soldiers = new ArrayList<>(army.branchOf(id, Branch.GUARD));
         if (soldiers.isEmpty()) {
             return;
         }
@@ -194,8 +255,7 @@ public final class NpcGarrison {
                 .map(at -> throne != null && throne.dimension().equals(at.dimension()) ? throne.distanceSqr(at) : Double.MAX_VALUE)
                 .orElse(Double.MAX_VALUE)));
         int inCapital = Math.min(soldiers.size(), rules.guards(level) + rules.army(level));
-        // A capital of the first layout was planned for a handful of soldiers: all of them are its guard.
-        int inArmy = site.districts() ? inCapital * rules.army(level) / Math.max(1, rules.guards(level) + rules.army(level)) : 0;
+        int inArmy = plannedArmy(site, soldiers.size());
         for (int i = 0; i < soldiers.size(); i++) {
             UUID citizen = soldiers.get(i).citizenId();
             boolean ofArmy = i >= inCapital - inArmy && i < inCapital;
@@ -215,18 +275,10 @@ public final class NpcGarrison {
         for (Soldier soldier : soldiers) {
             world.citizens().get(soldier.citizenId()).ifPresent(citizen -> ArmyWork.billet(server, citizen));
         }
-        // The royal army beyond the soldiers of the plan comes from abroad, all of it at once, with bread for as many days as
-        // the kingdom has for its people: like its gear, a part of the wealth of the kingdom at its founding.
-        int enlisted = enlist(server, id, royalArmy(server, id) - army.branchOf(id, Branch.ARMY).size());
-        long nutrition = (long) enlisted * NpcSettings.rules().foodDays()
-                * io.github.sekerator.kingdomworld.common.citizen.CitizenSettings.rules().dailyNutrition();
-        int bread = (int) Math.ceil(nutrition / (double) BREAD_NUTRITION);
-        while (bread > 0) {
-            int count = Math.min(64, bread);
-            io.github.sekerator.kingdomworld.common.storage.KingdomStorage.insert(server, id,
-                    new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.BREAD, count), throne);
-            bread -= count;
-        }
+        // The royal army beyond the soldiers of the plan came from abroad while the kingdom appeared; whoever is still lacking
+        // comes now.
+        enlist(server, id, royalArmy(server, id) - army.branchOf(id, Branch.ARMY).size(), true);
+        int enlisted = Math.max(0, army.branchOf(id, Branch.ARMY).size() - inArmy);
         for (Soldier soldier : army.branchOf(id, Branch.ARMY)) {
             if (army.soldier(soldier.citizenId()).map(known -> known.experience() < 300).orElse(false)) {
                 army.reward(soldier.citizenId(), 300 - soldier.experience(), 0, 0);
