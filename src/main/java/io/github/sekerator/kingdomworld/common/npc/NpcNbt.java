@@ -24,7 +24,8 @@ import java.util.UUID;
  *
  * <pre>
  * plan: { cursor, shift, done, next }
- * sites: [ { id, x, z, level, seed, towns: [x, z, ...], status, kingdom?, stage, step, ground, reason, given (format 3: 1 money, 2 laws, 4 stores) } ]
+ * sites: [ { id, x, z, level, seed, layout, style, wood, guild? (layout 3: b, a, s, ss), towns: [x, z, ...], status, kingdom?, stage, step,
+ *           ground, reason, given (format 3: 1 money, 2 laws, 4 stores) } ]
  * kingdoms: [ { kingdom, site, level, latin, cyrillic, character, traits: [id], ruler, gender, towns: [ { latin, cyrillic } ],
  *              founded, turn, camps (format 5): [ { x, z, y, status } ] } ]
  * rulers: see {@link RulerNbt} (format 2)
@@ -53,6 +54,9 @@ final class NpcNbt {
             entry.putInt("layout", site.layout());
             entry.putString("style", site.style());
             entry.putString("wood", site.wood());
+            if (!site.guildRank().isEmpty()) {
+                entry.putString("guild", site.guildRank());
+            }
             int[] towns = new int[site.towns().size() * 2];
             for (int i = 0; i < site.towns().size(); i++) {
                 towns[2 * i] = site.towns().get(i).x();
@@ -135,8 +139,9 @@ final class NpcNbt {
                 }
                 // Places saved before the districts have no layout: they keep the grid they were planned with.
                 int layout = entry.contains("layout") ? entry.getInt("layout") : NpcSite.LAYOUT_GRID;
+                // The rank of the guild is kept by styled places only; getString gives "" where it is missing.
                 NpcSite site = new NpcSite(entry.getInt("id"), entry.getInt("x"), entry.getInt("z"), level, entry.getLong("seed"), list, layout,
-                        entry.getString("style"), entry.getString("wood"));
+                        entry.getString("style"), entry.getString("wood"), entry.getString("guild"));
                 NpcSite.Status status = NpcSite.Status.byId(entry.getString("status"))
                         .orElseThrow(() -> new IllegalArgumentException("status"));
                 SpawnStage stage = SpawnStage.byId(entry.getString("stage")).orElseThrow(() -> new IllegalArgumentException("stage"));

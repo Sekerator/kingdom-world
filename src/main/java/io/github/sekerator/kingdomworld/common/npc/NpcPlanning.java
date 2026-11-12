@@ -4,6 +4,8 @@ import com.mojang.logging.LogUtils;
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.construction.TemplateMaterials;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
+import io.github.sekerator.kingdomworld.core.npc.ArchitecturalStyles;
+import io.github.sekerator.kingdomworld.core.npc.GuildHouses;
 import io.github.sekerator.kingdomworld.core.npc.NpcComposition;
 import io.github.sekerator.kingdomworld.core.npc.NpcLevel;
 import io.github.sekerator.kingdomworld.core.npc.NpcRules;
@@ -11,6 +13,7 @@ import io.github.sekerator.kingdomworld.core.npc.NpcSite;
 import io.github.sekerator.kingdomworld.core.npc.NpcState;
 import io.github.sekerator.kingdomworld.core.npc.NpcStyle;
 import io.github.sekerator.kingdomworld.core.npc.SitePlanner;
+import io.github.sekerator.kingdomworld.core.npc.TemplateCatalog;
 import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -28,8 +31,10 @@ import net.minecraftforge.common.Tags;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -258,8 +263,9 @@ public final class NpcPlanning {
         Optional<SitePlanner.Candidate> accepted = planner.judge(verdict.get());
         accepted.ifPresent(candidate -> {
             NpcSite site = addSite(server, candidate.x(), candidate.z(), candidate.level(), candidate.seed(), judging.towns);
-            LOGGER.info("Planned a kingdom of the world: {} with {} town(s), style {}{}", site, site.towns().size(),
-                    site.style().isEmpty() ? "none" : site.style(), candidate.relax() > 0 ? ", on pass " + (candidate.relax() + 1) : "");
+            LOGGER.info("Planned a kingdom of the world: {} with {} town(s), style {}{}{}", site, site.towns().size(),
+                    site.style().isEmpty() ? "none" : site.style(), site.guildRank().isEmpty() ? "" : ", guild rank " + site.guildRank(),
+                    candidate.relax() > 0 ? ", on pass " + (candidate.relax() + 1) : "");
         });
         judging = null;
         boolean done = planner.done();
@@ -304,26 +310,61 @@ public final class NpcPlanning {
     }
 
     /**
-     * Adds a place of the layout of districts to the plan: its style by the climate of its land and its number in the plan, and
-     * the wood that grows there, both read from the generator of the world without generating a chunk.
+     * Adds a styled place ({@link NpcSite#LAYOUT_STYLED}) to the plan: its architectural style by the climate of its land, one no
+     * other kingdom of the world holds, the rank of its guild, and the wood that grows there, all read from the generator of the
+     * world without generating a chunk.
      */
     public static NpcSite addSite(MinecraftServer server, int x, int z, NpcLevel kingdom, long seed, List<int[]> towns) {
-        return addSite(server, x, z, kingdom, seed, towns, siteLand(server.overworld(), x, z));
+        return addSite(server, x, z, kingdom, seed, towns, siteLand(server.overworld(), x, z), NpcSite.LAYOUT_STYLED, "");
     }
 
     /**
-     * Adds a place to the plan with what its land is like, looked up before ({@link #siteLand}).
+     * Adds a place of the layout of districts to the plan with what its land is like, looked up before ({@link #siteLand}): the
+     * capitals of the states of the plan of states, whose land is judged for a capital of districts.
      */
     public static NpcSite addSite(MinecraftServer server, int x, int z, NpcLevel kingdom, long seed, List<int[]> towns, SiteLand land) {
-        NpcState state = NpcWork.state(server);
-        NpcStyle style = NpcStyle.pick(NpcStyle.climate(land.biome(), land.tags()), seed, state.sites().size());
-        return state.addSite(x, z, kingdom, seed, NpcSite.towns(towns), NpcSite.LAYOUT_DISTRICTS, style.id(), land.wood());
+        return addSite(server, x, z, kingdom, seed, towns, land, NpcSite.LAYOUT_DISTRICTS, "");
     }
 
     /**
-     * What the land of a place is like: its biome, the tags of the biome and the wood that grows there.
+     * Adds a place of a layout to the plan, its land looked up now.
+     *
+     * @param layout {@link NpcSite#LAYOUT_DISTRICTS} or {@link NpcSite#LAYOUT_STYLED}
+     * @param style  the style of the place, or empty to choose it as the plan does
      */
-    public record SiteLand(String biome, java.util.Set<String> tags, String wood) {
+    static NpcSite addSite(MinecraftServer server, int x, int z, NpcLevel kingdom, long seed, List<int[]> towns, int layout, String style) {
+        return addSite(server, x, z, kingdom, seed, towns, siteLand(server.overworld(), x, z), layout, style);
+    }
+
+    /**
+     * Adds a place of a layout to the plan. A place of districts takes its look by the climate of its land and its number in
+     * the plan, a styled place the architectural style its climate prefers that no other kingdom of the world holds (when all
+     * are held, one the climate likes by the seed) and the rank of its guild, decided once and kept with the place.
+     */
+    private static NpcSite addSite(MinecraftServer server, int x, int z, NpcLevel kingdom, long seed, List<int[]> towns, SiteLand land,
+                                   int layout, String style) {
+        NpcState state = NpcWork.state(server);
+        NpcStyle.Climate climate = NpcStyle.climate(land.biome(), land.tags());
+        String chosen = style == null ? "" : style;
+        if (layout != NpcSite.LAYOUT_STYLED) {
+            if (chosen.isEmpty()) {
+                chosen = NpcStyle.pick(climate, seed, state.sites().size()).id();
+            }
+            return state.addSite(x, z, kingdom, seed, NpcSite.towns(towns), layout, chosen, land.wood());
+        }
+        if (chosen.isEmpty()) {
+            chosen = ArchitecturalStyles.pick(climate, land.mountains(), seed, state.takenStyles());
+        }
+        boolean ssTaken = state.holdsGuildRank(TemplateCatalog.Rank.SS.id());
+        TemplateCatalog.Rank rank = GuildHouses.rankOf(kingdom, seed, ssTaken);
+        return state.addSite(x, z, kingdom, seed, NpcSite.towns(towns), NpcSite.LAYOUT_STYLED, chosen, land.wood(), rank.id());
+    }
+
+    /**
+     * What the land of a place is like: its biome, the tags of the biome, the wood that grows there and whether it lies in
+     * mountains ({@link #mountains}).
+     */
+    public record SiteLand(String biome, java.util.Set<String> tags, String wood, boolean mountains) {
     }
 
     /**
@@ -333,9 +374,33 @@ public final class NpcPlanning {
     public static SiteLand siteLand(ServerLevel level, int x, int z) {
         Holder<Biome> biome = biomeAt(level, x, z);
         String id = biome.unwrapKey().map(key -> key.location().toString()).orElse("");
-        java.util.Set<String> tags = new java.util.HashSet<>();
+        Set<String> tags = new HashSet<>();
         biome.tags().forEach(tag -> tags.add(tag.location().toString()));
-        return new SiteLand(id, java.util.Set.copyOf(tags), TemplateMaterials.table().woodForBiome(id, tags));
+        return new SiteLand(id, java.util.Set.copyOf(tags), TemplateMaterials.table().woodForBiome(id, tags), mountains(level, x, z));
+    }
+
+    /** Blocks from a place to where the biomes around it are looked at for mountains. */
+    private static final int MOUNTAIN_LOOK = 96;
+    /** Blocks above the sea the ground of a place in mountains lies at least. */
+    private static final int MOUNTAIN_HEIGHT = 32;
+
+    /**
+     * Whether a place lies in mountains, by the generator: its ground high above the sea, or mountains or hills around it (the
+     * place itself never stands on them). Any thread, as {@link #siteLand}.
+     */
+    static boolean mountains(ServerLevel level, int x, int z) {
+        ChunkGenerator generator = level.getChunkSource().getGenerator();
+        RandomState random = level.getChunkSource().randomState();
+        if (generator.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, level, random) >= generator.getSeaLevel() + MOUNTAIN_HEIGHT) {
+            return true;
+        }
+        for (int[] offset : new int[][]{{MOUNTAIN_LOOK, 0}, {-MOUNTAIN_LOOK, 0}, {0, MOUNTAIN_LOOK}, {0, -MOUNTAIN_LOOK}}) {
+            Holder<Biome> around = biomeAt(level, x + offset[0], z + offset[1]);
+            if (around.is(BiomeTags.IS_MOUNTAIN) || around.is(BiomeTags.IS_HILL)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Holder<Biome> biomeAt(ServerLevel level, int x, int z) {
@@ -361,7 +426,7 @@ public final class NpcPlanning {
     private static Optional<SitePlanner.Verdict> judge(ServerLevel level, Judging judging, NpcRules rules) {
         SitePlanner.Candidate candidate = judging.candidate;
         MinecraftServer server = level.getServer();
-        int landRadius = NpcCity.landRadius(candidate.level(), NpcSite.LAYOUT_DISTRICTS);
+        int landRadius = NpcCity.landRadius(candidate.level(), NpcSite.LAYOUT_STYLED);
         int land = landRadius * 16 + 16;
         if (!judging.landDone) {
             if (nearKingdom(server, candidate.x(), candidate.z(), land)) {
@@ -386,7 +451,7 @@ public final class NpcPlanning {
             }
             judging.townCandidates = new ArrayList<>();
             for (int[] town : SitePlanner.townCandidates(candidate.x(), candidate.z(), candidate.seed(),
-                    NpcCity.townDistance(candidate.level(), NpcSite.LAYOUT_DISTRICTS))) {
+                    NpcCity.townDistance(candidate.level(), NpcSite.LAYOUT_STYLED))) {
                 judging.townCandidates.add(centred(town));
             }
             return Optional.empty();
@@ -513,9 +578,9 @@ public final class NpcPlanning {
     }
 
     /**
-     * Whether the land around a point suits a capital of districts of a level, by the noise of the generator: the ground is
-     * looked at on a grid over the whole square inside the wall and a little beyond it, and may differ in height by what the
-     * level allows; no water, and a biome kingdoms may stand in.
+     * Whether the land around a point suits a styled capital of a level, by the noise of the generator: the ground is looked at
+     * on a grid over the whole square inside the wall and a little beyond it, and may differ in height by what the level allows;
+     * no water, and a biome kingdoms may stand in.
      *
      * @param relax the pass of the plan: later passes allow rougher ground and a brook or two
      */
@@ -532,7 +597,7 @@ public final class NpcPlanning {
     private static Boolean suitableCapital(ServerLevel level, int x, int z, NpcLevel kingdom, int relax, @javax.annotation.Nullable Judging judging) {
         ChunkGenerator generator = level.getChunkSource().getGenerator();
         int sea = generator.getSeaLevel();
-        int reach = NpcComposition.districtWall(kingdom) + 8;
+        int reach = NpcComposition.capitalWall(kingdom, NpcSite.LAYOUT_STYLED) + 8;
         int step = Math.max(8, reach / 3);
         int allowed = CAPITAL_ROUGHNESS[kingdom.ordinal()] + ROUGHNESS_PER_PASS * Math.min(relax, 3);
         int wetAllowed = WET_PER_PASS * Math.min(relax, 3);
@@ -631,12 +696,13 @@ public final class NpcPlanning {
     private static final java.util.Map<Long, List<CompletableFuture<Integer>>> CAPITAL_HEIGHTS = new java.util.HashMap<>();
 
     /**
-     * The height of a capital, its columns asked of the generator off the tick: empty until all of them are answered.
+     * The height of a capital of a layout with a wall (of districts or styled), its columns asked of the generator off the tick:
+     * empty until all of them are answered.
      */
-    static java.util.OptionalInt capitalHeightSome(ServerLevel level, int x, int z, NpcLevel kingdom) {
+    static java.util.OptionalInt capitalHeightSome(ServerLevel level, int x, int z, NpcLevel kingdom, int layout) {
         ChunkGenerator generator = level.getChunkSource().getGenerator();
         RandomState random = level.getChunkSource().randomState();
-        int reach = NpcComposition.districtWall(kingdom);
+        int reach = NpcComposition.capitalWall(kingdom, layout);
         int step = Math.max(4, reach / 4);
         long key = BlockPos.asLong(x, 0, z);
         List<CompletableFuture<Integer>> asked = CAPITAL_HEIGHTS.computeIfAbsent(key, k -> {
@@ -660,7 +726,7 @@ public final class NpcPlanning {
         for (CompletableFuture<Integer> height : asked) {
             if (height.isCompletedExceptionally()) {
                 // The generator failed off the tick: the height is worked out at once.
-                return java.util.OptionalInt.of(capitalHeight(level, x, z, kingdom));
+                return java.util.OptionalInt.of(capitalHeight(level, x, z, kingdom, layout));
             }
         }
         List<Integer> sorted = new ArrayList<>();
@@ -678,12 +744,13 @@ public final class NpcPlanning {
     }
 
     /**
-     * The height the ground of a capital of a layout is levelled to, from the generator.
+     * The height the ground of a capital of a layout with a wall (of districts or styled) is levelled to, from the generator:
+     * the middle of the heights over all of it inside the wall, not below the sea.
      */
     static int capitalHeight(ServerLevel level, int x, int z, NpcLevel kingdom, int layout) {
         ChunkGenerator generator = level.getChunkSource().getGenerator();
         RandomState random = level.getChunkSource().randomState();
-        int reach = NpcComposition.districtWall(kingdom);
+        int reach = NpcComposition.capitalWall(kingdom, layout);
         int step = Math.max(4, reach / 4);
         List<Integer> heights = new ArrayList<>();
         for (int dx = -reach; dx <= reach; dx += step) {

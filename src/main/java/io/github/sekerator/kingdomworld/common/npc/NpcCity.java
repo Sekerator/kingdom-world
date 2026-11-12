@@ -1,13 +1,19 @@
 package io.github.sekerator.kingdomworld.common.npc;
 
+import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.construction.TemplateMaterials;
 import io.github.sekerator.kingdomworld.common.road.CityWalls;
 import io.github.sekerator.kingdomworld.core.construction.Materials;
+import io.github.sekerator.kingdomworld.core.kingdom.KingdomColors;
+import io.github.sekerator.kingdomworld.core.npc.ArchitecturalStyles;
+import io.github.sekerator.kingdomworld.core.npc.BuildingLooks;
 import io.github.sekerator.kingdomworld.core.npc.NpcComposition;
 import io.github.sekerator.kingdomworld.core.npc.NpcLevel;
 import io.github.sekerator.kingdomworld.core.npc.NpcRules;
 import io.github.sekerator.kingdomworld.core.npc.NpcSite;
 import io.github.sekerator.kingdomworld.core.npc.NpcStyle;
+import io.github.sekerator.kingdomworld.core.npc.StyledPlan;
+import io.github.sekerator.kingdomworld.core.npc.TemplateCatalog;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -21,14 +27,18 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
- * What the appearance of a kingdom needs to know about a capital laid out in districts ({@link NpcSite#LAYOUT_DISTRICTS}): the
- * land it takes, the stone and wood of its style, the ground of its streets and squares, where its posts of work, lamps and
- * trees stand, and where its citizens arrive. The stages themselves run in {@link NpcSpawner}.
+ * What the appearance of a kingdom needs to know about a capital laid out in districts ({@link NpcSite#LAYOUT_DISTRICTS}) or in
+ * an architectural style ({@link NpcSite#LAYOUT_STYLED}): the land it takes, the stone and wood of its style and the look of
+ * every building, the ground of its streets and squares, where its posts of work, lamps and trees stand, and where its
+ * citizens arrive. The stages themselves run in {@link NpcSpawner}.
  */
 final class NpcCity {
     /** Blocks between two lamps of an avenue. */
@@ -40,8 +50,8 @@ final class NpcCity {
     // ---------------------------------------------------------------- land
 
     /**
-     * The land around the capital of a place, in chunks from the chunk of the throne: what the rules give, and for a capital of
-     * districts at least what its wall and fields take.
+     * The land around the capital of a place, in chunks from the chunk of the throne: what the rules give, and for a capital with
+     * a wall (of districts or styled) at least what its wall and fields take.
      */
     static int landRadius(NpcSite site) {
         return landRadius(site.level(), site.layout());
@@ -49,10 +59,10 @@ final class NpcCity {
 
     static int landRadius(NpcLevel level, int layout) {
         int configured = NpcSettings.rules().landRadius(level);
-        if (layout != NpcSite.LAYOUT_DISTRICTS) {
+        if (layout == NpcSite.LAYOUT_GRID) {
             return configured;
         }
-        return Math.min(NpcRules.MAX_LAND_RADIUS, Math.max(configured, (NpcComposition.districtReach(level) + 15) / 16));
+        return Math.min(NpcRules.MAX_LAND_RADIUS, Math.max(configured, (NpcComposition.capitalReach(level, layout) + 15) / 16));
     }
 
     /**
@@ -63,28 +73,37 @@ final class NpcCity {
     }
 
     static int townRadius(int layout) {
-        return layout == NpcSite.LAYOUT_DISTRICTS ? 2 : 1;
+        return layout == NpcSite.LAYOUT_GRID ? 1 : 2;
     }
 
     /**
-     * How far the towns of a kingdom lie from its capital, in blocks: what the rules say, and for a kingdom of districts never
-     * so near that the ground of a town would reach the fields and the wall of the capital, whatever the config says.
+     * How far the towns of a kingdom lie from its capital, in blocks: what the rules say, and for a kingdom whose capital has a
+     * wall never so near that the ground of a town would reach the fields and the wall of the capital, whatever the config says.
      */
     static int townDistance(NpcLevel level, int layout) {
         int configured = NpcSettings.rules().townDistance();
-        if (layout != NpcSite.LAYOUT_DISTRICTS) {
+        if (layout == NpcSite.LAYOUT_GRID) {
             return configured;
         }
-        return Math.max(configured, NpcComposition.districtReach(level) + NpcComposition.districtTownReach() + NpcSpawner.RAMP + 16);
+        return Math.max(configured, NpcComposition.capitalReach(level, layout) + NpcComposition.districtTownReach() + NpcSpawner.RAMP + 16);
     }
 
     // ---------------------------------------------------------------- the look
 
     /**
      * The wood and stone the buildings of a place are built of: those of its style, the wood of its land where the style names
-     * none; a place of the first layout takes the wood that grows where each building stands.
+     * none; a place of the first layout takes the wood that grows where each building stands. For a styled capital these are
+     * the wood and stone of its architectural style without a look, for what has none (palisades, groves, stores).
      */
     static Materials materials(NpcSite site) {
+        if (site.styled()) {
+            String wood = BuildingLooks.styleWood(site.style());
+            if (wood.isEmpty()) {
+                wood = site.wood();
+            }
+            Materials wanted = new Materials(wood, BuildingLooks.styleStone(site.style()));
+            return TemplateMaterials.known(wanted) ? wanted : new Materials(TemplateMaterials.table().hasWood(wood) ? wood : "", "");
+        }
         if (!site.districts()) {
             return new Materials(Materials.AUTO, "");
         }
@@ -99,27 +118,107 @@ final class NpcCity {
     }
 
     /**
-     * The materials of a building on a plot of the capital of a place, with the look of its style and quarter for a styled
-     * capital.
+     * The materials of a building on a plot of the capital of a place: for a styled capital the look of its style and quarter,
+     * drawn from the place of the plot, so that a restart gives every building the same look; the materials of the place for
+     * other capitals.
      */
     static Materials materials(MinecraftServer server, NpcSite site, NpcComposition.Plot plot) {
-        return materials(site);
+        return styledLook(site) ? look(server, site, -1, plot) : materials(site);
     }
 
     /**
-     * The materials of a building on a plot of a town of a place.
+     * The materials of a building on a plot of a town of a place, with the look of its style and quarter for a styled kingdom.
      *
      * @param town the number of the town, from 0
+     * @param plot the plot, in blocks from the town hall
      */
     static Materials townMaterials(MinecraftServer server, NpcSite site, int town, NpcComposition.Plot plot) {
-        return materials(site);
+        return styledLook(site) ? look(server, site, town, plot) : materials(site);
     }
 
     /**
-     * The materials of the public buildings of a place (its camps of the army among them).
+     * The materials of the public buildings of a place (its camps of the army among them): the public look of the style of a
+     * styled kingdom, in the colour of the kingdom.
      */
     static Materials publicMaterials(MinecraftServer server, NpcSite site) {
-        return materials(site);
+        if (!styledLook(site)) {
+            return materials(site);
+        }
+        return known(BuildingLooks.of(site.style(), site.wood(), cloth(server, site), BuildingLooks.Quarter.PUBLIC, site.seed()));
+    }
+
+    /**
+     * Whether the buildings of a place wear the looks of an architectural style.
+     */
+    private static boolean styledLook(NpcSite site) {
+        return site.styled() && BuildingLooks.styles().contains(site.style());
+    }
+
+    /**
+     * The look of a building of a styled kingdom on a plot of its capital or of a town. A template of all styles (a market, a
+     * well, a barn) has no parts of a look and takes the public materials of the style.
+     *
+     * @param town the number of the town, or -1 for the capital
+     */
+    private static Materials look(MinecraftServer server, NpcSite site, int town, NpcComposition.Plot plot) {
+        boolean styledTemplate = TemplateCatalog.get(plot.template()).map(entry -> !entry.style().isEmpty()).orElse(false);
+        BuildingLooks.Quarter quarter = styledTemplate ? quarter(plot.quarter()) : BuildingLooks.Quarter.PUBLIC;
+        return known(BuildingLooks.of(site.style(), site.wood(), cloth(server, site), quarter, plotSeed(site, town, plot)));
+    }
+
+    /**
+     * The seed of the look of a plot: by its place, so that it is the same after a restart whatever was built before.
+     *
+     * @param town the number of the town, or -1 for the capital
+     */
+    static long plotSeed(NpcSite site, int town, NpcComposition.Plot plot) {
+        return plotSeed(site, town, plot.x(), plot.z());
+    }
+
+    /**
+     * The seed of a place of a capital or a town, {@code x} and {@code z} in blocks from its middle.
+     *
+     * @param town the number of the town, or -1 for the capital
+     */
+    static long plotSeed(NpcSite site, int town, int x, int z) {
+        return site.seed() ^ ((town + 2) * 0x9E3779B97F4A7C15L) ^ (x * 0xBF58476D1CE4E5B9L) ^ (z * 0x94D049BB133111EBL);
+    }
+
+    /**
+     * The quarter of a plot by the name its plan gives it; the public look for a name it does not know.
+     */
+    static BuildingLooks.Quarter quarter(String name) {
+        for (BuildingLooks.Quarter quarter : BuildingLooks.Quarter.values()) {
+            if (quarter.name().toLowerCase(Locale.ROOT).equals(name)) {
+                return quarter;
+            }
+        }
+        return BuildingLooks.Quarter.PUBLIC;
+    }
+
+    /**
+     * The dye nearest to the colour of the kingdom of a place, for the banners and carpets of its great buildings; empty (the
+     * cloth of the templates) while the place has no kingdom.
+     */
+    private static String cloth(MinecraftServer server, NpcSite site) {
+        return site.kingdomId().flatMap(id -> KingdomWorldApi.kingdom(server, id)).map(kingdom -> KingdomColors.dye(kingdom.color()))
+                .orElse("");
+    }
+
+    /**
+     * Materials with the woods and stones the game does not know left to the template; the look stays, and its unknown parts
+     * are left out when the building is laid.
+     */
+    private static Materials known(Materials wanted) {
+        if (TemplateMaterials.known(wanted)) {
+            return wanted;
+        }
+        String wood = wanted.wood();
+        if (!wood.isEmpty() && !Materials.AUTO.equals(wood) && !TemplateMaterials.table().hasWood(wood)) {
+            wood = "";
+        }
+        String stone = wanted.stone().isEmpty() || TemplateMaterials.table().hasStone(wanted.stone()) ? wanted.stone() : "";
+        return new Materials(wood, stone, wanted.look());
     }
 
     /**
@@ -138,11 +237,17 @@ final class NpcCity {
      * The item the stone wall of the capital of a place is built of.
      */
     static String wallStone(NpcSite site) {
+        if (site.styled()) {
+            String wall = ArchitecturalStyles.wallBlock(site.style());
+            ResourceLocation id = wall.isEmpty() ? null : ResourceLocation.tryParse(wall);
+            return id != null && ForgeRegistries.ITEMS.containsKey(id) ? wall : "minecraft:stone_bricks";
+        }
         return site.look().map(NpcStyle::wallBlock).orElse("minecraft:stone_bricks");
     }
 
-    private static BlockState block(String id, Block fallback) {
-        Block block = ForgeRegistries.BLOCKS.getValue(ResourceLocation.tryParse(id));
+    static BlockState block(String id, Block fallback) {
+        ResourceLocation key = id == null || id.isEmpty() ? null : ResourceLocation.tryParse(id);
+        Block block = key == null ? null : ForgeRegistries.BLOCKS.getValue(key);
         return block == null || block == Blocks.AIR ? fallback.defaultBlockState() : block.defaultBlockState();
     }
 
@@ -150,6 +255,9 @@ final class NpcCity {
      * The paving of squares and avenues in the style of a place.
      */
     private static BlockState paving(NpcSite site) {
+        if (site.styled()) {
+            return block(ArchitecturalStyles.paving(site.style()), Blocks.STONE_BRICKS);
+        }
         return switch (site.look().orElse(NpcStyle.STONE)) {
             case BRICK -> Blocks.BRICKS.defaultBlockState();
             case SANDSTONE -> Blocks.CUT_SANDSTONE.defaultBlockState();
@@ -163,6 +271,9 @@ final class NpcCity {
      * The rougher paving of streets in the style of a place.
      */
     private static BlockState cobbles(NpcSite site) {
+        if (site.styled()) {
+            return block(ArchitecturalStyles.cobbles(site.style()), Blocks.COBBLESTONE);
+        }
         return switch (site.look().orElse(NpcStyle.STONE)) {
             case SANDSTONE -> Blocks.SANDSTONE.defaultBlockState();
             case DEEPSLATE -> Blocks.COBBLED_DEEPSLATE.defaultBlockState();
@@ -218,9 +329,37 @@ final class NpcCity {
     /**
      * Where the posts of the builders, carriers, registrar and minter, the desk of the guild, the mint and the bank stand: in the
      * corners of the square around the palace, and for a larger capital more posts of builders and carriers by its gates, so that
-     * the builders reach the land outside the wall.
+     * the builders reach the land outside the wall. The workers of a profession are shared between its posts, the first ones
+     * taking what does not divide.
+     *
+     * <p>A styled capital has its guild, treasury and yards in buildings ({@link CapitalStaff}): outside them it has only the
+     * posts of builders and carriers in the squares of its gates.
      */
     static List<Place> places(NpcComposition composition) {
+        List<Place> list = new ArrayList<>();
+        if (composition.styled()) {
+            for (StyledPlan.WorkPlace place : StyledPlan.workPlaces(composition)) {
+                list.add(new Place(place.what(), place.x(), place.z(), place.seats()));
+            }
+            return list;
+        }
+        Map<String, Integer> posts = new HashMap<>();
+        for (Place place : squarePlaces(composition)) {
+            posts.merge(place.what(), 1, Integer::sum);
+        }
+        Map<String, Integer> seen = new HashMap<>();
+        for (Place place : squarePlaces(composition)) {
+            int index = seen.merge(place.what(), 1, Integer::sum) - 1;
+            int seats = NpcComposition.share(composition.jobs().getOrDefault(place.what(), 0), posts.get(place.what()), index);
+            list.add(new Place(place.what(), place.x(), place.z(), seats));
+        }
+        return list;
+    }
+
+    /**
+     * The places of the square and the gates of a capital of districts, without their seats.
+     */
+    private static List<Place> squarePlaces(NpcComposition composition) {
         int q = composition.precinct() + 2;
         List<Place> list = new ArrayList<>();
         list.add(new Place("builder", -q, q));
@@ -282,9 +421,13 @@ final class NpcCity {
     }
 
     /**
-     * The middles of the greens of a capital, where a tree stands: {x, z} from the throne.
+     * The middles of the greens of a capital, where a tree stands: {x, z} from the throne. A styled capital has its trees in its
+     * plan (in gaps between houses, back gardens and the corners of the square), away from every building.
      */
     static List<int[]> greens(NpcComposition composition) {
+        if (composition.styled()) {
+            return composition.trees();
+        }
         List<int[]> list = new ArrayList<>();
         int reach = composition.wallRadius();
         for (int x = -reach; x <= reach; x++) {

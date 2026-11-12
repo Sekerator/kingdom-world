@@ -190,8 +190,8 @@ final class NpcFounding {
             case 2 -> {
                 if (site.groundY() == 0) {
                     if (site.districts()) {
-                        // The height of a capital of districts takes many columns of the generator: a part a tick.
-                        java.util.OptionalInt height = NpcPlanning.capitalHeightSome(level, site.x(), site.z(), site.level());
+                        // The height of a capital with a wall takes many columns of the generator: a part a tick.
+                        java.util.OptionalInt height = NpcPlanning.capitalHeightSome(level, site.x(), site.z(), site.level(), site.layout());
                         if (height.isEmpty()) {
                             return;
                         }

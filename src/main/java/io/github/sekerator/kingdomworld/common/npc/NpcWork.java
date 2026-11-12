@@ -199,8 +199,8 @@ public final class NpcWork {
 
     /**
      * The radius the plan of a kingdom of the world gives the wall of its capital or of its towns, in blocks: that of a capital
-     * laid out in districts once its buildings are raised or being raised, whether its wall stands yet or not; 0 for a kingdom of
-     * players, a kingdom of the first layout, one that waits for its buildings, and towns without a palisade.
+     * laid out in districts or in a style once its buildings are raised or being raised, whether its wall stands yet or not; 0
+     * for a kingdom of players, a kingdom of the first layout, one that waits for its buildings, and towns without a palisade.
      *
      * @param capital whether the capital is asked for, or a town
      */
@@ -208,7 +208,7 @@ public final class NpcWork {
         NpcState state = state(server);
         return state.kingdom(kingdomId).flatMap(kingdom -> state.site(kingdom.siteId()))
                 .filter(site -> site.districts() && (site.status() == NpcSite.Status.SPAWNED || site.status() == NpcSite.Status.SPAWNING))
-                .map(site -> capital ? io.github.sekerator.kingdomworld.core.npc.NpcComposition.districtWall(site.level())
+                .map(site -> capital ? io.github.sekerator.kingdomworld.core.npc.NpcComposition.capitalWall(site.level(), site.layout())
                         : io.github.sekerator.kingdomworld.core.npc.NpcComposition.districtTownWall(site.level()))
                 .orElse(0);
     }
@@ -270,7 +270,7 @@ public final class NpcWork {
             int minCity = Math.max(64, io.github.sekerator.kingdomworld.common.road.RoadSettings.rules().minCityDistance());
             List<int[]> candidates = new ArrayList<>();
             for (int[] town : io.github.sekerator.kingdomworld.core.npc.SitePlanner.townCandidates(x, z, seed,
-                    NpcCity.townDistance(level, NpcSite.LAYOUT_DISTRICTS))) {
+                    NpcCity.townDistance(level, NpcSite.LAYOUT_STYLED))) {
                 candidates.add(NpcPlanning.centred(town));
             }
             chosen = io.github.sekerator.kingdomworld.core.npc.SitePlanner.chooseTowns(candidates,
@@ -281,16 +281,12 @@ public final class NpcWork {
     }
 
     /**
-     * Adds a place to the plan with the towns given without raising it: it is founded as data like a place of the plan; for game
-     * tests.
+     * Adds a styled place to the plan with the towns given without raising it, its style chosen as the plan does: it is founded
+     * as data like a place of the plan; for game tests.
      */
     public static Optional<NpcSite> planAt(MinecraftServer server, int x, int z, io.github.sekerator.kingdomworld.core.npc.NpcLevel level,
                                            List<int[]> towns) {
-        if (isReadOnly(server)) {
-            return Optional.empty();
-        }
-        long seed = server.overworld().getSeed() * 31 + x * 341_873_128_712L + z * 132_897_987_541L;
-        return Optional.of(NpcPlanning.addSite(server, x, z, level, seed, towns));
+        return planAt(server, x, z, level, towns, NpcSite.LAYOUT_STYLED, "");
     }
 
     /**
@@ -301,7 +297,11 @@ public final class NpcWork {
      */
     public static Optional<NpcSite> planAt(MinecraftServer server, int x, int z, io.github.sekerator.kingdomworld.core.npc.NpcLevel level,
                                            List<int[]> towns, int layout, String style) {
-        return planAt(server, x, z, level, towns);
+        if (isReadOnly(server)) {
+            return Optional.empty();
+        }
+        long seed = server.overworld().getSeed() * 31 + x * 341_873_128_712L + z * 132_897_987_541L;
+        return Optional.of(NpcPlanning.addSite(server, x, z, level, seed, towns, layout, style));
     }
 
     /**
@@ -318,22 +318,12 @@ public final class NpcWork {
     }
 
     /**
-     * Adds a place to the plan with the towns given and starts its appearance at once (when no other one is appearing); for
-     * operators and game tests.
+     * Adds a styled place to the plan with the towns given, its style chosen as the plan does, and starts its appearance at
+     * once (when no other one is appearing); for operators and game tests.
      */
     public static Optional<NpcSite> plantAt(MinecraftServer server, int x, int z, io.github.sekerator.kingdomworld.core.npc.NpcLevel level,
                                             List<int[]> towns) {
-        if (isReadOnly(server)) {
-            return Optional.empty();
-        }
-        NpcState state = state(server);
-        long seed = server.overworld().getSeed() * 31 + x * 341_873_128_712L + z * 132_897_987_541L;
-        NpcSite site = NpcPlanning.addSite(server, x, z, level, seed, towns);
-        if (state.spawning().isEmpty()) {
-            NpcSpawner.start(server, site);
-        }
-        LOGGER.info("An operator planted a kingdom of the world: {}", site);
-        return Optional.of(site);
+        return plantAt(server, x, z, level, towns, NpcSite.LAYOUT_STYLED, "");
     }
 
     /**
@@ -345,7 +335,17 @@ public final class NpcWork {
      */
     public static Optional<NpcSite> plantAt(MinecraftServer server, int x, int z, io.github.sekerator.kingdomworld.core.npc.NpcLevel level,
                                             List<int[]> towns, int layout, String style) {
-        return plantAt(server, x, z, level, towns);
+        if (isReadOnly(server)) {
+            return Optional.empty();
+        }
+        NpcState state = state(server);
+        long seed = server.overworld().getSeed() * 31 + x * 341_873_128_712L + z * 132_897_987_541L;
+        NpcSite site = NpcPlanning.addSite(server, x, z, level, seed, towns, layout, style);
+        if (state.spawning().isEmpty()) {
+            NpcSpawner.start(server, site);
+        }
+        LOGGER.info("An operator planted a kingdom of the world: {}", site);
+        return Optional.of(site);
     }
 
     /**
@@ -393,7 +393,7 @@ public final class NpcWork {
     public static int[] nearestSuitable(MinecraftServer server, int x, int z, int maxDistance,
                                         io.github.sekerator.kingdomworld.core.npc.NpcLevel kingdom) {
         ServerLevel level = server.overworld();
-        int land = NpcCity.landRadius(kingdom, NpcSite.LAYOUT_DISTRICTS) * 16 + 16;
+        int land = NpcCity.landRadius(kingdom, NpcSite.LAYOUT_STYLED) * 16 + 16;
         // The plan asks less of a place on its later passes; an operator takes the best place near where it stands.
         for (int relax = 0; relax <= 2; relax++) {
             if (NpcPlanning.suitableCapital(level, x, z, kingdom, relax)) {

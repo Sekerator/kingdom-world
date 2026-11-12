@@ -46,6 +46,7 @@ import io.github.sekerator.kingdomworld.core.kingdom.KingdomColors;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomNames;
 import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
 import io.github.sekerator.kingdomworld.core.npc.BackgroundPace;
+import io.github.sekerator.kingdomworld.core.npc.GuildHouses;
 import io.github.sekerator.kingdomworld.core.npc.NpcComposition;
 import io.github.sekerator.kingdomworld.core.npc.NpcKingdom;
 import io.github.sekerator.kingdomworld.core.npc.NpcNames;
@@ -356,7 +357,7 @@ public final class NpcSpawner {
      */
     private record CompositionKey(int site, int layout, io.github.sekerator.kingdomworld.core.npc.NpcLevel level, long seed, int towns,
                                   int rulesTowns, int soldiers, int guards, int army, int townGuards, int townPeople, int townBuildings,
-                                  int cityPeople, int cityBuildings, int wallRadius) {
+                                  int cityPeople, int cityBuildings, int wallRadius, String style, String guildRank) {
     }
 
     /**
@@ -370,9 +371,13 @@ public final class NpcSpawner {
         CompositionKey key;
         RoadRules roads = null;
         int wallRadius = 0;
-        if (site.districts()) {
+        if (site.styled()) {
             key = new CompositionKey(site.id(), site.layout(), level, site.seed(), towns, rules.towns(level), rules.soldiers(level),
-                    rules.guards(level), rules.army(level), rules.townGuards(level), 0, 0, 0, 0, 0);
+                    rules.guards(level), rules.army(level), rules.townGuards(level), 0, 0, 0, 0, 0, site.style(),
+                    GuildHouses.of(site).name());
+        } else if (site.districts()) {
+            key = new CompositionKey(site.id(), site.layout(), level, site.seed(), towns, rules.towns(level), rules.soldiers(level),
+                    rules.guards(level), rules.army(level), rules.townGuards(level), 0, 0, 0, 0, 0, "", "");
         } else {
             roads = RoadSettings.rules();
             // The capital is laid out for walls of at least the default radius; a wall of a smaller one leaves out what stands in
@@ -380,7 +385,7 @@ public final class NpcSpawner {
             wallRadius = Math.max(roads.wallRadius(), MIN_WALL_RADIUS);
             key = new CompositionKey(site.id(), site.layout(), level, site.seed(), towns, rules.towns(level), rules.soldiers(level),
                     rules.guards(level), rules.army(level), rules.townGuards(level), roads.townPeople(), roads.townBuildings(),
-                    roads.cityPeople(), roads.cityBuildings(), wallRadius);
+                    roads.cityPeople(), roads.cityBuildings(), wallRadius, "", "");
         }
         synchronized (COMPOSED) {
             NpcComposition known = COMPOSED.get(key);
@@ -389,7 +394,9 @@ public final class NpcSpawner {
             }
         }
         NpcComposition made;
-        if (roads == null) {
+        if (site.styled()) {
+            made = NpcComposition.styled(level, site.seed(), site.style(), GuildHouses.of(site), rules, towns);
+        } else if (roads == null) {
             made = NpcComposition.districts(level, site.seed(), rules, towns);
         } else {
             // The work is planned for the towns the place has: a place without room for its towns gets no work for their people.
@@ -747,7 +754,7 @@ public final class NpcSpawner {
             site.retainTowns(kept);
         }
         if (site.groundY() == 0) {
-            site.setGroundY(site.districts() ? wideHeight(level, site.x(), site.z(), NpcComposition.districtWall(site.level()))
+            site.setGroundY(site.districts() ? wideHeight(level, site.x(), site.z(), NpcComposition.capitalWall(site.level(), site.layout()))
                     : plazaHeight(level, site.x(), site.z()));
         }
         site.advance(SpawnStage.FOUND);
@@ -1245,9 +1252,9 @@ public final class NpcSpawner {
         UUID id = site.kingdomId().orElseThrow();
         List<NpcComposition.Plot> plots = job.composition.buildings();
         int budget = blockBudget();
-        Materials materials = NpcCity.materials(site);
         while (site.step() < plots.size() && budget > 0) {
             NpcComposition.Plot plot = plots.get(site.step());
+            Materials materials = NpcCity.materials(server, site, plot);
             int[] used = new int[1];
             boolean standing = buildAt(server, level, id, plot.template(), site.x() + plot.x(), site.groundY() + 1, site.z() + plot.z(),
                     new Placement(plot.facing(), plot.mirror()), materials, budget, used);
@@ -1396,22 +1403,13 @@ public final class NpcSpawner {
         int fields = composition.fields();
         int step = site.step();
         if (step == 0) {
-            List<NpcCity.Place> places = NpcCity.places(composition);
-            Map<String, Integer> posts = new java.util.HashMap<>();
-            for (NpcCity.Place place : places) {
-                posts.merge(place.what(), 1, Integer::sum);
-            }
-            Map<String, Integer> seen = new java.util.HashMap<>();
-            for (NpcCity.Place place : places) {
+            for (NpcCity.Place place : NpcCity.places(composition)) {
                 BlockPos at = new BlockPos(site.x() + place.x(), y, site.z() + place.z());
                 switch (place.what()) {
                     case "guild_desk" -> place(level, id, at, GuildRegistries.GUILD_DESK.get().defaultBlockState());
                     case "mint" -> place(level, id, at, ModRegistries.MINT.get().defaultBlockState());
                     case "bank" -> place(level, id, at, ModRegistries.BANK.get().defaultBlockState());
-                    default -> {
-                        int index = seen.merge(place.what(), 1, Integer::sum) - 1;
-                        post(level, id, at, place.what(), share(composition.jobs().getOrDefault(place.what(), 0), posts.get(place.what()), index));
-                    }
+                    default -> post(level, id, at, place.what(), place.seats());
                 }
             }
             site.setStep(1);
@@ -1455,6 +1453,9 @@ public final class NpcSpawner {
         }
         professionsByRole(server, level, id, composition.level() == io.github.sekerator.kingdomworld.core.npc.NpcLevel.SMALL ? 1
                 : SEATS_IN_BUILDING);
+        if (composition.styled()) {
+            CapitalStaff.staff(server, level, site, composition, id);
+        }
         site.advance(SpawnStage.TOWNS);
     }
 
@@ -1895,7 +1896,7 @@ public final class NpcSpawner {
             NpcComposition.Plot at = plots.get(plot);
             int[] used = new int[1];
             if (buildAt(server, level, id, at.template(), town.x() + at.x(), y + 1, town.z() + at.z(), new Placement(at.facing(), at.mirror()),
-                    NpcCity.materials(site), blockBudget(), used)) {
+                    NpcCity.townMaterials(server, site, index, at), blockBudget(), used)) {
                 site.setStep(index * TOWN_STEPS + sub + 1);
             }
             return;
