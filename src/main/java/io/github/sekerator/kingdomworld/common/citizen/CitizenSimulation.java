@@ -30,6 +30,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -64,8 +65,24 @@ public final class CitizenSimulation {
         }
     }
 
+    /** Citizens all steps under way go through in a tick at most. */
+    static final int CITIZENS_PER_TICK = 128;
+    /** Time all steps under way take in a tick at most, besides the beginning and end of a step. */
+    static final long NANOS_PER_TICK = 2_000_000L;
+
+    /** The steps under way, the oldest first; a step that comes due while the last one is still under way waits for it. */
+    private static final io.github.sekerator.kingdomworld.core.citizen.StepQueue<UUID> STEPS = new io.github.sekerator.kingdomworld.core.citizen.StepQueue<>();
+
     /**
-     * Called every server tick; steps the kingdoms whose turn it is.
+     * Forgets the steps under way, when the server stops.
+     */
+    static void reset() {
+        STEPS.clear();
+    }
+
+    /**
+     * Called every server tick: begins the steps of the kingdoms whose turn it is and takes every step under way a little
+     * further, at most {@value #CITIZENS_PER_TICK} citizens and {@value #NANOS_PER_TICK} nanoseconds a tick for all of them.
      */
     static void tick(MinecraftServer server, long tick) {
         if (KingdomWorldApi.isReadOnly(server)) {
@@ -75,38 +92,141 @@ public final class CitizenSimulation {
         if (tick % GEAR_CLEANUP_TICKS == 0) {
             forgetLostGear(server);
         }
+        STEPS.startWaiting();
         for (Kingdom kingdom : KingdomWorldApi.kingdoms(server)) {
             if (Math.floorMod(tick + kingdom.id().hashCode(), interval) == 0) {
-                step(server, kingdom.id());
+                UUID id = kingdom.id();
+                STEPS.due(id, () -> KingdomStep.begin(server, id));
             }
         }
+        STEPS.advance(CITIZENS_PER_TICK, NANOS_PER_TICK, System::nanoTime);
     }
 
     /**
-     * Does one simulation step for a kingdom.
+     * Takes the steps under way further within a budget of citizens and time, as a tick does; for game tests.
+     */
+    public static int advance(int citizens, long nanos) {
+        return STEPS.advance(citizens, nanos, System::nanoTime);
+    }
+
+    /**
+     * Begins the step of a kingdom, or lets it wait for the one under way, as when it comes due; for game tests.
+     */
+    public static void beginStep(MinecraftServer server, UUID kingdomId) {
+        STEPS.due(kingdomId, () -> KingdomStep.begin(server, kingdomId));
+    }
+
+    /**
+     * Whether the step of a kingdom is under way.
+     */
+    public static boolean stepping(UUID kingdomId) {
+        return STEPS.running(kingdomId);
+    }
+
+    /**
+     * Does one whole simulation step for a kingdom at once: its beginning, every citizen and its end.
      */
     public static void step(MinecraftServer server, UUID kingdomId) {
-        if (KingdomWorldApi.isReadOnly(server)) {
+        KingdomStep step = KingdomStep.begin(server, kingdomId);
+        if (step == null) {
             return;
         }
-        KingdomWorldState state = KingdomWorldApi.state(server);
-        if (state.kingdoms().get(kingdomId).isEmpty()) {
-            return;
+        while (step.hasNext()) {
+            step.next();
         }
-        CitizenRules rules = CitizenSettings.rules();
-        Citizens citizens = state.citizens();
-        int interval = rules.simulationInterval();
-        long now = KingdomWorldApi.gameTime(server);
-        int recentDeaths = citizens.registry().deathsSince(kingdomId, now - CitizenNeeds.RECENT_DEATH_DAYS * CitizenNeeds.TICKS_PER_DAY);
-        int unrest = io.github.sekerator.kingdomworld.common.nobility.NobilityWork.moodShift(server, kingdomId);
-        int infirmaryRoom = citizens.sites().count(kingdomId, SiteKinds.INFIRMARY) * rules.infirmaryCapacity();
-        int treated = 0;
-        float hunger = CitizenNeeds.hunger(rules.dailyNutrition(), interval);
+        step.finish();
+    }
 
-        Production.plan(server, kingdomId);
-        // Materials of constructions are set aside before workshops look for ingredients and fuel.
-        io.github.sekerator.kingdomworld.common.construction.ConstructionWork.refreshReservations(server);
-        for (Citizen citizen : citizens.registry().citizensOf(kingdomId)) {
+    /**
+     * One step of the citizens of a kingdom, done a few citizens at a time. The beginning plans the work of the workshops and
+     * sets aside what the constructions of the kingdom need; then every citizen of the list taken at the beginning gets
+     * hungry and eats, finds a bed and a workplace, heals or starves, changes its mood and, without a body, works by formula
+     * (a citizen gone meanwhile is passed over, one come meanwhile waits for the next step); the end moves goods, farms the
+     * fields of the camps, exports, looks at the posts and lets newcomers come. Done all at once it is the step as it always
+     * was.
+     */
+    static final class KingdomStep implements io.github.sekerator.kingdomworld.core.citizen.StepQueue.Step {
+        private final MinecraftServer server;
+        private final UUID kingdomId;
+        private final List<UUID> ids;
+        private final CitizenRules rules;
+        private final int interval;
+        private final long now;
+        private final int recentDeaths;
+        private final int unrest;
+        private final int infirmaryRoom;
+        private final float hunger;
+        private int treated;
+        private int index;
+
+        private KingdomStep(MinecraftServer server, UUID kingdomId, List<UUID> ids, CitizenRules rules, int interval, long now,
+                            int recentDeaths, int unrest, int infirmaryRoom, float hunger) {
+            this.server = server;
+            this.kingdomId = kingdomId;
+            this.ids = ids;
+            this.rules = rules;
+            this.interval = interval;
+            this.now = now;
+            this.recentDeaths = recentDeaths;
+            this.unrest = unrest;
+            this.infirmaryRoom = infirmaryRoom;
+            this.hunger = hunger;
+        }
+
+        /**
+         * Begins a step: the numbers of the step, the plan of the workshops and what the constructions set aside.
+         *
+         * @return the step, or null when the data is read-only or the kingdom is gone
+         */
+        static KingdomStep begin(MinecraftServer server, UUID kingdomId) {
+            if (KingdomWorldApi.isReadOnly(server)) {
+                return null;
+            }
+            KingdomWorldState state = KingdomWorldApi.state(server);
+            if (state.kingdoms().get(kingdomId).isEmpty()) {
+                return null;
+            }
+            CitizenRules rules = CitizenSettings.rules();
+            Citizens citizens = state.citizens();
+            int interval = rules.simulationInterval();
+            long now = KingdomWorldApi.gameTime(server);
+            int recentDeaths = citizens.registry().deathsSince(kingdomId, now - CitizenNeeds.RECENT_DEATH_DAYS * CitizenNeeds.TICKS_PER_DAY);
+            int unrest = io.github.sekerator.kingdomworld.common.nobility.NobilityWork.moodShift(server, kingdomId);
+            int infirmaryRoom = citizens.sites().count(kingdomId, SiteKinds.INFIRMARY) * rules.infirmaryCapacity();
+            float hunger = CitizenNeeds.hunger(rules.dailyNutrition(), interval);
+            Production.plan(server, kingdomId);
+            // Materials of constructions are set aside before workshops look for ingredients and fuel.
+            io.github.sekerator.kingdomworld.common.construction.ConstructionWork.refreshReservations(server, kingdomId);
+            List<UUID> ids = new ArrayList<>();
+            for (Citizen citizen : citizens.registry().citizensOf(kingdomId)) {
+                ids.add(citizen.id());
+            }
+            return new KingdomStep(server, kingdomId, ids, rules, interval, now, recentDeaths, unrest, infirmaryRoom, hunger);
+        }
+
+        @Override
+        public boolean alive() {
+            return !KingdomWorldApi.isReadOnly(server) && KingdomWorldApi.state(server).kingdoms().get(kingdomId).isPresent();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return index < ids.size();
+        }
+
+        /**
+         * The next citizen of the list, if it is still a citizen of the kingdom.
+         */
+        @Override
+        public void next() {
+            UUID id = ids.get(index++);
+            KingdomWorldState state = KingdomWorldApi.state(server);
+            Citizens citizens = state.citizens();
+            Optional<Citizen> found = citizens.get(id);
+            if (found.isEmpty() || !kingdomId.equals(found.get().kingdomId())) {
+                return;
+            }
+            Citizen citizen = found.get();
             CitizenEntity body = CitizenBodies.body(citizen.id());
             if (body != null) {
                 CitizenBodies.syncBack(server, body, citizen);
@@ -131,7 +251,7 @@ public final class CitizenSimulation {
                 treated++;
             }
             if (!changeHealth(server, citizen, body, inInfirmary, interval, rules)) {
-                continue;
+                return;
             }
             // The life of the city: illnesses, the evening in the tavern and sleep; an ill citizen takes a place in an infirmary too.
             if (io.github.sekerator.kingdomworld.common.life.LifeWork.step(server, citizen, body, interval, treated < infirmaryRoom)) {
@@ -151,19 +271,31 @@ public final class CitizenSimulation {
                 PostWork.setStatus(server, citizen, WorkStatus.WOUNDED);
             }
         }
-        CarrierBehavior.stepAbstractly(server, kingdomId, interval);
-        // The soldiers of the camps of a royal army work their fields.
-        io.github.sekerator.kingdomworld.common.npc.NpcCamps.farm(server, kingdomId, interval);
-        io.github.sekerator.kingdomworld.common.trade.TradeWork.exportStep(server, kingdomId, interval);
-        for (WorkPost post : citizens.posts().postsOf(kingdomId)) {
-            PostWork.refreshStatus(server, post);
-            boolean workshop = Professions.usesStations(post.professionId());
-            // Workshops are looked at every step: workstations come and go.
-            if (post.hasProfession() && (post.yield().isEmpty() || workshop) && !ZoneSurveys.pending(post.pos())) {
-                ZoneSurveys.request(post.pos());
+
+        /**
+         * Ends the step: goods carried, the fields of the camps, exports, the posts and newcomers.
+         */
+        @Override
+        public void finish() {
+            if (!alive()) {
+                return;
             }
+            KingdomWorldState state = KingdomWorldApi.state(server);
+            Citizens citizens = state.citizens();
+            CarrierBehavior.stepAbstractly(server, kingdomId, interval);
+            // The soldiers of the camps of a royal army work their fields.
+            io.github.sekerator.kingdomworld.common.npc.NpcCamps.farm(server, kingdomId, interval);
+            io.github.sekerator.kingdomworld.common.trade.TradeWork.exportStep(server, kingdomId, interval);
+            for (WorkPost post : citizens.posts().postsOf(kingdomId)) {
+                PostWork.refreshStatus(server, post);
+                boolean workshop = Professions.usesStations(post.professionId());
+                // Workshops are looked at every step: workstations come and go.
+                if (post.hasProfession() && (post.yield().isEmpty() || workshop) && !ZoneSurveys.pending(post.pos())) {
+                    ZoneSurveys.request(post.pos());
+                }
+            }
+            grow(server, state, kingdomId, rules, now);
         }
-        grow(server, state, kingdomId, rules, now);
     }
 
     /**

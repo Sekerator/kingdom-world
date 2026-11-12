@@ -119,6 +119,7 @@ public final class CitizenEvents {
      * Forgets everything kept in memory, when the server stops.
      */
     public static void reset() {
+        CitizenSimulation.reset();
         CitizenBodies.reset();
         CitizenFear.reset();
         CitizenCare.reset();

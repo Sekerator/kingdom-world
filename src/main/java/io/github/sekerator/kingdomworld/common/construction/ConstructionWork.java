@@ -933,6 +933,52 @@ public final class ConstructionWork {
     }
 
     /**
+     * Sets aside again what the constructions of one kingdom need, as {@link #refreshReservations(MinecraftServer)} does for
+     * every kingdom: the holds of constructions that are gone are let go, the holds of its constructions taken out of its
+     * storehouses anew. The holds of other kingdoms stay as they are, so doing it for every kingdom in turn gives the same holds.
+     */
+    public static void refreshReservations(MinecraftServer server, UUID kingdomId) {
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        Reservations reservations = Production.reservations();
+        List<Construction> mine = state.construction().of(kingdomId);
+        Set<UUID> live = new HashSet<>();
+        for (Construction construction : mine) {
+            live.add(holdKey(construction));
+        }
+        for (UUID worker : reservations.workers(kingdomId)) {
+            if (isConstructionKey(worker) && !live.contains(worker)) {
+                reservations.release(worker);
+            }
+        }
+        if (mine.isEmpty()) {
+            return;
+        }
+        for (Construction construction : mine) {
+            reservations.release(holdKey(construction));
+        }
+        Map<String, Long> stock = KingdomStorage.countsById(server, kingdomId);
+        for (Construction construction : mine) {
+            Optional<BuildPlan> plan = plan(construction);
+            if (construction.paused() || plan.isEmpty()) {
+                continue;
+            }
+            Map<String, Integer> hold = new LinkedHashMap<>();
+            UUID key = holdKey(construction);
+            plan.get().needed(construction).forEach((item, count) -> {
+                long free = stock.getOrDefault(item, 0L) - reservations.reserved(kingdomId, item, key);
+                int take = (int) Math.max(0, Math.min(count, free));
+                if (take > 0) {
+                    hold.put(item, take);
+                }
+            });
+            if (!hold.isEmpty()) {
+                KEYS.add(key);
+                reservations.reserve(key, new Reservations.Hold(kingdomId, 0, hold, "", 0));
+            }
+        }
+    }
+
+    /**
      * Sets aside in the storehouses what every construction still needs, the most urgent first, so that workshops and
      * the market do not take it. Paused constructions set nothing aside.
      */
