@@ -41,6 +41,10 @@ import java.util.UUID;
  *       scales and saves screenshots (see {@link ClientLayoutCheck}); a problem ends the client with exit code 1.</li>
  *   <li>{@code buildings}: in a copy of a test world, builds every built-in building template and saves screenshots of
  *       them and of the outline of a blueprint (see {@link ClientBuildingShowcase}).</li>
+ *   <li>{@code capital}: in a flat copy of a test world, builds the castles, the buildings of the institutions, towers,
+ *       yards and monuments of the capitals of kingdoms of the world in the looks of their styles and streets of houses of
+ *       every quarter, and saves screenshots of every building, every street and the throne halls (see
+ *       {@link ClientCapitalShowcase}).</li>
  *   <li>{@code life}: in a copy of a test world, builds the tavern with an innkeeper, guests and beds beside it and saves
  *       screenshots of the evening in the tavern, its window and the citizens asleep at night (see {@link ClientLifeShowcase}).</li>
  *   <li>{@code roads}: in a copy of a test world, lays a road with a bridge, puts a caravan on it and a camp of robbers
@@ -68,6 +72,7 @@ public final class ClientSelfTest {
     private static boolean quit;
     private static ClientLayoutCheck layout;
     private static ClientBuildingShowcase showcase;
+    private static ClientCapitalShowcase capitalShowcase;
     private static ClientRoadShowcase roadShowcase;
     private static ClientSiegeShowcase siegeShowcase;
     private static ClientNpcShowcase npcShowcase;
@@ -126,6 +131,25 @@ public final class ClientSelfTest {
             }
             maps.tick();
             quit = maps.finished();
+            return;
+        }
+        if ("capital".equals(MODE) && minecraft.player != null && minecraft.getSingleplayerServer() != null) {
+            if (capitalShowcase == null) {
+                String folder = System.getProperty("kingdomworld.clientSelfTest.screenshots");
+                Path screenshots = folder != null && !folder.isEmpty() ? Path.of(folder)
+                        : minecraft.gameDirectory.toPath().resolve("kingdomworld-layout");
+                LOGGER.info(PREFIX + "capital showcase started, screenshots go to {}", screenshots.resolve("capital"));
+                capitalShowcase = new ClientCapitalShowcase(screenshots);
+            }
+            capitalShowcase.tick();
+            if (capitalShowcase.finished()) {
+                if (capitalShowcase.failed()) {
+                    LOGGER.error(PREFIX + "capital showcase failed, exiting with code 1");
+                    System.exit(1);
+                }
+                LOGGER.info(PREFIX + "finished");
+                quit = true;
+            }
             return;
         }
         if ("buildings".equals(MODE) && minecraft.player != null && minecraft.getSingleplayerServer() != null) {
