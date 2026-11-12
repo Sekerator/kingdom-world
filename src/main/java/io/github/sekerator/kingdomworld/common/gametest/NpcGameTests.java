@@ -1052,7 +1052,8 @@ public final class NpcGameTests {
         NpcSettings.override(NpcRules.DEFAULT);
         NpcSite site = null;
         try {
-            site = plantStyled(helper, center, NpcLevel.LARGE, "");
+            // The style with the roomiest houses: the fewest people for the work of a large capital.
+            site = plantStyled(helper, center, NpcLevel.LARGE, "nordic");
             long started = System.nanoTime();
             Kingdom kingdom = raise(helper, site, LARGE_STYLED_STEPS);
             long millis = (System.nanoTime() - started) / 1_000_000;
@@ -1070,6 +1071,20 @@ public final class NpcGameTests {
             assertCastlePost(helper, composition, castle, site, "castle_gate", 2);
             assertCastlePost(helper, composition, castle, site, "castle_wall", 4);
             assertCastlePost(helper, composition, castle, site, "treasury", 1);
+            // Every trade of the plan has its people, the last ones (miners, carriers) too, however few the houses hold.
+            Set<String> professions = new HashSet<>();
+            KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdom.id())
+                    .forEach(citizen -> professions.add(citizen.professionId()));
+            for (String profession : List.of("farmer", "merchant", "innkeeper", "crafter", "registrar", "minter", "mage", "builder",
+                    "lumberjack", "miner", "carrier")) {
+                helper.assertTrue(composition.jobs().getOrDefault(profession, 0) > 0, "The plan has no work for a " + profession + ": "
+                        + composition.jobs());
+            }
+            for (String profession : composition.jobs().keySet()) {
+                helper.assertTrue(professions.contains(profession), "Nobody is a " + profession + ": " + professions);
+            }
+            assertWorkersIn(helper, server, kingdom.id(), TemplateCatalog.Kind.YARD, "_carters_yard", "carrier");
+            assertWorkersIn(helper, server, kingdom.id(), TemplateCatalog.Kind.YARD, "_builders_yard", "builder");
             // A large kingdom without towns has guards left after the posts of the capital: the castle gets its own.
             GuardArmyGameTests.assertCastleDuties(helper, site, kingdom.id());
             com.mojang.logging.LogUtils.getLogger().info("A large styled capital ({}, guild rank {}) of {} buildings rose in {} ms", site.style(),
