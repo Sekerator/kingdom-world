@@ -198,6 +198,37 @@ public final class CitizenGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_citizen_body")
+    public static void bodyHiddenWithItsChunkNeverComesBack(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Kingdom kingdom = found(helper, "GameTest Hidden", UUID.randomUUID());
+        Citizen citizen = newcomer(helper, kingdom, 1, 1);
+        try {
+            CitizenBodies.force(citizen.id(), true);
+            CitizenBodies.update(server);
+            CitizenEntity body = CitizenBodies.body(citizen.id());
+            helper.assertTrue(body != null, "No body was created for a forced citizen");
+            // The chunk goes out of the reach of players: the world stops following the body without removing it, as it
+            // does with every entity that is not saved, and the body would wait there for the chunk to come back.
+            body.setHealth(11.0f);
+            body.onRemovedFromWorld();
+            helper.assertTrue(!body.isRemoved(), "The hidden body was removed by the world itself");
+            helper.assertTrue(CitizenBodies.body(citizen.id()) == null, "The hidden body is still linked");
+            helper.assertTrue(citizen.health() == 11.0f, "Health was not written back, got " + citizen.health());
+
+            // The next selection removes it for good and gives the citizen one new body.
+            CitizenBodies.update(server);
+            CitizenEntity again = CitizenBodies.body(citizen.id());
+            helper.assertTrue(body.isRemoved(), "The hidden body stayed in the world");
+            helper.assertTrue(again != null && again != body, "The body did not come back");
+            helper.assertTrue(bodiesOf(helper, citizen.id()).size() == 1, "Expected exactly one body, got "
+                    + bodiesOf(helper, citizen.id()).size());
+        } finally {
+            finish(helper, kingdom, citizen);
+        }
+        helper.succeed();
+    }
+
     @GameTest(template = EMPTY, batch = "kingdomworld_citizen_death")
     public static void deathEndsTheRecordAndWritesTheChronicle(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();

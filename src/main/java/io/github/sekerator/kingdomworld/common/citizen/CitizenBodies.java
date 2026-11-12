@@ -41,8 +41,10 @@ import java.util.UUID;
  * are removed, missing bodies are created (a few per second, to avoid spikes) and the state of every body is
  * copied back into its record. A body is never saved with the chunk, so unloading, restarts, teleports and
  * changes of dimension cannot copy it; this class is the only one that adds bodies, and a body it did not add,
- * or a second body for the same citizen, is refused when it tries to join a level. That keeps exactly one body
- * per citizen at any time.
+ * or a second body for the same citizen, is refused when it tries to join a level. A chunk that goes out of the
+ * reach of players only hides its entities, and an entity that is not saved stays hidden there until the chunk is
+ * in reach again: such a body is removed for good at the next selection, or it would come back beside the new
+ * body of its citizen. That keeps exactly one body per citizen at any time.
  */
 public final class CitizenBodies {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -53,6 +55,8 @@ public final class CitizenBodies {
 
     private static final Map<UUID, CitizenEntity> ACTIVE = new HashMap<>();
     private static final Set<UUID> FORCED = new HashSet<>();
+    /** Bodies a chunk hid without removing them; they are removed at the next selection. */
+    private static final List<CitizenEntity> HIDDEN = new ArrayList<>();
 
     private CitizenBodies() {
     }
@@ -93,6 +97,7 @@ public final class CitizenBodies {
     public static void update(MinecraftServer server) {
         KingdomWorldState state = KingdomWorldApi.state(server);
         CitizenRules rules = CitizenSettings.rules();
+        dropHiddenBodies();
         dropStaleBodies(state);
         for (CitizenEntity body : List.copyOf(ACTIVE.values())) {
             state.citizens().get(body.citizenId()).ifPresent(citizen -> syncBack(server, body, citizen));
@@ -160,6 +165,22 @@ public final class CitizenBodies {
             Optional<Citizen> citizen = state.citizens().get(id);
             if (citizen.isPresent() && spawn(server, citizen.get()) != null && !forced) {
                 spawned++;
+            }
+        }
+    }
+
+    /**
+     * Removes for good the bodies a chunk hid: their state is with the records already.
+     */
+    private static void dropHiddenBodies() {
+        if (HIDDEN.isEmpty()) {
+            return;
+        }
+        List<CitizenEntity> hidden = List.copyOf(HIDDEN);
+        HIDDEN.clear();
+        for (CitizenEntity body : hidden) {
+            if (!body.isRemoved()) {
+                body.discard();
             }
         }
     }
@@ -315,6 +336,10 @@ public final class CitizenBodies {
      */
     static void onBodyRemoved(CitizenEntity body) {
         UUID id = body.citizenId();
+        if (!body.isRemoved()) {
+            // Its chunk went out of reach: the body is hidden, not removed, and would come back with the chunk.
+            HIDDEN.add(body);
+        }
         if (id == null || ACTIVE.get(id) != body) {
             return;
         }
@@ -373,5 +398,6 @@ public final class CitizenBodies {
     public static void reset() {
         ACTIVE.clear();
         FORCED.clear();
+        HIDDEN.clear();
     }
 }
