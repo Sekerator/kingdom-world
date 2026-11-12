@@ -160,6 +160,7 @@
   "kingdomworld.screen.style.previous": "<",
   "kingdomworld.screen.style.next": ">",
   "kingdomworld.screen.style.suggested": "Suits the land",
+  "kingdomworld.screen.style.current": "Current style",
   "kingdomworld.style.classic": "Classic",
   "kingdomworld.style.terem": "Terem",
   "kingdomworld.style.nordic": "Nordic",

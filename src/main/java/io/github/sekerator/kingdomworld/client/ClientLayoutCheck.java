@@ -1118,10 +1118,15 @@ final class ClientLayoutCheck {
         cases.add(new Case("throne-king-overview", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "overview", longError)));
         cases.add(new Case("throne-king-overview-style", () -> styleChoice("mountain", Component.empty())));
         cases.add(new Case("throne-king-overview-style-error", () -> styleChoice(LONG_STYLE, longError)));
-        cases.add(new Case("throne-king-overview-style-changed", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "overview",
-                Component.translatable("kingdomworld.style.changed", Component.translatable("kingdomworld.style." + LONG_STYLE),
-                        io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(STYLE_FEE,
-                                io.github.sekerator.kingdomworld.core.economy.CurrencyUnits.DEFAULT)))));
+        // The answer of the server to a change of the style, a success.
+        cases.add(new Case("throne-king-overview-style-changed", () -> {
+            ThroneScreen screen = throne(view(KingdomView.Relation.MEMBER, Role.KING), "overview", Component.empty());
+            screen.onResult(true, Component.translatable("kingdomworld.style.changed",
+                    Component.translatable("kingdomworld.style." + LONG_STYLE),
+                    io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(STYLE_FEE,
+                            io.github.sekerator.kingdomworld.core.economy.CurrencyUnits.DEFAULT)));
+            return screen;
+        }));
         cases.add(new Case("throne-king-members", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "members", Component.empty())));
         cases.add(new Case("throne-king-rights", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "rights", Component.empty())));
         cases.add(new Case("throne-subject-overview", () -> throne(view(KingdomView.Relation.MEMBER, Role.SUBJECT), "overview", Component.empty())));

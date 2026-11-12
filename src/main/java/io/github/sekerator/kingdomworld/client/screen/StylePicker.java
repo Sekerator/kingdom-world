@@ -15,9 +15,9 @@ import java.util.List;
 
 /**
  * The choice of one of the architectural styles, shared by the founding screen and the overview of the throne screen: a
- * picture of the castle of the style, its name between two arrows, a mark when it is the style the land of the throne
- * suggests, and what the style is like on hover over the picture. Laid out in a column with the name under the picture,
- * or, where there is no room for that, with the arrows beside the picture and the name on it.
+ * picture of the castle of the style, its name between two arrows, a mark on one style (the one the land of the throne
+ * suggests, or the one the kingdom builds in now), and what the style is like on hover over the picture. Laid out in a column
+ * with the name under the picture, or, where there is no room for that, with the arrows beside the picture and the name on it.
  */
 final class StylePicker {
     static final int ARROW = 16;
@@ -37,7 +37,9 @@ final class StylePicker {
     private static final int BAND_COLOR = 0xC0100C08;
     private static final String KEY = "kingdomworld.style.";
 
-    private final int suggested;
+    /** The style that carries the mark, or -1 for none. */
+    private final int marked;
+    private final Component mark;
     private int index;
     private int x;
     private int y;
@@ -51,8 +53,24 @@ final class StylePicker {
      * @param suggested the style the land suggests, or -1 when nothing is suggested
      */
     StylePicker(int index, int suggested) {
+        this(index, suggested, Component.translatable("kingdomworld.screen.style.suggested"));
+    }
+
+    /**
+     * @param index  the style shown first, as an index into {@link ArchitecturalStyles#IDS}
+     * @param marked the style that carries {@code mark} on its picture, or -1 for none
+     */
+    StylePicker(int index, int marked, Component mark) {
         this.index = Math.floorMod(index, ArchitecturalStyles.IDS.size());
-        this.suggested = suggested;
+        this.marked = marked;
+        this.mark = mark;
+    }
+
+    /**
+     * A choice of a new style for a kingdom that builds in {@code current} now: it opens on that style, marked as the current one.
+     */
+    static StylePicker change(int current) {
+        return new StylePicker(Math.max(0, current), current, Component.translatable("kingdomworld.screen.style.current"));
     }
 
     int index() {
@@ -111,6 +129,14 @@ final class StylePicker {
     }
 
     /**
+     * The width of a column that holds a picture of {@code pictureWidth} with the row of the name under it: the arrows stand
+     * at the edges of the picture unless the longest name needs more room between them.
+     */
+    static int span(Font font, int pictureWidth) {
+        return Math.max(pictureWidth, rowWidth(font));
+    }
+
+    /**
      * The height of the picker laid out with its name under the picture.
      */
     static int height(int pictureHeight) {
@@ -153,8 +179,8 @@ final class StylePicker {
     }
 
     /**
-     * Draws the picture of the shown style with its frame, the mark of the suggested style on its top, the name, and the caption
-     * on hover over the picture.
+     * Draws the picture of the shown style with its frame, the mark on its top when it is the marked style, the name, and the
+     * caption on hover over the picture.
      */
     void render(KingdomScreen screen, GuiGraphics graphics, Font font) {
         String id = id();
@@ -163,10 +189,9 @@ final class StylePicker {
         graphics.renderOutline(left - 1, y - 1, pictureWidth + 2, pictureHeight + 2, FRAME);
         graphics.blit(picture(id), left, y, pictureWidth, pictureHeight, 0, 0, TEXTURE_WIDTH, TEXTURE_HEIGHT, TEXTURE_WIDTH,
                 TEXTURE_HEIGHT);
-        if (index == suggested) {
+        if (index == marked) {
             graphics.fill(left, y, right, y + BAND, BAND_COLOR);
-            screen.centeredLabel(graphics, Component.translatable("kingdomworld.screen.style.suggested"), left + pictureWidth / 2, y + 2,
-                    0xFFE8C860, left, right);
+            screen.centeredLabel(graphics, mark, left + pictureWidth / 2, y + 2, 0xFFE8C860, left, right);
         }
         if (compact) {
             graphics.fill(left, y + pictureHeight - BAND, right, y + pictureHeight, BAND_COLOR);

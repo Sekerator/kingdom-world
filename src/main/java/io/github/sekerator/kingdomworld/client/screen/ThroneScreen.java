@@ -58,8 +58,6 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private static final int GAP = 2;
     /** The gap between narrow tabs, which have to fit in two rows on the smallest screens. */
     private static final int TAB_GAP = 1;
-    /** The column of the picture of a style in the overview, as wide as the one of the founding screen. */
-    private static final int STYLE_COLUMN = 126;
     /** The least room beside the picture of a style for the current style and what the shown one is like. */
     private static final int STYLE_TEXT = 140;
     private static final int STYLE_BUTTON_HEIGHT = 14;
@@ -452,7 +450,8 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
      */
     public void showStyleForCheck(int index) {
         if (canChangeStyle()) {
-            stylePicker = new StylePicker(index, -1);
+            stylePicker = StylePicker.change(ArchitecturalStyles.index(view.style()));
+            stylePicker.select(index);
         }
         if (minecraft != null) {
             rebuildWidgets();
@@ -911,18 +910,26 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     }
 
     private void openStylePicker() {
-        stylePicker = new StylePicker(Math.max(0, ArchitecturalStyles.index(view.style())), -1);
+        stylePicker = StylePicker.change(ArchitecturalStyles.index(view.style()));
         rebuildWidgets();
     }
 
     /**
-     * The choice of a new style in the overview: the picture with its arrows on the left; the current style, what the shown
-     * one is like and the way back beside it; the button that builds in the shown style for the fee in place of leaving the
-     * kingdom at the bottom.
+     * The column of the picture of a style in the overview: the picture, from the left edge of the tabs, with the row of its
+     * name and arrows under it.
+     */
+    private int styleColumn() {
+        return StylePicker.span(font, StylePicker.PICTURE_WIDTH);
+    }
+
+    /**
+     * The choice of a new style in the overview: the picture with its arrows on the left, the current style marked on it; the
+     * current style, what the shown one is like and the way back beside it; the button that builds in the shown style for the
+     * fee in place of leaving the kingdom at the bottom.
      */
     private void initStylePicker(int left, int top) {
         int y = top + contentOffset + CONTENT_TOP + 4;
-        stylePicker.layout(left + PAD, y, STYLE_COLUMN, StylePicker.PICTURE_WIDTH, StylePicker.PICTURE_HEIGHT, false);
+        stylePicker.layout(left + PAD, y, styleColumn(), StylePicker.PICTURE_WIDTH, StylePicker.PICTURE_HEIGHT, false);
         for (Button arrow : stylePicker.buttons(this::rebuildWidgets)) {
             addRenderableWidget(arrow);
         }
@@ -945,7 +952,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
 
     private void renderStylePicker(GuiGraphics graphics, int left, int top, int right) {
         stylePicker.render(this, graphics, font);
-        int x = left + PAD + STYLE_COLUMN + PAD;
+        int x = left + PAD + styleColumn() + PAD;
         int y = top + CONTENT_TOP + 4;
         Component current = styleLine();
         if (current != null) {
@@ -1123,7 +1130,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             overview = Math.max(overview, font.width(style) + 4 + changeStyleWidth);
         }
         if (canChangeStyle()) {
-            overview = Math.max(overview, STYLE_COLUMN + PAD + STYLE_TEXT - 4);
+            overview = Math.max(overview, styleColumn() + PAD + STYLE_TEXT - 4);
         }
         int bottom = doneWidth + PAD;
         for (Component action : overviewActions()) {

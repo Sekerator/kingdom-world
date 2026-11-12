@@ -384,7 +384,8 @@ class TranslationKeysTest {
         assertEquals(styles, russianNames.size(), "Two styles share a name in Russian: " + russianNames);
         Map<String, Integer> arguments = Map.ofEntries(Map.entry("kingdomworld.screen.found.style", 0),
                 Map.entry("kingdomworld.screen.style.previous", 0), Map.entry("kingdomworld.screen.style.next", 0),
-                Map.entry("kingdomworld.screen.style.suggested", 0), Map.entry("kingdomworld.screen.throne.style", 1),
+                Map.entry("kingdomworld.screen.style.suggested", 0), Map.entry("kingdomworld.screen.style.current", 0),
+                Map.entry("kingdomworld.screen.throne.style", 1),
                 Map.entry("kingdomworld.screen.throne.style.change", 0), Map.entry("kingdomworld.screen.throne.style.confirm", 1),
                 Map.entry("kingdomworld.screen.throne.style.question", 2), Map.entry("kingdomworld.screen.throne.style.hint", 0),
                 Map.entry("kingdomworld.style.changed", 2), Map.entry("kingdomworld.style.same", 0), Map.entry("kingdomworld.style.unknown", 0),

@@ -18,13 +18,16 @@ import java.util.Optional;
 /**
  * Founding a kingdom on an empty throne: a name, checked with the same rules the server uses, a color and the architectural
  * style its buildings will have, the one the land of the throne suggests chosen at first. Colors and the style stand side by
- * side under the name; on a screen too narrow for that the picture of the style goes under the colors.
+ * side under the box of the name, the colors from its left edge and the picture of the style up to its right edge; on a
+ * screen too narrow for that the picture of the style goes under the colors.
  * The server checks everything again and answers with the throne screen or an error.
  */
 public class FoundKingdomScreen extends KingdomScreen implements ResultListener {
     /** Two columns of at least the row of colors, with the gaps around and between them. */
     private static final int MIN_COLUMN = 126;
-    private static final int MIN_PANEL_WIDTH = 2 * MIN_COLUMN + 3 * PAD;
+    /** The name box, the columns, the status and the buttons all stand this far inside the frame. */
+    private static final int INSET = PAD + 2;
+    private static final int MIN_PANEL_WIDTH = 2 * MIN_COLUMN + 2 * INSET + PAD;
     /** Fits the smallest screen the game allows, 240 high. */
     private static final int PANEL_HEIGHT = 232;
     private static final int SWATCH = 14;
@@ -118,15 +121,15 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
         int columnNeeded = Math.max(Math.max(MIN_COLUMN, swatchRow()), StylePicker.rowWidth(font));
         columnNeeded = Math.max(columnNeeded, font.width(Component.translatable("kingdomworld.screen.found.color")) + 2);
         columnNeeded = Math.max(columnNeeded, font.width(Component.translatable("kingdomworld.screen.found.style")) + 2);
-        int twoColumns = 2 * columnNeeded + 3 * PAD;
-        panelWidth = Math.min(Math.max(Math.max(MIN_PANEL_WIDTH, twoColumns), needed + 2 * PAD + 4), width - 8);
-        column = (panelWidth - 3 * PAD) / 2;
+        int twoColumns = 2 * columnNeeded + 2 * INSET + PAD;
+        panelWidth = Math.min(Math.max(Math.max(MIN_PANEL_WIDTH, twoColumns), needed + 2 * INSET), width - 8);
+        column = (panelWidth - 2 * INSET - PAD) / 2;
         narrow = column < columnNeeded;
 
         String previous = nameBox == null ? pendingName : nameBox.getValue();
         int left = left();
         int top = top();
-        nameBox = new EditBox(font, left + PAD + 2, top + 35, panelWidth - 2 * PAD - 4, 18,
+        nameBox = new EditBox(font, left + INSET, top + 35, panelWidth - 2 * INSET, 18,
                 Component.translatable("kingdomworld.screen.found.name"));
         nameBox.setMaxLength(FoundKingdomPacket.MAX_RAW_NAME);
         nameBox.setValue(previous);
@@ -134,18 +137,18 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
         addRenderableWidget(nameBox);
         setInitialFocus(nameBox);
         if (narrow) {
-            picker.layout(left + PAD, top + NARROW_PICTURE_TOP, panelWidth - 2 * PAD, StylePicker.SMALL_PICTURE_WIDTH,
+            picker.layout(left + INSET, top + NARROW_PICTURE_TOP, panelWidth - 2 * INSET, StylePicker.SMALL_PICTURE_WIDTH,
                     StylePicker.SMALL_PICTURE_HEIGHT, true);
         } else {
-            picker.layout(styleX(), top + CHOICE_TOP, column, StylePicker.PICTURE_WIDTH, StylePicker.PICTURE_HEIGHT, false);
+            picker.layout(styleX(), top + CHOICE_TOP, styleSpan(), StylePicker.PICTURE_WIDTH, StylePicker.PICTURE_HEIGHT, false);
         }
         for (Button arrow : picker.buttons(() -> { })) {
             addRenderableWidget(arrow);
         }
         foundButton = addRenderableWidget(Button.builder(found, button -> submit())
-                .bounds(left + PAD + 2, top + PANEL_HEIGHT - 28, buttons, 20).build());
+                .bounds(left + INSET, top + PANEL_HEIGHT - 28, buttons, 20).build());
         addRenderableWidget(Button.builder(cancel, button -> onClose())
-                .bounds(left + panelWidth - PAD - 2 - buttons, top + PANEL_HEIGHT - 28, buttons, 20).build());
+                .bounds(left + panelWidth - INSET - buttons, top + PANEL_HEIGHT - 28, buttons, 20).build());
         updateButtons();
     }
 
@@ -201,20 +204,30 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
      * Where the column of the colors starts: the left one beside the style, or the whole panel when the style goes under it.
      */
     private int colorsX() {
-        return left() + PAD;
+        return left() + INSET;
     }
 
-    private int colorsWidth() {
-        return narrow ? panelWidth - 2 * PAD : column;
+    /**
+     * The width of the picture of the style with the row of its name and arrows, which stand at the edges of the picture.
+     */
+    private int styleSpan() {
+        return Math.min(column, StylePicker.span(font, StylePicker.PICTURE_WIDTH));
     }
 
+    /**
+     * Where the picture of the style starts: it ends at the right edge of the name box, as the colors start at its left edge.
+     */
     private int styleX() {
-        return left() + 2 * PAD + column;
+        return left() + panelWidth - INSET - styleSpan();
     }
 
+    /**
+     * The colors start at the left edge of their column beside the style, or stand in the middle of the panel above it.
+     */
     private int swatchX(int index) {
         int perRow = KingdomColors.PALETTE.size() / 2;
-        return colorsX() + (colorsWidth() - swatchRow()) / 2 + (index % perRow) * (SWATCH + SWATCH_GAP);
+        int start = narrow ? colorsX() + (panelWidth - 2 * INSET - swatchRow()) / 2 : colorsX();
+        return start + (index % perRow) * (SWATCH + SWATCH_GAP);
     }
 
     private int swatchY(int index) {
@@ -244,13 +257,13 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
         graphics.fill(left, top, right, top + PANEL_HEIGHT, 0xF0201810);
         graphics.renderOutline(left, top, panelWidth, PANEL_HEIGHT, 0xFFC8A040);
         centeredLabel(graphics, title, width / 2, top + 8, 0xFFE8C860, left + PAD, right - PAD);
-        label(graphics, Component.translatable("kingdomworld.screen.found.name"), left + PAD + 2, top + 24, 0xFFE0E0E0, right - PAD);
+        label(graphics, Component.translatable("kingdomworld.screen.found.name"), left + INSET, top + 24, 0xFFE0E0E0, right - PAD);
         int colorsLabel = swatchX(0);
         label(graphics, Component.translatable("kingdomworld.screen.found.color"), colorsLabel, top + COLUMNS_TOP, 0xFFE0E0E0,
-                narrow ? right - PAD : colorsX() + column);
+                narrow ? right - INSET : colorsX() + column);
         if (!narrow) {
             label(graphics, Component.translatable("kingdomworld.screen.found.style"), picker.pictureX(), top + COLUMNS_TOP, 0xFFE0E0E0,
-                    styleX() + column);
+                    right - INSET);
         }
         for (int i = 0; i < KingdomColors.PALETTE.size(); i++) {
             int x = swatchX(i);
@@ -273,7 +286,7 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
                     0xFF100C08);
             centeredName(graphics, name, width / 2, top + PREVIEW_TOP, 0xFF000000 | readable(color), panelWidth - 2 * PAD - 8);
         }
-        paragraph(graphics, status, left + PAD + 2, top + STATUS_TOP, panelWidth - 2 * PAD - 4, STATUS_LINES,
+        paragraph(graphics, status, left + INSET, top + STATUS_TOP, panelWidth - 2 * INSET, STATUS_LINES,
                 statusIsError ? 0xFFFF8080 : 0xFFA0E0A0);
     }
 
