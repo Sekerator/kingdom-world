@@ -4,6 +4,8 @@ import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.citizen.work.GatheringSettings;
 import io.github.sekerator.kingdomworld.common.construction.ConstructionWork;
 import io.github.sekerator.kingdomworld.common.registry.ModRegistries;
+import io.github.sekerator.kingdomworld.core.citizen.Site;
+import io.github.sekerator.kingdomworld.core.citizen.SiteKinds;
 import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.construction.Box;
@@ -79,12 +81,17 @@ final class CapitalStaff {
                 continue;
             }
             Box box = building.box();
+            if (box == null) {
+                continue;
+            }
+            // The posts are looked for among the places of the chunks of the building, not among the posts of the whole world.
             List<WorkPost> inside = new ArrayList<>();
-            for (WorkPost post : state.citizens().posts().all()) {
-                WorldPos at = post.pos();
-                if (post.kingdomId().equals(id) && at.dimension().equals(building.anchor().dimension()) && at.x() >= box.minX()
-                        && at.x() <= box.maxX() && at.y() >= box.minY() && at.y() <= box.maxY() && at.z() >= box.minZ() && at.z() <= box.maxZ()) {
-                    inside.add(post);
+            for (long chunk : box.chunks()) {
+                for (Site place : state.citizens().sites().sitesInChunk(building.dimension(), chunk)) {
+                    WorldPos at = place.pos();
+                    if (SiteKinds.WORK_POST.equals(place.kind()) && id.equals(place.kingdomId()) && box.contains(at.x(), at.y(), at.z())) {
+                        state.citizens().posts().get(at).ifPresent(inside::add);
+                    }
                 }
             }
             // In the order of their places, so that a repeat gives every post the same seats.
