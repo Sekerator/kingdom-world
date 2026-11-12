@@ -82,13 +82,13 @@ public final class NpcGameTests {
      */
     static final int HALF = NpcComposition.districtReach(NpcLevel.SMALL) + 10;
     /** Half the side of the platform for a large kingdom. */
-    private static final int LARGE_HALF = NpcComposition.districtReach(NpcLevel.LARGE) + 10;
+    static final int LARGE_HALF = NpcComposition.districtReach(NpcLevel.LARGE) + 10;
     /** Blocks over the platform that are cleared before and after a test: the castle of a large capital is the highest building. */
     private static final int HEIGHT = 30;
     /** Steps the appearance of a small kingdom takes at most. */
     static final int STEPS = 4_000;
     /** Steps the appearance of a large kingdom takes at most. */
-    private static final int LARGE_STEPS = 12_000;
+    static final int LARGE_STEPS = 12_000;
     /** Ticks of the server the appearance of a small kingdom takes at most, with the wait for its wall. */
     private static final int TICKS = STEPS + 3_000;
     private static final String SMALL_HOUSE = NpcComposition.SMALL_HOUSE;
@@ -175,7 +175,7 @@ public final class NpcGameTests {
         return plant(helper, center, NpcLevel.SMALL);
     }
 
-    private static NpcSite plant(GameTestHelper helper, BlockPos center, NpcLevel size) {
+    static NpcSite plant(GameTestHelper helper, BlockPos center, NpcLevel size) {
         MinecraftServer server = helper.getLevel().getServer();
         helper.assertTrue(NpcWork.state(server).spawning().isEmpty(), "Another kingdom of the world is appearing");
         NpcSite site = NpcWork.plant(server, center.getX(), center.getZ(), size, false).orElse(null);
@@ -195,7 +195,7 @@ public final class NpcGameTests {
     /**
      * Raises a place to its end at once and gives its kingdom.
      */
-    private static Kingdom raise(GameTestHelper helper, NpcSite site, int steps) {
+    static Kingdom raise(GameTestHelper helper, NpcSite site, int steps) {
         NpcSpawner.runNow(helper.getLevel().getServer(), site, steps);
         helper.assertTrue(site.status() == NpcSite.Status.SPAWNED, "The appearance did not end: " + site + " at " + site.stage().id()
                 + " step " + site.step() + " " + site.reason());

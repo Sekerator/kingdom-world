@@ -420,7 +420,24 @@ final class RulerSnapshots {
         int nutrition = Math.max(1, CitizenSettings.rules().dailyNutrition());
         String wood = RulerPlaces.wood(server, id);
         Map<String, Long> wants = new LinkedHashMap<>();
-        wants.put(RulerMind.BREAD, (long) Math.ceil(view.population * (double) nutrition * FOOD_DAYS / 5.0));
+        // Food of other kinds in the stores (the carrots of the fields of a kingdom of the world, for one) feeds the people too:
+        // the ruler asks for bread only for what they do not cover, and keeps them instead of selling them as heaps of goods.
+        double need = view.population * (double) nutrition * FOOD_DAYS;
+        double covered = 0;
+        Map<String, Long> kept = new LinkedHashMap<>();
+        for (Map.Entry<String, Long> entry : counts.entrySet()) {
+            Item item = GoodsStacks.item(entry.getKey());
+            if (item == Items.AIR || entry.getValue() <= 0 || entry.getKey().equals(RulerMind.BREAD)) {
+                continue;
+            }
+            net.minecraft.world.food.FoodProperties food = new ItemStack(item).getFoodProperties(null);
+            if (food == null || food.getNutrition() <= 0) {
+                continue;
+            }
+            covered += entry.getValue() * (double) food.getNutrition();
+            kept.put(entry.getKey(), Math.min(entry.getValue(), (long) Math.ceil(need / food.getNutrition())));
+        }
+        wants.put(RulerMind.BREAD, (long) Math.ceil(Math.max(0.0, need - covered) / 5.0));
         wants.put("minecraft:wheat", 16L);
         wants.put(wood + "_log", 64L);
         wants.put(wood + "_planks", 64L);
@@ -454,6 +471,9 @@ final class RulerSnapshots {
             long stock = counts.getOrDefault(want.getKey(), 0L);
             view.goods.put(want.getKey(), new RulerView.Good(want.getKey(), stock, want.getValue(), Math.max(1, prices.value(want.getKey()).units())));
         }
+        // What is kept of the other food: all of it up to the food of the days the ruler looks ahead, and nothing is lacking.
+        kept.forEach((item, want) -> view.goods.putIfAbsent(item, new RulerView.Good(item, counts.getOrDefault(item, 0L), want,
+                Math.max(1, prices.value(item).units()))));
         counts.entrySet().stream()
                 .filter(entry -> !view.goods.containsKey(entry.getKey()) && entry.getValue() > 128)
                 .sorted(Map.Entry.<String, Long>comparingByValue().reversed())

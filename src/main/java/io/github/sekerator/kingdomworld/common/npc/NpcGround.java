@@ -22,6 +22,11 @@ final class NpcGround {
     static final int MAX_FILL = 12;
     /** How high above the ground a column is cleared, in blocks. */
     static final int CLEAR_HEIGHT = 24;
+    /**
+     * How much higher the trees of a column go: where a hill is cut down, the crown of a tall tree on it rises over what is
+     * cleared, and would hang in the air.
+     */
+    private static final int TREE_TOPS = 24;
     private static final int FLAGS = Block.UPDATE_CLIENTS;
 
     /**
@@ -113,16 +118,17 @@ final class NpcGround {
     }
 
     /**
-     * Clears a column above a height: up to {@value #CLEAR_HEIGHT} blocks over it.
+     * Clears a column above a height: up to {@value #CLEAR_HEIGHT} blocks over it, and the parts of trees up to
+     * {@value #TREE_TOPS} blocks higher.
      */
     static int clearAbove(ServerLevel level, int x, int z, int height) {
-        int top = Math.min(level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z) - 1, height + CLEAR_HEIGHT);
+        int top = Math.min(level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z) - 1, height + CLEAR_HEIGHT + TREE_TOPS);
         int changed = 0;
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, top, z);
         for (int y = top; y > height; y--) {
             pos.setY(y);
             BlockState state = level.getBlockState(pos);
-            if (state.isAir() || protectedAt(level, pos, state)) {
+            if (state.isAir() || protectedAt(level, pos, state) || y > height + CLEAR_HEIGHT && !treePart(state)) {
                 continue;
             }
             level.setBlock(pos, Blocks.AIR.defaultBlockState(), FLAGS);
@@ -145,13 +151,20 @@ final class NpcGround {
         for (int y = top; y > ground; y--) {
             pos.setY(y);
             BlockState state = level.getBlockState(pos);
-            if (state.is(BlockTags.LEAVES) || Trees.isLog(state) || state.is(Blocks.VINE) || state.is(Blocks.BEE_NEST)
-                    || state.is(Blocks.BROWN_MUSHROOM_BLOCK) || state.is(Blocks.RED_MUSHROOM_BLOCK) || state.is(Blocks.MUSHROOM_STEM)) {
+            if (treePart(state)) {
                 level.setBlock(pos, Blocks.AIR.defaultBlockState(), FLAGS);
                 changed++;
             }
         }
         return changed;
+    }
+
+    /**
+     * Whether a block is part of a tree or of a huge mushroom.
+     */
+    private static boolean treePart(BlockState state) {
+        return state.is(BlockTags.LEAVES) || Trees.isLog(state) || state.is(Blocks.VINE) || state.is(Blocks.BEE_NEST)
+                || state.is(Blocks.BROWN_MUSHROOM_BLOCK) || state.is(Blocks.RED_MUSHROOM_BLOCK) || state.is(Blocks.MUSHROOM_STEM);
     }
 
     static boolean protectedAt(ServerLevel level, BlockPos pos, BlockState state) {

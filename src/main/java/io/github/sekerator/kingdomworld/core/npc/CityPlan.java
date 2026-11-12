@@ -165,7 +165,8 @@ final class CityPlan {
         wanted.put(NORTH, names(small ? List.of("barracks_hall")
                 : large ? List.of("barracks_hall", "drill_yard", "barracks_hall", "mage_tower", "well")
                 : List.of("barracks_hall", "drill_yard")));
-        wanted.put(EAST, names(small ? List.of("smithy", "storehouse", "workshop")
+        // A small capital keeps its stores in a barn: two storehouses hold what one would run over with after a harvest.
+        wanted.put(EAST, names(small ? List.of("smithy", "barn", "workshop")
                 : large ? List.of("smithy", "carpentry", "storehouse", "workshop", "bakery", "smithy", "barn", "weavery", "carpentry", "well")
                 : List.of("smithy", "carpentry", "storehouse", "workshop")));
         wanted.put(WEST, names(small ? List.of() : large ? List.of("barracks_hall", "well", "fountain") : List.of("well")));
@@ -279,7 +280,7 @@ final class CityPlan {
         int citizens = homes + townHomes + soldiers;
         // A field of carrots feeds about twenty, one of wheat half as many through the baker: every third field is wheat. The
         // fields are counted for full barracks: newcomers take the free bunks, and a garrison eats as the citizens do.
-        int fields = Math.max(1, (int) Math.ceil((homes + bunks) * 1.25 / 18.0));
+        int fields = Math.max(1, (int) Math.ceil((homes + bunks) * 1.5 / 18.0));
         Map<String, Integer> jobs = new LinkedHashMap<>();
         int left = citizens - soldiers;
         left = job(jobs, "farmer", 2 * (fields + towns), left);

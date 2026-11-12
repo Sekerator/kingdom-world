@@ -14,10 +14,10 @@ import java.util.function.Predicate;
  * spawn of the world or to a capital of the plan is skipped without being judged.
  *
  * <p>How large the kingdoms are is a quota, not chance: the plan makes so many of each level, and a candidate is judged for the
- * largest level still wanted first, then for the smaller ones. When the candidates run out before the plan is full, the planner
- * goes over them again with less asked of a place ({@link Candidate#relax()}); on the last pass a place meant for a larger
- * kingdom may go to a smaller one, so that the world still gets all its kingdoms. Kingdoms beyond the quota draw their level by
- * the weights.
+ * largest level still wanted first, then for the smaller ones. When the candidates of a pass run out before the plan is full,
+ * the planner looks at as many new ones with less asked of a place ({@link Candidate#relax()}); on the last pass a place meant
+ * for a larger kingdom may go to a smaller one, so that the world still gets all its kingdoms. Kingdoms beyond the quota draw
+ * their level by the weights.
  */
 public final class SitePlanner {
     /** Places tried around a candidate whose land is taken, in 8 directions. */
@@ -149,14 +149,15 @@ public final class SitePlanner {
     public Optional<Candidate> current() {
         for (int guard = 0; guard < 100_000 && !done(); guard++) {
             if (cursor >= limit()) {
-                // The candidates ran out before the plan was full: once more over all of them, asking less.
+                // The candidates ran out before the plan was full: as many new ones, of which less is asked.
                 pass++;
                 cursor = 0;
                 shift = 0;
                 tier = 0;
                 continue;
             }
-            Candidate drawn = candidate(cursor, shift);
+            // Every pass has candidates of its own: land that did not suit is not looked at twice.
+            Candidate drawn = candidate(pass * limit() + cursor, shift);
             if (!fits(drawn.x(), drawn.z())) {
                 moveOn(shift > 0);
                 continue;

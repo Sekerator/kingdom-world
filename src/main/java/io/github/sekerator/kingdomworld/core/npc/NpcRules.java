@@ -34,7 +34,7 @@ public record NpcRules(boolean generate, int count, int radius, int minDistance,
     public static final int MAX_TOWNS = 6;
 
     public static final NpcRules DEFAULT = new NpcRules(true, 8, 6000, 1200, 1000, 12, new int[]{5, 0, 3}, new int[]{5, 3, 2},
-            new int[]{4, 6, 7}, new int[]{2, 3, 4}, 260, new long[]{6000, 15000, 40000}, 10, new int[]{6, 10, 16}, new int[]{2, 4, 8},
+            new int[]{4, 6, 7}, new int[]{2, 3, 4}, 260, new long[]{6000, 15000, 40000}, 10, new int[]{4, 10, 16}, new int[]{2, 4, 8},
             2000, 4, 20, 60);
 
     public NpcRules {

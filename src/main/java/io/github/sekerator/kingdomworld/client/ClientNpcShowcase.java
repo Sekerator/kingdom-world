@@ -292,17 +292,18 @@ final class ClientNpcShowcase {
         List<Shot> list = new ArrayList<>();
         int y = throne.getY();
         int radius = RoadWork.state(server).wallOf(0, kingdom).map(wall -> wall.radius()).orElse(NpcSpawner.composition(site).reach());
-        // The whole capital from above, from the south; then from its avenue at the height of a walker, towards the palace.
+        // The whole capital from above, from the south; then from its avenue at the height of a walker, towards the palace, from
+        // where the market opens beside it.
         list.add(new Shot("npc-capital", throne.getX() + 0.5, y + radius * 1.5, throne.getZ() + radius * 1.35, 180.0f, 50.0f));
         list.add(new Shot("npc-capital-street", throne.getX() + 0.5, y + 2.2, throne.getZ() + radius - 18.5, 180.0f, 2.0f));
         list.add(new Shot("npc-palace", throne.getX() + 34.5, y + 16, throne.getZ() + 44.5, 142.0f, 20.0f));
         list.add(new Shot("npc-throne-hall", throne.getX() + 0.5, y + 1.6, throne.getZ() + 5.8, 180.0f, 4.0f));
         // A street of houses on the west side, between two rows that look at each other.
         list.add(new Shot("npc-houses", throne.getX() - 54.5, y + 4.5, throne.getZ() + 40.5, 180.0f, 10.0f));
-        list.add(new Shot("npc-style-1", throne.getX() + 9.5, y + 9, throne.getZ() + radius - 10.5, 172.0f, 12.0f));
+        list.add(styleShot("npc-style-1", throne, radius));
         RoadWork.state(server).wallOf(0, kingdom).ifPresent(wall -> {
             int r = wall.radius();
-            list.add(new Shot("npc-wall", wall.centerX() + r + 14.5, y + 12, wall.centerZ() + r + 14.5, 135.0f, 18.0f));
+            list.add(new Shot("npc-wall", wall.centerX() + r + 14.5, y + 24, wall.centerZ() + r + 14.5, 135.0f, 30.0f));
         });
         List<WorldPos> gates = CityWalls.gates(server, kingdom, 0);
         if (!gates.isEmpty()) {
@@ -329,7 +330,8 @@ final class ClientNpcShowcase {
             RouteCell middle = road.cells().get(road.cells().size() / 2);
             RouteCell ahead = road.cells().get(Math.min(road.cells().size() - 1, road.cells().size() / 2 + 20));
             float roadYaw = (float) Math.toDegrees(Math.atan2(-(ahead.x() - middle.x()), ahead.z() - middle.z()));
-            list.add(new Shot("npc-road-to-town", middle.x() + 0.5, middle.y() + 10, middle.z() + 0.5, roadYaw, 25.0f));
+            // High enough to see the road over the crowns of a forest it runs through.
+            list.add(new Shot("npc-road-to-town", middle.x() + 0.5, middle.y() + 30, middle.z() + 0.5, roadYaw, 50.0f));
             RouteCell end = road.cells().get(road.cells().size() - 1);
             list.add(new Shot("npc-town", end.x() + 0.5, end.y() + 38, end.z() + 42.5, 180.0f, 42.0f));
             break;
@@ -340,7 +342,7 @@ final class ClientNpcShowcase {
                     .orElse(NpcSpawner.composition(small.get()).reach());
             list.add(new Shot("npc-small-capital", other.getX() + 0.5, other.getY() + reach * 1.6, other.getZ() + reach * 1.4, 180.0f, 50.0f));
             list.add(new Shot("npc-small-street", other.getX() + 0.5, other.getY() + 2.2, other.getZ() + reach - 12.5, 180.0f, 2.0f));
-            list.add(new Shot("npc-style-2", other.getX() + 9.5, other.getY() + 9, other.getZ() + reach - 6.5, 172.0f, 12.0f));
+            list.add(styleShot("npc-style-2", other, reach));
         } else if (small.isPresent()) {
             LOGGER.warn(PREFIX + "the small kingdom of the world was left alone: {}", small.get().reason());
         }
@@ -350,6 +352,16 @@ final class ClientNpcShowcase {
         int ground = level.getHeight(Heightmap.Types.MOTION_BLOCKING, throne.getX(), throne.getZ());
         LOGGER.info(PREFIX + "the kingdom of the world stands at {} (ground {}); {} shot(s)", throne.toShortString(), ground, list.size());
         ready = true;
+    }
+
+    /**
+     * The same view of a capital for both styles: from above the south-west of its wall, over the roofs, towards the palace.
+     *
+     * @param radius the radius of its wall
+     */
+    private static Shot styleShot(String name, BlockPos throne, int radius) {
+        double inside = radius - 12;
+        return new Shot(name, throne.getX() - inside + 0.5, throne.getY() + 18, throne.getZ() + inside + 0.5, 225.0f, 30.0f);
     }
 
     /**

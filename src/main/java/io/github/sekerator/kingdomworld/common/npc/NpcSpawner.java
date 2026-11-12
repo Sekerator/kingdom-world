@@ -112,6 +112,8 @@ public final class NpcSpawner {
     private static final int MIN_WALL_RADIUS = 24;
     /** Ticks longer than this while a kingdom appears are written to the log with their stage. */
     private static final long SLOW_TICK_NANOS = 50_000_000L;
+    /** Time of a tick the looks at the workplaces of a kingdom that just stood take at most, before its chunks go. */
+    private static final long SURVEY_NANOS = 10_000_000L;
     /** Chunks of land claimed in a tick for every chunk the rules let an appearance look through. */
     private static final int CLAIMS_PER_CHUNK_BUDGET = 2;
     /** Blocks of a building done in a tick at least, so that a small budget still moves on. */
@@ -160,6 +162,8 @@ public final class NpcSpawner {
         long paused;
         /** Whether the background goes on without players. */
         boolean forced;
+        /** Work posts still to be looked at before the chunks go; null before the kingdom settles. */
+        java.util.ArrayDeque<WorkPost> surveys;
 
         Job(int siteId, NpcComposition composition) {
             this.siteId = siteId;
@@ -1563,8 +1567,10 @@ public final class NpcSpawner {
             return;
         }
         UUID id = site.kingdomId().orElseThrow();
-        int index = site.step() / 1000;
-        int sub = site.step() % 1000;
+        // The step holds the town and how far it is: a town of districts counts every column of its ground.
+        int unit = job.composition.districts() ? TOWN_STEPS : 1000;
+        int index = site.step() / unit;
+        int sub = site.step() % unit;
         if (index >= site.towns().size()) {
             site.advance(SpawnStage.PLACES);
             return;
@@ -1627,38 +1633,41 @@ public final class NpcSpawner {
         site.setStep((index + 1) * 1000);
     }
 
+    /** Steps of the appearance a town of districts may take: the columns of its ground, its town hall, buildings and fields. */
+    private static final int TOWN_STEPS = 100_000;
+
     /**
-     * A town of a kingdom of districts in steps: its ground is levelled row by row with its square and its street, its town
-     * hall is founded, its buildings are put up along the street and its field is sown.
+     * A town of a kingdom of districts in steps: its ground is levelled column by column within the budget of a tick, with its
+     * square and its street, then its town hall is founded, its buildings are put up along the street and its field is sown.
      */
     private static void townOfDistricts(MinecraftServer server, ServerLevel level, NpcSite site, NpcComposition composition, UUID id,
                                         NpcSite.Town town, int index, int sub) {
         int reach = composition.townReach();
-        int rows = 2 * (reach + RAMP) + 1;
+        int side = 2 * (reach + RAMP) + 1;
+        int cells = side * side;
         int y = townHeight(level, site, town);
-        if (sub < rows) {
+        if (sub < cells) {
             int budget = blockBudget();
             NpcGround.Soil soil = NpcGround.soilAt(level, town.x() + reach + RAMP + 3, town.z());
             BlockState path = soil == NpcGround.Soil.GRASS ? Blocks.DIRT_PATH.defaultBlockState() : Blocks.GRAVEL.defaultBlockState();
-            while (sub < rows && budget > 0) {
-                int dz = sub - reach - RAMP;
-                for (int dx = -reach - RAMP; dx <= reach + RAMP; dx++) {
-                    int out = Math.max(Math.abs(dx), Math.abs(dz)) - reach;
-                    if (out > 0) {
-                        budget -= Math.max(1, ramp(level, id, town.x() + dx, town.z() + dz, y, out, soil));
-                        continue;
-                    }
+            while (sub < cells && budget > 0) {
+                int dx = sub % side - reach - RAMP;
+                int dz = sub / side - reach - RAMP;
+                int out = Math.max(Math.abs(dx), Math.abs(dz)) - reach;
+                if (out > 0) {
+                    budget -= Math.max(1, ramp(level, id, town.x() + dx, town.z() + dz, y, out, soil));
+                } else {
                     boolean square = Math.abs(dx) <= 4 && Math.abs(dz) <= 4;
-                    boolean street = Math.abs(dz) <= 5 && Math.abs(dx) <= reach - 3;
+                    boolean street = Math.abs(dz) <= 2 && Math.abs(dx) <= reach - 3;
                     BlockState top = square ? Blocks.COBBLESTONE.defaultBlockState() : street ? path : soil.top();
                     budget -= Math.max(1, NpcGround.level(level, id, town.x() + dx, town.z() + dz, y, top, soil.fill()));
                 }
                 sub++;
             }
-            site.setStep(index * 1000 + sub);
+            site.setStep(index * TOWN_STEPS + sub);
             return;
         }
-        if (sub == rows) {
+        if (sub == cells) {
             BlockPos hall = new BlockPos(town.x(), y + 1, town.z());
             Optional<City> existing = RoadWork.state(server).cityAt(Dimensions.id(level), hall.getX(), hall.getY(), hall.getZ());
             if (existing.isEmpty()) {
@@ -1671,17 +1680,17 @@ public final class NpcSpawner {
                     LOGGER.warn("The town {} of {} was not founded: {}", index + 1, site, founded.error());
                 }
             }
-            site.setStep(index * 1000 + sub + 1);
+            site.setStep(index * TOWN_STEPS + sub + 1);
             return;
         }
         List<NpcComposition.Plot> plots = composition.town(index);
-        int plot = sub - rows - 1;
+        int plot = sub - cells - 1;
         if (plot < plots.size()) {
             NpcComposition.Plot at = plots.get(plot);
             int[] used = new int[1];
             if (buildAt(server, level, id, at.template(), town.x() + at.x(), y + 1, town.z() + at.z(), new Placement(at.facing(), at.mirror()),
                     NpcCity.materials(site), blockBudget(), used)) {
-                site.setStep(index * 1000 + sub + 1);
+                site.setStep(index * TOWN_STEPS + sub + 1);
             }
             return;
         }
@@ -1689,10 +1698,10 @@ public final class NpcSpawner {
         int field = plot - plots.size();
         if (field < fields.size()) {
             field(level, id, town.x() + fields.get(field)[0], town.z() + fields.get(field)[1], Blocks.CARROTS);
-            site.setStep(index * 1000 + sub + 1);
+            site.setStep(index * TOWN_STEPS + sub + 1);
             return;
         }
-        site.setStep((index + 1) * 1000);
+        site.setStep((index + 1) * TOWN_STEPS);
     }
 
     private static int townHeight(ServerLevel level, NpcSite.Town town) {
@@ -2340,7 +2349,26 @@ public final class NpcSpawner {
         }
         // While the land is still loaded, everyone finds a workplace and looks at it: a farmer who never saw its field would
         // harvest nothing until a player came by.
-        io.github.sekerator.kingdomworld.common.citizen.CitizenSimulation.settle(server, id);
+        if (job.surveys == null) {
+            io.github.sekerator.kingdomworld.common.citizen.CitizenSimulation.settle(server, id);
+            // The zones of the posts the steps of the citizens look at in the ticks after them are looked at now, a share of
+            // them a tick: once the chunks go nothing could see the workstations of a workshop, the stall of a market or the
+            // desk of a registrar, and their workers would stand idle until a player came by.
+            job.surveys = new java.util.ArrayDeque<>();
+            for (WorkPost post : KingdomWorldApi.state(server).citizens().posts().postsOf(id)) {
+                if (post.hasProfession() && (post.yield().isEmpty() || Professions.usesStations(post.professionId()))) {
+                    job.surveys.add(post);
+                }
+            }
+            return;
+        }
+        long until = System.nanoTime() + SURVEY_NANOS;
+        while (!job.surveys.isEmpty() && System.nanoTime() < until) {
+            io.github.sekerator.kingdomworld.common.citizen.work.ZoneSurveys.surveyNow(server, job.surveys.poll());
+        }
+        if (!job.surveys.isEmpty()) {
+            return;
+        }
         releaseTickets(level);
         site.setStatus(NpcSite.Status.SPAWNED);
         RoadSync.changed();

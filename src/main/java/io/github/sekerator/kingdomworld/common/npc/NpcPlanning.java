@@ -116,8 +116,9 @@ final class NpcPlanning {
         int pass = planner.pass();
         Optional<SitePlanner.Candidate> current = planner.current();
         if (planner.pass() != pass) {
-            LOGGER.info("The plan of the kingdoms of the world has {} of {} place(s) after looking at all its candidates: it goes over them again "
-                    + "and asks less of a place (pass {} of {})", state.sites().size(), rules.count(), planner.pass() + 1, SitePlanner.PASSES);
+            LOGGER.info("The plan of the kingdoms of the world has {} of {} place(s) after looking at all the candidates of a pass: it looks at "
+                    + "as many new ones and asks less of a place (pass {} of {})", state.sites().size(), rules.count(), planner.pass() + 1,
+                    SitePlanner.PASSES);
         }
         if (current.isEmpty()) {
             finish(state);
@@ -361,6 +362,30 @@ final class NpcPlanning {
         int step = Math.max(8, reach / 3);
         int allowed = CAPITAL_ROUGHNESS[kingdom.ordinal()] + ROUGHNESS_PER_PASS * Math.min(relax, 2);
         int wetAllowed = WET_PER_PASS * Math.min(relax, 2);
+        // The cheap looks first: the biome of the throne, then the middle, the corners and the sides of the square. Most land
+        // falls here, and the whole grid is looked at only where these nine columns are dry and about level.
+        if (!allowed(biomeAt(level, x, z))) {
+            return false;
+        }
+        int low = Integer.MAX_VALUE;
+        int high = Integer.MIN_VALUE;
+        for (int dx = -reach; dx <= reach; dx += reach) {
+            for (int dz = -reach; dz <= reach; dz += reach) {
+                int floor = generator.getBaseHeight(x + dx, z + dz, Heightmap.Types.OCEAN_FLOOR_WG, level, random);
+                if (floor <= sea) {
+                    if (wetAllowed == 0 || (dx == 0 && dz == 0)) {
+                        return false;
+                    }
+                    continue;
+                }
+                low = Math.min(low, floor);
+                high = Math.max(high, floor);
+            }
+        }
+        // The grid trims its two lowest and highest columns on later passes: the nine may differ a little more.
+        if (high - low > allowed + (relax > 0 ? 6 : 0)) {
+            return false;
+        }
         int wet = 0;
         List<Integer> heights = new ArrayList<>();
         for (int dx = -reach; dx <= reach; dx += step) {
@@ -380,10 +405,7 @@ final class NpcPlanning {
         heights.sort(Integer::compare);
         // The few lowest and highest columns are cut or filled: what counts is the ground between them.
         int trim = relax > 0 ? Math.min(2, heights.size() / 16) : 0;
-        if (heights.isEmpty() || heights.get(heights.size() - 1 - trim) - heights.get(trim) > allowed) {
-            return false;
-        }
-        return allowed(biomeAt(level, x, z));
+        return !heights.isEmpty() && heights.get(heights.size() - 1 - trim) - heights.get(trim) <= allowed;
     }
 
     /**
