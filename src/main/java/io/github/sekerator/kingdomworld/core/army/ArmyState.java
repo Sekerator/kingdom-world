@@ -37,8 +37,8 @@ import java.util.function.DoubleSupplier;
  * <p>Not thread safe; the server uses it from the server thread only.
  */
 public final class ArmyState {
-    private final Map<UUID, Soldier> soldiers = new LinkedHashMap<>();
-    private final Map<Long, ArmySquad> squads = new LinkedHashMap<>();
+    private final SoldierBook soldiers = new SoldierBook();
+    private final SquadBook squads = new SquadBook();
     private final Map<Long, MercenaryBand> bands = new LinkedHashMap<>();
     private final Map<UUID, Set<WorldPos>> barracks = new LinkedHashMap<>();
     private final Map<UUID, Long> offersDay = new LinkedHashMap<>();
@@ -76,13 +76,7 @@ public final class ArmyState {
     }
 
     public List<Soldier> soldiersOf(UUID kingdomId) {
-        List<Soldier> result = new ArrayList<>();
-        for (Soldier soldier : soldiers.values()) {
-            if (soldier.kingdomId().equals(kingdomId)) {
-                result.add(soldier);
-            }
-        }
-        return result;
+        return soldiers.ofKingdom(kingdomId);
     }
 
     public Optional<ArmySquad> squad(long id) {
@@ -94,25 +88,14 @@ public final class ArmyState {
     }
 
     public List<ArmySquad> squadsOf(UUID kingdomId) {
-        List<ArmySquad> result = new ArrayList<>();
-        for (ArmySquad squad : squads.values()) {
-            if (squad.kingdomId().equals(kingdomId)) {
-                result.add(squad);
-            }
-        }
-        return result;
+        return squads.ofKingdom(kingdomId);
     }
 
     /**
      * The squad a soldier serves in.
      */
     public Optional<ArmySquad> squadOf(UUID citizenId) {
-        for (ArmySquad squad : squads.values()) {
-            if (squad.members().contains(citizenId)) {
-                return Optional.of(squad);
-            }
-        }
-        return Optional.empty();
+        return squads.ofMember(citizenId);
     }
 
     /**
@@ -302,7 +285,7 @@ public final class ArmyState {
      */
     public void forgetSoldier(UUID citizenId) {
         boolean any = soldiers.remove(citizenId) != null;
-        for (ArmySquad squad : List.copyOf(squads.values())) {
+        for (ArmySquad squad : squadOf(citizenId).stream().toList()) {
             if (squad.members().contains(citizenId)) {
                 List<UUID> rest = new ArrayList<>(squad.members());
                 rest.remove(citizenId);
@@ -323,7 +306,7 @@ public final class ArmyState {
      * Takes a soldier out of its squad; it stays a soldier. A squad left with nobody is gone.
      */
     public void leaveSquad(UUID citizenId) {
-        for (ArmySquad squad : List.copyOf(squads.values())) {
+        for (ArmySquad squad : squadOf(citizenId).stream().toList()) {
             if (!squad.members().contains(citizenId)) {
                 continue;
             }
@@ -380,8 +363,8 @@ public final class ArmyState {
      */
     public List<Soldier> branchOf(UUID kingdomId, Branch branch) {
         List<Soldier> result = new ArrayList<>();
-        for (Soldier soldier : soldiers.values()) {
-            if (soldier.kingdomId().equals(kingdomId) && soldier.branch() == branch) {
+        for (Soldier soldier : soldiers.ofKingdom(kingdomId)) {
+            if (soldier.branch() == branch) {
                 result.add(soldier);
             }
         }
@@ -395,8 +378,8 @@ public final class ArmyState {
         if (!post.officer()) {
             return Optional.empty();
         }
-        for (Soldier soldier : soldiers.values()) {
-            if (soldier.kingdomId().equals(kingdomId) && soldier.branch() == branch && soldier.post() == post) {
+        for (Soldier soldier : soldiers.ofKingdom(kingdomId)) {
+            if (soldier.branch() == branch && soldier.post() == post) {
                 return Optional.of(soldier);
             }
         }
@@ -943,7 +926,7 @@ public final class ArmyState {
 
     private void leave(long bandId) {
         bands.remove(bandId);
-        squads.values().removeIf(squad -> squad.band() == bandId);
+        squads.removeIf(squad -> squad.band() == bandId);
         changed();
     }
 
@@ -1053,8 +1036,8 @@ public final class ArmyState {
      * A kingdom was dissolved: its soldiers, squads, bands and barracks are forgotten.
      */
     public void forgetKingdom(UUID kingdomId) {
-        soldiers.values().removeIf(soldier -> soldier.kingdomId().equals(kingdomId));
-        squads.values().removeIf(squad -> squad.kingdomId().equals(kingdomId));
+        soldiers.removeIf(soldier -> soldier.kingdomId().equals(kingdomId));
+        squads.removeIf(squad -> squad.kingdomId().equals(kingdomId));
         bands.values().removeIf(band -> band.kingdomId().equals(kingdomId));
         barracks.remove(kingdomId);
         offersDay.remove(kingdomId);
