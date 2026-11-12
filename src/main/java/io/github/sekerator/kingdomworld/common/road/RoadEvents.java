@@ -75,7 +75,10 @@ public final class RoadEvents {
         }
         MinecraftServer server = event.getServer();
         try {
+            // The searches belong to the work of the appearance of kingdoms of the world, whose roads they find.
+            long started = System.nanoTime();
             RoadPlanning.tickSearch(server);
+            io.github.sekerator.kingdomworld.common.command.PerfCommands.countWork(System.nanoTime() - started);
         } catch (RuntimeException e) {
             LOGGER.error("KingdomWorld search for roads failed", e);
         }

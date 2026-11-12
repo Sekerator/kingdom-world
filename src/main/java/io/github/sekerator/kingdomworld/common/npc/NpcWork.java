@@ -157,9 +157,12 @@ public final class NpcWork {
         if (isReadOnly(server) || KingdomWorldApi.isReadOnly(server)) {
             return;
         }
+        // The appearance of the kingdoms of the world, its plan and its founding are measured as one work.
+        long started = System.nanoTime();
         NpcSpawner.tick(server);
         NpcPlanning.tick(server);
         NpcFounding.tick(server);
+        io.github.sekerator.kingdomworld.common.command.PerfCommands.countWork(System.nanoTime() - started);
         if (server.getTickCount() % TRIGGER_TICKS == 0) {
             NpcBackground.tick(server);
             keepInStep(server);

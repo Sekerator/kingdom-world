@@ -371,7 +371,15 @@ public final class CityWalls {
         int radius = ownRadius > 0 ? ownRadius : radiusOf(server, kingdomId, cityId);
         RoadTerrain terrain = new RoadTerrain(level);
         terrain.allow(Integer.MAX_VALUE);
-        List<RouteCell> ring = WallContour.ring(terrain, place.get().x(), place.get().z(), radius);
+        // The ring is read whole in this call: a chunk not loaded yet is read at once.
+        boolean before = RoadPlanning.loadNow;
+        RoadPlanning.loadNow = true;
+        List<RouteCell> ring;
+        try {
+            ring = WallContour.ring(terrain, place.get().x(), place.get().z(), radius);
+        } finally {
+            RoadPlanning.loadNow = before;
+        }
         if (ring == null) {
             return Outcome.fail(KingdomError.NO_GROUND_FOR_WALL);
         }

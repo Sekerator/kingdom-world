@@ -42,7 +42,12 @@ public final class PerfCommands {
      */
     private static final long[] WHOLE = new long[1_200];
     private static final int[] WHOLE_TICK = new int[WHOLE.length];
+    /** Of each whole tick: the time of the game alone (without any handler of the tick) and of the work counted with {@link #countWork}. */
+    private static final long[] WHOLE_GAME = new long[WHOLE.length];
+    private static final long[] WHOLE_WORK = new long[WHOLE.length];
     private static int wholeCount;
+    /** The work counted in the current tick. */
+    private static long work;
 
     private PerfCommands() {
     }
@@ -76,6 +81,30 @@ public final class PerfCommands {
     }
 
     /**
+     * Counts time of a tick spent on a work measured on its own (the appearance of kingdoms of the world with its plan, its
+     * founding and its roads), so that a tick of it can be told from the work of other systems in the same tick.
+     */
+    public static void countWork(long nanos) {
+        work += nanos;
+    }
+
+    /**
+     * The last tick that ended as far as the counted work made it: the game alone (the whole tick without the handlers of the
+     * tick, where every system of the mods does its work) and the counted work; -1 if no tick ended.
+     */
+    public static long lastWorkTick() {
+        return workTick(wholeCount - 1);
+    }
+
+    /**
+     * The tick counted as number {@code n} as far as the game alone and the counted work made it, or -1 once it is no longer
+     * kept.
+     */
+    public static long workTick(int n) {
+        return wholeTick(n) < 0 ? -1 : WHOLE_GAME[n % WHOLE.length] + WHOLE_WORK[n % WHOLE.length];
+    }
+
+    /**
      * Starts timing the ticks; called once when the mod sets up its events.
      */
     public static void register() {
@@ -101,6 +130,9 @@ public final class PerfCommands {
         long tick = now - tickStart;
         WHOLE[wholeCount % WHOLE.length] = tick;
         WHOLE_TICK[wholeCount % WHOLE.length] = event.getServer().getTickCount();
+        WHOLE_GAME[wholeCount % WHOLE.length] = Math.max(0, tick - handlers);
+        WHOLE_WORK[wholeCount % WHOLE.length] = work;
+        work = 0;
         wholeCount++;
         ticks++;
         tickSum += tick;

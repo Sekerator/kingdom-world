@@ -328,9 +328,16 @@ public final class RoadPlanning {
         Endpoint to = endpoint(server, dimension, toX, toZ);
         RoadTerrain terrain = new RoadTerrain(level);
         RouteSearch search = new RouteSearch(terrain, from.x(), from.z(), to.x(), to.z(), kingdomId, rules);
-        while (search.status() == RouteSearch.Status.RUNNING) {
-            terrain.allow(Integer.MAX_VALUE);
-            search.step(rules.maxNodes());
+        // No tick passes in this loop: the chunks are read at once, as the search asks for them.
+        boolean before = loadNow;
+        loadNow = true;
+        try {
+            while (search.status() == RouteSearch.Status.RUNNING) {
+                terrain.allow(Integer.MAX_VALUE);
+                search.step(rules.maxNodes());
+            }
+        } finally {
+            loadNow = before;
         }
         if (search.status() != RouteSearch.Status.FOUND) {
             return Optional.empty();

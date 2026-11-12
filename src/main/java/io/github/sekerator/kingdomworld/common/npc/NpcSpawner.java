@@ -419,8 +419,9 @@ public final class NpcSpawner {
         boolean own = !job.pausedLast;
         job.pausedLast = false;
         if (own && job.ticks > 1 && last % AUTOSAVE_TICKS != 0) {
-            // The whole last tick, with the handlers of END in which this work runs: the game's own time of a tick leaves them out.
-            long nanos = PerfCommands.lastWholeTick();
+            // The last tick as the game and this work made it: the game's own time of a tick leaves out the handlers of END in which
+            // this work runs, and the whole tick holds the work of every other system too.
+            long nanos = PerfCommands.lastWorkTick();
             if (nanos < 0) {
                 nanos = server.tickTimes[Math.floorMod(last, server.tickTimes.length)];
             }

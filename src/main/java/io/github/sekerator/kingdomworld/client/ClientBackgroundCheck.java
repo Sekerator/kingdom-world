@@ -16,8 +16,9 @@ import java.util.UUID;
  * The client self-check of the background appearance: in a new world the player stands still while the kingdoms of the world
  * planned for it appear in the background, and the ticks of the integrated server are measured minute by minute until all
  * of them stand (or {@link #MAX_MINUTES} minutes pass): the average, the worst and how many took longer than 50 ms. The ticks
- * are measured twice: as the game times them (without the handlers of the end of a tick, where the mods do their work) and
- * whole, from the first handler of a tick to its last one.
+ * are measured three times: as the game times them (without the handlers of the end of a tick, where the mods do their work),
+ * whole, from the first handler of a tick to its last one, and as the game alone and the appearance made them (the whole tick
+ * without the work of other systems of the mod: the rulers, the armies, the production of the kingdoms that stand).
  */
 final class ClientBackgroundCheck {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -39,6 +40,9 @@ final class ClientBackgroundCheck {
     /** The whole ticks, in all and in the current minute. */
     private final Stats whole = new Stats();
     private final Stats wholeMinute = new Stats();
+    /** The ticks as the game alone and the appearance made them, in all and in the current minute. */
+    private final Stats work = new Stats();
+    private final Stats workMinute = new Stats();
 
     /** Sums of ticks: all of them, and those without the tick of the autosave. */
     private static final class Stats {
@@ -139,6 +143,9 @@ final class ClientBackgroundCheck {
                 boolean save = PerfCommands.wholeTickNumber(nextWhole) % AUTOSAVE_TICKS == 0;
                 whole.add(nanos, save);
                 wholeMinute.add(nanos, save);
+                long own = PerfCommands.workTick(nextWhole);
+                work.add(own, save);
+                workMinute.add(own, save);
             }
         }
         int planned = 0;
@@ -150,14 +157,15 @@ final class ClientBackgroundCheck {
         int elapsed = server.getTickCount() - startTick;
         boolean all = NpcWork.state(server).planned() && planned > 0 && standing == planned && NpcWork.state(server).spawning().isEmpty();
         if (gameMinute.count >= 1200 || all) {
-            LOGGER.info(PREFIX + "background, minute {}: {} of {} kingdom(s) stand; as the game times the ticks: {}; whole ticks: {}", elapsed / 1200 + 1,
-                    standing, planned, gameMinute, wholeMinute);
+            LOGGER.info(PREFIX + "background, minute {}: {} of {} kingdom(s) stand; as the game times the ticks: {}; whole ticks: {}; the game and "
+                    + "the appearance: {}", elapsed / 1200 + 1, standing, planned, gameMinute, wholeMinute, workMinute);
             gameMinute.clear();
             wholeMinute.clear();
+            workMinute.clear();
         }
         if (all || elapsed >= MAX_MINUTES * 1200) {
-            LOGGER.info(PREFIX + "background appearance {} after {} s: {} of {} kingdom(s) stand; as the game times the ticks: {}; whole ticks: {}",
-                    all ? "done" : "not done", elapsed / 20, standing, planned, game, whole);
+            LOGGER.info(PREFIX + "background appearance {} after {} s: {} of {} kingdom(s) stand; as the game times the ticks: {}; whole ticks: {}; "
+                    + "the game and the appearance: {}", all ? "done" : "not done", elapsed / 20, standing, planned, game, whole, work);
             done = true;
         }
     }
