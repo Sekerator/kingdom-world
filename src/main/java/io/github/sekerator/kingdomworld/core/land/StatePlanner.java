@@ -130,7 +130,7 @@ public final class StatePlanner {
                 if (terrain == TerrainClass.UNKNOWN || spawnZone[cell]) {
                     continue;
                 }
-                double fromSpawn = Math.hypot(raster.centerX(cell) - rules.spawnX(), raster.centerZ(cell) - rules.spawnZ());
+                double fromSpawn = StrictMath.hypot(raster.centerX(cell) - rules.spawnX(), raster.centerZ(cell) - rules.spawnZ());
                 if (fromSpawn <= rules.radius()) {
                     ringCells++;
                 }
@@ -572,8 +572,8 @@ public final class StatePlanner {
                     double angle = random.nextDouble() * Math.PI * 2;
                     double u = random.nextDouble();
                     double distance = Math.sqrt(inner * inner + u * (outer * outer - inner * inner));
-                    int x = rules.spawnX() + (int) Math.round(Math.cos(angle) * distance);
-                    int z = rules.spawnZ() + (int) Math.round(Math.sin(angle) * distance);
+                    int x = rules.spawnX() + (int) Math.round(StrictMath.cos(angle) * distance);
+                    int z = rules.spawnZ() + (int) Math.round(StrictMath.sin(angle) * distance);
                     int cell = raster.cellAt(x, z);
                     if (cell < 0 || !free[cell] || !raster.terrain(cell).settles() || raster.generated(cell)) {
                         continue;
@@ -594,7 +594,7 @@ public final class StatePlanner {
                     if (other == self || seedCells[other] < 0) {
                         continue;
                     }
-                    double distance = Math.hypot(raster.centerX(cell) - raster.centerX(seedCells[other]),
+                    double distance = StrictMath.hypot(raster.centerX(cell) - raster.centerX(seedCells[other]),
                             raster.centerZ(cell) - raster.centerZ(seedCells[other]));
                     if (distance < (radius + radii[other] + rules.gapBlocks()) * factor) {
                         return false;

@@ -43,7 +43,7 @@ public final class RoadPlanner {
             double bestDistance = Double.MAX_VALUE;
             for (SettlementSlot other : slots) {
                 if (other.state() == slot.state() && other.province() == slot.province() && other.tier().above(slot.tier())) {
-                    double distance = Math.hypot(other.x() - slot.x(), other.z() - slot.z());
+                    double distance = StrictMath.hypot(other.x() - slot.x(), other.z() - slot.z());
                     if (distance < bestDistance) {
                         bestDistance = distance;
                         best = other.index();
@@ -76,8 +76,8 @@ public final class RoadPlanner {
                 }
             }
             cities.sort((a, b) -> {
-                double angleA = Math.atan2(a.z() - middle.z(), a.x() - middle.x());
-                double angleB = Math.atan2(b.z() - middle.z(), b.x() - middle.x());
+                double angleA = StrictMath.atan2(a.z() - middle.z(), a.x() - middle.x());
+                double angleB = StrictMath.atan2(b.z() - middle.z(), b.x() - middle.x());
                 return angleA != angleB ? Double.compare(angleA, angleB) : Integer.compare(a.index(), b.index());
             });
             if (cities.size() == 2) {
@@ -170,7 +170,7 @@ public final class RoadPlanner {
     }
 
     private static double distance(SettlementSlot a, SettlementSlot b) {
-        return Math.hypot(a.x() - b.x(), a.z() - b.z());
+        return StrictMath.hypot(a.x() - b.x(), a.z() - b.z());
     }
 
     /**
@@ -222,13 +222,13 @@ public final class RoadPlanner {
         double az = raster.cellZ(path[i]);
         double bx = raster.cellX(path[j]);
         double bz = raster.cellZ(path[j]);
-        double length = Math.hypot(bx - ax, bz - az);
+        double length = StrictMath.hypot(bx - ax, bz - az);
         int far = i + 1;
         double farDistance = -1;
         for (int k = i + 1; k < j; k++) {
             double px = raster.cellX(path[k]);
             double pz = raster.cellZ(path[k]);
-            double distance = length == 0 ? Math.hypot(px - ax, pz - az) : Math.abs((bx - ax) * (az - pz) - (ax - px) * (bz - az)) / length;
+            double distance = length == 0 ? StrictMath.hypot(px - ax, pz - az) : Math.abs((bx - ax) * (az - pz) - (ax - px) * (bz - az)) / length;
             if (distance > farDistance) {
                 farDistance = distance;
                 far = k;
@@ -243,7 +243,7 @@ public final class RoadPlanner {
     }
 
     private static double cells(SurveyRaster raster, int a, int b) {
-        return Math.hypot(raster.cellX(a) - raster.cellX(b), raster.cellZ(a) - raster.cellZ(b));
+        return StrictMath.hypot(raster.cellX(a) - raster.cellX(b), raster.cellZ(a) - raster.cellZ(b));
     }
 
     /**
@@ -254,7 +254,7 @@ public final class RoadPlanner {
         double az = raster.cellZ(a) + 0.5;
         double bx = raster.cellX(b) + 0.5;
         double bz = raster.cellZ(b) + 0.5;
-        int steps = (int) Math.ceil(Math.hypot(bx - ax, bz - az) * 4) + 1;
+        int steps = (int) Math.ceil(StrictMath.hypot(bx - ax, bz - az) * 4) + 1;
         for (int k = 0; k <= steps; k++) {
             double t = (double) k / steps;
             int x = (int) Math.floor(ax + (bx - ax) * t);

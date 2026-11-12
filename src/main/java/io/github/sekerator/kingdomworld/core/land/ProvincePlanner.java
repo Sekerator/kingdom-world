@@ -162,7 +162,7 @@ public final class ProvincePlanner {
             int best = group[0];
             double bestDistance = Double.MAX_VALUE;
             for (int cell : group) {
-                double distance = Math.hypot(raster.centerX(cell) - states.rules().spawnX(), raster.centerZ(cell) - states.rules().spawnZ());
+                double distance = StrictMath.hypot(raster.centerX(cell) - states.rules().spawnX(), raster.centerZ(cell) - states.rules().spawnZ());
                 if (distance < bestDistance) {
                     bestDistance = distance;
                     best = cell;
@@ -558,7 +558,7 @@ public final class ProvincePlanner {
                     if (!large[lab] || count[lab] == 0) {
                         continue;
                     }
-                    double distance = Math.hypot(sumX[lab] / (double) count[lab] - gx, sumZ[lab] / (double) count[lab] - gz);
+                    double distance = StrictMath.hypot(sumX[lab] / (double) count[lab] - gx, sumZ[lab] / (double) count[lab] - gz);
                     if (distance < bestDistance) {
                         bestDistance = distance;
                         best = lab;
@@ -643,7 +643,7 @@ public final class ProvincePlanner {
                 if (id == 0) {
                     continue;
                 }
-                double distance = Math.hypot(raster.cellX(cell) - sumX[id] / (double) size[id], raster.cellZ(cell) - sumZ[id] / (double) size[id]);
+                double distance = StrictMath.hypot(raster.cellX(cell) - sumX[id] / (double) size[id], raster.cellZ(cell) - sumZ[id] / (double) size[id]);
                 if (distance < centerDistance[id]) {
                     centerDistance[id] = distance;
                     center[id] = cell;
@@ -729,8 +729,8 @@ public final class ProvincePlanner {
                     if (nx != ny) {
                         return nx ? 1 : -1;
                     }
-                    double dx = Math.hypot(raster.cellX(center[x]) - raster.cellX(throne), raster.cellZ(center[x]) - raster.cellZ(throne));
-                    double dy = Math.hypot(raster.cellX(center[y]) - raster.cellX(throne), raster.cellZ(center[y]) - raster.cellZ(throne));
+                    double dx = StrictMath.hypot(raster.cellX(center[x]) - raster.cellX(throne), raster.cellZ(center[x]) - raster.cellZ(throne));
+                    double dy = StrictMath.hypot(raster.cellX(center[y]) - raster.cellX(throne), raster.cellZ(center[y]) - raster.cellZ(throne));
                     return dx != dy ? Double.compare(dy, dx) : Integer.compare(x, y);
                 });
                 for (int i = 0; i < frontier && i < edge.size(); i++) {

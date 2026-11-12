@@ -282,7 +282,7 @@ public final class SettlementPlanner {
                         continue;
                     }
                     int cell = raster.index(px + dx, pz + dz);
-                    double from = Math.hypot(raster.centerX(cell) - parent.x(), raster.centerZ(cell) - parent.z());
+                    double from = StrictMath.hypot(raster.centerX(cell) - parent.x(), raster.centerZ(cell) - parent.z());
                     if (from < rules.childMin() || from > rules.childMax() || !valid(s, cell, tier) || !apart(cell, tier, -1)) {
                         continue;
                     }
@@ -341,7 +341,7 @@ public final class SettlementPlanner {
                     continue;
                 }
                 SettlementSlot other = slots.get(index);
-                if (Math.hypot(other.x() - x, other.z() - z) < rules.apart(tier, other.tier())) {
+                if (StrictMath.hypot(other.x() - x, other.z() - z) < rules.apart(tier, other.tier())) {
                     return false;
                 }
             }
@@ -357,7 +357,7 @@ public final class SettlementPlanner {
             double least = BUCKET;
             for (int index : near(x, z)) {
                 SettlementSlot other = slots.get(index);
-                least = Math.min(least, Math.hypot(other.x() - x, other.z() - z));
+                least = Math.min(least, StrictMath.hypot(other.x() - x, other.z() - z));
             }
             return least;
         }
@@ -434,7 +434,7 @@ public final class SettlementPlanner {
                         continue;
                     }
                     if (child && parent != null) {
-                        double from = Math.hypot(raster.centerX(cell) - parent.x(), raster.centerZ(cell) - parent.z());
+                        double from = StrictMath.hypot(raster.centerX(cell) - parent.x(), raster.centerZ(cell) - parent.z());
                         if (from < rules.childMin() || from > rules.childMax()) {
                             continue;
                         }
@@ -451,7 +451,7 @@ public final class SettlementPlanner {
         }
 
         private double distance(int a, int b) {
-            return Math.hypot(raster.centerX(a) - raster.centerX(b), raster.centerZ(a) - raster.centerZ(b));
+            return StrictMath.hypot(raster.centerX(a) - raster.centerX(b), raster.centerZ(a) - raster.centerZ(b));
         }
     }
 }

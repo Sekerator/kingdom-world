@@ -50,7 +50,7 @@ public record PlannedEdge(int index, int from, int to, RoadClass roadClass, int[
     public double length() {
         double length = 0;
         for (int i = 1; i < xs.length; i++) {
-            length += Math.hypot(xs[i] - xs[i - 1], zs[i] - zs[i - 1]);
+            length += StrictMath.hypot(xs[i] - xs[i - 1], zs[i] - zs[i - 1]);
         }
         return length;
     }

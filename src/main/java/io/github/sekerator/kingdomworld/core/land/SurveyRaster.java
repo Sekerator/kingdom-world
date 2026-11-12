@@ -152,7 +152,7 @@ public final class SurveyRaster {
         double minZ = originZ + cellZ(cell) * (double) CELL;
         double dx = Math.max(0, Math.max(minX - x, x - (minX + CELL)));
         double dz = Math.max(0, Math.max(minZ - z, z - (minZ + CELL)));
-        return Math.hypot(dx, dz);
+        return StrictMath.hypot(dx, dz);
     }
 
     /**
@@ -163,7 +163,7 @@ public final class SurveyRaster {
         double minZ = originZ + cellZ(cell) * (double) CELL;
         double dx = Math.max(Math.abs(minX - x), Math.abs(minX + CELL - x));
         double dz = Math.max(Math.abs(minZ - z), Math.abs(minZ + CELL - z));
-        return Math.hypot(dx, dz);
+        return StrictMath.hypot(dx, dz);
     }
 
     /**
