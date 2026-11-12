@@ -5,6 +5,7 @@ import io.github.sekerator.kingdomworld.common.network.ServerRequestGuard;
 import io.github.sekerator.kingdomworld.common.network.data.KingdomView;
 import io.github.sekerator.kingdomworld.core.membership.Permission;
 import io.github.sekerator.kingdomworld.core.membership.Role;
+import io.github.sekerator.kingdomworld.core.npc.ArchitecturalStyles;
 import io.github.sekerator.kingdomworld.core.request.RequestPolicy;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -94,6 +95,10 @@ public record KingdomActionPacket(Action action, @Nullable UUID target, int valu
         }
         if (message.action == Action.SET_PERMISSION
                 && !ServerRequestGuard.requireValid(sender, POLICY, "permission", message.value, isValidPermissionValue(message.value))) {
+            return;
+        }
+        if (message.action == Action.SET_STYLE
+                && !ServerRequestGuard.requireRange(sender, POLICY, "style", message.value, 0, ArchitecturalStyles.IDS.size() - 1)) {
             return;
         }
         KingdomActions.handleAction(sender, message);

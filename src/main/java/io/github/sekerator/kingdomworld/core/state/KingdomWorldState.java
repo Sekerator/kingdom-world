@@ -224,12 +224,14 @@ public final class KingdomWorldState {
     }
 
     /**
-     * Sets the architectural style the new buildings of a kingdom follow.
+     * Sets the architectural style the new buildings of a kingdom follow; the buildings that stand keep theirs.
      *
+     * @param style the style, or empty to forget the chosen one
      * @return {@code false} if there is no such kingdom
      */
     public boolean setKingdomStyle(UUID kingdomId, String style) {
-        return false;
+        Optional<Kingdom> kingdom = kingdoms.get(kingdomId);
+        return kingdom.isPresent() && kingdoms.update(kingdom.get().withStyle(style));
     }
 
     /**

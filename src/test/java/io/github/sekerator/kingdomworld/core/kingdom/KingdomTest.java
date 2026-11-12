@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class KingdomTest {
@@ -36,6 +37,39 @@ class KingdomTest {
         assertEquals(0xFFFFFF, kingdom.color());
         assertEquals(ID, kingdom.id());
         assertEquals(7L, kingdom.createdGameTime());
+    }
+
+    @Test
+    void styleIsEmptyUntilChosen() {
+        Kingdom kingdom = new Kingdom(ID, "Valoria", 0x123456, RULER, 42L);
+        assertEquals("", kingdom.style());
+        assertEquals("", new Kingdom(ID, "Valoria", 0x123456, RULER, 42L, null).style());
+        assertEquals(kingdom, new Kingdom(ID, "Valoria", 0x123456, RULER, 42L, ""));
+    }
+
+    @Test
+    void withStyleKeepsEverythingElse() {
+        Kingdom kingdom = new Kingdom(ID, "Valoria", 0x123456, RULER, 42L).withStyle("gothic");
+        assertEquals("gothic", kingdom.style());
+        assertEquals(new Kingdom(ID, "Valoria", 0x123456, RULER, 42L, "gothic"), kingdom);
+        assertEquals("", kingdom.withStyle(null).style());
+    }
+
+    @Test
+    void changesOfRulerAndColorKeepTheStyle() {
+        Kingdom kingdom = new Kingdom(ID, "Valoria", 0, RULER, 7L, "terem");
+        assertEquals("terem", kingdom.withRuler(null).style());
+        assertEquals("terem", kingdom.withColor(0xABCDEF).style());
+        assertEquals(new Kingdom(ID, "Valoria", 0xABCDEF, null, 7L, "terem"), kingdom.withRuler(null).withColor(0xABCDEF));
+    }
+
+    @Test
+    void equalityIncludesTheStyle() {
+        Kingdom plain = new Kingdom(ID, "Valoria", 0, RULER, 7L);
+        Kingdom nordic = plain.withStyle("nordic");
+        assertNotEquals(plain, nordic);
+        assertNotEquals(nordic, plain.withStyle("desert"));
+        assertEquals(plain, nordic.withStyle(""));
     }
 
     @Test

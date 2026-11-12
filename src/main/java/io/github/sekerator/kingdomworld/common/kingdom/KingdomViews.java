@@ -93,7 +93,8 @@ public final class KingdomViews {
                 members.map(KingdomMembers::size).orElse(0), territory.map(Territory::size).orElse(0),
                 state.chunkLimit(kingdom.id(), KingdomWorldApi.rules()), state.citizens().registry().count(kingdom.id()),
                 capital, relation, viewerRole, viewerPermissions,
-                memberEntries, applications, rightsTable, npcInfo(server, kingdom), rulerInfo(server, kingdom, viewer));
+                memberEntries, applications, rightsTable, npcInfo(server, kingdom), rulerInfo(server, kingdom, viewer),
+                KingdomStyles.of(server, kingdom.id()), KingdomStyles.changeCost());
     }
 
     /**

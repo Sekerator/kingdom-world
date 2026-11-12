@@ -592,25 +592,31 @@ public final class CityWalls {
     // ---------------------------------------------------------------- building
 
     /**
-     * Pays for the next column of a section of a wall: one item of the class for every block of it.
+     * Pays for the next column of a section of a wall: one item of the class for every block of it. The stone or the logs of
+     * the style of the kingdom go first while the storehouses have enough of them; else the item of the class it has most of.
      */
     public static boolean payColumn(MinecraftServer server, Wall wall, Road.Section section) {
         if (section.done()) {
             return false;
         }
         Wall.Block block = wall.blocksOf(section).get(section.paid());
-        TagKey<Item> tag = wall.wallClass() == Wall.WallClass.PALISADE ? WALL_WOOD : WALL_STONE;
+        boolean palisade = wall.wallClass() == Wall.WallClass.PALISADE;
+        TagKey<Item> tag = palisade ? WALL_WOOD : WALL_STONE;
         Map<String, Long> stock = KingdomStorage.countsById(server, wall.kingdomId());
         UUID key = UUID.nameUUIDFromBytes(("kingdomworld:wall:" + wall.id()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        String best = null;
-        long bestCount = 0;
-        for (Map.Entry<String, Long> entry : stock.entrySet()) {
-            Item item = PostWork.item(entry.getKey());
-            if (item instanceof BlockItem && new ItemStack(item).is(tag)) {
-                long free = entry.getValue() - Production.reservations().reserved(wall.kingdomId(), entry.getKey(), key);
-                if (free >= block.height() && free > bestCount) {
-                    best = entry.getKey();
-                    bestCount = free;
+        String best = io.github.sekerator.kingdomworld.common.kingdom.KingdomStyles.wallItem(server, wall.kingdomId(), palisade)
+                .filter(styled -> stock.containsKey(styled) && wallItem(styled, tag)
+                        && free(wall, stock, styled, key) >= block.height())
+                .orElse(null);
+        if (best == null) {
+            long bestCount = 0;
+            for (String id : stock.keySet()) {
+                if (wallItem(id, tag)) {
+                    long count = free(wall, stock, id, key);
+                    if (count >= block.height() && count > bestCount) {
+                        best = id;
+                        bestCount = count;
+                    }
                 }
             }
         }
@@ -625,6 +631,21 @@ public final class CityWalls {
         }
         section.markPaid(items);
         return true;
+    }
+
+    /**
+     * Whether an item is a block of the class of a wall.
+     */
+    private static boolean wallItem(String id, TagKey<Item> tag) {
+        Item item = PostWork.item(id);
+        return item instanceof BlockItem && new ItemStack(item).is(tag);
+    }
+
+    /**
+     * How many of an item the storehouses of the kingdom of a wall have that nothing else waits for.
+     */
+    private static long free(Wall wall, Map<String, Long> stock, String id, UUID key) {
+        return stock.getOrDefault(id, 0L) - Production.reservations().reserved(wall.kingdomId(), id, key);
     }
 
     /**

@@ -18,6 +18,7 @@ import io.github.sekerator.kingdomworld.core.membership.KingdomMembers;
 import io.github.sekerator.kingdomworld.core.membership.Member;
 import io.github.sekerator.kingdomworld.core.membership.Permission;
 import io.github.sekerator.kingdomworld.core.membership.Role;
+import io.github.sekerator.kingdomworld.core.npc.ArchitecturalStyles;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -131,7 +132,8 @@ public final class KingdomActions {
             return;
         }
         int color = KingdomColors.PALETTE.get(level.getRandom().nextInt(KingdomColors.PALETTE.size()));
-        KingdomWorldNetwork.sendToPlayer(player, new OpenFoundingScreenPacket(pos, color, 0));
+        int style = Math.max(0, ArchitecturalStyles.index(KingdomStyles.suggested(level, pos)));
+        KingdomWorldNetwork.sendToPlayer(player, new OpenFoundingScreenPacket(pos, color, style));
     }
 
     @Nullable
@@ -239,6 +241,8 @@ public final class KingdomActions {
             case ABDICATE -> feedback = target == null ? Feedback.error(KingdomError.NOT_A_MEMBER) : abdicate(player, target);
             case LEAVE -> feedback = leave(player);
             case DISSOLVE -> feedback = dissolve(player);
+            case SET_STYLE -> feedback = kingdomBefore == null ? Feedback.error(KingdomError.NOT_IN_KINGDOM)
+                    : KingdomStyles.change(server, player.getUUID(), kingdomBefore, ArchitecturalStyles.id(packet.value()));
             default -> feedback = Feedback.error(KingdomError.NO_PERMISSION);
         }
         reply(player, feedback);

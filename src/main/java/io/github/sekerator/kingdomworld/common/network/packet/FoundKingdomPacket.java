@@ -3,6 +3,7 @@ package io.github.sekerator.kingdomworld.common.network.packet;
 import io.github.sekerator.kingdomworld.common.kingdom.KingdomActions;
 import io.github.sekerator.kingdomworld.common.network.ServerRequestGuard;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
+import io.github.sekerator.kingdomworld.core.npc.ArchitecturalStyles;
 import io.github.sekerator.kingdomworld.core.request.RequestPolicy;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -37,9 +38,10 @@ public record FoundKingdomPacket(BlockPos throne, String name, int color, int st
         ServerPlayer sender = context.get().getSender();
         if (!ServerRequestGuard.admit(sender, POLICY)
                 || !ServerRequestGuard.requireLength(sender, POLICY, "name", message.name, MAX_RAW_NAME)
-                || !ServerRequestGuard.requireRange(sender, POLICY, "color", message.color, 0, Kingdom.MAX_COLOR)) {
+                || !ServerRequestGuard.requireRange(sender, POLICY, "color", message.color, 0, Kingdom.MAX_COLOR)
+                || !ServerRequestGuard.requireRange(sender, POLICY, "style", message.style, 0, ArchitecturalStyles.IDS.size() - 1)) {
             return;
         }
-        KingdomActions.foundFromThrone(sender, message.throne, message.name, message.color);
+        KingdomActions.foundFromThrone(sender, message.throne, message.name, message.color, ArchitecturalStyles.id(message.style));
     }
 }

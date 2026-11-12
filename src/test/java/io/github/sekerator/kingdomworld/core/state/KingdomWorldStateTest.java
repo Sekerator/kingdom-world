@@ -21,6 +21,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -83,6 +84,29 @@ class KingdomWorldStateTest {
         assertEquals(CreateKingdomResult.Error.NAME_TAKEN, refusal(state.found(UUID.randomUUID(), "valoria",
                 0, UUID.randomUUID(), new Capital(OVERWORLD, 10_000, 64, 0), 0L, RULES)));
         assertEquals(2, state.kingdoms().size());
+    }
+
+    @Test
+    void foundingKeepsTheStyle() {
+        CreateKingdomResult result = state.found(UUID.randomUUID(), "Valoria", 0x336699, founder,
+                new Capital(OVERWORLD, 8, 64, 8), 100L, RULES, "gothic");
+        Kingdom kingdom = assertInstanceOf(CreateKingdomResult.Created.class, result).kingdom();
+        assertEquals("gothic", kingdom.style());
+        assertEquals(Optional.of(kingdom), state.kingdomOf(founder));
+        assertEquals("", found("Far Realm", UUID.randomUUID(), 10_000, 0).style());
+    }
+
+    @Test
+    void settingTheStyleChangesOnlyTheStyle() {
+        Kingdom kingdom = found("Valoria", founder, 8, 8);
+        int before = changes.get();
+        assertTrue(state.setKingdomStyle(kingdom.id(), "southern"));
+        assertTrue(changes.get() > before);
+        assertEquals(kingdom.withStyle("southern"), state.kingdoms().get(kingdom.id()).orElseThrow());
+        assertEquals(Optional.of(kingdom.withStyle("southern")), state.kingdomOf(founder));
+        assertTrue(state.setKingdomStyle(kingdom.id(), ""));
+        assertEquals(kingdom, state.kingdoms().get(kingdom.id()).orElseThrow());
+        assertFalse(state.setKingdomStyle(UUID.randomUUID(), "southern"));
     }
 
     @Test

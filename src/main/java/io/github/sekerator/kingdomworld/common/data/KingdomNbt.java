@@ -6,6 +6,7 @@ import io.github.sekerator.kingdomworld.core.membership.Member;
 import io.github.sekerator.kingdomworld.core.membership.Permission;
 import io.github.sekerator.kingdomworld.core.membership.Role;
 import io.github.sekerator.kingdomworld.core.membership.RolePermissions;
+import io.github.sekerator.kingdomworld.core.npc.ArchitecturalStyles;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import io.github.sekerator.kingdomworld.core.territory.Capital;
 import io.github.sekerator.kingdomworld.core.territory.Territory;
@@ -26,7 +27,7 @@ import java.util.UUID;
  * NBT form of a kingdom with its land, members, rights, pending requests, population, orders and treasury (format 7; trade is kept at the root).
  *
  * <pre>
- * { id, name, color, ruler?, createdGameTime,
+ * { id, name, color, ruler?, createdGameTime, style?,
  *   capital?: { dimension, x, y, z }, chunks: long[],
  *   members: [ { player, role, joined } ],
  *   permissions?: { &lt;role&gt;: [ &lt;permission&gt;, ... ] },
@@ -35,7 +36,8 @@ import java.util.UUID;
  * </pre>
  *
  * <p>Reading is strict: anything that cannot be understood throws {@link IllegalArgumentException}, so the
- * caller can keep the data read-only instead of silently dropping parts of it.
+ * caller can keep the data read-only instead of silently dropping parts of it. The one exception is the architectural style:
+ * a style this version does not know is read as none, so that a style dropped by a later version does not lock the data.
  */
 public final class KingdomNbt {
     static final String ID = "id";
@@ -43,6 +45,7 @@ public final class KingdomNbt {
     static final String COLOR = "color";
     static final String RULER = "ruler";
     static final String CREATED_GAME_TIME = "createdGameTime";
+    static final String STYLE = "style";
     static final String CAPITAL = "capital";
     static final String DIMENSION = "dimension";
     static final String CHUNKS = "chunks";
@@ -70,6 +73,9 @@ public final class KingdomNbt {
             tag.putUUID(RULER, kingdom.rulerId());
         }
         tag.putLong(CREATED_GAME_TIME, kingdom.createdGameTime());
+        if (!kingdom.style().isEmpty()) {
+            tag.putString(STYLE, kingdom.style());
+        }
         return tag;
     }
 
@@ -135,7 +141,9 @@ public final class KingdomNbt {
             throw new IllegalArgumentException("Missing kingdom name");
         }
         UUID ruler = tag.hasUUID(RULER) ? tag.getUUID(RULER) : null;
-        return new Kingdom(tag.getUUID(ID), tag.getString(NAME), tag.getInt(COLOR), ruler, tag.getLong(CREATED_GAME_TIME));
+        String style = tag.contains(STYLE, Tag.TAG_STRING) ? tag.getString(STYLE) : "";
+        return new Kingdom(tag.getUUID(ID), tag.getString(NAME), tag.getInt(COLOR), ruler, tag.getLong(CREATED_GAME_TIME),
+                ArchitecturalStyles.known(style) ? style : "");
     }
 
     /**

@@ -44,6 +44,31 @@ class KingdomRegistryTest {
     }
 
     @Test
+    void createKeepsTheStyle() {
+        CreateKingdomResult result = registry.create(UUID.randomUUID(), "Valoria", 0x336699, null, 100L, "eastern");
+        Kingdom kingdom = assertInstanceOf(CreateKingdomResult.Created.class, result).kingdom();
+        assertEquals("eastern", kingdom.style());
+        assertEquals(Optional.of(kingdom), registry.get(kingdom.id()));
+        assertEquals("", create("Second Realm").style());
+    }
+
+    @Test
+    void updateChangesOnlyTheStyle() {
+        Kingdom kingdom = create("Valoria");
+        assertTrue(registry.update(kingdom.withStyle("mountain")));
+        assertEquals(2, changes.get());
+        Kingdom updated = registry.get(kingdom.id()).orElseThrow();
+        assertEquals("mountain", updated.style());
+        assertEquals(kingdom.name(), updated.name());
+        assertEquals(kingdom.color(), updated.color());
+        assertEquals(kingdom.createdGameTime(), updated.createdGameTime());
+        assertEquals(Optional.of(updated), registry.findByName("valoria"));
+        // The same style again changes nothing.
+        assertTrue(registry.update(kingdom.withStyle("mountain")));
+        assertEquals(2, changes.get());
+    }
+
+    @Test
     void findByNameIgnoresCaseAndSpacing() {
         Kingdom kingdom = create("Северный Предел");
         assertEquals(Optional.of(kingdom), registry.findByName("северный   предел"));
