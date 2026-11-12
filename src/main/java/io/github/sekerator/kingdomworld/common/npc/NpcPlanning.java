@@ -57,7 +57,7 @@ final class NpcPlanning {
     /** Town candidates judged in a tick. */
     private static final int TOWNS_PER_TICK = 2;
     /** Time a tick spends on the plan at most: candidates the noise judges at once are gone through several a tick. */
-    private static final long BUDGET_NANOS = 4_000_000L;
+    private static final long BUDGET_NANOS = 8_000_000L;
 
     private static SitePlanner planner;
     private static Judging judging;
@@ -360,8 +360,8 @@ final class NpcPlanning {
         int sea = generator.getSeaLevel();
         int reach = NpcComposition.districtWall(kingdom) + 8;
         int step = Math.max(8, reach / 3);
-        int allowed = CAPITAL_ROUGHNESS[kingdom.ordinal()] + ROUGHNESS_PER_PASS * Math.min(relax, 2);
-        int wetAllowed = WET_PER_PASS * Math.min(relax, 2);
+        int allowed = CAPITAL_ROUGHNESS[kingdom.ordinal()] + ROUGHNESS_PER_PASS * Math.min(relax, 3);
+        int wetAllowed = WET_PER_PASS * Math.min(relax, 3);
         // The cheap looks first: the biome of the throne, then the middle, the corners and the sides of the square. Most land
         // falls here, and the whole grid is looked at only where these nine columns are dry and about level.
         if (!allowed(biomeAt(level, x, z))) {

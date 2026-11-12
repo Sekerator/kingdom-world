@@ -112,6 +112,8 @@ public final class NpcSpawner {
     private static final int MIN_WALL_RADIUS = 24;
     /** Ticks longer than this while a kingdom appears are written to the log with their stage. */
     private static final long SLOW_TICK_NANOS = 50_000_000L;
+    /** Ticks between two saves of the world by the game itself. */
+    private static final int AUTOSAVE_TICKS = 6_000;
     /** Time of a tick the looks at the workplaces of a kingdom that just stood take at most, before its chunks go. */
     private static final long SURVEY_NANOS = 10_000_000L;
     /** Chunks of land claimed in a tick for every chunk the rules let an appearance look through. */
@@ -150,6 +152,10 @@ public final class NpcSpawner {
         long maxNanos;
         SpawnStage worstStage = SpawnStage.LOAD;
         SpawnStage lastStage = SpawnStage.LOAD;
+        /** Whether the last tick only waited: for chunks to load, or for the roads and the wall to be placed. */
+        boolean lastWaited;
+        /** Whether this tick only waits for what others place. */
+        boolean idle;
         boolean searching;
         boolean loaded;
         List<Long> land;
@@ -325,24 +331,39 @@ public final class NpcSpawner {
             job.paused++;
             return;
         }
-        // The tick an appearance starts in belongs to what started it (a player coming near, a command looking for land).
-        if (job.ticks > 1) {
-            long nanos = server.tickTimes[Math.floorMod(server.getTickCount() - 1, server.tickTimes.length)];
+        // The tick an appearance starts in belongs to what started it (a player coming near, a command looking for land), and the
+        // tick the game saves the world in (every 6000 ticks) to the save. A tick in which the appearance only waited for the
+        // game to load or generate its chunks is the game's own: it is counted in the average and told of in the log, but it is
+        // not the worst tick of the work of the appearance (the chunks are asked for a few at a time for that reason).
+        int last = server.getTickCount() - 1;
+        if (job.ticks > 1 && last % AUTOSAVE_TICKS != 0) {
+            long nanos = server.tickTimes[Math.floorMod(last, server.tickTimes.length)];
             job.sumNanos += nanos;
-            if (nanos > job.maxNanos) {
-                job.maxNanos = nanos;
-                job.worstStage = job.lastStage;
-            }
-            if (nanos > SLOW_TICK_NANOS) {
-                LOGGER.info("A tick of the appearance of {} took {} ms at {} step {}", site, String.format(java.util.Locale.ROOT, "%.1f",
-                        nanos / 1e6), job.lastStage.id(), site.step());
+            if (job.lastWaited) {
+                if (nanos > SLOW_TICK_NANOS) {
+                    LOGGER.info("A tick in which the chunks of {} were loading took {} ms", site, String.format(java.util.Locale.ROOT, "%.1f",
+                            nanos / 1e6));
+                }
+            } else {
+                if (nanos > job.maxNanos) {
+                    job.maxNanos = nanos;
+                    job.worstStage = job.lastStage;
+                }
+                if (nanos > SLOW_TICK_NANOS) {
+                    LOGGER.info("A tick of the appearance of {} took {} ms at {} step {}", site, String.format(java.util.Locale.ROOT, "%.1f",
+                            nanos / 1e6), job.lastStage.id(), site.step());
+                }
             }
         }
         job.ticks++;
         job.lastStage = site.stage();
         ServerLevel level = server.overworld();
+        Job running = job;
+        running.idle = false;
         try {
-            step(server, level, site, job);
+            step(server, level, site, running);
+            // The last step of an appearance lets the job go.
+            running.lastWaited = !running.loaded || running.idle;
         } catch (RuntimeException e) {
             LOGGER.error("The appearance of the kingdom of the world at {} failed at {} step {}", site, site.stage().id(), site.step(), e);
             stop(level, site, "failed: " + e);
@@ -1248,7 +1269,8 @@ public final class NpcSpawner {
             site.setStep(step + 1);
             return;
         }
-        professionsByRole(server, level, id);
+        professionsByRole(server, level, id, composition.level() == io.github.sekerator.kingdomworld.core.npc.NpcLevel.SMALL ? 1
+                : SEATS_IN_BUILDING);
         site.advance(SpawnStage.TOWNS);
     }
 
@@ -1516,7 +1538,7 @@ public final class NpcSpawner {
      * Gives the posts inside the buildings of a kingdom their professions by what each building is for and what stands in it
      * ({@link NpcCity#profession}), whatever template it was built from.
      */
-    private static void professionsByRole(MinecraftServer server, ServerLevel level, UUID id) {
+    private static void professionsByRole(MinecraftServer server, ServerLevel level, UUID id, int workers) {
         KingdomWorldState state = KingdomWorldApi.state(server);
         int max = GatheringSettings.rules().maxSeats();
         for (Building building : state.construction().buildingsOf(id)) {
@@ -1548,7 +1570,7 @@ public final class NpcSpawner {
             if (profession.isEmpty()) {
                 continue;
             }
-            int seats = "innkeeper".equals(profession) ? 1 : SEATS_IN_BUILDING;
+            int seats = "innkeeper".equals(profession) ? 1 : "merchant".equals(profession) ? SEATS_IN_BUILDING : workers;
             for (WorkPost post : inside) {
                 state.setPostProfession(null, post.pos(), profession);
                 state.setPostSeats(null, post.pos(), Math.max(1, Math.min(seats, max)), max);
@@ -2345,6 +2367,7 @@ public final class NpcSpawner {
         }
         if (!standing && site.step() < PLACE_WAIT_TICKS) {
             site.setStep(site.step() + 1);
+            job.idle = true;
             return;
         }
         // While the land is still loaded, everyone finds a workplace and looks at it: a farmer who never saw its field would

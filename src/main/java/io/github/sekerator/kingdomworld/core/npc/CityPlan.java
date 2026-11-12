@@ -162,7 +162,7 @@ final class CityPlan {
         wanted.put(SOUTH, names(small ? List.of("market_square", "well", "bakery")
                 : large ? List.of("market_square", "fountain", "market_hall", "well", "market_square", "bakery", "weavery", "well")
                 : List.of("market_square", "fountain", "market_hall", "bakery", "well")));
-        wanted.put(NORTH, names(small ? List.of("barracks_hall")
+        wanted.put(NORTH, names(small ? List.of("barracks_hall", "carpentry")
                 : large ? List.of("barracks_hall", "drill_yard", "barracks_hall", "mage_tower", "well")
                 : List.of("barracks_hall", "drill_yard")));
         // A small capital keeps its stores in a barn: two storehouses hold what one would run over with after a harvest.
@@ -286,12 +286,13 @@ final class CityPlan {
         left = job(jobs, "farmer", 2 * (fields + 2 * towns), left);
         left = job(jobs, "merchant", 2 * markets, left);
         left = job(jobs, "innkeeper", taverns, left);
-        left = job(jobs, "crafter", 2 * workshops + towns, left);
+        // A small capital has one worker at each workshop, the others two; the carriers take who is left.
+        left = job(jobs, "crafter", (small ? 1 : 2) * workshops + towns, left);
+        left = job(jobs, "registrar", 1, left);
         left = job(jobs, "builder", large ? 4 : small ? 1 : 2, left);
-        left = job(jobs, "carrier", large ? 6 : small ? 2 : 4, left);
         left = job(jobs, "lumberjack", large ? 6 : small ? 2 : 4, left);
         left = job(jobs, "miner", large ? 6 : small ? 2 : 3, left);
-        left = job(jobs, "registrar", 1, left);
+        left = job(jobs, "carrier", large ? 6 : small ? 2 : 4, left);
         if (!small) {
             left = job(jobs, "minter", 1, left);
         }

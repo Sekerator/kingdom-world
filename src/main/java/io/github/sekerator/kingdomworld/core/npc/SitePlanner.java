@@ -24,8 +24,11 @@ public final class SitePlanner {
     public static final int SHIFTS = 8;
     /** How far a shifted candidate lies from the original one, in blocks. */
     public static final int SHIFT_STEP = 320;
-    /** Passes over the candidates: the first asks everything of a place, each later one less. */
-    public static final int PASSES = 4;
+    /**
+     * Passes over the candidates: the first asks everything of a place, each later one less; only on the last one, after the
+     * pass that asks least has looked for the larger kingdoms alone, a smaller kingdom may take the place of a larger one.
+     */
+    public static final int PASSES = 5;
     /** The pass from which capitals may stand closer to each other. */
     public static final int CLOSER_FROM = 2;
 

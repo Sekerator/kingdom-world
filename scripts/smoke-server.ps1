@@ -1090,8 +1090,9 @@ Invoke-Phase 'run1' {
                 [void](Wait-ForNewLog $server "Ran 1 simulation step\(s\) of $KingdomName" $CommandTimeout $runs)
                 # The zone of the post is looked at over a few ticks before the minter knows its mint.
                 Start-Sleep -Seconds 3
-                # With the mods of the pack the smelter makes copper ingots of more ores; the minter needs more time for them all.
-                $mintSteps = if ($Pack) { 12 } else { 6 }
+                # The smelter makes copper ingots of the ore the miner brings (more ores with the mods of the pack), and the minter
+                # strikes them too: where the land of the world gives copper, six steps are not enough for the iron as well.
+                $mintSteps = 12
                 $runs = Count-Log "Ran $mintSteps simulation step\(s\) of $KingdomName"
                 Send-ServerCommand $server "kingdomworld admin simulate $KingdomName $mintSteps"
                 if (-not (Wait-ForNewLog $server "Ran $mintSteps simulation step\(s\) of $KingdomName" $CommandTimeout $runs)) {

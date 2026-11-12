@@ -607,7 +607,8 @@ public final class RulerMind {
         }
         for (String item : TOOLS) {
             if (view.makeable.contains(item) && !view.ordered.contains(item) && shortage(view, item) > 0) {
-                out.add(new Scored(25, RulerDecision.of(Kind.ORDER, item, want(view, item, 1))));
+                // Before weapons in peace: woodcutters and miners whose tool wore out stand idle until the smith makes one.
+                out.add(new Scored(45, RulerDecision.of(Kind.ORDER, item, want(view, item, 1))));
                 break;
             }
         }
