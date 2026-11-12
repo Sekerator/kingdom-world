@@ -293,13 +293,14 @@ final class Furnish {
 
     /**
      * The buildings of a style with their furniture tidied by what they are: a home keeps one container and one stove, a
-     * workshop or a tavern its stoves, a castle the chests of its treasury.
+     * workshop or a tavern its stoves, a castle the chests of its treasury, a store all its containers.
      */
     static java.util.List<BuildingGenerator.Building> tidy(java.util.List<BuildingGenerator.Building> buildings) {
         for (BuildingGenerator.Building building : buildings) {
             String role = building.role();
             boolean work = role.equals("workshop") || role.equals("tavern");
-            int containers = role.equals("house") ? 1 : building.type().equals("palace") ? 4 : 2;
+            // A store keeps all its containers: they are what it is for.
+            int containers = role.equals("warehouse") ? Integer.MAX_VALUE : role.equals("house") ? 1 : building.type().equals("palace") ? 4 : 2;
             tidy(building.structure(), containers, work ? 8 : building.type().equals("palace") ? 2 : 1);
         }
         return buildings;

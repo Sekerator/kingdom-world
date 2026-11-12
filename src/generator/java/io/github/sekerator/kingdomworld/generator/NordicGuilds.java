@@ -58,6 +58,13 @@ final class NordicGuilds {
     private static final String RUNE_GLASS = Kit.stainedPane("light_blue");
     private static final String SOUL_LANTERN = "minecraft:soul_lantern[hanging=false,waterlogged=false]";
     private static final String SOUL_HANGING = "minecraft:soul_lantern[hanging=true,waterlogged=false]";
+    /** A fire burning in a hearth or a brazier. */
+    private static final String FIRE = "minecraft:campfire[facing=north,lit=true,signal_fire=false,waterlogged=false]";
+    /** A drinking horn lying on a board along x, and one lying along z. */
+    private static final String HORN_WE = "minecraft:lightning_rod[facing=east,powered=false,waterlogged=false]";
+    private static final String HORN_NS = "minecraft:lightning_rod[facing=south,powered=false,waterlogged=false]";
+    /** The head of a spear standing in its rack. */
+    private static final String SPEAR = "minecraft:lightning_rod[facing=up,powered=false,waterlogged=false]";
     /** Rough stone as the blocks of a roof, for the sloping skirts of plinths. */
     private static final Kit.Roof ROUGH = new Kit.Roof(Nordic.FOOTING, Nordic.FOOTING_STAIRS, Nordic.FOOTING_SLAB);
 
@@ -411,10 +418,13 @@ final class NordicGuilds {
      * behind the front wall; in the middle of the front the gate tower, its roofs stacked in tiers (two skirts, the lookout
      * under two painted gables crossing with dragon heads to the west and the east, a needle at the crossing), the gate
      * passage through its foot and the banners of the guild beside it. In the court dummies, targets, a rune stone and
-     * braziers. The great hall holds the high seat of the master between carved pillars, the long hearth, three feast boards,
-     * the counter of the registrar with the desk, his post and the chest, the contract board and the trophies; the west
-     * wing the armoury and above it the map room of the guild; the east wing the kitchen and above it the chambers of honour
-     * with beds of state; the gate tower the guard room and the watch room.
+     * braziers. The great hall is a mead hall under tie beams hung with lanterns: the sunken hearth behind iron bars with
+     * the cauldron over it, the high seat of the master between carved posts, four long tables with benches beside the
+     * hearth and one across before the honour wall of trophies and the casks of mead, shields and cloth on the walls, furs
+     * on the floor, the counter of the registrar with the desk, his post and the chest, and the board of contracts on its
+     * east gable (see {@link #meadHall}); the west wing holds the armoury and above it the map room of the guild; the east
+     * wing the kitchen and above it two chambers of honour with beds of state; the gate tower a passage under a ceiling of
+     * beams with the benches of the gate guard, the guard room over the gate and two watch rooms (see {@link #gateRooms}).
      */
     private static Drawn guildSS() {
         Structure s = new Structure(35, 44, 37);
@@ -499,8 +509,6 @@ final class NordicGuilds {
         int lf = lookout(s, gx, gz, 3, 21);
         int crest = crown(s, gx, gz, 4, lf + 4, "we", null);
         spike(s, gx, gz, crest, 6);
-        Furnish.bench(s, gx + 2, gz - 1, gx + 2, gz + 1, 17, "west", "spruce");
-        s.set(gx - 2, 17, gz + 2, grindstone("east"));
         Nordic.window(s, gx, 18, gz + 3, "south", 2, true);
         Nordic.window(s, gx - 3, 18, gz, "west", 1, true);
         Nordic.window(s, gx + 3, 18, gz, "east", 1, true);
@@ -512,15 +520,10 @@ final class NordicGuilds {
         s.fill(gx - 1, 0, gz - 4, gx + 1, 0, gz - 4, Nordic.FLOOR);
         s.set(gx - 2, 4, gz + 4, Kit.wallBanner(GUILD, "south")).set(gx + 2, 4, gz + 4, Kit.wallBanner(GUILD, "south"));
         s.set(gx - 2, 6, gz + 4, Kit.wallBanner(GUILD, "south")).set(gx + 2, 6, gz + 4, Kit.wallBanner(GUILD, "south"));
-        s.fill(gx - 2, 1, gz - 2, gx - 2, lf, gz - 2, Kit.ladder("south"));
-        lamp(s, gx, 4, gz);
-        Furnish.bench(s, gx + 2, gz - 1, gx + 2, gz + 1, 11, "west", "spruce");
-        s.set(gx + 2, 11, gz + 2, grindstone("west")).set(gx - 2, 11, gz + 2, grindstone("east"));
-        s.set(gx - 2, 11, gz + 1, Kit.topSlab(Nordic.FLOOR_SLAB)).set(gx - 2, 12, gz + 1, Furnish.candles(2));
-        lamp(s, gx + 2, 14, gz + 2);
         Nordic.window(s, gx, 12, gz + 3, "south", 2, true);
         Nordic.window(s, gx - 3, 12, gz, "west", 2, true);
         Nordic.window(s, gx + 3, 12, gz, "east", 2, true);
+        gateRooms(s, gx, gz, lf);
 
         // the court
         dummy(s, 11, 22);
@@ -533,79 +536,413 @@ final class NordicGuilds {
         brazier(s, 12, 28);
         brazier(s, 22, 28);
 
-        // the great hall: the high seat, the hearth, the boards, the counter, the board of contracts and the trophies
-        Nordic.longHearth(s, 13, 8, 21, 10, STAND, ceiling(s, 17, STAND, 9));
-        Nordic.feastBoard(s, 11, 5, 15, 5, STAND);
-        Nordic.feastBoard(s, 19, 5, 22, 5, STAND);
-        Nordic.feastBoard(s, 11, 13, 22, 13, STAND);
-        Nordic.highSeat(s, 17, STAND, 3, "south");
-        Nordic.tapestry(s, 12, 3, 15, 3, 5, "south");
-        Nordic.tapestry(s, 19, 3, 22, 3, 5, "south");
-        s.fill(23, STAND, 9, 27, STAND, 9, Kit.topSlab(Nordic.FLOOR_SLAB));
-        s.set(25, STAND, 9, DESK);
-        s.set(23, STAND + 1, 9, Furnish.candles(3)).set(27, STAND + 1, 9, Kit.lantern());
-        s.set(25, STAND, 7, WORK_POST);
-        s.set(24, STAND, 7, Kit.chest("south"));
-        Furnish.books(s, 23, 4, 26, 4, STAND, STAND + 1);
-        skull(s, 23, STAND + 2, 4, "south", true);
-        skull(s, 26, STAND + 2, 4, "south", false);
-        contractBoard(s, 20, STAND, 16, "north", 2);
-        s.set(7, STAND + 3, c, "minecraft:dragon_wall_head[facing=east]");
-        skull(s, 7, STAND + 2, c - 2, "east", true);
-        skull(s, 7, STAND + 2, c + 2, "east", false);
-        s.set(7, STAND, c - 3, grindstone("east")).set(7, STAND, c + 3, grindstone("east"));
-        Nordic.tapestry(s, 7, c - 1, 7, c + 1, STAND + 1, "east");
-        for (int x : new int[]{11, 17, 23}) {
-            lamp(s, x, top - 1, 6);
-            lamp(s, x, top - 1, 12);
-        }
-        lamp(s, 9, top - 1, c);
-        lamp(s, 26, top - 1, 12);
-
-        // the west wing: the armoury and the map room above it
+        // the great hall, the armoury and the map room in the west wing, the kitchen and the chambers in the east wing
+        meadHall(s);
         s.door(7, STAND, 25, Nordic.DOOR, "west", "left");
         s.fill(6, STAND, 20, 6, 6, 20, Kit.ladder("south"));
-        for (int z = 21; z <= 29; z += 2) {
-            s.set(2, STAND, z, grindstone("east"));
-        }
-        s.set(4, STAND, 30, "minecraft:anvil[facing=east]");
-        Furnish.crate(s, 2, STAND, 30, "spruce");
-        Furnish.crate(s, 6, STAND, 30, "spruce");
-        s.set(6, STAND, 29, "minecraft:hay_block[axis=y]");
-        for (int z = 24; z <= 26; z++) {
-            skull(s, 2, STAND + 2, z, "east", z % 2 == 0);
-        }
-        lamp(s, 4, 5, 22);
-        lamp(s, 4, 5, 28);
-        guildMap(s, 2, 8, 19);
-        s.set(3, 7, 21, lectern("south")).set(3, 7, 22, Kit.stairs(Nordic.FLOOR_STAIRS, "south"));
-        s.set(4, 7, 25, CARTOGRAPHY).set(3, 7, 25, Kit.stairs(Nordic.FLOOR_STAIRS, "west"))
-                .set(5, 7, 25, Kit.stairs(Nordic.FLOOR_STAIRS, "east"));
-        Furnish.books(s, 2, 27, 2, 30, 7, 8);
-        Furnish.books(s, 6, 27, 6, 30, 7, 8);
-        Nordic.furs(s, 3, 27, 5, 29, 7);
-        lamp(s, 4, 10, 23);
-        lamp(s, 4, 10, 28);
-
-        // the east wing: the kitchen and the chambers of honour above it
+        armoury(s);
+        mapRoom(s);
         s.door(27, STAND, 25, Nordic.DOOR, "east", "left");
         s.fill(28, STAND, 20, 28, 6, 20, Kit.ladder("south"));
-        Furnish.kitchen(s, 30, STAND, 20, "south", "spruce");
-        Nordic.feastBoard(s, 30, 24, 30, 29, STAND);
-        Furnish.crate(s, 32, STAND, 30, "spruce");
-        Furnish.sack(s, 31, STAND, 30, true);
-        Furnish.sack(s, 32, STAND, 29, false);
-        lamp(s, 30, 5, 23);
-        lamp(s, 30, 5, 28);
-        Furnish.canopyBed(s, 31, 7, 23, "north", "spruce");
-        Furnish.canopyBed(s, 31, 7, 29, "north", "spruce");
-        Nordic.furs(s, 29, 25, 30, 27, 7);
-        s.set(29, 7, 21, Kit.topSlab(Nordic.FLOOR_SLAB)).set(29, 8, 21, Furnish.candles(2));
-        lamp(s, 29, 10, 24);
-        lamp(s, 29, 10, 29);
+        kitchen(s);
+        chambers(s);
         s.connect();
         s.trimSky(3);
         return new Drawn(s, new int[]{17, STAND, 17}, List.of(new int[]{23, STAND, 10}));
+    }
+
+    // ---------------------------------------------------------------- the rooms of the guild court SS
+
+    /**
+     * The great hall of the guild court SS, a longhouse along x from its gable on x = 6 to that on x = 28 around the line
+     * z = 9, its floor on layer {@link #FLOOR}, its walls up to the plate on layer 7, its door in the middle of its south
+     * wall. Tie beams cross it on the plates and lanterns hang from them on chains. In its middle the sunken hearth with the
+     * cauldron hanging over it from the middle beam; across it from the door the high seat of the master between his carved
+     * posts under the banner of the guild, shields beside it; to his left and right and on both sides of the door long
+     * tables with benches along the walls and benches before them, horns and candles on the boards, furs on the floor, a
+     * frieze of cloth over the windows, spears in their racks beside the door. At
+     * the west gable the honour wall: the head of a dragon over a red cloth, skulls, shields and weapon racks, the casks of
+     * mead with their taps in the corners and a long table across before it. At the east end the counter of the registrar
+     * with the guild desk in its middle, his post, his chest, his shelves and his writing board behind it, and before it the
+     * bench of those who wait and the board of contracts on the gable.
+     */
+    private static void meadHall(Structure s) {
+        int y = STAND;
+        int c = 9;
+        for (int x = 9; x <= 25; x += 4) {
+            int w = Nordic.hullWidth(x, 6, 28, 5, 7);
+            s.fill(x, 7, c - w + 1, x, 7, c + w - 1, Kit.log(Nordic.LOG, "z"));
+        }
+        // the hearth and the cauldron over it
+        sunkenHearth(s, 13, 21, c, y);
+        s.fill(17, y + 2, c, 17, 6, c, Kit.chain());
+        s.set(17, y + 1, c, CAULDRON);
+
+        // the high seat between the carved posts, the banners of the guild on them, shields and furs before it
+        Nordic.highSeat(s, 17, y, 3, "south");
+        for (int x : new int[]{16, 18}) {
+            s.set(x, y + 1, 3, POST).set(x, y + 2, 3, STAVE).set(x, y + 3, 3, POST).set(x, y + 4, 3, Kit.lantern());
+        }
+        s.set(17, y + 4, 3, Kit.wallBanner(GUILD, "south"));
+        shield(s, 15, y + 2, 3, "south", true);
+        shield(s, 19, y + 2, 3, "south", true);
+        Nordic.furs(s, 15, 6, 19, 7, y);
+        // a frieze of cloth along the long walls over the windows
+        Nordic.tapestry(s, 12, 3, 15, 3, y + 4, "south");
+        Nordic.tapestry(s, 19, 3, 22, 3, y + 4, "south");
+        Nordic.tapestry(s, 12, 15, 15, 15, y + 4, "north");
+        Nordic.tapestry(s, 19, 15, 22, 15, y + 4, "north");
+
+        // the long tables on both sides of the hearth, benches along the walls and before the boards
+        for (int x1 : new int[]{12, 19}) {
+            int x2 = x1 + 3;
+            Furnish.bench(s, x1, 3, x2, 3, y, "south", "spruce");
+            hallTable(s, x1, 4, x2, 4, y, "s");
+            hallTable(s, x1, 14, x2, 14, y, "n");
+            Furnish.bench(s, x1, 15, x2, 15, y, "north", "spruce");
+        }
+        Nordic.furs(s, 16, 11, 18, 12, y);
+        Nordic.furs(s, 11, 7, 12, 11, y);
+        for (int x : new int[]{16, 18}) {
+            s.set(x, y, 15, Nordic.FENCE).set(x, y + 1, 15, SPEAR);
+        }
+        shield(s, 12, y + 2, 3, "south", false);
+        shield(s, 22, y + 2, 3, "south", false);
+        shield(s, 12, y + 2, 15, "north", true);
+        shield(s, 15, y + 2, 15, "north", false);
+        shield(s, 19, y + 2, 15, "north", false);
+        shield(s, 22, y + 2, 15, "north", true);
+        for (int x = 8; x <= 11; x++) {
+            if (x % 2 == 0) {
+                s.set(x, y + 3, 4, Kit.wallBanner("red", "south")).set(x, y + 3, 14, Kit.wallBanner("red", "north"));
+            } else {
+                shield(s, x, y + 2, 4, "south", x == 9);
+                shield(s, x, y + 2, 14, "north", x == 11);
+            }
+        }
+
+        // the honour wall on the west gable, the casks of mead in its corners and the long table across before it
+        s.set(7, y + 3, c, "minecraft:dragon_wall_head[facing=east]");
+        s.set(7, y + 2, c, Kit.wallBanner("red", "east"));
+        for (int z : new int[]{c - 2, c + 2}) {
+            s.set(7, y, z, grindstone("east"));
+            skull(s, 7, y + 2, z, "east", z < c);
+        }
+        shield(s, 7, y + 1, c - 1, "east", true);
+        shield(s, 7, y + 1, c + 1, "east", false);
+        for (int z : new int[]{5, 6, 12, 13}) {
+            cask(s, 7, y, z, "east");
+        }
+        hallTable(s, 9, 7, 9, 11, y, "we");
+
+        // the counter of the registrar, the desk in its middle, his post and his chest behind it
+        s.fill(23, y, c, 27, y, c, Kit.topSlab(Nordic.SLAB));
+        s.set(25, y, c, DESK);
+        s.set(23, y + 1, c, Furnish.candles(3)).set(27, y + 1, c, Kit.lantern());
+        s.set(25, y, 7, WORK_POST);
+        s.set(24, y, 7, Kit.chest("south"));
+        Furnish.books(s, 23, 4, 26, 4, y, y + 1);
+        skull(s, 23, y + 2, 4, "south", true);
+        s.set(24, y + 2, 4, Furnish.candles(2)).set(25, y + 2, 4, HORN_NS);
+        skull(s, 26, y + 2, 4, "south", false);
+        s.set(27, y, 6, Kit.topSlab(Nordic.SLAB)).set(27, y + 1, 6, Furnish.candles(1));
+        s.set(27, y, 7, Kit.topSlab(Nordic.SLAB)).set(27, y + 1, 7, "minecraft:white_carpet");
+        s.set(26, y, 7, Kit.stairs(Nordic.STAIRS, "west"));
+        Furnish.crate(s, 23, y, 5, "spruce");
+        s.set(23, y + 1, 5, Furnish.candles(2));
+        Nordic.furs(s, 24, 5, 26, 6, y);
+        s.set(27, y + 3, 5, Kit.wallBanner(GUILD, "west"));
+        // those who wait sit on a bench under the window and read the board of contracts on the gable
+        Furnish.bench(s, 23, 14, 26, 14, y, "north", "spruce");
+        Nordic.furs(s, 24, 11, 26, 13, y);
+        noticeBoard(s, 28, y, 10, 13);
+
+        // the lanterns on the beams
+        for (int x : new int[]{13, 21}) {
+            lamp(s, x, 5, 4);
+            lamp(s, x, 5, 14);
+        }
+        lamp(s, 9, 5, 7);
+        lamp(s, 9, 5, 11);
+        lamp(s, 17, 5, 6);
+        lamp(s, 17, 5, 13);
+        lamp(s, 25, 5, 6);
+        lamp(s, 25, 5, 12);
+    }
+
+    /**
+     * A sunken hearth along x from x1 to x2 around the line z, three wide, in a hall whose floor lies on layer
+     * {@code y - 1}: a trough of rough stone let into the floor, fires burning in it on every other cell and glowing embers
+     * deep between them, iron bars round its rim on the layer one stands on, so that no one steps into the fire.
+     */
+    private static void sunkenHearth(Structure s, int x1, int x2, int z, int y) {
+        for (int x = x1; x <= x2; x++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (dz != 0 || x == x1 || x == x2) {
+                    s.set(x, y - 1, z + dz, Nordic.FOOTING);
+                    s.set(x, y, z + dz, Kit.BARS);
+                } else if ((x - x1) % 2 == 1) {
+                    s.set(x, y - 2, z, Nordic.EMBERS);
+                    s.set(x, y - 1, z, FIRE);
+                    s.set(x, y, z, AIR);
+                } else {
+                    s.set(x, y - 2, z, "minecraft:magma_block");
+                    s.set(x, y - 1, z, AIR);
+                    s.set(x, y, z, AIR);
+                }
+            }
+        }
+    }
+
+    /**
+     * A long table of the hall from (x1, z1) to (x2, z2), along x or z, on layer y: boards of upper slabs with candles and
+     * drinking horns on them, and benches of lower slabs along it on the sides named in {@code benches} ("n", "s", "w",
+     * "e").
+     */
+    private static void hallTable(Structure s, int x1, int z1, int x2, int z2, int y, String benches) {
+        boolean alongX = x2 - x1 >= z2 - z1;
+        int n = alongX ? x2 - x1 : z2 - z1;
+        for (int i = 0; i <= n; i++) {
+            int x = alongX ? x1 + i : x1;
+            int z = alongX ? z1 : z1 + i;
+            s.set(x, y, z, Kit.topSlab(Nordic.SLAB));
+            if (i % 4 == 1) {
+                s.set(x, y + 1, z, Furnish.candles(2 + i % 3 % 2));
+            } else if (i % 4 == 3) {
+                s.set(x, y + 1, z, alongX ? HORN_NS : HORN_WE);
+            }
+            for (int[] b : new int[][]{{0, -1, 'n'}, {0, 1, 's'}, {-1, 0, 'w'}, {1, 0, 'e'}}) {
+                if (benches.indexOf(b[2]) >= 0) {
+                    s.set(x + b[0], y, z + b[1], Kit.slab(Nordic.SLAB));
+                }
+            }
+        }
+    }
+
+    /**
+     * A shield hung on the wall behind (x, y, z), looking {@code facing}: a round board of dark oak, or painted red.
+     */
+    private static void shield(Structure s, int x, int y, int z, String facing, boolean red) {
+        s.set(x, y, z, Kit.shutter(red ? "minecraft:mangrove_trapdoor" : "minecraft:dark_oak_trapdoor", facing));
+    }
+
+    /**
+     * Two casks of mead lying one on the other at (x, y, z) and above, their heads looking {@code facing}, a tap in the
+     * head of the lower one.
+     */
+    private static void cask(Structure s, int x, int y, int z, String facing) {
+        int[] f = Furnish.step(facing);
+        String axis = f[0] != 0 ? "x" : "z";
+        s.set(x, y, z, Kit.log(Nordic.LOG, axis)).set(x, y + 1, z, Kit.log(Nordic.LOG, axis));
+        s.set(x + f[0], y, z + f[1], "minecraft:spruce_button[face=wall,facing=" + facing + ",powered=false]");
+    }
+
+    /**
+     * The board of contracts in a gable on x from z1 to z2, looking west into the hall whose floor one stands on at layer
+     * y: boards in the wall three layers high between two posts under a beam, the notices of white and yellow cloth hanging
+     * on them, and a ledge before them with papers and candles.
+     */
+    private static void noticeBoard(Structure s, int x, int y, int z1, int z2) {
+        String[] papers = {"white", "yellow", "white", "light_gray"};
+        for (int z = z1; z <= z2; z++) {
+            int i = z - z1;
+            s.fill(x, y + 1, z, x, y + 3, z, Nordic.PLANKS);
+            s.set(x - 1, y, z, Kit.topSlab(Nordic.SLAB));
+            s.set(x - 1, y + 1, z, i % 2 == 0 ? "minecraft:white_carpet" : Furnish.candles(2));
+            s.set(x - 1, y + 3, z, Kit.wallBanner(papers[i % papers.length], "west"));
+        }
+        s.fill(x, y + 1, z1 - 1, x, y + 3, z1 - 1, POST);
+        s.fill(x, y + 1, z2 + 1, x, y + 3, z2 + 1, POST);
+        s.fill(x, y + 4, z1 - 1, x, y + 4, z2 + 1, Kit.log(Nordic.LOG, "z"));
+    }
+
+    /**
+     * The rooms of the gate tower of the guild court SS around (gx, gz), whose walls stand three blocks out, its floor on
+     * the ground, the lookout on layer {@code lf}: over the passage a ceiling of boards on beams on layer 5, along the sides
+     * of the passage the benches of the gate guard, shields, weapon racks and the banners of the guild; above the gate the
+     * guard room with its table and benches, lit by a window over the gate on each side; the watch rooms above it with their
+     * tables, benches and furs; a ladder along the back wall through all of them.
+     */
+    private static void gateRooms(Structure s, int gx, int gz, int lf) {
+        // the ceiling over the passage
+        s.fill(gx - 2, 5, gz - 2, gx + 2, 5, gz + 2, Nordic.FLOOR);
+        for (int z : new int[]{gz - 1, gz + 1}) {
+            s.fill(gx - 2, 5, z, gx + 2, 5, z, Kit.log(Nordic.LOG, "x"));
+        }
+        s.fill(gx - 2, 1, gz - 2, gx - 2, lf, gz - 2, Kit.ladder("south"));
+        // the passage: the benches of the guard, shields and banners over them, weapon racks
+        Furnish.bench(s, gx - 2, gz - 1, gx - 2, gz + 1, 1, "east", "spruce");
+        Furnish.bench(s, gx + 2, gz - 1, gx + 2, gz + 1, 1, "west", "spruce");
+        s.set(gx - 2, 1, gz + 2, grindstone("east")).set(gx + 2, 1, gz + 2, grindstone("west"));
+        s.set(gx + 2, 1, gz - 2, grindstone("west"));
+        for (int side = -1; side <= 1; side += 2) {
+            String in = side < 0 ? "east" : "west";
+            int x = gx + 2 * side;
+            shield(s, x, 3, gz - 1, in, side < 0);
+            shield(s, x, 3, gz + 1, in, side > 0);
+            s.set(x, 4, gz, Kit.wallBanner(GUILD, in));
+        }
+        lamp(s, gx, 4, gz);
+        lamp(s, gx, 4, gz - 2);
+        lamp(s, gx, 4, gz + 2);
+
+        // the guard room over the gate
+        int g = 6;
+        Nordic.window(s, gx, g + 1, gz + 3, "south", 2, true);
+        Nordic.window(s, gx, g + 1, gz - 3, "north", 2, true);
+        hallTable(s, gx - 1, gz, gx + 1, gz, g, "ns");
+        s.set(gx + 2, g, gz - 2, grindstone("west")).set(gx + 2, g, gz + 2, grindstone("west"));
+        Furnish.crate(s, gx - 2, g, gz + 2, "spruce");
+        s.set(gx - 2, g + 1, gz + 2, Furnish.candles(2));
+        Nordic.furs(s, gx - 1, gz + 2, gx + 1, gz + 2, g);
+        shield(s, gx + 2, g + 2, gz, "west", true);
+        shield(s, gx - 2, g + 2, gz, "east", false);
+        lamp(s, gx, 9, gz);
+
+        // the first watch room: a bench and a table by the east wall, furs, weapon racks
+        int w1 = 11;
+        Furnish.bench(s, gx + 2, gz - 1, gx + 2, gz + 1, w1, "west", "spruce");
+        s.fill(gx + 1, w1, gz - 1, gx + 1, w1, gz + 1, Kit.topSlab(Nordic.SLAB));
+        s.set(gx + 1, w1 + 1, gz - 1, Furnish.candles(2)).set(gx + 1, w1 + 1, gz + 1, HORN_WE);
+        s.set(gx + 2, w1, gz + 2, grindstone("west")).set(gx - 2, w1, gz + 2, grindstone("east"));
+        s.set(gx - 2, w1, gz + 1, Kit.topSlab(Nordic.FLOOR_SLAB)).set(gx - 2, w1 + 1, gz + 1, Furnish.candles(2));
+        Nordic.furs(s, gx - 1, gz - 1, gx, gz + 1, w1);
+        lamp(s, gx + 2, 14, gz + 2);
+        lamp(s, gx - 1, 14, gz);
+
+        // the second watch room under the lookout: a bench, a table with the horn of the watch, furs
+        int w2 = 17;
+        Furnish.bench(s, gx + 2, gz - 1, gx + 2, gz + 1, w2, "west", "spruce");
+        s.set(gx + 1, w2, gz, Kit.topSlab(Nordic.SLAB)).set(gx + 1, w2 + 1, gz, HORN_WE);
+        s.set(gx - 2, w2, gz + 2, grindstone("east"));
+        Nordic.furs(s, gx - 1, gz - 1, gx, gz + 1, w2);
+        lamp(s, gx - 1, 20, gz + 1);
+    }
+
+    /**
+     * The armoury on the ground floor of the west wing of the guild court SS (inside x 2..6, z 20..30, standing on layer
+     * {@link #STAND} under the floor of the map room on layer 6): weapon racks along the outer wall under the skulls of
+     * beasts, racks of spears and shields along the inner wall, a table of blades in the middle, the anvil, crates and hay
+     * at the far end, lanterns hanging from the beams.
+     */
+    private static void armoury(Structure s) {
+        int y = STAND;
+        for (int z = 21; z <= 29; z += 2) {
+            s.set(2, y, z, grindstone("east"));
+        }
+        for (int z = 24; z <= 26; z++) {
+            skull(s, 2, y + 2, z, "east", z % 2 == 0);
+        }
+        for (int z : new int[]{22, 28}) {
+            s.set(2, y + 2, z + (z < 25 ? 1 : -1), Kit.wallBanner(GUILD, "east"));
+        }
+        // spears in racks and shields on the inner wall
+        for (int z : new int[]{22, 23, 27, 28}) {
+            s.set(6, y, z, Nordic.FENCE).set(6, y + 1, z, SPEAR);
+        }
+        shield(s, 6, y + 2, 22, "west", true);
+        shield(s, 6, y + 2, 23, "west", false);
+        shield(s, 6, y + 2, 27, "west", false);
+        shield(s, 6, y + 2, 28, "west", true);
+        // the table of blades
+        s.fill(4, y, 24, 4, y, 26, Kit.topSlab(Nordic.SLAB));
+        s.set(4, y + 1, 24, HORN_NS).set(4, y + 1, 26, Furnish.candles(3));
+        s.set(4, y + 1, 25, "minecraft:lightning_rod[facing=south,powered=false,waterlogged=false]");
+        s.set(4, y, 30, "minecraft:anvil[facing=east]");
+        Furnish.crate(s, 2, y, 30, "spruce");
+        Furnish.crate(s, 6, y, 30, "spruce");
+        s.set(6, y, 29, "minecraft:hay_block[axis=y]");
+        s.set(5, y, 30, "minecraft:hay_block[axis=y]");
+        lamp(s, 4, 5, 22);
+        lamp(s, 4, 5, 28);
+    }
+
+    /**
+     * The map room of the guild over the armoury in the west wing of the guild court SS (inside x 2..6, z 20..30, standing
+     * on layer 7): the map of the lands painted on the north gable with candles under it, the one lectern of the guild
+     * with its stool, the cartography table by the window, a great table in the middle with a map of cloth spread on it and
+     * chairs round it, shelves of books along both walls with candles on them, furs, crates of scrolls and the banner of
+     * the guild on the south gable.
+     */
+    private static void mapRoom(Structure s) {
+        int y = 7;
+        guildMap(s, 2, y + 1, 19);
+        s.set(3, y, 21, lectern("south")).set(3, y, 22, Kit.stairs(Nordic.FLOOR_STAIRS, "south"));
+        s.set(2, y, 21, Kit.topSlab(Nordic.SLAB)).set(2, y + 1, 21, Furnish.candles(3));
+        s.set(5, y, 21, Kit.topSlab(Nordic.SLAB)).set(5, y + 1, 21, Furnish.candles(2));
+        s.set(2, y, 23, CARTOGRAPHY);
+        // the great table with the map of cloth on it and chairs round it
+        String[] land = {"lime", "green", "light_blue", "green", "brown", "lime", "light_blue", "white", "green"};
+        for (int z = 24; z <= 26; z++) {
+            for (int x = 3; x <= 5; x++) {
+                s.set(x, y, z, Kit.topSlab(Nordic.SLAB));
+                s.set(x, y + 1, z, "minecraft:" + land[(z - 24) * 3 + x - 3] + "_carpet");
+            }
+        }
+        s.set(2, y, 25, Kit.stairs(Nordic.STAIRS, "west")).set(6, y, 25, Kit.stairs(Nordic.STAIRS, "east"));
+        s.set(4, y, 23, Kit.stairs(Nordic.STAIRS, "north")).set(4, y, 27, Kit.stairs(Nordic.STAIRS, "south"));
+        Furnish.books(s, 2, 27, 2, 30, y, y + 1);
+        Furnish.books(s, 6, 27, 6, 30, y, y + 1);
+        s.set(2, y + 2, 28, Furnish.candles(2)).set(6, y + 2, 29, Furnish.candles(3));
+        Nordic.furs(s, 3, 28, 5, 30, y);
+        Furnish.crate(s, 3, y, 30, "spruce");
+        s.set(4, y + 2, 30, Kit.wallBanner(GUILD, "north"));
+        lamp(s, 4, 10, 23);
+        lamp(s, 4, 10, 28);
+    }
+
+    /**
+     * The kitchen on the ground floor of the east wing of the guild court SS (inside x 28..32, z 20..30, standing on
+     * layer {@link #STAND}): the cooking corner with the cauldron, the fire and the board under the shelf at the north
+     * gable, the table of the servants with its benches, casks of mead, sacks and crates at the far end, hay, lanterns.
+     */
+    private static void kitchen(Structure s) {
+        int y = STAND;
+        Furnish.kitchen(s, 30, y, 20, "south", "spruce");
+        Nordic.feastBoard(s, 30, 24, 30, 29, y);
+        s.fill(32, y, 21, 32, y, 22, Kit.topSlab(Nordic.SLAB));
+        s.set(32, y + 1, 21, "minecraft:cake[bites=0]").set(32, y + 1, 22, Furnish.candles(2));
+        cask(s, 28, y, 22, "east");
+        cask(s, 28, y, 23, "east");
+        Furnish.crate(s, 32, y, 30, "spruce");
+        Furnish.sack(s, 31, y, 30, true);
+        Furnish.sack(s, 32, y, 29, false);
+        Furnish.sack(s, 32, y, 28, true);
+        s.set(32, y + 1, 30, "minecraft:hay_block[axis=y]");
+        lamp(s, 30, 5, 23);
+        lamp(s, 30, 5, 28);
+    }
+
+    /**
+     * The chambers of honour of the masters over the kitchen in the east wing of the guild court SS (inside x 28..32,
+     * z 20..30, standing on layer 7), parted by a wall of boards with a door: in each a bed of state with its canopy, which
+     * is no home, a fur before it, a table with candles and a chair, a crate at the foot of the bed, a weapon rack and the
+     * banner of the guild on the wall.
+     */
+    private static void chambers(Structure s) {
+        int y = 7;
+        // the wall between the chambers and its door
+        s.fill(28, y, 25, 32, y + 2, 25, Nordic.PLANKS);
+        s.fill(28, y + 3, 25, 32, y + 3, 25, Kit.log(Nordic.LOG, "x"));
+        s.door(29, y, 25, Nordic.DOOR, "south", "left");
+        // the north chamber
+        Furnish.canopyBed(s, 31, y, 23, "north", "spruce");
+        Nordic.furs(s, 28, 23, 29, 24, y);
+        s.set(29, y, 21, Kit.topSlab(Nordic.SLAB)).set(29, y + 1, 21, Furnish.candles(2));
+        s.set(29, y, 22, Kit.stairs(Nordic.STAIRS, "south"));
+        Furnish.crate(s, 31, y, 24, "spruce");
+        s.set(32, y, 24, grindstone("west"));
+        s.set(30, y + 2, 20, Kit.wallBanner(GUILD, "south"));
+        // the south chamber
+        Furnish.canopyBed(s, 31, y, 29, "north", "spruce");
+        Nordic.furs(s, 28, 28, 29, 30, y);
+        s.set(28, y, 26, Kit.topSlab(Nordic.SLAB)).set(28, y + 1, 26, Furnish.candles(3));
+        s.set(28, y, 27, Kit.stairs(Nordic.STAIRS, "south"));
+        Furnish.crate(s, 31, y, 30, "spruce");
+        s.set(32, y, 30, grindstone("west"));
+        s.set(32, y + 2, 26, Kit.wallBanner(GUILD, "west"));
+        lamp(s, 29, 10, 23);
+        lamp(s, 29, 10, 28);
     }
 
     // ---------------------------------------------------------------- shapes of the guild
