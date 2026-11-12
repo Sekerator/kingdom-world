@@ -163,8 +163,12 @@ public final class NpcGarrison {
             io.github.sekerator.kingdomworld.core.kingdom.Outcome outcome = ArmyWork.change(server, "enlist a soldier of the royal army",
                     state -> state.recruit(null, kingdomId, id, profession, KingdomWorldApi.gameTime(server), rules, world));
             if (!outcome.ok()) {
-                // No room in the army: the newcomer stays a citizen without work.
+                // No room in the army: the recruit goes back abroad.
                 LOGGER.debug("A recruit of {} was not taken into the army: {}", kingdomId, outcome.error());
+                KingdomWorldApi.change(server, "send a recruit back", state -> {
+                    state.citizens().registry().remove(id);
+                    return io.github.sekerator.kingdomworld.core.kingdom.Outcome.DONE;
+                });
                 break;
             }
             army.setBranch(null, id, Branch.ARMY, world);
@@ -476,11 +480,14 @@ public final class NpcGarrison {
             moved += fill(server, kingdomId, branch, duties, rules);
         }
         sergeants(server, kingdomId);
-        // Every squad of a post does what the post asks, unless the ruler sent it elsewhere for now.
+        // Every squad of a post does what the post asks, unless the ruler sent it elsewhere for now; a squad of a camp sent to
+        // a war that is over comes home.
+        boolean atWar = !io.github.sekerator.kingdomworld.common.diplomacy.WarWork.state(server).warsOf(kingdomId).isEmpty();
         for (Duty duty : duties) {
             army.squadOfDuty(kingdomId, duty.id()).ifPresent(squad -> {
                 Order.Kind kind = squad.order().kind();
-                if (!squad.order().equals(duty.order()) && (kind == Order.Kind.NONE || kind == duty.order().kind())) {
+                boolean home = kind == Order.Kind.NONE || kind == duty.order().kind() || (!atWar && awayAtWar(server, squad));
+                if (!squad.order().equals(duty.order()) && home) {
                     ArmyWork.order(server, null, squad.id(), duty.order());
                 }
             });
@@ -634,6 +641,17 @@ public final class NpcGarrison {
             }
         }
         return squads;
+    }
+
+    /**
+     * Whether a squad of a camp (or of the army waiting for one) is away on an order of war: holding a place, besieging,
+     * defending a city or attacking.
+     */
+    public static boolean awayAtWar(MinecraftServer server, ArmySquad squad) {
+        Order.Kind kind = squad.order().kind();
+        boolean war = kind == Order.Kind.HOLD || kind == Order.Kind.SIEGE || kind == Order.Kind.DEFEND || kind == Order.Kind.ATTACK;
+        return war && ArmyWork.state(server).duty(squad.id())
+                .map(duty -> duty.startsWith(NpcCamps.DUTY) || duty.startsWith(FIELD)).orElse(false);
     }
 
     /**

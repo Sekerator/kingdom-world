@@ -423,6 +423,10 @@ public final class NpcRulers {
         if (outcome == null) {
             return false;
         }
+        if (!outcome.ok() && current instanceof CampJob camp) {
+            // A camp that could not go up is not left half known: the ruler looks for another place.
+            camp.abandon(server);
+        }
         current.release(level);
         finish(server, current.kingdomId, current.decision, outcome, day);
         return true;

@@ -946,7 +946,9 @@ public final class WarWork {
     }
 
     /**
-     * After the peace the squads of rulers of the world that held places on the land of the former enemy come home.
+     * After the peace the squads of rulers of the world that held places on the land of the former enemy come home, and so do
+     * the squads of their camps that went to the war, wherever they stand and whoever holds that land now (a city taken, a
+     * kingdom gone) unless another war goes on.
      */
     private static void recall(MinecraftServer server, War war) {
         if (ArmyWork.isReadOnly(server)) {
@@ -958,8 +960,10 @@ public final class WarWork {
                 if (!isNpc(server, member)) {
                     continue;
                 }
+                boolean stillAtWar = !state(server).warsOf(member).isEmpty();
                 for (ArmySquad squad : List.copyOf(ArmyWork.state(server).squadsOf(member))) {
-                    if (onLandOf(server, squad).map(enemies::contains).orElse(false)) {
+                    boolean campAtWar = !stillAtWar && io.github.sekerator.kingdomworld.common.npc.NpcGarrison.awayAtWar(server, squad);
+                    if (campAtWar || onLandOf(server, squad).map(enemies::contains).orElse(false)) {
                         ArmyWork.order(server, null, squad.id(), Order.NONE);
                     }
                 }

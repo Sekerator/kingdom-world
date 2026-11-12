@@ -1017,6 +1017,64 @@ public final class GuardArmyGameTests {
         });
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_guardarmy_warhome", timeoutTicks = 200)
+    public static void theSquadsOfACampComeHomeAfterAWarWhoeverHoldsTheirPlace(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos center = NpcGameTests.platform(helper);
+        io.github.sekerator.kingdomworld.common.npc.NpcSettings.override(io.github.sekerator.kingdomworld.core.npc.NpcRules.DEFAULT);
+        io.github.sekerator.kingdomworld.core.npc.NpcSite site = null;
+        Kingdom enemy = null;
+        try {
+            site = NpcGameTests.plant(helper, center);
+            UUID id = NpcGameTests.raise(helper, site, NpcGameTests.STEPS).id();
+            ArmyState army = ArmyWork.state(server);
+            List<ArmySquad> field = io.github.sekerator.kingdomworld.common.npc.NpcGarrison.fieldArmy(server, id);
+            helper.assertTrue(field.size() >= 2, "The kingdom has " + field.size() + " squad(s) beyond its capital");
+            // A kingdom of players far off: founding one on the platform would take the land of the kingdom of the world.
+            BlockPos throne = center.offset(320, 0, 0);
+            level.setBlockAndUpdate(throne, io.github.sekerator.kingdomworld.common.registry.ModRegistries.THRONE.get().defaultBlockState());
+            io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult created = KingdomWorldApi.foundKingdom(level, throne,
+                    "GameTest War Home", 0x2E86C1, UUID.randomUUID());
+            helper.assertTrue(created instanceof io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult.Created,
+                    "The enemy was not founded: " + created);
+            enemy = ((io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult.Created) created).kingdom();
+            Kingdom attacker = KingdomWorldApi.kingdom(server, id).orElseThrow(() -> new IllegalStateException("The kingdom of the world is gone"));
+            io.github.sekerator.kingdomworld.core.diplomacy.War war = WarGameTests.war(helper, attacker, enemy,
+                    io.github.sekerator.kingdomworld.core.diplomacy.WarGoal.RAID);
+            // Two squads of the camps hold a city that is their own land now (taken, or the enemy gone), another besieges.
+            WorldPos taken = ArmyWork.capitalOf(server, id);
+            List<ArmySquad> sent = List.of(field.get(0), field.get(1));
+            helper.assertTrue(ArmyWork.order(server, null, sent.get(0).id(), Order.hold(taken)).ok()
+                    && ArmyWork.order(server, null, sent.get(1).id(), Order.siege(taken)).ok(), "The squads took no orders of war");
+            long warId = war.id();
+            war = io.github.sekerator.kingdomworld.common.diplomacy.WarWork.state(server).war(warId)
+                    .orElseThrow(() -> new IllegalStateException("The war #" + warId + " is gone before its end"));
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.diplomacy.WarWork.end(server, war,
+                    io.github.sekerator.kingdomworld.core.diplomacy.War.Result.ADMIN,
+                    io.github.sekerator.kingdomworld.core.diplomacy.PeaceTerms.WHITE).ok(), "The war did not end");
+            // At peace they come home: the order of war is gone at once and the next stationing puts them back in the camp.
+            io.github.sekerator.kingdomworld.common.npc.NpcGarrison.station(server, id);
+            for (ArmySquad squad : sent) {
+                ArmySquad now = army.squad(squad.id()).orElse(null);
+                helper.assertTrue(now != null, "The squad #" + squad.id() + " is gone after the peace");
+                String duty = army.duty(now.id()).orElse("");
+                helper.assertTrue(now.order().kind() == Order.Kind.GUARD && (duty.startsWith("camp") || duty.startsWith("field")),
+                        "The squad " + duty + " stays at war after the peace: " + now.order());
+            }
+        } finally {
+            io.github.sekerator.kingdomworld.common.npc.NpcSettings.override(null);
+            if (enemy != null) {
+                io.github.sekerator.kingdomworld.common.diplomacy.WarWork.markPresent(enemy.id(), null);
+                site.kingdomId().ifPresent(npc -> io.github.sekerator.kingdomworld.common.diplomacy.WarWork.markPresent(npc, null));
+                KingdomWorldApi.dissolveKingdom(server, enemy.id());
+                level.setBlockAndUpdate(center.offset(320, 0, 0), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState());
+            }
+            NpcGameTests.cleanUp(helper, site, center);
+        }
+        helper.succeed();
+    }
+
     @GameTest(template = EMPTY, batch = "kingdomworld_guardarmy_oldkingdom", timeoutTicks = 200)
     public static void aKingdomRaisedBeforeGetsPostsAndFillsItsRanksByAndBy(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();

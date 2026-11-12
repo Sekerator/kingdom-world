@@ -256,6 +256,18 @@ final class CampJob extends RulerActions.Job {
     }
 
     /**
+     * Forgets a camp that is still being raised after the job ended without it (an error, a lost kingdom).
+     */
+    void abandon(MinecraftServer server) {
+        boolean building = NpcWork.state(server).camps(kingdomId).stream()
+                .anyMatch(camp -> camp.x() == x && camp.z() == z && camp.status() == ArmyCamp.Status.BUILDING);
+        if (building) {
+            RulerPlaces.unfit(kingdomId, new BlockPos(x, 0, z));
+            NpcWork.state(server).removeCamp(kingdomId, x, z);
+        }
+    }
+
+    /**
      * Gives up this place: it is marked unfit and forgotten as a camp, so that the ruler looks for another one.
      */
     private Outcome give(MinecraftServer server, KingdomError error) {
