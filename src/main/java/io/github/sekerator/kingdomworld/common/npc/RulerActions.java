@@ -142,7 +142,9 @@ public final class RulerActions {
         abstract Outcome step(MinecraftServer server, ServerLevel level);
 
         /**
-         * Asks for chunks and tells whether all of them are loaded.
+         * Asks for chunks and tells whether all of them are loaded. A chunk the game holds a ticket for may still be loading or
+         * generating ({@code hasChunk} says yes to it already), and a block read from it then waits for it in the tick: only a
+         * chunk the game has whole counts.
          */
         boolean loaded(ServerLevel level, List<Long> chunks) {
             boolean all = true;
@@ -151,7 +153,7 @@ public final class RulerActions {
                 if (ticketed.add(key)) {
                     level.getChunkSource().addRegionTicket(TICKET, pos, 0, pos);
                 }
-                if (!level.hasChunk(pos.x, pos.z)) {
+                if (level.getChunkSource().getChunkNow(pos.x, pos.z) == null) {
                     all = false;
                 }
             }

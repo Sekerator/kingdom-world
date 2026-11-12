@@ -42,11 +42,17 @@ final class CampJob extends RulerActions.Job {
     private static final int LOAD_TICKS = 1200;
     /** Chunks a camp claims in a tick at most. */
     private static final int CLAIMS_PER_TICK = 4;
+    /** Time a step of levelling, building or the fields takes at most: the work goes on in the next tick. */
+    private static final long STEP_NANOS = 6_000_000L;
+    /** Blocks a building of the camp places in one go, between two looks at the time. */
+    private static final int BUILD_SLICE = 256;
     private final NpcKingdom npc;
     private final int x;
     private final int z;
     private List<Long> chunks;
     private List<Long> square;
+    /** The chunks under the whole camp, its buildings and its fields: all of them are loaded before the ground is touched. */
+    private List<Long> area;
     private final Map<Long, CompletableFuture<Optional<CompoundTag>>> reads = new LinkedHashMap<>();
     private int stage;
     private int row;
@@ -56,6 +62,8 @@ final class CampJob extends RulerActions.Job {
     private boolean claimedInPass;
     private int building;
     private int field;
+    /** The row of the current field being levelled; past the last one its crops are planted. */
+    private int fieldRow;
 
     CampJob(NpcKingdom npc, RulerDecision decision, int x, int z) {
         super(npc.kingdomId(), decision);
@@ -82,6 +90,15 @@ final class CampJob extends RulerActions.Job {
                         square.add(ChunkKey.of((x >> 4) + dx, (z >> 4) + dz));
                     }
                 }
+                // The levelling reaches beyond the square around the middle: a column of a chunk the game has not loaded would
+                // be loaded or generated in the tick.
+                area = new ArrayList<>();
+                int reach = ArmyCamp.REACH + 2;
+                for (int cx = (x - reach) >> 4; cx <= (x + reach) >> 4; cx++) {
+                    for (int cz = (z - reach) >> 4; cz <= (z + reach) >> 4; cz++) {
+                        area.add(ChunkKey.of(cx, cz));
+                    }
+                }
                 // Known as being raised from now on, so that a restart goes on with it and no second camp is begun meanwhile.
                 ArmyCamp known = NpcWork.state(server).camps(kingdomId).stream().filter(camp -> camp.x() == x && camp.z() == z)
                         .findFirst().orElse(null);
@@ -106,8 +123,8 @@ final class CampJob extends RulerActions.Job {
                     reads.put(chunk, now != null ? CompletableFuture.completedFuture(Optional.of(RulerActions.inhabited(now)))
                             : level.getChunkSource().chunkMap.read(new ChunkPos(ChunkKey.x(chunk), ChunkKey.z(chunk))));
                 }
-                boolean squareLoaded = loaded(level, square);
-                if (!squareLoaded || reads.values().stream().anyMatch(read -> !read.isDone())) {
+                boolean areaLoaded = loaded(level, area);
+                if (!areaLoaded ||reads.values().stream().anyMatch(read -> !read.isDone())) {
                     return ++waited > LOAD_TICKS ? give(server, KingdomError.AREA_NOT_LOADED) : null;
                 }
                 for (CompletableFuture<Optional<CompoundTag>> read : reads.values()) {
@@ -162,9 +179,10 @@ final class CampJob extends RulerActions.Job {
                 int side = 2 * reach + 1;
                 NpcGround.Soil soil = NpcGround.soilAt(level, x, z);
                 // Column by column: a hill or a forest may hold many blocks in one column, and the step ends as soon as the budget
-                // of the tick is spent.
+                // of the tick or its time is spent.
                 int budget = Math.max(64, NpcSettings.rules().blocksPerTick() / 16);
-                while (row < side && budget > 0) {
+                long started = System.nanoTime();
+                while (row < side && budget > 0 && System.nanoTime() - started < STEP_NANOS) {
                     int rz = z - reach + row;
                     int rx = x - reach + column;
                     // The drill yard is beaten earth.
@@ -185,11 +203,12 @@ final class CampJob extends RulerActions.Job {
                 List<ArmyCamp.Building> buildings = ArmyCamp.buildings();
                 int budget = NpcSpawner.blockBudget();
                 Materials materials = NpcWork.state(server).site(npc.siteId()).map(NpcCity::materials).orElse(Materials.NONE);
-                while (building < buildings.size() && budget > 0) {
+                long started = System.nanoTime();
+                while (building < buildings.size() && budget > 0 && System.nanoTime() - started < STEP_NANOS) {
                     ArmyCamp.Building plan = buildings.get(building);
                     int[] used = new int[1];
                     boolean standing = NpcSpawner.buildAt(server, level, kingdomId, plan.template(), x + plan.dx(), y + 1, z + plan.dz(),
-                            new Placement(plan.facing(), false), materials, budget, used);
+                            new Placement(plan.facing(), false), materials, Math.min(budget, BUILD_SLICE), used);
                     budget -= Math.max(1, used[0]);
                     if (standing) {
                         building++;
@@ -202,14 +221,23 @@ final class CampJob extends RulerActions.Job {
                 return null;
             }
             case 5 -> {
-                // The fields, one a step.
+                // The fields a row at a time, while the time of the step lasts.
                 List<int[]> fields = ArmyCamp.fields();
-                if (field < fields.size()) {
-                    field(level, x + fields.get(field)[0], z + fields.get(field)[1]);
-                    field++;
-                    return null;
+                long started = System.nanoTime();
+                while (field < fields.size() && System.nanoTime() - started < STEP_NANOS) {
+                    int cx = x + fields.get(field)[0];
+                    int cz = z + fields.get(field)[1];
+                    if (fieldRow < FIELD_SIDE) {
+                        levelRow(level, cx, cz, fieldRow++);
+                    } else {
+                        plant(level, cx, cz);
+                        fieldRow = 0;
+                        field++;
+                    }
                 }
-                stage = 6;
+                if (field >= fields.size()) {
+                    stage = 6;
+                }
                 return null;
             }
             default -> {
@@ -222,16 +250,25 @@ final class CampJob extends RulerActions.Job {
         }
     }
 
+    /** Rows of the ground levelled under a field: eleven by eleven. */
+    private static final int FIELD_SIDE = 11;
+
     /**
-     * A field of the camp: nine by nine of carrots on farmland round the water in its middle, with a fence and a lantern at two
-     * corners. The soldiers of the camp work it; it has no composters, so no farmer of the capital takes it.
+     * A row of the ground under a field of the camp.
      */
-    private void field(ServerLevel level, int cx, int cz) {
-        for (int dx = -5; dx <= 5; dx++) {
-            for (int dz = -5; dz <= 5; dz++) {
-                NpcGround.level(level, kingdomId, cx + dx, cz + dz, y, Blocks.GRASS_BLOCK.defaultBlockState(), Blocks.DIRT.defaultBlockState());
-            }
+    private void levelRow(ServerLevel level, int cx, int cz, int row) {
+        int dx = row - FIELD_SIDE / 2;
+        for (int dz = -FIELD_SIDE / 2; dz <= FIELD_SIDE / 2; dz++) {
+            NpcGround.level(level, kingdomId, cx + dx, cz + dz, y, Blocks.GRASS_BLOCK.defaultBlockState(), Blocks.DIRT.defaultBlockState());
         }
+    }
+
+    /**
+     * The crops of a field of the camp on its levelled ground: nine by nine of carrots on farmland round the water in its
+     * middle, with a fence and a lantern at two corners. The soldiers of the camp work it; it has no composters, so no farmer of
+     * the capital takes it.
+     */
+    private void plant(ServerLevel level, int cx, int cz) {
         net.minecraft.world.level.block.CropBlock crop = (net.minecraft.world.level.block.CropBlock) Blocks.CARROTS;
         for (int dx = -4; dx <= 4; dx++) {
             for (int dz = -4; dz <= 4; dz++) {

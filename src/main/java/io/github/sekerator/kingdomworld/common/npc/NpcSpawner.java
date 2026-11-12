@@ -618,15 +618,16 @@ public final class NpcSpawner {
             return true;
         }
         // Tickets go out as the chunks before them come in, a few at a time, so that the server loads or generates them at its
-        // own pace instead of finishing many in one tick.
-        job.pending.removeIf(chunk -> level.hasChunk(chunk.x, chunk.z));
+        // own pace instead of finishing many in one tick. A chunk counts once the game has it whole: one it only holds a ticket
+        // for may still be loading or generating, and a step that reads a block of it would wait for it in the tick.
+        job.pending.removeIf(chunk -> level.getChunkSource().getChunkNow(chunk.x, chunk.z) != null);
         int waiting = Math.max(1, chunkBudget());
         while (job.next < job.chunks.size() && job.pending.size() < waiting) {
             ChunkPos chunk = job.chunks.get(job.next++);
             if (job.ticketed.add(chunk.toLong())) {
                 level.getChunkSource().addRegionTicket(TICKET, chunk, 0, chunk);
             }
-            if (!level.hasChunk(chunk.x, chunk.z)) {
+            if (level.getChunkSource().getChunkNow(chunk.x, chunk.z) == null) {
                 job.pending.add(chunk);
             }
         }
