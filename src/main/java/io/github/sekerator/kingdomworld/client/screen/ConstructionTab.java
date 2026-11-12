@@ -856,15 +856,23 @@ final class ConstructionTab {
             graphics.fill(x - 5, y + 2, x - 3, y + ROW - 3, OWN_STYLE_COLOR);
         }
         graphics.renderItem(entry.icon(), x, y + 1);
-        Component info = Component.translatable(KEY + "row.template", category(entry.category()), size(entry));
-        if (!style.isEmpty()) {
-            info = Component.translatable(KEY + "row.template", Component.translatable(KEY + "row.style", StylePicker.name(style)), info);
-        }
-        int infoWidth = Math.min(font.width(info), (right - x) / 2);
-        int infoX = right - infoWidth;
-        screen.name(graphics, info.getString(), infoX, y + 5, 0xFFB0B0B0, infoWidth);
+        Component plain = Component.translatable(KEY + "row.template", category(entry.category()), size(entry));
+        Component info = style.isEmpty() ? plain
+                : Component.translatable(KEY + "row.template", Component.translatable(KEY + "row.style", StylePicker.name(style)), plain);
         int nameX = x + 20;
-        int drawn = screen.name(graphics, entry.name().getString(), nameX, y + 5, entry.available() ? 0xFFFFFFFF : 0xFF909090, infoX - 6 - nameX);
+        String name = entry.name().getString();
+        // The details take half the row, or what a short name leaves; where the style does not fit with the category and the
+        // size, it is left to the hover so that the size is never cut.
+        int room = Math.max((right - x) / 2, right - (nameX + font.width(name) + 6));
+        boolean styleShown = font.width(info) <= room || style.isEmpty();
+        Component shown = styleShown ? info : plain;
+        int infoWidth = Math.min(font.width(shown), room);
+        int infoX = right - infoWidth;
+        int drawnInfo = screen.name(graphics, shown.getString(), infoX, y + 5, 0xFFB0B0B0, infoWidth);
+        if (!styleShown) {
+            screen.hoverText(infoX, y + 5, drawnInfo, info);
+        }
+        int drawn = screen.name(graphics, name, nameX, y + 5, entry.available() ? 0xFFFFFFFF : 0xFF909090, infoX - 6 - nameX);
         if (!entry.available()) {
             screen.hoverText(nameX, y + 5, drawn, entry.problem());
         }
