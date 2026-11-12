@@ -240,59 +240,98 @@ public final class ProvincePlanner {
             }
         }
 
+        /**
+         * Evens the provinces of a group out, round by round: every province too small joins its smallest neighbour, the
+         * smallest first; then every province too large is split in two.
+         */
         private void balance(int[] group, int base) {
             if (group.length < rules.minCells()) {
                 return;
             }
-            boolean[] stuck = new boolean[0];
             boolean[] whole = new boolean[0];
-            for (int guard = 0; guard < 400; guard++) {
+            for (int round = 0; round < 64; round++) {
                 int labels = nextLabel - base;
-                if (stuck.length < labels) {
-                    stuck = Arrays.copyOf(stuck, labels);
+                if (whole.length < labels) {
                     whole = Arrays.copyOf(whole, labels);
                 }
+                int[][] members = members(group, base, labels);
                 int[] sizes = new int[labels];
-                for (int cell : group) {
-                    sizes[label[cell] - base]++;
-                }
-                int smallest = -1;
                 for (int i = 0; i < labels; i++) {
-                    if (sizes[i] > 0 && sizes[i] < rules.minCells() && !stuck[i] && (smallest < 0 || sizes[i] < sizes[smallest])) {
-                        smallest = i;
-                    }
+                    sizes[i] = members[i].length;
                 }
-                if (smallest >= 0) {
-                    int into = smallestNeighbour(group, base + smallest, sizes, base);
+                Integer[] small = smallFirst(sizes);
+                boolean merged = false;
+                boolean[] grew = new boolean[labels];
+                for (int i : small) {
+                    // A province that took in another this round waits for the next one, when its cells are counted anew.
+                    if (sizes[i] == 0 || sizes[i] >= rules.minCells() || grew[i]) {
+                        continue;
+                    }
+                    int into = smallestNeighbour(members[i], base + i, sizes, base);
                     if (into < 0) {
-                        stuck[smallest] = true;
-                    } else {
-                        for (int cell : group) {
-                            if (label[cell] == base + smallest) {
-                                label[cell] = into;
-                            }
+                        continue;
+                    }
+                    for (int cell : members[i]) {
+                        if (label[cell] == base + i) {
+                            label[cell] = into;
                         }
                     }
+                    sizes[into - base] += sizes[i];
+                    sizes[i] = 0;
+                    grew[into - base] = true;
+                    merged = true;
+                }
+                if (merged) {
                     continue;
                 }
-                int largest = -1;
+                boolean splitAny = false;
                 for (int i = 0; i < labels; i++) {
-                    if (sizes[i] > rules.maxCells() && !whole[i] && (largest < 0 || sizes[i] > sizes[largest])) {
-                        largest = i;
+                    if (sizes[i] > rules.maxCells() && !whole[i]) {
+                        if (split(members[i], base + i)) {
+                            splitAny = true;
+                        } else {
+                            whole[i] = true;
+                        }
                     }
                 }
-                if (largest < 0) {
+                if (!splitAny) {
                     return;
-                }
-                if (!split(group, base + largest)) {
-                    whole[largest] = true;
                 }
             }
         }
 
-        private int smallestNeighbour(int[] group, int lab, int[] sizes, int base) {
-            int best = -1;
+        /**
+         * The cells of every province of a group.
+         */
+        private int[][] members(int[] group, int base, int labels) {
+            int[] sizes = new int[labels];
             for (int cell : group) {
+                sizes[label[cell] - base]++;
+            }
+            int[][] members = new int[labels][];
+            for (int i = 0; i < labels; i++) {
+                members[i] = new int[sizes[i]];
+            }
+            int[] filled = new int[labels];
+            for (int cell : group) {
+                int i = label[cell] - base;
+                members[i][filled[i]++] = cell;
+            }
+            return members;
+        }
+
+        private static Integer[] smallFirst(int[] sizes) {
+            Integer[] order = new Integer[sizes.length];
+            for (int i = 0; i < order.length; i++) {
+                order[i] = i;
+            }
+            Arrays.sort(order, (a, b) -> sizes[a] != sizes[b] ? Integer.compare(sizes[a], sizes[b]) : Integer.compare(a, b));
+            return order;
+        }
+
+        private int smallestNeighbour(int[] part, int lab, int[] sizes, int base) {
+            int best = -1;
+            for (int cell : part) {
                 if (label[cell] != lab) {
                     continue;
                 }
@@ -398,9 +437,32 @@ public final class ProvincePlanner {
                     }
                 }
             }
+            int kept = 0;
             for (int cell : part) {
                 if (label[cell] == -2) {
                     label[cell] = lab;
+                }
+                if (label[cell] == lab) {
+                    kept++;
+                }
+            }
+            if (Math.min(kept, part.length - kept) < rules.minCells()) {
+                // One half hemmed the other in: the nearer half of the cells by the way from the first far cell, the rest the
+                // other half.
+                farthest(part, a);
+                Integer[] order = new Integer[part.length];
+                for (int i = 0; i < order.length; i++) {
+                    order[i] = part[i];
+                }
+                Arrays.sort(order, (x, y) -> dist[x] != dist[y] ? Integer.compare(dist[x], dist[y]) : Integer.compare(x, y));
+                for (int i = 0; i < order.length; i++) {
+                    label[order[i]] = i < (order.length + 1) / 2 ? lab : other;
+                }
+                if (part.length / 2 < rules.minCells()) {
+                    for (int cell : part) {
+                        label[cell] = lab;
+                    }
+                    return false;
                 }
             }
             return true;
