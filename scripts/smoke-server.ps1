@@ -2721,6 +2721,8 @@ Invoke-Phase 'run1' {
             Add-Failure "[run1] the alarm did not go through its steps: '$(if ($struck) { $struck.Value })', steps $($steps -join ', ')"
         }
         [void](Invoke-ServerCommand $server "kingdomworld admin law act $rioter $npc leave" "$rioter left")
+        # The record of the blows is not kept: the parts that follow count the wanted of the world.
+        [void](Invoke-ServerCommand $server "kingdomworld admin law pardon $rioter $npc" "$rioter is pardoned in ")
         [void](Invoke-ServerCommand $server "kingdomworld admin citizens body $guard remove" "The body of citizen $guard ")
         Send-ServerCommand $server "forceload remove $tx $tz"
         Sync-Server $server
