@@ -5,7 +5,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Draws the built-in building templates of KingdomWorld and writes them as structure files (the format of the structure
@@ -41,11 +43,36 @@ public final class BuildingGenerator {
 
     /**
      * A template with its description.
+     *
+     * @param roleParams the numbers of its role that differ from those of the role, as the body of a JSON object, or empty
+     * @param points     named places inside it (x, y, z in its own box): where a guard stands, where a block is put later
      */
     record Building(String name, String category, String type, String icon, int anchorX, int anchorY, int anchorZ, Structure structure,
-                    String role, int level, String upgradesTo) {
+                    String role, int level, String upgradesTo, String roleParams, Map<String, int[]> points) {
+        Building(String name, String category, String type, String icon, int anchorX, int anchorY, int anchorZ, Structure structure,
+                 String role, int level, String upgradesTo) {
+            this(name, category, type, icon, anchorX, anchorY, anchorZ, structure, role, level, upgradesTo,
+                    ROLE_PARAMS.getOrDefault(name, ""), Map.of());
+        }
+
         Building(String name, String category, String type, String icon, int anchorX, int anchorY, int anchorZ, Structure structure) {
             this(name, category, type, icon, anchorX, anchorY, anchorZ, structure, type, 1, "");
+        }
+
+        /**
+         * This building with other numbers of its role, for example {@code "bunks": 6}.
+         */
+        Building params(String params) {
+            return new Building(name, category, type, icon, anchorX, anchorY, anchorZ, structure, role, level, upgradesTo, params, points);
+        }
+
+        /**
+         * This building with one more named place.
+         */
+        Building at(String point, int x, int y, int z) {
+            Map<String, int[]> more = new LinkedHashMap<>(points);
+            more.put(point, new int[]{x, y, z});
+            return new Building(name, category, type, icon, anchorX, anchorY, anchorZ, structure, role, level, upgradesTo, roleParams, more);
         }
     }
 
@@ -97,7 +124,7 @@ public final class BuildingGenerator {
      * Numbers of the role of a building that differ from those of its role: a barracks hall has twelve bunks, the large stores
      * count more containers.
      */
-    private static final java.util.Map<String, String> ROLE_PARAMS = java.util.Map.of(
+    private static final Map<String, String> ROLE_PARAMS = Map.of(
             "barracks_hall", "\"bunks\": 12",
             "barn", "\"containers\": 12",
             "storage_yard", "\"containers\": 20");
@@ -115,7 +142,7 @@ public final class BuildingGenerator {
                 + "  \"category\": \"" + building.category() + "\",\n"
                 + "  \"type\": \"" + building.type() + "\",\n"
                 + "  \"role\": \"" + building.role() + "\",\n"
-                + (ROLE_PARAMS.containsKey(building.name()) ? "  \"role_params\": {" + ROLE_PARAMS.get(building.name()) + "},\n" : "")
+                + (building.roleParams().isEmpty() ? "" : "  \"role_params\": {" + building.roleParams() + "},\n")
                 + "  \"level\": " + building.level() + ",\n"
                 + (building.upgradesTo().isEmpty() ? "" : "  \"upgrades_to\": \"" + building.upgradesTo() + "\",\n")
                 + "  \"icon\": \"" + building.icon() + "\",\n"

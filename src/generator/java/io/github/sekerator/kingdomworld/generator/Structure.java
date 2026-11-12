@@ -237,6 +237,193 @@ final class Structure {
         return this;
     }
 
+    // ---------------------------------------------------------------- whole structures
+
+    /**
+     * Whether a position is left out of the building.
+     */
+    boolean leftOut(int x, int y, int z) {
+        return LEFT_OUT.equals(states[index(x, y, z)]);
+    }
+
+    /**
+     * Whether a position lies inside the box.
+     */
+    boolean inside(int x, int y, int z) {
+        return x >= 0 && y >= 0 && z >= 0 && x < sizeX && y < sizeY && z < sizeZ;
+    }
+
+    /**
+     * The highest layer of a column that holds a block, or -1 for an empty column.
+     */
+    int top(int x, int z) {
+        for (int y = sizeY - 1; y >= 0; y--) {
+            if (solid(x, y, z)) {
+                return y;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Leaves the sky out of the building: in every column the air more than {@code headroom} layers above its highest block
+     * is no part of the file, so that a large building does not carry tens of thousands of positions that only say "air".
+     * The air below stays and clears the place for those who walk there.
+     */
+    Structure trimSky(int headroom) {
+        for (int z = 0; z < sizeZ; z++) {
+            for (int x = 0; x < sizeX; x++) {
+                for (int y = top(x, z) + headroom + 1; y < sizeY; y++) {
+                    if (!leftOut(x, y, z)) {
+                        skip(x, y, z);
+                    }
+                }
+            }
+        }
+        return this;
+    }
+
+    /**
+     * Copies another structure into this one with its corner at the given position; positions it leaves out stay as they are.
+     */
+    Structure paste(Structure other, int dx, int dy, int dz) {
+        for (int y = 0; y < other.sizeY; y++) {
+            for (int z = 0; z < other.sizeZ; z++) {
+                for (int x = 0; x < other.sizeX; x++) {
+                    String state = other.states[other.index(x, y, z)];
+                    if (!LEFT_OUT.equals(state) && inside(x + dx, y + dy, z + dz)) {
+                        set(x + dx, y + dy, z + dz, state == null ? AIR : state);
+                    }
+                }
+            }
+        }
+        return this;
+    }
+
+    /**
+     * This structure turned clockwise by quarter turns as a placement turns a building: once, and the front that looked south
+     * looks west.
+     */
+    Structure turned(int quarters) {
+        Structure result = this;
+        for (int turn = 0; turn < Math.floorMod(quarters, 4); turn++) {
+            Structure from = result;
+            Structure next = new Structure(from.sizeZ, from.sizeY, from.sizeX);
+            for (int y = 0; y < from.sizeY; y++) {
+                for (int z = 0; z < from.sizeZ; z++) {
+                    for (int x = 0; x < from.sizeX; x++) {
+                        String state = from.states[from.index(x, y, z)];
+                        next.states[next.index(from.sizeZ - 1 - z, y, x)] = state == null || state.isEmpty() ? state : States.turned(state);
+                    }
+                }
+            }
+            result = next;
+        }
+        return result;
+    }
+
+    /**
+     * This structure mirrored along its front, as a placement mirrors a building: west and east change places.
+     */
+    Structure mirrored() {
+        Structure next = new Structure(sizeX, sizeY, sizeZ);
+        for (int y = 0; y < sizeY; y++) {
+            for (int z = 0; z < sizeZ; z++) {
+                for (int x = 0; x < sizeX; x++) {
+                    String state = states[index(x, y, z)];
+                    next.states[next.index(sizeX - 1 - x, y, z)] = state == null || state.isEmpty() ? state : States.mirrored(state);
+                }
+            }
+        }
+        return next;
+    }
+
+    /**
+     * Joins fences, panes, bars and walls to their neighbours the way the game does when they are placed by hand, so that a
+     * building is drawn with bare posts and gets its rails, window bars and parapets whole. Call it once, when the
+     * building is drawn.
+     */
+    Structure connect() {
+        // Walls from the top down: whether a wall keeps its post depends on the wall above it.
+        for (int y = sizeY - 1; y >= 0; y--) {
+            for (int z = 0; z < sizeZ; z++) {
+                for (int x = 0; x < sizeX; x++) {
+                    String state = states[index(x, y, z)];
+                    if (state == null || state.isEmpty()) {
+                        continue;
+                    }
+                    String id = States.id(state);
+                    if (States.isFence(id)) {
+                        set(x, y, z, States.with(state, "north", String.valueOf(fenceJoins(id, x, y, z - 1)),
+                                "south", String.valueOf(fenceJoins(id, x, y, z + 1)), "west", String.valueOf(fenceJoins(id, x - 1, y, z)),
+                                "east", String.valueOf(fenceJoins(id, x + 1, y, z)), "waterlogged", "false"));
+                    } else if (States.isPane(id)) {
+                        set(x, y, z, States.with(state, "north", String.valueOf(paneJoins(x, y, z - 1)),
+                                "south", String.valueOf(paneJoins(x, y, z + 1)), "west", String.valueOf(paneJoins(x - 1, y, z)),
+                                "east", String.valueOf(paneJoins(x + 1, y, z)), "waterlogged", "false"));
+                    } else if (States.isWall(id)) {
+                        set(x, y, z, wall(state, x, y, z));
+                    }
+                }
+            }
+        }
+        return this;
+    }
+
+    private String at(int x, int y, int z) {
+        if (!inside(x, y, z)) {
+            return AIR;
+        }
+        String state = states[index(x, y, z)];
+        return state == null || state.isEmpty() ? AIR : state;
+    }
+
+    private boolean fenceJoins(String fence, int x, int y, int z) {
+        String id = States.id(at(x, y, z));
+        if (States.isFence(id)) {
+            // Wooden fences join each other whatever their wood; a fence of nether bricks joins only its own kind.
+            return id.equals(fence) || !id.contains("brick") && !fence.contains("brick");
+        }
+        return id.endsWith("_fence_gate") || States.isFull(at(x, y, z));
+    }
+
+    private boolean paneJoins(int x, int y, int z) {
+        String state = at(x, y, z);
+        String id = States.id(state);
+        return States.isPane(id) || States.isWall(id) || States.isFull(state);
+    }
+
+    private boolean wallJoins(int x, int y, int z) {
+        String state = at(x, y, z);
+        String id = States.id(state);
+        return States.isWall(id) || States.isPane(id) || id.endsWith("_fence_gate") || States.isFull(state);
+    }
+
+    private String wall(String state, int x, int y, int z) {
+        boolean north = wallJoins(x, y, z - 1);
+        boolean south = wallJoins(x, y, z + 1);
+        boolean west = wallJoins(x - 1, y, z);
+        boolean east = wallJoins(x + 1, y, z);
+        String above = at(x, y + 1, z);
+        String aboveId = States.id(above);
+        boolean covered = States.isFull(above);
+        boolean line = north && south && !west && !east || west && east && !north && !south;
+        // The post stays unless the wall runs straight on; a wall with a post or anything that stands on a post keeps it.
+        boolean post = !line || States.isWall(aboveId) && above.contains("up=true")
+                || !above.equals(AIR) && !covered && !States.isWall(aboveId) && !States.isPane(aboveId);
+        return States.with(state, "north", arm(north, covered, above, "north"), "south", arm(south, covered, above, "south"),
+                "west", arm(west, covered, above, "west"), "east", arm(east, covered, above, "east"),
+                "up", String.valueOf(post), "waterlogged", "false");
+    }
+
+    private static String arm(boolean joins, boolean covered, String above, String side) {
+        if (!joins) {
+            return "none";
+        }
+        boolean raised = covered || above.contains(side + "=low") || above.contains(side + "=tall") || above.contains(side + "=true");
+        return raised ? "tall" : "low";
+    }
+
     /**
      * The structure as the game writes it: size, palette and every position with its state.
      */
