@@ -18,6 +18,7 @@ import io.github.sekerator.kingdomworld.core.npc.NpcKingdom;
 import io.github.sekerator.kingdomworld.core.npc.NpcLevel;
 import io.github.sekerator.kingdomworld.core.npc.NpcSite;
 import io.github.sekerator.kingdomworld.core.npc.RulerDecision;
+import io.github.sekerator.kingdomworld.core.npc.RulerRules;
 import io.github.sekerator.kingdomworld.core.territory.Territory;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -58,6 +59,9 @@ public final class WorldKingdomGameTests {
         MinecraftServer server = level.getServer();
         // A new world plans styled capitals: the platform holds one.
         BlockPos center = NpcGameTests.platform(helper, NpcGameTests.HALF3);
+        // The limits of the rulers of a new world, whatever the config of the test world keeps from older versions: the land of a
+        // styled small capital is larger than the old limit of a small kingdom.
+        NpcSettings.overrideRulers(RulerRules.DEFAULT);
         NpcSite site = null;
         try {
             site = NpcWork.planAt(server, center.getX(), center.getZ(), NpcLevel.SMALL, List.of()).orElse(null);
@@ -128,6 +132,7 @@ public final class WorldKingdomGameTests {
                     "The citizens are not those planned for the map");
             helper.succeed();
         } finally {
+            NpcSettings.overrideRulers(null);
             NpcGameTests.cleanUp(helper, site, center, NpcGameTests.HALF3);
         }
     }
