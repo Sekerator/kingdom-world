@@ -270,9 +270,11 @@ public final class NpcRulers {
     private static boolean work(MinecraftServer server) {
         NpcState state = NpcWork.state(server);
         long day = TreasuryActions.day(server);
-        // A camp goes up every other tick beside whatever else the rulers do.
+        // A camp goes up every other tick, in place of whatever else the rulers would do in that tick.
         if (campJob != null && server.getTickCount() % 2 == 0) {
+            doing = "a step of a camp";
             campJob = step(server, campJob, day) ? null : campJob;
+            return true;
         }
         if (turning != null) {
             Turning current = turning;

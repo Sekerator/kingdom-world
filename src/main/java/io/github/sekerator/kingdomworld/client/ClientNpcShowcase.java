@@ -202,6 +202,7 @@ final class ClientNpcShowcase {
         }
         index++;
         if (index > shots.size()) {
+            server.execute(() -> io.github.sekerator.kingdomworld.common.npc.NpcSettings.override(null));
             LOGGER.info(PREFIX + "kingdom of the world shown: {} screenshot(s)", shots.size() + 1);
             minecraft.setScreen(null);
             finished = true;
@@ -215,6 +216,11 @@ final class ClientNpcShowcase {
         }
         boolean street = index < shots.size() && shots.get(index).name().equals(STREET);
         String next = index < shots.size() ? shots.get(index).name() : "";
+        // Other kingdoms of the world may be appearing in the background meanwhile, and their chunks load in long ticks: they
+        // wait while the ticks of a scene are measured, so that the measure is of the scene alone.
+        boolean measured = street || next.equals(ALARM) || next.equals(FORMATION) || next.equals(BATTLE);
+        server.execute(() -> io.github.sekerator.kingdomworld.common.npc.NpcSettings.override(measured
+                ? io.github.sekerator.kingdomworld.common.npc.NpcSettings.rules().withGenerate(false) : null));
         if (next.equals(BATTLE)) {
             server.execute(() -> ClientArmyScenes.battle(server, garrisonKingdom, smallKingdom, battleField));
         }
@@ -222,7 +228,7 @@ final class ClientNpcShowcase {
             yaw = Float.NaN;
             KingdomMapScreen map = new KingdomMapScreen(null);
             minecraft.setScreen(map);
-            map.showForCheck(battleField.x() / 16.0, battleField.z() / 16.0, 4.0, null, net.minecraft.network.chat.Component.empty(), false);
+            map.showForCheck(battleField.x() / 16.0, battleField.z() / 16.0, 6.0, null, net.minecraft.network.chat.Component.empty(), false);
             map.showArmyForCheck(null, List.of(), List.of());
         } else if (index < shots.size()) {
             Shot shot = shots.get(index);
@@ -722,7 +728,7 @@ final class ClientNpcShowcase {
             if (smallKingdom != null) {
                 WorldPos field = ClientArmyScenes.field(server, camp);
                 battleField = field;
-                list.add(new Shot(BATTLE, field.x() + 0.5, field.y() + 12, field.z() + 26.5, 180.0f, 24.0f));
+                list.add(new Shot(BATTLE, field.x() + 0.5, field.y() + 6, field.z() + 15.5, 180.0f, 16.0f));
                 list.add(new Shot(WAR_MAP, field.x() + 0.5, field.y() + 60, field.z() + 0.5, 0.0f, 90.0f));
             }
         }

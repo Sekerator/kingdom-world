@@ -50,6 +50,7 @@ final class CampJob extends RulerActions.Job {
     private final Map<Long, CompletableFuture<Optional<CompoundTag>>> reads = new LinkedHashMap<>();
     private int stage;
     private int row;
+    private int column;
     private int y;
     private int claimIndex;
     private boolean claimedInPass;
@@ -160,16 +161,20 @@ final class CampJob extends RulerActions.Job {
                 int reach = ArmyCamp.REACH;
                 int side = 2 * reach + 1;
                 NpcGround.Soil soil = NpcGround.soilAt(level, x, z);
-                int budget = Math.max(64, NpcSettings.rules().blocksPerTick() / 8);
+                // Column by column: a hill or a forest may hold many blocks in one column, and the step ends as soon as the budget
+                // of the tick is spent.
+                int budget = Math.max(64, NpcSettings.rules().blocksPerTick() / 16);
                 while (row < side && budget > 0) {
                     int rz = z - reach + row;
-                    for (int rx = x - reach; rx <= x + reach; rx++) {
-                        // The drill yard is beaten earth.
-                        boolean yard = Math.abs(rx - x) <= 8 && Math.abs(rz - z) <= 7;
-                        BlockState top = yard ? Blocks.COARSE_DIRT.defaultBlockState() : soil.top();
-                        budget -= Math.max(1, NpcGround.level(level, kingdomId, rx, rz, y, top, soil.fill()));
+                    int rx = x - reach + column;
+                    // The drill yard is beaten earth.
+                    boolean yard = Math.abs(rx - x) <= 8 && Math.abs(rz - z) <= 7;
+                    BlockState top = yard ? Blocks.COARSE_DIRT.defaultBlockState() : soil.top();
+                    budget -= Math.max(1, NpcGround.level(level, kingdomId, rx, rz, y, top, soil.fill()));
+                    if (++column >= side) {
+                        column = 0;
+                        row++;
                     }
-                    row++;
                 }
                 if (row >= side) {
                     stage = 4;

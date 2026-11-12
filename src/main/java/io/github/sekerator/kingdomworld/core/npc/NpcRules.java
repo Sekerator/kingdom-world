@@ -163,6 +163,15 @@ public record NpcRules(boolean generate, int count, int radius, int minDistance,
         return army[level.ordinal()];
     }
 
+    /**
+     * The same rules with the kingdoms of the world planned and raised or not.
+     */
+    public NpcRules withGenerate(boolean value) {
+        return new NpcRules(value, count, radius, minDistance, minSpawnDistance, triggerChunks, sizeQuota, sizeWeights, landRadius, towns,
+                townDistance, money, foodDays, materials, soldiers, blocksPerTick, chunksPerTick, maxInhabitedMinutes, attemptsPerSite, guards,
+                army, townGuards, armyLeast, armyMost, armyPerDay, campSoldiers, campBodies, armyBodies);
+    }
+
     /** The least royal army of a kingdom of a size. */
     public int armyLeast(NpcLevel level) {
         return armyLeast[level.ordinal()];
