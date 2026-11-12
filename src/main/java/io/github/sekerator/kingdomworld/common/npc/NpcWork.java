@@ -35,6 +35,8 @@ public final class NpcWork {
     private static final Map<UUID, NpcNames.Name> NAMES = new ConcurrentHashMap<>();
     /** Names of the towns of the kingdoms of the world in both alphabets, by the Latin form (the name of the city). */
     private static final Map<String, NpcNames.Name> TOWNS = new ConcurrentHashMap<>();
+    /** Grows whenever the names of the kingdoms of the world or of their towns change. */
+    private static final java.util.concurrent.atomic.AtomicLong NAMES_VERSION = new java.util.concurrent.atomic.AtomicLong();
     private static long lastDay = Long.MIN_VALUE;
 
     private NpcWork() {
@@ -82,10 +84,20 @@ public final class NpcWork {
     public static void remember(NpcKingdom kingdom) {
         NAMES.put(kingdom.kingdomId(), kingdom.name());
         kingdom.towns().forEach(town -> TOWNS.put(town.latin(), town));
+        NAMES_VERSION.incrementAndGet();
     }
 
     static void forgetName(UUID kingdomId) {
         NAMES.remove(kingdomId);
+        NAMES_VERSION.incrementAndGet();
+    }
+
+    /**
+     * Grows whenever the names {@link #localCity} and {@link #localKingdom} give may change, so that what was named with them
+     * is named again only then.
+     */
+    public static long namesVersion() {
+        return NAMES_VERSION.get();
     }
 
     /**
@@ -123,6 +135,7 @@ public final class NpcWork {
     static void reset() {
         NAMES.clear();
         TOWNS.clear();
+        NAMES_VERSION.incrementAndGet();
         lastDay = Long.MIN_VALUE;
         NpcPlanning.reset();
         NpcFounding.reset();
@@ -134,6 +147,7 @@ public final class NpcWork {
     static void loaded(MinecraftServer server) {
         NAMES.clear();
         TOWNS.clear();
+        NAMES_VERSION.incrementAndGet();
         state(server).kingdoms().forEach(NpcWork::remember);
     }
 

@@ -59,6 +59,42 @@ public final class RoadSync {
         SENT.remove(player);
     }
 
+    /**
+     * What the map data of a player was last built from, with the data the player has: the lists of the last rebuild, the language
+     * of the player, the camps it is shown (all its kingdom and its marks count for) and the names of the kingdoms of the world.
+     * While all of it stays the same, the data built anew would be the data the player has, so it is neither built nor compared.
+     * Whatever {@link RoadSync#data} reads must be here.
+     */
+    private record Seen(RoadViews.MapData sent, List<RoadViews.MapCity> cities, List<RoadViews.MapRoad> roads, List<RoadViews.MapWall> walls,
+                        String language, List<RoadViews.MapCamp> camps, long names) {
+        /**
+         * Whether both were made of the same: the lists of a rebuild only when they are the very same lists.
+         */
+        boolean same(Seen other) {
+            return sent == other.sent && cities == other.cities && roads == other.roads && walls == other.walls
+                    && java.util.Objects.equals(language, other.language) && camps.equals(other.camps) && names == other.names;
+        }
+    }
+
+    private static final Map<UUID, Seen> SEEN = new HashMap<>();
+
+    /**
+     * The camps a player is shown, found as {@link #data} finds them.
+     */
+    private static List<RoadViews.MapCamp> knownCamps(MinecraftServer server, RoadState state, UUID player) {
+        Optional<UUID> kingdom = KingdomWorldApi.state(server).membership().kingdomOf(player);
+        List<RoadViews.MapCamp> camps = new ArrayList<>();
+        java.util.Set<Long> marked = io.github.sekerator.kingdomworld.common.life.LifeWork.state(server).marks(player);
+        if (kingdom.isPresent() || !marked.isEmpty()) {
+            for (BanditCamp camp : state.camps()) {
+                if ((kingdom.isPresent() && camp.knownTo(kingdom.get()) || marked.contains(camp.id())) && !camp.cleared()) {
+                    camps.add(new RoadViews.MapCamp(camp.id(), camp.dimension(), camp.x(), camp.z(), camp.size()));
+                }
+            }
+        }
+        return camps;
+    }
+
     static void tick(MinecraftServer server) {
         // The levels of cities follow their people and buildings: they are looked at again every minute.
         if (++seconds % 60 == 0) {
@@ -69,17 +105,28 @@ public final class RoadSync {
             rebuild(server);
         }
         RoadState state = RoadWork.state(server);
+        // Read before any data is built, so that names changing meanwhile are looked at again the next time.
+        long names = io.github.sekerator.kingdomworld.common.npc.NpcWork.namesVersion();
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (player instanceof FakePlayer) {
                 continue;
             }
-            RoadViews.MapData data = data(server, state, player.getUUID(), player.getLanguage());
-            if (!data.equals(SENT.get(player.getUUID()))) {
-                SENT.put(player.getUUID(), data);
+            UUID id = player.getUUID();
+            String language = player.getLanguage();
+            Seen now = new Seen(SENT.get(id), cities, roads, walls, language, knownCamps(server, state, id), names);
+            Seen last = SEEN.get(id);
+            if (now.sent() != null && last != null && last.same(now)) {
+                continue;
+            }
+            RoadViews.MapData data = data(server, state, id, language);
+            if (!data.equals(SENT.get(id))) {
+                SENT.put(id, data);
                 KingdomWorldNetwork.sendToPlayer(player, new RoadPackets.MapSync(data));
             }
+            SEEN.put(id, new Seen(SENT.get(id), now.cities(), now.roads(), now.walls(), language, now.camps(), names));
         }
         SENT.keySet().removeIf(id -> server.getPlayerList().getPlayer(id) == null);
+        SEEN.keySet().removeIf(id -> server.getPlayerList().getPlayer(id) == null);
     }
 
     private static void rebuild(MinecraftServer server) {

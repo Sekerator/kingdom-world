@@ -281,18 +281,66 @@ public final class NpcSpawner {
                 : NpcSettings.rules().chunksPerTick();
     }
 
+    /** Compositions kept at most: the garrisons and the views ask for the same few places again and again. */
+    private static final int COMPOSITIONS = 16;
+    /** The compositions asked for last, by everything they are made from; the one asked for longest ago goes first. */
+    private static final Map<CompositionKey, NpcComposition> COMPOSED = new java.util.LinkedHashMap<>(COMPOSITIONS * 2, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<CompositionKey, NpcComposition> eldest) {
+            return size() > COMPOSITIONS;
+        }
+    };
+
     /**
-     * The composition of the kingdom of a place, from its seed and the rules of the server.
+     * Everything a composition is made from: the place (its id, layout, level, seed and how many towns it has) and the values of
+     * the rules its layout reads; the road rules count for the first layout only.
+     */
+    private record CompositionKey(int site, int layout, io.github.sekerator.kingdomworld.core.npc.NpcLevel level, long seed, int towns,
+                                  int rulesTowns, int soldiers, int guards, int army, int townGuards, int townPeople, int townBuildings,
+                                  int cityPeople, int cityBuildings, int wallRadius) {
+    }
+
+    /**
+     * The composition of the kingdom of a place, from its seed and the rules of the server. The same place under the same rules
+     * gets the same composition, which cannot be changed, without laying it out again.
      */
     public static NpcComposition composition(NpcSite site) {
+        NpcRules rules = NpcSettings.rules();
+        io.github.sekerator.kingdomworld.core.npc.NpcLevel level = site.level();
+        int towns = site.towns().size();
+        CompositionKey key;
+        RoadRules roads = null;
+        int wallRadius = 0;
         if (site.districts()) {
-            return NpcComposition.districts(site.level(), site.seed(), NpcSettings.rules(), site.towns().size());
+            key = new CompositionKey(site.id(), site.layout(), level, site.seed(), towns, rules.towns(level), rules.soldiers(level),
+                    rules.guards(level), rules.army(level), rules.townGuards(level), 0, 0, 0, 0, 0);
+        } else {
+            roads = RoadSettings.rules();
+            // The capital is laid out for walls of at least the default radius; a wall of a smaller one leaves out what stands in
+            // its way.
+            wallRadius = Math.max(roads.wallRadius(), MIN_WALL_RADIUS);
+            key = new CompositionKey(site.id(), site.layout(), level, site.seed(), towns, rules.towns(level), rules.soldiers(level),
+                    rules.guards(level), rules.army(level), rules.townGuards(level), roads.townPeople(), roads.townBuildings(),
+                    roads.cityPeople(), roads.cityBuildings(), wallRadius);
         }
-        RoadRules roads = RoadSettings.rules();
-        // The capital is laid out for walls of at least the default radius; a wall of a smaller one leaves out what stands in its way.
-        // The work is planned for the towns the place has: a place without room for its towns gets no work for their people.
-        return NpcComposition.of(site.level(), site.seed(), NpcSettings.rules(), roads.townPeople(), roads.townBuildings(), roads.cityPeople(),
-                roads.cityBuildings(), Math.max(roads.wallRadius(), MIN_WALL_RADIUS), site.towns().size());
+        synchronized (COMPOSED) {
+            NpcComposition known = COMPOSED.get(key);
+            if (known != null) {
+                return known;
+            }
+        }
+        NpcComposition made;
+        if (roads == null) {
+            made = NpcComposition.districts(level, site.seed(), rules, towns);
+        } else {
+            // The work is planned for the towns the place has: a place without room for its towns gets no work for their people.
+            made = NpcComposition.of(level, site.seed(), rules, roads.townPeople(), roads.townBuildings(), roads.cityPeople(),
+                    roads.cityBuildings(), wallRadius, towns);
+        }
+        synchronized (COMPOSED) {
+            COMPOSED.put(key, made);
+        }
+        return made;
     }
 
     /**

@@ -3,7 +3,9 @@ package io.github.sekerator.kingdomworld.core.road;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.PriorityQueue;
 
 /**
@@ -24,6 +26,111 @@ public final class RoadNetwork {
     }
 
     private record Edge(int to, double ticks, double length, Road road, int section, RoadClass roadClass, boolean forward) {
+    }
+
+    /**
+     * A way across country between the end of a road and a nearby road, before the pace of a trip makes it ticks.
+     */
+    private record Link(int to, double length) {
+    }
+
+    /** Dimensions whose skeleton is kept at most. */
+    private static final int KEPT_DIMENSIONS = 8;
+    /** The skeleton of the roads of a dimension made last, by dimension. */
+    private static final Map<String, Skeleton> SKELETONS = new LinkedHashMap<>(KEPT_DIMENSIONS * 2, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, Skeleton> eldest) {
+            return size() > KEPT_DIMENSIONS;
+        }
+    };
+
+    /**
+     * What the roads taken make of the graph by themselves: the points where their sections meet, the lengths of the sections
+     * and the ways across country between the ends of roads and nearby roads, each point with its ways in the order the graph
+     * adds them. A road keeps its cells and sections for good, so the same roads in the same order make the same skeleton;
+     * whether a section is built, how worn it is, the rules and the pace are read for every trip. Nothing in it is changed once
+     * it is made.
+     */
+    private static final class Skeleton {
+        /** The roads it is made of, in order. */
+        final Road[] roads;
+        /** The points of the roads; the point {@code i} here is the node {@code i + 2} of the graph, after the start and the goal. */
+        final List<Node> nodes;
+        /** The node of the first point of every road. */
+        final int[] firsts;
+        /** The lengths of the sections of every road. */
+        final double[][] lengths;
+        /** The ways across country from every point, as {@link #nodes}. */
+        final List<List<Link>> links;
+
+        Skeleton(List<Road> taken) {
+            roads = taken.toArray(new Road[0]);
+            firsts = new int[roads.length];
+            lengths = new double[roads.length][];
+            List<Node> all = new ArrayList<>();
+            all.add(null);
+            all.add(null);
+            List<int[]> ends = new ArrayList<>();
+            for (int r = 0; r < roads.length; r++) {
+                Road road = roads[r];
+                int first = all.size();
+                int count = road.sections().size();
+                for (int b = 0; b <= count; b++) {
+                    RouteCell cell = road.boundary(b);
+                    all.add(new Node(cell.x(), cell.z(), road, b));
+                }
+                double[] of = new double[count];
+                for (int s = 0; s < count; s++) {
+                    of[s] = road.sectionLength(road.section(s));
+                }
+                firsts[r] = first;
+                lengths[r] = of;
+                ends.add(new int[]{first, first + count});
+            }
+            int total = all.size();
+            List<List<Link>> found = new ArrayList<>(total - 2);
+            for (int i = 2; i < total; i++) {
+                found.add(new ArrayList<>());
+            }
+            for (int[] end : ends) {
+                for (int e : end) {
+                    Node node = all.get(e);
+                    for (int j = 2; j < total; j++) {
+                        Node other = all.get(j);
+                        if (other.road() == node.road()) {
+                            continue;
+                        }
+                        double dx = other.x() - node.x();
+                        double dz = other.z() - node.z();
+                        if (dx * dx + dz * dz <= (double) JUNCTION * JUNCTION) {
+                            found.get(e - 2).add(new Link(j, distance(node, other)));
+                            found.get(j - 2).add(new Link(e, distance(other, node)));
+                        }
+                    }
+                }
+            }
+            List<List<Link>> kept = new ArrayList<>(found.size());
+            for (List<Link> list : found) {
+                kept.add(list.isEmpty() ? List.of() : List.copyOf(list));
+            }
+            nodes = List.copyOf(all.subList(2, total));
+            links = List.copyOf(kept);
+        }
+
+        /**
+         * Whether it is made of these very roads in this order.
+         */
+        boolean madeOf(List<Road> taken) {
+            if (taken.size() != roads.length) {
+                return false;
+            }
+            for (int r = 0; r < roads.length; r++) {
+                if (taken.get(r) != roads[r]) {
+                    return false;
+                }
+            }
+            return true;
+        }
     }
 
     private RoadNetwork() {
@@ -53,27 +160,32 @@ public final class RoadNetwork {
      */
     public static TravelPlan plan(Collection<Road> roads, String dimension, int fromX, int fromZ, int toX, int toZ, double blocksPerMinute,
                                   RoadRules rules, long minTicks, long maxTicks) {
-        List<Node> nodes = new ArrayList<>();
-        nodes.add(new Node(fromX, fromZ, null, -1));
-        nodes.add(new Node(toX, toZ, null, -1));
-        List<List<Edge>> edges = new ArrayList<>();
-        edges.add(new ArrayList<>());
-        edges.add(new ArrayList<>());
-        List<int[]> ends = new ArrayList<>();
+        // Whether a road is taken is read anew for every trip: a road is paid for and let through without a change of the roads.
+        List<Road> taken = new ArrayList<>();
         for (Road road : roads) {
             if (!road.dimension().equals(dimension) || road.status() == Road.Status.WAITING_CONSENT || road.paid() == 0) {
                 continue;
             }
-            int first = nodes.size();
-            int count = road.sections().size();
-            for (int b = 0; b <= count; b++) {
-                RouteCell cell = road.boundary(b);
-                nodes.add(new Node(cell.x(), cell.z(), road, b));
-                edges.add(new ArrayList<>());
-            }
-            for (int s = 0; s < count; s++) {
+            taken.add(road);
+        }
+        Skeleton skeleton = skeleton(dimension, taken);
+        int total = skeleton.nodes.size() + 2;
+        List<Node> nodes = new ArrayList<>(total);
+        nodes.add(new Node(fromX, fromZ, null, -1));
+        nodes.add(new Node(toX, toZ, null, -1));
+        nodes.addAll(skeleton.nodes);
+        List<List<Edge>> edges = new ArrayList<>(total);
+        for (int i = 0; i < total; i++) {
+            edges.add(new ArrayList<>());
+        }
+        // How fast a section is depends on whether it is built and how worn it is, and on the rules and the pace of the trip.
+        for (int r = 0; r < skeleton.roads.length; r++) {
+            Road road = skeleton.roads[r];
+            int first = skeleton.firsts[r];
+            double[] lengths = skeleton.lengths[r];
+            for (int s = 0; s < lengths.length; s++) {
                 Road.Section section = road.section(s);
-                double length = road.sectionLength(section);
+                double length = lengths[s];
                 boolean built = section.done();
                 double pace = built ? blocksPerMinute * speedFactor(road.roadClass(), section.condition(), rules) : blocksPerMinute;
                 double ticks = ticks(length, pace);
@@ -81,9 +193,7 @@ public final class RoadNetwork {
                 edges.get(first + s).add(new Edge(first + s + 1, ticks, length, road, s, roadClass, true));
                 edges.get(first + s + 1).add(new Edge(first + s, ticks, length, road, s, roadClass, false));
             }
-            ends.add(new int[]{first, first + count});
         }
-        int total = nodes.size();
         // Across country: from the start and to the goal everywhere, and from the ends of roads to other roads nearby.
         for (int i = 1; i < total; i++) {
             addStraight(nodes, edges, 0, i, blocksPerMinute);
@@ -91,21 +201,10 @@ public final class RoadNetwork {
         for (int i = 2; i < total; i++) {
             addStraight(nodes, edges, i, 1, blocksPerMinute);
         }
-        for (int[] end : ends) {
-            for (int e : end) {
-                Node node = nodes.get(e);
-                for (int j = 2; j < total; j++) {
-                    Node other = nodes.get(j);
-                    if (other.road() == node.road()) {
-                        continue;
-                    }
-                    double dx = other.x() - node.x();
-                    double dz = other.z() - node.z();
-                    if (dx * dx + dz * dz <= (double) JUNCTION * JUNCTION) {
-                        addStraight(nodes, edges, e, j, blocksPerMinute);
-                        addStraight(nodes, edges, j, e, blocksPerMinute);
-                    }
-                }
+        for (int i = 2; i < total; i++) {
+            List<Edge> from = edges.get(i);
+            for (Link link : skeleton.links.get(i - 2)) {
+                from.add(new Edge(link.to(), ticks(link.length(), blocksPerMinute), link.length(), null, 0, null, true));
             }
         }
         double[] best = new double[total];
@@ -173,10 +272,38 @@ public final class RoadNetwork {
     }
 
     private static void addStraight(List<Node> nodes, List<List<Edge>> edges, int from, int to, double blocksPerMinute) {
-        Node a = nodes.get(from);
-        Node b = nodes.get(to);
-        double length = Math.sqrt(Math.pow((double) b.x() - a.x(), 2) + Math.pow((double) b.z() - a.z(), 2));
+        double length = distance(nodes.get(from), nodes.get(to));
         edges.get(from).add(new Edge(to, ticks(length, blocksPerMinute), length, null, 0, null, true));
+    }
+
+    private static double distance(Node a, Node b) {
+        return Math.sqrt(Math.pow((double) b.x() - a.x(), 2) + Math.pow((double) b.z() - a.z(), 2));
+    }
+
+    /**
+     * The skeleton of the roads of a dimension that are taken, made again when they are other roads or in another order.
+     */
+    private static Skeleton skeleton(String dimension, List<Road> taken) {
+        synchronized (SKELETONS) {
+            Skeleton kept = SKELETONS.get(dimension);
+            if (kept != null && kept.madeOf(taken)) {
+                return kept;
+            }
+        }
+        Skeleton made = new Skeleton(taken);
+        synchronized (SKELETONS) {
+            SKELETONS.put(dimension, made);
+        }
+        return made;
+    }
+
+    /**
+     * Forgets the skeletons kept, so that the next trips make them anew; for tests.
+     */
+    static void forget() {
+        synchronized (SKELETONS) {
+            SKELETONS.clear();
+        }
     }
 
     private static double straight(List<TravelPlan.Point> points, List<TravelPlan.Piece> pieces, Node a, Node b, double clock, double ticks) {
