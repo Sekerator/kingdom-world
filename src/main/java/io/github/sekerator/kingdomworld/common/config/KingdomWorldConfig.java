@@ -1340,6 +1340,12 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> soldiers;
         public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> guards;
         public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> army;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> armyLeast;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> armyMost;
+        public final ForgeConfigSpec.IntValue armyPerDay;
+        public final ForgeConfigSpec.IntValue campSoldiers;
+        public final ForgeConfigSpec.IntValue campBodies;
+        public final ForgeConfigSpec.IntValue armyBodies;
         public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> townGuards;
         public final ForgeConfigSpec.IntValue garrisonWagePercent;
         public final ForgeConfigSpec.IntValue citizenTaxPercent;
@@ -1414,10 +1420,32 @@ public final class KingdomWorldConfig {
                             "officers included. A kingdom appears with them, its ruler keeps that many and replaces the fallen.")
                     .defineList("guards", ints(io.github.sekerator.kingdomworld.core.npc.NpcRules.GUARDS),
                             value -> value instanceof Integer number && number >= 0 && number <= 256);
-            army = builder.comment("Soldiers of the royal army of a kingdom, officers included, by size. The army stands in reserve at the",
-                            "barracks and the palace and comes out when the guard is hard pressed.")
+            army = builder.comment("Soldiers of the royal army of a kingdom who live in its capital, officers included, by size. They stand",
+                            "in reserve at the barracks and the palace and come out first when the guard is hard pressed; the rest of the",
+                            "army lives in its camps.")
                     .defineList("army", ints(io.github.sekerator.kingdomworld.core.npc.NpcRules.ARMY),
                             value -> value instanceof Integer number && number >= 0 && number <= 256);
+            armyLeast = builder.comment("The least royal army of a kingdom, officers included, by size: a ruler who cares for trade keeps",
+                            "about that many. The seed of the kingdom and the character of its ruler choose the number between this and",
+                            "armyMost; a warrior keeps about armyMost.")
+                    .defineList("armyLeast", ints(io.github.sekerator.kingdomworld.core.npc.NpcRules.ARMY_LEAST),
+                            value -> value instanceof Integer number && number >= 0 && number <= io.github.sekerator.kingdomworld.core.npc.NpcRules.MAX_ARMY);
+            armyMost = builder.comment("The largest royal army of a kingdom, officers included, by size.")
+                    .defineList("armyMost", ints(io.github.sekerator.kingdomworld.core.npc.NpcRules.ARMY_MOST),
+                            value -> value instanceof Integer number && number >= 0 && number <= io.github.sekerator.kingdomworld.core.npc.NpcRules.MAX_ARMY);
+            armyPerDay = builder.comment("Recruits from abroad a royal army that lacks soldiers takes in a game day: a kingdom that appeared",
+                            "before the large armies, or lost soldiers in a war, fills its army that fast.")
+                    .defineInRange("armyPerDay", io.github.sekerator.kingdomworld.core.npc.NpcRules.ARMY_PER_DAY, 0, 64);
+            campSoldiers = builder.comment("Soldiers one camp of the army holds. The army beyond the capital lives in camps on the land of the",
+                            "kingdom: a kingdom has as many camps as it needs, at most three.")
+                    .defineInRange("campSoldiers", io.github.sekerator.kingdomworld.core.npc.NpcRules.CAMP_SOLDIERS, 10,
+                            io.github.sekerator.kingdomworld.core.npc.NpcRules.MAX_ARMY);
+            campBodies = builder.comment("Soldiers of one camp who have a body near players at most; the others live in the camp unseen.",
+                            "The same holds for the army of a kingdom away from its camps.")
+                    .defineInRange("campBodies", io.github.sekerator.kingdomworld.core.npc.NpcRules.CAMP_BODIES, 0, 256);
+            armyBodies = builder.comment("Soldiers of the royal armies of all kingdoms of the world who have a body at once at most, within",
+                            "citizens.maxActiveNpcs. Citizens and the guard get their bodies first; the army never takes theirs.")
+                    .defineInRange("armyBodies", io.github.sekerator.kingdomworld.core.npc.NpcRules.ARMY_BODIES, 0, 1024);
             townGuards = builder.comment("Soldiers of the guard every town of a kingdom has besides, by size.")
                     .defineList("townGuards", ints(io.github.sekerator.kingdomworld.core.npc.NpcRules.TOWN_GUARDS),
                             value -> value instanceof Integer number && number >= 0 && number <= 16);

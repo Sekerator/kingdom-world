@@ -137,7 +137,8 @@ public final class NpcSettings {
                     ints(c.towns.get(), d.towns()), c.townDistance.get(), new long[]{money[0], money[1], money[2]}, c.startingFoodDays.get(),
                     ints(c.startingMaterials.get(), d.materials()), ints(c.soldiers.get(), d.soldiers()), c.blocksPerTick.get(),
                     c.chunksPerTick.get(), c.maxInhabitedMinutes.get(), d.attemptsPerSite(), ints(c.guards.get(), d.guards()),
-                    ints(c.army.get(), d.army()), ints(c.townGuards.get(), d.townGuards()));
+                    ints(c.army.get(), d.army()), ints(c.townGuards.get(), d.townGuards()), ints(c.armyLeast.get(), d.armyLeast()),
+                    ints(c.armyMost.get(), d.armyMost()), c.armyPerDay.get(), c.campSoldiers.get(), c.campBodies.get(), c.armyBodies.get());
         } catch (IllegalStateException | IllegalArgumentException e) {
             return d;
         }
