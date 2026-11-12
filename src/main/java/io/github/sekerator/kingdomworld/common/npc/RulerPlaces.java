@@ -388,7 +388,8 @@ final class RulerPlaces {
         String dimension = territory.get().dimension();
         int capitalX = territory.get().capital().x();
         int capitalZ = territory.get().capital().z();
-        int distance = NpcSettings.rules().townDistance();
+        int distance = NpcWork.state(server).site(npc.siteId()).map(site -> NpcCity.townDistance(site.level(), site.layout()))
+                .orElse(NpcSettings.rules().townDistance());
         int buffer = KingdomWorldApi.rules().claimBufferChunks() + 1;
         List<int[]> capitals = new ArrayList<>();
         for (Territory other : state.territory().territories()) {

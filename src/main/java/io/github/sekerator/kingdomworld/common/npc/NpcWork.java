@@ -251,7 +251,7 @@ public final class NpcWork {
             int minCity = Math.max(64, io.github.sekerator.kingdomworld.common.road.RoadSettings.rules().minCityDistance());
             List<int[]> candidates = new ArrayList<>();
             for (int[] town : io.github.sekerator.kingdomworld.core.npc.SitePlanner.townCandidates(x, z, seed,
-                    NpcSettings.rules().townDistance())) {
+                    NpcCity.townDistance(level, NpcSite.LAYOUT_DISTRICTS))) {
                 candidates.add(NpcPlanning.centred(town));
             }
             chosen = io.github.sekerator.kingdomworld.core.npc.SitePlanner.chooseTowns(candidates,

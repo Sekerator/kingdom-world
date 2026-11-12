@@ -235,7 +235,8 @@ final class NpcPlanning {
                 judging.reads.add(level.getChunkSource().chunkMap.read(new ChunkPos(center.x + offset[0], center.z + offset[1])));
             }
             judging.townCandidates = new ArrayList<>();
-            for (int[] town : SitePlanner.townCandidates(candidate.x(), candidate.z(), candidate.seed(), rules.townDistance())) {
+            for (int[] town : SitePlanner.townCandidates(candidate.x(), candidate.z(), candidate.seed(),
+                    NpcCity.townDistance(candidate.level(), NpcSite.LAYOUT_DISTRICTS))) {
                 judging.townCandidates.add(centred(town));
             }
             return Optional.empty();

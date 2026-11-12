@@ -241,6 +241,13 @@ public record NpcComposition(int layout, NpcLevel level, long seed, List<Plot> b
     }
 
     /**
+     * How far the ground of a town of a kingdom of districts reaches from its town hall, in blocks.
+     */
+    public static int districtTownReach() {
+        return CityPlan.TOWN_WALL;
+    }
+
+    /**
      * How far the fields and outer posts of a capital of districts of a level reach from the throne, in blocks.
      */
     public static int districtReach(NpcLevel level) {

@@ -65,6 +65,18 @@ final class NpcCity {
         return layout == NpcSite.LAYOUT_DISTRICTS ? 2 : 1;
     }
 
+    /**
+     * How far the towns of a kingdom lie from its capital, in blocks: what the rules say, and for a kingdom of districts never
+     * so near that the ground of a town would reach the fields and the wall of the capital, whatever the config says.
+     */
+    static int townDistance(NpcLevel level, int layout) {
+        int configured = NpcSettings.rules().townDistance();
+        if (layout != NpcSite.LAYOUT_DISTRICTS) {
+            return configured;
+        }
+        return Math.max(configured, NpcComposition.districtReach(level) + NpcComposition.districtTownReach() + NpcSpawner.RAMP + 16);
+    }
+
     // ---------------------------------------------------------------- the look
 
     /**
