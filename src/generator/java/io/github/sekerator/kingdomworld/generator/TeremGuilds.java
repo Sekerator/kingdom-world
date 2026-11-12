@@ -162,10 +162,11 @@ final class TeremGuilds {
     }
 
     /**
-     * Rank A: the hall of B grown deeper, with a covered gallery on posts along its east side leading to a watch tower at
-     * its back corner: a log tower whose lookout juts out over brackets under a tent with the banner of the guild on its
-     * point. Before the gallery a fenced yard where the adventurers train, with a dummy of hay and a target. Inside the hall
-     * a long table runs from the counter to the door, and a stair climbs along the west wall to the loft of the guild.
+     * Rank A: the hall of B grown deeper, with a covered gallery on posts and a plinth of stone along its east wall leading
+     * to a watch tower at its back corner: a log tower whose lookout juts out over brackets under a tent with the banner of
+     * the guild on its point. Before the gallery a fenced and paved yard where the adventurers train, with a dummy of hay
+     * and a target. Inside the hall a long table runs from the counter to the door, and a stair climbs along the west wall
+     * to the loft of the guild.
      */
     private static Drawn guildA() {
         Structure s = new Structure(19, 30, 19);
@@ -189,14 +190,17 @@ final class TeremGuilds {
         flag(s, 3, STAND + 9, z2 + 2, 0);
         s.set(2, 5, z2 + 1, Kit.wallBanner(GUILD, "south")).set(4, 5, z2 + 1, Kit.wallBanner(GUILD, "south"));
 
-        // the gallery along the east side, its door from the hall, the tower at its end
+        // the gallery on a plinth along the east wall of the hall, its door from the hall, the tower at its end; its roof
+        // leans on the wall, which stays whole under it, and a railing closes its open end
         int tx = 14;
         int tz = 4;
-        Terem.gallery(s, 13, 7, 15, 12, STAND, 0, false);
-        s.set(x2 + 1, FLOOR, 10, Terem.FLOOR).set(13, STAND, 10, AIR);
+        Terem.gallery(s, x2 + 1, 7, x2 + 3, 12, STAND, 0, false);
+        s.fill(x2, top - 2, 7, x2, top - 1, 12, Kit.log(Terem.LOG, "z"));
+        plinth(s, x2 + 1, 7, x2 + 3, 12, FLOOR);
+        s.set(x2 + 1, STAND, 10, AIR).set(x2 + 2, STAND, 12, Terem.CARVE_FENCE);
         s.door(x2, STAND, 10, Terem.DOOR, "west", "left");
         watchTower(s, tx, tz, 2, FLOOR, 13, 1, false);
-        s.door(tx, STAND, tz + 2, Terem.DOOR, "north", "left");
+        s.door(x2 + 2, STAND, tz + 2, Terem.DOOR, "north", "left");
         trainingYard(s, 13, 14, 18, 18);
 
         // the great hall
@@ -212,6 +216,7 @@ final class TeremGuilds {
         Terem.candleChandelier(s, 7, 10, top - 1, 1);
         Furnish.chandelier(s, 9, 3, top - 1, 1);
         flight(s, x1 + 1, STAND, z2 - 1, "north", 6);
+        lamps(s, 0, top - 1, 0, new int[]{x1 + 2, 10}, new int[]{8, z2 - 1});
         s.set(x1 + 2, top + 1, 8, Terem.FENCE).set(x1 + 2, top + 1, 9, Terem.FENCE).set(x1 + 1, top + 1, 10, Terem.FENCE);
 
         // the loft of the guild
@@ -284,9 +289,9 @@ final class TeremGuilds {
     }
 
     /**
-     * The yard where the adventurers train, fenced from (x1, z1) to (x2, z2): a dummy of hay on a post with arms and a
-     * pumpkin head, a target on a bale of hay, a rack of weapons, a lamp on a post and a gate to the street on its south
-     * side.
+     * The yard where the adventurers train, fenced from (x1, z1) to (x2, z2) and paved with rough stone, a walk of boards
+     * from its gate: a dummy of hay on a post with arms and a pumpkin head, a target on a bale of hay, a rack of weapons, a
+     * lamp on a post and a gate to the street on its south side.
      */
     private static void trainingYard(Structure s, int x1, int z1, int x2, int z2) {
         for (int x = x1; x <= x2; x++) {
@@ -298,6 +303,7 @@ final class TeremGuilds {
         }
         int gx = (x1 + x2) / 2;
         put(s, gx, 0, z2, "minecraft:spruce_fence_gate[facing=south,in_wall=false,open=false,powered=false]");
+        pave(s, x1 + 1, z1 + 1, x2 - 1, z2 - 1, gx, 0, z1 + 1, z2 - 1);
         int mx = x1 + 2;
         int mz = z1 + 2;
         s.set(mx, 0, mz, Terem.FENCE).set(mx, 1, mz, HAY).set(mx, 2, mz, "minecraft:carved_pumpkin[facing=south]");
@@ -312,7 +318,8 @@ final class TeremGuilds {
      * the middle (the svetlitsa, the upper chamber of the guild) and a high porch under a barrel roof before the door. The
      * forecourt lies behind a palisade of sharpened logs with a gate under a tent; two watch towers stand in it before the
      * corners of the hall, each with its lookout jutting out under a tent and the banner of the guild on the point; a dummy,
-     * a target and banners on poles stand in the forecourt. Inside the great
+     * a target, banners on poles and lamps on posts stand in the forecourt, paved with stone and a walk of boards from the
+     * gate. Inside the great
      * hall two long tables, the stove, the counter of the registrar, the trophies and the contract board; a stair to the
      * upper floor with the council table, the books of the guild and the map room in the svetlitsa.
      */
@@ -367,6 +374,10 @@ final class TeremGuilds {
         s.set(8, 0, 16, HAY).set(8, 1, 16, "minecraft:target[power=0]").set(8, 0, 17, "minecraft:grindstone[face=floor,facing=east]");
         flagpole(s, 8, 0, 20, 5);
         flagpole(s, 14, 0, 20, 5);
+        pave(s, x1, z2 + 1, x2, 20, 11, 1, 15, 20);
+        for (int x : new int[]{x1 + 1, x2 - 1}) {
+            s.set(x, 1, z2 + 2, Terem.FENCE).set(x, 2, z2 + 2, Kit.lantern());
+        }
 
         // the great hall
         Terem.stove(s, 5, STAND, 4, "south", 18);
@@ -399,6 +410,7 @@ final class TeremGuilds {
         lamp(s, 16, 13, 6);
         lamp(s, 11, 14, 9);
         lamp(s, 6, 6, 9);
+        lamps(s, 11, top - 1, 6, new int[]{-6, -3}, new int[]{-6, 3}, new int[]{6, 3}, new int[]{6, -3});
         s.connect();
         s.trimSky(3);
         return new Drawn(s, new int[]{11, STAND, z2 + 1}, List.of(new int[]{17, STAND, 6}));
@@ -441,7 +453,8 @@ final class TeremGuilds {
     /**
      * A gate of the forecourt under a tent: four hewn posts at the corners of a square of half-size {@code r} around the
      * gate at (cx, cz) in a palisade along x, a ring of beams on them, the tent with the banner of the guild on its point,
-     * the leaves of the gate standing open, a lantern hanging in the gateway and the banner of the guild over it.
+     * the leaves of the gate standing open, a lantern hanging in the gateway and the banner of the guild on the front beam,
+     * outside over the way in, so that nothing hangs in the gateway before those who pass through it.
      */
     private static void tentGate(Structure s, int cx, int cz, int r) {
         int beam = 5;
@@ -461,11 +474,13 @@ final class TeremGuilds {
         s.set(cx - r + 1, beam - 2, cz, Kit.upside(Terem.CARVE_STAIRS, "east")).set(cx + r - 1, beam - 2, cz, Kit.upside(Terem.CARVE_STAIRS, "west"));
         s.set(cx - r + 1, 0, cz, "minecraft:spruce_fence_gate[facing=west,in_wall=false,open=true,powered=false]");
         s.set(cx + r - 1, 0, cz, "minecraft:spruce_fence_gate[facing=east,in_wall=false,open=true,powered=false]");
-        s.set(cx, beam - 1, cz + 1, Kit.wallBanner(GUILD, "south"));
+        put(s, cx, beam, cz + r + 1, Kit.wallBanner(GUILD, "south"));
         s.set(cx, beam - 2, cz, Kit.hangingLantern());
+        put(s, cx, beam - 1, cz - r, Kit.hangingLantern());
         s.set(cx, beam, cz, Kit.log(Terem.POST, "x"));
         int tip = Terem.tent(s, Terem.EVERYWHERE, cx, cz, r + 1, beam + 1, Terem.SQUARE, Terem.SQUARE, Terem.TENT_RISES, 0, -1);
         flag(s, cx, tip - 1, cz, 0);
+        pave(s, cx - r + 1, cz - r, cx + r - 1, cz + r, cx, r, cz - r, cz + r);
     }
 
     /**
@@ -479,11 +494,12 @@ final class TeremGuilds {
     /**
      * Rank SS: the guild court, one of the main buildings of a capital after the castle. At the back of a court the great
      * hall of two storeys under a barrel roof with carved kokoshniki at its ends and three onion domes on its ridge, a high
-     * porch under a tent before its door; covered galleries on carved posts along both sides of the court lead from the hall
-     * to two watch towers at the front corners, each with its lookout and a watch lantern carrying the banner of the
-     * guild; between them a palisade and the gate under a tall tent. In the court a well, a dummy, a target and the banners
-     * of the guild. Inside, the great hall with two long tables, the stove, the counter of the registrar, the trophies and
-     * the contract board, and over it the vaulted upper hall of the guild with its council table, books and maps.
+     * porch under a tent before its door; covered galleries on carved posts over plinths of stone along both sides of the
+     * court lead from the hall to two watch towers at the front corners, each with its lookout and a watch lantern carrying
+     * the banner of the guild; between them a palisade and the gate under a tall tent. The court is paved with stone and a
+     * walk of boards from the gate to the porch; in it a well, a dummy, a target and the banners of the guild. Inside, the
+     * great hall with two long tables, the stove, the counter of the registrar, the trophies and the contract board, and over
+     * it the vaulted upper hall of the guild with its council table, books and maps, lit by horoses of lanterns.
      */
     private static Drawn guildSS() {
         Structure s = new Structure(31, 40, 33);
@@ -522,24 +538,39 @@ final class TeremGuilds {
         Terem.porch(s, c, STAND, z2, "south", 0, -1, false);
         flag(s, c, STAND + 9, z2 + 2, 0);
 
-        // the galleries round the court and the towers at its front corners
+        // the galleries round the court and the towers at its front corners; under the galleries and the landings that
+        // join them to the hall and to the towers a plinth of stone, so that no hollow is left under their boards
         Terem.gallery(s, 3, 14, 7, 24, STAND, 0, false);
         Terem.gallery(s, 23, 14, 27, 24, STAND, 0, false);
         for (int x : new int[]{6, 24}) {
-            s.set(x, FLOOR, z2 + 1, Terem.FLOOR);
             s.door(x, STAND, z2, Terem.DOOR, "north", "left");
         }
         watchTower(s, 5, 28, 2, FLOOR, 15, 1, true);
         watchTower(s, 25, 28, 2, FLOOR, 15, 1, true);
         for (int x : new int[]{5, 25}) {
-            s.set(x, FLOOR, 25, Terem.FLOOR);
             s.door(x, STAND, 26, Terem.DOOR, "south", "left");
+        }
+        for (int gx : new int[]{3, 23}) {
+            plinth(s, gx, z2 + 1, gx + 4, 25, FLOOR);
+            for (int z : new int[]{z2 + 1, 25}) {
+                for (int x = gx; x <= gx + 4; x++) {
+                    if (!s.solid(x, FLOOR, z)) {
+                        s.set(x, FLOOR, z, Terem.FLOOR);
+                    }
+                }
+            }
+            for (int x : new int[]{gx, gx + 4}) {
+                if (!s.solid(x, STAND, z2 + 1)) {
+                    s.set(x, STAND, z2 + 1, Terem.CARVE_FENCE);
+                }
+            }
         }
         // the palisade and the gate
         tyn(s, 8, 28, 11, 28, 5);
         tyn(s, 19, 28, 22, 28, 5);
         tentGate(s, c, 28, 3);
-        // the court: a well, a dummy and a target, racks of weapons, the banners of the guild
+        // the court: a well, a dummy and a target, racks of weapons, the banners of the guild; paved with stone and a walk
+        // of boards from the gate to the porch
         well(s, c, 20);
         s.set(10, 0, 18, Terem.FENCE).set(10, 1, 18, HAY).set(10, 2, 18, "minecraft:carved_pumpkin[facing=south]");
         s.set(9, 1, 18, Terem.FENCE).set(11, 1, 18, Terem.FENCE);
@@ -550,6 +581,7 @@ final class TeremGuilds {
         for (int x : new int[]{10, 20}) {
             s.set(x, 0, 21, Terem.FENCE).set(x, 1, 21, Kit.lantern());
         }
+        pave(s, 8, z2 + 1, 22, 27, c, 1, z2 + 4, 27);
 
         // the great hall
         Terem.stove(s, 7, STAND, 5, "south", 20);
@@ -564,6 +596,7 @@ final class TeremGuilds {
         Furnish.chandelier(s, c, 10, upper - 1, 1);
         Furnish.chandelier(s, 22, 4, upper - 1, 1);
         Furnish.chandelier(s, 7, 9, upper - 1, 1);
+        Furnish.chandelier(s, 13, 5, upper - 1, 1);
         flight(s, x2 - 1, STAND, z2 - 2, "north", 6);
 
         // the upper hall under the vault
@@ -581,11 +614,14 @@ final class TeremGuilds {
         Terem.lavka(s, 13, z2 - 1, 17, z2 - 1, up);
         Terem.redCorner(s, x2 - 1, up, z2 - 1, "south", "east");
         s.set(c - 1, up + 3, z2 - 1, Kit.wallBanner(GUILD, "north")).set(c + 1, up + 3, z2 - 1, Kit.wallBanner(GUILD, "north"));
-        Terem.candleChandelier(s, c, 7, 22, 9);
-        Terem.candleChandelier(s, 10, 7, 22, 9);
-        Terem.candleChandelier(s, 20, 7, 22, 9);
+        horos(s, c, 7, 22, 13);
+        horos(s, 10, 7, 22, 13);
+        horos(s, 20, 7, 22, 13);
         lamp(s, 8, 12, 5);
         lamp(s, 22, 12, 5);
+        for (int x : new int[]{8, 13, 17, 22}) {
+            lamp(s, x, 12, 10);
+        }
         s.connect();
         s.trimSky(3);
         return new Drawn(s, new int[]{c, STAND, z2 + 2}, List.of(new int[]{23, STAND, 7}));
@@ -794,6 +830,68 @@ final class TeremGuilds {
     }
 
     /**
+     * Lanterns that light the corners of a room: one at each offset from (cx, cz) at layer {@code y}, hanging on a chain from
+     * the ceiling or the roof at most eight layers over it; a cell that is taken, or has nothing over it to hang from, is
+     * left as it is.
+     */
+    private static void lamps(Structure s, int cx, int y, int cz, int[]... offsets) {
+        for (int[] d : offsets) {
+            int x = cx + d[0];
+            int z = cz + d[1];
+            if (!s.inside(x, y, z) || s.solid(x, y, z)) {
+                continue;
+            }
+            for (int yy = y + 1; yy <= y + 8 && yy < s.sizeY; yy++) {
+                if (s.solid(x, yy, z)) {
+                    if (!s.get(x, yy, z).startsWith("minecraft:chain") && !s.get(x, yy, z).startsWith("minecraft:lantern")) {
+                        lamp(s, x, y, z);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * A great horos of lanterns for a high hall: a chain from the vault at {@code top} down to a hub of carved posts at
+     * layer {@code hub} with four arms, a lantern standing on each arm.
+     */
+    private static void horos(Structure s, int x, int z, int top, int hub) {
+        for (int yy = hub + 1; yy <= top; yy++) {
+            put(s, x, yy, z, Kit.chain());
+        }
+        put(s, x, hub, z, Terem.CARVE_FENCE);
+        for (int[] d : new int[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+            put(s, x + d[0], hub, z + d[1], Terem.CARVE_FENCE);
+            put(s, x + d[0], hub + 1, z + d[1], Kit.lantern());
+        }
+    }
+
+    /**
+     * Paves a court on layer 0 from (x1, z1) to (x2, z2) wherever nothing stands yet: rough stone, and a walk of boards
+     * {@code half} blocks to each side of the column {@code walkX} from row {@code walkZ1} to row {@code walkZ2}, so that
+     * no bare ground shows within the walls of the guild.
+     */
+    private static void pave(Structure s, int x1, int z1, int x2, int z2, int walkX, int half, int walkZ1, int walkZ2) {
+        for (int z = z1; z <= z2; z++) {
+            for (int x = x1; x <= x2; x++) {
+                if (s.inside(x, 0, z) && !s.solid(x, 0, z)) {
+                    boolean walk = Math.abs(x - walkX) <= half && z >= walkZ1 && z <= walkZ2;
+                    s.set(x, 0, z, walk ? Terem.FLOOR : Terem.FOOTING);
+                }
+            }
+        }
+    }
+
+    /**
+     * A plinth of rough stone under a raised gallery from (x1, z1) to (x2, z2), from the ground up to the layer under its
+     * boards at {@code floor}, so that no dark hollow is left under them.
+     */
+    private static void plinth(Structure s, int x1, int z1, int x2, int z2, int floor) {
+        s.fill(x1, 0, z1, x2, floor - 1, z2, Terem.FOOTING);
+    }
+
+    /**
      * The map table: the cartography table with stools of the timber at its sides and before it.
      */
     private static void mapTable(Structure s, int x, int y, int z) {
@@ -805,6 +903,8 @@ final class TeremGuilds {
     // ================================================================ the mages' tower
 
     private static final String LECTERN = "minecraft:lectern[facing=south,has_book=false,powered=false]";
+    /** The four places two blocks diagonally out from the middle of a storey, where lanterns light its corners. */
+    private static final int[][] CORNERS = {{-2, -2}, {2, -2}, {-2, 2}, {2, 2}};
 
     /**
      * The tower of the mages of a rank.
@@ -836,6 +936,7 @@ final class TeremGuilds {
         Furnish.books(s, c + 1, c - 3, c + 2, c - 3, 6, 7);
         s.set(c, 6, c - 2, LECTERN);
         ladder(s, c + 3, 6, c - 2, "west", gallery);
+        hatch(s, c + 3, gallery, c - 2, "west");
         Furnish.chandelier(s, c, c, gallery - 1, 1);
         researchRoom(s, c, gallery + 1, c);
         s.connect();
@@ -865,6 +966,7 @@ final class TeremGuilds {
         // the library
         library(s, c, 11, c);
         ladder(s, c + 3, 6, c - 2, "west", gallery);
+        hatch(s, c + 3, gallery, c - 2, "west");
         researchRoom(s, c, gallery + 1, c);
         s.connect();
         s.trimSky(3);
@@ -874,7 +976,8 @@ final class TeremGuilds {
     /**
      * Rank S: a tower of three log storeys (the room of two mages, the brewing room, the study), a library hall of logs
      * beside it under a barrel roof with a little onion dome, and a slender eight-sided side tower with the room of the third
-     * mage under its own tent and dome; a porch with a tent before the door of the tower.
+     * mage under its own tent and dome, the three joined door to door by little closed passages; a porch with a tent before
+     * the door of the tower.
      */
     private static Drawn mageS() {
         Structure s = new Structure(17, 41, 17);
@@ -893,6 +996,7 @@ final class TeremGuilds {
         brewingRoom(s, c, 11, c);
         study(s, c, 16, c);
         ladder(s, c + 3, 6, c - 2, "west", gallery);
+        hatch(s, c + 3, gallery, c - 2, "west");
         researchRoom(s, c, gallery + 1, c);
 
         // the library hall beside the tower, its door from the tower and its door to the side tower
@@ -906,6 +1010,8 @@ final class TeremGuilds {
         // the side tower with the room of the third mage
         sideTower(s, 13, 13, 2, 13, 5, "east", "east", "south");
         s.door(13, 1, 11, Terem.DOOR, "south", "left");
+        joint(s, c + 5, 2, c + 5, 8, 5, c + 5, c);
+        joint(s, 12, 10, 14, 10, 5, 13, 10);
         Furnish.bed(s, 14, 7, 14, "north", "purple");
         s.set(14, 1, 12, BREWING).set(14, 1, 14, CAULDRON);
         s.connect();
@@ -916,10 +1022,11 @@ final class TeremGuilds {
     /**
      * Rank SS: the tower court of the mages. The main tower of four log storeys rises in the middle (the room of two mages,
      * the study, the research room with the enchanting table, the hall of the mages, and the observatory under the tent) to
-     * the gilt ball and glowing spike of its dome; low wings under barrel roofs with little domes stand against it on both sides, the
-     * library hall to the west and the brewing room to the east; before them a court with a porch under a tent at the door
-     * of the tower, and at the front corners two slender lower towers with the rooms of two more mages, joined by a covered
-     * gallery on carved posts through whose middle one enters the court.
+     * the gilt ball and glowing spike of its dome; low wings under barrel roofs with little domes stand against it on both
+     * sides, the library hall to the west and the brewing room to the east, each joined to it by a little closed passage;
+     * before them a court paved with stone and a walk of boards, with a porch under a tent at the door of the tower, and at
+     * the front corners two slender lower towers with the rooms of two more mages, joined by a covered gallery on carved
+     * posts through whose middle one enters the court.
      */
     private static Drawn mageSS() {
         Structure s = new Structure(25, 46, 25);
@@ -948,7 +1055,9 @@ final class TeremGuilds {
             }
         }
         Terem.candleChandelier(s, c, cz, 24, 1);
+        lamps(s, c, 24, cz, CORNERS);
         ladder(s, c + 3, 6, cz - 2, "west", gallery);
+        hatch(s, c + 3, gallery, cz - 2, "west");
         observatory(s, c, gallery + 1, cz);
 
         // the wings: the library hall to the west, the brewing room to the east
@@ -965,6 +1074,8 @@ final class TeremGuilds {
         for (int x : new int[]{4, 20}) {
             s.door(x, 1, 12, Terem.DOOR, "north", "left");
         }
+        joint(s, c - 5, 3, c - 5, 11, 5, c - 5, cz - 2);
+        joint(s, c + 5, 3, c + 5, 11, 5, c + 5, cz);
 
         // the lower towers at the front corners and the gallery between them
         sideTower(s, 4, 20, 2, 15, 5, "south", "west", "south");
@@ -982,6 +1093,7 @@ final class TeremGuilds {
         for (int x : new int[]{8, 16}) {
             s.set(x, 0, 13, Terem.FENCE).set(x, 1, 13, Kit.lantern());
         }
+        pave(s, 2, 13, 22, 18, c, 1, 15, 18);
         s.connect();
         s.trimSky(3);
         return new Drawn(s, new int[]{c, 1, cz + 5}, List.of());
@@ -1006,7 +1118,7 @@ final class TeremGuilds {
      * The ground floor of a mage tower of half-size 4 around (cx, cz), one stands at layer 1: the magic focus in its middle
      * on a rug, the post of the mage two blocks from it with the one chest beside it, brewing stands and a cauldron by the
      * east wall, shelves of books against the north wall leaving its window free, a stair climbing along the west wall to the
-     * storey over it (the hole in that floor fenced) and a chandelier of candles.
+     * storey over it (the hole in that floor fenced), a chandelier of candles and lanterns in the four corners.
      */
     private static void focusFloor(Structure s, int cx, int cz, int brewing) {
         Furnish.rug(s, cx - 1, cz - 1, cx + 1, cz + 1, 1, "minecraft:purple_carpet");
@@ -1021,6 +1133,7 @@ final class TeremGuilds {
         flight(s, cx - 3, 1, cz + 3, "north", 5);
         s.set(cx - 2, 6, cz, Terem.CARVE_FENCE).set(cx - 2, 6, cz + 1, Terem.CARVE_FENCE).set(cx - 3, 6, cz + 2, Terem.CARVE_FENCE);
         Terem.candleChandelier(s, cx, cz, 4, 1);
+        lamps(s, cx, 4, cz, CORNERS);
     }
 
     /**
@@ -1036,6 +1149,7 @@ final class TeremGuilds {
         s.set(cx, y, cz - 2, LECTERN);
         Terem.feastTable(s, cx - 1, cz + 1, cx + 1, cz + 1, y, true);
         Terem.candleChandelier(s, cx, cz, y + 3, 1);
+        lamps(s, cx, y + 3, cz, CORNERS);
     }
 
     /**
@@ -1053,6 +1167,7 @@ final class TeremGuilds {
         Furnish.sack(s, cx + 1, y, cz + 3, true);
         s.set(cx, y, cz + 1, Kit.topSlab(Terem.FLOOR_SLAB)).set(cx, y + 1, cz + 1, Furnish.candles(3));
         Terem.candleChandelier(s, cx, cz, y + 3, 1);
+        lamps(s, cx, y + 3, cz, CORNERS);
     }
 
     /**
@@ -1067,6 +1182,7 @@ final class TeremGuilds {
         s.set(cx + 1, y, cz + 2, CARTOGRAPHY);
         s.set(cx - 2, y, cz, Terem.FENCE).set(cx - 2, y + 1, cz, AMETHYST);
         Terem.candleChandelier(s, cx, cz, y + 3, 1);
+        lamps(s, cx, y + 3, cz, CORNERS);
     }
 
     /**
@@ -1230,6 +1346,7 @@ final class TeremGuilds {
         s.set(cx - 1, y, cz + 2, CARTOGRAPHY).set(cx + 1, y, cz + 2, Kit.topSlab(Terem.FLOOR_SLAB));
         s.set(cx + 1, y + 1, cz + 2, Furnish.candles(3));
         Terem.candleChandelier(s, cx, cz, y + 3, 1);
+        lamps(s, cx, y + 3, cz, new int[]{2, 0}, new int[]{-2, 0}, new int[]{0, 2}, new int[]{0, -2});
     }
 
     /**
@@ -1360,6 +1477,34 @@ final class TeremGuilds {
         for (int[] p : new int[][]{{d, 0}, {-d, 0}, {0, d}, {0, -d}}) {
             if (s.inside(cx + p[0], y, cz + p[1]) && s.get(cx + p[0], y, cz + p[1]).startsWith(Terem.MICA)) {
                 s.set(cx + p[0], y, cz + p[1], PURPLE);
+            }
+        }
+    }
+
+    /**
+     * The hatch where a ladder comes up through the floor of the gallery: a trapdoor of the timber lying shut in the floor,
+     * so that the room under the gallery has no hole to the sky; turned the way the ladder is, it opens into a rung of it
+     * for those who climb.
+     */
+    private static void hatch(Structure s, int x, int y, int z, String facing) {
+        s.set(x, y, z, Kit.trapdoor("minecraft:oak_trapdoor", facing, true));
+    }
+
+    /**
+     * Closes the narrow gap between a tower and a wing that stand side by side with their doors facing each other: lying
+     * logs fill the gap from (x1, z1) to (x2, z2) from layer 1 to layer {@code top}, leaving a passage two layers high
+     * at (px, pz) under a lintel, so that the doors are joined by a little closed passage instead of a slot open to the sky.
+     */
+    private static void joint(Structure s, int x1, int z1, int x2, int z2, int top, int px, int pz) {
+        String axis = x1 == x2 ? "z" : "x";
+        for (int y = 1; y <= top; y++) {
+            for (int z = z1; z <= z2; z++) {
+                for (int x = x1; x <= x2; x++) {
+                    boolean passage = x == px && z == pz && y <= 2;
+                    if (!passage && !s.solid(x, y, z)) {
+                        s.set(x, y, z, Kit.log(Terem.LOG, axis));
+                    }
+                }
             }
         }
     }

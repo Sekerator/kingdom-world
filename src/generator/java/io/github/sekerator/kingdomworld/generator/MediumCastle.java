@@ -4,20 +4,22 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The castle of a medium kingdom of the world, the palace in the middle of its capital. A curtain wall with a walk behind
- * battlements runs all round between six round towers: four big ones at the corners under cones of slate, the two at the
- * back the tallest, and two smaller ones with battlements in the middle of the side walls. In the south wall a gatehouse with
- * twin crenellated towers guards a deep vaulted passage with a portcullis, a balcony over the gate and the banners of the
- * kingdom on both sides. Inside lies a courtyard with a fountain on the way from the gate to the keep, gardens with trees and flower beds on
- * both sides and lamp posts along the paths.
+ * The castle of a medium kingdom of the world, the palace in the middle of its capital, drawn as one mass that rises in
+ * steps from the curtain wall over the towers and the keep to the donjon. A curtain wall with a walk behind battlements
+ * runs all round between four round towers of two kinds: at the back corners two great towers, broad and tall under slender
+ * cones of slate with the banners of the kingdom, at the front corners two slimmer and lower ones under short cones. In the
+ * middle of the south wall stands a square gatehouse, broad and higher than the wall, with a deep vaulted passage and a
+ * portcullis, a balcony over the gate and a parapet carried on corbels all round. Inside lies a courtyard with a fountain on
+ * the way from the gate to the keep, gardens with trees and flower beds on both sides and lamp posts along the paths.
  *
  * <p>The keep holds the throne hall: a nave with two aisles under galleries, a gable front with a great portal, a tall
- * window and a rose window, corbelled turrets at its front corners and a steep roof of tiles. The throne stands in the
- * world before the castle is built, in the middle of the ground at the north end of the hall; the castle leaves it and the
- * ground under it out. Behind the throne rises the donjon, the highest point of the capital: the treasury on its ground
- * floor, the council room, the royal chamber and the library above, a spiral stair round a newel through all of them, an
- * open lookout under a tall spire and the flag of the kingdom on its point. A timbered kitchen wing leans on its west side,
- * a chapel with a bell cote on its east side.
+ * window and a rose window between angle buttresses, and a steep roof of tiles. The throne stands in the world before the
+ * castle is built, in the middle of the ground at the north end of the hall; the castle leaves it and the ground under it
+ * out. Behind the throne rises the donjon, broader than any tower and far higher than all of them: the treasury on its
+ * ground floor, the council room, the royal chamber and the library above, a spiral stair round a newel through all of them,
+ * an open lookout under a parapet on machicolations and over it a tall square spire with dormers on its four faces and the
+ * flag of the kingdom on its point, the highest point of the capital. A timbered kitchen wing leans on its west side, a
+ * chapel with a bell cote on its east side, so that the wings, the keep and the donjon step up together.
  */
 final class MediumCastle {
     private static final String AIR = Structure.AIR;
@@ -42,18 +44,19 @@ final class MediumCastle {
     private static final String DIRT = "minecraft:dirt";
     private static final String WATER = "minecraft:water[level=0]";
     private static final String GLOW = "minecraft:glowstone";
-    private static final String BOOKSHELF = "minecraft:bookshelf";
     private static final String GOLD = "minecraft:gold_block";
     private static final String YELLOW = "minecraft:yellow_wool";
     private static final String HAY = "minecraft:hay_block[axis=y]";
     private static final String ROD = "minecraft:lightning_rod[facing=up,powered=false,waterlogged=false]";
     private static final String HATCH = Kit.trapdoor("minecraft:oak_trapdoor", "north", true);
+    private static final String CAMPFIRE = "minecraft:campfire[facing=east,lit=true,signal_fire=false,waterlogged=false]";
+    private static final String WOOD = "spruce";
 
     // ---------------------------------------------------------------- the plan
 
-    /** The box: 41 by 41, 44 high; the throne in its middle. */
+    /** The box: 41 by 41, 48 high; the throne in its middle. */
     private static final int SIZE = 41;
-    private static final int HEIGHT = 44;
+    private static final int HEIGHT = 48;
     private static final int CX = 20;
     private static final int CZ = 20;
     /** The layer the feet are in on the wall walk; the curtain wall is solid below it. */
@@ -65,26 +68,33 @@ final class MediumCastle {
     private static final int KEEP_Z2 = 27;
     private static final int KEEP_TOP = 14;
     private static final int GALLERY = 6;
-    /** The donjon behind the throne, its floors (the last one that of the lookout) and the roof over the lookout. */
-    private static final int DON_X1 = 15;
-    private static final int DON_X2 = 25;
-    private static final int DON_Z1 = 8;
+    /** The donjon behind the throne, its floors (the last one that of the lookout) and its roof, on which the spire stands. */
+    private static final int DON_X1 = 14;
+    private static final int DON_X2 = 26;
+    private static final int DON_Z1 = 6;
     private static final int DON_Z2 = 18;
-    private static final int[] FLOORS = {9, 14, 19, 23};
-    private static final int SPIRE = 27;
+    private static final int[] FLOORS = {9, 14, 19, 24};
+    private static final int ROOF = 31;
     /** The newel of the spiral stair in the donjon and the eight cells around it in the order they climb. */
     private static final int NEWEL_X = 23;
     private static final int NEWEL_Z = 15;
     private static final int[][] SPIRAL = {{-1, -1}, {0, -1}, {1, -1}, {1, 0}, {1, 1}, {0, 1}, {-1, 1}, {-1, 0}};
-    /** The gate passage, from the courtyard to the street. */
+    /** The gatehouse: its walls and the layer of its roof. */
+    private static final int GATE_X1 = 13;
+    private static final int GATE_X2 = 27;
     private static final int GATE_Z1 = 35;
     private static final int GATE_Z2 = 39;
+    private static final int GATE_TOP = 15;
     /** The fountain in the courtyard, on the way from the gate to the keep. */
     private static final int FOUNTAIN_Z = 31;
 
     private MediumCastle() {
     }
 
+    /**
+     * The template this class draws, with the places of the guards: four in the throne hall, the door of the keep, two in
+     * the gate passage, one before the treasury, eight on the wall walk and the door of the castle.
+     */
     static List<BuildingGenerator.Building> buildings() {
         List<BuildingGenerator.Building> list = new ArrayList<>();
         list.add(new BuildingGenerator.Building("classic_castle_medium", "defense", "palace", "minecraft:stone_bricks", CX, 1, SIZE - 1, castle(),
@@ -101,21 +111,19 @@ final class MediumCastle {
     }
 
     /**
-     * The castle of a medium kingdom: the curtain wall with its six towers and the gatehouse, the keep with the throne hall,
+     * The castle of a medium kingdom: the curtain wall with its four towers and the gatehouse, the keep with the throne hall,
      * the donjon behind it, the kitchen and the chapel wings and the courtyard with its fountain and gardens.
      */
     static Structure castle() {
         Structure s = new Structure(SIZE, HEIGHT, SIZE);
         ground(s);
         curtainWalls(s);
-        int[] tall = {1, 2, 2, 2, 2, 2};
-        int[] flared = {1, 1, 2, 2, 2, 2};
-        roundTower(s, 4, 4, 9, 16, tall, 4, 1, "south", true);
-        roundTower(s, 36, 4, 9, 16, tall, 36, 1, "south", true);
-        roundTower(s, 4, 36, 9, 14, flared, -1, -1, null, false);
-        roundTower(s, 36, 36, 9, 14, flared, -1, -1, null, false);
-        roundTower(s, 3, 20, 7, 12, null, 1, 20, "east", true);
-        roundTower(s, 37, 20, 7, 12, null, 39, 20, "west", true);
+        int[] slender = {1, 2, 2, 2, 2, 2};
+        int[] stout = {1, 1, 2, 2, 2};
+        roundTower(s, 4, 4, 9, 17, slender, new int[][]{{-1, 0}, {1, 0}, {0, 1}}, 4, 1, "south", true);
+        roundTower(s, 36, 4, 9, 17, slender, new int[][]{{1, 0}, {-1, 0}, {0, 1}}, 36, 1, "south", true);
+        roundTower(s, 4, 36, 7, 12, stout, new int[][]{{-1, 0}, {0, 1}}, -1, -1, null, false);
+        roundTower(s, 36, 36, 7, 12, stout, new int[][]{{1, 0}, {0, 1}}, -1, -1, null, false);
         gatehouse(s);
         walkDoors(s);
         keep(s);
@@ -142,6 +150,7 @@ final class MediumCastle {
         return dz < 0 ? "south" : "north";
     }
 
+    /** The side across from a side. */
     private static String opposite(String side) {
         return switch (side) {
             case "north" -> "south";
@@ -151,19 +160,18 @@ final class MediumCastle {
         };
     }
 
-    private static int outsideSides(int dx, int dz, int diameter) {
-        int n = 0;
-        n += Kit.inDisc(dx + 1, dz, diameter) ? 0 : 1;
-        n += Kit.inDisc(dx - 1, dz, diameter) ? 0 : 1;
-        n += Kit.inDisc(dx, dz + 1, diameter) ? 0 : 1;
-        n += Kit.inDisc(dx, dz - 1, diameter) ? 0 : 1;
-        return n;
-    }
-
+    /** Sets a block only where the position lies inside the box. */
     private static void put(Structure s, int x, int y, int z, String state) {
         if (s.inside(x, y, z)) {
             s.set(x, y, z, state);
         }
+    }
+
+    /**
+     * A window of plain glass from one layer to another with a carved head over it.
+     */
+    private static void window(Structure s, int x, int z, int y1, int y2) {
+        s.fill(x, y1, z, x, y2, z, Kit.GLASS).set(x, y2 + 1, z, CARVED);
     }
 
     /**
@@ -221,6 +229,61 @@ final class MediumCastle {
     }
 
     /**
+     * A tall spire over a square plan: square rings shrinking by one block on every side, every ring as many layers high as
+     * its entry in {@code rises} (the last entry serves the rings after it), a shell two blocks thick, the top of every ring
+     * dressed with stairs and turned stairs at its corners.
+     *
+     * @return the layer above the point
+     */
+    private static int squareSpire(Structure s, int x1, int z1, int x2, int z2, int y, int[] rises, Kit.Roof roof) {
+        int layer = y;
+        for (int ring = 0; x1 + ring <= x2 - ring && z1 + ring <= z2 - ring; ring++) {
+            int w = x1 + ring;
+            int e = x2 - ring;
+            int b = z1 + ring;
+            int f = z2 - ring;
+            int rise = rises[Math.min(ring, rises.length - 1)];
+            for (int step = 0; step < rise; step++) {
+                boolean last = step == rise - 1;
+                for (int z = b; z <= f; z++) {
+                    for (int x = w; x <= e; x++) {
+                        if (x - w >= 2 && e - x >= 2 && z - b >= 2 && f - z >= 2) {
+                            continue;
+                        }
+                        boolean edge = x == w || x == e || z == b || z == f;
+                        String state = roof.block();
+                        if (last && edge && e > w) {
+                            state = spireStairs(roof, x == w, x == e, z == b, z == f);
+                        }
+                        put(s, x, layer, z, state);
+                    }
+                }
+                layer++;
+            }
+        }
+        return layer;
+    }
+
+    /**
+     * The stair on the edge of a ring of a square spire: rising toward the middle, turned at the corners.
+     */
+    private static String spireStairs(Kit.Roof roof, boolean west, boolean east, boolean back, boolean front) {
+        if (back && west) {
+            return Kit.stairs(roof.stairs(), "south", "outer_left");
+        }
+        if (back && east) {
+            return Kit.stairs(roof.stairs(), "south", "outer_right");
+        }
+        if (front && west) {
+            return Kit.stairs(roof.stairs(), "north", "outer_right");
+        }
+        if (front && east) {
+            return Kit.stairs(roof.stairs(), "north", "outer_left");
+        }
+        return Kit.stairs(roof.stairs(), back ? "south" : front ? "north" : west ? "east" : "west");
+    }
+
+    /**
      * A ring of corbels around a round plan: stairs hanging upside down from its rim, one block out, that carry the eaves of
      * a cone or a parapet.
      */
@@ -247,6 +310,31 @@ final class MediumCastle {
                         && !s.solid(cx + dx, 1, cz + dz)) {
                     s.set(cx + dx, 0, cz + dz, ROUGH);
                     s.set(cx + dx, 1, cz + dz, Kit.stairs(ROUGH_STAIRS, toward(dx, dz)));
+                }
+            }
+        }
+    }
+
+    /**
+     * A parapet carried one block out on a row of corbels round a rectangle: the corbels, two courses of wall, merlons on
+     * every second block and at the corners merlons raised one course higher under a carved cap.
+     *
+     * @param y the layer of the corbels
+     */
+    private static void machicolations(Structure s, int x1, int z1, int x2, int z2, int y) {
+        for (int x = x1 - 1; x <= x2 + 1; x++) {
+            for (int z = z1 - 1; z <= z2 + 1; z++) {
+                if (x >= x1 && x <= x2 && z >= z1 && z <= z2) {
+                    continue;
+                }
+                String in = x < x1 ? "east" : x > x2 ? "west" : z < z1 ? "south" : "north";
+                s.set(x, y, z, Kit.upside(TRIM_STAIRS, in));
+                s.set(x, y + 1, z, WALL).set(x, y + 2, z, WALL);
+                boolean corner = (x < x1 || x > x2) && (z < z1 || z > z2);
+                if (corner) {
+                    s.set(x, y + 3, z, WALL).set(x, y + 4, z, CARVED);
+                } else if (Math.floorMod(x + z, 2) == 0) {
+                    s.set(x, y + 3, z, WALL);
                 }
             }
         }
@@ -338,20 +426,20 @@ final class MediumCastle {
 
     /**
      * A round tower of the curtain wall: a solid footing of rough stone up to the walk with a sloped foot, a guard room at the
-     * height of the walk that the walk runs through, for a tall tower a second room over it, bands of trim, windows on its
-     * four sides and a ring of corbels at its top. Over the corbels either a cone of slate open to the room under it, with a
-     * banner of the kingdom or a rod on its point, or a parapet with merlons round a platform reached by a ladder, with lanterns
-     * in the crenels and a banner on a pole.
+     * height of the walk that the walk runs through, for a tall tower a second room over it reached by a ladder, bands of
+     * trim, windows on its outer sides and a ring of corbels at its top that carries the eaves of a cone of slate, open to the
+     * room under it, with a banner of the kingdom or a rod on its point.
      *
-     * @param top   the last layer of its wall
-     * @param rises the rises of the rings of its cone, or null for a platform with battlements
-     * @param lx    the ladder up from the guard room (x, z and the way it faces), standing against the side away from the
-     *              courtyard, or -1 for none
+     * @param top     the last layer of its wall
+     * @param rises   the rises of the rings of its cone
+     * @param windows the sides that have windows, as steps from the middle
+     * @param lx      the ladder up from the guard room (x, z and the way it faces), standing against the side away from the
+     *                courtyard, or -1 for none
      */
-    private static void roundTower(Structure s, int cx, int cz, int d, int top, int[] rises, int lx, int lz, String lf, boolean flag) {
+    private static void roundTower(Structure s, int cx, int cz, int d, int top, int[] rises, int[][] windows, int lx, int lz,
+            String lf, boolean flag) {
         int r = (d - 1) / 2;
         boolean upper = top >= 15;
-        boolean battlements = rises == null;
         for (int dz = -r; dz <= r; dz++) {
             for (int dx = -r; dx <= r; dx++) {
                 if (!Kit.inDisc(dx, dz, d)) {
@@ -362,13 +450,11 @@ final class MediumCastle {
                 for (int y = 1; y <= top; y++) {
                     String state;
                     if (rim) {
-                        state = y <= 2 ? ROUGH : y == WALK - 1 || y == 12 ? TRIM : WALL;
+                        state = y <= 2 ? ROUGH : y == WALK - 1 || y == 12 || y == top ? TRIM : WALL;
                     } else if (y < WALK - 1) {
                         state = ROUGH;
                     } else if (y == WALK - 1 || upper && y == 12) {
                         state = PLANKS;
-                    } else if (battlements && y == top) {
-                        state = WALL;
                     } else {
                         state = AIR;
                     }
@@ -377,25 +463,17 @@ final class MediumCastle {
             }
         }
         batterRing(s, cx, cz, d);
-        // Windows on the four sides, but not behind the ladder.
-        int sx = -100;
-        int sz = -100;
         if (lx >= 0) {
-            sx = lx + (lf.equals("east") ? -1 : lf.equals("west") ? 1 : 0);
-            sz = lz + (lf.equals("south") ? -1 : lf.equals("north") ? 1 : 0);
-            for (int y = WALK; y <= (battlements ? top : 12); y++) {
+            for (int y = WALK; y <= 12; y++) {
                 s.set(lx, y, lz, Kit.ladder(lf));
             }
         }
-        for (int[] side : new int[][]{{0, -r}, {0, r}, {-r, 0}, {r, 0}}) {
-            int x = cx + side[0];
-            int z = cz + side[1];
-            if (!s.inside(x, 0, z) || x == sx && z == sz) {
-                continue;
-            }
+        for (int[] side : windows) {
+            int x = cx + side[0] * r;
+            int z = cz + side[1] * r;
             s.set(x, 10, z, Kit.GLASS).set(x, 11, z, Kit.GLASS);
             if (upper) {
-                s.set(x, 13, z, Kit.GLASS).set(x, 14, z, Kit.GLASS);
+                s.set(x, 14, z, Kit.GLASS).set(x, 15, z, Kit.GLASS);
             }
         }
         s.set(cx, WALK, cz, Kit.lantern());
@@ -403,20 +481,6 @@ final class MediumCastle {
             s.set(cx, 13, cz, Kit.lantern());
         }
         corbelRing(s, cx, top, cz, d, TRIM_STAIRS);
-        if (battlements) {
-            int rr = r + 1;
-            for (int dz = -rr; dz <= rr; dz++) {
-                for (int dx = -rr; dx <= rr; dx++) {
-                    if (Kit.inDisc(dx, dz, d + 2) && !Kit.inDisc(dx, dz, d) && s.inside(cx + dx, top + 1, cz + dz)) {
-                        s.set(cx + dx, top + 1, cz + dz, WALL);
-                        boolean merlon = Math.floorMod(dx + dz, 2) == 0;
-                        s.set(cx + dx, top + 2, cz + dz, merlon ? WALL : dx == 0 || dz == 0 ? Kit.lantern() : AIR);
-                    }
-                }
-            }
-            s.set(cx, top + 1, cz, Kit.fence("spruce")).set(cx, top + 2, cz, Kit.fence("spruce")).set(cx, top + 3, cz, Kit.banner("red", 0));
-            return;
-        }
         int tip = cone(s, cx, top + 1, cz, d, rises, Kit.SLATE);
         if (flag) {
             s.set(cx, tip, cz, Kit.fence("spruce")).set(cx, tip + 1, cz, Kit.fence("spruce")).set(cx, tip + 2, cz, Kit.banner("red", 0));
@@ -426,83 +490,106 @@ final class MediumCastle {
     }
 
     /**
-     * The gatehouse in the middle of the south wall: twin round towers with battlements, between them a block over a vaulted
-     * passage with arches at both mouths and a portcullis hung behind the outer arch, a guard room over the passage that the
-     * wall walk runs through, a balcony in an arched niche over the gate on a row of corbels, battlements over it, the
-     * banners of the kingdom on both sides of the gate and lanterns in the passage.
+     * The gatehouse in the middle of the south wall: one square mass, broader and higher than the wall, with quoins, a sloped
+     * foot and bands of trim, a vaulted passage with arches at both mouths and a portcullis hung behind the outer arch, a
+     * guard room over the passage that the wall walk runs through with the winch of the portcullis, a table and racks of
+     * weapons, a balcony in an arched niche over the gate on a row of corbels, the banners of the kingdom on its front and
+     * a parapet with merlons carried on corbels all round its roof.
      */
     private static void gatehouse(Structure s) {
-        s.fill(16, 1, GATE_Z1, 24, 12, GATE_Z2, WALL);
-        s.fill(16, 1, GATE_Z1, 24, 2, GATE_Z1, ROUGH).fill(16, 1, GATE_Z2, 24, 2, GATE_Z2, ROUGH);
-        s.fill(16, WALK - 1, GATE_Z1, 24, WALK - 1, GATE_Z1, TRIM).fill(16, WALK - 1, GATE_Z2, 24, WALK - 1, GATE_Z2, TRIM);
-        roundTower(s, 15, 37, 7, 17, null, 15, 39, "north", true);
-        roundTower(s, 25, 37, 7, 17, null, 25, 39, "north", true);
+        int x1 = GATE_X1;
+        int x2 = GATE_X2;
+        int z1 = GATE_Z1;
+        int z2 = GATE_Z2;
+        int top = GATE_TOP;
+        s.fill(x1, 0, z1, x2, 0, z2, ROUGH);
+        s.fill(x1, 1, z1, x2, top, z2, WALL);
+        s.walls(x1, 1, z1, x2, 2, z2, ROUGH);
+        s.walls(x1, WALK - 1, z1, x2, WALK - 1, z2, TRIM);
+        s.walls(x1, top, z1, x2, top, z2, TRIM);
+        for (int x : new int[]{x1, x2}) {
+            for (int z : new int[]{z1, z2}) {
+                s.fill(x, 1, z, x, top - 1, z, ROUGH);
+            }
+        }
+        // A sloped foot along the front, not before the gate, and on the sides that look at the courtyard.
+        for (int x = x1; x <= x2; x++) {
+            if (x < 18 || x > 22) {
+                s.set(x, 1, SIZE - 1, Kit.stairs(ROUGH_STAIRS, "north"));
+            }
+        }
+        for (int z = z1; z <= 36; z++) {
+            s.set(x1 - 1, 1, z, Kit.stairs(ROUGH_STAIRS, "east")).set(x2 + 1, 1, z, Kit.stairs(ROUGH_STAIRS, "west"));
+        }
         // The passage, paved, under a vault of stairs, with arches at both mouths.
-        s.fill(19, 0, GATE_Z1 - 1, 21, 0, SIZE - 1, TRIM);
+        s.fill(19, 0, z1 - 1, 21, 0, SIZE - 1, TRIM);
         s.fill(17, 0, SIZE - 1, 23, 0, SIZE - 1, TRIM);
-        s.fill(19, 1, GATE_Z1, 21, 5, GATE_Z2, AIR);
-        for (int z = GATE_Z1; z <= GATE_Z2; z++) {
+        s.fill(19, 1, z1, 21, 5, z2, AIR);
+        for (int z = z1; z <= z2; z++) {
             s.set(19, 5, z, Kit.upside(WALL_STAIRS, "west")).set(21, 5, z, Kit.upside(WALL_STAIRS, "east"));
         }
-        for (int z : new int[]{GATE_Z1, GATE_Z2}) {
+        for (int z : new int[]{z1, z2}) {
             s.set(19, 5, z, Kit.upside(TRIM_STAIRS, "west")).set(21, 5, z, Kit.upside(TRIM_STAIRS, "east"));
             s.set(18, 6, z, TRIM).set(22, 6, z, TRIM).set(20, 6, z, CARVED);
             s.set(19, 6, z, Kit.upside(TRIM_STAIRS, "west")).set(21, 6, z, Kit.upside(TRIM_STAIRS, "east"));
             s.fill(18, 3, z, 18, 5, z, TRIM).fill(22, 3, z, 22, 5, z, TRIM);
         }
-        // The portcullis, half raised behind the outer arch.
-        s.fill(19, 4, GATE_Z2 - 1, 21, 4, GATE_Z2 - 1, Kit.BARS).set(20, 5, GATE_Z2 - 1, Kit.BARS);
-        s.set(20, 5, 37, Kit.hangingLantern()).set(20, 5, GATE_Z1 + 1, Kit.hangingLantern());
+        // The portcullis, half raised behind the outer arch, and the light of the passage.
+        s.fill(19, 4, z2 - 1, 21, 4, z2 - 1, Kit.BARS).set(20, 5, z2 - 1, Kit.BARS);
+        s.set(20, 5, z1 + 1, Kit.hangingLantern());
         s.set(19, 3, 37, Kit.wallTorch("east")).set(21, 3, 37, Kit.wallTorch("west"));
-        // The guard room over the passage, with doors to the towers and to the balcony.
-        s.fill(19, WALK - 1, 36, 21, WALK - 1, 37, PLANKS);
-        s.fill(19, WALK, 36, 21, 11, 37, AIR);
-        s.door(18, WALK, 37, DOOR, "east", "left").door(22, WALK, 37, DOOR, "west", "left");
-        s.door(20, WALK, GATE_Z2 - 1, DOOR, "south", "left");
-        s.set(20, 9, GATE_Z1, Kit.GLASS).set(20, 10, GATE_Z1, Kit.GLASS);
-        s.set(19, 11, 36, Kit.hangingLantern()).set(21, WALK, 36, Kit.barrel()).set(21, WALK + 1, 36, Kit.barrel());
+        // The guard room over the passage, its windows and doors to the wall walk on both sides.
+        s.fill(x1 + 1, WALK - 1, z1 + 1, x2 - 1, WALK - 1, z2 - 1, PLANKS);
+        s.fill(x1 + 1, WALK, z1 + 1, x2 - 1, top - 1, z2 - 1, AIR);
+        for (int x : new int[]{16, CX, 24}) {
+            window(s, x, z1, 9, 11);
+        }
+        for (int x : new int[]{15, 25}) {
+            window(s, x, z2, 9, 11);
+            s.fill(x, 3, z2, x, 4, z2, AIR);
+        }
+        window(s, x1, 37, 11, 12);
+        window(s, x2, 37, 11, 12);
+        // The winch of the portcullis, a table with a bench, racks of weapons, crates and lanterns.
+        s.fill(19, WALK, 36, 19, WALK + 1, 36, Kit.fence(WOOD)).fill(21, WALK, 36, 21, WALK + 1, 36, Kit.fence(WOOD));
+        s.fill(19, WALK + 2, 36, 21, WALK + 2, 36, Kit.log(LOG, "x"));
+        Furnish.longTable(s, 15, 37, 17, 37, WALK, WOOD);
+        Furnish.bench(s, 15, 36, 17, 36, WALK, "south", WOOD);
+        s.set(16, WALK + 1, 37, Kit.lantern());
+        Furnish.weaponRack(s, 24, WALK, 36, "south", WOOD);
+        Furnish.weaponRack(s, 25, WALK, 36, "south", WOOD);
+        Furnish.crate(s, 26, WALK, 36, WOOD);
+        Furnish.crate(s, 26, WALK + 1, 36, WOOD);
+        Furnish.sack(s, 14, WALK, 36, false);
+        s.set(16, top - 1, 38, Kit.hangingLantern()).set(24, top - 1, 38, Kit.hangingLantern()).set(CX, top - 1, 37, Kit.hangingLantern());
         // The balcony in its niche, its floor on corbels, its rail of stone.
-        s.fill(19, WALK, GATE_Z2, 21, 10, GATE_Z2, AIR);
-        s.set(19, 11, GATE_Z2, Kit.upside(TRIM_STAIRS, "west")).set(21, 11, GATE_Z2, Kit.upside(TRIM_STAIRS, "east"));
-        s.set(20, 11, GATE_Z2, AIR).set(20, 12, GATE_Z2, CARVED);
+        s.fill(19, WALK, z2, 21, 10, z2, AIR);
+        s.set(19, 11, z2, Kit.upside(TRIM_STAIRS, "west")).set(21, 11, z2, Kit.upside(TRIM_STAIRS, "east"));
+        s.set(CX, 11, z2, AIR).set(CX, 12, z2, CARVED);
         for (int x = 18; x <= 22; x++) {
             s.set(x, 6, SIZE - 1, Kit.upside(TRIM_STAIRS, "north"));
             s.set(x, WALK - 1, SIZE - 1, TRIM);
             s.set(x, WALK, SIZE - 1, WALL_FENCE);
-            // Battlements over the niche on a second row of corbels.
-            s.set(x, 12, SIZE - 1, Kit.upside(TRIM_STAIRS, "north"));
-            s.set(x, 13, SIZE - 1, WALL);
-            if (x % 2 == 0) {
-                s.set(x, 14, SIZE - 1, WALL);
-            }
         }
-        s.set(19, 10, GATE_Z2, Kit.wallBanner("red", "south")).set(21, 10, GATE_Z2, Kit.wallBanner("red", "south"));
-        for (int x = 18; x <= 22; x++) {
-            s.set(x, 13, GATE_Z1, WALL);
-            if (x % 2 == 0) {
-                s.set(x, 14, GATE_Z1, WALL);
-            }
+        // The banners of the kingdom: short ones on both sides of the gate, long ones over them, torches.
+        for (int x : new int[]{17, 23}) {
+            s.set(x, 5, SIZE - 1, Kit.wallBanner("red", "south")).set(x, 3, SIZE - 1, Kit.wallTorch("south"));
+            s.set(x, 12, SIZE - 1, Kit.wallBanner("red", "south")).set(x, 10, SIZE - 1, Kit.wallBanner("red", "south"));
         }
-        s.set(20, 13, 37, Kit.lantern());
-        // The banners of the kingdom on both sides of the gate and long ones on the outer sides of the towers.
-        s.set(17, 5, SIZE - 1, Kit.wallBanner("red", "south")).set(23, 5, SIZE - 1, Kit.wallBanner("red", "south"));
-        for (int y : new int[]{11, 13}) {
-            s.set(13, y, SIZE - 1, Kit.wallBanner("red", "south")).set(27, y, SIZE - 1, Kit.wallBanner("red", "south"));
-        }
-        s.set(17, 3, SIZE - 1, Kit.wallTorch("south")).set(23, 3, SIZE - 1, Kit.wallTorch("south"));
+        // The parapet on its corbels and lanterns on the roof.
+        machicolations(s, x1, z1, x2, z2, top - 1);
+        s.set(16, top + 1, 37, Kit.lantern()).set(24, top + 1, 37, Kit.lantern());
     }
 
     /**
-     * The doors from the wall walk into the towers, so that the walk runs all round through their guard rooms.
+     * The doors from the wall walk into the towers and the gatehouse, so that the walk runs all round through their rooms.
      */
     private static void walkDoors(Structure s) {
         s.door(8, WALK, 3, DOOR, "west", "left").door(3, WALK, 8, DOOR, "north", "left");
         s.door(32, WALK, 3, DOOR, "east", "left").door(37, WALK, 8, DOOR, "north", "left");
-        s.door(3, WALK, 32, DOOR, "south", "left").door(8, WALK, 37, DOOR, "west", "left");
-        s.door(37, WALK, 32, DOOR, "south", "left").door(32, WALK, 37, DOOR, "east", "left");
-        s.door(3, WALK, 17, DOOR, "north", "left").door(3, WALK, 23, DOOR, "south", "left");
-        s.door(37, WALK, 17, DOOR, "north", "left").door(37, WALK, 23, DOOR, "south", "left");
-        s.door(12, WALK, 37, DOOR, "west", "left").door(28, WALK, 37, DOOR, "east", "left");
+        s.door(3, WALK, 33, DOOR, "south", "left").door(7, WALK, 37, DOOR, "west", "left");
+        s.door(37, WALK, 33, DOOR, "south", "left").door(33, WALK, 37, DOOR, "east", "left");
+        s.door(GATE_X1, WALK, 37, DOOR, "east", "left").door(GATE_X2, WALK, 37, DOOR, "west", "left");
     }
 
     // ---------------------------------------------------------------- the keep
@@ -573,9 +660,9 @@ final class MediumCastle {
 
     /**
      * The shell of the keep: walls of stone on a course of rough stone with quoins and bands of trim, buttresses between the
-     * bays of its long sides, windows over the aisles and tall arched windows of stained glass in the galleries, the steep
-     * roof of tiles with its gable to the street, and on the gable front the great portal under a double arch, a tall
-     * window over it, a rose window in the gable, banners and two turrets corbelled out at its corners.
+     * bays of its long sides and at its front corners, windows over the aisles and tall arched windows of stained glass in
+     * the galleries, the steep roof of tiles with its gable to the street and a dormer on each side, and on the gable front
+     * the great portal under a double arch, a tall window over it, a rose window in the gable and banners.
      */
     private static void keep(Structure s) {
         s.walls(KEEP_X1, 1, KEEP_Z1, KEEP_X2, KEEP_TOP, KEEP_Z2, WALL);
@@ -592,8 +679,8 @@ final class MediumCastle {
             s.set(KEEP_X1 - 1, KEEP_TOP - 1, z, Kit.upside(TRIM_STAIRS, "east")).set(KEEP_X2 + 1, KEEP_TOP - 1, z, Kit.upside(TRIM_STAIRS, "west"));
         }
         roofZ(s, KEEP_X1 - 1, KEEP_X2 + 1, KEEP_Z1, KEEP_Z2 + 1, KEEP_TOP, Kit.TILE, WALL, KEEP_Z1, KEEP_Z2);
-        // Buttresses of rough stone between the bays, stepped back twice.
-        for (int z : new int[]{21, 24}) {
+        // Buttresses of rough stone between the bays and at the front corners, stepped back twice.
+        for (int z : new int[]{21, 24, KEEP_Z2}) {
             s.fill(KEEP_X1 - 1, 1, z, KEEP_X1 - 1, 9, z, ROUGH).set(KEEP_X1 - 1, 10, z, Kit.stairs(ROUGH_STAIRS, "east"));
             s.fill(KEEP_X1 - 2, 1, z, KEEP_X1 - 2, 4, z, ROUGH).set(KEEP_X1 - 2, 5, z, Kit.stairs(ROUGH_STAIRS, "east"));
             s.fill(KEEP_X2 + 1, 1, z, KEEP_X2 + 1, 9, z, ROUGH).set(KEEP_X2 + 1, 10, z, Kit.stairs(ROUGH_STAIRS, "west"));
@@ -616,9 +703,6 @@ final class MediumCastle {
         keepFront(s);
         keepDormer(s, KEEP_X1, 1);
         keepDormer(s, KEEP_X2, -1);
-        s.set(CX, KEEP_TOP + 10, KEEP_Z2, Kit.fence("spruce")).set(CX, KEEP_TOP + 11, KEEP_Z2, Kit.banner("red", 0));
-        bartizan(s, KEEP_X1 - 1, KEEP_Z2 + 1);
-        bartizan(s, KEEP_X2 + 1, KEEP_Z2 + 1);
     }
 
     /**
@@ -682,30 +766,6 @@ final class MediumCastle {
         }
         // The banners of the kingdom on both sides of the tall window.
         s.set(17, 11, z + 1, Kit.wallBanner("red", "south")).set(23, 11, z + 1, Kit.wallBanner("red", "south"));
-    }
-
-    /**
-     * A turret corbelled out from a front corner of the keep: an inverted cone of rough stone on the corner, a hollow round
-     * shaft lit inside with slits on its outer sides and a band of trim, a cornice and a cone of slate with a rod.
-     */
-    private static void bartizan(Structure s, int cx, int cz) {
-        int toCornerX = cx < CX ? 1 : -1;
-        s.set(cx, 7, cz, ROUGH);
-        s.set(cx + toCornerX, 7, cz, Kit.upside(ROUGH_STAIRS, "north"));
-        s.set(cx, 7, cz - 1, Kit.upside(ROUGH_STAIRS, toCornerX > 0 ? "east" : "west"));
-        Kit.disc(s, cx, 8, cz, 3, ROUGH);
-        corbelRing(s, cx, 8, cz, 3, ROUGH_STAIRS);
-        for (int y = 9; y <= 18; y++) {
-            Kit.disc(s, cx, y, cz, 5, y == 14 ? TRIM : WALL);
-            Kit.disc(s, cx, y, cz, 3, AIR);
-        }
-        s.set(cx, 9, cz, Kit.lantern());
-        for (int y : new int[]{11, 12, 16}) {
-            s.set(cx - 2 * toCornerX, y, cz, Kit.GLASS).set(cx, y, cz + 2, Kit.GLASS);
-        }
-        corbelRing(s, cx, 18, cz, 5, TRIM_STAIRS);
-        int tip = cone(s, cx, 19, cz, 5, new int[]{1, 2, 2, 3}, Kit.SLATE);
-        s.set(cx, tip, cz, ROD);
     }
 
     /**
@@ -775,209 +835,221 @@ final class MediumCastle {
     // ---------------------------------------------------------------- the donjon
 
     /**
-     * The donjon behind the throne, the highest tower of the capital: square, with quoins and a footing of rough stone, bands
-     * of trim at its floors, windows with carved heads on every floor, an oriel on corbels before the royal chamber, long
-     * banners on its sides, a ledge on corbels under an open lookout with arches on every side, a roof with a parapet and
-     * merlons on a second row of corbels, pinnacles at its corners and in the middle a slender spire of slate, the highest
-     * point of the capital, with the flag of the kingdom on its point.
+     * The donjon behind the throne, broader than any tower and the highest of them all by far: square, with quoins and a
+     * footing of rough stone, bands of trim at its floors, windows with carved heads on every floor where the roofs of the
+     * wings and the keep leave room, an oriel on corbels before the royal chamber, long banners on its sides, an open lookout
+     * with arches on every side, over it a parapet with merlons carried out on machicolations, and inside the parapet a tall
+     * square spire of slate with a dormer on each face and the flag of the kingdom on its point, the highest point of the
+     * capital.
      */
     private static void donjon(Structure s) {
         int top = FLOORS[3];
         int mx = (DON_X1 + DON_X2) / 2;
         int mz = (DON_Z1 + DON_Z2) / 2;
         s.fill(DON_X1, 0, DON_Z1, DON_X2, 0, DON_Z2, ROUGH);
-        s.fill(DON_X1 + 1, 1, DON_Z1 + 1, DON_X2 - 1, SPIRE, DON_Z2 - 1, AIR);
-        s.walls(DON_X1, 1, DON_Z1, DON_X2, top - 1, DON_Z2, WALL);
+        s.fill(DON_X1 + 1, 1, DON_Z1 + 1, DON_X2 - 1, ROOF, DON_Z2 - 1, AIR);
+        s.walls(DON_X1, 1, DON_Z1, DON_X2, ROOF - 1, DON_Z2, WALL);
         s.walls(DON_X1, 1, DON_Z1, DON_X2, 2, DON_Z2, ROUGH);
         for (int x = DON_X1; x <= DON_X2; x++) {
             s.set(x, 1, DON_Z1 - 1, Kit.stairs(ROUGH_STAIRS, "south"));
         }
         for (int x : new int[]{DON_X1, DON_X2}) {
             for (int z : new int[]{DON_Z1, DON_Z2}) {
-                s.fill(x, 1, z, x, top - 1, z, ROUGH);
+                s.fill(x, 1, z, x, ROOF - 1, z, ROUGH);
             }
         }
-        for (int i = 0; i < 3; i++) {
-            s.walls(DON_X1, FLOORS[i], DON_Z1, DON_X2, FLOORS[i], DON_Z2, TRIM);
-            s.fill(DON_X1 + 1, FLOORS[i], DON_Z1 + 1, DON_X2 - 1, FLOORS[i], DON_Z2 - 1, PLANKS);
+        for (int floor : FLOORS) {
+            s.walls(DON_X1, floor, DON_Z1, DON_X2, floor, DON_Z2, TRIM);
+            s.fill(DON_X1 + 1, floor, DON_Z1 + 1, DON_X2 - 1, floor, DON_Z2 - 1, PLANKS);
         }
         s.fill(DON_X1 + 1, 0, DON_Z1 + 1, DON_X2 - 1, 0, DON_Z2 - 1, TRIM);
-        // Windows: barred ones by the treasury, then on every floor where the roofs of the wings and the keep leave room.
-        s.fill(18, 3, DON_Z1, 18, 4, DON_Z1, Kit.BARS).fill(23, 3, DON_Z1, 23, 4, DON_Z1, Kit.BARS);
-        for (int x : new int[]{17, mx, 23}) {
-            s.fill(x, 11, DON_Z1, x, 12, DON_Z1, Kit.GLASS);
-            s.fill(x, 15, DON_Z1, x, 17, DON_Z1, Kit.GLASS);
-        }
-        for (int z : new int[]{11, 15}) {
-            s.fill(DON_X1, 15, z, DON_X1, 17, z, Kit.GLASS);
-        }
-        s.fill(DON_X2, 15, 11, DON_X2, 17, 11, Kit.GLASS);
+        // Windows: barred ones by the treasury and the armoury, then on every floor where the roofs leave room.
+        s.fill(17, 3, DON_Z1, 17, 4, DON_Z1, Kit.BARS).fill(23, 3, DON_Z1, 23, 4, DON_Z1, Kit.BARS);
         for (int x : new int[]{17, 23}) {
-            s.fill(x, 20, DON_Z1, x, 21, DON_Z1, Kit.GLASS);
+            window(s, x, DON_Z1, 11, 12);
+            window(s, x, DON_Z1, 15, 17);
         }
-        s.fill(DON_X1, 20, mz, DON_X1, 21, mz, Kit.GLASS).fill(DON_X2, 20, mz, DON_X2, 21, mz, Kit.GLASS);
-        // Carved heads over the windows of the upper floors.
+        window(s, DON_X1, 9, 11, 12);
+        window(s, DON_X2, 9, 11, 12);
+        window(s, DON_X2, 15, 11, 12);
+        for (int z : new int[]{9, 15}) {
+            window(s, DON_X1, z, 15, 17);
+        }
+        for (int z : new int[]{8, 14}) {
+            window(s, DON_X2, z, 15, 17);
+        }
         for (int x : new int[]{17, mx, 23}) {
-            s.set(x, 13, DON_Z1, CARVED).set(x, 18, DON_Z1, CARVED);
+            window(s, x, DON_Z1, 20, 22);
         }
-        for (int x : new int[]{17, 23}) {
-            s.set(x, 22, DON_Z1, CARVED);
+        for (int z : new int[]{10, 14}) {
+            window(s, DON_X1, z, 20, 22);
+            window(s, DON_X2, z, 20, 22);
         }
-        s.set(DON_X1, 18, 11, CARVED).set(DON_X1, 18, 15, CARVED).set(DON_X2, 18, 11, CARVED);
-        s.set(DON_X1, 22, mz, CARVED).set(DON_X2, 22, mz, CARVED);
+        for (int x : new int[]{16, 24}) {
+            window(s, x, DON_Z2, 20, 22);
+        }
         // An oriel on corbels before the royal chamber, open to the room behind it.
         int oz = DON_Z1 - 1;
-        s.set(mx, FLOORS[1] - 2, oz, Kit.upside(TRIM_STAIRS, "south"));
-        s.fill(mx - 1, FLOORS[1] - 1, oz, mx + 1, FLOORS[1] - 1, oz, Kit.upside(TRIM_STAIRS, "south"));
-        s.fill(mx - 1, FLOORS[1], oz, mx + 1, FLOORS[1], oz, TRIM);
-        s.fill(mx - 1, FLOORS[1] + 1, oz, mx - 1, FLOORS[1] + 3, oz, WALL).fill(mx + 1, FLOORS[1] + 1, oz, mx + 1, FLOORS[1] + 3, oz, WALL);
-        s.fill(mx, FLOORS[1] + 1, oz, mx, FLOORS[1] + 3, oz, Kit.stainedPane("light_blue"));
-        s.fill(mx, FLOORS[1] + 1, DON_Z1, mx, FLOORS[1] + 3, DON_Z1, AIR);
-        s.fill(mx - 1, FLOORS[1] + 4, oz, mx + 1, FLOORS[1] + 4, oz, Kit.stairs(TRIM_STAIRS, "north"));
+        int y = FLOORS[1];
+        s.set(mx, y - 2, oz, Kit.upside(TRIM_STAIRS, "south"));
+        s.fill(mx - 1, y - 1, oz, mx + 1, y - 1, oz, Kit.upside(TRIM_STAIRS, "south"));
+        s.fill(mx - 1, y, oz, mx + 1, y, oz, TRIM);
+        s.fill(mx - 1, y + 1, oz, mx - 1, y + 3, oz, WALL).fill(mx + 1, y + 1, oz, mx + 1, y + 3, oz, WALL);
+        s.fill(mx, y + 1, oz, mx, y + 3, oz, Kit.stainedPane("light_blue"));
+        s.fill(mx, y + 1, DON_Z1, mx, y + 3, DON_Z1, AIR);
+        s.fill(mx - 1, y + 4, oz, mx + 1, y + 4, oz, Kit.stairs(TRIM_STAIRS, "south"));
+        // A string course on corbels at the floor of the library, on the back and the sides where no roof meets the walls.
+        for (int x = DON_X1; x <= DON_X2; x++) {
+            s.set(x, FLOORS[2], DON_Z1 - 1, Kit.upside(TRIM_STAIRS, "south"));
+        }
+        for (int z = DON_Z1; z <= DON_Z2; z++) {
+            s.set(DON_X1 - 1, FLOORS[2], z, Kit.upside(TRIM_STAIRS, "east")).set(DON_X2 + 1, FLOORS[2], z, Kit.upside(TRIM_STAIRS, "west"));
+        }
         // Long banners of the kingdom on the sides, over the roofs of the wings.
-        for (int y : new int[]{14, 16}) {
-            s.set(DON_X1 - 1, y, mz, Kit.wallBanner("red", "west")).set(DON_X2 + 1, y, mz, Kit.wallBanner("red", "east"));
+        for (int by : new int[]{14, 16}) {
+            s.set(DON_X1 - 1, by, mz, Kit.wallBanner("red", "west")).set(DON_X2 + 1, by, mz, Kit.wallBanner("red", "east"));
         }
-        // The ledge of the lookout on its corbels, the floor, the piers with rails and arches between them.
-        corbelledRing(s, top, TRIM);
-        s.fill(DON_X1 + 1, top, DON_Z1 + 1, DON_X2 - 1, top, DON_Z2 - 1, PLANKS);
-        s.walls(DON_X1, top, DON_Z1, DON_X2, top, DON_Z2, TRIM);
-        for (int i = 0; i <= 10; i++) {
-            lookoutSide(s, DON_X1 + i, DON_Z1, i);
-            lookoutSide(s, DON_X1 + i, DON_Z2, i);
-            lookoutSide(s, DON_X1, DON_Z1 + i, i);
-            lookoutSide(s, DON_X2, DON_Z1 + i, i);
+        // The lookout: piers at the corners and between three arches on every side, rails between them.
+        for (int i = 0; i <= DON_X2 - DON_X1; i++) {
+            lookoutSide(s, DON_X1 + i, DON_Z1, i, true);
+            lookoutSide(s, DON_X1 + i, DON_Z2, i, true);
+            lookoutSide(s, DON_X1, DON_Z1 + i, i, false);
+            lookoutSide(s, DON_X2, DON_Z1 + i, i, false);
         }
-        // The roof of the lookout with a light set in it, a parapet with merlons on corbels round its edge, pinnacles.
-        s.fill(DON_X1, SPIRE, DON_Z1, DON_X2, SPIRE, DON_Z2, WALL);
-        s.walls(DON_X1, SPIRE, DON_Z1, DON_X2, SPIRE, DON_Z2, TRIM);
-        s.set(mx, SPIRE, mz, GLOW);
-        corbelledRing(s, SPIRE + 1, WALL);
-        for (int x = DON_X1 - 1; x <= DON_X2 + 1; x++) {
-            for (int z = DON_Z1 - 1; z <= DON_Z2 + 1; z++) {
-                boolean edge = x < DON_X1 || x > DON_X2 || z < DON_Z1 || z > DON_Z2;
-                if (edge && Math.floorMod(x + z, 2) == 0) {
-                    s.set(x, SPIRE + 2, z, WALL);
-                }
-            }
-        }
-        for (int x : new int[]{DON_X1 - 1, DON_X2 + 1}) {
-            for (int z : new int[]{DON_Z1 - 1, DON_Z2 + 1}) {
-                s.set(x, SPIRE + 2, z, WALL).set(x, SPIRE + 3, z, CARVED).set(x, SPIRE + 4, z, Kit.slab(Kit.SLATE.slab()));
-            }
-        }
-        // The spire: a slender cone of slate rising from the roof, lanterns round its foot, the flag of the kingdom on its point.
-        int tip = cone(s, mx, SPIRE + 1, mz, 9, new int[]{1, 2, 2, 2, 2, 3}, Kit.SLATE);
-        for (int[] spot : new int[][]{{-4, -4}, {4, -4}, {-4, 4}, {4, 4}}) {
-            s.set(mx + spot[0], SPIRE + 1, mz + spot[1], Kit.lantern());
-        }
-        s.set(mx, tip, mz, Kit.fence("spruce")).set(mx, tip + 1, mz, Kit.fence("spruce"));
-        s.fill(mx + 1, tip + 1, mz, mx + 3, tip + 1, mz, CLOTH).fill(mx + 1, tip, mz, mx + 2, tip, mz, CLOTH);
+        s.walls(DON_X1, ROOF - 1, DON_Z1, DON_X2, ROOF - 1, DON_Z2, TRIM);
+        // The roof of the lookout with a light set in it and the parapet on its machicolations.
+        s.fill(DON_X1, ROOF, DON_Z1, DON_X2, ROOF, DON_Z2, WALL);
+        s.walls(DON_X1, ROOF, DON_Z1, DON_X2, ROOF, DON_Z2, TRIM);
+        s.set(mx, ROOF, mz, GLOW);
+        machicolations(s, DON_X1, DON_Z1, DON_X2, DON_Z2, ROOF - 1);
+        // The spire: a tall square cone of slate inside the parapet, dormers on its faces, the flag of the kingdom on its point.
+        int tip = squareSpire(s, DON_X1 + 1, DON_Z1 + 1, DON_X2 - 1, DON_Z2 - 1, ROOF + 1, new int[]{3, 3, 3, 2, 2, 1}, Kit.SLATE);
+        spireDormer(s, mx, DON_Z2 - 1, 0, 1);
+        spireDormer(s, mx, DON_Z1 + 1, 0, -1);
+        spireDormer(s, DON_X1 + 1, mz, -1, 0);
+        spireDormer(s, DON_X2 - 1, mz, 1, 0);
+        int pole = Math.min(tip + 2, HEIGHT - 1);
+        s.fill(mx, tip, mz, mx, pole, mz, Kit.fence("spruce"));
+        s.fill(mx + 1, pole, mz, mx + 3, pole, mz, CLOTH).fill(mx + 1, pole - 1, mz, mx + 2, pole - 1, mz, CLOTH);
     }
 
     /**
-     * A ring one block outside the walls of the donjon at a layer, carried on stairs hanging upside down under it.
+     * A dormer on a face of the spire of the donjon, standing on its lowest ring so that it shows over the parapet: a window
+     * of glass between cheeks of stone that looks into the lit space under the spire, and a small gable of slate over it.
+     *
+     * @param ox the way out of the face along x
+     * @param oz the way out of the face along z
      */
-    private static void corbelledRing(Structure s, int y, String state) {
-        for (int x = DON_X1 - 1; x <= DON_X2 + 1; x++) {
-            for (int z = DON_Z1 - 1; z <= DON_Z2 + 1; z++) {
-                if (x < DON_X1 || x > DON_X2 || z < DON_Z1 || z > DON_Z2) {
-                    String in = x < DON_X1 ? "east" : x > DON_X2 ? "west" : z < DON_Z1 ? "south" : "north";
-                    s.set(x, y - 1, z, Kit.upside(TRIM_STAIRS, in));
-                    s.set(x, y, z, state);
-                }
-            }
-        }
+    private static void spireDormer(Structure s, int x, int z, int ox, int oz) {
+        int y = ROOF + 4;
+        int ax = oz != 0 ? 1 : 0;
+        int az = ox != 0 ? 1 : 0;
+        String low = ax == 1 ? "east" : "south";
+        String high = ax == 1 ? "west" : "north";
+        s.fill(x - ax, y, z - az, x - ax, y + 1, z - az, WALL).fill(x + ax, y, z + az, x + ax, y + 1, z + az, WALL);
+        s.fill(x, y, z, x, y + 1, z, Kit.GLASS);
+        s.fill(x - ox, y, z - oz, x - ox, y + 1, z - oz, AIR);
+        s.set(x - ax, y + 2, z - az, Kit.stairs(Kit.SLATE.stairs(), low)).set(x + ax, y + 2, z + az, Kit.stairs(Kit.SLATE.stairs(), high));
+        s.set(x, y + 2, z, Kit.SLATE.block()).set(x, y + 3, z, Kit.slab(Kit.SLATE.slab()));
     }
 
     /**
-     * One cell of a side of the lookout: piers at the corners and in the middle of every side, a rail of stone between
-     * them, and over every opening an arch of two stairs.
+     * One cell of a side of the lookout: piers at the corners and between three openings on every side, a rail of stone
+     * between them, and over every opening an arch of two stairs.
      */
-    private static void lookoutSide(Structure s, int x, int z, int i) {
+    private static void lookoutSide(Structure s, int x, int z, int i, boolean alongX) {
         int y = FLOORS[3] + 1;
-        if (i == 0 || i == 5 || i == 10) {
-            s.fill(x, y, z, x, y + 2, z, i == 5 ? WALL : ROUGH);
+        int k = i % 4;
+        if (k == 0) {
+            s.fill(x, y, z, x, ROOF - 2, z, i == 0 || i == DON_X2 - DON_X1 ? ROUGH : WALL);
             return;
         }
-        boolean alongX = (z == DON_Z1 || z == DON_Z2) && x != DON_X1 && x != DON_X2;
-        s.set(x, y, z, WALL_FENCE).set(x, y + 1, z, AIR);
-        boolean nearLow = i == 1 || i == 6;
-        boolean nearHigh = i == 4 || i == 9;
+        s.set(x, y, z, WALL_FENCE).fill(x, y + 1, z, x, ROOF - 3, z, AIR);
         String lowSide = alongX ? "west" : "north";
         String highSide = alongX ? "east" : "south";
-        s.set(x, y + 2, z, nearLow ? Kit.upside(TRIM_STAIRS, lowSide) : nearHigh ? Kit.upside(TRIM_STAIRS, highSide) : AIR);
+        s.set(x, ROOF - 2, z, k == 1 ? Kit.upside(TRIM_STAIRS, lowSide) : k == 3 ? Kit.upside(TRIM_STAIRS, highSide) : AIR);
     }
 
     /**
-     * Inside the donjon: the spiral stair round its newel through every floor, the treasury with its vault behind iron bars,
-     * an armoury, the council room, the royal chamber, the library and the lookout with its bell, all lit.
+     * Inside the donjon: the spiral stair round its newel through every floor, the treasury with its vault behind iron bars
+     * and an armoury, the council room, the royal chamber with its hearth and bed of state, the library and the lookout
+     * with its bell, all lit.
      */
     private static void donjonRooms(Structure s) {
         spiralStair(s);
         // The ground floor: the vault behind its grille, the antechamber with the counting desk, the armoury.
-        s.fill(16, 1, 14, 20, FLOORS[0] - 1, 14, Kit.BARS);
+        int low = FLOORS[0] - 1;
+        s.fill(15, 1, 14, 20, low, 14, Kit.BARS);
         s.door(18, 1, 14, DOOR, "south", "left");
-        s.fill(21, 1, 9, 21, FLOORS[0] - 1, 14, WALL);
-        for (int x = 16; x <= 20; x++) {
-            s.set(x, 1, 9, x % 2 == 0 ? Kit.chest("south") : Kit.barrel());
+        s.fill(21, 1, DON_Z1 + 1, 21, low, 14, WALL);
+        s.set(16, 1, 7, Kit.chest("south")).set(19, 1, 7, Kit.chest("south"));
+        s.set(17, 1, 7, GOLD).set(18, 1, 7, GOLD).set(17, 2, 7, "minecraft:raw_gold_block");
+        Furnish.crate(s, 15, 1, 7, WOOD);
+        Furnish.crate(s, 20, 1, 7, WOOD);
+        Furnish.crate(s, 20, 2, 7, WOOD);
+        Furnish.sack(s, 15, 1, 9, false);
+        Furnish.sack(s, 15, 1, 10, false);
+        Furnish.sack(s, 15, 2, 9, true);
+        s.set(15, 1, 12, "minecraft:emerald_block").set(20, 1, 10, GOLD).set(20, 1, 11, "minecraft:iron_block").set(20, 2, 10, "minecraft:raw_gold_block");
+        s.set(18, low, 10, Kit.hangingLantern());
+        Furnish.desk(s, 15, 1, 16, "east", WOOD);
+        s.set(15, 4, 15, Kit.wallBanner("red", "east")).set(19, low, 16, Kit.hangingLantern());
+        Furnish.weaponRack(s, 22, 1, 7, "south", WOOD);
+        Furnish.weaponRack(s, 24, 1, 7, "south", WOOD);
+        for (int z = 8; z <= 10; z++) {
+            Furnish.crate(s, 25, 1, z, WOOD);
         }
-        s.set(16, 2, 9, Kit.barrel()).set(20, 2, 9, Kit.barrel());
-        s.set(16, 1, 10, Kit.barrel()).set(16, 1, 11, Kit.chest("east")).set(16, 1, 12, Kit.barrel()).set(16, 2, 10, Kit.barrel());
-        s.set(20, 1, 10, GOLD).set(20, 1, 11, GOLD).set(20, 2, 10, "minecraft:raw_gold_block").set(20, 1, 12, "minecraft:emerald_block");
-        s.set(20, 2, 11, Kit.lantern()).set(18, FLOORS[0] - 1, 11, Kit.hangingLantern());
-        s.set(21, 1, 17, "minecraft:lectern[facing=north,has_book=false,powered=false]");
-        s.set(16, 1, 16, Kit.barrel()).set(19, FLOORS[0] - 1, 16, Kit.hangingLantern());
-        s.set(16, 4, 15, Kit.wallBanner("red", "east"));
-        for (int z = 9; z <= 13; z++) {
-            s.set(24, 1, z, Kit.barrel());
-        }
-        s.set(24, 2, 10, Kit.barrel()).set(22, 1, 9, Kit.chest("south")).set(23, 1, 9, "minecraft:grindstone[face=floor,facing=south]");
-        s.set(23, FLOORS[0] - 1, 11, Kit.hangingLantern());
-        // The council room: a long table with chairs, shelves of books, a map table and the banner of the kingdom.
+        Furnish.crate(s, 25, 2, 9, WOOD);
+        s.set(22, 3, 10, Kit.wallBanner("red", "east")).set(23, low, 10, Kit.hangingLantern());
+        // The council room: a long table with chairs, shelves of books, a table with the map of the kingdom, a banner.
         int y = FLOORS[0] + 1;
-        s.fill(17, y, 12, 20, y, 12, Kit.topSlab(SPRUCE_SLAB));
+        Furnish.longTable(s, 17, 11, 20, 11, y, WOOD);
         for (int x = 17; x <= 20; x++) {
-            s.set(x, y, 11, Kit.stairs(SPRUCE_STAIRS, "north")).set(x, y, 13, Kit.stairs(SPRUCE_STAIRS, "south"));
+            s.set(x, y, 10, Kit.stairs(SPRUCE_STAIRS, "north")).set(x, y, 12, Kit.stairs(SPRUCE_STAIRS, "south"));
         }
-        s.set(16, y, 12, Kit.stairs(SPRUCE_STAIRS, "west")).set(21, y, 12, Kit.stairs(SPRUCE_STAIRS, "east"));
-        s.set(18, y + 1, 12, Kit.lantern()).set(20, y + 1, 12, "minecraft:flower_pot");
-        s.fill(16, y, 9, 16, y + 2, 10, BOOKSHELF).fill(16, y, 15, 16, y + 2, 17, BOOKSHELF);
-        s.set(24, y, 9, "minecraft:cartography_table").set(24, y, 10, Kit.barrel());
-        s.set(16, y + 2, 13, Kit.wallBanner("red", "east"));
-        s.set(18, FLOORS[1] - 1, 10, Kit.hangingLantern()).set(19, FLOORS[1] - 1, 15, Kit.hangingLantern());
-        s.set(23, FLOORS[1] - 1, 11, Kit.hangingLantern());
-        // The royal chamber: a carpet of the kingdom, a hearth with two chairs, a wardrobe, a writing desk.
+        s.set(16, y, 11, Kit.stairs(SPRUCE_STAIRS, "west")).set(21, y, 11, Kit.stairs(SPRUCE_STAIRS, "east"));
+        s.set(18, y + 1, 11, Kit.lantern()).set(20, y + 1, 11, Furnish.candles(3));
+        Furnish.books(s, 15, 11, 15, 15, y, y + 2);
+        s.fill(23, y, 8, 24, y, 8, Kit.topSlab(SPRUCE_SLAB));
+        s.set(23, y + 1, 8, "minecraft:white_carpet").set(24, y + 1, 8, Furnish.candle(""));
+        s.set(CX, y + 2, DON_Z1 + 1, Kit.wallBanner("red", "south"));
+        s.set(18, FLOORS[1] - 1, 9, Kit.hangingLantern()).set(18, FLOORS[1] - 1, 15, Kit.hangingLantern());
+        s.set(24, FLOORS[1] - 1, 10, Kit.hangingLantern());
+        // The royal chamber: a carpet of the kingdom, a hearth with two chairs, a bed of state, a wardrobe, a writing desk.
         y = FLOORS[1] + 1;
-        s.fill(17, y, 10, 21, y, 16, Kit.CLOTH_CARPET);
-        s.set(16, y, 12, ROUGH).set(16, y, 14, ROUGH).set(16, y, 13, "minecraft:campfire[facing=east,lit=true,signal_fire=false,waterlogged=false]");
-        s.fill(16, y + 1, 12, 16, y + 1, 14, Kit.upside(ROUGH_STAIRS, "west")).fill(16, y + 2, 12, 16, FLOORS[2] - 1, 14, ROUGH);
-        s.set(18, y, 12, Kit.stairs(SPRUCE_STAIRS, "east")).set(18, y, 14, Kit.stairs(SPRUCE_STAIRS, "east"));
-        s.set(17, y, 9, Kit.chest("south")).set(18, y, 9, Kit.barrel()).set(19, y, 9, Kit.chest("south")).set(21, y, 9, Kit.barrel());
-        s.set(21, y, 16, Kit.topSlab(SPRUCE_SLAB)).set(20, y, 16, Kit.stairs(SPRUCE_STAIRS, "west"));
-        s.set(21, y + 1, 16, Kit.lantern());
-        s.set(24, y + 2, 10, Kit.wallBanner("red", "west")).set(16, y + 2, 10, Kit.wallBanner("red", "east"));
-        s.set(19, FLOORS[2] - 1, 12, Kit.hangingLantern()).set(23, FLOORS[2] - 1, 11, Kit.hangingLantern());
+        Furnish.rug(s, 16, 8, 21, 13, y, Kit.CLOTH_CARPET);
+        s.set(15, y, 11, ROUGH).set(15, y, 13, ROUGH).set(15, y, 12, CAMPFIRE);
+        s.fill(15, y + 1, 11, 15, y + 1, 13, Kit.upside(ROUGH_STAIRS, "west")).fill(15, y + 2, 11, 15, FLOORS[2] - 1, 13, ROUGH);
+        s.set(17, y, 11, Kit.stairs(SPRUCE_STAIRS, "east")).set(17, y, 13, Kit.stairs(SPRUCE_STAIRS, "east"));
+        Furnish.canopyBed(s, 23, y, 10, "east", WOOD);
+        for (int x = 15; x <= 16; x++) {
+            Furnish.crate(s, x, y, DON_Z1 + 1, WOOD);
+            Furnish.crate(s, x, y + 1, DON_Z1 + 1, WOOD);
+        }
+        Furnish.desk(s, 20, y, 16, "west", WOOD);
+        s.set(DON_X2 - 1, y + 2, 12, Kit.wallBanner("red", "west"));
+        s.set(19, FLOORS[2] - 1, 11, Kit.hangingLantern()).set(19, FLOORS[2] - 1, 15, Kit.hangingLantern());
         // The library: shelves along the walls, a lectern, a reading table.
         y = FLOORS[2] + 1;
-        for (int x = 16; x <= 24; x++) {
-            if (x != 17 && x != 23) {
-                s.fill(x, y, DON_Z1 + 1, x, y + 1, DON_Z1 + 1, BOOKSHELF);
+        for (int x = DON_X1 + 1; x <= DON_X2 - 1; x++) {
+            if (x != 17 && x != CX && x != 23) {
+                Furnish.books(s, x, DON_Z1 + 1, x, DON_Z1 + 1, y, y + 1);
             }
         }
-        for (int z = 10; z <= 17; z++) {
-            if (z != 13) {
-                s.fill(16, y, z, 16, y + 1, z, BOOKSHELF);
+        for (int z = DON_Z1 + 2; z <= DON_Z2 - 1; z++) {
+            if (z != 10 && z != 14) {
+                Furnish.books(s, DON_X1 + 1, z, DON_X1 + 1, z, y, y + 1);
             }
         }
-        s.set(19, y, 13, "minecraft:lectern[facing=south,has_book=false,powered=false]");
-        s.set(19, y, 16, Kit.topSlab(SPRUCE_SLAB)).set(18, y, 16, Kit.stairs(SPRUCE_STAIRS, "west"));
-        s.set(19, y + 1, 16, Kit.lantern());
-        s.set(20, FLOORS[3] - 1, 11, Kit.hangingLantern()).set(19, FLOORS[3] - 1, 15, Kit.hangingLantern());
+        s.set(19, y, 12, "minecraft:lectern[facing=south,has_book=false,powered=false]");
+        Furnish.longTable(s, 18, 15, 19, 15, y, WOOD);
+        s.set(18, y, 16, Kit.stairs(SPRUCE_STAIRS, "south")).set(19, y, 16, Kit.stairs(SPRUCE_STAIRS, "south"));
+        s.set(19, y + 1, 15, Kit.lantern());
+        s.set(20, FLOORS[3] - 1, 10, Kit.hangingLantern()).set(17, FLOORS[3] - 1, 14, Kit.hangingLantern());
         // The lookout: the great bell and lanterns hanging from its roof, a lantern on the newel.
         y = FLOORS[3] + 1;
-        s.set(CX, SPIRE - 1, 13, "minecraft:bell[attachment=ceiling,facing=north,powered=false]");
-        s.set(17, SPIRE - 1, 13, Kit.hangingLantern()).set(23, SPIRE - 1, 13, Kit.hangingLantern());
+        s.set(CX, ROOF - 1, 11, "minecraft:bell[attachment=ceiling,facing=north,powered=false]");
+        s.set(17, ROOF - 1, 9, Kit.hangingLantern()).set(23, ROOF - 1, 9, Kit.hangingLantern()).set(17, ROOF - 1, 15, Kit.hangingLantern());
         s.set(NEWEL_X, y, NEWEL_Z, Kit.lantern());
     }
 
@@ -1017,7 +1089,7 @@ final class MediumCastle {
      * under a hood, ovens, a table, stores and lanterns hanging from a beam.
      */
     private static void kitchen(Structure s) {
-        int x1 = 8;
+        int x1 = 7;
         int x2 = DON_X1 - 1;
         int z1 = 9;
         int z2 = 17;
@@ -1035,44 +1107,46 @@ final class MediumCastle {
             s.set(x, 3, z1, Kit.log(OAK_LOG, "x")).set(x, 3, z2, Kit.log(OAK_LOG, "x"));
             s.set(x, eaves, z1, Kit.log(OAK_LOG, "x")).set(x, eaves, z2, Kit.log(OAK_LOG, "x"));
         }
-        for (int[] post : new int[][]{{x1, z1}, {x1, z2}, {x1, 11}, {x1, 15}, {11, z1}, {11, z2}, {x2, z1}, {x2, z2}}) {
+        for (int[] post : new int[][]{{x1, z1}, {x1, z2}, {x1, 11}, {x1, 15}, {10, z1}, {10, z2}, {x2, z1}, {x2, z2}}) {
             s.fill(post[0], 3, post[1], post[0], eaves, post[1], Kit.log(OAK_LOG, "y"));
         }
         roofX(s, x1, x2, z1 - 1, z2 + 1, eaves, Kit.SHINGLE, PLASTER, x1, -1);
         s.fill(x1, eaves + 1, 13, x1, eaves + 4, 13, Kit.log(OAK_LOG, "y"));
-        // Windows, the door and a lantern over it.
+        // Windows, the door and a torch by it.
         s.fill(x1, 4, 10, x1, 5, 10, Kit.GLASS).fill(x1, 4, 16, x1, 5, 16, Kit.GLASS);
-        s.fill(13, 4, z2, 13, 5, z2, Kit.GLASS).fill(9, 4, z2, 9, 5, z2, Kit.GLASS);
-        s.fill(13, 4, z1, 13, 5, z1, Kit.GLASS).fill(9, 4, z1, 9, 5, z1, Kit.GLASS);
-        s.door(11, 1, z2, "minecraft:oak_door", "south", "left");
-        s.set(10, 3, z2 + 1, Kit.wallTorch("south"));
+        s.fill(12, 4, z2, 12, 5, z2, Kit.GLASS).fill(8, 4, z2, 8, 5, z2, Kit.GLASS);
+        s.fill(12, 4, z1, 12, 5, z1, Kit.GLASS).fill(8, 4, z1, 8, 5, z1, Kit.GLASS);
+        s.door(10, 1, z2, "minecraft:oak_door", "south", "left");
+        s.set(9, 3, z2 + 1, Kit.wallTorch("south"));
         // The chimney stack outside the west gable.
         s.fill(x1 - 1, 1, 13, x1 - 1, 13, 13, Kit.CHIMNEY).set(x1 - 1, 14, 13, Kit.CHIMNEY_POT);
         // Inside: the hearth under its hood, ovens and stores along the north wall, a table, a beam with lanterns.
-        s.set(x1 + 1, 1, 12, ROUGH).set(x1 + 1, 1, 14, ROUGH).set(x1 + 1, 1, 13, "minecraft:campfire[facing=east,lit=true,signal_fire=false,waterlogged=false]");
+        s.set(x1 + 1, 1, 12, ROUGH).set(x1 + 1, 1, 14, ROUGH).set(x1 + 1, 1, 13, CAMPFIRE);
         s.fill(x1 + 1, 2, 12, x1 + 1, 2, 14, Kit.upside(ROUGH_STAIRS, "west")).fill(x1 + 1, 3, 12, x1 + 1, 6, 14, ROUGH);
-        s.set(10, 1, z1 + 1, "minecraft:smoker[facing=south,lit=false]").set(11, 1, z1 + 1, "minecraft:furnace[facing=south,lit=false]");
-        s.set(12, 1, z1 + 1, Kit.barrel()).set(13, 1, z1 + 1, Kit.barrel()).set(14, 1, z1 + 1, "minecraft:crafting_table");
-        s.set(13, 2, z1 + 1, Kit.barrel()).set(14, 1, 12, "minecraft:cauldron").set(14, 1, 15, HAY).set(14, 2, 15, HAY);
-        s.fill(11, 1, 13, 12, 1, 13, Kit.topSlab(SPRUCE_SLAB));
-        s.set(11, 1, 14, Kit.stairs(SPRUCE_STAIRS, "south")).set(12, 1, 14, Kit.stairs(SPRUCE_STAIRS, "south"));
+        s.set(9, 1, z1 + 1, "minecraft:smoker[facing=south,lit=false]").set(10, 1, z1 + 1, "minecraft:furnace[facing=south,lit=false]");
+        s.set(11, 1, z1 + 1, Kit.barrel()).set(13, 1, z1 + 1, "minecraft:crafting_table");
+        Furnish.sack(s, 12, 1, z1 + 1, true);
+        Furnish.crate(s, 12, 2, z1 + 1, WOOD);
+        s.set(13, 1, 12, "minecraft:cauldron").set(13, 1, 15, HAY).set(13, 2, 15, HAY);
+        Furnish.longTable(s, 10, 13, 11, 13, 1, WOOD);
+        s.set(10, 1, 14, Kit.stairs(SPRUCE_STAIRS, "south")).set(11, 1, 14, Kit.stairs(SPRUCE_STAIRS, "south"));
         s.fill(x1 + 2, eaves - 1, 13, x2, eaves - 1, 13, Kit.log(LOG, "x"));
-        s.set(11, eaves - 2, 13, Kit.hangingLantern()).set(13, eaves - 2, 13, Kit.hangingLantern());
+        s.set(10, eaves - 2, 13, Kit.hangingLantern()).set(12, eaves - 2, 13, Kit.hangingLantern());
     }
 
     /**
      * The chapel leaning on the east side of the donjon: stone walls with buttresses, tall lancets of stained glass, a roof
      * of blue-green shingles with its gable to the courtyard, a door under an arch and a small rose window in the gable, a
-     * belfry with a bell and a little spire on its ridge; inside an altar with candles, pews on both sides of a carpet and
-     * chandeliers.
+     * bell cote with a bell under a little pyramid of shingles on its ridge; inside an altar with candles, pews on both sides
+     * of a carpet and chandeliers.
      */
     private static void chapel(Structure s) {
-        int x1 = 26;
-        int x2 = 32;
+        int x1 = DON_X2 + 1;
+        int x2 = 33;
         int z1 = 9;
         int z2 = 17;
         int eaves = 9;
-        int mid = 29;
+        int mid = 30;
         s.fill(x1, 0, z1, x2, 0, z2, ROUGH).fill(x1 + 1, 0, z1 + 1, x2 - 1, 0, z2 - 1, TRIM);
         s.walls(x1, 1, z1, x2, eaves, z2, WALL);
         s.walls(x1, 1, z1, x2, 1, z2, ROUGH).walls(x1, eaves, z1, x2, eaves, z2, TRIM);
@@ -1085,7 +1159,7 @@ final class MediumCastle {
         for (int z : new int[]{11, 15}) {
             s.fill(x2, 3, z, x2, 7, z, Kit.stainedPane(z == 11 ? "purple" : "blue")).set(x2, 8, z, CARVED);
         }
-        for (int x : new int[]{28, 30}) {
+        for (int x : new int[]{mid - 1, mid + 1}) {
             s.fill(x, 3, z1, x, 7, z1, Kit.stainedPane("light_blue")).set(x, 8, z1, CARVED);
         }
         // The front: a door under an arch, a small rose window, a slit in the gable.
@@ -1096,7 +1170,7 @@ final class MediumCastle {
         s.set(mid, 5, z2, Kit.stainedPane("red")).set(mid, 7, z2, Kit.stainedPane("red"));
         s.fill(mid, 10, z2, mid, 11, z2, Kit.GLASS);
         s.set(mid + 2, 3, z2 + 1, Kit.wallTorch("south"));
-        // The belfry on the ridge: four piers, the bell, a little spire.
+        // The bell cote on the ridge: four piers, the bell, a little pyramid of shingles over them.
         int bz = z2 - 1;
         for (int x : new int[]{mid - 1, mid + 1}) {
             for (int z : new int[]{bz - 1, bz + 1}) {
@@ -1105,11 +1179,10 @@ final class MediumCastle {
         }
         s.fill(mid - 1, eaves + 7, bz - 1, mid + 1, eaves + 7, bz + 1, TRIM);
         s.set(mid, eaves + 6, bz, "minecraft:bell[attachment=ceiling,facing=south,powered=false]");
-        int tip = Kit.spire(s, mid - 1, bz - 1, mid + 1, bz + 1, eaves + 8, Kit.SLATE);
-        s.set(mid, tip, bz, ROD);
+        Kit.spire(s, mid - 1, bz - 1, mid + 1, bz + 1, eaves + 8, Kit.TEAL);
         // Inside: the altar with candles and a banner over it, pews, a carpet, chandeliers.
         s.fill(mid - 1, 1, z1 + 1, mid + 1, 1, z1 + 1, TRIM).set(mid, 1, z1 + 1, CARVED);
-        s.set(mid - 1, 2, z1 + 1, "minecraft:candle[candles=3,lit=true,waterlogged=false]").set(mid + 1, 2, z1 + 1, "minecraft:candle[candles=3,lit=true,waterlogged=false]");
+        s.set(mid - 1, 2, z1 + 1, Furnish.candles(3)).set(mid + 1, 2, z1 + 1, Furnish.candles(3));
         s.set(mid, 2, z1 + 1, GOLD).set(mid, 5, z1 + 1, "minecraft:white_wall_banner[facing=south]");
         for (int z = 12; z <= 15; z++) {
             for (int x : new int[]{x1 + 1, x1 + 2, x2 - 2, x2 - 1}) {
@@ -1125,7 +1198,8 @@ final class MediumCastle {
 
     /**
      * The courtyard: the paved forecourt between the gate and the keep with the fountain in its middle, stairs up to the
-     * wall walk on both sides, a well in the yard of the kitchen with a woodpile and hay, lamp posts along the ways.
+     * wall walk on both sides, a well in the yard of the kitchen with a woodpile and hay, stores behind the donjon and lamp
+     * posts along the ways.
      */
     private static void courtyard(Structure s) {
         // The forecourt, paved with trim, and the way along the front of the keep.
@@ -1155,10 +1229,10 @@ final class MediumCastle {
             }
         }
         // Lamp posts at the corners of the forecourt and along the side ways.
-        for (int[] p : new int[][]{{15, 29}, {25, 29}, {15, 33}, {25, 33}, {8, 19}, {32, 19}, {20, 5}}) {
+        for (int[] p : new int[][]{{15, 29}, {25, 29}, {15, 33}, {25, 33}, {8, 19}, {32, 19}}) {
             lampPost(s, p[0], p[1]);
         }
-        // The yard of the kitchen: a well with a roof, a woodpile, hay and barrels.
+        // The yard of the kitchen: a well with a roof, a woodpile, hay and crates.
         int wx = 7;
         int wz = 25;
         s.walls(wx - 1, 1, wz - 1, wx + 1, 1, wz + 1, ROUGH);
@@ -1168,10 +1242,16 @@ final class MediumCastle {
         }
         s.fill(wx - 1, 4, wz - 1, wx + 1, 4, wz + 1, Kit.slab(Kit.SHINGLE.slab()));
         s.set(wx, 3, wz, Kit.hangingLantern());
-        s.fill(5, 1, 10, 5, 2, 13, Kit.log(LOG, "z")).fill(6, 1, 10, 6, 1, 13, Kit.log(LOG, "z"));
-        s.set(9, 1, 18, Kit.barrel()).set(10, 1, 18, Kit.barrel()).set(9, 2, 18, Kit.barrel()).set(5, 1, 15, HAY).set(6, 1, 15, HAY).set(5, 2, 15, HAY);
+        s.fill(5, 1, 10, 5, 2, 12, Kit.log(LOG, "z")).fill(6, 1, 10, 6, 1, 12, Kit.log(LOG, "z"));
+        Furnish.crate(s, 8, 1, 18, WOOD);
+        Furnish.crate(s, 9, 1, 18, WOOD);
+        Furnish.crate(s, 8, 2, 18, WOOD);
+        s.set(5, 1, 15, HAY).set(6, 1, 15, HAY).set(5, 2, 15, HAY);
         // Stores behind the donjon.
-        s.set(17, 1, 4, Kit.barrel()).set(18, 1, 4, Kit.barrel()).set(23, 1, 4, HAY).set(24, 1, 4, HAY).set(23, 2, 4, HAY);
+        Furnish.crate(s, 10, 1, 4, WOOD);
+        Furnish.crate(s, 11, 1, 4, WOOD);
+        Furnish.crate(s, 10, 2, 4, WOOD);
+        s.set(29, 1, 4, HAY).set(30, 1, 4, HAY).set(30, 2, 4, HAY);
     }
 
     /**

@@ -4,10 +4,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The town of the style "terem" (see {@link Terem}): its houses, from the half sunken hut of the poor under a roof of turf
- * to the boyar's mansion of two log blocks round a fenced court, its smithy, its tavern and a piece of its wooden wall
- * with the gate. All of them are log frames on footings of rough stone under steep carved roofs, with windows in white
- * carved frames, porches on posts and a whitewashed stove inside, furnished for those who live or work there.
+ * The town of the style "terem" (see {@link Terem}): its houses, from the little log hut of the poor under a low roof of
+ * shingles to the boyar's mansion of two log blocks round a fenced court, its smithy, its tavern and a piece of its wooden
+ * wall with the gate. All of them are log frames on footings of rough stone under carved roofs, with windows in white
+ * carved frames, porches on posts and a stove or a hearth inside, furnished for those who live or work there.
  */
 final class TeremTown {
     private static final String LOG = Terem.LOG;
@@ -20,9 +20,6 @@ final class TeremTown {
     private static final String CARVE_FENCE = Terem.CARVE_FENCE;
     private static final String FOOTING = Terem.FOOTING;
     private static final String WHITEWASH = Terem.WHITEWASH;
-    private static final String MOSS = "minecraft:moss_block";
-    private static final String MOSS_CARPET = "minecraft:moss_carpet";
-    private static final String EARTH_FLOOR = "minecraft:dirt_path";
 
     private TeremTown() {
     }
@@ -612,9 +609,9 @@ final class TeremTown {
     /**
      * A smithy: a log hall under a carved gable roof whose front stands open between two log ends onto a yard paved with
      * rough stone under a lean-to on posts, where the anvil, the grindstone and the quenching tub stand. Inside the forge of
-     * rough stone with its fire under a hood, the blast furnace, the smithing table, the smith's post with his chest, coal
-     * and logs for the fire. A tall brick stack stands free against the east gable, a woodpile and a heap of coal beside
-     * it.
+     * rough stone with its fire under a hood, the blast furnace, the smithing table, the smith's post with his chest, a bin
+     * of charcoal and logs for the fire. A tall stack of rough stone with a band and a cap of trim stands against the east
+     * gable on a wider foot, a woodpile and sacks of charcoal beside it.
      */
     static Structure smithy() {
         Structure s = new Structure(13, 15, 11);
@@ -648,14 +645,19 @@ final class TeremTown {
         s.fill(7, 2, 3, 8, 2, 3, Kit.slab(Kit.ROUGH_SLAB));
         s.fill(7, 4, 3, 8, 4, 3, Kit.upside(Kit.ROUGH_STAIRS, "north")).fill(7, 4, 2, 8, 5, 2, FOOTING);
         s.fill(7, 5, 3, 8, 5, 3, Kit.stairs(Kit.ROUGH_STAIRS, "north"));
-        s.fill(11, 0, 1, 12, 12, 2, Kit.CHIMNEY).fill(10, 3, 2, 10, 5, 2, Kit.CHIMNEY);
-        s.set(11, 13, 1, Kit.CHIMNEY_POT).set(12, 13, 2, Kit.CHIMNEY_POT);
-        // The woodpile and the coal by the east gable.
+        forgeStack(s);
+        // The woodpile and the sacks of charcoal by the east gable.
         s.fill(11, 0, 4, 11, 2, 7, Kit.log("minecraft:oak_log", "x")).fill(12, 0, 4, 12, 1, 7, Kit.log("minecraft:oak_log", "x"));
         s.fill(11, 3, 4, 11, 3, 7, Kit.slab(Terem.SLAB)).fill(12, 2, 4, 12, 2, 7, Kit.slab(Terem.SLAB));
-        s.fill(11, 0, 8, 12, 0, 9, "minecraft:coal_block").set(11, 1, 8, "minecraft:coal_block");
-        // Inside: the smith's post with his chest, the tools, coal, logs and sacks.
-        s.set(2, 1, 2, "minecraft:smithing_table").set(3, 1, 2, "minecraft:coal_block");
+        Furnish.sack(s, 11, 0, 8, false);
+        Furnish.sack(s, 12, 0, 8, false);
+        Furnish.sack(s, 11, 1, 8, false);
+        Furnish.crate(s, 12, 0, 9, "spruce");
+        s.set(11, 0, 9, Kit.slab(Kit.ROUGH_SLAB));
+        s.set(10, 5, 5, Kit.hangingLantern());
+        // Inside: the smith's post with his chest, the tools, the bin of charcoal, logs and sacks.
+        s.set(2, 1, 2, "minecraft:smithing_table");
+        Furnish.crate(s, 3, 1, 2, "spruce");
         s.set(4, 1, 2, "kingdomworld:work_post");
         Furnish.chest(s, 5, 1, 2, "south");
         s.set(6, 1, 2, "minecraft:blast_furnace[facing=south,lit=false]");
@@ -666,6 +668,21 @@ final class TeremTown {
         Furnish.chandelier(s, 3, 4, 8, 3);
         s.connect();
         return s;
+    }
+
+    /**
+     * The stack of the forge against the east gable of the smithy: a shaft of rough stone two by two from the ground on a
+     * foot widened to the gable, the flue from the hood through the gable into it under a sloped cap, a band of trim halfway
+     * up, a cornice of trim on its top and two caps of trim slabs. It is stone in every look: none of it is a chimney that a
+     * look may take away.
+     */
+    private static void forgeStack(Structure s) {
+        s.fill(11, 0, 1, 12, 11, 2, Kit.ROUGH);
+        s.fill(10, 0, 1, 10, 2, 2, Kit.ROUGH).fill(10, 3, 2, 10, 5, 2, Kit.ROUGH);
+        s.set(10, 3, 1, Kit.stairs(Kit.ROUGH_STAIRS, "east")).set(10, 6, 2, Kit.stairs(Kit.ROUGH_STAIRS, "east"));
+        s.fill(11, 6, 1, 12, 6, 2, Kit.TRIM);
+        s.fill(11, 12, 1, 12, 12, 2, Kit.TRIM);
+        s.set(11, 13, 1, Kit.slab(Kit.TRIM_SLAB)).set(12, 13, 2, Kit.slab(Kit.TRIM_SLAB));
     }
 
     // ---------------------------------------------------------------- the tavern
@@ -763,6 +780,8 @@ final class TeremTown {
         flight(s, 0, 0, 2, 1, 0, 6, Terem.FLOOR_STAIRS);
         flight(s, 22, 0, 2, -1, 0, 6, Terem.FLOOR_STAIRS);
         s.set(5, 7, 2, Structure.AIR).set(17, 7, 2, Structure.AIR);
+        // Lanterns under the walks light the ground behind the palisades.
+        s.set(4, 4, 4, Kit.hangingLantern()).set(18, 4, 4, Kit.hangingLantern());
         // Where a palisade meets the tower.
         for (int x : new int[]{7, 15}) {
             s.fill(x, 0, 3, x, 0, 6, FOOTING).fill(x, 1, 5, x, 9, 5, Kit.log(LOG, "y")).set(x, 10, 5, Kit.stairs(Terem.STAIRS, "east"));
@@ -818,59 +837,55 @@ final class TeremTown {
     // ---------------------------------------------------------------- the hut
 
     /**
-     * A hut of the poor, low and half sunken: two courses of logs under a roof of turf on boards that comes down nearly to
-     * the ground, a log gable to the street with the door and one tiny window with a shutter, a stack of rough stone through
-     * the turf, logs piled under the overhang and a chopping block. Inside, on a floor of trodden earth: a bed, a stove of
-     * rough stone with its fire, the chest, a table with a candle and a lantern under the boards.
+     * A hut of the poor: a little log frame three courses high on a footing of rough stone, under a low roof of shingles
+     * whose gable looks at the street and reaches out over the door. A carved board follows the eaves of the gable, a towel
+     * hangs under the ridge and a horse head stands on the end of the ridge log. In the gable wall the door with its step and
+     * a tiny window with a carved sill and one shutter; a short stack of rough stone through the roof, logs piled under the
+     * overhang, a chopping block and a lantern by the door. Inside, on a floor of boards under a ceiling of boards: a bed, a
+     * hearth of rough stone with its fire, the chest, a table with a candle and a stool, a sack of flour and a lantern.
      */
     static Structure hut() {
-        Structure s = new Structure(5, 8, 7);
-        int[] ceiling = {2, 2, 3, 2, 2};
-        // The floor of trodden earth and the low side walls.
-        s.fill(1, 0, 1, 3, 0, 4, EARTH_FLOOR);
-        for (int x : new int[]{0, 4}) {
-            s.fill(x, 0, 0, x, 0, 5, "minecraft:rooted_dirt");
-        }
-        // The roof of turf on boards from the back to the overhang over the door, coming down to the earth at the sides,
-        // grass on its ridge.
-        for (int z = 0; z <= 6; z++) {
-            for (int x = 0; x <= 4; x++) {
-                if (x == 0 || x == 4) {
-                    s.fill(x, 1, z, x, 2, z, MOSS);
-                } else {
-                    s.set(x, ceiling[x], z, PLANKS);
-                    s.set(x, ceiling[x] + 1, z, x == 2 ? "minecraft:grass_block[snowy=false]" : MOSS);
-                }
-            }
-        }
-        s.set(2, 3, 6, PLANKS).set(1, 2, 6, PLANKS).set(3, 2, 6, PLANKS);
-        // The gables of lying logs.
+        Structure s = new Structure(5, 9, 7);
+        // The footing under the walls, the floor of boards, three courses of logs and the ceiling of boards.
+        footing(s, 0, 0, 4, 5, 0);
+        Terem.logWalls(s, 0, 1, 0, 4, 3, 5, LOG, false);
+        s.fill(1, 4, 1, 3, 4, 4, PLANKS);
+        // The gables of lying logs, the back one and the one to the street.
         for (int z : new int[]{0, 5}) {
-            for (int x = 1; x <= 3; x++) {
-                for (int y = 0; y < ceiling[x]; y++) {
-                    s.set(x, y, z, Kit.log(LOG, "x"));
-                }
-            }
+            s.fill(1, 4, z, 3, 4, z, Kit.log(LOG, "x")).set(2, 5, z, Kit.log(LOG, "x"));
         }
-        // The door, the tiny window with its shutter.
-        s.door(2, 0, 5, Terem.DOOR, "north", "left");
-        s.set(3, 1, 5, Terem.MICA).set(4, 1, 6, Kit.shutter(Kit.SHUTTER, "south"));
-        // Tufts on the turf, the stack of rough stone.
-        s.set(1, 4, 2, "minecraft:fern").set(3, 4, 4, MOSS_CARPET).set(0, 3, 4, "minecraft:fern").set(4, 3, 1, MOSS_CARPET);
-        s.set(2, 5, 3, "minecraft:grass").set(2, 5, 5, "minecraft:fern").set(0, 3, 1, "minecraft:grass");
-        s.fill(3, 0, 1, 3, 0, 2, FOOTING).set(3, 1, 1, "minecraft:campfire[facing=west,lit=true,signal_fire=false,waterlogged=false]");
-        s.set(3, 1, 2, FOOTING).fill(3, 2, 1, 3, 4, 1, FOOTING).set(3, 5, 1, Kit.ROUGH_FENCE);
-        // The woodpile and the chopping block under the overhang, a lantern over them.
+        // The low roof of shingles along z from the back wall to the overhang over the door, the ridge log on it.
+        String east = Kit.stairs(Terem.ROOF.stairs(), "east");
+        String west = Kit.stairs(Terem.ROOF.stairs(), "west");
+        s.fill(0, 4, 0, 0, 4, 6, east).fill(4, 4, 0, 4, 4, 6, west);
+        s.fill(1, 5, 0, 1, 5, 6, east).fill(3, 5, 0, 3, 5, 6, west);
+        s.fill(2, 6, 0, 2, 6, 6, Terem.ROOF.block());
+        s.fill(2, 7, 0, 2, 7, 6, Kit.log(POST, "z"));
+        konyok(s, 2, 7, 6, "south");
+        // The carving of the gable: the teeth of the board under the eaves, the towel under the ridge.
+        s.set(0, 3, 6, Kit.upside(CARVE_STAIRS, "west")).set(1, 4, 6, Kit.upside(CARVE_STAIRS, "west"));
+        s.set(4, 3, 6, Kit.upside(CARVE_STAIRS, "east")).set(3, 4, 6, Kit.upside(CARVE_STAIRS, "east"));
+        s.set(2, 5, 6, CARVE).set(2, 4, 6, CARVE_FENCE);
+        // The door with its step, the tiny window with its sill, its hood and one shutter, a window in each side wall.
+        s.door(2, 1, 5, Terem.DOOR, "north", "left");
+        s.set(2, 0, 6, Kit.slab(Terem.FLOOR_SLAB));
+        s.set(1, 2, 5, Terem.MICA).set(1, 1, 6, Kit.upside(CARVE_STAIRS, "north")).set(1, 3, 6, Kit.topSlab(CARVE_SLAB));
+        s.set(0, 2, 6, Kit.shutter(Kit.SHUTTER, "south"));
+        s.set(4, 2, 3, Terem.MICA).set(0, 2, 3, Terem.MICA);
+        // The hearth in the back corner and its stack of rough stone through the roof.
+        Furnish.hearth(s, 3, 1, 1, "south");
+        s.fill(3, 3, 1, 3, 6, 1, FOOTING).set(3, 7, 1, Kit.ROUGH_FENCE);
+        // The woodpile and the chopping block under the overhang, the lantern by the door.
         s.fill(0, 0, 6, 1, 0, 6, Kit.log("minecraft:oak_log", "z")).set(0, 1, 6, Kit.log("minecraft:oak_log", "z"));
         s.set(4, 0, 6, Kit.log(POST, "y"));
-        s.set(1, 1, 6, Kit.hangingLantern());
-        // Inside.
-        Furnish.bed(s, 1, 0, 2, "north", "brown");
-        Furnish.chest(s, 3, 0, 3, "west");
-        Furnish.table(s, 3, 0, 4, "spruce");
-        s.set(3, 1, 4, Furnish.candles(1));
-        s.set(1, 0, 4, Kit.stairs("minecraft:spruce_stairs", "north"));
-        s.set(2, 2, 3, Kit.hangingLantern());
+        s.set(3, 3, 6, Kit.hangingLantern());
+        // Inside: the bed, the chest, the table with its candle and stool, a sack of flour, the lantern under the ceiling.
+        Furnish.bed(s, 1, 1, 2, "north", "brown");
+        Furnish.chest(s, 3, 1, 3, "west");
+        Furnish.sack(s, 3, 1, 4, true);
+        s.set(1, 1, 4, Kit.topSlab("minecraft:spruce_slab")).set(1, 2, 4, Furnish.candles(1));
+        Furnish.chair(s, 1, 1, 3, "south", "spruce");
+        s.set(2, 3, 2, Kit.hangingLantern());
         s.connect();
         return s;
     }

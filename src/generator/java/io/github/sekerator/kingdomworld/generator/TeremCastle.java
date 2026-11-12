@@ -4,21 +4,29 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The castle of the style "terem": a wooden kremlin. An ostrog of upright sharpened logs on a plinth of rough stone, with a
- * roofed fighting gallery (zaborola) behind the logs that runs all round through the towers; log towers at the corners
- * whose fighting storey juts out over the walls under a tall tent with a watch lantern or a needle and a flag; and in the
- * middle of the front the gate tower, higher than the others, with a deep passage, a carved gate under a kokoshnik with the
- * icon of the kingdom, its banners, a tent and a small onion dome. Inside, the palace: a cluster of log frames of
- * different heights in the manner of Kolomenskoye, each under a roof of its own (a barrel, a steep carved gable, a tent),
- * joined by galleries, stairs and high porches, around the throne hall; the kitchen, the treasury behind iron bars, the
- * council room and the royal chambers; and over everything the church, its onion domes rising in tiers. A courtyard with a
+ * The castle of the style "terem": a white-stone kremlin of old Muscovy with a wooden terem palace inside. Its masses are
+ * kept apart by their colours so that it reads from afar and from above: white walls and towers, dark log frames, light
+ * shingle roofs and coloured onion domes.
+ *
+ * <p>The fortress: walls of the wall stone on a plinth of rough stone with a batter, swallow-tail merlons on their outer
+ * edge and a walk behind them under a lean-to roof of shingles, carried on the yard side by an arcade. Few towers, each of
+ * its own size: two strong towers at the back corners (machicolations, merlons, an upper tier and a tall tent), lower and
+ * slimmer ones at the front corners, and in the middle of the front the gate tower, the tallest of the walls, with a vaulted
+ * passage under a portal with the icon of the kingdom, a crenellated platform, an upper tier and a tall tent crowned by a
+ * watch lantern and a gilt needle. The walks run all round through the towers.
+ *
+ * <p>Inside, the palace: a cluster of log frames of different heights in the manner of Kolomenskoye, each under a roof of
+ * its own (a barrel, a steep carved gable, a tent), joined by galleries and high porches with birch carving, around the
+ * throne hall; the kitchen, the treasury behind iron bars, the council room and the royal chambers. Behind the hall rises the
+ * one dominant of the kremlin, white from the ground to its dome: the church with its bell tower in tiers that step in
+ * (the small kremlin has a tented bell tower of stone), at least eight blocks higher than any tower. A courtyard with a
  * roofed well, flower beds and birches.
  *
  * <p>One program drawn in three sizes: the small kremlin 31 by 31, the kremlin 41 by 41 and the great kremlin 47 by 47. The
- * size gives the number of towers, of the blocks of the palace and of the domes, and the height; the idea stays the same.
- * The throne stands in the middle of the ground on the street layer at the north end of its hall, facing south; the castle
- * leaves it and the ground under it out. Layer 0 replaces the ground, layer 1 is level with the street. Every part is drawn
- * with the blocks that stand for the parts of a look (see {@link Kit} and {@link Terem}).
+ * size gives the sizes and heights of the towers, the blocks of the palace and the tiers of the dominant; the idea stays the
+ * same. The throne stands in the middle of the ground on the street layer at the north end of its hall, facing south; the
+ * castle leaves it and the ground under it out. Layer 0 replaces the ground, layer 1 is level with the street. Every part is
+ * drawn with the blocks that stand for the parts of a look (see {@link Kit} and {@link Terem}).
  */
 final class TeremCastle {
     private static final String AIR = Structure.AIR;
@@ -75,23 +83,23 @@ final class TeremCastle {
         final int height;
         /** The middle of the ground: the cell of the throne. */
         final int c;
-        /** The line of the palisade from every edge, and the middle of the corner towers. */
+        /** The outer line of the walls from every edge, and the middle of the corner towers. */
         final int w;
         final int t;
-        /** The corner towers: their width, the layers of their lower walls, eight-sided or square, their top. */
-        final int tw;
-        final int cornerLower;
-        final boolean eight;
-        final int cornerTop;
         /** The layer of the floor of the fighting walk; one walks on the layer above. */
         final int f;
-        /** The gate tower: its middle row, width, lower walls and the onion on its tent. */
+        /** The strong towers at the back corners: width, top of the body, top of the upper tier. */
+        final int backW;
+        final int backBody;
+        final int backTier;
+        /** The slimmer towers at the front corners: width and top of the body (no upper tier). */
+        final int frontW;
+        final int frontBody;
+        /** The gate tower: its middle row, width, top of the body and of the upper tier. */
         final int gz;
         final int gw;
-        final int gateLower;
-        final int gateTop;
-        /** Towers in the middle of the walls: {x, z, width}. */
-        final int[][] wallTowers;
+        final int gateBody;
+        final int gateTier;
         /** The walls of the throne hall and the course of its ceiling. */
         final int hx1;
         final int hx2;
@@ -109,16 +117,16 @@ final class TeremCastle {
                     height = 40;
                     w = 3;
                     t = 4;
-                    tw = 5;
-                    cornerLower = 9;
-                    eight = false;
-                    cornerTop = 0;
                     f = 5;
-                    gz = 26;
-                    gw = 5;
-                    gateLower = 11;
-                    gateTop = 3;
-                    wallTowers = new int[0][];
+                    backW = 7;
+                    backBody = 9;
+                    backTier = 13;
+                    frontW = 5;
+                    frontBody = 9;
+                    gz = 27;
+                    gw = 7;
+                    gateBody = 9;
+                    gateTier = 13;
                     hx1 = 10;
                     hx2 = 20;
                     hz1 = 12;
@@ -130,16 +138,16 @@ final class TeremCastle {
                     height = 44;
                     w = 4;
                     t = 5;
-                    tw = 5;
-                    cornerLower = 9;
-                    eight = false;
-                    cornerTop = 1;
                     f = 5;
+                    backW = 7;
+                    backBody = 11;
+                    backTier = 16;
+                    frontW = 5;
+                    frontBody = 10;
                     gz = 35;
                     gw = 7;
-                    gateLower = 13;
-                    gateTop = 5;
-                    wallTowers = new int[][]{{5, 20, 5}, {35, 20, 5}};
+                    gateBody = 11;
+                    gateTier = 17;
                     hx1 = 14;
                     hx2 = 26;
                     hz1 = 16;
@@ -151,16 +159,16 @@ final class TeremCastle {
                     height = 48;
                     w = 4;
                     t = 5;
-                    tw = 7;
-                    cornerLower = 10;
-                    eight = false;
-                    cornerTop = 1;
                     f = 6;
+                    backW = 9;
+                    backBody = 13;
+                    backTier = 19;
+                    frontW = 7;
+                    frontBody = 12;
                     gz = 41;
-                    gw = 7;
-                    gateLower = 14;
-                    gateTop = 5;
-                    wallTowers = new int[][]{{5, 23, 5}, {41, 23, 5}};
+                    gw = 9;
+                    gateBody = 13;
+                    gateTier = 21;
                     hx1 = 16;
                     hx2 = 30;
                     hz1 = 19;
@@ -228,13 +236,13 @@ final class TeremCastle {
     // ---------------------------------------------------------------- the kremlin
 
     /**
-     * Draws the kremlin of a plan: the ground, the ostrog with its towers and gate, the palace around the throne hall, the
+     * Draws the kremlin of a plan: the ground, the fortress with its towers and gate, the palace around the throne hall, the
      * church and the courtyard.
      */
     private static Structure castle(Plan p) {
         Structure s = new Structure(p.n, p.height, p.n);
         ground(s, p);
-        ostrog(s, p);
+        fortress(s, p);
         palace(s, p);
         church(s, p);
         courtyard(s, p);
@@ -260,33 +268,170 @@ final class TeremCastle {
         box(s, p.c - 1, 0, p.gz, p.c + 1, 0, p.n - 1, PATH);
     }
 
-    // ---------------------------------------------------------------- the ostrog
+    // ---------------------------------------------------------------- shapes of white stone
 
     /**
-     * The ostrog: four palisades with their fighting walks between the corner towers, the towers in the middle of the walls
-     * (the medium and the great kremlin), stairs from the yard up to the walks, and the gate tower.
+     * Whether a column lies on the rim of a plan of the given half-size (see {@link Terem#inPlan}).
      */
-    private static void ostrog(Structure s, Plan p) {
+    private static boolean onRim(int dx, int dz, int r, int plan) {
+        return Terem.inPlan(dx, dz, r, plan) && (!Terem.inPlan(dx + 1, dz, r, plan) || !Terem.inPlan(dx - 1, dz, r, plan)
+                || !Terem.inPlan(dx, dz + 1, r, plan) || !Terem.inPlan(dx, dz - 1, r, plan));
+    }
+
+    /**
+     * Stairs on the rim of a plan with their high side to its middle (hanging upside down for a corbel or a cornice that
+     * carries what is above it); a corner stair where the rim turns.
+     */
+    private static String slope(String block, int dx, int dz, int r, int plan, boolean upside) {
+        boolean outX = dx != 0 && !Terem.inPlan(dx + Integer.signum(dx), dz, r, plan);
+        boolean outZ = dz != 0 && !Terem.inPlan(dx, dz + Integer.signum(dz), r, plan);
+        String half = upside ? "top" : "bottom";
+        String facing;
+        String shape = "straight";
+        if (outX && outZ) {
+            facing = dz > 0 ? "north" : "south";
+            shape = dz > 0 == dx > 0 ? "outer_left" : "outer_right";
+        } else if (outX || !outZ && Math.abs(dx) >= Math.abs(dz)) {
+            facing = dx > 0 ? "west" : "east";
+        } else {
+            facing = dz > 0 ? "north" : "south";
+        }
+        return block + "[facing=" + facing + ",half=" + half + ",shape=" + shape + ",waterlogged=false]";
+    }
+
+    /**
+     * A ring of stairs of the wall stone on the rim of a plan at layer {@code y}: a cornice or corbel table hanging upside
+     * down, or a sloping ledge; only where nothing stands yet.
+     */
+    private static void ring(Structure s, int cx, int y, int cz, int r, int plan, boolean upside) {
+        for (int dz = -r; dz <= r; dz++) {
+            for (int dx = -r; dx <= r; dx++) {
+                if (onRim(dx, dz, r, plan) && s.inside(cx + dx, y, cz + dz) && !s.solid(cx + dx, y, cz + dz)) {
+                    s.set(cx + dx, y, cz + dz, slope(Kit.WALL_STAIRS, dx, dz, r, plan, upside));
+                }
+            }
+        }
+    }
+
+    /**
+     * The walls of a body of a plan from layer {@code y1} to {@code y2}, hollow inside: the rim of the wall stone, the lowest
+     * {@code rough} layers of rough stone.
+     */
+    private static void shell(Structure s, int cx, int y1, int y2, int cz, int r, int plan, int rough) {
+        for (int y = y1; y <= y2; y++) {
+            for (int dz = -r; dz <= r; dz++) {
+                for (int dx = -r; dx <= r; dx++) {
+                    if (!Terem.inPlan(dx, dz, r, plan)) {
+                        continue;
+                    }
+                    put(s, cx + dx, y, cz + dz, onRim(dx, dz, r, plan) ? (y < y1 + rough ? Kit.ROUGH : Kit.WALL) : AIR);
+                }
+            }
+        }
+    }
+
+    /**
+     * Swallow-tail merlons on the rim of a square of half-size {@code r} at layer {@code y}: pairs of blocks with a gap
+     * between the pairs, each pair forked on top by two stairs whose high sides look away from each other, and a solid post
+     * at every corner.
+     */
+    private static void merlons(Structure s, int cx, int y, int cz, int r) {
+        for (int dz = -r; dz <= r; dz++) {
+            for (int dx = -r; dx <= r; dx++) {
+                if (Math.abs(dx) != r && Math.abs(dz) != r) {
+                    continue;
+                }
+                if (Math.abs(dx) == r && Math.abs(dz) == r) {
+                    put(s, cx + dx, y, cz + dz, Kit.WALL);
+                    put(s, cx + dx, y + 1, cz + dz, Kit.WALL);
+                    continue;
+                }
+                boolean alongX = Math.abs(dz) == r;
+                int u = alongX ? dx : dz;
+                int m = Math.abs(u) % 3;
+                if (m == 0) {
+                    continue;
+                }
+                int sign = Integer.signum(u) * (m == 1 ? -1 : 1);
+                put(s, cx + dx, y, cz + dz, Kit.WALL);
+                put(s, cx + dx, y + 1, cz + dz, Kit.stairs(Kit.WALL_STAIRS, along(alongX, sign == 0 ? 1 : sign)));
+            }
+        }
+    }
+
+    /**
+     * A row of kokoshniks (small pointed gables of the wall stone) along a line from {@code a1} to {@code a2} at layer
+     * {@code y}, three wide with a gap of one between them; the corners that fall outside the rhythm get a post.
+     */
+    private static void kokoshniki(Structure s, boolean alongX, int a1, int a2, int c, int y) {
+        int len = a2 - a1 + 1;
+        int start = (len + 1) % 4 == 0 ? a1 : a1 + 1;
+        for (int a = start; a + 2 <= a2; a += 4) {
+            at(s, alongX, a, y, c, Kit.stairs(Kit.WALL_STAIRS, along(alongX, 1)));
+            at(s, alongX, a + 1, y, c, Kit.WALL);
+            at(s, alongX, a + 2, y, c, Kit.stairs(Kit.WALL_STAIRS, along(alongX, -1)));
+            at(s, alongX, a + 1, y + 1, c, Kit.slab(Kit.WALL_SLAB));
+        }
+        if (start > a1) {
+            for (int a : new int[]{a1, a2}) {
+                at(s, alongX, a, y, c, Kit.WALL);
+                at(s, alongX, a, y + 1, c, Kit.slab(Kit.WALL_SLAB));
+            }
+        }
+    }
+
+    /**
+     * Arched openings in the four straight faces of an eight-sided tier of half-size {@code r} around (cx, cz), from layer
+     * {@code lo} to {@code hi}: one block wide in a face of three, three wide in a face of five with haunches at the top.
+     *
+     * @param glass panes in the openings (windows of a drum) instead of open arches (a belfry)
+     */
+    private static void arches(Structure s, int cx, int cz, int r, int lo, int hi, boolean glass) {
+        int half = (r * 141 + 50) / 100 - r;
+        String fill = glass ? Kit.GLASS : AIR;
+        for (int side = 0; side < 4; side++) {
+            boolean alongX = side < 2;
+            int c = (side % 2 == 0 ? -r : r);
+            int w = half >= 2 ? 1 : 0;
+            for (int u = -w; u <= w; u++) {
+                for (int y = lo; y <= hi; y++) {
+                    boolean haunch = w > 0 && y == hi && u != 0;
+                    String state = haunch ? Kit.upside(Kit.WALL_STAIRS, along(alongX, u)) : fill;
+                    at(s, alongX, (alongX ? cx : cz) + u, y, (alongX ? cz : cx) + c, state);
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- the fortress
+
+    /**
+     * The fortress: four walls between the corner towers, the strong towers at the back and the slimmer ones at the
+     * front, stairs from the yard up to the walks, and the gate tower.
+     */
+    private static void fortress(Structure s, Plan p) {
         int lo = p.w;
         int hi = p.n - 1 - p.w;
         int t1 = p.t;
         int t2 = p.n - 1 - p.t;
-        palisade(s, p, true, lo, t1, t2, 1);
-        palisade(s, p, true, hi, t1, t2, -1);
-        palisade(s, p, false, lo, t1, t2, 1);
-        palisade(s, p, false, hi, t1, t2, -1);
-        // Stairs up to the walks along the side walls, and along the back wall in the great kremlin.
+        wall(s, p, true, lo, t1, t2, 1);
+        wall(s, p, true, hi, t1, t2, -1);
+        wall(s, p, false, lo, t1, t2, 1);
+        wall(s, p, false, hi, t1, t2, -1);
+        // Stairs up to the walks along the side walls.
         int zTop = p.small() ? p.c - 1 : p.hz2 + 1;
         wallStair(s, p, false, lo, 1, zTop, -1);
         if (!p.small()) {
             wallStair(s, p, false, hi, -1, zTop, -1);
         }
-        int h = (p.tw - 1) / 2;
         int a = p.w + 1;
         int b = p.w + 2;
-        // The corner towers; the walks enter them through doors, and a door leads from each into the yard.
+        // The corner towers; the walks enter them through doors at their own height.
         for (int sx : new int[]{-1, 1}) {
             for (int sz : new int[]{-1, 1}) {
+                boolean back = sz < 0;
+                int width = back ? p.backW : p.frontW;
+                int h = (width - 1) / 2;
                 int cx = sx < 0 ? t1 : t2;
                 int cz = sz < 0 ? t1 : t2;
                 int ax = sx < 0 ? a : p.n - 1 - a;
@@ -295,95 +440,80 @@ final class TeremCastle {
                 int bz = sz < 0 ? b : p.n - 1 - b;
                 String toYardX = sx < 0 ? "east" : "west";
                 String toYardZ = sz < 0 ? "south" : "north";
-                tower(s, p, cx, cz, p.tw, p.cornerLower, p.eight, p.cornerTop, new int[][]{
+                tower(s, p, cx, cz, width, back ? p.backBody : p.frontBody, back ? p.backTier : 0, false, true, new int[][]{
                         {cx - sx * h, az}, {cx - sx * h, bz}, {ax, cz - sz * h}, {bx, cz - sz * h}},
-                        new String[]{toYardX, toYardX, toYardZ, toYardZ}, cx - sx * h, cz, toYardX);
-                // the walk crosses the tower on a floor at its own height
-                Terem.plate(s, cx, p.f, cz, h - 1, p.eight ? Terem.OCTAGON : Terem.SQUARE, Terem.FLOOR);
-                for (int y = 1; y <= p.cornerLower; y++) {
-                    put(s, cx, y, cz - h + 1, Kit.ladder("south"));
-                }
-                p.point(WALL, sx < 0 ? cx + h + 2 : cx - h - 2, p.f + 1, az);
-            }
-        }
-        // Towers in the middle of the walls: the walk runs through them.
-        for (int[] tw : p.wallTowers) {
-            int cx = tw[0];
-            int cz = tw[1];
-            int th = (tw[2] - 1) / 2;
-            boolean onSide = cx == t1 || cx == t2;
-            int in = onSide ? (cx == t1 ? 1 : -1) : (cz == t1 ? 1 : -1);
-            int[][] doors;
-            String[] outs;
-            if (onSide) {
-                int la = cx == t1 ? a : p.n - 1 - a;
-                int lb = cx == t1 ? b : p.n - 1 - b;
-                doors = new int[][]{{la, cz - th}, {lb, cz - th}, {la, cz + th}, {lb, cz + th}};
-                outs = new String[]{"north", "north", "south", "south"};
-                tower(s, p, cx, cz, tw[2], p.cornerLower - 1, p.large(), 0, doors, outs, cx + in * th, cz, in > 0 ? "east" : "west");
-            } else {
-                int la = cz == t1 ? a : p.n - 1 - a;
-                int lb = cz == t1 ? b : p.n - 1 - b;
-                doors = new int[][]{{cx - th, la}, {cx - th, lb}, {cx + th, la}, {cx + th, lb}};
-                outs = new String[]{"west", "west", "east", "east"};
-                tower(s, p, cx, cz, tw[2], p.cornerLower - 1, p.large(), 0, doors, outs, cx, cz + in * th, in > 0 ? "south" : "north");
-            }
-            Terem.plate(s, cx, p.f, cz, th - 1, Terem.SQUARE, Terem.FLOOR);
-            for (int y = 1; y <= p.cornerLower - 1; y++) {
-                put(s, cx, y, cz - th + 1, Kit.ladder("south"));
+                        new String[]{toYardX, toYardX, toYardZ, toYardZ});
+                // a guard's place on the walk before the tower's door: right at the door of a strong one, a step on at a slim one
+                int out = back ? 1 : 2;
+                p.point(WALL, sx < 0 ? cx + h + out : cx - h - out, p.f + 1, az);
             }
         }
         gate(s, p);
     }
 
     /**
-     * A palisade on the line {@code line} (z when it runs along x, x when along z) from {@code a1} to {@code a2}: upright logs
-     * on a plinth of rough stone with a batter outside, sharpened in pairs at the top, loopholes at the height of the eye;
-     * inside, the fighting walk two blocks wide on the layer over {@link Plan#f}, on posts with a carved railing on its
-     * inner edge, under a lean-to roof of three rows that rises against the logs; lanterns under the roof and under the
-     * walk.
+     * A wall on the line {@code line} (z when it runs along x, x when along z) from {@code a1} to {@code a2}, four blocks
+     * thick: outside a footing of rough stone with a batter, the face of rough stone for two layers and of the wall stone
+     * above, a corbel course under the parapet and swallow-tail merlons; on top the walk two blocks wide on the layer over
+     * {@link Plan#f}, with a carved railing on its yard edge and a lean-to roof of shingles that rises against the merlons;
+     * on the yard side the walk rests on an arcade of piers and arches. Lanterns under the roof and in the arches.
      *
      * @param in the side of the yard: +1 or -1 across the line
      */
-    private static void palisade(Structure s, Plan p, boolean alongX, int line, int a1, int a2, int in) {
+    private static void wall(Structure s, Plan p, boolean alongX, int line, int a1, int a2, int in) {
         int f = p.f;
         String toWall = across(alongX, -in);
+        String toYard = across(alongX, in);
         for (int a = a1; a <= a2; a++) {
-            at(s, alongX, a, 0, line, Terem.FOOTING);
-            at(s, alongX, a, 1, line, Terem.FOOTING);
-            at(s, alongX, a, 2, line, Terem.FOOTING);
-            at(s, alongX, a, 0, line - in, Terem.FOOTING);
-            at(s, alongX, a, 1, line - in, Kit.stairs(Terem.FOOTING_STAIRS, across(alongX, in)));
-            for (int y = 3; y <= f + 4; y++) {
-                at(s, alongX, a, y, line, Kit.log(Terem.LOG, "y"));
+            int m4 = Math.floorMod(a - a1, 4);
+            int m3 = Math.floorMod(a - a1, 3);
+            at(s, alongX, a, 0, line - in, Kit.ROUGH);
+            at(s, alongX, a, 1, line - in, Kit.stairs(Kit.ROUGH_STAIRS, toYard));
+            for (int k = 0; k <= 3; k++) {
+                at(s, alongX, a, 0, line + in * k, Kit.ROUGH);
             }
-            at(s, alongX, a, f + 5, line, Kit.stairs(Terem.STAIRS, along(alongX, (a - a1) % 2 == 0 ? 1 : -1)));
-            if ((a - a1) % 3 == 1) {
-                at(s, alongX, a, f + 2, line, Terem.FENCE);
+            for (int y = 1; y <= f; y++) {
+                at(s, alongX, a, y, line, y <= 2 ? Kit.ROUGH : Kit.WALL);
+                at(s, alongX, a, y, line + in, Kit.WALL);
             }
-            for (int k = 1; k <= 3; k++) {
-                at(s, alongX, a, f, line + in * k, Terem.PLANKS);
+            at(s, alongX, a, f, line - in, Kit.upside(Kit.WALL_STAIRS, toYard));
+            // the arcade under the yard half of the walk
+            for (int k = 2; k <= 3; k++) {
+                for (int y = 1; y < f; y++) {
+                    String state = m4 == 0 ? Kit.WALL : AIR;
+                    if (y == f - 1 && m4 == 1) {
+                        state = Kit.upside(Kit.WALL_STAIRS, along(alongX, -1));
+                    } else if (y == f - 1 && m4 == 3) {
+                        state = Kit.upside(Kit.WALL_STAIRS, along(alongX, 1));
+                    }
+                    at(s, alongX, a, y, line + in * k, state);
+                }
+                at(s, alongX, a, f, line + in * k, Kit.WALL);
             }
+            if (m4 == 2) {
+                at(s, alongX, a, f - 1, line + 3 * in, Kit.hangingLantern());
+            }
+            // the parapet: a breastwork and the swallow-tail merlons in pairs
+            at(s, alongX, a, f + 1, line, Kit.WALL);
+            if (m3 != 0) {
+                at(s, alongX, a, f + 2, line, Kit.WALL);
+                at(s, alongX, a, f + 3, line, Kit.stairs(Kit.WALL_STAIRS, along(alongX, m3 == 1 ? -1 : 1)));
+            }
+            // the walk, its railing and its roof
+            at(s, alongX, a, f + 1, line + 3 * in, m3 == 0 ? Kit.log(Terem.POST, "y") : Terem.CARVE_FENCE);
             at(s, alongX, a, f + 4, line + in, Kit.stairs(Terem.ROOF.stairs(), toWall));
             at(s, alongX, a, f + 3, line + 2 * in, Kit.stairs(Terem.ROOF.stairs(), toWall));
             at(s, alongX, a, f + 2, line + 3 * in, Kit.stairs(Terem.ROOF.stairs(), toWall));
-            if ((a - a1) % 3 == 0 || a == a2) {
-                for (int y = 1; y <= f + 1; y++) {
-                    at(s, alongX, a, y, line + 3 * in, Kit.log(Terem.POST, "y"));
-                }
-            } else {
-                at(s, alongX, a, f + 1, line + 3 * in, Terem.CARVE_FENCE);
-            }
-            if ((a - a1) % 4 == 2) {
+            if (m4 == 2) {
                 at(s, alongX, a, f + 3, line + in, Kit.hangingLantern());
-                at(s, alongX, a, f - 1, line + in, Kit.hangingLantern());
             }
         }
     }
 
     /**
-     * A flight of wooden stairs from the yard up to a walk, along the inner edge of its gallery, arriving at a gap in the
-     * railing at {@code aTop}; the eave over the gap is cut away so that one walks in upright.
+     * A flight of stone steps from the yard up to a walk along the yard face of its arcade, arriving at a gap in the railing
+     * at {@code aTop}, with a carved railing on its open side; the eave over the gap is cut away so that one walks in
+     * upright.
      *
      * @param dir the way the flight climbs along the line: +1 or -1
      */
@@ -393,14 +523,9 @@ final class TeremCastle {
         String up = along(alongX, dir);
         for (int k = 1; k <= f; k++) {
             int a = aTop - dir * (f - k);
-            at(s, alongX, a, k, lane, Kit.stairs(Terem.FLOOR_STAIRS, up));
-            if (k >= 2) {
-                at(s, alongX, a, k - 1, lane, Kit.upside(Terem.FLOOR_STAIRS, Furnish.opposite(up)));
-            }
-            if (k >= 3 && k % 2 == 1) {
-                for (int y = 1; y <= k - 2; y++) {
-                    at(s, alongX, a, y, lane, Kit.log(Terem.POST, "y"));
-                }
+            at(s, alongX, a, k, lane, Kit.stairs(Kit.WALL_STAIRS, up));
+            for (int y = 1; y < k; y++) {
+                at(s, alongX, a, y, lane, Kit.WALL);
             }
             if (k >= 2) {
                 at(s, alongX, a, k + 1, lane + in, Terem.CARVE_FENCE);
@@ -408,31 +533,84 @@ final class TeremCastle {
         }
         at(s, alongX, aTop, f + 1, line + 3 * in, AIR);
         at(s, alongX, aTop, f + 2, line + 3 * in, AIR);
-        at(s, alongX, aTop, f, line + 3 * in, Terem.PLANKS);
         at(s, alongX, aTop + dir, f + 1, line + 3 * in, Kit.log(Terem.POST, "y"));
         p.point(WALL, alongX ? aTop - dir * 2 : line + in, f + 1, alongX ? line + in : aTop - dir * 2);
     }
 
     /**
-     * A log tower of the ostrog standing on the ground, drawn with {@link Terem#tower}: cleared first, then a floor at the
-     * height of the walk inside it, doors from the walks through its walls, a door at its foot to the yard, a lantern on
-     * every storey and a flag of the kingdom on its point.
+     * A tower of the fortress standing on the ground, square, of the wall stone on a plinth of rough stone with a batter:
+     * a room at its foot reached by a ladder from the floor of the walk, which the walks cross through doors in its walls;
+     * loopholes where its walls look out. A tower with an upper tier ({@code tier > 0}) carries over its body a corbel
+     * table and a platform behind swallow-tail merlons, the tier one block narrower on every side, and a tent over the
+     * tier; one without carries its tent right over a cornice of its body. The tent of shingles ends in a gilt needle with
+     * the flag of the kingdom, or in a watch lantern with a gilt needle (the gate). Lanterns on every storey.
      *
-     * @param doors    the wall cells where the walks come in, each with the side it looks to in {@code outs}
-     * @param doorX    the cell of the door at its foot
-     * @param doorOut  where that door looks
+     * @param watch  whether the tent ends in the watch lantern of the style instead of a needle with a flag
+     * @param ladder whether a ladder leads from the room at its foot to the floor of the walk
+     * @param doors  the wall cells where the walks come in, each with the side it looks to in {@code outs}
+     * @return the layer of the top of its point
      */
-    private static void tower(Structure s, Plan p, int cx, int cz, int width, int lower, boolean eight, int top, int[][] doors,
-                              String[] outs, int doorX, int doorZ, String doorOut) {
+    private static int tower(Structure s, Plan p, int cx, int cz, int width, int body, int tier, boolean watch, boolean ladder,
+                             int[][] doors, String[] outs) {
         int h = (width - 1) / 2;
-        box(s, cx - h, 1, cz - h, cx + h, lower + 4, cz + h, AIR);
-        Terem.tower(s, cx, 0, cz, width, lower, eight, top, null);
-        for (int i = 0; i < doors.length; i++) {
-            s.door(doors[i][0], p.f + 1, doors[i][1], Terem.DOOR, Furnish.opposite(outs[i]), "left");
+        int f = p.f;
+        Terem.plate(s, cx, 0, cz, h + 1, Terem.SQUARE, Kit.ROUGH);
+        for (int dz = -h - 1; dz <= h + 1; dz++) {
+            for (int dx = -h - 1; dx <= h + 1; dx++) {
+                if ((Math.abs(dx) == h + 1 || Math.abs(dz) == h + 1) && s.inside(cx + dx, 1, cz + dz) && !s.solid(cx + dx, 1, cz + dz)) {
+                    put(s, cx + dx, 1, cz + dz, slope(Kit.ROUGH_STAIRS, dx, dz, h + 1, Terem.SQUARE, false));
+                }
+            }
         }
-        s.door(doorX, 1, doorZ, Terem.DOOR, Furnish.opposite(doorOut), "left");
-        put(s, cx, p.f - 1, cz + 1, Kit.hangingLantern());
-        flag(s, cx, cz);
+        shell(s, cx, 1, body, cz, h, Terem.SQUARE, 2);
+        Terem.plate(s, cx, 0, cz, h - 1, Terem.SQUARE, Terem.FLOOR);
+        Terem.plate(s, cx, f, cz, h - 1, Terem.SQUARE, Terem.FLOOR);
+        // Loopholes where the walls look out.
+        for (int[] d : new int[][]{{h, 0}, {-h, 0}, {0, h}, {0, -h}}) {
+            for (int y : new int[]{3, f + 2, body - 1}) {
+                int ox = cx + d[0] + Integer.signum(d[0]);
+                int oz = cz + d[1] + Integer.signum(d[1]);
+                if (y > 2 && y <= body && s.inside(ox, y, oz) && !s.solid(ox, y, oz) && !s.solid(ox, y - 1, oz)) {
+                    put(s, cx + d[0], y, cz + d[1], AIR);
+                }
+            }
+        }
+        for (int i = 0; i < doors.length; i++) {
+            s.door(doors[i][0], f + 1, doors[i][1], Terem.DOOR, Furnish.opposite(outs[i]), "left");
+        }
+        if (ladder) {
+            for (int y = 1; y <= f; y++) {
+                put(s, cx, y, cz - h + 1, Kit.ladder("south"));
+            }
+        }
+        put(s, cx + 1, f - 1, cz, Kit.hangingLantern());
+        put(s, cx + 1, body, cz, Kit.hangingLantern());
+        int eaves;
+        int r0;
+        if (tier > 0) {
+            int u = Math.max(1, h - 1);
+            ring(s, cx, body + 1, cz, h + 1, Terem.SQUARE, true);
+            Terem.plate(s, cx, body + 1, cz, h, Terem.SQUARE, Kit.WALL);
+            merlons(s, cx, body + 2, cz, h + 1);
+            shell(s, cx, body + 2, tier, cz, u, Terem.SQUARE, 0);
+            put(s, cx, tier, cz, Kit.hangingLantern());
+            for (int[] d : new int[][]{{u, 0}, {-u, 0}, {0, u}, {0, -u}}) {
+                put(s, cx + d[0], tier - 1, cz + d[1], AIR);
+            }
+            eaves = tier + 1;
+            r0 = h;
+        } else {
+            ring(s, cx, body, cz, h + 1, Terem.SQUARE, true);
+            eaves = body + 1;
+            r0 = h + 1;
+        }
+        if (!watch) {
+            int top = Terem.tent(s, Terem.EVERYWHERE, cx, cz, r0, eaves, Terem.SQUARE, Terem.SQUARE, Terem.TENT_RISES, 0, -1);
+            flag(s, cx, cz);
+            return top - 1;
+        }
+        int layer = Terem.tent(s, Terem.EVERYWHERE, cx, cz, r0, eaves, Terem.SQUARE, Terem.SQUARE, Terem.TENT_RISES, 0, 1);
+        return Terem.watch(s, cx, layer, cz) - 1;
     }
 
     /**
@@ -452,77 +630,69 @@ final class TeremCastle {
     }
 
     /**
-     * The gate tower (prokhodnaya bashnya) in the middle of the front, higher than the others: a deep passage through it
-     * between open leaves, a carved gate on its front under a kokoshnik with the icon of the kingdom, banners of the
-     * kingdom on its fighting storey, a room over the passage that the walks of the front pass through, and a tent with an
-     * onion dome.
+     * The gate tower in the middle of the front, the tallest of the walls: a vaulted passage three wide through its solid
+     * foot, a portal of the wall stone on its front under a kokoshnik with the icon of the kingdom, banners of the kingdom;
+     * a room over the passage that the walks of the front pass through; over its body the platform behind merlons, the upper
+     * tier and the tall tent with the watch lantern and the gilt needle.
      */
     private static void gate(Structure s, Plan p) {
         int cx = p.c;
         int cz = p.gz;
         int h = (p.gw - 1) / 2;
-        int k = h - 1;
         int f = p.f;
         int la = p.n - 1 - (p.w + 1);
         int lb = p.n - 1 - (p.w + 2);
-        tower(s, p, cx, cz, p.gw, p.gateLower, false, p.gateTop, new int[][]{{cx - h, la}, {cx - h, lb}, {cx + h, la}, {cx + h, lb}},
-                new String[]{"west", "west", "east", "east"}, cx, cz - h, "north");
-        // The passage, the floor of the room over it and the ladder from that room up to the fighting storey.
-        box(s, cx - k, 1, cz - h, cx + k, f - 1, cz + h, AIR);
-        // the log ends at its inner corners leave the way free along the yard
-        box(s, cx - h, 1, cz - h - 1, cx - h, 3, cz - h - 1, AIR);
-        box(s, cx + h, 1, cz - h - 1, cx + h, 3, cz - h - 1, AIR);
-        box(s, cx - k, 0, cz - h - 1, cx + k, 0, cz + h + 1, PATH);
-        box(s, cx - k, f, cz - h + 1, cx + k, f, cz + h - 1, Terem.FLOOR);
-        for (int y = f + 1; y <= p.gateLower; y++) {
-            put(s, cx, y, cz - h + 1, Kit.ladder("south"));
-        }
-        put(s, cx, f, cz - h + 1, Terem.FLOOR);
-        // The inner arch, the open leaves of the gate against the passage walls and lanterns in the passage.
-        for (int z : new int[]{cz - h, cz + h}) {
-            put(s, cx - k, f - 1, z, Kit.upside(Terem.CARVE_STAIRS, "west"));
-            put(s, cx + k, f - 1, z, Kit.upside(Terem.CARVE_STAIRS, "east"));
-        }
-        for (int y = 1; y <= f - 2; y++) {
-            put(s, cx - k, y, cz + h - 1, "minecraft:oak_trapdoor[facing=east,half=bottom,open=true,powered=false,waterlogged=false]");
-            put(s, cx + k, y, cz + h - 1, "minecraft:oak_trapdoor[facing=west,half=bottom,open=true,powered=false,waterlogged=false]");
-        }
+        tower(s, p, cx, cz, p.gw, p.gateBody, p.gateTier, true, false,
+                new int[][]{{cx - h, la}, {cx - h, lb}, {cx + h, la}, {cx + h, lb}},
+                new String[]{"west", "west", "east", "east"});
+        // The solid foot and the vaulted passage through it.
+        box(s, cx - h + 1, 1, cz - h + 1, cx + h - 1, f - 1, cz + h - 1, Kit.WALL);
+        box(s, cx - 1, 1, cz - h, cx + 1, f - 1, cz + h, AIR);
+        box(s, cx - 1, f - 1, cz - h, cx - 1, f - 1, cz + h, Kit.upside(Kit.WALL_STAIRS, "west"));
+        box(s, cx + 1, f - 1, cz - h, cx + 1, f - 1, cz + h, Kit.upside(Kit.WALL_STAIRS, "east"));
+        box(s, cx - 1, 0, cz - h - 1, cx + 1, 0, cz + h + 1, PATH);
         put(s, cx, f - 1, cz, Kit.hangingLantern());
-        // The carved gate: pilasters, a band and an ogee kokoshnik over the opening with the icon in it.
+        put(s, cx, f - 1, cz + h - 1, Kit.hangingLantern());
+        // The open leaves of the gate against the walls of the passage.
+        for (int y = 1; y <= f - 3; y++) {
+            put(s, cx - 1, y, cz + h - 1, Kit.shutter("minecraft:oak_trapdoor", "east"));
+            put(s, cx + 1, y, cz + h - 1, Kit.shutter("minecraft:oak_trapdoor", "west"));
+        }
+        // The icon in the face over the arch; where the ground leaves room before the face (all but the small kremlin), the
+        // portal: pilasters, a cornice and a kokoshnik with the icon in it, banners of the kingdom under the corbels.
+        put(s, cx, f + 1, cz + h, Terem.GILT);
         int zo = cz + h + 1;
+        if (zo > p.n - 1) {
+            put(s, cx - 2, p.gateBody - 1, cz - h - 1, Kit.wallBanner("red", "north"));
+            put(s, cx + 2, p.gateBody - 1, cz - h - 1, Kit.wallBanner("red", "north"));
+        }
         for (int y = 1; y <= f - 1; y++) {
-            put(s, cx - k - 1, y, zo, Terem.CARVE_FENCE);
-            put(s, cx + k + 1, y, zo, Terem.CARVE_FENCE);
+            put(s, cx - 2, y, zo, y <= 1 ? Kit.ROUGH : Kit.WALL);
+            put(s, cx + 2, y, zo, y <= 1 ? Kit.ROUGH : Kit.WALL);
         }
-        box(s, cx - k - 1, f, zo, cx + k + 1, f, zo, Kit.upside(Terem.CARVE_STAIRS, "north"));
-        for (int i = 0; ; i++) {
-            int lo = cx - k - 1 + i;
-            int hi = cx + k + 1 - i;
-            int y = f + 1 + i;
-            if (lo >= hi) {
-                put(s, lo, y, zo, Kit.slab(Terem.CARVE_SLAB));
-                put(s, lo, y + 1, zo, Terem.GILT);
-                put(s, lo, y + 2, zo, Terem.ROD);
-                break;
-            }
-            put(s, lo, y, zo, Kit.stairs(Terem.CARVE_STAIRS, "east"));
-            put(s, hi, y, zo, Kit.stairs(Terem.CARVE_STAIRS, "west"));
-            for (int x = lo + 1; x < hi; x++) {
-                put(s, x, y, zo, Terem.CARVE);
-            }
-        }
+        box(s, cx - 2, f, zo, cx + 2, f, zo, Kit.upside(Kit.WALL_STAIRS, "north"));
+        put(s, cx - 2, f + 1, zo, Kit.stairs(Kit.WALL_STAIRS, "east"));
+        put(s, cx - 1, f + 1, zo, Kit.WALL);
         put(s, cx, f + 1, zo, Terem.GILT);
-        // Banners of the kingdom on the fighting storey, a lantern over the gate.
-        int storey = p.gateLower + 2;
-        put(s, cx - 2, storey, cz + h + 2, Kit.wallBanner("red", "south"));
-        put(s, cx + 2, storey, cz + h + 2, Kit.wallBanner("red", "south"));
-        put(s, cx, f + 3, zo, Kit.wallTorch("south"));
-        // The room over the passage: benches and a lantern.
-        Terem.lavka(s, cx - k + 1, cz + h - 1, cx + k - 1, cz + h - 1, f + 1);
+        put(s, cx + 1, f + 1, zo, Kit.WALL);
+        put(s, cx + 2, f + 1, zo, Kit.stairs(Kit.WALL_STAIRS, "west"));
+        put(s, cx - 1, f + 2, zo, Kit.stairs(Kit.WALL_STAIRS, "east"));
+        put(s, cx, f + 2, zo, Kit.WALL);
+        put(s, cx + 1, f + 2, zo, Kit.stairs(Kit.WALL_STAIRS, "west"));
+        put(s, cx, f + 3, zo, Kit.slab(Kit.WALL_SLAB));
+        put(s, cx - 3, 3, zo, Kit.wallTorch("south"));
+        put(s, cx + 3, 3, zo, Kit.wallTorch("south"));
+        put(s, cx - 2, p.gateBody - 1, zo, Kit.wallBanner("red", "south"));
+        put(s, cx + 2, p.gateBody - 1, zo, Kit.wallBanner("red", "south"));
+        // The room over the passage: benches and lanterns.
+        if (h >= 3) {
+            Terem.lavka(s, cx - h + 2, cz + h - 1, cx + h - 2, cz + h - 1, f + 1);
+        }
         hang(s, cx + 1, f + 3, cz);
-        p.point(GATE, cx - 1, 1, cz);
-        p.point(GATE, cx + 1, 1, cz);
-        p.point(WALL, cx, f + 1, cz + 1);
+        // the guards of the gate stand in the passage under the line of the walk, the one over it in the room
+        p.point(GATE, cx - 1, 1, la);
+        p.point(GATE, cx + 1, 1, la);
+        p.point(WALL, cx, f + 1, la + 1);
     }
 
     // ---------------------------------------------------------------- frames, porches and roofs of the palace
@@ -625,8 +795,8 @@ final class TeremCastle {
 
     /**
      * The shell of the throne hall: a log frame, a painted ceiling, side windows in carved frames where nothing stands
-     * against its walls and its roof: a steep carved gable over the small one, a barrel with onion domes on its ridge over
-     * the others.
+     * against its walls and its roof: a steep carved gable over the small one, a barrel over the others (no dome of its
+     * own, so that the dominant behind it stands alone).
      */
     private static void hallShell(Structure s, Plan p, int[] windowRows) {
         int x1 = p.hx1;
@@ -640,13 +810,7 @@ final class TeremCastle {
         if (p.small()) {
             Terem.steepGable(s, x1, z1, x2, z2, top, false);
         } else {
-            int ridge = Terem.barrelRoof(s, z1 - 1, z2 + 1, c, top, x2 - x1 + 3, false, Terem.ROOF, null, true, true);
-            int mid = (z1 + z2) / 2;
-            ridgeDome(s, c, ridge, mid, 5);
-            if (p.large()) {
-                ridgeDome(s, c, ridge, mid - 4, 3);
-                ridgeDome(s, c, ridge, mid + 4, 3);
-            }
+            Terem.barrelRoof(s, z1 - 1, z2 + 1, c, top, x2 - x1 + 3, false, Terem.ROOF, null, true, true);
         }
         ceiling(s, x1 + 1, z1 + 1, x2 - 1, z2 - 1, top);
         // lanterns in the space under the roof, so that nothing lives in the dark there
@@ -831,40 +995,26 @@ final class TeremCastle {
             p.point(TREASURY, p.n - 2 - wing[1], 1, p.c - 1);
         }
         hallInside(s, p);
+        if (p.small()) {
+            // the door from the hall into the bell tower, through the cloth behind the throne
+            s.door(p.c, 1, p.hz1, Terem.DOOR, "south", "left");
+        }
         hallPorch(s, p);
     }
 
     /**
      * The terem of the small kremlin behind the hall, sharing its north wall: two log frames of two floors under steep
-     * carved gables looking west and east, and between them a bay with the stair under a barrel, from which the tented bell
-     * tower rises over everything with an onion dome. Below, the kitchen (west) and the treasury behind iron bars, its iron
-     * door in the hall (east); above, the royal chamber over the warm stove and the council room.
+     * carved gables looking west and east, and between them the white bell tower with the stair, the dominant of the small
+     * kremlin (see {@link #smallBelfry}). Below, the kitchen (west) and the treasury behind iron bars, its iron door in the
+     * hall (east); above, the royal chamber over the warm stove and the council room.
      */
     private static void smallTerem(Structure s, Plan p) {
         int top = 10;
         srub(s, 8, 6, 13, 12, top, 5);
         srub(s, 17, 6, 22, 12, top, 5);
-        srub(s, 13, 6, 17, 12, top, 5, 10);
         Terem.steepGable(s, 8, 6, 13, 12, top, true);
         Terem.steepGable(s, 17, 6, 22, 12, top, true);
-        Terem.barrelRoof(s, 5, 13, 15, top, 7, false, Terem.ROOF, null, true, true);
-        // The bell tower over the bay: a square frame, an eight-sided belfry and a tent with an onion.
-        box(s, 13, 11, 7, 17, 18, 11, AIR);
-        Terem.logWalls(s, 13, 11, 7, 17, 14, 11);
-        box(s, 14, 11, 8, 16, 14, 10, AIR);
-        Terem.plate(s, 15, 15, 9, 2, Terem.SQUARE, Terem.FLOOR);
-        for (int[] d : new int[][]{{-2, -2}, {2, -2}, {-2, 2}, {2, 2}}) {
-            put(s, 15 + d[0], 15, 9 + d[1], Kit.slab(Terem.ROOF.slab()));
-        }
-        Terem.octWalls(s, 15, 15, 18, 9, 2);
-        for (int[] d : new int[][]{{2, 0}, {-2, 0}, {0, 2}, {0, -2}}) {
-            box(s, 15 + d[0], 16, 9 + d[1], 15 + d[0], 17, 9 + d[1], AIR);
-        }
-        box(s, 14, 16, 8, 16, 18, 10, AIR);
-        put(s, 15, 18, 9, "minecraft:bell[attachment=ceiling,facing=south,powered=false]");
-        Terem.tent(s, Terem.EVERYWHERE, 15, 9, 3, 19, Terem.OCTAGON, Terem.OCTAGON, Terem.TENT_RISES, 5, -1);
-        put(s, 15, 11, 9, Kit.lantern());
-        put(s, 16, 16, 9, Kit.lantern());
+        smallBelfry(s);
         // Windows in carved frames.
         Terem.window(s, 8, 7, 9, "west", 1, 2, true);
         Terem.window(s, 8, 2, 8, "west", 1, 1, true);
@@ -931,8 +1081,8 @@ final class TeremCastle {
     /**
      * The palace of the medium and the great kremlin around the hall: two wings of two floors against its sides under steep
      * carved gables, with high porches to their upper floors (the medium kremlin has one, on the east wing); behind them
-     * two terems of three floors, the western under a tall tent of shingles, the eastern under a barrel, each with a small
-     * onion dome (in the great kremlin the north-east one is the bell tower), joined to the wings by roofed galleries.
+     * two terems of three floors, the western under a tall tent of shingles with a gilt needle, the eastern under a barrel
+     * with a small onion dome, joined to the wings by roofed galleries.
      * The west wing holds the kitchen and the council room over it, the east wing the treasury (its iron door in the hall)
      * and the royal chambers.
      */
@@ -963,11 +1113,7 @@ final class TeremCastle {
             int tx2 = west ? ter[2] : p.n - 1 - ter[0];
             int gx = (tx1 + tx2) / 2;
             Terem.gallery(s, gx - 1, ter[3] + 1, gx + 1, z1 - 1, 6, 1, false);
-            if (large && !west) {
-                bellTower(s, p, tx1, ter[1], tx2, ter[3]);
-            } else {
-                terem(s, p, tx1, ter[1], tx2, ter[3], west);
-            }
+            terem(s, p, tx1, ter[1], tx2, ter[3], west);
             s.door(gx, 6, ter[3], Terem.DOOR, "north", "left");
             s.door(gx, 6, z1, Terem.DOOR, "south", "left");
             int ix1 = x1 + 1;
@@ -985,8 +1131,8 @@ final class TeremCastle {
     }
 
     /**
-     * A terem of three floors behind a wing: a log frame under a tall tent of shingles (west) or a barrel (east) with a small
-     * onion dome; a door to the yard on the ground floor and a ladder up through all floors; windows in carved frames on
+     * A terem of three floors behind a wing: a log frame under a tall tent of shingles with a gilt needle (west) or a barrel
+     * with a small onion dome (east); a door to the yard on the ground floor and a ladder up through all floors; windows in carved frames on
      * every floor. The western one holds the armoury, the chamber of the queen and a bright room for needlework at the top;
      * the eastern one a store, the library and a room to look out from.
      */
@@ -997,7 +1143,8 @@ final class TeremCastle {
         int mz = (z1 + z2) / 2;
         if (west) {
             int point = Kit.spire(s, x1 - 1, z1 - 1, x2 + 1, z2 + 1, top + 1, Terem.ROOF);
-            Terem.onionDome(s, mx, point - 1, mz, 3);
+            put(s, mx, point - 1, mz, Terem.GILT);
+            put(s, mx, point, mz, Terem.ROD);
         } else {
             int ridge = Terem.barrelRoof(s, x1 - 1, x2 + 1, mz, top, z2 - z1 + 3, true, Terem.ROOF, null, true, true);
             ridgeDome(s, mx, ridge, mz, 3);
@@ -1058,45 +1205,6 @@ final class TeremCastle {
         hang(s, mx, 4, mz);
         hang(s, mx, 9, mz);
         hang(s, mx, 14, mz);
-    }
-
-    /**
-     * The bell tower of the great kremlin: a square log frame of three floors, an eight-sided belfry with open arches and
-     * bells, and a tall tent with a needle and a flag over it.
-     */
-    private static void bellTower(Structure s, Plan p, int x1, int z1, int x2, int z2) {
-        int top = 14;
-        srub(s, x1, z1, x2, z2, top, 5, 10);
-        int cx = (x1 + x2) / 2;
-        int cz = (z1 + z2) / 2;
-        Terem.plate(s, cx, top + 1, cz, 4, Terem.SQUARE, Kit.slab(Terem.ROOF.slab()));
-        Terem.plate(s, cx, top + 1, cz, 3, Terem.SQUARE, Terem.FLOOR);
-        Terem.octWalls(s, cx, top + 1, top + 5, cz, 3);
-        for (int[] d : new int[][]{{3, 0}, {-3, 0}, {0, 3}, {0, -3}}) {
-            box(s, cx + d[0], top + 2, cz + d[1], cx + d[0], top + 4, cz + d[1], AIR);
-            put(s, cx + d[0], top + 2, cz + d[1], Terem.CARVE_FENCE);
-        }
-        box(s, cx - 2, top + 2, cz - 1, cx + 2, top + 5, cz + 1, AIR);
-        box(s, cx - 1, top + 2, cz - 2, cx + 1, top + 5, cz + 2, AIR);
-        Terem.tent(s, Terem.EVERYWHERE, cx, cz, 4, top + 6, Terem.OCTAGON, Terem.OCTAGON, Terem.TENT_RISES, 0, -1);
-        flag(s, cx, cz);
-        put(s, cx, top + 5, cz, "minecraft:bell[attachment=ceiling,facing=south,powered=false]");
-        put(s, cx + 1, top + 5, cz, "minecraft:bell[attachment=ceiling,facing=east,powered=false]");
-        put(s, cx - 1, top + 5, cz, "minecraft:bell[attachment=ceiling,facing=west,powered=false]");
-        put(s, cx, top + 2, cz + 1, Kit.lantern());
-        for (int y : new int[]{2, 7, 11}) {
-            Terem.window(s, x2, y, cz, "east", 1, 2, true);
-            Terem.window(s, cx, y, z1, "north", 1, 2, false);
-        }
-        s.door(x1, 1, cz, Terem.DOOR, "east", "left");
-        for (int y = 1; y <= top - 1; y++) {
-            put(s, x2 - 1, y, z1 + 1, Kit.ladder("south"));
-        }
-        Terem.lavka(s, x1 + 1, z2 - 1, x2 - 1, z2 - 1, 6);
-        Terem.redCorner(s, x1 + 1, 6, z1 + 1, "north", "west");
-        hang(s, cx, 4, cz);
-        hang(s, cx, 9, cz);
-        hang(s, cx, 13, cz);
     }
 
     // ---------------------------------------------------------------- rooms
@@ -1189,14 +1297,105 @@ final class TeremCastle {
         hang(s, mx + 1, y + 3, z2 - 1);
     }
 
-    // ---------------------------------------------------------------- the church
+    // ---------------------------------------------------------------- the dominant
 
     /**
-     * The church behind the hall, the highest point of the kremlin (the small kremlin has its tented bell tower instead):
-     * an eight-sided log frame on a stone footing, its roof rising in tiers of onion domes on drums, in the manner of Kizhi.
-     * The kremlin has four domes round a tall drum with the great dome; the great kremlin eight domes on the first tier,
-     * four on an eight-sided second tier and the great dome over them, so that from the gate one sees five, three and one.
-     * Inside, the iconostasis of gold and ochre with candles before it, and a chandelier of candles.
+     * The dominant of the small kremlin, between the two frames of its terem: a tented bell tower of the wall stone. Its
+     * square foot holds the stair of the terem on three floors and rises over the roofs with kokoshniks on its north front;
+     * on it an eight-sided belfry with open arches and the bell, a cornice, a tent of the wall stone itself and the onion
+     * dome on a carved band with a gilt finial: white from the ground to the dome, its point 34 above the street.
+     */
+    private static void smallBelfry(Structure s) {
+        int x1 = 13;
+        int x2 = 17;
+        int z1 = 6;
+        int z2 = 12;
+        int cx = 15;
+        int cz = 9;
+        int top = 12;
+        // The roofs of the frames end against the tower: what of them stands in it becomes its stone or goes.
+        for (int y = 11; y <= 20; y++) {
+            for (int z = 5; z <= 10; z++) {
+                for (int x = x1; x <= x2; x++) {
+                    boolean wall = x == x1 || x == x2;
+                    if (!wall || s.solid(x, y, z)) {
+                        s.set(x, y, z, wall ? Kit.WALL : AIR);
+                    }
+                }
+            }
+        }
+        box(s, x1, 0, z1, x2, 0, z2, Kit.ROUGH);
+        for (int y = 1; y <= top; y++) {
+            s.walls(x1, y, z1, x2, y, z2, y == 1 ? Kit.ROUGH : Kit.WALL);
+        }
+        box(s, x1 + 1, 1, z1 + 1, x2 - 1, top - 1, z2 - 1, AIR);
+        for (int y : new int[]{0, 5}) {
+            box(s, x1 + 1, y, z1 + 1, x2 - 1, y, z2 - 1, Terem.FLOOR);
+        }
+        box(s, x1 + 1, top, z1 + 1, x2 - 1, top, z2 - 1, Kit.WALL);
+        Terem.window(s, cx, 10, z1, "north", 1, 2, false);
+        kokoshniki(s, true, x1, x2, z1, top + 1);
+        // The belfry, its cornice, the stone tent and the onion.
+        shell(s, cx, top + 1, top + 5, cz, 2, Terem.OCTAGON, 0);
+        arches(s, cx, cz, 2, top + 2, top + 4, false);
+        put(s, cx, top + 5, cz, "minecraft:bell[attachment=ceiling,facing=south,powered=false]");
+        put(s, cx + 1, top + 1, cz, Kit.lantern());
+        Terem.plate(s, cx, top + 6, cz, 2, Terem.OCTAGON, Kit.WALL);
+        ring(s, cx, top + 6, cz, 3, Terem.OCTAGON, true);
+        int point = stoneTent(s, cx, top + 7, cz, 3, 3);
+        Terem.plate(s, cx, point, cz, 1, Terem.ROUND, Terem.CARVE);
+        Terem.plate(s, cx, point + 1, cz, 1, Terem.ROUND, Terem.DOME.block());
+        int layer = point + 2;
+        // a bulb five wide that swells, holds its width and draws in to a point over two layers
+        int[][] bulb = {{2, 0}, {2, 1}, {2, 2}, {1, 1}, {1, 2}, {0, 1}};
+        for (int[] step : bulb) {
+            int r = step[0];
+            for (int dz = -r; dz <= r; dz++) {
+                for (int dx = -r; dx <= r; dx++) {
+                    if (Terem.inPlan(dx, dz, r, Terem.ROUND)) {
+                        boolean edge = step[1] != 1 && r > 0 && onRim(dx, dz, r, Terem.ROUND);
+                        put(s, cx + dx, layer, cz + dz, edge ? slope(Terem.DOME.stairs(), dx, dz, r, Terem.ROUND, step[1] == 0)
+                                : Terem.DOME.block());
+                    }
+                }
+            }
+            layer++;
+        }
+        Terem.finial(s, cx, layer, cz, 1);
+    }
+
+    /**
+     * A solid tent of the wall stone over an eight-sided plan from layer {@code y}: rings narrowing by one block, the eaves
+     * one layer high and every other ring {@code rise} layers, each ring edged with stairs in its last layer.
+     *
+     * @return the layer above its point
+     */
+    private static int stoneTent(Structure s, int cx, int y, int cz, int r0, int rise) {
+        int layer = y;
+        for (int r = r0; r >= 1; r--) {
+            int count = r == r0 ? 1 : rise;
+            for (int j = 0; j < count; j++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    for (int dx = -r; dx <= r; dx++) {
+                        if (Terem.inPlan(dx, dz, r, Terem.OCTAGON)) {
+                            boolean edge = j == count - 1 && onRim(dx, dz, r, Terem.OCTAGON);
+                            put(s, cx + dx, layer, cz + dz, edge ? slope(Kit.WALL_STAIRS, dx, dz, r, Terem.OCTAGON, false) : Kit.WALL);
+                        }
+                    }
+                }
+                layer++;
+            }
+        }
+        return layer;
+    }
+
+    /**
+     * The dominant of the kremlin and the great kremlin, behind the hall, white from the ground to its dome: the church of
+     * the wall stone on a plinth of rough stone under a cornice and a crown of kokoshniks, and rising out of its roof the bell
+     * tower in eight-sided tiers that step in, each on a cornice of its own: the belfry with open arches and its bell (the
+     * great kremlin has a second, narrower one over it), the drum and the great onion dome with its gilt cross, 38 above
+     * the street (46 in the great kremlin). Inside, the iconostasis of gold and ochre with candles before it, a runner, a
+     * bench and a chandelier of candles; the door looks to the hall under a carved hood.
      */
     private static void church(Structure s, Plan p) {
         if (p.small()) {
@@ -1204,88 +1403,99 @@ final class TeremCastle {
         }
         boolean large = p.large();
         int cx = p.c;
-        int cz = large ? 12 : 11;
-        int r = large ? 5 : 3;
-        int top = large ? 13 : 14;
-        Terem.plate(s, cx, 0, cz, r + 1, Terem.OCTAGON, Terem.FOOTING);
-        Terem.plate(s, cx, 0, cz, r - 1, Terem.OCTAGON, Terem.FLOOR);
-        for (int y = 1; y <= top + 2; y++) {
-            Terem.plate(s, cx, y, cz, r, Terem.OCTAGON, AIR);
+        int x1 = large ? 18 : 16;
+        int x2 = p.n - 1 - x1;
+        int z1 = 8;
+        int z2 = large ? 16 : 14;
+        int cz = (z1 + z2) / 2;
+        int top = large ? 13 : 11;
+        // The church: plinth, walls, roof, cornice and kokoshniks.
+        box(s, x1 - 1, 0, z1 - 1, x2 + 1, 0, z2 + 1, Kit.ROUGH);
+        for (int y = 1; y <= top; y++) {
+            s.walls(x1, y, z1, x2, y, z2, y == 1 ? Kit.ROUGH : Kit.WALL);
         }
-        Terem.octWalls(s, cx, 1, top, cz, r);
-        for (int dz = -r; dz <= r; dz++) {
-            for (int dx = -r; dx <= r; dx++) {
-                if (Terem.inPlan(dx, dz, r, Terem.OCTAGON) && !Terem.inPlan(dx, dz, r - 1, Terem.OCTAGON)) {
-                    put(s, cx + dx, 1, cz + dz, Terem.FOOTING);
-                }
+        box(s, x1 + 1, 1, z1 + 1, x2 - 1, top - 1, z2 - 1, AIR);
+        box(s, x1 + 1, 0, z1 + 1, x2 - 1, 0, z2 - 1, Terem.FLOOR);
+        box(s, x1 + 1, top, z1 + 1, x2 - 1, top, z2 - 1, Kit.WALL);
+        for (int x = x1 - 1; x <= x2 + 1; x++) {
+            putFree(s, x, top, z1 - 1, Kit.upside(Kit.WALL_STAIRS, "south"));
+            putFree(s, x, top, z2 + 1, Kit.upside(Kit.WALL_STAIRS, "north"));
+        }
+        for (int z = z1; z <= z2; z++) {
+            putFree(s, x1 - 1, top, z, Kit.upside(Kit.WALL_STAIRS, "east"));
+            putFree(s, x2 + 1, top, z, Kit.upside(Kit.WALL_STAIRS, "west"));
+        }
+        kokoshniki(s, true, x1, x2, z1, top + 1);
+        kokoshniki(s, true, x1, x2, z2, top + 1);
+        kokoshniki(s, false, z1, z2, x1, top + 1);
+        kokoshniki(s, false, z1, z2, x2, top + 1);
+        // The tiers of the bell tower: {half-size, first layer, last layer, lowest and highest layer of the openings, glass}.
+        int[][] tiers = large
+                ? new int[][]{{4, top + 1, top + 10, top + 4, top + 7, 0}, {3, top + 12, top + 16, top + 13, top + 15, 0},
+                        {2, top + 18, top + 19, top + 18, top + 19, 1}}
+                : new int[][]{{3, top + 1, top + 8, top + 4, top + 6, 0}, {2, top + 10, top + 14, top + 11, top + 12, 1}};
+        for (int i = 0; i < tiers.length; i++) {
+            int[] t = tiers[i];
+            int r = t[0];
+            shell(s, cx, t[1], t[2], cz, r, Terem.OCTAGON, 0);
+            if (i > 0) {
+                ring(s, cx, t[1], cz, r + 1, Terem.OCTAGON, false);
+            }
+            arches(s, cx, cz, r, t[3], t[4], t[5] == 1);
+            put(s, cx + 1, t[1], cz, Kit.lantern());
+            if (t[5] == 0) {
+                put(s, cx, t[2], cz, "minecraft:bell[attachment=ceiling,facing=south,powered=false]");
+            }
+            boolean last = i == tiers.length - 1;
+            if (!last || !large) {
+                Terem.plate(s, cx, t[2] + 1, cz, r, Terem.OCTAGON, Kit.WALL);
+                ring(s, cx, t[2] + 1, cz, r + 1, Terem.OCTAGON, true);
             }
         }
-        // The first tier: a stepped roof and its domes.
-        Terem.tent(s, Terem.EVERYWHERE, cx, cz, r + 1, top + 1, Terem.OCTAGON, Terem.OCTAGON, new int[]{1, 1}, 0, r - 1);
-        int domeY = top + 3;
-        for (int[] d : new int[][]{{r, 0}, {-r, 0}, {0, r}, {0, -r}}) {
-            Terem.onionDome(s, cx + d[0], domeY, cz + d[1], 3, 1, Terem.PLANKS);
+        int[] last = tiers[tiers.length - 1];
+        Terem.onionDome(s, cx, last[2] + (large ? 1 : 2), cz, large ? 9 : 7, 0, null);
+        // Windows in carved frames, the door under its hood.
+        for (int y : large ? new int[]{3, 8} : new int[]{3, 7}) {
+            Terem.window(s, x1, y, cz, "west", 1, 2, false);
+            Terem.window(s, x2, y, cz, "east", 1, 2, false);
         }
-        int mainY;
-        if (large) {
-            int d4 = r - 1;
-            for (int[] d : new int[][]{{d4, d4}, {-d4, d4}, {d4, -d4}, {-d4, -d4}}) {
-                Terem.onionDome(s, cx + d[0], domeY - 1, cz + d[1], 3, 2, Terem.PLANKS);
+        s.door(cx, 1, z2, Terem.DOOR, "north", "left");
+        put(s, cx - 1, 3, z2 + 1, Kit.upside(Terem.CARVE_STAIRS, "west"));
+        put(s, cx + 1, 3, z2 + 1, Kit.upside(Terem.CARVE_STAIRS, "east"));
+        put(s, cx, 4, z2 + 1, Kit.slab(Terem.CARVE_SLAB));
+        put(s, cx, 3, z2 + 1, Kit.wallTorch("south"));
+        // The iconostasis across the church before the altar, candles before it, the runner and the chandelier.
+        int zi = z1 + 2;
+        for (int x = x1 + 2; x <= x2 - 2; x++) {
+            for (int y = 1; y <= 6; y++) {
+                put(s, x, y, zi, Math.floorMod(x + y, 2) == 0 ? "minecraft:yellow_terracotta" : "minecraft:orange_terracotta");
             }
-            // The second tier: an eight-sided frame with four domes on its roof.
-            int y1 = top + 4;
-            int y2 = y1 + 6;
-            for (int y = y1; y <= y2; y++) {
-                Terem.plate(s, cx, y, cz, 2, Terem.OCTAGON, AIR);
-            }
-            Terem.octWalls(s, cx, y1, y2, cz, 3);
-            for (int[] d : new int[][]{{3, 0}, {-3, 0}, {0, 3}, {0, -3}}) {
-                Terem.window(s, cx + d[0], y1 + 2, cz + d[1], d[0] > 0 ? "east" : d[0] < 0 ? "west" : d[1] > 0 ? "south" : "north", 1, 2, false);
-            }
-            Terem.tent(s, Terem.EVERYWHERE, cx, cz, 4, y2 + 1, Terem.OCTAGON, Terem.OCTAGON, new int[]{1, 1}, 0, 2);
-            put(s, cx, y1, cz, Kit.lantern());
-            for (int[] d : new int[][]{{4, 0}, {-4, 0}, {0, 4}, {0, -4}}) {
-                Terem.onionDome(s, cx + d[0], y2 + 2, cz + d[1], 3, 1, Terem.PLANKS);
-            }
-            mainY = y2 + 4;
-        } else {
-            mainY = top + 4;
+            put(s, x, 7, zi, Kit.slab(Terem.CARVE_SLAB));
         }
-        Terem.onionDome(s, cx, mainY, cz, large ? 9 : 7, large ? 5 : 6, Kit.log(Terem.LOG, "y"));
-        // Windows, the door to the south under a carved hood.
-        for (String face : new String[]{"east", "west", "south"}) {
-            int[] d = Furnish.step(face);
-            Terem.window(s, cx + d[0] * r, 4, cz + d[1] * r, face, 1, 2, false);
-            Terem.window(s, cx + d[0] * r, 9, cz + d[1] * r, face, 1, 2, false);
+        put(s, cx, 1, zi, "minecraft:spruce_fence_gate[facing=south,in_wall=false,open=false,powered=false]");
+        put(s, cx, 2, zi, Terem.GILT);
+        put(s, cx, 3, zi, Terem.GILT);
+        put(s, cx - 1, 3, zi, Terem.GILT);
+        put(s, cx + 1, 3, zi, Terem.GILT);
+        put(s, cx, 1, z1 + 1, Terem.GILT);
+        put(s, cx + 1, 1, z1 + 1, Kit.lantern());
+        for (int dx : new int[]{-2, 2}) {
+            put(s, cx + dx, 1, zi + 1, Terem.CARVE_FENCE);
+            put(s, cx + dx, 2, zi + 1, Furnish.candles(3));
         }
-        box(s, cx, 4, cz + r, cx, 6, cz + r + 1, AIR);
-        s.door(cx, 1, cz + r, Terem.DOOR, "north", "left");
-        put(s, cx - 1, 3, cz + r + 1, Kit.upside(Terem.CARVE_STAIRS, "west"));
-        put(s, cx + 1, 3, cz + r + 1, Kit.upside(Terem.CARVE_STAIRS, "east"));
-        put(s, cx, 4, cz + r + 1, Kit.slab(Terem.CARVE_SLAB));
-        put(s, cx, 3, cz + r + 1, Kit.wallTorch("south"));
-        // The iconostasis on the east side, candles before it, the chandelier.
-        int ix = cx + r - 2;
-        int iconTop = Math.min(top - 2, 6);
-        for (int dz = -(r - 2); dz <= r - 2; dz++) {
-            for (int y = 1; y <= iconTop; y++) {
-                boolean icon = Math.floorMod(dz + y, 2) == 0;
-                put(s, ix, y, cz + dz, icon ? "minecraft:yellow_terracotta" : "minecraft:orange_terracotta");
-            }
-            put(s, ix, iconTop + 1, cz + dz, Kit.slab(Terem.CARVE_SLAB));
+        box(s, cx, 1, zi + 1, cx, 1, z2 - 1, Kit.CLOTH_CARPET);
+        Terem.lavka(s, x1 + 1, zi + 2, x1 + 1, z2 - 1, 1);
+        Terem.lavka(s, x2 - 1, zi + 2, x2 - 1, z2 - 1, 1);
+        horos(s, cx, cz + 1, top - 4);
+        put(s, x2 - 1, 1, zi + 1, Kit.lantern());
+        put(s, x1 + 1, 1, zi + 1, Kit.lantern());
+    }
+
+    /** A block where nothing stands yet. */
+    private static void putFree(Structure s, int x, int y, int z, String state) {
+        if (s.inside(x, y, z) && !s.solid(x, y, z)) {
+            s.set(x, y, z, state);
         }
-        put(s, ix, 1, cz, "minecraft:spruce_fence_gate[facing=west,in_wall=false,open=false,powered=false]");
-        put(s, ix, 2, cz, Terem.GILT);
-        put(s, ix, 3, cz, Terem.GILT);
-        put(s, ix, 3, cz - 1, Terem.GILT);
-        put(s, ix, 3, cz + 1, Terem.GILT);
-        for (int dz : new int[]{-1, 1}) {
-            put(s, ix - 1, 1, cz + dz * 2, Terem.CARVE_FENCE);
-            put(s, ix - 1, 2, cz + dz * 2, Furnish.candles(3));
-        }
-        Terem.lavka(s, cx - r + 1, cz - 1, cx - r + 1, cz + 1, 1);
-        horos(s, cx, cz, top - 4);
-        put(s, cx - 1, 1, cz + r - 1, Kit.lantern());
     }
 
     // ---------------------------------------------------------------- the courtyard

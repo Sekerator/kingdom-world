@@ -175,7 +175,7 @@ public final class TemplateCatalog {
         add("classic_castle_small", Kind.CASTLE, 31, 31, 0,
                 "door 0 0 15; castle_gate -1 0 11, 1 0 11; palace_door -1 0 4, 1 0 4; " +
                 "palace_hall -2 0 3, 2 0 3, -1 0 2, 1 0 2; treasury -3 0 -2; " +
-                "castle_wall -12 6 -5, -12 6 5, -6 6 -12, 6 6 -12, 12 6 -5, 12 6 5, 0 6 14, 0 6 11");
+                "castle_wall -12 6 -3, -12 6 5, 12 6 -3, 12 6 5, -6 6 12, 6 6 12, 0 6 11, 0 6 13");
         add("classic_castle_medium", Kind.CASTLE, 41, 41, 0,
                 "palace_hall -2 0 3, 2 0 3, -2 0 5, 2 0 5; palace_door 0 0 6; castle_gate -1 0 17, 1 0 17; " +
                 "treasury -2 0 -5; " +
