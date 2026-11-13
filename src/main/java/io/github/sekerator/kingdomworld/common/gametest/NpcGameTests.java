@@ -1244,9 +1244,11 @@ public final class NpcGameTests {
                 boolean styled = TemplateCatalog.get(building.templateId()).map(entry -> !entry.style().isEmpty()).orElse(false);
                 helper.assertTrue(!styled || !building.materials().look().isEmpty(), building.templateId() + " stands without a look");
             }
+            // The people of the guilds who came from abroad and the royal army from abroad are not of the plan.
             int citizens = KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdom.id()).size();
-            helper.assertTrue(citizens - fromAbroad(server, kingdom.id()) == composition.citizens(), "Citizens after the restart: " + citizens
-                    + " of " + composition.citizens());
+            helper.assertTrue(plannedPeople(server, kingdom.id(), citizens, composition.citizens()), "Citizens after the restart: " + citizens
+                    + " (" + fromAbroad(server, kingdom.id()) + " of the royal army from abroad, " + guildsText(server, kingdom.id()) + ") of "
+                    + composition.citizens());
             helper.assertTrue(level.getBlockState(NpcSpawner.thronePos(site)).is(ModRegistries.THRONE.get()), "No throne after the restart");
             helper.succeed();
         } finally {
