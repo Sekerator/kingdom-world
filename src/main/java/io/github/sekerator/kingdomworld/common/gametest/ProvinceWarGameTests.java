@@ -171,8 +171,8 @@ public final class ProvinceWarGameTests {
             throw new IllegalStateException("The state was not created: " + created);
         }
         Kingdom kingdom = result.kingdom();
-        NpcWork.state(server).putKingdom(new NpcKingdom(kingdom.id(), -1, NpcLevel.SMALL, new NpcNames.Name(name, name), character, List.of(),
-                4321, Gender.FEMALE, List.of(), KingdomWorldApi.gameTime(server), TreasuryActions.day(server)));
+        NpcWork.state(server).putKingdom(new NpcKingdom(kingdom.id(), -1, NpcLevel.SMALL, new NpcNames.Name(name, name), character,
+                List.of(RulerCharacter.Trait.PATIENT), 4321, Gender.FEMALE, List.of(), KingdomWorldApi.gameTime(server), TreasuryActions.day(server)));
         return kingdom;
     }
 
