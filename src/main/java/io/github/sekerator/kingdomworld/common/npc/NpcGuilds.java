@@ -209,15 +209,16 @@ public final class NpcGuilds {
         List<WorkPost> towers = world.citizens().posts().postsOf(kingdomId, Professions.MAGE.id());
         int wantedMages = magicRules.worldMages(ranks.mages());
         if (!towers.isEmpty() && !stopped) {
+            // The tower of a guild of mages of the world seats all the mages of its rank, beyond the seats of a post of players.
             int seats = (int) Math.ceil(wantedMages / (double) towers.size());
-            int maxSeats = io.github.sekerator.kingdomworld.common.citizen.work.GatheringSettings.rules().maxSeats();
+            int maxSeats = Math.max(seats, io.github.sekerator.kingdomworld.common.citizen.work.GatheringSettings.rules().maxSeats());
             int room = 0;
             for (WorkPost post : towers) {
-                if (post.seats() < Math.min(maxSeats, seats)) {
+                if (post.seats() < seats) {
                     KingdomWorldApi.change(server, "seat the mages of a kingdom of the world",
-                            state -> state.setPostSeats(null, post.pos(), Math.min(maxSeats, seats), maxSeats));
+                            state -> state.setPostSeats(null, post.pos(), seats, maxSeats));
                 }
-                room += Math.max(post.seats(), Math.min(maxSeats, seats));
+                room += Math.max(post.seats(), seats);
             }
             wantedMages = Math.min(wantedMages, room);
             while (mages(world, kingdomId) < wantedMages && came < atMost) {
