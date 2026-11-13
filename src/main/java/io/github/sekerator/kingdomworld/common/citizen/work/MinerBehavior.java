@@ -541,7 +541,9 @@ public final class MinerBehavior implements ProfessionBehavior {
             }
             for (Direction direction : Direction.values()) {
                 BlockPos side = opened.relative(direction);
-                if (uncovered.size() >= MAX_UNCOVERED || !level.getBlockState(side).is(Tags.Blocks.ORES) || !land.owns(side)) {
+                // The land and the loaded state come first: reading a block of a chunk that sleeps would wake it.
+                if (uncovered.size() >= MAX_UNCOVERED || !land.owns(side) || !level.isLoaded(side)
+                        || !level.getBlockState(side).is(Tags.Blocks.ORES)) {
                     continue;
                 }
                 boolean known = false;
@@ -649,6 +651,11 @@ public final class MinerBehavior implements ProfessionBehavior {
                 BlockPos side = pos.relative(direction);
                 if (cell != null && isPartOfTunnel(side, cell)) {
                     continue;
+                }
+                if (!level.isLoaded(side)) {
+                    // What lies beyond the loaded world is not known and is not looked at: the block waits.
+                    unloaded = true;
+                    return false;
                 }
                 if (!level.getFluidState(side).isEmpty() && !seal(level, side)) {
                     // No cobblestone to wall it off with: the block stays.
