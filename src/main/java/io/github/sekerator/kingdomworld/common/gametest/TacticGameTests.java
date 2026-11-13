@@ -66,6 +66,8 @@ public final class TacticGameTests {
         BlockPos from = helper.absolutePos(new BlockPos(-2, 0, -2));
         BlockPos to = helper.absolutePos(new BlockPos(toX, 3, toZ));
         GatheringGameTests.enclose(helper.getLevel(), from, to);
+        // The bodies tick only in forced chunks of the world of the game tests: the whole area is held while the test runs.
+        TestChunks.hold(helper.getLevel(), from, to);
         return new BlockPos[]{from, to};
     }
 
@@ -114,6 +116,22 @@ public final class TacticGameTests {
         return Math.sqrt(dx * dx + dz * dz);
     }
 
+    /** Where the soldiers stand around their target and where their duties put them, for the message of a failure. */
+    private static String ring(List<CitizenEntity> bodies, LivingEntity target) {
+        StringBuilder text = new StringBuilder();
+        for (CitizenEntity body : bodies) {
+            Duty duty = SquadTactics.duty(body);
+            text.append(String.format(java.util.Locale.ROOT, "%.1f,%.1f,%.1f", body.getX() - target.getX(), body.getY() - target.getY(),
+                    body.getZ() - target.getZ()));
+            if (duty != null && duty.stand() != null) {
+                text.append(String.format(java.util.Locale.ROOT, " stand %.1f,%.1f,%.1f", duty.stand().x() - target.getX(),
+                        duty.stand().y() - target.getY(), duty.stand().z() - target.getZ()));
+            }
+            text.append(body.getNavigation().isDone() ? "" : " path").append("; ");
+        }
+        return text.toString();
+    }
+
     private static Role role(LivingEntity body) {
         Duty duty = SquadTactics.duty(body);
         return duty == null ? null : duty.role();
@@ -132,6 +150,7 @@ public final class TacticGameTests {
             CitizenGameTests.finish(helper, kingdom, citizens.toArray(new Citizen[0]));
         }
         GatheringGameTests.clear(helper.getLevel(), area[0], area[1]);
+        TestChunks.release(helper.getLevel(), area[0]);
     }
 
     // ---------------------------------------------------------------- the ring
@@ -167,7 +186,8 @@ public final class TacticGameTests {
                 helper.assertTrue(sides.size() >= 4, "The soldiers stand on " + sides.size() + " sides of their target, not around it");
                 // Someone stands on the far side: the back of the target is closed.
                 helper.assertTrue(bodies.stream().anyMatch(body -> body.getX() > target.getX() + 1.0 && body.getZ() > target.getZ() - 0.5
-                        || body.getZ() > target.getZ() + 1.0 && body.getX() > target.getX() - 0.5), "Nobody closed the back of the target");
+                        || body.getZ() > target.getZ() + 1.0 && body.getX() > target.getX() - 0.5), "Nobody closed the back of the target: "
+                        + ring(bodies, target));
             } finally {
                 end(helper, kingdom, area, citizens, List.of(target));
             }
