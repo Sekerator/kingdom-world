@@ -62,6 +62,11 @@ final class DiplomacyNbt {
             }
             entry.putLong("war", proposal.war());
             entry.put("terms", writeTerms(proposal.terms()));
+            if (proposal.kind() == Proposal.Kind.CEDE) {
+                // Format 2: a cession names the province and its price.
+                entry.putInt("province", proposal.province());
+                entry.putLong("price", proposal.price());
+            }
             entry.putLong("created", proposal.created());
             entry.putLong("expires", proposal.expires());
             entry.putString("status", proposal.status().id());
@@ -109,6 +114,10 @@ final class DiplomacyNbt {
             entry.putString("city", claim.city());
             entry.putBoolean("throne", claim.throne());
             entry.putLong("made", claim.made());
+            if (!claim.provinces().isEmpty()) {
+                // Format 2: the provinces a peace hands over whole; a claim without them is of chunks, a city or the throne.
+                entry.putIntArray("provinces", claim.provinces().stream().mapToInt(Integer::intValue).toArray());
+            }
             claims.add(entry);
         }
         tag.put("claims", claims);
@@ -244,7 +253,7 @@ final class DiplomacyNbt {
                 Proposal.Status status = Proposal.Status.byId(entry.getString("status")).orElseThrow(() -> new IllegalArgumentException("status"));
                 state.restoreProposal(new Proposal(entry.getLong("id"), entry.getUUID("from"), entry.getUUID("to"), kind,
                         entry.hasUUID("vassal") ? entry.getUUID("vassal") : null, entry.getLong("war"), readTerms(entry.getCompound("terms")),
-                        entry.getLong("created"), entry.getLong("expires"), status));
+                        entry.getInt("province"), entry.getLong("price"), entry.getLong("created"), entry.getLong("expires"), status));
             } catch (RuntimeException e) {
                 problems.add("proposal " + i + ": " + e.getMessage());
             }
@@ -294,8 +303,15 @@ final class DiplomacyNbt {
         for (int i = 0; i < claims.size(); i++) {
             CompoundTag entry = claims.getCompound(i);
             try {
+                List<Integer> provinces = new ArrayList<>();
+                for (int province : entry.getIntArray("provinces")) {
+                    if (province < 1) {
+                        throw new IllegalArgumentException("province " + province);
+                    }
+                    provinces.add(province);
+                }
                 state.restoreClaim(new DiplomacyState.Claim(entry.getLong("war"), entry.getUUID("winner"), entry.getUUID("loser"),
-                        entry.getInt("chunks"), entry.getString("city"), entry.getBoolean("throne"), entry.getLong("made")));
+                        entry.getInt("chunks"), entry.getString("city"), entry.getBoolean("throne"), entry.getLong("made"), provinces));
             } catch (RuntimeException e) {
                 problems.add("claim " + i + ": " + e.getMessage());
             }

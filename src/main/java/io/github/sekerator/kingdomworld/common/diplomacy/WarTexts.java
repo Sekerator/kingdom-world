@@ -68,6 +68,7 @@ public final class WarTexts {
             case PEACE -> WarWork.state(server).war(proposal.war())
                     .<Component>map(war -> Component.translatable(KEY + "offer_text.peace", terms(server, war, proposal.terms())))
                     .orElseGet(() -> Component.translatable(KEY + "offer_text.peace", Component.translatable(KEY + "terms.white")));
+            case CEDE -> offer(proposal.kind());
         };
     }
 

@@ -226,6 +226,7 @@ public final class DiplomacyActions {
                     case VASSALAGE -> "vassal";
                     case RELEASE -> "released";
                     case PEACE -> "peace";
+                    case CEDE -> "ceded";
                 };
                 UUID first = proposal.kind() == Proposal.Kind.VASSALAGE ? proposal.vassal() : proposal.from();
                 UUID second = proposal.kind() == Proposal.Kind.VASSALAGE ? proposal.overlord() : proposal.to();

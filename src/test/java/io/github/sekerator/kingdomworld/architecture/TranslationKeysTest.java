@@ -861,7 +861,8 @@ class TranslationKeysTest {
 
     /**
      * Words of diplomacy and war exist in both languages: chunks in every plural form («1 чанк, 2 чанка, 5 чанков»), every goal,
-     * bond, offer, reason of a relation, way a war ends, answer of a ruler of the world and entry of the chronicle.
+     * bond, offer, reason of a relation, way a war ends, answer of a ruler of the world and entry of the chronicle, and the lines
+     * of the tab of war for every place held (a chunk is counted apart) and every conquest.
      */
     @Test
     void wordsOfWarHaveEveryForm() {
@@ -892,6 +893,17 @@ class TranslationKeysTest {
         }
         for (String reason : io.github.sekerator.kingdomworld.core.diplomacy.DiplomacyMind.REASONS) {
             keys.add("kingdomworld.war.npc_reason." + reason);
+        }
+        for (io.github.sekerator.kingdomworld.core.siege.Hold.Kind kind : io.github.sekerator.kingdomworld.core.siege.Hold.Kind.values()) {
+            if (kind == io.github.sekerator.kingdomworld.core.siege.Hold.Kind.CHUNK) {
+                continue;
+            }
+            for (String what : List.of("_ours", "_theirs", "_taken_ours", "_taken_theirs")) {
+                keys.add("kingdomworld.siege.tab." + kind.id() + what);
+            }
+        }
+        for (io.github.sekerator.kingdomworld.core.siege.Conquest.Kind kind : io.github.sekerator.kingdomworld.core.siege.Conquest.Kind.values()) {
+            keys.add("kingdomworld.siege.tab.conquest." + kind.id());
         }
         for (String kind : List.of("declared", "started", "battle", "raid", "blockade", "peace", "pact", "alliance", "vassal", "released", "broken",
                 "joined", "refused", "kill")) {

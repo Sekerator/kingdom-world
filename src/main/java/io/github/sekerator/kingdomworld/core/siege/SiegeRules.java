@@ -67,14 +67,25 @@ public record SiegeRules(int woodGateHp, int ironGateHp, double soldierHit, int 
     }
 
     /**
-     * Game ticks a hold of a kind needs.
+     * Game ticks a hold of a kind needs. A province is held as long as the square of a city here; an empty one takes less,
+     * see {@link #provinceTicks}.
      */
     public long ticks(Hold.Kind kind) {
         return switch (kind) {
             case CHUNK -> occupyTicks;
-            case PLAZA -> plazaTicks;
+            case PLAZA, PROVINCE -> plazaTicks;
             case THRONE -> throneTicks;
         };
+    }
+
+    /**
+     * Game ticks a hold of a province needs: as long as the square of a city where people live in it (the square of its main
+     * settlement is held), as long as a chunk where nobody does (its boundary stone is held).
+     *
+     * @param settled whether the province has a main settlement that stands (not ruined)
+     */
+    public long provinceTicks(boolean settled) {
+        return settled ? plazaTicks : occupyTicks;
     }
 
     public SiegeRules withTimes(long occupy, long plaza, long throne) {

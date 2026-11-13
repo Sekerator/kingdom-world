@@ -83,6 +83,7 @@ public final class SiegeNbt {
             c.putUUID("winner", conquest.winner());
             c.putUUID("loser", conquest.loser());
             c.putString("dimension", conquest.dimension());
+            // A conquest of provinces (format 3) keeps the ids of its provinces here.
             c.put("chunks", new LongArrayTag(conquest.chunks().stream().mapToLong(Long::longValue).toArray()));
             c.putLong("city", conquest.city());
             c.putString("step", conquest.step().id());

@@ -31,8 +31,12 @@ import java.util.Optional;
  */
 public final class DiplomacySavedData extends SavedData {
     public static final String DATA_NAME = KingdomWorld.MOD_ID + "_diplomacy";
-    /** Current layout of the saved data. Increase it together with a migration step. */
-    public static final int FORMAT_VERSION = 1;
+    /**
+     * Current layout of the saved data. Increase it together with a migration step. Format 2 adds the provinces a claim of a
+     * war on a state hands over and offers to cede a province with their price; format 1 has neither and reads as it is. An
+     * older build keeps format 2 read-only instead of dropping what it does not know.
+     */
+    public static final int FORMAT_VERSION = 2;
     static final String TAG_FORMAT_VERSION = "formatVersion";
 
     private static final Logger LOGGER = LogUtils.getLogger();

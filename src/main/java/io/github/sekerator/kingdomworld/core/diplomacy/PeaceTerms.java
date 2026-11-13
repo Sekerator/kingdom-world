@@ -53,6 +53,14 @@ public record PeaceTerms(UUID winner, long indemnity, int tributeShare, int trib
         return landChunks > 0 || !city.isEmpty() || throne;
     }
 
+    /**
+     * The land of the terms counted in provinces, for a war on a state whose land is provinces: half the chunks, at least
+     * one (the land of a goal in full is two provinces, halved one); 0 when no land is asked.
+     */
+    public int provinces() {
+        return landChunks > 0 ? Math.max(1, landChunks / 2) : 0;
+    }
+
     public PeaceTerms withIndemnity(long value) {
         return new PeaceTerms(winner, Math.max(0, value), tributeShare, tributeDays, vassalage, independence, landChunks, city, throne);
     }

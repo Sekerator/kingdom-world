@@ -32,9 +32,11 @@ public final class SiegeSavedData extends SavedData {
     public static final String DATA_NAME = KingdomWorld.MOD_ID + "_siege";
     /**
      * Current layout of the saved data. Increase it together with a migration step. Format 2 adds to a damaged block whether
-     * it comes back for free (damaged in peace) and what a stranger placed over it; format 1 has neither and reads as it is.
+     * it comes back for free (damaged in peace) and what a stranger placed over it; format 3 adds holds of provinces and
+     * conquests of provinces (their ids in the list of chunks) with the step of settlements. Formats 1 and 2 have none of
+     * these and read as they are; an older build keeps format 3 read-only.
      */
-    public static final int FORMAT_VERSION = 2;
+    public static final int FORMAT_VERSION = 3;
     static final String TAG_FORMAT_VERSION = "formatVersion";
 
     private static final Logger LOGGER = LogUtils.getLogger();

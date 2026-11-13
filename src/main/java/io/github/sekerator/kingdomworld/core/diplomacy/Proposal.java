@@ -8,13 +8,15 @@ import java.util.UUID;
 /**
  * An offer of one kingdom to another, like the deals of trade: it waits for an answer until it expires.
  *
- * @param vassal for {@link Kind#VASSALAGE}, the kingdom that would become the vassal: the proposer offering itself or the
- *               other asked to bow
- * @param war    for {@link Kind#PEACE}, the war it ends
- * @param terms  for {@link Kind#PEACE}, the terms
+ * @param vassal   for {@link Kind#VASSALAGE}, the kingdom that would become the vassal: the proposer offering itself or
+ *                 the other asked to bow
+ * @param war      for {@link Kind#PEACE}, the war it ends
+ * @param terms    for {@link Kind#PEACE}, the terms
+ * @param province for {@link Kind#CEDE}, the province of the other the proposer asks for
+ * @param price    for {@link Kind#CEDE}, what the proposer pays for it, 0 for nothing
  */
-public record Proposal(long id, UUID from, UUID to, Kind kind, UUID vassal, long war, PeaceTerms terms, long created, long expires,
-                       Status status) {
+public record Proposal(long id, UUID from, UUID to, Kind kind, UUID vassal, long war, PeaceTerms terms, int province, long price, long created,
+                       long expires, Status status) {
 
     /**
      * What is offered.
@@ -29,7 +31,9 @@ public record Proposal(long id, UUID from, UUID to, Kind kind, UUID vassal, long
         /** A vassal asks its overlord to let it go in peace. */
         RELEASE,
         /** Peace on terms. */
-        PEACE;
+        PEACE,
+        /** The other cedes a province to the proposer, for a price or for nothing. */
+        CEDE;
 
         public String id() {
             return name().toLowerCase(Locale.ROOT);
@@ -69,6 +73,13 @@ public record Proposal(long id, UUID from, UUID to, Kind kind, UUID vassal, long
         }
     }
 
+    /**
+     * An offer that is not a cession.
+     */
+    public Proposal(long id, UUID from, UUID to, Kind kind, UUID vassal, long war, PeaceTerms terms, long created, long expires, Status status) {
+        this(id, from, to, kind, vassal, war, terms, 0, 0, created, expires, status);
+    }
+
     public Proposal {
         Objects.requireNonNull(from, "from");
         Objects.requireNonNull(to, "to");
@@ -92,6 +103,14 @@ public record Proposal(long id, UUID from, UUID to, Kind kind, UUID vassal, long
             war = 0;
             terms = PeaceTerms.WHITE;
         }
+        if (kind == Kind.CEDE) {
+            if (province < 1 || price < 0) {
+                throw new IllegalArgumentException("Cession without a province: #" + id);
+            }
+        } else {
+            province = 0;
+            price = 0;
+        }
     }
 
     public boolean open() {
@@ -103,14 +122,14 @@ public record Proposal(long id, UUID from, UUID to, Kind kind, UUID vassal, long
     }
 
     public Proposal withStatus(Status value) {
-        return new Proposal(id, from, to, kind, vassal, war, terms, created, expires, value);
+        return new Proposal(id, from, to, kind, vassal, war, terms, province, price, created, expires, value);
     }
 
     /**
      * The same offer closing at another time: closed offers keep the time they closed at here.
      */
     public Proposal withExpires(long value) {
-        return new Proposal(id, from, to, kind, vassal, war, terms, created, Math.max(created, value), status);
+        return new Proposal(id, from, to, kind, vassal, war, terms, province, price, created, Math.max(created, value), status);
     }
 
     /**

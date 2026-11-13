@@ -11,9 +11,9 @@ import java.util.UUID;
 
 /**
  * How rulers of the world deal with their neighbours, by character and relations. A merchant looks for pacts and alliances;
- * a warrior declares war on weak neighbours for tribute or loot, but not often and not on those who were just at war; a just
- * ruler never attacks first but stands by its allies; a mage keeps out of it. Every ruler answers offers sensibly and makes
- * peace when worn out or beaten.
+ * a warrior declares war on weak neighbours for tribute or loot, or for their provinces when they border its state, but not
+ * often and not on those who were just at war; a just ruler never attacks first but stands by its allies; a mage keeps out
+ * of it. Every ruler answers offers sensibly, sells a province for a fair price and makes peace when worn out or beaten.
  */
 public final class DiplomacyMind {
     public static final String ASIDE = "aside";
@@ -23,7 +23,16 @@ public final class DiplomacyMind {
     public static final String WINNING = "winning";
     public static final String TOO_MUCH = "too_much";
     public static final String AGREED = "agreed";
-    public static final List<String> REASONS = List.of(ASIDE, DISTRUST, WEAK, PROUD, WINNING, TOO_MUCH, AGREED);
+    /** The heart of a state, where its capital stands, is never ceded. */
+    public static final String HEART = "heart";
+    /** The price offered for a province is below what the ruler wants for it. */
+    public static final String LOW_PRICE = "low_price";
+    public static final List<String> REASONS = List.of(ASIDE, DISTRUST, WEAK, PROUD, WINNING, TOO_MUCH, AGREED, HEART, LOW_PRICE);
+
+    /** What a province is worth at least, whatever its size. */
+    public static final long MIN_CEDE_VALUE = 1_500;
+    /** Worth of a chunk of a province before character and relations. */
+    public static final double CEDE_CHUNK_VALUE = 3.0;
 
     /**
      * A ruler of the world, as diplomacy sees it.
@@ -53,12 +62,37 @@ public final class DiplomacyMind {
      * @param recentWar    whether it was at war a short time ago
      * @param lastNpcWar   for a kingdom of players, the game day a ruler of the world last declared war on it, {@code null}
      *                     for never
+     * @param bordering    whether a province of it borders a province of the ruler's state
      */
     public record Neighbor(UUID id, boolean npc, double power, double distance, int relation, Bond bond, boolean playable, boolean recentWar,
-                           Long lastNpcWar) {
+                           Long lastNpcWar, boolean bordering) {
         public Neighbor {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(bond, "bond");
+        }
+
+        /**
+         * A neighbour whose provinces do not border the ruler's.
+         */
+        public Neighbor(UUID id, boolean npc, double power, double distance, int relation, Bond bond, boolean playable, boolean recentWar,
+                        Long lastNpcWar) {
+            this(id, npc, power, distance, relation, bond, playable, recentWar, lastNpcWar, false);
+        }
+    }
+
+    /**
+     * A province a ruler is asked to cede, as the land tells it.
+     *
+     * @param settled  whether people live in it: it has a main settlement that stands
+     * @param heart    whether the capital of the ruler stands in it
+     * @param chunks   how many chunks it has
+     * @param price    what the asker offers for it, 0 for nothing
+     * @param overlord whether the asker is the overlord of the ruler
+     */
+    public record CedeAsk(boolean settled, boolean heart, int chunks, long price, boolean overlord) {
+        public CedeAsk {
+            chunks = Math.max(0, chunks);
+            price = Math.max(0, price);
         }
     }
 
@@ -121,9 +155,14 @@ public final class DiplomacyMind {
     }
 
     /**
-     * What a warrior goes to war for: vassalage of a neighbour three times weaker, else loot.
+     * What a warrior goes to war for: the provinces of a state of the world that borders its own and is twice weaker, else
+     * vassalage of a neighbour three times weaker, else loot. Land is never the goal against a kingdom of players: rulers of
+     * the world do not fight for places of their land.
      */
     public static WarGoal goal(Self self, Neighbor target) {
+        if (self.character() == RulerCharacter.WARRIOR && target.bordering() && target.npc() && self.power() >= target.power() * 2.0) {
+            return WarGoal.LAND;
+        }
         return self.power() >= target.power() * 3.0 && !self.poor() ? WarGoal.TRIBUTE : WarGoal.RAID;
     }
 
@@ -222,8 +261,61 @@ public final class DiplomacyMind {
             case PEACE -> {
                 return new Verdict(false, WINNING);
             }
+            case CEDE -> {
+                // A cession is weighed by cede, which knows the land; without it the ruler keeps what it has.
+                return new Verdict(false, DISTRUST);
+            }
         }
         return new Verdict(false, DISTRUST);
+    }
+
+    /**
+     * How a ruler answers a neighbour that asks for a province: never the heart of its state, never to a neighbour it dislikes
+     * (a relation below -20), never for nothing when it is a warrior. Otherwise it sells for a price of at least
+     * {@link #cedeValue}, and gives an empty province for nothing to its overlord, or to a dear friend (a relation of 80 or
+     * more) when it is generous.
+     *
+     * @param asker the kingdom that asks for the province
+     */
+    public static Verdict cede(Self self, Neighbor asker, CedeAsk ask) {
+        if (ask.heart()) {
+            return new Verdict(false, HEART);
+        }
+        if (asker.relation() < -20) {
+            return new Verdict(false, DISTRUST);
+        }
+        if (self.character() == RulerCharacter.WARRIOR && ask.price() <= 0) {
+            return new Verdict(false, PROUD);
+        }
+        if (ask.price() >= cedeValue(self, asker, ask)) {
+            return new Verdict(true, AGREED);
+        }
+        boolean gift = !ask.settled() && (ask.overlord() || (asker.relation() >= 80 && self.has(RulerCharacter.Trait.GENEROUS)));
+        return gift ? new Verdict(true, AGREED) : new Verdict(false, LOW_PRICE);
+    }
+
+    /**
+     * What a ruler wants for a province: 3 a chunk, more from a warrior (x1.4) and less from a merchant (x0.85), less from a
+     * generous ruler (x0.9) and more from a proud one (x1.25), more from one who dislikes the asker (x1.2 at a relation of 0
+     * or below, down to x0.9 at 50 or above), at least {@value #MIN_CEDE_VALUE}, and twice as much where people live.
+     */
+    public static long cedeValue(Self self, Neighbor asker, CedeAsk ask) {
+        double character = switch (self.character()) {
+            case MERCHANT -> 0.85;
+            case BUILDER, MAGE -> 1.0;
+            case WARRIOR -> 1.4;
+        };
+        double traits = 1.0;
+        if (self.has(RulerCharacter.Trait.GENEROUS)) {
+            traits *= 0.9;
+        }
+        if (self.has(RulerCharacter.Trait.PROUD)) {
+            traits *= 1.25;
+        }
+        double friendship = Math.max(0, Math.min(50, asker.relation())) / 50.0;
+        double relation = 1.2 - 0.3 * friendship;
+        long value = Math.max(MIN_CEDE_VALUE, Math.round(ask.chunks() * CEDE_CHUNK_VALUE * character * traits * relation));
+        return ask.settled() ? value * 2 : value;
     }
 
     /**

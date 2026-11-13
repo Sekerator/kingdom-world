@@ -149,6 +149,8 @@ final class SiegeConquests {
             case BUILDINGS -> buildings(server, conquest, area);
             case CITIZENS -> citizens(server, conquest, area);
             case CITIES -> cities(server, conquest, now);
+            case SETTLEMENTS -> {
+            }
             case DAMAGE -> state.damage().move(conquest.loser(), conquest.winner(), entry -> area.test(new WorldPos(entry.dimension(),
                     (int) net.minecraft.core.BlockPos.getX(entry.pos()), (int) net.minecraft.core.BlockPos.getY(entry.pos()),
                     (int) net.minecraft.core.BlockPos.getZ(entry.pos()))));
@@ -167,6 +169,7 @@ final class SiegeConquests {
     private static Predicate<WorldPos> area(MinecraftServer server, Conquest conquest) {
         return switch (conquest.kind()) {
             case ANNEX -> pos -> true;
+            case PROVINCE -> pos -> false;
             case LAND -> {
                 Set<Long> chunks = new HashSet<>(conquest.chunks());
                 yield pos -> pos.dimension().equals(conquest.dimension()) && chunks.contains(ChunkKey.of(pos.chunkX(), pos.chunkZ()));

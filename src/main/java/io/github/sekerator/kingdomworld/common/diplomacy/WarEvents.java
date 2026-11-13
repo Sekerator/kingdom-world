@@ -239,7 +239,7 @@ public final class WarEvents {
                 for (io.github.sekerator.kingdomworld.core.diplomacy.Proposal.Kind kind : io.github.sekerator.kingdomworld.core.diplomacy.Proposal.Kind.values()) {
                     io.github.sekerator.kingdomworld.core.diplomacy.Proposal proposal = new io.github.sekerator.kingdomworld.core.diplomacy.Proposal(1, strong,
                             self, kind, kind == io.github.sekerator.kingdomworld.core.diplomacy.Proposal.Kind.VASSALAGE ? self : null, 1,
-                            io.github.sekerator.kingdomworld.core.diplomacy.PeaceTerms.WHITE, 0, 1,
+                            io.github.sekerator.kingdomworld.core.diplomacy.PeaceTerms.WHITE, 1, 0, 0, 1,
                             io.github.sekerator.kingdomworld.core.diplomacy.Proposal.Status.OPEN);
                     io.github.sekerator.kingdomworld.core.diplomacy.DiplomacyMind.answer(proposal, ruler, around.get(1));
                 }

@@ -2965,8 +2965,8 @@ Invoke-Phase 'run2' {
     # First what moves with the clock of the server: the war, the siege, the nobility and the memory of the rulers.
     Invoke-Part $server 'the war after the restart' {
         if (-not $script:WarId) { return }
-        if (Wait-ForStartLog $server 'KingdomWorld diplomacy: \d+ treaty\(ies\), (\d+) war\(s\) going on, \d+ open offer\(s\), data format 1' 10) {
-            Write-Ok '[run2] diplomacy is loaded in data format 1'
+        if (Wait-ForStartLog $server 'KingdomWorld diplomacy: \d+ treaty\(ies\), (\d+) war\(s\) going on, \d+ open offer\(s\), data format 2' 10) {
+            Write-Ok '[run2] diplomacy is loaded in data format 2'
         } else {
             Add-Failure '[run2] diplomacy was not loaded as expected'
         }
@@ -2984,8 +2984,8 @@ Invoke-Phase 'run2' {
 
     Invoke-Part $server 'the siege after the restart' {
         if (-not $script:SiegeWarId) { return }
-        if (Wait-ForStartLog $server 'KingdomWorld sieges: \d+ gate\(s\), (\d+) siege\(s\), (\d+) hold\(s\), .*data format 2' 10) {
-            Write-Ok '[run2] the sieges are loaded in data format 2'
+        if (Wait-ForStartLog $server 'KingdomWorld sieges: \d+ gate\(s\), (\d+) siege\(s\), (\d+) hold\(s\), .*data format 3' 10) {
+            Write-Ok '[run2] the sieges are loaded in data format 3'
         } else {
             Add-Failure '[run2] the sieges were not loaded as expected'
         }
@@ -3692,7 +3692,7 @@ Invoke-Phase 'run2' {
     # of SmokeTest are over, so that no enemy near its cities holds the mending back.
     Invoke-Part $server 'the block of a city broken before the stop' {
         if (-not $script:LawLastBreak) { return }
-        $loaded = Wait-ForStartLog $server 'KingdomWorld sieges: [^\r\n]*?(\d+) block\(s\) damaged in peace, data format 2' 10
+        $loaded = Wait-ForStartLog $server 'KingdomWorld sieges: [^\r\n]*?(\d+) block\(s\) damaged in peace, data format 3' 10
         if ($loaded -and [int]$loaded.Groups[1].Value -ge 1) {
             Write-Ok "[run2] the record of the block broken before the stop outlived the restart ($($loaded.Groups[1].Value) block(s) damaged in peace were loaded)"
         } else {

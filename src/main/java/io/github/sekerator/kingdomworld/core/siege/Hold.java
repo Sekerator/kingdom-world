@@ -6,10 +6,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Attackers holding a place of the enemy: a chunk of its land, the square at the town hall of a city, or its throne hall.
- * The time grows while attackers are there and defenders are not; defenders coming back interrupt it (the time starts
- * over), and while the defenders are shielded because their players are away it stands still. A taken chunk is freed again
- * when defenders hold it as long without attackers; a taken city or throne stays taken until the peace.
+ * Attackers holding a place of the enemy: a chunk of its land, the square at the town hall of a city, its throne hall, or
+ * a province of a state (the square of its main settlement, or the boundary stone of an empty one). The time grows while
+ * attackers are there and defenders are not; defenders coming back interrupt it (the time starts over), and while the
+ * defenders are shielded because their players are away it stands still. A taken chunk is freed again when defenders hold
+ * it as long without attackers; a taken city, throne or province stays taken until the peace.
  */
 public final class Hold {
     /**
@@ -21,7 +22,12 @@ public final class Hold {
         /** The square at the town hall of a city (0 for the capital): the goal "city". */
         PLAZA,
         /** The throne hall: the goal "throne". */
-        THRONE;
+        THRONE,
+        /**
+         * A province of a state: the square of its main settlement, or the boundary stone at its middle when nobody lives
+         * there. The time depends on which, so the caller tells it (see {@link SiegeRules#provinceTicks}).
+         */
+        PROVINCE;
 
         public String id() {
             return name().toLowerCase(Locale.ROOT);
@@ -59,7 +65,10 @@ public final class Hold {
     private final UUID attacker;
     private final UUID defender;
     private final String dimension;
-    /** The chunk for {@link Kind#CHUNK}, the city for {@link Kind#PLAZA}, 0 for {@link Kind#THRONE}. */
+    /**
+     * The chunk for {@link Kind#CHUNK}, the city for {@link Kind#PLAZA}, 0 for {@link Kind#THRONE}, the province for
+     * {@link Kind#PROVINCE}.
+     */
     private final long target;
     private long progress;
     private boolean taken;
@@ -128,10 +137,18 @@ public final class Hold {
      * The share of the time held so far, 0 to 100.
      */
     public int percent(SiegeRules rules) {
+        return percent(rules.ticks(kind));
+    }
+
+    /**
+     * The share of the time held so far, 0 to 100, of a hold that needs a given time.
+     *
+     * @param need game ticks the place must be held
+     */
+    public int percent(long need) {
         if (taken) {
             return 100;
         }
-        long need = rules.ticks(kind);
         return (int) Math.max(0, Math.min(100, progress * 100 / Math.max(1, need)));
     }
 
@@ -144,10 +161,20 @@ public final class Hold {
      * @param ticks     game ticks since the last step
      */
     public Change step(boolean attackers, boolean defenders, boolean frozen, long ticks, long now, SiegeRules rules) {
+        return step(attackers, defenders, frozen, ticks, now, rules.ticks(kind));
+    }
+
+    /**
+     * One step of a hold that needs a given time, for a place whose time is not the same for every place of its kind: a
+     * province with a settlement is held longer than an empty one.
+     *
+     * @param need game ticks the place must be held, at least 1
+     */
+    public Change step(boolean attackers, boolean defenders, boolean frozen, long ticks, long now, long need) {
         if (frozen || ticks <= 0) {
             return Change.NONE;
         }
-        long need = rules.ticks(kind);
+        need = Math.max(1, need);
         if (taken) {
             if (kind != Kind.CHUNK) {
                 return Change.NONE;
@@ -192,7 +219,14 @@ public final class Hold {
      * Takes the place at once, for operators.
      */
     public void take(long now, SiegeRules rules) {
-        progress = rules.ticks(kind);
+        take(now, rules.ticks(kind));
+    }
+
+    /**
+     * Takes the place at once, for operators, as a hold that needs a given time.
+     */
+    public void take(long now, long need) {
+        progress = Math.max(0, need);
         taken = true;
         since = now;
     }

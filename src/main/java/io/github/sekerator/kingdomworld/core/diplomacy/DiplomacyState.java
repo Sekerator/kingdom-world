@@ -79,13 +79,48 @@ public final class DiplomacyState {
     }
 
     /**
-     * Something a peace gave the winner in the world: chunks of land, a city or the throne. Taken by a later stage.
+     * Something a peace gave the winner in the world: chunks of land, a city, the throne, or whole provinces of a state.
+     * Taken by a later stage.
+     *
+     * @param provinces the provinces of the loser the winner took and the peace hands over whole (a war on a state); empty for
+     *                  land by chunks, a city of a kingdom without provinces or the throne
      */
-    public record Claim(long war, UUID winner, UUID loser, int chunks, String city, boolean throne, long made) {
+    public record Claim(long war, UUID winner, UUID loser, int chunks, String city, boolean throne, long made, List<Integer> provinces) {
         public Claim {
             Objects.requireNonNull(winner, "winner");
             Objects.requireNonNull(loser, "loser");
             city = city == null ? "" : city;
+            provinces = provinces == null ? List.of() : List.copyOf(provinces);
+        }
+
+        /**
+         * A claim without provinces: chunks of land, a city or the throne.
+         */
+        public Claim(long war, UUID winner, UUID loser, int chunks, String city, boolean throne, long made) {
+            this(war, winner, loser, chunks, city, throne, made, List.of());
+        }
+    }
+
+    /**
+     * A province a treaty cedes. The price is paid already; the world hands the province over by a conquest of provinces.
+     *
+     * @param winner the kingdom that asked for the province and gets it
+     * @param loser  the kingdom that cedes it
+     * @param price  what the winner paid the loser for it
+     */
+    public record Cession(long proposal, UUID winner, UUID loser, int province, long price) {
+        public Cession {
+            Objects.requireNonNull(winner, "winner");
+            Objects.requireNonNull(loser, "loser");
+        }
+    }
+
+    /**
+     * What accepting an offer did, and for a cession what the world has to hand over now.
+     */
+    public record Accepted(Outcome outcome, Optional<Cession> cession) {
+        static Accepted fail(Outcome outcome) {
+            return new Accepted(outcome, Optional.empty());
         }
     }
 
@@ -510,7 +545,8 @@ public final class DiplomacyState {
         wars.put(war.id(), war);
         relations.add(attacker, defender, Relations.Reason.WAR);
         lastDeclared.put(attacker, day);
-        cancelOpen(attacker, defender, Proposal.Kind.PACT, Proposal.Kind.ALLIANCE, Proposal.Kind.VASSALAGE, Proposal.Kind.RELEASE);
+        cancelOpen(attacker, defender, Proposal.Kind.PACT, Proposal.Kind.ALLIANCE, Proposal.Kind.VASSALAGE, Proposal.Kind.RELEASE,
+                Proposal.Kind.CEDE);
         changed();
         return new Declared(Outcome.DONE, Optional.of(war), broken);
     }
@@ -809,6 +845,16 @@ public final class DiplomacyState {
      * owes a tribute, a vassal goes free, and claims of land, cities and thrones are recorded.
      */
     public Outcome endWar(long warId, War.Result how, PeaceTerms terms, long now, long day, DiplomacyRules rules) {
+        return endWar(warId, how, terms, now, day, rules, List.of());
+    }
+
+    /**
+     * Ends a war on a state: as {@link #endWar(long, War.Result, PeaceTerms, long, long, DiplomacyRules)}, and the claim of
+     * the terms names the provinces the world hands over.
+     *
+     * @param provinces the provinces of the loser the winner took that the terms hand over, empty for none
+     */
+    public Outcome endWar(long warId, War.Result how, PeaceTerms terms, long now, long day, DiplomacyRules rules, List<Integer> provinces) {
         War war = wars.get(warId);
         if (war == null || war.over()) {
             return Outcome.fail(KingdomError.UNKNOWN_WAR);
@@ -841,7 +887,7 @@ public final class DiplomacyState {
             tributes.add(new Tribute(loser, terms.winner(), terms.tributeShare(), day + terms.tributeDays(), war.id()));
         }
         if (terms.claims() && loser != null) {
-            claims.add(new Claim(war.id(), terms.winner(), loser, terms.landChunks(), terms.city(), terms.throne(), now));
+            claims.add(new Claim(war.id(), terms.winner(), loser, terms.landChunks(), terms.city(), terms.throne(), now, provinces));
             while (claims.size() > MAX_CLAIMS) {
                 claims.remove(0);
             }
@@ -940,12 +986,42 @@ public final class DiplomacyState {
     // ---------------------------------------------------------------- offers
 
     /**
-     * Whether a kingdom may make an offer to another now.
+     * Whether a kingdom may make an offer to another now. A cession is asked with {@link #checkCede}, which knows the land.
      *
      * @param loserFunds for peace: what the treasury of the side that would pay holds
      */
     public Outcome checkPropose(UUID from, UUID to, Proposal.Kind kind, UUID vassal, long warId, PeaceTerms terms, long now, long loserFunds,
                                 DiplomacyRules rules) {
+        Outcome room = checkRoom(from, to, kind, warId);
+        if (!room.ok()) {
+            return room;
+        }
+        return checkStillPossible(from, to, kind, vassal, warId, terms, 0, 0, null, now, loserFunds, rules);
+    }
+
+    /**
+     * Whether a kingdom may ask another to cede a province now: they are neither at war nor in a truce, no other cession
+     * between them is open, the price is not negative and the asker can pay it, and the land allows it (see
+     * {@link CedeLand#check}).
+     *
+     * @param price what the asker offers for it, 0 for nothing
+     * @param land  what the land says of the province now, {@code null} when there is no such province
+     * @param funds what the treasury of the asker holds now
+     */
+    public Outcome checkCede(UUID from, UUID to, int province, long price, CedeLand land, long now, long funds) {
+        Outcome room = checkRoom(from, to, Proposal.Kind.CEDE, 0);
+        if (!room.ok()) {
+            return room;
+        }
+        return checkStillPossible(from, to, Proposal.Kind.CEDE, null, 0, PeaceTerms.WHITE, province, price, land, now, funds,
+                DiplomacyRules.DEFAULT);
+    }
+
+    /**
+     * Whether a kingdom has room for one more offer to another: it does not offer itself, has not made too many offers and
+     * has no such offer open with it already (a peace of the same war from the same side; another kind either way).
+     */
+    private Outcome checkRoom(UUID from, UUID to, Proposal.Kind kind, long warId) {
         if (from.equals(to)) {
             return Outcome.fail(KingdomError.TARGET_IS_SELF);
         }
@@ -966,11 +1042,18 @@ public final class DiplomacyState {
         if (open >= MAX_OPEN_PROPOSALS) {
             return Outcome.fail(KingdomError.TOO_MANY_PROPOSALS);
         }
-        return checkStillPossible(from, to, kind, vassal, warId, terms, now, loserFunds, rules);
+        return Outcome.DONE;
     }
 
-    private Outcome checkStillPossible(UUID from, UUID to, Proposal.Kind kind, UUID vassal, long warId, PeaceTerms terms, long now, long loserFunds,
-                                       DiplomacyRules rules) {
+    /**
+     * Whether an offer can be carried out now.
+     *
+     * @param loserFunds for peace: what the treasury of the side that would pay holds; for a cession: what the treasury of the
+     *                   asker holds
+     * @param land       for a cession: what the land says of the province, {@code null} when there is no such province
+     */
+    private Outcome checkStillPossible(UUID from, UUID to, Proposal.Kind kind, UUID vassal, long warId, PeaceTerms terms, int province,
+                                       long price, CedeLand land, long now, long loserFunds, DiplomacyRules rules) {
         Bond bond = bond(from, to, now);
         switch (kind) {
             case PACT -> {
@@ -1019,12 +1102,27 @@ public final class DiplomacyState {
                     }
                 }
             }
+            case CEDE -> {
+                if (province < 1 || price < 0) {
+                    return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+                }
+                if (bond == Bond.WAR || bond == Bond.TRUCE) {
+                    return Outcome.fail(bond == Bond.WAR ? KingdomError.AT_WAR : KingdomError.IN_TRUCE);
+                }
+                if (price > loserFunds) {
+                    return Outcome.fail(KingdomError.NOT_ENOUGH_MONEY);
+                }
+                Outcome where = CedeLand.check(to, province, land);
+                if (!where.ok()) {
+                    return where;
+                }
+            }
         }
         return Outcome.DONE;
     }
 
     /**
-     * Makes an offer.
+     * Makes an offer. A cession is asked with {@link #proposeCede}.
      */
     public Proposed propose(UUID from, UUID to, Proposal.Kind kind, UUID vassal, long warId, PeaceTerms terms, long now, long loserFunds,
                             DiplomacyRules rules) {
@@ -1032,18 +1130,49 @@ public final class DiplomacyState {
         if (!check.ok()) {
             return new Proposed(check, Optional.empty());
         }
-        Proposal proposal = new Proposal(nextProposalId++, from, to, kind, vassal, warId, terms, now, now + rules.proposalTicks(),
-                Proposal.Status.OPEN);
+        return open(new Proposal(nextProposalId++, from, to, kind, vassal, warId, terms, now, now + rules.proposalTicks(),
+                Proposal.Status.OPEN));
+    }
+
+    /**
+     * Asks another kingdom to cede a province, for a price or for nothing. The money moves only when the offer is accepted.
+     *
+     * @param land  what the land says of the province now, {@code null} when there is no such province
+     * @param funds what the treasury of the asker holds now
+     */
+    public Proposed proposeCede(UUID from, UUID to, int province, long price, CedeLand land, long now, long funds, DiplomacyRules rules) {
+        Outcome check = checkCede(from, to, province, price, land, now, funds);
+        if (!check.ok()) {
+            return new Proposed(check, Optional.empty());
+        }
+        return open(new Proposal(nextProposalId++, from, to, Proposal.Kind.CEDE, null, 0, PeaceTerms.WHITE, province, price, now,
+                now + rules.proposalTicks(), Proposal.Status.OPEN));
+    }
+
+    private Proposed open(Proposal proposal) {
         proposals.put(proposal.id(), proposal);
-        keepFew(from);
+        keepFew(proposal.from());
         changed();
         return new Proposed(Outcome.DONE, Optional.of(proposal));
     }
 
     /**
-     * Whether a kingdom may accept an offer now: it is open, made to this kingdom and still possible.
+     * Whether a kingdom may accept an offer now: it is open, made to this kingdom and still possible. A cession needs the
+     * land: see {@link #checkAccept(long, UUID, long, long, DiplomacyRules, CedeLand)}.
      */
     public Outcome checkAccept(long id, UUID kingdom, long now, long loserFunds, DiplomacyRules rules) {
+        return checkAccept(id, kingdom, now, loserFunds, rules, null);
+    }
+
+    /**
+     * Whether a kingdom may accept an offer now: it is open, made to this kingdom and still possible, a cession as far as the
+     * land and the money of the asker go.
+     *
+     * @param loserFunds for peace: what the treasury of the side that would pay holds; for a cession: what the treasury of the
+     *                   asker holds
+     * @param land       for a cession: what the land says of the province now, {@code null} when there is no such province
+     */
+    public Outcome checkAccept(long id, UUID kingdom, long now, long loserFunds, DiplomacyRules rules, CedeLand land) {
         Proposal proposal = proposals.get(id);
         if (proposal == null) {
             return Outcome.fail(KingdomError.UNKNOWN_PROPOSAL);
@@ -1062,21 +1191,33 @@ public final class DiplomacyState {
             }
             return checkTerms(war, proposal.terms());
         }
-        return checkStillPossible(proposal.from(), proposal.to(), proposal.kind(), proposal.vassal(), proposal.war(), proposal.terms(), now,
-                loserFunds, rules);
+        return checkStillPossible(proposal.from(), proposal.to(), proposal.kind(), proposal.vassal(), proposal.war(), proposal.terms(),
+                proposal.province(), proposal.price(), land, now, loserFunds, rules);
     }
 
     /**
-     * Accepts an offer. For peace the indemnity must be paid already (see {@link #settlement}).
+     * Accepts an offer. For peace the indemnity must be paid already (see {@link #settlement}). A cession needs the land: see
+     * {@link #acceptOffer}; here it is refused.
      */
     public Outcome accept(long id, UUID kingdom, long now, long day, DiplomacyRules rules) {
-        Outcome check = checkAccept(id, kingdom, now, Long.MAX_VALUE, rules);
+        return acceptOffer(id, kingdom, now, day, rules, null).outcome();
+    }
+
+    /**
+     * Accepts an offer. For peace the indemnity must be paid already (see {@link #settlement}); for a cession the price must
+     * be paid already, and the result tells which province the world hands over now.
+     *
+     * @param land for a cession: what the land says of the province now, {@code null} when there is no such province
+     */
+    public Accepted acceptOffer(long id, UUID kingdom, long now, long day, DiplomacyRules rules, CedeLand land) {
+        Outcome check = checkAccept(id, kingdom, now, Long.MAX_VALUE, rules, land);
         if (!check.ok()) {
-            return check;
+            return Accepted.fail(check);
         }
         Proposal proposal = proposals.get(id);
         UUID a = proposal.from();
         UUID b = proposal.to();
+        Optional<Cession> cession = Optional.empty();
         switch (proposal.kind()) {
             case PACT -> {
                 treaties.put(Treaty.key(a, b), Treaty.of(a, b, Bond.PACT, now, now + (long) rules.pactDays() * CitizenNeeds.TICKS_PER_DAY, null, 0));
@@ -1097,13 +1238,23 @@ public final class DiplomacyState {
             case PEACE -> {
                 Outcome ended = endWar(proposal.war(), War.Result.PEACE, proposal.terms(), now, day, rules);
                 if (!ended.ok()) {
-                    return ended;
+                    return Accepted.fail(ended);
+                }
+            }
+            case CEDE -> {
+                relations.add(a, b, Relations.Reason.CEDED);
+                cession = Optional.of(new Cession(proposal.id(), a, b, proposal.province(), proposal.price()));
+                // A province is ceded once: other open cessions of it are void now.
+                for (Proposal other : List.copyOf(proposals.values())) {
+                    if (other.open() && other.id() != id && other.kind() == Proposal.Kind.CEDE && other.province() == proposal.province()) {
+                        proposals.put(other.id(), other.withStatus(Proposal.Status.CANCELLED).withExpires(now));
+                    }
                 }
             }
         }
         proposals.put(id, proposals.get(id).withStatus(Proposal.Status.ACCEPTED).withExpires(now));
         changed();
-        return Outcome.DONE;
+        return new Accepted(Outcome.DONE, cession);
     }
 
     /**

@@ -45,7 +45,9 @@ public final class Relations {
         /** They backed a plot against our crown. */
         PLOT_BACKED(-35),
         /** Houses of the two kingdoms married. */
-        MARRIAGE(15);
+        MARRIAGE(15),
+        /** A province was ceded by treaty. */
+        CEDED(3);
 
         private final int weight;
 
