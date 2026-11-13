@@ -96,9 +96,12 @@ public final class TacticGameTests {
                 KingdomWorldApi.state(server)).squad().orElseThrow(() -> new IllegalStateException("No squad was formed"));
     }
 
-    /** A monster that stands still and takes no harm: a target to ring. */
+    /**
+     * A monster that stands still and takes no harm: a target to ring. It stands on the floor of the area (air from y 0 up):
+     * without its mind it does not fall, and one hanging a block up has its ring a block up too, where the soldiers jump.
+     */
     private static Mob dummy(GameTestHelper helper, int x, int z) {
-        Husk husk = helper.spawn(EntityType.HUSK, new BlockPos(x, 1, z));
+        Husk husk = helper.spawn(EntityType.HUSK, new BlockPos(x, 0, z));
         husk.setNoAi(true);
         husk.setInvulnerable(true);
         husk.setPersistenceRequired();
@@ -255,11 +258,12 @@ public final class TacticGameTests {
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Lava Ford", UUID.randomUUID());
         List<Citizen> citizens = new ArrayList<>();
         List<CitizenEntity> bodies = new ArrayList<>();
-        // Lava on the far side of the target: the half of its ring there is no ground to stand on.
+        // Lava on the far side of the target: the half of its ring there is no ground to stand on. The lava takes the place of
+        // the floor (the area is air from y 0 up, on a floor of stone at y -1), so that it stays in its pit and does not flow.
         Map<BlockPos, BlockState> floor = new HashMap<>();
         for (int x = 13; x <= 18; x++) {
             for (int z = 3; z <= 17; z++) {
-                BlockPos at = helper.absolutePos(new BlockPos(x, 0, z));
+                BlockPos at = helper.absolutePos(new BlockPos(x, -1, z));
                 floor.put(at, level.getBlockState(at));
                 level.setBlockAndUpdate(at, Blocks.LAVA.defaultBlockState());
             }
@@ -270,6 +274,34 @@ public final class TacticGameTests {
         }
         squad(server, kingdom, citizens);
         Mob target = dummy(helper, 11, 10);
+        // What the first soldier to touch the lava did in the ticks before, for the message of a failure.
+        BlockPos origin = helper.absolutePos(BlockPos.ZERO);
+        Map<CitizenEntity, java.util.ArrayDeque<String>> trail = new HashMap<>();
+        String[] entered = {null};
+        int[] tick = {0};
+        Runnable[] watch = new Runnable[1];
+        watch[0] = () -> {
+            tick[0]++;
+            for (CitizenEntity body : bodies) {
+                java.util.ArrayDeque<String> steps = trail.computeIfAbsent(body, key -> new java.util.ArrayDeque<>());
+                Duty duty = SquadTactics.duty(body);
+                steps.add(String.format(java.util.Locale.ROOT, "%d:%.1f,%.1f,%.1f %s%s%s", tick[0], body.getX() - origin.getX(), body.getY() - origin.getY(),
+                        body.getZ() - origin.getZ(), duty == null ? "-" : duty.role(), duty == null || duty.stand() == null ? ""
+                                : String.format(java.util.Locale.ROOT, " stand %.1f,%.1f,%.1f", duty.stand().x() - origin.getX(),
+                                duty.stand().y() - origin.getY(), duty.stand().z() - origin.getZ()), body.getNavigation().isDone() ? "" : " path"));
+                if (steps.size() > 6) {
+                    steps.poll();
+                }
+                if (entered[0] == null && (body.isInLava() || body.isOnFire())) {
+                    entered[0] = String.join(" | ", steps);
+                }
+            }
+            if (tick[0] < SETTLE - 2) {
+                // A new runnable every time: the helper keeps them by the runnable, and one put again while it runs is lost.
+                helper.runAfterDelay(1, () -> watch[0].run());
+            }
+        };
+        helper.runAfterDelay(1, () -> watch[0].run());
         helper.runAfterDelay(SETTLE, () -> {
             try {
                 for (CitizenEntity body : bodies) {
@@ -277,7 +309,8 @@ public final class TacticGameTests {
                             + helper.relativePos(body.blockPosition()).toShortString() + (body.isAlive() ? "" : " dead") + (body.isInLava() ? " in lava" : "")
                             + (body.isOnFire() ? " on fire" : "") + ", role " + role(body) + ", target at "
                             + helper.relativePos(target.blockPosition()).toShortString() + ", squad at "
-                            + bodies.stream().map(other -> helper.relativePos(other.blockPosition()).toShortString()).toList());
+                            + bodies.stream().map(other -> helper.relativePos(other.blockPosition()).toShortString()).toList()
+                            + "; the first in: " + entered[0]);
                     BlockPos under = body.blockPosition().below();
                     helper.assertTrue(!level.getBlockState(under).is(Blocks.LAVA) && !level.getBlockState(body.blockPosition()).is(Blocks.LAVA),
                             "A soldier stands over lava at " + body.blockPosition().toShortString());
