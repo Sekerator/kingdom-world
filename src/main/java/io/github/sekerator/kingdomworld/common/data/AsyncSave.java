@@ -134,6 +134,21 @@ public final class AsyncSave {
 
     private static void onServerStopped(ServerStoppedEvent event) {
         await();
+        forget();
+    }
+
+    /**
+     * Lets go of the data of a server that stopped once its files are written: a single player game opens another world in the
+     * same game, and the data of the one before must not stay in memory. What could not be written by then is not written later.
+     */
+    public static void forget() {
+        int failed = FAILED.size();
+        if (failed > 0) {
+            LOGGER.error("{} file(s) of KingdomWorld could not be written before the server stopped: {}", failed, FAILED);
+        }
+        SAVED.clear();
+        FAILED.clear();
+        THREAD_NANOS.clear();
     }
 
     /**
