@@ -93,6 +93,17 @@ public final class LandPlanning {
     private static Job world;
     private static boolean warned;
 
+    /**
+     * The time the collector of garbage took so far, in nanoseconds: a tick of the plan it fell into is counted without it too.
+     */
+    static long pauseNanos() {
+        long millis = 0;
+        for (java.lang.management.GarbageCollectorMXBean bean : java.lang.management.ManagementFactory.getGarbageCollectorMXBeans()) {
+            millis += Math.max(0, bean.getCollectionTime());
+        }
+        return millis * 1_000_000L;
+    }
+
     private LandPlanning() {
     }
 
@@ -437,7 +448,7 @@ public final class LandPlanning {
             }
             looksThisTick = 0;
             tickStart = System.nanoTime();
-            progress.tick(this, System::nanoTime, budgetNanos, System.currentTimeMillis());
+            progress.tick(this, System::nanoTime, LandPlanning::pauseNanos, budgetNanos, System.currentTimeMillis());
             dirty.run();
             if (progress.done()) {
                 finish();
@@ -866,9 +877,10 @@ public final class LandPlanning {
                 // A place a tick: the founding of each goes on in the work of the kingdoms of the world.
                 Entry entry = entries.get(cursor);
                 if (entry.site < 0 || npc.site(entry.site).isEmpty()) {
+                    // A place planned at the throne before a restart is taken again; one removed or left alone is not.
                     NpcSite site = null;
                     for (NpcSite existing : npc.sites()) {
-                        if (existing.x() == entry.x && existing.z() == entry.z) {
+                        if (existing.x() == entry.x && existing.z() == entry.z && live(existing)) {
                             site = existing;
                         }
                     }
@@ -891,10 +903,7 @@ public final class LandPlanning {
                 return false;
             }
             Optional<UUID> owner = site.flatMap(NpcSite::kingdomId);
-            boolean stands = site.isPresent() && switch (site.get().status()) {
-                case FOUNDED, SPAWNING, SPAWNED -> true;
-                default -> false;
-            };
+            boolean stands = site.isPresent() && live(site.get());
             if (stands && owner.isPresent() && territory != null) {
                 long day = Math.floorDiv(KingdomWorldApi.gameTime(server), CitizenNeeds.TICKS_PER_DAY);
                 int given = 0;
@@ -915,6 +924,13 @@ public final class LandPlanning {
             }
             progress.moveTo(cursor + 1);
             return at + 1 >= count;
+        }
+
+        private static boolean live(NpcSite site) {
+            return switch (site.status()) {
+                case PLANNED, FOUNDED, SPAWNING, SPAWNED -> true;
+                default -> false;
+            };
         }
 
         // ------------------------------------------------------------ the worker thread
@@ -1034,8 +1050,9 @@ public final class LandPlanning {
                     .append(summary.getInt("wildProvinces")).append(" wild; ")
                     .append(String.format(Locale.ROOT, "%.1f%%", 100 * summary.getDouble("neutralShare"))).append(" of the land neutral; ")
                     .append(summary.getInt("tiles")).append(" tiles; ")
-                    .append(String.format(Locale.ROOT, "%.1f s in all, the worst tick %.2f ms (%s); stages:", progress.totalWallMillis() / 1000.0,
-                            progress.worstTickNanos() / 1e6, progress.worstStage().key()));
+                    .append(String.format(Locale.ROOT, "%.1f s in all, the worst tick %.2f ms (%s), %.2f ms (%s) without the garbage collector;"
+                                    + " stages:", progress.totalWallMillis() / 1000.0, progress.worstTickNanos() / 1e6, progress.worstStage().key(),
+                            progress.worstWorkNanos() / 1e6, progress.worstWorkStage().key()));
             for (Stage stage : Stage.values()) {
                 if (stage == Stage.DONE || progress.ticks(stage) == 0) {
                     continue;

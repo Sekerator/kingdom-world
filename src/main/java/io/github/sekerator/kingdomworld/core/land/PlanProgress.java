@@ -74,6 +74,8 @@ public final class PlanProgress {
     private final int[] ticks = new int[STAGES];
     private long worstTickNanos;
     private Stage worstStage = Stage.SURVEY;
+    private long worstWorkNanos;
+    private Stage worstWorkStage = Stage.SURVEY;
     private int[] thrones = new int[0];
     private long lastTickMillis = -1;
 
@@ -157,6 +159,22 @@ public final class PlanProgress {
             worstTickNanos = nanos;
             worstStage = stage;
         }
+        if (nanos > worstWorkNanos) {
+            worstWorkNanos = nanos;
+            worstWorkStage = stage;
+        }
+    }
+
+    /**
+     * The worst tick of the plan without the pauses of the whole process within it (the collector of garbage stops every
+     * thread), and its stage: what the plan itself took.
+     */
+    public long worstWorkNanos() {
+        return worstWorkNanos;
+    }
+
+    public Stage worstWorkStage() {
+        return worstWorkStage;
     }
 
     public long workNanos(Stage stage) {
@@ -192,10 +210,10 @@ public final class PlanProgress {
 
     /**
      * The numbers of the progress to keep: the stage, the place, the worst tick and its stage, then for every stage its server
-     * time, the time it lasted and its ticks.
+     * time, the time it lasted and its ticks, then the worst tick without the pauses of the process and its stage.
      */
     public long[] numbers() {
-        long[] numbers = new long[4 + 3 * STAGES];
+        long[] numbers = new long[6 + 3 * STAGES];
         numbers[0] = stage.ordinal();
         numbers[1] = cursor;
         numbers[2] = worstTickNanos;
@@ -205,6 +223,8 @@ public final class PlanProgress {
             numbers[5 + 3 * i] = wallMillis[i];
             numbers[6 + 3 * i] = ticks[i];
         }
+        numbers[4 + 3 * STAGES] = worstWorkNanos;
+        numbers[5 + 3 * STAGES] = worstWorkStage.ordinal();
         return numbers;
     }
 
@@ -224,6 +244,13 @@ public final class PlanProgress {
             progress.workNanos[i] = numbers[4 + 3 * i];
             progress.wallMillis[i] = numbers[5 + 3 * i];
             progress.ticks[i] = (int) numbers[6 + 3 * i];
+        }
+        if (numbers.length >= 6 + 3 * STAGES) {
+            progress.worstWorkNanos = numbers[4 + 3 * STAGES];
+            progress.worstWorkStage = Stage.byId((int) numbers[5 + 3 * STAGES]);
+        } else {
+            progress.worstWorkNanos = progress.worstTickNanos;
+            progress.worstWorkStage = progress.worstStage;
         }
         progress.thrones = thrones == null ? new int[0] : thrones.clone();
         return progress;
@@ -249,9 +276,20 @@ public final class PlanProgress {
      * @return whether the plan is made
      */
     public boolean tick(Work work, LongSupplier nanoClock, long budgetNanos, long nowMillis) {
+        return tick(work, nanoClock, () -> 0L, budgetNanos, nowMillis);
+    }
+
+    /**
+     * Runs the plan for one tick as {@link #tick(Work, LongSupplier, long, long)}, also counting the worst tick without the pauses
+     * of the whole process within it.
+     *
+     * @param pauseNanos the time the whole process was paused so far (the collector of garbage), in nanoseconds
+     */
+    public boolean tick(Work work, LongSupplier nanoClock, LongSupplier pauseNanos, long budgetNanos, long nowMillis) {
         if (done()) {
             return true;
         }
+        long paused = pauseNanos.getAsLong();
         long start = nanoClock.getAsLong();
         long deadline = start + budgetNanos;
         Stage longest = stage;
@@ -275,7 +313,16 @@ public final class PlanProgress {
             }
         }
         lasted(stage, nowMillis);
-        worst(nanoClock.getAsLong() - start, longest);
+        long took = nanoClock.getAsLong() - start;
+        if (took > worstTickNanos) {
+            worstTickNanos = took;
+            worstStage = longest;
+        }
+        long own = Math.max(0, took - Math.max(0, pauseNanos.getAsLong() - paused));
+        if (own > worstWorkNanos) {
+            worstWorkNanos = own;
+            worstWorkStage = longest;
+        }
         return done();
     }
 

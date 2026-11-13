@@ -219,9 +219,33 @@ class PlanProgressTest {
         assertEquals(50 + PlanProgress.MAX_PAUSE_MILLIS, read.wallMillis(Stage.THRONES), "a long pause counts as a second");
         assertEquals(3 * MS, read.worstTickNanos());
         assertEquals(Stage.THRONES, read.worstStage());
+        assertEquals(3 * MS, read.worstWorkNanos());
+        assertEquals(Stage.THRONES, read.worstWorkStage());
         // Numbers kept before a stage was added are read as far as they go.
         long[] shorter = java.util.Arrays.copyOf(progress.numbers(), 10);
         assertEquals(Stage.THRONES, PlanProgress.restore(shorter, null).stage());
+    }
+
+    @Test
+    void aPauseOfTheProcessIsCountedApart() {
+        long[] clock = {0};
+        long[] paused = {0};
+        PlanProgress progress = new PlanProgress();
+        PlanProgress.Work work = (stage, p, deadline) -> {
+            clock[0] += 2 * MS;
+            if (stage == Stage.SURVEY) {
+                // The collector stops the server for 30 ms in the middle of the survey.
+                clock[0] += 30 * MS;
+                paused[0] += 30 * MS;
+            }
+            return true;
+        };
+        progress.tick(work, () -> clock[0], () -> paused[0], 100 * MS, 0);
+        assertEquals(Stage.SURVEY, progress.worstStage());
+        assertTrue(progress.worstTickNanos() >= 32 * MS);
+        assertTrue(progress.worstWorkNanos() < progress.worstTickNanos() - 29 * MS, "the pause is not counted: " + progress.worstWorkNanos());
+        PlanProgress read = PlanProgress.restore(progress.numbers(), progress.thrones());
+        assertEquals(progress.worstWorkNanos(), read.worstWorkNanos());
     }
 
     @Test
