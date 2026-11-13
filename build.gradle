@@ -63,6 +63,8 @@ minecraft {
         gameTestServer {
             workingDirectory project.file('run-gametest')
             property 'forge.enabledGameTestNamespaces', mod_id
+            // No mob spawning and no weather in the world of the game tests, as in the test server of the game.
+            property 'kingdomworld.gameTestWorld', 'true'
         }
 
         data {

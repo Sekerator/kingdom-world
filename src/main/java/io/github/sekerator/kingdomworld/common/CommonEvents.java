@@ -72,6 +72,16 @@ public final class CommonEvents {
     }
 
     private static void onServerStarted(ServerStartedEvent event) {
+        if (Boolean.getBoolean("kingdomworld.gameTestWorld")) {
+            // The game tests run in an ordinary world kept by the properties of the server: as in the test server of the game,
+            // no monster comes by itself into the dark places of the tests deep under the land and no storm makes the day dark
+            // for the workers; the tests spawn what they need.
+            net.minecraft.server.level.ServerLevel level = event.getServer().overworld();
+            level.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOMOBSPAWNING).set(false, event.getServer());
+            level.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_WEATHER_CYCLE).set(false, event.getServer());
+            level.setWeatherParameters(1_000_000, 0, false, false);
+            LOGGER.info("KingdomWorld game tests: no mob spawning, no weather cycle, clear weather");
+        }
         KingdomWorldConfig.Server config = KingdomWorldConfig.SERVER;
         LOGGER.info("KingdomWorld server config: maxActiveNpcs={}, simulationIntervalTicks={}, afkTimeoutSeconds={}, combatTagSeconds={}",
                 config.maxActiveNpcs.get(), config.simulationIntervalTicks.get(),
