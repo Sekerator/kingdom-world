@@ -352,4 +352,20 @@ public final class LandPlanGameTests {
         helper.assertTrue(LandPlanning.describe(server).isEmpty(), "The world of the tests describes a plan of states");
         helper.succeed();
     }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_land_locked")
+    public static void aReadOnlyFileOfProvincesKeepsThePlanOfCapitalsWaiting(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        ProvinceSavedData provinces = ProvinceSavedData.get(server);
+        helper.assertTrue(!provinces.isReadOnly(), "The provinces of the world of the tests are read-only");
+        try {
+            // The plan the file keeps is not known: the plan of capitals must not begin, the plan of states waits instead.
+            provinces.setReadOnlyForCheck(true);
+            helper.assertTrue(LandPlanning.wanted(server, false), "A read-only file of provinces let the plan of capitals go on");
+        } finally {
+            provinces.setReadOnlyForCheck(false);
+        }
+        helper.assertTrue(!LandPlanning.wanted(server, false), "The world of the tests got the plan of states once the file was writable");
+        helper.succeed();
+    }
 }

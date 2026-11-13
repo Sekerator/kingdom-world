@@ -144,9 +144,16 @@ public final class LandPlanning {
         if (world != null && world.server == server) {
             return true;
         }
+        ProvinceSavedData provinces = ProvinceSavedData.get(server);
+        if (provinces.isReadOnly()) {
+            // The plan the file keeps may not have been read: the places of a world of states would look like a plan of capitals
+            // begun, and the plan of capitals would go on among the states. Neither plan goes on until the file is fixed or
+            // unlocked (the plan of states waits with a line in the log).
+            return true;
+        }
         NpcState state = NpcWork.state(server);
         boolean legacyBegun = !state.sites().isEmpty() || state.planCursor() > 0 || state.planPass() > 0;
-        return wanted(ProvinceSavedData.get(server).hasPlan(), statesConfigured, legacyBegun);
+        return wanted(provinces.hasPlan(), statesConfigured, legacyBegun);
     }
 
     /**
@@ -179,7 +186,8 @@ public final class LandPlanning {
         if (data.isReadOnly() || survey.isReadOnly()) {
             if (!warned) {
                 warned = true;
-                LOGGER.warn("The plan of the states of the world waits: the file of the provinces or of the survey is read-only");
+                LOGGER.warn("The plan of the kingdoms of the world waits: the file of the provinces or of the survey is read-only (fix it "
+                        + "or run /kingdomworld admin land unlock)");
             }
             return null;
         }
