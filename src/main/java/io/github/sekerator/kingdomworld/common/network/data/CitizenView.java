@@ -45,7 +45,7 @@ public record CitizenView(UUID kingdomId, boolean canManage, int population, int
      * @param data whether it is not raised in the world yet
      */
     public record SettlementRow(String latin, String cyrillic, io.github.sekerator.kingdomworld.core.land.Tier tier, int population, int housing,
-                                int food, int guards, int militia, boolean data) {
+                                int food, int guards, int militia, boolean data, int named) {
         public SettlementRow {
             Objects.requireNonNull(latin, "latin");
             Objects.requireNonNull(cyrillic, "cyrillic");
@@ -62,12 +62,13 @@ public record CitizenView(UUID kingdomId, boolean canManage, int population, int
             buf.writeVarInt(guards);
             buf.writeVarInt(militia);
             buf.writeBoolean(data);
+            buf.writeVarInt(named);
         }
 
         static SettlementRow decode(FriendlyByteBuf buf) {
             return new SettlementRow(buf.readUtf(MAX_SETTLEMENT_NAME), buf.readUtf(MAX_SETTLEMENT_NAME),
                     KingdomView.readEnum(buf, io.github.sekerator.kingdomworld.core.land.Tier.class), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(),
-                    buf.readVarInt(), buf.readVarInt(), buf.readBoolean());
+                    buf.readVarInt(), buf.readVarInt(), buf.readBoolean(), buf.readVarInt());
         }
     }
 

@@ -412,13 +412,18 @@ public final class RoadViews {
      * @param data whether it lives as data, not raised in the world yet: the maps draw it dashed
      */
     public record MapSettlement(io.github.sekerator.kingdomworld.core.land.Tier tier, int population, int guards, int militia, int province,
-                                boolean data) {
+                                boolean data, int named) {
         public MapSettlement {
             java.util.Objects.requireNonNull(tier, "tier");
             if (population < 0 || population > NpcKingdomInfo.MAX_COUNT || guards < 0 || guards > NpcKingdomInfo.MAX_COUNT || militia < 0
-                    || militia > NpcKingdomInfo.MAX_COUNT || province < 0) {
+                    || militia > NpcKingdomInfo.MAX_COUNT || province < 0 || named < 0 || named > NpcKingdomInfo.MAX_COUNT) {
                 throw new IllegalArgumentException("Settlement out of range");
             }
+        }
+
+        public MapSettlement(io.github.sekerator.kingdomworld.core.land.Tier tier, int population, int guards, int militia, int province,
+                             boolean data) {
+            this(tier, population, guards, militia, province, data, 0);
         }
 
         void encode(FriendlyByteBuf buf) {
@@ -428,11 +433,12 @@ public final class RoadViews {
             buf.writeVarInt(militia);
             buf.writeVarInt(province);
             buf.writeBoolean(data);
+            buf.writeVarInt(named);
         }
 
         static MapSettlement decode(FriendlyByteBuf buf) {
             return new MapSettlement(readEnum(buf, io.github.sekerator.kingdomworld.core.land.Tier.class), buf.readVarInt(), buf.readVarInt(),
-                    buf.readVarInt(), buf.readVarInt(), buf.readBoolean());
+                    buf.readVarInt(), buf.readVarInt(), buf.readBoolean(), buf.readVarInt());
         }
     }
 

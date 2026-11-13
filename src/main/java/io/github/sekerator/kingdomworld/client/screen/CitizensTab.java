@@ -411,8 +411,9 @@ final class CitizensTab {
             Component tier = Component.translatable("kingdomworld.settlement.tier." + settlement.tier().name().toLowerCase(Locale.ROOT));
             screen.label(graphics, settlement.data() ? Component.translatable(KEY + "settlement.planned", tier) : tier, professionX + 4, y,
                     0xFFD0D0D0, stateX - 2);
-            screen.label(graphics, Component.translatable(KEY + "settlement.numbers", settlement.population(), settlement.housing(),
-                    settlement.food(), settlement.guards() + settlement.militia()), stateX, y, settlement.food() == 0 ? 0xFFFF8080 : 0xFFA0E0A0, right);
+            screen.label(graphics, Component.translatable(KEY + "settlement.numbers", settlement.population(), settlement.named(),
+                    settlement.housing(), settlement.food(), settlement.guards() + settlement.militia()), stateX, y,
+                    settlement.food() == 0 ? 0xFFFF8080 : 0xFFA0E0A0, right);
         }
         for (int i = 0; i < rows && scroll + i < entries.size(); i++) {
             CitizenView.Entry entry = entries.get(scroll + i);

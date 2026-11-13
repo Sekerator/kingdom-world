@@ -1982,7 +1982,8 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         List<Component> lines = new java.util.ArrayList<>();
         Component tier = Component.translatable("kingdomworld.settlement.tier." + settlement.tier().name().toLowerCase(java.util.Locale.ROOT));
         lines.add(settlement.data() ? Component.translatable("kingdomworld.screen.map.settlement.planned", tier) : tier);
-        lines.add(Component.translatable("kingdomworld.screen.map.settlement.people", settlement.population()));
+        lines.add(settlement.data() ? Component.translatable("kingdomworld.screen.map.settlement.people", settlement.population())
+                : Component.translatable("kingdomworld.screen.map.settlement.people_named", settlement.population(), settlement.named()));
         if (settlement.guards() > 0 || settlement.militia() > 0) {
             lines.add(Component.translatable("kingdomworld.screen.map.settlement.guard", settlement.guards(), settlement.militia()));
         }

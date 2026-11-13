@@ -149,6 +149,11 @@ public final class CitizenLife {
         }
         CitizenBodies.force(citizenId, false);
         io.github.sekerator.kingdomworld.common.production.Production.release(citizenId);
+        if (citizen.get().settlement() != 0) {
+            // A death is a citizen less in the numbers of its settlement.
+            io.github.sekerator.kingdomworld.common.npc.NpcWork.state(server).settlement(citizen.get().settlement())
+                    .ifPresent(settlement -> settlement.setPopulation(settlement.population() - 1));
+        }
         CitizenEntity body = CitizenBodies.body(citizenId);
         if (body != null && body.isAlive()) {
             body.storeGear(io.github.sekerator.kingdomworld.common.data.KingdomSavedData.get(server).gear());

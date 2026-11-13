@@ -101,6 +101,7 @@ public final class CitizenActions {
                 io.github.sekerator.kingdomworld.common.npc.NpcWork.state(server).settlementsOf(kingdomId));
         own.sort(java.util.Comparator.comparingInt((io.github.sekerator.kingdomworld.core.npc.Settlement settlement) -> settlement.tier().ordinal())
                 .thenComparing(settlement -> -settlement.population()));
+        java.util.Map<Integer, Integer> named = io.github.sekerator.kingdomworld.common.npc.SettlementResidents.named(server, kingdomId);
         for (io.github.sekerator.kingdomworld.core.npc.Settlement settlement : own) {
             if (settlement.tier() == io.github.sekerator.kingdomworld.core.land.Tier.CAPITAL
                     || settlement.status() == io.github.sekerator.kingdomworld.core.npc.Settlement.Status.RUINED) {
@@ -112,7 +113,8 @@ public final class CitizenActions {
             int people = Math.max(1, settlement.population());
             rows.add(new CitizenView.SettlementRow(settlement.name().latin(), settlement.name().cyrillic(), settlement.tier(),
                     settlement.population(), settlement.housing(), Math.min(CitizenView.MAX_FOOD_DAYS, settlement.food() / people),
-                    settlement.guards(), settlement.militia(), settlement.status() != io.github.sekerator.kingdomworld.core.npc.Settlement.Status.STANDING));
+                    settlement.guards(), settlement.militia(), settlement.status() != io.github.sekerator.kingdomworld.core.npc.Settlement.Status.STANDING,
+                    named.getOrDefault(settlement.id(), 0)));
         }
         return rows;
     }

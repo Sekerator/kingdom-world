@@ -433,17 +433,44 @@ public final class CitizenSimulation {
             return;
         }
         CitizenRegistry registry = state.citizens().registry();
+        if (registry.size() >= io.github.sekerator.kingdomworld.common.npc.SettlementSettings.maxNamedCitizens()) {
+            // The world holds as many named citizens as it may: newcomers wait.
+            return;
+        }
         List<Citizen> people = registry.citizensOf(kingdomId);
-        int[] freeBeds = io.github.sekerator.kingdomworld.common.construction.BuildingEffects.freeBeds(server, kingdomId);
+        int[] freeBeds = capitalBeds(server, kingdomId);
         long last = registry.lastArrival(kingdomId);
         long since = last == CitizenRegistry.NEVER ? Long.MAX_VALUE : now - last;
-        CitizenNeeds.GrowthCheck check = CitizenNeeds.checkGrowth(people.size() - royalArmy(server, kingdomId), people.size(),
+        CitizenNeeds.GrowthCheck check = CitizenNeeds.checkGrowth(capitalPeople(people) - royalArmy(server, kingdomId), people.size(),
                 freeBeds[0], freeBeds[1],
                 KingdomStorage.totalNutrition(server, kingdomId), since, averageMood(people), rules);
         if (check == CitizenNeeds.GrowthCheck.READY) {
             Capital capital = territory.get().capital();
             CitizenLife.arrive(server, kingdomId, new WorldPos(capital.dimension(), capital.x(), capital.y(), capital.z()), true);
         }
+    }
+
+    /**
+     * The citizens of a kingdom that count against the most it may have: those of its capital; the people of the settlements of
+     * a state are bounded by their beds.
+     */
+    private static int capitalPeople(List<Citizen> people) {
+        int count = 0;
+        for (Citizen citizen : people) {
+            if (citizen.settlement() == 0) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * The free beds a newcomer may take: those of the settlements of a state wait for the citizens of their slots.
+     */
+    private static int[] capitalBeds(MinecraftServer server, UUID kingdomId) {
+        int[] free = io.github.sekerator.kingdomworld.common.construction.BuildingEffects.freeBeds(server, kingdomId);
+        int kept = io.github.sekerator.kingdomworld.common.npc.SettlementResidents.bedsKept(server, kingdomId);
+        return kept == 0 ? free : new int[]{Math.max(0, free[0] - kept), free.length > 1 ? Math.max(0, free[1] - kept) : 0};
     }
 
     /**
@@ -479,10 +506,10 @@ public final class CitizenSimulation {
         KingdomWorldState state = KingdomWorldApi.state(server);
         CitizenRegistry registry = state.citizens().registry();
         List<Citizen> people = registry.citizensOf(kingdomId);
-        int[] freeBeds = io.github.sekerator.kingdomworld.common.construction.BuildingEffects.freeBeds(server, kingdomId);
+        int[] freeBeds = capitalBeds(server, kingdomId);
         long last = registry.lastArrival(kingdomId);
         long since = last == CitizenRegistry.NEVER ? Long.MAX_VALUE : KingdomWorldApi.gameTime(server) - last;
-        return CitizenNeeds.checkGrowth(people.size() - royalArmy(server, kingdomId), people.size(), freeBeds[0], freeBeds[1],
+        return CitizenNeeds.checkGrowth(capitalPeople(people) - royalArmy(server, kingdomId), people.size(), freeBeds[0], freeBeds[1],
                 KingdomStorage.totalNutrition(server, kingdomId), since,
                 averageMood(people), CitizenSettings.rules());
     }

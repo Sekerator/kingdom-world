@@ -268,9 +268,12 @@ public final class Settlement {
         changed();
     }
 
+    /**
+     * When a player was last near. It changes every second a player is near, so it tells nobody: it is saved with the next
+     * change of the settlements.
+     */
     public void setLastPlayerTick(long value) {
         lastPlayerTick = value;
-        changed();
     }
 
     public void setFolded(long[] value) {

@@ -337,6 +337,7 @@ public final class RoadSync {
         }
         String dimension = io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(server.overworld());
         Map<UUID, Integer> colors = new HashMap<>();
+        Map<UUID, Map<Integer, Integer>> named = new HashMap<>();
         for (io.github.sekerator.kingdomworld.core.npc.Settlement settlement : npc.settlements()) {
             if (!shown(server, settlement)) {
                 continue;
@@ -352,7 +353,10 @@ public final class RoadSync {
             long id = settlementId(settlement.id());
             cityList.add(new RoadViews.MapCity(id, settlement.kingdomId(), settlement.name().latin(), dimension, settlement.x(), settlement.z(), color,
                     level, null, new RoadViews.MapSettlement(settlement.tier(), Math.min(most, settlement.population()), Math.min(most, settlement.guards()),
-                    Math.min(most, settlement.militia()), Math.max(0, settlement.province()), data)));
+                    Math.min(most, settlement.militia()), Math.max(0, settlement.province()), data,
+                    Math.min(most, named.computeIfAbsent(settlement.kingdomId(),
+                            kingdom -> io.github.sekerator.kingdomworld.common.npc.SettlementResidents.named(server, kingdom))
+                            .getOrDefault(settlement.id(), 0)))));
             names.put(id, settlement.name());
         }
         settlementNames = Map.copyOf(names);
