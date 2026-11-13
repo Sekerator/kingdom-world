@@ -234,6 +234,13 @@ public final class StateGrowth {
             return;
         }
         ProvinceGrowth.Candidate candidate = at.candidates.get(at.index);
+        if (!map.exists(candidate.province()) || NpcWork.state(server).kingdom(at.kingdom).isEmpty()) {
+            // The province or the state went while the look lasted (a plan made anew, a state taken down): the look ends, and
+            // the state looks again when it is due.
+            LOGGER.info("The look of the state of the world {} at the province {} ends: one of them is gone", at.kingdom, candidate.province());
+            check = null;
+            return;
+        }
         ServerLevel level = server.overworld();
         if (at.regions == null) {
             at.regions = new LinkedHashMap<>();
