@@ -161,11 +161,18 @@ final class StylePicker {
     }
 
     /**
+     * Where the picker starts on the left: the arrow beside the picture, or the left edge of its column.
+     */
+    int left() {
+        return compact ? pictureX() - ARROW - 2 : x;
+    }
+
+    /**
      * The arrows that show the previous and the next style; {@code changed} runs after either.
      */
     List<Button> buttons(Runnable changed) {
         int rowY = compact ? y + (pictureHeight - ARROW) / 2 : y + pictureHeight + ROW_GAP;
-        int previousX = compact ? pictureX() - ARROW - 2 : x;
+        int previousX = left();
         int nextX = compact ? pictureX() + pictureWidth + 2 : x + width - ARROW;
         Button previous = Button.builder(Component.translatable("kingdomworld.screen.style.previous"), b -> {
             select(index - 1);

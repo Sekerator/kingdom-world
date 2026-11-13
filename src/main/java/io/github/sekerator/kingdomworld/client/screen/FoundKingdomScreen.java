@@ -19,7 +19,7 @@ import java.util.Optional;
  * Founding a kingdom on an empty throne: a name, checked with the same rules the server uses, a color and the architectural
  * style its buildings will have, the one the land of the throne suggests chosen at first. Colors and the style stand side by
  * side under the box of the name, the colors from its left edge and the picture of the style up to its right edge; on a
- * screen too narrow for that the picture of the style goes under the colors.
+ * screen too narrow for that the colors stand in one row and the style under them, with its arrows beside its picture.
  * The server checks everything again and answers with the throne screen or an error.
  */
 public class FoundKingdomScreen extends KingdomScreen implements ResultListener {
@@ -30,13 +30,19 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
     private static final int MIN_PANEL_WIDTH = 2 * MIN_COLUMN + 2 * INSET + PAD;
     /** Fits the smallest screen the game allows, 240 high. */
     private static final int PANEL_HEIGHT = 232;
+    /** The narrowest screen the game allows. */
+    private static final int NARROWEST_SCREEN = 320;
     private static final int SWATCH = 14;
     private static final int SWATCH_GAP = 2;
     private static final int STATUS_LINES = 3;
     private static final int COLUMNS_TOP = 60;
     private static final int CHOICE_TOP = 72;
-    /** Where the picture of the style stands when it goes under the colors. */
-    private static final int NARROW_PICTURE_TOP = 104;
+    /**
+     * Where the label and the picture of the style stand when they go under the colors, which then take one row: the narrowest
+     * panel, {@link #MIN_PANEL_WIDTH} wide, holds all of them in a row.
+     */
+    private static final int NARROW_STYLE_TOP = CHOICE_TOP + SWATCH + 4;
+    private static final int NARROW_PICTURE_TOP = NARROW_STYLE_TOP + 11;
     private static final int PREVIEW_TOP = 160;
     private static final int STATUS_TOP = 172;
 
@@ -49,6 +55,8 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
     private int column;
     /** Whether the picture of the style stands under the colors instead of beside them. */
     private boolean narrow;
+    /** Set by the client self-check to lay the screen out as a language whose labels need more than half of it would. */
+    private boolean narrowForCheck;
     private EditBox nameBox;
     private Button foundButton;
     private String pendingName = "";
@@ -104,9 +112,18 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
                 KingdomNames.MIN_LENGTH, KingdomNames.MAX_LENGTH);
     }
 
-    private static int swatchRow() {
-        int perRow = KingdomColors.PALETTE.size() / 2;
+    /**
+     * The width of a row of {@code perRow} colors.
+     */
+    private static int swatchRow(int perRow) {
         return perRow * (SWATCH + SWATCH_GAP) - SWATCH_GAP;
+    }
+
+    /**
+     * The colors stand in two rows beside the style, or in one row above it.
+     */
+    private int perRow() {
+        return narrow ? KingdomColors.PALETTE.size() : KingdomColors.PALETTE.size() / 2;
     }
 
     @Override
@@ -118,13 +135,17 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
         for (NameProblem problem : NameProblem.values()) {
             needed = Math.max(needed, font.width(problemText(problem)));
         }
-        int columnNeeded = Math.max(Math.max(MIN_COLUMN, swatchRow()), StylePicker.rowWidth(font));
+        int columnNeeded = Math.max(Math.max(MIN_COLUMN, swatchRow(KingdomColors.PALETTE.size() / 2)), StylePicker.rowWidth(font));
         columnNeeded = Math.max(columnNeeded, font.width(Component.translatable("kingdomworld.screen.found.color")) + 2);
         columnNeeded = Math.max(columnNeeded, font.width(Component.translatable("kingdomworld.screen.found.style")) + 2);
         int twoColumns = 2 * columnNeeded + 2 * INSET + PAD;
         panelWidth = Math.min(Math.max(Math.max(MIN_PANEL_WIDTH, twoColumns), needed + 2 * INSET), width - 8);
+        if (narrowForCheck) {
+            // The panel a language whose two columns do not fit the narrowest screen gets there: as wide as that screen allows.
+            panelWidth = Math.min(Math.max(panelWidth, NARROWEST_SCREEN - 8), width - 8);
+        }
         column = (panelWidth - 2 * INSET - PAD) / 2;
-        narrow = column < columnNeeded;
+        narrow = narrowForCheck || column < columnNeeded;
 
         String previous = nameBox == null ? pendingName : nameBox.getValue();
         int left = left();
@@ -169,6 +190,14 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
      */
     public void showStyleForCheck(int index) {
         picker.select(index);
+    }
+
+    /**
+     * Lays the screen out with the style under the colors, as on a screen too narrow to hold them side by side; used by the
+     * client self-check, since in English and Russian every screen the game allows holds them side by side.
+     */
+    public void narrowForCheck() {
+        narrowForCheck = true;
     }
 
     private Optional<NameProblem> problem() {
@@ -222,17 +251,15 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
     }
 
     /**
-     * The colors start at the left edge of their column beside the style, or stand in the middle of the panel above it.
+     * The colors start at the left edge of their column beside the style, or stand in a row in the middle of the panel above it.
      */
     private int swatchX(int index) {
-        int perRow = KingdomColors.PALETTE.size() / 2;
-        int start = narrow ? colorsX() + (panelWidth - 2 * INSET - swatchRow()) / 2 : colorsX();
-        return start + (index % perRow) * (SWATCH + SWATCH_GAP);
+        int start = narrow ? colorsX() + (panelWidth - 2 * INSET - swatchRow(perRow())) / 2 : colorsX();
+        return start + (index % perRow()) * (SWATCH + SWATCH_GAP);
     }
 
     private int swatchY(int index) {
-        int perRow = KingdomColors.PALETTE.size() / 2;
-        return top() + CHOICE_TOP + (index / perRow) * (SWATCH + SWATCH_GAP);
+        return top() + CHOICE_TOP + (index / perRow()) * (SWATCH + SWATCH_GAP);
     }
 
     @Override
@@ -261,7 +288,10 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
         int colorsLabel = swatchX(0);
         label(graphics, Component.translatable("kingdomworld.screen.found.color"), colorsLabel, top + COLUMNS_TOP, 0xFFE0E0E0,
                 narrow ? right - INSET : colorsX() + column);
-        if (!narrow) {
+        if (narrow) {
+            label(graphics, Component.translatable("kingdomworld.screen.found.style"), picker.left(), top + NARROW_STYLE_TOP, 0xFFE0E0E0,
+                    right - INSET);
+        } else {
             label(graphics, Component.translatable("kingdomworld.screen.found.style"), picker.pictureX(), top + COLUMNS_TOP, 0xFFE0E0E0,
                     right - INSET);
         }

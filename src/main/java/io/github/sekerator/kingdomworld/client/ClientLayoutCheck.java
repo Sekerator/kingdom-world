@@ -371,6 +371,14 @@ final class ClientLayoutCheck {
     }
 
     /**
+     * The founding screen laid out with the style under the colors.
+     */
+    private static FoundKingdomScreen narrow(FoundKingdomScreen screen) {
+        screen.narrowForCheck();
+        return screen;
+    }
+
+    /**
      * The overview of a king with the choice of a new style open on {@code shown}.
      */
     private static ThroneScreen styleChoice(String shown, Component status) {
@@ -1115,6 +1123,12 @@ final class ClientLayoutCheck {
         cases.add(new Case("founding-style-terem", () -> founding("classic", "terem", "Abc!", Component.empty(), false)));
         cases.add(new Case("founding-style-mountain", () -> founding("mountain", "mountain", LONG_KINGDOM,
                 Component.translatable("kingdomworld.kingdom.error.read_only"), true)));
+        // The same with the style under the colors, as a screen too narrow for them side by side has it.
+        cases.add(new Case("founding-narrow-suggested", () -> narrow(founding("classic", "classic", LONG_KINGDOM,
+                Component.translatable("kingdomworld.screen.found.waiting"), false))));
+        cases.add(new Case("founding-narrow-style", () -> narrow(founding("classic", "terem", "Abc!", Component.empty(), false))));
+        cases.add(new Case("founding-narrow-error", () -> narrow(founding("mountain", "mountain", LONG_KINGDOM,
+                Component.translatable("kingdomworld.kingdom.error.read_only"), true))));
         cases.add(new Case("throne-king-overview", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "overview", longError)));
         cases.add(new Case("throne-king-overview-style", () -> styleChoice("mountain", Component.empty())));
         cases.add(new Case("throne-king-overview-style-error", () -> styleChoice(LONG_STYLE, longError)));
