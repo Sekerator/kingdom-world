@@ -31,6 +31,9 @@ public final class LandEvents {
     public static void register() {
         MinecraftForge.EVENT_BUS.addListener(LandEvents::onServerStarted);
         MinecraftForge.EVENT_BUS.addListener(LandEvents::onServerTick);
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.server.ServerStoppedEvent event) -> Wilderness.reset());
+        // Players act in the wilds of the kingdoms of the world as on land of nobody.
+        Wilderness.register();
     }
 
     private static void onServerStarted(ServerStartedEvent event) {

@@ -353,15 +353,20 @@ public final class ProtectionEvents {
         if (!territory.hasLand(dimension)) {
             return;
         }
-        event.getAffectedBlocks().removeIf(pos -> isClaimed(territory, dimension, pos)
+        net.minecraft.server.MinecraftServer server = level.getServer();
+        event.getAffectedBlocks().removeIf(pos -> isClaimed(server, territory, dimension, pos)
                 && !io.github.sekerator.kingdomworld.common.siege.SiegeEvents.explosionBreaks(level, event.getExplosion(), pos));
         event.getAffectedEntities().removeIf(entity -> (entity instanceof HangingEntity || entity instanceof ArmorStand)
-                && isClaimed(territory, dimension, entity.blockPosition()));
+                && isClaimed(server, territory, dimension, entity.blockPosition()));
     }
 
-    private static boolean isClaimed(TerritoryIndex territory, String dimension, BlockPos pos) {
-        UUID owner = territory.ownerOf(dimension, ChunkKey.of(pos.getX() >> 4, pos.getZ() >> 4));
-        return owner != null;
+    /**
+     * Whether a block is on protected land: land of a kingdom, but not in the wilds of a kingdom of the world.
+     */
+    private static boolean isClaimed(net.minecraft.server.MinecraftServer server, TerritoryIndex territory, String dimension, BlockPos pos) {
+        long chunk = ChunkKey.of(pos.getX() >> 4, pos.getZ() >> 4);
+        UUID owner = territory.ownerOf(dimension, chunk);
+        return owner != null && (server == null || !io.github.sekerator.kingdomworld.common.land.Wilderness.isWild(server, dimension, chunk));
     }
 
     /**

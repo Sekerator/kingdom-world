@@ -182,7 +182,12 @@ public final class ProtectionService {
      * every fire tick, so it stays cheap.
      */
     public static boolean protectsFromFire(Level level, BlockPos pos) {
-        return level instanceof ServerLevel && KingdomWorldConfig.SERVER.protectFromFire.get() && isClaimed(level, pos);
+        if (!(level instanceof ServerLevel serverLevel) || !KingdomWorldConfig.SERVER.protectFromFire.get() || !isClaimed(level, pos)) {
+            return false;
+        }
+        // Fire burns freely in the wilds of a kingdom of the world, as on land of nobody.
+        return !io.github.sekerator.kingdomworld.common.land.Wilderness.isWild(serverLevel.getServer(), Dimensions.id(level),
+                io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(pos.getX() >> 4, pos.getZ() >> 4));
     }
 
     /**

@@ -183,6 +183,8 @@ public final class KingdomWorldConfig {
         public final Nobility nobility;
         /** How squads of soldiers, guards, adventurers and robbers fight near players. */
         public final Tactics tactics;
+        /** The land of the states of the world: their wilds and the sale of their provinces. */
+        public final Land land;
         /** The guide book given to new players. */
         public final ForgeConfigSpec.BooleanValue giveGuideOnFirstJoin;
 
@@ -503,6 +505,7 @@ public final class KingdomWorldConfig {
             siege = new Siege(builder);
             nobility = new Nobility(builder);
             tactics = new Tactics(builder);
+            land = new Land(builder);
 
             builder.comment("The guide book: chapters on founding a kingdom and on everything after it.").push("guide");
             giveGuideOnFirstJoin = builder.comment("Whether every player gets the guide book once, the first time they join the world.",
@@ -1143,6 +1146,21 @@ public final class KingdomWorldConfig {
                 return null;
             }
             return ticks;
+        }
+    }
+
+    /**
+     * The land of the states of the world.
+     */
+    public static final class Land {
+        public final ForgeConfigSpec.BooleanValue wildernessOpen;
+
+        Land(ForgeConfigSpec.Builder builder) {
+            builder.comment("The land of the states of the world: their wilds and the sale of their provinces.").push("land");
+            wildernessOpen = builder.comment("Whether the wilds of a kingdom of the world, the land of its provinces where nobody lives",
+                            "(no claim, building, wall or road), are as free to players as land of nobody; the law holds where it lives.")
+                    .define("wildernessOpen", true);
+            builder.pop();
         }
     }
 
