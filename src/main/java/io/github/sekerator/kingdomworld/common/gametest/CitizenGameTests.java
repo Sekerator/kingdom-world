@@ -85,6 +85,9 @@ public final class CitizenGameTests {
             }
         }
         stale.forEach(id -> KingdomWorldApi.dissolveKingdom(server, id));
+        // The bodies of the kingdom walk beyond the chunks the game holds for the structure of the test: those around the
+        // throne are held until the kingdom finishes.
+        TestChunks.hold(level, throne.offset(-HELD, 0, -HELD), throne.offset(HELD, 0, HELD));
         level.setBlockAndUpdate(throne, ModRegistries.THRONE.get().defaultBlockState());
         CreateKingdomResult result = KingdomWorldApi.foundKingdom(level, throne, name, 0x8E44AD, king);
         if (result instanceof CreateKingdomResult.Created created) {
@@ -142,7 +145,11 @@ public final class CitizenGameTests {
         }
         KingdomWorldApi.dissolveKingdom(helper.getLevel().getServer(), kingdom.id());
         CitizenBodies.update(helper.getLevel().getServer());
+        TestChunks.release(helper.getLevel(), helper.absolutePos(new BlockPos(2, 0, 2)).offset(-HELD, 0, -HELD));
     }
+
+    /** Blocks around the throne of a kingdom of a test whose chunks are held while it lives. */
+    private static final int HELD = 17;
 
     // ---------------------------------------------------------------- bodies
 

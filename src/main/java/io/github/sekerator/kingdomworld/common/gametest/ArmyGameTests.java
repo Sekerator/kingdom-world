@@ -203,7 +203,11 @@ public final class ArmyGameTests {
         Husk zombie = helper.spawn(EntityType.HUSK, new BlockPos(4, 0, 5));
         zombie.setNoAi(true);
         helper.succeedWhen(() -> {
-            helper.assertTrue(!zombie.isAlive(), "The zombie is still alive");
+            helper.assertTrue(!zombie.isAlive(), "The zombie is still alive at " + GatheringGameTests.local(helper, zombie.blockPosition()).toShortString()
+                    + " with " + zombie.getHealth() + " health; the soldier " + (body.isAlive() ? "at " + GatheringGameTests.local(helper,
+                    body.blockPosition()).toShortString() + " with " + body.getHealth() + " health, target " + body.getTarget() + ", holding "
+                    + body.getMainHandItem() + ", goals " + body.goalSelector.getRunningGoals().map(goal -> goal.getGoal().getClass().getSimpleName())
+                    .toList() + ", ticking " + helper.getLevel().isPositionEntityTicking(body.blockPosition()) : "dead of " + body.getLastDamageSource()));
             // A failure, not a crash of the server with every test after it, when the soldier is gone (dead in something left
             // on its place).
             Soldier record = ArmyWork.state(server).soldier(citizen.id()).orElse(null);
