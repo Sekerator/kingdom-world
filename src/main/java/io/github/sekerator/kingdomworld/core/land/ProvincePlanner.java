@@ -93,23 +93,46 @@ public final class ProvincePlanner {
         }
 
         /**
+         * Whether a capital may stand on a cell the server did not look at: land of the state the world never generated and no
+         * kingdom holds, so that a throne nobody judged in the world does not come down on what players built.
+         */
+        private boolean throneFree(int cell, int s) {
+            return throneFits(cell, s) && !raster.generated(cell) && !raster.player(cell);
+        }
+
+        /**
          * The throne of a state the server chose none for: its first candidate a capital may stand on, else its seed if one
-         * may, else the cell of its land nearest the seed a capital may stand on, else its seed.
+         * may, else the cell of its land nearest the seed a capital may stand on, all on land never generated; if the players
+         * left no such land, the nearest land a capital may stand on (the founding in the world gives the place up where players
+         * live), else its seed.
          */
         private int fallbackThrone(PlannedState state) {
             int s = state.index();
             for (int candidate : state.throneCandidates()) {
-                if (throneFits(candidate, s)) {
+                if (throneFree(candidate, s)) {
                     return candidate;
                 }
             }
-            if (throneFits(state.seedCell(), s)) {
+            if (throneFree(state.seedCell(), s)) {
                 return state.seedCell();
             }
-            int best = state.seedCell();
+            int free = nearestThrone(state, true);
+            if (free >= 0) {
+                return free;
+            }
+            int any = nearestThrone(state, false);
+            return any >= 0 ? any : state.seedCell();
+        }
+
+        /**
+         * The cell of the land of a state nearest its seed a capital may stand on, never generated if asked; -1 for none.
+         */
+        private int nearestThrone(PlannedState state, boolean neverGenerated) {
+            int s = state.index();
+            int best = -1;
             double bestDistance = Double.MAX_VALUE;
             for (int cell = 0; cell < cells; cell++) {
-                if (throneFits(cell, s)) {
+                if (neverGenerated ? throneFree(cell, s) : throneFits(cell, s)) {
                     double distance = StrictMath.hypot(raster.cellX(cell) - raster.cellX(state.seedCell()),
                             raster.cellZ(cell) - raster.cellZ(state.seedCell()));
                     if (distance < bestDistance) {

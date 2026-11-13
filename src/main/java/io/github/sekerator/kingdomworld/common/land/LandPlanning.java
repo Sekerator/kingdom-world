@@ -784,8 +784,8 @@ public final class LandPlanning {
                 int next = valid(states, cursor);
                 if (next != cursor) {
                     if (next >= (s + 1) * perState) {
-                        LOGGER.warn("No throne candidate of the {} state {} suits a capital on any pass: its first one is taken",
-                                states.state(s).level().id(), s);
+                        LOGGER.warn("No throne candidate of the {} state {} suits a capital on any pass: the provinces take the first "
+                                + "land of the state never generated a capital may stand on", states.state(s).level().id(), s);
                     }
                     cursor = next;
                     continue;

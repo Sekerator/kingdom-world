@@ -145,6 +145,27 @@ class ProvincePlannerTest {
     }
 
     @Test
+    void aThroneNobodyJudgedDoesNotComeDownOnGeneratedLand() {
+        // The land around the seed was generated (players went there): the state has no candidate for a throne, and the one the
+        // provinces take must stand on land never generated, past the marked cells.
+        SurveyRaster.Builder builder = SyntheticLand.fill(SyntheticLand.land(30, 12), 15, 0, 15, 11, TerrainClass.RIVER);
+        for (int z = 0; z < 12; z++) {
+            for (int x = 0; x <= 13; x++) {
+                builder.mark(x, z, SurveyRaster.GENERATED);
+            }
+        }
+        SurveyRaster raster = builder.build();
+        StatePlan states = StatePlanner.plan(raster, SyntheticLand.openRules(0, 0, 1, 16, 16, 400 * 16), SEED,
+                new int[]{raster.index(5, 6)});
+        assertTrue(states.state(0).throneCandidates().isEmpty(), "the state has candidates: " + states.state(0).throneCandidates());
+        ProvincePlan plan = ProvincePlanner.plan(states, new ProvinceRules(180, 90, 360), SEED);
+        int throne = plan.throneCell(0);
+        assertFalse(raster.generated(throne), "the throne stands on generated land at " + raster.cellX(throne) + ", " + raster.cellZ(throne));
+        assertTrue(raster.terrain(throne).settles(), "the throne stands on land");
+        assertEquals(0, states.stateAt(throne), "the throne stands in its state");
+    }
+
+    @Test
     void aThroneOnWaterIsNotTaken() {
         ProvincePlan rivers = riverState();
         StatePlan states = rivers.states();
