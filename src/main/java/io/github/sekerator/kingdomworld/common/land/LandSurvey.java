@@ -37,10 +37,11 @@ public final class LandSurvey {
         int width = data.width();
         long reach = (long) data.radius() + SurveySavedData.MARGIN;
         int cell = data.nextCell();
-        // A cell is not begun when the last one would not end before the deadline: one look at the ground costs a lot.
+        // A cell is not begun when one costing half as much again as the last would not end before the deadline: one look at the
+        // ground costs a lot.
         long last = 0;
         long now = System.nanoTime();
-        while (cell < cells && now - deadlineNanos < 0 && now + last - deadlineNanos < 0) {
+        while (cell < cells && now - deadlineNanos < 0 && now + last + last / 2 - deadlineNanos < 0) {
             long start = now;
             int x = data.originX() + (cell % width) * SurveyRaster.CELL + SurveyRaster.CELL / 2;
             int z = data.originZ() + (cell / width) * SurveyRaster.CELL + SurveyRaster.CELL / 2;

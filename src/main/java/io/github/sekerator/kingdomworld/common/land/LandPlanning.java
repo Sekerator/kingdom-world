@@ -488,7 +488,9 @@ public final class LandPlanning {
             if (looksThisTick == 0 && now - tickStart < BUDGET_NANOS / 4) {
                 return true;
             }
-            return now + heights * heightNanos + biomes * biomeNanos - deadline < 0;
+            // Half as much again as they cost lately: one look at the noise may cost more than the ones before it.
+            long guess = heights * heightNanos + biomes * biomeNanos;
+            return now + guess + guess / 2 - deadline < 0;
         }
 
         /**
