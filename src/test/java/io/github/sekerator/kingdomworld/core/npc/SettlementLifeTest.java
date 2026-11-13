@@ -148,6 +148,49 @@ class SettlementLifeTest {
     }
 
     @Test
+    void aSettlementRisingGoesOnForItsNewKingdomFromWhatStands() {
+        UUID winner = UUID.fromString("00000000-0000-4000-8000-000000000002");
+        NpcState state = new NpcState();
+        Settlement town = state.addSettlement(KINGDOM, 7, 0, Tier.TOWN, 100, -200, 42, new NpcNames.Name("Ostbrook", "Остбрук"));
+        town.found(40, 30, 125);
+
+        town.setStage(SettlementStage.CHECK.id(), 0);
+        assertTrue(state.moveSettlement(town.id(), winner));
+        assertEquals(SettlementStage.CHECK.id(), town.stage(), "nothing of it stands yet: it rises for the winner as it would have");
+
+        town.setStage(SettlementStage.GROUND.id(), 300);
+        assertTrue(state.moveSettlement(town.id(), KINGDOM));
+        assertEquals(SettlementStage.GROUND.id(), town.stage());
+        assertEquals(0, town.step(), "its ground is levelled again for the layout of its new kingdom");
+
+        town.setStage(SettlementStage.BUILD.id(), 1);
+        assertTrue(state.moveSettlement(town.id(), winner));
+        assertEquals(SettlementStage.BUILD.id(), town.stage(), "only its town hall stands: the buildings of the winner go up");
+        assertEquals(1, town.step());
+
+        town.setStatus(Settlement.Status.RAISING);
+        town.setStage(SettlementStage.BUILD.id(), 5);
+        assertTrue(state.moveSettlement(town.id(), KINGDOM));
+        assertEquals(SettlementStage.PLACES.id(), town.stage(), "no second layout over the buildings that stand");
+        assertEquals(0, town.step());
+
+        town.setStatus(Settlement.Status.DATA);
+        town.setStage(SettlementStage.WORK.id(), 2);
+        assertTrue(state.moveSettlement(town.id(), winner));
+        assertEquals(SettlementStage.PLACES.id(), town.stage(), "nor fields of the winner over those sown");
+
+        town.setStage(SettlementStage.PEOPLE.id(), 6);
+        assertTrue(state.moveSettlement(town.id(), KINGDOM));
+        assertEquals(SettlementStage.PEOPLE.id(), town.stage(), "past its buildings it goes on where it was");
+        assertEquals(6, town.step());
+
+        town.setStatus(Settlement.Status.BLOCKED);
+        town.setStage(SettlementStage.BUILD.id(), 5);
+        assertTrue(state.moveSettlement(town.id(), winner));
+        assertEquals(SettlementStage.BUILD.id(), town.stage(), "one that never rises keeps what it has");
+    }
+
+    @Test
     void theGridFindsTheSettlementOfAChunkAndThoseNear() {
         NpcState state = new NpcState();
         Settlement city = state.addSettlement(KINGDOM, 1, 0, Tier.CITY, 0, 0, 1, new NpcNames.Name("A", "А"));

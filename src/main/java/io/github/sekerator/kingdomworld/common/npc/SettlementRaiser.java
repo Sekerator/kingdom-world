@@ -207,6 +207,11 @@ public final class SettlementRaiser {
             putAside(server, settlement);
             return;
         }
+        if (io.github.sekerator.kingdomworld.common.siege.SiegeWork.handingOver(server).test(settlement)) {
+            // Its land changes hands by the journal of conquests: it rises no more for the kingdom that loses it.
+            putAside(server, settlement);
+            return;
+        }
         if (job == null || job.id != settlement.id()) {
             if (job != null) {
                 release(level);
@@ -453,15 +458,22 @@ public final class SettlementRaiser {
     }
 
     /**
-     * Another place for a settlement a few chunks away whose loaded land suits it, or null.
+     * Another place for a settlement a few chunks away whose loaded land suits it, in the province of its own place, or null.
      */
     private static int[] moved(ServerLevel level, Settlement settlement) {
         int start = (int) Math.floorMod(settlement.seed(), 8L);
+        io.github.sekerator.kingdomworld.core.territory.TerritoryIndex territory = KingdomWorldApi.state(level.getServer()).territory();
+        String dimension = Dimensions.id(level);
+        int province = territory.provinceAt(dimension, ChunkKey.of(settlement.x() >> 4, settlement.z() >> 4));
         for (int distance = 1; distance <= 3; distance++) {
             for (int i = 0; i < 8; i++) {
                 double angle = (start + i) * Math.PI / 4;
                 int x = settlement.x() + (int) Math.round(Math.cos(angle) * distance * 16);
                 int z = settlement.z() + (int) Math.round(Math.sin(angle) * distance * 16);
+                if (province != 0 && territory.provinceAt(dimension, ChunkKey.of(x >> 4, z >> 4)) != province) {
+                    // The square of a settlement stays in its province: there the province is held in a war.
+                    continue;
+                }
                 Settlement there = new Settlement(settlement.id(), settlement.kingdomId(), settlement.province(), settlement.parent(), settlement.tier(),
                         x, z, settlement.seed(), settlement.name());
                 if (problem(level, there) == null) {

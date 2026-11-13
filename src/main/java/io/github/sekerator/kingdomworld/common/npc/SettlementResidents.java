@@ -83,15 +83,29 @@ public final class SettlementResidents {
             visits(server, now);
         }
         List<Settlement> standing = new ArrayList<>();
+        Settlement won = null;
+        java.util.function.Predicate<Settlement> handingOver = io.github.sekerator.kingdomworld.common.siege.SiegeWork.handingOver(server);
         for (Settlement settlement : npc.settlements()) {
-            if (settlement.status() == Settlement.Status.STANDING) {
-                standing.add(settlement);
+            if (settlement.status() != Settlement.Status.STANDING || handingOver.test(settlement)) {
+                // One the journal of conquests is handing over waits until it is the winner's.
+                continue;
             }
+            if (npc.kingdom(settlement.kingdomId()).isEmpty()) {
+                // A settlement a kingdom of players won: its citizens are theirs and never fold; those folded before come back.
+                if (won == null && foldedWithRoom(settlement)) {
+                    won = settlement;
+                }
+                continue;
+            }
+            standing.add(settlement);
+        }
+        long deadline = System.nanoTime() + NANOS;
+        if (won != null) {
+            unfold(server, won, UNFOLD_PER_TICK, deadline, true);
         }
         if (standing.isEmpty()) {
             return;
         }
-        long deadline = System.nanoTime() + NANOS;
         boolean over = KingdomWorldApi.state(server).citizens().registry().size() > SettlementSettings.maxNamedCitizens();
         if (over) {
             // Above the most of the world: the settlement nobody visited longest folds first.
@@ -108,8 +122,21 @@ public final class SettlementResidents {
         if (now - settlement.lastPlayerTick() > keep) {
             fold(server, settlement, FOLD_PER_TICK, deadline);
         } else {
-            unfold(server, settlement, UNFOLD_PER_TICK, deadline);
+            unfold(server, settlement, UNFOLD_PER_TICK, deadline, false);
         }
+    }
+
+    /**
+     * Whether a citizen folded into a settlement has a slot its numbers and beds still have room for, so that it can come back.
+     */
+    private static boolean foldedWithRoom(Settlement settlement) {
+        int target = Math.min(settlement.population(), settlement.housing());
+        for (long packed : settlement.folded()) {
+            if (FoldedCitizen.unpack(packed).slot() < target) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -220,9 +247,10 @@ public final class SettlementResidents {
      * Brings the citizens of a settlement back as themselves, a few at most: those folded and those its numbers have room for
      * in its beds but who are missing.
      *
+     * @param foldedOnly whether only those folded come back (a settlement a kingdom of players won)
      * @return how many came back
      */
-    static int unfold(MinecraftServer server, Settlement settlement, int most, long deadline) {
+    static int unfold(MinecraftServer server, Settlement settlement, int most, long deadline, boolean foldedOnly) {
         KingdomWorldState state = KingdomWorldApi.state(server);
         if (state.citizens().registry().size() >= SettlementSettings.maxNamedCitizens()) {
             return 0;
@@ -238,6 +266,9 @@ public final class SettlementResidents {
                 continue;
             }
             FoldedCitizen record = FoldedCitizen.of(settlement.folded(), slot);
+            if (record == null && foldedOnly) {
+                continue;
+            }
             long born = record == null ? Long.MIN_VALUE : now - (long) record.ageDays() * CitizenNeeds.TICKS_PER_DAY;
             Optional<Citizen> settler = CitizenLife.settle(server, settlement.kingdomId(), settlement.id(), settlement.seed(), slot, at, born);
             if (settler.isEmpty()) {
@@ -276,7 +307,7 @@ public final class SettlementResidents {
      * Brings every citizen of a settlement back at once, for operators and game tests.
      */
     public static int unfoldNow(MinecraftServer server, Settlement settlement) {
-        return unfold(server, settlement, Integer.MAX_VALUE, System.nanoTime() + Long.MAX_VALUE / 2);
+        return unfold(server, settlement, Integer.MAX_VALUE, System.nanoTime() + Long.MAX_VALUE / 2, false);
     }
 
     /**

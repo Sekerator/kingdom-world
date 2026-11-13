@@ -10,6 +10,7 @@ import io.github.sekerator.kingdomworld.common.diplomacy.WarWork;
 import io.github.sekerator.kingdomworld.common.land.ProvinceSavedData;
 import io.github.sekerator.kingdomworld.common.land.ProvinceTrade;
 import io.github.sekerator.kingdomworld.common.npc.NpcWork;
+import io.github.sekerator.kingdomworld.common.npc.SettlementRaiser;
 import io.github.sekerator.kingdomworld.common.road.CityWalls;
 import io.github.sekerator.kingdomworld.common.road.RoadWork;
 import io.github.sekerator.kingdomworld.core.citizen.Citizen;
@@ -708,9 +709,11 @@ final class SiegeConquests {
 
     /**
      * A settlement goes to the winner with its city and wall when it has one standing; the places citizens use in the loaded
-     * chunks of its square where such places are known are looked at again, so that they become the winner's.
+     * chunks of its square where such places are known are looked at again, so that they become the winner's. One rising goes
+     * as it stands: its raising for the loser is put aside first, and it goes on for the winner from what stands.
      */
     private static void handOver(MinecraftServer server, Conquest conquest, NpcState npc, Settlement settlement) {
+        SettlementRaiser.putAside(server, settlement);
         npc.moveSettlement(settlement.id(), conquest.winner());
         if (settlement.cityId() != 0) {
             RoadState roads = RoadWork.state(server);

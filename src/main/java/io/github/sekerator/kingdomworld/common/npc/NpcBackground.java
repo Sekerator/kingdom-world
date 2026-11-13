@@ -151,6 +151,9 @@ final class NpcBackground {
             return Optional.empty();
         }
         int reach = close ? 16 * 16 : SettlementSettings.backgroundBlocks();
+        // A settlement of a kingdom of players, or one the journal of conquests is handing over, is not raised.
+        java.util.function.Predicate<io.github.sekerator.kingdomworld.core.npc.Settlement> handingOver =
+                io.github.sekerator.kingdomworld.common.siege.SiegeWork.handingOver(server);
         io.github.sekerator.kingdomworld.core.npc.Settlement best = null;
         double bestDistance = Double.MAX_VALUE;
         for (ServerPlayer player : server.overworld().players()) {
@@ -158,7 +161,7 @@ final class NpcBackground {
                 continue;
             }
             for (io.github.sekerator.kingdomworld.core.npc.Settlement settlement : SettlementIndex.near(server, (int) player.getX(), (int) player.getZ(), reach)) {
-                if (!SettlementRaiser.waiting(settlement)) {
+                if (!SettlementRaiser.waiting(settlement) || state.kingdom(settlement.kingdomId()).isEmpty() || handingOver.test(settlement)) {
                     continue;
                 }
                 double dx = player.getX() - settlement.x();

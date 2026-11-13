@@ -161,4 +161,32 @@ class ProvinceWarTest {
         assertEquals(Optional.of(Conquest.Kind.PROVINCE), Conquest.Kind.byId("province"));
         assertEquals(Optional.of(Conquest.Step.SETTLEMENTS), Conquest.Step.byId("settlements"));
     }
+
+    @Test
+    void aSettlementIsBeingHandedOverFromTheStepOfItsLandUntilItGoes() {
+        SiegeState state = new SiegeState();
+        Conquest at = state.addConquest(Conquest.Kind.PROVINCE, 3, a, b, WORLD, List.of(14L, 13L), 0, 0);
+        assertTrue(at.handsOver(b, 14), "its land changes hands at the first step");
+        assertTrue(at.handsOver(b, 13));
+        assertFalse(at.handsOver(b, 12), "a province the conquest does not take");
+        assertFalse(at.handsOver(b, 0), "a settlement of no province");
+        assertFalse(at.handsOver(a, 14), "a settlement of the winner");
+        while (at.step() != Conquest.Step.SETTLEMENTS) {
+            at = state.advance(at.id()).orElseThrow();
+            assertTrue(at.handsOver(b, 14), at.step().id());
+        }
+        at = state.advance(at.id()).orElseThrow();
+        assertEquals(Conquest.Step.DAMAGE, at.step());
+        assertFalse(at.handsOver(b, 14), "once the settlements went, what the loser still has there stays its own");
+
+        Conquest annex = state.addConquest(Conquest.Kind.ANNEX, 4, a, c, WORLD, List.of(), 0, 0);
+        assertEquals(Conquest.Step.TREASURY, annex.step());
+        assertFalse(annex.handsOver(c, 5), "while its money goes the land of the loser is still its own");
+        annex = state.advance(annex.id()).orElseThrow();
+        assertTrue(annex.handsOver(c, 5), "an annexation takes every settlement");
+        assertTrue(annex.handsOver(c, 0));
+        assertFalse(annex.handsOver(b, 5));
+        assertFalse(state.addConquest(Conquest.Kind.LAND, 5, a, b, WORLD, List.of(14L), 0, 0).handsOver(b, 14),
+                "chunks of land hand over no settlement");
+    }
 }

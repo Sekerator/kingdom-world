@@ -315,6 +315,27 @@ public final class SiegeWork {
         return false;
     }
 
+    /**
+     * Which settlements the journal of conquests is handing over now: those of a kingdom being annexed and those in the
+     * provinces a kingdom gives up, from the moment their land changes hands until they go themselves. Meanwhile nothing
+     * raises them for the kingdom that loses them, nor folds or brings back their citizens.
+     */
+    public static java.util.function.Predicate<Settlement> handingOver(MinecraftServer server) {
+        List<Conquest> conquests = state(server).conquests();
+        if (conquests.isEmpty()) {
+            return settlement -> false;
+        }
+        List<Conquest> now = List.copyOf(conquests);
+        return settlement -> {
+            for (Conquest conquest : now) {
+                if (conquest.handsOver(settlement.kingdomId(), settlement.province())) {
+                    return true;
+                }
+            }
+            return false;
+        };
+    }
+
     static Optional<Seat> seat(MinecraftServer server, UUID kingdomId, long cityId) {
         for (Seat seat : seats(server, kingdomId)) {
             if (seat.city() == cityId) {

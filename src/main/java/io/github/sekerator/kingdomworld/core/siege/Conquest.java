@@ -149,6 +149,20 @@ public record Conquest(long id, Kind kind, long war, UUID winner, UUID loser, St
         return ids;
     }
 
+    /**
+     * Whether the conquest is handing over a settlement of a kingdom standing in a province: from the step of the land, when its
+     * land changes hands, until the settlements went; any settlement of the loser in an annexation, one in a province of a
+     * conquest of provinces. Nothing raises such a settlement for the loser meanwhile, nor folds or brings back its citizens.
+     *
+     * @param province the province of the settlement, 0 for none
+     */
+    public boolean handsOver(UUID kingdomId, int province) {
+        if (!loser.equals(kingdomId) || step.ordinal() < Step.LAND.ordinal() || step.ordinal() > Step.SETTLEMENTS.ordinal()) {
+            return false;
+        }
+        return kind == Kind.ANNEX || kind == Kind.PROVINCE && province > 0 && chunks.contains((long) province);
+    }
+
     public Conquest advance() {
         return new Conquest(id, kind, war, winner, loser, dimension, chunks, city, next(kind, step), made);
     }

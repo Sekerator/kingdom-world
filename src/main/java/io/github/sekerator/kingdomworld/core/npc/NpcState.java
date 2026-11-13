@@ -88,7 +88,10 @@ public final class NpcState {
 
     /**
      * Gives a settlement to another kingdom, when its province changed hands in a war or by a treaty: everything else of it stays
-     * as it is, and the change is seen like any change of a settlement.
+     * as it is, and the change is seen like any change of a settlement. One rising goes on for the new kingdom from what stands,
+     * so that the layout of the new kingdom never builds over what the layout of the old one laid: ground being levelled is
+     * levelled again from the start, and once buildings went up (or fields were sown) it goes on from the places of what
+     * stands.
      *
      * @return whether it changed hands; false for no such settlement or one of that kingdom already
      */
@@ -99,6 +102,14 @@ public final class NpcState {
             return false;
         }
         settlement.setKingdom(kingdomId);
+        if (settlement.status() == Settlement.Status.DATA || settlement.status() == Settlement.Status.RAISING) {
+            SettlementStage stage = SettlementStage.byId(settlement.stage());
+            if (stage == SettlementStage.GROUND) {
+                settlement.setStage(SettlementStage.GROUND.id(), 0);
+            } else if (stage == SettlementStage.BUILD && settlement.step() > 1 || stage == SettlementStage.WORK) {
+                settlement.setStage(SettlementStage.PLACES.id(), 0);
+            }
+        }
         settlementChanged();
         return true;
     }
