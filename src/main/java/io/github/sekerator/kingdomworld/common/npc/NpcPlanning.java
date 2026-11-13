@@ -308,15 +308,34 @@ public final class NpcPlanning {
      * the wood that grows there, both read from the generator of the world without generating a chunk.
      */
     public static NpcSite addSite(MinecraftServer server, int x, int z, NpcLevel kingdom, long seed, List<int[]> towns) {
-        ServerLevel level = server.overworld();
+        return addSite(server, x, z, kingdom, seed, towns, siteLand(server.overworld(), x, z));
+    }
+
+    /**
+     * Adds a place to the plan with what its land is like, looked up before ({@link #siteLand}).
+     */
+    public static NpcSite addSite(MinecraftServer server, int x, int z, NpcLevel kingdom, long seed, List<int[]> towns, SiteLand land) {
         NpcState state = NpcWork.state(server);
+        NpcStyle style = NpcStyle.pick(NpcStyle.climate(land.biome(), land.tags()), seed, state.sites().size());
+        return state.addSite(x, z, kingdom, seed, NpcSite.towns(towns), NpcSite.LAYOUT_DISTRICTS, style.id(), land.wood());
+    }
+
+    /**
+     * What the land of a place is like: its biome, the tags of the biome and the wood that grows there.
+     */
+    public record SiteLand(String biome, java.util.Set<String> tags, String wood) {
+    }
+
+    /**
+     * What the land of a place at a point is like, from the generator and the table of materials (built from the blocks of the
+     * game the first time). Any thread: it reads only the generator and the registries.
+     */
+    public static SiteLand siteLand(ServerLevel level, int x, int z) {
         Holder<Biome> biome = biomeAt(level, x, z);
         String id = biome.unwrapKey().map(key -> key.location().toString()).orElse("");
         java.util.Set<String> tags = new java.util.HashSet<>();
         biome.tags().forEach(tag -> tags.add(tag.location().toString()));
-        NpcStyle style = NpcStyle.pick(NpcStyle.climate(id, tags), seed, state.sites().size());
-        String wood = TemplateMaterials.table().woodForBiome(id, tags);
-        return state.addSite(x, z, kingdom, seed, NpcSite.towns(towns), NpcSite.LAYOUT_DISTRICTS, style.id(), wood);
+        return new SiteLand(id, java.util.Set.copyOf(tags), TemplateMaterials.table().woodForBiome(id, tags));
     }
 
     private static Holder<Biome> biomeAt(ServerLevel level, int x, int z) {

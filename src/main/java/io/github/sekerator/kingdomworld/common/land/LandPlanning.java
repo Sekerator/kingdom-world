@@ -355,6 +355,8 @@ public final class LandPlanning {
         private int refineAsked = -1;
         /** The provinces of the state being given, already given. */
         private int givenOfState;
+        /** What the land at the thrones is like, asked of the threads of the noise, by state. */
+        private final Map<Integer, CompletableFuture<NpcPlanning.SiteLand>> lands = new HashMap<>();
 
         /**
          * @param map       the map of the land the provinces are written into
@@ -1024,7 +1026,14 @@ public final class LandPlanning {
             int cursor = progress.cursor();
             NpcState npc = NpcWork.state(server);
             if (cursor < count) {
-                // A place a tick: the founding of each goes on in the work of the kingdoms of the world.
+                // A place a tick: the founding of each goes on in the work of the kingdoms of the world. What the land at the
+                // thrones is like (a look at the noise, and the table of materials the first time) is asked off the tick.
+                ServerLevel level = server.overworld();
+                for (int i = cursor; i < count; i++) {
+                    Entry ask = entries.get(i);
+                    lands.computeIfAbsent(i, k -> CompletableFuture.supplyAsync(() -> NpcPlanning.siteLand(level, ask.x, ask.z),
+                            NpcPlanning.noise()));
+                }
                 Entry entry = entries.get(cursor);
                 if (entry.site < 0 || npc.site(entry.site).isEmpty()) {
                     // A place planned at the throne before a restart is taken again; one removed or left alone is not.
@@ -1035,7 +1044,18 @@ public final class LandPlanning {
                         }
                     }
                     if (site == null) {
-                        site = NpcPlanning.addSite(server, entry.x, entry.z, entry.level, entry.seed, List.of());
+                        CompletableFuture<NpcPlanning.SiteLand> land = lands.get(cursor);
+                        if (!land.isDone()) {
+                            return false;
+                        }
+                        NpcPlanning.SiteLand known;
+                        try {
+                            known = land.join();
+                        } catch (CompletionException | java.util.concurrent.CancellationException e) {
+                            fail("the land of a throne could not be looked at: " + (e.getCause() != null ? e.getCause() : e));
+                            return false;
+                        }
+                        site = NpcPlanning.addSite(server, entry.x, entry.z, entry.level, entry.seed, List.of(), known);
                         LOGGER.info("Planned a state of the world: {} with {} province(s)", site, entry.provinces.length);
                     }
                     entry.site = site.id();
