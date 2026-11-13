@@ -33,7 +33,8 @@ public final class ProvincePlanner {
      * The provinces.
      *
      * @param thrones the cell of the throne of every state as the server chose it, or null (or -1 for a state) for the first
-     *                candidate; a cell outside the state is taken as its first candidate
+     *                candidate; a cell outside the state or where no capital may stand (water, steep land) is taken as its
+     *                first candidate a capital may stand on
      */
     public static ProvincePlan plan(StatePlan states, int[] thrones, ProvinceRules rules, long seed) {
         return new Run(states, thrones, rules, seed).plan();
@@ -83,11 +84,41 @@ public final class ProvincePlanner {
             for (int s = 0; s < count; s++) {
                 PlannedState state = states.state(s);
                 int chosen = thrones != null && s < thrones.length ? thrones[s] : -1;
-                if (chosen < 0 || chosen >= cells || states.stateAt(chosen) != s) {
-                    chosen = state.throneCandidates().isEmpty() ? state.seedCell() : state.throneCandidates().get(0);
-                }
-                this.thrones[s] = chosen;
+                this.thrones[s] = throneFits(chosen, s) ? chosen : fallbackThrone(state);
             }
+        }
+
+        private boolean throneFits(int cell, int s) {
+            return cell >= 0 && cell < cells && states.stateAt(cell) == s && raster.terrain(cell).settles();
+        }
+
+        /**
+         * The throne of a state the server chose none for: its first candidate a capital may stand on, else its seed if one
+         * may, else the cell of its land nearest the seed a capital may stand on, else its seed.
+         */
+        private int fallbackThrone(PlannedState state) {
+            int s = state.index();
+            for (int candidate : state.throneCandidates()) {
+                if (throneFits(candidate, s)) {
+                    return candidate;
+                }
+            }
+            if (throneFits(state.seedCell(), s)) {
+                return state.seedCell();
+            }
+            int best = state.seedCell();
+            double bestDistance = Double.MAX_VALUE;
+            for (int cell = 0; cell < cells; cell++) {
+                if (throneFits(cell, s)) {
+                    double distance = StrictMath.hypot(raster.cellX(cell) - raster.cellX(state.seedCell()),
+                            raster.cellZ(cell) - raster.cellZ(state.seedCell()));
+                    if (distance < bestDistance) {
+                        bestDistance = distance;
+                        best = cell;
+                    }
+                }
+            }
+            return best;
         }
 
         ProvincePlan plan() {

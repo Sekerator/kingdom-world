@@ -143,4 +143,31 @@ class ProvincePlannerTest {
         assertNotNull(plan.province(plan.heart(0)));
         assertFalse(plan.provincesOf(0).isEmpty());
     }
+
+    @Test
+    void aThroneOnWaterIsNotTaken() {
+        ProvincePlan rivers = riverState();
+        StatePlan states = rivers.states();
+        int water = states.raster().index(15, 6);
+        assertEquals(TerrainClass.RIVER, states.raster().terrain(water));
+        assertEquals(0, states.stateAt(water), "the river lies in the state");
+        ProvincePlan plan = ProvincePlanner.plan(states, new int[]{water}, new ProvinceRules(180, 90, 360), SEED);
+        assertTrue(states.raster().terrain(plan.throneCell(0)).settles(), "the throne stands on land");
+        assertEquals(plan.heart(0), plan.provinceAt(plan.throneCell(0)));
+        // Every throne of a world stands on land, whatever the server gave.
+        StatePlan world = StatePlanner.plan(SyntheticLand.world(SEED, StateRules.RADIUS, 0.3), StateRules.defaults(0, 0), SEED);
+        int[] wet = new int[world.states().size()];
+        for (int s = 0; s < wet.length; s++) {
+            wet[s] = -1;
+            for (int cell = 0; cell < world.raster().cells() && wet[s] < 0; cell++) {
+                if (world.stateAt(cell) == s && !world.raster().terrain(cell).settles()) {
+                    wet[s] = cell;
+                }
+            }
+        }
+        ProvincePlan wide = ProvincePlanner.plan(world, wet, ProvinceRules.DEFAULT, SEED);
+        for (int s = 0; s < wet.length; s++) {
+            assertTrue(world.raster().terrain(wide.throneCell(s)).settles(), "the throne of state " + s + " stands on land");
+        }
+    }
 }
