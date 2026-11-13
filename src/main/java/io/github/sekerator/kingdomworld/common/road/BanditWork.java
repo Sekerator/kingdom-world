@@ -186,14 +186,15 @@ public final class BanditWork {
                 }
                 RouteCell cell = road.cells().get(RANDOM.nextInt(road.cells().size()));
                 double angle = RANDOM.nextDouble() * Math.PI * 2;
-                double distance = 24 + RANDOM.nextInt(40);
+                // In the wilds off the road: far enough not to be seen from it, near enough to fall upon it.
+                double distance = ROAD_DISTANCE + 8 + RANDOM.nextInt(96);
                 dimension = road.dimension();
                 x = cell.x() + (int) Math.round(Math.cos(angle) * distance);
                 z = cell.z() + (int) Math.round(Math.sin(angle) * distance);
             } else if (!capitals.isEmpty()) {
                 Capital capital = capitals.get(RANDOM.nextInt(capitals.size()));
                 double angle = RANDOM.nextDouble() * Math.PI * 2;
-                double distance = rules.minDistance() + 64 + RANDOM.nextInt(256);
+                double distance = Math.max(rules.minDistance(), SETTLEMENT_DISTANCE) + 32 + RANDOM.nextInt(256);
                 dimension = capital.dimension();
                 x = capital.x() + (int) Math.round(Math.cos(angle) * distance);
                 z = capital.z() + (int) Math.round(Math.sin(angle) * distance);
@@ -207,19 +208,50 @@ public final class BanditWork {
         return Optional.empty();
     }
 
+    /** Blocks a camp keeps from the claimed land of the settlements of kingdoms of the world. */
+    static final int SETTLEMENT_DISTANCE = 400;
+    /** Blocks a camp keeps from every road. */
+    static final int ROAD_DISTANCE = 128;
+
     /**
-     * Whether a place is far enough from the land of every kingdom and from other camps.
+     * Whether a place is in the wilds for a camp: at least {@link #SETTLEMENT_DISTANCE} blocks from the claimed land of the
+     * settlements of kingdoms of the world, at least the distance of the rules from the claims of kingdoms of players, at least
+     * {@link #ROAD_DISTANCE} from roads and 128 from other camps. The provinces of the states of the world keep no distance:
+     * their wilds are where robbers live.
      */
     static boolean wild(MinecraftServer server, RoadState roads, String dimension, int x, int z, BanditRules rules) {
-        int chunks = (rules.minDistance() + 15) / 16;
+        int playerChunks = (rules.minDistance() + 15) / 16;
+        int settlementChunks = (SETTLEMENT_DISTANCE + 15) / 16;
         Map<Long, UUID> claims = KingdomWorldApi.claims(server, dimension);
         int cx = x >> 4;
         int cz = z >> 4;
-        for (long chunk : claims.keySet()) {
-            int dx = ChunkKey.x(chunk) - cx;
-            int dz = ChunkKey.z(chunk) - cz;
-            if (dx * dx + dz * dz <= chunks * chunks) {
+        Map<UUID, Boolean> world = new java.util.HashMap<>();
+        for (Map.Entry<Long, UUID> claim : claims.entrySet()) {
+            int dx = ChunkKey.x(claim.getKey()) - cx;
+            int dz = ChunkKey.z(claim.getKey()) - cz;
+            int distance = dx * dx + dz * dz;
+            if (distance > settlementChunks * settlementChunks && distance > playerChunks * playerChunks) {
+                continue;
+            }
+            boolean ofWorld = world.computeIfAbsent(claim.getValue(), id -> io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, id));
+            int limit = ofWorld ? settlementChunks : playerChunks;
+            if (distance <= limit * limit) {
                 return false;
+            }
+        }
+        for (Road road : roads.roads()) {
+            if (!road.dimension().equals(dimension)) {
+                continue;
+            }
+            List<RouteCell> cells = road.cells();
+            // Every eighth block of a road is close enough to tell its distance.
+            for (int i = 0; i < cells.size(); i += 8) {
+                RouteCell cell = cells.get(i);
+                double dx = cell.x() - x;
+                double dz = cell.z() - z;
+                if (dx * dx + dz * dz < (double) ROAD_DISTANCE * ROAD_DISTANCE) {
+                    return false;
+                }
             }
         }
         for (BanditCamp camp : roads.camps()) {
