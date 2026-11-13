@@ -175,6 +175,7 @@ public final class DiplomacySync {
             case "broken" -> Bond.byId(event.detail()).<Component>map(WarTexts::bond).orElse(Component.literal(event.detail()));
             case "raid" -> WarTexts.items(parse(event.detail()));
             case "peace" -> Component.translatable(KEY + "chronicle.how." + event.detail());
+            case "province_taken" -> io.github.sekerator.kingdomworld.common.siege.SiegeTexts.provinceName(server, (int) parse(event.detail()));
             default -> Component.literal(event.detail());
         };
         return Component.translatable(KEY + "chronicle." + event.kind(), DaySchedule.day(event.time()), first, second, detail);

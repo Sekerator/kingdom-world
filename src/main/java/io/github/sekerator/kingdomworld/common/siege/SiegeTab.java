@@ -69,6 +69,12 @@ public final class SiegeTab {
                 }
                 continue;
             }
+            if (hold.kind() == Hold.Kind.PROVINCE) {
+                String what = hold.kind().id() + (hold.taken() ? "_taken" : "") + (ours ? "_ours" : "_theirs");
+                lines.add(Component.translatable(KEY + what, SiegeTexts.provinceName(server, (int) hold.target()),
+                        hold.percent(SiegeHolds.need(server, hold, rules))).withStyle(ours ? ChatFormatting.RED : ChatFormatting.GREEN));
+                continue;
+            }
             Component place = SiegeTexts.cityLabel(server, hold.defender(), hold.kind() == Hold.Kind.THRONE ? 0 : hold.target());
             String what = hold.kind().id() + (hold.taken() ? "_taken" : "") + (ours ? "_ours" : "_theirs");
             lines.add(Component.translatable(KEY + what, place, hold.percent(rules))
@@ -127,6 +133,10 @@ public final class SiegeTab {
                             Component.translatable(SiegeWork.KEY + (ours ? "map.occupied_ours" : "map.occupied_theirs"),
                                     WarWork.name(server, ours ? hold.attacker() : hold.defender()))));
                 }
+                continue;
+            }
+            if (hold.kind() == Hold.Kind.PROVINCE) {
+                // The target of a province is no city.
                 continue;
             }
             long city = hold.kind() == Hold.Kind.THRONE ? 0 : hold.target();

@@ -175,7 +175,8 @@ public final class SiegeCommands {
         }
         SiegeRules rules = SiegeSettings.rules();
         for (Hold hold : state.holds()) {
-            source.sendSuccess(() -> Component.translatable(ADMIN + "hold_line", hold.war(), hold.kind().id(), hold.target(), hold.percent(rules),
+            int percent = hold.percent(SiegeHolds.need(source.getServer(), hold, rules));
+            source.sendSuccess(() -> Component.translatable(ADMIN + "hold_line", hold.war(), hold.kind().id(), hold.target(), percent,
                     hold.taken() ? "+" : "-"), false);
         }
         return 1;

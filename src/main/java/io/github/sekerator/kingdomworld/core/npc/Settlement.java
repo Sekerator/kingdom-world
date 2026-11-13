@@ -297,6 +297,23 @@ public final class Settlement {
     }
 
     /**
+     * Defenders of the settlement fell in a battle: its guards first, then its militia.
+     *
+     * @return how many of them fell, no more than it had
+     */
+    public int loseDefenders(int fallen) {
+        int lost = Math.max(0, Math.min(fallen, guards + militia));
+        if (lost == 0) {
+            return 0;
+        }
+        int ofGuards = Math.min(guards, lost);
+        guards -= ofGuards;
+        militia -= lost - ofGuards;
+        changed();
+        return lost;
+    }
+
+    /**
      * Its numbers when it is founded: its houses and people by its rank and seed, the land it farms.
      */
     public void found(int newHousing, int newPopulation, int newFertility) {

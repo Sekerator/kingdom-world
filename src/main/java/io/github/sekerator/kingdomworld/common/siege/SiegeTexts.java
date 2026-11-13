@@ -1,13 +1,18 @@
 package io.github.sekerator.kingdomworld.common.siege;
 
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
+import io.github.sekerator.kingdomworld.common.npc.NpcTexts;
 import io.github.sekerator.kingdomworld.common.road.RoadWork;
 import io.github.sekerator.kingdomworld.core.economy.Plurals;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
+import io.github.sekerator.kingdomworld.core.land.ProvinceNames;
+import io.github.sekerator.kingdomworld.core.npc.NpcNames;
 import io.github.sekerator.kingdomworld.core.road.City;
+import io.github.sekerator.kingdomworld.core.territory.Province;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -32,6 +37,18 @@ public final class SiegeTexts {
      */
     public static Component cityLabel(MinecraftServer server, UUID kingdomId, long cityId) {
         return Component.translatable(SiegeWork.KEY + (cityId == 0 ? "capital_label" : "city_label"), cityName(server, kingdomId, cityId));
+    }
+
+    /**
+     * The name of a province in both alphabets, its number for a province the map does not know.
+     */
+    public static Component provinceName(MinecraftServer server, int province) {
+        Optional<Province> found = KingdomWorldApi.state(server).territory().provinceMap().flatMap(map -> map.province(province));
+        if (found.isEmpty()) {
+            return Component.literal("#" + province);
+        }
+        NpcNames.Name name = ProvinceNames.of(found.get().nameSeed());
+        return NpcTexts.name(name.latin(), name.cyrillic());
     }
 
     /**

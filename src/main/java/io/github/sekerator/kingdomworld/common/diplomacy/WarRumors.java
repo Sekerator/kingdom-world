@@ -24,7 +24,7 @@ final class WarRumors {
     /** Game days news of war stays worth telling. */
     private static final long NEWS_DAYS = 3;
     private static final Set<String> TOLD = Set.of("declared", "battle", "raid", "peace", "alliance", "vassal", "broken", "siege",
-            "city_taken", "annexed");
+            "city_taken", "province_taken", "annexed");
 
     private WarRumors() {
     }

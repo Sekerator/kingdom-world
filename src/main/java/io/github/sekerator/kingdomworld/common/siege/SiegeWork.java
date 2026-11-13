@@ -205,6 +205,14 @@ public final class SiegeWork {
         return result;
     }
 
+    /**
+     * The province the capital of a kingdom stands in, 0 for none: the heart of a state, which only an annexation takes.
+     */
+    public static int capitalProvince(MinecraftServer server, UUID kingdomId) {
+        return RoadWork.capital(server, kingdomId).map(capital -> KingdomWorldApi.state(server).territory().provinceAt(capital.dimension(),
+                io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(capital.x() >> 4, capital.z() >> 4))).orElse(0);
+    }
+
     static Optional<Seat> seat(MinecraftServer server, UUID kingdomId, long cityId) {
         for (Seat seat : seats(server, kingdomId)) {
             if (seat.city() == cityId) {

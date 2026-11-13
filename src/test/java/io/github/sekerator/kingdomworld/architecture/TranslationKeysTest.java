@@ -906,7 +906,7 @@ class TranslationKeysTest {
             keys.add("kingdomworld.siege.tab.conquest." + kind.id());
         }
         for (String kind : List.of("declared", "started", "battle", "raid", "blockade", "peace", "pact", "alliance", "vassal", "released", "broken",
-                "joined", "refused", "kill")) {
+                "joined", "refused", "kill", "province_taken")) {
             keys.add("kingdomworld.war.chronicle." + kind);
         }
         for (String key : keys) {
