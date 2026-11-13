@@ -83,6 +83,10 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue workPostMaxSeats;
         public final ForgeConfigSpec.IntValue maxTreeBlocks;
         public final ForgeConfigSpec.IntValue mineLevels;
+        public final ForgeConfigSpec.IntValue minerCorridorLength;
+        public final ForgeConfigSpec.IntValue minerBranchLength;
+        public final ForgeConfigSpec.IntValue minerVeinBlocks;
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> minerOreDepths;
         public final ForgeConfigSpec.IntValue maxHerdSize;
         public final ForgeConfigSpec.IntValue carrierRange;
         public final ForgeConfigSpec.IntValue carrierItemsPerMinute;
@@ -244,8 +248,25 @@ public final class KingdomWorldConfig {
                     .comment("Most logs of one tree a lumberjack fells; larger trees are left standing.")
                     .defineInRange("maxTreeBlocks", 160, 8, 2_048);
             mineLevels = builder
-                    .comment("Most levels a miner digs below its post, one every 3 blocks (as many as the radius allows).")
+                    .comment("Most levels of a mine, one every 4 blocks below the working depth (above it once the bottom of the",
+                            "world is reached).")
                     .defineInRange("mineLevels", 4, 1, 32);
+            minerCorridorLength = builder
+                    .comment("Blocks of the main corridor of a mine to each side of its staircase; it stops at the edge of the",
+                            "kingdom's land.")
+                    .defineInRange("minerCorridorLength", 48, 8, 256);
+            minerBranchLength = builder
+                    .comment("Blocks of a branch of a mine to each side of the corridor; branches leave it every 3 blocks.")
+                    .defineInRange("minerBranchLength", 16, 4, 64);
+            minerVeinBlocks = builder
+                    .comment("Most blocks of ore a miner takes from one vein it uncovers beside a tunnel. 0 leaves veins alone.")
+                    .defineInRange("minerVeinBlocks", 24, 0, 128);
+            minerOreDepths = builder
+                    .comment("The height a kind of ore is mined at when the depth of a mine is chosen automatically, as tag=y.",
+                            "A kind that is not listed is mined at y 16.")
+                    .defineListAllowEmpty("minerOreDepths", io.github.sekerator.kingdomworld.core.citizen.MineRules.defaultDepths(),
+                            value -> value instanceof String text
+                                    && io.github.sekerator.kingdomworld.core.citizen.MineRules.parseDepth(text).isPresent());
             maxHerdSize = builder
                     .comment("Largest herd a herder keeps.")
                     .defineInRange("maxHerdSize", 12, 2, 64);

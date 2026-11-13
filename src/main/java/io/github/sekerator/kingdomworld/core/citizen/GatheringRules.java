@@ -12,7 +12,7 @@ import java.util.Objects;
  * @param maxRadius         largest radius of a zone
  * @param maxSeats          most workers one post takes
  * @param maxTreeBlocks     most logs of one tree a lumberjack fells
- * @param mineLevels        most levels a miner digs below the post, one every {@link #MINE_LEVEL_STEP} blocks
+ * @param mineLevels        most levels a mine has, one every {@link #MINE_LEVEL_STEP} blocks
  * @param maxHerd           largest herd a herder keeps
  * @param carrierRange      how far from its post a carrier fetches and brings goods, in blocks
  * @param carrierItemsPerMinute items one carrier far from players moves in a minute
@@ -25,7 +25,7 @@ public record GatheringRules(int defaultRadius, int maxRadius, int maxSeats, int
     /** Ticks of a game day spent working; workers rest at night. */
     public static final long WORK_TICKS_PER_DAY = CitizenNeeds.TICKS_PER_DAY / 2;
     /** Blocks between two levels of a mine. */
-    public static final int MINE_LEVEL_STEP = 3;
+    public static final int MINE_LEVEL_STEP = 4;
     /** A worker without a container at its post carries its harvest to the storehouse itself and gathers less. */
     public static final double SELF_CARRY_FACTOR = 0.75;
     /** Weight of a new measurement when it is averaged with the rates known before. */

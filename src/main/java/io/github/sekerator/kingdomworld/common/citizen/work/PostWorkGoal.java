@@ -92,7 +92,21 @@ public abstract class PostWorkGoal extends Goal {
         Optional<WorkPost> found = PostWork.post(server, new WorldPos(Dimensions.id(body.level()), workplace.getX(),
                 workplace.getY(), workplace.getZ()));
         return found.isPresent() && found.get().professionId().equals(body.professionId())
-                && body.blockPosition().distSqr(workplace) < (double) MAX_DISTANCE * MAX_DISTANCE;
+                && body.blockPosition().distSqr(workplace) < (double) maxDistance() * maxDistance();
+    }
+
+    /**
+     * How far from its post a body still works, in blocks.
+     */
+    protected int maxDistance() {
+        return MAX_DISTANCE;
+    }
+
+    /**
+     * Ticks a worker walks with its harvest before it stops for a while and tries again.
+     */
+    protected int deliveryPatience() {
+        return GIVE_UP_TICKS;
     }
 
     /**
@@ -346,7 +360,7 @@ public abstract class PostWorkGoal extends Goal {
                 return;
             }
         }
-        if (++deliverTicks > GIVE_UP_TICKS) {
+        if (++deliverTicks > deliveryPatience()) {
             deliverTo = null;
             finish(100);
             return;

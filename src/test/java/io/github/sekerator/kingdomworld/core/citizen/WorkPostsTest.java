@@ -119,6 +119,34 @@ class WorkPostsTest {
     }
 
     @Test
+    void theGoalOfAMineNeedsTheRightAndAMiner() {
+        citizens.addSite(pos(8, 8), SiteKinds.WORK_POST, realm);
+        assertEquals(KingdomError.NOT_A_POST_PROFESSION, state.setPostMineGoal(king, pos(8, 8), "forge:ores/iron", 64, true, 0).error());
+        assertTrue(state.setPostProfession(king, pos(8, 8), "miner").ok());
+        WorkPost post = citizens.posts().get(pos(8, 8)).orElseThrow();
+        assertEquals(MineGoal.ANYTHING, post.mineGoal(), "a new post digs anything");
+        assertEquals(KingdomError.NO_PERMISSION, state.setPostMineGoal(UUID.randomUUID(), pos(8, 8), "forge:ores/iron", 64, true, 0).error());
+        assertEquals(KingdomError.VALUE_OUT_OF_RANGE, state.setPostMineGoal(king, pos(8, 8), "Iron", 64, true, 0).error());
+        assertEquals(KingdomError.VALUE_OUT_OF_RANGE, state.setPostMineGoal(king, pos(8, 8), "forge:ores/iron", -1, true, 0).error());
+        assertEquals(KingdomError.VALUE_OUT_OF_RANGE,
+                state.setPostMineGoal(king, pos(8, 8), "forge:ores/iron", MineGoal.MAX_AMOUNT + 1, true, 0).error());
+        assertEquals(KingdomError.VALUE_OUT_OF_RANGE, state.setPostMineGoal(king, pos(8, 8), "forge:ores/iron", 64, false, 5_000).error());
+        post.setYield(new PostYield(Map.of("minecraft:cobblestone", 100.0), Map.of(), 100.0, true));
+        assertTrue(state.setPostMineGoal(king, pos(8, 8), "forge:ores/iron", 64, true, 0).ok());
+        assertEquals(new MineGoal("forge:ores/iron", 64, true, 0), post.mineGoal());
+        assertTrue(post.yield().isEmpty(), "another kind of ore is another mine: its yield is not known yet");
+        assertEquals(KingdomError.UNCHANGED, state.setPostMineGoal(king, pos(8, 8), "forge:ores/iron", 64, true, 0).error());
+        post.setYield(new PostYield(Map.of("minecraft:raw_iron", 10.0), Map.of(), 100.0, true));
+        assertTrue(state.setPostMineGoal(king, pos(8, 8), "forge:ores/iron", 128, true, 0).ok());
+        assertFalse(post.yield().isEmpty(), "the amount does not move the mine");
+        assertTrue(state.setPostMineGoal(king, pos(8, 8), "forge:ores/iron", 128, false, -20).ok());
+        assertTrue(post.yield().isEmpty(), "another depth is another mine");
+        assertEquals(-20, post.mineGoal().depth());
+        assertTrue(state.setPostMineGoal(king, pos(8, 8), "", 0, true, 0).ok());
+        assertEquals(MineGoal.ANYTHING, post.mineGoal());
+    }
+
+    @Test
     void hiringTakesTheNearestCitizenWithoutWork() {
         citizens.addSite(pos(8, 8), SiteKinds.WORK_POST, realm);
         assertEquals(KingdomError.NOT_A_POST_PROFESSION, state.hire(king, pos(8, 8)).outcome().error());

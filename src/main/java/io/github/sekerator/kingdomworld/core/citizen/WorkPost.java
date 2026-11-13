@@ -10,7 +10,7 @@ import java.util.UUID;
 
 /**
  * A work post: a block on a kingdom's land where citizens of one profession work, with its settings (profession,
- * radius of the zone, seats, the animals of a herd), the workers, the last status and what is known about its
+ * radius of the zone, seats, the animals of a herd, the goal of a mine), the workers, the last status and what is known about its
  * yield. Workers change only through {@link Citizens}, which keeps them consistent with the citizens'
  * workplaces; settings change through {@link io.github.sekerator.kingdomworld.core.state.KingdomWorldState},
  * which checks the rights. The simulation updates status, yield and progress directly.
@@ -28,6 +28,7 @@ public final class WorkPost {
     private int seats = 1;
     private String animal = NO_ANIMAL;
     private int herdSize;
+    private MineGoal mineGoal = MineGoal.ANYTHING;
     private final Set<UUID> workers = new LinkedHashSet<>();
     private WorkStatus status = WorkStatus.NO_PROFESSION;
     private PostYield yield = PostYield.NONE;
@@ -148,6 +149,33 @@ public final class WorkPost {
             herdSize = clamped;
             changed();
         }
+    }
+
+    /**
+     * What a miner's post is asked for; {@link MineGoal#ANYTHING} until somebody sets a goal.
+     */
+    public MineGoal mineGoal() {
+        return mineGoal;
+    }
+
+    void setMineGoal(MineGoal value) {
+        Objects.requireNonNull(value, "value");
+        if (!value.equals(mineGoal)) {
+            if (!value.sameMine(mineGoal)) {
+                // Another kind of ore or another depth is another mine: what the old one gave says nothing about it.
+                yield = PostYield.NONE;
+                progress.clear();
+            }
+            mineGoal = value;
+            changed();
+        }
+    }
+
+    /**
+     * Restores the goal of a miner's post from saved data. Does not notify.
+     */
+    public void restoreMineGoal(MineGoal value) {
+        this.mineGoal = Objects.requireNonNull(value, "value");
     }
 
     // ---------------------------------------------------------------- workers

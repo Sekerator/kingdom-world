@@ -38,8 +38,8 @@ public record WorkZone(String dimension, int minX, int minY, int minZ, int maxX,
      */
     public static WorkZone of(WorldPos post, String professionId, int radius, int mineLevels) {
         if (Professions.MINER.id().equals(professionId)) {
-            int levels = MinePlan.levels(radius, mineLevels);
-            return around(post, radius, (levels - 1) * GatheringRules.MINE_LEVEL_STEP + 1, 3);
+            // The mine itself follows its plan and the land, not this box.
+            return around(post, radius, (Math.max(1, mineLevels) - 1) * GatheringRules.MINE_LEVEL_STEP + 1, 3);
         }
         if (Professions.LUMBERJACK.id().equals(professionId)) {
             return around(post, radius, 6, 32);

@@ -5,6 +5,7 @@ import io.github.sekerator.kingdomworld.core.citizen.Citizen;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenRegistry;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
 import io.github.sekerator.kingdomworld.core.citizen.Citizens;
+import io.github.sekerator.kingdomworld.core.citizen.MineGoal;
 import io.github.sekerator.kingdomworld.core.citizen.DeathRecord;
 import io.github.sekerator.kingdomworld.core.citizen.Gender;
 import io.github.sekerator.kingdomworld.core.citizen.PostYield;
@@ -95,6 +96,9 @@ public final class CitizenNbt {
     private static final String CONTAINER = "container";
     private static final String AUTO = "auto";
     private static final String STATIONS = "stations";
+    private static final String GOAL_ORE = "goal_ore";
+    private static final String GOAL_AMOUNT = "goal_amount";
+    private static final String GOAL_DEPTH = "goal_depth";
 
     /**
      * What was read for one kingdom, not yet restored.
@@ -179,6 +183,14 @@ public final class CitizenNbt {
         CompoundTag stations = new CompoundTag();
         post.stations().forEach(stations::putInt);
         tag.put(STATIONS, stations);
+        MineGoal goal = post.mineGoal();
+        if (!goal.equals(MineGoal.ANYTHING)) {
+            tag.putString(GOAL_ORE, goal.ore());
+            tag.putInt(GOAL_AMOUNT, goal.amount());
+            if (!goal.autoDepth()) {
+                tag.putInt(GOAL_DEPTH, goal.depth());
+            }
+        }
         return tag;
     }
 
@@ -322,6 +334,16 @@ public final class CitizenNbt {
             }
         }
         post.restoreProduction(!tag.contains(AUTO) || tag.getBoolean(AUTO), stations);
+        // Posts saved before mines had goals dig anything at their own level.
+        String ore = tag.getString(GOAL_ORE);
+        int amount = tag.getInt(GOAL_AMOUNT);
+        boolean autoDepth = !tag.contains(GOAL_DEPTH, Tag.TAG_INT);
+        int depth = autoDepth ? 0 : tag.getInt(GOAL_DEPTH);
+        if (!MineGoal.isValidOre(ore) || amount < 0 || amount > MineGoal.MAX_AMOUNT || depth < MineGoal.MIN_DEPTH
+                || depth > MineGoal.MAX_DEPTH) {
+            throw new IllegalArgumentException(where + " has an invalid goal of its mine");
+        }
+        post.restoreMineGoal(new MineGoal(ore, amount, autoDepth, depth));
         return post;
     }
 

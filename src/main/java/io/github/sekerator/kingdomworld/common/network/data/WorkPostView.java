@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.common.network.data;
 
+import io.github.sekerator.kingdomworld.core.citizen.MineGoal;
 import io.github.sekerator.kingdomworld.core.citizen.Profession;
 import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
 import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
@@ -30,13 +31,86 @@ import java.util.UUID;
  * @param stations       for a workshop: the workstations in its zone, by kind with their number
  * @param current        for a workshop: what it makes now, empty if nothing
  * @param progress       how far the current item is, in percent
+ * @param goal           for a miner: what the post is asked for
  */
 public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, String profession, int radius, int maxRadius,
                            int seats, int maxSeats, String animal, List<String> animals, int herdSize, int maxHerd,
                            WorkStatus status, boolean container, boolean measured, int perDay, long producedToday,
                            List<Worker> workers, int unemployed, boolean auto, List<Station> stations, ItemStack current,
-                           int progress, net.minecraft.network.chat.Component site) {
+                           int progress, net.minecraft.network.chat.Component site, Goal goal) {
     public static final int MAX_WORKERS = 16;
+    public static final int MAX_ORES = 128;
+
+    /**
+     * What a miner's post is asked for, with what the window needs to offer the choices.
+     *
+     * @param ores      ids of the kinds of ore of the running game, the choices besides anything
+     * @param ore       the kind asked for, empty for anything
+     * @param amount    items the storehouses should hold, 0 for no limit
+     * @param stock     items of it the storehouses hold now
+     * @param autoDepth whether the depth comes from the kind of ore
+     * @param depth     the height the mine works at
+     * @param minDepth  the lowest height a mine may work at
+     * @param maxDepth  the highest: the level of the post
+     */
+    public record Goal(List<String> ores, String ore, int amount, long stock, boolean autoDepth, int depth, int minDepth,
+                       int maxDepth) {
+        public static final Goal NONE = new Goal(List.of(), "", 0, 0L, true, 0, 0, 0);
+
+        public Goal {
+            ores = List.copyOf(ores);
+            Objects.requireNonNull(ore, "ore");
+            if (ores.size() > MAX_ORES) {
+                throw new IllegalArgumentException("Too many kinds of ore");
+            }
+        }
+
+        public boolean met() {
+            return !ore.isEmpty() && amount > 0 && stock >= amount;
+        }
+
+        void encode(FriendlyByteBuf buf) {
+            buf.writeVarInt(ores.size());
+            for (String kind : ores) {
+                buf.writeUtf(kind, MineGoal.MAX_ORE_LENGTH);
+            }
+            buf.writeUtf(ore, MineGoal.MAX_ORE_LENGTH);
+            buf.writeVarInt(amount);
+            buf.writeVarLong(stock);
+            buf.writeBoolean(autoDepth);
+            buf.writeInt(depth);
+            buf.writeInt(minDepth);
+            buf.writeInt(maxDepth);
+        }
+
+        static Goal decode(FriendlyByteBuf buf) {
+            int count = KingdomView.readSize(buf, MAX_ORES);
+            List<String> ores = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                ores.add(buf.readUtf(MineGoal.MAX_ORE_LENGTH));
+            }
+            return new Goal(ores, buf.readUtf(MineGoal.MAX_ORE_LENGTH), buf.readVarInt(), buf.readVarLong(), buf.readBoolean(),
+                    buf.readInt(), buf.readInt(), buf.readInt());
+        }
+    }
+
+    /**
+     * The view of a post that is not a mine.
+     */
+    public WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, String profession, int radius, int maxRadius,
+                        int seats, int maxSeats, String animal, List<String> animals, int herdSize, int maxHerd,
+                        WorkStatus status, boolean container, boolean measured, int perDay, long producedToday,
+                        List<Worker> workers, int unemployed, boolean auto, List<Station> stations, ItemStack current,
+                        int progress, net.minecraft.network.chat.Component site) {
+        this(pos, kingdomId, canManage, profession, radius, maxRadius, seats, maxSeats, animal, animals, herdSize, maxHerd, status,
+                container, measured, perDay, producedToday, workers, unemployed, auto, stations, current, progress, site, Goal.NONE);
+    }
+
+    public WorkPostView withGoal(Goal value) {
+        return new WorkPostView(pos, kingdomId, canManage, profession, radius, maxRadius, seats, maxSeats, animal, animals, herdSize,
+                maxHerd, status, container, measured, perDay, producedToday, workers, unemployed, auto, stations, current, progress,
+                site, value);
+    }
     public static final int MAX_ANIMALS = 16;
     public static final int MAX_STATIONS = 16;
 
@@ -69,6 +143,7 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
         workers = List.copyOf(workers);
         stations = List.copyOf(stations);
         Objects.requireNonNull(current, "current");
+        Objects.requireNonNull(goal, "goal");
         progress = Math.max(0, Math.min(100, progress));
         if (animals.size() > MAX_ANIMALS || workers.size() > MAX_WORKERS || stations.size() > MAX_STATIONS) {
             throw new IllegalArgumentException("Work post view too large");
@@ -113,6 +188,7 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
         buf.writeItem(current);
         buf.writeVarInt(progress);
         buf.writeComponent(site);
+        goal.encode(buf);
     }
 
     public static WorkPostView decode(FriendlyByteBuf buf) {
@@ -156,6 +232,7 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
         int progress = buf.readVarInt();
         net.minecraft.network.chat.Component site = buf.readComponent();
         return new WorkPostView(pos, kingdomId, canManage, profession, radius, maxRadius, seats, maxSeats, animal, animals, herdSize,
-                maxHerd, status, container, measured, perDay, produced, workers, unemployed, auto, stations, current, progress, site);
+                maxHerd, status, container, measured, perDay, produced, workers, unemployed, auto, stations, current, progress, site,
+                Goal.decode(buf));
     }
 }

@@ -30,6 +30,8 @@ public enum WorkStatus {
     TOOL_TOO_WEAK(true),
     NO_TREES(true),
     NO_ROCK(true),
+    /** Every tunnel of the mine is dug; another goal or depth starts a new mine. */
+    MINE_WORKED_OUT(true),
     NO_WATER(true),
     NO_ANIMALS(true),
     /** Breeding needs food the animals eat and there is none. */

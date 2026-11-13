@@ -2,6 +2,7 @@ package io.github.sekerator.kingdomworld.core.state;
 
 import io.github.sekerator.kingdomworld.core.citizen.Citizen;
 import io.github.sekerator.kingdomworld.core.citizen.Citizens;
+import io.github.sekerator.kingdomworld.core.citizen.MineGoal;
 import io.github.sekerator.kingdomworld.core.citizen.Professions;
 import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
 import io.github.sekerator.kingdomworld.core.citizen.WorkZone;
@@ -495,6 +496,31 @@ public final class KingdomWorldState {
             return Outcome.fail(KingdomError.UNCHANGED);
         }
         citizens.setPostHerdSize(post, size);
+        return Outcome.DONE;
+    }
+
+    /**
+     * Sets what a miner's post is asked for: the kind of ore, how much of it and the depth of the mine. Whether the
+     * kind of ore exists is checked by the caller.
+     */
+    public Outcome setPostMineGoal(UUID actor, WorldPos pos, String ore, int amount, boolean autoDepth, int depth) {
+        Outcome check = checkPost(actor, pos);
+        if (!check.ok()) {
+            return check;
+        }
+        WorkPost post = citizens.posts().get(pos).orElseThrow();
+        if (!Professions.MINER.id().equals(post.professionId())) {
+            return Outcome.fail(KingdomError.NOT_A_POST_PROFESSION);
+        }
+        if (!MineGoal.isValidOre(ore) || amount < 0 || amount > MineGoal.MAX_AMOUNT
+                || !autoDepth && (depth < MineGoal.MIN_DEPTH || depth > MineGoal.MAX_DEPTH)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        MineGoal goal = new MineGoal(ore, amount, autoDepth, autoDepth ? 0 : depth);
+        if (post.mineGoal().equals(goal)) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        citizens.setPostMineGoal(post, goal);
         return Outcome.DONE;
     }
 

@@ -13,6 +13,8 @@ import io.github.sekerator.kingdomworld.common.protection.ProtectionService;
 import io.github.sekerator.kingdomworld.core.citizen.Citizen;
 import io.github.sekerator.kingdomworld.core.citizen.GatheringRules;
 import io.github.sekerator.kingdomworld.core.citizen.Gender;
+import io.github.sekerator.kingdomworld.core.citizen.MineGoal;
+import io.github.sekerator.kingdomworld.core.citizen.MinePlan;
 import io.github.sekerator.kingdomworld.core.citizen.Professions;
 import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
 import io.github.sekerator.kingdomworld.core.citizen.WorkZone;
@@ -157,6 +159,17 @@ public final class WorkPostActions {
                         construction.anchor().coordinates(), progress);
             }
         }
+        WorkPostView.Goal goal = WorkPostView.Goal.NONE;
+        if (level != null && post.professionId().equals(Professions.MINER.id())) {
+            MineGoal asked = post.mineGoal();
+            List<String> ores = new ArrayList<>(MineOres.kinds());
+            if (!asked.anything() && !ores.contains(asked.ore()) && ores.size() < WorkPostView.MAX_ORES) {
+                ores.add(0, asked.ore());
+            }
+            int lowest = Math.min(post.pos().y(), level.getMinBuildHeight() + MinePlan.BOTTOM_MARGIN);
+            goal = new WorkPostView.Goal(ores, asked.ore(), asked.amount(), MinerBehavior.stock(level, post), asked.autoDepth(),
+                    MinerBehavior.depth(level, post), lowest, post.pos().y());
+        }
         return new WorkPostView(new BlockPos(post.pos().x(), post.pos().y(), post.pos().z()), post.kingdomId(),
                 state.membership().hasPermission(player.getUUID(), post.kingdomId(), Permission.MANAGE_CITIZENS),
                 post.professionId(), post.radius(), Math.max(post.radius(), rules.maxRadius()), post.seats(),
@@ -165,7 +178,7 @@ public final class WorkPostActions {
                 post.status(), container, post.yield().measured(), (int) Math.min(1_000_000, Math.round(post.yield().total())),
                 post.producedOn(PostWork.gameDay(server)), workers, unemployed, post.auto(), stations,
                 current == null ? net.minecraft.world.item.ItemStack.EMPTY : new net.minecraft.world.item.ItemStack(current),
-                progress, site);
+                progress, site, goal);
     }
 
     // ---------------------------------------------------------------- changes
@@ -200,6 +213,9 @@ public final class WorkPostActions {
             case DISMISS -> packet.target() == null ? KingdomActions.Feedback.error(KingdomError.NOT_A_WORKER)
                     : dismiss(player, at, packet.target());
             case AUTO -> setAuto(player, at, packet.value() != 0);
+            case GOAL_ORE -> setGoalOre(player, at, packet.text());
+            case GOAL_AMOUNT -> setGoalAmount(player, at, packet.value());
+            case GOAL_DEPTH -> setGoalDepth(player, at, packet.value() == 0, packet.value() - WorkPostActionPacket.DEPTH_OFFSET);
         };
         if (feedback != null) {
             KingdomActions.reply(player, feedback);
@@ -263,6 +279,60 @@ public final class WorkPostActions {
         Outcome outcome = KingdomWorldApi.change(player.server, "switch the auto mode of a workshop",
                 state -> state.setPostAuto(player.getUUID(), pos, auto));
         return result(outcome, auto ? KEY + "auto_on" : KEY + "auto_off");
+    }
+
+    /**
+     * Asks a miner's post for a kind of ore, or for anything with an empty id. Another kind is another mine.
+     */
+    public static KingdomActions.Feedback setGoalOre(ServerPlayer player, WorldPos pos, String ore) {
+        if (ore == null || !ore.isEmpty() && !MineOres.exists(ore)) {
+            return KingdomActions.Feedback.error(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        Outcome outcome = setGoal(player, pos, goal -> goal.withOre(ore));
+        return result(outcome, ore.isEmpty() ? KEY + "goal_anything" : KEY + "goal_ore_set", MineOres.name(ore));
+    }
+
+    public static KingdomActions.Feedback setGoalAmount(ServerPlayer player, WorldPos pos, int amount) {
+        if (amount < 0 || amount > MineGoal.MAX_AMOUNT) {
+            return KingdomActions.Feedback.error(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        Outcome outcome = setGoal(player, pos, goal -> goal.withAmount(amount));
+        return result(outcome, amount == 0 ? KEY + "goal_no_limit" : KEY + "goal_amount_set", amount);
+    }
+
+    /**
+     * Sets the depth of a mine: the one of its kind of ore, or a height, which the world and the level of the post
+     * limit. Another depth is another mine.
+     */
+    public static KingdomActions.Feedback setGoalDepth(ServerPlayer player, WorldPos pos, boolean auto, int depth) {
+        Optional<WorkPost> post = PostWork.post(player.server, pos);
+        ServerLevel level = PostWork.level(player.server, pos);
+        if (post.isEmpty() || level == null) {
+            return KingdomActions.Feedback.error(KingdomError.UNKNOWN_POST);
+        }
+        if (!auto && (depth < MineGoal.MIN_DEPTH || depth > MineGoal.MAX_DEPTH)) {
+            return KingdomActions.Feedback.error(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        int height = auto ? 0 : MinePlan.clampDepth(depth, pos.y(), level.getMinBuildHeight());
+        Outcome outcome = setGoal(player, pos, goal -> auto ? goal.withAutoDepth() : goal.withDepth(height));
+        return result(outcome, KEY + "goal_depth_set", MinerBehavior.depth(level, post.get()));
+    }
+
+    private static Outcome setGoal(ServerPlayer player, WorldPos pos, java.util.function.UnaryOperator<MineGoal> change) {
+        Optional<WorkPost> post = PostWork.post(player.server, pos);
+        if (post.isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_POST);
+        }
+        MineGoal before = post.get().mineGoal();
+        MineGoal goal = change.apply(before);
+        Outcome outcome = KingdomWorldApi.change(player.server, "set the goal of a mine",
+                state -> state.setPostMineGoal(player.getUUID(), pos, goal.ore(), goal.amount(), goal.autoDepth(), goal.depth()));
+        if (outcome.ok() && !goal.sameMine(before)) {
+            // A new mine: what it gives is estimated anew.
+            ZoneSurveys.forget(pos);
+            ZoneSurveys.request(pos);
+        }
+        return outcome;
     }
 
     public static KingdomActions.Feedback hire(ServerPlayer player, WorldPos pos) {

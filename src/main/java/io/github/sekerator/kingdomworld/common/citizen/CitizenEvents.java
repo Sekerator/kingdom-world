@@ -127,6 +127,7 @@ public final class CitizenEvents {
         CitizenSettings.reset();
         GatheringSettings.reset();
         PostWork.reset();
+        io.github.sekerator.kingdomworld.common.citizen.work.MinerBehavior.reset();
         ZoneSurveys.reset();
         io.github.sekerator.kingdomworld.common.production.ProductionSettings.reset();
         io.github.sekerator.kingdomworld.common.production.Production.reset();

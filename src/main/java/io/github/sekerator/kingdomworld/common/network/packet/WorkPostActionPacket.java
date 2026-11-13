@@ -19,7 +19,7 @@ import java.util.function.Supplier;
  * the result and a refreshed screen.
  *
  * @param value  a number for the settings that take one
- * @param text   a profession or animal id for the settings that take one, otherwise empty
+ * @param text   a profession, animal or ore id for the settings that take one, otherwise empty
  * @param target the worker to dismiss, otherwise {@code null}
  */
 public record WorkPostActionPacket(BlockPos pos, Action action, int value, String text, @Nullable UUID target) {
@@ -34,8 +34,18 @@ public record WorkPostActionPacket(BlockPos pos, Action action, int value, Strin
         HERD,
         HIRE,
         DISMISS,
-        AUTO
+        AUTO,
+        /** The kind of ore a miner's post is asked for, in {@code text}; empty for anything. */
+        GOAL_ORE,
+        /** How much of it the storehouses should hold, in {@code value}; 0 for no limit. */
+        GOAL_AMOUNT,
+        /** The depth of the mine, in {@code value}: 0 for the depth of the kind of ore, otherwise y + {@link #DEPTH_OFFSET}. */
+        GOAL_DEPTH
     }
+
+    /** Added to a height so that it travels as a positive number. */
+    public static final int DEPTH_OFFSET = 4_096;
+    private static final int MAX_VALUE = 10_000;
 
     public WorkPostActionPacket {
         text = text == null ? "" : text;
@@ -65,7 +75,7 @@ public record WorkPostActionPacket(BlockPos pos, Action action, int value, Strin
         ServerPlayer sender = context.get().getSender();
         if (!ServerRequestGuard.admit(sender, POLICY)
                 || !ServerRequestGuard.requireLength(sender, POLICY, "text", message.text(), WorkPost.MAX_ANIMAL_LENGTH)
-                || !ServerRequestGuard.requireRange(sender, POLICY, "value", message.value(), 0, 1_000)) {
+                || !ServerRequestGuard.requireRange(sender, POLICY, "value", message.value(), 0, MAX_VALUE)) {
             return;
         }
         WorkPostActions.handle(sender, message);

@@ -2,6 +2,7 @@ package io.github.sekerator.kingdomworld.common.citizen.work;
 
 import io.github.sekerator.kingdomworld.common.config.KingdomWorldConfig;
 import io.github.sekerator.kingdomworld.core.citizen.GatheringRules;
+import io.github.sekerator.kingdomworld.core.citizen.MineRules;
 import io.github.sekerator.kingdomworld.core.citizen.TaskRisks;
 
 /**
@@ -11,6 +12,8 @@ import io.github.sekerator.kingdomworld.core.citizen.TaskRisks;
 public final class GatheringSettings {
     private static GatheringRules override;
     private static GatheringRules cached;
+    private static MineRules mineOverride;
+    private static MineRules mineCached;
 
     private GatheringSettings() {
     }
@@ -28,15 +31,50 @@ public final class GatheringSettings {
     }
 
     /**
+     * The rules of mines of the running server.
+     */
+    public static MineRules mine() {
+        if (mineOverride != null) {
+            return mineOverride;
+        }
+        MineRules rules = mineCached;
+        if (rules == null) {
+            rules = mineFromConfig();
+            mineCached = rules;
+        }
+        return rules;
+    }
+
+    /**
      * Rereads the config.
      */
     public static void refresh() {
         cached = fromConfig();
+        MineRules mine = mineFromConfig();
+        // The plans of mines are kept by their rules: the same settings stay the same object.
+        if (!mine.equals(mineCached)) {
+            mineCached = mine;
+        }
     }
 
     public static void reset() {
         cached = null;
         override = null;
+        mineCached = null;
+        mineOverride = null;
+    }
+
+    private static MineRules mineFromConfig() {
+        KingdomWorldConfig.Server config = KingdomWorldConfig.SERVER;
+        return new MineRules(config.minerCorridorLength.get(), config.minerBranchLength.get(), config.minerVeinBlocks.get(),
+                MineRules.parseDepths(config.minerOreDepths.get()));
+    }
+
+    /**
+     * Replaces the configured rules of mines, for game tests; {@code null} restores the config.
+     */
+    public static void overrideMine(MineRules rules) {
+        mineOverride = rules;
     }
 
     private static GatheringRules fromConfig() {

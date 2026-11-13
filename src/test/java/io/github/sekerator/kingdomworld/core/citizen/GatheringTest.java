@@ -14,7 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Risks of work, zones and the mine plan, the choice of tools and the work done far from players.
+ * Risks of work, zones, the choice of tools and the work done far from players; the plan of a mine has
+ * {@link MineTest}.
  */
 class GatheringTest {
     private static final String OVERWORLD = "minecraft:overworld";
@@ -107,40 +108,6 @@ class GatheringTest {
         assertEquals(8, GatheringRules.DEFAULT.radiusForNewPost(23));
         assertEquals(3, GatheringRules.DEFAULT.radiusForNewPost(3));
         assertEquals(1, GatheringRules.DEFAULT.radiusForNewPost(0));
-    }
-
-    @Test
-    void theMineIsDugFromItsEntrance() {
-        List<MinePlan.Cell> cells = MinePlan.cells(0, 60, 0, 7, 4);
-        assertEquals(3, MinePlan.levels(7, 4));
-        assertEquals(1, MinePlan.levels(7, 1));
-        assertEquals(1, MinePlan.levels(2, 4));
-        MinePlan.Cell first = cells.get(0);
-        assertEquals(-1, first.from());
-        assertEquals(0, first.x());
-        assertEquals(1, first.z(), "the mine starts in front of the post");
-        Set<String> seen = new HashSet<>();
-        int lowest = 60;
-        for (int i = 0; i < cells.size(); i++) {
-            MinePlan.Cell cell = cells.get(i);
-            assertTrue(seen.add(cell.x() + "," + cell.y() + "," + cell.z()), "a cell is planned twice: " + cell);
-            assertTrue(Math.abs(cell.x()) <= 7 && Math.abs(cell.z()) <= 7, "a cell leaves the zone: " + cell);
-            assertTrue(cell.y() <= 60, "a mine never goes up");
-            assertTrue(cell.x() != 0 || cell.z() != 0 || cell.y() != 60, "the miner digs away its own post");
-            if (i > 0) {
-                assertTrue(cell.from() >= 0 && cell.from() < i, "a cell is entered from one dug before it");
-                MinePlan.Cell from = cells.get(cell.from());
-                int dx = Math.abs(cell.x() - from.x());
-                int dz = Math.abs(cell.z() - from.z());
-                assertEquals(1, dx + dz, "neighbouring cells touch side by side: " + from + " -> " + cell);
-                assertTrue(Math.abs(cell.y() - from.y()) <= 1);
-                if (cell.y() < from.y()) {
-                    assertEquals(MinePlan.STAIR_HEIGHT, cell.height(), "stepping down needs a high cell");
-                }
-            }
-            lowest = Math.min(lowest, cell.y());
-        }
-        assertEquals(60 - 2 * GatheringRules.MINE_LEVEL_STEP, lowest);
     }
 
     // ---------------------------------------------------------------- tools

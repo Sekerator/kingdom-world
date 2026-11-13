@@ -347,6 +347,10 @@ public final class Citizens {
         post.setHerdSize(herdSize);
     }
 
+    public void setPostMineGoal(WorkPost post, MineGoal goal) {
+        post.setMineGoal(goal);
+    }
+
     // ---------------------------------------------------------------- persistence
 
     /**

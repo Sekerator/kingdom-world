@@ -1,10 +1,12 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
 import io.github.sekerator.kingdomworld.common.citizen.CitizenTexts;
+import io.github.sekerator.kingdomworld.common.citizen.work.MineOres;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.WorkPostView;
 import io.github.sekerator.kingdomworld.common.network.packet.WorkPostActionPacket;
 import io.github.sekerator.kingdomworld.core.citizen.Gender;
+import io.github.sekerator.kingdomworld.core.citizen.MineGoal;
 import io.github.sekerator.kingdomworld.core.citizen.Profession;
 import io.github.sekerator.kingdomworld.core.citizen.Professions;
 import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
@@ -23,8 +25,10 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * The screen of a work post: its profession, the radius of its zone, its seats, the animals of a herd, why it
- * stands still if it does, what it yields and who works there. Members with the right to manage citizens change
+ * The screen of a work post: its profession, the radius of its zone, its seats, the animals of a herd, the goal of
+ * a mine (the kind of ore, how much of it is needed and the depth), why it stands still if it does, what it yields
+ * and who works there. The buttons that go through choices (profession, animals, ore) take the next one on a left
+ * click and the one before on a right click. Members with the right to manage citizens change
  * the settings, hire citizens without work and dismiss workers; everybody else of the kingdom only looks. Every
  * button sends an intent; the server decides and answers with the result and a fresh screen. Widths come from the
  * translated texts.
@@ -43,6 +47,11 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
     private static final int NAME_COLUMN = 86;
     /** Width the value between minus and plus takes at most ("16 / 16"). */
     private static final int VALUE_WIDTH = 44;
+    /** Widest button of a kind of ore; longer names are shortened and shown in full on hover. */
+    private static final int ORE_WIDTH = 118;
+    private static final int AMOUNT_STEP = 16;
+    private static final int AMOUNT_BIG_STEP = 64;
+    private static final int DEPTH_BIG_STEP = 8;
 
     private WorkPostView view;
     private Component status = Component.empty();
@@ -59,6 +68,9 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
     private int modeWidth;
     private int dismissWidth;
     private int stateWidth;
+    private int depthValueWidth;
+    private int amountValueWidth;
+    private int oreWidth;
 
     public WorkPostScreen(WorkPostView view) {
         super(Component.translatable("block.kingdomworld.work_post"));
@@ -93,6 +105,46 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
 
     private boolean isWorkshop() {
         return Professions.usesStations(view.profession());
+    }
+
+    private boolean isMiner() {
+        return view.profession().equals(Professions.MINER.id());
+    }
+
+    private static Component oreName(String id) {
+        return id.isEmpty() ? Component.translatable(KEY + "goal.anything") : MineOres.name(id);
+    }
+
+    private static Component depthText(boolean auto, int depth) {
+        return Component.translatable(auto ? KEY + "goal.depth_auto" : KEY + "goal.depth_manual", depth);
+    }
+
+    private Component amountText() {
+        int amount = view.goal().amount();
+        return amount == 0 ? Component.translatable(KEY + "goal.no_limit") : Component.literal(Integer.toString(amount));
+    }
+
+    /**
+     * The first line of a mine: the goal when it is met, otherwise the state of the post.
+     */
+    private Component statusLine() {
+        WorkPostView.Goal goal = view.goal();
+        if (isMiner() && goal.met() && !view.status().isProblem()) {
+            return Component.translatable(KEY + "goal.met", oreName(goal.ore()), goal.stock(), goal.amount());
+        }
+        return Component.translatable(KEY + "status", statusText(view.status()));
+    }
+
+    /**
+     * How much of what the mine is asked for the storehouses hold.
+     */
+    private Component stockLine() {
+        WorkPostView.Goal goal = view.goal();
+        if (goal.ore().isEmpty()) {
+            return Component.translatable(KEY + "goal.none");
+        }
+        return goal.amount() > 0 ? Component.translatable(KEY + "goal.stock", goal.stock(), goal.amount())
+                : Component.translatable(KEY + "goal.stock_any", goal.stock());
     }
 
     private boolean isBuilder() {
@@ -185,19 +237,30 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
      * Labels of the first column: profession, radius, herd size.
      */
     private List<Component> labels() {
-        return List.of(Component.translatable(KEY + "profession"), Component.translatable(KEY + "radius"),
-                Component.translatable(hasAuto() ? KEY + "mode" : KEY + "herd"));
+        return List.of(Component.translatable(KEY + "profession"), Component.translatable(isMiner() ? KEY + "goal.depth" : KEY + "radius"),
+                Component.translatable(hasAuto() ? KEY + "mode" : isMiner() ? KEY + "goal.ore" : KEY + "herd"));
     }
 
     /**
      * Labels of the second column: seats, animals.
      */
     private List<Component> secondLabels() {
-        return List.of(Component.translatable(KEY + "seats"), Component.translatable(KEY + "animal"));
+        return List.of(Component.translatable(KEY + "seats"), Component.translatable(isMiner() ? KEY + "goal.amount" : KEY + "animal"));
     }
 
     private static int stepperWidth() {
         return 2 * SMALL + 2 * GAP + VALUE_WIDTH;
+    }
+
+    /**
+     * Width of the first column of controls: a stepper, or for a mine the wider of its depth and its ore.
+     */
+    private int firstColumnWidth() {
+        return isMiner() ? Math.max(2 * SMALL + 2 * GAP + depthValueWidth, oreWidth) : stepperWidth();
+    }
+
+    private int amountStepperWidth() {
+        return 2 * SMALL + 2 * GAP + amountValueWidth;
     }
 
     private Component containerLine() {
@@ -231,6 +294,9 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         if (isWorkshop()) {
             return List.of(Component.translatable(KEY + "status", statusText(view.status())), stationsLine(), currentLine(), containerLine(),
                     workshopYieldLine());
+        }
+        if (isMiner()) {
+            return List.of(statusLine(), containerLine(), yieldLine(), todayLine(), stockLine());
         }
         return List.of(Component.translatable(KEY + "status", statusText(view.status())), containerLine(), yieldLine(), todayLine());
     }
@@ -273,9 +339,22 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         for (WorkStatus value : WorkStatus.values()) {
             stateWidth = Math.max(stateWidth, font.width(statusText(value)));
         }
+        WorkPostView.Goal goal = view.goal();
+        depthValueWidth = VALUE_WIDTH;
+        for (int depth : new int[]{goal.depth(), goal.minDepth(), goal.maxDepth()}) {
+            depthValueWidth = Math.max(depthValueWidth, Math.max(buttonWidth(depthText(true, depth)), buttonWidth(depthText(false, depth))));
+        }
+        amountValueWidth = Math.max(VALUE_WIDTH, Math.max(font.width(Integer.toString(MineGoal.MAX_AMOUNT)),
+                font.width(Component.translatable(KEY + "goal.no_limit"))) + 4);
+        // The ore button shortens a long name; hovering shows it in full.
+        oreWidth = font.width(oreName("")) + CycleButton.ICON_SPACE + LayoutCheck.BUTTON_TEXT_MARGIN + 8;
+        for (String ore : goal.ores()) {
+            oreWidth = Math.max(oreWidth, font.width(oreName(ore)) + CycleButton.ICON_SPACE + LayoutCheck.BUTTON_TEXT_MARGIN + 8);
+        }
+        oreWidth = Math.min(oreWidth, ORE_WIDTH);
         // The animal button shortens its text when it has to; a few letters must show.
-        int controls = labelWidth + 6 + Math.max(Math.max(professionWidth, modeWidth), stepperWidth() + 12 + secondLabelWidth + 6
-                + Math.max(stepperWidth(), Math.min(animalWidth, 80)));
+        int controls = labelWidth + 6 + Math.max(Math.max(professionWidth, modeWidth), firstColumnWidth() + 12 + secondLabelWidth + 6
+                + Math.max(stepperWidth(), isMiner() ? amountStepperWidth() : Math.min(animalWidth, 80)));
         int info = font.width(title()) + 2 * PAD;
         WorkPostView saved = view;
         // The longest numbers the lines can show.
@@ -298,6 +377,11 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
             info = Math.max(info, Math.max(font.width(Component.translatable(KEY + "made_today", 9_999_999L)),
                     font.width(Component.translatable(KEY + "no_stations"))));
             info = Math.max(info, font.width(Component.translatable(KEY + "current_none")));
+        }
+        if (isMiner()) {
+            info = Math.max(info, Math.max(font.width(Component.translatable(KEY + "goal.stock", 9_999_999L, MineGoal.MAX_AMOUNT)),
+                    font.width(Component.translatable(KEY + "goal.stock_any", 9_999_999L))));
+            info = Math.max(info, font.width(Component.translatable(KEY + "goal.none")));
         }
         if (isBuilder()) {
             info = Math.max(info, Math.max(font.width(Component.translatable(KEY + "site_none")),
@@ -323,11 +407,11 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
     }
 
     private int settingRows() {
-        return isHerder() || hasAuto() ? 3 : 2;
+        return isHerder() || hasAuto() || isMiner() ? 3 : 2;
     }
 
     private int secondColumnX() {
-        return controlsX() + stepperWidth() + 12;
+        return controlsX() + firstColumnWidth() + 12;
     }
 
     private int secondControlsX() {
@@ -370,24 +454,30 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
                     index = i;
                 }
             }
-            String next = choices.get((index + 1) % choices.size()).id();
-            addRenderableWidget(Button.builder(professionName(view.profession()),
-                    b -> send(WorkPostActionPacket.Action.PROFESSION, 0, next, null)).bounds(x, y, professionWidth, ROW - 2).build());
-            stepper(x, y + ROW, view.radius(), 1, view.maxRadius(), WorkPostActionPacket.Action.RADIUS);
+            int chosen = index;
+            CycleButton profession = addRenderableWidget(new CycleButton(x, y, professionWidth, ROW - 2, professionName(view.profession()),
+                    direction -> send(WorkPostActionPacket.Action.PROFESSION, 0,
+                            choices.get(Math.floorMod(chosen + direction, choices.size())).id(), null)));
+            profession.setTooltip(Tooltip.create(Component.translatable(KEY + "cycle_hint")));
+            if (isMiner()) {
+                goalWidgets(x, y);
+            } else {
+                stepper(x, y + ROW, view.radius(), 1, view.maxRadius(), WorkPostActionPacket.Action.RADIUS);
+            }
             stepper(secondControlsX(), y + ROW, view.seats(), 1, view.maxSeats(), WorkPostActionPacket.Action.SEATS);
             if (isHerder()) {
                 stepper(x, y + 2 * ROW, view.herdSize(), 2, view.maxHerd(), WorkPostActionPacket.Action.HERD);
                 List<String> animals = view.animals();
                 if (!animals.isEmpty()) {
                     int current = animals.indexOf(view.animal());
-                    String nextAnimal = animals.get((current + 1) % animals.size());
                     int available = left() + panelWidth - PAD - secondControlsX();
                     int buttonWidth = Math.min(animalWidth, available);
                     Component label = animalName(view.animal());
-                    Button button = addRenderableWidget(Button.builder(Component.literal(fit(label.getString(),
-                                    buttonWidth - LayoutCheck.BUTTON_TEXT_MARGIN - 8)),
-                            b -> send(WorkPostActionPacket.Action.ANIMAL, 0, nextAnimal, null))
-                            .bounds(secondControlsX(), y + 2 * ROW, buttonWidth, ROW - 2).build());
+                    // Before a kind is chosen the first click takes the first one, or the last one going back.
+                    CycleButton button = addRenderableWidget(new CycleButton(secondControlsX(), y + 2 * ROW, buttonWidth, ROW - 2,
+                            Component.literal(fit(label.getString(), buttonWidth - LayoutCheck.BUTTON_TEXT_MARGIN - 8)),
+                            direction -> send(WorkPostActionPacket.Action.ANIMAL, 0, animals.get(Math.floorMod(
+                                    current < 0 ? (direction > 0 ? 0 : -1) : current + direction, animals.size())), null)));
                     button.setTooltip(Tooltip.create(label));
                 }
             }
@@ -414,6 +504,63 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         int doneWidth = Math.max(50, buttonWidth(Component.translatable("gui.done")));
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose())
                 .bounds(left() + panelWidth - PAD - doneWidth, top() + panelHeight - 26, doneWidth, 20).build());
+    }
+
+    /**
+     * The goal of a mine: its depth in the place of the radius, which a mine does not have, the kind of ore below
+     * it and how much of it is needed beside that.
+     */
+    private void goalWidgets(int x, int y) {
+        WorkPostView.Goal goal = view.goal();
+        int depthY = y + ROW;
+        Button lower = addRenderableWidget(Button.builder(Component.literal("-"),
+                        b -> sendDepth(goal.depth() - (hasShiftDown() ? DEPTH_BIG_STEP : 1)))
+                .bounds(x, depthY, SMALL, ROW - 2).build());
+        lower.active = goal.depth() > goal.minDepth();
+        Button mode = addRenderableWidget(Button.builder(depthText(goal.autoDepth(), goal.depth()),
+                        b -> send(WorkPostActionPacket.Action.GOAL_DEPTH,
+                                goal.autoDepth() ? goal.depth() + WorkPostActionPacket.DEPTH_OFFSET : 0, "", null))
+                .bounds(x + SMALL + GAP, depthY, depthValueWidth, ROW - 2).build());
+        mode.setTooltip(Tooltip.create(Component.translatable(goal.autoDepth() ? KEY + "goal.depth_auto_hint" : KEY + "goal.depth_manual_hint")));
+        Button higher = addRenderableWidget(Button.builder(Component.literal("+"),
+                        b -> sendDepth(goal.depth() + (hasShiftDown() ? DEPTH_BIG_STEP : 1)))
+                .bounds(x + SMALL + GAP + depthValueWidth + GAP, depthY, SMALL, ROW - 2).build());
+        higher.active = goal.depth() < goal.maxDepth();
+
+        List<String> ores = new ArrayList<>();
+        ores.add("");
+        ores.addAll(goal.ores());
+        int chosen = Math.max(0, ores.indexOf(goal.ore()));
+        Component name = oreName(goal.ore());
+        int width = Math.min(oreWidth, firstColumnWidth());
+        CycleButton ore = addRenderableWidget(new CycleButton(x, y + 2 * ROW, width, ROW - 2,
+                Component.literal(fit(name.getString(), width - CycleButton.ICON_SPACE - LayoutCheck.BUTTON_TEXT_MARGIN - 4)),
+                MineOres.icon(goal.ore()),
+                direction -> send(WorkPostActionPacket.Action.GOAL_ORE, 0, ores.get(Math.floorMod(chosen + direction, ores.size())), null)));
+        ore.setTooltip(Tooltip.create(Component.translatable(KEY + "goal.ore_hint", name)));
+
+        int amountX = secondControlsX();
+        Button less = addRenderableWidget(Button.builder(Component.literal("-"),
+                        b -> send(WorkPostActionPacket.Action.GOAL_AMOUNT, goal.amount() - amountStep(), "", null))
+                .bounds(amountX, y + 2 * ROW, SMALL, ROW - 2).build());
+        // Anything has no stock to count: the amount belongs to a kind of ore.
+        less.active = !goal.ore().isEmpty() && goal.amount() > 0;
+        less.setTooltip(Tooltip.create(Component.translatable(KEY + "goal.amount_hint")));
+        Button more = addRenderableWidget(Button.builder(Component.literal("+"),
+                        b -> send(WorkPostActionPacket.Action.GOAL_AMOUNT, Math.min(MineGoal.MAX_AMOUNT, goal.amount() + amountStep()), "", null))
+                .bounds(amountX + SMALL + GAP + amountValueWidth + GAP, y + 2 * ROW, SMALL, ROW - 2).build());
+        more.active = !goal.ore().isEmpty() && goal.amount() < MineGoal.MAX_AMOUNT;
+        more.setTooltip(Tooltip.create(Component.translatable(KEY + "goal.amount_hint")));
+    }
+
+    private static int amountStep() {
+        return hasShiftDown() ? AMOUNT_BIG_STEP : AMOUNT_STEP;
+    }
+
+    private void sendDepth(int depth) {
+        WorkPostView.Goal goal = view.goal();
+        int clamped = Math.max(goal.minDepth(), Math.min(goal.maxDepth(), depth));
+        send(WorkPostActionPacket.Action.GOAL_DEPTH, clamped + WorkPostActionPacket.DEPTH_OFFSET, "", null);
     }
 
     /**
@@ -471,7 +618,7 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         int secondControls = secondControlsX();
         for (int row = 0; row < settingRows(); row++) {
             label(graphics, labels.get(row), x, y + row * ROW + 5, 0xFFE8E8E8, controls - 2);
-            if (row == 1 || row == 2 && isHerder()) {
+            if (row == 1 || row == 2 && (isHerder() || isMiner())) {
                 label(graphics, second.get(row - 1), secondX, y + row * ROW + 5, 0xFFE8E8E8, secondControls - 2);
             }
         }
@@ -479,7 +626,20 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         if (!manage) {
             label(graphics, professionName(view.profession()), controls, y + 5, 0xFFFFFFFF, right);
         }
-        value(graphics, view.radius(), view.maxRadius(), controls, y + ROW, manage, secondX - 4);
+        if (isMiner()) {
+            WorkPostView.Goal goal = view.goal();
+            if (manage) {
+                int amountLeft = secondControls + SMALL + GAP;
+                centeredLabel(graphics, amountText(), amountLeft + amountValueWidth / 2, y + 2 * ROW + 5, 0xFFFFFFFF, amountLeft,
+                        amountLeft + amountValueWidth);
+            } else {
+                label(graphics, depthText(goal.autoDepth(), goal.depth()), controls, y + ROW + 5, 0xFFFFFFFF, secondX - 4);
+                name(graphics, oreName(goal.ore()).getString(), controls, y + 2 * ROW + 5, 0xFFFFFFFF, secondX - 4 - controls);
+                label(graphics, amountText(), secondControls, y + 2 * ROW + 5, 0xFFFFFFFF, right);
+            }
+        } else {
+            value(graphics, view.radius(), view.maxRadius(), controls, y + ROW, manage, secondX - 4);
+        }
         value(graphics, view.seats(), view.maxSeats(), secondControls, y + ROW, manage, right);
         if (hasAuto() && !manage) {
             label(graphics, modeName(view.auto()), controls, y + 2 * ROW + 5, 0xFFFFFFFF, right);
@@ -495,7 +655,11 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         List<Component> info = infoLines();
         for (int i = 0; i < info.size(); i++) {
             int color = i == 0 ? statusColor(view.status()) : 0xFFD0D0D0;
-            if (isNameLine(i)) {
+            if (i == 0 && isMiner()) {
+                // The goal that is met names its ore, as long as the game names it.
+                boolean met = view.goal().met() && !view.status().isProblem();
+                fittedLabel(graphics, info.get(i), x, infoY, met ? 0xFFA0E0A0 : color, right);
+            } else if (isNameLine(i)) {
                 name(graphics, info.get(i).getString(), x, infoY + i * (LINE + 1), color, right - x);
             } else {
                 label(graphics, info.get(i), x, infoY + i * (LINE + 1), color, right);
