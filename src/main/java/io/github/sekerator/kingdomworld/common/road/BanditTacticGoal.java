@@ -82,10 +82,15 @@ final class BanditTacticGoal extends Goal {
         if (aim == null) {
             return;
         }
+        Spot stand = duty.stand() != null ? duty.stand() : TacticMover.spot(bandit);
+        if (aim instanceof net.minecraft.world.entity.player.Player && !bandit.getSensing().hasLineOfSight(aim)) {
+            // The band knows a player only where one of it last saw the player: the robber goes to its place by that.
+            mover.walk(stand, 1.1);
+            return;
+        }
         if (bandit.getTarget() != aim) {
             bandit.setTarget(aim);
         }
-        Spot stand = duty.stand() != null ? duty.stand() : TacticMover.spot(bandit);
         if (bandit.getMainHandItem().getItem() instanceof BowItem) {
             if (bandit.distanceToSqr(stand.x(), stand.y(), stand.z()) > 4.0) {
                 mover.walk(stand, 1.0);

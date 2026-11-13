@@ -361,7 +361,8 @@ public final class TacticGameTests {
             bandits.add(bandit);
         }
         ServerPlayer traveller = LawStandIn.create(server, level, new GameProfile(UUID.randomUUID(), "kw-traveller"));
-        BlockPos far = helper.absolutePos(new BlockPos(20, 1, 20));
+        // Far from the camp, but in the sight of the band: a band knows only a player one of it sees.
+        BlockPos far = helper.absolutePos(new BlockPos(16, 1, 16));
         traveller.setPos(far.getX() + 0.5, far.getY(), far.getZ() + 0.5);
         ArmyWork.markOnline(traveller.getUUID(), true);
         bandits.forEach(bandit -> bandit.setTarget(traveller));

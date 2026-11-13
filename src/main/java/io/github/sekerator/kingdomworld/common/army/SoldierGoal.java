@@ -50,6 +50,11 @@ final class SoldierGoal extends Goal {
     private static final double RUN = 0.9;
     /** How far a soldier without an order looks for a barracks of its kingdom, in blocks. */
     private static final double BARRACKS_REACH = 160.0;
+    /**
+     * Ticks a soldier keeps a player it fights as its target out of its sight: then it no longer knows where the player is
+     * and searches where the player was last seen.
+     */
+    private static final int LOST_TICKS = 60;
 
     private final CitizenEntity body;
     private final boolean archer;
@@ -59,8 +64,13 @@ final class SoldierGoal extends Goal {
     /** A wanted player a guard called out and walks to while the player may still give up. */
     @Nullable
     private ServerPlayer approach;
+    /** Where an alarm calls the soldier when it does not see the offender: where the offender was last seen. */
+    @Nullable
+    private BlockPos approachPlace;
     /** Whether an alarm called the soldier to the player it approaches: it runs, however far. */
     private boolean urgent;
+    /** Ticks the player the soldier fights has been out of its sight. */
+    private int unseen;
     private boolean meleeRunning;
     private int searchCooldown;
     private int equipCooldown = 40;
@@ -77,7 +87,8 @@ final class SoldierGoal extends Goal {
     SoldierGoal(CitizenEntity body, boolean archer) {
         this.body = body;
         this.archer = archer;
-        this.melee = new MeleeAttackGoal(body, 0.8, true);
+        // The blows follow a target only while the soldier sees it: nobody follows a player through walls.
+        this.melee = new MeleeAttackGoal(body, 0.8, false);
         this.mover = new io.github.sekerator.kingdomworld.common.tactics.TacticMover(body);
         setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
     }
@@ -138,6 +149,15 @@ final class SoldierGoal extends Goal {
                 || body.distanceToSqr(target) > SEARCH * SEARCH * 4)) {
             disengage();
         }
+        if (target instanceof net.minecraft.world.entity.player.Player && !body.getSensing().hasLineOfSight(target)) {
+            // Out of sight a few moments, the player is lost: the soldier searches where the alarm last saw the player.
+            if (++unseen > LOST_TICKS) {
+                disengage();
+                searchCooldown = 0;
+            }
+        } else {
+            unseen = 0;
+        }
         if (--searchCooldown <= 0) {
             searchCooldown = SEARCH_TICKS;
             LivingEntity found = findTarget(server, level, order);
@@ -168,6 +188,16 @@ final class SoldierGoal extends Goal {
                     pathCooldown = body.distanceToSqr(approach) > ENGAGE * ENGAGE ? 20 : 10;
                     body.getNavigation().moveTo(approach, RUN);
                 }
+            }
+            return;
+        }
+        if (approachPlace != null && urgent) {
+            // An alarm whose offender the soldier does not see: it runs to where the offender was last seen, and looks there.
+            double dx = body.getX() - (approachPlace.getX() + 0.5);
+            double dz = body.getZ() - (approachPlace.getZ() + 0.5);
+            if (dx * dx + dz * dz > 2.0 * 2.0 && --pathCooldown <= 0 && PathBudget.tryAcquire()) {
+                pathCooldown = dx * dx + dz * dz > ENGAGE * ENGAGE ? 20 : 10;
+                body.getNavigation().moveTo(approachPlace.getX() + 0.5, approachPlace.getY(), approachPlace.getZ() + 0.5, RUN);
             }
             return;
         }
@@ -211,6 +241,15 @@ final class SoldierGoal extends Goal {
                 && ArmyWork.mayAttack(server, body.kingdomId(), found) ? found : null;
         if (aim == null) {
             return false;
+        }
+        if (aim instanceof net.minecraft.world.entity.player.Player && !body.getSensing().hasLineOfSight(aim)) {
+            // The squad knows a player only where one of it last saw the player, and placed this soldier by that: it goes
+            // to its place there instead of following the player through walls.
+            stopMelee();
+            if (duty.stand() != null) {
+                mover.walk(duty.stand(), RUN);
+            }
+            return true;
         }
         stopMelee();
         if (aim != target) {
@@ -339,18 +378,25 @@ final class SoldierGoal extends Goal {
         // A guard deals with the wanted first: it calls out, then attacks whoever did not give up.
         io.github.sekerator.kingdomworld.common.law.LawWork.Pursuit pursuit = io.github.sekerator.kingdomworld.common.law.LawWork.pursuit(server, body);
         approach = null;
+        approachPlace = null;
         urgent = false;
         if (pursuit != null) {
-            // From afar the soldier first runs up; it takes the player as its target once near enough to keep it.
-            if (pursuit.attack() && body.distanceToSqr(pursuit.player()) <= ENGAGE * ENGAGE
-                    && ArmyWork.mayAttack(server, kingdom, pursuit.player())) {
-                return pursuit.player();
+            if (pursuit.sees()) {
+                // From afar the soldier first runs up; it takes the player as its target once near enough to keep it.
+                if (pursuit.attack() && body.distanceToSqr(pursuit.player()) <= ENGAGE * ENGAGE
+                        && ArmyWork.mayAttack(server, kingdom, pursuit.player())) {
+                    return pursuit.player();
+                }
+                approach = pursuit.player();
+            } else {
+                approachPlace = pursuit.place();
             }
-            approach = pursuit.player();
             urgent = pursuit.urgent();
         }
+        // Who struck the soldier is answered when the soldier sees who it was.
         LivingEntity attacker = body.getLastHurtByMob();
         if (attacker != null && body.tickCount - body.getLastHurtByMobTimestamp() < 200 && body.distanceToSqr(attacker) < SEARCH * SEARCH * 4
+                && (!(attacker instanceof net.minecraft.world.entity.player.Player) || body.getSensing().hasLineOfSight(attacker))
                 && ArmyWork.mayAttack(server, kingdom, attacker)) {
             return attacker;
         }

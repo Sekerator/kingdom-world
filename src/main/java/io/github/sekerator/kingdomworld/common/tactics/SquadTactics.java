@@ -75,6 +75,11 @@ public final class SquadTactics {
     private static final int AMBUSH_TICKS = 600;
     /** A squad falls back towards help no further than this many blocks at a time. */
     private static final double RALLY_STEP = 24.0;
+    /**
+     * Ticks a squad keeps a player none of it sees at the place one of it last saw the player: it searches there, then
+     * forgets the player.
+     */
+    static final int PLAYER_MEMORY_TICKS = 200;
 
     enum Kind {
         SOLDIERS, ADVENTURERS, ROBBERS
@@ -94,6 +99,9 @@ public final class SquadTactics {
         int startSize;
         boolean pressedTold;
         Plan plan = Plan.NONE;
+        /** Where and when one of the squad last saw each player it fights: nobody of it follows a player through walls. */
+        final Map<UUID, Spot> playerSeen = new HashMap<>();
+        final Map<UUID, Long> playerSeenAt = new HashMap<>();
 
         Group(String key, Kind kind, UUID kingdomId) {
             this.key = key;
@@ -313,11 +321,13 @@ public final class SquadTactics {
         }
         Set<UUID> ours = new HashSet<>();
         bodies.forEach(body -> ours.add(body.getUUID()));
-        // The enemies its fighters fight, then the others around them that one of the squad sees.
+        // The enemies its fighters fight, then the others around them that one of the squad sees. A player is where one of the
+        // squad last saw the player, for a while; the squad does not follow a player it cannot see.
         Set<LivingEntity> seen = new LinkedHashSet<>();
         for (Mob body : bodies) {
             LivingEntity target = body.getTarget();
-            if (target != null && target.isAlive() && target.level() == level && hostile(server, group, target, ours)) {
+            if (target != null && target.isAlive() && target.level() == level && hostile(server, group, target, ours)
+                    && known(group, bodies, target, now, rules)) {
                 seen.add(target);
             }
         }
@@ -336,7 +346,9 @@ public final class SquadTactics {
         group.startSize = Math.max(group.startSize, bodies.size());
         AABB around = null;
         for (LivingEntity foe : seen) {
-            around = around == null ? foe.getBoundingBox() : around.minmax(foe.getBoundingBox());
+            Spot at = where(group, foe);
+            AABB box = new AABB(at.x() - 0.5, at.y(), at.z() - 0.5, at.x() + 0.5, at.y() + 2.0, at.z() + 0.5);
+            around = around == null ? box : around.minmax(box);
         }
         for (LivingEntity other : level.getEntitiesOfClass(LivingEntity.class, around.inflate(AROUND, 4.0, AROUND),
                 entity -> entity.isAlive() && !ours.contains(entity.getUUID()))) {
@@ -345,6 +357,10 @@ public final class SquadTactics {
             }
             if (!seen.contains(other) && hostile(server, group, other, ours) && sees(bodies, other, rules.sight)) {
                 seen.add(other);
+                if (other instanceof Player) {
+                    group.playerSeen.put(other.getUUID(), TacticMover.spot(other));
+                    group.playerSeenAt.put(other.getUUID(), now);
+                }
             }
         }
         List<Fighter> own = new ArrayList<>();
@@ -356,10 +372,11 @@ public final class SquadTactics {
         List<Foe> foes = new ArrayList<>();
         for (LivingEntity foe : seen) {
             nearestOwn = Double.MAX_VALUE;
+            Spot at = where(group, foe);
             for (Mob body : bodies) {
-                nearestOwn = Math.min(nearestOwn, horizontal(body, foe));
+                nearestOwn = Math.min(nearestOwn, Math.hypot(body.getX() - at.x(), body.getZ() - at.z()));
             }
-            foes.add(foe(level, foe, ours, middleY, nearestOwn));
+            foes.add(foe(level, foe, at, ours, middleY, nearestOwn));
         }
         Plan plan;
         int skill = own.stream().mapToInt(Fighter::skill).max().orElse(0);
@@ -367,7 +384,7 @@ public final class SquadTactics {
             plan = SquadPlanner.ambush(own);
         } else {
             Spot rally = rally(server, group, bodies);
-            double baseY = seen.stream().mapToDouble(LivingEntity::getY).average().orElse(middleY);
+            double baseY = seen.stream().mapToDouble(foe -> where(group, foe).y()).average().orElse(middleY);
             plan = SquadPlanner.plan(own, group.startSize, foes, rally, new WorldGround(level, baseY), rules, group.kind == Kind.ROBBERS);
         }
         group.plan = plan;
@@ -385,7 +402,34 @@ public final class SquadTactics {
         }
     }
 
+    /**
+     * Whether a squad knows where an enemy is: anything it fights where it stands, a player only while one of the nearest of
+     * the squad sees the player or for {@value #PLAYER_MEMORY_TICKS} ticks at the place where one of it last did.
+     */
+    private static boolean known(Group group, List<Mob> bodies, LivingEntity enemy, long now, TacticRules rules) {
+        if (!(enemy instanceof Player)) {
+            return true;
+        }
+        if (sees(bodies, enemy, rules.sight)) {
+            group.playerSeen.put(enemy.getUUID(), TacticMover.spot(enemy));
+            group.playerSeenAt.put(enemy.getUUID(), now);
+            return true;
+        }
+        Long at = group.playerSeenAt.get(enemy.getUUID());
+        return at != null && now - at <= PLAYER_MEMORY_TICKS && group.playerSeen.containsKey(enemy.getUUID());
+    }
+
+    /**
+     * Where a squad holds an enemy to be: a player where one of it last saw the player, anything else where it stands.
+     */
+    private static Spot where(Group group, LivingEntity enemy) {
+        Spot seen = enemy instanceof Player ? group.playerSeen.get(enemy.getUUID()) : null;
+        return seen != null ? seen : TacticMover.spot(enemy);
+    }
+
     private static void end(Group group, long now) {
+        group.playerSeen.clear();
+        group.playerSeenAt.clear();
         group.members.forEach(DUTIES::remove);
         group.firstSeen = -1;
         group.startSize = 0;
@@ -405,7 +449,8 @@ public final class SquadTactics {
                 return false;
             }
             for (LivingEntity foe : seen) {
-                if (body.distanceToSqr(foe) < AMBUSH_RANGE * AMBUSH_RANGE) {
+                Spot at = where(group, foe);
+                if (body.distanceToSqr(at.x(), at.y(), at.z()) < AMBUSH_RANGE * AMBUSH_RANGE) {
                     return false;
                 }
             }
@@ -482,15 +527,15 @@ public final class SquadTactics {
                 skill, worth(body), false);
     }
 
-    private static Foe foe(ServerLevel level, LivingEntity entity, Set<UUID> ours, double middleY, double nearestOwn) {
+    private static Foe foe(ServerLevel level, LivingEntity entity, Spot at, Set<UUID> ours, double middleY, double nearestOwn) {
         boolean ranged = entity instanceof RangedAttackMob || entity.getMainHandItem().getItem() instanceof ProjectileWeaponItem;
         boolean engaged = entity instanceof Mob mob && mob.getTarget() != null && ours.contains(mob.getTarget().getUUID())
                 || entity.getLastHurtMob() != null && ours.contains(entity.getLastHurtMob().getUUID())
                 && entity.tickCount - entity.getLastHurtMobTimestamp() < 100;
         double danger = damage(entity) * (ranged ? 1.3 : 1.0);
-        boolean high = entity.getY() - middleY >= 2.5 && nearestOwn <= 6.0;
-        return new Foe(entity.getUUID(), TacticMover.spot(entity), entity.getHealth(), Math.max(1.0f, entity.getMaxHealth()), danger,
-                worth(entity), ranged, engaged, narrow(level, entity.blockPosition()), high);
+        boolean high = at.y() - middleY >= 2.5 && nearestOwn <= 6.0;
+        return new Foe(entity.getUUID(), at, entity.getHealth(), Math.max(1.0f, entity.getMaxHealth()), danger,
+                worth(entity), ranged, engaged, narrow(level, BlockPos.containing(at.x(), at.y(), at.z())), high);
     }
 
     /**
