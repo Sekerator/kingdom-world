@@ -69,6 +69,22 @@ public final class SettlementLife {
     }
 
     /**
+     * The soldiers and squads a kingdom of the world keeps at most with all its settlements standing: the guard of the capital,
+     * of every large city and small town, and the royal army; a squad for every post of the capital, one for every town and one
+     * for every squad of the army.
+     *
+     * @param capitalPosts the posts of the capital, those of its army in reserve among them
+     * @param inCapital    soldiers of the army who stay in the capital, in its reserve
+     * @param squad        soldiers of a squad of the army beyond the capital
+     * @return {soldiers, squads}
+     */
+    public static int[] garrison(int capitalGuards, int capitalPosts, int cities, int towns, int army, int inCapital, int squad) {
+        int soldiers = capitalGuards + cities * guards(Tier.CITY) + towns * guards(Tier.TOWN) + army;
+        int squads = capitalPosts + cities + towns + (Math.max(0, army - inCapital) + squad - 1) / squad;
+        return new int[]{soldiers, squads};
+    }
+
+    /**
      * The militia: in a village a tenth of its people, elsewhere none.
      */
     public static int militia(Tier tier, int population) {

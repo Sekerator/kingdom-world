@@ -100,13 +100,23 @@ public final class NpcGarrison {
         }
         NpcRules rules = NpcSettings.rules();
         NpcLevel level = site.get().level();
-        int guards = rules.guards(level) + RoadWork.state(server).citiesOf(kingdomId).size() * rules.townGuards(level);
+        // The towns of a state are its settlements: their guard came from abroad by their rank and is not taken from the people.
+        int towns = 0;
+        for (City city : RoadWork.state(server).citiesOf(kingdomId)) {
+            if (SettlementGarrison.ofCity(server, kingdomId, city.id()).isEmpty()) {
+                towns++;
+            }
+        }
+        int guards = rules.guards(level) + towns * rules.townGuards(level);
         ArmyState army = ArmyWork.state(server);
         int people = 0;
         for (Citizen citizen : KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdomId)) {
-            people += army.soldier(citizen.id()).map(soldier -> soldier.branch() == Branch.ARMY ? 0 : 1).orElse(1);
+            if (citizen.settlement() == 0) {
+                people += army.soldier(citizen.id()).map(soldier -> soldier.branch() == Branch.ARMY ? 0 : 1).orElse(1);
+            }
         }
-        return new int[]{Math.min(guards, people * MOST_PERCENT / 100), royalArmy(server, kingdomId)};
+        return new int[]{Math.min(guards, people * MOST_PERCENT / 100) + SettlementGarrison.standingGuards(server, kingdomId),
+                royalArmy(server, kingdomId)};
     }
 
     /**
@@ -434,14 +444,17 @@ public final class NpcGarrison {
                         new WorldPos(dimension, box.minX() - 2, y, box.maxZ() + 2))), 2, ArmySquad.MAX_MEMBERS, Branch.GUARD, Post.VICE_CAPTAIN));
             });
         }
-        // Every town has guards of its own at its town hall.
+        // Every town has guards of its own at its town hall; the town of a settlement of a state as many as its rank keeps.
         int ofTown = rules.townGuards(site.level());
-        if (ofTown > 0) {
-            for (City city : RoadWork.state(server).citiesOf(kingdomId)) {
-                if (city.dimension().equals(dimension)) {
-                    duties.add(new Duty("town_" + city.id(), Order.guard(new WorldPos(dimension, city.x(), city.y(), city.z()), 1), ofTown,
-                            ofTown, Branch.GUARD, null));
-                }
+        for (City city : RoadWork.state(server).citiesOf(kingdomId)) {
+            if (!city.dimension().equals(dimension)) {
+                continue;
+            }
+            int guards = SettlementGarrison.ofCity(server, kingdomId, city.id()).map(settlement -> SettlementGarrison.guards(settlement.tier()))
+                    .orElse(ofTown);
+            if (guards > 0) {
+                duties.add(new Duty("town_" + city.id(), Order.guard(new WorldPos(dimension, city.x(), city.y(), city.z()), 1), guards, guards,
+                        Branch.GUARD, null));
             }
         }
         duties.addAll(castle);

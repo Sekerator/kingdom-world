@@ -2497,7 +2497,7 @@ public final class NpcSpawner {
      *
      * @return whether the wall is all paid
      */
-    private static boolean payWall(MinecraftServer server, ServerLevel level, NpcSite site, Wall wall) {
+    static boolean payWall(MinecraftServer server, ServerLevel level, NpcSite site, Wall wall) {
         boolean palisade = wall.wallClass() == Wall.WallClass.PALISADE;
         String item = palisade ? (site.districts() ? NpcCity.wood(site) : woodOf(level, new BlockPos(site.x(), site.groundY(), site.z()))) + "_log"
                 : site.districts() ? NpcCity.wallStone(site) : "minecraft:stone_bricks";

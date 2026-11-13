@@ -613,7 +613,8 @@ public final class SettlementRaiser {
     }
 
     /**
-     * Looks through the chunks of the land of the settlement (not of the whole kingdom) for beds and posts.
+     * Looks through the chunks of the land of the settlement (not of the whole kingdom) for beds and posts, then gives the posts
+     * inside its buildings their professions by what each building is for, a building a tick.
      */
     private static void places(ServerLevel level, Settlement settlement, Job job) {
         List<long[]> chunks = SettlementLayouts.square(settlement.x(), settlement.z(), SettlementLayouts.land(settlement.tier()));
@@ -626,9 +627,75 @@ public final class SettlementRaiser {
             }
             step++;
         }
-        settlement.setStage(SettlementStage.PLACES.id(), step);
-        if (step >= chunks.size()) {
-            advance(settlement, SettlementStage.WEALTH);
+        if (step < chunks.size()) {
+            settlement.setStage(SettlementStage.PLACES.id(), step);
+            return;
+        }
+        List<io.github.sekerator.kingdomworld.core.construction.Building> buildings = buildingsOf(level.getServer(), settlement);
+        int index = step - chunks.size();
+        if (index < buildings.size()) {
+            professions(level, settlement.kingdomId(), buildings.get(index));
+            settlement.setStage(SettlementStage.PLACES.id(), step + 1);
+            return;
+        }
+        settlement.setHousing(Math.max(job.layout.homes(), 0));
+        advance(settlement, SettlementStage.WEALTH);
+    }
+
+    /**
+     * The buildings of the kingdom of a settlement on its land, in a fixed order.
+     */
+    static List<io.github.sekerator.kingdomworld.core.construction.Building> buildingsOf(MinecraftServer server, Settlement settlement) {
+        int reach = SettlementLayouts.land(settlement.tier()) * 8;
+        List<io.github.sekerator.kingdomworld.core.construction.Building> list = new ArrayList<>();
+        for (io.github.sekerator.kingdomworld.core.construction.Building building
+                : KingdomWorldApi.state(server).construction().buildingsOf(settlement.kingdomId())) {
+            if (Math.abs(building.anchor().x() - settlement.x()) <= reach && Math.abs(building.anchor().z() - settlement.z()) <= reach) {
+                list.add(building);
+            }
+        }
+        list.sort(java.util.Comparator.comparingLong(building -> BlockPos.asLong(building.anchor().x(), building.anchor().y(), building.anchor().z())));
+        return list;
+    }
+
+    /**
+     * The posts inside a building take the profession of what it is for and what stands in it: one worker each, two at a market.
+     */
+    private static void professions(ServerLevel level, UUID id, io.github.sekerator.kingdomworld.core.construction.Building building) {
+        if (building.role().isEmpty()) {
+            return;
+        }
+        KingdomWorldState state = KingdomWorldApi.state(level.getServer());
+        io.github.sekerator.kingdomworld.core.construction.Box box = building.box();
+        List<WorkPost> inside = new ArrayList<>();
+        for (WorkPost post : state.citizens().posts().postsOf(id)) {
+            WorldPos at = post.pos();
+            if (at.x() >= box.minX() && at.x() <= box.maxX() && at.y() >= box.minY() && at.y() <= box.maxY() && at.z() >= box.minZ()
+                    && at.z() <= box.maxZ()) {
+                inside.add(post);
+            }
+        }
+        if (inside.isEmpty()) {
+            return;
+        }
+        Set<Block> blocks = new java.util.HashSet<>();
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        for (int x = box.minX(); x <= box.maxX(); x++) {
+            for (int y = box.minY(); y <= box.maxY(); y++) {
+                for (int z = box.minZ(); z <= box.maxZ(); z++) {
+                    blocks.add(level.getBlockState(pos.set(x, y, z)).getBlock());
+                }
+            }
+        }
+        String profession = NpcCity.profession(building.role(), blocks::contains);
+        if (profession.isEmpty()) {
+            return;
+        }
+        int max = io.github.sekerator.kingdomworld.common.citizen.work.GatheringSettings.rules().maxSeats();
+        int seats = "merchant".equals(profession) ? 2 : 1;
+        for (WorkPost post : inside) {
+            state.setPostProfession(null, post.pos(), profession);
+            state.setPostSeats(null, post.pos(), Math.max(1, Math.min(seats, max)), max);
         }
     }
 

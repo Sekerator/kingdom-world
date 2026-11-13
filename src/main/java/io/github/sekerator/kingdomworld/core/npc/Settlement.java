@@ -114,6 +114,15 @@ public final class Settlement {
     }
 
     /**
+     * Its houses as the beds of its buildings, once they stand: its named citizens are never more than them, its people as a
+     * number may be.
+     */
+    public void setHousing(int value) {
+        housing = Math.max(0, value);
+        changed();
+    }
+
+    /**
      * Its people as a number: the citizens of a settlement that no longer stands go to another one.
      */
     public void setPopulation(int value) {
