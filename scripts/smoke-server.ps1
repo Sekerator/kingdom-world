@@ -2151,8 +2151,10 @@ Invoke-Phase 'run1' {
                 Add-Failure "[run1] the house did not grow half way: '$($info.Value)'"
             }
             if ($hasCreate) {
-                Send-ServerCommand $server "kingdomworld admin build place $KingdomName smoketest:create_shed 45 70 6"
-                $shed = Wait-ForLog $server 'Construction #(\d+) laid out: .* at 45 70 6' $CommandTimeout $ConsoleFailPattern
+                # The shed stands east of the wall of Smoke Hollow (x 36 to 44): its anchor is its middle column from west to east,
+                # so at x 46 it takes x 45 to 47 and neither breaks the wall nor meets the gate the road gets on that side.
+                Send-ServerCommand $server "kingdomworld admin build place $KingdomName smoketest:create_shed 46 70 6"
+                $shed = Wait-ForLog $server 'Construction #(\d+) laid out: .* at 46 70 6' $CommandTimeout $ConsoleFailPattern
                 if ($shed) {
                     Send-ServerCommand $server "kingdomworld admin build finish $($shed.Groups[1].Value)"
                     if (Wait-ForLog $server "Construction #$($shed.Groups[1].Value) finished at once; building #(\d+) is in the register" $CommandTimeout $ConsoleFailPattern) {
