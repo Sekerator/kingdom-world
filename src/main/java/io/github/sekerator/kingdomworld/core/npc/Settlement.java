@@ -51,7 +51,7 @@ public final class Settlement {
     private final UUID kingdomId;
     private final int province;
     private final int parent;
-    private final Tier tier;
+    private Tier tier;
     private int x;
     private int z;
     private final long seed;
@@ -103,6 +103,21 @@ public final class Settlement {
     public static final int GIVEN_LAWS = 2;
     /** The flag of its guard come from abroad. */
     public static final int GIVEN_GUARDS = 16;
+
+    /**
+     * Raises the rank of a settlement that lives as data (a village its ruler makes a small town): its houses and guard follow the
+     * new rank, its people grow toward them day by day.
+     */
+    public void promote(Tier higher) {
+        if (higher == Tier.CAPITAL || !higher.above(tier)) {
+            throw new IllegalArgumentException(tier + " is not raised to " + higher);
+        }
+        tier = higher;
+        housing = Math.max(housing, SettlementLife.housing(higher, seed));
+        guards = SettlementLife.guards(higher);
+        militia = SettlementLife.militia(higher, population);
+        changed();
+    }
 
     /**
      * Moves the settlement to another place, when its own was turned down by the world.

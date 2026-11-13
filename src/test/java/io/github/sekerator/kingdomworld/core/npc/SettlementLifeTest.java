@@ -103,6 +103,24 @@ class SettlementLifeTest {
     }
 
     @Test
+    void aVillageBecomesASmallTown() {
+        NpcState state = new NpcState();
+        Settlement village = state.addSettlement(KINGDOM, 1, 0, Tier.VILLAGE, 0, 0, 9, new NpcNames.Name("Brook", "Брук"));
+        village.found(20, 15, 120);
+        long version = state.settlementsVersion();
+        village.promote(Tier.TOWN);
+        assertEquals(Tier.TOWN, village.tier());
+        assertEquals(4, village.guards());
+        assertEquals(0, village.militia());
+        int[] range = SettlementLife.people(Tier.TOWN);
+        assertTrue(village.housing() >= range[0] && village.housing() <= range[1], "houses of a town: " + village.housing());
+        assertEquals(15, village.population(), "its people grow day by day");
+        assertTrue(state.settlementsVersion() > version);
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> village.promote(Tier.VILLAGE));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> village.promote(Tier.CAPITAL));
+    }
+
+    @Test
     void theGridFindsTheSettlementOfAChunkAndThoseNear() {
         NpcState state = new NpcState();
         Settlement city = state.addSettlement(KINGDOM, 1, 0, Tier.CITY, 0, 0, 1, new NpcNames.Name("A", "А"));

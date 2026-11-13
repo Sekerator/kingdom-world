@@ -331,7 +331,7 @@ public final class SettlementRaiser {
             case WEALTH -> wealth(server, settlement, job);
             case PEOPLE -> people(server, level, settlement, job);
             case GUARDS -> SettlementGarrison.guards(server, settlement, job.layout, deadline(job));
-            case ROADS -> advance(settlement, SettlementStage.WALL);
+            case ROADS -> roads(server, settlement);
             case WALL -> SettlementGarrison.wall(server, level, settlement, job.site, job.layout);
             case LAW -> SettlementGarrison.law(server, settlement, job.site, job.layout);
             case DONE -> done(server, level, settlement, job);
@@ -814,6 +814,42 @@ public final class SettlementRaiser {
             }
         }
         return true;
+    }
+
+    /** Ticks the raising waits for the search of another road of the plan before it goes on without its own. */
+    private static final int ROAD_WAIT_TICKS = 600;
+
+    /**
+     * The road of the plan to the settlement it belongs to: once the other end stands, its search starts now and it is paid as
+     * the roads of the founding are when it is laid (once, by the road of the edge); the raising does not wait for it to be laid.
+     * A road that cannot start now is left to the roads of the plan, which lay it once both ends stand.
+     */
+    private static void roads(MinecraftServer server, Settlement settlement) {
+        NpcState state = NpcWork.state(server);
+        Optional<io.github.sekerator.kingdomworld.core.npc.PlannedRoad> edge = Optional.empty();
+        for (io.github.sekerator.kingdomworld.core.npc.PlannedRoad road : state.plannedRoads()) {
+            boolean ours = road.from() == settlement.id() && road.to() == settlement.parent()
+                    || road.to() == settlement.id() && road.from() == settlement.parent();
+            if (ours && road.roadId() == 0) {
+                edge = Optional.of(road);
+                break;
+            }
+        }
+        Optional<Settlement> parent = state.settlement(settlement.parent());
+        if (edge.isEmpty() || parent.isEmpty() || !io.github.sekerator.kingdomworld.common.road.PlannedRoads.stands(state, parent.get())
+                || RoadWork.isReadOnly(server)) {
+            advance(settlement, SettlementStage.WALL);
+            return;
+        }
+        io.github.sekerator.kingdomworld.core.kingdom.Outcome started = io.github.sekerator.kingdomworld.common.road.PlannedRoads.start(server, edge.get());
+        if (started.ok() || settlement.step() >= ROAD_WAIT_TICKS) {
+            if (!started.ok()) {
+                LOGGER.info("The road of {} to the settlement it belongs to waits for the roads of the plan: {}", settlement, started.error());
+            }
+            advance(settlement, SettlementStage.WALL);
+            return;
+        }
+        settlement.setStage(SettlementStage.ROADS.id(), settlement.step() + 1);
     }
 
     private static void done(MinecraftServer server, ServerLevel level, Settlement settlement, Job job) {

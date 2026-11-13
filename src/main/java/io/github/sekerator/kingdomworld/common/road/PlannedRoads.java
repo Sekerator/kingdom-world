@@ -118,7 +118,7 @@ public final class PlannedRoads {
     /**
      * Whether a settlement stands in the world: raised, or the capital of a kingdom of the world that stands.
      */
-    static boolean stands(NpcState npc, Settlement settlement) {
+    public static boolean stands(NpcState npc, Settlement settlement) {
         if (settlement.status() == Settlement.Status.STANDING) {
             return true;
         }

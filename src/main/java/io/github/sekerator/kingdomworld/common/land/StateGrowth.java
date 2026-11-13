@@ -359,7 +359,8 @@ public final class StateGrowth {
     public static Outcome village(MinecraftServer server, NpcKingdom npc) {
         Optional<Province> found = villageProvince(server, npc.kingdomId());
         if (found.isEmpty()) {
-            return Outcome.fail(KingdomError.CITY_TOO_CLOSE);
+            // No empty province of the core is left: a village that is not raised yet becomes a small town.
+            return town(server, npc);
         }
         Province province = found.get();
         return NpcWork.change(server, "found a village of a state of the world", state -> {
@@ -378,6 +379,43 @@ public final class StateGrowth {
             int housing = SettlementLife.housing(Tier.VILLAGE, seed);
             settlement.found(housing, SettlementLife.startingPopulation(housing), 100);
             LOGGER.info("The state of the world {} founded the village {} in its province {}", npc.name().latin(), name.latin(), province.id());
+            return Outcome.DONE;
+        });
+    }
+
+    /**
+     * A village of a state that lives as data becomes a small town: the one with the most people far enough from every town and
+     * city of the world.
+     */
+    public static Outcome town(MinecraftServer server, NpcKingdom npc) {
+        NpcState state = NpcWork.state(server);
+        io.github.sekerator.kingdomworld.core.land.SettlementRules rules = io.github.sekerator.kingdomworld.core.land.SettlementRules.DEFAULT;
+        Settlement best = null;
+        for (Settlement village : state.settlementsOf(npc.kingdomId())) {
+            if (village.tier() != Tier.VILLAGE || village.status() != Settlement.Status.DATA || !village.stage().isEmpty()) {
+                continue;
+            }
+            boolean apart = true;
+            for (Settlement other : state.settlements()) {
+                if (other.id() == village.id() || other.tier().ordinal() > Tier.TOWN.ordinal() || other.status() == Settlement.Status.RUINED) {
+                    continue;
+                }
+                long least = rules.apart(Tier.TOWN, other.tier());
+                long dx = other.x() - village.x();
+                long dz = other.z() - village.z();
+                apart &= dx * dx + dz * dz >= least * least;
+            }
+            if (apart && (best == null || village.population() > best.population())) {
+                best = village;
+            }
+        }
+        if (best == null) {
+            return Outcome.fail(KingdomError.CITY_TOO_CLOSE);
+        }
+        Settlement chosen = best;
+        return NpcWork.change(server, "make a village of a state a small town", npcState -> {
+            chosen.promote(Tier.TOWN);
+            LOGGER.info("The state of the world {} made its village {} a small town", npc.name().latin(), chosen.name().latin());
             return Outcome.DONE;
         });
     }
