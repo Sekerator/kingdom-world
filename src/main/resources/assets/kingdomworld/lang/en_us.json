@@ -4286,8 +4286,9 @@
   "kingdomworld.screen.map.settlement.people": "People: %s",
   "kingdomworld.screen.map.settlement.guard": "Guard: %s, militia: %s",
   "kingdomworld.screen.map.settlement.province": "Province: %s",
-  "kingdomworld.screen.map.province.seat": "%s, main settlement %s",
+  "kingdomworld.screen.map.province.seat": "%s, seat %s",
   "kingdomworld.screen.throne.npc.settlements": "Settlements: %s, %s in them",
   "kingdomworld.screen.citizens.settlement.planned": "%s (not raised)",
-  "kingdomworld.screen.citizens.settlement.numbers": "%s of %s people, food for %s days, guard %s"
+  "kingdomworld.screen.citizens.settlement.numbers": "%s of %s people, food for %s days, guard %s",
+  "kingdomworld.screen.map.chunk_short": "%s, %s"
 }

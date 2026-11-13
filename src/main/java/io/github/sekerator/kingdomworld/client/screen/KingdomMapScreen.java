@@ -1515,14 +1515,16 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             int cx = chunkAtX(mouseX);
             int cz = chunkAtZ(mouseY);
             KingdomMapInfo info = ClientTerritoryCache.kingdom(ClientTerritoryCache.ownerOf(cx, cz));
-            Component where = Component.translatable("kingdomworld.screen.map.chunk", cx, cz, cx * 16, cz * 16);
+            Component province = provinceLine(cx, cz);
+            // With a province the line is long: the chunk goes without its blocks.
+            Component where = province != null ? Component.translatable("kingdomworld.screen.map.chunk_short", cx, cz)
+                    : Component.translatable("kingdomworld.screen.map.chunk", cx, cz, cx * 16, cz * 16);
             // The holder of the province is told with the province: the owner of the chunk only when it is another kingdom.
             boolean held = info != null && provincesShown() && info.id().equals(ClientProvinceMap.owner(ClientProvinceMap.provinceAt(cx, cz)));
             if (info != null && !held) {
                 int prefix = font.width(Component.translatable("kingdomworld.screen.map.chunk_owned", where, ""));
                 where = Component.translatable("kingdomworld.screen.map.chunk_owned", where, fit(info.name(), textWidth - prefix));
             }
-            Component province = provinceLine(cx, cz);
             if (province != null) {
                 where = Component.translatable("kingdomworld.screen.map.chunk_province", where, province);
             }

@@ -4286,8 +4286,9 @@
   "kingdomworld.screen.map.settlement.people": "Жители: %s",
   "kingdomworld.screen.map.settlement.guard": "Стража: %s, ополчение: %s",
   "kingdomworld.screen.map.settlement.province": "Провинция: %s",
-  "kingdomworld.screen.map.province.seat": "%s, главное поселение %s",
+  "kingdomworld.screen.map.province.seat": "%s, центр %s",
   "kingdomworld.screen.throne.npc.settlements": "Поселения: %s, в них %s",
   "kingdomworld.screen.citizens.settlement.planned": "%s (не отстроено)",
-  "kingdomworld.screen.citizens.settlement.numbers": "%s из %s жителей, еды на %s дн., стража %s"
+  "kingdomworld.screen.citizens.settlement.numbers": "%s из %s жителей, еды на %s дн., стража %s",
+  "kingdomworld.screen.map.chunk_short": "%s, %s"
 }
