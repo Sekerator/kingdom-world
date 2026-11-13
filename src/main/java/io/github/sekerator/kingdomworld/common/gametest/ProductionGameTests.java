@@ -146,7 +146,9 @@ public final class ProductionGameTests {
         Citizen worker = GatheringGameTests.worker(helper, kingdom, "smelter", postPos, helper.absolutePos(new BlockPos(2, 0, 2)));
 
         helper.succeedWhen(() -> {
-            helper.assertTrue(stored(server, kingdom, Items.IRON_INGOT) >= 1, "No ingot reached the storehouse");
+            helper.assertTrue(stored(server, kingdom, Items.IRON_INGOT) >= 1, "No ingot reached the storehouse: worker " + worker.workStatus()
+                    + ", raw iron " + stored(server, kingdom, Items.RAW_IRON) + ", coal " + stored(server, kingdom, Items.COAL) + ", furnaces "
+                    + furnacesAround(level, postPos, 8));
             helper.assertTrue(stored(server, kingdom, Items.RAW_IRON) == 0, "The raw iron is still in the storehouse");
             AbstractFurnaceBlockEntity furnace = (AbstractFurnaceBlockEntity) level.getBlockEntity(helper.absolutePos(new BlockPos(5, 0, 2)));
             helper.assertTrue(furnace != null && furnace.getItem(0).isEmpty() && furnace.getItem(2).isEmpty(),
@@ -155,6 +157,50 @@ public final class ProductionGameTests {
             helper.assertTrue(!Production.reservations().has(worker.id()), "The reservation was not released");
             GatheringGameTests.end(helper, kingdom, worker, from, to);
         });
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_workshop_blocked_furnace", timeoutTicks = 1800)
+    public static void aSmelterLeavesAFurnaceWhoseOutputHoldsSomethingElse(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        level.setDayTime(1_000L);
+        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos to = helper.absolutePos(new BlockPos(7, 3, 6));
+        GatheringGameTests.clear(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Glassworks", UUID.randomUUID());
+        // The nearer furnace holds glass in its output: iron put into it would never come out.
+        helper.setBlock(new BlockPos(3, 0, 1), Blocks.FURNACE);
+        helper.setBlock(new BlockPos(5, 0, 2), Blocks.FURNACE);
+        AbstractFurnaceBlockEntity blocked = (AbstractFurnaceBlockEntity) level.getBlockEntity(helper.absolutePos(new BlockPos(3, 0, 1)));
+        blocked.setItem(2, new ItemStack(Items.GLASS));
+        StorehouseInventory store = GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(0, 0, 4)));
+        fill(store, new ItemStack(Items.RAW_IRON), new ItemStack(Items.COAL));
+        WorldPos postPos = GatheringGameTests.post(helper, new BlockPos(0, 0, 0), "smelter");
+        surveyed(server, postPos);
+        Citizen worker = GatheringGameTests.worker(helper, kingdom, "smelter", postPos, helper.absolutePos(new BlockPos(2, 0, 2)));
+
+        helper.succeedWhen(() -> {
+            helper.assertTrue(stored(server, kingdom, Items.IRON_INGOT) >= 1, "No ingot reached the storehouse: worker " + worker.workStatus()
+                    + ", furnaces " + furnacesAround(level, postPos, 8));
+            helper.assertTrue(blocked.getItem(0).isEmpty() && blocked.getItem(1).isEmpty() && blocked.getItem(2).is(Items.GLASS),
+                    "The furnace with glass was used: " + furnacesAround(level, postPos, 8));
+            GatheringGameTests.end(helper, kingdom, worker, from, to);
+        });
+    }
+
+    /**
+     * The furnaces around a post with what they hold, for the messages of failed tests.
+     */
+    static String furnacesAround(ServerLevel level, WorldPos post, int reach) {
+        List<String> found = new java.util.ArrayList<>();
+        BlockPos center = new BlockPos(post.x(), post.y(), post.z());
+        for (BlockPos pos : BlockPos.betweenClosed(center.offset(-reach, -3, -reach), center.offset(reach, 3, reach))) {
+            if (level.getBlockEntity(pos) instanceof AbstractFurnaceBlockEntity furnace) {
+                found.add(pos.subtract(center).toShortString() + " [" + furnace.getItem(0) + ", " + furnace.getItem(1) + ", " + furnace.getItem(2)
+                        + "]");
+            }
+        }
+        return found.toString();
     }
 
     @GameTest(template = EMPTY, batch = "kingdomworld_workshop_cook", timeoutTicks = 1800)

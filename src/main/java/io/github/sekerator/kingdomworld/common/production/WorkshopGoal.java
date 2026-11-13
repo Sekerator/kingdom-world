@@ -163,7 +163,8 @@ final class WorkshopGoal extends PostWorkGoal {
             if (!level.isLoaded(pos) || !land.owns(pos) || !kind.equals(Workstations.kindOf(level, pos, level.getBlockState(pos)))) {
                 continue;
             }
-            if (found.recipe().kind().needsFuel() && !furnaceFree(level, pos, found.picks().keySet())) {
+            if (found.recipe().kind().needsFuel() && !furnaceFree(level, pos, found.picks().keySet(), Recipes.item(found.recipe().output()),
+                    found.recipe().outputCount())) {
                 continue;
             }
             double distance = body.distanceToSqr(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
@@ -175,14 +176,28 @@ final class WorkshopGoal extends PostWorkGoal {
         return best;
     }
 
-    private static boolean furnaceFree(ServerLevel level, BlockPos pos, Set<String> inputs) {
+    /**
+     * Whether a furnace can take the ingredient and give the result: its input is empty or holds the same ingredient with room,
+     * and its output is empty or holds the same result with room for it. A furnace whose output holds something else (glass a
+     * player left there, say) would burn the fuel and never give the result.
+     */
+    private static boolean furnaceFree(ServerLevel level, BlockPos pos, Set<String> inputs, @Nullable Item output, int outputCount) {
         BlockEntity entity = level.getBlockEntity(pos);
         Workstations.Furnace furnace = entity == null ? null : Workstations.furnace(entity);
         if (furnace == null) {
             return false;
         }
         ItemStack input = furnace.input().getStackInSlot(0);
-        return input.isEmpty() || inputs.contains(KingdomStorage.itemId(input)) && input.getCount() < input.getMaxStackSize();
+        if (!input.isEmpty() && !(inputs.contains(KingdomStorage.itemId(input)) && input.getCount() < input.getMaxStackSize())) {
+            return false;
+        }
+        for (int slot = 0; slot < furnace.output().getSlots(); slot++) {
+            ItemStack made = furnace.output().getStackInSlot(slot);
+            if (!made.isEmpty() && (output == null || !made.is(output) || made.getCount() + outputCount > made.getMaxStackSize())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
