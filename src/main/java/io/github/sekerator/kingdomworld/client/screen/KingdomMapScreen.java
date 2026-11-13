@@ -57,6 +57,8 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     private static final int PROVINCE_BORDER = 0x70402A14;
     private static final int WILD_TINT = 0x1A5A4630;
     private static final int WILD_HATCH = 0x705A4630;
+    /** The grey of a boundary stone. */
+    private static final int STONE = 0xFF9A9488;
     private static final long REQUEST_INTERVAL_MILLIS = 300L;
     private static final int PARCHMENT = 0xFFE9D9B0;
     private static final int GRID = 0x22000000;
@@ -81,6 +83,9 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     private io.github.sekerator.kingdomworld.core.road.Road.Mode planMode = io.github.sekerator.kingdomworld.core.road.Road.Mode.JOINT;
     /** Places of the names drawn on the map this frame, so that later names do not cover earlier ones. */
     private final List<int[]> labels = new java.util.ArrayList<>();
+    /** The provinces with a settlement, for the settlements the server sent last ({@link #settledFrom}). */
+    private java.util.Set<Integer> settledProvinces = java.util.Set.of();
+    private Object settledFrom;
     private double centerX;
     private double centerZ;
     private double cell = 12.0;
@@ -510,6 +515,55 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             labels.add(box);
             drawn++;
         }
+    }
+
+    /**
+     * The boundary stones of the empty provinces of states, from half a pixel a chunk on: a small grey stone under the name of
+     * a province held by a kingdom where nobody lives, where a war holds it.
+     */
+    private void drawStones(GuiGraphics graphics, int minX, int maxX, int minZ, int maxZ) {
+        if (!provincesShown() || cell < PROVINCE_NAME_CELL || minecraft == null) {
+            return;
+        }
+        java.util.Set<Integer> settled = settledProvinces();
+        boolean cyrillic = io.github.sekerator.kingdomworld.core.citizen.CitizenNames.alphabetFor(minecraft.getLanguageManager().getSelected())
+                == io.github.sekerator.kingdomworld.core.citizen.CitizenNames.Alphabet.CYRILLIC;
+        int drawn = 0;
+        for (io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket.Entry entry : ClientProvinceMap.provinces()) {
+            int chunkX = Math.floorDiv(entry.centerX(), 16);
+            int chunkZ = Math.floorDiv(entry.centerZ(), 16);
+            if (chunkX < minX || chunkX > maxX || chunkZ < minZ || chunkZ > maxZ || drawn >= MAX_PROVINCE_NAMES
+                    || ClientProvinceMap.owner(entry.id()) == null || settled.contains(entry.id())) {
+                continue;
+            }
+            int x = screenX(chunkX + 0.5);
+            int y = screenZ(chunkZ + 0.5) + 6;
+            if (x - 2 < mapLeft() || x + 3 > mapRight() || y < mapTop() || y + 5 > mapBottom()) {
+                continue;
+            }
+            graphics.fill(x - 2, y, x + 3, y + 5, 0xFF2B1D0E);
+            graphics.fill(x - 1, y + 1, x + 2, y + 5, STONE);
+            hoverText(x - 2, y, 5, Component.translatable("kingdomworld.screen.map.province.stone", provinceName(entry.nameSeed(), cyrillic)));
+            drawn++;
+        }
+    }
+
+    /**
+     * The provinces with a settlement among those the server sent, worked out again only when it sent new ones.
+     */
+    private java.util.Set<Integer> settledProvinces() {
+        io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapData data = io.github.sekerator.kingdomworld.client.map.ClientRoadCache.data();
+        if (data != settledFrom) {
+            java.util.Set<Integer> settled = new java.util.HashSet<>();
+            for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city : data.cities()) {
+                if (city.settlement() != null) {
+                    settled.add(city.settlement().province());
+                }
+            }
+            settledProvinces = settled;
+            settledFrom = data;
+        }
+        return settledProvinces;
     }
 
     /**
@@ -1400,6 +1454,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         drawDiplomacy(graphics);
         drawCities(graphics);
         drawCamps(graphics);
+        drawStones(graphics, minX, maxX, minZ, maxZ);
         drawProvinceNames(graphics, minX, maxX, minZ, maxZ);
         drawLifeEvents(graphics);
         drawCaravans(graphics);
@@ -2104,8 +2159,8 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
 
     /**
      * The war in the world: chunks occupied by an enemy are hatched (red when the enemy holds ours, green when we hold
-     * theirs), a besieged city wears a ring of flames with the share of its gate broken, a taken city a banner. Hovering
-     * tells how far the hold has gone.
+     * theirs), a besieged city wears a ring of flames with the share of its gate broken, a province being held a diamond over
+     * its place with the share held, a taken city or province a banner. Hovering tells how far the hold has gone.
      */
     private void drawWarSpots(GuiGraphics graphics, String dimension) {
         for (io.github.sekerator.kingdomworld.common.network.data.DiplomacyViews.WarSpot spot
@@ -2137,6 +2192,17 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
                 graphics.renderOutline(x - 6, y - 6, 13, 13, 0xFF2B1D0E);
                 graphics.renderOutline(x - 5, y - 5, 11, 11, 0xFFFF8020);
                 graphics.fill(x - 4, y + 4, x - 4 + Math.max(1, spot.percent() * 9 / 100), y + 5, 0xFFFF4020);
+            } else if ("province".equals(spot.kind()) && spot.percent() < 100) {
+                // A province being held: a diamond in the colour of the side over its place, and how far the hold went.
+                for (int dy = -4; dy <= 4; dy++) {
+                    int half = 4 - Math.abs(dy);
+                    graphics.fill(x - half - 1, y + dy, x + half + 2, y + dy + 1, 0xFF2B1D0E);
+                    if (half > 0) {
+                        graphics.fill(x - half + 1, y + dy, x + half, y + dy + 1, color);
+                    }
+                }
+                graphics.fill(x - 5, y + 6, x + 6, y + 8, 0xFF2B1D0E);
+                graphics.fill(x - 4, y + 6, x - 4 + Math.max(1, spot.percent() * 9 / 100), y + 7, color);
             } else {
                 graphics.fill(x - 1, y - 6, x, y + 6, 0xFF6B4A2B);
                 graphics.fill(x, y - 6, x + 6, y - 1, color);

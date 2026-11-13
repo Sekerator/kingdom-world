@@ -7,7 +7,7 @@ import java.util.UUID;
 
 /**
  * Land that maps show on a layer of its own, apart from the land of kingdoms: contested land and battle zones of wars.
- * Nothing creates zones yet; wars will, and the map integrations already draw the layers.
+ * Wars create them: battle zones around squads on enemy land, contested land around provinces held.
  *
  * @param layer     the layer the zone belongs to
  * @param dimension dimension id

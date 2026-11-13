@@ -19,7 +19,10 @@ import io.github.sekerator.kingdomworld.core.diplomacy.War;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
 import io.github.sekerator.kingdomworld.core.npc.NpcKingdom;
+import io.github.sekerator.kingdomworld.core.territory.Borders;
 import io.github.sekerator.kingdomworld.core.territory.Capital;
+import io.github.sekerator.kingdomworld.core.territory.Province;
+import io.github.sekerator.kingdomworld.core.territory.ProvinceMap;
 import io.github.sekerator.kingdomworld.core.territory.Territory;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -30,6 +33,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -193,6 +197,32 @@ final class NpcDiplomacy {
         POWER.clear();
         countingKingdom = null;
         countingSoldiers = List.of();
+        BORDERING.clear();
+        borderingMap = null;
+    }
+
+    /** The kingdoms each state borders by its provinces, good for one version of the map of provinces. */
+    private static final Map<UUID, Set<UUID>> BORDERING = new java.util.HashMap<>();
+    private static ProvinceMap borderingMap;
+    private static long borderingVersion;
+
+    /**
+     * The kingdoms holding a province next to one of a kingdom's own, empty for a kingdom without provinces; looked up again
+     * only when the map of provinces changed.
+     */
+    static Set<UUID> bordering(MinecraftServer server, UUID kingdomId) {
+        Optional<ProvinceMap> attached = KingdomWorldApi.state(server).territory().provinceMap();
+        if (attached.isEmpty()) {
+            return Set.of();
+        }
+        ProvinceMap map = attached.get();
+        if (borderingMap != map || borderingVersion != map.version()) {
+            BORDERING.clear();
+            borderingMap = map;
+            borderingVersion = map.version();
+        }
+        return BORDERING.computeIfAbsent(kingdomId, id -> Set.copyOf(Borders.holders(map.provincesOf(id),
+                p -> map.province(p).map(Province::neighbours).orElse(List.of()), map::owner, id, Integer.MAX_VALUE)));
     }
 
     /**
@@ -219,6 +249,8 @@ final class NpcDiplomacy {
                 continue;
             }
             offerPeace(server, state, rules, kingdom.id());
+            // A state is a neighbour of the states its provinces border, however far their capitals stand.
+            Set<UUID> bordering = bordering(server, kingdom.id());
             List<DiplomacyMind.Neighbor> neighbors = new ArrayList<>();
             for (Kingdom other : kingdoms) {
                 if (other.id().equals(kingdom.id()) || !NpcWork.built(server, other.id())) {
@@ -229,8 +261,9 @@ final class NpcDiplomacy {
                     continue;
                 }
                 double distance = Math.hypot(theirs.get().x() - capital.get().x(), theirs.get().z() - capital.get().z());
-                if (distance <= WarWork.NEIGHBOUR_DISTANCE) {
-                    neighbors.add(WarWork.neighbor(server, kingdom.id(), other.id(), distance, now, rules));
+                boolean borders = bordering.contains(other.id());
+                if (distance <= WarWork.NEIGHBOUR_DISTANCE || borders) {
+                    neighbors.add(WarWork.neighbor(server, kingdom.id(), other.id(), distance, now, rules, borders));
                 }
             }
             boolean atWar = !state.warsOf(kingdom.id()).isEmpty();

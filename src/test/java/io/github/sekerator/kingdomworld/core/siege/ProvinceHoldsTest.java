@@ -155,4 +155,51 @@ class ProvinceHoldsTest {
         assertEquals(0, town.loseDefenders(-2));
         assertEquals(version, npc.settlementsVersion(), "nothing lost, nothing changed");
     }
+
+    @Test
+    void anArmyMarchesOnTheNearestProvinceWherePeopleLiveThenOnTheNearestStone() {
+        int capital = 1;
+        ProvinceHolds.Target heart = new ProvinceHolds.Target(1, true, 10, 0, 64, 0);
+        ProvinceHolds.Target farTown = new ProvinceHolds.Target(2, true, 11, 900, 70, 0);
+        ProvinceHolds.Target nearTown = new ProvinceHolds.Target(3, true, 12, 400, 70, 0);
+        ProvinceHolds.Target nearStone = ProvinceHolds.stone(4, ChunkKey.of(5, 0));
+        ProvinceHolds.Target farStone = ProvinceHolds.stone(5, ChunkKey.of(60, 0));
+        List<ProvinceHolds.Target> places = List.of(heart, farTown, nearStone, nearTown, farStone);
+
+        assertEquals(3, ProvinceHolds.next(places, WarGoal.LAND, capital, id -> false, 0, 0).orElseThrow().province(),
+                "the nearest square where people live, even with an empty province nearer, never the heart");
+        assertEquals(2, ProvinceHolds.next(places, WarGoal.LAND, capital, id -> id == 3, 0, 0).orElseThrow().province(),
+                "once it is taken, the next");
+        assertEquals(2, ProvinceHolds.next(places, WarGoal.LAND, capital, id -> id == 3, 1_000, 0).orElseThrow().province(),
+                "measured from where the army stands");
+        assertEquals(4, ProvinceHolds.next(places, WarGoal.LAND, capital, id -> id == 2 || id == 3, 0, 0).orElseThrow().province(),
+                "in a war for land the nearest stone once no square is left");
+        assertEquals(5, ProvinceHolds.next(places, WarGoal.LAND, capital, id -> id == 2 || id == 3, 2_000, 0).orElseThrow().province());
+        assertTrue(ProvinceHolds.next(places, WarGoal.CITY, capital, id -> id == 2 || id == 3, 0, 0).isEmpty(),
+                "a war for a city takes no empty province");
+        assertTrue(ProvinceHolds.next(places, WarGoal.LAND, capital, id -> id != 1, 0, 0).isEmpty(), "nothing is left but the heart");
+        assertTrue(ProvinceHolds.next(places, WarGoal.THRONE, capital, id -> false, 0, 0).isEmpty(), "a war for the throne holds no province");
+
+        ProvinceHolds.Target twin = new ProvinceHolds.Target(6, true, 13, -400, 70, 0);
+        assertEquals(3, ProvinceHolds.next(List.of(twin, nearTown), WarGoal.CITY, capital, id -> false, 0, 0).orElseThrow().province(),
+                "the lower number on a tie");
+    }
+
+    @Test
+    void aStateSendsReliefToTheProvinceWhoseHoldWentFurthest() {
+        UUID enemy = new UUID(0, 9);
+        Hold quiet = new Hold(Hold.Kind.PROVINCE, 1, enemy, STATE, WORLD, 4, 0, false, 0);
+        Hold early = new Hold(Hold.Kind.PROVINCE, 1, enemy, STATE, WORLD, 3, 600, false, 100);
+        Hold late = new Hold(Hold.Kind.PROVINCE, 1, enemy, STATE, WORLD, 7, 2_400, false, 100);
+        Hold taken = new Hold(Hold.Kind.PROVINCE, 1, enemy, STATE, WORLD, 8, 6_000, true, 100);
+        Hold theirs = new Hold(Hold.Kind.PROVINCE, 2, STATE, enemy, WORLD, 9, 5_000, false, 100);
+        Hold plaza = new Hold(Hold.Kind.PLAZA, 1, enemy, STATE, WORLD, 2, 5_000, false, 100);
+
+        assertEquals(7, ProvinceHolds.relief(List.of(quiet, early, late, taken, theirs, plaza), STATE, id -> false),
+                "the hold that went furthest, not one taken (lost until the peace), nor one of the enemy, nor a city");
+        assertEquals(4, ProvinceHolds.relief(List.of(quiet, taken), STATE, id -> id == 4), "an army of the enemy at a province is enough");
+        assertEquals(0, ProvinceHolds.relief(List.of(quiet, taken), STATE, id -> false), "nothing held, no relief");
+        Hold same = new Hold(Hold.Kind.PROVINCE, 1, enemy, STATE, WORLD, 5, 2_400, false, 100);
+        assertEquals(5, ProvinceHolds.relief(List.of(late, same), STATE, id -> false), "the lower number on a tie");
+    }
 }

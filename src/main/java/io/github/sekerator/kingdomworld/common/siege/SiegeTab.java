@@ -6,9 +6,12 @@ import io.github.sekerator.kingdomworld.core.road.Wall;
 import io.github.sekerator.kingdomworld.core.siege.Conquest;
 import io.github.sekerator.kingdomworld.core.siege.Gate;
 import io.github.sekerator.kingdomworld.core.siege.Hold;
+import io.github.sekerator.kingdomworld.core.siege.ProvinceHolds;
 import io.github.sekerator.kingdomworld.core.siege.Siege;
 import io.github.sekerator.kingdomworld.core.siege.SiegeRules;
 import io.github.sekerator.kingdomworld.core.siege.SiegeState;
+import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
+import io.github.sekerator.kingdomworld.core.territory.MapZone;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -18,9 +21,11 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.Item;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -111,7 +116,7 @@ public final class SiegeTab {
 
     /**
      * Places of war for the atlas of a kingdom: its chunks occupied by an enemy and the enemy's occupied by it, sieges and
-     * taken cities of either side.
+     * taken cities of either side, provinces held or taken at their place.
      */
     public static List<io.github.sekerator.kingdomworld.common.network.data.DiplomacyViews.WarSpot> spots(MinecraftServer server, UUID kingdomId) {
         List<io.github.sekerator.kingdomworld.common.network.data.DiplomacyViews.WarSpot> spots = new ArrayList<>();
@@ -136,7 +141,17 @@ public final class SiegeTab {
                 continue;
             }
             if (hold.kind() == Hold.Kind.PROVINCE) {
-                // The target of a province is no city.
+                // A province is marked at its place: the square of its settlement or its boundary stone.
+                Optional<ProvinceHolds.Target> place = SiegeHolds.place(server, (int) hold.target());
+                if (place.isEmpty()) {
+                    continue;
+                }
+                int percent = hold.percent(rules.provinceTicks(place.get().settled()));
+                Component name = SiegeTexts.provinceName(server, (int) hold.target());
+                Component label = hold.taken() ? Component.translatable(SiegeWork.KEY + "map.province_taken", name)
+                        : Component.translatable(SiegeWork.KEY + "map.province", name, percent);
+                spots.add(new io.github.sekerator.kingdomworld.common.network.data.DiplomacyViews.WarSpot("province", hold.dimension(),
+                        place.get().x() >> 4, place.get().z() >> 4, ours, percent, label));
                 continue;
             }
             long city = hold.kind() == Hold.Kind.THRONE ? 0 : hold.target();
@@ -162,6 +177,36 @@ public final class SiegeTab {
                     SiegeTexts.cityLabel(server, siege.defender(), siege.city()), broken, held)));
         }
         return spots;
+    }
+
+    /**
+     * Contested land for the war layers of the web maps: around the place of every province held or taken in a war, the
+     * chunks next to the square of its settlement or to its boundary stone, never the whole province.
+     */
+    static List<MapZone> zones(MinecraftServer server) {
+        List<MapZone> zones = new ArrayList<>();
+        if (SiegeSavedData.get(server).isReadOnly()) {
+            return zones;
+        }
+        for (Hold hold : SiegeWork.state(server).holds()) {
+            if (hold.kind() != Hold.Kind.PROVINCE || hold.idle()) {
+                continue;
+            }
+            Optional<ProvinceHolds.Target> place = SiegeHolds.place(server, (int) hold.target());
+            if (place.isEmpty()) {
+                continue;
+            }
+            long middle = place.get().chunk();
+            Set<Long> chunks = new HashSet<>();
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    chunks.add(ChunkKey.offset(middle, dx, dz));
+                }
+            }
+            zones.add(new MapZone(MapZone.Layer.CONTESTED, hold.dimension(), "war-" + hold.war() + "-province-" + hold.target(),
+                    List.of(hold.attacker(), hold.defender()), chunks));
+        }
+        return zones;
     }
 
     private static int weakestGate(MinecraftServer server, SiegeState state, Siege siege, SiegeRules rules) {

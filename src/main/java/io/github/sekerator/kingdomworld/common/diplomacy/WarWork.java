@@ -1041,11 +1041,20 @@ public final class WarWork {
      * Another kingdom as a ruler sees it.
      */
     static DiplomacyMind.Neighbor neighbor(MinecraftServer server, UUID self, UUID other, double distance, long now, DiplomacyRules rules) {
+        return neighbor(server, self, other, distance, now, rules, false);
+    }
+
+    /**
+     * @param bordering whether a province of the other borders a province of the ruler's state
+     */
+    static DiplomacyMind.Neighbor neighbor(MinecraftServer server, UUID self, UUID other, double distance, long now, DiplomacyRules rules,
+                                           boolean bordering) {
         DiplomacyState state = state(server);
         boolean recent = state.lastWarEnded(other).map(end -> now - end < (long) rules.npcRecentWarDays() * CitizenNeeds.TICKS_PER_DAY)
                 .orElse(false) || state.fightsAnyWar(other);
         return new DiplomacyMind.Neighbor(other, isNpc(server, other), NpcDiplomacy.power(server, other), distance, relation(server, self, other),
-                state.bond(self, other, now), playable(server, other) && !shielded(server, other), recent, state.lastNpcWar().get(other));
+                state.bond(self, other, now), playable(server, other) && !shielded(server, other), recent, state.lastNpcWar().get(other),
+                bordering);
     }
 
     /**

@@ -28,6 +28,7 @@ import java.util.UUID;
  * the enemy is open, brings a ram it builds from its storehouses, and sends half its squads with the order "siege"; a ruler
  * whose city is besieged sends the squads at home to defend it. A ruler holds no more than one siege at a time; whether
  * rulers declare wars on kingdoms of players at all is decided by diplomacy (9a), here they only fight the wars there are.
+ * In a war on a state the armies go from province to province ({@link ProvinceNpc}).
  */
 final class SiegeNpc {
     /** Game ticks between two decisions. */
@@ -44,6 +45,7 @@ final class SiegeNpc {
 
     static void reset() {
         last = Long.MIN_VALUE;
+        ProvinceNpc.reset();
     }
 
     static void tick(MinecraftServer server, long now) {
@@ -68,6 +70,8 @@ final class SiegeNpc {
                 defend(server, siege);
             }
         }
+        // In a war on a state the armies go from province to province, and the state sends relief to the one held.
+        ProvinceNpc.tick(server, state, diplomacy);
         for (var kingdom : io.github.sekerator.kingdomworld.common.api.KingdomWorldApi.kingdoms(server)) {
             if (!WarWork.isNpc(server, kingdom.id()) || !state.siegesOf(kingdom.id()).isEmpty()) {
                 continue;

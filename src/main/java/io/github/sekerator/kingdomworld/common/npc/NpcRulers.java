@@ -624,17 +624,22 @@ public final class NpcRulers {
         }
     }
 
+    /** Neighbours a ruler that wants land disputes with at most, at a time. */
+    private static final int DISPUTES = 5;
+
     /**
-     * A ruler that wants land and finds none free remembers the neighbours whose land stands in its way, once in a few turns.
+     * A ruler that wants land and finds none free remembers the neighbours whose land stands in its way, once in a few turns:
+     * those whose land lies near its claims, and for a state those that hold a province next to one of its own, unless wild
+     * land next to it is still free for it to take.
      */
     private static void disputes(MinecraftServer server, UUID id, RulerMemory memory, boolean blocked) {
         if (!blocked || memory.turns() % 5 != 0) {
             return;
         }
         KingdomWorldState state = KingdomWorldApi.state(server);
+        java.util.Set<UUID> near = new LinkedHashSet<>();
         state.territory().territory(id).ifPresent(own -> {
             int buffer = KingdomWorldApi.rules().claimBufferChunks() + 2;
-            java.util.Set<UUID> near = new java.util.HashSet<>();
             for (long chunk : own.chunks()) {
                 for (int dx = -buffer; dx <= buffer; dx++) {
                     for (int dz = -buffer; dz <= buffer; dz++) {
@@ -644,12 +649,32 @@ public final class NpcRulers {
                         }
                     }
                 }
-                if (near.size() > 4) {
+                if (near.size() >= DISPUTES) {
                     break;
                 }
             }
-            near.forEach(other -> memory.relate(other, RulerMemory.Reason.LAND));
         });
+        Optional<io.github.sekerator.kingdomworld.core.territory.ProvinceMap> attached = state.territory().provinceMap();
+        if (near.size() < DISPUTES && attached.isPresent()) {
+            io.github.sekerator.kingdomworld.core.territory.ProvinceMap map = attached.get();
+            List<Integer> provinces = map.provincesOf(id);
+            if (!provinces.isEmpty()) {
+                for (UUID other : io.github.sekerator.kingdomworld.core.territory.Borders.inTheWay(provinces,
+                        p -> map.province(p).map(io.github.sekerator.kingdomworld.core.territory.Province::neighbours).orElse(List.of()),
+                        map::owner, p -> free(map, p), id, DISPUTES - near.size())) {
+                    near.add(other);
+                }
+            }
+        }
+        near.forEach(other -> memory.relate(other, RulerMemory.Reason.LAND));
+    }
+
+    /**
+     * Whether a province is wild land a state may still take by itself: of nobody and promised to nobody.
+     */
+    private static boolean free(io.github.sekerator.kingdomworld.core.territory.ProvinceMap map, int province) {
+        return map.owner(province) == null && map.hold(province).isEmpty() && map.province(province)
+                .map(p -> p.kind() == io.github.sekerator.kingdomworld.core.land.ProvinceKind.WILD).orElse(false);
     }
 
     /**

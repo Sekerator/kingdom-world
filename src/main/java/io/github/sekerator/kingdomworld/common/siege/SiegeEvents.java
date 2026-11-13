@@ -76,6 +76,8 @@ public final class SiegeEvents {
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOW, SiegeEvents::onExplosion);
         MinecraftForge.EVENT_BUS.addListener(SiegeEvents::onBreakSpeed);
         KingdomWorldApi.accessPolicy().addExemption(WAR_LAND);
+        // Provinces held in a war show on the web maps as contested land around their place.
+        io.github.sekerator.kingdomworld.common.kingdom.MapZones.register(SiegeTab::zones);
     }
 
     // ---------------------------------------------------------------- the server

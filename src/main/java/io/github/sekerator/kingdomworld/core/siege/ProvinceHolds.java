@@ -7,6 +7,10 @@ import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
 import io.github.sekerator.kingdomworld.core.territory.Province;
 
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.IntPredicate;
 import java.util.function.LongSupplier;
 import java.util.function.LongToIntFunction;
 
@@ -196,6 +200,68 @@ public final class ProvinceHolds {
             case CITY -> settled;
             default -> false;
         };
+    }
+
+    /**
+     * Where an army of the attackers goes next in a war on a state, one place at a time: the nearest square of a province
+     * where people live that is not taken yet, and in a war for land, once none is left, the nearest boundary stone of an
+     * empty one; never the province of the capital. A tie goes to the lower number.
+     *
+     * @param places  the places of the provinces of the defender
+     * @param capital the province of the capital of the defender, 0 for none
+     * @param taken   whether a province is taken already in this war
+     * @param fromX   where the army stands (or its capital, before it marched out)
+     */
+    public static Optional<Target> next(Collection<Target> places, WarGoal goal, int capital, IntPredicate taken, int fromX, int fromZ) {
+        Target best = null;
+        long bestDistance = Long.MAX_VALUE;
+        for (Target place : places) {
+            if (!eligible(goal, place.province(), place.settled(), capital) || taken.test(place.province())) {
+                continue;
+            }
+            long dx = (long) place.x() - fromX;
+            long dz = (long) place.z() - fromZ;
+            long distance = dx * dx + dz * dz;
+            boolean better;
+            if (best == null || place.settled() != best.settled()) {
+                better = best == null || place.settled();
+            } else {
+                better = distance < bestDistance || (distance == bestDistance && place.province() < best.province());
+            }
+            if (better) {
+                best = place;
+                bestDistance = distance;
+            }
+        }
+        return Optional.ofNullable(best);
+    }
+
+    /**
+     * The province of a state its ruler sends relief to, one at a time: of the provinces of it held by the enemy now (the hold
+     * going on, or an army of the enemy standing at its place), the one whose hold went furthest, the lower number on a tie.
+     * A province taken already is lost until the peace and gets none.
+     *
+     * @param holds    the holds of the wars on the state
+     * @param attacked whether an army of the enemy is sent to hold a province
+     * @return the province, 0 for none
+     */
+    public static int relief(Collection<Hold> holds, UUID defender, IntPredicate attacked) {
+        int best = 0;
+        long bestProgress = -1;
+        for (Hold hold : holds) {
+            if (hold.kind() != Hold.Kind.PROVINCE || hold.taken() || !hold.defender().equals(defender)) {
+                continue;
+            }
+            int province = (int) hold.target();
+            if (hold.progress() <= 0 && !attacked.test(province)) {
+                continue;
+            }
+            if (hold.progress() > bestProgress || (hold.progress() == bestProgress && province < best)) {
+                best = province;
+                bestProgress = hold.progress();
+            }
+        }
+        return best;
     }
 
     /**

@@ -531,7 +531,7 @@ final class SiegeHolds {
     /**
      * Whether a kingdom holds any province: looked up again only when the map changed.
      */
-    private static boolean holdsProvinces(ProvinceMap map, UUID kingdomId) {
+    static boolean holdsProvinces(ProvinceMap map, UUID kingdomId) {
         Holding known = HOLDING.get(kingdomId);
         if (known == null || known.map() != map || known.version() != map.version()) {
             known = new Holding(map, map.version(), !map.provincesOf(kingdomId).isEmpty());
@@ -544,7 +544,7 @@ final class SiegeHolds {
      * Where a province is held, {@code null} for no such province.
      */
     @Nullable
-    private static ProvinceHolds.Target target(ProvinceMap map, NpcState npc, int id) {
+    static ProvinceHolds.Target target(ProvinceMap map, NpcState npc, int id) {
         if (targetsMap != map || targetsVersion != map.version() || targetsSettlements != npc.settlementsVersion()) {
             TARGETS.clear();
             targetsMap = map;

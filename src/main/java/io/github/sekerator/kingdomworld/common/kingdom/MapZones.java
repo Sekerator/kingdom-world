@@ -13,8 +13,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
 
 /**
- * Sources of the zones on the war layers of the maps (contested land, battle zones). None is registered yet: the
- * layers exist and stay empty until wars register a source here. Read on the server thread.
+ * Sources of the zones on the war layers of the maps: battle zones around the squads of a war on enemy land, contested land
+ * around the places of provinces held in a war. Read on the server thread.
  */
 public final class MapZones {
     private static final Logger LOGGER = LogUtils.getLogger();
