@@ -882,7 +882,7 @@ final class ClientNpcShowcase {
                     seen += reaches(player, eye, target, tx, tz, 8.0) ? 1 : 0;
                 }
                 boolean gate = (eye.x - tx) * out[0] + (eye.z - tz) * out[1] > 0;
-                double score = (seen > 0 && clearView(player, eye, aim, 5.5, 48.0, 26.0) ? 1000.0 : 0.0) + seen * 100.0 + (gate ? 20.0 : 0.0)
+                double score = (seen > 0 ? courtClear(player, eye, aim) : 0.0) + seen * 100.0 + (gate ? 20.0 : 0.0)
                         + (seen > 1 ? openness(player, eye, keep.get(1)) / 4.0 : 0.0) - up * 3.0;
                 if (seen > 0 && score > bestScore) {
                     bestScore = score;
@@ -934,7 +934,7 @@ final class ClientNpcShowcase {
                     if (seen < 2) {
                         continue;
                     }
-                    double clearOf = clearView(player, eye, aim, 5.5, 48.0, 26.0) ? 1000.0 : 0.0;
+                    double clearOf = courtClear(player, eye, aim);
                     if (clearOf + seen * 100.0 + 80.0 - up * 3.0 <= bestScore) {
                         continue;
                     }
@@ -955,8 +955,21 @@ final class ClientNpcShowcase {
                 String.format(java.util.Locale.ROOT, "%.0f", Math.hypot(best.x - tx, best.z - tz)),
                 String.format(java.util.Locale.ROOT, "%.0f", best.y - throne.getY()), String.format(java.util.Locale.ROOT, "%.1f", best.x),
                 String.format(java.util.Locale.ROOT, "%.1f", best.y), String.format(java.util.Locale.ROOT, "%.1f", best.z),
-                bestScore >= 1000.0 ? "" : ", with something right beside the camera");
+                bestScore >= 3000.0 ? "" : bestScore >= 1000.0 ? ", with something a few blocks from the camera at a side of the picture"
+                        : ", with something right beside the camera");
         return fromEye(planned.name(), best, tx, throne.getY() + 10, tz);
+    }
+
+    /**
+     * How open the picture of the court is from a place: a place with nothing within eight blocks over the whole picture, no
+     * post of a gate, corner of a house or roof under the camera filling a side or the foot of it, goes before one with nothing
+     * only right beside the camera, which goes before any other.
+     */
+    private static double courtClear(ServerPlayer player, net.minecraft.world.phys.Vec3 eye, net.minecraft.world.phys.Vec3 aim) {
+        if (!clearView(player, eye, aim, 5.5, 48.0, 26.0)) {
+            return 0.0;
+        }
+        return clearView(player, eye, aim, 8.0, 52.0, 33.0) ? 3000.0 : 1000.0;
     }
 
     private void shoot(String name) {
@@ -1076,12 +1089,12 @@ final class ClientNpcShowcase {
             list.add(bank);
         }
         frame("npc-court", server, site, composition, kingdom, io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.COURT, list);
-        // The streets of the quarters: the nobles by the square and the poor by the wall, in whichever of the two capitals has
-        // more of them in a row; the craftsmen in the outer ring of the large one.
+        // The streets of the quarters: the nobles by the square, the craftsmen on a side of the outer ring and the poor by the
+        // north wall, in whichever of the two capitals has more of them in a row.
         List<NpcSite> capitals = new ArrayList<>(List.of(site));
         small.filter(other -> other.status() == NpcSite.Status.SPAWNED).ifPresent(capitals::add);
         Shot noble = quarterStreet("npc-noble-street", capitals, "noble", true);
-        Shot craft = rowShot("npc-houses", site, composition, "craft");
+        Shot craft = quarterStreet("npc-houses", capitals, "craft", true);
         Shot poor = quarterStreet("npc-poor-street", capitals, "poor", false);
         for (Shot street : java.util.Arrays.asList(noble, craft, poor)) {
             if (street != null) {
@@ -1358,61 +1371,6 @@ final class ClientNpcShowcase {
                     site.z() + plot.z() + b[2] + 0.5);
         }
         return null;
-    }
-
-    /**
-     * A street of a quarter of a capital: along the half-row with the most houses of the quarter, from before its first house
-     * nearest the avenue towards its last one, a little above the street before their fronts.
-     */
-    private static Shot rowShot(String name, NpcSite site, io.github.sekerator.kingdomworld.core.npc.NpcComposition composition, String quarter) {
-        java.util.Map<String, List<io.github.sekerator.kingdomworld.core.npc.NpcComposition.Plot>> rows = new java.util.LinkedHashMap<>();
-        for (io.github.sekerator.kingdomworld.core.npc.NpcComposition.Plot plot : composition.buildings()) {
-            if (!plot.quarter().equals(quarter)) {
-                continue;
-            }
-            boolean ns = plot.facing() == 0 || plot.facing() == 2;
-            int across = ns ? plot.z() : plot.x();
-            int along = ns ? plot.x() : plot.z();
-            rows.computeIfAbsent(plot.facing() + ":" + Integer.signum(across) + ":" + Integer.signum(along), key -> new ArrayList<>()).add(plot);
-        }
-        List<io.github.sekerator.kingdomworld.core.npc.NpcComposition.Plot> row = null;
-        for (List<io.github.sekerator.kingdomworld.core.npc.NpcComposition.Plot> candidate : rows.values()) {
-            if (row == null || candidate.size() > row.size()) {
-                row = candidate;
-            }
-        }
-        if (row == null || row.size() < 2) {
-            return null;
-        }
-        int facing = Math.floorMod(row.get(0).facing(), 4);
-        boolean ns = facing == 0 || facing == 2;
-        int[] out = OUT[facing];
-        int outAcross = ns ? out[1] : out[0];
-        row.sort(java.util.Comparator.comparingInt(plot -> Math.abs(ns ? plot.x() : plot.z())));
-        // The line before the fronts: before the front of the house nearest the street.
-        int front = outAcross > 0 ? Integer.MIN_VALUE : Integer.MAX_VALUE;
-        for (io.github.sekerator.kingdomworld.core.npc.NpcComposition.Plot plot : row) {
-            int[] box = io.github.sekerator.kingdomworld.core.npc.NpcComposition.footprint(plot);
-            int face = switch (facing) {
-                case 0 -> box[3];
-                case 1 -> box[0];
-                case 2 -> box[1];
-                default -> box[2];
-            };
-            front = outAcross > 0 ? Math.max(front, face) : Math.min(front, face);
-        }
-        int firstAlong = ns ? row.get(0).x() : row.get(0).z();
-        int lastAlong = ns ? row.get(row.size() - 1).x() : row.get(row.size() - 1).z();
-        int sign = lastAlong >= firstAlong ? 1 : -1;
-        double fromAlong = firstAlong - sign * 6.0;
-        double fromAcross = front + outAcross * 3.0;
-        double toAcross = front + outAcross * 1.0;
-        int ground = site.groundY() + 1;
-        double fromX = site.x() + (ns ? fromAlong : fromAcross) + 0.5;
-        double fromZ = site.z() + (ns ? fromAcross : fromAlong) + 0.5;
-        double toX = site.x() + (ns ? lastAlong : toAcross) + 0.5;
-        double toZ = site.z() + (ns ? toAcross : lastAlong) + 0.5;
-        return towards(name, fromX, ground + 2.5, fromZ, toX, ground + 3.0, toZ);
     }
 
     /** The quarters of the houses of a styled capital. */
