@@ -301,16 +301,30 @@ public final class LandCommands {
         return String.format(Locale.ROOT, "%.1f%%", whole == 0 ? 0.0 : 100.0 * part / whole);
     }
 
+    /**
+     * Unlocks the provinces and the survey of the land, whichever is read-only, each after a backup of its original.
+     */
     private static int unlock(CommandSourceStack source) {
+        Optional<Path> provinces;
         try {
-            Optional<Path> backup = ProvinceSavedData.get(source.getServer()).unlock(source.getServer());
-            source.sendSuccess(() -> backup.<Component>map(path -> Component.translatable(LAND + "unlocked", path.toString()))
-                    .orElseGet(() -> Component.translatable(LAND + "not_locked")), true);
-            return 1;
+            provinces = ProvinceSavedData.get(source.getServer()).unlock(source.getServer());
         } catch (IOException e) {
             source.sendFailure(Component.translatable(LAND + "unlock_failed", e.getMessage()));
             return 0;
         }
+        Optional<Path> survey;
+        try {
+            survey = SurveySavedData.get(source.getServer()).unlock(source.getServer());
+        } catch (IOException e) {
+            source.sendFailure(Component.translatable(LAND + "survey_unlock_failed", e.getMessage()));
+            return 0;
+        }
+        provinces.ifPresent(path -> source.sendSuccess(() -> Component.translatable(LAND + "unlocked", path.toString()), true));
+        survey.ifPresent(path -> source.sendSuccess(() -> Component.translatable(LAND + "survey_unlocked", path.toString()), true));
+        if (provinces.isEmpty() && survey.isEmpty()) {
+            source.sendSuccess(() -> Component.translatable(LAND + "not_locked"), true);
+        }
+        return 1;
     }
 
     private static boolean refusedReadOnly(CommandSourceStack source) {
