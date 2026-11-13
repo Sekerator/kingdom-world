@@ -84,6 +84,33 @@ public final class GuildRanks {
     }
 
     /**
+     * The ranks of the adventurers of a branch of a kingdom of the world: the head of the guild of the rank of the branch, two
+     * (in a branch of five or fewer) or three a rank lower, the others two and three ranks lower in turn, none below D.
+     */
+    public static java.util.List<Rank> adventurers(Rank branch, int count) {
+        java.util.List<Rank> ranks = new java.util.ArrayList<>();
+        int second = count <= 5 ? 2 : 3;
+        for (int i = 0; i < count; i++) {
+            int below = i == 0 ? 0 : i <= second ? 1 : (i - second) % 2 == 1 ? 2 : 3;
+            ranks.add(Rank.max(Rank.D, branch.plus(-below)));
+        }
+        return ranks;
+    }
+
+    /**
+     * The energy the adventurers of a kingdom of the world bring home from a day of hunting far from players: for each of them
+     * the crystal of a monster a rank below its own, as often as such a monster gives one.
+     */
+    public static long huntEnergy(java.util.List<Rank> adventurers, GuildRules rules) {
+        double energy = 0;
+        for (Rank rank : adventurers) {
+            Rank prey = rank.plus(-1);
+            energy += rules.crystalChance(prey) * rules.crystalEnergy(prey);
+        }
+        return Math.round(energy);
+    }
+
+    /**
      * A well spread number from a seed, so that close seeds give unrelated choices.
      */
     static long mix(long seed) {

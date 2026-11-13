@@ -162,9 +162,10 @@ final class CityPlan {
         wanted.put(SOUTH, names(small ? List.of("market_square", "well", "bakery")
                 : large ? List.of("market_square", "fountain", "market_hall", "well", "market_square", "bakery", "weavery", "well")
                 : List.of("market_square", "fountain", "market_hall", "bakery", "well")));
-        wanted.put(NORTH, names(small ? List.of("barracks_hall", "carpentry")
+        // Every capital has a mage tower: the seat of its guild of mages.
+        wanted.put(NORTH, names(small ? List.of("barracks_hall", "carpentry", "mage_tower")
                 : large ? List.of("barracks_hall", "drill_yard", "barracks_hall", "mage_tower", "well")
-                : List.of("barracks_hall", "drill_yard")));
+                : List.of("barracks_hall", "drill_yard", "mage_tower")));
         // A small capital keeps its stores in a barn: two storehouses hold what one would run over with after a harvest.
         wanted.put(EAST, names(small ? List.of("smithy", "barn", "workshop")
                 : large ? List.of("smithy", "carpentry", "storehouse", "workshop", "bakery", "smithy", "barn", "weavery", "carpentry", "well")

@@ -31,6 +31,8 @@ public final class NpcWork {
     private static final int SEARCH_STEP = 64;
     /** Ticks between two looks for players near planned places. */
     private static final int TRIGGER_TICKS = 20;
+    /** Ticks between two looks at the guilds of the kingdoms of the world: a minute, in which a few of their people come. */
+    private static final int GUILD_TICKS = 1_200;
     /** Names of the kingdoms of the world in both alphabets, for texts made without the server at hand. */
     private static final Map<UUID, NpcNames.Name> NAMES = new ConcurrentHashMap<>();
     /** Names of the towns of the kingdoms of the world in both alphabets, by the Latin form (the name of the city). */
@@ -174,6 +176,10 @@ public final class NpcWork {
             if (day != lastDay) {
                 lastDay = day;
                 NpcRulers.due(server, day);
+                NpcGuilds.day(server, day);
+            }
+            if (server.getTickCount() % GUILD_TICKS == 0) {
+                NpcGuilds.keepUp(server);
             }
         }
         NpcRulers.tick(server);

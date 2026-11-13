@@ -946,6 +946,7 @@ public final class NpcSpawner {
         npc.putKingdom(kingdom);
         NpcWork.remember(kingdom);
         site.setKingdomId(id);
+        NpcGuilds.found(server, site, kingdom);
         LOGGER.info(asData ? "The kingdom of the world {} ({}) is founded at {}: {} ruled by {} ({}, {})"
                         : "The kingdom of the world {} ({}) appears at {}: {} ruled by {} ({}, {})", name.latin(), name.cyrillic(),
                 throne.toShortString(), site.level().id(), kingdom.rulerName(io.github.sekerator.kingdomworld.core.citizen.CitizenNames.Alphabet.LATIN),
@@ -2265,6 +2266,14 @@ public final class NpcSpawner {
             // The guard and the army get their posts once: the step of the stage remembers it over a restart.
             NpcGarrison.found(server, site, job.composition);
             site.setStep(1);
+            return;
+        }
+        if (site.step() == 1) {
+            // The adventurers of the branch of the guild and the mages of the tower come from abroad, a part a tick.
+            if (!NpcGuilds.raise(server, site, budget(ARMY_NANOS))) {
+                return;
+            }
+            site.setStep(2);
             return;
         }
         // The soldiers moved into the bunks of the barracks: whoever has no bed yet takes one of those they left, a part a tick.

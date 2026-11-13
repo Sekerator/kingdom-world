@@ -653,14 +653,18 @@ final class RulerSnapshots {
             return;
         }
         MagicState magic = MagicWork.state(server);
-        view.tower = magic.towerLevel(id) > 0;
+        // A kingdom with a guild of mages has its tower even before its first research is done.
+        view.tower = magic.towerLevel(id) > 0 || magic.find(id).flatMap(io.github.sekerator.kingdomworld.core.magic.KingdomMagic::guildRank).isPresent();
         view.researching = magic.find(id).flatMap(io.github.sekerator.kingdomworld.core.magic.KingdomMagic::current).isPresent();
         if (!view.tower || view.researching) {
             return;
         }
+        // The energy for a few days of the ward stays in the store: a research waits until the hunts brought more.
+        long reserve = NpcGuilds.wardReserve(server, id);
         for (Research research : Research.values()) {
             if (!magic.researched(id, research) && research.requires().map(before -> magic.researched(id, before)).orElse(true)
-                    && magic.checkResearch(null, id, research, MagicSettings.rules(), state).ok()) {
+                    && magic.checkResearch(null, id, research, MagicSettings.rules(), state).ok()
+                    && magic.energy(id) - MagicSettings.rules().researchCost(research) >= reserve) {
                 view.research = research.id();
                 return;
             }

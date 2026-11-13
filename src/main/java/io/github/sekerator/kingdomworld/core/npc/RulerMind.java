@@ -638,8 +638,9 @@ public final class RulerMind {
         if (view.festivals && view.mood < rules.festivalMood() && spare >= view.festivalCost) {
             out.add(new Scored(50, RulerDecision.of(Kind.FESTIVAL, "", view.festivalCost)));
         }
-        if (view.character == RulerCharacter.MAGE && view.tower && !view.researching && !view.research.isEmpty()) {
-            out.add(new Scored(55, RulerDecision.of(Kind.RESEARCH, view.research, 1)));
+        // Every ruler with a guild of mages has it research further; a mage cares for it more than the others.
+        if (view.tower && !view.researching && !view.research.isEmpty()) {
+            out.add(new Scored(view.character == RulerCharacter.MAGE ? 55 : 25, RulerDecision.of(Kind.RESEARCH, view.research, 1)));
         }
         // A subject of good name becomes an honorary councillor: an honour without any right in the kingdom.
         if (view.councillorFree) {

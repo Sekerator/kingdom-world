@@ -285,16 +285,20 @@ class RulerMindTest {
     }
 
     @Test
-    void aMageRulerResearchesAndOthersDoNot() {
+    void everyRulerWithAGuildOfMagesResearchesAndAMageFirst() {
         RulerView mage = calm();
         mage.character = RulerCharacter.MAGE;
         mage.tower = true;
         mage.research = "ward";
         assertTrue(has(decide(mage), Kind.RESEARCH, "ward"));
+        // Since the guilds have ranks every kingdom of the world has a guild of mages, and its ruler has it research further.
         RulerView builder = calm();
         builder.tower = true;
         builder.research = "ward";
-        assertFalse(has(decide(builder), Kind.RESEARCH, null));
+        assertTrue(has(decide(builder), Kind.RESEARCH, "ward"));
+        RulerView noTower = calm();
+        noTower.research = "ward";
+        assertFalse(has(decide(noTower), Kind.RESEARCH, null));
     }
 
     @Test

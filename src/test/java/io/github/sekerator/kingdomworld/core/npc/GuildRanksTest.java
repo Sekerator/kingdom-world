@@ -66,6 +66,27 @@ class GuildRanksTest {
     }
 
     @Test
+    void aBranchHasAHeadOfItsRankAndAdventurersBelowIt() {
+        assertEquals(java.util.List.of(Rank.B, Rank.C, Rank.C, Rank.D, Rank.D), GuildRanks.adventurers(Rank.B, RULES.worldAdventurers(Rank.B)));
+        java.util.List<Rank> top = GuildRanks.adventurers(Rank.SS, RULES.worldAdventurers(Rank.SS));
+        assertEquals(14, top.size());
+        assertEquals(Rank.SS, top.get(0));
+        assertEquals(3, top.stream().filter(rank -> rank == Rank.S).count());
+        assertTrue(top.stream().skip(1).allMatch(rank -> rank.ordinal() < Rank.SS.ordinal() && rank.atLeast(Rank.B)), top.toString());
+        assertEquals(8, RULES.worldAdventurers(Rank.A));
+        assertEquals(11, RULES.worldAdventurers(Rank.S));
+    }
+
+    @Test
+    void aStrongerBranchBringsMoreEnergyFromItsHunts() {
+        long b = GuildRanks.huntEnergy(GuildRanks.adventurers(Rank.B, RULES.worldAdventurers(Rank.B)), RULES);
+        long a = GuildRanks.huntEnergy(GuildRanks.adventurers(Rank.A, RULES.worldAdventurers(Rank.A)), RULES);
+        long ss = GuildRanks.huntEnergy(GuildRanks.adventurers(Rank.SS, RULES.worldAdventurers(Rank.SS)), RULES);
+        assertTrue(b > 0 && a > b && ss > a, b + " " + a + " " + ss);
+        assertEquals(0, GuildRanks.huntEnergy(java.util.List.of(), RULES));
+    }
+
+    @Test
     void theRangesComeFromTheSettings() {
         GuildRules.Builder builder = new GuildRules.Builder();
         builder.worldRankMin = new Rank[]{Rank.C, Rank.B, Rank.A};
