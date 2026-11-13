@@ -273,7 +273,11 @@ public final class TacticGameTests {
         helper.runAfterDelay(SETTLE, () -> {
             try {
                 for (CitizenEntity body : bodies) {
-                    helper.assertTrue(body.isAlive() && !body.isInLava() && !body.isOnFire(), "A soldier went into the lava");
+                    helper.assertTrue(body.isAlive() && !body.isInLava() && !body.isOnFire(), "A soldier went into the lava: "
+                            + helper.relativePos(body.blockPosition()).toShortString() + (body.isAlive() ? "" : " dead") + (body.isInLava() ? " in lava" : "")
+                            + (body.isOnFire() ? " on fire" : "") + ", role " + role(body) + ", target at "
+                            + helper.relativePos(target.blockPosition()).toShortString() + ", squad at "
+                            + bodies.stream().map(other -> helper.relativePos(other.blockPosition()).toShortString()).toList());
                     BlockPos under = body.blockPosition().below();
                     helper.assertTrue(!level.getBlockState(under).is(Blocks.LAVA) && !level.getBlockState(body.blockPosition()).is(Blocks.LAVA),
                             "A soldier stands over lava at " + body.blockPosition().toShortString());

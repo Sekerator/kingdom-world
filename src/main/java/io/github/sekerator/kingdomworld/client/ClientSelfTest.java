@@ -93,6 +93,13 @@ public final class ClientSelfTest {
     private ClientSelfTest() {
     }
 
+    /**
+     * Whether a self-test was asked for in this run of the client.
+     */
+    static boolean active() {
+        return !MODE.isEmpty();
+    }
+
     static void onTitleScreen() {
         if ("title".equals(MODE) && !quit) {
             LOGGER.info(PREFIX + "title screen reached");
