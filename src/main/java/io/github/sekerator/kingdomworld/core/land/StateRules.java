@@ -21,6 +21,12 @@ public record StateRules(int spawnX, int spawnZ, int spawnZone, int radius, int 
                          int[] quota, int[] minChunks, int[] maxChunks) {
     public static final int SPAWN_ZONE = 1500;
     public static final int RADIUS = 7000;
+    /**
+     * The largest radius the plan of states of a world takes from the config, in blocks: the survey and its file grow with the
+     * square of the radius, and a few of its steps (the end of the survey, the copy for the worker, the writing of the file) go
+     * over every cell in one tick. At this radius the survey has about 415 000 cells.
+     */
+    public static final int MAX_RADIUS = 20_000;
     public static final int GAP_BLOCKS = 384;
     public static final double NEUTRAL_SHARE = 0.35;
     public static final double RING_SHARE = 0.40;
@@ -43,6 +49,14 @@ public record StateRules(int spawnX, int spawnZ, int spawnZone, int radius, int 
                 || !(ringShare > 0 && ringShare <= 1)) {
             throw new IllegalArgumentException("Rules of the plan of states out of range");
         }
+    }
+
+    /**
+     * The radius a plan of states of a world takes for the radius of the config: no larger than {@value #MAX_RADIUS} blocks and
+     * no smaller than 256.
+     */
+    public static int planRadius(int configured) {
+        return Math.max(256, Math.min(MAX_RADIUS, configured));
     }
 
     /**

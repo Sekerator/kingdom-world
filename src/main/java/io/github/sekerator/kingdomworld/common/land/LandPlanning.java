@@ -522,7 +522,13 @@ public final class LandPlanning {
         private boolean survey(long deadline) {
             StateRules rules = setup.states();
             if (!survey.started() || survey.spawnX() != rules.spawnX() || survey.spawnZ() != rules.spawnZ() || survey.radius() != rules.radius()) {
-                survey.start(rules.spawnX(), rules.spawnZ(), rules.radius(), server.overworld().getSeaLevel());
+                try {
+                    survey.start(rules.spawnX(), rules.spawnZ(), rules.radius(), server.overworld().getSeaLevel());
+                } catch (IllegalArgumentException e) {
+                    // A plan kept from before the radius had its bound: the survey cannot hold it.
+                    fail("the survey cannot be begun: " + e.getMessage());
+                    return false;
+                }
                 surveyBlocks.clear();
                 surveyAsked = -1;
             }

@@ -1393,7 +1393,8 @@ public final class KingdomWorldConfig {
                     "Values given by size are in the order small, medium, large.").push("npcKingdoms");
             generate = builder.comment("Whether kingdoms of the world are planned and appear.").define("generate", d.generate());
             count = builder.comment("How many kingdoms a world plans.").defineInRange("count", d.count(), 0, 256);
-            radius = builder.comment("How far from the spawn of the world their capitals may lie, in blocks.")
+            radius = builder.comment("How far from the spawn of the world their capitals may lie, in blocks. The plan of states takes at most "
+                            + io.github.sekerator.kingdomworld.core.land.StateRules.MAX_RADIUS + ".")
                     .defineInRange("radius", io.github.sekerator.kingdomworld.core.land.StateRules.RADIUS, 256, 1_000_000);
             minDistance = builder.comment("The least distance between two capitals, in blocks.")
                     .defineInRange("minDistance", d.minDistance(), 256, 100_000);

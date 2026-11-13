@@ -11,6 +11,9 @@ import java.util.List;
  * the other rules; game tests may replace them. Before the config is loaded the defaults count.
  */
 public final class NpcSettings {
+    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
+    /** Whether the log was told that the radius of the config is too large for the plan of states. */
+    private static boolean radiusWarned;
     private static NpcRules override;
     private static NpcRules rules;
     private static io.github.sekerator.kingdomworld.core.npc.RulerRules rulerOverride;
@@ -62,7 +65,13 @@ public final class NpcSettings {
                     most[i] = Math.max(chunks.get(2 * i), chunks.get(2 * i + 1));
                 }
             }
-            return new io.github.sekerator.kingdomworld.core.land.StateRules(spawnX, spawnZ, c.spawnZone.get(), npc.radius(), c.gapBlocks.get(),
+            int radius = io.github.sekerator.kingdomworld.core.land.StateRules.planRadius(npc.radius());
+            if (radius != npc.radius() && !radiusWarned) {
+                radiusWarned = true;
+                LOGGER.warn("The radius {} of the kingdoms of the world is too large for the plan of states: it takes {} blocks", npc.radius(),
+                        radius);
+            }
+            return new io.github.sekerator.kingdomworld.core.land.StateRules(spawnX, spawnZ, c.spawnZone.get(), radius, c.gapBlocks.get(),
                     c.neutralShare.get(), d.ringShare(), quota(npc.sizeQuota()), least, most);
         } catch (IllegalStateException e) {
             return d;
