@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.core.diplomacy;
 
+import io.github.sekerator.kingdomworld.core.npc.ProvinceSale;
 import io.github.sekerator.kingdomworld.core.npc.RulerCharacter;
 
 import java.util.ArrayList;
@@ -29,10 +30,8 @@ public final class DiplomacyMind {
     public static final String LOW_PRICE = "low_price";
     public static final List<String> REASONS = List.of(ASIDE, DISTRUST, WEAK, PROUD, WINNING, TOO_MUCH, AGREED, HEART, LOW_PRICE);
 
-    /** What a province is worth at least, whatever its size. */
-    public static final long MIN_CEDE_VALUE = 1_500;
-    /** Worth of a chunk of a province before character and relations. */
-    public static final double CEDE_CHUNK_VALUE = 3.0;
+    /** What a province is worth at least, whatever its size: the least price of a province on sale. */
+    public static final long MIN_CEDE_VALUE = ProvinceSale.Rules.DEFAULT.minPrice();
 
     /**
      * A ruler of the world, as diplomacy sees it.
@@ -270,14 +269,24 @@ public final class DiplomacyMind {
     }
 
     /**
+     * How a ruler answers a neighbour that asks for a province, at the prices of sales by default.
+     *
+     * @param asker the kingdom that asks for the province
+     */
+    public static Verdict cede(Self self, Neighbor asker, CedeAsk ask) {
+        return cede(self, asker, ask, ProvinceSale.Rules.DEFAULT);
+    }
+
+    /**
      * How a ruler answers a neighbour that asks for a province: never the heart of its state, never to a neighbour it dislikes
      * (a relation below -20), never for nothing when it is a warrior. Otherwise it sells for a price of at least
      * {@link #cedeValue}, and gives an empty province for nothing to its overlord, or to a dear friend (a relation of 80 or
      * more) when it is generous.
      *
      * @param asker the kingdom that asks for the province
+     * @param rules the rules of the sale of provinces, whose prices the ruler asks
      */
-    public static Verdict cede(Self self, Neighbor asker, CedeAsk ask) {
+    public static Verdict cede(Self self, Neighbor asker, CedeAsk ask, ProvinceSale.Rules rules) {
         if (ask.heart()) {
             return new Verdict(false, HEART);
         }
@@ -287,7 +296,7 @@ public final class DiplomacyMind {
         if (self.character() == RulerCharacter.WARRIOR && ask.price() <= 0) {
             return new Verdict(false, PROUD);
         }
-        if (ask.price() >= cedeValue(self, asker, ask)) {
+        if (ask.price() >= cedeValue(self, asker, ask, rules)) {
             return new Verdict(true, AGREED);
         }
         boolean gift = !ask.settled() && (ask.overlord() || (asker.relation() >= 80 && self.has(RulerCharacter.Trait.GENEROUS)));
@@ -295,26 +304,19 @@ public final class DiplomacyMind {
     }
 
     /**
-     * What a ruler wants for a province: 3 a chunk, more from a warrior (x1.4) and less from a merchant (x0.85), less from a
-     * generous ruler (x0.9) and more from a proud one (x1.25), more from one who dislikes the asker (x1.2 at a relation of 0
-     * or below, down to x0.9 at 50 or above), at least {@value #MIN_CEDE_VALUE}, and twice as much where people live.
+     * What a ruler wants for a province at the prices of sales by default.
      */
     public static long cedeValue(Self self, Neighbor asker, CedeAsk ask) {
-        double character = switch (self.character()) {
-            case MERCHANT -> 0.85;
-            case BUILDER, MAGE -> 1.0;
-            case WARRIOR -> 1.4;
-        };
-        double traits = 1.0;
-        if (self.has(RulerCharacter.Trait.GENEROUS)) {
-            traits *= 0.9;
-        }
-        if (self.has(RulerCharacter.Trait.PROUD)) {
-            traits *= 1.25;
-        }
-        double friendship = Math.max(0, Math.min(50, asker.relation())) / 50.0;
-        double relation = 1.2 - 0.3 * friendship;
-        long value = Math.max(MIN_CEDE_VALUE, Math.round(ask.chunks() * CEDE_CHUNK_VALUE * character * traits * relation));
+        return cedeValue(self, asker, ask, ProvinceSale.Rules.DEFAULT);
+    }
+
+    /**
+     * What a ruler wants for a province: what it asks for a province on sale ({@link ProvinceSale#price}: a price a chunk,
+     * more from a warrior or a proud ruler, less from a merchant or a generous one, more from one who dislikes the asker, at
+     * least the least price of a province), and twice as much where people live, for those are never on sale.
+     */
+    public static long cedeValue(Self self, Neighbor asker, CedeAsk ask, ProvinceSale.Rules rules) {
+        long value = ProvinceSale.price(ask.chunks(), self.character(), self.traits(), asker.relation(), rules);
         return ask.settled() ? value * 2 : value;
     }
 

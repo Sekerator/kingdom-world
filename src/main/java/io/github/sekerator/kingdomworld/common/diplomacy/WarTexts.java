@@ -56,7 +56,8 @@ public final class WarTexts {
     }
 
     /**
-     * What an offer is, in full: a pact for some days, an alliance, who becomes whose vassal, freedom, peace on terms.
+     * What an offer is, in full: a pact for some days, an alliance, who becomes whose vassal, freedom, peace on terms, a
+     * province for a price or for nothing.
      */
     static Component offerText(MinecraftServer server, Proposal proposal) {
         return switch (proposal.kind()) {
@@ -68,7 +69,7 @@ public final class WarTexts {
             case PEACE -> WarWork.state(server).war(proposal.war())
                     .<Component>map(war -> Component.translatable(KEY + "offer_text.peace", terms(server, war, proposal.terms())))
                     .orElseGet(() -> Component.translatable(KEY + "offer_text.peace", Component.translatable(KEY + "terms.white")));
-            case CEDE -> offer(proposal.kind());
+            case CEDE -> Cessions.offerText(server, proposal);
         };
     }
 

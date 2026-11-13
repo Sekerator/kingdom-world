@@ -68,6 +68,10 @@ final class NpcDiplomacy {
                 War.Side side = war.get().sideOf(proposal.to()).orElse(War.Side.DEFENDER);
                 PeaceTerms enemyMay = DiplomacyState.terms(war.get(), side.enemy(), false, WarWork.funds(server, proposal.to()), rules);
                 verdict = DiplomacyMind.peace(war.get(), side, proposal.terms(), enemyMay, rules);
+            } else if (proposal.kind() == Proposal.Kind.CEDE) {
+                // A province is weighed by its land and price, as the ruler would sell it.
+                DiplomacyMind.Neighbor from = WarWork.neighbor(server, proposal.to(), proposal.from(), 0.0, now, rules);
+                verdict = Cessions.verdict(server, self.get(), from, proposal);
             } else {
                 DiplomacyMind.Neighbor from = WarWork.neighbor(server, proposal.to(), proposal.from(), 0.0, now, rules);
                 verdict = DiplomacyMind.answer(proposal, self.get(), from);

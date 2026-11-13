@@ -75,6 +75,7 @@ public final class DiplomacySync {
         boolean canManage = membership.hasPermission(viewer, kingdomId, Permission.MANAGE_DIPLOMACY);
         boolean canDeclare = membership.hasPermission(viewer, kingdomId, Permission.DECLARE_WAR);
         List<DiplomacyViews.KingdomRow> kingdoms = new ArrayList<>();
+        Map<UUID, List<DiplomacyViews.CedeOption>> cede = Cessions.options(server, kingdomId);
         for (Kingdom other : KingdomWorldApi.kingdoms(server)) {
             if (other.id().equals(kingdomId)) {
                 continue;
@@ -87,7 +88,7 @@ public final class DiplomacySync {
             boolean lordOf = treaty.map(t -> t.kind() == Bond.VASSAL && kingdomId.equals(t.overlord())).orElse(false);
             kingdoms.add(new DiplomacyViews.KingdomRow(other.id(), KingdomActions.kingdomName(other), other.color(), WarWork.isNpc(server, other.id()),
                     bond, WarWork.relation(server, kingdomId, other.id()), reason, vassalOf, lordOf, minutes, WarWork.playable(server, other.id()),
-                    WarWork.shielded(server, other.id())));
+                    WarWork.shielded(server, other.id()), cede.getOrDefault(other.id(), List.of())));
         }
         kingdoms.sort((a, b) -> {
             int order = Integer.compare(rank(a.bond()), rank(b.bond()));
@@ -175,7 +176,8 @@ public final class DiplomacySync {
             case "broken" -> Bond.byId(event.detail()).<Component>map(WarTexts::bond).orElse(Component.literal(event.detail()));
             case "raid" -> WarTexts.items(parse(event.detail()));
             case "peace" -> Component.translatable(KEY + "chronicle.how." + event.detail());
-            case "province_taken" -> io.github.sekerator.kingdomworld.common.siege.SiegeTexts.provinceName(server, (int) parse(event.detail()));
+            case "province_taken", "ceded" ->
+                    io.github.sekerator.kingdomworld.common.siege.SiegeTexts.provinceName(server, (int) parse(event.detail()));
             default -> Component.literal(event.detail());
         };
         return Component.translatable(KEY + "chronicle." + event.kind(), DaySchedule.day(event.time()), first, second, detail);
@@ -219,9 +221,16 @@ public final class DiplomacySync {
             case JOIN -> DiplomacyActions.answerCall(server, actor, kingdomId, change.value(), true);
             case REFUSE -> DiplomacyActions.answerCall(server, actor, kingdomId, change.value(), false);
             case PEACE_WHITE, PEACE_DEMAND, PEACE_CONCEDE -> peace(server, actor, kingdomId, change.value(), change.action());
+            case ASK_CEDE -> change.value() >= 1 && change.value() <= io.github.sekerator.kingdomworld.core.territory.ProvinceMap.MAX_ID
+                    ? DiplomacyActions.askCede(server, actor, kingdomId, target, (int) change.value())
+                    : Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
         };
         if (!outcome.ok()) {
-            return KingdomActions.Feedback.error(outcome.error());
+            // A province asked for, or a cession accepted, that the land refuses is told why in words of land.
+            boolean cession = change.action() == DiplomacyPackets.TabChange.Action.ASK_CEDE
+                    || change.action() == DiplomacyPackets.TabChange.Action.ACCEPT;
+            Optional<Component> why = cession ? Cessions.refusal(outcome.error()) : Optional.empty();
+            return why.map(KingdomActions.Feedback::fail).orElseGet(() -> KingdomActions.Feedback.error(outcome.error()));
         }
         return KingdomActions.Feedback.ok(KEY + "tab.done." + change.action().name().toLowerCase(java.util.Locale.ROOT));
     }

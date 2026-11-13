@@ -2,6 +2,7 @@ package io.github.sekerator.kingdomworld.common.diplomacy;
 
 import com.mojang.logging.LogUtils;
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
+import io.github.sekerator.kingdomworld.core.diplomacy.CedeLand;
 import io.github.sekerator.kingdomworld.core.diplomacy.DiplomacyRules;
 import io.github.sekerator.kingdomworld.core.diplomacy.DiplomacyState;
 import io.github.sekerator.kingdomworld.core.diplomacy.PeaceTerms;
@@ -189,6 +190,57 @@ public final class DiplomacyActions {
     }
 
     /**
+     * Asks another kingdom to cede a province that touches the land of the asker: for the price its ruler asks, when a ruler
+     * of the world holds it (nothing when it would give it away), or for nothing from a kingdom of players, which answers the
+     * offer itself. The money moves only when the offer is accepted.
+     */
+    public static Outcome askCede(MinecraftServer server, @Nullable UUID actor, UUID from, UUID to, int province) {
+        Outcome right = allowed(server, actor, from, Permission.MANAGE_DIPLOMACY);
+        if (!right.ok()) {
+            return right;
+        }
+        if (KingdomWorldApi.kingdom(server, to).isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (io.github.sekerator.kingdomworld.common.land.ProvinceSavedData.get(server).isReadOnly()) {
+            return Outcome.fail(KingdomError.READ_ONLY);
+        }
+        DiplomacyRules rules = DiplomacySettings.rules();
+        long now = KingdomWorldApi.gameTime(server);
+        CedeLand land = Cessions.land(server, from, province);
+        long price = land == null || !to.equals(land.holder()) ? 0 : Cessions.price(server, to, from, province);
+        Outcome check = WarWork.state(server).checkCede(from, to, province, price, land, now, Long.MAX_VALUE);
+        if (!check.ok()) {
+            return check;
+        }
+        if (Cessions.chartered(server, province)) {
+            return Outcome.fail(KingdomError.NOT_FOR_SALE);
+        }
+        if (price > 0) {
+            // What the price costs the asker in its currency by the rates of today; the money moves only on acceptance.
+            Outcome money = KingdomWorldApi.state(server).economy().checkLandPayment(from, to, price);
+            if (!money.ok()) {
+                return money;
+            }
+        }
+        Proposal[] made = new Proposal[1];
+        Outcome outcome = WarWork.change(server, "ask for a province", state -> {
+            DiplomacyState.Proposed proposed = state.proposeCede(from, to, province, price, land, now, Long.MAX_VALUE, rules);
+            made[0] = proposed.proposal().orElse(null);
+            return proposed.outcome();
+        });
+        if (!outcome.ok()) {
+            return outcome;
+        }
+        Component what = WarTexts.offerText(server, made[0]);
+        WarWork.tellDiplomats(server, to, Component.translatable(KEY + "offer_got", WarWork.name(server, from), what).withStyle(ChatFormatting.AQUA));
+        WarWork.tellDiplomats(server, from, Component.translatable(KEY + "offer_sent", WarWork.name(server, to), what));
+        LOGGER.info("{} asked {} to cede the province {} for {}", WarWork.name(server, from).getString(), WarWork.name(server, to).getString(),
+                province, price);
+        return Outcome.DONE;
+    }
+
+    /**
      * Accepts or declines an offer made to a kingdom.
      */
     public static Outcome answer(MinecraftServer server, @Nullable UUID actor, UUID kingdomId, long proposalId, boolean accept) {
@@ -217,6 +269,8 @@ public final class DiplomacyActions {
         Outcome outcome;
         if (proposal.kind() == Proposal.Kind.PEACE) {
             outcome = WarWork.acceptPeace(server, proposal, kingdomId);
+        } else if (proposal.kind() == Proposal.Kind.CEDE) {
+            outcome = Cessions.accept(server, proposal, kingdomId);
         } else {
             outcome = WarWork.state(server).accept(proposalId, kingdomId, now, WarWork.day(server), rules);
             if (outcome.ok()) {

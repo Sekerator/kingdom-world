@@ -276,6 +276,18 @@ public final class SiegeWork {
         return named.equalsIgnoreCase(seat.name().cyrillic()) ? seat.name().cyrillic() : seat.name().latin();
     }
 
+    /**
+     * A province ceded by treaty goes to the kingdom that asked for it by the journal of conquests, as a province a peace
+     * hands over: its land with the claims of the one who ceded it in it, then buildings, citizens, cities and settlements.
+     *
+     * @param dimension the world of the provinces
+     */
+    public static void cede(MinecraftServer server, UUID winner, UUID loser, int province, String dimension, long now) {
+        state(server).addConquest(Conquest.Kind.PROVINCE, 0, winner, loser, dimension, List.of((long) province), 0, now);
+        LOGGER.info("The province {} ceded by {} to {} goes over by the journal of conquests", province, WarWork.name(server, loser).getString(),
+                WarWork.name(server, winner).getString());
+    }
+
     static Optional<Seat> seat(MinecraftServer server, UUID kingdomId, long cityId) {
         for (Seat seat : seats(server, kingdomId)) {
             if (seat.city() == cityId) {

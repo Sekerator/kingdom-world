@@ -1,9 +1,13 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
+import io.github.sekerator.kingdomworld.client.map.ClientProvinceMap;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.DiplomacyViews;
 import io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets;
+import io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket;
+import io.github.sekerator.kingdomworld.core.citizen.CitizenNames;
 import io.github.sekerator.kingdomworld.core.diplomacy.Bond;
+import io.github.sekerator.kingdomworld.core.diplomacy.Proposal;
 import io.github.sekerator.kingdomworld.core.diplomacy.War;
 import io.github.sekerator.kingdomworld.core.diplomacy.WarGoal;
 import net.minecraft.client.Minecraft;
@@ -21,9 +25,9 @@ import java.util.UUID;
 
 /**
  * The "Diplomacy" tab of the throne screen: how the kingdom stands with every other one and what can be done with it
- * (offers of a pact, an alliance, vassalage or freedom, breaking a treaty, declaring war with a goal), offers and calls to
- * war that wait for an answer, the wars of the kingdom with their score, exhaustion, allies and terms of peace, and the
- * chronicle of wars and treaties. The server checks every action.
+ * (offers of a pact, an alliance, vassalage or freedom, breaking a treaty, declaring war with a goal, asking it to cede a
+ * province that touches our land), offers and calls to war that wait for an answer, the wars of the kingdom with their
+ * score, exhaustion, allies and terms of peace, and the chronicle of wars and treaties. The server checks every action.
  */
 final class DiplomacyTab {
     static final int ROW = 18;
@@ -51,6 +55,8 @@ final class DiplomacyTab {
     /** The kingdom whose actions are shown, or {@code null} for the list. */
     private UUID selected;
     private int goal;
+    /** Which of the provinces of the open kingdom that may be asked for is chosen. */
+    private int cede;
 
     private int modeWidth;
     private int openWidth;
@@ -78,6 +84,7 @@ final class DiplomacyTab {
         mode = value;
         scroll = 0;
         selected = null;
+        cede = 0;
     }
 
     /**
@@ -100,7 +107,8 @@ final class DiplomacyTab {
 
     // ---------------------------------------------------------------- layout
 
-    private static final String[] ACTIONS = {"pact", "alliance", "offer_vassal", "demand_vassal", "release", "break", "declare", "declare_break"};
+    private static final String[] ACTIONS = {"pact", "alliance", "offer_vassal", "demand_vassal", "release", "break", "declare", "declare_break",
+            "ask_cede"};
 
     int measure(Font font) {
         modeWidth = 0;
@@ -116,6 +124,7 @@ final class DiplomacyTab {
         for (WarGoal value : DECLARABLE) {
             actionWidth = Math.max(actionWidth, screen.buttonWidth(goalLabel(value)));
         }
+        actionWidth = Math.max(actionWidth, screen.buttonWidth(Component.translatable(KEY + "cede_none")));
         answerWidth = screen.buttonWidth(Component.translatable(KEY + "accept"), Component.translatable(KEY + "decline"),
                 Component.translatable(KEY + "cancel"), Component.translatable(KEY + "join"), Component.translatable(KEY + "refuse"));
         peaceWidth = screen.buttonWidth(Component.translatable(KEY + "peace_white"), Component.translatable(KEY + "peace_demand"),
@@ -200,7 +209,7 @@ final class DiplomacyTab {
                 selected = null;
                 screen.rebuild();
             }).bounds(right - backWidth, buttonsY(top), backWidth, ROW - 2).build());
-            initActions(x, right, top, chosen.get());
+            initActions(x, right, top, panelHeight, chosen.get());
             return;
         }
         int rows = visibleItems(top, panelHeight);
@@ -220,12 +229,13 @@ final class DiplomacyTab {
             int y = listTop(top) + i * ROW;
             screen.add(Button.builder(Component.translatable(KEY + "open"), b -> {
                 selected = row.id();
+                cede = 0;
                 screen.rebuild();
             }).bounds(right - openWidth, y, openWidth, ROW - 2).build());
         }
     }
 
-    private void initActions(int x, int right, int top, DiplomacyViews.KingdomRow row) {
+    private void initActions(int x, int right, int top, int panelHeight, DiplomacyViews.KingdomRow row) {
         int y = listTop(top) + ROW;
         int column = right - 2 * actionWidth - GAP;
         boolean manage = view.canManage();
@@ -254,6 +264,53 @@ final class DiplomacyTab {
         boolean breakFirst = bond == Bond.PACT || bond == Bond.ALLIANCE;
         action(column + actionWidth + GAP, y, breakFirst ? "declare_break" : "declare", declarable,
                 DiplomacyPackets.TabChange.Action.DECLARE, row, breakFirst ? 1 : 0, chosen.id());
+        y += ROW;
+        if (cedeFits(top, panelHeight)) {
+            initCede(column, y, row);
+        }
+    }
+
+    /**
+     * Whether the row of the provinces to ask for fits under the actions; where it does not, it is not shown and nothing
+     * else gives way to it.
+     */
+    private static boolean cedeFits(int top, int panelHeight) {
+        return listTop(top) + 5 * ROW + ROW - 2 <= bottom(top, panelHeight);
+    }
+
+    /**
+     * The provinces of the open kingdom that touch the land of ours, one at a time on a button that goes on to the next (its
+     * name and price on hover), and the offer to cede the one shown, for the price its ruler asks or for nothing.
+     */
+    private void initCede(int column, int y, DiplomacyViews.KingdomRow row) {
+        List<DiplomacyViews.CedeOption> options = row.cede();
+        DiplomacyViews.CedeOption shown = options.isEmpty() ? null : options.get(Math.floorMod(cede, options.size()));
+        Component label = shown == null ? Component.translatable(KEY + "cede_none") : Component.literal(provinceName(shown.province()));
+        Button province = screen.add(Button.builder(label, b -> {
+            cede = options.isEmpty() ? 0 : (Math.floorMod(cede, options.size()) + 1) % options.size();
+            screen.rebuild();
+        }).bounds(column, y, actionWidth, ROW - 2).build());
+        province.active = options.size() > 1;
+        province.setTooltip(Tooltip.create(shown == null ? Component.translatable(KEY + "cede_none_hint")
+                : Component.translatable(KEY + (options.size() > 1 ? "cede_hint_more" : "cede_hint"), provinceName(shown.province()), shown.cost(),
+                options.size())));
+        Bond bond = row.bond();
+        boolean askable = view.canManage() && shown != null && bond != Bond.WAR && bond != Bond.TRUCE;
+        action(column + actionWidth + GAP, y, "ask_cede", askable, DiplomacyPackets.TabChange.Action.ASK_CEDE, row,
+                shown == null ? 0 : shown.province(), "");
+    }
+
+    /**
+     * The name of a province as the atlas writes it, in the alphabet of the language of the game; its number while the
+     * provinces are not known yet.
+     */
+    private static String provinceName(int id) {
+        ProvinceSnapshotPacket.Entry entry = ClientProvinceMap.province(id);
+        if (entry == null) {
+            return "#" + id;
+        }
+        boolean cyrillic = CitizenNames.alphabetFor(Minecraft.getInstance().getLanguageManager().getSelected()) == CitizenNames.Alphabet.CYRILLIC;
+        return KingdomMapScreen.provinceName(entry.nameSeed(), cyrillic);
     }
 
     private void action(int x, int y, String key, boolean active, DiplomacyPackets.TabChange.Action action, DiplomacyViews.KingdomRow row,
@@ -353,7 +410,7 @@ final class DiplomacyTab {
         int headerX = x + modeWidth + 6;
         Optional<DiplomacyViews.KingdomRow> chosen = selectedRow();
         if (chosen.isPresent()) {
-            renderActions(graphics, font, x, right, top, headerX, chosen.get());
+            renderActions(graphics, font, x, right, top, panelHeight, headerX, chosen.get());
             return;
         }
         if (right - headerX > 8) {
@@ -439,7 +496,8 @@ final class DiplomacyTab {
         return Component.translatable(KEY + extra, reason);
     }
 
-    private void renderActions(GuiGraphics graphics, Font font, int x, int right, int top, int headerX, DiplomacyViews.KingdomRow row) {
+    private void renderActions(GuiGraphics graphics, Font font, int x, int right, int top, int panelHeight, int headerX,
+                               DiplomacyViews.KingdomRow row) {
         int headerRight = right - backWidth - 4;
         if (headerRight - headerX > 8) {
             screen.name(graphics, row.name().getString(), headerX, buttonsY(top) + 4, 0xFF000000 | Math.max(0x404040, row.color()), headerRight - headerX);
@@ -449,7 +507,8 @@ final class DiplomacyTab {
         screen.name(graphics, status.getString(), x, y + 4, row.bond() == Bond.WAR ? 0xFFFF5050 : relationColor(row.relation()), right - x);
         screen.hoverText(x, y + 4, Math.min(font.width(status), right - x), details(row));
         int column = right - 2 * actionWidth - GAP;
-        String[] hints = {"hint_treaties", "hint_vassals", "hint_break", "hint_war"};
+        String[] hints = cedeFits(top, panelHeight) ? new String[]{"hint_treaties", "hint_vassals", "hint_break", "hint_war", "hint_cede"}
+                : new String[]{"hint_treaties", "hint_vassals", "hint_break", "hint_war"};
         for (int i = 0; i < hints.length; i++) {
             int lineY = y + (i + 1) * ROW + 4;
             if (column - 6 - x > 8) {
@@ -472,8 +531,9 @@ final class DiplomacyTab {
             Component hover;
             int color;
             if (line instanceof DiplomacyViews.OfferRow offer) {
-                text = Component.translatable(KEY + (offer.incoming() ? "offer_in" : "offer_out"), offer.otherName(),
-                        Component.translatable(WAR + "offer." + offer.kind().id()));
+                // A province asked for is told by its name and price.
+                Component what = offer.kind() == Proposal.Kind.CEDE ? offer.text() : Component.translatable(WAR + "offer." + offer.kind().id());
+                text = Component.translatable(KEY + (offer.incoming() ? "offer_in" : "offer_out"), offer.otherName(), what);
                 hover = Component.translatable(KEY + "offer_hint", offer.text(), io.github.sekerator.kingdomworld.common.trade.TradeTexts.minutes(
                         offer.minutes()));
                 color = offer.incoming() ? 0xFFFFFFFF : 0xFFB8B8B8;

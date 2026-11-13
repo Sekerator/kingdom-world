@@ -68,7 +68,7 @@ public final class DiplomacyPackets {
      * Client to server: something done in the diplomacy tab.
      *
      * @param target the other kingdom of an offer, a break or a declaration
-     * @param value  the offer, the war, or 1 to break a treaty for a declaration
+     * @param value  the offer, the war, the province asked for, or 1 to break a treaty for a declaration
      * @param word   the goal of a declaration
      */
     public record TabChange(UUID kingdomId, Action action, UUID target, long value, String word) {
@@ -89,7 +89,9 @@ public final class DiplomacyPackets {
             REFUSE,
             PEACE_WHITE,
             PEACE_DEMAND,
-            PEACE_CONCEDE
+            PEACE_CONCEDE,
+            /** Asks the target to cede the province {@code value}, for the price its ruler asks or for nothing. */
+            ASK_CEDE
         }
 
         public TabChange {

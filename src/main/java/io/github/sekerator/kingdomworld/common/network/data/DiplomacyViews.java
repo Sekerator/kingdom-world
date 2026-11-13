@@ -24,6 +24,8 @@ public final class DiplomacyViews {
     public static final int MAX_ROWS = 256;
     public static final int MAX_CHRONICLE = 64;
     public static final int MAX_WORD = 32;
+    /** Provinces of one kingdom offered to be asked for at most. */
+    public static final int MAX_CEDE = 8;
 
     private DiplomacyViews() {
     }
@@ -58,15 +60,17 @@ public final class DiplomacyViews {
      * @param minutes    minutes a pact or a truce has left, -1 for none
      * @param playable   whether it can defend itself now (a war may be declared on it)
      * @param shielded   whether its players are all away and its land is shielded
+     * @param cede       provinces of it that touch the land of the viewer's kingdom and may be asked for, with their prices
      */
     public record KingdomRow(UUID id, Component name, int color, boolean npc, Bond bond, int relation, String reason, boolean vassalOf,
-                             boolean lordOf, long minutes, boolean playable, boolean shielded) {
+                             boolean lordOf, long minutes, boolean playable, boolean shielded, List<CedeOption> cede) {
         public KingdomRow {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(name, "name");
             Objects.requireNonNull(bond, "bond");
             reason = reason == null ? "" : reason;
             color &= Kingdom.MAX_COLOR;
+            cede = cede == null ? List.of() : List.copyOf(cede.size() > MAX_CEDE ? cede.subList(0, MAX_CEDE) : cede);
         }
 
         void encode(FriendlyByteBuf buf) {
@@ -82,12 +86,61 @@ public final class DiplomacyViews {
             buf.writeVarLong(minutes + 1);
             buf.writeBoolean(playable);
             buf.writeBoolean(shielded);
+            buf.writeVarInt(cede.size());
+            for (CedeOption option : cede) {
+                option.encode(buf);
+            }
         }
 
         static KingdomRow decode(FriendlyByteBuf buf) {
-            return new KingdomRow(buf.readUUID(), buf.readComponent(), buf.readInt(), buf.readBoolean(), KingdomView.readEnum(buf, Bond.class),
-                    buf.readVarInt(), buf.readUtf(MAX_WORD), buf.readBoolean(), buf.readBoolean(), buf.readVarLong() - 1, buf.readBoolean(),
-                    buf.readBoolean());
+            UUID id = buf.readUUID();
+            Component name = buf.readComponent();
+            int color = buf.readInt();
+            boolean npc = buf.readBoolean();
+            Bond bond = KingdomView.readEnum(buf, Bond.class);
+            int relation = buf.readVarInt();
+            String reason = buf.readUtf(MAX_WORD);
+            boolean vassalOf = buf.readBoolean();
+            boolean lordOf = buf.readBoolean();
+            long minutes = buf.readVarLong() - 1;
+            boolean playable = buf.readBoolean();
+            boolean shielded = buf.readBoolean();
+            int count = buf.readVarInt();
+            if (count < 0 || count > MAX_CEDE) {
+                throw new DecoderException("Too many provinces to ask for: " + count);
+            }
+            List<CedeOption> cede = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                cede.add(CedeOption.decode(buf));
+            }
+            return new KingdomRow(id, name, color, npc, bond, relation, reason, vassalOf, lordOf, minutes, playable, shielded, cede);
+        }
+    }
+
+    /**
+     * A province of another kingdom that may be asked for.
+     *
+     * @param price what its holder asks for it in its currency, 0 for nothing
+     * @param cost  the price in words, in the currency of the holder
+     */
+    public record CedeOption(int province, long price, Component cost) {
+        public CedeOption {
+            Objects.requireNonNull(cost, "cost");
+            price = Math.max(0, price);
+        }
+
+        void encode(FriendlyByteBuf buf) {
+            buf.writeVarInt(province);
+            buf.writeVarLong(price);
+            buf.writeComponent(cost);
+        }
+
+        static CedeOption decode(FriendlyByteBuf buf) {
+            int province = buf.readVarInt();
+            if (province < 1) {
+                throw new DecoderException("No such province: " + province);
+            }
+            return new CedeOption(province, buf.readVarLong(), buf.readComponent());
         }
     }
 

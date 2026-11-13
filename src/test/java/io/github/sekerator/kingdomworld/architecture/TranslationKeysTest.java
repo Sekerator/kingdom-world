@@ -861,7 +861,8 @@ class TranslationKeysTest {
 
     /**
      * Words of diplomacy and war exist in both languages: chunks in every plural form («1 чанк, 2 чанка, 5 чанков»), every goal,
-     * bond, offer, reason of a relation, way a war ends, answer of a ruler of the world and entry of the chronicle, and the lines
+     * bond, offer, reason of a relation, way a war ends, answer of a ruler of the world, entry of the chronicle, action of the tab
+     * and refusal of a cession, and the lines
      * of the tab of war for every place held (a chunk is counted apart) and every conquest.
      */
     @Test
@@ -906,8 +907,15 @@ class TranslationKeysTest {
             keys.add("kingdomworld.siege.tab.conquest." + kind.id());
         }
         for (String kind : List.of("declared", "started", "battle", "raid", "blockade", "peace", "pact", "alliance", "vassal", "released", "broken",
-                "joined", "refused", "kill", "province_taken")) {
+                "joined", "refused", "kill", "province_taken", "ceded")) {
             keys.add("kingdomworld.war.chronicle." + kind);
+        }
+        for (io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.TabChange.Action action
+                : io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.TabChange.Action.values()) {
+            keys.add("kingdomworld.war.tab.done." + action.name().toLowerCase(java.util.Locale.ROOT));
+        }
+        for (String why : List.of("not_theirs", "heart", "not_bordering", "chartered")) {
+            keys.add("kingdomworld.war.cede.refused." + why);
         }
         for (String key : keys) {
             assertTrue(english.containsKey(key) && russian.containsKey(key), "Missing: " + key);

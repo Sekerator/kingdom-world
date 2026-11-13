@@ -8,6 +8,7 @@ import io.github.sekerator.kingdomworld.common.citizen.CitizenSites;
 import io.github.sekerator.kingdomworld.common.data.CitizenNbt;
 import io.github.sekerator.kingdomworld.common.diplomacy.WarWork;
 import io.github.sekerator.kingdomworld.common.land.ProvinceSavedData;
+import io.github.sekerator.kingdomworld.common.land.ProvinceTrade;
 import io.github.sekerator.kingdomworld.common.npc.NpcWork;
 import io.github.sekerator.kingdomworld.common.road.CityWalls;
 import io.github.sekerator.kingdomworld.common.road.RoadWork;
@@ -477,8 +478,9 @@ final class SiegeConquests {
     }
 
     /**
-     * Hands provinces of the loser to the winner within the time of the second, one event each; a hold for a buyer on one of
-     * them ends, for it is the winner's now. Nothing moves while the provinces cannot be written.
+     * Hands provinces of the loser to the winner within the time of the second, one event each; a charter for one of them is
+     * void, for it is the winner's now, and its bearer gets the money back. Nothing moves while the provinces cannot be
+     * written.
      *
      * @return whether all of them went
      */
@@ -495,9 +497,8 @@ final class SiegeConquests {
                 break;
             }
             territory.transferProvince(id, conquest.winner(), day);
-            if (map.hold(id).isPresent()) {
-                map.setHold(id, null);
-            }
+            // A charter for it is void now: its money goes back to its bearer, as when its days are over.
+            ProvinceTrade.voidCharter(server, map, id);
             batch.did();
         }
         if (batch.done() > 0) {

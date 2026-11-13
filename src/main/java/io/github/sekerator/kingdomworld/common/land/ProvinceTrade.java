@@ -429,6 +429,21 @@ public final class ProvinceTrade {
     }
 
     /**
+     * A province changed hands by war or by treaty: a charter for it is void, and its money goes back to its bearer as when
+     * its days are over (if the account cannot take it now, it stays held and goes back with the next look at charters).
+     */
+    public static void voidCharter(MinecraftServer server, ProvinceMap map, int id) {
+        Optional<ProvinceMap.SaleHold> hold = map.hold(id);
+        if (hold.isPresent()) {
+            release(server, map, id, hold.get(), false);
+            if (map.hold(id).isEmpty()) {
+                LOGGER.info("The charter for the province {} is void, the province changed hands: the money went back to {}", id,
+                        hold.get().buyer());
+            }
+        }
+    }
+
+    /**
      * Charters whose days are over, or whose province changed hands, give the money back. Once a second is enough.
      */
     public static void expire(MinecraftServer server, ProvinceMap map) {

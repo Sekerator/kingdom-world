@@ -2,10 +2,15 @@ package io.github.sekerator.kingdomworld.core.diplomacy;
 
 import io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
+import io.github.sekerator.kingdomworld.core.npc.ProvinceSale;
 import io.github.sekerator.kingdomworld.core.npc.RulerCharacter;
+import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
 import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -15,7 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * A province ceded by treaty outside war: the offer, its checks, what accepting it hands over, how a ruler of the world
- * answers it; and the goal of a warrior against a bordering state.
+ * answers it at the prices of sales, which provinces a kingdom may ask for; and the goal of a warrior against a bordering
+ * state.
  */
 class CessionTest {
     private static final long DAY = CitizenNeeds.TICKS_PER_DAY;
@@ -151,10 +157,11 @@ class CessionTest {
         DiplomacyMind.Self warrior = ruler(RulerCharacter.WARRIOR, RulerCharacter.Trait.GENEROUS);
         assertEquals(new DiplomacyMind.Verdict(false, DiplomacyMind.PROUD),
                 DiplomacyMind.cede(warrior, asker(100), new DiplomacyMind.CedeAsk(false, false, 1_000, 0, true)), "a warrior gives nothing away");
-        assertEquals(4_536, DiplomacyMind.cedeValue(warrior, asker(0), free()));
-        assertTrue(DiplomacyMind.cede(warrior, asker(0), new DiplomacyMind.CedeAsk(false, false, 1_000, 4_536, false)).accept(),
-                "a warrior sells dear");
-        assertFalse(DiplomacyMind.cede(warrior, asker(0), new DiplomacyMind.CedeAsk(false, false, 1_000, 4_535, false)).accept());
+        assertEquals(3_240, DiplomacyMind.cedeValue(warrior, asker(0), free()), "a generous trait weighs over the leaning, as in a sale");
+        assertEquals(5_040, DiplomacyMind.cedeValue(ruler(RulerCharacter.WARRIOR), asker(0), free()));
+        assertTrue(DiplomacyMind.cede(warrior, asker(0), new DiplomacyMind.CedeAsk(false, false, 1_000, 3_240, false)).accept(),
+                "a warrior sells for its price");
+        assertFalse(DiplomacyMind.cede(warrior, asker(0), new DiplomacyMind.CedeAsk(false, false, 1_000, 3_239, false)).accept());
 
         DiplomacyMind.CedeAsk free = free();
         DiplomacyMind.Self generous = ruler(RulerCharacter.MERCHANT, RulerCharacter.Trait.GENEROUS);
@@ -170,6 +177,39 @@ class CessionTest {
 
         Proposal cede = new Proposal(1, a, b, Proposal.Kind.CEDE, null, 0, PeaceTerms.WHITE, 7, 1_000_000, 0, 10, Proposal.Status.OPEN);
         assertFalse(DiplomacyMind.answer(cede, builder, asker(100)).accept(), "an offer without its land is not taken");
+    }
+
+    @Test
+    void aRulerAsksForAProvinceWhatItAsksForOneOnSale() {
+        ProvinceSale.Rules dear = new ProvinceSale.Rules(5.0, 2_000, 10, 0.75, 0.75, 0.25, -20, 3);
+        DiplomacyMind.Self proud = ruler(RulerCharacter.MERCHANT, RulerCharacter.Trait.PROUD);
+        DiplomacyMind.CedeAsk empty = new DiplomacyMind.CedeAsk(false, false, 700, 0, false);
+        long sale = ProvinceSale.price(700, RulerCharacter.MERCHANT, List.of(RulerCharacter.Trait.PROUD), 30, dear);
+        assertEquals(sale, DiplomacyMind.cedeValue(proud, asker(30), empty, dear), "the price of a sale, with the rules of the server");
+        assertEquals(sale * 2, DiplomacyMind.cedeValue(proud, asker(30), new DiplomacyMind.CedeAsk(true, false, 700, 0, false), dear),
+                "twice where people live");
+        assertEquals(2_000, DiplomacyMind.cedeValue(proud, asker(30), new DiplomacyMind.CedeAsk(false, false, 3, 0, false), dear), "the least price");
+        assertTrue(DiplomacyMind.cede(proud, asker(30), new DiplomacyMind.CedeAsk(false, false, 700, sale, false), dear).accept());
+        assertFalse(DiplomacyMind.cede(proud, asker(30), new DiplomacyMind.CedeAsk(false, false, 700, sale - 1, false), dear).accept());
+    }
+
+    @Test
+    void theProvincesAskedForAreThoseOfOthersThatTouchTheLandOfTheAsker() {
+        // a holds 1; 2, 3 (the heart of b), 6 (promised by a charter) and 9 of b and 7 of nobody border 1; 4 of c is beside a claim of a.
+        Map<Integer, List<Integer>> near = Map.of(1, List.of(1, 2, 3, 6, 7, 9), 2, List.of(1, 5));
+        Map<Integer, UUID> holders = new HashMap<>(Map.of(1, a, 2, b, 3, b, 4, c, 5, b, 6, b, 9, b));
+        long claim = ChunkKey.of(10, 0);
+        Map<Long, Integer> provinceAt = Map.of(ChunkKey.of(11, 0), 4, ChunkKey.of(10, 1), 1);
+        Set<Integer> touching = CedeLand.bordering(List.of(1), id -> near.getOrDefault(id, List.of()), List.of(claim),
+                chunk -> provinceAt.getOrDefault(chunk, 0));
+        assertEquals(Set.of(2, 3, 4, 6, 7, 9), touching, "not its own, not one far away, not the sea of no province");
+
+        Map<UUID, List<Integer>> asked = CedeLand.candidates(touching, holders::get, a, k -> k.equals(b) ? 3 : 0, id -> id == 6, 8);
+        assertEquals(Map.of(b, List.of(2, 9), c, List.of(4)), asked, "never the heart, nor land promised by a charter, nor land of nobody");
+        assertEquals(Map.of(b, List.of(2), c, List.of(4)), CedeLand.candidates(touching, holders::get, a, k -> k.equals(b) ? 3 : 0, id -> id == 6, 1),
+                "the lowest numbers first, a few of each");
+        assertTrue(CedeLand.candidates(Set.of(3, 6), holders::get, a, k -> 3, id -> id == 6, 8).isEmpty(), "none left: nobody to ask");
+        assertEquals(Map.of(b, List.of(2)), CedeLand.candidates(Set.of(1, 2), holders::get, a, k -> 0, id -> false, 8), "never its own");
     }
 
     @Test

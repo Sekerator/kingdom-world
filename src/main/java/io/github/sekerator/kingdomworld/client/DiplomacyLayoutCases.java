@@ -27,12 +27,14 @@ import java.util.function.Supplier;
 
 /**
  * The screens and lines of diplomacy in the layout check: the diplomacy tab of the throne screen for the king and for a
- * subject in every view (with the actions for a kingdom open), and the lines above the hotbar of the land of an enemy and
- * of refused blows. Views carry the longest names, the largest numbers and more rows than fit.
+ * subject in every view (with the actions for a kingdom open, the provinces to ask for among them), and the lines above the
+ * hotbar of the land of an enemy and of refused blows. Views carry the longest names, the largest numbers and more rows than
+ * fit.
  */
 final class DiplomacyLayoutCases {
     private static final String LONG_KINGDOM = "Великое Северное Королевство Щит";
     private static final String LONG_PLAYER = "WWWWWWWWWWWWWWWW";
+    private static final Component PRICE = Component.literal("999 999 999 999 Великая Северная Крона Щит");
 
     private DiplomacyLayoutCases() {
     }
@@ -78,15 +80,23 @@ final class DiplomacyLayoutCases {
         List<Component> world = new ArrayList<>();
         if (!empty) {
             Bond[] bonds = Bond.values();
+            // The kingdom opened for the check has the most provinces to ask for at the largest price (for a king), or none.
+            List<DiplomacyViews.CedeOption> cede = new ArrayList<>();
+            for (int i = 0; canManage && i < DiplomacyViews.MAX_CEDE; i++) {
+                cede.add(new DiplomacyViews.CedeOption(65_535 - i, 999_999_999_999L, Component.translatable("kingdomworld.war.cede.price", PRICE)));
+            }
             for (int i = 0; i < 24; i++) {
                 kingdoms.add(new DiplomacyViews.KingdomRow(id("k" + i), name(i), 0x922B21 + i * 977, i % 2 == 1, bonds[i % bonds.length],
                         i % 3 == 0 ? -100 : 100, i % 2 == 0 ? "broken_treaty" : "call_answered", i == 3, i == 4, i % 4 == 0 ? 99_999 : -1,
-                        i % 5 != 0, i % 7 == 0));
+                        i % 5 != 0, i % 7 == 0, i == 0 ? cede : List.of()));
             }
             Proposal.Kind[] kinds = Proposal.Kind.values();
             for (int i = 0; i < 12; i++) {
-                offers.add(new DiplomacyViews.OfferRow(i + 1, i % 2 == 0, id("o" + i), name(i), kinds[i % kinds.length],
-                        Component.translatable("kingdomworld.war.offer_text.vassalage", name(i), name(i + 1)), 99_999));
+                Proposal.Kind kind = kinds[i % kinds.length];
+                Component text = kind == Proposal.Kind.CEDE
+                        ? Component.translatable("kingdomworld.war.offer_text.cede", name(i), Component.translatable("kingdomworld.war.cede.price", PRICE))
+                        : Component.translatable("kingdomworld.war.offer_text.vassalage", name(i), name(i + 1));
+                offers.add(new DiplomacyViews.OfferRow(i + 1, i % 2 == 0, id("o" + i), name(i), kind, text, 99_999));
             }
             for (int i = 0; i < 3; i++) {
                 calls.add(new DiplomacyViews.CallRow(i + 1, name(i), name(i + 1)));
