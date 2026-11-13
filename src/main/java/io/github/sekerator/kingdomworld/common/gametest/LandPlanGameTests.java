@@ -254,6 +254,76 @@ public final class LandPlanGameTests {
                 + Arrays.toString(stopped[0].stageWork()));
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_land_fault", timeoutTicks = 24_000)
+    public static void aBlockOfTheNoiseThatFailsOnceIsAskedAgainAndThePlanEndsTheSame(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        ProvinceMap straightMap = new ProvinceMap(ProvinceSavedData.DEFAULT_DIMENSION);
+        ProvinceMap faultyMap = new ProvinceMap(ProvinceSavedData.DEFAULT_DIMENSION);
+        LandPlanning.Setup setup = ring(landedCenter(server, FAR, -FAR), 0);
+        LandPlanning.Job straight = new LandPlanning.Job(server, setup, new SurveySavedData(), straightMap, null, false, () -> {
+        });
+        LandPlanning.Job faulty = new LandPlanning.Job(server, setup, new SurveySavedData(), faultyMap, null, false, () -> {
+        });
+        // The second block of the survey and the first block of the borders fail once each; the blocks after them come first.
+        java.util.concurrent.atomic.AtomicInteger surveyFaults = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger borderFaults = new java.util.concurrent.atomic.AtomicInteger();
+        faulty.faults(from -> from > 0 && surveyFaults.compareAndSet(0, 1), from -> borderFaults.compareAndSet(0, 1));
+        repeat(helper, 0, 20_000, () -> {
+            if (!straight.done()) {
+                straight.tick();
+            }
+            if (!faulty.done()) {
+                faulty.tick();
+            }
+            helper.assertTrue(straight.failure().isEmpty() && faulty.failure().isEmpty(), "A plan failed: "
+                    + faulty.failure().or(straight::failure).orElse(""));
+            return straight.done() && faulty.done();
+        }, () -> {
+            helper.assertTrue(surveyFaults.get() == 1, "No block of the survey failed");
+            helper.assertTrue(borderFaults.get() == 1 || faulty.summary().getInt("probeCells") == 0, "No block of the borders failed");
+            helper.assertTrue(Arrays.equals(straight.progress().thrones(), faulty.progress().thrones()), "The thrones differ: "
+                    + Arrays.toString(straight.progress().thrones()) + " and " + Arrays.toString(faulty.progress().thrones()));
+            helper.assertTrue(straightMap.provinces().equals(faultyMap.provinces()), "The provinces differ");
+            long[] keys = straightMap.tileKeys();
+            long[] other = faultyMap.tileKeys();
+            Arrays.sort(keys);
+            Arrays.sort(other);
+            helper.assertTrue(keys.length > 0 && Arrays.equals(keys, other), "The tiles differ: " + keys.length + " and " + other.length);
+            for (long key : keys) {
+                helper.assertTrue(Arrays.equals(straightMap.tile(key), faultyMap.tile(key)), "The tile " + ProvinceMap.tileX(key) + " "
+                        + ProvinceMap.tileZ(key) + " differs");
+            }
+            helper.succeed();
+        }, () -> {
+        }, () -> straight.progress() + " " + Arrays.toString(straight.stageWork()) + ", " + faulty.progress() + " "
+                + Arrays.toString(faulty.stageWork()));
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_land_fault_stop", timeoutTicks = 6_000)
+    public static void aBlockOfTheNoiseThatAlwaysFailsStopsThePlanWhereItIs(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        LandPlanning.Job job = new LandPlanning.Job(server, ring(new int[]{-FAR, -FAR}, 0), new SurveySavedData(),
+                new ProvinceMap(ProvinceSavedData.DEFAULT_DIMENSION), null, false, () -> {
+        });
+        // The third block of the survey (cells 128 to 191) never answers.
+        int failing = 128;
+        job.faults(from -> from == failing, from -> false);
+        int[] after = {-1};
+        repeat(helper, 0, 5_000, () -> {
+            job.tick();
+            if (job.failure().isEmpty()) {
+                return false;
+            }
+            // The plan stopped: twenty more ticks move nothing, and nothing of the blocks after the failing one was put in its place.
+            after[0]++;
+            helper.assertTrue(job.survey().nextCell() == failing && !job.survey().complete(), "The survey went past the failing block to cell "
+                    + job.survey().nextCell());
+            helper.assertTrue(job.progress().stage() == Stage.SURVEY, "The plan went on to " + job.progress().stage());
+            return after[0] >= 20;
+        }, helper::succeed, () -> {
+        }, () -> job.progress() + " at cell " + job.survey().nextCell() + ", " + job.failure().orElse("no failure"));
+    }
+
     /**
      * The plan as a restart finds it: read from what its files keep, nothing of its memory.
      */

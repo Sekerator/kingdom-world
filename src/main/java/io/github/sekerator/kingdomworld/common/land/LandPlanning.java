@@ -80,6 +80,8 @@ public final class LandPlanning {
     static final int REFINE_BLOCK = 8;
     /** Tasks of the borders asked of the threads of the noise at once at most. */
     static final int REFINE_IN_FLIGHT = 9;
+    /** Times a block of the survey or of the borders is asked of the threads of the noise before the plan stops. */
+    static final int NOISE_ATTEMPTS = 3;
     /** Tiles of the map of the land written in a tick at most. */
     static final int TILES_PER_TICK = 32;
     /** Provinces given to their state in a tick at most. */
@@ -321,6 +323,12 @@ public final class LandPlanning {
     }
 
     /**
+     * A block asked of the threads of the noise: the first cell, how many, which try it is and the answer to come.
+     */
+    private record Asked<T>(int from, int count, int attempt, CompletableFuture<T> answer) {
+    }
+
+    /**
      * A plan of states over ticks: the plan of the world, or one a game test makes apart from it.
      */
     public static final class Job implements PlanProgress.Work {
@@ -346,12 +354,15 @@ public final class LandPlanning {
         private long[] tiles;
         private boolean finished;
         /** The blocks of the survey asked of the threads of the noise, in order, and the first cell not asked yet. */
-        private final java.util.ArrayDeque<CompletableFuture<int[]>> surveyBlocks = new java.util.ArrayDeque<>();
+        private final java.util.ArrayDeque<Asked<int[]>> surveyBlocks = new java.util.ArrayDeque<>();
         private int surveyAsked = -1;
+        /** Blocks of the survey and of the borders that fail on purpose, by their first cell: for game tests. */
+        private java.util.function.IntPredicate surveyFault = from -> false;
+        private java.util.function.IntPredicate refineFault = from -> false;
         /** The verdicts of throne candidates asked of the threads of the noise, by their place in the stage. */
         private final Map<Integer, CompletableFuture<Boolean>> verdicts = new HashMap<>();
         /** The blocks of the borders asked of the threads of the noise, in order, and the first cell to probe not asked yet. */
-        private final java.util.ArrayDeque<CompletableFuture<byte[]>> refineBlocks = new java.util.ArrayDeque<>();
+        private final java.util.ArrayDeque<Asked<byte[]>> refineBlocks = new java.util.ArrayDeque<>();
         private int refineAsked = -1;
         /** The provinces of the state being given, already given. */
         private int givenOfState;
@@ -396,6 +407,15 @@ public final class LandPlanning {
          */
         public Optional<String> failure() {
             return Optional.ofNullable(failure);
+        }
+
+        /**
+         * For game tests: the blocks of the survey and of the borders, by their first cell, whose look at the noise fails. The
+         * predicates are asked on the server thread when a block is asked.
+         */
+        public void faults(java.util.function.IntPredicate survey, java.util.function.IntPredicate borders) {
+            this.surveyFault = survey;
+            this.refineFault = borders;
         }
 
         /**
@@ -475,6 +495,10 @@ public final class LandPlanning {
 
         @Override
         public boolean run(Stage stage, PlanProgress progress, long deadline) {
+            if (failure != null) {
+                // A stopped plan stands where it is: what comes after would be made from what failed. It goes on after a restart.
+                return false;
+            }
             return switch (stage) {
                 case SURVEY -> survey(deadline);
                 case GUARD -> guard(deadline);
@@ -511,15 +535,23 @@ public final class LandPlanning {
                 surveyBlocks.clear();
                 surveyAsked = survey.nextCell();
             }
-            while (!surveyBlocks.isEmpty() && surveyBlocks.peek().isDone() && System.nanoTime() - deadline < 0) {
+            while (!surveyBlocks.isEmpty() && surveyBlocks.peek().answer().isDone() && System.nanoTime() - deadline < 0) {
+                Asked<int[]> asked = surveyBlocks.poll();
                 int[] looks;
                 try {
-                    looks = surveyBlocks.poll().join();
+                    looks = asked.answer().join();
                 } catch (CompletionException | java.util.concurrent.CancellationException e) {
-                    fail("the survey failed on a thread of the noise: " + (e.getCause() != null ? e.getCause() : e));
+                    // The block is asked again in its place: the blocks after it wait, so that no answer lands on the cells of another.
+                    if (askAgain("the survey", asked, e)) {
+                        surveyBlocks.addFirst(askSurvey(asked.from(), asked.count(), asked.attempt() + 1));
+                    }
                     return false;
                 }
                 int from = survey.nextCell();
+                if (asked.from() != from || looks.length != 2 * asked.count()) {
+                    fail("a block of the survey for cell " + asked.from() + " came when the survey was at cell " + from);
+                    return false;
+                }
                 for (int i = 0; i < looks.length / 2; i++) {
                     survey.put(from + i, io.github.sekerator.kingdomworld.core.land.TerrainClass.byId(looks[2 * i]), looks[2 * i + 1]);
                 }
@@ -529,6 +561,19 @@ public final class LandPlanning {
                 survey.finish();
                 return true;
             }
+            while (surveyBlocks.size() < SURVEY_IN_FLIGHT && surveyAsked < cells) {
+                int from = surveyAsked;
+                int count = Math.min(SURVEY_BLOCK, cells - from);
+                surveyBlocks.add(askSurvey(from, count, 0));
+                surveyAsked += count;
+            }
+            return false;
+        }
+
+        /**
+         * Asks the threads of the noise for a block of the survey.
+         */
+        private Asked<int[]> askSurvey(int from, int count, int attempt) {
             ServerLevel level = server.overworld();
             int originX = survey.originX();
             int originZ = survey.originZ();
@@ -537,14 +582,26 @@ public final class LandPlanning {
             int spawnZ = survey.spawnZ();
             long reach = (long) survey.radius() + SurveySavedData.MARGIN;
             int sea = survey.seaLevel();
-            while (surveyBlocks.size() < SURVEY_IN_FLIGHT && surveyAsked < cells) {
-                int from = surveyAsked;
-                int count = Math.min(SURVEY_BLOCK, cells - from);
-                surveyBlocks.add(CompletableFuture.supplyAsync(() -> LandSurvey.cells(level, from, count, originX, originZ, width, spawnX, spawnZ,
-                        reach, sea), NpcPlanning.noise()));
-                surveyAsked += count;
+            boolean faulty = surveyFault.test(from);
+            return new Asked<>(from, count, attempt, CompletableFuture.supplyAsync(() -> {
+                if (faulty) {
+                    throw new IllegalStateException("a fault asked by a test at cell " + from);
+                }
+                return LandSurvey.cells(level, from, count, originX, originZ, width, spawnX, spawnZ, reach, sea);
+            }, NpcPlanning.noise()));
+        }
+
+        /**
+         * Whether a block whose look at the noise failed is asked again; after {@value #NOISE_ATTEMPTS} tries the plan stops.
+         */
+        private boolean askAgain(String what, Asked<?> asked, Throwable thrown) {
+            Throwable cause = thrown.getCause() != null ? thrown.getCause() : thrown;
+            if (asked.attempt() + 1 >= NOISE_ATTEMPTS) {
+                fail(what + " failed on a thread of the noise at cell " + asked.from() + " " + NOISE_ATTEMPTS + " times: " + cause);
+                return false;
             }
-            return false;
+            LOGGER.warn("A block of {} from cell {} failed on a thread of the noise ({}): it is asked again", what, asked.from(), cause);
+            return true;
         }
 
         private int regionX0() {
@@ -900,12 +957,22 @@ public final class LandPlanning {
                 refineBlocks.clear();
                 refineAsked = done;
             }
-            while (!refineBlocks.isEmpty() && refineBlocks.peek().isDone() && System.nanoTime() - deadline < 0) {
+            while (!refineBlocks.isEmpty() && refineBlocks.peek().answer().isDone() && System.nanoTime() - deadline < 0) {
+                Asked<byte[]> asked = refineBlocks.poll();
                 byte[] block;
                 try {
-                    block = refineBlocks.poll().join();
+                    block = asked.answer().join();
                 } catch (CompletionException | java.util.concurrent.CancellationException e) {
-                    fail("the borders failed on a thread of the noise: " + (e.getCause() != null ? e.getCause() : e));
+                    // Asked again in its place, as a block of the survey is.
+                    if (askAgain("the borders", asked, e)) {
+                        refineBlocks.addFirst(askBorders(cells, asked.from(), asked.count(), asked.attempt() + 1));
+                    }
+                    progress.moveTo(done * perCell);
+                    return false;
+                }
+                if (asked.from() != done || block.length != asked.count() * perCell) {
+                    fail("a block of the borders for cell " + asked.from() + " came when the borders were at cell " + done);
+                    progress.moveTo(done * perCell);
                     return false;
                 }
                 System.arraycopy(block, 0, probeClasses, done * perCell, block.length);
@@ -913,32 +980,44 @@ public final class LandPlanning {
             }
             progress.moveTo(done * perCell);
             if (done < cells.length) {
-                SurveyRaster raster = plans.provinces().raster();
-                ServerLevel level = server.overworld();
-                int sea = survey.seaLevel();
                 while (refineBlocks.size() < REFINE_IN_FLIGHT && refineAsked < cells.length) {
                     int from = refineAsked;
                     int count = Math.min(REFINE_BLOCK, cells.length - from);
-                    int[] chunkX = new int[count];
-                    int[] chunkZ = new int[count];
-                    io.github.sekerator.kingdomworld.core.land.TerrainClass[] kinds = new io.github.sekerator.kingdomworld.core.land.TerrainClass[count];
-                    for (int i = 0; i < count; i++) {
-                        chunkX[i] = raster.chunkX(cells[from + i]);
-                        chunkZ[i] = raster.chunkZ(cells[from + i]);
-                        kinds[i] = raster.terrain(cells[from + i]);
-                    }
-                    refineBlocks.add(CompletableFuture.supplyAsync(() -> {
-                        byte[] block = new byte[count * perCell];
-                        for (int i = 0; i < count; i++) {
-                            System.arraycopy(LandSurvey.probeCell(level, chunkX[i], chunkZ[i], sea, kinds[i]), 0, block, i * perCell, perCell);
-                        }
-                        return block;
-                    }, NpcPlanning.noise()));
+                    refineBlocks.add(askBorders(cells, from, count, 0));
                     refineAsked += count;
                 }
                 return false;
             }
             return ready(3);
+        }
+
+        /**
+         * Asks the threads of the noise to probe the chunks of a block of the cells along the water.
+         */
+        private Asked<byte[]> askBorders(int[] cells, int from, int count, int attempt) {
+            SurveyRaster raster = plans.provinces().raster();
+            ServerLevel level = server.overworld();
+            int sea = survey.seaLevel();
+            int perCell = SurveyRaster.CHUNKS_PER_CELL;
+            int[] chunkX = new int[count];
+            int[] chunkZ = new int[count];
+            io.github.sekerator.kingdomworld.core.land.TerrainClass[] kinds = new io.github.sekerator.kingdomworld.core.land.TerrainClass[count];
+            for (int i = 0; i < count; i++) {
+                chunkX[i] = raster.chunkX(cells[from + i]);
+                chunkZ[i] = raster.chunkZ(cells[from + i]);
+                kinds[i] = raster.terrain(cells[from + i]);
+            }
+            boolean faulty = refineFault.test(from);
+            return new Asked<>(from, count, attempt, CompletableFuture.supplyAsync(() -> {
+                if (faulty) {
+                    throw new IllegalStateException("a fault asked by a test at cell " + from);
+                }
+                byte[] block = new byte[count * perCell];
+                for (int i = 0; i < count; i++) {
+                    System.arraycopy(LandSurvey.probeCell(level, chunkX[i], chunkZ[i], sea, kinds[i]), 0, block, i * perCell, perCell);
+                }
+                return block;
+            }, NpcPlanning.noise()));
         }
 
         private boolean raster(long deadline) {
