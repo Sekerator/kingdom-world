@@ -636,6 +636,19 @@ public final class NpcRulers {
         if (!blocked || memory.turns() % 5 != 0) {
             return;
         }
+        dispute(server, id, memory);
+    }
+
+    /**
+     * A ruler that wants land and finds none free looks at once at who stands in its way, whatever turn it is, for game tests.
+     */
+    public static void forceDisputes(MinecraftServer server, UUID kingdomId) {
+        NpcState npc = NpcWork.state(server);
+        dispute(server, kingdomId, npc.ruler(kingdomId));
+        npc.rulerChanged();
+    }
+
+    private static void dispute(MinecraftServer server, UUID id, RulerMemory memory) {
         KingdomWorldState state = KingdomWorldApi.state(server);
         java.util.Set<UUID> near = new LinkedHashSet<>();
         state.territory().territory(id).ifPresent(own -> {

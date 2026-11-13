@@ -861,9 +861,9 @@ class TranslationKeysTest {
 
     /**
      * Words of diplomacy and war exist in both languages: chunks in every plural form («1 чанк, 2 чанка, 5 чанков»), every goal,
-     * bond, offer, reason of a relation, way a war ends, answer of a ruler of the world, entry of the chronicle, action of the tab
-     * and refusal of a cession, and the lines
-     * of the tab of war for every place held (a chunk is counted apart) and every conquest.
+     * bond, offer, reason of a relation, way a war ends, answer of a ruler of the world, entry of the chronicle and rumor of a war,
+     * action of the tab and refusal of a cession, the lines of the tab of war for every place held (a chunk is counted apart) and
+     * every conquest, and the line above the hotbar for every place held.
      */
     @Test
     void wordsOfWarHaveEveryForm() {
@@ -896,6 +896,7 @@ class TranslationKeysTest {
             keys.add("kingdomworld.war.npc_reason." + reason);
         }
         for (io.github.sekerator.kingdomworld.core.siege.Hold.Kind kind : io.github.sekerator.kingdomworld.core.siege.Hold.Kind.values()) {
+            keys.add("kingdomworld.siege.bar.hold." + kind.id());
             if (kind == io.github.sekerator.kingdomworld.core.siege.Hold.Kind.CHUNK) {
                 continue;
             }
@@ -907,8 +908,13 @@ class TranslationKeysTest {
             keys.add("kingdomworld.siege.tab.conquest." + kind.id());
         }
         for (String kind : List.of("declared", "started", "battle", "raid", "blockade", "peace", "pact", "alliance", "vassal", "released", "broken",
-                "joined", "refused", "kill", "province_taken", "ceded")) {
+                "joined", "refused", "kill", "siege", "gate", "city_taken", "throne_taken", "province_taken", "annexed", "crown_lost", "ceded")) {
             keys.add("kingdomworld.war.chronicle." + kind);
+        }
+        // The kinds of the chronicle the taverns tell (WarRumors).
+        for (String kind : List.of("declared", "battle", "raid", "peace", "alliance", "vassal", "broken", "siege", "city_taken", "province_taken",
+                "annexed", "ceded")) {
+            keys.add("kingdomworld.war.rumor." + kind);
         }
         for (io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.TabChange.Action action
                 : io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.TabChange.Action.values()) {

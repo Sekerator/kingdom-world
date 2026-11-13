@@ -849,6 +849,15 @@ public final class WarWork {
     }
 
     /**
+     * The rulers of the world answer the offers made to them at once (two at most, as in a second), for game tests.
+     */
+    public static void forceAnswers(MinecraftServer server) {
+        if (!isReadOnly(server)) {
+            NpcDiplomacy.answer(server, state(server), DiplomacySettings.rules(), KingdomWorldApi.gameTime(server), day(server));
+        }
+    }
+
+    /**
      * A day of the wars at once, for operators: exhaustion, tributes, the end of wars and the decisions of rulers.
      *
      * @return the wars still going on afterwards

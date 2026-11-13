@@ -440,11 +440,21 @@ public final class SiegeWork {
      */
     public static void forceConquests(MinecraftServer server) {
         for (int i = 0; i < FORCED_CONQUEST_SECONDS; i++) {
-            SiegeConquests.tick(server, SiegeSettings.rules(), KingdomWorldApi.gameTime(server));
-            if (state(server).conquests().isEmpty() && WarWork.state(server).claims().isEmpty()) {
+            if (forceConquestSecond(server)) {
                 return;
             }
         }
+    }
+
+    /**
+     * One second of the journal of conquests at once, for game tests that measure it: claims become conquests and every
+     * conquest does as much of its step as the share of time of the second allows.
+     *
+     * @return whether the journal and the claims of peace are empty afterwards
+     */
+    public static boolean forceConquestSecond(MinecraftServer server) {
+        SiegeConquests.tick(server, SiegeSettings.rules(), KingdomWorldApi.gameTime(server));
+        return state(server).conquests().isEmpty() && WarWork.state(server).claims().isEmpty();
     }
 
     /**
