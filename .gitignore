@@ -21,6 +21,7 @@ eclipse/
 run/
 run-data/
 run-gametest/
+logs/
 
 # Data generator cache
 src/generated/resources/.cache/
