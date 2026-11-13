@@ -202,6 +202,14 @@ public final class TerritoryIndex {
      * @param self the kingdom whose own land does not count, or {@code null} to count every kingdom
      */
     public boolean hasForeignLandWithin(String dimension, long center, int radius, UUID self) {
+        return hasForeignLandWithin(dimension, center, radius, self, chunk -> false);
+    }
+
+    /**
+     * Whether land of another kingdom lies within a radius of chunks, the chunks granted aside: a province bought for the
+     * founder of a kingdom is no foreign land to it.
+     */
+    public boolean hasForeignLandWithin(String dimension, long center, int radius, UUID self, java.util.function.LongPredicate granted) {
         if (radius < 0 || !hasLand(dimension)) {
             return false;
         }
@@ -209,8 +217,9 @@ public final class TerritoryIndex {
         int cz = ChunkKey.z(center);
         for (int dx = -radius; dx <= radius; dx++) {
             for (int dz = -radius; dz <= radius; dz++) {
-                UUID owner = ownerOf(dimension, ChunkKey.of(cx + dx, cz + dz));
-                if (owner != null && !owner.equals(self)) {
+                long chunk = ChunkKey.of(cx + dx, cz + dz);
+                UUID owner = ownerOf(dimension, chunk);
+                if (owner != null && !owner.equals(self) && !granted.test(chunk)) {
                     return true;
                 }
             }

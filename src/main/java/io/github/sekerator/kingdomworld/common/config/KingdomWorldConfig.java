@@ -1154,12 +1154,16 @@ public final class KingdomWorldConfig {
      */
     public static final class Land {
         public final ForgeConfigSpec.BooleanValue wildernessOpen;
+        public final ForgeConfigSpec.DoubleValue provincePricePerChunk;
 
         Land(ForgeConfigSpec.Builder builder) {
             builder.comment("The land of the states of the world: their wilds and the sale of their provinces.").push("land");
             wildernessOpen = builder.comment("Whether the wilds of a kingdom of the world, the land of its provinces where nobody lives",
                             "(no claim, building, wall or road), are as free to players as land of nobody; the law holds where it lives.")
                     .define("wildernessOpen", true);
+            provincePricePerChunk = builder.comment("The price of a chunk of a province a ruler of the world sells, in its currency, before",
+                            "its character and what it thinks of the buyer (a merchant asks 0.85 of it, a warrior 1.4); a province costs at least 1500.")
+                    .defineInRange("provincePricePerChunk", 3.0, 0.5, 100.0);
             builder.pop();
         }
     }

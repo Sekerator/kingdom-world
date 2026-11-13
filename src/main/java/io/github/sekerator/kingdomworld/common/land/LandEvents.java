@@ -49,6 +49,9 @@ public final class LandEvents {
         if (territory.provinceChunksPending()) {
             territory.drainProvinceChunks(CHUNKS_PER_TICK);
         }
+        if (server.getTickCount() % 20 == 7) {
+            territory.provinceMap().ifPresent(map -> ProvinceTrade.expire(server, map));
+        }
     }
 
     /**
@@ -62,6 +65,8 @@ public final class LandEvents {
         if (territory.provinceMap().orElse(null) != map) {
             check(server, map, territory);
             territory.attachProvinces(map);
+            // The money of charters waits in escrow for the sellers: it counts with the money of its currency.
+            KingdomWorldApi.state(server).economy().setHeldElsewhere("charters", map::heldMoney);
         }
         return territory;
     }

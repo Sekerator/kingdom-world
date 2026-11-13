@@ -1387,6 +1387,12 @@ public final class LandPlanning {
                     }
                     givenOfState = end;
                     if (end == entry.provinces.length) {
+                        // What the plan gave the state: it sells only a part of it and grows to a little more.
+                        long planned = 0;
+                        for (int id : entry.provinces) {
+                            planned += territory.provinceMap().map(map -> map.chunks(id)).orElse(0);
+                        }
+                        ProvinceSavedData.get(server).states().plan(owner.get(), entry.provinces.length, planned);
                         LOGGER.info("The state of the world {} holds its {} province(s)", site.get(), territory.provincesOf(owner.get()).size());
                     }
                     // The settlements are written in ticks of their own.

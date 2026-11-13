@@ -90,6 +90,10 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     private long lastRequest;
     @Nullable
     private UUID selected;
+    /** The province of the land clicked last, for its card of sale; 0 for none. */
+    private int selectedProvince;
+    /** Whether the prices of the provinces were asked of the server since the map opened. */
+    private boolean offersAsked;
     private Component status = Component.empty();
     private boolean statusIsError;
     private int buttonsLeft;
@@ -535,6 +539,10 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
                 : Component.translatable("kingdomworld.screen.map.province.held", holder.name());
         Component line = Component.translatable("kingdomworld.screen.map.province.line", provinceName(entry.nameSeed(), cyrillic),
                 Component.translatable("kingdomworld.province.kind." + entry.kind().id()), held);
+        io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Offer offer = io.github.sekerator.kingdomworld.client.map.ClientProvinceOffers.offer(id);
+        if (offer != null && offer.forSale()) {
+            line = Component.translatable("kingdomworld.screen.map.province.for_sale", line, offer.price());
+        }
         // The main settlement of the province, when the server sent its settlements.
         io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity seat = io.github.sekerator.kingdomworld.client.map.ClientRoadCache.seatOf(id);
         return seat == null ? line : Component.translatable("kingdomworld.screen.map.province.seat", line, seat.name());
@@ -626,6 +634,13 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         addRenderableWidget(Button.builder(done, button -> onClose()).bounds(doneX, 3, doneWidth, 16).build());
         if (planning != null) {
             initPlanning();
+        }
+        if (editing == null && planning == null && !army) {
+            if (!offersAsked && minecraft != null && minecraft.getConnection() != null) {
+                offersAsked = true;
+                KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Request());
+            }
+            initProvinceCard();
         }
         requestVisibleArea(true);
     }
@@ -1211,6 +1226,91 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         }
         if (button == 0) {
             selected = owner;
+            int province = provincesShown() ? ClientProvinceMap.provinceAt(chunkX, chunkZ) : 0;
+            if (province != selectedProvince) {
+                selectedProvince = province;
+                rebuildWidgets();
+            }
+        }
+    }
+
+    /**
+     * The prices of the provinces came from the server: the card of the province clicked shows them.
+     */
+    public void onProvinceOffers() {
+        if (selectedProvince != 0) {
+            rebuildWidgets();
+        }
+    }
+
+    /**
+     * The card of sale of the province clicked last, if a state of the world holds it: its name, price, why it is not for
+     * sale, and a button to buy it (a charter for a player without a kingdom). Null when there is none.
+     */
+    @Nullable
+    private ProvinceCard provinceCard() {
+        io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Offer offer = selectedProvince == 0 || !provincesShown() ? null : io.github.sekerator.kingdomworld.client.map.ClientProvinceOffers.offer(selectedProvince);
+        io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket.Entry entry = ClientProvinceMap.province(selectedProvince);
+        if (offer == null || entry == null || minecraft == null) {
+            return null;
+        }
+        boolean cyrillic = io.github.sekerator.kingdomworld.core.citizen.CitizenNames.alphabetFor(minecraft.getLanguageManager().getSelected())
+                == io.github.sekerator.kingdomworld.core.citizen.CitizenNames.Alphabet.CYRILLIC;
+        List<Component> lines = new java.util.ArrayList<>();
+        lines.add(Component.translatable("kingdomworld.screen.map.province.card", provinceName(entry.nameSeed(), cyrillic), offer.id()));
+        lines.add(Component.translatable("kingdomworld.screen.map.province.price", offer.price()));
+        if (!offer.forSale()) {
+            lines.add(offer.reason());
+        }
+        Component buy = Component.translatable(io.github.sekerator.kingdomworld.client.map.ClientProvinceOffers.charter() ? "kingdomworld.screen.map.province.buy_charter"
+                : "kingdomworld.screen.map.province.buy");
+        int buttonWidth = buttonWidth(buy);
+        int maxWidth = mapRight() - mapLeft() - 12;
+        int inner = buttonWidth;
+        for (Component line : lines) {
+            inner = Math.max(inner, Math.min(font.width(line), MAX_CARD_NAME + 120));
+        }
+        int cardWidth = Math.min(inner + 12, maxWidth);
+        int cardHeight = 8 + lines.size() * 11 + 18;
+        int x = mapLeft() + 6;
+        int y = mapBottom() - cardHeight - 6;
+        return new ProvinceCard(offer, lines, buy, x, y, cardWidth, cardHeight, Math.min(buttonWidth, cardWidth - 12));
+    }
+
+    private record ProvinceCard(io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Offer offer, List<Component> lines, Component buy, int x, int y, int width, int height,
+                                int buttonWidth) {
+    }
+
+    private void initProvinceCard() {
+        ProvinceCard card = provinceCard();
+        if (card == null) {
+            return;
+        }
+        int id = card.offer().id();
+        Button buy = addRenderableWidget(Button.builder(card.buy(), button -> KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Buy(id)))
+                .bounds(card.x() + 6, card.y() + card.height() - 20, card.buttonWidth(), 16).build());
+        buy.active = card.offer().forSale();
+        buy.setTooltip(net.minecraft.client.gui.components.Tooltip.create(card.offer().forSale()
+                ? Component.translatable(io.github.sekerator.kingdomworld.client.map.ClientProvinceOffers.charter() ? "kingdomworld.screen.map.province.buy_charter.hint"
+                : "kingdomworld.screen.map.province.buy.hint", card.offer().price())
+                : card.offer().reason()));
+    }
+
+    private void drawProvinceCard(GuiGraphics graphics) {
+        if (planning != null || army) {
+            return;
+        }
+        ProvinceCard card = provinceCard();
+        if (card == null) {
+            return;
+        }
+        graphics.fill(card.x(), card.y(), card.x() + card.width(), card.y() + card.height(), 0xF0201810);
+        graphics.renderOutline(card.x(), card.y(), card.width(), card.height(), card.offer().forSale() ? 0xFFD4AF37 : 0xFF6B4E2A);
+        int lineY = card.y() + 5;
+        for (Component line : card.lines()) {
+            // A long reason is shortened, the whole of it on hover.
+            name(graphics, line.getString(), card.x() + 6, lineY, 0xFFE8E8E8, card.width() - 12);
+            lineY += 11;
         }
     }
 
@@ -1326,6 +1426,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         drawHeader(graphics);
         drawFooter(graphics, mouseX, mouseY);
         drawCard(graphics);
+        drawProvinceCard(graphics);
         drawSettlementCard(graphics);
     }
 

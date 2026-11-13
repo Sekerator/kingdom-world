@@ -52,6 +52,7 @@ public final class ProvinceSavedData extends SavedData {
     static final String TAG_TILES = "tiles";
     static final String TAG_PLAN = "plan";
     static final String TAG_ADOPTION = "adoption";
+    static final String TAG_STATES = "states";
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
@@ -60,11 +61,13 @@ public final class ProvinceSavedData extends SavedData {
     /** Makes the plan of the world as it stands while it is being made, when the file is written; null when it is not. */
     private java.util.function.Supplier<CompoundTag> planSource;
     private ListTag adoption = new ListTag();
+    private final io.github.sekerator.kingdomworld.core.npc.StateLand states = new io.github.sekerator.kingdomworld.core.npc.StateLand();
     private CompoundTag preserved;
     private String readOnlyReason;
 
     public ProvinceSavedData() {
         map.setChangeListener(this::setDirty);
+        states.setChangeListener(this::setDirty);
     }
 
     /**
@@ -85,6 +88,13 @@ public final class ProvinceSavedData extends SavedData {
 
     public ProvinceMap map() {
         return map;
+    }
+
+    /**
+     * What each state of the world was planned to hold, what it sold and when it last grew.
+     */
+    public io.github.sekerator.kingdomworld.core.npc.StateLand states() {
+        return states;
     }
 
     /**
@@ -243,6 +253,18 @@ public final class ProvinceSavedData extends SavedData {
         if (tag.contains(TAG_ADOPTION, Tag.TAG_LIST)) {
             adoption = tag.getList(TAG_ADOPTION, Tag.TAG_COMPOUND).copy();
         }
+        if (tag.contains(TAG_STATES, Tag.TAG_LIST)) {
+            ListTag list = tag.getList(TAG_STATES, Tag.TAG_COMPOUND);
+            for (int i = 0; i < list.size(); i++) {
+                CompoundTag entry = list.getCompound(i);
+                try {
+                    states.restore(entry.getUUID("kingdom"), new io.github.sekerator.kingdomworld.core.npc.StateLand.Entry(entry.getInt("provinces"),
+                            entry.getLong("chunks"), entry.getLong("sale"), entry.getInt("sold"), entry.getLong("grew")));
+                } catch (RuntimeException e) {
+                    problems.add("state #" + i + ": " + e.getMessage());
+                }
+            }
+        }
         read.setChangeListener(this::setDirty);
         map = read;
         return problems;
@@ -270,7 +292,8 @@ public final class ProvinceSavedData extends SavedData {
         ProvinceMap.SaleHold hold = null;
         if (tag.contains("hold", Tag.TAG_COMPOUND)) {
             CompoundTag held = tag.getCompound("hold");
-            hold = new ProvinceMap.SaleHold(held.getUUID("buyer"), held.getLong("until"));
+            hold = new ProvinceMap.SaleHold(held.getUUID("buyer"), held.getLong("until"), held.hasUUID("seller") ? held.getUUID("seller") : null,
+                    held.hasUUID("currency") ? held.getUUID("currency") : null, held.hasUUID("currency") ? held.getLong("amount") : 0);
         }
         read.restore(id, owner, tag.getLong("day"), hold);
     }
@@ -374,6 +397,13 @@ public final class ProvinceSavedData extends SavedData {
                 CompoundTag held = new CompoundTag();
                 held.putUUID("buyer", hold.buyer());
                 held.putLong("until", hold.untilDay());
+                if (hold.seller() != null) {
+                    held.putUUID("seller", hold.seller());
+                }
+                if (hold.currency() != null) {
+                    held.putUUID("currency", hold.currency());
+                    held.putLong("amount", hold.amount());
+                }
                 entry.put("hold", held);
             });
             provinces.add(entry);
@@ -390,6 +420,18 @@ public final class ProvinceSavedData extends SavedData {
         tag.put(TAG_TILES, tiles);
         tag.put(TAG_PLAN, plan());
         tag.put(TAG_ADOPTION, adoption.copy());
+        ListTag lands = new ListTag();
+        states.entries().forEach((kingdom, land) -> {
+            CompoundTag entry = new CompoundTag();
+            entry.putUUID("kingdom", kingdom);
+            entry.putInt("provinces", land.plannedProvinces());
+            entry.putLong("chunks", land.plannedChunks());
+            entry.putLong("sale", land.lastSaleDay());
+            entry.putInt("sold", land.sold());
+            entry.putLong("grew", land.lastGrowthDay());
+            lands.add(entry);
+        });
+        tag.put(TAG_STATES, lands);
         return tag;
     }
 }

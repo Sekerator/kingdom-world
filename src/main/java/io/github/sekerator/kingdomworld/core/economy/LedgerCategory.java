@@ -37,7 +37,9 @@ public enum LedgerCategory {
     /** Tributes, indemnities and the loot of wars. */
     WAR,
     /** The share of the nobles of their fiefs, demands of the court, spies, ransoms and what spies took. */
-    NOBILITY;
+    NOBILITY,
+    /** Provinces bought and sold. */
+    LAND;
 
     public String id() {
         return name().toLowerCase(Locale.ROOT);
