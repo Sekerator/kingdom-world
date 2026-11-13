@@ -389,8 +389,13 @@ public final class GuardArmyGameTests {
         java.util.function.BiConsumer<Integer, Boolean> came = (index, expected) -> {
             double now = bodies[index].distanceTo(offender);
             boolean moved = now < start[index] - 4.0;
+            io.github.sekerator.kingdomworld.core.tactics.Duty duty = io.github.sekerator.kingdomworld.common.tactics.SquadTactics.duty(bodies[index]);
             helper.assertTrue(moved == expected, (expected ? "Did not come out: " : "Came out too early: ") + "soldier " + index + " at "
-                    + now + " of " + start[index] + " blocks, step " + ArmyRelief.step(kingdom.id(), offender.getUUID()));
+                    + now + " of " + start[index] + " blocks, step " + ArmyRelief.step(kingdom.id(), offender.getUUID()) + ", duty "
+                    + (duty == null ? "none" : duty.role() + " at " + duty.target()) + ", target " + bodies[index].getTarget() + ", path "
+                    + !bodies[index].getNavigation().isDone() + ", alive " + bodies[index].isAlive() + ", called "
+                    + ArmyRelief.isCalled(staff[index].id()) + ", bodies in the world " + level.getEntities(
+                    net.minecraft.world.level.entity.EntityTypeTest.forClass(CitizenEntity.class), entity -> true).size());
         };
         helper.runAtTickTime(5, () -> {
             helper.assertTrue(LawAlarms.active(server, kingdom.id()).isEmpty(), "An alarm before anything happened");
