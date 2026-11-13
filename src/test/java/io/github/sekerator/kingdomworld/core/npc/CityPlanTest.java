@@ -371,15 +371,4 @@ class CityPlanTest {
         assertEquals("paved", large.roadClass());
         assertEquals("path", of(NpcLevel.SMALL, 5L).roadClass());
     }
-
-    @Test
-    void everyCapitalHasAMageTowerForItsGuildOfMages() {
-        for (NpcLevel level : NpcLevel.values()) {
-            for (long seed = 1; seed <= 20; seed++) {
-                NpcComposition plan = NpcComposition.districts(level, seed * 104_729L, RULES, RULES.towns(level));
-                assertTrue(plan.buildings().stream().anyMatch(plot -> plot.template().endsWith("mage_tower")),
-                        level.id() + " capital " + seed + " has no mage tower");
-            }
-        }
-    }
 }

@@ -7,8 +7,8 @@ import java.util.Optional;
  * place, so that the plan made anew from the place stays the same when other kingdoms appear or go. A small kingdom has a guild
  * of rank B or A, a medium one A or S, a large one S, and the first large kingdom of a world the only guild of rank SS.
  *
- * <p>This is where the rank of a guild comes from until the guilds rank themselves in play; the buildings of a rank are
- * {@link TemplateCatalog#guildHouse(String, TemplateCatalog.Kind, TemplateCatalog.Rank)}.
+ * <p>The rank is that of the guilds of the kingdom ({@link GuildRanks}): the place keeps it, and the guilds of the kingdom are
+ * founded with it. The buildings of a rank are {@link TemplateCatalog#guildHouse(String, TemplateCatalog.Kind, TemplateCatalog.Rank)}.
  */
 public final class GuildHouses {
     private GuildHouses() {
@@ -20,12 +20,36 @@ public final class GuildHouses {
      * @param ssTaken whether another kingdom of the world already holds the only guild of rank SS
      */
     public static TemplateCatalog.Rank rankOf(NpcLevel level, long seed, boolean ssTaken) {
-        boolean higher = (mix(seed) >>> 17 & 1) == 1;
-        return switch (level) {
-            case SMALL -> higher ? TemplateCatalog.Rank.A : TemplateCatalog.Rank.B;
-            case MEDIUM -> higher ? TemplateCatalog.Rank.S : TemplateCatalog.Rank.A;
-            case LARGE -> ssTaken ? TemplateCatalog.Rank.S : TemplateCatalog.Rank.SS;
-        };
+        return rankOf(level, seed, ssTaken, io.github.sekerator.kingdomworld.core.guild.GuildRules.DEFAULT);
+    }
+
+    /**
+     * The rank of the guilds of a new capital by the rules of the guilds: within the range of its level by its seed, SS only for
+     * the strongest kingdom of the world while no other holds it.
+     */
+    public static TemplateCatalog.Rank rankOf(NpcLevel level, long seed, boolean ssTaken, io.github.sekerator.kingdomworld.core.guild.GuildRules rules) {
+        boolean strongest = !ssTaken && GuildRanks.mayBeStrongest(level, rules);
+        return of(GuildRanks.kingdom(level, seed, strongest, rules));
+    }
+
+    /**
+     * The rank of the buildings for a rank of a guild: B for B and below, SS for SS and above.
+     */
+    public static TemplateCatalog.Rank of(io.github.sekerator.kingdomworld.core.guild.Rank rank) {
+        if (rank.atLeast(io.github.sekerator.kingdomworld.core.guild.Rank.SS)) {
+            return TemplateCatalog.Rank.SS;
+        }
+        if (rank.atLeast(io.github.sekerator.kingdomworld.core.guild.Rank.S)) {
+            return TemplateCatalog.Rank.S;
+        }
+        return rank.atLeast(io.github.sekerator.kingdomworld.core.guild.Rank.A) ? TemplateCatalog.Rank.A : TemplateCatalog.Rank.B;
+    }
+
+    /**
+     * The rank of the guilds a place keeps, as a rank of the guild, if it keeps one.
+     */
+    public static Optional<io.github.sekerator.kingdomworld.core.guild.Rank> guildRank(NpcSite site) {
+        return parse(site.guildRank()).flatMap(rank -> io.github.sekerator.kingdomworld.core.guild.Rank.byId(rank.id()));
     }
 
     /**

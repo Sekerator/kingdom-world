@@ -65,7 +65,13 @@ public final class GuildRanks {
      * The ranks of the two guilds of a kingdom of the world.
      */
     public static Ranks of(NpcLevel level, long seed, RulerCharacter character, boolean strongest, GuildRules rules) {
-        Rank rank = kingdom(level, seed, strongest, rules);
+        return split(kingdom(level, seed, strongest, rules), level, character, rules);
+    }
+
+    /**
+     * The ranks of the two guilds of a kingdom of a rank: the guild its ruler cares for keeps it, the other stands a rank lower.
+     */
+    public static Ranks split(Rank rank, NpcLevel level, RulerCharacter character, GuildRules rules) {
         Rank lower = Rank.max(rules.worldRankMin(level.ordinal()), rank.plus(-1));
         return switch (character) {
             case WARRIOR -> new Ranks(rank, lower);

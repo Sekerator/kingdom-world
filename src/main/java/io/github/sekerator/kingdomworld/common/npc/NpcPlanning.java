@@ -356,7 +356,8 @@ public final class NpcPlanning {
             chosen = ArchitecturalStyles.pick(climate, land.mountains(), seed, state.takenStyles());
         }
         boolean ssTaken = state.holdsGuildRank(TemplateCatalog.Rank.SS.id());
-        TemplateCatalog.Rank rank = GuildHouses.rankOf(kingdom, seed, ssTaken);
+        // The rank of the guilds of the kingdom: its guild house and mage tower are of it, and its guilds are founded with it.
+        TemplateCatalog.Rank rank = GuildHouses.rankOf(kingdom, seed, ssTaken, io.github.sekerator.kingdomworld.common.guild.GuildSettings.rules());
         return state.addSite(x, z, kingdom, seed, NpcSite.towns(towns), NpcSite.LAYOUT_STYLED, chosen, land.wood(), rank.id());
     }
 

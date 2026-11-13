@@ -70,6 +70,13 @@ public final class NpcGuilds {
      * Whether a kingdom of the world already holds the top rank, so that no other may.
      */
     private static boolean topTaken(MinecraftServer server, UUID except) {
+        // A place planned with the guilds of rank SS holds the top rank before its kingdom is founded.
+        for (NpcSite site : NpcWork.state(server).sites()) {
+            if (site.status() != NpcSite.Status.REMOVED && !site.kingdomId().equals(Optional.of(except))
+                    && io.github.sekerator.kingdomworld.core.npc.GuildHouses.guildRank(site).map(rank -> rank.atLeast(GuildRanks.TOP)).orElse(false)) {
+                return true;
+            }
+        }
         for (NpcSite site : NpcWork.state(server).sites()) {
             if (site.kingdomId().isEmpty() || site.kingdomId().get().equals(except) || site.status() == NpcSite.Status.REMOVED) {
                 continue;
@@ -96,8 +103,16 @@ public final class NpcGuilds {
      */
     static GuildRanks.Ranks found(MinecraftServer server, NpcSite site, NpcKingdom kingdom) {
         GuildRules rules = GuildSettings.rules();
-        boolean strongest = GuildRanks.mayBeStrongest(kingdom.level(), rules) && !topTaken(server, kingdom.kingdomId());
-        GuildRanks.Ranks ranks = GuildRanks.of(kingdom.level(), site.seed(), kingdom.character(), strongest, rules);
+        // A place planned in a style keeps the rank of its guilds, the one its guild house and mage tower are built for.
+        Optional<Rank> planned = io.github.sekerator.kingdomworld.core.npc.GuildHouses.guildRank(site);
+        GuildRanks.Ranks ranks;
+        if (planned.isPresent()) {
+            Rank rank = Rank.max(rules.worldRankMin(kingdom.level().ordinal()), planned.get());
+            ranks = GuildRanks.split(rank, kingdom.level(), kingdom.character(), rules);
+        } else {
+            boolean strongest = GuildRanks.mayBeStrongest(kingdom.level(), rules) && !topTaken(server, kingdom.kingdomId());
+            ranks = GuildRanks.of(kingdom.level(), site.seed(), kingdom.character(), strongest, rules);
+        }
         give(server, kingdom.kingdomId(), ranks);
         LOGGER.info("The guilds of {}: the branch of the adventurers' guild of rank {}, the guild of mages of rank {}{}", kingdom.name().latin(),
                 ranks.adventurers().label(), ranks.mages().label(), ranks.highest().atLeast(GuildRanks.TOP) ? ", the strongest of the world" : "");

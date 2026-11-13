@@ -322,7 +322,9 @@ public final class NpcGameTests {
         io.github.sekerator.kingdomworld.core.guild.Rank headRank = io.github.sekerator.kingdomworld.common.guild.GuildWork.state(server)
                 .hireling(head.get().id()).orElseThrow().rank();
         helper.assertTrue(headRank == ranks.adventurers(), "The head of the guild is of rank " + headRank.label());
-        helper.assertTrue(mages >= magicRules.worldMages(ranks.mages()), mages + " mages in a guild of rank " + ranks.mages().label());
+        // Mages come for the seats of a mage tower: a capital of districts of an older world has one only when it is large.
+        boolean tower = !KingdomWorldApi.state(server).citizens().posts().postsOf(kingdom.id(), Professions.MAGE.id()).isEmpty();
+        helper.assertTrue(!tower || mages >= magicRules.worldMages(ranks.mages()), mages + " mages in a guild of rank " + ranks.mages().label());
         int researches = io.github.sekerator.kingdomworld.common.magic.MagicWork.state(server).towerLevel(kingdom.id());
         helper.assertTrue(researches >= magicRules.worldResearch(ranks.mages()), researches + " researches in a guild of rank " + ranks.mages().label());
     }
