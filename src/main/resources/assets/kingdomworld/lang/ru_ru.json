@@ -2159,6 +2159,7 @@
   "commands.kingdomworld.admin.army.unlock.failed": "Не удалось сохранить копию данных армии: %s",
   "commands.kingdomworld.admin.army.weapons.header": "Оружие мода %s, которое возьмут солдаты: %s",
   "commands.kingdomworld.admin.army.weapons.line": "Оружие %s: %s %s",
+  "commands.kingdomworld.admin.army.tactics": "Отрядов, воюющих по плану ведущего: %s; решений %s, в среднем %s мс, худший тик решений %s мс",
   "kingdomworld.error.not_enough_energy": "У королевства не хватает энергии",
   "kingdomworld.error.energy_full": "Запас энергии королевства полон",
   "kingdomworld.error.research_under_way": "Башня уже занята другим исследованием",

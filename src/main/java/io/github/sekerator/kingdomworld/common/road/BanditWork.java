@@ -516,6 +516,15 @@ public final class BanditWork {
     }
 
     /**
+     * The robbers who have bodies now, of the camps and of the ambushes: their ids.
+     */
+    public static Set<UUID> living() {
+        Set<UUID> all = new HashSet<>(AMBUSHERS.keySet());
+        BODIES.values().forEach(all::addAll);
+        return all;
+    }
+
+    /**
      * Robbers of a camp fall upon a caravan walking near players: up to a party of them come at its merchant.
      *
      * @return whether any came

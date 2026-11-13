@@ -130,6 +130,20 @@ public final class ArmyRelief {
         return Relief.answers(call.step, record.get().branch(), record.get().post(), call.wave != null && call.wave.contains(soldier.citizenId()));
     }
 
+    /**
+     * The soldiers answering an alarm fall back from its offender: they are losing, and the answer goes a step further at once
+     * (the next help comes out), as if the fight had dragged on.
+     */
+    public static void pressed(UUID kingdomId, UUID offender) {
+        Call call = CALLS.get(new Key(kingdomId, offender));
+        if (call == null || call.step == Relief.Step.ARMY_CAPTAIN) {
+            return;
+        }
+        Relief.Step next = Relief.Step.values()[call.step.ordinal() + 1];
+        LOGGER.info("Alarm of {}: the soldiers fall back from {}, the relief goes to {}", kingdomId, offender, next);
+        call.step = next;
+    }
+
     // ---------------------------------------------------------------- once a second
 
     static void tick(MinecraftServer server) {

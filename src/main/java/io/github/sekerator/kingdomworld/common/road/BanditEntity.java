@@ -74,6 +74,8 @@ public class BanditEntity extends Monster implements RangedAttackMob {
     @Override
     protected void registerGoals() {
         goalSelector.addGoal(0, new FloatGoal(this));
+        // The plan of the camp comes before fighting on its own (priority 4) and keeping to the camp.
+        goalSelector.addGoal(3, new BanditTacticGoal(this));
         goalSelector.addGoal(5, new MoveTowardsRestrictionGoal(this, 1.0));
         goalSelector.addGoal(6, new WaterAvoidingRandomStrollGoal(this, 0.8));
         goalSelector.addGoal(7, new LookAtPlayerGoal(this, Player.class, 8.0f));

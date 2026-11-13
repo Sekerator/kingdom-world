@@ -81,9 +81,12 @@ public final class AdventurerBehavior implements ProfessionBehavior {
         private int attackCooldown;
         private int pathCooldown;
         private int equipCooldown;
+        /** Carries out the duty the leader of the squad gives in a fight. */
+        private final io.github.sekerator.kingdomworld.common.tactics.TacticMover mover;
 
         GuardGoal(CitizenEntity body) {
             this.body = body;
+            this.mover = new io.github.sekerator.kingdomworld.common.tactics.TacticMover(body);
             setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
         }
 
@@ -91,6 +94,10 @@ public final class AdventurerBehavior implements ProfessionBehavior {
         public boolean canUse() {
             if (!fights(body) || body.kingdomId() == null) {
                 return false;
+            }
+            if (io.github.sekerator.kingdomworld.common.tactics.SquadTactics.duty(body) != null) {
+                // The squad fights: the adventurer takes its part.
+                return true;
             }
             if (--searchCooldown > 0) {
                 return false;
@@ -102,6 +109,9 @@ public final class AdventurerBehavior implements ProfessionBehavior {
 
         @Override
         public boolean canContinueToUse() {
+            if (fights(body) && io.github.sekerator.kingdomworld.common.tactics.SquadTactics.duty(body) != null) {
+                return true;
+            }
             return target != null && target.isAlive() && fights(body) && body.distanceToSqr(target) < SEARCH * SEARCH * 2.25;
         }
 
@@ -131,6 +141,11 @@ public final class AdventurerBehavior implements ProfessionBehavior {
 
         @Override
         public void tick() {
+            mover.tick();
+            io.github.sekerator.kingdomworld.core.tactics.Duty duty = io.github.sekerator.kingdomworld.common.tactics.SquadTactics.duty(body);
+            if (duty != null && tactic(duty)) {
+                return;
+            }
             if (target == null) {
                 return;
             }
@@ -152,6 +167,52 @@ public final class AdventurerBehavior implements ProfessionBehavior {
                 body.swing(InteractionHand.MAIN_HAND);
                 body.doHurtTarget(target);
             }
+        }
+
+        /**
+         * Carries out the duty the leader of the squad gave: rings, flanks or holds against its target, falls back or waits.
+         *
+         * @return whether the duty took the tick
+         */
+        private boolean tactic(io.github.sekerator.kingdomworld.core.tactics.Duty duty) {
+            switch (duty.role()) {
+                case RETREAT, FALL_BACK, HEAL -> {
+                    body.setAggressive(false);
+                    if (duty.stand() != null) {
+                        mover.walk(duty.stand(), 0.9);
+                    }
+                    return true;
+                }
+                case AMBUSH -> {
+                    body.getNavigation().stop();
+                    return true;
+                }
+                default -> {
+                }
+            }
+            ServerLevel level = body.serverLevel();
+            LivingEntity aim = level != null && duty.target() != null && level.getEntity(duty.target()) instanceof Mob mob && mob.isAlive()
+                    && mob instanceof Enemy && !(mob instanceof CitizenEntity) ? mob : null;
+            if (aim == null) {
+                return false;
+            }
+            target = aim;
+            body.setTarget(aim);
+            body.setAggressive(true);
+            io.github.sekerator.kingdomworld.core.tactics.Spot stand = duty.stand() != null ? duty.stand()
+                    : io.github.sekerator.kingdomworld.common.tactics.TacticMover.spot(body);
+            switch (duty.role()) {
+                case ENCIRCLE, FLANK, SHOOT -> mover.strikeFrom(aim, stand, 0.9);
+                case HOLD_FRONT, GUARD_WOUNDED -> {
+                    if (body.distanceToSqr(aim) < 3.5 * 3.5) {
+                        mover.strikeFrom(aim, io.github.sekerator.kingdomworld.common.tactics.TacticMover.spot(body), 0.8);
+                    } else {
+                        mover.hold(stand, aim, 0.8);
+                    }
+                }
+                default -> mover.hold(stand, aim, 0.8);
+            }
+            return true;
         }
 
         /**

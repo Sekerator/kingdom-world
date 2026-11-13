@@ -2159,6 +2159,7 @@
   "commands.kingdomworld.admin.army.unlock.failed": "Could not back up the army data: %s",
   "commands.kingdomworld.admin.army.weapons.header": "Weapons of %s soldiers would take: %s",
   "commands.kingdomworld.admin.army.weapons.line": "Weapon %s: %s %s",
+  "commands.kingdomworld.admin.army.tactics": "Squads fighting by the plans of their leaders: %s; %s decision(s), average %s ms, worst tick of decisions %s ms",
   "kingdomworld.error.not_enough_energy": "The kingdom has too little energy",
   "kingdomworld.error.energy_full": "The kingdom's store of energy is full",
   "kingdomworld.error.research_under_way": "The tower is busy with another research",
