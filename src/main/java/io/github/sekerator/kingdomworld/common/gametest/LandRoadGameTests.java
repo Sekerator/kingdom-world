@@ -72,7 +72,7 @@ public final class LandRoadGameTests {
         }
         Kingdom kingdom = result.kingdom();
         NpcWork.state(server).putKingdom(new NpcKingdom(kingdom.id(), -1, NpcLevel.SMALL, new NpcNames.Name(name, name), RulerCharacter.BUILDER,
-                List.of(), 99, Gender.MALE, List.of(), KingdomWorldApi.gameTime(server), TreasuryActions.day(server)));
+                List.of(RulerCharacter.Trait.PATIENT), 99, Gender.MALE, List.of(), KingdomWorldApi.gameTime(server), TreasuryActions.day(server)));
         return kingdom;
     }
 
