@@ -190,12 +190,16 @@ public final class SettlementResidents {
             // Its things go to the storehouses of its kingdom before it leaves the books, so that nothing is lost.
             WorldPos near = citizen.home() != null ? citizen.home() : citizen.lastPos();
             for (ItemStack stack : io.github.sekerator.kingdomworld.common.data.KingdomSavedData.get(server).gear().takeAll(citizen.id())) {
-                ItemStack rest = KingdomStorage.insert(server, settlement.kingdomId(), stack, near);
+                ItemStack kept = io.github.sekerator.kingdomworld.common.army.ArmyKits.released(stack);
+                ItemStack rest = KingdomStorage.insert(server, settlement.kingdomId(), kept, near);
                 if (!rest.isEmpty()) {
                     LOGGER.warn("{} of a folded citizen of {} found no room in the storehouses", rest, settlement);
                 }
             }
             Outcome outcome = KingdomWorldApi.change(server, "fold a citizen into the numbers of a settlement", world -> {
+                // Its bed and its seat are freed as at a death, without the chronicle.
+                world.citizens().releaseHome(citizen);
+                world.citizens().releaseWorkplace(citizen);
                 world.citizens().registry().remove(citizen.id());
                 return Outcome.DONE;
             });
@@ -204,6 +208,8 @@ public final class SettlementResidents {
             }
             CitizenBodies.force(citizen.id(), false);
             io.github.sekerator.kingdomworld.common.production.Production.release(citizen.id());
+            io.github.sekerator.kingdomworld.common.construction.ConstructionWork.releaseAll(citizen.id());
+            io.github.sekerator.kingdomworld.common.life.LifeWork.forget(server, citizen.id());
             settlement.setFolded(FoldedCitizen.with(settlement.folded(), record));
             folded++;
         }

@@ -8,6 +8,9 @@ import io.github.sekerator.kingdomworld.common.land.ProvinceSavedData;
 import io.github.sekerator.kingdomworld.common.land.SurveySavedData;
 import io.github.sekerator.kingdomworld.common.npc.NpcWork;
 import io.github.sekerator.kingdomworld.common.npc.SettlementWork;
+import io.github.sekerator.kingdomworld.common.citizen.CitizenLife;
+import io.github.sekerator.kingdomworld.core.citizen.Citizen;
+import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import io.github.sekerator.kingdomworld.common.storage.KingdomStorage;
 import io.github.sekerator.kingdomworld.core.economy.Treasury;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
@@ -281,5 +284,109 @@ public final class SettlementGameTests {
             npc.removeSettlementsOf(kingdom.id());
             KingdomWorldApi.dissolveKingdom(server, kingdom.id());
         }
+    }
+
+    /**
+     * Plans and founds a small ring of its own, then hands a settlement of a rank of its first state to a check.
+     */
+    private static void withSettlement(GameTestHelper helper, int x, int z, int base, Tier tier,
+                                       java.util.function.BiConsumer<MinecraftServer, Settlement> check) {
+        MinecraftServer server = helper.getLevel().getServer();
+        TerritoryIndex territory = LandEvents.attach(server);
+        ProvinceMap map = territory.provinceMap().orElseThrow();
+        LandPlanning.Job job = new LandPlanning.Job(server, ring(x, z, base), new SurveySavedData(), map, territory, true, () -> {
+        });
+        repeat(helper, 0, 20_000, () -> {
+            job.tick();
+            for (int id : job.sites()) {
+                Optional<NpcSite> site = id < 0 ? Optional.empty() : NpcWork.state(server).site(id);
+                if (site.isPresent() && site.get().status() == NpcSite.Status.PLANNED) {
+                    NpcWork.foundNow(server, site.get());
+                }
+            }
+            helper.assertTrue(job.failure().isEmpty(), "The plan failed: " + job.failure().orElse(""));
+            return job.done();
+        }, () -> {
+            NpcState npc = NpcWork.state(server);
+            UUID kingdom = npc.site(job.sites()[0]).flatMap(NpcSite::kingdomId).orElseThrow();
+            Settlement settlement = npc.settlementsOf(kingdom).stream().filter(one -> one.tier() == tier).findFirst().orElse(null);
+            helper.assertTrue(settlement != null, "The first state has no settlement of rank " + tier);
+            check.accept(server, settlement);
+            helper.succeed();
+        }, () -> cleanUp(server, territory, job.sites()), () -> job.progress().toString());
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_settlements_raise", timeoutTicks = 24_000)
+    public static void aVillageRisesAndGoesOnAfterARestartWithoutCopies(GameTestHelper helper) {
+        withSettlement(helper, FAR, FAR, BASE + 10_000, Tier.VILLAGE, (server, village) -> {
+            // Halfway: the raising stops as a restart stops it, and goes on from the stage and step the village kept.
+            io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.runNow(server, village, 40);
+            String stopped = village.stage() + " " + village.step();
+            io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.resetForTests();
+            io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.runNow(server, village, 20_000);
+            helper.assertTrue(village.status() == Settlement.Status.STANDING, village + " does not stand, stopped at " + stopped);
+            KingdomWorldState world = KingdomWorldApi.state(server);
+            java.util.Set<String> buildings = new java.util.HashSet<>();
+            for (io.github.sekerator.kingdomworld.core.construction.Building building : world.construction().buildingsOf(village.kingdomId())) {
+                if (Math.abs(building.anchor().x() - village.x()) <= 32 && Math.abs(building.anchor().z() - village.z()) <= 32) {
+                    helper.assertTrue(buildings.add(building.templateId() + "@" + building.anchor().x() + "," + building.anchor().z()),
+                            "A building of " + village + " stands twice: " + building.templateId());
+                }
+            }
+            helper.assertTrue(buildings.size() >= 4, village + " has " + buildings.size() + " building(s)");
+            long seed = server.overworld().getSeed();
+            int named = 0;
+            for (Citizen citizen : world.citizens().registry().citizensOf(village.kingdomId())) {
+                if (citizen.settlement() == village.id()) {
+                    named++;
+                }
+            }
+            helper.assertTrue(named > 0 && named <= village.housing() && named <= village.population(), named + " named citizens in " + village);
+            for (int slot = 0; slot < named; slot++) {
+                helper.assertTrue(world.citizens().get(CitizenLife.settlerId(seed, village.id(), slot)).isPresent(),
+                        "The settler of slot " + slot + " of " + village + " is missing");
+            }
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.ticketsHeld() == 0, "The village holds its chunks");
+        });
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_settlements_fold", timeoutTicks = 24_000)
+    public static void theCitizensOfAVillageFoldAndComeBackAsThemselves(GameTestHelper helper) {
+        withSettlement(helper, -FAR, FAR, BASE + 20_000, Tier.VILLAGE, (server, village) -> {
+            io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.runNow(server, village, 20_000);
+            KingdomWorldState world = KingdomWorldApi.state(server);
+            java.util.List<UUID> before = new java.util.ArrayList<>();
+            java.util.Map<UUID, String> names = new java.util.HashMap<>();
+            for (Citizen citizen : world.citizens().registry().citizensOf(village.kingdomId())) {
+                if (citizen.settlement() == village.id()) {
+                    before.add(citizen.id());
+                    names.put(citizen.id(), citizen.nameSeed() + "/" + citizen.gender() + "/" + citizen.skin() + "/" + citizen.professionId());
+                }
+            }
+            int people = village.population();
+            Map<String, Long> stock = KingdomStorage.countsById(server, village.kingdomId());
+            int folded = io.github.sekerator.kingdomworld.common.npc.SettlementResidents.foldNow(server, village);
+            helper.assertTrue(folded == before.size(), folded + " of " + before.size() + " citizens folded");
+            helper.assertTrue(village.population() == people, "Folding changed the people of " + village);
+            helper.assertTrue(village.folded().length == folded, village.folded().length + " records for " + folded + " folded");
+            for (UUID id : before) {
+                helper.assertTrue(world.citizens().get(id).isEmpty(), "A folded citizen is still named");
+            }
+            // Folding again folds nothing and copies nothing.
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.npc.SettlementResidents.foldNow(server, village) == 0, "Folded twice");
+            int back = io.github.sekerator.kingdomworld.common.npc.SettlementResidents.unfoldNow(server, village);
+            helper.assertTrue(back == before.size(), back + " of " + before.size() + " came back");
+            for (UUID id : before) {
+                Citizen citizen = world.citizens().get(id).orElse(null);
+                helper.assertTrue(citizen != null, "A citizen did not come back");
+                helper.assertTrue(names.get(id).equals(citizen.nameSeed() + "/" + citizen.gender() + "/" + citizen.skin() + "/" + citizen.professionId()),
+                        "A citizen came back as another: " + names.get(id));
+            }
+            helper.assertTrue(village.folded().length == 0, "Records left after the citizens came back");
+            Map<String, Long> after = KingdomStorage.countsById(server, village.kingdomId());
+            for (Map.Entry<String, Long> entry : stock.entrySet()) {
+                helper.assertTrue(after.getOrDefault(entry.getKey(), 0L) >= entry.getValue(), "Something of " + entry.getKey() + " was lost");
+            }
+        });
     }
 }
