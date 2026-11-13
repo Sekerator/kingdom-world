@@ -131,9 +131,27 @@ public abstract class KingdomScreen extends Screen {
     }
 
     /**
-     * The lines about a kingdom of the world: its ruler, its size, the character of its ruler, and its people and soldiers.
+     * The lines about a kingdom of the world: its ruler, its size, the character of its ruler, its people and soldiers, and the
+     * ranks of its guilds.
      */
     protected static List<Component> npcLines(io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo npc) {
+        List<Component> lines = new java.util.ArrayList<>(npcBasics(npc));
+        if (npc.ranked()) {
+            lines.add(npcGuilds(npc.adventurers(), npc.mages()));
+        }
+        return lines;
+    }
+
+    /**
+     * The ranks of the two guilds of a kingdom of the world: its branch of the adventurers' guild and its guild of mages.
+     */
+    protected static Component npcGuilds(io.github.sekerator.kingdomworld.core.guild.Rank adventurers,
+                                         io.github.sekerator.kingdomworld.core.guild.Rank mages) {
+        return Component.translatable("kingdomworld.screen.throne.npc.guilds", io.github.sekerator.kingdomworld.common.guild.GuildTexts.rank(adventurers),
+                io.github.sekerator.kingdomworld.common.guild.GuildTexts.rank(mages));
+    }
+
+    private static List<Component> npcBasics(io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo npc) {
         Component ruler = io.github.sekerator.kingdomworld.common.npc.NpcTexts.ruler(npc.rulerLatin(), npc.rulerCyrillic(), npc.rulerGender());
         List<Component> lines = new java.util.ArrayList<>(List.of(Component.translatable("kingdomworld.screen.throne.npc.ruler", ruler),
                 Component.translatable(npc.raising() ? "kingdomworld.screen.throne.npc.size.raising" : "kingdomworld.screen.throne.npc.size",

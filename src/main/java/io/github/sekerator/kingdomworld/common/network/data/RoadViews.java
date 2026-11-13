@@ -440,9 +440,16 @@ public final class RoadViews {
      * How large a kingdom of the world is, for the list of kingdoms of the atlas: its level and its people and soldiers, those it
      * is expected to have while its capital is being built and the real ones once it stands.
      */
-    public record MapKingdom(io.github.sekerator.kingdomworld.core.npc.NpcLevel level, int people, int soldiers, boolean raising) {
+    public record MapKingdom(io.github.sekerator.kingdomworld.core.npc.NpcLevel level, int people, int soldiers, boolean raising,
+                             io.github.sekerator.kingdomworld.core.guild.Rank adventurers, io.github.sekerator.kingdomworld.core.guild.Rank mages) {
+        public MapKingdom(io.github.sekerator.kingdomworld.core.npc.NpcLevel level, int people, int soldiers, boolean raising) {
+            this(level, people, soldiers, raising, io.github.sekerator.kingdomworld.core.guild.Rank.F, io.github.sekerator.kingdomworld.core.guild.Rank.F);
+        }
+
         public MapKingdom {
             java.util.Objects.requireNonNull(level, "level");
+            java.util.Objects.requireNonNull(adventurers, "adventurers");
+            java.util.Objects.requireNonNull(mages, "mages");
             if (people < 0 || people > NpcKingdomInfo.MAX_COUNT || soldiers < 0 || soldiers > NpcKingdomInfo.MAX_COUNT) {
                 throw new IllegalArgumentException("Kingdom of the world out of range");
             }
@@ -452,7 +459,14 @@ public final class RoadViews {
          * The size of the kingdom of the world players are shown.
          */
         public static MapKingdom of(NpcKingdomInfo info) {
-            return new MapKingdom(info.level(), info.people(), info.soldiers(), info.raising());
+            return new MapKingdom(info.level(), info.people(), info.soldiers(), info.raising(), info.adventurers(), info.mages());
+        }
+
+        /**
+         * Whether the guilds of the kingdom have their ranks, to be shown.
+         */
+        public boolean ranked() {
+            return adventurers != io.github.sekerator.kingdomworld.core.guild.Rank.F || mages != io.github.sekerator.kingdomworld.core.guild.Rank.F;
         }
 
         void encode(FriendlyByteBuf buf) {
@@ -460,6 +474,8 @@ public final class RoadViews {
             buf.writeVarInt(people);
             buf.writeVarInt(soldiers);
             buf.writeBoolean(raising);
+            buf.writeEnum(adventurers);
+            buf.writeEnum(mages);
         }
 
         static MapKingdom decode(FriendlyByteBuf buf) {
@@ -469,7 +485,10 @@ public final class RoadViews {
             if (people < 0 || people > NpcKingdomInfo.MAX_COUNT || soldiers < 0 || soldiers > NpcKingdomInfo.MAX_COUNT) {
                 throw new IllegalArgumentException("People out of range: " + people + ", " + soldiers);
             }
-            return new MapKingdom(level, people, soldiers, buf.readBoolean());
+            boolean raising = buf.readBoolean();
+            io.github.sekerator.kingdomworld.core.guild.Rank adventurers = readEnum(buf, io.github.sekerator.kingdomworld.core.guild.Rank.class);
+            io.github.sekerator.kingdomworld.core.guild.Rank mages = readEnum(buf, io.github.sekerator.kingdomworld.core.guild.Rank.class);
+            return new MapKingdom(level, people, soldiers, raising, adventurers, mages);
         }
     }
 

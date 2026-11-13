@@ -124,19 +124,24 @@ final class ClientLayoutCheck {
 
     /** The widest count of people or soldiers a kingdom of the world is shown with: five digits in the longest plural form. */
     private static final int WIDE_COUNT = 99_999;
-    /** A kingdom of the world with the longest names, leaning and traits there are, and five digit people and soldiers. */
+    /**
+     * A kingdom of the world with the longest names, leaning and traits there are, five digit people and soldiers, and the
+     * longest ranks of guilds.
+     */
     private static final io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo LONG_NPC =
             new io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo("Serebrozemye XIV", "Сереброземье XIV", "Dobroslaslava",
                     "Доброславслава", io.github.sekerator.kingdomworld.core.citizen.Gender.FEMALE,
                     io.github.sekerator.kingdomworld.core.npc.RulerCharacter.BUILDER,
                     List.of(io.github.sekerator.kingdomworld.core.npc.RulerCharacter.Trait.JUST,
                             io.github.sekerator.kingdomworld.core.npc.RulerCharacter.Trait.THRIFTY),
-                    io.github.sekerator.kingdomworld.core.npc.NpcLevel.MEDIUM, 3, false, WIDE_COUNT, WIDE_COUNT);
+                    io.github.sekerator.kingdomworld.core.npc.NpcLevel.MEDIUM, 3, false, WIDE_COUNT, WIDE_COUNT, 64, WIDE_COUNT,
+                    io.github.sekerator.kingdomworld.core.guild.Rank.SSS, io.github.sekerator.kingdomworld.core.guild.Rank.SSS);
     /** The same kingdom founded as data, large, its capital still being built, with the people and soldiers it expects. */
     private static final io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo RAISING_NPC =
             new io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo(LONG_NPC.nameLatin(), LONG_NPC.nameCyrillic(),
                     LONG_NPC.rulerLatin(), LONG_NPC.rulerCyrillic(), LONG_NPC.rulerGender(), LONG_NPC.character(), LONG_NPC.traits(),
-                    io.github.sekerator.kingdomworld.core.npc.NpcLevel.LARGE, 3, true, WIDE_COUNT, WIDE_COUNT);
+                    io.github.sekerator.kingdomworld.core.npc.NpcLevel.LARGE, 3, true, WIDE_COUNT, WIDE_COUNT, 64, WIDE_COUNT,
+                    io.github.sekerator.kingdomworld.core.guild.Rank.SS, io.github.sekerator.kingdomworld.core.guild.Rank.S);
 
     private record Case(String name, Supplier<Screen> screen) {
     }
@@ -1469,7 +1474,7 @@ final class ClientLayoutCheck {
             for (int i = 0; i < 30; i++) {
                 io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapKingdom kingdom = i % 4 == 3 ? null
                         : new io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapKingdom(levels[i % levels.length], WIDE_COUNT,
-                        WIDE_COUNT, i % 2 == 0);
+                        WIDE_COUNT, i % 2 == 0, io.github.sekerator.kingdomworld.core.guild.Rank.SSS, io.github.sekerator.kingdomworld.core.guild.Rank.SS);
                 entries.add(new KingdomMapScreen.KingdomEntry(i % 2 == 0 ? LONG_KINGDOM : LONG_NPC.nameCyrillic(), i * 400, -i * 300, 12_340L + i * 10,
                         directions[i % directions.length], kingdom));
             }

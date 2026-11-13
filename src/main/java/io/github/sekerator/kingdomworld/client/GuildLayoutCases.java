@@ -105,7 +105,7 @@ final class GuildLayoutCases {
 
     private static GuildViews.DeskView desk(GuildViews.Card card, boolean empty, boolean kingdom) {
         return new GuildViews.DeskView(FAR, BRANCH, LONG_KINGDOM, 0x6C3483, currency(), card, empty ? List.of() : contracts(false, 24),
-                empty ? List.of() : contracts(true, 8), MUCH, kingdom, 300, 20, MUCH, 3, 7, 4_096, MUCH);
+                empty ? List.of() : contracts(true, 8), MUCH, kingdom, 300, 20, MUCH, 3, 7, 4_096, MUCH, io.github.sekerator.kingdomworld.core.guild.Rank.SSS);
     }
 
     private static GuildDeskScreen deskScreen(GuildViews.DeskView view, String mode, Component status, boolean success) {
@@ -169,7 +169,7 @@ final class GuildLayoutCases {
             }
         }
         return new GuildViews.GuildTabView(kingdom, canManage, currency(), 300, MUCH, MUCH, empty ? 0 : 99, empty ? 0 : 99, 0, 300, MUCH, 2, 5,
-                adventurers, squads, empty ? List.of() : contracts(false, 24), crystals, energy);
+                adventurers, squads, empty ? List.of() : contracts(false, 24), crystals, energy, io.github.sekerator.kingdomworld.core.guild.Rank.SSS, MUCH, empty ? "" : LONG_PLAYER);
     }
 
     private static ThroneScreen guildTab(Function<Role, KingdomView> member, Role role, boolean canManage, boolean empty, String mode, int chosen,
@@ -213,9 +213,9 @@ final class GuildLayoutCases {
                 Rank.SSS, false, 4_096), io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(MUCH, currency().units()),
                 GuildTexts.points(999_999));
         add.accept("guild-desk-outsider", () -> deskScreen(new GuildViews.DeskView(FAR, BRANCH, LONG_KINGDOM, 0x6C3483, currency(),
-                GuildViews.Card.NONE, List.of(), List.of(), MUCH, false, 300, 20, MUCH, 3, 7, 4_096, MUCH), "card", Component.empty(), false));
+                GuildViews.Card.NONE, List.of(), List.of(), MUCH, false, 300, 20, MUCH, 3, 7, 4_096, MUCH, io.github.sekerator.kingdomworld.core.guild.Rank.SSS), "card", Component.empty(), false));
         for (GuildViews.ExamState exam : new GuildViews.ExamState[]{GuildViews.ExamState.AVAILABLE, GuildViews.ExamState.UNDER_WAY,
-                GuildViews.ExamState.COOLDOWN, GuildViews.ExamState.TOO_FEW_POINTS, GuildViews.ExamState.TOP}) {
+                GuildViews.ExamState.COOLDOWN, GuildViews.ExamState.TOO_FEW_POINTS, GuildViews.ExamState.TOP, GuildViews.ExamState.BRANCH_TOO_LOW}) {
             add.accept("guild-desk-card-" + exam.name().toLowerCase(java.util.Locale.ROOT), () -> deskScreen(desk(card(exam), false, false), "card",
                     Component.empty(), false));
         }

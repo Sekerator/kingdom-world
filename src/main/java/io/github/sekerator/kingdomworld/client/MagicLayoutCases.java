@@ -139,7 +139,7 @@ final class MagicLayoutCases {
             spells.add(new MagicViews.SpellRow(spell, empty || spell.ordinal() != 2, spell.ordinal() % 2 == 0, MUCH, 99_999));
         }
         return new MagicViews.TabView(kingdom, canManage, MUCH, MUCH, empty ? 0 : 99_999, empty ? 0 : 99_999, empty ? 0 : MUCH, empty ? 0 : MUCH,
-                journal, mages, research, 8, spells, 99_999, 99_999, here, here, gates, generators, 1_000_000, 1_000_000);
+                journal, mages, research, 8, spells, 99_999, 99_999, here, here, gates, generators, 1_000_000, 1_000_000, Rank.SSS);
     }
 
     private static ThroneScreen magicTab(Function<Role, KingdomView> member, Role role, boolean canManage, boolean empty, boolean here, String mode,
@@ -160,8 +160,10 @@ final class MagicLayoutCases {
         KingdomError[] refusals = {KingdomError.TOWER_TOO_LOW, KingdomError.RANK_TOO_LOW, KingdomError.NOT_ENOUGH_MONEY, KingdomError.NOT_A_MEMBER};
         for (PlayerSpell spell : PlayerSpell.values()) {
             boolean known = learned && spell.ordinal() % 2 == 0;
+            // Lessons learned to every level, the last one and the first, and lessons not taken yet.
             lessons.add(new MagicViews.Lesson(spell, known, MUCH, MUCH, Rank.SSS, 99,
-                    known || spell.ordinal() == 1 ? Optional.empty() : Optional.of(refusals[spell.ordinal() % refusals.length])));
+                    known || spell.ordinal() == 1 ? Optional.empty() : Optional.of(refusals[spell.ordinal() % refusals.length]),
+                    known ? 1 + spell.ordinal() % 4 : 0, 4));
         }
         List<Optional<PlayerSpell>> slots = new ArrayList<>();
         if (staff) {
@@ -170,7 +172,7 @@ final class MagicLayoutCases {
             }
         }
         return new MagicViews.FocusView(FAR, KINGDOM, LONG_KINGDOM, 0x6C3483, currency(), 99, Rank.SSS, MUCH, MUCH, lessons, slots,
-                Optional.of(Research.ARCANA_3), 99);
+                Optional.of(Research.ARCANA_3), 99, Rank.SSS, true);
     }
 
     private static MagicFocusScreen focusScreen(MagicViews.FocusView view, String mode, Component status) {

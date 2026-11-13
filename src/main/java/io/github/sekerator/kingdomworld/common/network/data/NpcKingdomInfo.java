@@ -2,6 +2,7 @@ package io.github.sekerator.kingdomworld.common.network.data;
 
 import io.github.sekerator.kingdomworld.core.citizen.CitizenNames;
 import io.github.sekerator.kingdomworld.core.citizen.Gender;
+import io.github.sekerator.kingdomworld.core.guild.Rank;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomNames;
 import io.github.sekerator.kingdomworld.core.npc.NpcKingdom;
 import io.github.sekerator.kingdomworld.core.npc.NpcLevel;
@@ -15,12 +16,12 @@ import java.util.Objects;
 
 /**
  * What players see of a kingdom of the world on the overview of the throne and on the atlas: its names in both alphabets,
- * its ruler with a character and traits, its size and its towns, and its people and soldiers: those it is expected to have
- * while its capital is being built, the real ones once it stands.
+ * its ruler with a character and traits, its size and its towns, its people and soldiers (those it is expected to have
+ * while its capital is being built, the real ones once it stands), and the ranks of its two guilds, F while it has none yet.
  */
 public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String rulerLatin, String rulerCyrillic, Gender rulerGender,
                              RulerCharacter character, List<RulerCharacter.Trait> traits, NpcLevel level, int towns, boolean raising,
-                             int people, int soldiers, int settlements, int settlementPeople) {
+                             int people, int soldiers, int settlements, int settlementPeople, Rank adventurers, Rank mages) {
     /** The most people or soldiers a kingdom of the world is shown with. */
     public static final int MAX_COUNT = 100_000;
     private static final int MAX_NAME = 64;
@@ -38,7 +39,8 @@ public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String ruler
     public NpcKingdomInfo(String nameLatin, String nameCyrillic, String rulerLatin, String rulerCyrillic, Gender rulerGender,
                           RulerCharacter character, List<RulerCharacter.Trait> traits, NpcLevel level, int towns, boolean raising, int people,
                           int soldiers) {
-        this(nameLatin, nameCyrillic, rulerLatin, rulerCyrillic, rulerGender, character, traits, level, towns, raising, people, soldiers, 0, 0);
+        this(nameLatin, nameCyrillic, rulerLatin, rulerCyrillic, rulerGender, character, traits, level, towns, raising, people, soldiers, 0, 0,
+                Rank.F, Rank.F);
     }
 
     public NpcKingdomInfo {
@@ -49,6 +51,8 @@ public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String ruler
         Objects.requireNonNull(rulerGender, "rulerGender");
         Objects.requireNonNull(character, "character");
         Objects.requireNonNull(level, "level");
+        Objects.requireNonNull(adventurers, "adventurers");
+        Objects.requireNonNull(mages, "mages");
         traits = List.copyOf(traits);
         if (traits.size() > 2 || towns < 0 || people < 0 || people > MAX_COUNT || soldiers < 0 || soldiers > MAX_COUNT || settlements < 0
                 || settlements > MAX_COUNT || settlementPeople < 0 || settlementPeople > MAX_COUNT) {
@@ -73,9 +77,24 @@ public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String ruler
      * @param soldiers the soldiers it is expected to have while raising, else the ones it has; kept within {@link #MAX_COUNT}
      */
     public static NpcKingdomInfo of(NpcKingdom kingdom, boolean raising, int people, int soldiers) {
+        return of(kingdom, raising, people, soldiers, Rank.F, Rank.F);
+    }
+
+    /**
+     * @param adventurers the rank of its branch of the adventurers' guild
+     * @param mages       the rank of its guild of mages
+     */
+    public static NpcKingdomInfo of(NpcKingdom kingdom, boolean raising, int people, int soldiers, Rank adventurers, Rank mages) {
         return new NpcKingdomInfo(kingdom.name().latin(), kingdom.name().cyrillic(), kingdom.rulerName(CitizenNames.Alphabet.LATIN),
                 kingdom.rulerName(CitizenNames.Alphabet.CYRILLIC), kingdom.rulerGender(), kingdom.character(), kingdom.traits(), kingdom.level(),
-                kingdom.towns().size(), raising, bounded(people), bounded(soldiers));
+                kingdom.towns().size(), raising, bounded(people), bounded(soldiers), 0, 0, adventurers, mages);
+    }
+
+    /**
+     * Whether the guilds of the kingdom have their ranks, to be shown.
+     */
+    public boolean ranked() {
+        return adventurers != Rank.F || mages != Rank.F;
     }
 
     /**
@@ -83,7 +102,7 @@ public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String ruler
      */
     public NpcKingdomInfo withSettlements(int count, int people) {
         return new NpcKingdomInfo(nameLatin, nameCyrillic, rulerLatin, rulerCyrillic, rulerGender, character, traits, level, towns, raising,
-                this.people, soldiers, bounded(count), bounded(people));
+                this.people, soldiers, bounded(count), bounded(people), adventurers, mages);
     }
 
     private static int bounded(int count) {
@@ -106,6 +125,8 @@ public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String ruler
         buf.writeVarInt(soldiers);
         buf.writeVarInt(settlements);
         buf.writeVarInt(settlementPeople);
+        buf.writeEnum(adventurers);
+        buf.writeEnum(mages);
     }
 
     public static NpcKingdomInfo decode(FriendlyByteBuf buf) {
@@ -139,8 +160,10 @@ public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String ruler
         if (settlements < 0 || settlements > MAX_COUNT || settlementPeople < 0 || settlementPeople > MAX_COUNT) {
             throw new DecoderException("Settlements out of range: " + settlements + ", " + settlementPeople);
         }
+        Rank adventurers = KingdomView.readEnum(buf, Rank.class);
+        Rank mages = KingdomView.readEnum(buf, Rank.class);
         return new NpcKingdomInfo(nameLatin, nameCyrillic, rulerLatin, rulerCyrillic, gender, character, traits, level, towns, raising,
-                people, soldiers, settlements, settlementPeople);
+                people, soldiers, settlements, settlementPeople, adventurers, mages);
     }
 
     /**

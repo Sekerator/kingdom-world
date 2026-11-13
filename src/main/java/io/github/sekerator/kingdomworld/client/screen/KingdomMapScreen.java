@@ -317,8 +317,12 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapKingdom kingdom = entry.kingdom();
             boolean sizeShown = false;
             if (kingdom != null) {
-                // The size stands before the distance; where the row is too narrow for it, it gives way and is told on hover.
-                Component size = io.github.sekerator.kingdomworld.common.npc.NpcTexts.level(kingdom.level());
+                // The size (with the rank of the stronger guild) stands before the distance; where the row is too narrow for it, it
+                // gives way and is told on hover.
+                Component size = kingdom.ranked()
+                        ? Component.translatable("kingdomworld.screen.map.list.size_rank", io.github.sekerator.kingdomworld.common.npc.NpcTexts.level(kingdom.level()),
+                        io.github.sekerator.kingdomworld.common.guild.GuildTexts.rank(io.github.sekerator.kingdomworld.core.guild.Rank.max(kingdom.adventurers(), kingdom.mages())))
+                        : io.github.sekerator.kingdomworld.common.npc.NpcTexts.level(kingdom.level());
                 int sizeWidth = font.width(size);
                 int sizeX = whereX - 6 - sizeWidth;
                 if (sizeX - 6 - (left + 4) >= LIST_NAME_MIN) {
@@ -335,6 +339,9 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
                             io.github.sekerator.kingdomworld.common.npc.NpcTexts.level(kingdom.level())));
                 }
                 hoverText(left + 4, y, width - 8, npcPeople(kingdom.raising(), kingdom.people(), kingdom.soldiers()));
+                if (kingdom.ranked()) {
+                    hoverText(left + 4, y, width - 8, npcGuilds(kingdom.adventurers(), kingdom.mages()));
+                }
             }
         }
     }

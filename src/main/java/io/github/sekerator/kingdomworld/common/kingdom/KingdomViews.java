@@ -144,8 +144,9 @@ public final class KingdomViews {
                     settlementPeople += settlement.population();
                 }
             }
-            return io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo.of(npc, raising, people, soldiers)
-                    .withSettlements(settlements, settlementPeople);
+            io.github.sekerator.kingdomworld.core.npc.GuildRanks.Ranks ranks = io.github.sekerator.kingdomworld.common.npc.NpcGuilds.ranks(server, kingdomId);
+            return io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo.of(npc, raising, people, soldiers, ranks.adventurers(),
+                    ranks.mages()).withSettlements(settlements, settlementPeople);
         }).orElse(null);
     }
 

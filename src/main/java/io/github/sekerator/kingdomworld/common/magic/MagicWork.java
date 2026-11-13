@@ -176,6 +176,9 @@ public final class MagicWork {
         if (now % 100 < 20) {
             MagicDevices.check(server);
         }
+        if (now % RANK_TICKS < 20) {
+            rankGuilds(server, magic, world, rules);
+        }
         for (KingdomMagic kingdom : List.copyOf(magic.kingdoms())) {
             UUID id = kingdom.kingdomId();
             magic.keepWard(id, chunk -> id.equals(world.territory().ownerOf(chunk.dimension(), chunk.chunk())));
@@ -193,6 +196,29 @@ public final class MagicWork {
             }
         }
         tailwind(server, now, day, rules);
+    }
+
+    /** Ticks between two looks at the ranks of the guilds of mages of players. */
+    private static final long RANK_TICKS = 1_200;
+
+    /**
+     * Ranks the guild of mages of every kingdom of players by its researches, its mages at work and its working mage towers.
+     * A kingdom of the world has the rank it was founded with and grows by its own rules.
+     */
+    static void rankGuilds(MinecraftServer server, MagicState magic, KingdomWorldState world, MagicRules rules) {
+        for (Kingdom kingdom : world.kingdoms().all()) {
+            UUID id = kingdom.id();
+            if (io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, id)) {
+                continue;
+            }
+            int towers = io.github.sekerator.kingdomworld.common.construction.BuildingEffects.working(server, id,
+                    io.github.sekerator.kingdomworld.core.construction.BuildingRoles.MAGE_TOWER).size();
+            io.github.sekerator.kingdomworld.core.guild.Rank rank = rules.guildRankOf(magic.towerLevel(id),
+                    MageBehavior.workingMages(server, id).size(), towers);
+            if (rank != magic.guildRank(id) && magic.setGuildRank(id, rank)) {
+                LOGGER.info("KingdomWorld magic: the guild of mages of {} is of rank {} now", kingdom.name(), rank.label());
+            }
+        }
     }
 
     private static void switchedOff(MinecraftServer server, UUID kingdomId, KingdomSpell spell) {
