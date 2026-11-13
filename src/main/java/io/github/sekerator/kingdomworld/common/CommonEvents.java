@@ -87,9 +87,10 @@ public final class CommonEvents {
                 config.maxActiveNpcs.get(), config.simulationIntervalTicks.get(),
                 config.afkTimeoutSeconds.get(), config.combatTagSeconds.get());
         LOGGER.info("KingdomWorld kingdom rules: allowedDimensions={}, minChunksFromOtherKingdom={}, initialClaimRadius={}, "
-                        + "baseMaxChunks={}, chunksPerMember={}, claimBufferChunks={}",
+                        + "baseMaxChunks={}, chunksPerMember={}, chunksPerCitizen={}, claimBufferChunks={}",
                 config.allowedDimensions.get(), config.minChunksFromOtherKingdom.get(), config.initialClaimRadius.get(),
-                config.baseMaxChunks.get(), config.chunksPerMember.get(), config.claimBufferChunks.get());
+                config.baseMaxChunks.get(), config.chunksPerMember.get(), config.chunksPerCitizen.get(),
+                config.claimBufferChunks.get());
         LOGGER.info("KingdomWorld protection: interactions={}, explosions={}, fire={}, fakePlayers={}",
                 config.protectInteractions.get(), config.protectFromExplosions.get(), config.protectFromFire.get(),
                 config.allowFakePlayers.get());

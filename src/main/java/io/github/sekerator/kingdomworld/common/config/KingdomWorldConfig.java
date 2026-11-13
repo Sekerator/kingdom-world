@@ -62,6 +62,7 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue styleChangeCost;
         public final ForgeConfigSpec.IntValue baseMaxChunks;
         public final ForgeConfigSpec.IntValue chunksPerMember;
+        public final ForgeConfigSpec.IntValue chunksPerCitizen;
         public final ForgeConfigSpec.IntValue claimBufferChunks;
         public final ForgeConfigSpec.BooleanValue protectInteractions;
         public final ForgeConfigSpec.BooleanValue protectFromExplosions;
@@ -551,6 +552,9 @@ public final class KingdomWorldConfig {
             chunksPerMember = builder
                     .comment("Additional chunks for every player subject (members other than the ruler).")
                     .defineInRange("chunksPerMember", 4, 0, 10_000);
+            chunksPerCitizen = builder
+                    .comment("Additional chunks for every living citizen of the kingdom.")
+                    .defineInRange("chunksPerCitizen", 2, 0, 10_000);
             claimBufferChunks = builder
                     .comment("A claimed chunk must have no land of another kingdom within this many chunks (square distance).",
                             "0 lets borders of different kingdoms touch.")

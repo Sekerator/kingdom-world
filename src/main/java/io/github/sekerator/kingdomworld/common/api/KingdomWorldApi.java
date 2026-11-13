@@ -179,7 +179,8 @@ public final class KingdomWorldApi {
     public static KingdomRules rules() {
         KingdomWorldConfig.Server config = KingdomWorldConfig.SERVER;
         ChunkLimitPolicy limit = chunkLimitOverride != null ? chunkLimitOverride
-                : ChunkLimitPolicy.perSubject(config.baseMaxChunks.get(), config.chunksPerMember.get());
+                : ChunkLimitPolicy.perSubjectAndCitizen(config.baseMaxChunks.get(), config.chunksPerMember.get(),
+                        config.chunksPerCitizen.get());
         return new KingdomRules(Set.copyOf(config.allowedDimensions.get()), config.minChunksFromOtherKingdom.get(),
                 config.initialClaimRadius.get(), config.claimBufferChunks.get(), limit);
     }

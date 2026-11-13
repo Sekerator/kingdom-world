@@ -187,4 +187,36 @@ class ClaimRulesTest {
         assertEquals(33, policy.maxChunks(new KingdomStats(alpha, 3, 2, 9)));
         assertThrows(IllegalArgumentException.class, () -> ChunkLimitPolicy.perSubject(-1, 4));
     }
+
+    @Test
+    void chunkLimitGrowsWithCitizens() {
+        ChunkLimitPolicy policy = ChunkLimitPolicy.perSubjectAndCitizen(25, 4, 2);
+        assertEquals(25, policy.maxChunks(new KingdomStats(alpha, 1, 0, 9)));
+        assertEquals(25, policy.maxChunks(new KingdomStats(alpha, 1, 0, 9, 0)));
+        assertEquals(33, policy.maxChunks(new KingdomStats(alpha, 3, 2, 9, 0)));
+        assertEquals(45, policy.maxChunks(new KingdomStats(alpha, 1, 0, 9, 10)));
+        assertEquals(53, policy.maxChunks(new KingdomStats(alpha, 3, 2, 9, 10)));
+    }
+
+    @Test
+    void chunkLimitIgnoresCitizensWhenTheirFactorIsZero() {
+        ChunkLimitPolicy off = ChunkLimitPolicy.perSubjectAndCitizen(25, 4, 0);
+        assertEquals(25, off.maxChunks(new KingdomStats(alpha, 1, 0, 9, 10)));
+        assertEquals(33, off.maxChunks(new KingdomStats(alpha, 3, 2, 9, 10)));
+        assertEquals(33, ChunkLimitPolicy.perSubject(25, 4).maxChunks(new KingdomStats(alpha, 3, 2, 9, 10)));
+        assertEquals(45, ChunkLimitPolicy.perSubjectAndCitizen(25, 0, 2).maxChunks(new KingdomStats(alpha, 3, 2, 9, 10)));
+    }
+
+    @Test
+    void chunkLimitIsClampedAndRefusesNegativeFactors() {
+        ChunkLimitPolicy huge = ChunkLimitPolicy.perSubjectAndCitizen(100_000, 10_000, 10_000);
+        assertEquals(Integer.MAX_VALUE,
+                huge.maxChunks(new KingdomStats(alpha, 1, 0, 9, Integer.MAX_VALUE)));
+        assertEquals(Integer.MAX_VALUE,
+                huge.maxChunks(new KingdomStats(alpha, Integer.MAX_VALUE, Integer.MAX_VALUE, 9, Integer.MAX_VALUE)));
+        assertEquals(Integer.MAX_VALUE,
+                ChunkLimitPolicy.perSubjectAndCitizen(Integer.MAX_VALUE, 0, 1).maxChunks(new KingdomStats(alpha, 1, 0, 9, 1)));
+        assertThrows(IllegalArgumentException.class, () -> ChunkLimitPolicy.perSubjectAndCitizen(25, 4, -1));
+        assertThrows(IllegalArgumentException.class, () -> ChunkLimitPolicy.perSubjectAndCitizen(25, -4, 2));
+    }
 }

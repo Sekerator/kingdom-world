@@ -161,7 +161,8 @@ public final class KingdomWorldState {
         int members = membership.kingdom(kingdomId).map(KingdomMembers::size).orElse(0);
         boolean rulerIsMember = membership.kingdom(kingdomId).flatMap(KingdomMembers::king).isPresent();
         int chunks = territory.territory(kingdomId).map(Territory::size).orElse(0);
-        return new KingdomStats(kingdomId, members, members - (rulerIsMember ? 1 : 0), chunks);
+        return new KingdomStats(kingdomId, members, members - (rulerIsMember ? 1 : 0), chunks,
+                citizens.registry().count(kingdomId));
     }
 
     public int chunkLimit(UUID kingdomId, KingdomRules rules) {

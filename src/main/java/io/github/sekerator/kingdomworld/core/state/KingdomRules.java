@@ -18,7 +18,7 @@ import java.util.Set;
 public record KingdomRules(Set<String> allowedDimensions, int minChunksFromOtherKingdom, int initialClaimRadius,
                            int claimBufferChunks, ChunkLimitPolicy chunkLimit) {
     public static final KingdomRules DEFAULT = new KingdomRules(Set.of("minecraft:overworld"), 4, 1, 1,
-            ChunkLimitPolicy.perSubject(25, 4));
+            ChunkLimitPolicy.perSubjectAndCitizen(25, 4, 2));
 
     public KingdomRules {
         allowedDimensions = Set.copyOf(allowedDimensions);

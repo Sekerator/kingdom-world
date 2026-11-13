@@ -511,6 +511,7 @@ public final class KingdomGameTests {
         helper.assertTrue(config.styleChangeCost.get() == 2000, "styleChangeCost default");
         helper.assertTrue(config.baseMaxChunks.get() == 25, "baseMaxChunks default");
         helper.assertTrue(config.chunksPerMember.get() == 4, "chunksPerMember default");
+        helper.assertTrue(config.chunksPerCitizen.get() == 2, "chunksPerCitizen default");
         helper.assertTrue(config.protectInteractions.get() && config.protectFromExplosions.get()
                 && config.protectFromFire.get() && config.allowFakePlayers.get(), "protection defaults");
         helper.succeed();

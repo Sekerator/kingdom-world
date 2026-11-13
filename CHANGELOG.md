@@ -2,6 +2,10 @@
 
 ## Русский
 
+### 1.4.1
+
+- **Лимит земли растёт с жителями.** Королевство может занять `baseMaxChunks` (25) чанков, ещё `chunksPerMember` (4) за каждого игрока-подданного и теперь `chunksPerCitizen` (2) за каждого живого жителя, солдаты считаются: это население из окна трона. Новый ключ `chunksPerCitizen` в `[territory]` конфига сервера (0-10000, 0 отключает прибавку); в конфиги старых миров Forge добавит его сам. Лимит по-прежнему касается только чанков, которые занимают игроки. Если жителей стало меньше, земля остаётся за королевством: оно лишь не может занять новую, пока владеет не меньше лимита. Сообщение о достигнутом лимите и глава 2 книги-путеводителя объясняют, от чего он растёт. Сетевой протокол прежний, 40; клиент и сервер должны быть одной версии мода.
+
 ### 1.4.0
 
 Этап 15 «Большие государства»: королевства мира становятся государствами, чья обширная земля поделена на провинции, с городами, деревнями и дорогами, пустошами, провинциями на продажу и войной за провинции. Новый мир раскладывает государства по умолчанию, а мир версии 1.3.0 и раньше и мир, где план уже составлен или начат, сохраняют свой план. Сетевой протокол 40: клиент и сервер должны быть версии 1.4.0.
@@ -107,6 +111,10 @@
 - **Нагрузка и баланс.** Замер нагрузки `admin perf`, тяжёлые места разнесены по тикам, жалование всех профессий по умолчанию.
 
 ## English
+
+### 1.4.1
+
+- **The land limit grows with citizens.** A kingdom may claim `baseMaxChunks` (25) chunks, `chunksPerMember` (4) more for every player subject and now `chunksPerCitizen` (2) more for every living citizen, soldiers included: the population the throne screen shows. The new key `chunksPerCitizen` in `[territory]` of the server config (0-10000, 0 turns the addition off); Forge adds it to the configs of older worlds by itself. The limit still applies only to chunks claimed by players. When citizens are lost the land stays with the kingdom: it only cannot claim more while it owns as much as the limit or more. The message about the limit reached and chapter 2 of the guide book tell what the limit grows with. The network protocol is still 40; client and server must run the same version of the mod.
 
 ### 1.4.0
 
