@@ -81,6 +81,7 @@ public final class ArmyCommands {
                 .then(Commands.literal("garrison")
                         .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
                                 .executes(ArmyCommands::garrison)))
+                .then(Commands.literal("tactics").executes(context -> tactics(context.getSource())))
                 .then(Commands.literal("staff")
                         .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
                                 .executes(ArmyCommands::staff)))
@@ -209,6 +210,21 @@ public final class ArmyCommands {
      * The garrison of a kingdom in one line: the guard and the army, their officers, how many soldiers stand at every post,
      * how far the answer to every alarm has gone, and where the throne stands.
      */
+    /**
+     * The squads that fight by the plans of their leaders now (their shape and roles) and how long the decisions took.
+     */
+    private static int tactics(CommandSourceStack source) {
+        java.util.List<String> lines = io.github.sekerator.kingdomworld.common.tactics.SquadTactics.describe();
+        long[] measures = io.github.sekerator.kingdomworld.common.tactics.SquadTactics.measures();
+        String average = String.format(java.util.Locale.ROOT, "%.3f", measures[0] == 0 ? 0.0 : measures[1] / 1e6 / measures[0]);
+        String worst = String.format(java.util.Locale.ROOT, "%.3f", measures[2] / 1e6);
+        source.sendSuccess(() -> Component.translatable("commands.kingdomworld.admin.army.tactics", lines.size(), measures[0], average, worst), false);
+        for (String line : lines) {
+            source.sendSuccess(() -> Component.literal("  " + line), false);
+        }
+        return lines.size();
+    }
+
     private static int garrison(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         CommandSourceStack source = context.getSource();
         MinecraftServer server = source.getServer();

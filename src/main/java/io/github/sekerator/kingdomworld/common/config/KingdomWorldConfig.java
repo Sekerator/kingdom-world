@@ -181,6 +181,8 @@ public final class KingdomWorldConfig {
         public final War war;
         public final Siege siege;
         public final Nobility nobility;
+        /** How squads of soldiers, guards, adventurers and robbers fight near players. */
+        public final Tactics tactics;
         /** The guide book given to new players. */
         public final ForgeConfigSpec.BooleanValue giveGuideOnFirstJoin;
 
@@ -500,6 +502,7 @@ public final class KingdomWorldConfig {
             war = new War(builder);
             siege = new Siege(builder);
             nobility = new Nobility(builder);
+            tactics = new Tactics(builder);
 
             builder.comment("The guide book: chapters on founding a kingdom and on everything after it.").push("guide");
             giveGuideOnFirstJoin = builder.comment("Whether every player gets the guide book once, the first time they join the world.",
@@ -1017,6 +1020,99 @@ public final class KingdomWorldConfig {
      * fertility, fair wind, gates, arcana I, II and III), per spell of a kingdom (ward, healing, fertility, fair wind, gates)
      * or per spell of players (fireball, heal, light, detect, shield, blink).
      */
+    /**
+     * The tactics of squads near players: their leaders decide every few ticks who rings, flanks, shoots, guards or falls back.
+     */
+    public static final class Tactics {
+        public final ForgeConfigSpec.BooleanValue enabled;
+        public final ForgeConfigSpec.ConfigValue<String> decideTicks;
+        public final ForgeConfigSpec.IntValue reactionTicks;
+        public final ForgeConfigSpec.DoubleValue ringRadius;
+        public final ForgeConfigSpec.DoubleValue exitRadius;
+        public final ForgeConfigSpec.DoubleValue flankRadius;
+        public final ForgeConfigSpec.DoubleValue archerMin;
+        public final ForgeConfigSpec.DoubleValue archerMax;
+        public final ForgeConfigSpec.DoubleValue archerTooClose;
+        public final ForgeConfigSpec.DoubleValue fallBack;
+        public final ForgeConfigSpec.IntValue woundedPercent;
+        public final ForgeConfigSpec.IntValue retreatLossesPercent;
+        public final ForgeConfigSpec.IntValue retreatBalancePercent;
+        public final ForgeConfigSpec.IntValue pincerFoes;
+        public final ForgeConfigSpec.IntValue flankBonusPercent;
+        public final ForgeConfigSpec.IntValue rearBonusPercent;
+        public final ForgeConfigSpec.IntValue budgetMicros;
+        public final ForgeConfigSpec.DoubleValue sight;
+
+        Tactics(ForgeConfigSpec.Builder builder) {
+            io.github.sekerator.kingdomworld.core.tactics.TacticRules.Builder d = new io.github.sekerator.kingdomworld.core.tactics.TacticRules.Builder();
+            builder.comment("Tactics of squads near players: soldiers, guards, adventurers and robbers with bodies.").push("tactics");
+            enabled = builder.comment("Whether squads fight by the plans of their leaders; off, every body fights on its own as before.")
+                    .define("enabled", true);
+            decideTicks = builder.comment("Ticks between two decisions of the leader of a squad: a fighter, a sergeant, a vice-captain,",
+                            "a captain leads it (four numbers, 1 to 200).")
+                    .define("decideTicks", d.decideTicks[0] + ", " + d.decideTicks[1] + ", " + d.decideTicks[2] + ", " + d.decideTicks[3],
+                            value -> parseTicks(value) != null);
+            reactionTicks = builder.comment("Ticks a squad takes to answer an enemy it has just seen.")
+                    .defineInRange("reactionTicks", d.reactionTicks, 0, 100);
+            ringRadius = builder.comment("Blocks between an enemy and the ring of blades around it.")
+                    .defineInRange("ringRadius", d.ringRadius, 1.0, 8.0);
+            exitRadius = builder.comment("Blocks between an enemy in a narrow place and the fighters holding its ways out.")
+                    .defineInRange("exitRadius", d.exitRadius, 1.0, 16.0);
+            flankRadius = builder.comment("Blocks from a group of enemies the wings of a pincer go to.")
+                    .defineInRange("flankRadius", d.flankRadius, 1.0, 16.0);
+            archerMin = builder.comment("The distance archers keep from their target, at least, in blocks.")
+                    .defineInRange("archerMin", d.archerMin, 2.0, 32.0);
+            archerMax = builder.comment("The distance archers keep from their target, at most, in blocks.")
+                    .defineInRange("archerMax", d.archerMax, 2.0, 48.0);
+            archerTooClose = builder.comment("An enemy closer than this to an archer makes it step back, in blocks.")
+                    .defineInRange("archerTooClose", d.archerTooClose, 1.0, 16.0);
+            fallBack = builder.comment("Blocks behind the front the badly wounded fall back to.")
+                    .defineInRange("fallBack", d.fallBack, 1.0, 24.0);
+            woundedPercent = builder.comment("A fighter with less than this percent of its health falls back behind the front.")
+                    .defineInRange("woundedPercent", (int) Math.round(d.woundedShare * 100), 0, 100);
+            retreatLossesPercent = builder.comment("A squad that lost this percent of its fighters falls back towards help.")
+                    .defineInRange("retreatLossesPercent", (int) Math.round(d.retreatLosses * 100), 0, 100);
+            retreatBalancePercent = builder.comment("A squad worth less than this percent of the enemies it sees falls back towards help.")
+                    .defineInRange("retreatBalancePercent", (int) Math.round(d.retreatBalance * 100), 0, 100);
+            pincerFoes = builder.comment("A led squad splits into a front and wings against at least this many enemies.")
+                    .defineInRange("pincerFoes", d.pincerFoes, 2, 32);
+            flankBonusPercent = builder.comment("Further damage of a blow of a body of a squad from the side of its target, in percent.")
+                    .defineInRange("flankBonusPercent", (int) Math.round(d.flankBonus * 100), 0, 100);
+            rearBonusPercent = builder.comment("Further damage of a blow of a body of a squad from behind its target, in percent.")
+                    .defineInRange("rearBonusPercent", (int) Math.round(d.rearBonus * 100), 0, 100);
+            budgetMicros = builder.comment("Microseconds the decisions of all squads may take in one server tick; the rest wait a tick.")
+                    .defineInRange("budgetMicros", d.budgetMicros, 100, 50_000);
+            sight = builder.comment("Blocks a squad sees its enemies at (with a free line of sight).")
+                    .defineInRange("sight", d.sight, 4.0, 64.0);
+            builder.pop();
+        }
+
+        /**
+         * Reads four numbers of ticks, 1 to 200, separated by commas or spaces; {@code null} if they are not.
+         */
+        public static int[] parseTicks(Object value) {
+            if (!(value instanceof String text)) {
+                return null;
+            }
+            String[] parts = text.strip().split("[,;\\s]+");
+            if (parts.length != 4) {
+                return null;
+            }
+            int[] ticks = new int[4];
+            try {
+                for (int i = 0; i < 4; i++) {
+                    ticks[i] = Integer.parseInt(parts[i]);
+                    if (ticks[i] < 1 || ticks[i] > 200) {
+                        return null;
+                    }
+                }
+            } catch (NumberFormatException e) {
+                return null;
+            }
+            return ticks;
+        }
+    }
+
     public static final class Magic {
         public final ForgeConfigSpec.LongValue baseCapacity;
         public final ForgeConfigSpec.LongValue accumulatorCapacity;

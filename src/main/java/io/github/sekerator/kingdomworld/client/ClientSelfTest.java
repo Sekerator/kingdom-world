@@ -51,6 +51,9 @@ import java.util.UUID;
  *       beside it and saves screenshots of them (see {@link ClientRoadShowcase}).</li>
  *   <li>{@code npc}: in a copy of a test world, a large kingdom of the world appears near the player and the camera flies over
  *       it (see {@link ClientNpcShowcase}).</li>
+ *   <li>{@code tactics}: in a copy of a test world, fifty monsters come at the garrison of a large capital of the world near the
+ *       player, then an alarm brings the garrison; the ticks and the decisions of the squads go to the log (see
+ *       {@link ClientTacticsCheck}).</li>
  *   <li>{@code world}: in a singleplayer world, founds a kingdom next to the player with three citizens and a work
  *       post, opens the map, the throne screen (through the real server packet) with all tabs including the citizens
  *       and the storehouses, the territory editor with a claim request, the screen of the work post (through the real
@@ -76,6 +79,7 @@ public final class ClientSelfTest {
     private static ClientRoadShowcase roadShowcase;
     private static ClientSiegeShowcase siegeShowcase;
     private static ClientNpcShowcase npcShowcase;
+    private static ClientTacticsCheck tacticsCheck;
     private static ClientProvinceShowcase provinceShowcase;
     private static ClientBackgroundCheck backgroundCheck;
     private static ClientLifeShowcase lifeShowcase;
@@ -252,6 +256,25 @@ public final class ClientSelfTest {
             if (provinceShowcase.finished()) {
                 if (provinceShowcase.failed()) {
                     LOGGER.error(PREFIX + "provinces showcase failed, exiting with code 1");
+                    System.exit(1);
+                }
+                LOGGER.info(PREFIX + "finished");
+                quit = true;
+            }
+            return;
+        }
+        if ("tactics".equals(MODE) && minecraft.player != null && minecraft.getSingleplayerServer() != null) {
+            if (tacticsCheck == null) {
+                String folder = System.getProperty("kingdomworld.clientSelfTest.screenshots");
+                Path screenshots = folder != null && !folder.isEmpty() ? Path.of(folder)
+                        : minecraft.gameDirectory.toPath().resolve("kingdomworld-layout");
+                LOGGER.info(PREFIX + "tactics check started, screenshots go to {}", screenshots.resolve("tactics"));
+                tacticsCheck = new ClientTacticsCheck(screenshots);
+            }
+            tacticsCheck.tick();
+            if (tacticsCheck.finished()) {
+                if (tacticsCheck.failed()) {
+                    LOGGER.error(PREFIX + "tactics check failed, exiting with code 1");
                     System.exit(1);
                 }
                 LOGGER.info(PREFIX + "finished");

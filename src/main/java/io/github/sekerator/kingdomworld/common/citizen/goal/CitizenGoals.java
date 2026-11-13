@@ -22,11 +22,12 @@ public final class CitizenGoals {
     }
 
     /**
-     * Runs from monsters nearby.
+     * Runs from monsters nearby; a fighter of a squad in a fight keeps to its duty instead, its squad covering it.
      */
     public static Goal fleeMonsters(CitizenEntity body) {
         return new AvoidEntityGoal<>(body, Mob.class, entity -> entity instanceof Enemy
-                && !io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehaviors.fights(body), 8.0f, 0.6, 0.8, entity -> true);
+                && !io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehaviors.fights(body)
+                && !io.github.sekerator.kingdomworld.common.tactics.SquadTactics.fightsByPlan(body), 8.0f, 0.6, 0.8, entity -> true);
     }
 
     /**
@@ -95,8 +96,10 @@ public final class CitizenGoals {
 
         @Override
         protected boolean wanted() {
-            // A wounded soldier does not walk off while an alarm of its kingdom lasts close by.
-            return body.needsCare() && !io.github.sekerator.kingdomworld.common.law.LawWork.holdsOut(body);
+            // A wounded soldier does not walk off while an alarm of its kingdom lasts close by, nor while its squad fights:
+            // it falls back behind the front and goes to be cared for when the fight is over.
+            return body.needsCare() && !io.github.sekerator.kingdomworld.common.law.LawWork.holdsOut(body)
+                    && !io.github.sekerator.kingdomworld.common.tactics.SquadTactics.fightsByPlan(body);
         }
 
         @Override

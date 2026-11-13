@@ -71,18 +71,22 @@ final class SoldierGoal extends Goal {
     private int trainCooldown = TRAIN_TICKS;
     private int swingCooldown;
     private int patrolIndex;
+    /** Carries out the duty the leader of the squad gives in a fight. */
+    private final io.github.sekerator.kingdomworld.common.tactics.TacticMover mover;
 
     SoldierGoal(CitizenEntity body, boolean archer) {
         this.body = body;
         this.archer = archer;
         this.melee = new MeleeAttackGoal(body, 0.8, true);
+        this.mover = new io.github.sekerator.kingdomworld.common.tactics.TacticMover(body);
         setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
     }
 
     @Override
     public boolean canUse() {
         // A wounded soldier leaves its duty to be cared for, but not while an alarm of its kingdom lasts close by.
-        return (ProfessionBehaviors.fights(body) || io.github.sekerator.kingdomworld.common.law.LawWork.holdsOut(body))
+        return (ProfessionBehaviors.fights(body) || io.github.sekerator.kingdomworld.common.law.LawWork.holdsOut(body)
+                || io.github.sekerator.kingdomworld.common.tactics.SquadTactics.fightsByPlan(body))
                 && body.kingdomId() != null && body.citizenId() != null && body.serverLevel() != null;
     }
 
@@ -144,6 +148,11 @@ final class SoldierGoal extends Goal {
                 body.setAggressive(true);
             }
         }
+        mover.tick();
+        io.github.sekerator.kingdomworld.core.tactics.Duty duty = io.github.sekerator.kingdomworld.common.tactics.SquadTactics.duty(body);
+        if (duty != null && tactic(server, level, duty)) {
+            return;
+        }
         if (target != null) {
             fight();
             return;
@@ -169,6 +178,87 @@ final class SoldierGoal extends Goal {
             return;
         }
         follow(server, level, order);
+    }
+
+    // ---------------------------------------------------------------- fighting by the plan of the squad
+
+    /**
+     * Carries out the duty the leader of the squad gave: rings, flanks or holds the front against its target, shoots from its
+     * place, guards the wounded, falls back or lies in wait.
+     *
+     * @return whether the duty took the tick; {@code false} leaves the soldier to fight on its own (its target is gone)
+     */
+    private boolean tactic(MinecraftServer server, ServerLevel level, io.github.sekerator.kingdomworld.core.tactics.Duty duty) {
+        io.github.sekerator.kingdomworld.core.tactics.Role role = duty.role();
+        switch (role) {
+            case RETREAT, FALL_BACK, HEAL -> {
+                stopMelee();
+                body.setAggressive(false);
+                if (duty.stand() != null) {
+                    mover.walk(duty.stand(), role == io.github.sekerator.kingdomworld.core.tactics.Role.HEAL ? 0.8 : RUN);
+                }
+                return true;
+            }
+            case AMBUSH -> {
+                stopMelee();
+                body.getNavigation().stop();
+                return true;
+            }
+            default -> {
+            }
+        }
+        LivingEntity aim = duty.target() != null && level.getEntity(duty.target()) instanceof LivingEntity found && found.isAlive()
+                && ArmyWork.mayAttack(server, body.kingdomId(), found) ? found : null;
+        if (aim == null) {
+            return false;
+        }
+        stopMelee();
+        if (aim != target) {
+            target = aim;
+            body.setTarget(aim);
+        }
+        body.setAggressive(true);
+        switch (role) {
+            case SHOOT -> {
+                ItemStack weapon = body.getItemBySlot(EquipmentSlot.MAINHAND);
+                if (!ArmyGear.isRanged(weapon)) {
+                    mover.strikeFrom(aim, duty.stand() != null ? duty.stand() : io.github.sekerator.kingdomworld.common.tactics.TacticMover.spot(body), RUN);
+                    return true;
+                }
+                if (duty.stand() != null && body.distanceToSqr(duty.stand().x(), duty.stand().y(), duty.stand().z()) > 4.0) {
+                    mover.walk(duty.stand(), 0.8);
+                } else {
+                    body.getNavigation().stop();
+                }
+                body.getLookControl().setLookAt(aim, 30.0f, 30.0f);
+                fire(weapon, aim, io.github.sekerator.kingdomworld.common.tactics.TacticSettings.rules().archerMax + 3.0);
+            }
+            case ENCIRCLE, FLANK -> mover.strikeFrom(aim, duty.stand() != null ? duty.stand() : io.github.sekerator.kingdomworld.common.tactics.TacticMover.spot(body), RUN);
+            case HOLD_FRONT, GUARD_WOUNDED -> {
+                // The front holds its line and strikes whoever comes up to it.
+                if (duty.stand() == null || body.distanceToSqr(aim) < 3.5 * 3.5) {
+                    mover.strikeFrom(aim, io.github.sekerator.kingdomworld.common.tactics.TacticMover.spot(body), 0.8);
+                } else {
+                    mover.hold(duty.stand(), aim, 0.8);
+                }
+            }
+            default -> {
+                // Holding a way out, or waiting at the foot of what the target climbed.
+                if (duty.stand() != null) {
+                    mover.hold(duty.stand(), aim, 0.8);
+                } else {
+                    mover.swing(aim);
+                }
+            }
+        }
+        return true;
+    }
+
+    private void stopMelee() {
+        if (meleeRunning) {
+            melee.stop();
+            meleeRunning = false;
+        }
     }
 
     // ---------------------------------------------------------------- fighting
@@ -214,7 +304,14 @@ final class SoldierGoal extends Goal {
         } else {
             body.getNavigation().stop();
         }
-        if (--shootCooldown > 0 || !sees || distance > SHOOT_RANGE * SHOOT_RANGE) {
+        fire(weapon, aim, SHOOT_RANGE);
+    }
+
+    /**
+     * Shoots at a target in sight within a range, once the bow or crossbow is ready.
+     */
+    private void fire(ItemStack weapon, LivingEntity aim, double range) {
+        if (--shootCooldown > 0 || body.distanceToSqr(aim) > range * range || !body.getSensing().hasLineOfSight(aim)) {
             return;
         }
         shootCooldown = ArmyGear.isCrossbow(weapon) ? 50 : 30;

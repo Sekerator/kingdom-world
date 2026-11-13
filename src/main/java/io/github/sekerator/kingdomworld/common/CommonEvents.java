@@ -48,6 +48,7 @@ public final class CommonEvents {
         io.github.sekerator.kingdomworld.common.guild.GuildEvents.register();
         io.github.sekerator.kingdomworld.common.construction.ConstructionEvents.register();
         io.github.sekerator.kingdomworld.common.army.ArmyEvents.register();
+        io.github.sekerator.kingdomworld.common.tactics.TacticEvents.register();
         io.github.sekerator.kingdomworld.common.magic.MagicEvents.register();
         io.github.sekerator.kingdomworld.common.companion.CompanionEvents.register();
         io.github.sekerator.kingdomworld.common.road.RoadEvents.register();

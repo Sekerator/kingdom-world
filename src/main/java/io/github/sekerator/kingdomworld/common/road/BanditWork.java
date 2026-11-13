@@ -516,6 +516,37 @@ public final class BanditWork {
     }
 
     /**
+     * A robber an operator or a check spawned joins the bodies of a camp, and fights with them.
+     */
+    public static void adopt(long campId, BanditEntity bandit) {
+        bandit.setCampId(campId);
+        BODIES.computeIfAbsent(campId, id -> new HashSet<>()).add(bandit.getUUID());
+    }
+
+    /**
+     * A robber leaves the bodies of its camp without dying: an operator or a check took it away.
+     */
+    public static void release(BanditEntity bandit) {
+        Set<UUID> bodies = BODIES.get(bandit.campId());
+        if (bodies != null) {
+            bodies.remove(bandit.getUUID());
+            if (bodies.isEmpty()) {
+                BODIES.remove(bandit.campId());
+            }
+        }
+        AMBUSHERS.remove(bandit.getUUID());
+    }
+
+    /**
+     * The robbers who have bodies now, of the camps and of the ambushes: their ids.
+     */
+    public static Set<UUID> living() {
+        Set<UUID> all = new HashSet<>(AMBUSHERS.keySet());
+        BODIES.values().forEach(all::addAll);
+        return all;
+    }
+
+    /**
      * Robbers of a camp fall upon a caravan walking near players: up to a party of them come at its merchant.
      *
      * @return whether any came
