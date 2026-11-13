@@ -110,12 +110,14 @@ public final class ProvinceHolds {
     }
 
     /**
-     * Whether people live in a province: it has a main settlement, and that stands.
+     * Whether people live in a province: it has a main settlement, and that stands, or waits to rise; one turned down by the
+     * world for good (its people went to another settlement) leaves the province empty, as a ruined one does.
      *
      * @param seat the settlement its {@link Province#seat()} names, {@code null} when there is none
      */
     public static boolean settled(Province province, Settlement seat) {
-        return province.seat() != 0 && seat != null && seat.id() == province.seat() && seat.status() != Settlement.Status.RUINED;
+        return province.seat() != 0 && seat != null && seat.id() == province.seat() && seat.status() != Settlement.Status.RUINED
+                && seat.status() != Settlement.Status.BLOCKED;
     }
 
     /**
@@ -262,6 +264,17 @@ public final class ProvinceHolds {
             }
         }
         return best;
+    }
+
+    /**
+     * The guards of a settlement that fight by its number: those of the number not serving in person as soldiers of its guard,
+     * who stand at its square as their squad and fight as that.
+     *
+     * @param guards  the guards of the settlement by its number
+     * @param serving the soldiers of the guard that live in the settlement
+     */
+    public static int guardsByNumber(int guards, int serving) {
+        return Math.max(0, guards - Math.max(0, serving));
     }
 
     /**

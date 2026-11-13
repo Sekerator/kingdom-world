@@ -60,7 +60,7 @@ public final class SettlementGarrison {
     /**
      * The soldiers of the guard of a kingdom that serve a standing settlement, by settlement.
      */
-    static Map<Integer, Integer> guardsBySettlement(MinecraftServer server, UUID kingdomId) {
+    public static Map<Integer, Integer> guardsBySettlement(MinecraftServer server, UUID kingdomId) {
         Map<Integer, Integer> counts = new HashMap<>();
         ArmyState army = ArmyWork.state(server);
         KingdomWorldState world = KingdomWorldApi.state(server);

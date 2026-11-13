@@ -9,6 +9,7 @@ import io.github.sekerator.kingdomworld.common.diplomacy.WarEvents;
 import io.github.sekerator.kingdomworld.common.diplomacy.WarWork;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
 import io.github.sekerator.kingdomworld.common.npc.NpcWork;
+import io.github.sekerator.kingdomworld.common.npc.SettlementGarrison;
 import io.github.sekerator.kingdomworld.common.road.RoadWork;
 import io.github.sekerator.kingdomworld.core.army.ArmyRules;
 import io.github.sekerator.kingdomworld.core.army.ArmySquad;
@@ -118,7 +119,10 @@ final class SiegeHolds {
                     provinces(server, state, war, attackers, defenders, frozen, rules, now, ticks);
                 }
                 case CITY -> {
-                    seats(server, state, war, attackers, defenders, frozen, rules, now, ticks);
+                    if (!byProvinces(server, defender)) {
+                        // A state is fought by its provinces: the town of a settlement is held as the square of its province.
+                        seats(server, state, war, attackers, defenders, frozen, rules, now, ticks);
+                    }
                     provinces(server, state, war, attackers, defenders, frozen, rules, now, ticks);
                 }
                 case THRONE -> seats(server, state, war, attackers, defenders, frozen, rules, now, ticks);
@@ -485,16 +489,17 @@ final class SiegeHolds {
                 List<ArmySquad> ours = holding.getOrDefault(id, List.of());
                 List<ArmySquad> theirs = at(posted, target);
                 Settlement garrison = garrisonOf(npc, target, defenders);
+                int serving = serving(server, garrison);
                 a = !ours.isEmpty();
-                d = !theirs.isEmpty() || strength(garrison) > 0;
+                d = !theirs.isEmpty() || strength(garrison, serving) > 0;
                 if (a && d && !frozen && ProvinceHolds.battleDue(LAST_BATTLE.get(key), now) && !ArmyWork.isReadOnly(server)
                         && !NpcWork.isReadOnly(server)) {
                     LAST_BATTLE.put(key, now);
-                    fight(server, war, target, dimension, ours, theirs, garrison);
+                    fight(server, war, target, dimension, ours, theirs, garrison, serving);
                     ours = alive(server, ours);
                     theirs = alive(server, theirs);
                     a = !ours.isEmpty();
-                    d = !theirs.isEmpty() || strength(garrison) > 0;
+                    d = !theirs.isEmpty() || strength(garrison, serving) > 0;
                 }
             }
             if (existing.isEmpty() && !a) {
@@ -538,6 +543,15 @@ final class SiegeHolds {
             HOLDING.put(kingdomId, known);
         }
         return known.any();
+    }
+
+    /**
+     * Whether a war on a kingdom is fought by its provinces alone: a state of the world that holds provinces. A kingdom of
+     * players that bought one keeps its cities and claims by the rules of chunks besides.
+     */
+    static boolean byProvinces(MinecraftServer server, UUID kingdomId) {
+        Optional<ProvinceMap> map = KingdomWorldApi.state(server).territory().provinceMap();
+        return map.isPresent() && WarWork.isNpc(server, kingdomId) && holdsProvinces(map.get(), kingdomId);
     }
 
     /**
@@ -659,8 +673,16 @@ final class SiegeHolds {
         return seat != null && defenders.contains(seat.kingdomId()) && seat.status() != Settlement.Status.RUINED ? seat : null;
     }
 
-    private static int strength(@Nullable Settlement garrison) {
-        return garrison == null ? 0 : garrison.guards() + garrison.militia();
+    /**
+     * The soldiers of the guard of a settlement that live in it: they stand at its square as their squad, so its number does not
+     * count them again.
+     */
+    private static int serving(MinecraftServer server, @Nullable Settlement garrison) {
+        return garrison == null ? 0 : SettlementGarrison.guardsBySettlement(server, garrison.kingdomId()).getOrDefault(garrison.id(), 0);
+    }
+
+    private static int strength(@Nullable Settlement garrison, int serving) {
+        return garrison == null ? 0 : ProvinceHolds.guardsByNumber(garrison.guards(), serving) + garrison.militia();
     }
 
     /**
@@ -690,17 +712,21 @@ final class SiegeHolds {
     /**
      * Far from players the strongest squad of the attackers at the place of a province fights its defenders by numbers: the
      * strongest squad of the defenders there with the guards and the militia of the settlement, or the garrison alone. The
-     * fallen of the garrison are taken from its guards first, then from its militia.
+     * fallen of the garrison are taken from its guards first, then from its militia. The guards of its number that serve in
+     * person as soldiers of its guard fight as their squad, not again by the number.
+     *
+     * @param serving the soldiers of the guard that live in the settlement
      */
     private static void fight(MinecraftServer server, War war, ProvinceHolds.Target target, String dimension, List<ArmySquad> attacking,
-                              List<ArmySquad> defending, @Nullable Settlement garrison) {
+                              List<ArmySquad> defending, @Nullable Settlement garrison, int serving) {
         ArmyRules armyRules = ArmySettings.rules();
         ArmySquad attacker = strongest(server, attacking);
         ArmySquad guard = defending.isEmpty() ? null : strongest(server, defending);
         Side ours = ArmyWork.side(server, attacker);
         Side guardSide = guard == null ? null : ArmyWork.side(server, guard);
-        int men = strength(garrison);
-        Side crowd = ProvinceHolds.garrison(garrison == null ? 0 : garrison.guards(), garrison == null ? 0 : garrison.militia());
+        int men = strength(garrison, serving);
+        Side crowd = ProvinceHolds.garrison(garrison == null ? 0 : ProvinceHolds.guardsByNumber(garrison.guards(), serving),
+                garrison == null ? 0 : garrison.militia());
         Side theirs = guardSide == null ? crowd : men > 0 ? guardSide.with(crowd) : guardSide;
         Battle.Result result = Battle.resolve(ours, theirs, armyRules.battle(), ArmyWork.rolls());
         if (result.winner() == Battle.Winner.NONE) {
@@ -716,7 +742,7 @@ final class SiegeHolds {
                     attacker.kingdomId())));
         }
         // The squads have no crowd: whatever the defenders lost by head count, the garrison lost.
-        int fallen = garrison == null ? 0 : garrison.loseDefenders(result.secondLost());
+        int fallen = garrison == null ? 0 : garrison.loseDefenders(result.secondLost(), serving);
         if (garrison != null && men > 0) {
             WarWork.tell(server, garrison.kingdomId(), Component.translatable(SiegeWork.KEY + "garrison_fought",
                     SiegeTexts.provinceName(server, target.province()), fallen).withStyle(ChatFormatting.RED));

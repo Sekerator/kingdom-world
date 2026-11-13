@@ -129,6 +129,16 @@ final class ProvinceNpc {
                 || taken(state, war, dimension, aim.province()))) {
             aim = null;
         }
+        if (aim != null) {
+            // The place of the province moved (its settlement rose a few chunks away, or stands no more): the army goes there.
+            ProvinceHolds.Target place = SiegeHolds.target(map, npc, aim.province());
+            if (place == null) {
+                aim = null;
+            } else if (moved(aim, place)) {
+                aim = new Aim(aim.war(), aim.province(), point(server, dimension, place));
+                MARCHES.put(member, aim);
+            }
+        }
         if (aim == null) {
             WorldPos from = army.isEmpty() ? null : ArmyField.positionOf(server, army.get(0));
             int fromX = from != null && from.dimension().equals(dimension) ? from.x() : home.get().x();
@@ -195,11 +205,13 @@ final class ProvinceNpc {
             return;
         }
         Aim aim = RELIEFS.get(kingdomId);
-        if (aim == null || aim.province() != province) {
-            ProvinceHolds.Target place = SiegeHolds.target(map, npc, province);
-            if (place == null) {
-                return;
-            }
+        ProvinceHolds.Target place = SiegeHolds.target(map, npc, province);
+        if (place == null) {
+            return;
+        }
+        // The relief sent to where the place of the province was before it moved goes on to where it is now.
+        WorldPos before = aim != null && aim.province() == province && moved(aim, place) ? aim.point() : null;
+        if (aim == null || aim.province() != province || before != null) {
             aim = new Aim(0, province, point(server, dimension, place));
             RELIEFS.put(kingdomId, aim);
             SiegeWork.LOGGER.info("The ruler of {} sends relief to its province {} ({})", WarWork.name(server, kingdomId).getString(), province,
@@ -209,7 +221,8 @@ final class ProvinceNpc {
         for (ArmySquad squad : ArmyWork.state(server).squadsOf(kingdomId)) {
             // A squad holding the place of a province of its own is relief; one at a province of an enemy attacks it.
             if (squad.order().kind() == Order.Kind.HOLD && !squad.members().isEmpty() && !NpcGarrison.keepsHome(server, squad)
-                    && kingdomId.equals(map.owner(squad.order().anchor().map(at -> placeAt(map, npc, at)).orElse(0)))) {
+                    && (kingdomId.equals(map.owner(squad.order().anchor().map(at -> placeAt(map, npc, at)).orElse(0)))
+                    || before != null && squad.order().anchor().map(before::equals).orElse(false))) {
                 relief.add(squad);
             }
         }
@@ -234,6 +247,14 @@ final class ProvinceNpc {
                 }
             }
         }
+    }
+
+    /**
+     * Whether the place of a province is no longer where an army was sent: its settlement rose a few chunks away, or a
+     * province held at the square of its settlement is held at its boundary stone now.
+     */
+    private static boolean moved(Aim aim, ProvinceHolds.Target place) {
+        return aim.point().x() != place.x() || aim.point().z() != place.z();
     }
 
     /**

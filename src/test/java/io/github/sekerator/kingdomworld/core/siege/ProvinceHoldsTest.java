@@ -65,6 +65,10 @@ class ProvinceHoldsTest {
         assertTrue(target.reaches(124, -176, ProvinceHolds.REACH), "a squad within 24 blocks stands at the square");
         assertFalse(target.reaches(125, -200, ProvinceHolds.REACH));
 
+        town.setStatus(Settlement.Status.RAISING);
+        assertTrue(ProvinceHolds.settled(settled, town), "a settlement rising is where people live");
+        town.setStatus(Settlement.Status.BLOCKED);
+        assertFalse(ProvinceHolds.settled(settled, town), "one the world turned down for good leaves the province empty");
         town.setStatus(Settlement.Status.RUINED);
         assertFalse(ProvinceHolds.settled(settled, town), "a ruined settlement leaves the province empty");
         assertFalse(ProvinceHolds.settled(province(5, 0, 0, 0), null), "a province without a seat is empty");
@@ -154,6 +158,27 @@ class ProvinceHoldsTest {
         assertEquals(0, town.loseDefenders(3));
         assertEquals(0, town.loseDefenders(-2));
         assertEquals(version, npc.settlementsVersion(), "nothing lost, nothing changed");
+    }
+
+    @Test
+    void theGuardServingInPersonFightsAsItsSquadNotAgainByTheNumber() {
+        assertEquals(8, ProvinceHolds.guardsByNumber(8, 0), "a guard that never came is its number");
+        assertEquals(0, ProvinceHolds.guardsByNumber(8, 8), "a guard that came in full fights as its squad");
+        assertEquals(3, ProvinceHolds.guardsByNumber(8, 5), "the rest of the number");
+        assertEquals(0, ProvinceHolds.guardsByNumber(4, 6));
+        assertEquals(4, ProvinceHolds.guardsByNumber(4, -1));
+
+        NpcState npc = new NpcState();
+        Settlement city = npc.addSettlement(STATE, 5, 0, Tier.CITY, 0, 0, 7, new NpcNames.Name("Ostbrook", "Остбрук"));
+        city.restore(Settlement.Status.STANDING, "done", 0, 64, Settlement.GIVEN_GUARDS, 0, 30, 40, 100, 8, 3, 50, 100, 0, 0, new long[0]);
+        assertEquals(3, city.loseDefenders(5, 8), "the guard came in full: only the militia falls by the number");
+        assertEquals(8, city.guards());
+        assertEquals(0, city.militia());
+        assertEquals(0, city.loseDefenders(5, 8), "nobody is left by the number");
+        city.restore(Settlement.Status.STANDING, "done", 0, 64, Settlement.GIVEN_GUARDS, 0, 30, 40, 100, 8, 3, 50, 100, 0, 0, new long[0]);
+        assertEquals(5, city.loseDefenders(5, 6), "two guards by the number, then the militia");
+        assertEquals(6, city.guards());
+        assertEquals(0, city.militia());
     }
 
     @Test

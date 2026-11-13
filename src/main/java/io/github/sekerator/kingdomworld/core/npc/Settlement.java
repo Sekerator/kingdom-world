@@ -310,11 +310,23 @@ public final class Settlement {
      * @return how many of them fell, no more than it had
      */
     public int loseDefenders(int fallen) {
-        int lost = Math.max(0, Math.min(fallen, guards + militia));
+        return loseDefenders(fallen, 0);
+    }
+
+    /**
+     * Defenders of the settlement fell in a battle: its guards by number first, then its militia. The guards of the number that
+     * serve in person as soldiers of its guard fall with their squad, not here.
+     *
+     * @param serving the soldiers of the guard that live in the settlement
+     * @return how many of them fell, no more than it had
+     */
+    public int loseDefenders(int fallen, int serving) {
+        int byNumber = Math.max(0, guards - Math.max(0, serving));
+        int lost = Math.max(0, Math.min(fallen, byNumber + militia));
         if (lost == 0) {
             return 0;
         }
-        int ofGuards = Math.min(guards, lost);
+        int ofGuards = Math.min(byNumber, lost);
         guards -= ofGuards;
         militia -= lost - ofGuards;
         changed();

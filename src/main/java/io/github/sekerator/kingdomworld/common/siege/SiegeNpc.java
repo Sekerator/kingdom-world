@@ -60,7 +60,9 @@ final class SiegeNpc {
                 continue;
             }
             UUID attacker = war.attacker();
-            if (WarWork.isNpc(server, attacker) && (war.goal() == WarGoal.CITY || war.goal() == WarGoal.THRONE)
+            // A war for a city on a state goes from province to province: its towns are not besieged.
+            boolean byProvinces = war.goal() == WarGoal.CITY && SiegeHolds.byProvinces(server, war.defender());
+            if (WarWork.isNpc(server, attacker) && (war.goal() == WarGoal.CITY || war.goal() == WarGoal.THRONE) && !byProvinces
                     && state.siegesBy(attacker).isEmpty() && SiegeWork.open(server, attacker, war.defender())) {
                 besiege(server, state, war, now);
             }
