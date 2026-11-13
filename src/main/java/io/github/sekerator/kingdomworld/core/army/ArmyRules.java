@@ -33,10 +33,10 @@ public record ArmyRules(int maxSoldiers, int maxSquads, int maxSquadSize, int tr
     public static final ArmyRules DEFAULT = new Builder().build();
     /**
      * What a kingdom of the world may keep at least, whatever the limits of players say: its guard and its royal army are
-     * larger.
+     * larger, and every settlement of a state has the squads of its own guard or watch.
      */
     public static final int WORLD_SOLDIERS = 480;
-    public static final int WORLD_SQUADS = 64;
+    public static final int WORLD_SQUADS = 128;
     public static final int WORLD_SQUAD_SIZE = ArmySquad.MAX_MEMBERS;
 
     /**

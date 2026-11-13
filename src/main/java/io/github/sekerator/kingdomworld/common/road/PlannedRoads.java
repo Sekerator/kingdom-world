@@ -342,6 +342,8 @@ public final class PlannedRoads {
             return remembered;
         }
         io.github.sekerator.kingdomworld.common.npc.NpcSpawner.payRoad(server, at.level(), road);
+        // The road comes into the towns of its ends through gates of their walls.
+        CityWalls.gatesFor(server, road);
         LOGGER.info("The road of the plan {} is laid as road {}: {} blocks, {} request(s) to cross land, the most steps of a stretch {}",
                 at.planned(), road.id(), road.length(), sent.size(), at.search().mostInStretch());
         RoadSync.changed();

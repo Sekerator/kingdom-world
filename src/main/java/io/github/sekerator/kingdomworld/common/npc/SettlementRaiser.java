@@ -9,7 +9,6 @@ import io.github.sekerator.kingdomworld.common.citizen.CitizenSites;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
 import io.github.sekerator.kingdomworld.common.road.RoadRegistries;
 import io.github.sekerator.kingdomworld.common.road.RoadWork;
-import io.github.sekerator.kingdomworld.common.storage.KingdomStorage;
 import io.github.sekerator.kingdomworld.core.citizen.Citizen;
 import io.github.sekerator.kingdomworld.core.citizen.Professions;
 import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
@@ -30,18 +29,14 @@ import io.github.sekerator.kingdomworld.core.road.City;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraftforge.registries.ForgeRegistries;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -91,6 +86,14 @@ public final class SettlementRaiser {
         boolean loaded;
         boolean background;
         int hireIndex;
+        /** Where the building of the plan being completed goes, {x, z, facing}, once its place is decided. */
+        int[] renewAt;
+        /** The next column of the ground levelled under it, -1 once level. */
+        int levelFrom = -1;
+        /** The next place looked at for a building that moves. */
+        final int[] cursor = {0};
+        /** Steps spent on finishing a building begun before. */
+        int begunTicks;
         double scale = 0.25;
         long ticks;
         long maxNanos;
@@ -115,6 +118,7 @@ public final class SettlementRaiser {
         job = null;
         startBackground = true;
         RELEASING.clear();
+        LAYOUTS.clear();
     }
 
     /**
@@ -129,7 +133,7 @@ public final class SettlementRaiser {
      */
     public static Optional<Settlement> raising(NpcState state) {
         for (Settlement settlement : state.settlements()) {
-            if (settlement.status() == Settlement.Status.RAISING) {
+            if (rising(settlement)) {
                 return Optional.of(settlement);
             }
         }
@@ -137,14 +141,30 @@ public final class SettlementRaiser {
     }
 
     /**
-     * Whether a settlement still waits to be raised: data whose rank rises in the world.
+     * Whether a settlement is being raised, or completed while it stands.
      */
-    public static boolean waiting(Settlement settlement) {
-        return settlement.status() == Settlement.Status.DATA && settlement.tier() != Tier.CAPITAL;
+    public static boolean rising(Settlement settlement) {
+        return settlement.status() == Settlement.Status.RAISING || renewing(settlement);
     }
 
     /**
-     * Starts raising a settlement; another one being raised is put aside and keeps its stage.
+     * Whether a standing settlement is being completed now.
+     */
+    public static boolean renewing(Settlement settlement) {
+        return settlement.status() == Settlement.Status.STANDING && settlement.given(Settlement.GIVEN_RENEWING);
+    }
+
+    /**
+     * Whether a settlement still waits to be raised (data whose rank rises in the world) or to be completed (one that stands
+     * without all its parts, raised by an older version).
+     */
+    public static boolean waiting(Settlement settlement) {
+        return settlement.status() == Settlement.Status.DATA && settlement.tier() != Tier.CAPITAL || SettlementRenewal.incomplete(settlement)
+                && settlement.tier() != Tier.CAPITAL;
+    }
+
+    /**
+     * Starts raising a settlement, or completing one that stands; another one being raised is put aside and keeps its stage.
      *
      * @param background whether it rises with the small budget of the background
      */
@@ -155,7 +175,16 @@ public final class SettlementRaiser {
             release(server.overworld());
             job = null;
         }
-        settlement.setStatus(Settlement.Status.RAISING);
+        if (settlement.status() == Settlement.Status.STANDING) {
+            if (!settlement.given(Settlement.GIVEN_RENEWING)) {
+                // It stands: what it lacks is built on free ground of its plan, nothing is levelled or moved.
+                settlement.give(Settlement.GIVEN_RENEWING);
+                settlement.setStage(SettlementStage.LOAD.id(), 0);
+                LOGGER.info("{} stands without all its parts and is completed", settlement);
+            }
+        } else {
+            settlement.setStatus(Settlement.Status.RAISING);
+        }
         startBackground = background;
         if (job != null) {
             job.background = background;
@@ -164,7 +193,7 @@ public final class SettlementRaiser {
 
     /**
      * Puts the raising of a settlement aside for another place: it keeps its stage and step, lets its chunks go and goes on
-     * later from there.
+     * later from there; a settlement being completed begins its completion anew later.
      */
     public static void putAside(MinecraftServer server, Settlement settlement) {
         if (job != null && job.id == settlement.id()) {
@@ -173,6 +202,8 @@ public final class SettlementRaiser {
         }
         if (settlement.status() == Settlement.Status.RAISING) {
             settlement.setStatus(Settlement.Status.DATA);
+        } else if (renewing(settlement)) {
+            settlement.forget(Settlement.GIVEN_RENEWING);
         }
     }
 
@@ -251,10 +282,10 @@ public final class SettlementRaiser {
      * Raises a settlement to its end at once, for game tests and operators: its chunks are loaded as they are needed.
      */
     public static void runNow(MinecraftServer server, Settlement settlement, int maxTicks) {
-        if (settlement.status() != Settlement.Status.RAISING) {
+        if (!rising(settlement)) {
             start(server, settlement, false);
         }
-        for (int i = 0; i < maxTicks && settlement.status() == Settlement.Status.RAISING; i++) {
+        for (int i = 0; i < maxTicks && rising(settlement); i++) {
             if (job == null || job.id != settlement.id()) {
                 job = newJob(server, settlement);
                 if (job == null) {
@@ -297,6 +328,21 @@ public final class SettlementRaiser {
                 NpcSettings.rules());
     }
 
+    /** Layouts worked out already, by settlement and what they are made from. */
+    private static final java.util.Map<String, SettlementLayouts.Layout> LAYOUTS = new java.util.HashMap<>();
+
+    /**
+     * The layout of a settlement, worked out once: the posts of its guard ask for it every day.
+     */
+    static SettlementLayouts.Layout cachedLayout(Settlement settlement, NpcSite site) {
+        String key = settlement.id() + "/" + settlement.tier() + "/" + settlement.seed() + "/" + site.level() + "/" + site.styled() + "/"
+                + site.style() + "/" + GuildHouses.of(site);
+        if (LAYOUTS.size() > 1024) {
+            LAYOUTS.clear();
+        }
+        return LAYOUTS.computeIfAbsent(key, k -> layout(settlement, site));
+    }
+
     private static int blocks(Job job) {
         int configured = job.background ? Math.min(NpcSettings.build().backgroundBlocksPerTick(), NpcSettings.rules().blocksPerTick())
                 : NpcSettings.rules().blocksPerTick();
@@ -322,21 +368,41 @@ public final class SettlementRaiser {
             // After a restart the chunks come back with the tickets first, so that nothing loads on the main thread.
             return;
         }
+        boolean renewing = renewing(settlement);
         switch (stage) {
             case LOAD -> {
                 if (loaded(level, settlement, job)) {
                     advance(settlement, SettlementStage.CHECK);
                 }
             }
-            case CHECK -> check(server, level, settlement, job);
+            case CHECK -> {
+                if (renewing) {
+                    // A settlement that stands is not looked at again, its ground not levelled again.
+                    advance(settlement, SettlementStage.BUILD);
+                } else {
+                    check(server, level, settlement, job);
+                }
+            }
             case GROUND -> ground(level, settlement, job);
-            case BUILD -> build(server, level, settlement, job);
-            case WORK -> work(level, settlement, job);
+            case BUILD -> {
+                if (renewing) {
+                    complete(server, level, settlement, job);
+                } else {
+                    build(server, level, settlement, job);
+                }
+            }
+            case WORK -> work(level, settlement, job, renewing);
             case PLACES -> places(level, settlement, job);
             case WEALTH -> wealth(server, settlement, job);
             case PEOPLE -> people(server, level, settlement, job);
             case GUARDS -> SettlementGarrison.guards(server, settlement, job.layout, deadline(job));
-            case ROADS -> roads(server, settlement);
+            case ROADS -> {
+                if (renewing) {
+                    advance(settlement, SettlementStage.WALL);
+                } else {
+                    roads(server, settlement);
+                }
+            }
             case WALL -> SettlementGarrison.wall(server, level, settlement, job.site, job.layout);
             case LAW -> SettlementGarrison.law(server, settlement, job.site, job.layout);
             case DONE -> done(server, level, settlement, job);
@@ -492,6 +558,13 @@ public final class SettlementRaiser {
             release(server.overworld());
             job = null;
         }
+        if (settlement.status() == Settlement.Status.STANDING) {
+            // A settlement that stands stays: what it lacks stays lacking, and it is not looked at again.
+            LOGGER.warn("{} is not completed: {}", settlement, reason);
+            settlement.forget(Settlement.GIVEN_RENEWING);
+            settlement.give(Settlement.GIVEN_LIVING);
+            return;
+        }
         LOGGER.warn("{} is not raised: {}", settlement, reason);
         Settlement nearest = null;
         long best = Long.MAX_VALUE;
@@ -553,14 +626,19 @@ public final class SettlementRaiser {
     }
 
     /**
-     * The top of the ground of a town, a village or a hamlet: a cobbled square around the town hall, a path along the street.
+     * The top of the ground of a town, a village or a hamlet: a cobbled square around the town hall, a path along the street
+     * out through the gates of a town, and the lanes behind the rows of a town.
      */
     private static BlockState surface(SettlementLayouts.Layout layout, int dx, int dz, NpcGround.Soil soil, BlockState path) {
         if (layout.hall() && Math.abs(dx) <= 4 && Math.abs(dz) <= 4) {
             return Blocks.COBBLESTONE.defaultBlockState();
         }
         int width = layout.tier() == Tier.HAMLET ? 1 : 2;
-        if (Math.abs(dz) <= width && Math.abs(dx) <= layout.reach() - 3) {
+        int street = layout.wall() > 0 ? layout.reach() + NpcSpawner.RAMP : layout.reach() - 3;
+        if (Math.abs(dz) <= width && Math.abs(dx) <= street) {
+            return path;
+        }
+        if (layout.tier() == Tier.TOWN && io.github.sekerator.kingdomworld.core.npc.SettlementTowns.lane(dx, dz)) {
             return path;
         }
         return soil.top();
@@ -609,17 +687,130 @@ public final class SettlementRaiser {
     }
 
     /**
-     * The fields of a settlement, one a tick.
+     * Completes a settlement that stands, within the budget: first whatever its kingdom began to build on its land, then every
+     * building of its plan that is missing, on free ground only ({@link SettlementRenewal#free}). A building its place has no
+     * room for and that the settlement lacks (its market, tavern, storehouse, a workshop, a well) is built on free ground
+     * elsewhere on its land; a house waits for its own place. The step is the next building of the plan.
      */
-    private static void work(ServerLevel level, Settlement settlement, Job job) {
+    private static void complete(MinecraftServer server, ServerLevel level, Settlement settlement, Job job) {
+        UUID id = settlement.kingdomId();
+        int y = settlement.groundY() + 1;
+        int budget = blocks(job);
+        long deadline = deadline(job);
+        // A building of its plan begun before a restart (here or moved elsewhere) is finished first; one that does not finish in
+        // a minute of steps is given up.
+        int reach = SettlementLayouts.land(settlement.tier()) * 8;
+        List<NpcComposition.Plot> plots = job.layout.plots();
+        Set<String> ofPlan = new java.util.HashSet<>();
+        plots.forEach(plot -> ofPlan.add(plot.template()));
+        for (io.github.sekerator.kingdomworld.core.construction.Construction begun : List.copyOf(KingdomWorldApi.state(server).construction().of(id))) {
+            if (!ofPlan.contains(begun.templateId()) || Math.abs(begun.anchor().x() - settlement.x()) > reach
+                    || Math.abs(begun.anchor().z() - settlement.z()) > reach) {
+                continue;
+            }
+            int part = Math.max(64, budget);
+            if (io.github.sekerator.kingdomworld.common.construction.ConstructionWork.finishSome(server, begun, part).isEmpty()) {
+                if (begun.status() == io.github.sekerator.kingdomworld.core.construction.Construction.Status.OUTSIDE_LAND || ++job.begunTicks > 1200) {
+                    LOGGER.warn("{} gives up its {} at {}", settlement, begun.templateId(), begun.anchor());
+                    io.github.sekerator.kingdomworld.common.construction.ConstructionWork.cancel(server, null, id, begun.id());
+                    job.begunTicks = 0;
+                }
+                return;
+            }
+            job.begunTicks = 0;
+            budget -= part;
+        }
+        int index = settlement.step();
+        while (index < plots.size() && budget > 0 && System.nanoTime() - deadline < 0) {
+            NpcComposition.Plot plot = plots.get(index);
+            if (job.renewAt == null) {
+                int x = settlement.x() + plot.x();
+                int z = settlement.z() + plot.z();
+                io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind kind =
+                        io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.of(plot.template()).kind();
+                boolean movable = SettlementRenewal.movable(plot);
+                if (SettlementRenewal.started(server, id, plot, x, y, z)
+                        || movable && kind != io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.WELL
+                        && SettlementRenewal.kindStands(server, settlement, kind)) {
+                    // It stands already, at its place or elsewhere.
+                    index++;
+                    continue;
+                }
+                budget -= 64;
+                if (SettlementRenewal.free(level, settlement, plot, x, z)) {
+                    job.renewAt = new int[]{x, z, plot.facing()};
+                    job.levelFrom = 0;
+                } else if (movable && !SettlementRenewal.kindStands(server, settlement, kind)) {
+                    Optional<int[]> spot = SettlementRenewal.elsewhere(level, settlement, plot, job.cursor, 4);
+                    if (spot.isPresent()) {
+                        job.renewAt = spot.get();
+                        job.levelFrom = 0;
+                    } else if (job.cursor[0] < 0) {
+                        LOGGER.info("{} has no free ground for its {}", settlement, plot.template());
+                        job.cursor[0] = 0;
+                        index++;
+                        continue;
+                    } else {
+                        break;
+                    }
+                } else {
+                    index++;
+                    continue;
+                }
+            }
+            NpcComposition.Plot placed = new NpcComposition.Plot(plot.template(), job.renewAt[0] - settlement.x(), job.renewAt[1] - settlement.z(),
+                    job.renewAt[2], plot.mirror(), plot.quarter());
+            if (job.levelFrom >= 0) {
+                job.levelFrom = SettlementRenewal.level(level, settlement, placed, job.renewAt[0], job.renewAt[1], job.levelFrom, budget);
+                budget = 0;
+                if (job.levelFrom >= 0) {
+                    break;
+                }
+                continue;
+            }
+            Materials materials = job.layout.city() != null ? NpcCity.materials(server, job.site, placed)
+                    : NpcCity.townMaterials(server, job.site, 0, placed);
+            int[] used = new int[1];
+            boolean standing = NpcSpawner.buildAt(server, level, id, placed.template(), job.renewAt[0], y, job.renewAt[1],
+                    new Placement(placed.facing(), placed.mirror()), materials, budget, used);
+            budget -= Math.max(1, used[0]);
+            if (!standing) {
+                break;
+            }
+            LOGGER.info("{} got its {} at {} {}", settlement, plot.template(), job.renewAt[0], job.renewAt[1]);
+            job.renewAt = null;
+            job.cursor[0] = 0;
+            index++;
+        }
+        settlement.setStage(SettlementStage.BUILD.id(), index);
+        if (index >= plots.size()) {
+            advance(settlement, SettlementStage.WORK);
+        }
+    }
+
+    /**
+     * The fields of a settlement, one a tick, then the posts of its woodcutters, miners and fishers outside it by its land.
+     * A settlement being completed sows only fields whose ground is free and adds only the work it has no post of.
+     */
+    private static void work(ServerLevel level, Settlement settlement, Job job, boolean renewing) {
         List<int[]> fields = job.layout.fields();
         int step = settlement.step();
         if (step < fields.size()) {
             int[] field = fields.get(step);
-            NpcSpawner.field(level, settlement.kingdomId(), settlement.x() + field[0], settlement.z() + field[1],
-                    step % 2 == 0 ? Blocks.WHEAT : Blocks.CARROTS);
+            int x = settlement.x() + field[0];
+            int z = settlement.z() + field[1];
+            if (!renewing || SettlementRenewal.fieldFree(level, settlement, x, z)) {
+                NpcSpawner.field(level, settlement.kingdomId(), x, z, step % 2 == 0 ? Blocks.WHEAT : Blocks.CARROTS);
+            }
             settlement.setStage(SettlementStage.WORK.id(), step + 1);
             return;
+        }
+        java.util.Map<String, Integer> have = renewing ? SettlementWorks.workers(level.getServer(), settlement, 0) : java.util.Map.of();
+        for (SettlementWorks.Work work : SettlementWorks.outside(level, settlement, job.layout)) {
+            if (have.getOrDefault(work.profession(), 0) > 0) {
+                continue;
+            }
+            SettlementWorks.place(level, settlement, job.site, work);
         }
         advance(settlement, SettlementStage.PLACES);
     }
@@ -719,6 +910,11 @@ public final class SettlementRaiser {
         }
         String profession = NpcCity.profession(building.role(), blocks::contains);
         if (profession.isEmpty()) {
+            // The registrar of the house of the guild, the minter of the treasury, the builders and carriers of their yards.
+            profession = io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.get(building.templateId())
+                    .map(io.github.sekerator.kingdomworld.core.npc.StyledPlan::profession).orElse("");
+        }
+        if (profession.isEmpty()) {
             return;
         }
         int max = io.github.sekerator.kingdomworld.common.citizen.work.GatheringSettings.rules().maxSeats();
@@ -734,48 +930,40 @@ public final class SettlementRaiser {
      * its rank, into the storehouses of its kingdom.
      */
     private static void wealth(MinecraftServer server, Settlement settlement, Job job) {
-        if (settlement.given(Settlement.GIVEN_STORES)) {
-            advance(settlement, SettlementStage.PEOPLE);
-            return;
-        }
         UUID id = settlement.kingdomId();
-        int people = Math.min(settlement.population(), settlement.housing());
-        int bread = (int) Math.min(64L * 16, ((long) NpcSettings.rules().foodDays() * people * CitizenSettings.rules().dailyNutrition()
-                + NpcWealth.BREAD_NUTRITION - 1) / NpcWealth.BREAD_NUTRITION);
-        int stacks = switch (settlement.tier()) {
-            case CITY -> 4;
-            case TOWN -> 2;
-            case VILLAGE -> 1;
-            default -> 0;
-        };
-        String wood = NpcCity.wood(job.site);
         WorldPos near = new WorldPos(Dimensions.id(server.overworld()), settlement.x(), settlement.groundY() + 1, settlement.z());
+        int people = Math.min(settlement.population(), settlement.housing());
         int lost = 0;
-        lost += store(server, id, "minecraft:bread", bread, near);
-        lost += store(server, id, wood + "_log", 64 * stacks, near);
-        lost += store(server, id, wood + "_planks", 64 * stacks, near);
-        lost += store(server, id, "minecraft:cobblestone", 64 * stacks, near);
+        if (!settlement.given(Settlement.GIVEN_STORES) || !settlement.given(Settlement.GIVEN_SUPPLIES)) {
+            // Food for its days; a settlement completed now had its founding bread put wherever its kingdom had room then, and
+            // gets half of it again into its own storehouse.
+            int days = settlement.given(Settlement.GIVEN_STORES) ? NpcSettings.rules().foodDays() / 2 : NpcSettings.rules().foodDays();
+            int bread = io.github.sekerator.kingdomworld.core.npc.SettlementSupplies.bread(people, days, CitizenSettings.rules().dailyNutrition(),
+                    NpcWealth.BREAD_NUTRITION);
+            lost += SettlementWorks.store(server, id, "minecraft:bread", bread, near);
+            LOGGER.info("{} got food for {} day(s): {} bread", settlement, days, bread);
+        }
+        if (!settlement.given(Settlement.GIVEN_STORES)) {
+            int stacks = switch (settlement.tier()) {
+                case CITY -> 4;
+                case TOWN -> 2;
+                default -> 1;
+            };
+            String wood = NpcCity.wood(job.site);
+            lost += SettlementWorks.store(server, id, wood + "_log", 64 * stacks, near);
+            lost += SettlementWorks.store(server, id, wood + "_planks", 64 * stacks, near);
+            lost += SettlementWorks.store(server, id, "minecraft:cobblestone", 64 * stacks, near);
+            settlement.give(Settlement.GIVEN_STORES);
+            LOGGER.info("{} got its founding stores: {} stacks each of wood and stone", settlement, stacks);
+        }
+        if (!settlement.given(Settlement.GIVEN_SUPPLIES)) {
+            lost += SettlementWorks.stores(server, settlement, job.layout, job.site);
+            settlement.give(Settlement.GIVEN_SUPPLIES);
+        }
         if (lost > 0) {
-            LOGGER.warn("{} item(s) of the founding stores of {} did not fit into the storehouses of its kingdom", lost, settlement);
+            LOGGER.warn("{} item(s) of the stores of {} did not fit into the storehouses of its kingdom", lost, settlement);
         }
-        settlement.give(Settlement.GIVEN_STORES);
-        LOGGER.info("{} got its founding stores: {} bread, {} stacks each of wood and stone", settlement, bread, stacks);
         advance(settlement, SettlementStage.PEOPLE);
-    }
-
-    private static int store(MinecraftServer server, UUID id, String itemId, int count, WorldPos near) {
-        Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.tryParse(itemId));
-        if (item == null || item == net.minecraft.world.item.Items.AIR || count <= 0) {
-            return 0;
-        }
-        int lost = 0;
-        int left = count;
-        while (left > 0) {
-            int part = Math.min(left, new ItemStack(item).getMaxStackSize());
-            lost += KingdomStorage.insert(server, id, new ItemStack(item, part), near).getCount();
-            left -= part;
-        }
-        return lost;
     }
 
     /**
@@ -784,7 +972,9 @@ public final class SettlementRaiser {
      */
     private static void people(MinecraftServer server, ServerLevel level, Settlement settlement, Job job) {
         KingdomWorldState state = KingdomWorldApi.state(server);
-        int named = named(settlement, job.layout);
+        // A settlement being completed keeps the people it has (some of them folded, some dead): its new houses fill as its
+        // people grow, and only the posts and tools are seen to.
+        int named = renewing(settlement) ? 0 : named(settlement, job.layout);
         int slot = settlement.step();
         WorldPos at = new WorldPos(Dimensions.id(level), settlement.x(), settlement.groundY() + 1, settlement.z());
         if (slot < named) {
@@ -800,6 +990,11 @@ public final class SettlementRaiser {
         // Two farmers for every field, from the citizens of the settlement without work.
         int wanted = 2 * job.layout.fields().size();
         int made = 0;
+        for (Citizen citizen : state.citizens().registry().citizensOf(settlement.kingdomId())) {
+            if (citizen.settlement() == settlement.id() && citizen.professionId().equals(Professions.FARMER.id())) {
+                made++;
+            }
+        }
         for (Citizen citizen : List.copyOf(state.citizens().registry().citizensOf(settlement.kingdomId()))) {
             if (made >= wanted) {
                 break;
@@ -810,6 +1005,8 @@ public final class SettlementRaiser {
                 made++;
             }
         }
+        // Every worker who needs a tool has one in hand from the first day.
+        SettlementWorks.arm(server, settlement);
         advance(settlement, SettlementStage.GUARDS);
     }
 
@@ -827,7 +1024,8 @@ public final class SettlementRaiser {
      */
     private static boolean hireSome(KingdomWorldState state, Settlement settlement, Job job) {
         long deadline = deadline(job);
-        int reach = SettlementLayouts.land(settlement.tier()) * 8;
+        // The posts of its woodcutters, miners and fishers stand outside its land, by the forest, the rock or the water.
+        int reach = SettlementLayouts.land(settlement.tier()) * 8 + SettlementWorks.BEYOND;
         List<WorkPost> posts = state.citizens().posts().postsOf(settlement.kingdomId());
         while (job.hireIndex < posts.size()) {
             WorkPost post = posts.get(job.hireIndex);
@@ -883,10 +1081,14 @@ public final class SettlementRaiser {
     }
 
     private static void done(MinecraftServer server, ServerLevel level, Settlement settlement, Job job) {
+        boolean completed = renewing(settlement);
         settlement.setStatus(Settlement.Status.STANDING);
+        settlement.forget(Settlement.GIVEN_RENEWING);
+        settlement.give(Settlement.GIVEN_LIVING);
         settlement.setLastPlayerTick(KingdomWorldApi.gameTime(server));
         long ticks = server.getTickCount() - job.startedTick;
-        LOGGER.info("{} stands: {} building(s) in {} s, {} step tick(s), the average {} ms and the worst {} ms of its own work", settlement,
+        LOGGER.info("{} {}: {} building(s) in {} s, {} step tick(s), the average {} ms and the worst {} ms of its own work", settlement,
+                completed ? "is completed" : "stands",
                 job.layout.plots().size(), ticks / 20, job.ticks, job.ticks == 0 ? 0 : String.format(java.util.Locale.ROOT, "%.2f", job.sumNanos / 1e6 / job.ticks),
                 String.format(java.util.Locale.ROOT, "%.2f", job.maxNanos / 1e6));
         release(level);

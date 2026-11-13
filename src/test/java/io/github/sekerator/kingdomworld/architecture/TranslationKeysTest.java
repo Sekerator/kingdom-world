@@ -442,6 +442,12 @@ class TranslationKeysTest {
             used.add("kingdomworld.permission." + permission.id());
             used.add("kingdomworld.permission." + permission.id() + ".short");
         }
+        // The office of the head of every rank of settlement but the capital.
+        for (io.github.sekerator.kingdomworld.core.land.Tier tier : io.github.sekerator.kingdomworld.core.land.Tier.values()) {
+            if (tier != io.github.sekerator.kingdomworld.core.land.Tier.CAPITAL) {
+                used.add("kingdomworld.settlement.head." + tier.id());
+            }
+        }
         // Words that agree with a citizen have a form for women.
         List<String> gendered = new ArrayList<>(List.of("kingdomworld.death.player_named", "kingdomworld.profession.unknown",
                 "kingdomworld.citizen.arrived", "kingdomworld.citizen.died", "commands.kingdomworld.admin.citizens.kill.success",

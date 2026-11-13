@@ -353,12 +353,8 @@ public final class SettlementGameTests {
             }
             helper.assertTrue(buildings.size() >= 4, village + " has " + buildings.size() + " building(s)");
             long seed = server.overworld().getSeed();
-            int named = 0;
-            for (Citizen citizen : world.citizens().registry().citizensOf(village.kingdomId())) {
-                if (citizen.settlement() == village.id()) {
-                    named++;
-                }
-            }
+            // Its watchmen live there too, but they came from abroad as soldiers and are no settlers of a slot.
+            int named = settlers(server, village);
             helper.assertTrue(named > 0 && named <= village.housing() && named <= village.population(), named + " named citizens in " + village);
             for (int slot = 0; slot < named; slot++) {
                 helper.assertTrue(world.citizens().get(CitizenLife.settlerId(seed, village.id(), slot)).isPresent(),
@@ -368,6 +364,133 @@ public final class SettlementGameTests {
         });
     }
 
+    private static final int TOWN_BASE = 36_000;
+    private static final int WATCH_BASE = 32_000;
+    private static final int RENEW_BASE = 28_000;
+
+    /**
+     * The settlers of a settlement: its citizens but the soldiers of its guard or watch, who came from abroad.
+     */
+    private static int settlers(MinecraftServer server, Settlement settlement) {
+        int named = 0;
+        for (Citizen citizen : KingdomWorldApi.state(server).citizens().registry().citizensOf(settlement.kingdomId())) {
+            if (citizen.settlement() == settlement.id()
+                    && io.github.sekerator.kingdomworld.common.army.ArmyWork.state(server).soldier(citizen.id()).isEmpty()) {
+                named++;
+            }
+        }
+        return named;
+    }
+
+    /**
+     * The kinds of the buildings of a kingdom on the land of a settlement.
+     */
+    private static Set<io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind> kinds(MinecraftServer server, Settlement settlement) {
+        int reach = io.github.sekerator.kingdomworld.core.npc.SettlementLayouts.land(settlement.tier()) * 8;
+        Set<io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind> kinds = new HashSet<>();
+        for (io.github.sekerator.kingdomworld.core.construction.Building building
+                : KingdomWorldApi.state(server).construction().buildingsOf(settlement.kingdomId())) {
+            if (Math.abs(building.anchor().x() - settlement.x()) <= reach && Math.abs(building.anchor().z() - settlement.z()) <= reach) {
+                io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.get(building.templateId()).ifPresent(entry -> kinds.add(entry.kind()));
+            }
+        }
+        return kinds;
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_settlements_town", timeoutTicks = 36_000)
+    public static void aSmallTownRisesWithItsMarketStoresToolsGatesAndGuard(GameTestHelper helper) {
+        withSettlement(helper, -FAR, -FAR, TOWN_BASE, Tier.TOWN, (server, town) -> {
+            io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.runNow(server, town, 30_000);
+            helper.assertTrue(town.status() == Settlement.Status.STANDING && town.given(Settlement.GIVEN_LIVING), town + " does not stand whole");
+            Set<io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind> kinds = kinds(server, town);
+            for (io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind kind : List.of(io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.MARKET,
+                    io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.TAVERN, io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.STOREHOUSE,
+                    io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.WELL)) {
+                helper.assertTrue(kinds.contains(kind), town + " has no " + kind + ": " + kinds);
+            }
+            // A palisade with a gate at each end of its street, and wherever a road comes in.
+            io.github.sekerator.kingdomworld.core.road.Wall wall = io.github.sekerator.kingdomworld.common.road.RoadWork.state(server)
+                    .wallOf(town.cityId(), town.kingdomId()).orElse(null);
+            helper.assertTrue(wall != null && wall.gates().size() >= 2, town + " has no palisade with its gates");
+            // Its own guard at its gate and on its round, not at the posts of the capital.
+            io.github.sekerator.kingdomworld.core.army.ArmyState army = io.github.sekerator.kingdomworld.common.army.ArmyWork.state(server);
+            io.github.sekerator.kingdomworld.common.npc.NpcGarrison.station(server, town.kingdomId());
+            helper.assertTrue(army.squadOfDuty(town.kingdomId(), "sgate_" + town.id()).isPresent(), town + " has nobody at its gate");
+            helper.assertTrue(army.squadOfDuty(town.kingdomId(), "sround_" + town.id()).map(squad -> squad.members().size() >= 2).orElse(false),
+                    town + " has no round");
+            for (io.github.sekerator.kingdomworld.core.army.ArmySquad squad : army.squadsOf(town.kingdomId())) {
+                String duty = army.duty(squad.id()).orElse("");
+                boolean own = duty.endsWith("_" + town.id()) || duty.equals("town_" + town.cityId());
+                for (UUID member : squad.members()) {
+                    int home = KingdomWorldApi.state(server).citizens().get(member).map(Citizen::settlement).orElse(0);
+                    helper.assertTrue(home != town.id() || own, "A guard of " + town + " stands at " + duty);
+                }
+            }
+            // Food in its storehouses, and a tool in the hands of every worker who needs one.
+            helper.assertTrue(KingdomStorage.count(server, town.kingdomId(), stack -> stack.is(net.minecraft.world.item.Items.BREAD)) > 0,
+                    town + " has no food");
+            for (Citizen citizen : KingdomWorldApi.state(server).citizens().registry().citizensOf(town.kingdomId())) {
+                if (citizen.settlement() == town.id()
+                        && io.github.sekerator.kingdomworld.core.npc.SettlementSupplies.tool(citizen.professionId(), town.tier()) != null) {
+                    helper.assertTrue(!io.github.sekerator.kingdomworld.common.citizen.work.Equipment.of(server, citizen.id())
+                            .get(net.minecraft.world.entity.EquipmentSlot.MAINHAND).isEmpty(), "A " + citizen.professionId() + " of " + town
+                            + " has no tool");
+                }
+            }
+            helper.assertTrue(town.given(Settlement.GIVEN_SUPPLIES), town + " got no supplies");
+        });
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_settlements_watch", timeoutTicks = 24_000)
+    public static void aVillageHasItsWatchAndItsLawAsATownHas(GameTestHelper helper) {
+        withSettlement(helper, 2 * FAR, 0, WATCH_BASE, Tier.VILLAGE, (server, village) -> {
+            io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.runNow(server, village, 20_000);
+            helper.assertTrue(village.status() == Settlement.Status.STANDING, village + " does not stand");
+            Set<io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind> kinds = kinds(server, village);
+            helper.assertTrue(kinds.contains(io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.STOREHOUSE), village + " has no barn");
+            String dimension = io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(server.overworld());
+            // Its land is a town for the law: a deed there is chased through it and 48 blocks beyond its edge, no further.
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.road.CityAreas.inCity(server, village.kingdomId(), dimension, village.x(), village.z()),
+                    village + " has no law of a town");
+            int edge = io.github.sekerator.kingdomworld.core.npc.SettlementLayouts.land(Tier.VILLAGE) * 8 + 8;
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.law.LawAlarms.inChase(server, village.kingdomId(), dimension,
+                    village.x() + edge + 40, village.z()), "The chase ends before 48 blocks beyond " + village);
+            helper.assertTrue(!io.github.sekerator.kingdomworld.common.law.LawAlarms.inChase(server, village.kingdomId(), dimension,
+                    village.x() + edge + 60, village.z()) || !io.github.sekerator.kingdomworld.common.road.CityAreas.of(server, village.kingdomId()).stream()
+                    .allMatch(area -> area.cityId() == -village.id()), "The chase goes on far beyond " + village);
+            io.github.sekerator.kingdomworld.common.npc.NpcGarrison.station(server, village.kingdomId());
+            io.github.sekerator.kingdomworld.core.army.ArmyState army = io.github.sekerator.kingdomworld.common.army.ArmyWork.state(server);
+            helper.assertTrue(army.squadOfDuty(village.kingdomId(), "swatch_" + village.id())
+                            .map(squad -> squad.members().size() == SettlementLife.watch(Tier.VILLAGE)).orElse(false),
+                    village + " has not its two watchmen on their round");
+        });
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_settlements_renew", timeoutTicks = 36_000)
+    public static void aStandingVillageWithoutItsPartsIsCompletedOnceAndWhatPlayersPlacedStays(GameTestHelper helper) {
+        withSettlement(helper, -2 * FAR, 0, RENEW_BASE, Tier.VILLAGE, (server, village) -> {
+            io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.runNow(server, village, 20_000);
+            helper.assertTrue(village.status() == Settlement.Status.STANDING, village + " does not stand");
+            // As a village raised by an older version: no mark of its parts, no supplies, and a player's block on its land.
+            village.forget(Settlement.GIVEN_LIVING);
+            village.forget(Settlement.GIVEN_SUPPLIES);
+            net.minecraft.core.BlockPos placed = new net.minecraft.core.BlockPos(village.x() + 4, village.groundY() + 1, village.z() - 30);
+            server.overworld().setBlockAndUpdate(placed, net.minecraft.world.level.block.Blocks.OAK_PLANKS.defaultBlockState());
+            int before = kinds(server, village).size();
+            int people = settlers(server, village);
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.waiting(village), village + " is not completed");
+            io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.runNow(server, village, 20_000);
+            helper.assertTrue(village.status() == Settlement.Status.STANDING && village.given(Settlement.GIVEN_LIVING)
+                    && !village.given(Settlement.GIVEN_RENEWING), village + " was not completed: " + village.stage());
+            helper.assertTrue(village.given(Settlement.GIVEN_SUPPLIES), village + " got no supplies");
+            helper.assertTrue(server.overworld().getBlockState(placed).is(net.minecraft.world.level.block.Blocks.OAK_PLANKS),
+                    "The completion broke the block a player placed");
+            helper.assertTrue(kinds(server, village).size() >= before, "The completion took buildings away");
+            helper.assertTrue(settlers(server, village) == people, "The completion settled people again: " + people + " -> "
+                    + settlers(server, village));
+            helper.assertTrue(!io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.waiting(village), village + " would be completed twice");
+        });
+    }
     private interface SettlementCheck {
         void accept(MinecraftServer server, Settlement settlement, int[] sites);
     }

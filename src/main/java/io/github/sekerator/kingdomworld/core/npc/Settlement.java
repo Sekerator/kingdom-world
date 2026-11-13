@@ -104,6 +104,15 @@ public final class Settlement {
     public static final int GIVEN_LAWS = 2;
     /** The flag of its guard come from abroad. */
     public static final int GIVEN_GUARDS = 16;
+    /**
+     * The flag of a settlement raised or completed with all its parts: its gates, posts, guard or watch, stores, tools and work.
+     * A settlement that stands without it is completed once, when a player comes near.
+     */
+    public static final int GIVEN_LIVING = 32;
+    /** The flag of a standing settlement being completed now. */
+    public static final int GIVEN_RENEWING = 64;
+    /** The flag of the tools, the materials of its crafts and the seed it was given, once. */
+    public static final int GIVEN_SUPPLIES = 128;
 
     /**
      * Raises the rank of a settlement that lives as data (a village its ruler makes a small town): its houses and guard follow the
@@ -283,6 +292,14 @@ public final class Settlement {
 
     public void give(int flag) {
         given |= flag;
+        changed();
+    }
+
+    /**
+     * Takes a flag away again: one that marks work going on, once it is over or put aside.
+     */
+    public void forget(int flag) {
+        given &= ~flag;
         changed();
     }
 

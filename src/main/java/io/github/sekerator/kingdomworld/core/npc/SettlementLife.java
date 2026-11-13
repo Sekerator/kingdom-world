@@ -69,18 +69,48 @@ public final class SettlementLife {
     }
 
     /**
+     * The soldiers who serve a standing settlement of a rank in person, come from abroad: the guard of a large city (8) and of a
+     * small town (4), the watchmen of a village (2) and of a hamlet (1). The watchmen of a village stand beside its militia,
+     * which stays a number.
+     */
+    public static int watch(Tier tier) {
+        return switch (tier) {
+            case CITY -> 8;
+            case TOWN -> 4;
+            case VILLAGE -> 2;
+            case HAMLET -> 1;
+            case CAPITAL -> 0;
+        };
+    }
+
+    /**
+     * The squads of the guard of a standing settlement of a rank: a large city its gate, its round and its town hall, a small town
+     * its gate and its round, a village and a hamlet the round of their watch.
+     */
+    public static int squads(Tier tier) {
+        return switch (tier) {
+            case CITY -> 3;
+            case TOWN -> 2;
+            case VILLAGE, HAMLET -> 1;
+            case CAPITAL -> 0;
+        };
+    }
+
+    /**
      * The soldiers and squads a kingdom of the world keeps at most with all its settlements standing: the guard of the capital,
-     * of every large city and small town, and the royal army; a squad for every post of the capital, one for every town and one
-     * for every squad of the army.
+     * of every large city and small town, the watch of every village and hamlet, and the royal army; a squad for every post of
+     * the capital, the squads of the settlements and one for every squad of the army.
      *
      * @param capitalPosts the posts of the capital, those of its army in reserve among them
+     * @param villages     villages and hamlets, all counted as villages
      * @param inCapital    soldiers of the army who stay in the capital, in its reserve
      * @param squad        soldiers of a squad of the army beyond the capital
      * @return {soldiers, squads}
      */
-    public static int[] garrison(int capitalGuards, int capitalPosts, int cities, int towns, int army, int inCapital, int squad) {
-        int soldiers = capitalGuards + cities * guards(Tier.CITY) + towns * guards(Tier.TOWN) + army;
-        int squads = capitalPosts + cities + towns + (Math.max(0, army - inCapital) + squad - 1) / squad;
+    public static int[] garrison(int capitalGuards, int capitalPosts, int cities, int towns, int villages, int army, int inCapital, int squad) {
+        int soldiers = capitalGuards + cities * watch(Tier.CITY) + towns * watch(Tier.TOWN) + villages * watch(Tier.VILLAGE) + army;
+        int squads = capitalPosts + cities * squads(Tier.CITY) + towns * squads(Tier.TOWN) + villages * squads(Tier.VILLAGE)
+                + (Math.max(0, army - inCapital) + squad - 1) / squad;
         return new int[]{soldiers, squads};
     }
 

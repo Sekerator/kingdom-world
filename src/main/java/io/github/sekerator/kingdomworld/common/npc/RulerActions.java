@@ -618,8 +618,8 @@ public final class RulerActions {
             "lumberjack", new Tool("minecraft:stone_axe", io.github.sekerator.kingdomworld.common.citizen.work.Equipment.ToolNeed.AXE),
             "miner", new Tool("minecraft:stone_pickaxe", io.github.sekerator.kingdomworld.common.citizen.work.Equipment.ToolNeed.PICKAXE),
             "fisher", new Tool("minecraft:fishing_rod", io.github.sekerator.kingdomworld.common.citizen.work.Equipment.ToolNeed.FISHING_ROD));
-    /** Tools a kingdom buys in a day at most. */
-    private static final int TOOLS_PER_DAY = 6;
+    /** Tools a kingdom buys in a day at most: a state has workers in many settlements. */
+    private static final int TOOLS_PER_DAY = 24;
     /** The day each kingdom last bought tools: once a day, however many turns its ruler takes. */
     private static final java.util.Map<UUID, Long> TOOLS_DAY = new java.util.HashMap<>();
 
@@ -643,10 +643,16 @@ public final class RulerActions {
             return List.of();
         }
         java.util.Map<Tool, Integer> idle = new java.util.LinkedHashMap<>();
+        // Where the idle workers of each tool work: a tool bought goes to the storehouse nearest to one of them, so that the
+        // woodcutter of a far village finds it in his village and not in the capital.
+        java.util.Map<String, List<io.github.sekerator.kingdomworld.core.citizen.WorldPos>> where = new java.util.LinkedHashMap<>();
         for (Citizen citizen : state.citizens().registry().citizensOf(id)) {
             Tool tool = TOOLS.get(citizen.professionId());
             if (tool != null && citizen.workStatus() == io.github.sekerator.kingdomworld.core.citizen.WorkStatus.NO_TOOL) {
                 idle.merge(tool, 1, Integer::sum);
+                if (citizen.workplace() != null) {
+                    where.computeIfAbsent(tool.item(), k -> new ArrayList<>()).add(citizen.workplace());
+                }
             }
         }
         java.util.Map<String, Integer> lacking = new java.util.LinkedHashMap<>();
@@ -672,18 +678,20 @@ public final class RulerActions {
             double worth = io.github.sekerator.kingdomworld.common.trade.MarketStock.worth(server, item).amount();
             long each = Math.max(1L, io.github.sekerator.kingdomworld.core.trade.Prices.importCost(worth, 1, rules));
             int count = 0;
+            List<io.github.sekerator.kingdomworld.core.citizen.WorldPos> places = where.getOrDefault(entry.getKey(), List.of());
             for (int i = 0; i < entry.getValue() && left > 0; i++) {
                 if (state.economy().treasury(id).map(treasury -> treasury.funds() < each * 3).orElse(true)) {
                     break;
                 }
                 net.minecraft.world.item.ItemStack tool = new net.minecraft.world.item.ItemStack(item);
-                if (!io.github.sekerator.kingdomworld.common.storage.KingdomStorage.insert(server, id, tool.copy(), capital).isEmpty()) {
+                io.github.sekerator.kingdomworld.core.citizen.WorldPos near = places.isEmpty() ? capital : places.get(i % places.size());
+                if (!io.github.sekerator.kingdomworld.common.storage.KingdomStorage.insert(server, id, tool.copy(), near).isEmpty()) {
                     // No room in the storehouses: nothing is bought.
                     break;
                 }
                 if (!state.economy().importPayment(id, each, day).ok()) {
                     // Paid for or not at all: the tool that could not be paid goes back out of the storehouses.
-                    io.github.sekerator.kingdomworld.common.trade.MarketStock.take(server, id, item, 1, capital);
+                    io.github.sekerator.kingdomworld.common.trade.MarketStock.take(server, id, item, 1, near);
                     break;
                 }
                 count++;

@@ -431,6 +431,7 @@ public final class RoadPlanning {
         }
         PLANS.remove(planId);
         Road road = made[0];
+        CityWalls.gatesFor(server, road);
         LOGGER.info("Road {} of {} planned: {} blocks, {}, {} request(s) to cross land", road.id(),
                 RoadWork.kingdomName(server, kingdomId).getString(), road.length(), road.roadClass().id(), sent.size());
         RoadWork.notify(server, kingdomId, Component.translatable(RoadWork.KEY + "road_planned", road.id(), RoadTexts.className(road.roadClass()),

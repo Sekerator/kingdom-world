@@ -1616,7 +1616,7 @@ public final class NpcSpawner {
     /**
      * Saplings of the wood of the place around the lumberjack's post, so that it always has trees to fell.
      */
-    private static void grove(ServerLevel level, UUID id, BlockPos post, NpcSite site) {
+    static void grove(ServerLevel level, UUID id, BlockPos post, NpcSite site) {
         Block sapling = site.districts() ? saplingOf(NpcCity.wood(site)) : sapling(level, post);
         for (int dx = -6; dx <= 6; dx += 4) {
             for (int dz = -6; dz <= 6; dz += 4) {

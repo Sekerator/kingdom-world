@@ -32,10 +32,13 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -76,8 +79,12 @@ public final class NpcGarrison {
      * @param most    soldiers it may have when there are more than the posts ask for
      * @param branch  who stands there: the guard or the army
      * @param officer the officer of the branch who stands there, or {@code null}
+     * @param settlement the settlement of a state whose own guard stands there, 0 for a post of the capital and its old towns
      */
-    record Duty(String id, Order order, int wanted, int most, Branch branch, @Nullable Post officer) {
+    record Duty(String id, Order order, int wanted, int most, Branch branch, @Nullable Post officer, int settlement) {
+        Duty(String id, Order order, int wanted, int most, Branch branch, @Nullable Post officer) {
+            this(id, order, wanted, most, branch, officer, 0);
+        }
     }
 
     private NpcGarrison() {
@@ -330,7 +337,11 @@ public final class NpcGarrison {
                         army.branchOf(kingdomId, Branch.ARMY).size(), wanted[1]);
             }
         }
-        ArmyStaff.daily(server, kingdomId, wanted[0], army.branchOf(kingdomId, Branch.ARMY).size());
+        // The settlements get the guards and watchmen they lost from abroad; the staff does not take people of the capital for
+        // those still lacking.
+        SettlementGarrison.refill(server, kingdomId);
+        int lackingAbroad = Math.max(0, SettlementGarrison.standingGuards(server, kingdomId) - SettlementGarrison.serving(server, kingdomId));
+        ArmyStaff.daily(server, kingdomId, wanted[0] - lackingAbroad, army.branchOf(kingdomId, Branch.ARMY).size());
         station(server, kingdomId);
     }
 
@@ -444,19 +455,18 @@ public final class NpcGarrison {
                         new WorldPos(dimension, box.minX() - 2, y, box.maxZ() + 2))), 2, ArmySquad.MAX_MEMBERS, Branch.GUARD, Post.VICE_CAPTAIN));
             });
         }
-        // Every town has guards of its own at its town hall; the town of a settlement of a state as many as its rank keeps.
+        // Every old town has guards of its own at its town hall; a settlement of a state has the posts of its own guard or watch.
         int ofTown = rules.townGuards(site.level());
         for (City city : RoadWork.state(server).citiesOf(kingdomId)) {
-            if (!city.dimension().equals(dimension)) {
+            if (!city.dimension().equals(dimension) || SettlementGarrison.ofCity(server, kingdomId, city.id()).isPresent()) {
                 continue;
             }
-            int guards = SettlementGarrison.ofCity(server, kingdomId, city.id()).map(settlement -> SettlementGarrison.guards(settlement.tier()))
-                    .orElse(ofTown);
-            if (guards > 0) {
-                duties.add(new Duty("town_" + city.id(), Order.guard(new WorldPos(dimension, city.x(), city.y(), city.z()), 1), guards, guards,
+            if (ofTown > 0) {
+                duties.add(new Duty("town_" + city.id(), Order.guard(new WorldPos(dimension, city.x(), city.y(), city.z()), 1), ofTown, ofTown,
                         Branch.GUARD, null));
             }
         }
+        duties.addAll(SettlementGarrison.duties(server, kingdomId, dimension));
         duties.addAll(castle);
         // The army in reserve: at the barracks with its vice-captain, and at the palace with its captain.
         WorldPos barracks = building(server, kingdomId, BuildingRoles.BARRACKS, throne).map(Building::anchor).orElse(throne);
@@ -507,9 +517,21 @@ public final class NpcGarrison {
                 army.disband(null, squad.id(), world);
             }
         }
+        // The guard of a settlement stands at its own posts and nowhere else; a soldier at a post of another place leaves it.
+        Set<Integer> served = new HashSet<>();
+        duties.forEach(duty -> served.add(duty.settlement()));
+        for (Duty duty : duties) {
+            army.squadOfDuty(kingdomId, duty.id()).ifPresent(squad -> {
+                for (UUID member : List.copyOf(squad.members())) {
+                    if (home(world, member, served) != duty.settlement()) {
+                        army.leaveSquad(member);
+                    }
+                }
+            });
+        }
         int moved = 0;
         for (Branch branch : Branch.values()) {
-            moved += fill(server, kingdomId, branch, duties, rules);
+            moved += fill(server, kingdomId, branch, duties, rules, served);
         }
         sergeants(server, kingdomId);
         // Every squad of a post does what the post asks, unless the ruler sent it elsewhere for now; a squad of a camp sent to
@@ -560,8 +582,9 @@ public final class NpcGarrison {
      * take the posts that lack somebody, a post that still lacks takes from the least important one, and who is left over
      * joins the posts that have room.
      */
-    private static int fill(MinecraftServer server, UUID kingdomId, Branch branch, List<Duty> all, ArmyRules rules) {
+    private static int fill(MinecraftServer server, UUID kingdomId, Branch branch, List<Duty> all, ArmyRules rules, Set<Integer> served) {
         ArmyState army = ArmyWork.state(server);
+        KingdomWorldState world = KingdomWorldApi.state(server);
         List<Duty> duties = all.stream().filter(duty -> duty.branch() == branch).toList();
         if (duties.isEmpty()) {
             return 0;
@@ -573,27 +596,34 @@ public final class NpcGarrison {
                 continue;
             }
             Optional<Soldier> officer = army.officer(kingdomId, branch, duty.officer());
-            if (officer.isPresent() && free(army, officer.get().citizenId(), duty) && assign(server, kingdomId, duty, officer.get().citizenId(), rules)) {
+            if (officer.isPresent() && free(army, officer.get().citizenId(), duty) && home(world, officer.get().citizenId(), served) == duty.settlement()
+                    && assign(server, kingdomId, duty, officer.get().citizenId(), rules)) {
                 moved++;
             }
         }
-        List<UUID> idle = new ArrayList<>();
+        // The soldiers without a post, by the place they serve: the capital (0) or their settlement.
+        Map<Integer, List<UUID>> idleOf = new HashMap<>();
         for (Soldier soldier : army.branchOf(kingdomId, branch)) {
             if (army.squadOf(soldier.citizenId()).isEmpty()) {
-                idle.add(soldier.citizenId());
+                idleOf.computeIfAbsent(home(world, soldier.citizenId(), served), k -> new ArrayList<>()).add(soldier.citizenId());
             }
         }
-        // What the posts ask for, in their order.
+        // What the posts ask for, in their order: a post takes the soldiers of its own place, and from the least important post
+        // of that place.
         for (Duty duty : duties) {
             int wanted = branch == Branch.ARMY ? 0 : duty.wanted();
+            List<UUID> own = idleOf.computeIfAbsent(duty.settlement(), k -> new ArrayList<>());
+            List<Duty> same = duties.stream().filter(other -> other.settlement() == duty.settlement()).toList();
             while (members(army, kingdomId, duty) < wanted) {
-                UUID soldier = !idle.isEmpty() ? idle.remove(0) : donor(army, kingdomId, duties, duty);
+                UUID soldier = !own.isEmpty() ? own.remove(0) : donor(army, kingdomId, same, duty);
                 if (soldier == null || !assign(server, kingdomId, duty, soldier, rules)) {
                     break;
                 }
                 moved++;
             }
         }
+        // Soldiers of a settlement beyond the posts of their settlement stay there without a post.
+        List<UUID> idle = idleOf.getOrDefault(0, new ArrayList<>());
         // Who is left over: the army to its posts in their order (the reserve, the palace with the captain, the squads of the
         // camps), the guard to the posts with room.
         if (branch == Branch.ARMY) {
@@ -619,7 +649,7 @@ public final class NpcGarrison {
                 if (idle.isEmpty()) {
                     break;
                 }
-                if (members(army, kingdomId, duty) < duty.most() && assign(server, kingdomId, duty, idle.get(0), rules)) {
+                if (duty.settlement() == 0 && members(army, kingdomId, duty) < duty.most() && assign(server, kingdomId, duty, idle.get(0), rules)) {
                     idle.remove(0);
                     moved++;
                     placed = true;
@@ -627,6 +657,14 @@ public final class NpcGarrison {
             }
         }
         return moved;
+    }
+
+    /**
+     * The place a soldier serves: its settlement while that settlement has posts of its own, otherwise the capital (0).
+     */
+    static int home(KingdomWorldState world, UUID citizenId, Set<Integer> served) {
+        int settlement = world.citizens().get(citizenId).map(Citizen::settlement).orElse(0);
+        return settlement != 0 && served.contains(settlement) ? settlement : 0;
     }
 
     /**

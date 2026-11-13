@@ -105,6 +105,7 @@ public final class CityWalls {
         LAST.clear();
         FROM.clear();
         LAYOUTS.clear();
+        PENDING.clear();
         seconds = 0;
         CityAreas.reset();
     }
@@ -509,6 +510,118 @@ public final class CityWalls {
         return outcome.ok();
     }
 
+    /** Gates cut while a part of their wall was not loaded: {wall, cell}, opened once it is. */
+    private static final java.util.Set<String> PENDING = new java.util.LinkedHashSet<>();
+
+    /**
+     * Cuts a gate into a wall where its ring passes nearest a place, for a road of a settlement or a gate of its plan; what the
+     * wall placed there already is taken away now, or as soon as its chunk is loaded.
+     *
+     * @return whether the wall has a gate there now
+     */
+    public static boolean cutGate(MinecraftServer server, Wall wall, int x, int z) {
+        if (wall.cells().isEmpty()) {
+            return false;
+        }
+        int cell = wall.nearestCell(x, z);
+        RouteCell at = wall.cells().get(cell);
+        if (Math.abs(at.x() - x) > 4 || Math.abs(at.z() - z) > 4) {
+            return false;
+        }
+        if (wall.inGate(cell)) {
+            return true;
+        }
+        Outcome outcome = RoadWork.change(server, "cut a gate of a settlement", state -> {
+            wall.addGate(cell);
+            state.changed();
+            return Outcome.DONE;
+        });
+        if (!outcome.ok()) {
+            return false;
+        }
+        open(server, wall, cell);
+        if (wall.buildingId() != 0) {
+            registerGate(server, wall, cell);
+        }
+        RoadSync.changed();
+        return true;
+    }
+
+    /**
+     * A road was laid: every wall of a settlement it leads into gets a gate where the road crosses it.
+     */
+    public static void gatesFor(MinecraftServer server, Road road) {
+        if (!io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, road.kingdomId())) {
+            // A king cuts the gates of his own walls.
+            return;
+        }
+        for (Wall wall : List.copyOf(RoadWork.state(server).walls())) {
+            if (!wall.kingdomId().equals(road.kingdomId()) || !wall.dimension().equals(road.dimension()) || wall.cityId() == 0) {
+                continue;
+            }
+            int radius = wall.radius();
+            boolean enters = inside(wall, road.from().x(), road.from().z(), radius) || inside(wall, road.to().x(), road.to().z(), radius);
+            if (!enters) {
+                continue;
+            }
+            List<RouteCell> near = new ArrayList<>();
+            for (RouteCell cell : road.cells()) {
+                if (Math.abs(cell.x() - wall.centerX()) <= radius + 2 && Math.abs(cell.z() - wall.centerZ()) <= radius + 2) {
+                    near.add(cell);
+                }
+            }
+            for (int cell : WallContour.gates(wall.cells(), List.of(near))) {
+                RouteCell at = wall.cells().get(cell);
+                if (!wall.inGate(cell)) {
+                    cutGate(server, wall, at.x(), at.z());
+                    LOGGER.info("Wall {} got a gate at {} {} for road {}", wall.id(), at.x(), at.z(), road.id());
+                }
+            }
+        }
+    }
+
+    private static boolean inside(Wall wall, int x, int z, int radius) {
+        return Math.abs(x - wall.centerX()) < radius && Math.abs(z - wall.centerZ()) < radius;
+    }
+
+    /**
+     * Opens the blocks of a gate whose place is loaded now, or waits for it.
+     */
+    private static void open(MinecraftServer server, Wall wall, int cell) {
+        ServerLevel level = ConstructionWork.level(server, wall.dimension());
+        RouteCell at = wall.cells().get(cell);
+        if (level != null && level.isLoaded(new BlockPos(at.x(), at.y(), at.z()))) {
+            openGate(level, wall, cell);
+        } else {
+            PENDING.add(wall.id() + "/" + cell);
+        }
+    }
+
+    /**
+     * Opens the gates that waited for their place to be loaded.
+     */
+    private static void openPending(MinecraftServer server) {
+        if (PENDING.isEmpty()) {
+            return;
+        }
+        RoadState roads = RoadWork.state(server);
+        for (java.util.Iterator<String> it = PENDING.iterator(); it.hasNext(); ) {
+            String[] parts = it.next().split("/");
+            Optional<Wall> wall = roads.wall(Long.parseLong(parts[0]));
+            int cell = Integer.parseInt(parts[1]);
+            if (wall.isEmpty() || cell >= wall.get().cells().size()) {
+                it.remove();
+                continue;
+            }
+            ServerLevel level = ConstructionWork.level(server, wall.get().dimension());
+            RouteCell at = wall.get().cells().get(cell);
+            if (level != null && level.isLoaded(new BlockPos(at.x(), at.y(), at.z()))) {
+                openGate(level, wall.get(), cell);
+                it.remove();
+            }
+        }
+    }
+
     /**
      * Takes away the blocks the wall put where a gate is now; they go to the storehouses. Blocks the wall did not place, or
      * that were changed since, stay.
@@ -677,6 +790,7 @@ public final class CityWalls {
      */
     static void tick(MinecraftServer server) {
         boolean minute = ++seconds % 60 == 0;
+        openPending(server);
         RoadState roads = RoadWork.state(server);
         for (Wall wall : roads.walls()) {
             ServerLevel level = ConstructionWork.level(server, wall.dimension());

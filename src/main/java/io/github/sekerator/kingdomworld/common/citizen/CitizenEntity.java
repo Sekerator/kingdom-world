@@ -127,7 +127,7 @@ public class CitizenEntity extends PathfinderMob {
         entityData.set(SKIN, citizen.skin());
         entityData.set(FEMALE, citizen.gender() == Gender.FEMALE);
         entityData.set(COLOR, kingdomColor & 0xFFFFFF);
-        setCustomName(CitizenTexts.name(citizen));
+        setCustomName(io.github.sekerator.kingdomworld.common.npc.SettlementHeads.title(level(), citizen, CitizenTexts.name(citizen)));
         setCustomNameVisible(false);
         // A soldier has more health than other citizens, by its branch and post.
         getAttribute(Attributes.MAX_HEALTH).setBaseValue(citizen.maxHealth());

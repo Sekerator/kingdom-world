@@ -53,6 +53,7 @@ public final class CityAreas {
     private static long signedRoadVersion;
     private static KingdomRegistry signedKingdoms;
     private static long signedKingdomVersion;
+    private static long signedSettlements = Long.MIN_VALUE;
     private static long signed;
 
     private CityAreas() {
@@ -82,10 +83,12 @@ public final class CityAreas {
     private static long signature(MinecraftServer server) {
         RoadState roads = RoadWork.state(server);
         KingdomRegistry kingdoms = KingdomWorldApi.state(server).kingdoms();
+        long settlements = io.github.sekerator.kingdomworld.common.npc.NpcWork.state(server).settlementsVersion();
         if (roads == signedRoads && roads.version() == signedRoadVersion && kingdoms == signedKingdoms
-                && kingdoms.version() == signedKingdomVersion) {
+                && kingdoms.version() == signedKingdomVersion && settlements == signedSettlements) {
             return signed;
         }
+        signedSettlements = settlements;
         long sum = 17;
         for (var kingdom : kingdoms.all()) {
             sum = sum * 31 + kingdom.id().hashCode();
@@ -96,6 +99,7 @@ public final class CityAreas {
         for (Wall wall : roads.walls()) {
             sum = sum * 31 + wall.id() * 7 + wall.cells().size();
         }
+        sum = sum * 31 + settlements;
         signedRoads = roads;
         signedRoadVersion = roads.version();
         signedKingdoms = kingdoms;
@@ -145,6 +149,22 @@ public final class CityAreas {
             }
             built.computeIfAbsent(place.kingdomId(), k -> new ArrayList<>()).add(area);
             sorted.computeIfAbsent(place.kingdomId(), k -> new CellIndex<>(CELL_SHIFT)).add(area.dimension(),
+                    (long) area.x() - area.radius(), (long) area.z() - area.radius(), (long) area.x() + area.radius(),
+                    (long) area.z() + area.radius(), area);
+        }
+        // A village or a hamlet of a state that stands has no town hall, but its law and its watch hold on its land as in a town.
+        String overworld = io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(server.overworld());
+        for (io.github.sekerator.kingdomworld.core.npc.Settlement settlement
+                : io.github.sekerator.kingdomworld.common.npc.NpcWork.state(server).settlements()) {
+            if (settlement.status() != io.github.sekerator.kingdomworld.core.npc.Settlement.Status.STANDING || settlement.cityId() != 0
+                    || settlement.tier() == io.github.sekerator.kingdomworld.core.land.Tier.CAPITAL
+                    || KingdomWorldApi.state(server).kingdoms().get(settlement.kingdomId()).isEmpty()) {
+                continue;
+            }
+            int radius = io.github.sekerator.kingdomworld.core.npc.SettlementLayouts.land(settlement.tier()) * 8 + 8;
+            Area area = new Area(settlement.kingdomId(), -settlement.id(), overworld, settlement.x(), settlement.z(), radius, false);
+            built.computeIfAbsent(settlement.kingdomId(), k -> new ArrayList<>()).add(area);
+            sorted.computeIfAbsent(settlement.kingdomId(), k -> new CellIndex<>(CELL_SHIFT)).add(area.dimension(),
                     (long) area.x() - area.radius(), (long) area.z() - area.radius(), (long) area.x() + area.radius(),
                     (long) area.z() + area.radius(), area);
         }
