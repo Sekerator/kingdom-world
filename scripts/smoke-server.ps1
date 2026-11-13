@@ -2477,10 +2477,14 @@ Invoke-Phase 'run1' {
         } else {
             Add-Failure "[run1] $($script:WorldFounding) (every place of the plan expected within $foundingLimit s)"
         }
-        # A new world gets its kingdoms by quota: three large and five small ones, whatever the seed.
+        # A new world gets its kingdoms by quota: three large and five small ones. Where the land of the seed has no more room flat
+        # and wide enough for a large one, a small one takes its place and the plan says so: that is no failure, but it is told.
         $sizes = [regex]::Match((Get-WholeLog), 'The plan of the kingdoms of the world is made: (\d+) place\(s\): (\d+) large, (\d+) medium, (\d+) small')
         if ($sizes.Success -and [int]$sizes.Groups[2].Value -eq 3 -and [int]$sizes.Groups[3].Value -eq 0 -and [int]$sizes.Groups[4].Value -eq 5) {
             Write-Ok '[run1] the plan of the world has 3 large and 5 small kingdoms'
+        } elseif ($sizes.Success -and [int]$sizes.Groups[1].Value -eq 8 -and [int]$sizes.Groups[2].Value -lt 3 -and [int]$sizes.Groups[3].Value -eq 0 -and
+                ((Get-WholeLog) -match 'The plan has \d+ large kingdom\(s\) of the 3 wanted: no more land flat and wide enough was found')) {
+            Add-Warning "[run1] the plan of the world has $($sizes.Groups[2].Value) large and $($sizes.Groups[4].Value) small kingdoms: the land of this seed has no more room for a large one"
         } elseif ($sizes.Success) {
             Add-Failure "[run1] the plan of the world has $($sizes.Groups[2].Value) large, $($sizes.Groups[3].Value) medium and $($sizes.Groups[4].Value) small kingdoms (3 large and 5 small expected)"
             foreach ($pass in [regex]::Matches((Get-WholeLog), 'The plan of the kingdoms of the world has [^\r\n]*')) { Write-Host "    $($pass.Value)" }
