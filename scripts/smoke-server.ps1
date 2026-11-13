@@ -2339,8 +2339,11 @@ Invoke-Phase 'run1' {
         $foundingPattern = 'The kingdom of the world of site \d+ \w+ at -?\d+, -?\d+ \(founded\) is founded: \d+ chunks of land'
         $founded = 0
         $plannedCount = -1
+        # The plan takes what is left of short ticks and asks the generator for most of its columns off the ticks: a world whose
+        # plan needs its third pass takes up to about two minutes for it.
+        $foundingLimit = 180
         $waited = Get-Date
-        while (((Get-Date) - $waited).TotalSeconds -lt 120) {
+        while (((Get-Date) - $waited).TotalSeconds -lt $foundingLimit) {
             $log = Get-WholeLog
             $plan = [regex]::Match($log, 'The plan of the kingdoms of the world is made: (\d+) place\(s\)')
             $founded = [regex]::Matches($log, $foundingPattern).Count
@@ -2367,10 +2370,10 @@ Invoke-Phase 'run1' {
         # The plan has as many places as the land of the world gives (8 are asked for, a place without land that suits is left
         # out): every place of the plan is founded, or 8 are while the plan is still being made.
         $everyPlace = ($plannedCount -ge 1 -and $founded -ge $plannedCount) -or $founded -ge 8
-        if ($everyPlace -and $elapsed -ge 0 -and $elapsed -le 120) {
+        if ($everyPlace -and $elapsed -ge 0 -and $elapsed -le $foundingLimit) {
             Write-Ok "[run1] $($script:WorldFounding), each with its land"
         } else {
-            Add-Failure "[run1] $($script:WorldFounding) (every place of the plan expected within 120 s)"
+            Add-Failure "[run1] $($script:WorldFounding) (every place of the plan expected within $foundingLimit s)"
         }
         # A new world gets its kingdoms by quota: three large and five small ones, whatever the seed.
         $sizes = [regex]::Match((Get-WholeLog), 'The plan of the kingdoms of the world is made: (\d+) place\(s\): (\d+) large, (\d+) medium, (\d+) small')

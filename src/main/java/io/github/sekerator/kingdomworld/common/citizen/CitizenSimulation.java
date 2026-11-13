@@ -378,6 +378,36 @@ public final class CitizenSimulation {
     }
 
     /**
+     * Settles the citizens of a kingdom as {@link #settle} does, a part at a time: a large kingdom has hundreds of them, and
+     * looking at the workplace of a farmer works out what its fields yield.
+     *
+     * @param from  the citizen to go on from (0 at first)
+     * @param nanos the time of this call; at least one citizen is settled
+     * @return the citizen to go on from in the next call, or -1 once all are settled
+     */
+    public static int settleSome(MinecraftServer server, UUID kingdomId, int from, long nanos) {
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        Citizens citizens = state.citizens();
+        List<Citizen> all = List.copyOf(citizens.registry().citizensOf(kingdomId));
+        long started = System.nanoTime();
+        int next = Math.max(0, from);
+        while (next < all.size()) {
+            Citizen citizen = all.get(next++);
+            findPlaces(server, citizens, citizen);
+            survey(server, citizen);
+            if (next < all.size() && System.nanoTime() - started > nanos) {
+                return next;
+            }
+        }
+        for (WorkPost post : citizens.posts().postsOf(kingdomId)) {
+            if (post.hasProfession() && post.yield().isEmpty() && !ZoneSurveys.pending(post.pos())) {
+                ZoneSurveys.request(post.pos());
+            }
+        }
+        return -1;
+    }
+
+    /**
      * Lets the profession look at a loaded workplace, so that the abstract work has something to go on.
      */
     static void survey(MinecraftServer server, Citizen citizen) {

@@ -135,6 +135,8 @@ public final class NpcSpawner {
     static final int RAMP = 6;
     /** Citizens added in a tick at most. */
     private static final int CITIZENS_PER_TICK = 4;
+    /** Time a step gives the posts that take their citizens. */
+    private static final long PEOPLE_NANOS = 6_000_000L;
     /** Positions of the town plots around the town hall: x, z and where the front looks. */
     private static final int[][] TOWN_PLOTS = {{0, -12, 0}, {12, 0, 1}, {0, 12, 2}, {-12, 0, 3}, {12, -12, 0}, {-12, 12, 2}};
 
@@ -179,6 +181,9 @@ public final class NpcSpawner {
         long paused;
         /** Whether the background did nothing in the last tick: that tick is not its own. */
         boolean pausedLast;
+        /** Whether the guard and the army of the appearance got their posts; then the citizens it settles, from this one. */
+        boolean garrisonFounded;
+        int settled;
         /** Whether the background goes on without players. */
         boolean forced;
         /** Work posts still to be looked at before the chunks go; null before the kingdom settles. */
@@ -2027,13 +2032,8 @@ public final class NpcSpawner {
             return;
         }
         // Work: the posts take the citizens without work nearest to them, the farmers find their composters.
-        for (WorkPost post : state.citizens().posts().all()) {
-            if (!post.kingdomId().equals(id) || !post.hasProfession()) {
-                continue;
-            }
-            while (post.freeSeats() > 0 && state.hire(null, post.pos()).outcome().ok()) {
-                // One citizen after another.
-            }
+        if (!hireSome(state, id)) {
+            return;
         }
         int farmers = job.composition.jobs().getOrDefault("farmer", 0);
         int already = 0;
@@ -2058,6 +2058,27 @@ public final class NpcSpawner {
     }
 
     /**
+     * The posts of a kingdom take the citizens without work nearest to them, one after another, while the time of the step lasts.
+     *
+     * @return whether every post is full or nobody is left without work; otherwise the rest is hired in the next tick
+     */
+    private static boolean hireSome(KingdomWorldState state, UUID id) {
+        long started = System.nanoTime();
+        for (WorkPost post : state.citizens().posts().all()) {
+            if (!post.kingdomId().equals(id) || !post.hasProfession()) {
+                continue;
+            }
+            while (post.freeSeats() > 0 && state.hire(null, post.pos()).outcome().ok()) {
+                if (System.nanoTime() - started > PEOPLE_NANOS) {
+                    return false;
+                }
+            }
+        }
+        // The farmers are chosen in a tick of their own when the hiring took most of this one.
+        return System.nanoTime() - started <= PEOPLE_NANOS / 2;
+    }
+
+    /**
      * The citizens of a kingdom of districts: each arrives before its own house and takes the bed there, the posts then take
      * the citizens without work nearest to them, and the farmers come from those who live nearest to the fields: two for every
      * town from its own people, the rest from the houses of the capital furthest from the palace.
@@ -2077,13 +2098,8 @@ public final class NpcSpawner {
             }
             return;
         }
-        for (WorkPost post : state.citizens().posts().all()) {
-            if (!post.kingdomId().equals(id) || !post.hasProfession()) {
-                continue;
-            }
-            while (post.freeSeats() > 0 && state.hire(null, post.pos()).outcome().ok()) {
-                // One citizen after another.
-            }
+        if (!hireSome(state, id)) {
+            return;
         }
         int soldiers = composition.soldiers();
         int townFarmers = 2 * composition.townFields().size();
@@ -2180,9 +2196,16 @@ public final class NpcSpawner {
         if (!NpcGarrison.enlistSome(server, site)) {
             return;
         }
-        NpcGarrison.found(server, site, job.composition);
-        // The soldiers moved into the bunks of the barracks: whoever has no bed yet takes one of those they left.
-        io.github.sekerator.kingdomworld.common.citizen.CitizenSimulation.settle(server, id);
+        if (!job.garrisonFounded) {
+            NpcGarrison.found(server, site, job.composition);
+            job.garrisonFounded = true;
+            return;
+        }
+        // The soldiers moved into the bunks of the barracks: whoever has no bed yet takes one of those they left, a part a tick.
+        job.settled = io.github.sekerator.kingdomworld.common.citizen.CitizenSimulation.settleSome(server, id, job.settled, PEOPLE_NANOS);
+        if (job.settled >= 0) {
+            return;
+        }
         site.advance(afterArmy(job.composition));
     }
 

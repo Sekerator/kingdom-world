@@ -57,17 +57,17 @@ final class NpcPlanning {
     /** Town candidates judged in a tick at most, while the time of the tick lasts. */
     private static final int TOWNS_PER_TICK = 8;
     /** Time a tick spends on the plan at most: candidates the noise judges at once are gone through several a tick. */
-    private static final long BUDGET_NANOS = 12_000_000L;
+    private static final long BUDGET_NANOS = 16_000_000L;
     /** Time a tick spends on the plan at least, however long the tick was before the plan came to it. */
     private static final long MIN_BUDGET_NANOS = 3_000_000L;
     /** The plan takes what is left of a tick up to this length. */
-    private static final long TICK_AIM_NANOS = 25_000_000L;
+    private static final long TICK_AIM_NANOS = 28_000_000L;
     /**
      * Threads that ask the generator for the heights of many columns at once (the whole land of a candidate, its towns, the
      * height of a capital), off the ticks of the server: the generator answers any thread, as it does while it generates
      * chunks on its own threads.
      */
-    private static final java.util.concurrent.ExecutorService NOISE = java.util.concurrent.Executors.newFixedThreadPool(2, runnable -> {
+    private static final java.util.concurrent.ExecutorService NOISE = java.util.concurrent.Executors.newFixedThreadPool(3, runnable -> {
         Thread thread = new Thread(runnable, "KingdomWorld plan");
         thread.setDaemon(true);
         thread.setPriority(Thread.NORM_PRIORITY - 1);
