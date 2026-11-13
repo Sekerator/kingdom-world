@@ -31,7 +31,8 @@ import java.util.UUID;
  */
 public final class RoadSync {
     /** Every how many blocks of road the maps get a point. */
-    private static final int EVERY = 4;
+    /** How far a block of a road may stray from the line the maps draw, in blocks. */
+    private static final double THIN_BLOCKS = 3.0;
     /** About how many bytes of the parts of kingdoms a packet carries at most; a part larger than this goes alone. */
     static final int PACKET_BYTES = 192 * 1024;
     /** The first id of the settlements of the plan on the maps, negated; the roads of the plan start at twice it. */
@@ -478,15 +479,25 @@ public final class RoadSync {
      */
     public static RoadViews.MapRoad mapRoad(MinecraftServer server, Road road) {
         List<RouteCell> cells = road.cells();
-        int step = Math.max(EVERY, (cells.size() + RoadViews.MAX_POINTS - 2) / (RoadViews.MAX_POINTS - 1));
+        int[] allX = new int[cells.size()];
+        int[] allZ = new int[cells.size()];
+        for (int i = 0; i < cells.size(); i++) {
+            allX[i] = cells.get(i).x();
+            allZ[i] = cells.get(i).z();
+        }
+        // Only the bends: no block of the road strays further than a few blocks from the line drawn.
+        int[] kept = io.github.sekerator.kingdomworld.core.road.Polylines.keep(allX, allZ, THIN_BLOCKS);
+        int step = Math.max(1, (kept.length + RoadViews.MAX_POINTS - 2) / (RoadViews.MAX_POINTS - 1));
         List<Integer> xs = new ArrayList<>();
         List<Integer> zs = new ArrayList<>();
-        for (int i = 0; i < cells.size(); i += step) {
-            xs.add(cells.get(i).x());
-            zs.add(cells.get(i).z());
+        for (int k = 0; k < kept.length; k += step) {
+            xs.add(allX[kept[k]]);
+            zs.add(allZ[kept[k]]);
         }
-        xs.add(cells.get(cells.size() - 1).x());
-        zs.add(cells.get(cells.size() - 1).z());
+        if (kept.length > 0 && (kept.length - 1) % step != 0) {
+            xs.add(allX[kept[kept.length - 1]]);
+            zs.add(allZ[kept[kept.length - 1]]);
+        }
         int built = road.units() == 0 ? 1000 : (int) Math.round(1000.0 * road.paid() / road.units());
         return new RoadViews.MapRoad(road.id(), road.kingdomId(), road.dimension(), road.roadClass(), color(server, road.kingdomId()), built,
                 xs.stream().mapToInt(Integer::intValue).toArray(), zs.stream().mapToInt(Integer::intValue).toArray());

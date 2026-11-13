@@ -1796,6 +1796,7 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue maxCities;
         public final ForgeConfigSpec.IntValue minCityDistance;
         public final ForgeConfigSpec.IntValue maxRoads;
+        public final ForgeConfigSpec.IntValue npcMaxRoads;
         public final ForgeConfigSpec.IntValue maxRouteLength;
         public final ForgeConfigSpec.IntValue searchStepsPerTick;
         public final ForgeConfigSpec.IntValue maxSearchSteps;
@@ -1851,7 +1852,10 @@ public final class KingdomWorldConfig {
                     .defineInRange("maxCities", r.maxCities, 0, 256);
             minCityDistance = builder.comment("Blocks between two cities, or a city and a capital, at least.")
                     .defineInRange("minCityDistance", r.minCityDistance, 0, 10_000);
-            maxRoads = builder.comment("Roads one kingdom keeps at most.").defineInRange("maxRoads", r.maxRoads, 0, 1_024);
+            maxRoads = builder.comment("Roads one kingdom of players keeps at most; its cities are limited by maxCities and",
+                    "minCityDistance.").defineInRange("maxRoads", r.maxRoads, 0, 1_024);
+            npcMaxRoads = builder.comment("Roads one kingdom of the world keeps at most: the roads between the settlements of its plan;",
+                    "its settlements are those of its plan, not limited by maxCities.").defineInRange("npcMaxRoads", 200, 0, 4_096);
             maxRouteLength = builder.comment("The longest road, in blocks along its way.")
                     .defineInRange("maxRouteLength", r.maxRouteLength, 16, 8_192);
             searchStepsPerTick = builder.comment("Steps of the search for the way of a road the server makes in one tick.")

@@ -32,6 +32,24 @@ public final class RoadSettings {
         return value;
     }
 
+    /**
+     * The rules of cities and roads for a kingdom: those of the config for a kingdom of players, for a kingdom of the world its
+     * own number of roads and no limit of cities but its plan.
+     */
+    public static RoadRules rulesFor(net.minecraft.server.MinecraftServer server, java.util.UUID kingdomId) {
+        RoadRules rules = rules();
+        if (!io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, kingdomId)) {
+            return rules;
+        }
+        int most;
+        try {
+            most = io.github.sekerator.kingdomworld.common.config.KingdomWorldConfig.SERVER.roads.npcMaxRoads.get();
+        } catch (IllegalStateException e) {
+            most = 200;
+        }
+        return rules.forWorldKingdom(Math.max(rules.maxRoads(), most));
+    }
+
     public static BanditRules bandits() {
         if (banditOverride != null) {
             return banditOverride;
