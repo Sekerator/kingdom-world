@@ -66,8 +66,9 @@ public final class RegionHeaders {
 
     /**
      * The chunks of a region of the overworld that were generated: bit {@code (z & 31) * 32 + (x & 31)} of a chunk is set when
-     * the region file holds it. A region without a file has none; of a file too short or that cannot be read, the chunks that
-     * could be read count (with a word in the log). Every call gets a set of its own.
+     * the region file holds it. A region without a file has none; a file too short or that cannot be read counts as generated
+     * all over (with a word in the log), so that the plan keeps away from land it cannot tell about. Every call gets a set of its
+     * own.
      */
     public static CompletableFuture<BitSet> generated(MinecraftServer server, int regionX, int regionZ) {
         long key = ((long) regionX << 32) | (regionZ & 0xFFFFFFFFL);
@@ -83,7 +84,10 @@ public final class RegionHeaders {
         CACHE.clear();
     }
 
-    static BitSet read(Path file) {
+    /**
+     * The chunks a region file holds, as {@link #generated} tells them; public for game tests.
+     */
+    public static BitSet read(Path file) {
         byte[] header = new byte[HEADER];
         int length = 0;
         try (InputStream in = Files.newInputStream(file)) {
@@ -97,13 +101,23 @@ public final class RegionHeaders {
         } catch (NoSuchFileException e) {
             return new BitSet(CHUNKS);
         } catch (IOException | RuntimeException e) {
-            LOGGER.warn("Could not read the header of the region file {} past byte {}: only the chunks before count", file, length, e);
-            return chunks(header, length);
+            LOGGER.warn("Could not read the header of the region file {} past byte {}: the whole region counts as generated", file, length, e);
+            return all();
         }
         if (length < HEADER) {
-            LOGGER.warn("The region file {} is {} bytes long, shorter than its header: only the chunks it holds count", file, length);
+            LOGGER.warn("The region file {} is {} bytes long, shorter than its header: the whole region counts as generated", file, length);
+            return all();
         }
         return chunks(header, length);
+    }
+
+    /**
+     * Every chunk of a region, for a region whose file cannot tell which were generated.
+     */
+    public static BitSet all() {
+        BitSet bits = new BitSet(CHUNKS);
+        bits.set(0, CHUNKS);
+        return bits;
     }
 
     /**

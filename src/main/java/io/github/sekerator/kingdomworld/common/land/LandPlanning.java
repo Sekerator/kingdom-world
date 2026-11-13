@@ -653,7 +653,8 @@ public final class LandPlanning {
                 try {
                     bits = read.join();
                 } catch (CompletionException | java.util.concurrent.CancellationException e) {
-                    bits = new BitSet();
+                    // A region that could not be looked at is kept away from, as one whose file cannot be read.
+                    bits = RegionHeaders.all();
                 }
                 int regionX = x0 + cursor % across;
                 int regionZ = z0 + cursor / across;

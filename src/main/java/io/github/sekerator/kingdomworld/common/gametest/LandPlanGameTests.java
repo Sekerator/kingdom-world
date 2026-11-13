@@ -5,6 +5,7 @@ import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
 import io.github.sekerator.kingdomworld.common.land.LandEvents;
 import io.github.sekerator.kingdomworld.common.land.LandPlanning;
 import io.github.sekerator.kingdomworld.common.land.ProvinceSavedData;
+import io.github.sekerator.kingdomworld.common.land.RegionHeaders;
 import io.github.sekerator.kingdomworld.common.land.SurveyProbes;
 import io.github.sekerator.kingdomworld.common.land.SurveySavedData;
 import io.github.sekerator.kingdomworld.common.npc.NpcSettings;
@@ -350,6 +351,41 @@ public final class LandPlanGameTests {
         helper.assertTrue(!LandPlanning.wanted(server, false), "The world of the tests got the plan of states");
         helper.assertTrue(!ProvinceSavedData.get(server).hasPlan(), "The world of the tests has a plan of states");
         helper.assertTrue(LandPlanning.describe(server).isEmpty(), "The world of the tests describes a plan of states");
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_land_regions")
+    public static void aRegionFileThatCannotBeReadCountsAsGeneratedAllOver(GameTestHelper helper) {
+        java.nio.file.Path folder = null;
+        try {
+            folder = java.nio.file.Files.createTempDirectory("kingdomworld-regions");
+            // No file: nothing was generated there.
+            helper.assertTrue(RegionHeaders.read(folder.resolve("r.0.0.mca")).isEmpty(), "A region without a file has chunks");
+            // A whole header with one chunk in it: that chunk alone.
+            byte[] header = new byte[8192];
+            header[4 * 37 + 3] = 1;
+            java.nio.file.Path whole = folder.resolve("r.1.0.mca");
+            java.nio.file.Files.write(whole, header);
+            java.util.BitSet one = RegionHeaders.read(whole);
+            helper.assertTrue(one.cardinality() == 1 && one.get(37), "A header with chunk 37 tells " + one);
+            // A file cut short in its header cannot tell which chunks are there: all of them count, the plan keeps away.
+            java.nio.file.Path cut = folder.resolve("r.2.0.mca");
+            java.nio.file.Files.write(cut, Arrays.copyOf(header, 200));
+            helper.assertTrue(RegionHeaders.read(cut).cardinality() == 1024, "A file cut short does not count as generated all over");
+            // A folder where the file should be cannot be read either.
+            java.nio.file.Path odd = java.nio.file.Files.createDirectory(folder.resolve("r.3.0.mca"));
+            helper.assertTrue(RegionHeaders.read(odd).cardinality() == 1024, "A file that cannot be read does not count as generated all over");
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("The files of the test could not be made", e);
+        } finally {
+            if (folder != null) {
+                try (java.util.stream.Stream<java.nio.file.Path> paths = java.nio.file.Files.walk(folder)) {
+                    paths.sorted(java.util.Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
+                } catch (java.io.IOException ignored) {
+                    // A temporary folder left behind is no failure of the test.
+                }
+            }
+        }
         helper.succeed();
     }
 
