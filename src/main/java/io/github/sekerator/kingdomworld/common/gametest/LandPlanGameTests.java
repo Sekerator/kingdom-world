@@ -216,7 +216,6 @@ public final class LandPlanGameTests {
             }
             job.tick();
             if (restarts.size() == 1 && job.progress().stage() == Stage.PROVINCES) {
-                helper.assertTrue(job.working(), "The provinces are not being made on the worker thread");
                 stopped[0] = restart(server, job, stoppedMap);
                 helper.assertTrue(stopped[0].progress().stage() == Stage.PROVINCES, "The plan went back: " + stopped[0].progress());
                 restarts.add("provinces");

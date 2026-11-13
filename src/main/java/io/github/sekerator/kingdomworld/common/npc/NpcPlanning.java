@@ -587,6 +587,134 @@ public final class NpcPlanning {
         return !heights.isEmpty() && heights.get(heights.size() - 1 - trim) - heights.get(trim) <= allowed;
     }
 
+    /**
+     * The judgement of {@link #suitableCapital} column by column, so that it can be spread over ticks: every column is a look at
+     * the noise of the generator, and the whole grid of a large capital is about a hundred of them.
+     */
+    public static final class CapitalJudge {
+        private final int x;
+        private final int z;
+        private final int sea;
+        private final int reach;
+        private final int step;
+        private final int across;
+        private final int allowed;
+        private final int wetAllowed;
+        private final int relax;
+        /** 0 the biome of the throne, 1 the nine columns of the middle, the corners and the sides, 2 the whole grid. */
+        private int phase;
+        private int index;
+        private int low = Integer.MAX_VALUE;
+        private int high = Integer.MIN_VALUE;
+        private int wet;
+        private final List<Integer> heights = new ArrayList<>();
+        private Boolean verdict;
+
+        public CapitalJudge(ServerLevel level, int x, int z, NpcLevel kingdom, int relax) {
+            this.x = x;
+            this.z = z;
+            this.sea = level.getChunkSource().getGenerator().getSeaLevel();
+            this.reach = NpcComposition.districtWall(kingdom) + 8;
+            this.step = Math.max(8, reach / 3);
+            this.across = 2 * reach / step + 1;
+            this.allowed = CAPITAL_ROUGHNESS[kingdom.ordinal()] + ROUGHNESS_PER_PASS * Math.min(relax, 3);
+            this.wetAllowed = WET_PER_PASS * Math.min(relax, 3);
+            this.relax = relax;
+        }
+
+        /**
+         * The verdict, once there is one.
+         */
+        public Optional<Boolean> verdict() {
+            return Optional.ofNullable(verdict);
+        }
+
+        /**
+         * How many looks at the height of the ground the next look takes: one for the biome of the throne and the nine columns,
+         * two for a column of the grid (the ground and the surface of the water).
+         */
+        public int heightsNext() {
+            return phase == 2 ? 2 : 1;
+        }
+
+        /**
+         * Judges to the end at once.
+         */
+        public boolean run(ServerLevel level) {
+            while (verdict == null) {
+                look(level);
+            }
+            return verdict;
+        }
+
+        /**
+         * One look at the noise: the biome of the throne, a column of the nine, or a column of the grid.
+         *
+         * @return the verdict, once there is one
+         */
+        public Optional<Boolean> look(ServerLevel level) {
+            if (verdict != null) {
+                return Optional.of(verdict);
+            }
+            ChunkGenerator generator = level.getChunkSource().getGenerator();
+            RandomState random = level.getChunkSource().randomState();
+            switch (phase) {
+                case 0 -> {
+                    // The cheap looks first: the biome of the throne, then the middle, the corners and the sides of the square. Most
+                    // land falls here, and the whole grid is looked at only where these nine columns are dry and about level.
+                    if (!allowed(biomeAt(level, x, z))) {
+                        verdict = false;
+                    }
+                    phase = 1;
+                }
+                case 1 -> {
+                    int dx = (index % 3 - 1) * reach;
+                    int dz = (index / 3 - 1) * reach;
+                    index++;
+                    int floor = generator.getBaseHeight(x + dx, z + dz, Heightmap.Types.OCEAN_FLOOR_WG, level, random);
+                    if (floor <= sea) {
+                        if (wetAllowed == 0 || (dx == 0 && dz == 0)) {
+                            verdict = false;
+                        }
+                    } else {
+                        low = Math.min(low, floor);
+                        high = Math.max(high, floor);
+                    }
+                    if (verdict == null && index == 9) {
+                        // The grid trims its two lowest and highest columns on later passes: the nine may differ a little more.
+                        if (high - low > allowed + (relax > 0 ? 6 : 0)) {
+                            verdict = false;
+                        }
+                        phase = 2;
+                        index = 0;
+                    }
+                }
+                default -> {
+                    int dx = -reach + (index / across) * step;
+                    int dz = -reach + (index % across) * step;
+                    index++;
+                    int floor = generator.getBaseHeight(x + dx, z + dz, Heightmap.Types.OCEAN_FLOOR_WG, level, random);
+                    int surface = generator.getBaseHeight(x + dx, z + dz, Heightmap.Types.WORLD_SURFACE_WG, level, random);
+                    if (surface > floor || floor <= sea) {
+                        // Water over the ground, or ground at the level of the sea.
+                        if (++wet > wetAllowed || (dx == 0 && dz == 0)) {
+                            verdict = false;
+                        }
+                    } else {
+                        heights.add(floor);
+                    }
+                    if (verdict == null && index == across * across) {
+                        heights.sort(Integer::compare);
+                        // The few lowest and highest columns are cut or filled: what counts is the ground between them.
+                        int trim = relax > 0 ? Math.min(2, heights.size() / 16) : 0;
+                        verdict = !heights.isEmpty() && heights.get(heights.size() - 1 - trim) - heights.get(trim) <= allowed;
+                    }
+                }
+            }
+            return Optional.ofNullable(verdict);
+        }
+    }
+
     /** The heights of the columns of a capital asked of the generator off the tick, by the place of its throne. */
     private static final java.util.Map<Long, List<CompletableFuture<Integer>>> CAPITAL_HEIGHTS = new java.util.HashMap<>();
 

@@ -37,7 +37,11 @@ public final class LandSurvey {
         int width = data.width();
         long reach = (long) data.radius() + SurveySavedData.MARGIN;
         int cell = data.nextCell();
-        while (cell < cells && System.nanoTime() < deadlineNanos) {
+        // A cell is not begun when the last one would not end before the deadline: one look at the ground costs a lot.
+        long last = 0;
+        long now = System.nanoTime();
+        while (cell < cells && now - deadlineNanos < 0 && now + last - deadlineNanos < 0) {
+            long start = now;
             int x = data.originX() + (cell % width) * SurveyRaster.CELL + SurveyRaster.CELL / 2;
             int z = data.originZ() + (cell / width) * SurveyRaster.CELL + SurveyRaster.CELL / 2;
             long dx = x - (long) data.spawnX();
@@ -55,6 +59,10 @@ public final class LandSurvey {
             }
             cell++;
             data.advance(cell);
+            now = System.nanoTime();
+            if (dx * dx + dz * dz <= reach * reach) {
+                last = now - start;
+            }
         }
         if (cell >= cells) {
             data.finish();
@@ -72,5 +80,34 @@ public final class LandSurvey {
         int z = (chunkZ << 4) + 8;
         int floor = SurveyProbes.floor(level, x, z);
         return SurveyClassifier.chunk(SurveyProbes.probe(level, x, floor, z), floor, seaLevel);
+    }
+
+    /**
+     * The class of a chunk of a cell of a class, as cheaply as it can be told: the biome at the level of the sea says the sea, a
+     * river or the shore at once; the height of the ground, the dear look, is asked only in a cell of a lake, where it alone tells
+     * the water from the land. Elsewhere a chunk of another biome is land (or a swamp).
+     */
+    public static TerrainClass probeChunk(ServerLevel level, int chunkX, int chunkZ, int seaLevel, TerrainClass cell) {
+        int x = (chunkX << 4) + 8;
+        int z = (chunkZ << 4) + 8;
+        SurveyClassifier.Probe probe = SurveyProbes.probe(level, x, seaLevel, z);
+        if (probe == SurveyClassifier.Probe.OCEAN || probe == SurveyClassifier.Probe.RIVER || probe == SurveyClassifier.Probe.BEACH
+                || cell != TerrainClass.LAKE) {
+            groundLooked = false;
+            return SurveyClassifier.chunk(probe, seaLevel + 1, seaLevel);
+        }
+        groundLooked = true;
+        return SurveyClassifier.chunk(probe, SurveyProbes.floor(level, x, z), seaLevel);
+    }
+
+    /** Whether the last chunk probed by its cell needed the height of its ground. Server thread only. */
+    private static boolean groundLooked;
+
+    /**
+     * Whether the last chunk probed by its cell ({@link #probeChunk(ServerLevel, int, int, int, TerrainClass)}) needed the dear
+     * look at the height of its ground.
+     */
+    public static boolean lookedAtGround() {
+        return groundLooked;
     }
 }

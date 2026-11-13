@@ -218,7 +218,8 @@ public final class ScaleGameTests {
             data.setDirty();
             AsyncSave.failNextForTest(new IllegalStateException("the writer stopped"));
             AsyncSave.save(data, file, "test");
-            AsyncSave.await();
+            // The writer alone: waiting for it as a stopping server does would write the failed save again at once.
+            AsyncSave.awaitWriterForTest();
             helper.assertTrue(read(file).equals("old"), "A broken save spoiled the file");
             helper.assertTrue(!Files.exists(folder.resolve("kingdomworld_test.dat.tmp")), "A half written file was left");
             // The next save writes again what was not written, though nothing changed since.
