@@ -213,8 +213,9 @@ public final class DiplomacyActions {
         if (!check.ok()) {
             return check;
         }
-        if (Cessions.chartered(server, province)) {
-            return Outcome.fail(KingdomError.NOT_FOR_SALE);
+        Optional<KingdomError> barred = Cessions.barred(server, to, province);
+        if (barred.isPresent()) {
+            return Outcome.fail(barred.get());
         }
         if (price > 0) {
             // What the price costs the asker in its currency by the rates of today; the money moves only on acceptance.

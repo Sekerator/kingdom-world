@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.common.diplomacy;
 
+import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.economy.MoneyTexts;
 import io.github.sekerator.kingdomworld.common.trade.Purses;
 import io.github.sekerator.kingdomworld.common.trade.TradeTexts;
@@ -56,6 +57,13 @@ public final class WarTexts {
     }
 
     /**
+     * A number of provinces in words, in the right plural form.
+     */
+    public static MutableComponent provinces(long count) {
+        return Component.translatable(KEY + "count.provinces." + Plurals.form(count).suffix(), count);
+    }
+
+    /**
      * What an offer is, in full: a pact for some days, an alliance, who becomes whose vassal, freedom, peace on terms, a
      * province for a price or for nothing.
      */
@@ -98,7 +106,14 @@ public final class WarTexts {
             parts.add(Component.translatable(KEY + "terms.independence", winnerName));
         }
         if (terms.landChunks() > 0) {
-            parts.add(Component.translatable(KEY + "terms.land", winnerName, chunks(terms.landChunks())));
+            // A kingdom holding provinces gives up whole provinces taken in the war; a kingdom of players its chunks as well.
+            boolean provinces = !KingdomWorldApi.state(server).territory().provincesOf(loser).isEmpty();
+            if (provinces) {
+                parts.add(Component.translatable(KEY + "terms.provinces", winnerName, provinces(terms.provinces())));
+            }
+            if (!provinces || !WarWork.isNpc(server, loser)) {
+                parts.add(Component.translatable(KEY + "terms.land", winnerName, chunks(terms.landChunks())));
+            }
         }
         if (!terms.city().isEmpty()) {
             parts.add(Component.translatable(KEY + "terms.city", winnerName));

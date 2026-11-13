@@ -113,6 +113,8 @@ final class SiegeConquests {
             TerritoryIndex territory = KingdomWorldApi.state(server).territory();
             String dimension = territory.territory(claim.loser()).map(Territory::dimension).orElse("");
             boolean any = false;
+            // A kingdom of players that bought a province keeps the rules of chunks for its claims and cities as well.
+            boolean chunkRules = claim.provinces().isEmpty() || !WarWork.isNpc(server, claim.loser());
             if (!claim.provinces().isEmpty()) {
                 // A war on a state: the provinces the winner took go whole, with their claims, settlements and people.
                 String where = territory.provinceMap().map(ProvinceMap::dimension).orElse(dimension);
@@ -122,14 +124,15 @@ final class SiegeConquests {
                 }
                 state.addConquest(Conquest.Kind.PROVINCE, claim.war(), claim.winner(), claim.loser(), where, ids, 0, now);
                 any = true;
-            } else if (claim.chunks() > 0) {
+            }
+            if (chunkRules && claim.chunks() > 0) {
                 List<Long> land = Conquest.landToCede(holds, claim.winner(), claim.loser(), claim.war(), claim.chunks());
                 if (!land.isEmpty()) {
                     state.addConquest(Conquest.Kind.LAND, claim.war(), claim.winner(), claim.loser(), dimension, land, 0, now);
                     any = true;
                 }
             }
-            if (claim.provinces().isEmpty() && !claim.city().isEmpty()) {
+            if (chunkRules && !claim.city().isEmpty()) {
                 Optional<Long> city = Conquest.cityToCede(holds, claim.winner(), claim.loser(), claim.war(), claim.city(),
                         id -> SiegeTexts.cityName(server, claim.loser(), id));
                 if (city.isPresent()) {
@@ -338,8 +341,11 @@ final class SiegeConquests {
             case ANNEX -> annexLand(server, conquest, pace);
         };
         if (done) {
+            // Chunks held in other wars that left the loser with this land are taken from it no more.
+            TerritoryIndex territory = KingdomWorldApi.state(server).territory();
             for (Hold hold : List.copyOf(state.holds())) {
-                if (hold.kind() == Hold.Kind.CHUNK && hold.defender().equals(conquest.loser())) {
+                if (hold.kind() == Hold.Kind.CHUNK && hold.defender().equals(conquest.loser())
+                        && !conquest.loser().equals(territory.claimOwner(hold.dimension(), hold.target()))) {
                     state.putHold(new Hold(hold.kind(), hold.war(), hold.attacker(), hold.defender(), hold.dimension(), hold.target(), 0, false,
                             hold.since()));
                 }

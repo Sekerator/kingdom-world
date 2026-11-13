@@ -754,6 +754,7 @@ public final class ProvinceWarGameTests {
             answered(server, offer.id());
             helper.assertTrue(diplomacy.proposal(offer.id()).map(p -> p.status() == Proposal.Status.ACCEPTED).orElse(false),
                     "The ruler did not cede the edge for its own price");
+            helper.assertTrue(asker.id().equals(map.owner(CEDE_EDGE)), "The edge paid for is not the asker's before the journal");
             SiegeWork.forceConquests(server);
             helper.assertTrue(asker.id().equals(map.owner(CEDE_EDGE)), "The edge did not go to the asker");
             helper.assertTrue(heldBy(npc, List.of(seat.id()), asker.id()) == 1, "The village of the edge stayed with the ruler");

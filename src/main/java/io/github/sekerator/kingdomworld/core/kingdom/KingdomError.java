@@ -383,7 +383,9 @@ public enum KingdomError {
     /** The guild of mages here teaches the spell up to a lower level. */
     LESSON_TOO_HIGH,
     /** The guild of mages teaches no one wanted here or of a kingdom at war with this one. */
-    NOT_WELCOME;
+    NOT_WELCOME,
+    /** The province is at stake in a war or in a peace being carried out: held by an enemy or about to change hands. */
+    LAND_AT_STAKE;
 
     /**
      * Lower case identifier, used for translation keys.

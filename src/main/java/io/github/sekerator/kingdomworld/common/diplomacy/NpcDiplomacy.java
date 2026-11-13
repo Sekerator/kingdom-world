@@ -249,7 +249,8 @@ final class NpcDiplomacy {
                 continue;
             }
             offerPeace(server, state, rules, kingdom.id());
-            // A state is a neighbour of the states its provinces border, however far their capitals stand.
+            // A state is a neighbour of the states its provinces border, however far their capitals stand; a kingdom of players
+            // is one only as near as before.
             Set<UUID> bordering = bordering(server, kingdom.id());
             List<DiplomacyMind.Neighbor> neighbors = new ArrayList<>();
             for (Kingdom other : kingdoms) {
@@ -261,7 +262,7 @@ final class NpcDiplomacy {
                     continue;
                 }
                 double distance = Math.hypot(theirs.get().x() - capital.get().x(), theirs.get().z() - capital.get().z());
-                boolean borders = bordering.contains(other.id());
+                boolean borders = bordering.contains(other.id()) && WarWork.isNpc(server, other.id());
                 if (distance <= WarWork.NEIGHBOUR_DISTANCE || borders) {
                     neighbors.add(WarWork.neighbor(server, kingdom.id(), other.id(), distance, now, rules, borders));
                 }

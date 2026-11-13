@@ -860,8 +860,8 @@ class TranslationKeysTest {
     }
 
     /**
-     * Words of diplomacy and war exist in both languages: chunks in every plural form («1 чанк, 2 чанка, 5 чанков»), every goal,
-     * bond, offer, reason of a relation, way a war ends, answer of a ruler of the world, entry of the chronicle and rumor of a war,
+     * Words of diplomacy and war exist in both languages: chunks and provinces in every plural form («1 чанк, 2 чанка, 5
+     * чанков»), every goal, bond, offer, reason of a relation, way a war ends, answer of a ruler of the world, entry of the chronicle and rumor of a war,
      * action of the tab and refusal of a cession, the lines of the tab of war for every place held (a chunk is counted apart) and
      * every conquest, and the line above the hotbar for every place held.
      */
@@ -873,6 +873,12 @@ class TranslationKeysTest {
             String key = "kingdomworld.war.count.chunks." + all[i].suffix();
             assertEquals("%s " + russianChunks[i], russian.get(key), key);
             assertEquals("%s " + (all[i] == Plurals.Form.N1 ? "chunk" : "chunks"), english.get(key), key);
+        }
+        String[] russianProvinces = {"провинция", "провинция", "провинции", "провинций"};
+        for (int i = 0; i < all.length; i++) {
+            String key = "kingdomworld.war.count.provinces." + all[i].suffix();
+            assertEquals("%s " + russianProvinces[i], russian.get(key), key);
+            assertEquals("%s " + (all[i] == Plurals.Form.N1 ? "province" : "provinces"), english.get(key), key);
         }
         List<String> keys = new java.util.ArrayList<>();
         for (io.github.sekerator.kingdomworld.core.diplomacy.WarGoal goal : io.github.sekerator.kingdomworld.core.diplomacy.WarGoal.values()) {
@@ -920,7 +926,7 @@ class TranslationKeysTest {
                 : io.github.sekerator.kingdomworld.common.network.packet.DiplomacyPackets.TabChange.Action.values()) {
             keys.add("kingdomworld.war.tab.done." + action.name().toLowerCase(java.util.Locale.ROOT));
         }
-        for (String why : List.of("not_theirs", "heart", "not_bordering", "chartered")) {
+        for (String why : List.of("not_theirs", "heart", "not_bordering", "chartered", "at_stake")) {
             keys.add("kingdomworld.war.cede.refused." + why);
         }
         for (String key : keys) {

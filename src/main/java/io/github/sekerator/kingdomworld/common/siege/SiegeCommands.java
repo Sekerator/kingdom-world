@@ -22,6 +22,7 @@ import io.github.sekerator.kingdomworld.core.siege.Siege;
 import io.github.sekerator.kingdomworld.core.siege.SiegeRules;
 import io.github.sekerator.kingdomworld.core.siege.SiegeState;
 import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
+import io.github.sekerator.kingdomworld.core.territory.TerritoryIndex;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -324,15 +325,23 @@ public final class SiegeCommands {
         BlockPos at = BlockPos.containing(source.getPosition());
         String dimension = Dimensions.id(source.getLevel());
         long chunk = ChunkKey.of(at.getX() >> 4, at.getZ() >> 4);
-        if (!defender.id().equals(KingdomWorldApi.state(server).territory().ownerOf(dimension, chunk))) {
+        TerritoryIndex territory = KingdomWorldApi.state(server).territory();
+        if (!defender.id().equals(territory.ownerOf(dimension, chunk))) {
             throw NO_CITY.create(ChunkKey.format(chunk));
         }
         if (!writable(source)) {
             return 0;
         }
         long now = KingdomWorldApi.gameTime(server);
-        Hold hold = SiegeWork.state(server).holdAt(Hold.Kind.CHUNK, war.id(), war.attacker(), defender.id(), dimension, chunk, now);
-        hold.take(now, SiegeSettings.rules());
+        if (defender.id().equals(territory.claimOwner(dimension, chunk))) {
+            Hold hold = SiegeWork.state(server).holdAt(Hold.Kind.CHUNK, war.id(), war.attacker(), defender.id(), dimension, chunk, now);
+            hold.take(now, SiegeSettings.rules());
+        } else {
+            // Land held as a province is taken by its province, as the war takes it.
+            int province = territory.provinceAt(dimension, chunk);
+            Hold hold = SiegeWork.state(server).holdAt(Hold.Kind.PROVINCE, war.id(), war.attacker(), defender.id(), dimension, province, now);
+            hold.take(now, SiegeHolds.need(server, hold, SiegeSettings.rules()));
+        }
         SiegeWork.state(server).changed();
         source.sendSuccess(() -> Component.translatable(ADMIN + "occupied", ChunkKey.x(chunk), ChunkKey.z(chunk)), true);
         return 1;

@@ -277,8 +277,9 @@ public final class SiegeWork {
     }
 
     /**
-     * A province ceded by treaty goes to the kingdom that asked for it by the journal of conquests, as a province a peace
-     * hands over: its land with the claims of the one who ceded it in it, then buildings, citizens, cities and settlements.
+     * What stands in a province ceded by treaty goes to the kingdom that asked for it by the journal of conquests, as in a
+     * province a peace hands over: the claims of the one who ceded it in it, then buildings, citizens, cities and settlements.
+     * The province itself is the asker's already, from the moment it was paid for.
      *
      * @param dimension the world of the provinces
      */
@@ -286,6 +287,32 @@ public final class SiegeWork {
         state(server).addConquest(Conquest.Kind.PROVINCE, 0, winner, loser, dimension, List.of((long) province), 0, now);
         LOGGER.info("The province {} ceded by {} to {} goes over by the journal of conquests", province, WarWork.name(server, loser).getString(),
                 WarWork.name(server, winner).getString());
+    }
+
+    /**
+     * Whether a province of a kingdom is at stake in a war or in a peace the world carries out: an enemy holds it or has taken
+     * it, a claim of a peace or a conquest still in the journal names it, or its holder is being annexed. Such a province is not
+     * ceded by treaty, so what a war won is never given to another meanwhile.
+     */
+    public static boolean atStake(MinecraftServer server, UUID holder, int province) {
+        SiegeState siege = state(server);
+        for (Hold hold : siege.holds()) {
+            if (hold.kind() == Hold.Kind.PROVINCE && hold.target() == province && hold.defender().equals(holder)) {
+                return true;
+            }
+        }
+        for (Conquest conquest : siege.conquests()) {
+            if (conquest.kind() == Conquest.Kind.ANNEX && conquest.loser().equals(holder)
+                    || conquest.kind() == Conquest.Kind.PROVINCE && conquest.provinces().contains(province)) {
+                return true;
+            }
+        }
+        for (DiplomacyState.Claim claim : WarWork.state(server).claims()) {
+            if (claim.loser().equals(holder) && (claim.throne() || claim.provinces().contains(province))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     static Optional<Seat> seat(MinecraftServer server, UUID kingdomId, long cityId) {

@@ -9,6 +9,7 @@ import io.github.sekerator.kingdomworld.common.land.ProvinceSavedData;
 import io.github.sekerator.kingdomworld.common.land.ProvinceTrade;
 import io.github.sekerator.kingdomworld.common.network.data.DiplomacyViews;
 import io.github.sekerator.kingdomworld.common.npc.NpcWork;
+import io.github.sekerator.kingdomworld.common.road.RoadWork;
 import io.github.sekerator.kingdomworld.common.siege.SiegeTexts;
 import io.github.sekerator.kingdomworld.common.siege.SiegeWork;
 import io.github.sekerator.kingdomworld.common.trade.Purses;
@@ -45,7 +46,7 @@ import java.util.UUID;
  * Provinces ceded by treaty outside war, as the world sees them: what the land says of a province asked for, what a ruler of
  * the world asks for it (the price it asks for a province on sale, twice that where people live, nothing when it would give
  * it away), which provinces a kingdom may ask each of its neighbours for, and the acceptance: the price paid by the books on
- * the line "Land", then the journal of conquests hands the province over whole, as a peace does.
+ * the line "Land", the province handed over at once, then what stands in it by the journal of conquests, as a peace does.
  */
 final class Cessions {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -91,6 +92,20 @@ final class Cessions {
 
     private static boolean chartered(ProvinceMap map, int id, long day) {
         return map.hold(id).filter(hold -> hold.untilDay() > day).isPresent();
+    }
+
+    /**
+     * Why a province cannot be asked for or ceded now beyond what the land says: it is promised by a charter, or it is at stake
+     * in a war or in a peace the world carries out; empty when nothing stands in the way.
+     */
+    static Optional<KingdomError> barred(MinecraftServer server, @Nullable UUID holder, int id) {
+        if (chartered(server, id)) {
+            return Optional.of(KingdomError.NOT_FOR_SALE);
+        }
+        if (holder != null && SiegeWork.atStake(server, holder, id)) {
+            return Optional.of(KingdomError.LAND_AT_STAKE);
+        }
+        return Optional.empty();
     }
 
     /**
@@ -175,7 +190,7 @@ final class Cessions {
         }
         long day = TreasuryActions.day(server);
         Map<UUID, List<Integer>> candidates = CedeLand.candidates(bordering, map::owner, asker, holder -> SiegeWork.capitalProvince(server, holder),
-                id -> chartered(map, id, day), MAX_OFFERED);
+                id -> chartered(map, id, day) || map.owner(id) != null && SiegeWork.atStake(server, map.owner(id), id), MAX_OFFERED);
         Map<UUID, List<DiplomacyViews.CedeOption>> options = new HashMap<>();
         candidates.forEach((holder, provinces) -> {
             List<DiplomacyViews.CedeOption> list = new ArrayList<>(provinces.size());
@@ -205,6 +220,7 @@ final class Cessions {
             case CAPITAL_CHUNK -> "heart";
             case NOT_ADJACENT -> "not_bordering";
             case NOT_FOR_SALE -> "chartered";
+            case LAND_AT_STAKE -> "at_stake";
             default -> null;
         };
         return key == null ? Optional.empty() : Optional.of(Component.translatable(WarWork.KEY + "cede.refused." + key));
@@ -213,11 +229,12 @@ final class Cessions {
     /**
      * Accepts an offer to cede a province: the land and the money of the asker are looked at again, the asker pays the price
      * in its currency by the rates of the day into the reserves of the one who cedes, on the line "Land" of both (in the books
-     * of both or not at all), and the journal of conquests hands the province over whole with its claims, buildings, citizens,
-     * cities and settlements.
+     * of both or not at all), the province is the asker's at once, and the journal of conquests hands over what stands in it:
+     * the claims of the one who ceded it, buildings, citizens, cities and settlements.
      */
     static Outcome accept(MinecraftServer server, Proposal proposal, UUID kingdomId) {
-        if (SiegeWork.isReadOnly(server) || ProvinceSavedData.get(server).isReadOnly() || KingdomWorldApi.isReadOnly(server)) {
+        if (SiegeWork.isReadOnly(server) || ProvinceSavedData.get(server).isReadOnly() || KingdomWorldApi.isReadOnly(server)
+                || RoadWork.isReadOnly(server)) {
             return Outcome.fail(KingdomError.READ_ONLY);
         }
         DiplomacyState state = WarWork.state(server);
@@ -230,8 +247,9 @@ final class Cessions {
         if (!check.ok()) {
             return check;
         }
-        if (chartered(server, id)) {
-            return Outcome.fail(KingdomError.NOT_FOR_SALE);
+        Optional<KingdomError> barred = barred(server, land == null ? null : land.holder(), id);
+        if (barred.isPresent()) {
+            return Outcome.fail(barred.get());
         }
         Economy economy = KingdomWorldApi.state(server).economy();
         if (proposal.price() > 0) {
@@ -252,7 +270,12 @@ final class Cessions {
             return outcome.ok() ? Outcome.fail(KingdomError.UNKNOWN_PROPOSAL) : outcome;
         }
         DiplomacyState.Cession cession = accepted[0].cession().get();
-        String dimension = LandEvents.attach(server).provinceMap().map(ProvinceMap::dimension).orElse("");
+        TerritoryIndex territory = LandEvents.attach(server);
+        Optional<ProvinceMap> map = territory.provinceMap();
+        String dimension = map.map(ProvinceMap::dimension).orElse("");
+        // The province is the asker's the moment it is paid for, so nobody else can be promised it while the journal works.
+        territory.transferProvince(cession.province(), cession.winner(), day);
+        map.ifPresent(provinces -> ProvinceTrade.voidCharter(server, provinces, cession.province()));
         SiegeWork.cede(server, cession.winner(), cession.loser(), cession.province(), dimension, now);
         state.record(now, "ceded", cession.winner(), cession.loser(), 0, Integer.toString(cession.province()));
         LOGGER.info("{} ceded the province {} to {} for {}", WarWork.name(server, cession.loser()).getString(), id,
