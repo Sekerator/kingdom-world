@@ -54,8 +54,9 @@ public final class TacticMover {
             going = null;
             return true;
         }
-        if (distance < STRAIGHT * STRAIGHT && Math.abs(body.getY() - place.y()) < 1.2) {
-            // Close by and on the same level: a step, no path to search.
+        if (distance < STRAIGHT * STRAIGHT && Math.abs(body.getY() - place.y()) < 1.2 && safeLine(place)) {
+            // Close by, on the same level and over ground to walk on all the way: a step, no path to search. Otherwise the path,
+            // which goes round lava, fire and drops, even close by.
             body.getNavigation().stop();
             going = null;
             body.getMoveControl().setWantedPosition(place.x(), place.y(), place.z(), speed);
@@ -68,6 +69,33 @@ public final class TacticMover {
             body.getNavigation().moveTo(place.x(), place.y(), place.z(), speed);
         }
         return false;
+    }
+
+    /**
+     * Whether the straight line from the body to a place runs over ground a mob walks on, every half block: a straight step
+     * does not look where it goes, and the places of going round a target are not settled on the ground (they may lie over
+     * lava or a drop by the target).
+     */
+    private boolean safeLine(Spot place) {
+        double dx = place.x() - body.getX();
+        double dz = place.z() - body.getZ();
+        int steps = Math.max(1, (int) Math.ceil(Math.sqrt(dx * dx + dz * dz) * 2));
+        int y = net.minecraft.util.Mth.floor(body.getY() + 0.5);
+        net.minecraft.core.BlockPos.MutableBlockPos at = new net.minecraft.core.BlockPos.MutableBlockPos();
+        for (int i = 1; i <= steps; i++) {
+            double t = i / (double) steps;
+            at.set(net.minecraft.util.Mth.floor(body.getX() + dx * t), y, net.minecraft.util.Mth.floor(body.getZ() + dz * t));
+            if (!body.level().isLoaded(at)) {
+                return false;
+            }
+            net.minecraft.world.level.pathfinder.BlockPathTypes type =
+                    net.minecraft.world.level.pathfinder.WalkNodeEvaluator.getBlockPathTypeStatic(body.level(), at);
+            if (type != net.minecraft.world.level.pathfinder.BlockPathTypes.WALKABLE
+                    && type != net.minecraft.world.level.pathfinder.BlockPathTypes.DOOR_OPEN) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
