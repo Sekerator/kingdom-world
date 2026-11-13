@@ -228,6 +228,22 @@ class SquadPlannerTest {
     }
 
     @Test
+    void aRingHalfOverLavaGivesEveryFighterABlockOfItsOwnByTheEnemy() {
+        // Lava east of x = 1 and on a block-wide strip next to it: the ring there cannot be stood on. The places move along the
+        // ring to the dry side instead of falling back to the same few blocks, and no two fighters are given one block.
+        Ground lava = spot -> spot.x() > 0.0 ? null : new Spot(Math.floor(spot.x()) + 0.5, spot.y(), Math.floor(spot.z()) + 0.5);
+        List<Fighter> own = blades(6, -8, 0);
+        Foe target = foe(0.5, 0.5, 4, 20);
+        Plan plan = SquadPlanner.plan(own, 6, List.of(target), null, lava, RULES, false);
+        java.util.Set<String> blocks = new java.util.HashSet<>();
+        for (Duty duty : plan.duties()) {
+            assertTrue(duty.stand().x() <= 0.0, "sent into lava: " + duty.stand());
+            assertTrue(blocks.add(Math.floor(duty.stand().x()) + "," + Math.floor(duty.stand().z())), "two fighters on one block: " + plan.duties());
+            assertTrue(duty.stand().flatDistanceTo(target.spot()) <= RULES.ringRadius + 2.5, "sent far from the enemy: " + duty.stand());
+        }
+    }
+
+    @Test
     void aTargetInANarrowPlaceIsWaitedForAtItsWaysOutAndOneUpAPillarAtItsFoot() {
         List<Fighter> own = blades(4, -8, 0);
         Foe cornered = new Foe(id(), new Spot(0, 64, 0), 20, 20, 4, 10, false, false, true, false);

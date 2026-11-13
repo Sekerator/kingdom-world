@@ -198,11 +198,69 @@ public final class SquadPlanner {
                 shift = s;
             }
         }
+        // A place over lava or a drop on one side of the enemy, or a block another fighter of the ring has, is moved to the
+        // nearest free place round the enemy one can stand on: falling back halfway to the fighter would bring several of them
+        // to the same few blocks by the edge, where they push each other in.
+        java.util.Set<Long> taken = new java.util.HashSet<>();
+        List<Spot> pool = null;
         for (int i = 0; i < byAngle.size(); i++) {
             Fighter fighter = byAngle.get(i);
             Spot place = placesByAngle.get((i + shift) % placesByAngle.size());
-            duties.add(new Duty(fighter.id(), role, target.id(), place(ground, place, fighter)));
+            Spot stand = ground.settle(place);
+            if (stand == null || taken.contains(cell(stand))) {
+                if (pool == null) {
+                    pool = ringPool(ground, center, center.flatDistanceTo(place));
+                }
+                stand = nearestFree(pool, place, taken);
+                if (stand == null) {
+                    stand = place(ground, place, fighter);
+                }
+            }
+            taken.add(cell(stand));
+            duties.add(new Duty(fighter.id(), role, target.id(), stand));
         }
+    }
+
+    /** Directions round an enemy looked at for free places of its ring, and blocks out from the ring they reach. */
+    private static final int RING_ANGLES = 24;
+    private static final int RING_OUT = 2;
+
+    /**
+     * The places one can stand on round an enemy at the radius of its ring and a little further out, looked at once a plan and
+     * only when a place of the ring cannot be stood on.
+     */
+    private static List<Spot> ringPool(Ground ground, Spot center, double radius) {
+        List<Spot> pool = new ArrayList<>();
+        for (int out = 0; out <= RING_OUT; out++) {
+            for (int k = 0; k < RING_ANGLES; k++) {
+                Spot settled = ground.settle(center.toward(2 * Math.PI * k / RING_ANGLES, radius + out));
+                if (settled != null) {
+                    pool.add(settled);
+                }
+            }
+        }
+        return pool;
+    }
+
+    /**
+     * The place of the pool nearest to the one wanted on a block nobody was given; null if every one is taken.
+     */
+    private static Spot nearestFree(List<Spot> pool, Spot wanted, java.util.Set<Long> taken) {
+        Spot best = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (Spot spot : pool) {
+            double distance = wanted.distanceSq(spot);
+            if (distance < bestDistance && !taken.contains(cell(spot))) {
+                best = spot;
+                bestDistance = distance;
+            }
+        }
+        return best;
+    }
+
+    /** The block column a place stands in. */
+    private static long cell(Spot spot) {
+        return ((long) Math.floor(spot.x()) << 32) ^ ((long) Math.floor(spot.z()) & 0xFFFFFFFFL);
     }
 
     /**
