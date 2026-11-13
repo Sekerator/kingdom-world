@@ -72,6 +72,24 @@ minecraft {
     }
 }
 
+// Every run of the game tests starts in a new world: what a failed test leaves on its place (lava, stone, a kingdom) must not
+// wait for whatever test of a later run comes to stand there. "-PkeepGameTestWorld" runs them in the world of the last run.
+// The world is an ordinary one, the tests standing deep under its land: the new world has the same land every time (the seed
+// below, or "-PgameTestSeed=..."), because the tests of roads, camps and kingdoms of the world read its surface.
+tasks.matching { it.name == 'runGameTestServer' }.configureEach {
+    doFirst {
+        if (!project.hasProperty('keepGameTestWorld')) {
+            delete file('run-gametest/world')
+            def seed = project.findProperty('gameTestSeed') ?: '1'
+            def properties = file('run-gametest/server.properties')
+            def lines = properties.exists() ? properties.readLines('UTF-8').findAll { !it.startsWith('level-seed=') } : []
+            lines.add("level-seed=${seed}".toString())
+            properties.parentFile.mkdirs()
+            properties.write(lines.join('\n') + '\n', 'UTF-8')
+        }
+    }
+}
+
 mixin {
     add sourceSets.main, "${mod_id}.refmap.json"
     config "${mod_id}.mixins.json"

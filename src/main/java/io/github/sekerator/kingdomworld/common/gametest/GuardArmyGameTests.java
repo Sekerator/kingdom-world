@@ -96,16 +96,8 @@ public final class GuardArmyGameTests {
         BlockPos from = helper.absolutePos(new BlockPos(-2, 0, -2));
         BlockPos to = helper.absolutePos(new BlockPos(toX, 3, toZ));
         GatheringGameTests.enclose(helper.getLevel(), from, to);
-        forceChunks(helper.getLevel(), from, to, true);
+        TestChunks.hold(helper.getLevel(), from, to);
         return new BlockPos[]{from, to};
-    }
-
-    private static void forceChunks(ServerLevel level, BlockPos a, BlockPos b, boolean forced) {
-        for (int cx = Math.min(a.getX(), b.getX()) >> 4; cx <= Math.max(a.getX(), b.getX()) >> 4; cx++) {
-            for (int cz = Math.min(a.getZ(), b.getZ()) >> 4; cz <= Math.max(a.getZ(), b.getZ()) >> 4; cz++) {
-                level.setChunkForced(cx, cz, forced);
-            }
-        }
     }
 
     private static void noon(ServerLevel level) {
@@ -186,7 +178,7 @@ public final class GuardArmyGameTests {
 
     private static void end(GameTestHelper helper, Kingdom kingdom, BlockPos[] area, List<ServerPlayer> players, Citizen... citizens) {
         MinecraftServer server = helper.getLevel().getServer();
-        forceChunks(helper.getLevel(), area[0], area[1], false);
+        TestChunks.release(helper.getLevel(), area[0]);
         LawSettings.override(null);
         ArmySettings.overrideForce(null);
         WarWork.markPresent(kingdom.id(), null);
