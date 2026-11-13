@@ -293,9 +293,12 @@ public final class NobilityGameTests {
                         "The citizen of the city did not go with it");
                 helper.assertTrue(KingdomWorldApi.state(server).citizens().registry().get(here.id()).map(Citizen::kingdomId).orElse(null).equals(home.id()),
                         "A citizen of the capital left");
+                // The adventurers and mages who came from abroad to the guilds of the new kingdom of the world are new people.
+                int guilds = NpcGameTests.guildsFromAbroad(server, free)[1];
                 int now = KingdomWorldApi.state(server).citizens().registry().citizensOf(home.id()).size()
-                        + KingdomWorldApi.state(server).citizens().registry().citizensOf(free).size();
-                helper.assertTrue(now == citizens, "Citizens were lost or doubled: " + citizens + " -> " + now);
+                        + KingdomWorldApi.state(server).citizens().registry().citizensOf(free).size() - guilds;
+                helper.assertTrue(now == citizens, "Citizens were lost or doubled: " + citizens + " -> " + now + " (without "
+                        + NpcGameTests.guildsText(server, free) + " of the guilds from abroad)");
                 helper.assertTrue(KingdomWorldApi.state(server).membership().kingdom(home.id()).map(m -> m.members().get(king))
                         .map(member -> member.role() == Role.KING).orElse(false), "The king lost the crown");
                 helper.assertTrue(KingdomWorldApi.state(server).economy().supply(home.id()) == money, "Money of the kingdom was made or lost");
