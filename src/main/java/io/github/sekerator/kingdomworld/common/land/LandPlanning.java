@@ -81,6 +81,8 @@ public final class LandPlanning {
      * without a look at the world: the survey sees the ground once every 64 blocks.
      */
     static final int ROUGH_SLACK = 12;
+    /** The same over the guesses of the height on the grid of the capital, which are a few blocks off each. */
+    static final int GUESS_SLACK = 10;
     /** Chunks around the land of a kingdom the states keep away from. */
     static final int KINGDOM_MARGIN = 4;
     /** What the plan of the provinces file says it is. */
@@ -493,9 +495,10 @@ public final class LandPlanning {
             if (looksThisTick == 0 && now - tickStart < BUDGET_NANOS / 4) {
                 return true;
             }
-            // Half as much again as they cost lately: one look at the noise may cost more than the ones before it.
-            long guess = heights * heightNanos + biomes * biomeNanos;
-            return now + guess + guess / 2 - deadline < 0;
+            // Twice what a look at the ground cost lately and half as much again for a biome: one look at the noise may cost more
+            // than the ones before it.
+            long guess = 2 * heights * heightNanos + biomes * biomeNanos + biomes * biomeNanos / 2;
+            return now + guess - deadline < 0;
         }
 
         /**
@@ -712,6 +715,20 @@ public final class LandPlanning {
                     continue;
                 }
                 if (judge == null || judgeCursor != cursor) {
+                    // The guesses of the height over the grid of the capital, cheap, before the columns themselves.
+                    int across = 2 * NpcPlanning.CapitalJudge.reach(state.level()) / Math.max(8, NpcPlanning.CapitalJudge.reach(state.level()) / 3) + 1;
+                    if (!room(deadline, 0, 2 * across * across)) {
+                        break;
+                    }
+                    long start = System.nanoTime();
+                    boolean rough = guessedRough(raster.centerX(cell), raster.centerZ(cell), state.level(), relax);
+                    looked(start, 0, 2 * across * across);
+                    if (rough) {
+                        cursor++;
+                        continue;
+                    }
+                }
+                if (judge == null || judgeCursor != cursor) {
                     judge = new NpcPlanning.CapitalJudge(server.overworld(), raster.centerX(cell), raster.centerZ(cell), state.level(), relax);
                     judgeCursor = cursor;
                 }
@@ -766,6 +783,29 @@ public final class LandPlanning {
             return high - low > NpcPlanning.CapitalJudge.roughness(level, relax) + ROUGH_SLACK;
         }
 
+        /**
+         * Whether the guesses of the height over the grid of a capital differ by far more than the capital allows on a pass, the
+         * two lowest and highest left out: the judgement in the world would end the same, at a hundred times the cost.
+         */
+        private boolean guessedRough(int x, int z, NpcLevel level, int relax) {
+            ServerLevel world = server.overworld();
+            int reach = NpcPlanning.CapitalJudge.reach(level);
+            int step = Math.max(8, reach / 3);
+            List<Integer> heights = new ArrayList<>();
+            for (int dx = -reach; dx <= reach; dx += step) {
+                for (int dz = -reach; dz <= reach; dz += step) {
+                    Integer guess = SurveyProbes.guess(world, x + dx, z + dz);
+                    if (guess == null) {
+                        return false;
+                    }
+                    heights.add(guess);
+                }
+            }
+            heights.sort(Integer::compare);
+            int trim = Math.min(2, heights.size() / 16);
+            return heights.get(heights.size() - 1 - trim) - heights.get(trim) > NpcPlanning.CapitalJudge.roughness(level, relax) + GUESS_SLACK;
+        }
+
         private boolean provinces() {
             if (!ready(2)) {
                 return false;
@@ -806,12 +846,19 @@ public final class LandPlanning {
             int chunks = cells.length * perCell;
             while (cursor < chunks) {
                 int cell = cells[cursor / perCell];
-                // In a cell of a lake the height of the ground may be looked at too.
+                int local = cursor % perCell;
+                // In a cell of a lake only the height of the ground tells the water: it is looked at once every two by two chunks,
+                // the first of the four standing for them all.
                 boolean lake = raster.terrain(cell) == io.github.sekerator.kingdomworld.core.land.TerrainClass.LAKE;
+                int lead = (local / SurveyRaster.CELL_CHUNKS & ~1) * SurveyRaster.CELL_CHUNKS + (local % SurveyRaster.CELL_CHUNKS & ~1);
+                if (lake && lead != local) {
+                    probeClasses[cursor] = probeClasses[cursor - local + lead];
+                    cursor++;
+                    continue;
+                }
                 if (!room(deadline, lake ? 1 : 0, 1)) {
                     break;
                 }
-                int local = cursor % perCell;
                 int chunkX = raster.chunkX(cell) + (local % SurveyRaster.CELL_CHUNKS);
                 int chunkZ = raster.chunkZ(cell) + (local / SurveyRaster.CELL_CHUNKS);
                 long start = System.nanoTime();

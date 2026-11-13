@@ -41,8 +41,9 @@ public final class LandSurvey {
         int cell = data.nextCell();
         int sea = data.seaLevel();
         // A cell is looked at by a guess of its height and four biomes; the height itself, a dear look, only where the guess lies
-        // near the sea and no point says the sea, a river or the shore. A look is not begun when one costing half as much again
-        // as such looks did lately would not end before the deadline: then the cell is looked at again in the next tick.
+        // near the sea and no point says the sea, a river or the shore. A look is not begun when it would not end before the
+        // deadline by what such looks cost lately (twice that for the height itself): then the cell is looked at again in the next
+        // tick.
         long now = System.nanoTime();
         // The first cell of a tick is always looked at, so that the survey goes on however dear its looks are.
         int looked = 0;
@@ -93,11 +94,10 @@ public final class LandSurvey {
     private static long lastMeasure;
 
     /**
-     * Whether a look at the height of the ground costing half as much again as such looks did lately would end before the
-     * deadline.
+     * Whether a look at the height of the ground costing twice what such looks did lately would end before the deadline.
      */
     private static boolean room(long deadlineNanos) {
-        return System.nanoTime() + heightNanos + heightNanos / 2 - deadlineNanos < 0;
+        return System.nanoTime() + 2 * heightNanos - deadlineNanos < 0;
     }
 
     private static int measure(ServerLevel level, int x, int z) {
