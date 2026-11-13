@@ -617,9 +617,10 @@ final class ClientNpcShowcase {
     /**
      * A shot of a building from where it is seen whole and large: from before its front, from its two front corners and
      * further to its sides, at about the distance at which it fills the picture and from low to high, the first place from
-     * which the middle, the top, the foot and both sides of its front are in plain sight, else the one that sees the most of
-     * them. The camera stays inside the wall of the capital, so that a building by the wall is seen from its street, and looks
-     * at the middle of the building. A shot of no building stays as it was planned.
+     * which the middle, the top, the foot and both sides of its front are in plain sight with no roof or tower near the camera
+     * at the sides of the picture, else the first from which they are all in sight, else the one that sees the most of them.
+     * The camera stays inside the wall of the capital, so that a building by the wall is seen from its street, and looks at
+     * the middle of the building. A shot of no building stays as it was planned.
      */
     private Shot framed(ServerPlayer player, Shot shot) {
         Frame frame = frames.get(shot.name());
@@ -654,6 +655,7 @@ final class ClientNpcShowcase {
         double lookY = frame.ground() + height * 0.4;
         net.minecraft.world.phys.Vec3 best = null;
         int bestSeen = 0;
+        net.minecraft.world.phys.Vec3 middle = new net.minecraft.world.phys.Vec3(midX, lookY, midZ);
         search:
         for (double far : new double[]{1.0, 0.85, 1.2, 0.7, 1.45}) {
             for (double rise : new double[]{20.0, 30.0, 40.0, 52.0, 64.0}) {
@@ -675,11 +677,16 @@ final class ClientNpcShowcase {
                                 net.minecraft.world.level.ClipContext.Fluid.NONE, player)).getType()
                                 == net.minecraft.world.phys.HitResult.Type.MISS ? 1 : 0;
                     }
-                    if (seen > bestSeen) {
-                        bestSeen = seen;
+                    // A place that sees the whole front with no roof or tower of a neighbour near the camera at the sides of the
+                    // picture ends the search; of those that see it all with something there, the first is kept in case none is
+                    // open.
+                    boolean open = seen == targets.size() && clearView(player, eye, middle, Math.max(8.0, Math.min(24.0, distance * 0.45)), 56.0, 33.0);
+                    int rank = seen * 2 + (open ? 1 : 0);
+                    if (rank > bestSeen) {
+                        bestSeen = rank;
                         best = eye;
                     }
-                    if (seen == targets.size()) {
+                    if (open) {
                         break search;
                     }
                 }
@@ -689,8 +696,9 @@ final class ClientNpcShowcase {
             LOGGER.warn(PREFIX + "the front of {} is seen from nowhere; the shot stays as planned", shot.name());
             return shot;
         }
-        LOGGER.info(PREFIX + "the shot of {} sees {} of {} points of its front from {} blocks", shot.name(), bestSeen, targets.size(),
-                String.format(java.util.Locale.ROOT, "%.0f", Math.hypot(best.x - midX, best.z - midZ)));
+        LOGGER.info(PREFIX + "the shot of {} sees {} of {} points of its front from {} blocks{}", shot.name(), bestSeen / 2, targets.size(),
+                String.format(java.util.Locale.ROOT, "%.0f", Math.hypot(best.x - midX, best.z - midZ)),
+                bestSeen == targets.size() * 2 ? ", with something near the camera at a side of the picture" : "");
         return fromEye(shot.name(), best, midX, lookY, midZ);
     }
 
@@ -733,6 +741,43 @@ final class ClientNpcShowcase {
             }
         }
         return total;
+    }
+
+    /**
+     * Whether the near part of a picture is open: looks from a place spread over the picture around the look towards a point,
+     * up to an angle to each side and up and down, meet no block within a distance. A crown, a lantern, a banner or the corner
+     * of a wall right beside the camera would fill a part of the picture.
+     */
+    private static boolean clearView(ServerPlayer player, net.minecraft.world.phys.Vec3 eye, net.minecraft.world.phys.Vec3 toward, double distance,
+                                     double sideways, double upDown) {
+        net.minecraft.world.phys.Vec3 look = toward.subtract(eye);
+        double yaw = Math.atan2(look.z, look.x);
+        double pitch = Math.atan2(look.y, Math.hypot(look.x, look.z));
+        // Close enough to each other that a post or the corner of a tower between two of them is not missed.
+        for (int side = -6; side <= 6; side++) {
+            for (int up = -2; up <= 2; up++) {
+                double angle = yaw + Math.toRadians(sideways * side / 6.0);
+                double rise = pitch + Math.toRadians(upDown * up / 2.0);
+                net.minecraft.world.phys.Vec3 end = eye.add(new net.minecraft.world.phys.Vec3(Math.cos(angle) * Math.cos(rise), Math.sin(rise),
+                        Math.sin(angle) * Math.cos(rise)).scale(distance));
+                // The outline of a block, not its collision: a banner or a lantern has none and fills a picture all the same.
+                if (player.serverLevel().clip(new net.minecraft.world.level.ClipContext(eye, end, net.minecraft.world.level.ClipContext.Block.OUTLINE,
+                        net.minecraft.world.level.ClipContext.Fluid.NONE, player)).getType() != net.minecraft.world.phys.HitResult.Type.MISS) {
+                    return false;
+                }
+            }
+        }
+        // A banner shows its cloth well beyond its outline, which the looks above pass: one by the camera and not behind it
+        // fills a side of the picture.
+        BlockPos at = BlockPos.containing(eye);
+        net.minecraft.world.phys.Vec3 ahead = look.normalize();
+        for (BlockPos pos : BlockPos.betweenClosed(at.offset(-3, -3, -3), at.offset(3, 3, 3))) {
+            if (player.serverLevel().getBlockState(pos).getBlock() instanceof net.minecraft.world.level.block.AbstractBannerBlock
+                    && net.minecraft.world.phys.Vec3.atCenterOf(pos).subtract(eye).normalize().dot(ahead) > -0.5) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -797,9 +842,9 @@ final class ClientNpcShowcase {
 
     /**
      * In the court of a castle: of the places on the walk of its wall and over its gate, and of the places inside its walls in
-     * the middle of open ground under the open sky, the one from which the keep over the throne is seen best, then the side of
-     * the gate, then the one that sees farthest around the keep; the shot as planned if there is none. A narrow court is seen
-     * from its wall, a wide one from its ground.
+     * the middle of open ground under the open sky, of those with nothing right beside the camera if there are any, the one from
+     * which the keep over the throne is seen best, then the side of the gate, then the one that sees farthest around the keep;
+     * the shot as planned if there is none. A narrow court is seen from its wall, a wide one from its ground.
      */
     private Shot courtShot(Shot planned, ServerPlayer player, BlockPos throne, io.github.sekerator.kingdomworld.core.construction.Box box,
                            int facing, io.github.sekerator.kingdomworld.core.npc.NpcComposition composition) {
@@ -811,6 +856,9 @@ final class ClientNpcShowcase {
                 new net.minecraft.world.phys.Vec3(tx, throne.getY() + 16, tz), new net.minecraft.world.phys.Vec3(tx, throne.getY() + 24, tz));
         net.minecraft.world.phys.Vec3 best = null;
         double bestScore = -1;
+        // A place with nothing right beside the camera, no lantern of the parapet or roof of a house of the court filling a side
+        // of the picture, goes before any other.
+        net.minecraft.world.phys.Vec3 aim = new net.minecraft.world.phys.Vec3(tx, throne.getY() + 10, tz);
         // The walk of the wall, where its guards go round, and the gate at the height of the walk.
         List<int[]> walk = new ArrayList<>();
         composition.post("castle_wall").ifPresent(post -> walk.addAll(post.points()));
@@ -821,7 +869,9 @@ final class ClientNpcShowcase {
         int wallTop = top;
         composition.post("castle_gate").ifPresent(post -> post.points().forEach(point -> walk.add(new int[]{point[0], point[1], wallTop})));
         for (int[] point : walk) {
-            for (double up : new double[]{2.2, 3.5, 1.7}) {
+            // Over the heads of the guards of the walk, and higher over its parapet, its lanterns and the roofs by the wall: a
+            // narrow court full of houses is seen from above its wall, a little less high the better.
+            for (double up : new double[]{2.2, 3.5, 1.7, 5.0, 7.0, 10.0, 13.0}) {
                 net.minecraft.world.phys.Vec3 eye = new net.minecraft.world.phys.Vec3(throne.getX() + point[0] + 0.5,
                         throne.getY() + (point.length > 2 ? point[2] : 0) + up, throne.getZ() + point[1] + 0.5);
                 if (!room(level, eye)) {
@@ -832,12 +882,12 @@ final class ClientNpcShowcase {
                     seen += reaches(player, eye, target, tx, tz, 8.0) ? 1 : 0;
                 }
                 boolean gate = (eye.x - tx) * out[0] + (eye.z - tz) * out[1] > 0;
-                double score = seen * 100.0 + (gate ? 20.0 : 0.0) + (seen > 1 ? openness(player, eye, keep.get(1)) / 4.0 : 0.0);
+                double score = (seen > 0 && clearView(player, eye, aim, 5.5, 48.0, 26.0) ? 1000.0 : 0.0) + seen * 100.0 + (gate ? 20.0 : 0.0)
+                        + (seen > 1 ? openness(player, eye, keep.get(1)) / 4.0 : 0.0) - up * 3.0;
                 if (seen > 0 && score > bestScore) {
                     bestScore = score;
                     best = eye;
                 }
-                break;
             }
         }
         // The layer of the feet on each column of open ground under the open sky inside the walls, the lowest of the court.
@@ -866,7 +916,8 @@ final class ClientNpcShowcase {
                 if (feet == Integer.MIN_VALUE || flat < 9.0) {
                     continue;
                 }
-                // Open ground two blocks round the place, about level.
+                // Open ground two blocks round the place, about level, to stand on; over any open ground the camera may hang
+                // higher, over the roofs and the stalls of a court full of houses, nothing being over it.
                 boolean clear = true;
                 for (int ox = -2; ox <= 2 && clear; ox++) {
                     for (int oz = -2; oz <= 2 && clear; oz++) {
@@ -874,22 +925,25 @@ final class ClientNpcShowcase {
                         clear = other != Integer.MIN_VALUE && Math.abs(other - feet) <= 1;
                     }
                 }
-                if (!clear) {
-                    continue;
-                }
-                net.minecraft.world.phys.Vec3 eye = new net.minecraft.world.phys.Vec3(x + 0.5, feet + 3.2, z + 0.5);
-                int seen = 0;
-                for (net.minecraft.world.phys.Vec3 target : keep) {
-                    seen += reaches(player, eye, target, tx, tz, 8.0) ? 1 : 0;
-                }
-                if (seen < 2 || seen * 100.0 + 80.0 <= bestScore) {
-                    continue;
-                }
-                boolean gate = (x + 0.5 - tx) * out[0] + (z + 0.5 - tz) * out[1] > 0;
-                double score = seen * 100.0 + (gate ? 20.0 : 0.0) + openness(player, eye, keep.get(1)) / 4.0;
-                if (score > bestScore) {
-                    bestScore = score;
-                    best = eye;
+                for (double up : clear ? new double[]{3.2, 6.2, 9.2} : new double[]{6.2, 9.2}) {
+                    net.minecraft.world.phys.Vec3 eye = new net.minecraft.world.phys.Vec3(x + 0.5, feet + up, z + 0.5);
+                    int seen = 0;
+                    for (net.minecraft.world.phys.Vec3 target : keep) {
+                        seen += reaches(player, eye, target, tx, tz, 8.0) ? 1 : 0;
+                    }
+                    if (seen < 2) {
+                        continue;
+                    }
+                    double clearOf = clearView(player, eye, aim, 5.5, 48.0, 26.0) ? 1000.0 : 0.0;
+                    if (clearOf + seen * 100.0 + 80.0 - up * 3.0 <= bestScore) {
+                        continue;
+                    }
+                    boolean gate = (x + 0.5 - tx) * out[0] + (z + 0.5 - tz) * out[1] > 0;
+                    double score = clearOf + seen * 100.0 + (gate ? 20.0 : 0.0) + openness(player, eye, keep.get(1)) / 4.0 - up * 3.0;
+                    if (score > bestScore) {
+                        bestScore = score;
+                        best = eye;
+                    }
                 }
             }
         }
@@ -897,8 +951,11 @@ final class ClientNpcShowcase {
             LOGGER.warn(PREFIX + "the castle has no court under the open sky; the shot of {} stays as planned", planned.name());
             return planned;
         }
-        LOGGER.info(PREFIX + "the shot of {} looks at the keep from {} blocks in the court", planned.name(),
-                String.format(java.util.Locale.ROOT, "%.0f", Math.hypot(best.x - tx, best.z - tz)));
+        LOGGER.info(PREFIX + "the shot of {} looks at the keep from {} blocks in the court, {} blocks over the throne, from {} {} {}{}", planned.name(),
+                String.format(java.util.Locale.ROOT, "%.0f", Math.hypot(best.x - tx, best.z - tz)),
+                String.format(java.util.Locale.ROOT, "%.0f", best.y - throne.getY()), String.format(java.util.Locale.ROOT, "%.1f", best.x),
+                String.format(java.util.Locale.ROOT, "%.1f", best.y), String.format(java.util.Locale.ROOT, "%.1f", best.z),
+                bestScore >= 1000.0 ? "" : ", with something right beside the camera");
         return fromEye(planned.name(), best, tx, throne.getY() + 10, tz);
     }
 
@@ -908,7 +965,9 @@ final class ClientNpcShowcase {
         try (NativeImage image = Screenshot.takeScreenshot(minecraft.getMainRenderTarget())) {
             Files.createDirectories(file.getParent());
             image.writeToFile(file);
-            LOGGER.info(PREFIX + "screenshot of {} saved to {}", name, file);
+            net.minecraft.world.phys.Vec3 eye = minecraft.player != null ? minecraft.player.getEyePosition() : net.minecraft.world.phys.Vec3.ZERO;
+            LOGGER.info(PREFIX + "screenshot of {} saved to {}, the camera at {} {} {}", name, file, String.format(java.util.Locale.ROOT, "%.1f", eye.x),
+                    String.format(java.util.Locale.ROOT, "%.1f", eye.y), String.format(java.util.Locale.ROOT, "%.1f", eye.z));
         } catch (IOException e) {
             LOGGER.error(PREFIX + "could not save the screenshot of {}", name, e);
             failed = true;
@@ -934,6 +993,8 @@ final class ClientNpcShowcase {
                 .filter(site -> site.status() == NpcSite.Status.SPAWNED && site.level() == NpcLevel.LARGE && site.styled()).findFirst();
         if (appeared.isPresent()) {
             siteId = appeared.get().id();
+            // Over it, as while one appears: its chunks and those of its camp load before the places of the shots are worked out.
+            player.teleportTo(level, appeared.get().x() + 0.5, appeared.get().groundY() + 60, appeared.get().z() - 80.5, 0, 40);
             started = true;
             return;
         }
@@ -1047,8 +1108,8 @@ final class ClientNpcShowcase {
             float gateYaw = (float) Math.toDegrees(Math.atan2(-(gate.x() - outX), gate.z() - outZ));
             list.add(new Shot("npc-gate", outX + 0.5, gate.y() + 6, outZ + 0.5, gateYaw, 15.0f));
         }
-        // The market square, framed from the street before it.
-        frame("npc-market", server, site, composition, kingdom, io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.MARKET, list);
+        // The market square: its stalls and halls by the avenue with the fountains between them, framed from the side of the city.
+        marketFrame("npc-market", server, site, composition, kingdom, list);
         for (Road road : RoadWork.state(server).roads()) {
             if (!road.kingdomId().equals(kingdom) || road.cells().size() < 40) {
                 continue;
@@ -1155,6 +1216,79 @@ final class ClientNpcShowcase {
             return;
         }
         LOGGER.warn(PREFIX + "no building of the kind {} stands for the shot {}", kind, name);
+    }
+
+    /** How far along its row from the avenue a stall, a hall or a fountain stands to belong to the market square of a shot. */
+    private static final int MARKET_REACH = 36;
+
+    /**
+     * A shot of the market of a capital: the market squares and halls of the row of its first market by the avenue, with the
+     * fountains and wells between them, framed as one building from the side of the city, the market seen over its stalls
+     * towards the gate. A capital whose market does not stand gets the frame of its first market building, if any.
+     */
+    private void marketFrame(String name, IntegratedServer server, NpcSite site, io.github.sekerator.kingdomworld.core.npc.NpcComposition composition,
+                             UUID kingdom, List<Shot> list) {
+        io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind market = io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.MARKET;
+        io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind well = io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind.WELL;
+        java.util.function.Function<io.github.sekerator.kingdomworld.core.npc.NpcComposition.Plot,
+                io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind> kind = plot -> io.github.sekerator.kingdomworld.core.npc.TemplateCatalog
+                .get(plot.template()).map(entry -> entry.kind()).orElse(null);
+        io.github.sekerator.kingdomworld.core.npc.NpcComposition.Plot first = null;
+        for (io.github.sekerator.kingdomworld.core.npc.NpcComposition.Plot plot : composition.buildings()) {
+            if (kind.apply(plot) == market) {
+                first = plot;
+                break;
+            }
+        }
+        if (first == null) {
+            frame(name, server, site, composition, kingdom, market, list);
+            return;
+        }
+        int facing = Math.floorMod(first.facing(), 4);
+        boolean ns = facing == 0 || facing == 2;
+        int side = Integer.signum(ns ? first.z() : first.x());
+        int minX = Integer.MAX_VALUE;
+        int minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxZ = Integer.MIN_VALUE;
+        int top = Integer.MIN_VALUE;
+        int count = 0;
+        for (io.github.sekerator.kingdomworld.core.npc.NpcComposition.Plot plot : composition.buildings()) {
+            io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Kind of = kind.apply(plot);
+            if ((of != market && of != well) || Math.floorMod(plot.facing(), 4) != facing || Integer.signum(ns ? plot.z() : plot.x()) != side
+                    || Math.abs(ns ? plot.x() : plot.z()) > MARKET_REACH) {
+                continue;
+            }
+            Optional<Building> building = standing(server, site, kingdom, plot);
+            if (building.isEmpty()) {
+                continue;
+            }
+            io.github.sekerator.kingdomworld.core.construction.Box box = building.get().box();
+            minX = Math.min(minX, box.minX());
+            minZ = Math.min(minZ, box.minZ());
+            maxX = Math.max(maxX, box.maxX());
+            maxZ = Math.max(maxZ, box.maxZ());
+            top = Math.max(top, box.maxY());
+            count += of == market ? 1 : 0;
+        }
+        if (count == 0) {
+            frame(name, server, site, composition, kingdom, market, list);
+            return;
+        }
+        int ground = site.groundY() + 1;
+        int height = Math.max(4, top - ground + 1);
+        // The side of the market that looks to the throne: its front on the first ring, its back on the second.
+        int[] out = OUT[facing];
+        int toThrone = out[0] * -Integer.signum(first.x()) + out[1] * -Integer.signum(first.z()) > 0 ? facing : (facing + 2) % 4;
+        frames.put(name, new Frame(minX, minZ, maxX, maxZ, ground, height, toThrone, site.x(), site.z(), inside(composition)));
+        int[] look = OUT[toThrone];
+        double midX = (minX + maxX + 1) / 2.0;
+        double midZ = (minZ + maxZ + 1) / 2.0;
+        double halfX = (maxX - minX + 1) / 2.0;
+        double halfZ = (maxZ - minZ + 1) / 2.0;
+        list.add(towards(name, midX + look[0] * (halfX + 16), ground + height + 12, midZ + look[1] * (halfZ + 16), midX, ground + height * 0.4, midZ));
+        LOGGER.info(PREFIX + "the shot of {} frames {} market building(s) with the fountains between them, {} by {} blocks", name, count,
+                maxX - minX + 1, maxZ - minZ + 1);
     }
 
     /**
@@ -1383,6 +1517,7 @@ final class ClientNpcShowcase {
         Shot planned = fromEye(name, eyes.get(0), target.x, target.y, target.z);
         net.minecraft.world.phys.Vec3 outward = ns ? new net.minecraft.world.phys.Vec3(0, 0, outAcross) : new net.minecraft.world.phys.Vec3(outAcross, 0, 0);
         found.put(name, player -> {
+            net.minecraft.world.phys.Vec3 open = null;
             search:
             for (net.minecraft.world.phys.Vec3 eye : eyes) {
                 if (!room(player.serverLevel(), eye)) {
@@ -1400,7 +1535,17 @@ final class ClientNpcShowcase {
                         }
                     }
                 }
-                return fromEye(name, eye, target.x, target.y, target.z);
+                // Nor a crown, a lamp or the corner of a tower beside the camera, at the sides of the picture.
+                if (clearView(player, eye, target, 5.0, 50.0, 18.0)) {
+                    return fromEye(name, eye, target.x, target.y, target.z);
+                }
+                if (open == null) {
+                    open = eye;
+                }
+            }
+            if (open != null) {
+                LOGGER.warn(PREFIX + "the street of {} is seen from no place open at the sides; something stands beside the camera", name);
+                return fromEye(name, open, target.x, target.y, target.z);
             }
             LOGGER.warn(PREFIX + "the street of {} is seen from no open place; the shot stays as planned", name);
             return planned;
@@ -1421,13 +1566,16 @@ final class ClientNpcShowcase {
     }
 
     /**
-     * On the server: a small kingdom of the world planted some way east of the large one, or one that stands already.
+     * On the server: a small kingdom of the world planted some way east of the large one, or of those that stand already the
+     * nearest to it, one of another style first.
      *
      * @return the number of its place, or 0 if none could be planted
      */
     private int plantSmall(IntegratedServer server, ServerLevel level, NpcSite large) {
         Optional<NpcSite> standing = NpcWork.state(server).sites().stream()
-                .filter(site -> site.status() == NpcSite.Status.SPAWNED && site.level() == NpcLevel.SMALL && site.styled()).findFirst();
+                .filter(site -> site.status() == NpcSite.Status.SPAWNED && site.level() == NpcLevel.SMALL && site.styled())
+                .min(java.util.Comparator.comparingDouble(site -> (site.style().equals(large.style()) ? 1e12 : 0.0)
+                        + Math.hypot(site.x() - large.x(), site.z() - large.z())));
         if (standing.isPresent()) {
             return standing.get().id();
         }
