@@ -18,6 +18,7 @@ import io.github.sekerator.kingdomworld.core.land.PlanProgress.Stage;
 import io.github.sekerator.kingdomworld.core.land.ProvinceRules;
 import io.github.sekerator.kingdomworld.core.land.StateRules;
 import io.github.sekerator.kingdomworld.core.land.Tier;
+import io.github.sekerator.kingdomworld.core.npc.NpcKingdom;
 import io.github.sekerator.kingdomworld.core.npc.NpcNames;
 import io.github.sekerator.kingdomworld.core.npc.NpcSite;
 import io.github.sekerator.kingdomworld.core.npc.NpcState;
@@ -63,6 +64,8 @@ public final class SettlementGameTests {
     private static final int BASE = 56_000;
     private static final int RAISE_BASE = 52_000;
     private static final int FOLD_BASE = 48_000;
+    private static final int HANDED_BASE = 44_000;
+    private static final int WON_BASE = 40_000;
     private static final int SPAN = 4_000;
 
     private SettlementGameTests() {
@@ -297,6 +300,14 @@ public final class SettlementGameTests {
      */
     private static void withSettlement(GameTestHelper helper, int x, int z, int base, Tier tier,
                                        java.util.function.BiConsumer<MinecraftServer, Settlement> check) {
+        withSettlement(helper, x, z, base, tier, (server, settlement, sites) -> check.accept(server, settlement));
+    }
+
+    /**
+     * Plans and founds a small ring of its own, then hands a settlement of a rank of its first state and the places of the
+     * ring to a check.
+     */
+    private static void withSettlement(GameTestHelper helper, int x, int z, int base, Tier tier, SettlementCheck check) {
         MinecraftServer server = helper.getLevel().getServer();
         TerritoryIndex territory = LandEvents.attach(server);
         ProvinceMap map = territory.provinceMap().orElseThrow();
@@ -318,7 +329,7 @@ public final class SettlementGameTests {
             UUID kingdom = npc.site(job.sites()[0]).flatMap(NpcSite::kingdomId).orElseThrow();
             Settlement settlement = npc.settlementsOf(kingdom).stream().filter(one -> one.tier() == tier).findFirst().orElse(null);
             helper.assertTrue(settlement != null, "The first state has no settlement of rank " + tier);
-            check.accept(server, settlement);
+            check.accept(server, settlement, job.sites());
             helper.succeed();
         }, () -> cleanUp(server, territory, base, job.sites()), () -> job.progress().toString());
     }
@@ -354,6 +365,85 @@ public final class SettlementGameTests {
                         "The settler of slot " + slot + " of " + village + " is missing");
             }
             helper.assertTrue(io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.ticketsHeld() == 0, "The village holds its chunks");
+        });
+    }
+
+    private interface SettlementCheck {
+        void accept(MinecraftServer server, Settlement settlement, int[] sites);
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_settlements_handed", timeoutTicks = 24_000)
+    public static void aVillageHandedOverWhileItRisesHousesAsManyAsItsStandingHousesHold(GameTestHelper helper) {
+        withSettlement(helper, 0, -FAR, HANDED_BASE, Tier.VILLAGE, (server, village, sites) -> {
+            NpcState npc = NpcWork.state(server);
+            UUID winner = npc.site(sites[1]).flatMap(NpcSite::kingdomId).orElseThrow();
+            UUID loser = village.kingdomId();
+            // The village rises for its state until a house stands.
+            for (int tick = 0; tick < 20_000 && village.status() != Settlement.Status.STANDING
+                    && io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.standingHomes(server, village) == 0; tick++) {
+                io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.runNow(server, village, 1);
+            }
+            helper.assertTrue(village.status() == Settlement.Status.RAISING, "The village stood up before it was handed over: " + village);
+            // Handed over as the journal of conquests does it: its buildings first, then the village itself.
+            var book = KingdomWorldApi.state(server).construction();
+            for (io.github.sekerator.kingdomworld.core.construction.Building b : List.copyOf(book.buildingsOf(loser))) {
+                if (Math.abs(b.anchor().x() - village.x()) <= 48 && Math.abs(b.anchor().z() - village.z()) <= 48) {
+                    book.putBuilding(new io.github.sekerator.kingdomworld.core.construction.Building(b.id(), winner, b.templateId(), b.type(),
+                            b.category(), b.role(), b.level(), b.materials(), b.anchor(), b.placement(), b.box(), b.fingerprint(), b.builtTime(),
+                            b.admin(), b.integrity(), b.checked(), b.autoRepair(), b.damaged()));
+                }
+            }
+            io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.putAside(server, village);
+            helper.assertTrue(npc.moveSettlement(village.id(), winner), "The village did not change hands");
+            io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.runNow(server, village, 20_000);
+            helper.assertTrue(village.status() == Settlement.Status.STANDING, village + " does not stand");
+            int standing = io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.standingHomes(server, village);
+            int layout = npc.kingdom(winner).map(NpcKingdom::siteId).flatMap(npc::site)
+                    .map(site -> io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.layout(village, site).homes()).orElse(-1);
+            helper.assertTrue(standing > 0, "No house of the village stands");
+            helper.assertTrue(village.housing() == standing, village + " houses " + village.housing() + " though its standing houses hold "
+                    + standing + " (the whole layout of its new state " + layout + ")");
+        });
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_settlements_won", timeoutTicks = 24_000)
+    public static void aSettlementOfAKingdomThatIsGoneKeepsNoSettlementOfPlayersWaiting(GameTestHelper helper) {
+        withSettlement(helper, 0, FAR, WON_BASE, Tier.VILLAGE, (server, first, sites) -> {
+            NpcState npc = NpcWork.state(server);
+            UUID otherState = npc.site(sites[1]).flatMap(NpcSite::kingdomId).orElseThrow();
+            Settlement second = npc.settlementsOf(otherState).stream().filter(one -> one.tier() == Tier.VILLAGE || one.tier() == Tier.HAMLET)
+                    .findFirst().orElse(null);
+            helper.assertTrue(second != null, "The second state has no village or hamlet");
+            for (Settlement settlement : List.of(first, second)) {
+                io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.runNow(server, settlement, 20_000);
+                helper.assertTrue(settlement.status() == Settlement.Status.STANDING, settlement + " does not stand");
+                io.github.sekerator.kingdomworld.common.npc.SettlementResidents.foldNow(server, settlement);
+                helper.assertTrue(settlement.folded().length > 0, "Nobody of " + settlement + " folded");
+            }
+            // The one looked at first goes to a kingdom that is gone, the other to a kingdom of players that won it.
+            Settlement gone = first.id() < second.id() ? first : second;
+            Settlement won = gone == first ? second : first;
+            UUID nobody = UUID.randomUUID();
+            io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult created = KingdomWorldApi.createKingdom(server,
+                    "GameTest Settlement Winners", null);
+            helper.assertTrue(created instanceof io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult.Created, "No kingdom of players: "
+                    + created);
+            UUID players = ((io.github.sekerator.kingdomworld.core.kingdom.CreateKingdomResult.Created) created).kingdom().id();
+            try {
+                helper.assertTrue(npc.moveSettlement(gone.id(), nobody) && npc.moveSettlement(won.id(), players), "The settlements did not change hands");
+                int goneFolded = gone.folded().length;
+                int wonFolded = won.folded().length;
+                for (int tick = 0; tick < 20; tick++) {
+                    io.github.sekerator.kingdomworld.common.npc.SettlementResidents.tickNow(server);
+                }
+                helper.assertTrue(won.folded().length < wonFolded, "The citizens of the settlement the players won did not come back: "
+                        + won.folded().length + " of " + wonFolded + " still folded");
+                helper.assertTrue(gone.folded().length == goneFolded, "Citizens of a kingdom that is gone came back");
+            } finally {
+                npc.removeSettlementsOf(nobody);
+                npc.removeSettlementsOf(players);
+                KingdomWorldApi.dissolveKingdom(server, players);
+            }
         });
     }
 

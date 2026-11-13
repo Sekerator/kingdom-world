@@ -650,8 +650,26 @@ public final class SettlementRaiser {
             settlement.setStage(SettlementStage.PLACES.id(), step + 1);
             return;
         }
-        settlement.setHousing(Math.max(job.layout.homes(), 0));
+        // The beds of the houses that stand: a settlement handed over in the middle of its raising has the houses of its first
+        // kingdom and of its new one, not the whole layout of the new one.
+        settlement.setHousing(standingHomes(level.getServer(), settlement));
         advance(settlement, SettlementStage.WEALTH);
+    }
+
+    /**
+     * The beds of the houses that stand on the land of a settlement, for the citizens who live there; the bunks of soldiers do
+     * not count.
+     */
+    public static int standingHomes(MinecraftServer server, Settlement settlement) {
+        int beds = 0;
+        for (io.github.sekerator.kingdomworld.core.construction.Building building : buildingsOf(server, settlement)) {
+            Optional<io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.Entry> entry =
+                    io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.get(building.templateId());
+            if (entry.isPresent() && !io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.bunks(entry.get())) {
+                beds += entry.get().beds();
+            }
+        }
+        return beds;
     }
 
     /**
@@ -721,7 +739,7 @@ public final class SettlementRaiser {
             return;
         }
         UUID id = settlement.kingdomId();
-        int people = Math.min(settlement.population(), job.layout.homes());
+        int people = Math.min(settlement.population(), settlement.housing());
         int bread = (int) Math.min(64L * 16, ((long) NpcSettings.rules().foodDays() * people * CitizenSettings.rules().dailyNutrition()
                 + NpcWealth.BREAD_NUTRITION - 1) / NpcWealth.BREAD_NUTRITION);
         int stacks = switch (settlement.tier()) {
@@ -799,7 +817,7 @@ public final class SettlementRaiser {
      * The named citizens a settlement has room for: its people, as many as its houses have beds.
      */
     public static int named(Settlement settlement, SettlementLayouts.Layout layout) {
-        return Math.max(0, Math.min(settlement.population(), layout.homes()));
+        return Math.max(0, Math.min(settlement.population(), settlement.housing()));
     }
 
     /**

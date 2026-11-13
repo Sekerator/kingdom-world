@@ -57,6 +57,8 @@ public final class SettlementResidents {
     private static final long NOW_TICKS = 1_200L;
 
     private static int cursor;
+    /** The turn of the settlements kingdoms of players won whose folded citizens come back. */
+    private static int wonCursor;
     /** The slots of the settlers of a settlement by their ids, kept while its houses stay the same. */
     private static final Map<Integer, Slots> SLOTS = new HashMap<>();
 
@@ -68,6 +70,7 @@ public final class SettlementResidents {
 
     static void reset() {
         cursor = 0;
+        wonCursor = 0;
         SLOTS.clear();
     }
 
@@ -83,7 +86,7 @@ public final class SettlementResidents {
             visits(server, now);
         }
         List<Settlement> standing = new ArrayList<>();
-        Settlement won = null;
+        List<Settlement> won = new ArrayList<>();
         java.util.function.Predicate<Settlement> handingOver = io.github.sekerator.kingdomworld.common.siege.SiegeWork.handingOver(server);
         for (Settlement settlement : npc.settlements()) {
             if (settlement.status() != Settlement.Status.STANDING || handingOver.test(settlement)) {
@@ -92,16 +95,18 @@ public final class SettlementResidents {
             }
             if (npc.kingdom(settlement.kingdomId()).isEmpty()) {
                 // A settlement a kingdom of players won: its citizens are theirs and never fold; those folded before come back.
-                if (won == null && foldedWithRoom(settlement)) {
-                    won = settlement;
+                // One of a kingdom that is gone brings nobody back, and waits in nobody's way.
+                if (KingdomWorldApi.kingdom(server, settlement.kingdomId()).isPresent() && foldedWithRoom(settlement)) {
+                    won.add(settlement);
                 }
                 continue;
             }
             standing.add(settlement);
         }
         long deadline = System.nanoTime() + NANOS;
-        if (won != null) {
-            unfold(server, won, UNFOLD_PER_TICK, deadline, true);
+        if (!won.isEmpty()) {
+            // In turn: a settlement whose citizens cannot come back now does not keep the others waiting.
+            unfold(server, won.get(Math.floorMod(wonCursor++, won.size())), UNFOLD_PER_TICK, deadline, true);
         }
         if (standing.isEmpty()) {
             return;
@@ -288,6 +293,13 @@ public final class SettlementResidents {
             back++;
         }
         return back;
+    }
+
+    /**
+     * One tick of the folding and the coming back of the citizens of the settlements, for game tests.
+     */
+    public static void tickNow(MinecraftServer server) {
+        tick(server);
     }
 
     /**
