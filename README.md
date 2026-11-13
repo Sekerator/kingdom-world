@@ -390,20 +390,21 @@ KingdomWorld: мод для Minecraft 1.20.1 (Forge) о королевствах
 
 Замер: smoke с `-Load` (9-10 королевств мира с домами и шпионами, 2 войны, осада, караваны; 30 минут: каждую минуту ход всех правителей, день войн и день дворов), команда `/kingdomworld admin perf`. «Обработчики тика» это все обработчики тика сервера: на чистом сервере только мод, в сборке и другие моды.
 
-| Замер | сборка, до | сборка, после | чистый, после | чистый, до индексов | чистый, после индексов |
-| --- | --- | --- | --- | --- | --- |
-| тик сервера, средний | 1,88 мс | 2,50 мс | 2,03 мс | 8,87 мс | 5,91 мс |
-| тик сервера, худший | 430 мс | 254 мс | 298 мс | 1616 мс | 30 890 мс |
-| тиков сервера дольше 50 мс | 0,08% | 0,04% | 0,23% | 2,68% | 1,40% |
-| обработчики тика, средний | 0,48 мс | 0,46 мс | 0,59 мс | 5,37 мс | 3,75 мс |
-| обработчики тика, худший | 424 мс | 248 мс | 296 мс | 1611 мс | 30 888 мс |
-| обработчиков дольше 50 мс | 17 | 8 | 53 | 571 | 327 |
-| память после сборки мусора | 552 из 6144 МБ | 535 из 6144 МБ | 275 из 2048 МБ | 313 из 2048 МБ | 299 из 2048 МБ |
-| данные мода / мир | 51 КБ / 81 МБ | 53 КБ / 86 МБ | 58 КБ / 87 МБ | 260 КБ / 136 МБ | 289 КБ / 134 МБ |
-| запуск сервера | 31 с | 31 с | 14 с | 19 с | 17 с |
+| Замер | сборка, до | сборка, после | чистый, после | чистый, до индексов | чистый, после индексов | чистый, после шага по частям |
+| --- | --- | --- | --- | --- | --- | --- |
+| тик сервера, средний | 1,88 мс | 2,50 мс | 2,03 мс | 8,87 мс | 5,91 мс | 5,36 мс |
+| тик сервера, худший | 430 мс | 254 мс | 298 мс | 1616 мс | 30 890 мс | 1590 мс |
+| тиков сервера дольше 50 мс | 0,08% | 0,04% | 0,23% | 2,68% | 1,40% | 1,06% |
+| обработчики тика, средний | 0,48 мс | 0,46 мс | 0,59 мс | 5,37 мс | 3,75 мс | 2,37 мс |
+| обработчики тика, худший | 424 мс | 248 мс | 296 мс | 1611 мс | 30 888 мс | 1588 мс |
+| обработчиков дольше 50 мс | 17 | 8 | 53 | 571 | 327 | 265 |
+| память после сборки мусора | 552 из 6144 МБ | 535 из 6144 МБ | 275 из 2048 МБ | 313 из 2048 МБ | 299 из 2048 МБ | 331 из 2048 МБ |
+| данные мода / мир | 51 КБ / 81 МБ | 53 КБ / 86 МБ | 58 КБ / 87 МБ | 260 КБ / 136 МБ | 289 КБ / 134 МБ | 288 КБ / 145 МБ |
+| запуск сервера | 31 с | 31 с | 14 с | 19 с | 17 с | 16 с |
 
 - Свои замеры систем в том же прогоне: ход правителей худший 2,4 мс, шаг войн 6,7 мс, день дворов 1,7 мс.
 - Индексы складов, зданий и городов (этап 15): столбцы «чистый, до индексов» и «чистый, после индексов» это smoke `-Load` на коде до и после них, на нынешнем наборе (8 королевств мира с армиями и лагерями). Худший тик в обоих задаёт шаг лагеря армии, который выравнивает землю и грузит чанки (1,2 с до, 31 с после в другом мире), а не индексы. Шаг жителей королевства на 976 жителей (крупное королевство мира и 700 новосёлов без кровати, игровой тест-стенд `IndexBenchGameTests`): 33,0 мс в среднем и 39,2 мс худший до, 24,3 мс и 30,8 мс после.
+- Шаг жителей по частям и запись вне потока (этап 15): столбец «чистый, после шага по частям» это тот же smoke `-Load`. Худшие тики в нём дают шаги стройки правителей, выравнивающие землю (до 0,3 с), и загрузка мира в начале нагрузки, а не шаг жителей. Стенд `ScaleGameTests` (3 королевства по 1700 жителей, 400 зданий и 40 складов): начало шагов всех трёх 1,3 мс, затем 40 срезов по 0,40 мс в среднем и 0,85 мс худший; выбор тел 0,04 мс; тег файла королевств (22 МБ без сжатия) 20 мс в потоке сервера, а сжатие и запись, которые раньше шли там же и вместе с тегом занимали 98 мс, теперь в своём потоке.
 - После кэша мест работы (последняя правка) 10 минут той же нагрузки на чистом сервере: обработчики тика в среднем 0,34 мс, худший 31 мс, ни одного дольше 50 мс.
 - Тревога в крупной столице мира (показ клиента `-PclientSelfTest=npc`, встроенный сервер): игрок на площади ранит 12 стражей, тревога доходит до капитана армии, через 40 секунд у игрока 59 солдат из 62 (20 из них армия), тел солдат 61: тик сервера в среднем 15,8 мс, худший 48,3 мс, ни одного дольше 50 мс из 900. Без тревоги внутри той же столицы 137 тел жителей: 15,5 мс, худший 38,3 мс.
 - Большая армия (показ клиента, встроенный сервер; фоновое появление других королевств мира на время замеров остановлено, его медленные тики при загрузке чанков в том же показе без остановки: 102 тика дольше 50 мс, в среднем 73 мс, худший 496 мс). Внутри крупной столицы 162 тела: 13,3 мс, худший 35,1 мс. Тревога до капитана армии, 84 солдата у игрока: 16,6 мс, худший 75,8 мс, 2 тика дольше 50 мс из 900. Лагерь крупного королевства в мирное время, 15 тел солдат: 10,5 мс, худший 34,1 мс, ни одного дольше 50 мс. Бой армий крупного и малого королевства рядом с игроком, 52 тела солдат: 13,0 мс, худший 37,0 мс, ни одного дольше 50 мс из 1000 (до того как солдат стал идти далёкий путь отрезками, путь к далёкой точке марша загружал чанки с диска на месте: 20-31 мс, худший 543 мс, 63 тика дольше 50 мс).
@@ -1070,20 +1071,21 @@ Stage 15 gives the kingdoms of the world wide lands split into provinces. The la
 
 Measured with the smoke check and `-Load` (9-10 kingdoms of the world with houses and spies, 2 wars, a siege, caravans; 30 minutes with a turn of every ruler, a day of the wars and a day of the courts each minute) and `/kingdomworld admin perf`. "Tick handlers" are all handlers of the server tick: on a clean server the mod alone, in the pack other mods too.
 
-| Measure | pack, before | pack, after | clean, after | clean, before the indexes | clean, after the indexes |
-| --- | --- | --- | --- | --- | --- |
-| server tick, average | 1.88 ms | 2.50 ms | 2.03 ms | 8.87 ms | 5.91 ms |
-| server tick, worst | 430 ms | 254 ms | 298 ms | 1616 ms | 30 890 ms |
-| server ticks over 50 ms | 0.08% | 0.04% | 0.23% | 2.68% | 1.40% |
-| tick handlers, average | 0.48 ms | 0.46 ms | 0.59 ms | 5.37 ms | 3.75 ms |
-| tick handlers, worst | 424 ms | 248 ms | 296 ms | 1611 ms | 30 888 ms |
-| handler ticks over 50 ms | 17 | 8 | 53 | 571 | 327 |
-| memory after GC | 552 of 6144 MB | 535 of 6144 MB | 275 of 2048 MB | 313 of 2048 MB | 299 of 2048 MB |
-| data of the mod / world | 51 KB / 81 MB | 53 KB / 86 MB | 58 KB / 87 MB | 260 KB / 136 MB | 289 KB / 134 MB |
-| server start | 31 s | 31 s | 14 s | 19 s | 17 s |
+| Measure | pack, before | pack, after | clean, after | clean, before the indexes | clean, after the indexes | clean, after the step in slices |
+| --- | --- | --- | --- | --- | --- | --- |
+| server tick, average | 1.88 ms | 2.50 ms | 2.03 ms | 8.87 ms | 5.91 ms | 5.36 ms |
+| server tick, worst | 430 ms | 254 ms | 298 ms | 1616 ms | 30 890 ms | 1590 ms |
+| server ticks over 50 ms | 0.08% | 0.04% | 0.23% | 2.68% | 1.40% | 1.06% |
+| tick handlers, average | 0.48 ms | 0.46 ms | 0.59 ms | 5.37 ms | 3.75 ms | 2.37 ms |
+| tick handlers, worst | 424 ms | 248 ms | 296 ms | 1611 ms | 30 888 ms | 1588 ms |
+| handler ticks over 50 ms | 17 | 8 | 53 | 571 | 327 | 265 |
+| memory after GC | 552 of 6144 MB | 535 of 6144 MB | 275 of 2048 MB | 313 of 2048 MB | 299 of 2048 MB | 331 of 2048 MB |
+| data of the mod / world | 51 KB / 81 MB | 53 KB / 86 MB | 58 KB / 87 MB | 260 KB / 136 MB | 289 KB / 134 MB | 288 KB / 145 MB |
+| server start | 31 s | 31 s | 14 s | 19 s | 17 s | 16 s |
 
 - The systems' own timings in the same run: the worst turn of rulers 2.4 ms, a step of wars 6.7 ms, a day of courts 1.7 ms.
 - Indexes of storehouses, buildings and cities (stage 15): the columns "clean, before the indexes" and "clean, after the indexes" are the smoke `-Load` on the code before and after them, with the present set (8 kingdoms of the world with armies and camps). The worst tick of both is a step of a camp of an army that levels the ground and loads chunks (1.2 s before, 31 s after in another world), not the indexes. A step of the citizens of a kingdom of 976 citizens (a large kingdom of the world and 700 newcomers without a bed, the game test stand `IndexBenchGameTests`): 33.0 ms on average and 39.2 ms at worst before, 24.3 ms and 30.8 ms after.
+- The step of citizens in slices and writing off the server thread (stage 15): the column "clean, after the step in slices" is the same smoke `-Load`. Its worst ticks come from building steps of rulers that level the ground (up to 0.3 s) and the loading of the world as the load begins, not from the step of citizens. The stand `ScaleGameTests` (3 kingdoms of 1700 citizens, 400 buildings and 40 storehouses): the beginning of the steps of all three 1.3 ms, then 40 slices of 0.40 ms on average and 0.85 ms at worst; the choice of bodies 0.04 ms; the tag of the file of the kingdoms (22 MB uncompressed) 20 ms on the server thread, while compressing and writing, which used to happen there too and took 98 ms with the tag, now run on their own thread.
 - After the cache of workplaces (the last change) 10 minutes of the same load on a clean server: tick handlers 0.34 ms on average, worst 31 ms, none over 50 ms.
 - An alarm in a large capital of the world (the client showcase `-PclientSelfTest=npc`, an integrated server): the player on the square wounds 12 guards, the alarm goes up to the captain of the army, and after 40 seconds 59 of 62 soldiers stand by the player (20 of them of the army), 61 soldiers with a body: a server tick of 15.8 ms on average, the worst 48.3 ms, none over 50 ms of 900. Without an alarm inside the same capital, 137 bodies of citizens: 15.5 ms, the worst 38.3 ms.
 - A large army (the client showcase, an integrated server; the background appearance of other kingdoms of the world is held while a scene is measured, its slow ticks while chunks load in the same showcase without the hold: 102 ticks over 50 ms, 73 ms on average, the worst 496 ms). Inside a large capital, 162 bodies: 13.3 ms, the worst 35.1 ms. An alarm up to the captain of the army, 84 soldiers by the player: 16.6 ms, the worst 75.8 ms, 2 ticks over 50 ms of 900. The camp of a large kingdom in peace, 15 bodies of soldiers: 10.5 ms, the worst 34.1 ms, none over 50 ms. A battle of the armies of a large and a small kingdom near the player, 52 bodies of soldiers: 13.0 ms, the worst 37.0 ms, none over 50 ms of 1000 (before a soldier walked a long way a stretch at a time, a way to a far point of a march loaded chunks from the disk on the spot: 20-31 ms, the worst 543 ms, 63 ticks over 50 ms).
