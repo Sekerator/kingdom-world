@@ -607,6 +607,8 @@ public final class NpcPlanning {
         private int low = Integer.MAX_VALUE;
         private int high = Integer.MIN_VALUE;
         private int wet;
+        /** The ground of the column of the grid looked at, before its surface; or {@code Integer.MIN_VALUE}. */
+        private int floor = Integer.MIN_VALUE;
         private final List<Integer> heights = new ArrayList<>();
         private Boolean verdict;
 
@@ -644,11 +646,11 @@ public final class NpcPlanning {
         }
 
         /**
-         * How many looks at the height of the ground the next look takes: one for the biome of the throne and the nine columns,
-         * two for a column of the grid (the ground and the surface of the water).
+         * How many looks at the height of the ground the next look takes: one, for the biome of the throne, a column of the nine,
+         * or the ground or the surface of a column of the grid.
          */
         public int heightsNext() {
-            return phase == 2 ? 2 : 1;
+            return 1;
         }
 
         /**
@@ -706,8 +708,14 @@ public final class NpcPlanning {
                 default -> {
                     int dx = -reach + (index / across) * step;
                     int dz = -reach + (index % across) * step;
+                    // A column of the grid takes two looks: its ground, then the surface over it.
+                    if (floor == Integer.MIN_VALUE) {
+                        floor = generator.getBaseHeight(x + dx, z + dz, Heightmap.Types.OCEAN_FLOOR_WG, level, random);
+                        return Optional.empty();
+                    }
+                    int floor = this.floor;
+                    this.floor = Integer.MIN_VALUE;
                     index++;
-                    int floor = generator.getBaseHeight(x + dx, z + dz, Heightmap.Types.OCEAN_FLOOR_WG, level, random);
                     int surface = generator.getBaseHeight(x + dx, z + dz, Heightmap.Types.WORLD_SURFACE_WG, level, random);
                     if (surface > floor || floor <= sea) {
                         // Water over the ground, or ground at the level of the sea.
