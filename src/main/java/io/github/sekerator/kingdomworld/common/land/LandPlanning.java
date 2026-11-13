@@ -88,6 +88,10 @@ public final class LandPlanning {
     static final int GIVEN_PER_TICK = 8;
     /** Places of settlements judged in the world on the threads of the noise at once at most. */
     static final int SETTLE_IN_FLIGHT = 6;
+    /** Settlements of a state written in a tick at most. */
+    static final int SETTLEMENTS_PER_TICK = 12;
+    /** Roads of the plan written in a tick at most. */
+    static final int ROADS_PER_TICK = 64;
     /** Headers of region files read at once at most. */
     static final int REGIONS_IN_FLIGHT = 32;
     /** Passes over the throne candidates of a state, each asking less of the ground. */
@@ -389,6 +393,8 @@ public final class LandPlanning {
         private int[] settleChoices;
         private final Map<Integer, CompletableFuture<Integer>> settling = new HashMap<>();
         private boolean roadsWritten;
+        /** The roads of the plan looked at so far while they are written. */
+        private int roadCursor;
         /** What the land at the thrones is like, asked of the threads of the noise, by state. */
         private final Map<Integer, CompletableFuture<NpcPlanning.SiteLand>> lands = new HashMap<>();
 
@@ -552,7 +558,7 @@ public final class LandPlanning {
                 case RASTER -> raster(deadline);
                 case SETTLE -> settle(deadline);
                 case ROADS -> roads();
-                case FOUND -> found();
+                case FOUND -> found(deadline);
                 case DONE -> true;
             };
         }
@@ -996,7 +1002,7 @@ public final class LandPlanning {
                 for (int ahead = cursor; ahead < Math.min(count, cursor + SETTLE_IN_FLIGHT); ahead++) {
                     io.github.sekerator.kingdomworld.core.land.SettlementSlot next = plan.slot(ahead);
                     if (next.tier() != io.github.sekerator.kingdomworld.core.land.Tier.CAPITAL && !settling.containsKey(ahead)) {
-                        settling.put(ahead, judge(level, plan.raster(), next));
+                        settling.put(ahead, judge(level, plan, ahead));
                     }
                 }
                 CompletableFuture<Integer> verdict = settling.get(cursor);
@@ -1048,21 +1054,23 @@ public final class LandPlanning {
             }
             io.github.sekerator.kingdomworld.core.land.SettlementSlot slot = plan.slot(index);
             io.github.sekerator.kingdomworld.core.land.SettlementRules rules = plan.rules();
-            for (int k = 1; k <= slot.alternates().size(); k++) {
+            for (int k = 1; k < plan.choices(index); k++) {
                 if ((allowed & (1 << k)) == 0) {
                     continue;
                 }
-                io.github.sekerator.kingdomworld.core.land.SettlementSlot.Spot spot = slot.alternates().get(k - 1);
-                boolean apart = true;
-                for (int j = 0; j < index && apart; j++) {
-                    if (settleChoices[j] > 0) {
-                        io.github.sekerator.kingdomworld.core.land.SettlementSlot other = plan.slot(j);
-                        io.github.sekerator.kingdomworld.core.land.SettlementSlot.Spot taken = other.alternates().get(settleChoices[j] - 1);
-                        long dx = spot.x() - taken.x();
-                        long dz = spot.z() - taken.z();
-                        long least = rules.apart(slot.tier(), other.tier());
-                        apart = dx * dx + dz * dz >= least * least;
+                io.github.sekerator.kingdomworld.core.land.SettlementSlot.Spot spot = plan.spot(index, k);
+                boolean apart = spot != null;
+                // Every other settlement where it stands: those placed already where they were placed, the rest at their own places.
+                for (int j = 0; j < plan.slots().size() && apart; j++) {
+                    int choice = j < index ? settleChoices[j] : 0;
+                    if (j == index || choice < 0) {
+                        continue;
                     }
+                    io.github.sekerator.kingdomworld.core.land.SettlementSlot.Spot taken = plan.spot(j, choice);
+                    long dx = spot.x() - taken.x();
+                    long dz = spot.z() - taken.z();
+                    long least = rules.apart(slot.tier(), plan.slot(j).tier());
+                    apart = dx * dx + dz * dz >= least * least;
                 }
                 if (apart) {
                     return k;
@@ -1072,30 +1080,37 @@ public final class LandPlanning {
         }
 
         /**
-         * Asks the threads of the noise which places of a settlement the world allows, as bits: its own place alone when it is
-         * allowed, else each of its alternates; never land generated or of a kingdom.
+         * Asks the threads of the noise which places of a settlement the world allows, as bits by choice: its own place alone when
+         * it is allowed, else the first two of its alternates and of the places near it in this order; never land generated or of a
+         * kingdom. A
+         * settlement is judged as a town of the old plan is: ground within a dozen blocks over its ring, no water, a biome
+         * kingdoms stand in.
          */
-        private static CompletableFuture<Integer> judge(ServerLevel level, SurveyRaster raster, io.github.sekerator.kingdomworld.core.land.SettlementSlot slot) {
-            List<io.github.sekerator.kingdomworld.core.land.SettlementSlot.Spot> spots = new ArrayList<>();
-            spots.add(new io.github.sekerator.kingdomworld.core.land.SettlementSlot.Spot(slot.x(), slot.z(), slot.cell(), slot.province()));
-            spots.addAll(slot.alternates());
-            int radius = switch (slot.tier()) {
-                case CITY -> 40;
+        private static CompletableFuture<Integer> judge(ServerLevel level, io.github.sekerator.kingdomworld.core.land.SettlementPlan plan, int index) {
+            SurveyRaster raster = plan.raster();
+            int choices = plan.choices(index);
+            List<io.github.sekerator.kingdomworld.core.land.SettlementSlot.Spot> spots = new ArrayList<>(choices);
+            for (int k = 0; k < choices; k++) {
+                spots.add(plan.spot(index, k));
+            }
+            int radius = switch (plan.slot(index).tier()) {
+                case CITY -> 32;
                 case TOWN -> 24;
-                case VILLAGE -> 16;
-                default -> 10;
+                case VILLAGE -> 14;
+                default -> 8;
             };
-            boolean thorough = slot.tier() == io.github.sekerator.kingdomworld.core.land.Tier.CITY;
             return CompletableFuture.supplyAsync(() -> {
                 int allowed = 0;
                 for (int i = 0; i < spots.size(); i++) {
                     io.github.sekerator.kingdomworld.core.land.SettlementSlot.Spot spot = spots.get(i);
-                    if (spot.cell() >= 0 && spot.cell() < raster.cells() && (raster.generated(spot.cell()) || raster.player(spot.cell()))) {
+                    if (spot == null || spot.cell() >= 0 && spot.cell() < raster.cells()
+                            && (raster.generated(spot.cell()) || raster.player(spot.cell()))) {
                         continue;
                     }
-                    if (NpcPlanning.suitable(level, spot.x(), spot.z(), radius, thorough)) {
+                    if (NpcPlanning.suitable(level, spot.x(), spot.z(), radius, false)) {
                         allowed |= 1 << i;
-                        if (i == 0) {
+                        // Its own place alone, or two others to choose from: every look at the noise costs.
+                        if (i == 0 || Integer.bitCount(allowed) >= 2) {
                             break;
                         }
                     }
@@ -1298,7 +1313,7 @@ public final class LandPlanning {
             defined = true;
         }
 
-        private boolean found() {
+        private boolean found(long deadline) {
             if (!found) {
                 return true;
             }
@@ -1345,7 +1360,7 @@ public final class LandPlanning {
             }
             int at = cursor - count;
             if (at >= count) {
-                return writeRoads(npc);
+                return writeRoads(npc, deadline);
             }
             if (!ready(5)) {
                 return false;
@@ -1359,61 +1374,91 @@ public final class LandPlanning {
             boolean stands = site.isPresent() && live(site.get());
             if (stands && owner.isPresent() && territory != null) {
                 // A few provinces a tick: every change of a holder is told to those who listen.
-                long day = Math.floorDiv(KingdomWorldApi.gameTime(server), CitizenNeeds.TICKS_PER_DAY);
-                int end = Math.min(entry.provinces.length, givenOfState + GIVEN_PER_TICK);
-                for (int i = givenOfState; i < end; i++) {
-                    int id = entry.provinces[i];
-                    try {
-                        territory.transferProvince(id, owner.get(), day);
-                    } catch (IllegalArgumentException e) {
-                        LOGGER.warn("The province {} of the state at {} {} is not in the map: it is not given", id, entry.x, entry.z);
+                if (givenOfState < entry.provinces.length) {
+                    long day = Math.floorDiv(KingdomWorldApi.gameTime(server), CitizenNeeds.TICKS_PER_DAY);
+                    int end = Math.min(entry.provinces.length, givenOfState + GIVEN_PER_TICK);
+                    for (int i = givenOfState; i < end; i++) {
+                        int id = entry.provinces[i];
+                        try {
+                            territory.transferProvince(id, owner.get(), day);
+                        } catch (IllegalArgumentException e) {
+                            LOGGER.warn("The province {} of the state at {} {} is not in the map: it is not given", id, entry.x, entry.z);
+                        }
                     }
+                    givenOfState = end;
+                    if (end == entry.provinces.length) {
+                        LOGGER.info("The state of the world {} holds its {} province(s)", site.get(), territory.provincesOf(owner.get()).size());
+                    }
+                    // The settlements are written in ticks of their own.
+                    return false;
                 }
-                givenOfState = end;
-                if (end < entry.provinces.length) {
+                if (!writeSettlements(npc, at, entry, owner.get(), deadline)) {
                     return false;
                 }
                 givenOfState = 0;
-                LOGGER.info("The state of the world {} holds its {} province(s)", site.get(), territory.provincesOf(owner.get()).size());
-                writeSettlements(npc, at, entry, owner.get());
             } else {
                 LOGGER.warn("The state of the plan at {} {} was not founded ({}): its {} province(s) stay without a holder", entry.x, entry.z,
                         site.map(value -> value.status().id() + (value.reason().isEmpty() ? "" : ": " + value.reason())).orElse("no place"),
                         entry.provinces.length);
             }
             progress.moveTo(cursor + 1);
-            return at + 1 >= count && writeRoads(npc);
+            return false;
         }
 
         /**
-         * Writes the settlements of a state as data, once: its capital and every place the world allowed, with their numbers, and
-         * the main settlement of each of its provinces as the seat of the province.
+         * Writes the settlements of a state as data, {@link #SETTLEMENTS_PER_TICK} a tick at most: its capital and every place the
+         * world allowed, with their numbers, and once all are written the main settlement of each of its provinces as the seat of
+         * the province. A settlement written already (found by its seed, also one written before a restart that came ahead of the
+         * save of the plan) is never written twice.
+         *
+         * @return whether all the settlements of the state are written
          */
-        private void writeSettlements(NpcState npc, int state, Entry entry, UUID owner) {
-            if (entry.settlements != null) {
-                return;
-            }
+        private boolean writeSettlements(NpcState npc, int state, Entry entry, UUID owner, long deadline) {
             io.github.sekerator.kingdomworld.core.land.SettlementPlan placed = plans.placed();
             SurveyRaster raster = placed.raster();
             List<io.github.sekerator.kingdomworld.core.land.SettlementSlot> slots = placed.slotsOf(state);
-            List<io.github.sekerator.kingdomworld.core.npc.Settlement> had = npc.settlementsOf(owner);
-            if (had.size() == slots.size()) {
-                // Written before a restart that came ahead of the save of the plan: kept as they are, never written twice.
-                entry.settlements = had.stream().mapToInt(io.github.sekerator.kingdomworld.core.npc.Settlement::id).toArray();
-                return;
+            if (entry.settlements == null || entry.settlements.length != slots.size()) {
+                entry.settlements = new int[slots.size()];
             }
-            java.util.Set<String> taken = npc.settlementNames();
+            int[] written = entry.settlements;
+            Map<Long, Integer> bySeed = new HashMap<>();
+            for (io.github.sekerator.kingdomworld.core.npc.Settlement had : npc.settlementsOf(owner)) {
+                bySeed.put(had.seed(), had.id());
+            }
             Map<Integer, Integer> ids = new HashMap<>();
-            int[] written = new int[slots.size()];
-            int base = setup.idBase();
             for (int k = 0; k < slots.size(); k++) {
+                if (written[k] != 0) {
+                    ids.put(slots.get(k).index(), written[k]);
+                }
+            }
+            java.util.Set<String> taken = null;
+            int base = setup.idBase();
+            int done = 0;
+            for (int k = 0; k < slots.size(); k++) {
+                if (written[k] != 0) {
+                    continue;
+                }
+                if (done >= SETTLEMENTS_PER_TICK || done > 0 && System.nanoTime() - deadline >= 0) {
+                    return false;
+                }
+                done++;
                 io.github.sekerator.kingdomworld.core.land.SettlementSlot slot = slots.get(k);
                 boolean capital = slot.tier() == io.github.sekerator.kingdomworld.core.land.Tier.CAPITAL;
                 long seed = entry.seed * 31 + slot.index() * 0x9E3779B97F4A7C15L;
+                Integer existing = bySeed.get(seed);
+                if (existing != null) {
+                    ids.put(slot.index(), existing);
+                    written[k] = existing;
+                    continue;
+                }
+                if (taken == null) {
+                    taken = npc.settlementNames();
+                }
+                java.util.Set<String> names = taken;
                 io.github.sekerator.kingdomworld.core.npc.NpcNames.Name name = capital
                         ? npc.kingdom(owner).map(io.github.sekerator.kingdomworld.core.npc.NpcKingdom::name)
-                        .orElse(io.github.sekerator.kingdomworld.core.npc.NpcNames.town(seed, taken::contains))
-                        : io.github.sekerator.kingdomworld.core.npc.NpcNames.town(seed, taken::contains);
+                        .orElse(io.github.sekerator.kingdomworld.core.npc.NpcNames.town(seed, names::contains))
+                        : io.github.sekerator.kingdomworld.core.npc.NpcNames.town(seed, names::contains);
                 taken.add(name.latin());
                 int parent = slot.parent() < 0 ? 0 : ids.getOrDefault(slot.parent(), 0);
                 int x = capital ? entry.x : slot.x();
@@ -1435,7 +1480,6 @@ public final class LandPlanning {
                             described.borderKinds(), described.kind(), described.nameSeed(), id));
                 }
             }
-            entry.settlements = written;
             int[] byTier = new int[io.github.sekerator.kingdomworld.core.land.Tier.values().length];
             slots.forEach(slot -> byTier[slot.tier().ordinal()]++);
             LOGGER.info("The state of the world {} has {} settlement(s): {} cities, {} towns, {} villages, {} hamlets", owner, written.length,
@@ -1443,6 +1487,7 @@ public final class LandPlanning {
                     byTier[io.github.sekerator.kingdomworld.core.land.Tier.TOWN.ordinal()],
                     byTier[io.github.sekerator.kingdomworld.core.land.Tier.VILLAGE.ordinal()],
                     byTier[io.github.sekerator.kingdomworld.core.land.Tier.HAMLET.ordinal()]);
+            return true;
         }
 
         /**
@@ -1470,7 +1515,7 @@ public final class LandPlanning {
         /**
          * Writes the roads of the plan between the settlements written, once all the states are founded.
          */
-        private boolean writeRoads(NpcState npc) {
+        private boolean writeRoads(NpcState npc, long deadline) {
             if (roadsWritten) {
                 return true;
             }
@@ -1489,23 +1534,27 @@ public final class LandPlanning {
                     ids.put(slots.get(k).index(), written[k]);
                 }
             }
-            java.util.Set<Integer> written = new java.util.HashSet<>(ids.values());
-            if (npc.plannedRoads().stream().anyMatch(road -> written.contains(road.from()) || written.contains(road.to()))) {
-                // Laid before a restart that came ahead of the save of the plan.
-                roadsWritten = true;
-                return true;
+            // A road laid already (also one laid before a restart that came ahead of the save of the plan) is not laid again.
+            java.util.Set<Long> laid = new java.util.HashSet<>();
+            for (io.github.sekerator.kingdomworld.core.npc.PlannedRoad road : npc.plannedRoads()) {
+                laid.add(((long) road.from() << 32) | (road.to() & 0xFFFFFFFFL));
             }
-            int roads = 0;
-            for (io.github.sekerator.kingdomworld.core.land.PlannedEdge edge : plans.roads().edges()) {
+            List<io.github.sekerator.kingdomworld.core.land.PlannedEdge> edges = plans.roads().edges();
+            int done = 0;
+            while (roadCursor < edges.size()) {
+                if (done > 0 && (done >= ROADS_PER_TICK || System.nanoTime() - deadline >= 0)) {
+                    return false;
+                }
+                io.github.sekerator.kingdomworld.core.land.PlannedEdge edge = edges.get(roadCursor++);
                 Integer from = ids.get(edge.from());
                 Integer to = ids.get(edge.to());
-                if (from != null && to != null && edge.points() >= 2) {
+                if (from != null && to != null && edge.points() >= 2 && laid.add(((long) from << 32) | (to & 0xFFFFFFFFL))) {
                     npc.addPlannedRoad(from, to, edge.roadClass(), edge.xs(), edge.zs());
-                    roads++;
+                    done++;
                 }
             }
             roadsWritten = true;
-            LOGGER.info("The plan of states laid {} road(s) between the settlements of the world", roads);
+            LOGGER.info("The plan of states laid {} road(s) between the settlements of the world", npc.plannedRoads().size());
             return true;
         }
 
@@ -1598,8 +1647,27 @@ public final class LandPlanning {
                 }
                 placed = settlements.placed(choices);
                 roads = io.github.sekerator.kingdomworld.core.land.RoadPlanner.plan(placed);
+                warmUp();
             }
             return new Plans(states, provinces, cells, refined, settlements, placed, roads);
+        }
+
+        /**
+         * Loads what the writing of the settlements uses (the records, the life in numbers, the tables of names) here, on the
+         * worker thread: loaded in the tick that writes the first settlements it took that tick more than the plan may.
+         */
+        private static void warmUp() {
+            io.github.sekerator.kingdomworld.core.npc.NpcNames.Name name = io.github.sekerator.kingdomworld.core.npc.NpcNames.town(1L, taken -> false);
+            io.github.sekerator.kingdomworld.core.npc.Settlement settlement = new io.github.sekerator.kingdomworld.core.npc.Settlement(1,
+                    new UUID(0, 0), 1, 0, io.github.sekerator.kingdomworld.core.land.Tier.TOWN, 0, 0, 1L, name);
+            int housing = io.github.sekerator.kingdomworld.core.npc.SettlementLife.housing(settlement.tier(), settlement.seed());
+            settlement.found(housing, io.github.sekerator.kingdomworld.core.npc.SettlementLife.startingPopulation(housing),
+                    io.github.sekerator.kingdomworld.core.npc.SettlementLife.yield(io.github.sekerator.kingdomworld.core.land.TerrainClass.LAND));
+            settlement.live(io.github.sekerator.kingdomworld.core.npc.SettlementLife.day(settlement.tier(), settlement.population(),
+                    settlement.housing(), settlement.food(), settlement.prosperity(), settlement.fertility()), 0);
+            new io.github.sekerator.kingdomworld.core.npc.PlannedRoad(1, 1, 2, io.github.sekerator.kingdomworld.core.road.RoadClass.PATH,
+                    new int[]{0, 1}, new int[]{0, 1}, 0).withRoad(1);
+            io.github.sekerator.kingdomworld.core.npc.SettlementGrid.of(List.of(settlement)).at(0, 0);
         }
 
         private void fail(String why) {
@@ -1688,6 +1756,7 @@ public final class LandPlanning {
                 tag.putIntArray("settle", settleChoices);
             }
             tag.putBoolean("roadsWritten", roadsWritten);
+            tag.putInt("roadCursor", roadCursor);
             ListTag list = new ListTag();
             for (Entry entry : entries) {
                 list.add(entry.write());
@@ -1723,6 +1792,7 @@ public final class LandPlanning {
             job.defined = tag.getBoolean("defined");
             job.settleChoices = tag.contains("settle") ? tag.getIntArray("settle") : null;
             job.roadsWritten = tag.getBoolean("roadsWritten");
+            job.roadCursor = tag.getInt("roadCursor");
             ListTag list = tag.getList("states", Tag.TAG_COMPOUND);
             for (int i = 0; i < list.size(); i++) {
                 job.entries.add(Entry.read(list.getCompound(i)));

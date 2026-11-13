@@ -93,6 +93,48 @@ public final class SettlementPlan {
      *
      * @throws IllegalArgumentException if a choice is not one of the places of its settlement
      */
+    /** Places tried near the place of a settlement when it and its alternates are turned down: two rings of eight around it. */
+    public static final int NUDGES = 16;
+    /** Blocks between the rings of the places tried near a place. */
+    public static final int NUDGE_STEP = 48;
+
+    /**
+     * How many places a settlement may take: its own, its alternates and the places near its own.
+     */
+    public int choices(int index) {
+        return 1 + slots.get(index).alternates().size() + NUDGES;
+    }
+
+    /**
+     * The place of a settlement for a choice: 0 its own, 1 to the number of its alternates an alternate, then the places near
+     * its own in two rings of eight; null for a place near that is off the survey, on land no settlement stands on, or in
+     * another province.
+     */
+    public SettlementSlot.Spot spot(int index, int choice) {
+        SettlementSlot slot = slots.get(index);
+        if (choice == 0) {
+            return new SettlementSlot.Spot(slot.x(), slot.z(), slot.cell(), slot.province());
+        }
+        int alternates = slot.alternates().size();
+        if (choice <= alternates) {
+            return slot.alternates().get(choice - 1);
+        }
+        int k = choice - alternates - 1;
+        if (k >= NUDGES || choice < 0) {
+            throw new IllegalArgumentException("No place " + choice + " for settlement " + index);
+        }
+        double angle = (k % 8) * Math.PI / 4 + (k >= 8 ? Math.PI / 8 : 0);
+        int distance = NUDGE_STEP * (1 + k / 8);
+        int x = slot.x() + (int) Math.round(Math.cos(angle) * distance);
+        int z = slot.z() + (int) Math.round(Math.sin(angle) * distance);
+        SurveyRaster raster = raster();
+        int cell = raster.cellAt(x, z);
+        if (cell < 0 || !raster.terrain(cell).passable() || provinces.provinceAt(cell) != slot.province()) {
+            return null;
+        }
+        return new SettlementSlot.Spot(x, z, cell, slot.province());
+    }
+
     public SettlementPlan placed(int[] choices) {
         if (choices.length != slots.size()) {
             throw new IllegalArgumentException("A choice for every settlement");
@@ -101,8 +143,8 @@ public final class SettlementPlan {
         int kept = 0;
         for (int i = 0; i < slots.size(); i++) {
             int choice = choices[i];
-            if (choice > slots.get(i).alternates().size()) {
-                throw new IllegalArgumentException("No alternate " + choice + " for settlement " + i);
+            if (choice >= choices(i) || choice >= 0 && spot(i, choice) == null) {
+                throw new IllegalArgumentException("No place " + choice + " for settlement " + i);
             }
             number[i] = choice < 0 ? -1 : kept++;
         }
@@ -112,8 +154,7 @@ public final class SettlementPlan {
                 continue;
             }
             SettlementSlot slot = slots.get(i);
-            SettlementSlot.Spot spot = choices[i] == 0 ? new SettlementSlot.Spot(slot.x(), slot.z(), slot.cell(), slot.province())
-                    : slot.alternates().get(choices[i] - 1);
+            SettlementSlot.Spot spot = spot(i, choices[i]);
             int parent = slot.parent();
             while (parent >= 0 && number[parent] < 0) {
                 parent = slots.get(parent).parent();

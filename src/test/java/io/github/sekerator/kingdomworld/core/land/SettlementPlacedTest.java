@@ -77,6 +77,43 @@ class SettlementPlacedTest {
     }
 
     @Test
+    void thePlacesNearAPlaceStayInItsProvinceOnLand() {
+        ProvincePlan provinces = SettlementPlannerTest.provinces(23);
+        SettlementPlan plan = SettlementPlanner.plan(provinces, SettlementRules.DEFAULT, 23);
+        SurveyRaster raster = plan.raster();
+        int near = 0;
+        int index = -1;
+        int choice = -1;
+        for (int i = 0; i < plan.slots().size(); i++) {
+            SettlementSlot slot = plan.slot(i);
+            int first = 1 + slot.alternates().size();
+            assertEquals(first + SettlementPlan.NUDGES, plan.choices(i));
+            for (int k = first; k < plan.choices(i); k++) {
+                SettlementSlot.Spot spot = plan.spot(i, k);
+                if (spot == null) {
+                    continue;
+                }
+                near++;
+                double distance = Math.hypot(spot.x() - slot.x(), spot.z() - slot.z());
+                assertTrue(distance >= SettlementPlan.NUDGE_STEP - 1 && distance <= 2 * SettlementPlan.NUDGE_STEP + 1, "a place near at " + distance);
+                assertEquals(slot.province(), spot.province());
+                assertEquals(slot.province(), provinces.provinceAt(spot.cell()));
+                assertTrue(raster.terrain(spot.cell()).passable());
+                if (index < 0 && slot.tier() != Tier.CAPITAL) {
+                    index = i;
+                    choice = k;
+                }
+            }
+        }
+        assertTrue(near > plan.slots().size(), near + " places near for " + plan.slots().size() + " settlements");
+        int[] choices = new int[plan.slots().size()];
+        choices[index] = choice;
+        SettlementSlot moved = plan.placed(choices).slot(index);
+        assertEquals(plan.spot(index, choice).x(), moved.x());
+        assertEquals(plan.spot(index, choice).z(), moved.z());
+    }
+
+    @Test
     void aChoiceForEverySettlement() {
         SettlementPlan plan = SettlementPlanner.plan(SettlementPlannerTest.provinces(22), SettlementRules.DEFAULT, 22);
         assertThrows(IllegalArgumentException.class, () -> plan.placed(new int[plan.slots().size() - 1]));
