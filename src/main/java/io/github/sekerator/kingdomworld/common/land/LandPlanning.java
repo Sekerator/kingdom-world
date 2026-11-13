@@ -56,7 +56,9 @@ import java.util.concurrent.Executors;
  * laid out on a worker thread; their thrones are judged in the world; the provinces are laid out on the worker thread; their
  * borders through water are probed chunk by chunk; the provinces are written into the map of the land tile by tile; and the
  * states are founded as data, each given its provinces as soon as it stands. A tick spends {@value #BUDGET_NANOS} ns on the
- * plan at most, and the worker thread touches nothing of the game.
+ * plan at most. The looks at the noise of the generator (the survey, the thrones, the borders) are asked of the threads of the
+ * noise of the plan of the kingdoms of the world ({@link NpcPlanning#noise()}), which read only the generator, and their answers
+ * are put in order on the server thread; the worker thread lays the plans out from copies and touches nothing of the game.
  *
  * <p>Where the plan has got is kept in the file of the provinces ({@link ProvinceSavedData#plan()}) with the provinces it
  * wrote, so that both are saved together: a restart goes on from the place reached in its stage. The plans of the states and the
@@ -68,10 +70,20 @@ public final class LandPlanning {
 
     /** The time of the server thread a tick spends on the plan at most. */
     public static final long BUDGET_NANOS = 8_000_000L;
-    /** Throne candidates judged in a tick at most. */
-    static final int THRONES_PER_TICK = 2;
+    /** Throne candidates judged on the threads of the noise at once at most. */
+    static final int THRONES_IN_FLIGHT = 3;
+    /** Cells of the survey a task of the threads of the noise looks at. */
+    static final int SURVEY_BLOCK = 64;
+    /** Tasks of the survey asked of the threads of the noise at once at most. */
+    static final int SURVEY_IN_FLIGHT = 9;
+    /** Cells of a border along the water a task of the threads of the noise probes. */
+    static final int REFINE_BLOCK = 8;
+    /** Tasks of the borders asked of the threads of the noise at once at most. */
+    static final int REFINE_IN_FLIGHT = 9;
     /** Tiles of the map of the land written in a tick at most. */
-    static final int TILES_PER_TICK = 4;
+    static final int TILES_PER_TICK = 32;
+    /** Provinces given to their state in a tick at most. */
+    static final int GIVEN_PER_TICK = 8;
     /** Headers of region files read at once at most. */
     static final int REGIONS_IN_FLIGHT = 32;
     /** Passes over the throne candidates of a state, each asking less of the ground. */
@@ -333,17 +345,16 @@ public final class LandPlanning {
         private String failure;
         private long[] tiles;
         private boolean finished;
-        /** The throne candidate being judged, column by column. */
-        private NpcPlanning.CapitalJudge judge;
-        private int judgeCursor = -1;
-        /**
-         * What a look at the height of the ground and a look at a biome cost lately, to stop before a look would go past the time
-         * of the tick.
-         */
-        private long heightNanos = 3_000_000L;
-        private long biomeNanos = 300_000L;
-        private int looksThisTick;
-        private long tickStart;
+        /** The blocks of the survey asked of the threads of the noise, in order, and the first cell not asked yet. */
+        private final java.util.ArrayDeque<CompletableFuture<int[]>> surveyBlocks = new java.util.ArrayDeque<>();
+        private int surveyAsked = -1;
+        /** The verdicts of throne candidates asked of the threads of the noise, by their place in the stage. */
+        private final Map<Integer, CompletableFuture<Boolean>> verdicts = new HashMap<>();
+        /** The blocks of the borders asked of the threads of the noise, in order, and the first cell to probe not asked yet. */
+        private final java.util.ArrayDeque<CompletableFuture<byte[]>> refineBlocks = new java.util.ArrayDeque<>();
+        private int refineAsked = -1;
+        /** The provinces of the state being given, already given. */
+        private int givenOfState;
 
         /**
          * @param map       the map of the land the provinces are written into
@@ -453,8 +464,6 @@ public final class LandPlanning {
                 finish();
                 return;
             }
-            looksThisTick = 0;
-            tickStart = System.nanoTime();
             progress.tick(this, System::nanoTime, LandPlanning::pauseNanos, budgetNanos, System.currentTimeMillis());
             dirty.run();
             if (progress.done()) {
@@ -481,46 +490,59 @@ public final class LandPlanning {
         // ------------------------------------------------------------ stages
 
         /**
-         * Whether looks at the noise may begin: they would end before the deadline by what such looks cost lately, or nothing was
-         * looked at this tick yet and the tick has only begun.
-         *
-         * @param heights how many looks at the height of the ground they take
-         * @param biomes  how many looks at a biome they take
+         * The survey, a block of cells at a time on the threads of the noise: the answers are put into the survey here, in order,
+         * as they come, so that the survey is the same as if it were looked at on the server thread.
          */
-        private boolean room(long deadline, int heights, int biomes) {
-            long now = System.nanoTime();
-            if (now - deadline >= 0) {
-                return false;
-            }
-            if (looksThisTick == 0 && now - tickStart < BUDGET_NANOS / 4) {
-                return true;
-            }
-            // Twice what a look at the ground cost lately and half as much again for a biome: one look at the noise may cost more
-            // than the ones before it.
-            long guess = 2 * heights * heightNanos + biomes * biomeNanos + biomes * biomeNanos / 2;
-            return now + guess - deadline < 0;
-        }
-
-        /**
-         * Counts looks that began at a time: what they cost becomes the guess for the next ones, a dear one forgotten slowly.
-         */
-        private void looked(long start, int heights, int biomes) {
-            long cost = System.nanoTime() - start;
-            if (heights > 0) {
-                long each = Math.max(0, cost - biomes * biomeNanos) / heights;
-                heightNanos = Math.min(BUDGET_NANOS, Math.max(each, heightNanos - heightNanos / 8));
-            } else if (biomes > 0) {
-                biomeNanos = Math.min(BUDGET_NANOS, Math.max(cost / biomes, biomeNanos - biomeNanos / 8));
-            }
-            looksThisTick++;
-        }
-
         private boolean survey(long deadline) {
             StateRules rules = setup.states();
             if (!survey.started() || survey.spawnX() != rules.spawnX() || survey.spawnZ() != rules.spawnZ() || survey.radius() != rules.radius()) {
                 survey.start(rules.spawnX(), rules.spawnZ(), rules.radius(), server.overworld().getSeaLevel());
+                surveyBlocks.clear();
+                surveyAsked = -1;
             }
-            return LandSurvey.step(server, survey, deadline);
+            if (survey.complete()) {
+                return true;
+            }
+            int cells = survey.cells();
+            if (surveyAsked < survey.nextCell()) {
+                // After a restart: what was asked before is gone, the survey goes on from its row.
+                surveyBlocks.clear();
+                surveyAsked = survey.nextCell();
+            }
+            while (!surveyBlocks.isEmpty() && surveyBlocks.peek().isDone() && System.nanoTime() - deadline < 0) {
+                int[] looks;
+                try {
+                    looks = surveyBlocks.poll().join();
+                } catch (CompletionException | java.util.concurrent.CancellationException e) {
+                    fail("the survey failed on a thread of the noise: " + (e.getCause() != null ? e.getCause() : e));
+                    return false;
+                }
+                int from = survey.nextCell();
+                for (int i = 0; i < looks.length / 2; i++) {
+                    survey.put(from + i, io.github.sekerator.kingdomworld.core.land.TerrainClass.byId(looks[2 * i]), looks[2 * i + 1]);
+                }
+                survey.advance(from + looks.length / 2);
+            }
+            if (survey.nextCell() >= cells) {
+                survey.finish();
+                return true;
+            }
+            ServerLevel level = server.overworld();
+            int originX = survey.originX();
+            int originZ = survey.originZ();
+            int width = survey.width();
+            int spawnX = survey.spawnX();
+            int spawnZ = survey.spawnZ();
+            long reach = (long) survey.radius() + SurveySavedData.MARGIN;
+            int sea = survey.seaLevel();
+            while (surveyBlocks.size() < SURVEY_IN_FLIGHT && surveyAsked < cells) {
+                int from = surveyAsked;
+                int count = Math.min(SURVEY_BLOCK, cells - from);
+                surveyBlocks.add(CompletableFuture.supplyAsync(() -> LandSurvey.cells(level, from, count, originX, originZ, width, spawnX, spawnZ,
+                        reach, sea), NpcPlanning.noise()));
+                surveyAsked += count;
+            }
+            return false;
         }
 
         private int regionX0() {
@@ -669,12 +691,16 @@ public final class LandPlanning {
             return true;
         }
 
+        /**
+         * The thrones: the candidates of a state are judged in the world in their order, pass after pass, on the threads of the
+         * noise, a few ahead of the first not judged yet; the first that suits is the throne, as if they were judged one after
+         * another.
+         */
         private boolean thrones(long deadline) {
             if (!ready(1)) {
                 return false;
             }
             StatePlan states = plans.states();
-            SurveyRaster raster = states.raster();
             int count = states.states().size();
             int[] thrones = progress.thrones();
             if (thrones.length != count) {
@@ -682,72 +708,59 @@ public final class LandPlanning {
                 Arrays.fill(thrones, -1);
                 progress.setThrones(thrones);
             }
-            int candidates = StatePlanner.THRONE_CANDIDATES;
-            int perState = THRONE_PASSES * candidates;
+            int perState = THRONE_PASSES * StatePlanner.THRONE_CANDIDATES;
             int cursor = progress.cursor();
-            int judged = 0;
-            while (cursor < count * perState) {
+            while (cursor < count * perState && System.nanoTime() - deadline < 0) {
                 int s = cursor / perState;
                 if (thrones[s] >= 0) {
                     cursor = (s + 1) * perState;
                     continue;
                 }
-                int relax = (cursor % perState) / candidates;
-                int c = cursor % candidates;
-                PlannedState state = states.state(s);
-                if (c >= state.throneCandidates().size()) {
-                    if (relax + 1 < THRONE_PASSES) {
-                        cursor = s * perState + (relax + 1) * candidates;
-                    } else {
-                        LOGGER.warn("No throne candidate of the {} state {} suits a capital on any pass: its first one is taken", state.level().id(), s);
-                        cursor = (s + 1) * perState;
+                int next = valid(states, cursor);
+                if (next != cursor) {
+                    if (next >= (s + 1) * perState) {
+                        LOGGER.warn("No throne candidate of the {} state {} suits a capital on any pass: its first one is taken",
+                                states.state(s).level().id(), s);
                     }
+                    cursor = next;
                     continue;
                 }
-                // A candidate is judged column by column of the noise, over as many ticks as it takes; two verdicts a tick at most.
-                if (judged >= THRONES_PER_TICK || !room(deadline, 1, 0)) {
-                    break;
-                }
-                int cell = state.throneCandidates().get(c);
-                if ((judge == null || judgeCursor != cursor) && tooRough(raster, cell, state.level(), relax)) {
+                if (!verdicts.containsKey(cursor) && tooRough(states.raster(), candidate(states, cursor), states.state(s).level(), relax(cursor))) {
                     // The survey shows ground far too rough for the square of the capital: no look at the world is needed.
                     cursor++;
                     continue;
                 }
-                if (judge == null || judgeCursor != cursor) {
-                    // The guesses of the height over the grid of the capital, cheap, before the columns themselves.
-                    int across = 2 * NpcPlanning.CapitalJudge.reach(state.level()) / Math.max(8, NpcPlanning.CapitalJudge.reach(state.level()) / 3) + 1;
-                    if (!room(deadline, 0, 2 * across * across)) {
-                        break;
+                // The candidate and a few after it in the same state are asked of the threads of the noise.
+                int ahead = cursor;
+                for (int asked = 0; asked < THRONES_IN_FLIGHT && ahead < Math.min(count, s + 1) * perState; ) {
+                    if (!verdicts.containsKey(ahead)) {
+                        int cell = candidate(states, ahead);
+                        if (ahead != cursor && tooRough(states.raster(), cell, states.state(s).level(), relax(ahead))) {
+                            ahead = valid(states, ahead + 1);
+                            continue;
+                        }
+                        verdicts.put(ahead, ask(states, s, cell, relax(ahead)));
                     }
-                    long start = System.nanoTime();
-                    boolean rough = guessedRough(raster.centerX(cell), raster.centerZ(cell), state.level(), relax);
-                    looked(start, 0, 2 * across * across);
-                    if (rough) {
-                        cursor++;
-                        continue;
-                    }
+                    asked++;
+                    ahead = valid(states, ahead + 1);
                 }
-                if (judge == null || judgeCursor != cursor) {
-                    judge = new NpcPlanning.CapitalJudge(server.overworld(), raster.centerX(cell), raster.centerZ(cell), state.level(), relax);
-                    judgeCursor = cursor;
-                }
-                Optional<Boolean> verdict = Optional.empty();
-                while (verdict.isEmpty() && room(deadline, judge.heightsNext(), 0)) {
-                    long start = System.nanoTime();
-                    int heights = judge.heightsNext();
-                    verdict = judge.look(server.overworld());
-                    looked(start, heights, 0);
-                }
-                if (verdict.isEmpty()) {
+                CompletableFuture<Boolean> verdict = verdicts.get(cursor);
+                if (!verdict.isDone()) {
                     break;
                 }
-                judged++;
-                judge = null;
-                judgeCursor = -1;
-                if (verdict.get()) {
-                    thrones[s] = cell;
+                boolean suits;
+                try {
+                    suits = verdict.join();
+                } catch (CompletionException | java.util.concurrent.CancellationException e) {
+                    LOGGER.warn("A throne candidate of the state {} could not be judged: {}", s, String.valueOf(e.getCause()));
+                    suits = false;
+                }
+                verdicts.remove(cursor);
+                if (suits) {
+                    thrones[s] = candidate(states, cursor);
                     progress.setThrones(thrones);
+                    // The candidates asked after it are not needed any more.
+                    verdicts.clear();
                     cursor = (s + 1) * perState;
                 } else {
                     cursor++;
@@ -757,13 +770,51 @@ public final class LandPlanning {
             return cursor >= count * perState;
         }
 
+        private static int relax(int position) {
+            return position % (THRONE_PASSES * StatePlanner.THRONE_CANDIDATES) / StatePlanner.THRONE_CANDIDATES;
+        }
+
+        private static int candidate(StatePlan states, int position) {
+            int perState = THRONE_PASSES * StatePlanner.THRONE_CANDIDATES;
+            return states.state(position / perState).throneCandidates().get(position % StatePlanner.THRONE_CANDIDATES);
+        }
+
+        /**
+         * The first place from a place on that names a candidate of its state: past the candidates of a pass the next pass begins,
+         * past the last pass the next state.
+         */
+        private static int valid(StatePlan states, int position) {
+            int candidates = StatePlanner.THRONE_CANDIDATES;
+            int perState = THRONE_PASSES * candidates;
+            int s = position / perState;
+            while (s < states.states().size() && position < (s + 1) * perState
+                    && position % candidates >= states.state(s).throneCandidates().size()) {
+                int relax = relax(position);
+                position = relax + 1 < THRONE_PASSES ? s * perState + (relax + 1) * candidates : (s + 1) * perState;
+            }
+            return position;
+        }
+
+        /**
+         * Asks the threads of the noise whether a capital of a state may stand at a cell on a pass: the guesses of the height first,
+         * then the columns of the noise themselves.
+         */
+        private CompletableFuture<Boolean> ask(StatePlan states, int s, int cell, int relax) {
+            ServerLevel level = server.overworld();
+            NpcLevel kingdom = states.state(s).level();
+            int x = states.raster().centerX(cell);
+            int z = states.raster().centerZ(cell);
+            return CompletableFuture.supplyAsync(() -> !guessedRough(level, x, z, kingdom, relax)
+                    && NpcPlanning.suitableCapital(level, x, z, kingdom, relax), NpcPlanning.noise());
+        }
+
         /**
          * Whether the dry cells of the survey under the square of a capital at a cell differ in height by far more than the capital
          * allows on a pass.
          */
         private static boolean tooRough(SurveyRaster raster, int cell, NpcLevel level, int relax) {
             // The cells the square reaches into from the middle of the cell of the throne.
-            int reach = (NpcPlanning.CapitalJudge.reach(level) - SurveyRaster.CELL / 2 + SurveyRaster.CELL - 1) / SurveyRaster.CELL;
+            int reach = (NpcPlanning.capitalReach(level) - SurveyRaster.CELL / 2 + SurveyRaster.CELL - 1) / SurveyRaster.CELL;
             int low = Integer.MAX_VALUE;
             int high = Integer.MIN_VALUE;
             for (int dz = -reach; dz <= reach; dz++) {
@@ -780,16 +831,15 @@ public final class LandPlanning {
                     }
                 }
             }
-            return high - low > NpcPlanning.CapitalJudge.roughness(level, relax) + ROUGH_SLACK;
+            return high - low > NpcPlanning.capitalRoughness(level, relax) + ROUGH_SLACK;
         }
 
         /**
          * Whether the guesses of the height over the grid of a capital differ by far more than the capital allows on a pass, the
          * two lowest and highest left out: the judgement in the world would end the same, at a hundred times the cost.
          */
-        private boolean guessedRough(int x, int z, NpcLevel level, int relax) {
-            ServerLevel world = server.overworld();
-            int reach = NpcPlanning.CapitalJudge.reach(level);
+        private static boolean guessedRough(ServerLevel world, int x, int z, NpcLevel level, int relax) {
+            int reach = NpcPlanning.capitalReach(level);
             int step = Math.max(8, reach / 3);
             List<Integer> heights = new ArrayList<>();
             for (int dx = -reach; dx <= reach; dx += step) {
@@ -803,7 +853,7 @@ public final class LandPlanning {
             }
             heights.sort(Integer::compare);
             int trim = Math.min(2, heights.size() / 16);
-            return heights.get(heights.size() - 1 - trim) - heights.get(trim) > NpcPlanning.CapitalJudge.roughness(level, relax) + GUESS_SLACK;
+            return heights.get(heights.size() - 1 - trim) - heights.get(trim) > NpcPlanning.capitalRoughness(level, relax) + GUESS_SLACK;
         }
 
         private boolean provinces() {
@@ -825,6 +875,10 @@ public final class LandPlanning {
             return true;
         }
 
+        /**
+         * The borders along the water: the chunks of the cells to probe are looked at on the threads of the noise, a block of
+         * cells at a time, and put in order; then the borders are drawn on the worker thread.
+         */
         private boolean refine(long deadline) {
             if (!ready(2)) {
                 return false;
@@ -838,37 +892,48 @@ public final class LandPlanning {
                 }
                 probeClasses = new byte[cells.length * perCell];
             }
-            SurveyRaster raster = plans.provinces().raster();
-            ServerLevel level = server.overworld();
-            int sea = survey.seaLevel();
-            // The place is a chunk: the chunks of a cell come one after another.
-            int cursor = progress.cursor();
-            int chunks = cells.length * perCell;
-            while (cursor < chunks) {
-                int cell = cells[cursor / perCell];
-                int local = cursor % perCell;
-                // In a cell of a lake only the height of the ground tells the water: it is looked at once every two by two chunks,
-                // the first of the four standing for them all.
-                boolean lake = raster.terrain(cell) == io.github.sekerator.kingdomworld.core.land.TerrainClass.LAKE;
-                int lead = (local / SurveyRaster.CELL_CHUNKS & ~1) * SurveyRaster.CELL_CHUNKS + (local % SurveyRaster.CELL_CHUNKS & ~1);
-                if (lake && lead != local) {
-                    probeClasses[cursor] = probeClasses[cursor - local + lead];
-                    cursor++;
-                    continue;
-                }
-                if (!room(deadline, lake ? 1 : 0, 1)) {
-                    break;
-                }
-                int chunkX = raster.chunkX(cell) + (local % SurveyRaster.CELL_CHUNKS);
-                int chunkZ = raster.chunkZ(cell) + (local / SurveyRaster.CELL_CHUNKS);
-                long start = System.nanoTime();
-                io.github.sekerator.kingdomworld.core.land.TerrainClass terrain = LandSurvey.probeChunk(level, chunkX, chunkZ, sea, raster.terrain(cell));
-                probeClasses[cursor] = terrain.id();
-                looked(start, LandSurvey.lookedAtGround() ? 1 : 0, 1);
-                cursor++;
+            // The place is a chunk; the chunks of a cell are put together.
+            int done = progress.cursor() / perCell;
+            if (refineAsked < done) {
+                refineBlocks.clear();
+                refineAsked = done;
             }
-            progress.moveTo(cursor);
-            if (cursor < chunks) {
+            while (!refineBlocks.isEmpty() && refineBlocks.peek().isDone() && System.nanoTime() - deadline < 0) {
+                byte[] block;
+                try {
+                    block = refineBlocks.poll().join();
+                } catch (CompletionException | java.util.concurrent.CancellationException e) {
+                    fail("the borders failed on a thread of the noise: " + (e.getCause() != null ? e.getCause() : e));
+                    return false;
+                }
+                System.arraycopy(block, 0, probeClasses, done * perCell, block.length);
+                done += block.length / perCell;
+            }
+            progress.moveTo(done * perCell);
+            if (done < cells.length) {
+                SurveyRaster raster = plans.provinces().raster();
+                ServerLevel level = server.overworld();
+                int sea = survey.seaLevel();
+                while (refineBlocks.size() < REFINE_IN_FLIGHT && refineAsked < cells.length) {
+                    int from = refineAsked;
+                    int count = Math.min(REFINE_BLOCK, cells.length - from);
+                    int[] chunkX = new int[count];
+                    int[] chunkZ = new int[count];
+                    io.github.sekerator.kingdomworld.core.land.TerrainClass[] kinds = new io.github.sekerator.kingdomworld.core.land.TerrainClass[count];
+                    for (int i = 0; i < count; i++) {
+                        chunkX[i] = raster.chunkX(cells[from + i]);
+                        chunkZ[i] = raster.chunkZ(cells[from + i]);
+                        kinds[i] = raster.terrain(cells[from + i]);
+                    }
+                    refineBlocks.add(CompletableFuture.supplyAsync(() -> {
+                        byte[] block = new byte[count * perCell];
+                        for (int i = 0; i < count; i++) {
+                            System.arraycopy(LandSurvey.probeCell(level, chunkX[i], chunkZ[i], sea, kinds[i]), 0, block, i * perCell, perCell);
+                        }
+                        return block;
+                    }, NpcPlanning.noise()));
+                    refineAsked += count;
+                }
                 return false;
             }
             return ready(3);
@@ -990,18 +1055,23 @@ public final class LandPlanning {
             Optional<UUID> owner = site.flatMap(NpcSite::kingdomId);
             boolean stands = site.isPresent() && live(site.get());
             if (stands && owner.isPresent() && territory != null) {
+                // A few provinces a tick: every change of a holder is told to those who listen.
                 long day = Math.floorDiv(KingdomWorldApi.gameTime(server), CitizenNeeds.TICKS_PER_DAY);
-                int given = 0;
-                for (int id : entry.provinces) {
+                int end = Math.min(entry.provinces.length, givenOfState + GIVEN_PER_TICK);
+                for (int i = givenOfState; i < end; i++) {
+                    int id = entry.provinces[i];
                     try {
-                        if (territory.transferProvince(id, owner.get(), day)) {
-                            given++;
-                        }
+                        territory.transferProvince(id, owner.get(), day);
                     } catch (IllegalArgumentException e) {
                         LOGGER.warn("The province {} of the state at {} {} is not in the map: it is not given", id, entry.x, entry.z);
                     }
                 }
-                LOGGER.info("The state of the world {} holds its {} province(s)", site.get(), given);
+                givenOfState = end;
+                if (end < entry.provinces.length) {
+                    return false;
+                }
+                givenOfState = 0;
+                LOGGER.info("The state of the world {} holds its {} province(s)", site.get(), territory.provincesOf(owner.get()).size());
             } else {
                 LOGGER.warn("The state of the plan at {} {} was not founded ({}): its {} province(s) stay without a holder", entry.x, entry.z,
                         site.map(value -> value.status().id() + (value.reason().isEmpty() ? "" : ": " + value.reason())).orElse("no place"),

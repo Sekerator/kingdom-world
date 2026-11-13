@@ -3,16 +3,17 @@ package io.github.sekerator.kingdomworld.common.land;
 import io.github.sekerator.kingdomworld.core.land.SurveyClassifier;
 import io.github.sekerator.kingdomworld.core.land.SurveyRaster;
 import io.github.sekerator.kingdomworld.core.land.TerrainClass;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 
 /**
- * Surveys the land of the overworld a few cells at a time, from the noise of the generator without generating a chunk. A cell
- * is looked at in four points 16 blocks from its middle along both axes, at the height of the ground at its middle, which is also
- * the height of the cell ({@link SurveyClassifier#cell}). The height is a guess from the depth of the noise
- * ({@link SurveyProbes#guess}), a hundred times cheaper than a column of the noise; the column itself is looked at only where the
- * guess lies near the sea and the height decides between water and land. Cells whose middle lies beyond the circle of the survey stay unknown
- * without a look.
+ * The looks of the survey of the land at the noise of the generator, without generating a chunk. A cell is looked at in four
+ * points 16 blocks from its middle along both axes, at the height of the ground at its middle, which is also the height of the
+ * cell ({@link SurveyClassifier#cell}). The height is a guess from the depth of the noise ({@link SurveyProbes#guess}), a hundred
+ * times cheaper than a column of the noise; the column itself is looked at only where the guess lies near the sea and the height
+ * decides between water and land.
+ *
+ * <p>Every look here reads only the generator, which answers any thread as it does while it generates chunks on its own threads:
+ * the plan asks them of worker threads, a block of cells at a time, and puts the answers into the survey on the server thread.
  */
 public final class LandSurvey {
     /** Blocks from the middle of a cell to its points, along both axes. */
@@ -22,90 +23,49 @@ public final class LandSurvey {
     }
 
     /**
-     * Surveys cells from {@link SurveySavedData#nextCell()} on until the time is up, and ends the survey after the last one.
+     * The class and the height of the ground of a cell around a block. Any thread.
      *
-     * @param deadlineNanos the {@link System#nanoTime()} after which no cell is begun
-     * @return whether the survey is complete
+     * @return {class id, height}
      */
-    public static boolean step(MinecraftServer server, SurveySavedData data, long deadlineNanos) {
-        if (data.complete()) {
-            return true;
+    public static int[] cell(ServerLevel level, int x, int z, int seaLevel) {
+        Integer guess = SurveyProbes.guess(level, x, z);
+        boolean exact = guess == null;
+        int floor = exact ? SurveyProbes.floor(level, x, z) : guess;
+        SurveyClassifier.Probe[] probes = {
+                SurveyProbes.probe(level, x - PROBE_OFFSET, floor, z - PROBE_OFFSET),
+                SurveyProbes.probe(level, x + PROBE_OFFSET, floor, z - PROBE_OFFSET),
+                SurveyProbes.probe(level, x - PROBE_OFFSET, floor, z + PROBE_OFFSET),
+                SurveyProbes.probe(level, x + PROBE_OFFSET, floor, z + PROBE_OFFSET)};
+        if (!exact && SurveyProbes.nearSea(floor, seaLevel) && SurveyClassifier.heightDecides(probes)) {
+            floor = SurveyProbes.floor(level, x, z);
         }
-        if (!data.started()) {
-            return false;
-        }
-        ServerLevel level = server.overworld();
-        int cells = data.cells();
-        int width = data.width();
-        long reach = (long) data.radius() + SurveySavedData.MARGIN;
-        int cell = data.nextCell();
-        int sea = data.seaLevel();
-        // A cell is looked at by a guess of its height and four biomes; the height itself, a dear look, only where the guess lies
-        // near the sea and no point says the sea, a river or the shore. A look is not begun when it would not end before the
-        // deadline by what such looks cost lately (twice that for the height itself): then the cell is looked at again in the next
-        // tick.
-        long now = System.nanoTime();
-        // The first cell of a tick is always looked at, so that the survey goes on however dear its looks are.
-        int looked = 0;
-        while (cell < cells && now - deadlineNanos < 0 && (looked == 0 || now + cheapNanos + cheapNanos / 2 - deadlineNanos < 0)) {
-            int x = data.originX() + (cell % width) * SurveyRaster.CELL + SurveyRaster.CELL / 2;
-            int z = data.originZ() + (cell / width) * SurveyRaster.CELL + SurveyRaster.CELL / 2;
-            long dx = x - (long) data.spawnX();
-            long dz = z - (long) data.spawnZ();
-            if (dx * dx + dz * dz > reach * reach) {
-                data.put(cell, TerrainClass.UNKNOWN, 0);
-            } else {
-                Integer guess = SurveyProbes.guess(level, x, z);
-                boolean exact = guess == null;
-                if (exact && looked > 0 && !room(deadlineNanos)) {
-                    break;
-                }
-                int floor = exact ? measure(level, x, z) : guess;
-                SurveyClassifier.Probe[] probes = {
-                        SurveyProbes.probe(level, x - PROBE_OFFSET, floor, z - PROBE_OFFSET),
-                        SurveyProbes.probe(level, x + PROBE_OFFSET, floor, z - PROBE_OFFSET),
-                        SurveyProbes.probe(level, x - PROBE_OFFSET, floor, z + PROBE_OFFSET),
-                        SurveyProbes.probe(level, x + PROBE_OFFSET, floor, z + PROBE_OFFSET)};
-                if (!exact && SurveyProbes.nearSea(floor, sea) && SurveyClassifier.heightDecides(probes)) {
-                    if (looked > 0 && !room(deadlineNanos)) {
-                        break;
-                    }
-                    floor = measure(level, x, z);
-                }
-                cheapNanos = Math.max(System.nanoTime() - now - lastMeasure, cheapNanos - cheapNanos / 8);
-                lastMeasure = 0;
-                data.put(cell, SurveyClassifier.cell(probes, floor, sea), floor);
-            }
-            cell++;
-            looked++;
-            data.advance(cell);
-            now = System.nanoTime();
-        }
-        if (cell >= cells) {
-            data.finish();
-            return true;
-        }
-        return false;
+        return new int[]{SurveyClassifier.cell(probes, floor, seaLevel).id(), floor};
     }
-
-    /** What the cheap looks at a cell and a look at the height of the ground cost lately. Server thread only. */
-    private static long cheapNanos = 200_000L;
-    private static long heightNanos = 4_000_000L;
-    private static long lastMeasure;
 
     /**
-     * Whether a look at the height of the ground costing twice what such looks did lately would end before the deadline.
+     * The classes and heights of a block of cells of a survey, from a cell on, row by row: those whose middle lies beyond the
+     * circle of the survey stay unknown without a look. Any thread.
+     *
+     * @return {class id, height} for each cell, one after another
      */
-    private static boolean room(long deadlineNanos) {
-        return System.nanoTime() + 2 * heightNanos - deadlineNanos < 0;
-    }
-
-    private static int measure(ServerLevel level, int x, int z) {
-        long start = System.nanoTime();
-        int floor = SurveyProbes.floor(level, x, z);
-        lastMeasure = System.nanoTime() - start;
-        heightNanos = Math.min(8_000_000L, Math.max(lastMeasure, heightNanos - heightNanos / 8));
-        return floor;
+    public static int[] cells(ServerLevel level, int from, int count, int originX, int originZ, int width, int spawnX, int spawnZ, long reach,
+                              int seaLevel) {
+        int[] out = new int[2 * count];
+        for (int i = 0; i < count; i++) {
+            int cell = from + i;
+            int x = originX + (cell % width) * SurveyRaster.CELL + SurveyRaster.CELL / 2;
+            int z = originZ + (cell / width) * SurveyRaster.CELL + SurveyRaster.CELL / 2;
+            long dx = x - (long) spawnX;
+            long dz = z - (long) spawnZ;
+            if (dx * dx + dz * dz > reach * reach) {
+                out[2 * i] = TerrainClass.UNKNOWN.id();
+                continue;
+            }
+            int[] look = cell(level, x, z, seaLevel);
+            out[2 * i] = look[0];
+            out[2 * i + 1] = look[1];
+        }
+        return out;
     }
 
     /**
@@ -121,8 +81,9 @@ public final class LandSurvey {
 
     /**
      * The class of a chunk of a cell of a class, as cheaply as it can be told: the biome at the level of the sea says the sea, a
-     * river or the shore at once; the height of the ground, the dear look, is asked only in a cell of a lake, where it alone tells
-     * the water from the land. Elsewhere a chunk of another biome is land (or a swamp).
+     * river or the shore at once; the height of the ground, a dear look, is asked only in a cell of a lake, where it alone tells
+     * the water from the land, and there only where its guess lies near the sea. Elsewhere a chunk of another biome is land (or a
+     * swamp). Any thread.
      */
     public static TerrainClass probeChunk(ServerLevel level, int chunkX, int chunkZ, int seaLevel, TerrainClass cell) {
         int x = (chunkX << 4) + 8;
@@ -130,22 +91,30 @@ public final class LandSurvey {
         SurveyClassifier.Probe probe = SurveyProbes.probe(level, x, seaLevel, z);
         if (probe == SurveyClassifier.Probe.OCEAN || probe == SurveyClassifier.Probe.RIVER || probe == SurveyClassifier.Probe.BEACH
                 || cell != TerrainClass.LAKE) {
-            groundLooked = false;
             return SurveyClassifier.chunk(probe, seaLevel + 1, seaLevel);
         }
         Integer guess = SurveyProbes.guess(level, x, z);
-        groundLooked = guess == null || SurveyProbes.nearSea(guess, seaLevel);
-        return SurveyClassifier.chunk(probe, groundLooked ? SurveyProbes.floor(level, x, z) : guess, seaLevel);
+        boolean exact = guess == null || SurveyProbes.nearSea(guess, seaLevel);
+        return SurveyClassifier.chunk(probe, exact ? SurveyProbes.floor(level, x, z) : guess, seaLevel);
     }
 
-    /** Whether the last chunk probed by its cell needed the height of its ground. Server thread only. */
-    private static boolean groundLooked;
-
     /**
-     * Whether the last chunk probed by its cell ({@link #probeChunk(ServerLevel, int, int, int, TerrainClass)}) needed the dear
-     * look at the height of its ground.
+     * The classes of the chunks of a cell of a border along the water ({@link io.github.sekerator.kingdomworld.core.land.ChunkProbes}
+     * order, row by row). In a cell of a lake only the height of the ground tells the water: it is looked at once every two by
+     * two chunks, the first of the four standing for them all. Any thread.
      */
-    public static boolean lookedAtGround() {
-        return groundLooked;
+    public static byte[] probeCell(ServerLevel level, int firstChunkX, int firstChunkZ, int seaLevel, TerrainClass cell) {
+        int side = SurveyRaster.CELL_CHUNKS;
+        byte[] classes = new byte[SurveyRaster.CHUNKS_PER_CELL];
+        boolean lake = cell == TerrainClass.LAKE;
+        for (int local = 0; local < classes.length; local++) {
+            int lead = (local / side & ~1) * side + (local % side & ~1);
+            if (lake && lead != local) {
+                classes[local] = classes[lead];
+                continue;
+            }
+            classes[local] = probeChunk(level, firstChunkX + local % side, firstChunkZ + local / side, seaLevel, cell).id();
+        }
+        return classes;
     }
 }

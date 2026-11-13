@@ -205,9 +205,12 @@ public final class LandPlanGameTests {
             }
             LandPlanning.Job job = stopped[0];
             if (restarts.isEmpty()) {
-                // A short tick stops the survey in the middle of a row.
-                job.tick(1_000_000L);
-                helper.assertTrue(job.progress().stage() == Stage.SURVEY && !job.survey().complete() && job.survey().nextCell() > 0,
+                // The plan stops as soon as the first cells of the survey are in, in the middle of the survey.
+                job.tick();
+                if (job.survey().nextCell() == 0) {
+                    return false;
+                }
+                helper.assertTrue(job.progress().stage() == Stage.SURVEY && !job.survey().complete(),
                         "The survey did not stop in its middle: " + job.progress() + " at cell " + job.survey().nextCell());
                 int before = job.survey().nextCell();
                 stopped[0] = restart(server, job, stoppedMap);
