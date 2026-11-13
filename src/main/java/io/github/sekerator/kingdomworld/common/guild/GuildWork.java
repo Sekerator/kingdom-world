@@ -303,7 +303,11 @@ public final class GuildWork {
         for (Contract contract : guild.expire(now, day, rules, world)) {
             tellExpired(server, contract);
         }
+        boolean rankTime = now % RANK_TICKS < 20;
         for (Kingdom kingdom : world.kingdoms().all()) {
+            if (rankTime) {
+                rankBranch(server, guild, kingdom.id(), rules);
+            }
             Branch branch = guild.branchOrDefault(kingdom.id(), rules);
             if (branch.lastAuto() != Long.MIN_VALUE && now - branch.lastAuto() < AUTO_LOOK_TICKS) {
                 continue;
@@ -315,6 +319,57 @@ public final class GuildWork {
         if (now % 6_000 < 20) {
             FARMS.cleanup(now, rules);
         }
+    }
+
+    /** Ticks between two looks at the ranks of the branches of players. */
+    private static final long RANK_TICKS = 1_200;
+    /** The role of a guild house, which lets a branch of players rise above the rank it reaches without one. */
+    public static final String GUILD_HOUSE = "guild";
+
+    /**
+     * Ranks the branch of a kingdom of players by the contracts finished there, within the limit of its guild house. A kingdom
+     * of the world has the ranks it was founded with and grows by its own rules.
+     */
+    static void rankBranch(MinecraftServer server, GuildState guild, UUID kingdomId, GuildRules rules) {
+        if (io.github.sekerator.kingdomworld.common.npc.NpcWork.kingdom(server, kingdomId).isPresent()) {
+            return;
+        }
+        Branch branch = guild.branchOrDefault(kingdomId, rules);
+        boolean house = !io.github.sekerator.kingdomworld.common.construction.BuildingEffects.working(server, kingdomId, GUILD_HOUSE).isEmpty();
+        Rank rank = rules.branchRankOf(branch.done(), house);
+        if (rank != branch.rank() && guild.setBranchRank(kingdomId, rank, rules)) {
+            LOGGER.info("The branch of the guild of {} is of rank {} now ({} contract(s) finished{})", kingdomId, rank.label(), branch.done(),
+                    house ? ", with a guild house" : "");
+        }
+    }
+
+    /**
+     * The head of the guild of a kingdom: from rank C of the branch on, its adventurer of the highest rank, if that is the rank
+     * of the branch or above.
+     */
+    public static Optional<Citizen> head(MinecraftServer server, UUID kingdomId) {
+        GuildState guild = state(server);
+        Rank branchRank = guild.branchOrDefault(kingdomId, GuildSettings.rules()).rank();
+        if (!branchRank.atLeast(GuildRules.HEAD_RANK)) {
+            return Optional.empty();
+        }
+        Citizen best = null;
+        Hireling bestRecord = null;
+        for (Citizen citizen : KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdomId)) {
+            if (!citizen.professionId().equals(Professions.ADVENTURER.id())) {
+                continue;
+            }
+            Optional<Hireling> record = guild.hireling(citizen.id());
+            if (record.isEmpty() || !record.get().rank().atLeast(branchRank)) {
+                continue;
+            }
+            if (bestRecord == null || record.get().rank().ordinal() > bestRecord.rank().ordinal()
+                    || record.get().rank() == bestRecord.rank() && record.get().points() > bestRecord.points()) {
+                best = citizen;
+                bestRecord = record.get();
+            }
+        }
+        return Optional.ofNullable(best);
     }
 
     private static void tellExpired(MinecraftServer server, Contract contract) {
@@ -403,7 +458,7 @@ public final class GuildWork {
             return Optional.empty();
         }
         Branch branch = guild.branchOrDefault(kingdom.id(), rules);
-        long budget = branch.budgetLeft(day);
+        long budget = branch.budgetLeft(day, rules);
         Optional<Capital> capital = KingdomWorldApi.state(server).territory().territory(kingdom.id()).map(Territory::capital);
         if (budget < 1 || capital.isEmpty()) {
             return Optional.empty();
@@ -415,6 +470,9 @@ public final class GuildWork {
         BlockPos at = new BlockPos(capital.get().x(), capital.get().y(), capital.get().z());
         List<MobSpawnSettings.SpawnerData> spawns = new ArrayList<>(level.get().getBiome(at).value().getMobSettings()
                 .getMobs(MobCategory.MONSTER).unwrap());
+        // The guild hunts what the branch may give out: monsters up to its own rank.
+        ServerLevel world = level.get();
+        spawns.removeIf(data -> !branch.rank().atLeast(MonsterRanks.of(data.type, world).rank()));
         RandomSource random = level.get().getRandom();
         int total = 0;
         for (MobSpawnSettings.SpawnerData data : spawns) {
@@ -436,7 +494,9 @@ public final class GuildWork {
             return Optional.empty();
         }
         Rank rank = MonsterRanks.of(type, level.get()).rank();
-        long perKill = Math.max(1, rules.autoRewardPerKill(rank));
+        // A branch of a higher rank pays more for the same monster: a quarter more for each rank it stands above it.
+        int above = Math.max(0, branch.rank().ordinal() - rank.ordinal());
+        long perKill = Math.max(1, Math.round(rules.autoRewardPerKill(rank) * (1.0 + 0.25 * above)));
         int count = (int) Math.max(1, Math.min(3 + random.nextInt(6), budget / perKill));
         long reward = Math.min(budget, perKill * count);
         if (reward < 1) {

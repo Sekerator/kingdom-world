@@ -12,6 +12,7 @@ import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -37,7 +38,8 @@ import java.util.function.ToLongFunction;
 public final class MagicState {
     private final Map<UUID, KingdomMagic> kingdoms = new LinkedHashMap<>();
     private final Map<WorldPos, MagicDevice> devices = new LinkedHashMap<>();
-    private final Map<UUID, EnumSet<PlayerSpell>> learned = new LinkedHashMap<>();
+    /** The spells every player learned, with the level learned (1 to {@link MagicRules#MAX_LEVEL}). */
+    private final Map<UUID, EnumMap<PlayerSpell, Integer>> learned = new LinkedHashMap<>();
     private long nextDevice = 1;
     private Runnable changeListener = () -> {
     };
@@ -528,19 +530,93 @@ public final class MagicState {
     // ---------------------------------------------------------------- spells of players
 
     public Set<PlayerSpell> learned(UUID player) {
-        EnumSet<PlayerSpell> spells = learned.get(player);
-        return spells == null ? Set.of() : Collections.unmodifiableSet(spells);
+        EnumMap<PlayerSpell, Integer> spells = learned.get(player);
+        return spells == null ? Set.of() : Collections.unmodifiableSet(spells.keySet());
     }
 
     public Map<UUID, Set<PlayerSpell>> allLearned() {
         Map<UUID, Set<PlayerSpell>> copy = new LinkedHashMap<>();
-        learned.forEach((player, spells) -> copy.put(player, Collections.unmodifiableSet(EnumSet.copyOf(spells))));
+        learned.forEach((player, spells) -> copy.put(player, Collections.unmodifiableSet(EnumSet.copyOf(spells.keySet()))));
         return Collections.unmodifiableMap(copy);
     }
 
     public boolean knows(UUID player, PlayerSpell spell) {
-        EnumSet<PlayerSpell> spells = learned.get(player);
-        return spells != null && spells.contains(spell);
+        return level(player, spell) > 0;
+    }
+
+    /**
+     * The level a player learned a spell to, 0 if not at all.
+     */
+    public int level(UUID player, PlayerSpell spell) {
+        EnumMap<PlayerSpell, Integer> spells = learned.get(player);
+        return spells == null ? 0 : spells.getOrDefault(spell, 0);
+    }
+
+    /**
+     * How a player stands with the guild of mages of a kingdom.
+     */
+    public enum Access {
+        /** A subject of the kingdom. */
+        SUBJECT,
+        /** Someone else the guild teaches for a higher price. */
+        GUEST,
+        /** Wanted in the kingdom or of a kingdom at war with it: not taught. */
+        BARRED
+    }
+
+    /**
+     * The rank of the guild of mages of a kingdom, F while it has none.
+     */
+    public Rank guildRank(UUID kingdomId) {
+        KingdomMagic magic = kingdoms.get(kingdomId);
+        return magic == null || magic.guildRank == null ? Rank.F : magic.guildRank;
+    }
+
+    /**
+     * Sets the rank of the guild of mages of a kingdom.
+     *
+     * @return whether it changed
+     */
+    public boolean setGuildRank(UUID kingdomId, Rank rank) {
+        Objects.requireNonNull(rank, "rank");
+        KingdomMagic magic = of(kingdomId);
+        if (magic.guildRank == rank) {
+            return false;
+        }
+        magic.guildRank = rank;
+        changed();
+        return true;
+    }
+
+    /**
+     * The guild of mages of a new kingdom of the world: its rank, the researches it begins with and the energy it holds, all of
+     * it the wealth of the kingdom at its founding.
+     */
+    public void found(UUID kingdomId, Rank rank, Collection<Research> researches, long energy, long day, MagicRules rules) {
+        KingdomMagic magic = of(kingdomId);
+        magic.guildRank = Objects.requireNonNull(rank, "rank");
+        magic.done.addAll(researches);
+        long room = Math.max(0, capacity(kingdomId, rules) - magic.energy);
+        long given = Math.max(0, Math.min(room, energy));
+        if (given > 0) {
+            magic.energy += given;
+            magic.journal.record(day, EnergyCategory.ADMIN, given, 0);
+        }
+        changed();
+    }
+
+    /**
+     * The next lesson of a spell a player would take: the level after the one learned.
+     */
+    public int nextLevel(UUID player, PlayerSpell spell) {
+        return level(player, spell) + 1;
+    }
+
+    /**
+     * What the next lesson of a spell costs a player at a kingdom.
+     */
+    public long lessonPrice(UUID player, PlayerSpell spell, Access access, MagicRules rules) {
+        return rules.lessonPrice(spell, Math.min(MagicRules.MAX_LEVEL, nextLevel(player, spell)), access == Access.GUEST);
     }
 
     /**
@@ -550,13 +626,30 @@ public final class MagicState {
      * @param rank the player's rank in the guild, F outside it
      */
     public Outcome checkLearn(UUID player, UUID kingdomId, PlayerSpell spell, Rank rank, MagicRules rules, KingdomWorldState world) {
+        if (world.kingdoms().get(kingdomId).isPresent() && !world.membership().isMember(player, kingdomId)) {
+            return Outcome.fail(KingdomError.NOT_A_MEMBER);
+        }
+        return checkLearn(player, kingdomId, spell, rank, Access.SUBJECT, rules, world);
+    }
+
+    /**
+     * Whether a player may take the next lesson of a spell at a focus of a kingdom: a subject, or someone else for a higher
+     * price unless wanted there or of a kingdom at war with it; the tower high enough, the guild rank of the player high
+     * enough, the level within what the guild of mages of the kingdom teaches, and money on the account for the lesson.
+     *
+     * @param rank   the player's rank in the adventurers' guild, F outside it
+     * @param access how the player stands with the kingdom
+     */
+    public Outcome checkLearn(UUID player, UUID kingdomId, PlayerSpell spell, Rank rank, Access access, MagicRules rules,
+                              KingdomWorldState world) {
         if (world.kingdoms().get(kingdomId).isEmpty()) {
             return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
         }
-        if (!world.membership().isMember(player, kingdomId)) {
-            return Outcome.fail(KingdomError.NOT_A_MEMBER);
+        if (access == Access.BARRED) {
+            return Outcome.fail(KingdomError.NOT_WELCOME);
         }
-        if (knows(player, spell)) {
+        int next = nextLevel(player, spell);
+        if (next > MagicRules.MAX_LEVEL) {
             return Outcome.fail(KingdomError.ALREADY_LEARNED);
         }
         if (towerLevel(kingdomId) < rules.towerLevel(spell)) {
@@ -565,26 +658,41 @@ public final class MagicState {
         if (!rank.atLeast(rules.minRank(spell))) {
             return Outcome.fail(KingdomError.RANK_TOO_LOW);
         }
-        long price = rules.lessonPrice(spell);
+        if (next > rules.lessonLevel(guildRank(kingdomId))) {
+            return Outcome.fail(KingdomError.LESSON_TOO_HIGH);
+        }
+        long price = lessonPrice(player, spell, access, rules);
         return price <= 0 ? Outcome.DONE : world.economy().checkPayTreasury(player, kingdomId, price);
     }
 
     /**
-     * A player learns a spell and pays the lesson to the treasury of the kingdom.
+     * A subject takes the next lesson of a spell and pays it to the treasury of the kingdom.
      */
     public Outcome learn(UUID player, UUID kingdomId, PlayerSpell spell, Rank rank, long day, MagicRules rules, KingdomWorldState world) {
-        Outcome check = checkLearn(player, kingdomId, spell, rank, rules, world);
+        if (world.kingdoms().get(kingdomId).isPresent() && !world.membership().isMember(player, kingdomId)) {
+            return Outcome.fail(KingdomError.NOT_A_MEMBER);
+        }
+        return learn(player, kingdomId, spell, rank, Access.SUBJECT, day, rules, world);
+    }
+
+    /**
+     * A player takes the next lesson of a spell and pays it to the treasury of the kingdom.
+     */
+    public Outcome learn(UUID player, UUID kingdomId, PlayerSpell spell, Rank rank, Access access, long day, MagicRules rules,
+                         KingdomWorldState world) {
+        Outcome check = checkLearn(player, kingdomId, spell, rank, access, rules, world);
         if (!check.ok()) {
             return check;
         }
-        long price = rules.lessonPrice(spell);
+        long price = lessonPrice(player, spell, access, rules);
         if (price > 0) {
             Outcome paid = world.economy().payTreasury(player, kingdomId, price, LedgerCategory.MAGIC, day);
             if (!paid.ok()) {
                 return paid;
             }
         }
-        learned.computeIfAbsent(player, p -> EnumSet.noneOf(PlayerSpell.class)).add(spell);
+        int level = nextLevel(player, spell);
+        learned.computeIfAbsent(player, p -> new EnumMap<>(PlayerSpell.class)).put(spell, level);
         changed();
         return Outcome.DONE;
     }
@@ -593,10 +701,18 @@ public final class MagicState {
      * An operator teaches a spell or takes it away.
      */
     public void adminLearn(UUID player, PlayerSpell spell, boolean known) {
-        if (known) {
-            learned.computeIfAbsent(player, p -> EnumSet.noneOf(PlayerSpell.class)).add(spell);
+        adminLevel(player, spell, known ? Math.max(1, level(player, spell)) : 0);
+    }
+
+    /**
+     * An operator sets the level a player knows a spell to; 0 takes it away.
+     */
+    public void adminLevel(UUID player, PlayerSpell spell, int level) {
+        int value = Math.max(0, Math.min(MagicRules.MAX_LEVEL, level));
+        if (value > 0) {
+            learned.computeIfAbsent(player, p -> new EnumMap<>(PlayerSpell.class)).put(spell, value);
         } else {
-            EnumSet<PlayerSpell> spells = learned.get(player);
+            EnumMap<PlayerSpell, Integer> spells = learned.get(player);
             if (spells != null) {
                 spells.remove(spell);
                 if (spells.isEmpty()) {
@@ -664,9 +780,26 @@ public final class MagicState {
     }
 
     public void restoreLearned(UUID player, Set<PlayerSpell> spells) {
-        if (!spells.isEmpty()) {
-            learned.computeIfAbsent(player, p -> EnumSet.noneOf(PlayerSpell.class)).addAll(spells);
+        Map<PlayerSpell, Integer> levels = new EnumMap<>(PlayerSpell.class);
+        spells.forEach(spell -> levels.put(spell, 1));
+        restoreLevels(player, levels);
+    }
+
+    /**
+     * Restores the spells of a player with their levels; a level outside 1 to {@link MagicRules#MAX_LEVEL} is kept within it.
+     */
+    public void restoreLevels(UUID player, Map<PlayerSpell, Integer> levels) {
+        if (!levels.isEmpty()) {
+            EnumMap<PlayerSpell, Integer> spells = learned.computeIfAbsent(player, p -> new EnumMap<>(PlayerSpell.class));
+            levels.forEach((spell, level) -> spells.put(spell, Math.max(1, Math.min(MagicRules.MAX_LEVEL, level))));
         }
+    }
+
+    /**
+     * Restores the rank of the guild of mages of a kingdom.
+     */
+    public void restoreGuildRank(UUID kingdomId, Rank rank) {
+        of(kingdomId).guildRank = rank;
     }
 
     public void restoreNextDevice(long next) {

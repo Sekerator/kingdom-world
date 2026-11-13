@@ -375,7 +375,15 @@ public enum KingdomError {
     /** The spy is busy, captured or cannot go there. */
     SPY_BUSY,
     /** The demand, plot or spy waits for nothing of that kind. */
-    NOT_PENDING;
+    NOT_PENDING,
+    /** The branch of the guild examines up to its own rank. */
+    BRANCH_RANK_TOO_LOW,
+    /** The branch of the guild takes no contract asking for a higher rank than its own. */
+    RANK_ABOVE_BRANCH,
+    /** The guild of mages here teaches the spell up to a lower level. */
+    LESSON_TOO_HIGH,
+    /** The guild of mages teaches no one wanted here or of a kingdom at war with this one. */
+    NOT_WELCOME;
 
     /**
      * Lower case identifier, used for translation keys.

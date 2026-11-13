@@ -384,9 +384,10 @@ final class GuildTab {
     }
 
     private void renderBranch(GuiGraphics graphics, Font font, int x, int right, int top, int panelHeight) {
-        Component state = view.registrars() > 0
-                ? Component.translatable(KEY + "branch_open", view.registrars(), view.desks())
-                : Component.translatable(KEY + "branch_closed");
+        Component branchRank = GuildTexts.rank(view.branchRank());
+        Component state = view.registrars() <= 0 ? Component.translatable(KEY + "branch_closed", branchRank)
+                : view.head().isEmpty() ? Component.translatable(KEY + "branch_open", branchRank, view.registrars(), view.desks())
+                : Component.translatable(KEY + "branch_open_head", branchRank, view.head(), view.registrars(), view.desks());
         // The state of the branch shares the row of the view button, to leave the height to the crystals.
         int stateX = x + modeWidth + 6;
         screen.name(graphics, state.getString(), stateX, buttonsY(top) + 4, view.registrars() > 0 ? 0xFFA0E0A0 : 0xFFFF9070, right - stateX);

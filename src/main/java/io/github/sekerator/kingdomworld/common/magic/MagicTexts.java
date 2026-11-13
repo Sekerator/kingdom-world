@@ -41,6 +41,14 @@ public final class MagicTexts {
         return Component.translatable(COUNT + "seconds." + Plurals.form(seconds).suffix(), seconds);
     }
 
+    /**
+     * The level of a learned spell, written I to IV.
+     */
+    public static MutableComponent level(int level) {
+        String[] numerals = {"0", "I", "II", "III", "IV"};
+        return Component.literal(numerals[Math.max(0, Math.min(numerals.length - 1, level))]);
+    }
+
     public static MutableComponent spell(PlayerSpell spell) {
         return Component.translatable(MAGIC + "spell." + spell.id());
     }

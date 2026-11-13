@@ -31,9 +31,10 @@ import java.util.function.Function;
  *
  * <pre>
  * kingdoms: [ { kingdom, energy, done: [id], current?, progress, enabled: [id], paid: { spell: day }, ward: [ { dimension, chunk } ],
- *               healed: [uuid], wind: [long], journal: [ { day, entries: [ { category, income, expense } ] } ] } ]
+ *               healed: [uuid], wind: [long], journal: [ { day, entries: [ { category, income, expense } ] } ], rank? } ]
  * devices: [ { id, kind, kingdom, dimension, x, y, z } ]
- * learned: [ { player, spells: [id] } ]
+ * learned: [ { player, spells: [id], levels?: [int] } ]  (levels added later, one for each spell; without them every
+ *          spell is of level I; rank of a kingdom added later too: without it the kingdom has no guild of mages yet)
  * nextDevice
  * </pre>
  */
@@ -60,6 +61,7 @@ final class MagicNbt {
             CompoundTag entry = new CompoundTag();
             entry.putUUID("kingdom", magic.kingdomId());
             entry.putLong("energy", magic.energy());
+            magic.guildRank().ifPresent(rank -> entry.putString("rank", rank.id()));
             entry.put("done", ids(magic.done(), Research::id));
             magic.current().ifPresent(research -> entry.putString("current", research.id()));
             entry.putDouble("progress", magic.progress());
@@ -122,6 +124,10 @@ final class MagicNbt {
             CompoundTag entry = new CompoundTag();
             entry.putUUID("player", player);
             entry.put("spells", ids(spells, PlayerSpell::id));
+            int[] levels = spells.stream().mapToInt(spell -> state.level(player, spell)).toArray();
+            if (java.util.Arrays.stream(levels).anyMatch(level -> level != 1)) {
+                entry.putIntArray("levels", levels);
+            }
             learned.add(entry);
         });
         tag.put(LEARNED, learned);
@@ -187,6 +193,11 @@ final class MagicNbt {
                 }
                 state.restoreKingdom(kingdom, entry.getLong("energy"), done, current, entry.getDouble("progress"), enabled, paid, ward, healed,
                         wind);
+                if (entry.contains("rank", Tag.TAG_STRING)) {
+                    String id = entry.getString("rank");
+                    state.restoreGuildRank(kingdom, io.github.sekerator.kingdomworld.core.guild.Rank.byId(id)
+                            .orElseThrow(() -> new IllegalArgumentException("unknown rank '" + id + "'")));
+                }
                 ListTag journal = entry.getList("journal", Tag.TAG_COMPOUND);
                 for (int j = 0; j < journal.size(); j++) {
                     CompoundTag dayTag = journal.getCompound(j);
@@ -220,8 +231,15 @@ final class MagicNbt {
         for (int i = 0; i < learned.size(); i++) {
             CompoundTag entry = learned.getCompound(i);
             try {
-                state.restoreLearned(uuid(entry, "player"),
-                        readIds(entry.getList("spells", Tag.TAG_STRING), PlayerSpell.class, PlayerSpell::byId, "spell"));
+                EnumSet<PlayerSpell> spells = readIds(entry.getList("spells", Tag.TAG_STRING), PlayerSpell.class, PlayerSpell::byId, "spell");
+                int[] levels = entry.getIntArray("levels");
+                Map<PlayerSpell, Integer> learnedLevels = new EnumMap<>(PlayerSpell.class);
+                int index = 0;
+                for (PlayerSpell spell : spells) {
+                    learnedLevels.put(spell, index < levels.length ? levels[index] : 1);
+                    index++;
+                }
+                state.restoreLevels(uuid(entry, "player"), learnedLevels);
             } catch (RuntimeException e) {
                 problems.add("learned #" + i + ": " + e.getMessage());
             }

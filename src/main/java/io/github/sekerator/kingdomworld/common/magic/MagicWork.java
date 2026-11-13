@@ -387,7 +387,9 @@ public final class MagicWork {
                 }
                 Vec3 from = body.getEyePosition();
                 Vec3 to = target.getEyePosition().subtract(from);
-                SpellFireball fireball = new SpellFireball(level, body, to.x, to.y, to.z, rules.fireballDamage);
+                // The mages of a guild of a higher rank cast stronger spells.
+                SpellFireball fireball = new SpellFireball(level, body, to.x, to.y, to.z,
+                        (float) (rules.fireballDamage * rules.mageSpellPower(magic.guildRank(kingdom))));
                 fireball.setPos(from.add(to.normalize()));
                 level.addFreshEntity(fireball);
                 level.playSound(null, body.blockPosition(), SoundEvents.BLAZE_SHOOT, SoundSource.NEUTRAL, 0.5f, 1.3f);
@@ -396,7 +398,7 @@ public final class MagicWork {
             }
             LivingEntity friend = hurtFriend(body, kingdom, rules.mageRange);
             if (friend != null && magic.spend(kingdom, rules.mageHealCost, EnergyCategory.DEFENSE, day).ok()) {
-                friend.heal(rules.healAmount);
+                friend.heal((float) (rules.healAmount * rules.mageSpellPower(magic.guildRank(kingdom))));
                 level.sendParticles(ParticleTypes.HEART, friend.getX(), friend.getEyeY(), friend.getZ(), 3, 0.3, 0.3, 0.3, 0.0);
                 MAGE_READY.put(citizenId, now + rules.mageCastTicks);
             }

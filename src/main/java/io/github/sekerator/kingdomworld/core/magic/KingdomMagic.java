@@ -37,6 +37,8 @@ public final class KingdomMagic {
     final Set<WardChunk> ward = new LinkedHashSet<>();
     final Set<UUID> healed = new HashSet<>();
     final Set<Long> windCaravans = new HashSet<>();
+    /** The rank of the guild of mages of the kingdom, or null while it has none. */
+    io.github.sekerator.kingdomworld.core.guild.Rank guildRank;
 
     KingdomMagic(UUID kingdomId) {
         this.kingdomId = Objects.requireNonNull(kingdomId, "kingdomId");
@@ -67,6 +69,13 @@ public final class KingdomMagic {
      */
     public int towerLevel() {
         return done.size();
+    }
+
+    /**
+     * The rank of the guild of mages of the kingdom, empty while it has none.
+     */
+    public Optional<io.github.sekerator.kingdomworld.core.guild.Rank> guildRank() {
+        return Optional.ofNullable(guildRank);
     }
 
     public Optional<Research> current() {
@@ -108,6 +117,7 @@ public final class KingdomMagic {
     }
 
     boolean isEmpty() {
-        return energy == 0 && done.isEmpty() && current == null && enabled.isEmpty() && ward.isEmpty() && journal.days().isEmpty();
+        return energy == 0 && done.isEmpty() && current == null && enabled.isEmpty() && ward.isEmpty() && journal.days().isEmpty()
+                && guildRank == null;
     }
 }

@@ -138,6 +138,8 @@ class GuildStateTest {
 
     @Test
     void contractsOfTheOwnRankAndOneAbove() {
+        // The branch takes contracts up to its own rank: one of rank B takes the hunts of rank D posted here.
+        guild.setBranchRank(kingdom.id(), Rank.B, RULES);
         guild.join(hunter, kingdom.id(), now, 2, RULES, world);
         Contract e = postByKingdom("", Rank.E, 1, 10);
         Contract d = postByKingdom("", Rank.D, 1, 10);
@@ -291,6 +293,8 @@ class GuildStateTest {
 
     @Test
     void aFailedExamWaitsForTheNextTry() {
+        // A branch of rank SS examines up to SS.
+        guild.setBranchRank(kingdom.id(), Rank.SS, RULES);
         guild.join(hunter, kingdom.id(), now, 2, RULES, world);
         guild.addPoints(hunter, RULES.rankPoints(Rank.E));
         Contract exam = guild.startExam(hunter, kingdom.id(), now, RULES).contract().orElseThrow();
@@ -317,6 +321,7 @@ class GuildStateTest {
 
     @Test
     void squadsGoOnExpeditionsAndBringTheRewardHome() {
+        guild.setBranchRank(kingdom.id(), Rank.B, RULES);
         List<UUID> members = new ArrayList<>();
         for (int i = 0; i < 3; i++) {
             members.add(adventurer().id());
@@ -418,5 +423,55 @@ class GuildStateTest {
         Expeditions.Outcome partial = Expeditions.resolve(List.of(bare), difficulty, contract, RULES, 0.6, new double[]{1, 1});
         assertEquals(Expeditions.Result.PARTIAL, partial.result());
         assertTrue(partial.kills() > 0 && partial.kills() < 4);
+    }
+
+    @Test
+    void aBranchExaminesUpToItsOwnRank() {
+        guild.join(hunter, kingdom.id(), now, 2, RULES, world);
+        guild.setRank(hunter, Rank.D, now);
+        guild.addPoints(hunter, RULES.rankPoints(Rank.C));
+        // A new branch is of rank E: the exam for C is taken at a branch of rank C or above.
+        assertEquals(Rank.E, guild.branchOrDefault(kingdom.id(), RULES).rank());
+        assertEquals(Optional.of(KingdomError.BRANCH_RANK_TOO_LOW), guild.startExam(hunter, kingdom.id(), now, RULES).outcome().failure());
+        assertTrue(guild.checkExam(hunter, now, RULES).ok(), "the member could take the exam at another branch");
+        guild.setBranchRank(kingdom.id(), Rank.C, RULES);
+        assertTrue(guild.startExam(hunter, kingdom.id(), now, RULES).outcome().ok());
+    }
+
+    @Test
+    void aBranchTakesNoContractAboveItsRank() {
+        assertEquals(Optional.of(KingdomError.RANK_ABOVE_BRANCH), guild.post(king, hunt(null, Contract.Poster.KINGDOM, kingdom.id(), "", Rank.D,
+                1, 10), now, 2, RULES, world).outcome().failure());
+        guild.setBranchRank(kingdom.id(), Rank.D, RULES);
+        assertTrue(guild.post(king, hunt(null, Contract.Poster.KINGDOM, kingdom.id(), "", Rank.D, 1, 10), now, 2, RULES, world).outcome().ok());
+        // The rule of the own rank and one above still holds for those who take it.
+        guild.join(hunter, kingdom.id(), now, 2, RULES, world);
+        Contract c = guild.board(kingdom.id()).get(0);
+        assertEquals(Optional.of(KingdomError.RANK_TOO_LOW), guild.take(hunter, c.id(), now, RULES).failure());
+    }
+
+    @Test
+    void aBranchOfPlayersRisesWithTheContractsFinishedThereUpToItsHouse() {
+        assertEquals(Rank.E, RULES.branchRankOf(0, false));
+        assertEquals(Rank.D, RULES.branchRankOf(3, false));
+        assertEquals(Rank.C, RULES.branchRankOf(10, false));
+        assertEquals(Rank.C, RULES.branchRankOf(1_000_000, false), "no higher than C without a guild house");
+        assertEquals(Rank.B, RULES.branchRankOf(1_000_000, true), "no higher than B with one");
+        // A finished hunt counts for its branch.
+        guild.join(hunter, kingdom.id(), now, 2, RULES, world);
+        Contract contract = postByKingdom("minecraft:zombie", Rank.E, 1, 10);
+        assertTrue(guild.take(hunter, contract.id(), now, RULES).ok());
+        assertTrue(guild.recordKill(hunter, "minecraft:zombie", Rank.E, false, now, 2, world).get(0).finished());
+        assertEquals(1, guild.branchOrDefault(kingdom.id(), RULES).done());
+    }
+
+    @Test
+    void theGuildMaySpendMoreOnItsOwnContractsAtAHigherBranch() {
+        Branch branch = guild.branchOrDefault(kingdom.id(), RULES);
+        assertEquals(RULES.defaultDailyBudget, branch.budgetLeft(3, RULES));
+        assertEquals(RULES.ownBudget(Rank.S), branch.withRank(Rank.S).budgetLeft(3, RULES));
+        assertTrue(RULES.ownBudget(Rank.S) > RULES.defaultDailyBudget);
+        // The budget of the king counts when it is higher.
+        assertEquals(5_000, branch.withRank(Rank.S).withBudget(5_000).budgetLeft(3, RULES));
     }
 }

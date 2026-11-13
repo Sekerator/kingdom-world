@@ -89,6 +89,30 @@ public final class MagicRules {
     /** Energy one well spends at most per player or jar and pulse. */
     public final long wellMaxEnergy;
 
+    // ---------------------------------------------------------------- the guild of mages
+    /** Levels a learned spell has, from I to IV. */
+    public static final int MAX_LEVEL = 4;
+    /** The highest level of a spell a guild of mages teaches, by its rank. */
+    private final int[] lessonLevel;
+    /** How much stronger (damage, healing, reach, time) each level of a spell is than the first, I to IV. */
+    private final double[] levelPower;
+    /** What the lesson for each level costs, as a share of the lesson for the first, I to IV. */
+    private final double[] levelPrice;
+    /** What a lesson costs someone who is not a subject of the kingdom, as a share of what a subject pays. */
+    public final double foreignerPrice;
+    /** Researches, mages and energy the guild of mages of a kingdom of the world has from its founding, by its rank. */
+    private final int[] worldResearch;
+    private final int[] worldMages;
+    private final long[] worldEnergy;
+    /** Health of the body of a mage, and how much stronger the spells of a mage are, by the rank of the guild. */
+    private final double[] mageHealth;
+    private final double[] mageSpellPower;
+    /** The worth a guild of mages of players needs for each rank, and what a research, a mage and a mage tower are worth. */
+    private final long[] guildScore;
+    public final int researchWorth;
+    public final int mageWorth;
+    public final int towerWorth;
+
     public static final MagicRules DEFAULT = new Builder().build();
 
     private MagicRules(Builder b) {
@@ -137,6 +161,101 @@ public final class MagicRules {
         wellRadius = Math.max(1, b.wellRadius);
         wellIntervalTicks = Math.max(1, b.wellIntervalTicks);
         wellMaxEnergy = Math.max(1, b.wellMaxEnergy);
+        lessonLevel = table(b.lessonLevel, Rank.COUNT);
+        for (int i = 0; i < lessonLevel.length; i++) {
+            lessonLevel[i] = Math.max(1, Math.min(MAX_LEVEL, lessonLevel[i]));
+        }
+        levelPower = byLevel(b.levelPower);
+        levelPrice = byLevel(b.levelPrice);
+        foreignerPrice = Math.max(1.0, b.foreignerPrice);
+        worldResearch = table(b.worldResearch, Rank.COUNT);
+        worldMages = table(b.worldMages, Rank.COUNT);
+        worldEnergy = table(b.worldEnergy, Rank.COUNT);
+        mageHealth = byRank(b.mageHealth);
+        mageSpellPower = byRank(b.mageSpellPower);
+        guildScore = table(b.guildScore, Rank.COUNT);
+        researchWorth = Math.max(0, b.researchWorth);
+        mageWorth = Math.max(0, b.mageWorth);
+        towerWorth = Math.max(0, b.towerWorth);
+    }
+
+    private static double[] byLevel(double[] values) {
+        if (values.length != MAX_LEVEL) {
+            throw new IllegalArgumentException("A table by level needs " + MAX_LEVEL + " values, not " + values.length);
+        }
+        double[] copy = values.clone();
+        for (int i = 0; i < copy.length; i++) {
+            copy[i] = Math.max(i == 0 ? 1.0 : copy[i - 1], Double.isFinite(copy[i]) ? copy[i] : 1.0);
+        }
+        return copy;
+    }
+
+    private static double[] byRank(double[] values) {
+        if (values.length != Rank.COUNT) {
+            throw new IllegalArgumentException("A table by rank needs " + Rank.COUNT + " values, not " + values.length);
+        }
+        double[] copy = values.clone();
+        for (int i = 0; i < copy.length; i++) {
+            copy[i] = Math.max(0.0, Double.isFinite(copy[i]) ? copy[i] : 0.0);
+        }
+        return copy;
+    }
+
+    /** The highest level of a spell a guild of mages of a rank teaches. */
+    public int lessonLevel(Rank guildRank) {
+        return lessonLevel[guildRank.ordinal()];
+    }
+
+    /** How much stronger a spell of a level (1 to 4) is than one of the first. */
+    public double levelPower(int level) {
+        return levelPower[Math.max(1, Math.min(MAX_LEVEL, level)) - 1];
+    }
+
+    /**
+     * What the lesson for a level of a spell costs.
+     *
+     * @param guest whether the one who learns is not a subject of the kingdom
+     */
+    public long lessonPrice(PlayerSpell spell, int level, boolean guest) {
+        double price = lessonPrice(spell) * levelPrice[Math.max(1, Math.min(MAX_LEVEL, level)) - 1] * (guest ? foreignerPrice : 1.0);
+        return Math.max(0, Math.min(io.github.sekerator.kingdomworld.core.economy.Money.MAX, Math.round(price)));
+    }
+
+    /** Researches the guild of mages of a kingdom of the world has from its founding. */
+    public int worldResearch(Rank guildRank) {
+        return worldResearch[guildRank.ordinal()];
+    }
+
+    /** Mages of a kingdom of the world, by the rank of its guild of mages. */
+    public int worldMages(Rank guildRank) {
+        return worldMages[guildRank.ordinal()];
+    }
+
+    /** Energy the guild of mages of a kingdom of the world holds at its founding. */
+    public long worldEnergy(Rank guildRank) {
+        return worldEnergy[guildRank.ordinal()];
+    }
+
+    /** Health of the body of a mage of a guild of a rank. */
+    public double mageHealth(Rank guildRank) {
+        return mageHealth[guildRank.ordinal()];
+    }
+
+    /** How much stronger the spells of the mages of a guild of a rank are. */
+    public double mageSpellPower(Rank guildRank) {
+        return Math.max(0.1, mageSpellPower[guildRank.ordinal()]);
+    }
+
+    /**
+     * The rank of a guild of mages of players: its worth from researches, mages and mage towers against the table.
+     */
+    public Rank guildRankOf(int researches, int mages, int towers) {
+        long worth = (long) researches * researchWorth + (long) mages * mageWorth + (long) towers * towerWorth;
+        Rank rank = Rank.F;
+        for (Rank next = rank.next().orElse(null); next != null && worth >= guildScore[next.ordinal()]; next = next.next().orElse(null)) {
+            rank = next;
+        }
+        return rank;
     }
 
     private static long[] table(long[] values, int size) {
@@ -255,6 +374,19 @@ public final class MagicRules {
         public int wellRadius = 8;
         public int wellIntervalTicks = 40;
         public long wellMaxEnergy = 20;
+        public int[] lessonLevel = {1, 1, 1, 1, 1, 2, 3, 4, 4};
+        public double[] levelPower = {1.0, 1.4, 1.8, 2.3};
+        public double[] levelPrice = {1.0, 2.5, 6.0, 15.0};
+        public double foreignerPrice = 2.0;
+        public int[] worldResearch = {0, 0, 0, 0, 3, 5, 7, 8, 8};
+        public int[] worldMages = {0, 0, 0, 0, 3, 5, 7, 10, 10};
+        public long[] worldEnergy = {0, 0, 0, 0, 1_000, 2_000, 3_000, 4_000, 5_000};
+        public double[] mageHealth = {20, 22, 25, 30, 40, 55, 75, 100, 130};
+        public double[] mageSpellPower = {1.0, 1.0, 1.0, 1.0, 1.0, 1.25, 1.5, 2.0, 2.5};
+        public long[] guildScore = {0, 2, 4, 7, 11, 16, 22, 30, 40};
+        public int researchWorth = 3;
+        public int mageWorth = 1;
+        public int towerWorth = 2;
 
         public MagicRules build() {
             return new MagicRules(this);

@@ -173,7 +173,8 @@ public final class MagicActions {
                 crystals, GuildActions.energy(server, kingdomId), journal, mages, research, magic.towerLevel(kingdomId), spells,
                 mine.map(m -> m.ward().size()).orElse(0), rules.wardMaxChunks, hereWarded, hereOwned,
                 magic.devicesOf(kingdomId, MagicDevice.Kind.GATE).stream().map(MagicActions::row).toList(),
-                magic.devicesOf(kingdomId, MagicDevice.Kind.GENERATOR).stream().map(MagicActions::row).toList(), rules.feRate, rules.feMaxPerTick));
+                magic.devicesOf(kingdomId, MagicDevice.Kind.GENERATOR).stream().map(MagicActions::row).toList(), rules.feRate, rules.feMaxPerTick,
+                magic.guildRank(kingdomId)));
     }
 
     /**
@@ -263,12 +264,14 @@ public final class MagicActions {
         MagicRules rules = MagicSettings.rules();
         KingdomWorldState world = KingdomWorldApi.state(server);
         Rank rank = rank(server, player.getUUID());
+        MagicState.Access access = access(server, player.getUUID(), owner);
+        int teaches = rules.lessonLevel(magic.guildRank(owner));
         List<MagicViews.Lesson> lessons = new ArrayList<>();
         for (PlayerSpell spell : PlayerSpell.values()) {
-            boolean learned = magic.knows(player.getUUID(), spell);
-            Outcome check = learned ? Outcome.DONE : magic.checkLearn(player.getUUID(), owner, spell, rank, rules, world);
-            lessons.add(new MagicViews.Lesson(spell, learned, rules.lessonPrice(spell), rules.cost(spell), rules.minRank(spell),
-                    rules.towerLevel(spell), check.failure()));
+            int level = magic.level(player.getUUID(), spell);
+            Outcome check = magic.checkLearn(player.getUUID(), owner, spell, rank, access, rules, world);
+            lessons.add(new MagicViews.Lesson(spell, level > 0, magic.lessonPrice(player.getUUID(), spell, access, rules), rules.cost(spell),
+                    rules.minRank(spell), rules.towerLevel(spell), check.failure(), level, teaches));
         }
         ItemStack staff = player.getMainHandItem();
         List<Optional<PlayerSpell>> slots = staff.getItem() instanceof StaffItem ? StaffItem.slots(staff, rules.staffSlots) : List.of();
@@ -277,7 +280,27 @@ public final class MagicActions {
         int percent = current.map(research -> (int) Math.min(99, Math.floor(mine.get().progress() * 100.0 / rules.researchTicks(research))))
                 .orElse(0);
         return Optional.of(new MagicViews.FocusView(pos, owner, kingdom.get().name(), kingdom.get().color(), currency.get(), magic.towerLevel(owner),
-                rank, CrystalEnergy.carried(player), world.economy().accounts().balance(player.getUUID(), owner), lessons, slots, current, percent));
+                rank, CrystalEnergy.carried(player), world.economy().accounts().balance(player.getUUID(), owner), lessons, slots, current, percent,
+                magic.guildRank(owner), access == MagicState.Access.GUEST));
+    }
+
+    /**
+     * How a player stands with the guild of mages of a kingdom: a subject; someone wanted there or of a kingdom at war with it,
+     * whom the guild does not teach; or anyone else, who pays more for the lessons.
+     */
+    public static MagicState.Access access(MinecraftServer server, UUID player, UUID kingdomId) {
+        KingdomWorldState world = KingdomWorldApi.state(server);
+        if (world.membership().isMember(player, kingdomId)) {
+            return MagicState.Access.SUBJECT;
+        }
+        if (io.github.sekerator.kingdomworld.common.law.LawWork.state(server).wanted(kingdomId, player).isPresent()) {
+            return MagicState.Access.BARRED;
+        }
+        Optional<UUID> home = world.membership().kingdomOf(player);
+        if (home.isPresent() && io.github.sekerator.kingdomworld.common.diplomacy.WarWork.fighting(server, home.get(), kingdomId)) {
+            return MagicState.Access.BARRED;
+        }
+        return MagicState.Access.GUEST;
     }
 
     /**
@@ -313,10 +336,13 @@ public final class MagicActions {
                 PlayerSpell spell = PlayerSpell.values()[action.spell()];
                 long day = TreasuryActions.day(server);
                 Rank rank = rank(server, player.getUUID());
+                MagicState.Access access = access(server, player.getUUID(), owner);
+                long price = MagicWork.state(server).lessonPrice(player.getUUID(), spell, access, rules);
                 Outcome outcome = MagicWork.change(server, "learn a spell",
-                        magic -> magic.learn(player.getUUID(), owner, spell, rank, day, rules, KingdomWorldApi.state(server)));
-                yield outcome.ok() ? KingdomActions.Feedback.ok(KEY + "learned", MagicTexts.spell(spell),
-                        io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(rules.lessonPrice(spell), Purses.units(server, owner)))
+                        magic -> magic.learn(player.getUUID(), owner, spell, rank, access, day, rules, KingdomWorldApi.state(server)));
+                int level = MagicWork.state(server).level(player.getUUID(), spell);
+                yield outcome.ok() ? KingdomActions.Feedback.ok(KEY + "learned_level", MagicTexts.spell(spell), MagicTexts.level(level),
+                        io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(price, Purses.units(server, owner)))
                         : KingdomActions.Feedback.error(outcome.error());
             }
             case BIND -> {

@@ -95,6 +95,25 @@ public final class GuildRules {
     /** The server's {@code taskRiskMultiplier}: 0 turns deaths and wounds on expeditions off. */
     public final double riskMultiplier;
 
+    // ---------------------------------------------------------------- the ranks of branches
+    /** Contracts a branch of players must have finished for each rank. */
+    private final long[] branchRankDone;
+    /** The highest rank of a branch of players without a guild house, and with one. */
+    public final Rank branchRankWithoutHouse;
+    public final Rank branchRankWithHouse;
+    /** The least the guild may spend on contracts of its own a day, by the rank of the branch. */
+    private final long[] ownBudget;
+    /** Health and further attack damage of the body of an adventurer, by its rank. */
+    private final double[] adventurerHealth;
+    private final double[] adventurerDamage;
+    /** The lowest and the highest rank of the guilds of a kingdom of the world, by its level (small, medium, large). */
+    private final Rank[] worldRankMin;
+    private final Rank[] worldRankMax;
+    /** Adventurers of a kingdom of the world, by the rank of its branch. */
+    private final int[] worldAdventurers;
+    /** Game days after which a guild of a rich kingdom of the world rises a rank, up to the highest of its level. */
+    public final int worldGrowthDays;
+
     public static final GuildRules DEFAULT = new Builder().build();
 
     private GuildRules(Builder b) {
@@ -140,6 +159,75 @@ public final class GuildRules {
         expeditionInjury = Math.max(0.0, Math.min(1.0, b.expeditionInjury));
         expeditionDeath = Math.max(0.0, Math.min(1.0, b.expeditionDeath));
         riskMultiplier = Math.max(0.0, b.riskMultiplier);
+        branchRankDone = table(b.branchRankDone);
+        branchRankWithoutHouse = b.branchRankWithoutHouse;
+        branchRankWithHouse = Rank.max(b.branchRankWithoutHouse, b.branchRankWithHouse);
+        ownBudget = table(b.ownBudget);
+        adventurerHealth = table(b.adventurerHealth);
+        adventurerDamage = table(b.adventurerDamage);
+        if (b.worldRankMin.length != LEVELS || b.worldRankMax.length != LEVELS) {
+            throw new IllegalArgumentException("The ranks of kingdoms of the world need " + LEVELS + " values a table");
+        }
+        worldRankMin = b.worldRankMin.clone();
+        worldRankMax = new Rank[LEVELS];
+        for (int i = 0; i < LEVELS; i++) {
+            worldRankMax[i] = Rank.max(worldRankMin[i], b.worldRankMax[i]);
+        }
+        worldAdventurers = table(b.worldAdventurers);
+        worldGrowthDays = Math.max(1, b.worldGrowthDays);
+    }
+
+    /** Levels of kingdoms of the world: small, medium, large. */
+    public static final int LEVELS = 3;
+    /** The lowest rank of a branch with a head of the guild. */
+    public static final Rank HEAD_RANK = Rank.C;
+
+    /** Contracts a branch of players must have finished for a rank. */
+    public long branchRankDone(Rank rank) {
+        return branchRankDone[rank.ordinal()];
+    }
+
+    /**
+     * The rank a branch of players has earned by the contracts finished there, within the limit of its guild house.
+     */
+    public Rank branchRankOf(long done, boolean house) {
+        Rank limit = house ? branchRankWithHouse : branchRankWithoutHouse;
+        Rank rank = Branch.FIRST_RANK;
+        for (Rank next = rank.next().orElse(null); next != null && next.ordinal() <= limit.ordinal() && done >= branchRankDone(next);
+             next = next.next().orElse(null)) {
+            rank = next;
+        }
+        return rank.ordinal() > limit.ordinal() ? limit : rank;
+    }
+
+    /** The least the guild may spend on contracts of its own a day at a branch of a rank. */
+    public long ownBudget(Rank rank) {
+        return ownBudget[rank.ordinal()];
+    }
+
+    /** Health of the body of an adventurer of a rank. */
+    public double adventurerHealth(Rank rank) {
+        return adventurerHealth[rank.ordinal()];
+    }
+
+    /** Further attack damage of the body of an adventurer of a rank. */
+    public double adventurerDamage(Rank rank) {
+        return adventurerDamage[rank.ordinal()];
+    }
+
+    /** The lowest rank of the guilds of a kingdom of the world of a level (0 small, 1 medium, 2 large). */
+    public Rank worldRankMin(int level) {
+        return worldRankMin[Math.max(0, Math.min(LEVELS - 1, level))];
+    }
+
+    /** The highest rank of the guilds of a kingdom of the world of a level. */
+    public Rank worldRankMax(int level) {
+        return worldRankMax[Math.max(0, Math.min(LEVELS - 1, level))];
+    }
+
+    /** Adventurers a kingdom of the world has with a branch of a rank. */
+    public int worldAdventurers(Rank rank) {
+        return worldAdventurers[rank.ordinal()];
     }
 
     private static double[] table(double[] values) {
@@ -261,6 +349,39 @@ public final class GuildRules {
     }
 
     /**
+     * Reads ranks by the level of a kingdom of the world, three ranks for small, medium and large: {@code B, A, S}.
+     */
+    public static Optional<Rank[]> parseLevelRanks(String text) {
+        if (text == null) {
+            return Optional.empty();
+        }
+        String[] parts = text.strip().split("[,;\s]+");
+        if (parts.length != LEVELS) {
+            return Optional.empty();
+        }
+        Rank[] ranks = new Rank[LEVELS];
+        for (int i = 0; i < LEVELS; i++) {
+            Optional<Rank> rank = Rank.byId(parts[i]);
+            if (rank.isEmpty()) {
+                return Optional.empty();
+            }
+            ranks[i] = rank.get();
+        }
+        return Optional.of(ranks);
+    }
+
+    /**
+     * Writes ranks by the level of a kingdom of the world for the config.
+     */
+    public static String formatLevelRanks(Rank[] ranks) {
+        StringBuilder text = new StringBuilder();
+        for (Rank rank : ranks) {
+            text.append(text.isEmpty() ? "" : ", ").append(rank.label());
+        }
+        return text.toString();
+    }
+
+    /**
      * Reads one override of the rank of monsters, {@code id=rank} or {@code #tag=rank}.
      */
     public static Optional<Map.Entry<String, Rank>> parseOverride(String text) {
@@ -339,6 +460,16 @@ public final class GuildRules {
         public double expeditionInjury = 0.25;
         public double expeditionDeath = 0.04;
         public double riskMultiplier = 1.0;
+        public long[] branchRankDone = {0, 0, 3, 10, 30, 80, 200, 500, 1_200};
+        public Rank branchRankWithoutHouse = Rank.C;
+        public Rank branchRankWithHouse = Rank.B;
+        public long[] ownBudget = {50, 50, 50, 80, 120, 200, 350, 600, 1_000};
+        public double[] adventurerHealth = {20, 24, 30, 40, 55, 75, 100, 140, 180};
+        public double[] adventurerDamage = {0, 0.5, 1, 2, 3, 4, 6, 8, 10};
+        public Rank[] worldRankMin = {Rank.B, Rank.A, Rank.S};
+        public Rank[] worldRankMax = {Rank.A, Rank.S, Rank.SS};
+        public int[] worldAdventurers = {0, 0, 0, 0, 5, 8, 11, 14, 14};
+        public int worldGrowthDays = 40;
 
         public GuildRules build() {
             return new GuildRules(this);

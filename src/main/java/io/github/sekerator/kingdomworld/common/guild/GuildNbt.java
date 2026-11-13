@@ -23,7 +23,8 @@ import java.util.UUID;
  * <pre>
  * members: [ { player, rank, points, joined, kills, contracts, cooldown } ]
  * hirelings: [ { citizen, kingdom, rank, points, kills, expeditions } ]
- * branches: [ { kingdom, commission, budget, budgetDay, spent, lastAuto } ]
+ * branches: [ { kingdom, commission, budget, budgetDay, spent, lastAuto, rank?, done? } ]  (rank and done added later: a branch
+ *            without them has the first rank and has done nothing)
  * contracts: [ { id, kind, branch, poster, posterId, minRank, target, targetRank, boss, count, progress, currency, reward,
  *                points, commission, posted, deadline, status, player?, squad, squads } ]
  * squads: [ { id, kingdom, members: [uuid], state, contract, departed, returns, power } ]
@@ -77,6 +78,8 @@ final class GuildNbt {
             entry.putLong("budgetDay", branch.budgetDay());
             entry.putLong("spent", branch.spentToday());
             entry.putLong("lastAuto", branch.lastAuto());
+            entry.putString("rank", branch.rank().id());
+            entry.putLong("done", branch.done());
             branches.add(entry);
         }
         tag.put(BRANCHES, branches);
@@ -160,8 +163,9 @@ final class GuildNbt {
         }
         for (CompoundTag entry : list(tag, BRANCHES, problems)) {
             try {
+                Rank rank = entry.contains("rank") ? rank(entry, "rank") : Branch.FIRST_RANK;
                 guild.restoreBranch(new Branch(uuid(entry, "kingdom"), entry.getInt("commission"), entry.getLong("budget"),
-                        entry.getLong("budgetDay"), entry.getLong("spent"), entry.getLong("lastAuto")));
+                        entry.getLong("budgetDay"), entry.getLong("spent"), entry.getLong("lastAuto"), rank, Math.max(0, entry.getLong("done"))));
             } catch (RuntimeException e) {
                 problems.add("branch: " + e.getMessage());
             }

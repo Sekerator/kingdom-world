@@ -98,7 +98,7 @@ public final class ArmyForce {
     static void keepHealth(MinecraftServer server, ArmyState army, KingdomWorldState world) {
         for (Citizen citizen : world.citizens().registry().all()) {
             Optional<Soldier> soldier = Professions.isMilitary(citizen.professionId()) ? army.soldier(citizen.id()) : Optional.empty();
-            float full = soldier.map(record -> maxHealth(server, record)).orElse(Citizen.MAX_HEALTH);
+            float full = soldier.map(record -> maxHealth(server, record)).orElseGet(() -> (float) civilian(server, citizen)[0]);
             if (citizen.maxHealth() != full) {
                 citizen.setMaxHealth(full);
             }
@@ -125,6 +125,28 @@ public final class ArmyForce {
     }
 
     /**
+     * The health and the further attack damage of a citizen who is no soldier: an adventurer is as strong as its rank in the
+     * guild, a mage as the rank of the guild of mages of its kingdom, anyone else a plain citizen.
+     */
+    static double[] civilian(MinecraftServer server, Citizen citizen) {
+        String profession = citizen.professionId();
+        if (profession.equals(Professions.ADVENTURER.id()) && !io.github.sekerator.kingdomworld.common.guild.GuildWork.isReadOnly(server)) {
+            Optional<io.github.sekerator.kingdomworld.core.guild.Hireling> record = io.github.sekerator.kingdomworld.common.guild.GuildWork.state(server)
+                    .hireling(citizen.id());
+            if (record.isPresent()) {
+                io.github.sekerator.kingdomworld.core.guild.GuildRules guild = io.github.sekerator.kingdomworld.common.guild.GuildSettings.rules();
+                return new double[]{Math.max(1.0, guild.adventurerHealth(record.get().rank())), guild.adventurerDamage(record.get().rank())};
+            }
+        } else if (profession.equals(Professions.MAGE.id()) && citizen.kingdomId() != null
+                && !io.github.sekerator.kingdomworld.common.magic.MagicWork.isReadOnly(server)) {
+            io.github.sekerator.kingdomworld.core.guild.Rank rank = io.github.sekerator.kingdomworld.common.magic.MagicWork.state(server)
+                    .guildRank(citizen.kingdomId());
+            return new double[]{Math.max(1.0, io.github.sekerator.kingdomworld.common.magic.MagicSettings.rules().mageHealth(rank)), 0.0};
+        }
+        return new double[]{Citizen.MAX_HEALTH, 0.0};
+    }
+
+    /**
      * Gives a body the strength of its branch and post, or takes it away from a body that is no soldier any more. The
      * health of the body keeps its share of the full health.
      */
@@ -145,6 +167,10 @@ public final class ArmyForce {
             factor = rules.damageFactor(soldier.get().branch(), post);
             armor = stats.armor();
             knockback = stats.knockback();
+        } else {
+            double[] strength = civilian(server, citizen);
+            full = strength[0];
+            damage = strength[1];
         }
         AttributeInstance health = body.getAttribute(Attributes.MAX_HEALTH);
         if (health != null && health.getBaseValue() != full) {

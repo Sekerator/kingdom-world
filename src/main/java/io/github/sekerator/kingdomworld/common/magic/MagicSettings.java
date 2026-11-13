@@ -88,6 +88,19 @@ public final class MagicSettings {
         b.wellRadius = c.wellRadius.get();
         b.wellIntervalTicks = c.wellIntervalTicks.get();
         b.wellMaxEnergy = c.wellMaxEnergy.get();
+        KingdomWorldConfig.Magic.parse(c.lessonLevelByRank.get(), 9).ifPresent(table -> b.lessonLevel = ints(table));
+        KingdomWorldConfig.Magic.parseDecimals(c.levelPower.get(), 4).ifPresent(table -> b.levelPower = table);
+        KingdomWorldConfig.Magic.parseDecimals(c.levelPrice.get(), 4).ifPresent(table -> b.levelPrice = table);
+        b.foreignerPrice = c.foreignerPrice.get();
+        KingdomWorldConfig.Magic.parse(c.worldResearch.get(), 9).ifPresent(table -> b.worldResearch = ints(table));
+        KingdomWorldConfig.Magic.parse(c.worldMages.get(), 9).ifPresent(table -> b.worldMages = ints(table));
+        KingdomWorldConfig.Magic.parse(c.worldEnergy.get(), 9).ifPresent(table -> b.worldEnergy = table);
+        KingdomWorldConfig.Magic.parseDecimals(c.mageHealth.get(), 9).ifPresent(table -> b.mageHealth = table);
+        KingdomWorldConfig.Magic.parseDecimals(c.mageSpellPower.get(), 9).ifPresent(table -> b.mageSpellPower = table);
+        KingdomWorldConfig.Magic.parse(c.guildScore.get(), 9).ifPresent(table -> b.guildScore = table);
+        b.researchWorth = c.researchWorth.get();
+        b.mageWorth = c.mageWorth.get();
+        b.towerWorth = c.towerWorth.get();
         return b;
     }
 

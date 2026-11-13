@@ -2,6 +2,7 @@ package io.github.sekerator.kingdomworld.common.network.data;
 
 import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
 import io.github.sekerator.kingdomworld.core.guild.Contract;
+import io.github.sekerator.kingdomworld.core.guild.Branch;
 import io.github.sekerator.kingdomworld.core.guild.Rank;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomNames;
 import net.minecraft.core.BlockPos;
@@ -134,7 +135,9 @@ public final class GuildViews {
         COOLDOWN,
         UNDER_WAY,
         /** The highest rank has no exam. */
-        TOP
+        TOP,
+        /** This branch examines up to a lower rank than the next one. */
+        BRANCH_TOO_LOW
     }
 
     /**
@@ -180,8 +183,16 @@ public final class GuildViews {
      */
     public record DeskView(BlockPos pos, UUID branch, String branchName, int branchColor, TradeViews.Currency currency, Card card,
                            List<ContractRow> board, List<ContractRow> mine, long balance, boolean canPostForKingdom, int commissionPermille,
-                           int postingFeePermille, long joinFee, int maxActive, int maxDays, int maxCount, long budgetLeft) {
+                           int postingFeePermille, long joinFee, int maxActive, int maxDays, int maxCount, long budgetLeft, Rank branchRank) {
+        public DeskView(BlockPos pos, UUID branch, String branchName, int branchColor, TradeViews.Currency currency, Card card,
+                        List<ContractRow> board, List<ContractRow> mine, long balance, boolean canPostForKingdom, int commissionPermille,
+                        int postingFeePermille, long joinFee, int maxActive, int maxDays, int maxCount, long budgetLeft) {
+            this(pos, branch, branchName, branchColor, currency, card, board, mine, balance, canPostForKingdom, commissionPermille,
+                    postingFeePermille, joinFee, maxActive, maxDays, maxCount, budgetLeft, Branch.FIRST_RANK);
+        }
+
         public DeskView {
+            Objects.requireNonNull(branchRank, "branchRank");
             Objects.requireNonNull(pos, "pos");
             Objects.requireNonNull(branch, "branch");
             Objects.requireNonNull(currency, "currency");
@@ -209,13 +220,14 @@ public final class GuildViews {
             buf.writeVarInt(maxDays);
             buf.writeVarInt(maxCount);
             buf.writeVarLong(budgetLeft);
+            buf.writeByte(branchRank.ordinal());
         }
 
         public static DeskView decode(FriendlyByteBuf buf) {
             return new DeskView(buf.readBlockPos(), buf.readUUID(), buf.readUtf(KingdomNames.MAX_LENGTH), buf.readInt(),
                     TradeViews.Currency.decode(buf), Card.decode(buf), readList(buf, ContractRow::decode), readList(buf, ContractRow::decode),
                     buf.readVarLong(), buf.readBoolean(), buf.readVarInt(), buf.readVarInt(), buf.readVarLong(), buf.readVarInt(), buf.readVarInt(),
-                    buf.readVarInt(), buf.readVarLong());
+                    buf.readVarInt(), buf.readVarLong(), Rank.ofIndex(buf.readByte()));
         }
     }
 
@@ -299,8 +311,18 @@ public final class GuildViews {
     public record GuildTabView(UUID kingdomId, boolean canManage, TradeViews.Currency currency, int commissionPermille, long dailyBudget,
                                long spentToday, int registrars, int desks, int minCommission, int maxCommission, long maxBudget, int minSquad,
                                int maxSquad, List<AdventurerRow> adventurers, List<SquadRow> squads, List<ContractRow> contracts,
-                               long[] crystals, long[] energy) {
+                               long[] crystals, long[] energy, Rank branchRank, long done, String head) {
+        public GuildTabView(UUID kingdomId, boolean canManage, TradeViews.Currency currency, int commissionPermille, long dailyBudget,
+                            long spentToday, int registrars, int desks, int minCommission, int maxCommission, long maxBudget, int minSquad,
+                            int maxSquad, List<AdventurerRow> adventurers, List<SquadRow> squads, List<ContractRow> contracts,
+                            long[] crystals, long[] energy) {
+            this(kingdomId, canManage, currency, commissionPermille, dailyBudget, spentToday, registrars, desks, minCommission, maxCommission,
+                    maxBudget, minSquad, maxSquad, adventurers, squads, contracts, crystals, energy, Branch.FIRST_RANK, 0, "");
+        }
+
         public GuildTabView {
+            Objects.requireNonNull(branchRank, "branchRank");
+            head = head == null ? "" : head;
             Objects.requireNonNull(kingdomId, "kingdomId");
             Objects.requireNonNull(currency, "currency");
             adventurers = List.copyOf(adventurers);
@@ -340,6 +362,9 @@ public final class GuildViews {
                 buf.writeVarLong(crystals[i]);
                 buf.writeVarLong(energy[i]);
             }
+            buf.writeByte(branchRank.ordinal());
+            buf.writeVarLong(done);
+            buf.writeUtf(head, KingdomNames.MAX_LENGTH);
         }
 
         public static GuildTabView decode(FriendlyByteBuf buf) {
@@ -365,8 +390,11 @@ public final class GuildViews {
                 crystals[i] = buf.readVarLong();
                 energy[i] = buf.readVarLong();
             }
+            Rank branchRank = Rank.ofIndex(buf.readByte());
+            long done = buf.readVarLong();
+            String head = buf.readUtf(KingdomNames.MAX_LENGTH);
             return new GuildTabView(kingdom, canManage, currency, commission, budget, spent, registrars, desks, minCommission, maxCommission,
-                    maxBudget, minSquad, maxSquad, adventurers, squads, contracts, crystals, energy);
+                    maxBudget, minSquad, maxSquad, adventurers, squads, contracts, crystals, energy, branchRank, done, head);
         }
     }
 }

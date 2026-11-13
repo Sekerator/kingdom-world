@@ -89,6 +89,16 @@ public final class GuildSettings {
         b.expeditionMinutesPerRank = c.expeditionMinutesPerRank.get();
         b.expeditionInjury = c.expeditionInjury.get();
         b.expeditionDeath = c.expeditionDeath.get();
+        GuildRules.parseTable(c.branchRankContracts.get()).ifPresent(table -> b.branchRankDone = longs(table));
+        b.branchRankWithoutHouse = Rank.byId(c.branchRankWithoutHouse.get()).orElse(b.branchRankWithoutHouse);
+        b.branchRankWithHouse = Rank.byId(c.branchRankWithHouse.get()).orElse(b.branchRankWithHouse);
+        GuildRules.parseTable(c.ownBudgetByRank.get()).ifPresent(table -> b.ownBudget = longs(table));
+        GuildRules.parseTable(c.adventurerHealth.get()).ifPresent(table -> b.adventurerHealth = table);
+        GuildRules.parseTable(c.adventurerDamage.get()).ifPresent(table -> b.adventurerDamage = table);
+        GuildRules.parseLevelRanks(c.worldRankMin.get()).ifPresent(ranks -> b.worldRankMin = ranks);
+        GuildRules.parseLevelRanks(c.worldRankMax.get()).ifPresent(ranks -> b.worldRankMax = ranks);
+        GuildRules.parseTable(c.worldAdventurers.get()).ifPresent(table -> b.worldAdventurers = ints(table));
+        b.worldGrowthDays = c.worldGrowthDays.get();
         b.riskMultiplier = KingdomWorldConfig.SERVER.taskRiskMultiplier.get();
         return b;
     }

@@ -287,7 +287,8 @@ class MagicStateTest {
         assertTrue(magic.knows(subject, fireball));
         assertEquals(1_000 - RULES.lessonPrice(fireball), economy.accounts().balance(subject, kingdom.id()));
         assertEquals(treasury + RULES.lessonPrice(fireball), economy.treasury(kingdom.id()).orElseThrow().funds());
-        assertEquals(Optional.of(KingdomError.ALREADY_LEARNED), magic.checkLearn(subject, kingdom.id(), fireball, Rank.F, RULES, world).failure());
+        // The next lesson is level II, which a guild of mages without a rank does not teach.
+        assertEquals(Optional.of(KingdomError.LESSON_TOO_HIGH), magic.checkLearn(subject, kingdom.id(), fireball, Rank.F, RULES, world).failure());
         assertEquals(Optional.of(KingdomError.TOWER_TOO_LOW), magic.checkLearn(subject, kingdom.id(), PlayerSpell.BLINK, Rank.SSS, RULES, world)
                 .failure());
         magic.adminResearch(kingdom.id(), Research.ARCANA_1, true);
@@ -319,5 +320,82 @@ class MagicStateTest {
         assertTrue(copy.warded(OVERWORLD, 9L));
         assertTrue(copy.caravanSpedUp(3L));
         assertEquals(120.5, copy.find(kingdom.id()).orElseThrow().progress());
+    }
+
+    // ---------------------------------------------------------------- the guild of mages
+
+    @Test
+    void theGuildOfMagesTeachesLevelsUpToItsRankAndEachCostsMore() {
+        economy.adminAccount(subject, kingdom.id(), 10_000);
+        PlayerSpell fireball = PlayerSpell.FIREBALL;
+        magic.setGuildRank(kingdom.id(), Rank.A);
+        long[] paid = new long[MagicRules.MAX_LEVEL];
+        for (int level = 1; level <= 2; level++) {
+            long before = economy.accounts().balance(subject, kingdom.id());
+            assertTrue(magic.learn(subject, kingdom.id(), fireball, Rank.F, 1, RULES, world).ok(), "level " + level);
+            assertEquals(level, magic.level(subject, fireball));
+            paid[level - 1] = before - economy.accounts().balance(subject, kingdom.id());
+        }
+        // A guild of rank A teaches up to level II, one of rank SS up to IV.
+        assertEquals(Optional.of(KingdomError.LESSON_TOO_HIGH), magic.checkLearn(subject, kingdom.id(), fireball, Rank.F, RULES, world).failure());
+        magic.setGuildRank(kingdom.id(), Rank.SS);
+        for (int level = 3; level <= 4; level++) {
+            long before = economy.accounts().balance(subject, kingdom.id());
+            assertTrue(magic.learn(subject, kingdom.id(), fireball, Rank.F, 1, RULES, world).ok(), "level " + level);
+            paid[level - 1] = before - economy.accounts().balance(subject, kingdom.id());
+        }
+        assertEquals(RULES.lessonPrice(fireball), paid[0]);
+        assertTrue(paid[0] < paid[1] && paid[1] < paid[2] && paid[2] < paid[3], java.util.Arrays.toString(paid));
+        assertEquals(Optional.of(KingdomError.ALREADY_LEARNED), magic.checkLearn(subject, kingdom.id(), fireball, Rank.F, RULES, world).failure());
+        assertTrue(RULES.levelPower(4) > RULES.levelPower(3) && RULES.levelPower(2) > RULES.levelPower(1), "a higher level is stronger");
+        assertEquals(1, RULES.lessonLevel(Rank.B));
+        assertEquals(2, RULES.lessonLevel(Rank.A));
+        assertEquals(3, RULES.lessonLevel(Rank.S));
+        assertEquals(4, RULES.lessonLevel(Rank.SS));
+    }
+
+    @Test
+    void aGuestPaysMoreAndOneWantedOrAtWarIsNotTaught() {
+        UUID guest = UUID.randomUUID();
+        economy.adminAccount(guest, kingdom.id(), 1_000);
+        PlayerSpell fireball = PlayerSpell.FIREBALL;
+        assertEquals(Optional.of(KingdomError.NOT_WELCOME), magic.checkLearn(guest, kingdom.id(), fireball, Rank.F, MagicState.Access.BARRED, RULES,
+                world).failure());
+        long price = magic.lessonPrice(guest, fireball, MagicState.Access.GUEST, RULES);
+        assertEquals(Math.round(RULES.lessonPrice(fireball) * RULES.foreignerPrice), price);
+        assertTrue(price > magic.lessonPrice(subject, fireball, MagicState.Access.SUBJECT, RULES));
+        assertTrue(magic.learn(guest, kingdom.id(), fireball, Rank.F, MagicState.Access.GUEST, 1, RULES, world).ok());
+        assertEquals(1_000 - price, economy.accounts().balance(guest, kingdom.id()));
+        assertTrue(magic.knows(guest, fireball));
+    }
+
+    @Test
+    void theRankOfAGuildOfMagesOfPlayersComesFromItsResearchesMagesAndTowers() {
+        assertEquals(Rank.F, RULES.guildRankOf(0, 0, 0));
+        assertEquals(Rank.E, RULES.guildRankOf(0, 2, 0));
+        assertEquals(Rank.B, RULES.guildRankOf(3, 2, 0));
+        assertEquals(Rank.SS, RULES.guildRankOf(Research.COUNT, 10, 2));
+        assertEquals(Rank.F, magic.guildRank(kingdom.id()), "no rank until it is given one");
+        assertTrue(magic.setGuildRank(kingdom.id(), Rank.B));
+        assertEquals(Rank.B, magic.guildRank(kingdom.id()));
+        assertFalse(magic.setGuildRank(kingdom.id(), Rank.B));
+    }
+
+    @Test
+    void aKingdomOfTheWorldFoundsItsGuildOfMagesWithResearchesAndEnergy() {
+        magic.found(kingdom.id(), Rank.S, java.util.List.of(Research.WARD, Research.HEALING), 3_000, 1, RULES);
+        assertEquals(Rank.S, magic.guildRank(kingdom.id()));
+        assertEquals(2, magic.towerLevel(kingdom.id()));
+        assertEquals(3_000, magic.energy(kingdom.id()));
+    }
+
+    @Test
+    void spellsLearnedBeforeLevelsAreOfLevelOne() {
+        UUID old = UUID.randomUUID();
+        magic.restoreLearned(old, java.util.EnumSet.of(PlayerSpell.HEAL, PlayerSpell.LIGHT));
+        assertEquals(1, magic.level(old, PlayerSpell.HEAL));
+        assertEquals(0, magic.level(old, PlayerSpell.BLINK));
+        magic.restoreLevels(old, java.util.Map.of(PlayerSpell.BLINK, 9));
+        assertEquals(MagicRules.MAX_LEVEL, magic.level(old, PlayerSpell.BLINK), "a level out of range is kept within it");
     }
 }

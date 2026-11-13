@@ -133,6 +133,13 @@ public final class GuildActions {
      * A player's card: rank, points, the exam.
      */
     static GuildViews.Card card(MinecraftServer server, UUID player, long now) {
+        return card(server, player, now, Rank.SSS);
+    }
+
+    /**
+     * A player's card at a branch of a rank, which examines up to its own rank.
+     */
+    static GuildViews.Card card(MinecraftServer server, UUID player, long now, Rank branchRank) {
         GuildState guild = GuildWork.state(server);
         GuildRules rules = GuildSettings.rules();
         Optional<GuildMember> member = guild.member(player);
@@ -155,6 +162,8 @@ public final class GuildActions {
         } else if (now < m.examCooldownEnd()) {
             state = GuildViews.ExamState.COOLDOWN;
             ticks = m.examCooldownEnd() - now;
+        } else if (!branchRank.atLeast(next.get())) {
+            state = GuildViews.ExamState.BRANCH_TOO_LOW;
         } else {
             state = GuildViews.ExamState.AVAILABLE;
         }
@@ -203,11 +212,11 @@ public final class GuildActions {
         KingdomWorldState world = KingdomWorldApi.state(server);
         Branch branch = guild.branchOrDefault(kingdom.id(), rules);
         long day = TreasuryActions.day(server);
-        return Optional.of(new GuildViews.DeskView(pos, kingdom.id(), kingdom.name(), kingdom.color(), currency.get(), card(server, viewer, now),
-                board, mine, world.economy().accounts().balance(viewer, kingdom.id()),
+        return Optional.of(new GuildViews.DeskView(pos, kingdom.id(), kingdom.name(), kingdom.color(), currency.get(),
+                card(server, viewer, now, branch.rank()), board, mine, world.economy().accounts().balance(viewer, kingdom.id()),
                 world.membership().hasPermission(viewer, kingdom.id(), Permission.MANAGE_GUILD), branch.commissionPermille(),
                 rules.postingFeePermille, rules.joinFee, rules.maxActiveContracts, rules.maxContractDays, Contract.MAX_COUNT,
-                branch.budgetLeft(day)));
+                branch.budgetLeft(day, rules), branch.rank()));
     }
 
     /**
@@ -541,10 +550,11 @@ public final class GuildActions {
         long[] crystals = crystals(server, kingdomId);
         long[] energy = crystalEnergy(server, kingdomId);
         boolean canManage = viewer == null || world.membership().hasPermission(viewer, kingdomId, Permission.MANAGE_GUILD);
+        String head = GuildWork.head(server, kingdomId).map(citizen -> CitizenTexts.name(citizen).getString()).orElse("");
         return Optional.of(new GuildViews.GuildTabView(kingdomId, canManage, currency.get(), branch.commissionPermille(), branch.dailyBudget(),
-                branch.dailyBudget() - branch.budgetLeft(day), RegistrarBehavior.working(server, kingdomId), RegistrarBehavior.desks(server, kingdomId),
+                branch.budgetDay() == day ? branch.spentToday() : 0, RegistrarBehavior.working(server, kingdomId), RegistrarBehavior.desks(server, kingdomId),
                 rules.minCommissionPermille, rules.maxCommissionPermille, rules.maxDailyBudget, rules.minSquad, rules.maxSquad, adventurers, squads,
-                contracts, crystals, energy));
+                contracts, crystals, energy, branch.rank(), branch.done(), head));
     }
 
     /**

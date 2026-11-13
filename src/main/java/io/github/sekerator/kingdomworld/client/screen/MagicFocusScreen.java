@@ -182,7 +182,7 @@ public class MagicFocusScreen extends KingdomScreen implements ResultListener {
         if (mode == Mode.LEARN) {
             for (int i = 0; i < rows && scroll + i < view.lessons().size(); i++) {
                 MagicViews.Lesson lesson = view.lessons().get(scroll + i);
-                if (lesson.learned()) {
+                if (allLearned(lesson)) {
                     continue;
                 }
                 Button learn = addRenderableWidget(Button.builder(Component.translatable(KEY + "learn"),
@@ -249,8 +249,8 @@ public class MagicFocusScreen extends KingdomScreen implements ResultListener {
         graphics.renderOutline(left, top, panelWidth, panelHeight, 0xFF000000 | view.kingdomColor());
         centeredName(graphics, Component.translatable(KEY + "title", view.kingdomName()).getString(), width / 2, top + 7,
                 0xFF000000 | FoundKingdomScreen.readable(view.kingdomColor()), panelWidth - 2 * PAD);
-        Component summary = Component.translatable(KEY + "summary", view.towerLevel(), GuildTexts.rank(view.rank()),
-                MagicTexts.energy(view.carried()), money(view.balance()));
+        Component summary = Component.translatable(view.guest() ? KEY + "summary_guest" : KEY + "summary", view.towerLevel(),
+                GuildTexts.rank(view.guildRank()), GuildTexts.rank(view.rank()), MagicTexts.energy(view.carried()), money(view.balance()));
         name(graphics, summary.getString(), x, top + 20, 0xFFF0D070, right - x);
         Component research = view.current().<Component>map(current -> Component.translatable(KEY + "research", MagicTexts.research(current),
                 view.percent())).orElseGet(() -> Component.translatable(KEY + "no_research"));
@@ -283,14 +283,24 @@ public class MagicFocusScreen extends KingdomScreen implements ResultListener {
         paragraph(graphics, bottom, x, top + panelHeight - bottomArea() + 2, panelWidth - 2 * PAD, STATUS_LINES, color);
     }
 
+    /**
+     * Whether a spell is learned to its highest level, so that it has no lesson left.
+     */
+    private static boolean allLearned(MagicViews.Lesson lesson) {
+        return lesson.level() >= io.github.sekerator.kingdomworld.core.magic.MagicRules.MAX_LEVEL;
+    }
+
     private void renderLesson(GuiGraphics graphics, int x, int right, int y, MagicViews.Lesson lesson) {
-        int textRight = lesson.learned() ? right : right - learnWidth - 4;
-        Component state = lesson.learned() ? Component.translatable(KEY + "learned")
-                : Component.translatable(KEY + "needs", money(lesson.price()), GuildTexts.rank(lesson.minRank()), lesson.towerLevel());
+        boolean done = allLearned(lesson);
+        int textRight = done ? right : right - learnWidth - 4;
+        Component state = done ? Component.translatable(KEY + "learned_level", MagicTexts.level(lesson.level()))
+                : Component.translatable(KEY + "needs_level", MagicTexts.level(lesson.level() + 1), money(lesson.price()),
+                GuildTexts.rank(lesson.minRank()), lesson.towerLevel(), MagicTexts.level(lesson.teaches()));
         int stateWidth = Math.min(font.width(state), (textRight - x - 20) / 2);
         graphics.renderItem(icon(lesson.spell()), x, y);
         int nameWidth = textRight - x - 20 - stateWidth - 6;
-        Component name = MagicTexts.spell(lesson.spell());
+        Component name = lesson.level() > 0 ? Component.translatable(KEY + "spell_level", MagicTexts.spell(lesson.spell()),
+                MagicTexts.level(lesson.level())) : MagicTexts.spell(lesson.spell());
         // The hint names the spell in full, so it stays readable when the name is shortened.
         hoverText(x + 20, y + 5, Math.max(0, Math.min(nameWidth, font.width(name))), Component.translatable(KEY + "spell_hint", name,
                 MagicTexts.spellHint(lesson.spell()), MagicTexts.energy(lesson.cost())));

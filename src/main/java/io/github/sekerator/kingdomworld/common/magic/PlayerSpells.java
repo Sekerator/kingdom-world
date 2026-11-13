@@ -199,9 +199,11 @@ public final class PlayerSpells {
         if (!CrystalEnergy.has(player, cost)) {
             return KingdomActions.Feedback.fail(KEY + "no_crystals", MagicTexts.energy(cost));
         }
+        // A spell learned to a higher level hits, heals, reaches and lasts more.
+        double power = rules.levelPower(MagicWork.state(player.server).level(player.getUUID(), spell));
         Vec3 blink = null;
         if (spell == PlayerSpell.BLINK) {
-            blink = blinkTarget(player, rules.blinkDistance);
+            blink = blinkTarget(player, (int) Math.round(rules.blinkDistance * power));
             if (blink == null) {
                 return KingdomActions.Feedback.fail(KEY + "blink_blocked");
             }
@@ -219,26 +221,26 @@ public final class PlayerSpells {
         switch (spell) {
             case FIREBALL -> {
                 Vec3 look = player.getLookAngle();
-                SpellFireball fireball = new SpellFireball(level, player, look.x, look.y, look.z, rules.fireballDamage);
+                SpellFireball fireball = new SpellFireball(level, player, look.x, look.y, look.z, (float) (rules.fireballDamage * power));
                 fireball.setPos(player.getX() + look.x, player.getEyeY() - 0.1 + look.y, player.getZ() + look.z);
                 level.addFreshEntity(fireball);
                 level.playSound(null, player.blockPosition(), SoundEvents.BLAZE_SHOOT, SoundSource.PLAYERS, 0.6f, 1.2f);
             }
             case HEAL -> {
                 LivingEntity target = healTarget(player);
-                target.heal(rules.healAmount);
+                target.heal((float) (rules.healAmount * power));
                 level.sendParticles(ParticleTypes.HEART, target.getX(), target.getEyeY(), target.getZ(), 4, 0.3, 0.3, 0.3, 0.0);
                 level.playSound(null, target.blockPosition(), SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 1.0f, 1.4f);
             }
             case LIGHT -> {
-                player.addEffect(new MobEffectInstance(MobEffects.NIGHT_VISION, rules.lightSeconds * 20, 0, false, true));
+                player.addEffect(new MobEffectInstance(MobEffects.NIGHT_VISION, (int) Math.round(rules.lightSeconds * 20 * power), 0, false, true));
                 level.playSound(null, player.blockPosition(), SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.PLAYERS, 0.8f, 1.6f);
             }
             case DETECT -> {
                 int found = 0;
-                for (Mob mob : level.getEntitiesOfClass(Mob.class, player.getBoundingBox().inflate(rules.detectRadius),
+                for (Mob mob : level.getEntitiesOfClass(Mob.class, player.getBoundingBox().inflate(rules.detectRadius * power),
                         mob -> mob.isAlive() && mob instanceof Enemy && !(mob instanceof CitizenEntity))) {
-                    mob.addEffect(new MobEffectInstance(MobEffects.GLOWING, rules.detectSeconds * 20, 0, false, false));
+                    mob.addEffect(new MobEffectInstance(MobEffects.GLOWING, (int) Math.round(rules.detectSeconds * 20 * power), 0, false, false));
                     found++;
                 }
                 level.playSound(null, player.blockPosition(), SoundEvents.ENDER_EYE_DEATH, SoundSource.PLAYERS, 0.8f, 1.2f);
@@ -246,7 +248,9 @@ public final class PlayerSpells {
                 return KingdomActions.Feedback.ok(KEY + "detected", found, MagicTexts.energy(cost));
             }
             case SHIELD -> {
-                player.addEffect(new MobEffectInstance(MobEffects.ABSORPTION, rules.shieldSeconds * 20, 1, false, true));
+                // The shield lasts longer and holds more with the level: a further level of absorption from level III.
+                player.addEffect(new MobEffectInstance(MobEffects.ABSORPTION, (int) Math.round(rules.shieldSeconds * 20 * power),
+                        power >= rules.levelPower(3) ? 2 : 1, false, true));
                 level.playSound(null, player.blockPosition(), SoundEvents.ARMOR_EQUIP_DIAMOND, SoundSource.PLAYERS, 1.0f, 0.8f);
             }
             case BLINK -> {

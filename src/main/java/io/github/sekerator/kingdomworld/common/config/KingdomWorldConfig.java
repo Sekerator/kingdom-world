@@ -665,6 +665,16 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue expeditionMinutesPerRank;
         public final ForgeConfigSpec.DoubleValue expeditionInjury;
         public final ForgeConfigSpec.DoubleValue expeditionDeath;
+        public final ForgeConfigSpec.ConfigValue<String> branchRankContracts;
+        public final ForgeConfigSpec.ConfigValue<String> branchRankWithoutHouse;
+        public final ForgeConfigSpec.ConfigValue<String> branchRankWithHouse;
+        public final ForgeConfigSpec.ConfigValue<String> ownBudgetByRank;
+        public final ForgeConfigSpec.ConfigValue<String> adventurerHealth;
+        public final ForgeConfigSpec.ConfigValue<String> adventurerDamage;
+        public final ForgeConfigSpec.ConfigValue<String> worldRankMin;
+        public final ForgeConfigSpec.ConfigValue<String> worldRankMax;
+        public final ForgeConfigSpec.ConfigValue<String> worldAdventurers;
+        public final ForgeConfigSpec.IntValue worldGrowthDays;
 
         Guild(ForgeConfigSpec.Builder builder) {
             GuildRules.Builder d = new GuildRules.Builder();
@@ -754,6 +764,29 @@ public final class KingdomWorldConfig {
                     .defineInRange("expeditionInjury", d.expeditionInjury, 0.0, 1.0);
             expeditionDeath = builder.comment("Chance of a member to die on an even expedition (taskRiskMultiplier applies).")
                     .defineInRange("expeditionDeath", d.expeditionDeath, 0.0, 1.0);
+            java.util.function.Predicate<Object> rank = value -> value instanceof String text && Rank.byId(text).isPresent();
+            java.util.function.Predicate<Object> levels = value -> value instanceof String text && GuildRules.parseLevelRanks(text).isPresent();
+            branchRankContracts = builder.comment("Contracts a branch of players must have finished for each rank (it starts at E).")
+                    .define("branchRankContracts", GuildRules.formatTable(d.branchRankDone), table);
+            branchRankWithoutHouse = builder.comment("The highest rank of a branch of players without a guild house.")
+                    .define("branchRankWithoutHouse", d.branchRankWithoutHouse.id(), rank);
+            branchRankWithHouse = builder.comment("The highest rank of a branch of players with a guild house.")
+                    .define("branchRankWithHouse", d.branchRankWithHouse.id(), rank);
+            ownBudgetByRank = builder.comment("The least the guild may spend on contracts of its own a day, by the rank of the branch.")
+                    .define("ownBudgetByRank", GuildRules.formatTable(d.ownBudget), table);
+            adventurerHealth = builder.comment("Health of the body of an adventurer of each rank (a citizen has 20).")
+                    .define("adventurerHealth", GuildRules.formatTable(d.adventurerHealth), table);
+            adventurerDamage = builder.comment("Further attack damage of the body of an adventurer of each rank.")
+                    .define("adventurerDamage", GuildRules.formatTable(d.adventurerDamage), table);
+            worldRankMin = builder.comment("The lowest rank of the guilds of a kingdom of the world, for small, medium and large ones.")
+                    .define("worldRankMin", GuildRules.formatLevelRanks(d.worldRankMin), levels);
+            worldRankMax = builder.comment("The highest rank of the guilds of a kingdom of the world, for small, medium and large ones;",
+                            "a rank of SS or above belongs to the strongest kingdom of the world alone.")
+                    .define("worldRankMax", GuildRules.formatLevelRanks(d.worldRankMax), levels);
+            worldAdventurers = builder.comment("Adventurers of a kingdom of the world by the rank of its branch.")
+                    .define("worldAdventurers", GuildRules.formatTable(d.worldAdventurers), table);
+            worldGrowthDays = builder.comment("Game days after which a guild of a rich kingdom of the world rises a rank, up to the highest of its level.")
+                    .defineInRange("worldGrowthDays", d.worldGrowthDays, 1, 100_000);
             builder.pop();
         }
     }
@@ -1154,6 +1187,19 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue wellRadius;
         public final ForgeConfigSpec.IntValue wellIntervalTicks;
         public final ForgeConfigSpec.LongValue wellMaxEnergy;
+        public final ForgeConfigSpec.ConfigValue<String> lessonLevelByRank;
+        public final ForgeConfigSpec.ConfigValue<String> levelPower;
+        public final ForgeConfigSpec.ConfigValue<String> levelPrice;
+        public final ForgeConfigSpec.DoubleValue foreignerPrice;
+        public final ForgeConfigSpec.ConfigValue<String> worldResearch;
+        public final ForgeConfigSpec.ConfigValue<String> worldMages;
+        public final ForgeConfigSpec.ConfigValue<String> worldEnergy;
+        public final ForgeConfigSpec.ConfigValue<String> mageHealth;
+        public final ForgeConfigSpec.ConfigValue<String> mageSpellPower;
+        public final ForgeConfigSpec.ConfigValue<String> guildScore;
+        public final ForgeConfigSpec.IntValue researchWorth;
+        public final ForgeConfigSpec.IntValue mageWorth;
+        public final ForgeConfigSpec.IntValue towerWorth;
 
         Magic(ForgeConfigSpec.Builder builder) {
             MagicRules.Builder d = new MagicRules.Builder();
@@ -1244,6 +1290,33 @@ public final class KingdomWorldConfig {
                     .defineInRange("wellIntervalTicks", d.wellIntervalTicks, 1, 72_000);
             wellMaxEnergy = builder.comment("Energy the well spends at most per player or jar and pulse.")
                     .defineInRange("wellMaxEnergy", d.wellMaxEnergy, 1L, 1_000_000L);
+            lessonLevelByRank = builder.comment("The highest level (1 to 4) of a spell a guild of mages teaches, by its rank F, E, D, C, B, A, S, SS, SSS.")
+                    .define("lessonLevelByRank", numbers(d.lessonLevel), value -> isTable(value, 9));
+            levelPower = builder.comment("How much stronger a spell of level I, II, III and IV is (damage, healing, reach, time).")
+                    .define("levelPower", decimals(d.levelPower), value -> parseDecimals(value, 4).isPresent());
+            levelPrice = builder.comment("What the lesson for level I, II, III and IV costs, as a share of the price of the spell.")
+                    .define("levelPrice", decimals(d.levelPrice), value -> parseDecimals(value, 4).isPresent());
+            foreignerPrice = builder.comment("What a lesson costs someone who is not a subject, as a share of what a subject pays.")
+                    .defineInRange("foreignerPrice", d.foreignerPrice, 1.0, 100.0);
+            worldResearch = builder.comment("Researches a guild of mages of a kingdom of the world has from its founding, by its rank.")
+                    .define("worldResearch", numbers(d.worldResearch), value -> isTable(value, 9));
+            worldMages = builder.comment("Mages of a kingdom of the world, by the rank of its guild of mages.")
+                    .define("worldMages", numbers(d.worldMages), value -> isTable(value, 9));
+            worldEnergy = builder.comment("Energy a guild of mages of a kingdom of the world holds at its founding, by its rank.")
+                    .define("worldEnergy", numbers(d.worldEnergy), value -> isTable(value, 9));
+            mageHealth = builder.comment("Health of the body of a mage, by the rank of the guild of mages (a citizen has 20).")
+                    .define("mageHealth", decimals(d.mageHealth), value -> parseDecimals(value, 9).isPresent());
+            mageSpellPower = builder.comment("How much stronger the fireballs and healing of mages are, by the rank of the guild of mages.")
+                    .define("mageSpellPower", decimals(d.mageSpellPower), value -> parseDecimals(value, 9).isPresent());
+            guildScore = builder.comment("The worth a guild of mages of players needs for each rank: researches, mages and mage towers",
+                            "count by researchWorth, mageWorth and towerWorth.")
+                    .define("guildScore", numbers(d.guildScore), value -> isTable(value, 9));
+            researchWorth = builder.comment("What a finished research is worth for the rank of a guild of mages of players.")
+                    .defineInRange("researchWorth", d.researchWorth, 0, 1_000);
+            mageWorth = builder.comment("What a mage at work is worth for the rank of a guild of mages of players.")
+                    .defineInRange("mageWorth", d.mageWorth, 0, 1_000);
+            towerWorth = builder.comment("What a working mage tower is worth for the rank of a guild of mages of players.")
+                    .defineInRange("towerWorth", d.towerWorth, 0, 1_000);
             builder.pop();
         }
 
@@ -1253,6 +1326,35 @@ public final class KingdomWorldConfig {
 
         static String numbers(int[] values) {
             return GuildRules.formatTable(values);
+        }
+
+        static String decimals(double[] values) {
+            return GuildRules.formatTable(values);
+        }
+
+        /**
+         * Reads a table of {@code size} numbers, decimals allowed, separated by commas or spaces.
+         */
+        public static java.util.Optional<double[]> parseDecimals(Object value, int size) {
+            if (!(value instanceof String text)) {
+                return java.util.Optional.empty();
+            }
+            String[] parts = text.strip().split("[,;\\s]+");
+            if (parts.length != size) {
+                return java.util.Optional.empty();
+            }
+            double[] result = new double[size];
+            try {
+                for (int i = 0; i < size; i++) {
+                    result[i] = Double.parseDouble(parts[i]);
+                    if (!Double.isFinite(result[i]) || result[i] < 0) {
+                        return java.util.Optional.empty();
+                    }
+                }
+            } catch (NumberFormatException e) {
+                return java.util.Optional.empty();
+            }
+            return java.util.Optional.of(result);
         }
 
         static String ranks(Rank[] values) {

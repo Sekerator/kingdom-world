@@ -275,7 +275,8 @@ final class MagicTab {
             default -> right;
         };
         Component header = switch (mode) {
-            case RESEARCH -> Component.translatable(KEY + "tower_level", view.towerLevel());
+            case RESEARCH -> Component.translatable(KEY + "tower_level", view.towerLevel(),
+                    io.github.sekerator.kingdomworld.common.guild.GuildTexts.rank(view.guildRank()));
             case MACHINES -> Component.translatable(KEY + "fe_rate", view.feRate(), view.feMaxPerTick());
             case SPELLS -> Component.translatable(KEY + "ward_count", MagicTexts.chunks(view.wardChunks()), view.wardMax());
             case GATES -> Component.translatable(KEY + "gates_count", view.gates().size());

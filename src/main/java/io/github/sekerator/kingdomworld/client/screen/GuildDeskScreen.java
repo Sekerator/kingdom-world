@@ -686,12 +686,14 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
                     card.examBoss(), card.examCount()));
             case COOLDOWN -> Component.translatable(KEY + "exam.cooldown", time(card.examTicks()));
             case UNDER_WAY -> Component.translatable(KEY + "exam.under_way", card.examProgress(), card.examCount(), time(card.examTicks()));
+            case BRANCH_TOO_LOW -> Component.translatable(KEY + "exam.branch_low", GuildTexts.rank(next.orElse(Rank.SSS)),
+                    GuildTexts.rank(view.branchRank()));
             case TOP, NONE -> Component.translatable(KEY + "exam.none");
         };
         paragraph(graphics, exam, x, y + 3 * step, right - x, 2, 0xFFF0D070);
         if (card.exam() != GuildViews.ExamState.AVAILABLE) {
-            name(graphics, Component.translatable(KEY + "card.branch", view.branchName(), TradeTexts.percent(view.commissionPermille())).getString(),
-                    x, cardButtonY() + 5, 0xFFB8B8B8, right - x);
+            name(graphics, Component.translatable(KEY + "card.branch", view.branchName(), GuildTexts.rank(view.branchRank()),
+                    TradeTexts.percent(view.commissionPermille())).getString(), x, cardButtonY() + 5, 0xFFB8B8B8, right - x);
         }
     }
 

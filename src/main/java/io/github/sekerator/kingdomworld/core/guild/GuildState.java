@@ -286,6 +286,21 @@ public final class GuildState {
     }
 
     /**
+     * Whether a member may start the exam for the next rank now at a branch: a branch examines up to its own rank.
+     */
+    public Outcome checkExam(UUID player, UUID branch, long now, GuildRules rules) {
+        Outcome check = checkExam(player, now, rules);
+        if (!check.ok()) {
+            return check;
+        }
+        Rank next = members.get(player).rank().next().orElseThrow();
+        if (!branchOrDefault(branch, rules).rank().atLeast(next)) {
+            return Outcome.fail(KingdomError.BRANCH_RANK_TOO_LOW);
+        }
+        return Outcome.DONE;
+    }
+
+    /**
      * The result of starting something that makes a contract.
      */
     public record Made(Outcome outcome, Optional<Contract> contract) {
@@ -299,7 +314,7 @@ public final class GuildState {
      * config.
      */
     public Made startExam(UUID player, UUID branch, long now, GuildRules rules) {
-        Outcome check = checkExam(player, now, rules);
+        Outcome check = checkExam(player, branch, now, rules);
         if (!check.ok()) {
             return Made.failed(check);
         }
@@ -403,6 +418,10 @@ public final class GuildState {
         if (openAt(posting.branch()) >= rules.maxContractsPerBranch) {
             return Outcome.fail(KingdomError.BOARD_FULL);
         }
+        // A branch takes no contract that asks for adventurers of a higher rank than its own.
+        if (!branchOrDefault(posting.branch(), rules).rank().atLeast(posting.minRank())) {
+            return Outcome.fail(KingdomError.RANK_ABOVE_BRANCH);
+        }
         switch (posting.poster()) {
             case KINGDOM -> {
                 if (!posting.posterId().equals(posting.branch())) {
@@ -417,7 +436,7 @@ public final class GuildState {
                 if (!posting.posterId().equals(posting.branch())) {
                     return Outcome.fail(KingdomError.NOT_PARTNER);
                 }
-                if (branchOrDefault(posting.branch(), rules).budgetLeft(day) < posting.reward()) {
+                if (branchOrDefault(posting.branch(), rules).budgetLeft(day, rules) < posting.reward()) {
                     return Outcome.fail(KingdomError.BUDGET_SPENT);
                 }
                 return economy.checkHoldFromTreasury(posting.branch(), posting.reward());
@@ -870,6 +889,7 @@ public final class GuildState {
             if (member != null) {
                 members.put(player, member.plusPoints(contract.points()).plusContract());
             }
+            countFinished(contract.branch());
             changed();
             return new Progress(contract.closed(Contract.Status.DONE), true, payout);
         }
@@ -904,6 +924,7 @@ public final class GuildState {
             }
             payments.add(new Payment(people.get(i), money[i], points[i]));
         }
+        countFinished(contract.branch());
         changed();
         return new Progress(contract.closed(Contract.Status.DONE), true, money[0], payments);
     }
@@ -1057,6 +1078,31 @@ public final class GuildState {
         branches.put(kingdomId, branch.withBudget(amount));
         changed();
         return Outcome.DONE;
+    }
+
+    /**
+     * One more contract finished at a branch, which a branch of players grows by.
+     */
+    private void countFinished(UUID kingdomId) {
+        Branch branch = branches.get(kingdomId);
+        if (branch != null) {
+            branches.put(kingdomId, branch.finished());
+        }
+    }
+
+    /**
+     * Sets the rank of a branch: the guild ranks it by its deeds, a kingdom of the world from its founding.
+     *
+     * @return whether the rank changed
+     */
+    public boolean setBranchRank(UUID kingdomId, Rank rank, GuildRules rules) {
+        Branch branch = branchOrDefault(kingdomId, rules);
+        if (branch.rank() == rank && branches.containsKey(kingdomId)) {
+            return false;
+        }
+        branches.put(kingdomId, branch.withRank(rank));
+        changed();
+        return true;
     }
 
     /**
@@ -1306,6 +1352,7 @@ public final class GuildState {
                     refund(moved, day, world);
                 }
                 after = moved.closed(Contract.Status.DONE);
+                countFinished(moved.branch());
             } else if (moved.deadline() <= now) {
                 contracts.remove(contract.id());
                 refund(moved, day, world);

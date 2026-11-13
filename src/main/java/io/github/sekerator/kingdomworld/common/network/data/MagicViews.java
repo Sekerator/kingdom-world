@@ -165,8 +165,17 @@ public final class MagicViews {
     public record TabView(UUID kingdomId, boolean canManage, long energy, long capacity, int accumulators, int foci, long crystals,
                           long crystalEnergy, List<List<JournalRow>> journal, List<MageRow> mages, List<ResearchRow> research, int towerLevel,
                           List<SpellRow> spells, int wardChunks, int wardMax, boolean hereWarded, boolean hereOwned, List<DeviceRow> gates,
-                          List<DeviceRow> generators, int feRate, int feMaxPerTick) {
+                          List<DeviceRow> generators, int feRate, int feMaxPerTick, Rank guildRank) {
+        public TabView(UUID kingdomId, boolean canManage, long energy, long capacity, int accumulators, int foci, long crystals,
+                       long crystalEnergy, List<List<JournalRow>> journal, List<MageRow> mages, List<ResearchRow> research, int towerLevel,
+                       List<SpellRow> spells, int wardChunks, int wardMax, boolean hereWarded, boolean hereOwned, List<DeviceRow> gates,
+                       List<DeviceRow> generators, int feRate, int feMaxPerTick) {
+            this(kingdomId, canManage, energy, capacity, accumulators, foci, crystals, crystalEnergy, journal, mages, research, towerLevel, spells,
+                    wardChunks, wardMax, hereWarded, hereOwned, gates, generators, feRate, feMaxPerTick, Rank.F);
+        }
+
         public TabView {
+            java.util.Objects.requireNonNull(guildRank, "guildRank");
             journal = List.copyOf(journal);
             mages = List.copyOf(mages);
             research = List.copyOf(research);
@@ -200,6 +209,7 @@ public final class MagicViews {
             writeList(buf, generators, DeviceRow::encode);
             buf.writeVarInt(feRate);
             buf.writeVarInt(feMaxPerTick);
+            buf.writeByte(guildRank.ordinal());
         }
 
         public static TabView decode(FriendlyByteBuf buf) {
@@ -220,9 +230,17 @@ public final class MagicViews {
             List<ResearchRow> research = readList(buf, ResearchRow::decode);
             int level = buf.readVarInt();
             List<SpellRow> spells = readList(buf, SpellRow::decode);
+            int wardChunks = buf.readVarInt();
+            int wardMax = buf.readVarInt();
+            boolean hereWarded = buf.readBoolean();
+            boolean hereOwned = buf.readBoolean();
+            List<DeviceRow> gates = readList(buf, DeviceRow::decode);
+            List<DeviceRow> generators = readList(buf, DeviceRow::decode);
+            int feRate = buf.readVarInt();
+            int feMaxPerTick = buf.readVarInt();
+            Rank guildRank = Rank.ofIndex(buf.readByte());
             return new TabView(kingdom, canManage, energy, capacity, accumulators, foci, crystals, crystalEnergy, journal, mages, research, level,
-                    spells, buf.readVarInt(), buf.readVarInt(), buf.readBoolean(), buf.readBoolean(), readList(buf, DeviceRow::decode),
-                    readList(buf, DeviceRow::decode), buf.readVarInt(), buf.readVarInt());
+                    spells, wardChunks, wardMax, hereWarded, hereOwned, gates, generators, feRate, feMaxPerTick, guildRank);
         }
     }
 
@@ -232,8 +250,16 @@ public final class MagicViews {
      * A spell a player can learn at a focus.
      *
      * @param refusal why the player cannot learn it now, if not
+     * @param level   the level the player learned it to, 0 if not at all
+     * @param teaches the highest level the guild of mages here teaches
+     * @param price   what the next lesson costs the player
      */
-    public record Lesson(PlayerSpell spell, boolean learned, long price, long cost, Rank minRank, int towerLevel, Optional<KingdomError> refusal) {
+    public record Lesson(PlayerSpell spell, boolean learned, long price, long cost, Rank minRank, int towerLevel, Optional<KingdomError> refusal,
+                         int level, int teaches) {
+        public Lesson(PlayerSpell spell, boolean learned, long price, long cost, Rank minRank, int towerLevel, Optional<KingdomError> refusal) {
+            this(spell, learned, price, cost, minRank, towerLevel, refusal, learned ? 1 : 0, 1);
+        }
+
         void encode(FriendlyByteBuf buf) {
             buf.writeEnum(spell);
             buf.writeBoolean(learned);
@@ -242,6 +268,8 @@ public final class MagicViews {
             buf.writeVarInt(minRank.ordinal());
             buf.writeVarInt(towerLevel);
             buf.writeVarInt(refusal.map(error -> error.ordinal() + 1).orElse(0));
+            buf.writeByte(level);
+            buf.writeByte(teaches);
         }
 
         static Lesson decode(FriendlyByteBuf buf) {
@@ -253,8 +281,10 @@ public final class MagicViews {
             int level = buf.readVarInt();
             int refusal = buf.readVarInt();
             KingdomError[] errors = KingdomError.values();
+            int learnedLevel = buf.readByte();
+            int teaches = buf.readByte();
             return new Lesson(spell, learned, price, cost, rank, level,
-                    refusal > 0 && refusal <= errors.length ? Optional.of(errors[refusal - 1]) : Optional.empty());
+                    refusal > 0 && refusal <= errors.length ? Optional.of(errors[refusal - 1]) : Optional.empty(), learnedLevel, teaches);
         }
     }
 
@@ -265,8 +295,16 @@ public final class MagicViews {
      */
     public record FocusView(BlockPos pos, UUID kingdomId, String kingdomName, int kingdomColor, TradeViews.Currency currency, int towerLevel,
                             Rank rank, long carried, long balance, List<Lesson> lessons, List<Optional<PlayerSpell>> staff,
-                            Optional<Research> current, int percent) {
+                            Optional<Research> current, int percent, Rank guildRank, boolean guest) {
+        public FocusView(BlockPos pos, UUID kingdomId, String kingdomName, int kingdomColor, TradeViews.Currency currency, int towerLevel,
+                         Rank rank, long carried, long balance, List<Lesson> lessons, List<Optional<PlayerSpell>> staff,
+                         Optional<Research> current, int percent) {
+            this(pos, kingdomId, kingdomName, kingdomColor, currency, towerLevel, rank, carried, balance, lessons, staff, current, percent, Rank.F,
+                    false);
+        }
+
         public FocusView {
+            java.util.Objects.requireNonNull(guildRank, "guildRank");
             lessons = List.copyOf(lessons);
             staff = List.copyOf(staff);
         }
@@ -285,6 +323,8 @@ public final class MagicViews {
             writeList(buf, staff, (slot, out) -> out.writeVarInt(slot.map(spell -> spell.ordinal() + 1).orElse(0)));
             buf.writeVarInt(current.map(research -> research.ordinal() + 1).orElse(0));
             buf.writeVarInt(percent);
+            buf.writeByte(guildRank.ordinal());
+            buf.writeBoolean(guest);
         }
 
         public static FocusView decode(FriendlyByteBuf buf) {
@@ -303,8 +343,12 @@ public final class MagicViews {
                 return value > 0 && value <= PlayerSpell.COUNT ? Optional.of(PlayerSpell.values()[value - 1]) : Optional.<PlayerSpell>empty();
             });
             int current = buf.readVarInt();
+            int percent = buf.readVarInt();
+            Rank guildRank = Rank.ofIndex(buf.readByte());
+            boolean guest = buf.readBoolean();
             return new FocusView(pos, kingdom, name, color, currency, level, rank, carried, balance, lessons, staff,
-                    current > 0 && current <= Research.COUNT ? Optional.of(Research.values()[current - 1]) : Optional.empty(), buf.readVarInt());
+                    current > 0 && current <= Research.COUNT ? Optional.of(Research.values()[current - 1]) : Optional.empty(), percent, guildRank,
+                    guest);
         }
     }
 
