@@ -495,6 +495,112 @@ public final class MagicGameTests {
         helper.succeed();
     }
 
+    // ---------------------------------------------------------------- lessons and levels
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_magic_lessons")
+    public static void aGuestPaysMoreForALessonAndOneWantedIsNotTaught(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos to = helper.absolutePos(new BlockPos(8, 3, 8));
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Lesson Hall", UUID.randomUUID());
+        ServerPlayer subject = player(helper, UUID.randomUUID(), "kw-pupil");
+        ServerPlayer guest = player(helper, UUID.randomUUID(), "kw-guest");
+        ServerPlayer outlaw = player(helper, UUID.randomUUID(), "kw-outlaw");
+        join(server, kingdom, subject.getUUID(), Role.SUBJECT);
+        BlockPos focus = helper.absolutePos(new BlockPos(2, 1, 2));
+        MagicPackets.FocusAction learn = new MagicPackets.FocusAction(focus, MagicPackets.FocusAction.Action.LEARN, PlayerSpell.LIGHT.ordinal(), 0);
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        try {
+            MagicState magic = MagicWork.state(server);
+            MagicRules rules = MagicSettings.rules();
+            // A guild of mages of rank A teaches up to level II.
+            magic.setGuildRank(kingdom.id(), Rank.A);
+            helper.assertTrue(rules.lessonLevel(Rank.A) == 2, "Rank A teaches level " + rules.lessonLevel(Rank.A));
+            for (ServerPlayer pupil : List.of(subject, guest, outlaw)) {
+                state.economy().adminAccount(pupil.getUUID(), kingdom.id(), 1_000_000);
+            }
+            io.github.sekerator.kingdomworld.common.law.LawWork.state(server).commit(kingdom.id(), outlaw.getUUID(), "kw-outlaw",
+                    io.github.sekerator.kingdomworld.core.law.CrimeKind.THEFT, 10, "", KingdomWorldApi.gameTime(server),
+                    io.github.sekerator.kingdomworld.common.law.LawSettings.rules());
+
+            long first = rules.lessonPrice(PlayerSpell.LIGHT, 1, false);
+            helper.assertTrue(MagicActions.applyFocus(subject, focus, learn).success(), "A subject could not take the lesson");
+            helper.assertTrue(magic.level(subject.getUUID(), PlayerSpell.LIGHT) == 1, "The subject did not learn level I");
+            helper.assertTrue(balance(server, subject, kingdom) == 1_000_000 - first, "The subject paid " + (1_000_000 - balance(server, subject, kingdom))
+                    + " instead of " + first);
+
+            long guestPrice = rules.lessonPrice(PlayerSpell.LIGHT, 1, true);
+            helper.assertTrue(guestPrice > first, "A guest pays no more than a subject: " + guestPrice + " and " + first);
+            helper.assertTrue(MagicActions.applyFocus(guest, focus, learn).success(), "A guest could not take the lesson");
+            helper.assertTrue(balance(server, guest, kingdom) == 1_000_000 - guestPrice, "The guest paid " + (1_000_000 - balance(server, guest, kingdom))
+                    + " instead of " + guestPrice);
+
+            helper.assertTrue(!MagicActions.applyFocus(outlaw, focus, learn).success(), "A wanted player took a lesson");
+            helper.assertTrue(magic.level(outlaw.getUUID(), PlayerSpell.LIGHT) == 0 && balance(server, outlaw, kingdom) == 1_000_000,
+                    "The refused lesson was given or paid");
+
+            // The next level costs more, and the level above what the guild teaches is refused.
+            long second = rules.lessonPrice(PlayerSpell.LIGHT, 2, false);
+            helper.assertTrue(second > first, "Level II costs no more than level I");
+            helper.assertTrue(MagicActions.applyFocus(subject, focus, learn).success() && magic.level(subject.getUUID(), PlayerSpell.LIGHT) == 2,
+                    "The subject did not learn level II");
+            helper.assertTrue(!MagicActions.applyFocus(subject, focus, learn).success() && magic.level(subject.getUUID(), PlayerSpell.LIGHT) == 2,
+                    "A guild of rank A taught level III");
+            helper.assertTrue(balance(server, subject, kingdom) == 1_000_000 - first - second, "The levels were paid wrongly");
+        } finally {
+            io.github.sekerator.kingdomworld.common.law.LawWork.state(server).clear(kingdom.id(), outlaw.getUUID());
+            for (ServerPlayer pupil : List.of(subject, guest, outlaw)) {
+                MagicWork.state(server).adminLearn(pupil.getUUID(), PlayerSpell.LIGHT, false);
+            }
+            end(helper, kingdom, from, to);
+        }
+        helper.succeed();
+    }
+
+    private static long balance(MinecraftServer server, ServerPlayer player, Kingdom kingdom) {
+        return KingdomWorldApi.state(server).economy().accounts().balance(player.getUUID(), kingdom.id());
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_magic_levels")
+    public static void aSpellOfAHigherLevelReachesFurther(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos to = helper.absolutePos(new BlockPos(8, 3, 8));
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Level Hall", UUID.randomUUID());
+        ServerPlayer player = net.minecraftforge.common.util.FakePlayerFactory.get(level, new GameProfile(UUID.randomUUID(), "kw-adept"));
+        BlockPos stand = helper.absolutePos(new BlockPos(1, 1, 1));
+        player.setPos(stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5);
+        player.getInventory().clearContent();
+        try {
+            MagicState magic = MagicWork.state(server);
+            MagicRules rules = MagicSettings.rules();
+            player.getInventory().add(MonsterCrystalItem.stack(Rank.D, 4));
+            int[] seconds = new int[MagicRules.MAX_LEVEL + 1];
+            for (int spellLevel = 1; spellLevel <= MagicRules.MAX_LEVEL; spellLevel++) {
+                magic.adminLevel(player.getUUID(), PlayerSpell.LIGHT, spellLevel);
+                PlayerSpells.forget(player.getUUID());
+                player.removeEffect(MobEffects.NIGHT_VISION);
+                helper.assertTrue(PlayerSpells.cast(player, PlayerSpell.LIGHT).success() && player.hasEffect(MobEffects.NIGHT_VISION),
+                        "The light of level " + spellLevel + " was not cast");
+                seconds[spellLevel] = player.getEffect(MobEffects.NIGHT_VISION).getDuration();
+            }
+            for (int spellLevel = 2; spellLevel <= MagicRules.MAX_LEVEL; spellLevel++) {
+                helper.assertTrue(seconds[spellLevel] > seconds[spellLevel - 1], "The light of level " + spellLevel + " lasts " + seconds[spellLevel]
+                        + " ticks, no more than " + seconds[spellLevel - 1] + " of the level below");
+            }
+            helper.assertTrue(seconds[1] == rules.lightSeconds * 20, "The light of level I lasts " + seconds[1] + " ticks");
+        } finally {
+            MagicWork.state(server).adminLearn(player.getUUID(), PlayerSpell.LIGHT, false);
+            PlayerSpells.forget(player.getUUID());
+            player.removeEffect(MobEffects.NIGHT_VISION);
+            player.getInventory().clearContent();
+            end(helper, kingdom, from, to);
+        }
+        helper.succeed();
+    }
+
     // ---------------------------------------------------------------- rights and data
 
     @GameTest(template = EMPTY, batch = "kingdomworld_magic_rights")
@@ -551,6 +657,8 @@ public final class MagicGameTests {
         magic.adminResearch(kingdom, Research.TAILWIND, true);
         magic.restoreDevice(new MagicDevice(4, MagicDevice.Kind.ACCUMULATOR, kingdom, new WorldPos("minecraft:overworld", 1, 64, 2)));
         magic.adminLearn(player, PlayerSpell.BLINK, true);
+        magic.adminLevel(player, PlayerSpell.FIREBALL, 3);
+        magic.setGuildRank(kingdom, Rank.S);
         CompoundTag saved = data.save(new CompoundTag());
         MagicSavedData reloaded = MagicSavedData.load(saved);
         helper.assertTrue(!reloaded.isReadOnly(), "Saved magic could not be read back: " + reloaded.readOnlyReason());
@@ -559,6 +667,18 @@ public final class MagicGameTests {
         helper.assertTrue(back.find(kingdom).orElseThrow().done().equals(Set.of(Research.WARD, Research.TAILWIND)), "Research changed");
         helper.assertTrue(back.devices().size() == 1 && back.nextDeviceId() == 5, "Devices changed");
         helper.assertTrue(back.knows(player, PlayerSpell.BLINK), "Learned spells were lost");
+        helper.assertTrue(back.level(player, PlayerSpell.BLINK) == 1 && back.level(player, PlayerSpell.FIREBALL) == 3, "Levels of spells were lost");
+        helper.assertTrue(back.guildRank(kingdom) == Rank.S, "The rank of the guild of mages was lost: " + back.guildRank(kingdom));
+        // Data of the guild of mages saved before levels and ranks: spells of level I, a guild without a rank.
+        CompoundTag old = saved.copy();
+        old.getList("learned", Tag.TAG_COMPOUND).getCompound(0).remove("levels");
+        for (Tag entry : old.getList("kingdoms", Tag.TAG_COMPOUND)) {
+            ((CompoundTag) entry).remove("rank");
+        }
+        MagicState before = MagicSavedData.load(old).state();
+        helper.assertTrue(!MagicSavedData.load(old).isReadOnly() && before.level(player, PlayerSpell.FIREBALL) == 1
+                && before.find(kingdom).flatMap(io.github.sekerator.kingdomworld.core.magic.KingdomMagic::guildRank).isEmpty(),
+                "Old data of magic was not read as level I without a rank");
         helper.assertTrue(back.find(kingdom).orElseThrow().journal().sum(7, EnergyJournal.Period.TODAY).income() == 4_321, "The journal was lost");
         CompoundTag again = reloaded.save(new CompoundTag());
         helper.assertTrue(again.equals(saved), "Saving the loaded magic gave different data");

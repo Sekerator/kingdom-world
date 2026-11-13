@@ -504,11 +504,24 @@ final class ClientNpcShowcase {
                 sum += nanos;
                 worst = Math.max(worst, nanos);
             }
-            int bodies = player.serverLevel().getEntitiesOfClass(io.github.sekerator.kingdomworld.common.citizen.CitizenEntity.class,
-                    player.getBoundingBox().inflate(128.0, 64.0, 128.0)).size();
+            List<io.github.sekerator.kingdomworld.common.citizen.CitizenEntity> around = player.serverLevel().getEntitiesOfClass(
+                    io.github.sekerator.kingdomworld.common.citizen.CitizenEntity.class, player.getBoundingBox().inflate(128.0, 64.0, 128.0));
+            int bodies = around.size();
+            // The bodies of the people of the guilds share the limit of active bodies with everybody else.
+            int adventurers = 0;
+            int mages = 0;
+            for (io.github.sekerator.kingdomworld.common.citizen.CitizenEntity body : around) {
+                String profession = io.github.sekerator.kingdomworld.common.api.KingdomWorldApi.state(server).citizens().get(body.citizenId())
+                        .map(io.github.sekerator.kingdomworld.core.citizen.Citizen::professionId).orElse("");
+                adventurers += profession.equals(io.github.sekerator.kingdomworld.core.citizen.Professions.ADVENTURER.id()) ? 1 : 0;
+                mages += profession.equals(io.github.sekerator.kingdomworld.core.citizen.Professions.MAGE.id()) ? 1 : 0;
+            }
             LOGGER.info(PREFIX + "inside the large capital with {} citizen bodies around: average tick {} ms, worst tick {} ms over {} ticks",
                     bodies, String.format(java.util.Locale.ROOT, "%.2f", sum / 1e6 / server.tickTimes.length),
                     String.format(java.util.Locale.ROOT, "%.2f", worst / 1e6), server.tickTimes.length);
+            LOGGER.info(PREFIX + "of the bodies around {} adventurers and {} mages; {} bodies in the world of the limit {}", adventurers, mages,
+                    io.github.sekerator.kingdomworld.common.citizen.CitizenBodies.activeCount(),
+                    io.github.sekerator.kingdomworld.common.citizen.CitizenSettings.rules().maxActive());
         });
     }
 

@@ -152,13 +152,24 @@ public final class NpcGuilds {
      * @return whether all have come (or none can)
      */
     static boolean arriveSome(MinecraftServer server, UUID kingdomId, long nanos, int atMost) {
+        return arrive(server, kingdomId, nanos, atMost).done();
+    }
+
+    /**
+     * What came of a call for adventurers and mages: how many came, and whether all have come (or none can).
+     */
+    record Arrival(int came, boolean done) {
+        static final Arrival NONE = new Arrival(0, true);
+    }
+
+    static Arrival arrive(MinecraftServer server, UUID kingdomId, long nanos, int atMost) {
         if (GuildWork.isReadOnly(server) || MagicWork.isReadOnly(server) || KingdomWorldApi.isReadOnly(server)) {
-            return true;
+            return Arrival.NONE;
         }
         Optional<NpcKingdom> kingdom = NpcWork.kingdom(server, kingdomId);
         Optional<Capital> capital = KingdomWorldApi.state(server).territory().territory(kingdomId).map(Territory::capital);
         if (kingdom.isEmpty() || capital.isEmpty()) {
-            return true;
+            return Arrival.NONE;
         }
         GuildRanks.Ranks ranks = ranks(server, kingdomId);
         GuildRules guildRules = GuildSettings.rules();
@@ -170,61 +181,84 @@ public final class NpcGuilds {
         // Adventurers first: their ranks in order, the head of the guild first.
         List<Rank> wanted = GuildRanks.adventurers(ranks.adventurers(), guildRules.worldAdventurers(ranks.adventurers()));
         GuildState guild = GuildWork.state(server);
+        boolean stopped = false;
         while (adventurers(world, kingdomId).size() < wanted.size() && came < atMost) {
             if (came > 0 && System.nanoTime() - started > nanos) {
-                return false;
+                return told(kingdom.get(), new Arrival(came, false));
             }
             Rank rank = wanted.get(adventurers(world, kingdomId).size());
             Optional<Citizen> newcomer = CitizenLife.arrive(server, kingdomId, throne, false, false);
             if (newcomer.isEmpty()) {
-                return true;
+                // The kingdom takes no more citizens.
+                return told(kingdom.get(), new Arrival(came, true));
             }
             UUID id = newcomer.get().id();
             Outcome made = KingdomWorldApi.change(server, "make an adventurer of a kingdom of the world",
                     state -> state.setProfession(null, id, Professions.ADVENTURER.id()));
+            came++;
             if (!made.ok()) {
-                return true;
+                stopped = true;
+                break;
             }
             GuildWork.change(server, "rank an adventurer of a kingdom of the world", state -> {
                 state.setHirelingRank(id, kingdomId, rank);
                 return Outcome.DONE;
             });
-            came++;
         }
-        // Mages at the posts of the mage towers of the capital.
+        // Mages for the free seats of the posts of the mage towers of the capital: a mage comes only for a seat.
         List<WorkPost> towers = world.citizens().posts().postsOf(kingdomId, Professions.MAGE.id());
         int wantedMages = magicRules.worldMages(ranks.mages());
-        if (!towers.isEmpty()) {
+        if (!towers.isEmpty() && !stopped) {
             int seats = (int) Math.ceil(wantedMages / (double) towers.size());
             int maxSeats = io.github.sekerator.kingdomworld.common.citizen.work.GatheringSettings.rules().maxSeats();
+            int room = 0;
             for (WorkPost post : towers) {
-                if (post.seats() < seats) {
+                if (post.seats() < Math.min(maxSeats, seats)) {
                     KingdomWorldApi.change(server, "seat the mages of a kingdom of the world",
                             state -> state.setPostSeats(null, post.pos(), Math.min(maxSeats, seats), maxSeats));
                 }
+                room += Math.max(post.seats(), Math.min(maxSeats, seats));
             }
-            int index = 0;
+            wantedMages = Math.min(wantedMages, room);
             while (mages(world, kingdomId) < wantedMages && came < atMost) {
                 if (came > 0 && System.nanoTime() - started > nanos) {
-                    return false;
+                    return told(kingdom.get(), new Arrival(came, false));
                 }
-                WorkPost post = towers.get(index++ % towers.size());
-                Optional<Citizen> newcomer = CitizenLife.arrive(server, kingdomId, post.pos(), false, false);
+                Optional<WorkPost> post = towers.stream().filter(p -> p.freeSeats() > 0).findFirst();
+                if (post.isEmpty()) {
+                    break;
+                }
+                Optional<Citizen> newcomer = CitizenLife.arrive(server, kingdomId, post.get().pos(), false, false);
                 if (newcomer.isEmpty()) {
-                    return true;
-                }
-                KingdomWorldState.Hiring hired = world.hire(null, post.pos());
-                if (!hired.outcome().ok()) {
-                    // No seat left: the newcomer stays as a citizen without work, and no more mages come now.
-                    return true;
+                    return told(kingdom.get(), new Arrival(came, true));
                 }
                 came++;
+                if (!world.hire(null, post.get().pos()).outcome().ok()) {
+                    break;
+                }
             }
         }
-        if (came > 0) {
-            LOGGER.info("{} adventurer(s) and mage(s) came to {} from abroad", came, kingdom.get().name().latin());
+        return told(kingdom.get(), new Arrival(came, true));
+    }
+
+    private static Arrival told(NpcKingdom kingdom, Arrival arrival) {
+        if (arrival.came() > 0) {
+            LOGGER.info("{} adventurer(s) and mage(s) came to {} from abroad", arrival.came(), kingdom.name().latin());
         }
-        return adventurers(world, kingdomId).size() >= wanted.size() && (towers.isEmpty() || mages(world, kingdomId) >= wantedMages);
+        return arrival;
+    }
+
+    /**
+     * Whether a citizen of a kingdom of the world lodges with its guild: an adventurer at the guild, a mage in the tower, while it
+     * has no bed of its own. Such a citizen lives as well housed as one who has, and takes a bed when one is free. The capitals of
+     * the world have a bed for every citizen they were planned for; the people of the guilds came on top of them.
+     */
+    public static boolean lodged(MinecraftServer server, Citizen citizen) {
+        if (citizen.home() != null || citizen.kingdomId() == null) {
+            return false;
+        }
+        String profession = citizen.professionId();
+        return (profession.equals(Professions.ADVENTURER.id()) || profession.equals(Professions.MAGE.id())) && NpcWork.isNpc(server, citizen.kingdomId());
     }
 
     // ---------------------------------------------------------------- every day
@@ -237,6 +271,7 @@ public final class NpcGuilds {
         if (GuildWork.isReadOnly(server) || MagicWork.isReadOnly(server) || KingdomWorldApi.isReadOnly(server)) {
             return;
         }
+        long day = TreasuryActions.day(server);
         for (NpcSite site : List.copyOf(NpcWork.state(server).sites())) {
             if (site.status() == NpcSite.Status.REMOVED || site.kingdomId().isEmpty()) {
                 continue;
@@ -250,10 +285,25 @@ public final class NpcGuilds {
                 found(server, site, kingdom.get());
             }
             if (site.status() == NpcSite.Status.SPAWNED) {
-                arriveSome(server, kingdom.get().kingdomId(), Long.MAX_VALUE, 2);
+                // A few a minute, and no more than ARRIVALS_PER_DAY a day: the fallen are replaced like the army's.
+                UUID id = kingdom.get().kingdomId();
+                long[] today = ARRIVED.get(id);
+                if (today == null || today[0] != day) {
+                    today = new long[]{day, 0};
+                    ARRIVED.put(id, today);
+                }
+                int left = (int) Math.max(0, ARRIVALS_PER_DAY - today[1]);
+                if (left > 0) {
+                    today[1] += arrive(server, id, Long.MAX_VALUE, Math.min(2, left)).came();
+                }
             }
         }
     }
+
+    /** Adventurers and mages who may come to a kingdom of the world a day once its capital stands. */
+    static final int ARRIVALS_PER_DAY = 4;
+    /** The day and how many came that day, by kingdom; forgotten on a restart, which costs at most a day's arrivals. */
+    private static final java.util.Map<UUID, long[]> ARRIVED = new java.util.HashMap<>();
 
     /**
      * The adventurers and mages of a kingdom of the world whose buildings are being raised come from abroad, while the time of
@@ -280,7 +330,7 @@ public final class NpcGuilds {
      * the guild of mages keeps the ward over the capital and heals with the energy, and the guilds of a rich kingdom rise a rank
      * now and then.
      */
-    static void day(MinecraftServer server, long day) {
+    public static void day(MinecraftServer server, long day) {
         if (GuildWork.isReadOnly(server) || MagicWork.isReadOnly(server) || KingdomWorldApi.isReadOnly(server)) {
             return;
         }

@@ -244,6 +244,8 @@ public final class CitizenSimulation {
                     && io.github.sekerator.kingdomworld.common.npc.NpcCamps.quartered(server, citizen.id());
             if (!quartered) {
                 findPlaces(server, citizens, citizen);
+                // An adventurer or a mage of a kingdom of the world without a bed lodges with its guild.
+                quartered = io.github.sekerator.kingdomworld.common.npc.NpcGuilds.lodged(server, citizen);
             }
 
             boolean inInfirmary = citizen.state() == CitizenState.WOUNDED && treated < infirmaryRoom;

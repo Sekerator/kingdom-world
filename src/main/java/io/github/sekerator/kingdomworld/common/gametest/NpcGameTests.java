@@ -267,6 +267,66 @@ public final class NpcGameTests {
         return Math.max(0, army - planned);
     }
 
+    /**
+     * The adventurers and mages of a kingdom of the world who came from abroad, at least and at most: every adventurer came, and
+     * of the mages those the capital did not hire among its own people.
+     */
+    static int[] guildsFromAbroad(MinecraftServer server, UUID kingdomId) {
+        int adventurers = 0;
+        int mages = 0;
+        for (Citizen citizen : KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdomId)) {
+            adventurers += citizen.professionId().equals(Professions.ADVENTURER.id()) ? 1 : 0;
+            mages += citizen.professionId().equals(Professions.MAGE.id()) ? 1 : 0;
+        }
+        return new int[]{adventurers, adventurers + mages};
+    }
+
+    /**
+     * Whether a kingdom of the world has the citizens it was planned for: those it has without the royal army and the people of
+     * the guilds from abroad.
+     */
+    static boolean plannedPeople(MinecraftServer server, UUID kingdomId, int citizens, int planned) {
+        int[] guilds = guildsFromAbroad(server, kingdomId);
+        int rest = citizens - fromAbroad(server, kingdomId);
+        return rest - guilds[1] <= planned && planned <= rest - guilds[0];
+    }
+
+    static String guildsText(MinecraftServer server, UUID kingdomId) {
+        int[] guilds = guildsFromAbroad(server, kingdomId);
+        return guilds[0] + " adventurers and " + (guilds[1] - guilds[0]) + " mages";
+    }
+
+    /**
+     * Asserts that the guilds of a raised kingdom of the world have their ranks and people: the adventurers of the rank of the
+     * branch with a head of the guild of that rank, the mages and the researches of the rank of the guild of mages.
+     */
+    static void assertGuilds(GameTestHelper helper, Kingdom kingdom, io.github.sekerator.kingdomworld.core.guild.Rank low,
+                             io.github.sekerator.kingdomworld.core.guild.Rank high) {
+        MinecraftServer server = helper.getLevel().getServer();
+        io.github.sekerator.kingdomworld.core.npc.GuildRanks.Ranks ranks = io.github.sekerator.kingdomworld.common.npc.NpcGuilds.ranks(server, kingdom.id());
+        for (io.github.sekerator.kingdomworld.core.guild.Rank rank : List.of(ranks.adventurers(), ranks.mages())) {
+            helper.assertTrue(rank.atLeast(low) && high.atLeast(rank), "A guild of rank " + rank.label() + " outside " + low.label() + "-" + high.label());
+        }
+        io.github.sekerator.kingdomworld.core.guild.GuildRules guildRules = io.github.sekerator.kingdomworld.common.guild.GuildSettings.rules();
+        io.github.sekerator.kingdomworld.core.magic.MagicRules magicRules = io.github.sekerator.kingdomworld.common.magic.MagicSettings.rules();
+        int adventurers = 0;
+        int mages = 0;
+        for (Citizen citizen : KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdom.id())) {
+            adventurers += citizen.professionId().equals(Professions.ADVENTURER.id()) ? 1 : 0;
+            mages += citizen.professionId().equals(Professions.MAGE.id()) ? 1 : 0;
+        }
+        helper.assertTrue(adventurers == guildRules.worldAdventurers(ranks.adventurers()), adventurers + " adventurers in a branch of rank "
+                + ranks.adventurers().label());
+        Optional<Citizen> head = io.github.sekerator.kingdomworld.common.guild.GuildWork.head(server, kingdom.id());
+        helper.assertTrue(head.isPresent(), "The branch of rank " + ranks.adventurers().label() + " has no head");
+        io.github.sekerator.kingdomworld.core.guild.Rank headRank = io.github.sekerator.kingdomworld.common.guild.GuildWork.state(server)
+                .hireling(head.get().id()).orElseThrow().rank();
+        helper.assertTrue(headRank == ranks.adventurers(), "The head of the guild is of rank " + headRank.label());
+        helper.assertTrue(mages >= magicRules.worldMages(ranks.mages()), mages + " mages in a guild of rank " + ranks.mages().label());
+        int researches = io.github.sekerator.kingdomworld.common.magic.MagicWork.state(server).towerLevel(kingdom.id());
+        helper.assertTrue(researches >= magicRules.worldResearch(ranks.mages()), researches + " researches in a guild of rank " + ranks.mages().label());
+    }
+
     static int landRadius(NpcSite site) {
         int configured = NpcSettings.rules().landRadius(site.level());
         if (!site.districts()) {
@@ -375,8 +435,8 @@ public final class NpcGameTests {
         }
         List<Citizen> citizens = KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdom.id());
         int abroad = fromAbroad(server, kingdom.id());
-        helper.assertTrue(citizens.size() - abroad == composition.citizens(), "Citizens " + citizens.size() + " (" + abroad
-                + " of the royal army from abroad) instead of " + composition.citizens());
+        helper.assertTrue(plannedPeople(server, kingdom.id(), citizens.size(), composition.citizens()), "Citizens " + citizens.size() + " ("
+                + abroad + " of the royal army from abroad, " + guildsText(server, kingdom.id()) + ") instead of " + composition.citizens());
         Set<UUID> soldiers = new HashSet<>();
         for (Soldier soldier : ArmyWork.state(server).soldiersOf(kingdom.id())) {
             soldiers.add(soldier.citizenId());
@@ -386,7 +446,7 @@ public final class NpcGameTests {
         int homeless = 0;
         int idle = 0;
         for (Citizen citizen : citizens) {
-            if (!soldiers.contains(citizen.id()) && citizen.home() == null) {
+            if (!soldiers.contains(citizen.id()) && citizen.home() == null && !io.github.sekerator.kingdomworld.common.npc.NpcGuilds.lodged(server, citizen)) {
                 homeless++;
             }
             if (citizen.professionId().equals(Professions.UNEMPLOYED.id())) {
@@ -588,10 +648,36 @@ public final class NpcGameTests {
             helper.assertTrue(treasury.balance() == money && founding(server, kingdom.id()) == money,
                     "The treasury " + treasury.balance() + " does not agree with its founding " + founding(server, kingdom.id()));
             helper.assertTrue(KingdomStorage.count(server, kingdom.id(), stack -> stack.is(Items.BREAD)) > 0, "No bread in the storehouses");
+            // The guilds of a small kingdom are of rank B or A, with their adventurers, mages and researches.
+            assertGuilds(helper, kingdom, io.github.sekerator.kingdomworld.core.guild.Rank.B, io.github.sekerator.kingdomworld.core.guild.Rank.A);
+            assertMagicWithoutPlayers(helper, kingdom);
             helper.succeed();
         } finally {
             cleanUp(helper, site, center);
         }
+    }
+
+    /**
+     * A day of the guilds of a kingdom of the world without any player: its adventurers bring the crystals of their hunts to
+     * its guild of mages, which puts the ward over the throne and heals, paid by that energy.
+     */
+    private static void assertMagicWithoutPlayers(GameTestHelper helper, Kingdom kingdom) {
+        MinecraftServer server = helper.getLevel().getServer();
+        io.github.sekerator.kingdomworld.core.magic.MagicState magic = io.github.sekerator.kingdomworld.common.magic.MagicWork.state(server);
+        long day = TreasuryActions.day(server);
+        io.github.sekerator.kingdomworld.common.npc.NpcGuilds.day(server, day);
+        UUID id = kingdom.id();
+        helper.assertTrue(magic.isOn(id, io.github.sekerator.kingdomworld.core.magic.KingdomSpell.WARD)
+                && magic.find(id).map(found -> found.ward().size()).orElse(0) > 0, "The guild of mages keeps no ward over the throne");
+        helper.assertTrue(magic.isOn(id, io.github.sekerator.kingdomworld.core.magic.KingdomSpell.HEALING), "The guild of mages does not heal");
+        Map<io.github.sekerator.kingdomworld.core.magic.EnergyCategory, io.github.sekerator.kingdomworld.core.magic.EnergyJournal.Totals> today =
+                magic.find(id).orElseThrow().journal().totals(day, io.github.sekerator.kingdomworld.core.magic.EnergyJournal.Period.TODAY);
+        long spells = today.getOrDefault(io.github.sekerator.kingdomworld.core.magic.EnergyCategory.SPELLS,
+                io.github.sekerator.kingdomworld.core.magic.EnergyJournal.Totals.ZERO).expense();
+        long crystals = today.getOrDefault(io.github.sekerator.kingdomworld.core.magic.EnergyCategory.CRYSTALS,
+                io.github.sekerator.kingdomworld.core.magic.EnergyJournal.Totals.ZERO).income();
+        helper.assertTrue(spells > 0, "The ward was not paid with energy: " + today);
+        helper.assertTrue(crystals > 0, "The adventurers brought no crystals home: " + today);
     }
 
     @GameTest(template = EMPTY, batch = "kingdomworld_npc_palace", timeoutTicks = 200)
@@ -710,12 +796,13 @@ public final class NpcGameTests {
             for (NpcComposition.Plot plot : composition.buildings()) {
                 beds += NpcComposition.beds(plot.template());
             }
-            helper.assertTrue(citizens.size() - fromAbroad(server, kingdom.id()) == beds, "Citizens " + citizens.size() + " for " + beds
-                    + " beds");
+            helper.assertTrue(plannedPeople(server, kingdom.id(), citizens.size(), beds), "Citizens " + citizens.size() + " ("
+                    + guildsText(server, kingdom.id()) + ") for " + beds + " beds");
             int homeless = 0;
             for (Citizen citizen : citizens) {
                 // The royal army from abroad lives in the tents of its camps.
-                homeless += citizen.home() == null && !io.github.sekerator.kingdomworld.common.npc.NpcCamps.quartered(server, citizen.id()) ? 1 : 0;
+                homeless += citizen.home() == null && !io.github.sekerator.kingdomworld.common.npc.NpcCamps.quartered(server, citizen.id())
+                        && !io.github.sekerator.kingdomworld.common.npc.NpcGuilds.lodged(server, citizen) ? 1 : 0;
             }
             helper.assertTrue(homeless == 0, homeless + " citizens without a home");
             int soldiers = ArmyWork.state(server).soldiersOf(kingdom.id()).size();
@@ -757,6 +844,8 @@ public final class NpcGameTests {
             helper.assertTrue(castle != null && castle.box().contains(throne.getX(), throne.getY(), throne.getZ()),
                     "The throne is not inside the castle: " + (castle == null ? "no castle" : castle.box()));
             helper.assertTrue(level.getBlockState(throne.above()).isAir(), "Something stands on the throne");
+            // The guilds of a large kingdom are of rank S, or SS for the strongest kingdom of the world.
+            assertGuilds(helper, kingdom, io.github.sekerator.kingdomworld.core.guild.Rank.S, io.github.sekerator.kingdomworld.core.guild.Rank.SS);
             com.mojang.logging.LogUtils.getLogger().info("A large capital of {} buildings rose in {} ms", composition.buildings().size(), millis);
             helper.succeed();
         } finally {
@@ -877,7 +966,8 @@ public final class NpcGameTests {
             helper.assertTrue(problem.isEmpty(), "After the restart: " + problem);
             int buildings = buildings(server, kingdom.id()).size();
             int citizens = KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdom.id()).size();
-            helper.assertTrue(citizens - fromAbroad(server, kingdom.id()) == composition.citizens(), "Citizens after the restart: " + citizens);
+            helper.assertTrue(plannedPeople(server, kingdom.id(), citizens, composition.citizens()), "Citizens after the restart: " + citizens
+                    + " (" + guildsText(server, kingdom.id()) + ")");
             int soldiers = ArmyWork.state(server).soldiersOf(kingdom.id()).size();
             long balance = KingdomWorldApi.treasury(server, kingdom.id()).orElseThrow().balance();
             long bread = KingdomStorage.count(server, kingdom.id(), stack -> stack.is(Items.BREAD));

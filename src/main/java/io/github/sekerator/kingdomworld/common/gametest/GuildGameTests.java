@@ -411,6 +411,42 @@ public final class GuildGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_guild_branch_rank")
+    public static void anExamAboveTheRankOfTheBranchIsRefused(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos to = helper.absolutePos(new BlockPos(8, 3, 8));
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Small Branch", UUID.randomUUID());
+        ServerPlayer student = player(helper, "kw-climber");
+        BlockPos desk = helper.absolutePos(new BlockPos(6, 0, 1));
+        GuildRules rules = GuildSettings.rules();
+        try {
+            GuildState guild = GuildWork.state(server);
+            helper.assertTrue(guild.branchOrDefault(kingdom.id(), rules).rank() == io.github.sekerator.kingdomworld.core.guild.Branch.FIRST_RANK,
+                    "A new branch is not of the first rank");
+            GuildActions.apply(student, kingdom, act(desk, GuildPackets.DeskAction.Action.JOIN, 0));
+            guild.setRank(student.getUUID(), Rank.E, 0);
+            guild.addPoints(student.getUUID(), rules.rankPoints(Rank.D));
+            // A branch of rank E examines nobody for D.
+            helper.assertTrue(!GuildActions.apply(student, kingdom, act(desk, GuildPackets.DeskAction.Action.EXAM, 0)).success(),
+                    "A branch of rank E started an exam for D");
+            helper.assertTrue(guild.exam(student.getUUID()).isEmpty(), "The refused exam was opened");
+            helper.assertTrue(guild.checkExam(student.getUUID(), kingdom.id(), KingdomWorldApi.gameTime(server), rules).error()
+                    == KingdomError.BRANCH_RANK_TOO_LOW, "The exam was refused for another reason");
+            // A contract asking for a rank above the branch is refused as well.
+            helper.assertTrue(!GuildActions.apply(student, kingdom, new GuildPackets.DeskAction(desk, GuildPackets.DeskAction.Action.POST, 0,
+                    Contract.Kind.HUNT, "minecraft:zombie", 0, 1, 100, Rank.C.ordinal(), 2, false, true)).success()
+                    || guild.contracts().stream().noneMatch(c -> !c.isExam() && c.minRank() == Rank.C), "A contract for C was posted at a branch of E");
+            guild.setBranchRank(kingdom.id(), Rank.D, rules);
+            helper.assertTrue(GuildActions.apply(student, kingdom, act(desk, GuildPackets.DeskAction.Action.EXAM, 0)).success(),
+                    "A branch of rank D did not examine for D");
+            helper.assertTrue(guild.exam(student.getUUID()).map(Contract::targetRank).orElse(null) == Rank.D, "The exam is not for D");
+        } finally {
+            end(helper, kingdom, from, to);
+        }
+        helper.succeed();
+    }
+
     // ---------------------------------------------------------------- squads
 
     @GameTest(template = EMPTY, batch = "kingdomworld_guild_squad", timeoutTicks = 200)
@@ -547,7 +583,7 @@ public final class GuildGameTests {
         UUID citizen = UUID.randomUUID();
         guild.setRank(player, Rank.C, 5);
         guild.addPoints(player, 321);
-        guild.restoreBranch(new io.github.sekerator.kingdomworld.core.guild.Branch(kingdom, 120, 75, 3, 20, 400));
+        guild.restoreBranch(new io.github.sekerator.kingdomworld.core.guild.Branch(kingdom, 120, 75, 3, 20, 400, Rank.A, 42));
         guild.restoreHireling(new io.github.sekerator.kingdomworld.core.guild.Hireling(citizen, kingdom, Rank.D, 150, 9, 2));
         guild.restoreContract(new Contract(7, Contract.Kind.HUNT, kingdom, Contract.Poster.PLAYER, player, Rank.D, "minecraft:zombie", Rank.E,
                 false, 5, 2, kingdom, 500, 10, 100, 10, 90_000, Contract.Status.TAKEN, null, 3, false));
@@ -561,6 +597,18 @@ public final class GuildGameTests {
         helper.assertTrue(back.contract(7).equals(guild.contract(7)), "The contract changed: " + back.contract(7));
         helper.assertTrue(back.squad(3).equals(guild.squad(3)), "The squad changed");
         helper.assertTrue(back.branch(kingdom).equals(guild.branch(kingdom)), "The branch changed");
+        helper.assertTrue(back.branch(kingdom).orElseThrow().rank() == Rank.A && back.branch(kingdom).orElseThrow().done() == 42,
+                "The rank of the branch changed");
+        // A branch saved before branches had ranks is of the first rank, with nothing finished.
+        CompoundTag old = saved.copy();
+        for (Tag entry : old.getList("branches", Tag.TAG_COMPOUND)) {
+            ((CompoundTag) entry).remove("rank");
+            ((CompoundTag) entry).remove("done");
+        }
+        GuildSavedData before = GuildSavedData.load(old);
+        helper.assertTrue(!before.isReadOnly() && before.state().branch(kingdom).orElseThrow().rank()
+                == io.github.sekerator.kingdomworld.core.guild.Branch.FIRST_RANK && before.state().branch(kingdom).orElseThrow().done() == 0,
+                "An old branch was not read with the first rank");
         helper.assertTrue(back.hireling(citizen).equals(guild.hireling(citizen)), "The adventurer changed");
         helper.assertTrue(back.held(kingdom) == 500, "The escrow changed");
         helper.assertTrue(back.isAway(citizen), "The squad came home while saved");

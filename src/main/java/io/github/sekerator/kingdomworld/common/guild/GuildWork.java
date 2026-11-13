@@ -335,7 +335,10 @@ public final class GuildWork {
             return;
         }
         Branch branch = guild.branchOrDefault(kingdomId, rules);
-        boolean house = !io.github.sekerator.kingdomworld.common.construction.BuildingEffects.working(server, kingdomId, GUILD_HOUSE).isEmpty();
+        // Where no building of the catalog is a guild house, a branch rises as if it had one: nothing could be built for it.
+        boolean house = !io.github.sekerator.kingdomworld.common.construction.BuildingEffects.working(server, kingdomId, GUILD_HOUSE).isEmpty()
+                || io.github.sekerator.kingdomworld.common.construction.BuildingTemplates.all().stream()
+                .noneMatch(template -> GUILD_HOUSE.equals(template.role()));
         Rank rank = rules.branchRankOf(branch.done(), house);
         if (rank != branch.rank() && guild.setBranchRank(kingdomId, rank, rules)) {
             LOGGER.info("The branch of the guild of {} is of rank {} now ({} contract(s) finished{})", kingdomId, rank.label(), branch.done(),

@@ -323,7 +323,8 @@ public final class LifeWork {
                 SICK.remove(citizen.id());
             }
         } else {
-            double chance = Sickness.stepChance(Sickness.dailyChance(rules, citizen.food() < CitizenNeeds.HUNGRY_BELOW, citizen.home() == null,
+            boolean homeless = citizen.home() == null && !io.github.sekerator.kingdomworld.common.npc.NpcGuilds.lodged(server, citizen);
+            double chance = Sickness.stepChance(Sickness.dailyChance(rules, citizen.food() < CitizenNeeds.HUNGRY_BELOW, homeless,
                     citizen.state() == CitizenState.WOUNDED), interval);
             if (chance > 0 && random.getAsDouble() < chance) {
                 fallIll(server, citizen.id());
