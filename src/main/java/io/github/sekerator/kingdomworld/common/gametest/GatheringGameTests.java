@@ -300,8 +300,13 @@ public final class GatheringGameTests {
         Citizen worker = worker(helper, kingdom, "miner", postPos, new BlockPos(x0, y, z0 - 1));
 
         helper.succeedWhen(() -> {
+            CitizenEntity body = CitizenBodies.body(worker.id());
             helper.assertTrue(level.getBlockState(new BlockPos(x0, y, z0 + 1)).isAir()
-                    && level.getBlockState(new BlockPos(x0, y + 1, z0 + 1)).isAir(), "The entrance of the mine is not dug");
+                    && level.getBlockState(new BlockPos(x0, y + 1, z0 + 1)).isAir(), "The entrance of the mine is not dug: worker "
+                    + worker.workStatus() + ", post " + PostWork.post(server, postPos).map(WorkPost::status).orElse(null) + ", body "
+                    + (body == null ? "none" : body.blockPosition().toShortString() + " holding " + body.getMainHandItem()) + ", capital "
+                    + capital + ", entrance " + level.getBlockState(new BlockPos(x0, y, z0 + 1)) + " over "
+                    + level.getBlockState(new BlockPos(x0, y - 1, z0 + 1)));
             helper.assertTrue(level.getBlockState(coal).isAir(), "The coal ore was not mined");
             helper.assertTrue(level.getBlockState(new BlockPos(x0 - 1, y, z0 + 1)).isAir(), "The tunnel next to the lava was not dug");
             helper.assertTrue(level.getBlockState(lava).is(net.minecraftforge.common.Tags.Blocks.COBBLESTONE), "The lava was not walled off");
