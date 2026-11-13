@@ -49,6 +49,12 @@ final class ClientNpcShowcase {
     private static final String PREFIX = "KingdomWorld client self-test: ";
     /** Ticks to wait after moving the camera before the screenshot, so that the chunks are drawn. */
     private static final int SETTLE = 100;
+    /**
+     * Ticks to wait after the camera moved further than {@link #FAR} blocks, to another capital: its chunks are loaded and drawn
+     * anew, the far ones last.
+     */
+    private static final int FAR_WAIT = 400;
+    private static final double FAR = 160.0;
     /** Ticks the appearance may take at most. */
     private static final int MAX_WAIT = 36_000;
     /** The shot from the avenue of the large capital: the player stands among its citizens, and the ticks are measured. */
@@ -271,8 +277,10 @@ final class ClientNpcShowcase {
             minecraft.setScreen(atlas);
             atlas.showForCheck(atlasX / 16.0, atlasZ / 16.0, 3.0, null, net.minecraft.network.chat.Component.empty(), false);
         }
+        boolean far = index > 0 && index < shots.size() && Math.hypot(shots.get(index).x() - shots.get(index - 1).x(),
+                shots.get(index).z() - shots.get(index - 1).z()) > FAR;
         wait = street ? STREET_WAIT : next.equals(ALARM) ? ALARM_WAIT : next.equals(FORMATION) ? FORMATION_WAIT
-                : next.equals(BATTLE) ? BATTLE_WAIT : SETTLE;
+                : next.equals(BATTLE) ? BATTLE_WAIT : far ? FAR_WAIT : SETTLE;
     }
 
     /**
