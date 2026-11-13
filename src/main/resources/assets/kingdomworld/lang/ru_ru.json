@@ -4019,5 +4019,14 @@
   "commands.kingdomworld.admin.land.stage.settle": "поселения",
   "commands.kingdomworld.admin.land.stage.roads": "дороги",
   "commands.kingdomworld.admin.land.stage.found": "основание",
-  "commands.kingdomworld.admin.land.stage.done": "готов"
+  "commands.kingdomworld.admin.land.stage.done": "готов",
+  "kingdomworld.screen.map.chunk_province": "%s; %s",
+  "kingdomworld.screen.map.province.line": "провинция %s (%s), %s",
+  "kingdomworld.screen.map.province.nobody": "ничья",
+  "kingdomworld.screen.map.province.held": "владеет %s",
+  "kingdomworld.province.kind.heart": "сердце государства",
+  "kingdomworld.province.kind.core": "провинция",
+  "kingdomworld.province.kind.frontier": "окраина",
+  "kingdomworld.province.kind.wild": "дикая земля",
+  "kingdomworld.screen.throne.land": "Земли: %s чанков, из них заявлено %s из %s"
 }

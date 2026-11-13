@@ -801,7 +801,10 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         }
         lines.add(Component.translatable("kingdomworld.screen.throne.members", view.memberCount()));
         lines.add(Component.translatable("kingdomworld.screen.throne.population", view.population()));
-        lines.add(Component.translatable("kingdomworld.screen.throne.chunks", view.chunks(), view.chunkLimit()));
+        long provinces = io.github.sekerator.kingdomworld.client.map.ClientProvinceMap.chunksHeldBy(view.id());
+        lines.add(provinces > 0
+                ? Component.translatable("kingdomworld.screen.throne.land", view.chunks() + provinces, view.chunks(), view.chunkLimit())
+                : Component.translatable("kingdomworld.screen.throne.chunks", view.chunks(), view.chunkLimit()));
         if (view.capital() != null) {
             lines.add(Component.translatable("kingdomworld.screen.throne.capital",
                     view.capital().getX(), view.capital().getY(), view.capital().getZ()));

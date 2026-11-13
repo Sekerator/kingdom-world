@@ -4019,5 +4019,14 @@
   "commands.kingdomworld.admin.land.stage.settle": "settlements",
   "commands.kingdomworld.admin.land.stage.roads": "roads",
   "commands.kingdomworld.admin.land.stage.found": "founding",
-  "commands.kingdomworld.admin.land.stage.done": "made"
+  "commands.kingdomworld.admin.land.stage.done": "made",
+  "kingdomworld.screen.map.chunk_province": "%s; %s",
+  "kingdomworld.screen.map.province.line": "province %s (%s), %s",
+  "kingdomworld.screen.map.province.nobody": "of nobody",
+  "kingdomworld.screen.map.province.held": "held by %s",
+  "kingdomworld.province.kind.heart": "heart of the state",
+  "kingdomworld.province.kind.core": "province",
+  "kingdomworld.province.kind.frontier": "borderland",
+  "kingdomworld.province.kind.wild": "wild land",
+  "kingdomworld.screen.throne.land": "Land: %s chunks, of them %s claimed of %s"
 }

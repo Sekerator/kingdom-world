@@ -36,10 +36,12 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Feeds the web maps of the server. Land is outlined from the kingdom state and kept up to date through a territory
- * listener; at most once per {@code webMapUpdateSeconds} the changes (kingdoms with new land or new labels, removed
- * kingdoms, caravans where they are now, war zones) go to every web map that is ready. A web map that starts or
- * reloads gets everything. Runs on the server thread; a failing web map is logged and left out.
+ * Feeds the web maps of the server. Claims are outlined from the kingdom state and kept up to date through a listener of the
+ * claims; every province is one area of its own, outlined from its tiles on a thread of its own whenever the chunks of the
+ * provinces changed, and shown in the color of its holder. At most once per {@code webMapUpdateSeconds} the changes (kingdoms with
+ * new land, provinces that changed hands or new labels, removed kingdoms, caravans where they are now, war zones) go to every web
+ * map that is ready. A web map that starts or reloads gets everything. Runs on the server thread; a failing web map is logged and
+ * left out.
  */
 public final class WebMaps {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -47,6 +49,12 @@ public final class WebMaps {
     private static final Map<String, TerritoryShapes> SHAPES = new HashMap<>();
     private static final Map<UUID, WebMapModel.Kingdom> SHOWN = new LinkedHashMap<>();
     private static final Set<WebMapSink> FAILED = new HashSet<>();
+    /** The outlines of the provinces by number, as of {@link #provinceChunks}, and the provinces each kingdom was shown with. */
+    private static Map<Integer, List<ChunkOutlines.Area>> provinceAreas = Map.of();
+    private static long provinceChunks = -1;
+    private static java.util.concurrent.CompletableFuture<Map<Integer, List<ChunkOutlines.Area>>> outlining;
+    private static long outliningChunks;
+    private static final Map<UUID, List<Integer>> SHOWN_PROVINCES = new HashMap<>();
 
     private static boolean registered;
     private static MinecraftServer server;
@@ -83,8 +91,12 @@ public final class WebMaps {
         for (String dimension : state.territory().dimensions()) {
             shapes(dimension).reset(state.territory().claimsIn(dimension));
         }
-        KingdomWorldApi.addTerritoryListener(server, (dimension, chunk, oldOwner, newOwner) ->
-                shapes(dimension).change(chunk, oldOwner, newOwner));
+        // The claims alone, chunk by chunk: the provinces are outlined whole.
+        state.territory().addListener((dimension, chunk, oldOwner, newOwner) -> shapes(dimension).change(chunk, oldOwner, newOwner));
+        provinceAreas = Map.of();
+        provinceChunks = -1;
+        outlining = null;
+        SHOWN_PROVINCES.clear();
         ticks = Integer.MAX_VALUE / 2;
         LOGGER.info("KingdomWorld web maps: {} in language {}", SINKS.stream().map(WebMapSink::name).toList(), texts.language());
     }
@@ -100,6 +112,9 @@ public final class WebMaps {
         server = null;
         SHAPES.clear();
         SHOWN.clear();
+        SHOWN_PROVINCES.clear();
+        provinceAreas = Map.of();
+        outlining = null;
     }
 
     private static void onServerTick(TickEvent.ServerTickEvent event) {
@@ -135,6 +150,8 @@ public final class WebMaps {
         for (TerritoryShapes dimension : SHAPES.values()) {
             landChanged.addAll(dimension.rebuild().keySet());
         }
+        io.github.sekerator.kingdomworld.core.territory.ProvinceMap provinces = state.territory().provinceMap().orElse(null);
+        boolean outlinesChanged = outlineProvinces(provinces);
 
         List<WebMapModel.Kingdom> changed = new ArrayList<>();
         Set<UUID> removed = new HashSet<>();
@@ -144,9 +161,19 @@ public final class WebMaps {
             if (territory.isEmpty() || !TerritorySnapshots.canSee(null, kingdom.id())) {
                 continue;
             }
-            List<ChunkOutlines.Area> areas = shapes(territory.get().dimension()).shape(kingdom.id());
+            List<ChunkOutlines.Area> claimed = shapes(territory.get().dimension()).shape(kingdom.id());
+            List<Integer> held = provinces != null && provinces.dimension().equals(territory.get().dimension())
+                    ? provinces.provincesOf(kingdom.id()) : List.of();
+            List<ChunkOutlines.Area> areas = new ArrayList<>(claimed);
+            for (int province : held) {
+                areas.addAll(provinceAreas.getOrDefault(province, List.of()));
+            }
             if (areas.isEmpty()) {
                 continue;
+            }
+            List<Integer> shownProvinces = SHOWN_PROVINCES.put(kingdom.id(), held);
+            if (!held.equals(shownProvinces == null ? List.of() : shownProvinces) || outlinesChanged && !held.isEmpty()) {
+                landChanged.add(kingdom.id());
             }
             present.add(kingdom.id());
             WebMapModel.Kingdom view = view(state, kingdom, territory.get(), areas);
@@ -158,6 +185,7 @@ public final class WebMaps {
         for (UUID id : List.copyOf(SHOWN.keySet())) {
             if (!present.contains(id)) {
                 SHOWN.remove(id);
+                SHOWN_PROVINCES.remove(id);
                 removed.add(id);
             }
         }
@@ -180,6 +208,61 @@ public final class WebMaps {
                 LOGGER.error("KingdomWorld web map {} failed and is switched off until the server restarts", sink.name(), e);
             }
         }
+    }
+
+    /**
+     * Outlines the provinces anew, on a thread of its own, when their chunks changed; their tiles are copied here first.
+     *
+     * @return whether new outlines came in since the last update
+     */
+    private static boolean outlineProvinces(io.github.sekerator.kingdomworld.core.territory.ProvinceMap provinces) {
+        boolean changed = false;
+        if (outlining != null && outlining.isDone()) {
+            try {
+                provinceAreas = outlining.join();
+                provinceChunks = outliningChunks;
+                changed = true;
+            } catch (java.util.concurrent.CompletionException | java.util.concurrent.CancellationException e) {
+                LOGGER.error("KingdomWorld web maps could not outline the provinces", e);
+                provinceChunks = outliningChunks;
+            }
+            outlining = null;
+        }
+        if (provinces == null) {
+            if (!provinceAreas.isEmpty()) {
+                provinceAreas = Map.of();
+                changed = true;
+            }
+            return changed;
+        }
+        if (outlining == null && provinces.chunksVersion() != provinceChunks) {
+            Map<Long, char[]> tiles = new HashMap<>();
+            for (long key : provinces.tileKeys()) {
+                tiles.put(key, provinces.tile(key));
+            }
+            outliningChunks = provinces.chunksVersion();
+            outlining = java.util.concurrent.CompletableFuture.supplyAsync(() -> outlines(tiles));
+        }
+        return changed;
+    }
+
+    /**
+     * The outlines of every province of some tiles. Any thread.
+     */
+    static Map<Integer, List<ChunkOutlines.Area>> outlines(Map<Long, char[]> tiles) {
+        Map<Integer, List<Long>> chunks = new HashMap<>();
+        tiles.forEach((key, tile) -> {
+            int baseX = io.github.sekerator.kingdomworld.core.territory.ProvinceMap.tileX(key) * io.github.sekerator.kingdomworld.core.territory.ProvinceMap.TILE;
+            int baseZ = io.github.sekerator.kingdomworld.core.territory.ProvinceMap.tileZ(key) * io.github.sekerator.kingdomworld.core.territory.ProvinceMap.TILE;
+            for (int i = 0; i < tile.length; i++) {
+                if (tile[i] != 0) {
+                    chunks.computeIfAbsent((int) tile[i], id -> new ArrayList<>()).add(io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(baseX + (i & 31), baseZ + (i >> 5)));
+                }
+            }
+        });
+        Map<Integer, List<ChunkOutlines.Area>> areas = new HashMap<>();
+        chunks.forEach((id, list) -> areas.put(id, ChunkOutlines.of(list)));
+        return areas;
     }
 
     private static WebMapModel.Kingdom view(KingdomWorldState state, Kingdom kingdom, Territory territory, List<ChunkOutlines.Area> areas) {

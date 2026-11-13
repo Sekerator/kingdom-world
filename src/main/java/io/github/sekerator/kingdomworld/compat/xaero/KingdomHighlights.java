@@ -1,6 +1,7 @@
 package io.github.sekerator.kingdomworld.compat.xaero;
 
 import io.github.sekerator.kingdomworld.client.map.ClientMapModel;
+import io.github.sekerator.kingdomworld.client.map.ClientProvinceMap;
 import io.github.sekerator.kingdomworld.client.map.ClientTerritoryCache;
 import io.github.sekerator.kingdomworld.client.map.MapLabels;
 import io.github.sekerator.kingdomworld.common.config.KingdomWorldConfig;
@@ -21,8 +22,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * Land of kingdoms as chunk highlights for Xaero's maps, shared by the World Map and the Minimap highlighters. Xaero's
  * maps ask from their own threads, so the owners of the current dimension are copied into concurrent maps here; the
  * copy follows {@link ClientTerritoryCache} on the client main thread and remembers which map regions (32 by 32
- * chunks) changed, so the maps redraw only those. A capital chunk is drawn stronger: Xaero's maps have no markers for
- * other mods, so this is how a capital shows.
+ * chunks) changed, so the maps redraw only those. The provinces are read from a view of {@link ClientProvinceMap} that never
+ * changes once made; a new view redraws every region. A capital chunk is drawn stronger: Xaero's maps have no markers for other
+ * mods, so this is how a capital shows.
  */
 final class KingdomHighlights implements ClientMapModel.Listener {
     static final KingdomHighlights INSTANCE = new KingdomHighlights();
@@ -36,6 +38,8 @@ final class KingdomHighlights implements ClientMapModel.Listener {
     private final Set<Long> dirtyRegions = new HashSet<>();
     private volatile String dimension;
     private volatile int labelVersion;
+    private volatile ClientProvinceMap.View provinces = ClientProvinceMap.View.EMPTY;
+    private long provincesSeen = -1;
     private boolean allDirty;
     private boolean listening;
     private int generation = -1;
@@ -49,7 +53,7 @@ final class KingdomHighlights implements ClientMapModel.Listener {
     void listen() {
         if (!listening) {
             listening = true;
-            ClientTerritoryCache.addListener(this::onChunk);
+            ClientTerritoryCache.addClaimListener(this::onChunk);
             ClientMapModel.addListener(this);
         }
     }
@@ -97,6 +101,12 @@ final class KingdomHighlights implements ClientMapModel.Listener {
             for (long chunk : owners.keySet()) {
                 landPerRegion.merge(region(ChunkKey.x(chunk), ChunkKey.z(chunk)), 1, Integer::sum);
             }
+            labelVersion++;
+            allDirty = true;
+        }
+        if (ClientProvinceMap.version() != provincesSeen) {
+            provincesSeen = ClientProvinceMap.version();
+            provinces = ClientProvinceMap.view();
             labelVersion++;
             allDirty = true;
         }
@@ -148,7 +158,16 @@ final class KingdomHighlights implements ClientMapModel.Listener {
     }
 
     boolean regionHasLand(String askedDimension, int regionX, int regionZ) {
-        return shows(askedDimension) && landPerRegion.containsKey(ChunkKey.of(regionX, regionZ));
+        if (!shows(askedDimension)) {
+            return false;
+        }
+        if (landPerRegion.containsKey(ChunkKey.of(regionX, regionZ))) {
+            return true;
+        }
+        // A region of Xaero's maps is a tile of the provinces.
+        ClientProvinceMap.View view = provinces;
+        return askedDimension.equals(view.dimension())
+                && view.tiles().containsKey(io.github.sekerator.kingdomworld.core.territory.ProvinceMap.tileKey(regionX, regionZ));
     }
 
     int regionHash(String askedDimension, int regionX, int regionZ) {
@@ -160,7 +179,15 @@ final class KingdomHighlights implements ClientMapModel.Listener {
     }
 
     UUID owner(String askedDimension, int chunkX, int chunkZ) {
-        return shows(askedDimension) ? owners.get(ChunkKey.of(chunkX, chunkZ)) : null;
+        if (!shows(askedDimension)) {
+            return null;
+        }
+        UUID claimed = owners.get(ChunkKey.of(chunkX, chunkZ));
+        if (claimed != null) {
+            return claimed;
+        }
+        ClientProvinceMap.View view = provinces;
+        return askedDimension.equals(view.dimension()) ? view.ownerAt(chunkX, chunkZ) : null;
     }
 
     /**
@@ -184,10 +211,10 @@ final class KingdomHighlights implements ClientMapModel.Listener {
         int center = color(rgb, fill);
         int border = color(rgb, BORDER_ALPHA);
         result[0] = center;
-        result[1] = owner.equals(owners.get(ChunkKey.of(chunkX, chunkZ - 1))) ? center : border;
-        result[2] = owner.equals(owners.get(ChunkKey.of(chunkX + 1, chunkZ))) ? center : border;
-        result[3] = owner.equals(owners.get(ChunkKey.of(chunkX, chunkZ + 1))) ? center : border;
-        result[4] = owner.equals(owners.get(ChunkKey.of(chunkX - 1, chunkZ))) ? center : border;
+        result[1] = owner.equals(owner(askedDimension, chunkX, chunkZ - 1)) ? center : border;
+        result[2] = owner.equals(owner(askedDimension, chunkX + 1, chunkZ)) ? center : border;
+        result[3] = owner.equals(owner(askedDimension, chunkX, chunkZ + 1)) ? center : border;
+        result[4] = owner.equals(owner(askedDimension, chunkX - 1, chunkZ)) ? center : border;
         return true;
     }
 

@@ -3,6 +3,7 @@ package io.github.sekerator.kingdomworld.client.screen;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import io.github.sekerator.kingdomworld.client.KingdomWorldClient;
+import io.github.sekerator.kingdomworld.client.map.ClientProvinceMap;
 import io.github.sekerator.kingdomworld.client.map.ClientTerritoryCache;
 import io.github.sekerator.kingdomworld.common.kingdom.PlayerNames;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
@@ -39,11 +40,17 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     private static final double MAX_CELL = 32.0;
     private static final int MAX_VISIBLE = MapAreaRequestPacket.MAX_SIDE - 8;
     /** The most chunks the map shows across when zoomed out: the whole ring of the kingdoms of the world with room around it. */
-    private static final int MAX_SPAN = 800;
+    private static final int MAX_SPAN = 1280;
     /** The height of a row of the list of kingdoms. */
     private static final int LIST_ROW = 11;
     /** Below this many pixels a chunk, towns are left out and only capitals are drawn. */
     private static final double TOWN_CELL = 1.5;
+    /** Pixels a chunk from which the names of the provinces show. */
+    private static final double PROVINCE_NAME_CELL = 0.5;
+    private static final int MAX_PROVINCE_NAMES = 300;
+    private static final int PROVINCE_BORDER = 0x70402A14;
+    private static final int WILD_TINT = 0x1A5A4630;
+    private static final int WILD_HATCH = 0x705A4630;
     private static final long REQUEST_INTERVAL_MILLIS = 300L;
     private static final int PARCHMENT = 0xFFE9D9B0;
     private static final int GRID = 0x22000000;
@@ -345,7 +352,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         int startZ = Math.floorDiv(minZ, step) * step;
         for (int z = startZ; z <= maxZ; z += step) {
             for (int x = startX; x <= maxX; x += step) {
-                UUID owner = ClientTerritoryCache.coarseOwnerOf(x, z);
+                UUID owner = coarseOwner(x, z, step);
                 if (owner == null) {
                     continue;
                 }
@@ -355,20 +362,166 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
                 int x1 = Math.max(x0 + 1, screenX(x + step));
                 int z1 = Math.max(z0 + 1, screenZ(z + step));
                 mapFill(graphics, x0, z0, x1, z1, 0x99000000 | (info == null ? 0x808080 : info.color()));
-                if (!owner.equals(ClientTerritoryCache.coarseOwnerOf(x - step, z))) {
-                    mapFill(graphics, x0, z0, x0 + 1, z1, BORDER);
+                // The borders of states are thick where a square is wide enough.
+                int thick = x1 - x0 >= 4 ? 2 : 1;
+                if (!owner.equals(coarseOwner(x - step, z, step))) {
+                    mapFill(graphics, x0, z0, x0 + thick, z1, BORDER);
                 }
-                if (!owner.equals(ClientTerritoryCache.coarseOwnerOf(x + step, z))) {
-                    mapFill(graphics, x1 - 1, z0, x1, z1, BORDER);
+                if (!owner.equals(coarseOwner(x + step, z, step))) {
+                    mapFill(graphics, x1 - thick, z0, x1, z1, BORDER);
                 }
-                if (!owner.equals(ClientTerritoryCache.coarseOwnerOf(x, z - step))) {
-                    mapFill(graphics, x0, z0, x1, z0 + 1, BORDER);
+                if (!owner.equals(coarseOwner(x, z - step, step))) {
+                    mapFill(graphics, x0, z0, x1, z0 + thick, BORDER);
                 }
-                if (!owner.equals(ClientTerritoryCache.coarseOwnerOf(x, z + step))) {
-                    mapFill(graphics, x0, z1 - 1, x1, z1, BORDER);
+                if (!owner.equals(coarseOwner(x, z + step, step))) {
+                    mapFill(graphics, x0, z1 - thick, x1, z1, BORDER);
                 }
             }
         }
+    }
+
+    /**
+     * The owner of a square of a map zoomed far out: the claim the server found in it, otherwise the holder of the province at its
+     * middle, from the tiles the client knows.
+     */
+    private UUID coarseOwner(int x, int z, int step) {
+        UUID claimed = ClientTerritoryCache.coarseOwnerOf(x, z);
+        if (claimed != null) {
+            return claimed;
+        }
+        return provincesShown() ? ClientProvinceMap.ownerAt(Math.floorDiv(x, step) * step + step / 2, Math.floorDiv(z, step) * step + step / 2) : null;
+    }
+
+    /**
+     * Whether the provinces the client knows lie in the dimension shown.
+     */
+    private boolean provincesShown() {
+        return !ClientProvinceMap.isEmpty() && java.util.Objects.equals(dimension(), ClientProvinceMap.dimension());
+    }
+
+    /**
+     * The owner at a square: a chunk near, a square of a map zoomed far out.
+     */
+    private UUID ownerAt(int x, int z, int step) {
+        return step <= 1 ? ClientTerritoryCache.ownerOf(x, z) : coarseOwner(x, z, step);
+    }
+
+    /**
+     * The provinces over the land: wild land of nobody hatched, and thin borders between provinces of one holder (the borders of
+     * states, between holders, are drawn thick with the land).
+     */
+    private void drawProvinces(GuiGraphics graphics, int minX, int maxX, int minZ, int maxZ, int step) {
+        if (!provincesShown()) {
+            return;
+        }
+        int startX = Math.floorDiv(minX, step) * step;
+        int startZ = Math.floorDiv(minZ, step) * step;
+        for (int z = startZ; z <= maxZ; z += step) {
+            for (int x = startX; x <= maxX; x += step) {
+                int id = ClientProvinceMap.provinceAt(x + step / 2, z + step / 2);
+                if (id == 0) {
+                    continue;
+                }
+                int x0 = screenX(x);
+                int z0 = screenZ(z);
+                int x1 = Math.max(x0 + 1, screenX(x + step));
+                int z1 = Math.max(z0 + 1, screenZ(z + step));
+                UUID owner = ownerAt(x, z, step);
+                if (owner == null) {
+                    io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket.Entry entry = ClientProvinceMap.province(id);
+                    if (entry != null && entry.kind() == io.github.sekerator.kingdomworld.core.land.ProvinceKind.WILD) {
+                        mapFill(graphics, x0, z0, x1, z1, WILD_TINT);
+                        hatch(graphics, x, z, step, x0, z0, x1, z1);
+                    }
+                }
+                int east = ClientProvinceMap.provinceAt(x + step + step / 2, z + step / 2);
+                if (east != id && east != 0 && java.util.Objects.equals(owner, ownerAt(x + step, z, step))) {
+                    mapFill(graphics, x1 - 1, z0, x1, z1, PROVINCE_BORDER);
+                }
+                int south = ClientProvinceMap.provinceAt(x + step / 2, z + step + step / 2);
+                if (south != id && south != 0 && java.util.Objects.equals(owner, ownerAt(x, z + step, step))) {
+                    mapFill(graphics, x0, z1 - 1, x1, z1, PROVINCE_BORDER);
+                }
+            }
+        }
+    }
+
+    /**
+     * A stroke of the hatching of wild land through every third square along the diagonals.
+     */
+    private void hatch(GuiGraphics graphics, int x, int z, int step, int x0, int z0, int x1, int z1) {
+        int size = x1 - x0;
+        if (size < 3 || Math.floorMod(x / step - z / step, 3) != 0) {
+            return;
+        }
+        int dot = Math.max(1, size / 6);
+        for (int k = 0; k < 4; k++) {
+            int px = x0 + k * size / 4;
+            int pz = z1 - dot - k * (z1 - z0) / 4;
+            mapFill(graphics, px, pz, px + dot, pz + dot, WILD_HATCH);
+        }
+    }
+
+    /**
+     * The names of the provinces, from half a pixel a chunk on: those of wild land paler; a name gives way to the names already
+     * there (capitals, cities).
+     */
+    private void drawProvinceNames(GuiGraphics graphics, int minX, int maxX, int minZ, int maxZ) {
+        if (!provincesShown() || cell < PROVINCE_NAME_CELL || minecraft == null) {
+            return;
+        }
+        boolean cyrillic = io.github.sekerator.kingdomworld.core.citizen.CitizenNames.alphabetFor(minecraft.getLanguageManager().getSelected())
+                == io.github.sekerator.kingdomworld.core.citizen.CitizenNames.Alphabet.CYRILLIC;
+        int drawn = 0;
+        for (io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket.Entry entry : ClientProvinceMap.provinces()) {
+            int chunkX = Math.floorDiv(entry.centerX(), 16);
+            int chunkZ = Math.floorDiv(entry.centerZ(), 16);
+            if (chunkX < minX || chunkX > maxX || chunkZ < minZ || chunkZ > maxZ || drawn >= MAX_PROVINCE_NAMES) {
+                continue;
+            }
+            String name = provinceName(entry.nameSeed(), cyrillic);
+            int width = font.width(name);
+            int x = screenX(chunkX + 0.5) - width / 2;
+            int y = screenZ(chunkZ + 0.5) - 4;
+            int[] box = {x - 1, y - 1, x + width + 1, y + 9};
+            if (box[0] < mapLeft() || box[2] > mapRight() || box[1] < mapTop() || box[3] > mapBottom()
+                    || labels.stream().anyMatch(other -> box[0] < other[2] && other[0] < box[2] && box[1] < other[3] && other[1] < box[3])) {
+                continue;
+            }
+            boolean wild = entry.kind() == io.github.sekerator.kingdomworld.core.land.ProvinceKind.WILD;
+            graphics.drawString(font, name, x, y, wild ? 0xFF7A6448 : 0xFF2B1D0E, false);
+            labels.add(box);
+            drawn++;
+        }
+    }
+
+    /**
+     * The name of a province in the alphabet of the language of the game.
+     */
+    static String provinceName(long seed, boolean cyrillic) {
+        io.github.sekerator.kingdomworld.core.npc.NpcNames.Name name = io.github.sekerator.kingdomworld.core.land.ProvinceNames.of(seed);
+        return cyrillic ? name.cyrillic() : name.latin();
+    }
+
+    /**
+     * What the footer says of the province under the pointer: its name, what it is and who holds it.
+     */
+    private Component provinceLine(int chunkX, int chunkZ) {
+        if (!provincesShown() || minecraft == null) {
+            return null;
+        }
+        int id = ClientProvinceMap.provinceAt(chunkX, chunkZ);
+        io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket.Entry entry = ClientProvinceMap.province(id);
+        if (entry == null) {
+            return null;
+        }
+        boolean cyrillic = io.github.sekerator.kingdomworld.core.citizen.CitizenNames.alphabetFor(minecraft.getLanguageManager().getSelected())
+                == io.github.sekerator.kingdomworld.core.citizen.CitizenNames.Alphabet.CYRILLIC;
+        KingdomMapInfo holder = ClientTerritoryCache.kingdom(ClientProvinceMap.owner(id));
+        Component held = holder == null ? Component.translatable("kingdomworld.screen.map.province.nobody")
+                : Component.translatable("kingdomworld.screen.map.province.held", holder.name());
+        return Component.translatable("kingdomworld.screen.map.province.line", provinceName(entry.nameSeed(), cyrillic),
+                Component.translatable("kingdomworld.province.kind." + entry.kind().id()), held);
     }
 
     /**
@@ -1116,6 +1269,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             drawLand(graphics, minX, maxX, minZ, maxZ);
             drawBorders(graphics, minX, maxX, minZ, maxZ);
         }
+        drawProvinces(graphics, minX, maxX, minZ, maxZ, step);
         labels.clear();
         if (listing) {
             // Names of the map give way to the list of kingdoms drawn over it.
@@ -1127,6 +1281,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         drawDiplomacy(graphics);
         drawCities(graphics);
         drawCamps(graphics);
+        drawProvinceNames(graphics, minX, maxX, minZ, maxZ);
         drawLifeEvents(graphics);
         drawCaravans(graphics);
         if (army) {
@@ -1217,7 +1372,8 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     }
 
     private void drawBorders(GuiGraphics graphics, int minX, int maxX, int minZ, int maxZ) {
-        int thickness = cell >= 10 ? 2 : 1;
+        // The borders of states are thick: the thin lines inside them are the borders of their provinces.
+        int thickness = cell >= 3 ? 2 : 1;
         for (int z = minZ; z <= maxZ; z++) {
             for (int x = minX; x <= maxX; x++) {
                 UUID owner = ClientTerritoryCache.ownerOf(x, z);
@@ -1350,6 +1506,10 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             if (info != null) {
                 int prefix = font.width(Component.translatable("kingdomworld.screen.map.chunk_owned", where, ""));
                 where = Component.translatable("kingdomworld.screen.map.chunk_owned", where, fit(info.name(), textWidth - prefix));
+            }
+            Component province = provinceLine(cx, cz);
+            if (province != null) {
+                where = Component.translatable("kingdomworld.screen.map.chunk_province", where, province);
             }
             label(graphics, where, PAD, y, 0xFFE8E8E8, width - PAD);
         }
