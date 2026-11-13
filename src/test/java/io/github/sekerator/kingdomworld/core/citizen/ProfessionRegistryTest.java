@@ -28,6 +28,16 @@ class ProfessionRegistryTest {
         assertTrue(Professions.isMilitary("warrior") && Professions.isMilitary("archer") && !Professions.isMilitary("adventurer"));
         assertEquals(Professions.MAGE, Professions.nextCivilian("builder"), "the citizens tab skips the soldiers");
         assertEquals(Professions.UNEMPLOYED, Professions.nextCivilian("mage"));
+        assertEquals(Professions.MAGE, Professions.stepCivilian("builder", 1), "forward as before");
+        assertEquals(Professions.BUILDER, Professions.stepCivilian("mage", -1), "back over the soldiers");
+        assertEquals(Professions.MAGE, Professions.stepCivilian("unemployed", -1), "back from the first is the last");
+        assertEquals(Professions.UNEMPLOYED, Professions.stepCivilian("farmer", -1));
+        for (Profession profession : Professions.REGISTRY.all()) {
+            if (!Professions.isMilitary(profession.id())) {
+                assertEquals(Professions.nextCivilian(profession.id()), Professions.stepCivilian(profession.id(), 1));
+                assertEquals(profession, Professions.stepCivilian(Professions.stepCivilian(profession.id(), 1).id(), -1));
+            }
+        }
         assertTrue(Professions.usesStations("registrar"));
         assertTrue(Professions.usesStations("mage"));
         assertTrue(Professions.isWorkshop("smith") && Professions.isWorkshop("cook"));

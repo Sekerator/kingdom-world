@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
+import io.github.sekerator.kingdomworld.core.Cycle;
 import io.github.sekerator.kingdomworld.common.construction.ArchitectRulerItem;
 import io.github.sekerator.kingdomworld.common.construction.BuildingTemplate;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
@@ -99,14 +100,14 @@ public class CaptureScreen extends KingdomScreen implements ResultListener {
         nameBox.setResponder(value -> updateButtons());
         addRenderableWidget(nameBox);
         setInitialFocus(nameBox);
-        addRenderableWidget(Button.builder(categoryLabel(BuildingTemplate.Category.values()[category]), button -> {
-            category = (category + 1) % BuildingTemplate.Category.values().length;
+        addRenderableWidget(new CycleButton(left + PAD + 2, top + 68, inner, 20, categoryLabel(BuildingTemplate.Category.values()[category]), direction -> {
+            category = Cycle.step(category, direction, BuildingTemplate.Category.values().length);
             rebuildWidgets();
-        }).bounds(left + PAD + 2, top + 68, inner, 20).build());
-        addRenderableWidget(Button.builder(roleLabel(roles.get(role)), button -> {
-            role = (role + 1) % roles.size();
+        }));
+        addRenderableWidget(new CycleButton(left + PAD + 2, top + 92, inner, 20, roleLabel(roles.get(role)), direction -> {
+            role = Cycle.step(role, direction, roles.size());
             rebuildWidgets();
-        }).bounds(left + PAD + 2, top + 92, inner, 20).build());
+        }));
         saveButton = addRenderableWidget(Button.builder(save, button -> submit())
                 .bounds(left + PAD + 2, top + PANEL_HEIGHT - 26, buttons, 20).build());
         addRenderableWidget(Button.builder(cancel, button -> onClose())

@@ -455,10 +455,9 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
                 }
             }
             int chosen = index;
-            CycleButton profession = addRenderableWidget(new CycleButton(x, y, professionWidth, ROW - 2, professionName(view.profession()),
+            addRenderableWidget(new CycleButton(x, y, professionWidth, ROW - 2, professionName(view.profession()),
                     direction -> send(WorkPostActionPacket.Action.PROFESSION, 0,
                             choices.get(Math.floorMod(chosen + direction, choices.size())).id(), null)));
-            profession.setTooltip(Tooltip.create(Component.translatable(KEY + "cycle_hint")));
             if (isMiner()) {
                 goalWidgets(x, y);
             } else {
@@ -478,7 +477,7 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
                             Component.literal(fit(label.getString(), buttonWidth - LayoutCheck.BUTTON_TEXT_MARGIN - 8)),
                             direction -> send(WorkPostActionPacket.Action.ANIMAL, 0, animals.get(Math.floorMod(
                                     current < 0 ? (direction > 0 ? 0 : -1) : current + direction, animals.size())), null)));
-                    button.setTooltip(Tooltip.create(label));
+                    button.setTooltip(CycleButton.hinted(label));
                 }
             }
             if (hasAuto()) {
@@ -537,7 +536,7 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
                 Component.literal(fit(name.getString(), width - CycleButton.ICON_SPACE - LayoutCheck.BUTTON_TEXT_MARGIN - 4)),
                 MineOres.icon(goal.ore()),
                 direction -> send(WorkPostActionPacket.Action.GOAL_ORE, 0, ores.get(Math.floorMod(chosen + direction, ores.size())), null)));
-        ore.setTooltip(Tooltip.create(Component.translatable(KEY + "goal.ore_hint", name)));
+        ore.setTooltip(CycleButton.hinted(name));
 
         int amountX = secondControlsX();
         Button less = addRenderableWidget(Button.builder(Component.literal("-"),

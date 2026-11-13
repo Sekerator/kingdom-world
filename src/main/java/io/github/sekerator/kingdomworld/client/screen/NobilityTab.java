@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
+import io.github.sekerator.kingdomworld.core.Cycle;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.NobilityViews;
 import io.github.sekerator.kingdomworld.common.network.packet.NobilityPackets;
@@ -101,12 +102,12 @@ final class NobilityTab {
         return Component.translatable(KEY + "mode", Component.translatable(KEY + "mode." + value.id()));
     }
 
-    private Mode nextMode() {
-        Mode next = mode;
+    private Mode stepMode(int direction) {
+        Mode found = mode;
         do {
-            next = Mode.values()[(next.ordinal() + 1) % Mode.values().length];
-        } while (next.secret() && (view == null || !view.canSpies()));
-        return next;
+            found = Cycle.step(found, direction);
+        } while (found.secret() && (view == null || !view.canSpies()));
+        return found;
     }
 
     // ---------------------------------------------------------------- layout
@@ -313,40 +314,39 @@ final class NobilityTab {
         }
         int x = left + KingdomScreen.PAD;
         int right = left + panelWidth - KingdomScreen.PAD;
-        Mode next = nextMode();
-        screen.add(Button.builder(modeLabel(mode), b -> {
-            setMode(next);
+        screen.add(new CycleButton(x, buttonsY(top), modeWidth, ROW - 2, modeLabel(mode), direction -> {
+            setMode(stepMode(direction));
             screen.rebuild();
-        }).bounds(x, buttonsY(top), modeWidth, ROW - 2).build());
+        }));
         int barY = buttonsY(top) + ROW + 4;
         if (mode == Mode.HOUSES && view.canManage()) {
             Title chosen = Title.values()[Math.floorMod(title, Title.values().length)];
-            screen.add(Button.builder(Component.translatable(KEY + "pick_title", Component.translatable(NOBLE + "title." + chosen.id())), b -> {
-                title = (title + 1) % Title.values().length;
+            screen.add(new CycleButton(x, barY, titleWidth, ROW - 2, Component.translatable(KEY + "pick_title", Component.translatable(NOBLE + "title." + chosen.id())), direction -> {
+                title = Cycle.step(title, direction, Title.values().length);
                 screen.rebuild();
-            }).bounds(x, barY, titleWidth, ROW - 2).build());
-            Button pick = screen.add(Button.builder(Component.translatable(KEY + "pick_fief"), b -> {
-                fief++;
+            }));
+            Button pick = screen.add(new CycleButton(x + titleWidth + GAP, barY, pickWidth, ROW - 2, Component.translatable(KEY + "pick_fief"), direction -> {
+                fief += direction;
                 screen.rebuild();
-            }).bounds(x + titleWidth + GAP, barY, pickWidth, ROW - 2).build());
+            }));
             pick.active = view.fiefs().size() > 1;
         } else if (mode == Mode.TITLES && view.canManage()) {
-            Button pick = screen.add(Button.builder(Component.translatable(KEY + "pick_recipient"), b -> {
-                recipient++;
+            Button pick = screen.add(new CycleButton(x, barY, pickWidth, ROW - 2, Component.translatable(KEY + "pick_recipient"), direction -> {
+                recipient += direction;
                 screen.rebuild();
-            }).bounds(x, barY, pickWidth, ROW - 2).build());
+            }));
             pick.active = recipients().size() > 1;
         } else if (mode == Mode.SPIES) {
             Spy.Task chosen = Spy.Task.values()[Math.floorMod(task, Spy.Task.values().length)];
-            Button pickTask = screen.add(Button.builder(Component.translatable(KEY + "pick_task", Component.translatable(NOBLE + "task." + chosen.id())), b -> {
-                task = (task + 1) % Spy.Task.values().length;
+            Button pickTask = screen.add(new CycleButton(x, barY, taskWidth, ROW - 2, Component.translatable(KEY + "pick_task", Component.translatable(NOBLE + "task." + chosen.id())), direction -> {
+                task = Cycle.step(task, direction, Spy.Task.values().length);
                 screen.rebuild();
-            }).bounds(x, barY, taskWidth, ROW - 2).build());
-            pickTask.setTooltip(Tooltip.create(Component.translatable(NOBLE + "task_hint." + chosen.id())));
-            Button pick = screen.add(Button.builder(Component.translatable(KEY + "pick_target"), b -> {
-                target++;
+            }));
+            pickTask.setTooltip(CycleButton.hinted(Component.translatable(NOBLE + "task_hint." + chosen.id())));
+            Button pick = screen.add(new CycleButton(x + taskWidth + GAP, barY, pickWidth, ROW - 2, Component.translatable(KEY + "pick_target"), direction -> {
+                target += direction;
                 screen.rebuild();
-            }).bounds(x + taskWidth + GAP, barY, pickWidth, ROW - 2).build());
+            }));
             pick.active = view.targets().size() > 1;
         }
         List<Line> lines = lines();

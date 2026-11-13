@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
+import io.github.sekerator.kingdomworld.core.Cycle;
 import io.github.sekerator.kingdomworld.common.economy.MoneyTexts;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.TradeViews;
@@ -126,11 +127,11 @@ public class ExchangeScreen extends KingdomScreen implements ResultListener {
         if (purse.isPresent()) {
             Component label = Component.translatable(KEY + "source", fit(shortName(purse.get().currency()), sourceWidth - 20
                     - font.width(Component.translatable(KEY + "source", ""))));
-            Button sourceButton = addRenderableWidget(Button.builder(label, b -> {
-                source = (source + 1) % view.sources().size();
+            Button sourceButton = addRenderableWidget(new CycleButton(x, y, sourceWidth, ROW - 2, label, direction -> {
+                source = Cycle.step(source, direction, view.sources().size());
                 rebuildWidgets();
-            }).bounds(x, y, sourceWidth, ROW - 2).build());
-            sourceButton.setTooltip(Tooltip.create(MoneyTexts.currency(purse.get().currency().name(), purse.get().currency().kingdomName())));
+            }));
+            sourceButton.setTooltip(CycleButton.hinted(MoneyTexts.currency(purse.get().currency().name(), purse.get().currency().kingdomName())));
             y += 2 * ROW + 4;
             addRenderableWidget(Button.builder(Component.translatable(fromAccount ? KEY + "from.account" : KEY + "from.coins"), b -> {
                 fromAccount = !fromAccount;

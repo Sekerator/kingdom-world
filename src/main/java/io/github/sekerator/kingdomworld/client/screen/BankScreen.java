@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
+import io.github.sekerator.kingdomworld.core.Cycle;
 import io.github.sekerator.kingdomworld.common.economy.MoneyTexts;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.BankView;
@@ -195,10 +196,10 @@ public class BankScreen extends KingdomScreen implements ResultListener {
         box.setTooltip(Tooltip.create(Component.translatable(KEY + "amount_tooltip")));
         addRenderableWidget(box);
         int coinX = boxX + BOX_WIDTH + GAP;
-        addRenderableWidget(Button.builder(coinLabel(COIN_CHOICES.get(coinChoice)), b -> {
-            coinChoice = (coinChoice + 1) % COIN_CHOICES.size();
+        addRenderableWidget(new CycleButton(coinX, y, coinWidth, ROW - 2, coinLabel(COIN_CHOICES.get(coinChoice)), direction -> {
+            coinChoice = Cycle.step(coinChoice, direction, COIN_CHOICES.size());
             rebuildWidgets();
-        }).bounds(coinX, y, coinWidth, ROW - 2).build());
+        }));
         Button take = addRenderableWidget(Button.builder(Component.translatable(KEY + "take"), b -> {
             Optional<Long> parsed = Money.parse(amount, units());
             parsed.filter(value -> value > 0).ifPresent(value ->

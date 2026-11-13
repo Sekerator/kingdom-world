@@ -70,8 +70,15 @@ class RolePermissionsTest {
     void roleCycleSkipsTheCrown() {
         assertEquals(Role.MARSHAL, Role.SUBJECT.nextAssignable());
         assertEquals(Role.TREASURER, Role.MARSHAL.nextAssignable());
+        assertEquals(Role.SUBJECT, Role.MARSHAL.stepAssignable(-1), "back from the first assignable role is the last");
+        assertEquals(Role.MARSHAL, Role.TREASURER.stepAssignable(-1));
         for (Role role : Role.values()) {
             assertNotEquals(Role.KING, role.nextAssignable());
+            assertNotEquals(Role.KING, role.stepAssignable(-1));
+            assertEquals(role.nextAssignable(), role.stepAssignable(1));
+            if (role.isAssignable()) {
+                assertEquals(role, role.nextAssignable().stepAssignable(-1));
+            }
             assertEquals(role, Role.byId(role.id()).orElseThrow());
         }
         assertTrue(Role.byId("emperor").isEmpty());

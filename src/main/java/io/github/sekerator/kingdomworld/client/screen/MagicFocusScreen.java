@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
+import io.github.sekerator.kingdomworld.core.Cycle;
 import io.github.sekerator.kingdomworld.common.economy.MoneyTexts;
 import io.github.sekerator.kingdomworld.common.guild.GuildTexts;
 import io.github.sekerator.kingdomworld.common.kingdom.KingdomActions;
@@ -198,14 +199,14 @@ public class MagicFocusScreen extends KingdomScreen implements ResultListener {
                 int slot = scroll + i;
                 Optional<PlayerSpell> current = view.staff().get(slot);
                 Component label = current.<Component>map(MagicTexts::spell).orElseGet(() -> Component.translatable(KEY + "slot_empty"));
-                Button button = addRenderableWidget(Button.builder(label, b -> {
-                    // Cycles through the learned spells, then an empty slot.
-                    int index = current.map(learned::indexOf).orElse(-1);
-                    int next = index + 1;
+                Button button = addRenderableWidget(new CycleButton(right - slotWidth, listTop() + i * ROW, slotWidth, ROW - 2, label, direction -> {
+                    // Goes through the learned spells and then an empty slot, forward or back.
+                    int index = current.map(learned::indexOf).filter(found -> found >= 0).orElse(learned.size());
+                    int next = Cycle.step(index, direction, learned.size() + 1);
                     send(MagicPackets.FocusAction.Action.BIND, next < learned.size() ? learned.get(next).ordinal() : -1, slot);
-                }).bounds(right - slotWidth, listTop() + i * ROW, slotWidth, ROW - 2).build());
+                }));
                 button.active = !learned.isEmpty();
-                button.setTooltip(Tooltip.create(Component.translatable(KEY + "slot_hint")));
+                button.setTooltip(CycleButton.hinted(Component.translatable(KEY + "slot_hint")));
             }
         }
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose())

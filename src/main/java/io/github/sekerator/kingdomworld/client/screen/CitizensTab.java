@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
+import io.github.sekerator.kingdomworld.core.Cycle;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenTexts;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.CitizenView;
@@ -305,16 +306,15 @@ final class CitizensTab {
         if (view == null) {
             return;
         }
-        Button filterButton = screen.add(Button.builder(filterLabel(filter), b -> {
-            setFilter(filter + 1);
+        Button filterButton = screen.add(new CycleButton(left + KingdomScreen.PAD, buttonsY, filterWidth, ROW - 2, filterLabel(filter), direction -> {
+            setFilter(filter + direction);
             screen.rebuild();
-        }).bounds(left + KingdomScreen.PAD, buttonsY, filterWidth, ROW - 2).build());
+        }));
         filterButton.active = listsCitizens();
-        Mode next = Mode.values()[(mode.ordinal() + 1) % Mode.values().length];
-        screen.add(Button.builder(modeLabel(mode), b -> {
-            setMode(next);
+        screen.add(new CycleButton(left + KingdomScreen.PAD + filterWidth + GAP, buttonsY, modeWidth, ROW - 2, modeLabel(mode), direction -> {
+            setMode(Cycle.step(mode, direction));
             screen.rebuild();
-        }).bounds(left + KingdomScreen.PAD + filterWidth + GAP, buttonsY, modeWidth, ROW - 2).build());
+        }));
         if (mode == Mode.LIFE && life != null && life.canManage()) {
             // The king calls a festival; the server says why not when it cannot be.
             net.minecraft.client.gui.components.Button festival = screen.add(Button.builder(Component.translatable(KEY + "life.call"),
@@ -335,10 +335,8 @@ final class CitizensTab {
             CitizenView.Entry entry = entries.get(scroll + i);
             int y = listTop(top) + i * ROW;
             // Soldiers are recruited and dismissed in the army tab.
-            String nextProfession = Professions.nextCivilian(entry.profession()).id();
-            Button profession = screen.add(Button.builder(CitizenTexts.profession(entry.profession(), gender(entry.female())),
-                            b -> KingdomWorldNetwork.sendToServer(new CitizenActionPacket(entry.id(), nextProfession)))
-                    .bounds(professionX, y, professionWidth, ROW - 2).build());
+            Button profession = screen.add(new CycleButton(professionX, y, professionWidth, ROW - 2,
+                    CitizenTexts.profession(entry.profession(), gender(entry.female())), direction -> KingdomWorldNetwork.sendToServer(new CitizenActionPacket(entry.id(), Professions.stepCivilian(entry.profession(), direction).id()))));
             if (Professions.isMilitary(entry.profession())) {
                 profession.active = false;
                 profession.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable(KEY + "soldier_hint")));

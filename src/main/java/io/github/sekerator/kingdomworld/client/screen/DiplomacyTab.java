@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
+import io.github.sekerator.kingdomworld.core.Cycle;
 import io.github.sekerator.kingdomworld.client.map.ClientProvinceMap;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.DiplomacyViews;
@@ -198,11 +199,10 @@ final class DiplomacyTab {
         }
         int x = left + KingdomScreen.PAD;
         int right = left + panelWidth - KingdomScreen.PAD;
-        Mode next = Mode.values()[(mode.ordinal() + 1) % Mode.values().length];
-        screen.add(Button.builder(modeLabel(mode), b -> {
-            setMode(next);
+        screen.add(new CycleButton(x, buttonsY(top), modeWidth, ROW - 2, modeLabel(mode), direction -> {
+            setMode(Cycle.step(mode, direction));
             screen.rebuild();
-        }).bounds(x, buttonsY(top), modeWidth, ROW - 2).build());
+        }));
         Optional<DiplomacyViews.KingdomRow> chosen = selectedRow();
         if (chosen.isPresent()) {
             screen.add(Button.builder(Component.translatable(KEY + "back"), b -> {
@@ -254,11 +254,11 @@ final class DiplomacyTab {
         action(column + actionWidth + GAP, y, "break", breakable, DiplomacyPackets.TabChange.Action.BREAK, row, 0, "");
         y += ROW;
         WarGoal chosen = DECLARABLE[goal % DECLARABLE.length];
-        Button goalButton = screen.add(Button.builder(goalLabel(chosen), b -> {
-            goal = (goal + 1) % DECLARABLE.length;
+        Button goalButton = screen.add(new CycleButton(column, y, actionWidth, ROW - 2, goalLabel(chosen), direction -> {
+            goal = Cycle.step(goal, direction, DECLARABLE.length);
             screen.rebuild();
-        }).bounds(column, y, actionWidth, ROW - 2).build());
-        goalButton.setTooltip(Tooltip.create(Component.translatable(KEY + "goal_hint." + chosen.id())));
+        }));
+        goalButton.setTooltip(CycleButton.hinted(Component.translatable(KEY + "goal_hint." + chosen.id())));
         goalButton.active = view.canDeclare();
         boolean declarable = view.canDeclare() && bond != Bond.WAR && bond != Bond.TRUCE && freeOfVassals && row.playable();
         boolean breakFirst = bond == Bond.PACT || bond == Bond.ALLIANCE;
@@ -286,12 +286,12 @@ final class DiplomacyTab {
         List<DiplomacyViews.CedeOption> options = row.cede();
         DiplomacyViews.CedeOption shown = options.isEmpty() ? null : options.get(Math.floorMod(cede, options.size()));
         Component label = shown == null ? Component.translatable(KEY + "cede_none") : Component.literal(provinceName(shown.province()));
-        Button province = screen.add(Button.builder(label, b -> {
-            cede = options.isEmpty() ? 0 : (Math.floorMod(cede, options.size()) + 1) % options.size();
+        Button province = screen.add(new CycleButton(column, y, actionWidth, ROW - 2, label, direction -> {
+            cede = Cycle.step(cede, direction, options.size());
             screen.rebuild();
-        }).bounds(column, y, actionWidth, ROW - 2).build());
+        }));
         province.active = options.size() > 1;
-        province.setTooltip(Tooltip.create(shown == null ? Component.translatable(KEY + "cede_none_hint")
+        province.setTooltip(CycleButton.hinted(shown == null ? Component.translatable(KEY + "cede_none_hint")
                 : Component.translatable(KEY + (options.size() > 1 ? "cede_hint_more" : "cede_hint"), provinceName(shown.province()), shown.cost(),
                 options.size())));
         Bond bond = row.bond();

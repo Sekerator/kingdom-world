@@ -100,6 +100,30 @@ public final class Professions {
     }
 
     /**
+     * The profession one step from {@code professionId} among those that are not a soldier's, in registration order
+     * and wrapping around: the next one for a direction above zero, the one before otherwise. From a soldier's or an
+     * unknown profession the way forward starts at the first one and the way back at the last.
+     */
+    public static Profession stepCivilian(String professionId, int direction) {
+        java.util.List<Profession> civil = new java.util.ArrayList<>();
+        for (Profession profession : REGISTRY.all()) {
+            if (!isMilitary(profession.id())) {
+                civil.add(profession);
+            }
+        }
+        int index = -1;
+        for (int i = 0; i < civil.size(); i++) {
+            if (civil.get(i).id().equals(professionId)) {
+                index = i;
+            }
+        }
+        if (index < 0) {
+            return civil.get(direction > 0 ? 0 : civil.size() - 1);
+        }
+        return civil.get(io.github.sekerator.kingdomworld.core.Cycle.step(index, direction > 0 ? 1 : -1, civil.size()));
+    }
+
+    /**
      * Professions a work post can be set to, in registration order.
      */
     public static java.util.List<Profession> postProfessions() {

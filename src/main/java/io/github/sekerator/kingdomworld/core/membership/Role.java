@@ -41,11 +41,19 @@ public enum Role {
      * The next assignable role in display order, wrapping around; used by the throne screen to cycle roles.
      */
     public Role nextAssignable() {
+        return stepAssignable(1);
+    }
+
+    /**
+     * The assignable role one step from this one in display order, wrapping around: the next one for a direction
+     * above zero, the one before otherwise. The throne screen goes forward on a left click and back on a right one.
+     */
+    public Role stepAssignable(int direction) {
         Role[] roles = values();
-        Role next = this;
+        Role found = this;
         do {
-            next = roles[(next.ordinal() + 1) % roles.length];
-        } while (!next.isAssignable());
-        return next;
+            found = roles[Math.floorMod(found.ordinal() + (direction > 0 ? 1 : -1), roles.length)];
+        } while (!found.isAssignable());
+        return found;
     }
 }

@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
+import io.github.sekerator.kingdomworld.core.Cycle;
 import io.github.sekerator.kingdomworld.client.construction.BlueprintRenderer;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenTexts;
 import io.github.sekerator.kingdomworld.common.construction.TemplateMaterials;
@@ -169,16 +170,19 @@ final class ConstructionTab {
     }
 
     /**
-     * The filter that follows {@code value}: all, the kingdom's own style when it has one, then every style.
+     * The filter one step from {@code value}, forward or back: all, the kingdom's own style when it has one, then
+     * every style.
      */
-    private int nextFilter(int value) {
-        if (value == ALL_STYLES) {
-            return kingdomStyle().isEmpty() ? 0 : OWN_STYLE;
+    private int stepFilter(int value, int direction) {
+        List<Integer> order = new ArrayList<>();
+        order.add(ALL_STYLES);
+        if (!kingdomStyle().isEmpty()) {
+            order.add(OWN_STYLE);
         }
-        if (value == OWN_STYLE) {
-            return 0;
+        for (int i = 0; i < ArchitecturalStyles.IDS.size(); i++) {
+            order.add(i);
         }
-        return value + 1 < ArchitecturalStyles.IDS.size() ? value + 1 : ALL_STYLES;
+        return order.get(Cycle.step(Math.max(0, order.indexOf(value)), direction, order.size()));
     }
 
     private static Component filterLabel(int value) {
@@ -535,22 +539,21 @@ final class ConstructionTab {
             site = 0;
             building = 0;
             action = null;
-            Mode next = Mode.values()[(mode.ordinal() + 1) % Mode.values().length];
-            screen.add(Button.builder(modeLabel(mode), b -> {
-                mode = next;
+            screen.add(new CycleButton(x, buttonsY(top), modeWidth, ROW - 2, modeLabel(mode), direction -> {
+                mode = Cycle.step(mode, direction);
                 scroll = 0;
                 screen.rebuild();
-            }).bounds(x, buttonsY(top), modeWidth, ROW - 2).build());
+            }));
             if (mode == Mode.CATALOG) {
                 if (filter == OWN_STYLE && kingdomStyle().isEmpty()) {
                     filter = ALL_STYLES;
                 }
-                Button filterButton = screen.add(Button.builder(filterLabel(filter), b -> {
-                    filter = nextFilter(filter);
+                Button filterButton = screen.add(new CycleButton(x + modeWidth + GAP, buttonsY(top), filterWidth, ROW - 2, filterLabel(filter), direction -> {
+                    filter = stepFilter(filter, direction);
                     scroll = 0;
                     screen.rebuild();
-                }).bounds(x + modeWidth + GAP, buttonsY(top), filterWidth, ROW - 2).build());
-                filterButton.setTooltip(Tooltip.create(Component.translatable(KEY + "filter.hint")));
+                }));
+                filterButton.setTooltip(CycleButton.hinted(Component.translatable(KEY + "filter.hint")));
             }
             int rows = visibleRows(top, panelHeight);
             scroll = Math.max(0, Math.min(scroll, rowCount() - rows));
@@ -586,9 +589,9 @@ final class ConstructionTab {
             Button widget;
             switch (i) {
                 case 0 -> {
-                    widget = Button.builder(button.label(), b -> change(ConstructionPackets.Change.Action.PRIORITY, id,
-                            shownSite.priority().next().ordinal())).bounds(button.x(), button.y(), button.width(), ROW - 2).build();
-                    widget.setTooltip(Tooltip.create(Component.translatable(KEY + "priority_hint")));
+                    widget = new CycleButton(button.x(), button.y(), button.width(), ROW - 2, button.label(),
+                            direction -> change(ConstructionPackets.Change.Action.PRIORITY, id, Cycle.step(shownSite.priority(), direction).ordinal()));
+                    widget.setTooltip(CycleButton.hinted(Component.translatable(KEY + "priority_hint")));
                 }
                 case 1 -> widget = Button.builder(button.label(), b -> change(shownSite.paused() ? ConstructionPackets.Change.Action.RESUME
                         : ConstructionPackets.Change.Action.PAUSE, id, 0)).bounds(button.x(), button.y(), button.width(), ROW - 2).build();
@@ -619,16 +622,16 @@ final class ConstructionTab {
         take.setTooltip(Tooltip.create(Component.translatable(view.canManage() ? KEY + "take_hint" : KEY + "read_only")));
         int y = materialsTop(top, shown);
         List<Placed> placed = rows(materialLabels(), x, right, y);
-        Button woodButton = screen.add(Button.builder(placed.get(0).label(), b -> {
-            wood = (wood + 1) % woodChoices().size();
+        Button woodButton = screen.add(new CycleButton(placed.get(0).x(), placed.get(0).y(), placed.get(0).width(), ROW - 2, placed.get(0).label(), direction -> {
+            wood = Cycle.step(wood, direction, woodChoices().size());
             screen.rebuild();
-        }).bounds(placed.get(0).x(), placed.get(0).y(), placed.get(0).width(), ROW - 2).build());
-        woodButton.setTooltip(Tooltip.create(Component.translatable(KEY + "wood_hint")));
-        Button stoneButton = screen.add(Button.builder(placed.get(1).label(), b -> {
-            stone = (stone + 1) % stoneChoices().size();
+        }));
+        woodButton.setTooltip(CycleButton.hinted(Component.translatable(KEY + "wood_hint")));
+        Button stoneButton = screen.add(new CycleButton(placed.get(1).x(), placed.get(1).y(), placed.get(1).width(), ROW - 2, placed.get(1).label(), direction -> {
+            stone = Cycle.step(stone, direction, stoneChoices().size());
             screen.rebuild();
-        }).bounds(placed.get(1).x(), placed.get(1).y(), placed.get(1).width(), ROW - 2).build());
-        stoneButton.setTooltip(Tooltip.create(Component.translatable(KEY + "stone_hint")));
+        }));
+        stoneButton.setTooltip(CycleButton.hinted(Component.translatable(KEY + "stone_hint")));
         if (!shown.own() || !view.canManage()) {
             return;
         }

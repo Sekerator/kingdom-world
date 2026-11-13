@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
+import io.github.sekerator.kingdomworld.core.Cycle;
 import io.github.sekerator.kingdomworld.common.guild.MonsterCrystalItem;
 import io.github.sekerator.kingdomworld.common.magic.MagicRegistries;
 import io.github.sekerator.kingdomworld.common.magic.MagicTexts;
@@ -188,19 +189,18 @@ final class MagicTab {
         }
         int x = left + KingdomScreen.PAD;
         int right = left + panelWidth - KingdomScreen.PAD;
-        Mode next = Mode.values()[(mode.ordinal() + 1) % Mode.values().length];
-        screen.add(Button.builder(modeLabel(mode), b -> {
-            setMode(next);
+        screen.add(new CycleButton(x, buttonsY(top), modeWidth, ROW - 2, modeLabel(mode), direction -> {
+            setMode(Cycle.step(mode, direction));
             screen.rebuild();
-        }).bounds(x, buttonsY(top), modeWidth, ROW - 2).build());
+        }));
         int rows = visibleRows(top, panelHeight);
         scroll = Math.max(0, Math.min(scroll, rowCount() - rows));
         switch (mode) {
-            case JOURNAL -> screen.add(Button.builder(periodLabel(period), b -> {
-                period = (period + 1) % 3;
+            case JOURNAL -> screen.add(new CycleButton(right - periodWidth, buttonsY(top), periodWidth, ROW - 2, periodLabel(period), direction -> {
+                period = Cycle.step(period, direction, 3);
                 scroll = 0;
                 screen.rebuild();
-            }).bounds(right - periodWidth, buttonsY(top), periodWidth, ROW - 2).build());
+            }));
             case RESEARCH -> {
                 for (int i = 0; i < rows && scroll + i < view.research().size(); i++) {
                     MagicViews.ResearchRow row = view.research().get(scroll + i);

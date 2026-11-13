@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
+import io.github.sekerator.kingdomworld.core.Cycle;
 import io.github.sekerator.kingdomworld.common.economy.MoneyTexts;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.TradeViews;
@@ -213,11 +214,10 @@ final class TradeTab {
         }
         int x = left + KingdomScreen.PAD;
         int right = left + panelWidth - KingdomScreen.PAD;
-        Mode next = Mode.values()[(mode.ordinal() + 1) % Mode.values().length];
-        screen.add(Button.builder(modeLabel(mode), b -> {
-            setMode(next);
+        screen.add(new CycleButton(x, buttonsY(top), modeWidth, ROW - 2, modeLabel(mode), direction -> {
+            setMode(Cycle.step(mode, direction));
             screen.rebuild();
-        }).bounds(x, buttonsY(top), modeWidth, ROW - 2).build());
+        }));
         if (picker.isOpen()) {
             picker.init(x, right, listTop(top), bottom(top, panelHeight));
             return;
@@ -268,12 +268,12 @@ final class TradeTab {
         int y = listTop(top);
         Optional<TradeViews.Partner> other = chosenPartner();
         Component partnerName = Component.literal(other.map(p -> screen.fitName(p.name(), partnerWidth - 10)).orElse("-"));
-        Button partnerButton = screen.add(Button.builder(partnerName, b -> {
-            partner = (partner + 1) % Math.max(1, view.partners().size());
+        Button partnerButton = screen.add(new CycleButton(fieldX, y, partnerWidth, ROW - 2, partnerName, direction -> {
+            partner = Cycle.step(partner, direction, view.partners().size());
             screen.rebuild();
-        }).bounds(fieldX, y, partnerWidth, ROW - 2).build());
+        }));
         partnerButton.active = view.canManage() && view.partners().size() > 1;
-        other.ifPresent(p -> partnerButton.setTooltip(Tooltip.create(Component.literal(p.name()))));
+        other.ifPresent(p -> partnerButton.setTooltip(CycleButton.hinted(Component.literal(p.name()))));
         Button side = screen.add(Button.builder(Component.translatable(weSell ? KEY + "side.sell" : KEY + "side.buy"), b -> {
             weSell = !weSell;
             screen.rebuild();

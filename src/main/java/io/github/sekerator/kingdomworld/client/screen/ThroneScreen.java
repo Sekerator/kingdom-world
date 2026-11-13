@@ -1349,9 +1349,8 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
                 KingdomView.MemberEntry member = row.member();
                 boolean other = !member.id().equals(self) && member.role() != Role.KING;
                 if (view.can(Permission.APPOINT) && other) {
-                    addRenderableWidget(Button.builder(roleName(member.role()), button ->
-                                    send(KingdomActionPacket.Action.SET_ROLE, member.id(), member.role().nextAssignable().ordinal()))
-                            .bounds(roleX(), y, roleWidth, 18).build());
+                    addRenderableWidget(new CycleButton(roleX(), y, roleWidth, 18, roleName(member.role()), direction ->
+                            send(KingdomActionPacket.Action.SET_ROLE, member.id(), member.role().stepAssignable(direction).ordinal())));
                 }
                 if (view.can(Permission.RECRUIT) && other && (king || member.role() == Role.SUBJECT)) {
                     addRenderableWidget(Button.builder(Component.translatable("kingdomworld.screen.throne.kick"), button ->

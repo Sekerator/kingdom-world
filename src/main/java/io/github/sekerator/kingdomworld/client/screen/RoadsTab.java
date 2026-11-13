@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
+import io.github.sekerator.kingdomworld.core.Cycle;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.RoadViews;
 import io.github.sekerator.kingdomworld.common.network.packet.RoadPackets;
@@ -268,11 +269,10 @@ final class RoadsTab {
         }
         int x = left + KingdomScreen.PAD;
         int right = left + panelWidth - KingdomScreen.PAD;
-        Mode next = Mode.values()[(mode.ordinal() + 1) % Mode.values().length];
-        screen.add(Button.builder(modeLabel(mode), b -> {
-            setMode(next);
+        screen.add(new CycleButton(x, buttonsY(top), modeWidth, ROW - 2, modeLabel(mode), direction -> {
+            setMode(Cycle.step(mode, direction));
             screen.rebuild();
-        }).bounds(x, buttonsY(top), modeWidth, ROW - 2).build());
+        }));
         int rows = visibleRows(top, panelHeight);
         scroll = Math.max(0, Math.min(scroll, rowCount() - rows));
         if (acting != 0 || patrolling != 0 || actingCity >= 0) {

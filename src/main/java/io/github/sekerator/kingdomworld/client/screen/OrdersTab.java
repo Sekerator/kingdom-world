@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
+import io.github.sekerator.kingdomworld.core.Cycle;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenTexts;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.CatalogView;
@@ -341,10 +342,9 @@ final class OrdersTab {
             int pauseX = cancelX - GAP - pauseWidth;
             int priorityX = pauseX - GAP - priorityWidth;
             long id = entry.id();
-            Button change = screen.add(Button.builder(priorityName(entry.priority()),
-                    b -> send(OrderPackets.Change.Action.PRIORITY, id, entry.kind(), 0, entry.priority().next()))
-                    .bounds(priorityX, y, priorityWidth, ROW - 4).build());
-            change.setTooltip(Tooltip.create(Component.translatable(KEY + "priority_hint")));
+            Button change = screen.add(new CycleButton(priorityX, y, priorityWidth, ROW - 4, priorityName(entry.priority()),
+                    direction -> send(OrderPackets.Change.Action.PRIORITY, id, entry.kind(), 0, Cycle.step(entry.priority(), direction))));
+            change.setTooltip(CycleButton.hinted(Component.translatable(KEY + "priority_hint")));
             screen.add(Button.builder(pauseLabel(entry.paused()), b -> send(entry.paused() ? OrderPackets.Change.Action.RESUME
                             : OrderPackets.Change.Action.PAUSE, id, entry.kind(), 0, entry.priority()))
                     .bounds(pauseX, y, pauseWidth, ROW - 4).build());
@@ -375,11 +375,11 @@ final class OrdersTab {
             screen.rebuild();
         }).bounds(kindX, y, kindWidth, ITEM_ROW - 2).build());
         int priorityX = kindX + kindWidth + GAP;
-        Button rank = screen.add(Button.builder(priorityName(priority), b -> {
-            priority = priority.next();
+        Button rank = screen.add(new CycleButton(priorityX, y, priorityWidth, ITEM_ROW - 2, priorityName(priority), direction -> {
+            priority = Cycle.step(priority, direction);
             screen.rebuild();
-        }).bounds(priorityX, y, priorityWidth, ITEM_ROW - 2).build());
-        rank.setTooltip(Tooltip.create(Component.translatable(KEY + "priority_hint")));
+        }));
+        rank.setTooltip(CycleButton.hinted(Component.translatable(KEY + "priority_hint")));
         int right = left + panelWidth - KingdomScreen.PAD;
         Button back = screen.add(Button.builder(Component.translatable(KEY + "back"), b -> {
             mode = Mode.LIST;

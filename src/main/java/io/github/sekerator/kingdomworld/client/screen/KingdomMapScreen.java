@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
+import io.github.sekerator.kingdomworld.core.Cycle;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import io.github.sekerator.kingdomworld.client.KingdomWorldClient;
@@ -722,10 +723,10 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         Component reset = Component.translatable("kingdomworld.screen.map.road.reset");
         int y = mapBottom() - 20;
         int x = mapLeft() + 4;
-        addRenderableWidget(Button.builder(classLabel(planClass), button -> {
-            planClass = planClass.next();
+        addRenderableWidget(new CycleButton(x, y, classWidth, 16, classLabel(planClass), direction -> {
+            planClass = Cycle.step(planClass, direction);
             rebuildWidgets();
-        }).bounds(x, y, classWidth, 16).build());
+        }));
         x += classWidth + 2;
         Button mode = addRenderableWidget(Button.builder(modeLabel(planMode), button -> {
             planMode = planMode == io.github.sekerator.kingdomworld.core.road.Road.Mode.JOINT
@@ -900,9 +901,9 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
                 y += 16;
             }
         }
-        Button shape = addRenderableWidget(Button.builder(shapeFits ? formationFull : Component.translatable("kingdomworld.screen.map.army.short.formation"),
-                pressed -> nextFormation()).bounds(x, y, buttonWidth, 14).build());
-        shape.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomworld.screen.map.army.formation",
+        Button shape = addRenderableWidget(new CycleButton(x, y, buttonWidth, 14,
+                shapeFits ? formationFull : Component.translatable("kingdomworld.screen.map.army.short.formation"), this::stepFormation));
+        shape.setTooltip(CycleButton.hinted(Component.translatable("kingdomworld.screen.map.army.formation",
                 Component.translatable("kingdomworld.screen.map.army.formation." + formation))
                 .append("\n").append(Component.translatable("kingdomworld.screen.map.army.formation.hint"))));
         shape.active = !chosen.isEmpty();
@@ -918,11 +919,11 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         return "line";
     }
 
-    private void nextFormation() {
+    private void stepFormation(int direction) {
         if (chosen.isEmpty()) {
             return;
         }
-        String next = FORMATIONS.get((FORMATIONS.indexOf(currentFormation()) + 1) % FORMATIONS.size());
+        String next = FORMATIONS.get(Cycle.step(FORMATIONS.indexOf(currentFormation()), direction, FORMATIONS.size()));
         KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Command(
                 io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Command.Action.FORMATION, List.copyOf(chosen), next,
                 new int[0], new int[0], 0, 0));

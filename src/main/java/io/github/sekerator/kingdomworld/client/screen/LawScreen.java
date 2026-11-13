@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
+import io.github.sekerator.kingdomworld.core.Cycle;
 import io.github.sekerator.kingdomworld.common.economy.MoneyTexts;
 import io.github.sekerator.kingdomworld.common.law.LawTexts;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
@@ -142,12 +143,11 @@ public class LawScreen extends KingdomScreen implements ResultListener {
         measure();
         int x = left() + PAD;
         int right = left() + panelWidth - PAD;
-        Mode next = Mode.values()[(mode.ordinal() + 1) % Mode.values().length];
-        addRenderableWidget(Button.builder(modeLabel(mode), b -> {
-            mode = next;
+        addRenderableWidget(new CycleButton(x, buttonsY(), modeWidth, ROW - 2, modeLabel(mode), direction -> {
+            mode = Cycle.step(mode, direction);
             scroll = 0;
             rebuildWidgets();
-        }).bounds(x, buttonsY(), modeWidth, ROW - 2).build());
+        }));
         Button auto = addRenderableWidget(Button.builder(autoLabel(), b -> send(LawPackets.PlayerAction.Action.AUTO_PAY, null,
                 view.autoPay() ? 0 : 1)).bounds(right - autoWidth, buttonsY(), autoWidth, ROW - 2).build());
         auto.setTooltip(Tooltip.create(Component.translatable(KEY + "auto_hint")));

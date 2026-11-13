@@ -1,6 +1,7 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
 
+import io.github.sekerator.kingdomworld.core.Cycle;
 import io.github.sekerator.kingdomworld.common.economy.MoneyTexts;
 import io.github.sekerator.kingdomworld.common.guild.GuildTexts;
 import io.github.sekerator.kingdomworld.common.guild.MonsterCrystalItem;
@@ -197,11 +198,10 @@ final class GuildTab {
         }
         int x = left + KingdomScreen.PAD;
         int right = left + panelWidth - KingdomScreen.PAD;
-        Mode next = Mode.values()[(mode.ordinal() + 1) % Mode.values().length];
-        screen.add(Button.builder(modeLabel(mode), b -> {
-            setMode(next);
+        screen.add(new CycleButton(x, buttonsY(top), modeWidth, ROW - 2, modeLabel(mode), direction -> {
+            setMode(Cycle.step(mode, direction));
             screen.rebuild();
-        }).bounds(x, buttonsY(top), modeWidth, ROW - 2).build());
+        }));
         if (mode == Mode.BRANCH) {
             initBranch(x, top);
             return;

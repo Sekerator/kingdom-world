@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
+import io.github.sekerator.kingdomworld.core.Cycle;
 import io.github.sekerator.kingdomworld.common.economy.MoneyTexts;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
 import io.github.sekerator.kingdomworld.common.network.data.TradeViews;
@@ -284,12 +285,12 @@ public class StallScreen extends KingdomScreen implements ResultListener {
             }).bounds(x, y, payWidth, ROW - 2).build());
             int next = x + payWidth + GAP;
             if (mode != Mode.SELL && view.purses().size() > 1) {
-                Button currency = addRenderableWidget(Button.builder(currencyLabel(), b -> {
-                    purse = (purse + 1) % view.purses().size();
+                Button currency = addRenderableWidget(new CycleButton(next, y, currencyWidth, ROW - 2, currencyLabel(), direction -> {
+                    purse = Cycle.step(purse, direction, view.purses().size());
                     rebuildWidgets();
-                }).bounds(next, y, currencyWidth, ROW - 2).build());
+                }));
                 TradeViews.Currency chosen = payCurrency();
-                currency.setTooltip(Tooltip.create(MoneyTexts.currency(chosen.name(), chosen.kingdomName())));
+                currency.setTooltip(CycleButton.hinted(MoneyTexts.currency(chosen.name(), chosen.kingdomName())));
                 next += currencyWidth + GAP;
             }
             if (mode != Mode.LOTS) {

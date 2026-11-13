@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
+import io.github.sekerator.kingdomworld.core.Cycle;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenTexts;
 import io.github.sekerator.kingdomworld.common.economy.MoneyTexts;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
@@ -300,17 +301,15 @@ final class TreasuryTab {
         }
         int x = left + KingdomScreen.PAD;
         int right = left + panelWidth - KingdomScreen.PAD;
-        Mode next = Mode.values()[(mode.ordinal() + 1) % Mode.values().length];
-        screen.add(Button.builder(modeLabel(mode), b -> {
-            setMode(next);
+        screen.add(new CycleButton(x, buttonsY(top), modeWidth, ROW - 2, modeLabel(mode), direction -> {
+            setMode(Cycle.step(mode, direction));
             screen.rebuild();
-        }).bounds(x, buttonsY(top), modeWidth, ROW - 2).build());
+        }));
         if (mode == Mode.JOURNAL) {
-            TreasuryJournal.Period following = TreasuryJournal.Period.values()[(period.ordinal() + 1) % TreasuryJournal.Period.values().length];
-            screen.add(Button.builder(periodLabel(period), b -> {
-                period = following;
+            screen.add(new CycleButton(x + modeWidth + GAP, buttonsY(top), periodWidth, ROW - 2, periodLabel(period), direction -> {
+                period = Cycle.step(period, direction);
                 screen.rebuild();
-            }).bounds(x + modeWidth + GAP, buttonsY(top), periodWidth, ROW - 2).build());
+            }));
         }
         int rows = visible(top, panelHeight);
         scroll = Math.max(0, Math.min(scroll, rowCount() - rows));
@@ -360,10 +359,10 @@ final class TreasuryTab {
         coins.setHint(Component.translatable(KEY + "coins_hint"));
         screen.add(coins);
         int choiceX = boxX + BOX_WIDTH + GAP;
-        Button choice = screen.add(Button.builder(coinChoiceLabel(coinChoice), b -> {
-            coinChoice = Denomination.values()[(coinChoice.ordinal() + 1) % Denomination.values().length];
+        Button choice = screen.add(new CycleButton(choiceX, y, coinChoiceWidth, ROW - 2, coinChoiceLabel(coinChoice), direction -> {
+            coinChoice = Cycle.step(coinChoice, direction);
             screen.rebuild();
-        }).bounds(choiceX, y, coinChoiceWidth, ROW - 2).build());
+        }));
         choice.active = view.canTakeCoins();
         Button take = screen.add(Button.builder(Component.translatable(KEY + "take_coins"), b -> {
             long count = parseCount(coinsText);

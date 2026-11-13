@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
+import io.github.sekerator.kingdomworld.core.Cycle;
 import io.github.sekerator.kingdomworld.common.economy.MoneyTexts;
 import io.github.sekerator.kingdomworld.common.guild.GuildTexts;
 import io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork;
@@ -419,11 +420,11 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
     }
 
     private void initBoard(int x, int right) {
-        addRenderableWidget(Button.builder(Component.translatable(KEY + "filter.kind", kindName(FILTERS[filter])), b -> {
-            filter = (filter + 1) % FILTERS.length;
+        addRenderableWidget(new CycleButton(x, controlsY(), filterWidth, ROW - 2, Component.translatable(KEY + "filter.kind", kindName(FILTERS[filter])), direction -> {
+            filter = Cycle.step(filter, direction, FILTERS.length);
             scroll = 0;
             rebuildWidgets();
-        }).bounds(x, controlsY(), filterWidth, ROW - 2).build());
+        }));
         addRenderableWidget(Button.builder(Component.translatable(onlyMine ? KEY + "filter.rank.mine" : KEY + "filter.rank.all"), b -> {
             onlyMine = !onlyMine;
             scroll = 0;
@@ -494,14 +495,14 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
      */
     private void initForm(int x) {
         int fieldX = x + labelWidth;
-        addRenderableWidget(Button.builder(GuildTexts.kind(postKind()), b -> {
-            postKind = (postKind + 1) % POSTABLE.length;
+        addRenderableWidget(new CycleButton(fieldX, formY(0), kindWidth, ROW - 2, GuildTexts.kind(postKind()), direction -> {
+            postKind = Cycle.step(postKind, direction, POSTABLE.length);
             target = "";
             targetIcon = ItemStack.EMPTY;
             targetName = Component.empty();
             byRank = false;
             rebuildWidgets();
-        }).bounds(fieldX, formY(0), kindWidth, ROW - 2).build());
+        }));
         Button poster = addRenderableWidget(Button.builder(Component.translatable(forKingdom ? KEY + "form.from_kingdom" : KEY + "form.from_me"),
                 b -> {
                     forKingdom = !forKingdom;
@@ -517,10 +518,10 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
             targetX += modeWidth + GAP;
         }
         if (byRank && postKind() == Contract.Kind.HUNT) {
-            addRenderableWidget(Button.builder(Component.translatable(KEY + "form.rank", huntRank.label()), b -> {
-                huntRank = Rank.ofIndex((huntRank.ordinal() + 1) % Rank.COUNT);
+            addRenderableWidget(new CycleButton(targetX, formY(1), rankWidth, ROW - 2, Component.translatable(KEY + "form.rank", huntRank.label()), direction -> {
+                huntRank = Rank.ofIndex(Cycle.step(huntRank.ordinal(), direction, Rank.COUNT));
                 rebuildWidgets();
-            }).bounds(targetX, formY(1), rankWidth, ROW - 2).build());
+            }));
         } else {
             addRenderableWidget(Button.builder(Component.translatable(KEY + "form.choose"), b -> {
                 picker.open(postKind() != Contract.Kind.GATHER, (id, entry) -> {
@@ -536,10 +537,10 @@ public class GuildDeskScreen extends KingdomScreen implements ResultListener {
         int rewardLabel = font.width(Component.translatable(KEY + "form.reward")) + 6;
         box(rewardX + rewardLabel, formY(2), rewardText, value -> rewardText = value, Component.translatable(KEY + "form.reward"), Money.MAX_TEXT)
                 .setTooltip(Tooltip.create(Component.translatable(KEY + "form.reward_hint")));
-        addRenderableWidget(Button.builder(Component.translatable(KEY + "form.rank", minRank.label()), b -> {
-            minRank = Rank.ofIndex((minRank.ordinal() + 1) % Rank.COUNT);
+        addRenderableWidget(new CycleButton(fieldX, formY(3), rankWidth, ROW - 2, Component.translatable(KEY + "form.rank", minRank.label()), direction -> {
+            minRank = Rank.ofIndex(Cycle.step(minRank.ordinal(), direction, Rank.COUNT));
             rebuildWidgets();
-        }).bounds(fieldX, formY(3), rankWidth, ROW - 2).build());
+        }));
         int daysX = fieldX + rankWidth + 6;
         int daysLabel = font.width(Component.translatable(KEY + "form.days")) + 6;
         box(daysX + daysLabel, formY(3), daysText, value -> daysText = value, Component.translatable(KEY + "form.days"), 3)
