@@ -1444,12 +1444,17 @@ public final class NpcSpawner {
             site.setStep(step + 1);
             return;
         }
-        if (step == fields + 3) {
-            for (int[] green : NpcCity.greens(composition)) {
-                NpcCity.tree(level, id, site, new BlockPos(site.x() + green[0], y, site.z() + green[1]));
+        if (step >= fields + 3) {
+            // The trees go in a few at a step: a styled capital has up to a hundred, some sixty blocks each.
+            List<int[]> greens = NpcCity.greens(composition);
+            int from = (step - fields - 3) * TREES_A_STEP;
+            if (from < greens.size()) {
+                for (int[] green : greens.subList(from, Math.min(greens.size(), from + TREES_A_STEP))) {
+                    NpcCity.tree(level, id, site, new BlockPos(site.x() + green[0], y, site.z() + green[1]));
+                }
+                site.setStep(step + 1);
+                return;
             }
-            site.setStep(step + 1);
-            return;
         }
         professionsByRole(server, level, id, composition.level() == io.github.sekerator.kingdomworld.core.npc.NpcLevel.SMALL ? 1
                 : SEATS_IN_BUILDING);
@@ -1718,6 +1723,8 @@ public final class NpcSpawner {
 
     /** Workers at the post of a workshop, a market or a tower of mages of a capital of districts. */
     private static final int SEATS_IN_BUILDING = 2;
+    /** The trees of a capital planted in one step of its raising. */
+    private static final int TREES_A_STEP = 16;
 
     /**
      * Gives the posts inside the buildings of a kingdom their professions by what each building is for and what stands in it
