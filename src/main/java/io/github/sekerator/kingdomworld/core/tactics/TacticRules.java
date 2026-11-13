@@ -99,7 +99,8 @@ public final class TacticRules {
         public double archerMax = 15.0;
         public double archerTooClose = 4.0;
         public double fallBack = 6.0;
-        public double woundedShare = 0.3;
+        /** As citizens count as wounded: below half of their health. */
+        public double woundedShare = 0.5;
         public double retreatLosses = 0.5;
         public double retreatBalance = 0.4;
         public int pincerFoes = 2;

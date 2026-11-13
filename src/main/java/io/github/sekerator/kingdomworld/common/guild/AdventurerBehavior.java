@@ -92,14 +92,14 @@ public final class AdventurerBehavior implements ProfessionBehavior {
 
         @Override
         public boolean canUse() {
-            if (!fights(body) || body.kingdomId() == null) {
+            if (body.kingdomId() == null) {
                 return false;
             }
             if (io.github.sekerator.kingdomworld.common.tactics.SquadTactics.duty(body) != null) {
                 // The squad fights: the adventurer takes its part.
                 return true;
             }
-            if (--searchCooldown > 0) {
+            if (!fights(body) || --searchCooldown > 0) {
                 return false;
             }
             searchCooldown = SEARCH_TICKS;
@@ -109,7 +109,8 @@ public final class AdventurerBehavior implements ProfessionBehavior {
 
         @Override
         public boolean canContinueToUse() {
-            if (fights(body) && io.github.sekerator.kingdomworld.common.tactics.SquadTactics.duty(body) != null) {
+            if (body.kingdomId() != null && io.github.sekerator.kingdomworld.common.tactics.SquadTactics.duty(body) != null) {
+                // A wounded adventurer stays with its squad while it fights, behind the front.
                 return true;
             }
             return target != null && target.isAlive() && fights(body) && body.distanceToSqr(target) < SEARCH * SEARCH * 2.25;

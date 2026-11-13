@@ -85,7 +85,8 @@ final class SoldierGoal extends Goal {
     @Override
     public boolean canUse() {
         // A wounded soldier leaves its duty to be cared for, but not while an alarm of its kingdom lasts close by.
-        return (ProfessionBehaviors.fights(body) || io.github.sekerator.kingdomworld.common.law.LawWork.holdsOut(body))
+        return (ProfessionBehaviors.fights(body) || io.github.sekerator.kingdomworld.common.law.LawWork.holdsOut(body)
+                || io.github.sekerator.kingdomworld.common.tactics.SquadTactics.fightsByPlan(body))
                 && body.kingdomId() != null && body.citizenId() != null && body.serverLevel() != null;
     }
 
