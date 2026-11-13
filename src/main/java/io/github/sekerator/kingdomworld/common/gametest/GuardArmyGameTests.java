@@ -482,12 +482,8 @@ public final class GuardArmyGameTests {
         helper.onEachTick(() -> {
             if (!came[0] && soldier.distanceTo(offender) < 6.0) {
                 came[0] = true;
-                // The alarm runs out at once: nothing feeds it any more.
-                LawRules.Builder over = LawSettings.configured();
-                over.reportMinTicks = 1_000_000;
-                over.reportMaxTicks = 1_000_000;
-                over.alarmTicks = 20;
-                LawSettings.override(over.build());
+                // The offender runs off far beyond the city: the guards chase no further, and the alarm ends.
+                offender.setPos(offender.getX() + 400.0, offender.getY(), offender.getZ());
             }
         });
         helper.succeedWhen(() -> {

@@ -18,8 +18,8 @@ public final class AlarmBook {
     private final Map<UUID, Map<UUID, Alarm>> alarms = new LinkedHashMap<>();
 
     /**
-     * Raises the alarm of a kingdom for an offender, or feeds the one that lasts: the place moves to where the offender is
-     * now and the alarm lasts {@link LawRules#alarmTicks} from this moment again.
+     * Raises the alarm of a kingdom for an offender somebody saw doing a deed, or feeds the one that lasts: the place moves to
+     * where the deed was seen and the alarm lasts {@link LawRules#alarmTicks} from this moment again.
      */
     public Alarm raise(UUID kingdomId, UUID offender, String name, String dimension, int x, int y, int z, long now, Alarm.Cause cause) {
         Map<UUID, Alarm> of = alarms.computeIfAbsent(kingdomId, k -> new LinkedHashMap<>());
@@ -59,29 +59,22 @@ public final class AlarmBook {
     }
 
     /**
-     * The offender moved while the alarm lasts: the soldiers know where to.
+     * Somebody of the kingdom sees the offender of an alarm at a place: the place moves there and the alarm lasts from now
+     * again. The place of an alarm moves only so: nobody follows the offender through walls.
      */
-    public void moved(UUID kingdomId, UUID offender, String dimension, int x, int y, int z) {
-        of(kingdomId, offender).ifPresent(alarm -> alarm.moveTo(dimension, x, y, z));
+    public void sighted(UUID kingdomId, UUID offender, String dimension, int x, int y, int z, long now) {
+        of(kingdomId, offender).ifPresent(alarm -> alarm.sighted(dimension, x, y, z, now));
     }
 
     /**
-     * A crime of the offender nobody has told the guards of: kept with the alarm until a soldier sees the offender.
+     * A soldier sees the offender of an alarm.
+     *
+     * @return whether an alarm for the offender lasts in the kingdom
      */
-    public void unseen(UUID kingdomId, UUID offender, Alarm.Deed deed) {
-        of(kingdomId, offender).ifPresent(alarm -> alarm.addUnseen(deed));
-    }
-
-    /**
-     * A soldier sees the offender: the deeds kept with the alarm are handed over to be written into the record.
-     */
-    public List<Alarm.Deed> seen(UUID kingdomId, UUID offender) {
+    public boolean seen(UUID kingdomId, UUID offender) {
         Optional<Alarm> alarm = of(kingdomId, offender);
-        if (alarm.isEmpty()) {
-            return List.of();
-        }
-        alarm.get().markSeen();
-        return alarm.get().takeUnseen();
+        alarm.ifPresent(Alarm::markSeen);
+        return alarm.isPresent();
     }
 
     /**
@@ -113,7 +106,7 @@ public final class AlarmBook {
     }
 
     /**
-     * Ends the alarms nothing fed for {@link LawRules#alarmTicks}.
+     * Ends the alarms whose offender nobody of the kingdom saw for {@link LawRules#alarmTicks}.
      *
      * @return the alarms that ended
      */

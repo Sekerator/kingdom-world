@@ -2085,8 +2085,9 @@ public final class KingdomWorldConfig {
                     .defineInRange("fearHearRadius", d.fearHearRadius, 0, 64);
             fearSpreadRadius = builder.comment("How far a running citizen frightens the others around it, once, in blocks.")
                     .defineInRange("fearSpreadRadius", d.fearSpreadRadius, 0, 32);
-            alarmSeconds = builder.comment("Seconds an alarm lasts after the last blow or killing of the offender. While it lasts the soldiers",
-                    "of the city run to the place and chase the offender on the land of the kingdom.")
+            alarmSeconds = builder.comment("Seconds an alarm lasts after a soldier or a citizen of the kingdom last saw the offender. While it",
+                    "lasts the soldiers of the city run to where the offender was last seen; they chase only in a city of the kingdom and",
+                    "48 blocks beyond its wall or edge.")
                     .defineInRange("alarmSeconds", d.alarmTicks / 20, 1, 3_600);
             alarmRadius = builder.comment("How far from the place of an alarm soldiers answer it at least, in blocks. A city answers as a whole:",
                     "its wall and a little beyond count when that is more.").defineInRange("alarmRadius", d.alarmRadius, 16, 256);

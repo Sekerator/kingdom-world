@@ -89,9 +89,10 @@ import java.util.UUID;
 
 /**
  * Game tests of the law in a city: doors open to strangers, with anything in hand, and nobody is shut in; a blow frightens
- * the citizens who see or hear it and they run, soldiers do not, and the fright ends; a killing calls a soldier from forty
- * blocks away, who strikes without calling out and writes the record itself; a soldier answers a blow nobody else saw; a
- * player in creative mode is answered like any other; a block of a city breaks without drops, is a crime when seen and
+ * the citizens who see or hear it and they run, soldiers do not, and the fright ends; a killing nobody saw names nobody,
+ * one a citizen saw calls a soldier from forty blocks away, who strikes without calling out and writes the record itself;
+ * a soldier answers a blow nobody else saw; the guards chase only in the city and 48 blocks beyond it, and an alarm knows
+ * only where the offender was last seen and ends its time after; a player in creative mode is answered like any other; a block of a city breaks without drops, is a crime when seen and
  * comes back, a stranger's block is taken out again, the stand-in an operator acts through opens, takes, breaks and strikes
  * by the events of a player, the land outside the city is free and the land of players who are
  * away stays shut; a theft from a house is a theft from the citizen who lives there, a theft from a storehouse next to a
@@ -112,6 +113,8 @@ public final class CityLawGameTests {
         BlockPos from = helper.absolutePos(new BlockPos(-2, 0, -2));
         BlockPos to = helper.absolutePos(new BlockPos(toX, 3, toZ));
         GatheringGameTests.enclose(helper.getLevel(), from, to);
+        // The bodies walk beyond the chunks the game holds for the structure of the test: the area is held too.
+        TestChunks.hold(helper.getLevel(), from, to);
         return new BlockPos[]{from, to};
     }
 
@@ -225,6 +228,7 @@ public final class CityLawGameTests {
             item.discard();
         }
         GatheringGameTests.clear(helper.getLevel(), area[0], area[1]);
+        TestChunks.release(helper.getLevel(), area[0]);
     }
 
     // ---------------------------------------------------------------- doors
@@ -404,40 +408,48 @@ public final class CityLawGameTests {
     // ---------------------------------------------------------------- alarm
 
     @GameTest(template = EMPTY, batch = "kingdomworld_citylaw_alarm", timeoutTicks = 1200)
-    public static void aKillingCallsASoldierFromFortyBlocksWhoStrikesWithoutCallingOut(GameTestHelper helper) {
+    public static void aKillingNobodySawNamesNobodyAndOneACitizenSawCallsASoldierFromFortyBlocks(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         BlockPos[] area = area(helper, 50, 6);
         noon(level);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Alarmed Town", UUID.randomUUID());
         slowReports();
-        Citizen dead = CitizenGameTests.newcomer(helper, kingdom, 4, 3);
+        Citizen first = CitizenGameTests.newcomer(helper, kingdom, 4, 3);
+        Citizen second = CitizenGameTests.newcomer(helper, kingdom, 4, 1);
+        Citizen seeing = CitizenGameTests.newcomer(helper, kingdom, 12, 3);
         Citizen guard = soldier(helper, kingdom, 46, 3);
-        CitizenEntity victim = body(helper, dead, 4, 3, false);
+        CitizenEntity alone = body(helper, first, 4, 3, false);
         CitizenEntity soldier = body(helper, guard, 46, 3, true);
         ServerPlayer murderer = player(helper, "kw-murderer", 5, 3);
-        Citizen[] all = {dead, guard};
+        Citizen[] all = {first, second, seeing, guard};
         helper.assertTrue(soldier.distanceTo(murderer) > 40.0, "The soldier stands too near: " + soldier.distanceTo(murderer));
-        victim.hurt(level.damageSources().playerAttack(murderer), 1_000.0f);
-        helper.assertTrue(!victim.isAlive(), "The citizen lives");
-        // Nobody saw it: no record yet, but the alarm is raised at once, with the offender and the place.
+        alone.hurt(level.damageSources().playerAttack(murderer), 1_000.0f);
+        helper.assertTrue(!alone.isAlive(), "The citizen lives");
+        // Nobody saw it, and the dead see nothing: nobody knows who did it, and no alarm names anybody.
         helper.assertTrue(LawWork.state(server).wanted(kingdom.id(), murderer.getUUID()).isEmpty(), "A killing nobody saw is on the record");
+        helper.assertTrue(LawAlarms.active(server, kingdom.id()).isEmpty(), "A killing nobody saw raised an alarm");
+        // A second killing, before the eyes of a citizen: the alarm is raised at once, with the offender and the place.
+        CitizenEntity witness = body(helper, seeing, 12, 3, false);
+        CitizenEntity seen = body(helper, second, 4, 1, false);
+        seen.hurt(level.damageSources().playerAttack(murderer), 1_000.0f);
+        helper.assertTrue(!seen.isAlive() && witness.isAlive(), "The second citizen lives");
+        helper.assertTrue(LawWork.state(server).wanted(kingdom.id(), murderer.getUUID()).isEmpty(), "The report of the citizen came at once");
         List<Alarm> alarms = LawAlarms.active(server, kingdom.id());
         helper.assertTrue(alarms.size() == 1 && alarms.get(0).offender().equals(murderer.getUUID()) && alarms.get(0).killing(),
-                "The killing raised no alarm: " + alarms.size());
-        helper.assertTrue(Math.abs(alarms.get(0).x() - victim.getBlockX()) <= 2 && Math.abs(alarms.get(0).z() - victim.getBlockZ()) <= 2,
+                "The killing a citizen saw raised no alarm: " + alarms.size());
+        helper.assertTrue(Math.abs(alarms.get(0).x() - seen.getBlockX()) <= 2 && Math.abs(alarms.get(0).z() - seen.getBlockZ()) <= 2,
                 "The alarm names another place");
-        helper.assertTrue(alarms.get(0).unseen().size() == 1, "The alarm does not keep the killing for the guards");
         boolean[] swung = {false};
         helper.onEachTick(() -> swung[0] |= soldier.swinging && soldier.getTarget() == murderer);
         helper.succeedWhen(() -> {
             helper.assertTrue(soldier.distanceTo(murderer) < 6.0, "The soldier did not come: " + soldier.distanceTo(murderer));
+            // The soldier who saw the murderer wrote what the citizen saw at once.
             Wanted wanted = LawWork.state(server).wanted(kingdom.id(), murderer.getUUID()).orElseThrow(() -> new IllegalStateException(
                     "The soldier who saw the murderer wrote no record"));
             helper.assertTrue(wanted.murder() && wanted.executable(), "The record is not a murder: " + wanted.crimes());
             helper.assertTrue(ArmyWork.mayAttack(server, kingdom.id(), murderer), "The soldier may not strike the murderer");
             helper.assertTrue(swung[0], "The soldier did not strike");
-            // It struck without calling out: nobody waited for the time to give up.
             helper.assertTrue(LawAlarms.of(server, kingdom.id(), murderer.getUUID()).map(Alarm::seen).orElse(false), "The alarm does not know the "
                     + "soldier saw the murderer");
             end(helper, kingdom, area, List.of(murderer), all);
@@ -469,6 +481,78 @@ public final class CityLawGameTests {
             helper.assertTrue(soldier.getTarget() == brawler, "The soldier did not turn on the player who struck it");
             helper.assertTrue(swung[0], "The soldier did not strike back");
             end(helper, kingdom, area, List.of(brawler), guard);
+        });
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_citylaw_chase", timeoutTicks = 300)
+    public static void theGuardsChaseOnlyInTheCityAndFortyEightBlocksBeyond(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos[] area = area(helper, 9, 9);
+        noon(level);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Short Chase", UUID.randomUUID());
+        slowReports();
+        Citizen guard = soldier(helper, kingdom, 4, 4);
+        CitizenEntity soldier = body(helper, guard, 4, 4, false);
+        ServerPlayer runaway = player(helper, "kw-runaway", 6, 4);
+        soldier.hurt(level.damageSources().playerAttack(runaway), 1.0f);
+        helper.assertTrue(LawWork.state(server).wanted(kingdom.id(), runaway.getUUID()).isPresent(), "The blow at the soldier is not on the record");
+        helper.assertTrue(LawAlarms.of(server, kingdom.id(), runaway.getUUID()).isPresent(), "The blow at the soldier raised no alarm");
+        String dimension = Dimensions.id(level);
+        io.github.sekerator.kingdomworld.common.road.CityAreas.Area city = io.github.sekerator.kingdomworld.common.road.CityAreas.at(server,
+                kingdom.id(), dimension, soldier.getBlockX(), soldier.getBlockZ()).orElse(null);
+        helper.assertTrue(city != null, "The capital of the test has no city around it");
+        int edge = city.x() + city.radius();
+        helper.assertTrue(LawAlarms.inChase(server, kingdom.id(), dimension, edge + LawAlarms.CHASE_BEYOND_CITY, city.z()),
+                "The guards do not chase 48 blocks beyond the city");
+        helper.assertTrue(!LawAlarms.inChase(server, kingdom.id(), dimension, edge + LawAlarms.CHASE_BEYOND_CITY + 1, city.z()),
+                "The guards chase further than 48 blocks beyond the city");
+        // The offender runs off sixty blocks beyond the edge of the city: the chase ends there, the record stays.
+        runaway.setPos(edge + 60.5, runaway.getY(), city.z() + 0.5);
+        helper.runAfterDelay(30, () -> {
+            helper.assertTrue(LawAlarms.of(server, kingdom.id(), runaway.getUUID()).isEmpty(), "The alarm chases the offender sixty blocks "
+                    + "beyond the city");
+            helper.assertTrue(LawWork.state(server).wanted(kingdom.id(), runaway.getUUID()).isPresent(), "The record went with the chase");
+            helper.assertTrue(!ArmyWork.mayAttack(server, kingdom.id(), runaway), "The soldiers may still strike the offender beyond the chase");
+            end(helper, kingdom, area, List.of(runaway), guard);
+            helper.succeed();
+        });
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_citylaw_lastseen", timeoutTicks = 300)
+    public static void theAlarmKnowsOnlyWhereTheOffenderWasLastSeenAndEndsItsTimeAfter(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos[] area = area(helper, 20, 9);
+        noon(level);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Lost Trail", UUID.randomUUID());
+        LawRules.Builder rules = slowReports();
+        rules.alarmTicks = 60;
+        LawSettings.override(rules.build());
+        Citizen guard = soldier(helper, kingdom, 4, 4);
+        CitizenEntity soldier = body(helper, guard, 4, 4, false);
+        ServerPlayer hider = player(helper, "kw-hider", 6, 4);
+        soldier.hurt(level.damageSources().playerAttack(hider), 1.0f);
+        Alarm raised = LawAlarms.of(server, kingdom.id(), hider.getUUID()).orElse(null);
+        helper.assertTrue(raised != null, "The blow at the soldier raised no alarm");
+        int x0 = raised.x();
+        int z0 = raised.z();
+        // The offender hides in a room of stone at the far end of the area, in the city still: nobody of the kingdom sees in.
+        GatheringGameTests.enclose(level, helper.absolutePos(new BlockPos(15, 0, 3)), helper.absolutePos(new BlockPos(17, 1, 5)));
+        BlockPos room = helper.absolutePos(new BlockPos(16, 0, 4));
+        hider.setPos(room.getX() + 0.5, room.getY(), room.getZ() + 0.5);
+        helper.runAfterDelay(40, () -> {
+            Alarm still = LawAlarms.of(server, kingdom.id(), hider.getUUID()).orElse(null);
+            helper.assertTrue(still != null, "The alarm ended before its time");
+            helper.assertTrue(still.x() == x0 && still.z() == z0, "The alarm followed the offender through the walls: " + still.x() + ", "
+                    + still.z() + " instead of " + x0 + ", " + z0);
+        });
+        helper.runAfterDelay(100, () -> {
+            helper.assertTrue(LawAlarms.of(server, kingdom.id(), hider.getUUID()).isEmpty(), "The alarm lasts though nobody saw the offender "
+                    + "for longer than its time");
+            helper.assertTrue(LawWork.state(server).wanted(kingdom.id(), hider.getUUID()).isPresent(), "The record ended with the alarm");
+            end(helper, kingdom, area, List.of(hider), guard);
+            helper.succeed();
         });
     }
 
@@ -946,7 +1030,8 @@ public final class CityLawGameTests {
         body(helper, guard, 6, 1, false);
         ServerPlayer thief = player(helper, "kw-thief", 0, 4);
         try {
-            // A wall between the thief and the soldier: the soldier hears the storehouse, it does not see the thief.
+            // A wall between the thief and the soldier: the soldier hears the storehouse, it does not see the thief, and
+            // nobody sees through walls.
             for (int z = -1; z <= 6; z++) {
                 for (int y = 0; y <= 2; y++) {
                     level.setBlock(helper.absolutePos(new BlockPos(3, y, z)), Blocks.STONE.defaultBlockState(), 2 | 16);
@@ -955,6 +1040,18 @@ public final class CityLawGameTests {
             StorehouseInventory storehouse = CitizenGameTests.storehouse(helper, 1, 0, 1);
             storehouse.insertItem(0, new ItemStack(Items.IRON_INGOT, 10), false);
             BlockPos pos = helper.absolutePos(new BlockPos(1, 0, 1));
+            ChestMenu hidden = new ChestMenu(MenuType.GENERIC_9x6, 1, thief.getInventory(), new RecipeWrapper(storehouse), 6);
+            LawEvents.watchForCheck(thief, pos, hidden);
+            hidden.getSlot(0).remove(2);
+            LawEvents.closedForCheck(thief, hidden);
+            helper.assertTrue(LawWork.state(server).wanted(kingdom.id(), thief.getUUID()).isEmpty()
+                    && LawAlarms.active(server, kingdom.id()).isEmpty(), "The soldier behind the wall knew the thief");
+            // Without the wall the soldier sees the thief at the storehouse.
+            for (int z = -1; z <= 6; z++) {
+                for (int y = 0; y <= 2; y++) {
+                    level.setBlock(helper.absolutePos(new BlockPos(3, y, z)), Blocks.AIR.defaultBlockState(), 2 | 16);
+                }
+            }
             ChestMenu menu = new ChestMenu(MenuType.GENERIC_9x6, 1, thief.getInventory(), new RecipeWrapper(storehouse), 6);
             LawEvents.watchForCheck(thief, pos, menu);
             menu.getSlot(0).remove(4);

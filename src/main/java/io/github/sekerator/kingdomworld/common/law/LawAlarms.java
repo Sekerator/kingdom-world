@@ -1,7 +1,6 @@
 package io.github.sekerator.kingdomworld.common.law;
 
 import com.mojang.logging.LogUtils;
-import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenEntity;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
 import io.github.sekerator.kingdomworld.common.road.CityAreas;
@@ -23,15 +22,20 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * The alarms of the kingdoms on the server. A blow at a citizen or a soldier, a killing, or a theft from a storehouse a
- * soldier noticed raises the alarm of the kingdom at once, with the offender and the place; nobody waits for a witness to
- * reach the guards. While it lasts, every soldier of the kingdom whose body is in the city of the place (and a little
- * beyond its wall), or within {@link LawRules#alarmRadius} blocks of it, runs there, with an order or without one. The place
- * follows the offender while the offender stays on the land of the kingdom; the alarm ends when the offender left the land,
- * died or paid, or when nothing fed it for {@link LawRules#alarmTicks}.
+ * The alarms of the kingdoms on the server. A blow at a citizen or a soldier, a killing, or a theft from a storehouse that
+ * somebody of the kingdom saw (the victim who lived and saw the offender, a witness in sight, a soldier watching the
+ * storehouse) raises the alarm of the kingdom at once, with the offender and the place; nobody waits for a witness to reach
+ * the guards. While it lasts, every soldier of the kingdom whose body is in the city of the place (and a little beyond its
+ * wall), or within {@link LawRules#alarmRadius} blocks of it, runs there, with an order or without one.
  *
- * <p>A soldier that sees the offender is a witness itself: what nobody reported yet is written into the record at once,
- * whatever became of the first witnesses.
+ * <p>Nobody sees through walls: the place of an alarm is where a soldier or a citizen of the kingdom last saw the offender,
+ * and the alarm ends {@link LawRules#alarmTicks} after that sighting. The guards chase only in a city of the kingdom and
+ * {@value #CHASE_BEYOND_CITY} blocks beyond its wall or edge: an offender further off, or one who left, died or paid, ends
+ * the alarm and the soldiers go back to their posts. The record stays; the bounty of the guild and the next visit deal with
+ * it.
+ *
+ * <p>A soldier that sees the offender is a witness itself: what witnesses still carry to the guards is written into the
+ * record at once, whatever became of them.
  *
  * <p>Who of the soldiers in reach answers is decided by the army ({@code ArmyRelief}): the fighters of the guard at once,
  * its officers and the royal army step by step.
@@ -46,6 +50,10 @@ public final class LawAlarms {
     private static final Logger LOGGER = LogUtils.getLogger();
     /** How far beyond the wall of its city an alarm still calls soldiers, in blocks. */
     static final int BEYOND_WALL = 16;
+    /** How far beyond the wall or the edge of a city of the kingdom its guards chase an offender, in blocks. */
+    public static final int CHASE_BEYOND_CITY = 48;
+    /** How many of the nearest bodies of a kingdom look for the offender of an alarm once a second. */
+    private static final int LOOKERS = 8;
     /** How near an alarm a wounded soldier stays in the fight, in blocks. */
     private static final double HOLD_OUT = 32.0;
 
@@ -114,6 +122,18 @@ public final class LawAlarms {
     }
 
     /**
+     * Whether the guards of a kingdom chase at a place: in one of its cities or {@value #CHASE_BEYOND_CITY} blocks beyond its
+     * wall or edge. The land of a state is far wider: beyond this the chase ends.
+     */
+    public static boolean inChase(MinecraftServer server, UUID kingdomId, String dimension, int x, int z) {
+        return CityAreas.near(server, kingdomId, dimension, x, z, CHASE_BEYOND_CITY).isPresent();
+    }
+
+    static boolean inChase(MinecraftServer server, UUID kingdomId, Player player) {
+        return inChase(server, kingdomId, Dimensions.id(player.level()), player.getBlockX(), player.getBlockZ());
+    }
+
+    /**
      * The city of the kingdom the place of an alarm lies in, if it lies in one.
      */
     public static Optional<CityAreas.Area> cityOf(MinecraftServer server, Alarm alarm) {
@@ -177,25 +197,40 @@ public final class LawAlarms {
     }
 
     /**
-     * A crime of the offender of an alarm that nobody reported: kept until a soldier sees the offender.
+     * A soldier of the kingdom sees the offender of its alarm: the soldier is a witness, and the alarm knows where the offender
+     * is now. What witnesses still carry to the guards is written into the record now.
      */
-    static void unseen(UUID kingdomId, UUID offender, Alarm.Deed deed) {
-        BOOK.unseen(kingdomId, offender, deed);
+    static void sees(MinecraftServer server, UUID kingdomId, ServerPlayer offender) {
+        if (LawWork.isReadOnly(server) || !BOOK.seen(kingdomId, offender.getUUID())) {
+            return;
+        }
+        sighted(server, kingdomId, offender);
+        LawWork.reportNow(server, kingdomId, offender.getUUID());
+    }
+
+    private static void sighted(MinecraftServer server, UUID kingdomId, ServerPlayer offender) {
+        BOOK.sighted(kingdomId, offender.getUUID(), Dimensions.id(offender.level()), offender.getBlockX(), offender.getBlockY(),
+                offender.getBlockZ(), LawWork.now(server));
     }
 
     /**
-     * A soldier of the kingdom sees the offender of its alarm: the soldier is a witness. What nobody reported yet and what
-     * witnesses still carry to the guards is written into the record now.
+     * Whether somebody of a kingdom sees a player now: a soldier within {@link LawGuards#SIGHT} blocks or a citizen awake within
+     * {@link LawRules#witnessRadius} blocks, with the player in its line of sight. Only the nearest few look.
      */
-    static void sees(MinecraftServer server, UUID kingdomId, ServerPlayer offender) {
-        if (BOOK.of(kingdomId, offender.getUUID()).isEmpty() || LawWork.isReadOnly(server)) {
-            return;
+    static boolean seenBy(UUID kingdomId, ServerPlayer player, LawRules rules) {
+        double reach = Math.max(LawGuards.SIGHT, rules.witnessRadius);
+        List<CitizenEntity> bodies = new java.util.ArrayList<>(player.level().getEntitiesOfClass(CitizenEntity.class,
+                player.getBoundingBox().inflate(reach, 8.0, reach), body -> body.isAlive() && !body.isSleeping()
+                        && kingdomId.equals(body.kingdomId()) && body.citizenId() != null));
+        bodies.sort(java.util.Comparator.comparingDouble(body -> body.distanceToSqr(player)));
+        for (int i = 0; i < Math.min(LOOKERS, bodies.size()); i++) {
+            CitizenEntity body = bodies.get(i);
+            double sight = LawWork.isSoldier(body) ? LawGuards.SIGHT : rules.witnessRadius;
+            if (body.distanceToSqr(player) <= sight * sight && body.hasLineOfSight(player)) {
+                return true;
+            }
         }
-        String name = offender.getGameProfile().getName();
-        for (Alarm.Deed deed : BOOK.seen(kingdomId, offender.getUUID())) {
-            LawWork.commit(server, kingdomId, offender.getUUID(), name, deed.kind(), deed.worth(), deed.victim());
-        }
-        LawWork.reportNow(server, kingdomId, offender.getUUID());
+        return false;
     }
 
     /**
@@ -260,7 +295,7 @@ public final class LawAlarms {
 
     /**
      * Whether the soldiers of a kingdom strike a player at once, without calling out: the alarm for the player lasts, the
-     * attack goes on or somebody was killed, and the player still stands on the land of the kingdom.
+     * attack goes on or somebody was killed, and the player is still where the guards chase.
      */
     static boolean strikes(MinecraftServer server, UUID kingdomId, Player player) {
         Optional<Alarm> alarm = BOOK.of(kingdomId, player.getUUID());
@@ -269,8 +304,7 @@ public final class LawAlarms {
         }
         long now = LawWork.now(server);
         LawRules rules = LawSettings.rules();
-        return alarm.get().active(now, rules) && alarm.get().violent(now, rules)
-                && kingdomId.equals(KingdomWorldApi.ownerAt(player.level(), player.blockPosition()));
+        return alarm.get().active(now, rules) && alarm.get().violent(now, rules) && inChase(server, kingdomId, player);
     }
 
     /**
@@ -307,14 +341,16 @@ public final class LawAlarms {
         for (Alarm alarm : BOOK.all()) {
             ServerPlayer offender = offender(server, alarm);
             if (LawWork.kingdom(server, alarm.kingdomId()).isEmpty() || offender == null || !offender.isAlive() || offender.hasDisconnected()
-                    || !answers(offender)
-                    || !alarm.kingdomId().equals(KingdomWorldApi.ownerAt(offender.level(), offender.blockPosition()))) {
-                // Gone from the land, from the server or from life: the soldiers go back to their posts. The record stays.
+                    || !answers(offender) || !inChase(server, alarm.kingdomId(), offender)) {
+                // Gone beyond the city and the ground around it, from the server or from life: the soldiers go back to their
+                // posts. The record stays.
                 BOOK.end(alarm.kingdomId(), alarm.offender());
                 continue;
             }
-            BOOK.moved(alarm.kingdomId(), alarm.offender(), Dimensions.id(offender.level()), offender.getBlockX(), offender.getBlockY(),
-                    offender.getBlockZ());
+            // Only what somebody of the kingdom sees moves the place of the alarm and keeps it going.
+            if (seenBy(alarm.kingdomId(), offender, rules)) {
+                sighted(server, alarm.kingdomId(), offender);
+            }
         }
     }
 }

@@ -209,7 +209,7 @@ public final class LawWork {
      * @param kingdomId the kingdom whose law applies; {@code null} takes the owner of the land at {@code where}
      * @param worth     what was stolen, for a theft
      * @param victim    who suffered, for the record
-     * @param victimEntity the victim, who is no witness
+     * @param victimEntity the victim, a witness only when it lives and saw who struck it
      * @return whether the crime was seen
      */
     public static boolean deed(ServerPlayer player, BlockPos where, @Nullable UUID kingdomId, CrimeKind kind, long worth, String victim,
@@ -231,25 +231,34 @@ public final class LawWork {
         LawRules rules = LawSettings.rules();
         long now = now(server);
         String name = player.getGameProfile().getName();
-        // A blow at a citizen or a soldier, or its death, raises the alarm at once: the one struck saw it. The record still
-        // needs somebody to tell the guards, or a soldier to see the offender.
+        // Nobody sees through walls: the alarm and the record need somebody of the kingdom who saw the offender. The one struck
+        // is a witness when it lives and saw who struck it; a killing nobody saw stays unknown, and a blow heard behind a wall
+        // only frightens (see CitizenFear).
         boolean violence = victimEntity instanceof CitizenEntity && (kind == CrimeKind.ASSAULT || kind == CrimeKind.MURDER);
+        CitizenEntity sawIt = victimEntity instanceof CitizenEntity struck && kind == CrimeKind.ASSAULT && struck.isAlive()
+                && kingdom.equals(struck.kingdomId()) && struck.citizenId() != null
+                && struck.distanceToSqr(player) <= (double) rules.witnessRadius * rules.witnessRadius && struck.hasLineOfSight(player) ? struck : null;
+        // A soldier that is struck and sees who struck it is a witness of the blow at itself.
+        boolean struckSoldier = sawIt != null && isSoldier(sawIt);
+        boolean victimTells = sawIt != null && !struckSoldier;
+        LawWitnesses.Seen seen = LawWitnesses.find(player.serverLevel(), player, kingdom, victimEntity, rules);
+        // A soldier at a storehouse notices a theft from it when it sees the thief.
+        boolean watched = kind == CrimeKind.THEFT && Victims.isTreasury(victim) && rules.storehouseWatchBlocks > 0
+                && soldiersNear(player.serverLevel(), where, kingdom, rules.storehouseWatchBlocks).stream().anyMatch(soldier -> soldier.hasLineOfSight(player));
+        if (seen.none() && !struckSoldier && !watched && !victimTells) {
+            LOGGER.debug("Nobody saw {} commit {} in {}", name, kind.id(), kingdom);
+            return false;
+        }
+        // A blow or a killing somebody saw raises the alarm at once, with the place where it was seen. The record still needs
+        // somebody to tell the guards, or a soldier to see the offender.
         if (violence) {
             LawAlarms.raise(player, kingdom, where, kind == CrimeKind.MURDER ? Alarm.Cause.KILLING : Alarm.Cause.BLOW);
         }
-        // A soldier that is struck is a witness of the blow at itself.
-        boolean struckSoldier = violence && kind == CrimeKind.ASSAULT && victimEntity instanceof CitizenEntity struck && struck.isAlive()
-                && kingdom.equals(struck.kingdomId()) && isSoldier(struck);
-        LawWitnesses.Seen seen = LawWitnesses.find(player.serverLevel(), player, kingdom, victimEntity, rules);
-        // A soldier at a storehouse notices a theft from it without looking at the thief.
-        boolean watched = kind == CrimeKind.THEFT && Victims.isTreasury(victim) && rules.storehouseWatchBlocks > 0
-                && !soldiersNear(player.serverLevel(), where, kingdom, rules.storehouseWatchBlocks).isEmpty();
-        if (seen.none() && !struckSoldier && !watched) {
-            if (violence) {
-                LawAlarms.unseen(kingdom, player.getUUID(), new Alarm.Deed(kind, victim, worth, victimEntity.getUUID().toString()));
-            }
-            LOGGER.debug("Nobody saw {} commit {} in {}", name, kind.id(), kingdom);
-            return false;
+        List<UUID> tellers = new ArrayList<>(seen.citizens());
+        List<CitizenEntity> runners = new ArrayList<>(seen.bodies());
+        if (victimTells) {
+            tellers.add(sawIt.citizenId());
+            runners.add(sawIt);
         }
         if (kind == CrimeKind.ASSAULT) {
             // Many blows at one victim are one assault.
@@ -271,7 +280,7 @@ public final class LawWork {
             if (report.kingdom.equals(kingdom) && report.offender.equals(player.getUUID()) && report.kind == kind && kind.adds()
                     && report.victim.equals(victim == null ? "" : victim)) {
                 report.worth = io.github.sekerator.kingdomworld.core.economy.Money.addCapped(report.worth, worth);
-                report.citizens.addAll(seen.citizens());
+                report.citizens.addAll(tellers);
                 report.players.addAll(seen.players());
                 return true;
             }
@@ -279,13 +288,13 @@ public final class LawWork {
         long delay = rules.reportMinTicks + (rules.reportMaxTicks > rules.reportMinTicks
                 ? RANDOM.nextInt(rules.reportMaxTicks - rules.reportMinTicks + 1) : 0);
         Report report = new Report(kingdom, player.getUUID(), name, kind, worth, victim == null ? "" : victim, now + delay);
-        report.citizens.addAll(seen.citizens());
+        report.citizens.addAll(tellers);
         report.players.addAll(seen.players());
         REPORTS.add(report);
         // The witnesses are frightened; those who have a soldier of their kingdom to run to run there and tell.
         boolean ran = false;
         boolean cried = false;
-        for (CitizenEntity body : seen.bodies()) {
+        for (CitizenEntity body : runners) {
             if (!cried) {
                 cried = true;
                 body.level().playSound(null, body.getX(), body.getY(), body.getZ(), SoundEvents.VILLAGER_NO, SoundSource.NEUTRAL, 1.0f, 1.2f);
@@ -295,7 +304,7 @@ public final class LawWork {
         if (ran) {
             player.displayClientMessage(Component.translatable(KEY + "witness_ran").withStyle(ChatFormatting.GOLD), true);
         }
-        LOGGER.debug("{} saw {} commit {} in {}; report in {} ticks", seen.citizens().size() + seen.players().size(), name, kind.id(),
+        LOGGER.debug("{} saw {} commit {} in {}; report in {} ticks", tellers.size() + seen.players().size(), name, kind.id(),
                 kingdom, delay);
         return true;
     }
@@ -605,7 +614,18 @@ public final class LawWork {
      * @param attack whether the soldier strikes now: the time to give up is over, or an alarm leaves no time for it
      * @param urgent whether an alarm called the soldier: it runs, however far the player is
      */
-    public record Pursuit(ServerPlayer player, boolean attack, boolean urgent) {
+    /**
+     * @param sees  whether the soldier sees the player now; one that does not knows only where the player was last seen
+     * @param place where the soldier goes: the player when it sees the player, otherwise where the player was last seen
+     */
+    public record Pursuit(ServerPlayer player, boolean attack, boolean urgent, boolean sees, BlockPos place) {
+        static Pursuit inSight(ServerPlayer player, boolean attack, boolean urgent) {
+            return new Pursuit(player, attack, urgent, true, player.blockPosition());
+        }
+
+        static Pursuit lastSeen(ServerPlayer player, BlockPos place) {
+            return new Pursuit(player, false, true, false, place);
+        }
     }
 
     /**

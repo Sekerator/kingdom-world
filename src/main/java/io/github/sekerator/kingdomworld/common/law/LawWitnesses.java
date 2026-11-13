@@ -15,7 +15,8 @@ import java.util.UUID;
 
 /**
  * Who saw a crime: citizens, soldiers and subjects of the kingdom within {@link LawRules#witnessRadius} blocks who see the
- * offender (a line of sight from their eyes). Subjects away from the keyboard see nothing; the victim is no witness.
+ * offender (a line of sight from their eyes). Subjects away from the keyboard see nothing. The victim is counted apart
+ * ({@link LawWork#deed}): a witness only when it lives and saw who struck it.
  */
 final class LawWitnesses {
 

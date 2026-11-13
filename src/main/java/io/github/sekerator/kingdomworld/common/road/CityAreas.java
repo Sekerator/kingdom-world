@@ -180,6 +180,29 @@ public final class CityAreas {
     }
 
     /**
+     * The city of a kingdom whose square, widened by a margin on every side, holds a place, if one does.
+     */
+    public static Optional<Area> near(MinecraftServer server, UUID kingdomId, String dimension, int x, int z, int margin) {
+        build(server);
+        CellIndex<Area> index = cells.get(kingdomId);
+        if (index == null) {
+            return Optional.empty();
+        }
+        // A square within the margin of the place meets the cell of the place or of a corner of the margin around it.
+        for (int dx = -margin; dx <= margin; dx += Math.max(1, margin)) {
+            for (int dz = -margin; dz <= margin; dz += Math.max(1, margin)) {
+                for (Area area : index.at(dimension, x + dx, z + dz)) {
+                    if (area.dimension().equals(dimension) && Math.abs(x - area.x()) <= area.radius() + margin
+                            && Math.abs(z - area.z()) <= area.radius() + margin) {
+                        return Optional.of(area);
+                    }
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
      * Whether a place lies inside a city of the kingdom.
      */
     public static boolean inCity(MinecraftServer server, UUID kingdomId, String dimension, int x, int z) {

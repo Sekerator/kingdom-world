@@ -1,6 +1,5 @@
 package io.github.sekerator.kingdomworld.common.law;
 
-import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.army.ArmyWork;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenEntity;
 import io.github.sekerator.kingdomworld.core.army.Order;
@@ -8,6 +7,7 @@ import io.github.sekerator.kingdomworld.core.law.Alarm;
 import io.github.sekerator.kingdomworld.core.law.LawRules;
 import io.github.sekerator.kingdomworld.core.law.Wanted;
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -24,17 +24,20 @@ import java.util.UUID;
 
 /**
  * The guards: soldiers whose squad holds a point, guards an area or walks a patrol (and, with the roads, the guards of the
- * gates). A guard that sees a wanted player on the land of its kingdom first calls out; the player may give up (a click on
- * the guard opens the window to pay the fine). Who neither gives up nor leaves the land in {@link LawRules#hailTicks} is
+ * gates). A guard that sees a wanted player in a city of its kingdom or near it first calls out; the player may give up (a
+ * click on the guard opens the window to pay the fine). Who neither gives up nor leaves in {@link LawRules#hailTicks} is
  * attacked: beaten down to little health for petty crimes, killed for a murder. Players away from the keyboard or offline
  * are never touched; their record waits.
  *
  * <p>An alarm ({@link LawAlarms}) calls every soldier of the kingdom near its place, guards and soldiers without an order
- * alike: they run to the offender and, while the attack goes on or after a killing, strike without calling out.
+ * alike: they run to where the offender was last seen and, once they see the offender, while the attack goes on or after a
+ * killing, strike without calling out. A soldier that does not see the offender knows only that place.
  */
 final class LawGuards {
     /** How far a guard looks for the wanted, in blocks. */
     static final double SEARCH = 16.0;
+    /** How far a soldier sees the offender of an alarm it answers, in blocks, when nothing stands between them. */
+    static final double SIGHT = 32.0;
 
     /**
      * A wanted player was called out by a guard of a kingdom at a time.
@@ -100,7 +103,7 @@ final class LawGuards {
             // start it anew for an old record.
             if (distance >= bestDistance || player.isCreative() || !catchable(server, player)
                     || LawWork.state(server).wanted(kingdom, player.getUUID()).isEmpty()
-                    || !kingdom.equals(KingdomWorldApi.ownerAt(player.level(), player.blockPosition())) || !guard.hasLineOfSight(player)) {
+                    || !LawAlarms.inChase(server, kingdom, player) || !guard.hasLineOfSight(player)) {
                 continue;
             }
             best = player;
@@ -120,15 +123,15 @@ final class LawGuards {
         Hail hail = HAILS.get(player.getUUID());
         if (hail == null || !hail.kingdom().equals(kingdom)) {
             hail(server, guard, player, kingdom, now);
-            return new LawWork.Pursuit(player, false, urgent);
+            return LawWork.Pursuit.inSight(player, false, urgent);
         }
-        return new LawWork.Pursuit(player, now - hail.at() >= LawSettings.rules().hailTicks, urgent);
+        return LawWork.Pursuit.inSight(player, now - hail.at() >= LawSettings.rules().hailTicks, urgent);
     }
 
     /**
-     * What a soldier does about an alarm of its kingdom in reach: it runs to the offender. Seeing the offender, it is a
-     * witness itself; then it strikes at once while the attack goes on or after a killing, and calls out as a guard does
-     * when the matter is petty or the blows stopped.
+     * What a soldier does about an alarm of its kingdom in reach: it runs to where the offender was last seen. Seeing the
+     * offender, it is a witness itself; then it strikes at once while the attack goes on or after a killing, and calls out as
+     * a guard does when the matter is petty or the blows stopped.
      */
     @Nullable
     private static LawWork.Pursuit answer(MinecraftServer server, CitizenEntity soldier) {
@@ -141,17 +144,19 @@ final class LawGuards {
             return null;
         }
         UUID kingdom = alarm.kingdomId();
-        boolean sees = soldier.distanceToSqr(offender) < SEARCH * SEARCH && soldier.hasLineOfSight(offender);
-        if (sees) {
-            LawAlarms.sees(server, kingdom, offender);
+        boolean sees = soldier.distanceToSqr(offender) < SIGHT * SIGHT && soldier.hasLineOfSight(offender);
+        if (!sees) {
+            // Out of sight: the soldier knows only where somebody of the kingdom last saw the offender, and searches there.
+            return LawWork.Pursuit.lastSeen(offender, new BlockPos(alarm.x(), alarm.y(), alarm.z()));
         }
+        LawAlarms.sees(server, kingdom, offender);
         if (alarm.violent(LawWork.now(server), LawSettings.rules())) {
-            return new LawWork.Pursuit(offender, true, true);
+            return LawWork.Pursuit.inSight(offender, true, true);
         }
-        if (sees && LawWork.state(server).wanted(kingdom, offender.getUUID()).isPresent()) {
+        if (LawWork.state(server).wanted(kingdom, offender.getUUID()).isPresent()) {
             return callOut(server, soldier, offender, kingdom, true);
         }
-        return new LawWork.Pursuit(offender, false, true);
+        return LawWork.Pursuit.inSight(offender, false, true);
     }
 
     /**
@@ -175,7 +180,7 @@ final class LawGuards {
 
     /**
      * Whether the soldiers of a kingdom may fight a player now for the law: called out long enough ago, still wanted and still
-     * on the land of the kingdom.
+     * where its guards chase.
      */
     static boolean pursues(MinecraftServer server, UUID kingdom, Player player) {
         if (LawWork.isReadOnly(server)) {
@@ -192,8 +197,7 @@ final class LawGuards {
         if (LawWork.now(server) - hail.at() < LawSettings.rules().hailTicks) {
             return false;
         }
-        return LawWork.state(server).wanted(kingdom, player.getUUID()).isPresent()
-                && kingdom.equals(KingdomWorldApi.ownerAt(player.level(), player.blockPosition()));
+        return LawWork.state(server).wanted(kingdom, player.getUUID()).isPresent() && LawAlarms.inChase(server, kingdom, player);
     }
 
     /**

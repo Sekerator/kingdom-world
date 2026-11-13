@@ -31,12 +31,12 @@ class AlarmBookTest {
     }
 
     @Test
-    void theAlarmLastsFromTheLastCauseAndThenRunsOut() {
+    void theAlarmLastsFromTheLastSeenDeedAndThenRunsOut() {
         AlarmBook book = new AlarmBook();
         book.raise(kingdom, offender, "Robber", OVERWORLD, 0, 64, 0, 0, Alarm.Cause.BLOW);
         Alarm alarm = book.raise(kingdom, offender, "Robber", OVERWORLD, 30, 64, 0, 600, Alarm.Cause.BLOW);
         assertEquals(0, alarm.started(), "A new blow feeds the alarm that lasts");
-        assertEquals(30, alarm.x(), "The place follows the offender");
+        assertEquals(30, alarm.x(), "The place is where the deed was seen");
         assertEquals(1, book.in(kingdom).size());
         assertTrue(alarm.active(600 + rules.alarmTicks, rules));
         assertFalse(alarm.active(601 + rules.alarmTicks, rules));
@@ -66,21 +66,27 @@ class AlarmBookTest {
     }
 
     @Test
-    void whatNobodyReportedIsHandedOverOnceWhenASoldierSeesTheOffender() {
+    void theAlarmLastsFromTheLastSightingAndOnlyASightingMovesItsPlace() {
         AlarmBook book = new AlarmBook();
-        book.raise(kingdom, offender, "Robber", OVERWORLD, 0, 64, 0, 0, Alarm.Cause.KILLING);
-        book.unseen(kingdom, offender, new Alarm.Deed(CrimeKind.MURDER, "@citizen:5:m", 0, "victim-1"));
-        book.unseen(kingdom, offender, new Alarm.Deed(CrimeKind.ASSAULT, "@citizen:6:f", 0, "victim-2"));
-        book.unseen(kingdom, offender, new Alarm.Deed(CrimeKind.ASSAULT, "@citizen:6:f", 0, "victim-2"));
-        Alarm alarm = book.of(kingdom, offender).orElseThrow();
-        assertEquals(2, alarm.unseen().size(), "Blows at one victim are one deed");
+        Alarm alarm = book.raise(kingdom, offender, "Robber", OVERWORLD, 0, 64, 0, 0, Alarm.Cause.KILLING);
         assertFalse(alarm.seen());
-        List<Alarm.Deed> deeds = book.seen(kingdom, offender);
-        assertEquals(2, deeds.size());
-        assertEquals(CrimeKind.MURDER, deeds.get(0).kind());
+        // Seen by a citizen at the gate a while later: the soldiers go there, and the alarm lasts from that moment.
+        book.sighted(kingdom, offender, OVERWORLD, 40, 65, 12, 900);
+        assertEquals(40, alarm.x());
+        assertEquals(65, alarm.y());
+        assertEquals(12, alarm.z());
+        assertEquals(900, alarm.lastSeen());
+        assertEquals(0, alarm.lastCause(), "A sighting is no new deed");
+        assertTrue(alarm.active(900 + rules.alarmTicks, rules));
+        assertFalse(alarm.active(901 + rules.alarmTicks, rules), "Nobody saw the offender since: the alarm is over");
+        assertTrue(alarm.violent(901 + rules.alarmTicks, rules), "After a killing the guards strike at once while it lasts");
+        // A sighting of an offender with no alarm raises none.
+        UUID stranger = UUID.randomUUID();
+        book.sighted(kingdom, stranger, OVERWORLD, 0, 64, 0, 950);
+        assertTrue(book.of(kingdom, stranger).isEmpty());
+        assertTrue(book.seen(kingdom, offender));
         assertTrue(alarm.seen());
-        assertTrue(book.seen(kingdom, offender).isEmpty(), "A deed is written into the record once");
-        assertTrue(book.seen(kingdom, UUID.randomUUID()).isEmpty());
+        assertFalse(book.seen(kingdom, stranger));
     }
 
     @Test
