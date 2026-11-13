@@ -459,7 +459,11 @@ public final class RoadGameTests {
         BlockPos to = helper.absolutePos(new BlockPos(16, 4, 16));
         GatheringGameTests.clear(level, from, to);
         ground(helper, 0, 15, 0, 15);
-        BlockPos center = helper.absolutePos(new BlockPos(7, 0, 7));
+        // The camp stands on the surface of the world, far above the test: where that is dry land.
+        BlockPos below = helper.absolutePos(new BlockPos(7, 0, 7));
+        int[] dry = SurfaceLand.near(level, below.getX(), below.getZ(), (x, z) -> SurfaceLand.drySquare(level, x, z, 6, 2, 3));
+        helper.assertTrue(dry != null, "No dry land for the camp within " + SurfaceLand.RINGS * SurfaceLand.STEP + " blocks of the test");
+        BlockPos center = new BlockPos(dry[0], below.getY(), dry[1]);
         // Items left over by an earlier run of the test world would count as the chest's.
         level.getEntitiesOfClass(ItemEntity.class, new AABB(center).inflate(24)).forEach(ItemEntity::discard);
         BanditCamp camp = BanditWork.found(server, dimension(helper), center.getX(), center.getZ(), 0);

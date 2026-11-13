@@ -32,7 +32,6 @@ import io.github.sekerator.kingdomworld.core.territory.ProvinceMap;
 import io.github.sekerator.kingdomworld.core.territory.TerritoryIndex;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
-import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -139,10 +138,13 @@ public final class LandRoadGameTests {
     @GameTest(template = EMPTY, batch = "kingdomworld_land_planned_road", timeoutTicks = 2_400)
     public static void aRoadOfThePlanIsLaidOnceBetweenStandingSettlements(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
-        Kingdom state = worldKingdom(server, "GameTest Road Plan State");
         BlockPos start = helper.absolutePos(new BlockPos(1, 0, 1));
-        int x0 = start.getX();
-        int z0 = start.getZ();
+        // The road is searched on the surface of the world, far above the test: its line goes where that is dry land.
+        int[] dry = SurfaceLand.near(helper.getLevel(), start.getX(), start.getZ(), (x, z) -> dryLine(helper.getLevel(), x, z));
+        helper.assertTrue(dry != null, "No dry land for the road of the plan within " + SurfaceLand.RINGS * SurfaceLand.STEP + " blocks of the test");
+        Kingdom state = worldKingdom(server, "GameTest Road Plan State");
+        int x0 = dry[0];
+        int z0 = dry[1];
         Settlement town = NpcWork.state(server).addSettlement(state.id(), 0, 0, Tier.TOWN, x0, z0, 11, new NpcNames.Name("Roadton", "Дорогин"));
         Settlement village = NpcWork.state(server).addSettlement(state.id(), 0, town.id(), Tier.VILLAGE, x0 + 120, z0 + 40, 12,
                 new NpcNames.Name("Lanesby", "Тропинск"));
@@ -151,20 +153,87 @@ public final class LandRoadGameTests {
         PlannedRoad planned = NpcWork.state(server).addPlannedRoad(town.id(), village.id(), RoadClass.PATH, new int[]{x0, x0 + 60, x0 + 120},
                 new int[]{z0, z0 + 25, z0 + 40});
         helper.assertTrue(PlannedRoads.start(server, planned).ok(), "The search for the road of the plan did not start");
-        helper.succeedWhen(() -> {
-            PlannedRoad now = NpcWork.state(server).plannedRoads().stream().filter(road -> road.id() == planned.id()).findFirst().orElseThrow();
-            if (now.roadId() == 0) {
-                throw new GameTestAssertException("The road of the plan is not laid yet");
-            }
-            Road road = RoadWork.state(server).road(now.roadId()).orElseThrow();
-            helper.assertTrue(road.paid() == road.units(), "The road of the plan is not paid whole");
-            long count = RoadWork.state(server).roads().stream().filter(other -> other.kingdomId().equals(state.id())).count();
-            helper.assertTrue(count == 1, "The road of the plan was laid " + count + " times");
+        // The settlements and the road go whether the test passes or fails: a town left standing would make the land of the
+        // tests after this one its own.
+        Runnable cleanUp = () -> {
             RoadWork.change(server, "forget the roads of a test", roads -> {
                 roads.forgetKingdom(state.id());
                 return io.github.sekerator.kingdomworld.core.kingdom.Outcome.DONE;
             });
             forget(server, state);
-        });
+        };
+        waitForRoad(helper, 0, 2_200, planned, state, cleanUp);
+    }
+
+    /**
+     * The line of the road of the plan of the test (120 blocks east and 40 south) runs over dry land of nobody without a cliff.
+     */
+    private static boolean dryLine(ServerLevel level, int x0, int z0) {
+        int[] xs = {x0, x0 + 60, x0 + 120};
+        int[] zs = {z0, z0 + 25, z0 + 40};
+        int low = Integer.MAX_VALUE;
+        int high = Integer.MIN_VALUE;
+        for (int i = 0; i + 1 < xs.length; i++) {
+            int steps = (int) Math.ceil(Math.hypot(xs[i + 1] - xs[i], zs[i + 1] - zs[i]) / 4.0);
+            for (int k = 0; k <= steps; k++) {
+                int y = SurfaceLand.dry(level, xs[i] + (xs[i + 1] - xs[i]) * k / steps, zs[i] + (zs[i + 1] - zs[i]) * k / steps);
+                if (y == Integer.MIN_VALUE) {
+                    return false;
+                }
+                low = Math.min(low, y);
+                high = Math.max(high, y);
+                if (high - low > 12) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private static void waitForRoad(GameTestHelper helper, int tick, int limit, PlannedRoad planned, Kingdom state, Runnable cleanUp) {
+        MinecraftServer server = helper.getLevel().getServer();
+        PlannedRoad now = NpcWork.state(server).plannedRoads().stream().filter(road -> road.id() == planned.id()).findFirst().orElse(null);
+        if (now != null && now.roadId() == 0 && tick < limit) {
+            helper.runAfterDelay(1, () -> waitForRoad(helper, tick + 1, limit, planned, state, cleanUp));
+            return;
+        }
+        try {
+            helper.assertTrue(now != null, "The road of the plan is gone");
+            helper.assertTrue(now.roadId() != 0, "The road of the plan is not laid in " + limit + " ticks; the land along its line: "
+                    + land(helper.getLevel(), planned));
+            Road road = RoadWork.state(server).road(now.roadId()).orElse(null);
+            helper.assertTrue(road != null, "The road of the plan is not in the register");
+            helper.assertTrue(road.paid() == road.units(), "The road of the plan is not paid whole");
+            long count = RoadWork.state(server).roads().stream().filter(other -> other.kingdomId().equals(state.id())).count();
+            helper.assertTrue(count == 1, "The road of the plan was laid " + count + " times");
+        } finally {
+            cleanUp.run();
+        }
+        helper.succeed();
+    }
+
+    /** The ground every ten blocks of the line of a road of the plan, for the message of a failure. */
+    private static String land(ServerLevel level, PlannedRoad planned) {
+        StringBuilder text = new StringBuilder();
+        int[] xs = planned.xs();
+        int[] zs = planned.zs();
+        for (int i = 0; i + 1 < xs.length; i++) {
+            int steps = Math.max(1, (int) Math.hypot(xs[i + 1] - xs[i], zs[i + 1] - zs[i]) / 10);
+            for (int k = 0; k <= steps; k++) {
+                int x = xs[i] + (xs[i + 1] - xs[i]) * k / steps;
+                int z = zs[i] + (zs[i + 1] - zs[i]) * k / steps;
+                if (!level.hasChunk(x >> 4, z >> 4)) {
+                    text.append(x).append(',').append(z).append(" not loaded; ");
+                    continue;
+                }
+                BlockPos top = level.getHeightmapPos(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, new BlockPos(x, 0, z));
+                UUID owner = KingdomWorldApi.ownerOfChunk(level, x >> 4, z >> 4);
+                text.append(x).append(',').append(z).append(" y ").append(top.getY() - 1).append(' ')
+                        .append(net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(level.getBlockState(top.below()).getBlock()).getPath())
+                        .append(owner == null ? "" : " of " + KingdomWorldApi.kingdom(level.getServer(), owner).map(Kingdom::name).orElse(owner.toString()))
+                        .append("; ");
+            }
+        }
+        return text.toString();
     }
 }
