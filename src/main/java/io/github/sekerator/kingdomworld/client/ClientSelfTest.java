@@ -81,6 +81,7 @@ public final class ClientSelfTest {
     private static ClientNpcShowcase npcShowcase;
     private static ClientTacticsCheck tacticsCheck;
     private static ClientProvinceShowcase provinceShowcase;
+    private static ClientSettlementShowcase settlementShowcase;
     private static ClientBackgroundCheck backgroundCheck;
     private static ClientLifeShowcase lifeShowcase;
     private static volatile BlockPos throne;
@@ -246,6 +247,25 @@ public final class ClientSelfTest {
             }
             backgroundCheck.tick();
             if (backgroundCheck.finished()) {
+                LOGGER.info(PREFIX + "finished");
+                quit = true;
+            }
+            return;
+        }
+        if ("settlements".equals(MODE) && minecraft.player != null && minecraft.getSingleplayerServer() != null) {
+            if (settlementShowcase == null) {
+                String folder = System.getProperty("kingdomworld.clientSelfTest.screenshots");
+                Path screenshots = folder != null && !folder.isEmpty() ? Path.of(folder)
+                        : minecraft.gameDirectory.toPath().resolve("kingdomworld-layout");
+                LOGGER.info(PREFIX + "settlements showcase started, screenshots go to {}", screenshots.resolve("settlements"));
+                settlementShowcase = new ClientSettlementShowcase(screenshots);
+            }
+            settlementShowcase.tick();
+            if (settlementShowcase.finished()) {
+                if (settlementShowcase.failed()) {
+                    LOGGER.error(PREFIX + "settlements showcase failed, exiting with code 1");
+                    System.exit(1);
+                }
                 LOGGER.info(PREFIX + "finished");
                 quit = true;
             }

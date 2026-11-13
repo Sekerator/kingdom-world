@@ -390,7 +390,14 @@ public final class NpcGarrison {
     static List<Duty> duties(MinecraftServer server, UUID kingdomId) {
         Optional<NpcSite> found = site(server, kingdomId);
         WorldPos throne = ArmyWork.capitalOf(server, kingdomId);
-        if (found.isEmpty() || throne == null) {
+        if (found.isEmpty()) {
+            return List.of();
+        }
+        if (!NpcWork.built(server, kingdomId)) {
+            // A settlement a player came to before its capital rose has the posts of its own guard already.
+            return SettlementGarrison.duties(server, kingdomId, io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(server.overworld()));
+        }
+        if (throne == null) {
             return List.of();
         }
         NpcSite site = found.get();

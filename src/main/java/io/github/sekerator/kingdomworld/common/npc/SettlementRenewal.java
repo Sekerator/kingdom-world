@@ -49,6 +49,14 @@ final class SettlementRenewal {
     }
 
     /**
+     * The top of the ground the kingdom laid at a place of a settlement when it rose, {dx, dz} from its middle: its paving,
+     * paths and soil may lie under a building of its plan.
+     */
+    interface Ground {
+        BlockState top(int dx, int dz);
+    }
+
+    /**
      * Whether a settlement of the plan stands but has not all its parts yet: raised before the settlements lived as their rank
      * asks, it is completed once when a player comes near.
      */
@@ -125,7 +133,7 @@ final class SettlementRenewal {
      * @param x the middle of the plot in the world
      * @param z the middle of the plot in the world
      */
-    static boolean free(ServerLevel level, Settlement settlement, NpcComposition.Plot plot, int x, int z) {
+    static boolean free(ServerLevel level, Settlement settlement, NpcComposition.Plot plot, int x, int z, Ground ground) {
         int[] box = NpcComposition.footprint(new NpcComposition.Plot(plot.template(), 0, 0, plot.facing(), plot.mirror(), plot.quarter()));
         int minX = x + box[0] - MARGIN;
         int minZ = z + box[1] - MARGIN;
@@ -161,6 +169,8 @@ final class SettlementRenewal {
             }
         }
         UUID owner = settlement.kingdomId();
+        // The residence of a large city stands round its town hall, as a castle round a throne.
+        long hall = SettlementLayouts.RESIDENCE.equals(plot.quarter()) ? BlockPos.asLong(settlement.x(), y + 1, settlement.z()) : Long.MIN_VALUE;
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         for (int bx = minX; bx <= maxX; bx++) {
             for (int bz = minZ; bz <= maxZ; bz++) {
@@ -171,7 +181,7 @@ final class SettlementRenewal {
                 boolean leaves = false;
                 for (int by = y - BELOW; by <= y + HEIGHT; by++) {
                     BlockState there = level.getBlockState(pos.set(bx, by, bz));
-                    if (there.isAir()) {
+                    if (there.isAir() || pos.asLong() == hall || by <= y && there.equals(ground.top(bx - settlement.x(), bz - settlement.z()))) {
                         continue;
                     }
                     if (NpcGround.protectedAt(level, pos, there) || there.hasBlockEntity()) {
@@ -253,7 +263,7 @@ final class SettlementRenewal {
      * @param tries  places to look at in this call at most
      * @return the middle of the free ground in the world, {x, z, facing}, if found
      */
-    static Optional<int[]> elsewhere(ServerLevel level, Settlement settlement, NpcComposition.Plot plot, int[] cursor, int tries) {
+    static Optional<int[]> elsewhere(ServerLevel level, Settlement settlement, NpcComposition.Plot plot, int[] cursor, int tries, Ground ground) {
         List<int[]> spots = spots(settlement);
         int done = 0;
         while (cursor[0] >= 0 && cursor[0] < spots.size() && done < tries) {
@@ -264,7 +274,7 @@ final class SettlementRenewal {
             int x = settlement.x() + spot[0];
             int z = settlement.z() + spot[1];
             done++;
-            if (free(level, settlement, moved, x, z)) {
+            if (free(level, settlement, moved, x, z, ground)) {
                 return Optional.of(new int[]{x, z, facing});
             }
         }

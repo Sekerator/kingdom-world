@@ -153,11 +153,26 @@ public final class SettlementGarrison {
         return duties;
     }
 
+    /** Blocks along a wall within which a gate serves a road towards a place as well. */
+    static final int GATE_SPACING = 32;
+
+    /**
+     * Whether a wall has a gate within {@value #GATE_SPACING} blocks of a place on its ring.
+     */
+    static boolean gateNear(Wall wall, int x, int z) {
+        for (io.github.sekerator.kingdomworld.core.road.RouteCell cell : wall.gateCells()) {
+            if (Math.abs(cell.x() - x) + Math.abs(cell.z() - z) <= GATE_SPACING) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * The post inside the gate of a settlement that looks towards the settlement it belongs to (the first gate when it belongs
      * to none), {x, z} or {x, z, y} from its middle.
      */
-    static Optional<int[]> gateTowardsParent(NpcState state, Settlement settlement, SettlementLayouts.Layout layout) {
+    public static Optional<int[]> gateTowardsParent(NpcState state, Settlement settlement, SettlementLayouts.Layout layout) {
         List<io.github.sekerator.kingdomworld.core.npc.NpcComposition.Post> gates = layout.gatePosts();
         if (gates.isEmpty()) {
             return Optional.empty();
@@ -225,7 +240,9 @@ public final class SettlementGarrison {
         ArmyState army = ArmyWork.state(server);
         KingdomWorldState world = KingdomWorldApi.state(server);
         ArmyRules rules = ArmySettings.rulesFor(server, kingdomId);
-        WorldPos hall = new WorldPos(Dimensions.id(server.overworld()), settlement.x(), settlement.groundY() + 1, settlement.z());
+        // They come to the square: that of a large city lies before the residence of its governor, whose hall holds the town hall.
+        int square = settlement.tier() == Tier.CITY ? SettlementLayouts.CITY_SQUARE : 0;
+        WorldPos hall = new WorldPos(Dimensions.id(server.overworld()), settlement.x(), settlement.groundY() + 1, settlement.z() + square);
         boolean watch = settlement.tier() == Tier.VILLAGE || settlement.tier() == Tier.HAMLET;
         int joined = 0;
         while (joined < count && System.nanoTime() - deadline < 0) {
@@ -363,7 +380,10 @@ public final class SettlementGarrison {
             // The ring of a wall is a square: the gate lies where the line to the other settlement crosses it.
             int x = settlement.x() + (int) Math.round(dx / length * wall.radius());
             int z = settlement.z() + (int) Math.round(dz / length * wall.radius());
-            CityWalls.cutGate(server, wall, x, z);
+            if (!gateNear(wall, x, z)) {
+                // A gate close by serves the road as well: the road comes in where it crosses the wall in any case.
+                CityWalls.cutGate(server, wall, x, z);
+            }
         }
         for (io.github.sekerator.kingdomworld.core.road.Road road : List.copyOf(RoadWork.state(server).roads())) {
             if (road.kingdomId().equals(settlement.kingdomId())) {

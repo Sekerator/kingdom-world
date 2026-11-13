@@ -26,7 +26,7 @@ public final class SettlementLayouts {
     /** The quarter of the residence of the governor of a large city. */
     public static final String RESIDENCE = "residence";
     /** Blocks from the middle of a large city at which its round passes the residence on its way from gate to gate. */
-    static final int CITY_SQUARE = 19;
+    public static final int CITY_SQUARE = 19;
 
     private SettlementLayouts() {
     }
@@ -186,6 +186,9 @@ public final class SettlementLayouts {
         for (NpcComposition.Plot plot : city.buildings()) {
             if (!palace(plot)) {
                 plots.add(plot);
+            } else if (!styled) {
+                // A city of districts keeps the hall of its plan round its town hall as the residence of its governor.
+                plots.add(0, new NpcComposition.Plot(plot.template(), plot.x(), plot.z(), plot.facing(), plot.mirror(), RESIDENCE));
             }
         }
         // A city has 40 buildings at most (its gates, towers, decorations and wells aside): the houses last laid out stay lots.

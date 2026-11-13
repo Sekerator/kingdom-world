@@ -163,6 +163,8 @@ class SettlementLayoutsTest {
         }
         SettlementLayouts.Layout plain = SettlementLayouts.of(Tier.CITY, NpcLevel.MEDIUM, false, "", 3, TemplateCatalog.Rank.B, RULES);
         assertTrue(plain.plots().stream().noneMatch(SettlementLayouts::palace));
+        assertTrue(plain.plots().stream().anyMatch(plot -> SettlementLayouts.RESIDENCE.equals(plot.quarter()) && plot.x() == 0 && plot.z() == 0),
+                "a city of districts keeps the hall of its plan as the residence of its governor");
         apart(plain.plots(), "districts");
     }
 

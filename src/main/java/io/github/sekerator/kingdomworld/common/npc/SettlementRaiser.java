@@ -701,6 +701,10 @@ public final class SettlementRaiser {
         // a minute of steps is given up.
         int reach = SettlementLayouts.land(settlement.tier()) * 8;
         List<NpcComposition.Plot> plots = job.layout.plots();
+        NpcGround.Soil soil = NpcGround.soilAt(level, settlement.x() + job.layout.reach() + NpcSpawner.RAMP + 3, settlement.z());
+        BlockState path = soil == NpcGround.Soil.GRASS ? Blocks.DIRT_PATH.defaultBlockState() : Blocks.GRAVEL.defaultBlockState();
+        SettlementRenewal.Ground laid = (dx, dz) -> job.layout.city() != null ? NpcCity.surface(job.site, job.layout.city(), dx, dz, soil)
+                : surface(job.layout, dx, dz, soil, path);
         Set<String> ofPlan = new java.util.HashSet<>();
         plots.forEach(plot -> ofPlan.add(plot.template()));
         for (io.github.sekerator.kingdomworld.core.construction.Construction begun : List.copyOf(KingdomWorldApi.state(server).construction().of(id))) {
@@ -737,11 +741,11 @@ public final class SettlementRaiser {
                     continue;
                 }
                 budget -= 64;
-                if (SettlementRenewal.free(level, settlement, plot, x, z)) {
+                if (SettlementRenewal.free(level, settlement, plot, x, z, laid)) {
                     job.renewAt = new int[]{x, z, plot.facing()};
                     job.levelFrom = 0;
                 } else if (movable && !SettlementRenewal.kindStands(server, settlement, kind)) {
-                    Optional<int[]> spot = SettlementRenewal.elsewhere(level, settlement, plot, job.cursor, 4);
+                    Optional<int[]> spot = SettlementRenewal.elsewhere(level, settlement, plot, job.cursor, 4, laid);
                     if (spot.isPresent()) {
                         job.renewAt = spot.get();
                         job.levelFrom = 0;
