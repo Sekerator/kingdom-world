@@ -83,6 +83,9 @@ final class ClientArmyScenes {
         ServerLevel level = server.overworld();
         int x = camp.x() + 60;
         int z = camp.z();
+        // The ground of a chunk nobody has near is not known until the chunk is there: a showcase run again in its world plans
+        // its shots before the player comes near the camp.
+        level.getChunk(x >> 4, z >> 4);
         int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
         return new WorldPos(io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level), x, y, z);
     }
