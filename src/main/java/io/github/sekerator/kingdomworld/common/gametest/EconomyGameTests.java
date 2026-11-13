@@ -26,6 +26,7 @@ import io.github.sekerator.kingdomworld.core.citizen.Citizen;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
 import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
+import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.economy.Coins;
 import io.github.sekerator.kingdomworld.core.economy.CurrencyUnits;
@@ -53,6 +54,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
@@ -156,6 +158,45 @@ public final class EconomyGameTests {
             helper.assertTrue(treasury.funds() == expected.value(units), "The treasury holds money that was not struck");
             helper.assertTrue(GatheringGameTests.produced(server, kingdom, "minter", "kingdomworld:coin") == 26, "The coins were not counted");
             helper.assertTrue(minter.experience() >= 7, "The minter gained no experience");
+        } finally {
+            EconomySettings.overrideMintTicks(0);
+            CitizenGameTests.finish(helper, kingdom, minter);
+            GatheringGameTests.clear(level, from, to);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_economy_mint_gone")
+    public static void aMinterFarFromPlayersStrikesNothingAtABrokenMint(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos to = helper.absolutePos(new BlockPos(8, 3, 8));
+        GatheringGameTests.clear(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Closed Mint", UUID.randomUUID());
+        StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 4);
+        store.insertItem(0, new ItemStack(Items.IRON_INGOT, 3), false);
+        store.insertItem(1, new ItemStack(Items.COPPER_INGOT, 4), false);
+        helper.setBlock(new BlockPos(6, 0, 1), ModRegistries.MINT.get());
+        WorldPos postPos = GatheringGameTests.post(helper, new BlockPos(5, 0, 1), "minter");
+        WorkPost post = PostWork.post(server, postPos).orElseThrow();
+        ZoneSurveys.surveyNow(server, post);
+        Citizen minter = CitizenGameTests.newcomer(helper, kingdom, 1, 1);
+        KingdomWorldApi.change(server, "test", state -> state.setProfession(null, minter.id(), "minter"));
+        helper.assertTrue(KingdomWorldApi.state(server).citizens().assignWorkplace(minter, postPos), "The minter got no seat");
+        try {
+            helper.assertTrue(post.stations().getOrDefault(Stations.MINT, 0) == 1, "The mint was not found in the zone");
+            // The mint is broken after the look over the zone: the next steps must not strike at what the look found.
+            helper.setBlock(new BlockPos(6, 0, 1), Blocks.AIR);
+            EconomySettings.overrideMintTicks(20);
+            steps(server, kingdom, 3);
+            Treasury treasury = treasury(server, kingdom);
+            long iron = KingdomStorage.count(server, kingdom.id(), stack -> stack.is(Items.IRON_INGOT));
+            long copper = KingdomStorage.count(server, kingdom.id(), stack -> stack.is(Items.COPPER_INGOT));
+            helper.assertTrue(iron == 3 && copper == 4, "Metal was taken without a mint: " + iron + " iron, " + copper + " copper left");
+            helper.assertTrue(treasury.vault().equals(Coins.NONE) && treasury.funds() == 0, "Coins were struck without a mint: vault "
+                    + treasury.vault() + ", funds " + treasury.funds());
+            helper.assertTrue(minter.workStatus() == WorkStatus.NO_WORKSTATION, "The minter works without a mint: " + minter.workStatus());
         } finally {
             EconomySettings.overrideMintTicks(0);
             CitizenGameTests.finish(helper, kingdom, minter);

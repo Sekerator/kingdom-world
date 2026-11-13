@@ -340,7 +340,7 @@ public final class MinterBehavior implements ProfessionBehavior {
             PostWork.setStatus(server, citizen, WorkStatus.OUTSIDE_TERRITORY);
             return;
         }
-        if (post.stations().getOrDefault(Stations.MINT, 0) <= 0) {
+        if (post.stations().getOrDefault(Stations.MINT, 0) <= 0 || mintsGone(server, post)) {
             PostWork.setStatus(server, citizen, WorkStatus.NO_WORKSTATION);
             return;
         }
@@ -379,6 +379,25 @@ public final class MinterBehavior implements ProfessionBehavior {
         if (struck > 0) {
             PostWork.accident(server, citizen, post, this, Equipment.of(server, citizen.id()), intervalTicks, server.overworld().getRandom());
         }
+    }
+
+    /**
+     * Whether every mint the last look over the zone found stands in loaded land and is gone. The zone is looked at again
+     * only after the step, so without this a minter far from players would strike for one more step at a mint already
+     * broken. Mints in land that is not loaded are taken as the look found them.
+     */
+    private static boolean mintsGone(MinecraftServer server, WorkPost post) {
+        List<BlockPos> known = KNOWN.get(post.pos());
+        ServerLevel level = PostWork.level(server, post.pos());
+        if (known == null || known.isEmpty() || level == null) {
+            return false;
+        }
+        for (BlockPos pos : known) {
+            if (!level.isLoaded(pos) || level.getBlockState(pos).is(ModRegistries.MINT.get())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // ---------------------------------------------------------------- the zone
