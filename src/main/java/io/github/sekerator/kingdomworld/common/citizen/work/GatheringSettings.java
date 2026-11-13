@@ -67,7 +67,7 @@ public final class GatheringSettings {
     private static MineRules mineFromConfig() {
         KingdomWorldConfig.Server config = KingdomWorldConfig.SERVER;
         return new MineRules(config.minerCorridorLength.get(), config.minerBranchLength.get(), config.minerVeinBlocks.get(),
-                MineRules.parseDepths(config.minerOreDepths.get()));
+                config.minerBarrenBlocks.get(), MineRules.parseDepths(config.minerOreDepths.get()));
     }
 
     /**

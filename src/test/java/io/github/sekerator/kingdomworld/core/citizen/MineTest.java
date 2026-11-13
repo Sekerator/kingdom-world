@@ -237,6 +237,86 @@ class MineTest {
     }
 
     @Test
+    void anythingGoesSixteenBlocksDeeperWithEveryLevel() {
+        assertEquals(16, GatheringRules.MINE_DEEP_STEP);
+        assertEquals(16, MineRules.levelStep(MineGoal.ANYTHING));
+        assertEquals(4, MineRules.levelStep(MineGoal.ANYTHING.withOre("forge:ores/iron")), "a kind of ore keeps to its layers");
+        assertEquals(4, MineRules.levelStep(MineGoal.ANYTHING.withDepth(16)), "a depth set by hand does too");
+        assertEquals(4, MineRules.levelStep(MineGoal.ANYTHING.withOre("forge:ores/iron").withDepth(16)));
+        assertEquals(8, GatheringRules.DEFAULT.mineLevels());
+
+        assertEquals(List.of(16, 0, -16, -32, -48, -58), MinePlan.floors(16, 70, BOTTOM, 6, 16),
+                "down to the layers of diamonds, the last level six blocks above the bottom of the world");
+        assertEquals(List.of(16, 0, -16, -32, -48, -58, 32, 48), MinePlan.floors(16, 70, BOTTOM, 8, 16), "then above the first level");
+        assertEquals(List.of(16, 0, -16), MinePlan.floors(16, 70, BOTTOM, 3, 16));
+        assertEquals(List.of(12, -4, -20, -36, -52, -58), MinePlan.floors(12, 12, BOTTOM, 8, 16), "no level above a low post");
+        assertEquals(List.of(-40, -56), MinePlan.floors(-40, 70, BOTTOM, 2, 16));
+        assertEquals(List.of(-40, -56, -24, -8), MinePlan.floors(-40, 70, BOTTOM, 4, 16),
+                "the last level is never closer than four blocks to the one above it");
+        assertEquals(List.of(16, 0, -16, -32, -48, -64, -80, -96), MinePlan.floors(16, 70, -128, 8, 16));
+        assertEquals(MinePlan.floors(20, 100, BOTTOM, 4), MinePlan.floors(20, 100, BOTTOM, 4, 4));
+        assertEquals(List.of(-58, -54, -50, -46), MinePlan.floors(-58, 70, BOTTOM, 4, 4), "a goal stays around its depth");
+
+        List<MinePlan.Cell> cells = MinePlan.cells(0, 70, 0, 16, 48, 16, 8, 16, BOTTOM, EVERYWHERE);
+        assertWalkable(cells, 70);
+        Map<Integer, Integer> floors = new HashMap<>();
+        int level = 0;
+        int lowestStair = 70;
+        for (MinePlan.Cell cell : cells) {
+            assertTrue(cell.level() >= level, "a level is planned after the one before it");
+            level = cell.level();
+            if (cell.kind() == MinePlan.Kind.STAIR) {
+                // The staircase goes on down inside its square of three by three.
+                assertTrue(cell.x() >= -1 && cell.x() <= 1 && Math.abs(cell.z()) >= 1 && Math.abs(cell.z()) <= 3, cell.toString());
+                lowestStair = Math.min(lowestStair, cell.y());
+            } else {
+                Integer known = floors.put(cell.level(), cell.y());
+                assertTrue(known == null || known == cell.y(), "a level lies at one height");
+            }
+        }
+        assertEquals(Map.of(0, 16, 1, 0, 2, -16, 3, -32, 4, -48, 5, -58, 6, 32, 7, 48), floors);
+        assertTrue(lowestStair <= -57, "the staircase reaches the lowest level: " + lowestStair);
+    }
+
+    @Test
+    void aLevelWithoutOreIsLeftForTheNext() {
+        MineProgress progress = new MineProgress();
+        for (int i = 0; i < 199; i++) {
+            assertFalse(progress.opened(0, 200));
+        }
+        assertFalse(progress.left(0));
+        assertTrue(progress.opened(0, 200), "the two hundredth block without ore ends the level");
+        assertTrue(progress.left(0) && progress.anyLeft());
+        assertFalse(progress.left(1));
+
+        // Ore starts the count anew, and so does another level.
+        for (int i = 0; i < 150; i++) {
+            assertFalse(progress.opened(1, 200));
+        }
+        progress.ore();
+        assertEquals(0, progress.barren());
+        for (int i = 0; i < 199; i++) {
+            assertFalse(progress.opened(1, 200));
+        }
+        assertFalse(progress.opened(2, 200), "the count of one level does not pass to another");
+        assertEquals(1, progress.barren());
+        assertFalse(progress.left(1) || progress.left(2));
+
+        // Without a limit no level is ever left.
+        MineProgress patient = new MineProgress();
+        for (int i = 0; i < 20_000; i++) {
+            assertFalse(patient.opened(0, 0));
+        }
+        assertFalse(patient.anyLeft());
+
+        // When nothing else is left to dig, the levels left are taken up again.
+        progress.resume();
+        assertFalse(progress.left(0) || progress.anyLeft());
+        assertEquals(0, progress.barren());
+        assertEquals(200, MineRules.DEFAULT.barrenBlocks());
+    }
+
+    @Test
     void theDepthStaysBetweenTheBottomOfTheWorldAndThePost() {
         assertEquals(16, MinePlan.clampDepth(16, 70, BOTTOM));
         assertEquals(70, MinePlan.clampDepth(232, 70, BOTTOM), "a depth above the post means the level of the post");
@@ -245,7 +325,9 @@ class MineTest {
         assertEquals(-60, MinePlan.clampDepth(-58, -60, BOTTOM), "a post below the margin digs at its own level");
 
         MineRules rules = MineRules.DEFAULT;
-        assertEquals(70, rules.depth(MineGoal.ANYTHING, 70, BOTTOM), "anything is dug right at the post");
+        assertEquals(16, rules.depth(MineGoal.ANYTHING, 70, BOTTOM), "anything is first dug at 16");
+        assertEquals(12, rules.depth(MineGoal.ANYTHING, 12, BOTTOM), "or at the level of a post that stands lower");
+        assertEquals(-60, rules.depth(MineGoal.ANYTHING, -60, BOTTOM));
         assertEquals(16, rules.depth(MineGoal.ANYTHING.withOre("forge:ores/iron"), 70, BOTTOM));
         assertEquals(-58, rules.depth(MineGoal.ANYTHING.withOre("forge:ores/diamond"), 70, BOTTOM));
         assertEquals(70, rules.depth(MineGoal.ANYTHING.withOre("forge:ores/emerald"), 70, BOTTOM));

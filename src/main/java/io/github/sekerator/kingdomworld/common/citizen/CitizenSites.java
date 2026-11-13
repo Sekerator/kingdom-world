@@ -1,6 +1,7 @@
 package io.github.sekerator.kingdomworld.common.citizen;
 
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
+import io.github.sekerator.kingdomworld.common.citizen.work.MinerBehavior;
 import io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehaviors;
 import io.github.sekerator.kingdomworld.common.citizen.work.WorkPostActions;
 import io.github.sekerator.kingdomworld.common.citizen.work.ZoneSurveys;
@@ -260,6 +261,7 @@ public final class CitizenSites {
         if (citizens.sites().get(at).isPresent()) {
             citizens.removeSite(at);
             ZoneSurveys.forget(at);
+            MinerBehavior.forget(at);
         }
     }
 

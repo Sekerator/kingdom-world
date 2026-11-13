@@ -7,8 +7,10 @@ import io.github.sekerator.kingdomworld.core.citizen.CauseOfDeath;
 import io.github.sekerator.kingdomworld.core.citizen.Citizen;
 import io.github.sekerator.kingdomworld.core.citizen.MineGoal;
 import io.github.sekerator.kingdomworld.core.citizen.MinePlan;
+import io.github.sekerator.kingdomworld.core.citizen.MineProgress;
 import io.github.sekerator.kingdomworld.core.citizen.MineRules;
 import io.github.sekerator.kingdomworld.core.citizen.PostYield;
+import io.github.sekerator.kingdomworld.core.citizen.Professions;
 import io.github.sekerator.kingdomworld.core.citizen.Veins;
 import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
 import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
@@ -51,7 +53,7 @@ import java.util.Set;
  * vein from block to block, but never the rock around it and never ore it has not seen; the holes ore leaves in
  * the floor it fills with cobblestone. Ore needs a pickaxe strong enough for it. Before it opens a block next to
  * lava or water it walls the fluid off with cobblestone, and it lights the tunnels with torches from the
- * storehouses.
+ * storehouses. A level on which it opens block after block without meeting ore it leaves for the next, deeper one.
  */
 public final class MinerBehavior implements ProfessionBehavior {
     /** Blocks one miner breaks in a working day at most. */
@@ -60,9 +62,10 @@ public final class MinerBehavior implements ProfessionBehavior {
     static final int TORCHES_WANTED = 16;
 
     /**
-     * The plan of the mine of a post, kept until the depth, the land or the settings change.
+     * The plan of the mine of a post, kept until the depth, the step between its levels, the land or the settings
+     * change, with the count of the blocks its miners open without meeting ore.
      */
-    record Plan(int depth, long landVersion, MineRules rules, int levels, List<MinePlan.Cell> cells) {
+    record Plan(int depth, int step, long landVersion, MineRules rules, int levels, List<MinePlan.Cell> cells, MineProgress progress) {
     }
 
     private static final Map<WorldPos, Plan> PLANS = new HashMap<>();
@@ -81,17 +84,32 @@ public final class MinerBehavior implements ProfessionBehavior {
         MineRules rules = GatheringSettings.mine();
         int levels = GatheringSettings.rules().mineLevels();
         int depth = depth(level, post);
+        int step = MineRules.levelStep(post.mineGoal());
         long version = KingdomWorldApi.state(level.getServer()).territory().version();
         Plan known = PLANS.get(post.pos());
-        if (known != null && known.depth() == depth && known.landVersion() == version && known.levels() == levels
-                && known.rules().equals(rules)) {
+        if (known != null && known.depth() == depth && known.step() == step && known.landVersion() == version
+                && known.levels() == levels && known.rules().equals(rules)) {
             return known;
         }
+        // A plan is built seldom: the plans of posts that are gone or took another profession leave with it.
+        PLANS.keySet().removeIf(pos -> !isMine(level.getServer(), pos));
         LandCheck land = new LandCheck(level, post.kingdomId());
-        Plan plan = new Plan(depth, version, rules, levels, MinePlan.cells(post.pos().x(), post.pos().y(), post.pos().z(), depth,
-                rules.corridorLength(), rules.branchLength(), levels, level.getMinBuildHeight(), land::owns));
+        Plan plan = new Plan(depth, step, version, rules, levels, MinePlan.cells(post.pos().x(), post.pos().y(), post.pos().z(),
+                depth, rules.corridorLength(), rules.branchLength(), levels, step, level.getMinBuildHeight(), land::owns),
+                new MineProgress());
         PLANS.put(post.pos(), plan);
         return plan;
+    }
+
+    private static boolean isMine(MinecraftServer server, WorldPos pos) {
+        return PostWork.post(server, pos).filter(post -> Professions.MINER.id().equals(post.professionId())).isPresent();
+    }
+
+    /**
+     * Forgets the plan of the mine of a post that was removed or took another profession.
+     */
+    public static void forget(WorldPos post) {
+        PLANS.remove(post);
     }
 
     /**
@@ -410,6 +428,11 @@ public final class MinerBehavior implements ProfessionBehavior {
                     return null;
                 }
                 target = nextCell(level);
+                if (target < 0 && plan.progress().anyLeft()) {
+                    // Nothing else to dig: the levels left for lack of ore are taken up again.
+                    plan.progress().resume();
+                    target = nextCell(level);
+                }
                 walking = 0;
                 closest = Double.MAX_VALUE;
                 block = 0;
@@ -491,8 +514,8 @@ public final class MinerBehavior implements ProfessionBehavior {
         }
 
         /**
-         * The next cell to dig: not open yet, with an open entrance, on the land. The search starts where the last
-         * one ended and goes once around the plan.
+         * The next cell to dig: not open yet, with an open entrance, on the land, and not a tunnel of a level left
+         * for lack of ore. The search starts where the last one ended and goes once around the plan.
          */
         private int nextCell(ServerLevel level) {
             int size = cells.size();
@@ -503,7 +526,7 @@ public final class MinerBehavior implements ProfessionBehavior {
                 }
                 MinePlan.Cell cell = cells.get(i);
                 BlockPos pos = cellPos(cell);
-                if (!land.owns(pos)) {
+                if (!land.owns(pos) || cell.kind() != MinePlan.Kind.STAIR && plan.progress().left(cell.level())) {
                     continue;
                 }
                 if (!level.isLoaded(pos)) {
@@ -553,6 +576,7 @@ public final class MinerBehavior implements ProfessionBehavior {
                 if (!known) {
                     uncovered.add(new Uncovered(side, anchor));
                 }
+                plan.progress().ore();
             }
         }
 
@@ -670,6 +694,12 @@ public final class MinerBehavior implements ProfessionBehavior {
             useTool(1);
             float speed = Math.max(1.0f, pickaxe.getDestroySpeed(state));
             timer = Math.max(3, (int) Math.ceil(30.0f * Math.max(0.3f, hardness) / speed));
+            if (state.is(Tags.Blocks.ORES)) {
+                plan.progress().ore();
+            } else if (cell != null && cell.kind() != MinePlan.Kind.STAIR) {
+                // Rock of a tunnel; the staircase is the way down and does not count against a level.
+                plan.progress().opened(cell.level(), plan.rules().barrenBlocks());
+            }
             if (cell != null) {
                 uncover(level, pos, cellPos(cell));
             }

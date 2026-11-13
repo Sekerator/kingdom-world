@@ -86,6 +86,7 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue minerCorridorLength;
         public final ForgeConfigSpec.IntValue minerBranchLength;
         public final ForgeConfigSpec.IntValue minerVeinBlocks;
+        public final ForgeConfigSpec.IntValue minerBarrenBlocks;
         public final ForgeConfigSpec.ConfigValue<List<? extends String>> minerOreDepths;
         public final ForgeConfigSpec.IntValue maxHerdSize;
         public final ForgeConfigSpec.IntValue carrierRange;
@@ -248,9 +249,10 @@ public final class KingdomWorldConfig {
                     .comment("Most logs of one tree a lumberjack fells; larger trees are left standing.")
                     .defineInRange("maxTreeBlocks", 160, 8, 2_048);
             mineLevels = builder
-                    .comment("Most levels of a mine, one every 4 blocks below the working depth (above it once the bottom of the",
-                            "world is reached).")
-                    .defineInRange("mineLevels", 4, 1, 32);
+                    .comment("Most levels of a mine below the working depth (above it once the bottom of the world is reached):",
+                            "one every 4 blocks for a kind of ore or a depth set by hand, one every 16 blocks for anything at the",
+                            "automatic depth, which starts at y 16 and ends 6 blocks above the bottom of the world.")
+                    .defineInRange("mineLevels", 8, 1, 32);
             minerCorridorLength = builder
                     .comment("Blocks of the main corridor of a mine to each side of its staircase; it stops at the edge of the",
                             "kingdom's land.")
@@ -261,6 +263,10 @@ public final class KingdomWorldConfig {
             minerVeinBlocks = builder
                     .comment("Most blocks of ore a miner takes from one vein it uncovers beside a tunnel. 0 leaves veins alone.")
                     .defineInRange("minerVeinBlocks", 24, 0, 128);
+            minerBarrenBlocks = builder
+                    .comment("Blocks of rock a miner opens in the tunnels of one level without meeting ore before it leaves the rest",
+                            "of that level and goes on to the next one. 0 makes it finish every level.")
+                    .defineInRange("minerBarrenBlocks", 200, 0, 10_000);
             minerOreDepths = builder
                     .comment("The height a kind of ore is mined at when the depth of a mine is chosen automatically, as tag=y.",
                             "A kind that is not listed is mined at y 16.")

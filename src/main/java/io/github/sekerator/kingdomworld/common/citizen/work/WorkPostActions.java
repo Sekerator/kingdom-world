@@ -232,6 +232,7 @@ public final class WorkPostActions {
                 state -> state.setPostProfession(player.getUUID(), pos, professionId));
         if (outcome.ok()) {
             ZoneSurveys.forget(pos);
+            MinerBehavior.forget(pos);
             ZoneSurveys.request(pos);
             PostWork.post(player.server, pos).ifPresent(post -> PostWork.refreshStatus(player.server, post));
         }

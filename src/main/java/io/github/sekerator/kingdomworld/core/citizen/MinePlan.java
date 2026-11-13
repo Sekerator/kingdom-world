@@ -6,8 +6,8 @@ import java.util.List;
 
 /**
  * The layout of a mine at a work post. Beside the post a spiral staircase goes down inside a square of three by
- * three blocks, one block per step and three blocks high. At the working depth, and on every further level
- * {@link GatheringRules#MINE_LEVEL_STEP} blocks below it (or above it once the bottom of the world is reached), a
+ * three blocks, one block per step and three blocks high, as deep as the lowest level. At the working depth, and on
+ * every further level a step of blocks below it (or above it once the bottom of the world is reached), a
  * short passage leads from the staircase to the main corridor, one block wide and two high, which runs in both
  * directions past the staircase; branches leave it every third block to both sides, so that two blocks of rock lie
  * between neighbouring branches and every block of the layer is seen from a tunnel.
@@ -88,20 +88,35 @@ public final class MinePlan {
     }
 
     /**
-     * The floors of the levels of a mine in digging order: the working depth first, then one level every
-     * {@link GatheringRules#MINE_LEVEL_STEP} blocks below it down to the bottom of the world, then above it up to
-     * the post.
+     * The floors of the levels of a mine in digging order, {@link GatheringRules#MINE_LEVEL_STEP} blocks apart.
      */
     public static List<Integer> floors(int depth, int postY, int worldBottom, int maxLevels) {
-        int step = GatheringRules.MINE_LEVEL_STEP;
+        return floors(depth, postY, worldBottom, maxLevels, GatheringRules.MINE_LEVEL_STEP);
+    }
+
+    /**
+     * The floors of the levels of a mine in digging order: the working depth first, then one level every
+     * {@code step} blocks below it down to the bottom of the world, where one last level lies {@link #BOTTOM_MARGIN}
+     * blocks above the bottom if there is room for it under the level before, then above the working depth up to
+     * the post.
+     *
+     * @param step blocks between two levels, at least {@link GatheringRules#MINE_LEVEL_STEP}
+     */
+    public static List<Integer> floors(int depth, int postY, int worldBottom, int maxLevels, int step) {
+        int apart = Math.max(GatheringRules.MINE_LEVEL_STEP, step);
         int lowest = worldBottom + BOTTOM_MARGIN;
         int levels = Math.max(1, maxLevels);
         List<Integer> floors = new ArrayList<>();
         floors.add(depth);
-        for (int y = depth - step; floors.size() < levels && y >= lowest; y -= step) {
+        int last = depth;
+        for (int y = depth - apart; floors.size() < levels && y >= lowest; y -= apart) {
             floors.add(y);
+            last = y;
         }
-        for (int y = depth + step; floors.size() < levels && y <= postY - step; y += step) {
+        if (floors.size() < levels && last - lowest >= GatheringRules.MINE_LEVEL_STEP) {
+            floors.add(lowest);
+        }
+        for (int y = depth + apart; floors.size() < levels && y <= postY - apart; y += apart) {
             floors.add(y);
         }
         return floors;
@@ -170,8 +185,17 @@ public final class MinePlan {
      */
     public static List<Cell> cells(int x0, int y0, int z0, int depth, int corridorLength, int branchLength, int maxLevels,
                                    int worldBottom, Land land) {
+        return cells(x0, y0, z0, depth, corridorLength, branchLength, maxLevels, GatheringRules.MINE_LEVEL_STEP, worldBottom, land);
+    }
+
+    /**
+     * The cells of the mine of a post whose levels lie {@code levelStep} blocks apart; the staircase goes on down
+     * inside its square from one level to the next.
+     */
+    public static List<Cell> cells(int x0, int y0, int z0, int depth, int corridorLength, int branchLength, int maxLevels,
+                                   int levelStep, int worldBottom, Land land) {
         return new Builder(x0, y0, z0, Math.max(0, corridorLength), Math.max(0, branchLength), land)
-                .build(floors(Math.min(depth, y0), y0, worldBottom, maxLevels));
+                .build(floors(Math.min(depth, y0), y0, worldBottom, maxLevels, levelStep));
     }
 
     private static final class Builder {

@@ -18,7 +18,7 @@ public record MineGoal(String ore, int amount, boolean autoDepth, int depth) {
     public static final int MAX_AMOUNT = 9_984;
     public static final int MIN_DEPTH = -2_048;
     public static final int MAX_DEPTH = 2_047;
-    /** Anything, without a limit, at the depth of the post: what a post does before anybody asks for more. */
+    /** Anything, without a limit, at the automatic depth: what a post does before anybody asks for more. */
     public static final MineGoal ANYTHING = new MineGoal("", 0, true, 0);
 
     private static final Pattern TAG_ID = Pattern.compile("[a-z0-9_.-]+:[a-z0-9_./-]+");

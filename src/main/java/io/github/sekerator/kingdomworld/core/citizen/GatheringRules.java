@@ -12,7 +12,8 @@ import java.util.Objects;
  * @param maxRadius         largest radius of a zone
  * @param maxSeats          most workers one post takes
  * @param maxTreeBlocks     most logs of one tree a lumberjack fells
- * @param mineLevels        most levels a mine has, one every {@link #MINE_LEVEL_STEP} blocks
+ * @param mineLevels        most levels a mine has, one every {@link #MINE_LEVEL_STEP} blocks, or every
+ *                          {@link #MINE_DEEP_STEP} blocks when anything is dug at the automatic depth
  * @param maxHerd           largest herd a herder keeps
  * @param carrierRange      how far from its post a carrier fetches and brings goods, in blocks
  * @param carrierItemsPerMinute items one carrier far from players moves in a minute
@@ -26,6 +27,8 @@ public record GatheringRules(int defaultRadius, int maxRadius, int maxSeats, int
     public static final long WORK_TICKS_PER_DAY = CitizenNeeds.TICKS_PER_DAY / 2;
     /** Blocks between two levels of a mine. */
     public static final int MINE_LEVEL_STEP = 4;
+    /** Blocks between two levels of a mine that digs anything at the automatic depth: it goes for the depths. */
+    public static final int MINE_DEEP_STEP = 16;
     /** A worker without a container at its post carries its harvest to the storehouse itself and gathers less. */
     public static final double SELF_CARRY_FACTOR = 0.75;
     /** Weight of a new measurement when it is averaged with the rates known before. */
@@ -33,7 +36,7 @@ public record GatheringRules(int defaultRadius, int maxRadius, int maxSeats, int
     /** Least time of watched work, in ticks, that makes a measurement. */
     public static final long MEASURE_TICKS = 2_400L;
 
-    public static final GatheringRules DEFAULT = new GatheringRules(8, 16, 4, 160, 4, 12, 48, 64, 1.0, TaskRisks.DEFAULTS);
+    public static final GatheringRules DEFAULT = new GatheringRules(8, 16, 4, 160, 8, 12, 48, 64, 1.0, TaskRisks.DEFAULTS);
 
     public GatheringRules {
         if (defaultRadius < 1 || maxRadius < defaultRadius || maxSeats < 1 || maxTreeBlocks < 1 || mineLevels < 1

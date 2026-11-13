@@ -405,10 +405,12 @@ public final class GatheringGameTests {
         GatheringRules rules = GatheringRules.DEFAULT;
         GatheringSettings.override(new GatheringRules(rules.defaultRadius(), rules.maxRadius(), rules.maxSeats(), rules.maxTreeBlocks(), 1,
                 rules.maxHerd(), rules.carrierRange(), rules.carrierItemsPerMinute(), 0.0, rules.risks()));
-        GatheringSettings.overrideMine(new MineRules(3, 8, 24, Map.of()));
+        GatheringSettings.overrideMine(new MineRules(3, 8, 24, 0, Map.of()));
         StorehouseInventory store = storehouse(level, new BlockPos(x0 + 1, y, z0 + 1));
         store.insertItem(0, new ItemStack(Items.STONE_PICKAXE), false);
         WorldPos postPos = post(level, new BlockPos(x0, y, z0), "miner");
+        // The mine of the test stays on the level of its post, inside the rock laid for it, whatever the height of the world.
+        KingdomWorldApi.change(server, "test", state -> state.setPostMineGoal(null, postPos, "", 0, false, y));
         List<MinePlan.Cell> cells = MinerBehavior.cells(level, PostWork.post(server, postPos).orElseThrow());
         for (MinePlan.Cell cell : cells) {
             helper.assertTrue(cell.x() >= from.getX() && cell.x() <= to.getX() && cell.z() >= from.getZ() && cell.z() <= to.getZ()
@@ -530,7 +532,8 @@ public final class GatheringGameTests {
         try {
             WorkPost post = PostWork.post(server, postPos).orElseThrow();
             helper.assertTrue(post.mineGoal().equals(MineGoal.ANYTHING), "A new post does not dig anything: " + post.mineGoal());
-            helper.assertTrue(MinerBehavior.depth(level, post) == postPos.y(), "Anything is not dug at the level of the post");
+            helper.assertTrue(MinerBehavior.depth(level, post) == Math.min(MineRules.ANYTHING_DEPTH, postPos.y()),
+                    "Anything is not dug from the height of 16 or the level of a lower post");
             helper.assertTrue(MineOres.kinds().contains("forge:ores/iron"), "Iron is not among the kinds of ore: " + MineOres.kinds());
             helper.assertTrue(MineOres.drop(level, "forge:ores/iron") == Items.RAW_IRON, "Iron ore does not count as raw iron: "
                     + MineOres.drop(level, "forge:ores/iron"));
