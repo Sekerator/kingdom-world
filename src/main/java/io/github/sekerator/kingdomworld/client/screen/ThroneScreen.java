@@ -924,7 +924,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
 
     /**
      * The choice of a new style in the overview: the picture with its arrows on the left, the current style marked on it; the
-     * current style, what the shown one is like and the way back beside it; the button that builds in the shown style for the
+     * current style, the name of the shown one over what it is like and the way back beside it; the button that builds in the shown style for the
      * fee in place of leaving the kingdom at the bottom.
      */
     private void initStylePicker(int left, int top) {
@@ -955,11 +955,17 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         int x = left + PAD + styleColumn() + PAD;
         int y = top + CONTENT_TOP + 4;
         Component current = styleLine();
+        String shown = stylePicker.id();
         if (current != null) {
             fittedLabel(graphics, current, x, y, 0xFFF0D070, right - PAD);
             y += 14;
+            if (!shown.equals(view.style())) {
+                // The text under the current style tells what the shown one is like, so it is headed by its name.
+                fittedLabel(graphics, StylePicker.name(shown), x, y, 0xFFFFFFFF, right - PAD);
+                y += LINE + 2;
+            }
         }
-        paragraph(graphics, StylePicker.caption(stylePicker.id()), x, y, right - PAD - x, 4, 0xFFD0D0D0);
+        paragraph(graphics, StylePicker.caption(shown), x, y, right - PAD - x, 4, 0xFFD0D0D0);
     }
 
     /**
