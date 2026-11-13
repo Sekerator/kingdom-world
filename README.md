@@ -488,6 +488,7 @@ KingdomWorld: мод для Minecraft 1.20.1 (Forge) о королевствах
   - малая теремная столица, поднятая в фоне: 43 здания, 139 жителей, 101 солдат, в среднем 14,3 мс, худший 57 мс; остальные королевства плана в фоне в среднем 12,7-16,2 мс, худший 29,7-104,9 мс (закладка замка малого королевства);
   - тревога с 70 солдатами в 24 блоках: в среднем 18,4-18,9 мс, худший 70,9-105,7 мс, 1-4 тика дольше 50 мс из 900; лагерь в мирное время 11,5 мс, худший 19,5 мс; бой 56 солдат 14,1 мс, худший 61,8 мс, 5 тиков дольше 50 мс из 1000.
 - Столицы в стиле в игровых тестах: большая северная столица поднимается за 2,9 с работы (71 здание); за 30 дней жизни сохраняет своих 266 жителей, никто не голодает.
+- Тактика отрядов (показ клиента `-PclientSelfTest=tactics`, встроенный сервер, ночь в крупной столице мира): 50 монстров против гарнизона рядом с игроком (57-58 тел солдат) без тактики дают тик в среднем 24,4 мс, худший 109,8 мс, 45 тиков дольше 50 мс из 700; тот же бой с тактикой 22,3 мс, 25 тиков дольше 50 мс (худший 362 мс совпал с ходом правителей, 102,9 мс по их логу, и мгновенной постройкой лагеря), решения ведущих по 0,21 мс, худший тик тактики 19,5 мс, дольше 5 мс один тик. Тревога на площади, 56 солдат с телами: 13,8 мс, худший 56,6 мс, тактика не дольше 0,42 мс за тик.
 
 ### Баланс
 
@@ -1248,6 +1249,7 @@ Measured with the smoke check and `-Load` (9-10 kingdoms of the world with house
   - the small terem capital raised in the background: 43 buildings, 139 citizens, 101 soldiers, 14.3 ms on average, the worst 57 ms; the other kingdoms of the plan in the background 12.7-16.2 ms on average, the worst 29.7-104.9 ms (the castle of a small kingdom laid);
   - an alarm with 70 soldiers within 24 blocks: 18.4-18.9 ms on average, the worst 70.9-105.7 ms, 1-4 ticks over 50 ms of 900; a camp in peace 11.5 ms, the worst 19.5 ms; a battle of 56 soldiers 14.1 ms, the worst 61.8 ms, 5 ticks over 50 ms of 1000.
 - Styled capitals in the game tests: a large northern capital rises in 2.9 s of work (71 buildings); in 30 days of life it keeps its 266 citizens, nobody starves.
+- Tactics of squads (the client check `-PclientSelfTest=tactics`, integrated server, night in a large capital of the world): 50 monsters against the garrison near the player (57-58 bodies of soldiers) give an average tick of 24.4 ms without the tactics, the worst 109.8 ms, 45 ticks over 50 ms of 700; the same fight with the tactics 22.3 ms, 25 ticks over 50 ms (the worst, 362 ms, fell with a turn of the rulers, 102.9 ms by their log, and a camp built at once), decisions of leaders 0.21 ms each, the worst tick of the tactics 19.5 ms, one tick over 5 ms. An alarm on the square with 56 soldiers with bodies: 13.8 ms, the worst 56.6 ms, the tactics no more than 0.42 ms a tick.
 
 ### Balance
 

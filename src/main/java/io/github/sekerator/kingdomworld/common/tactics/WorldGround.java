@@ -30,7 +30,8 @@ final class WorldGround implements Ground {
         int x = (int) Math.floor(spot.x());
         int z = (int) Math.floor(spot.z());
         int y0 = (int) Math.floor(spot.y() + 0.5);
-        if (!level.hasChunkAt(new BlockPos(x, y0, z))) {
+        // The kind of a place looks at its neighbours too: every chunk they lie in must be loaded, so that nothing loads.
+        if (!loaded(level, x, z)) {
             return null;
         }
         BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
@@ -51,6 +52,20 @@ final class WorldGround implements Ground {
             return new Spot(x + 0.5, y, z + 0.5);
         }
         return null;
+    }
+
+    /**
+     * Whether the chunks of a column and of its neighbours are loaded now (a chunk with a ticket that is still loading is not).
+     */
+    static boolean loaded(ServerLevel level, int x, int z) {
+        for (int cx = (x - 1) >> 4; cx <= (x + 1) >> 4; cx++) {
+            for (int cz = (z - 1) >> 4; cz <= (z + 1) >> 4; cz++) {
+                if (level.getChunkSource().getChunkNow(cx, cz) == null) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     @Override

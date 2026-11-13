@@ -113,6 +113,7 @@ public final class SquadTactics {
     private static long decisions;
     private static long decisionNanos;
     private static long worstTickNanos;
+    private static long slowTicks;
 
     private SquadTactics() {
     }
@@ -125,6 +126,7 @@ public final class SquadTactics {
         decisions = 0;
         decisionNanos = 0;
         worstTickNanos = 0;
+        slowTicks = 0;
     }
 
     // ---------------------------------------------------------------- what bodies read
@@ -152,9 +154,20 @@ public final class SquadTactics {
         return duty(body) != null;
     }
 
-    /** Decisions made, their time in all and the worst tick of decisions, in nanoseconds: for measures. */
+    /**
+     * Decisions made, their time in all, the worst tick of the tactics and the ticks in which the tactics took more than 5 ms,
+     * in nanoseconds, since the last {@link #resetMeasures()}: for measures.
+     */
     public static long[] measures() {
-        return new long[]{decisions, decisionNanos, worstTickNanos};
+        return new long[]{decisions, decisionNanos, worstTickNanos, slowTicks};
+    }
+
+    /** Starts the measures again. */
+    public static void resetMeasures() {
+        decisions = 0;
+        decisionNanos = 0;
+        worstTickNanos = 0;
+        slowTicks = 0;
     }
 
     // ---------------------------------------------------------------- every tick
@@ -177,7 +190,9 @@ public final class SquadTactics {
             lastGather = now;
         }
         decide(server, now, started);
-        worstTickNanos = Math.max(worstTickNanos, System.nanoTime() - started);
+        long spent = System.nanoTime() - started;
+        worstTickNanos = Math.max(worstTickNanos, spent);
+        slowTicks += spent > 5_000_000L ? 1 : 0;
     }
 
     /**
@@ -494,6 +509,9 @@ public final class SquadTactics {
      * Whether a place is narrow: few ways round it at the height of the feet, or a roof over it and walls about it.
      */
     static boolean narrow(ServerLevel level, BlockPos at) {
+        if (!WorldGround.loaded(level, at.getX(), at.getZ())) {
+            return false;
+        }
         int open = 0;
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {

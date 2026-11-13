@@ -21,7 +21,6 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.level.GameType;
-import net.minecraft.world.level.levelgen.Heightmap;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -34,9 +33,10 @@ import java.util.UUID;
 
 /**
  * A short check of the tactics of squads, for the measures: in a copy of a test world the player stands in the capital of a
- * large kingdom of the world at night, fifty monsters come at its garrison (a fight of about fifty bodies against fifty near
- * the player), then the player wounds guards on the square and the alarm brings the garrison. The ticks of the server and
- * the time the leaders of squads took to decide go to the log; one screenshot of each fight is saved.
+ * large kingdom of the world at night and fifty monsters come at its garrison on the ground of the square (a fight of about
+ * fifty bodies against fifty near the player), first with the tactics off and then with them on, the same way; then the
+ * player wounds guards on the square and the alarm brings the garrison. The ticks of the server and the time the leaders of
+ * squads took to decide go to the log; one screenshot of each fight is saved.
  */
 final class ClientTacticsCheck {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -90,7 +90,10 @@ final class ClientTacticsCheck {
                         finished = true;
                         return;
                     }
-                    server.execute(() -> monsters(server, playerId));
+                    server.execute(() -> {
+                        io.github.sekerator.kingdomworld.common.tactics.TacticSettings.overrideEnabled(false);
+                        monsters(server, playerId);
+                    });
                     phase = 1;
                     ticks = 0;
                 }
@@ -100,8 +103,23 @@ final class ClientTacticsCheck {
                     server.execute(() -> sample(server, playerId));
                 }
                 if (ticks == FIGHT) {
+                    shoot("tactics-off-battle");
+                    server.execute(() -> {
+                        report(server, playerId, "fifty monsters against the garrison near the player, tactics off");
+                        io.github.sekerator.kingdomworld.common.tactics.TacticSettings.overrideEnabled(true);
+                        monsters(server, playerId);
+                    });
+                    phase = 4;
+                    ticks = 0;
+                }
+            }
+            case 4 -> {
+                if (ticks % 100 == 0) {
+                    server.execute(() -> sample(server, playerId));
+                }
+                if (ticks == FIGHT) {
                     shoot("tactics-battle");
-                    server.execute(() -> report(server, playerId, "fifty monsters against the garrison near the player"));
+                    server.execute(() -> report(server, playerId, "fifty monsters against the garrison near the player, tactics on"));
                     phase = 2;
                     ticks = 0;
                 }
@@ -121,6 +139,7 @@ final class ClientTacticsCheck {
             }
             default -> {
                 if (ticks == 20) {
+                    server.execute(() -> io.github.sekerator.kingdomworld.common.tactics.TacticSettings.overrideEnabled(null));
                     finished = true;
                 }
             }
@@ -174,16 +193,32 @@ final class ClientTacticsCheck {
             return;
         }
         ServerLevel level = player.serverLevel();
+        // What is left of an earlier fight goes first.
+        for (UUID id : monsters) {
+            if (level.getEntity(id) != null) {
+                level.getEntity(id).discard();
+            }
+        }
+        monsters.clear();
         long now = KingdomWorldApi.gameTime(server);
         java.util.Random random = new java.util.Random(14_5L);
-        for (int i = 0; i < MONSTERS; i++) {
+        int ground = (int) Math.floor(player.getY()) - 6;
+        for (int i = 0; i < MONSTERS * 3 && monsters.size() < MONSTERS; i++) {
             EntityType<? extends Mob> type = i % 5 == 0 ? EntityType.VINDICATOR : i % 5 == 1 ? EntityType.SKELETON : EntityType.ZOMBIE;
             double angle = 2 * Math.PI * i / MONSTERS;
             double radius = 16 + random.nextInt(8);
             int x = (int) Math.floor(player.getX() + Math.cos(angle) * radius);
             int z = (int) Math.floor(player.getZ() + Math.sin(angle) * radius);
-            BlockPos top = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, new BlockPos(x, 0, z));
-            Mob mob = type.create(level);
+            // On the ground of the square and the streets, not on the roofs.
+            BlockPos top = null;
+            for (int y = ground - 2; y <= ground + 4 && top == null; y++) {
+                BlockPos at = new BlockPos(x, y, z);
+                if (!level.getBlockState(at.below()).getCollisionShape(level, at.below()).isEmpty()
+                        && level.noCollision(type.getAABB(x + 0.5, y, z + 0.5))) {
+                    top = at;
+                }
+            }
+            Mob mob = top == null ? null : type.create(level);
             if (mob == null) {
                 continue;
             }
@@ -196,6 +231,7 @@ final class ClientTacticsCheck {
         }
         soldiersAtStart = soldiers(player);
         samples.clear();
+        SquadTactics.resetMeasures();
         tacticsBefore = SquadTactics.measures();
         LOGGER.info(PREFIX + "{} monster(s) came at the garrison: {} soldier(s) with a body within {} blocks", monsters.size(), soldiersAtStart,
                 (int) AROUND);
@@ -232,6 +268,7 @@ final class ClientTacticsCheck {
         }
         soldiersAtStart = soldiers(player);
         samples.clear();
+        SquadTactics.resetMeasures();
         tacticsBefore = SquadTactics.measures();
         LOGGER.info(PREFIX + "the player struck {} guard(s) on the square: {} soldier(s) with a body within {} blocks", struck, soldiersAtStart,
                 (int) AROUND);
@@ -282,9 +319,10 @@ final class ClientTacticsCheck {
         List<String> squads = SquadTactics.describe();
         LOGGER.info(PREFIX + "tactics, {}: {} soldier(s) with a body within {} blocks at the start, {} monster(s) left, {} squad(s) by plan; "
                         + "average tick {} ms, worst tick {} ms, {} tick(s) over 50 ms of {}; {} decision(s) of leaders, {} ms each, worst tick of "
-                        + "decisions so far {} ms", what, soldiersAtStart, (int) AROUND, phase == 1 ? left : 0, squads.size(),
+                        + "the tactics {} ms, {} tick(s) of the tactics over 5 ms", what, soldiersAtStart, (int) AROUND, phase == 2 ? 0 : left, squads.size(),
                 String.format(java.util.Locale.ROOT, "%.2f", count == 0 ? 0.0 : sum / 1e6 / count), String.format(java.util.Locale.ROOT, "%.2f", worst / 1e6),
-                slow, count, decisions, String.format(java.util.Locale.ROOT, "%.3f", perDecision), String.format(java.util.Locale.ROOT, "%.2f", now[2] / 1e6));
+                slow, count, decisions, String.format(java.util.Locale.ROOT, "%.3f", perDecision), String.format(java.util.Locale.ROOT, "%.2f", now[2] / 1e6),
+                now[3]);
         for (String squad : squads) {
             LOGGER.info(PREFIX + "  squad {}", squad);
         }
