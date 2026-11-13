@@ -2,6 +2,18 @@
 
 ## Русский
 
+### 1.5.0
+
+Шахтёр стал умнее. Сетевой протокол 41: клиент и сервер должны быть версии 1.5.0. Сохранения читаются как есть: посты старых миров копают «Всё подряд» на авто-глубине без ограничения.
+
+- **Цель шахтёра.** В окне поста шахтёра появилась цель, её задаёт тот, кто может менять настройки поста: руда («Всё подряд» или один вид; виды это теги `forge:ores/<имя>` запущенной игры, руды других модов появляются сами, с иконкой и названием первого блока тега), сколько её нужно на складах (кнопки - и + с шагом 16, с Shift 64; «∞» значит без ограничения; считается то, что руда даёт под железной киркой без чар) и глубина (авто по виду руды или высота Y, кнопки - и + с шагом 1, с Shift 8). Строка «На складах: 23 из 64» показывает запас, а когда он набран, окно пишет «Цель выполнена: Железная руда 64/64»: шахтёр продолжает копать ту же шахту и берёт руду, какая попадётся, пока запас снова не упадёт. Новая руда или глубина начинает новую шахту, старые тоннели остаются.
+- **Кнопки выбора листают в обе стороны.** Кнопки профессии, животных и руды в окне поста по левой кнопке мыши берут следующий вариант, по правой предыдущий: проскочив нужную профессию, больше не надо проходить весь круг.
+- **Шахта стала длиннее и глубже.** От поста вниз идёт винтовая лестница в квадрате 3x3, на рабочей глубине главный коридор до `minerCorridorLength` (48) блоков в каждую сторону с ответвлениями каждые три блока до `minerBranchLength` (16) блоков; ось коридора выбирается по своей земле, тоннели обрываются у её края, радиус зоны поста шахте больше не нужен (в окне шахтёра вместо него глубина). Уровни идут через четыре блока вниз (у дна мира вверх), до `mineLevels`. Новое состояние «Шахта выработана», когда выкопано всё.
+- **Жилы.** Руду, которая обнажилась в стене, полу или потолке тоннеля, шахтёр берёт вместе с жилой: до `minerVeinBlocks` (24) блоков руды, касающихся друг друга, руду цели первой. Породу вокруг не трогает, руду за породой не видит. Лава, вода и слабая кирка учитываются как раньше.
+- **Вдали от игроков** оценка выработки смотрит на план шахты на рабочей глубине, блоки вокруг него и жилы: пост на алмазы на -58 даёт то, что там лежит.
+- **Конфиг сервера, `[work]`:** `minerCorridorLength` (48, 8-256), `minerBranchLength` (16, 4-64), `minerVeinBlocks` (24, 0-128, 0 отключает жилы), `minerOreDepths` (список `тег=y`: уголь 96, медь 48, железо 16, лазурит 0, золото -16, редстоун -58, алмазы -58, изумруды 232; вид не из списка копают на 16). Уровни шахты (`mineLevels`) теперь идут через четыре блока, а не через три.
+- Королевства мира целей не ставят, но шахты и жилы у них такие же. Глава 3 книги-руководства говорит о цели шахтёра.
+
 ### 1.4.1
 
 - **Лимит земли растёт с жителями.** Королевство может занять `baseMaxChunks` (25) чанков, ещё `chunksPerMember` (4) за каждого игрока-подданного и теперь `chunksPerCitizen` (2) за каждого живого жителя, солдаты считаются: это население из окна трона. Новый ключ `chunksPerCitizen` в `[territory]` конфига сервера (0-10000, 0 отключает прибавку); в конфиги старых миров Forge добавит его сам. Лимит по-прежнему касается только чанков, которые занимают игроки. Если жителей стало меньше, земля остаётся за королевством: оно лишь не может занять новую, пока владеет не меньше лимита. Сообщение о достигнутом лимите и глава 2 книги-путеводителя объясняют, от чего он растёт. Сетевой протокол прежний, 40; клиент и сервер должны быть одной версии мода.
@@ -111,6 +123,18 @@
 - **Нагрузка и баланс.** Замер нагрузки `admin perf`, тяжёлые места разнесены по тикам, жалование всех профессий по умолчанию.
 
 ## English
+
+### 1.5.0
+
+The miner got smarter. Network protocol 41: client and server must both be 1.5.0. Saved data is read as it is: the posts of older worlds dig "Anything" at the automatic depth without a limit.
+
+- **A goal for the miner.** The window of a miner's post has a goal, set by whoever may change the post: the ore ("Anything" or one kind; the kinds are the tags `forge:ores/<name>` of the running game, the ores of other mods come by themselves, each with the icon and the name of the first block of its tag), how much of it the storehouses need (buttons - and + in steps of 16, with Shift 64; "∞" means no limit; what counts is what the ore drops under an iron pickaxe without enchantments) and the depth (auto by the kind of ore, or a height Y, buttons - and + in steps of 1, with Shift 8). The line "In the storehouses: 23 of 64" shows the stock, and once it is there the window says "Goal met: Iron Ore 64/64": the miner keeps digging the same mine and takes ore as it comes until the stock falls again. Another ore or depth starts a new mine, the old tunnels stay.
+- **Buttons of choices go both ways.** The buttons of the profession, the animals and the ore in the window of a post take the next choice on a left click and the one before on a right click: a profession passed by mistake no longer costs a whole round.
+- **The mine reaches further and deeper.** A spiral staircase goes down from the post inside a square of 3x3 blocks; at the working depth a main corridor runs up to `minerCorridorLength` (48) blocks each way with branches every three blocks, up to `minerBranchLength` (16) blocks long; the axis of the corridor is chosen by the kingdom's own land, tunnels stop at its edge, and the radius of the zone no longer matters to a mine (the window of a miner shows the depth in its place). Levels lie four blocks apart going down (up at the bottom of the world), up to `mineLevels`. The new state "The mine is worked out" shows when everything is dug.
+- **Veins.** Ore that shows in the wall, the floor or the ceiling of a tunnel is taken with its vein: up to `minerVeinBlocks` (24) blocks of ore touching each other, the ore of the goal first. The rock around it is left alone, ore behind rock is not seen. Lava, water and a pickaxe that is too weak count as before.
+- **Far from players** the estimate of the yield looks at the plan of the mine at the working depth, at the blocks around it and at the veins: a post asked for diamonds at -58 yields what lies there.
+- **Server config, `[work]`:** `minerCorridorLength` (48, 8-256), `minerBranchLength` (16, 4-64), `minerVeinBlocks` (24, 0-128, 0 turns veins off), `minerOreDepths` (a list of `tag=y`: coal 96, copper 48, iron 16, lapis 0, gold -16, redstone -58, diamonds -58, emeralds 232; a kind that is not listed is dug at 16). The levels of a mine (`mineLevels`) now lie four blocks apart instead of three.
+- The kingdoms of the world set no goals but have the same mines and veins. Chapter 3 of the guide book tells about the goal of a miner.
 
 ### 1.4.1
 
