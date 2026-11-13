@@ -170,6 +170,14 @@ public final class KingdomWorldClient {
     }
 
     private static void onScreenOpening(ScreenEvent.Opening event) {
+        if (ClientSelfTest.active() && event.getNewScreen() instanceof net.minecraft.client.gui.screens.AccessibilityOnboardingScreen) {
+            // A self-test in a game folder that never ran: the first start asks about accessibility and nobody answers. The
+            // question is put away for good and the self-test goes on from the title screen.
+            Minecraft minecraft = Minecraft.getInstance();
+            minecraft.options.onboardAccessibility = false;
+            minecraft.options.save();
+            event.setNewScreen(new TitleScreen(true));
+        }
         if (!titleScreenSeen && event.getNewScreen() instanceof TitleScreen) {
             titleScreenSeen = true;
             LOGGER.debug("KingdomWorld client reached the title screen");
