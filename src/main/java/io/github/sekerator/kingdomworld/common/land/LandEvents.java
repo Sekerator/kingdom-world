@@ -31,7 +31,10 @@ public final class LandEvents {
     public static void register() {
         MinecraftForge.EVENT_BUS.addListener(LandEvents::onServerStarted);
         MinecraftForge.EVENT_BUS.addListener(LandEvents::onServerTick);
-        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.server.ServerStoppedEvent event) -> Wilderness.reset());
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.server.ServerStoppedEvent event) -> {
+            Wilderness.reset();
+            StateGrowth.reset();
+        });
         // Players act in the wilds of the kingdoms of the world as on land of nobody.
         Wilderness.register();
     }
@@ -52,6 +55,7 @@ public final class LandEvents {
         if (server.getTickCount() % 20 == 7) {
             territory.provinceMap().ifPresent(map -> ProvinceTrade.expire(server, map));
         }
+        StateGrowth.tick(server);
     }
 
     /**

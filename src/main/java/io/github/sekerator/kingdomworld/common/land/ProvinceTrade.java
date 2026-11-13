@@ -64,7 +64,18 @@ public final class ProvinceTrade {
         }
     }
 
+    /** Whether rulers are willing to sell, set by game tests; null for their characters. */
+    private static volatile Boolean willingOverride;
+
     private ProvinceTrade() {
+    }
+
+    /**
+     * Makes every ruler willing to sell, or unwilling, whatever its character, for game tests; null gives the rulers their
+     * characters back.
+     */
+    public static void overrideWilling(@Nullable Boolean willing) {
+        willingOverride = willing;
     }
 
     public static ProvinceSale.Rules rules() {
@@ -272,7 +283,8 @@ public final class ProvinceTrade {
         int relation = buyer == null ? 0 : WarWork.relation(server, quote.seller(), buyer);
         long seed = TreasuryActions.day(server) * 0x9E3779B97F4A7C15L + quote.province() * 31L + quote.seller().hashCode()
                 + (buyer == null ? 0 : buyer.hashCode());
-        if (!ProvinceSale.willing(npc.character(), relation, seed)) {
+        Boolean forced = willingOverride;
+        if (forced != null ? !forced : !ProvinceSale.willing(npc.character(), relation, seed)) {
             return Optional.of(KingdomActions.Feedback.fail(Component.translatable(KEY + "refusal.unwilling", WarWork.name(server, quote.seller()))));
         }
         return Optional.empty();
@@ -400,6 +412,7 @@ public final class ProvinceTrade {
             boolean toSeller = paid && hold.seller() != null && economy.canReleaseToTreasury(hold.seller(), hold.currency(), hold.amount());
             if (toSeller) {
                 economy.releaseToTreasury(hold.seller(), hold.currency(), hold.amount(), LedgerCategory.LAND, day);
+                economy.noteLandIncome(hold.seller(), hold.currency(), hold.amount(), day);
             } else if (!economy.releaseToAccount(hold.buyer(), hold.currency(), hold.amount()).ok()) {
                 LOGGER.warn("The money of the charter for the province {} could not go back to {}: it stays held", id, hold.buyer());
                 return;
@@ -418,7 +431,7 @@ public final class ProvinceTrade {
     /**
      * Charters whose days are over, or whose province changed hands, give the money back. Once a second is enough.
      */
-    static void expire(MinecraftServer server, ProvinceMap map) {
+    public static void expire(MinecraftServer server, ProvinceMap map) {
         if (ProvinceSavedData.get(server).isReadOnly()) {
             return;
         }

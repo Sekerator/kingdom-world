@@ -766,6 +766,10 @@ public final class RulerActions {
     }
 
     private static Result town(MinecraftServer server, NpcKingdom npc, RulerDecision decision) {
+        if (io.github.sekerator.kingdomworld.common.land.StateGrowth.isState(server, npc.kingdomId())) {
+            // A state of the plan founds a village in an empty province of its core; it is raised when players come near.
+            return Result.of(io.github.sekerator.kingdomworld.common.land.StateGrowth.village(server, npc), decision);
+        }
         Optional<int[]> spot = RulerPlaces.townSpot(server, npc);
         if (spot.isEmpty()) {
             return Result.failed(KingdomError.CITY_TOO_CLOSE, decision);

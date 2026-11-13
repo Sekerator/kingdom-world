@@ -906,7 +906,24 @@ public final class Economy {
             releaseToTreasury(buyer, buyer, cost, LedgerCategory.LAND, day);
             return new Exchanged(released, 0);
         }
+        noteLandIncome(seller, buyer, cost, day);
         return new Exchanged(Outcome.DONE, cost);
+    }
+
+    /**
+     * Money of another currency a seller of a province took into its reserves: its journal shows what it is worth in its own
+     * currency under "Land", as money of its own would be shown. Nothing on the balances changes.
+     */
+    public void noteLandIncome(UUID seller, UUID currency, long amount, long day) {
+        Treasury treasury = treasuries.get(seller);
+        if (treasury == null || currency.equals(seller) || amount <= 0) {
+            return;
+        }
+        long worth = ExchangeRates.convert(amount, rate(currency), rate(seller), 0);
+        if (worth > 0) {
+            treasury.journal().record(day, LedgerCategory.LAND, worth, 0);
+            changed();
+        }
     }
 
     /**

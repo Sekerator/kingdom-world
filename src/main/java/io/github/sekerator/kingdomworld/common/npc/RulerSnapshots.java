@@ -373,10 +373,13 @@ final class RulerSnapshots {
         view.maxChunks = rules.maxChunks(npc.level());
         Optional<Territory> territory = state.territory().territory(id);
         view.chunks = territory.map(Territory::size).orElse(0);
-        view.landToClaim = territory.isPresent() && !RulerPlaces.claimable(server, id, 1).isEmpty();
+        // A state of the plan grows by wild provinces now and then, not by claims; its towns are villages in its provinces.
+        boolean isState = io.github.sekerator.kingdomworld.common.land.StateGrowth.isState(server, id);
+        view.landToClaim = territory.isPresent() && !isState && !RulerPlaces.claimable(server, id, 1).isEmpty();
         view.towns = RoadWork.state(server).citiesOf(id).size();
         view.townSpot = view.population >= rules.townPopulation() && view.towns < rules.maxTowns()
-                && RulerPlaces.townSpot(server, npc).isPresent();
+                && (isState ? io.github.sekerator.kingdomworld.common.land.StateGrowth.villageProvince(server, id).isPresent()
+                : RulerPlaces.townSpot(server, npc).isPresent());
     }
 
     private static void army(MinecraftServer server, UUID id, RulerView view) {
