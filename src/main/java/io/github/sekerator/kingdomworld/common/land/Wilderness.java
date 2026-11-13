@@ -105,10 +105,24 @@ public final class Wilderness {
     }
 
     /**
-     * Whether a building, a wall or a road of a kingdom stands in a chunk.
+     * Whether a kingdom lives in a chunk: the square of one of its settlements being raised or standing there, or a building, a
+     * wall or a road of it.
      */
     public static boolean inhabited(MinecraftServer server, UUID kingdomId, String dimension, long chunk) {
+        if (dimension.equals("minecraft:overworld")) {
+            java.util.Optional<io.github.sekerator.kingdomworld.core.npc.Settlement> settlement = io.github.sekerator.kingdomworld.common.npc.SettlementIndex
+                    .at(server, io.github.sekerator.kingdomworld.core.territory.ChunkKey.x(chunk), io.github.sekerator.kingdomworld.core.territory.ChunkKey.z(chunk));
+            if (settlement.isPresent() && kingdomId.equals(settlement.get().kingdomId()) && lived(settlement.get())) {
+                return true;
+            }
+        }
         return chunks(server, kingdomId).contains(dimension, chunk);
+    }
+
+    /** Whether a settlement is lived in: being raised or standing. */
+    public static boolean lived(io.github.sekerator.kingdomworld.core.npc.Settlement settlement) {
+        return settlement.status() == io.github.sekerator.kingdomworld.core.npc.Settlement.Status.RAISING
+                || settlement.status() == io.github.sekerator.kingdomworld.core.npc.Settlement.Status.STANDING;
     }
 
     /**

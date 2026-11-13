@@ -239,6 +239,16 @@ public final class BanditWork {
                 return false;
             }
         }
+        if (dimension.equals("minecraft:overworld")) {
+            // The squares of the settlements of the states of the world, planned ones too: the land they will live in.
+            for (io.github.sekerator.kingdomworld.core.npc.Settlement settlement
+                    : io.github.sekerator.kingdomworld.common.npc.SettlementIndex.near(server, x, z, SETTLEMENT_DISTANCE)) {
+                if (settlement.status() != io.github.sekerator.kingdomworld.core.npc.Settlement.Status.RUINED
+                        && settlement.status() != io.github.sekerator.kingdomworld.core.npc.Settlement.Status.BLOCKED) {
+                    return false;
+                }
+            }
+        }
         for (Road road : roads.roads()) {
             if (!road.dimension().equals(dimension)) {
                 continue;
