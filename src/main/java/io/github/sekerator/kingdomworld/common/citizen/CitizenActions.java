@@ -89,7 +89,32 @@ public final class CitizenActions {
         return Optional.of(new CitizenView(kingdomId, state.membership().hasPermission(viewer, kingdomId, Permission.MANAGE_CITIZENS),
                 summary.population(), summary.bedsUsed(), summary.bedsTotal(), summary.foodDays(), summary.mood(),
                 summary.storehouses(), summary.growth(), entries, chronicle, production(server, kingdomId),
-                io.github.sekerator.kingdomworld.common.npc.NpcRulers.chronicle(server, kingdomId, viewer)));
+                io.github.sekerator.kingdomworld.common.npc.NpcRulers.chronicle(server, kingdomId, viewer), settlements(server, kingdomId)));
+    }
+
+    /**
+     * The settlements of a state of the world besides its capital, as the citizens tab lists them: the largest first.
+     */
+    static List<CitizenView.SettlementRow> settlements(MinecraftServer server, UUID kingdomId) {
+        List<CitizenView.SettlementRow> rows = new ArrayList<>();
+        List<io.github.sekerator.kingdomworld.core.npc.Settlement> own = new ArrayList<>(
+                io.github.sekerator.kingdomworld.common.npc.NpcWork.state(server).settlementsOf(kingdomId));
+        own.sort(java.util.Comparator.comparingInt((io.github.sekerator.kingdomworld.core.npc.Settlement settlement) -> settlement.tier().ordinal())
+                .thenComparing(settlement -> -settlement.population()));
+        for (io.github.sekerator.kingdomworld.core.npc.Settlement settlement : own) {
+            if (settlement.tier() == io.github.sekerator.kingdomworld.core.land.Tier.CAPITAL
+                    || settlement.status() == io.github.sekerator.kingdomworld.core.npc.Settlement.Status.RUINED) {
+                continue;
+            }
+            if (rows.size() >= CitizenView.MAX_SETTLEMENTS) {
+                break;
+            }
+            int people = Math.max(1, settlement.population());
+            rows.add(new CitizenView.SettlementRow(settlement.name().latin(), settlement.name().cyrillic(), settlement.tier(),
+                    settlement.population(), settlement.housing(), Math.min(CitizenView.MAX_FOOD_DAYS, settlement.food() / people),
+                    settlement.guards(), settlement.militia(), settlement.status() != io.github.sekerator.kingdomworld.core.npc.Settlement.Status.STANDING));
+        }
+        return rows;
     }
 
     /**

@@ -87,6 +87,44 @@ public final class SettlementPlan {
     }
 
     /**
+     * The plan with the places the world chose: for every settlement -1 leaves it out (the settlements that belonged to it go to
+     * the nearest one above it that stays), 0 keeps its place and {@code k} takes its {@code k}-th alternate. The settlements are
+     * numbered anew in the same order.
+     *
+     * @throws IllegalArgumentException if a choice is not one of the places of its settlement
+     */
+    public SettlementPlan placed(int[] choices) {
+        if (choices.length != slots.size()) {
+            throw new IllegalArgumentException("A choice for every settlement");
+        }
+        int[] number = new int[slots.size()];
+        int kept = 0;
+        for (int i = 0; i < slots.size(); i++) {
+            int choice = choices[i];
+            if (choice > slots.get(i).alternates().size()) {
+                throw new IllegalArgumentException("No alternate " + choice + " for settlement " + i);
+            }
+            number[i] = choice < 0 ? -1 : kept++;
+        }
+        List<SettlementSlot> placed = new ArrayList<>(kept);
+        for (int i = 0; i < slots.size(); i++) {
+            if (number[i] < 0) {
+                continue;
+            }
+            SettlementSlot slot = slots.get(i);
+            SettlementSlot.Spot spot = choices[i] == 0 ? new SettlementSlot.Spot(slot.x(), slot.z(), slot.cell(), slot.province())
+                    : slot.alternates().get(choices[i] - 1);
+            int parent = slot.parent();
+            while (parent >= 0 && number[parent] < 0) {
+                parent = slots.get(parent).parent();
+            }
+            placed.add(new SettlementSlot(number[i], slot.state(), slot.tier(), spot.x(), spot.z(), spot.cell(), spot.province(),
+                    parent < 0 ? -1 : number[parent], List.of()));
+        }
+        return new SettlementPlan(provinces, rules, placed, wanted);
+    }
+
+    /**
      * The main settlement of a province (its highest rank, the first on a tie), or -1 for a province without settlements.
      */
     public int seat(int province) {

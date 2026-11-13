@@ -35,7 +35,8 @@ import java.util.Optional;
  * states (two small, a medium and a large one) is planned far from the player with the plan of states, founded and given its
  * provinces; once the provinces reached the client the atlas is opened over them and screenshots go into the folder
  * {@code provinces} of the screenshot folder: the whole ring, the provinces of a state with their names, a capital with the
- * borders of its provinces and the pointer on a province, and wild land. The states stay in the world.
+ * borders of its provinces and the pointer on a province, wild land, the settlements of a state by rank and a settlement close by with
+ * its card. The states stay in the world.
  */
 final class ClientProvinceShowcase {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -108,8 +109,10 @@ final class ClientProvinceShowcase {
         shot++;
         if (shot >= SHOTS.length) {
             minecraft.setScreen(null);
-            LOGGER.info(PREFIX + "provinces showcase finished: {}; the client knows {} province(s) in {} tile(s), about {} KB", report,
-                    ClientProvinceMap.provinces().size(), ClientProvinceMap.tileCount(), ClientProvinceMap.memoryBytes() / 1024);
+            long settlements = io.github.sekerator.kingdomworld.client.map.ClientRoadCache.data().cities().stream()
+                    .filter(city -> city.settlement() != null).count();
+            LOGGER.info(PREFIX + "provinces showcase finished: {}; the client knows {} province(s) in {} tile(s), about {} KB, and {} settlement(s)",
+                    report, ClientProvinceMap.provinces().size(), ClientProvinceMap.tileCount(), ClientProvinceMap.memoryBytes() / 1024, settlements);
             finished = true;
             return;
         }
@@ -117,7 +120,7 @@ final class ClientProvinceShowcase {
         wait = shot == 0 ? SETTLE : SHOT_WAIT;
     }
 
-    private static final String[] SHOTS = {"atlas-ring", "atlas-state", "atlas-capital", "atlas-wild"};
+    private static final String[] SHOTS = {"atlas-ring", "atlas-state", "atlas-capital", "atlas-wild", "atlas-settlements", "atlas-settlement-card"};
 
     /**
      * The atlas of a shot: where it looks and how near.
@@ -137,6 +140,28 @@ final class ClientProvinceShowcase {
                 // The pointer on the province beside the capital, so that the footer tells it.
                 org.lwjgl.glfw.GLFW.glfwSetCursorPos(minecraft.getWindow().getWindow(), minecraft.getWindow().getScreenWidth() * 0.6,
                         minecraft.getWindow().getScreenHeight() * 0.5);
+            }
+            case 4 -> atlas.showForCheck(capital[0] / 16.0, capital[1] / 16.0, 3.0, null, Component.empty(), false);
+            case 5 -> {
+                // The town or city of the state nearest to its capital, close by, with its card.
+                io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity town = null;
+                double best = Double.MAX_VALUE;
+                for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city
+                        : io.github.sekerator.kingdomworld.client.map.ClientRoadCache.data().cities()) {
+                    if (city.settlement() == null || city.settlement().tier() == io.github.sekerator.kingdomworld.core.land.Tier.CAPITAL
+                            || city.settlement().tier().ordinal() > io.github.sekerator.kingdomworld.core.land.Tier.TOWN.ordinal()) {
+                        continue;
+                    }
+                    double distance = Math.hypot(city.x() - capital[0], city.z() - capital[1]);
+                    if (distance < best) {
+                        best = distance;
+                        town = city;
+                    }
+                }
+                int[] at = town == null ? capital : new int[]{town.x(), town.z()};
+                atlas.showForCheck(at[0] / 16.0, at[1] / 16.0, 8.0, null, Component.empty(), false);
+                atlas.hoverSettlementForCheck(town);
+                LOGGER.info(PREFIX + "the settlement shown close: {}", town);
             }
             default -> {
                 // Between the spawn zone and the states: the neutral land of the ring.

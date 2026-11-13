@@ -811,7 +811,7 @@ public final class NpcPlanning {
      * @param radius   how far around the point the ground is looked at
      * @param thorough whether to look at more columns (for a capital)
      */
-    static boolean suitable(ServerLevel level, int x, int z, int radius, boolean thorough) {
+    public static boolean suitable(ServerLevel level, int x, int z, int radius, boolean thorough) {
         ChunkGenerator generator = level.getChunkSource().getGenerator();
         RandomState random = level.getChunkSource().randomState();
         int sea = generator.getSeaLevel();

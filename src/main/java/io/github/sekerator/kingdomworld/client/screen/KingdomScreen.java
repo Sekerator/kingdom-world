@@ -135,13 +135,19 @@ public abstract class KingdomScreen extends Screen {
      */
     protected static List<Component> npcLines(io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo npc) {
         Component ruler = io.github.sekerator.kingdomworld.common.npc.NpcTexts.ruler(npc.rulerLatin(), npc.rulerCyrillic(), npc.rulerGender());
-        return List.of(Component.translatable("kingdomworld.screen.throne.npc.ruler", ruler),
+        List<Component> lines = new java.util.ArrayList<>(List.of(Component.translatable("kingdomworld.screen.throne.npc.ruler", ruler),
                 Component.translatable(npc.raising() ? "kingdomworld.screen.throne.npc.size.raising" : "kingdomworld.screen.throne.npc.size",
                         io.github.sekerator.kingdomworld.common.npc.NpcTexts.level(npc.level())),
                 Component.translatable("kingdomworld.screen.throne.npc.character",
                         io.github.sekerator.kingdomworld.common.npc.NpcTexts.character(npc.character()),
                         io.github.sekerator.kingdomworld.common.npc.NpcTexts.traits(npc.traits())),
-                npcPeople(npc.raising(), npc.people(), npc.soldiers()));
+                npcPeople(npc.raising(), npc.people(), npc.soldiers())));
+        if (npc.settlements() > 0) {
+            // The settlements of the state besides its capital: as numbers until they are raised.
+            lines.add(Component.translatable("kingdomworld.screen.throne.npc.settlements", npc.settlements(),
+                    io.github.sekerator.kingdomworld.common.life.LifeTexts.citizens(npc.settlementPeople())));
+        }
+        return List.copyOf(lines);
     }
 
     /**

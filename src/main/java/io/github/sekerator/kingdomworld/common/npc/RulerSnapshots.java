@@ -216,6 +216,40 @@ final class RulerSnapshots {
         }
         view.storageSlots = slots;
         view.storageUsed = used;
+        settlements(NpcWork.state(server), id, view);
+    }
+
+    /**
+     * The numbers of the settlements of a state the ruler sees: how many, their people and houses, guard and militia, and how many
+     * have no food left.
+     */
+    static void settlements(io.github.sekerator.kingdomworld.core.npc.NpcState npc, UUID id, RulerView view) {
+        int count = 0;
+        int people = 0;
+        int housing = 0;
+        int guards = 0;
+        int militia = 0;
+        int hungry = 0;
+        for (io.github.sekerator.kingdomworld.core.npc.Settlement settlement : npc.settlementsOf(id)) {
+            if (settlement.tier() == io.github.sekerator.kingdomworld.core.land.Tier.CAPITAL
+                    || settlement.status() == io.github.sekerator.kingdomworld.core.npc.Settlement.Status.RUINED) {
+                continue;
+            }
+            count++;
+            people += settlement.population();
+            housing += settlement.housing();
+            guards += settlement.guards();
+            militia += settlement.militia();
+            if (settlement.food() == 0) {
+                hungry++;
+            }
+        }
+        view.settlements = count;
+        view.settlementPeople = people;
+        view.settlementHousing = housing;
+        view.settlementGuards = guards;
+        view.settlementMilitia = militia;
+        view.hungrySettlements = hungry;
     }
 
     private static void treasury(MinecraftServer server, KingdomWorldState state, UUID id, NpcKingdom npc, RulerView view) {

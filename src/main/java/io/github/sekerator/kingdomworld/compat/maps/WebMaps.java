@@ -297,12 +297,12 @@ public final class WebMaps {
         for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city
                 : io.github.sekerator.kingdomworld.common.road.RoadSync.all(server).cities()) {
             // Capitals (id 0) have their own marker.
-            if (city.id() == 0 || !TerritorySnapshots.canSee(null, city.kingdomId())) {
+            if (city.id() == 0 || city.capitalOfPlan() || !TerritorySnapshots.canSee(null, city.kingdomId())) {
                 continue;
             }
             String kingdom = state.kingdoms().get(city.kingdomId()).map(Kingdom::name).orElse("?");
             // Towns of kingdoms of the world are named in the language of the web maps.
-            String name = io.github.sekerator.kingdomworld.common.npc.NpcWork.localCity(city.name(), texts.language());
+            String name = io.github.sekerator.kingdomworld.common.road.RoadSync.localName(city, texts.language());
             list.add(new WebMapModel.City(city.id(), city.dimension(), name, kingdom, city.color(), city.x(), city.z(),
                     texts.text("kingdomworld.map.city", name, kingdom)));
         }

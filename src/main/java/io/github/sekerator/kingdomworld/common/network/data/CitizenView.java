@@ -26,8 +26,52 @@ import java.util.UUID;
  */
 public record CitizenView(UUID kingdomId, boolean canManage, int population, int bedsUsed, int bedsTotal, int foodDays,
                           int mood, int storehouses, CitizenNeeds.GrowthCheck growth, List<Entry> citizens,
-                          List<Death> chronicle, List<Production> production, List<RulerInfo.Decree> decrees) {
+                          List<Death> chronicle, List<Production> production, List<RulerInfo.Decree> decrees, List<SettlementRow> settlements) {
     public static final int MAX_CITIZENS = 500;
+    /** Settlements of a state of the world the tab lists at most. */
+    public static final int MAX_SETTLEMENTS = 256;
+
+    public CitizenView(UUID kingdomId, boolean canManage, int population, int bedsUsed, int bedsTotal, int foodDays, int mood, int storehouses,
+                       CitizenNeeds.GrowthCheck growth, List<Entry> citizens, List<Death> chronicle, List<Production> production,
+                       List<RulerInfo.Decree> decrees) {
+        this(kingdomId, canManage, population, bedsUsed, bedsTotal, foodDays, mood, storehouses, growth, citizens, chronicle, production, decrees,
+                List.of());
+    }
+
+    /**
+     * A settlement of a state of the world that lives as numbers: its names, rank and numbers.
+     *
+     * @param food days of food in store
+     * @param data whether it is not raised in the world yet
+     */
+    public record SettlementRow(String latin, String cyrillic, io.github.sekerator.kingdomworld.core.land.Tier tier, int population, int housing,
+                                int food, int guards, int militia, boolean data) {
+        public SettlementRow {
+            Objects.requireNonNull(latin, "latin");
+            Objects.requireNonNull(cyrillic, "cyrillic");
+            Objects.requireNonNull(tier, "tier");
+        }
+
+        void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(latin, MAX_SETTLEMENT_NAME);
+            buf.writeUtf(cyrillic, MAX_SETTLEMENT_NAME);
+            buf.writeEnum(tier);
+            buf.writeVarInt(population);
+            buf.writeVarInt(housing);
+            buf.writeVarInt(food);
+            buf.writeVarInt(guards);
+            buf.writeVarInt(militia);
+            buf.writeBoolean(data);
+        }
+
+        static SettlementRow decode(FriendlyByteBuf buf) {
+            return new SettlementRow(buf.readUtf(MAX_SETTLEMENT_NAME), buf.readUtf(MAX_SETTLEMENT_NAME),
+                    KingdomView.readEnum(buf, io.github.sekerator.kingdomworld.core.land.Tier.class), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(),
+                    buf.readVarInt(), buf.readVarInt(), buf.readBoolean());
+        }
+    }
+
+    private static final int MAX_SETTLEMENT_NAME = 64;
     public static final int MAX_PRODUCTION = 32;
     public static final int MAX_CHRONICLE = 50;
     /** Decrees of a ruler of the world the chronicle shows at most. */
@@ -90,6 +134,7 @@ public record CitizenView(UUID kingdomId, boolean canManage, int population, int
         chronicle = List.copyOf(chronicle);
         production = List.copyOf(production);
         decrees = List.copyOf(decrees);
+        settlements = List.copyOf(settlements);
         if (citizens.size() > MAX_CITIZENS || chronicle.size() > MAX_CHRONICLE || production.size() > MAX_PRODUCTION
                 || decrees.size() > MAX_DECREES) {
             throw new IllegalArgumentException("Citizen view too large");
@@ -152,6 +197,11 @@ public record CitizenView(UUID kingdomId, boolean canManage, int population, int
         for (RulerInfo.Decree decree : decrees) {
             RulerInfo.writeDecree(buf, decree);
         }
+        int shown = Math.min(MAX_SETTLEMENTS, settlements.size());
+        buf.writeVarInt(shown);
+        for (int i = 0; i < shown; i++) {
+            settlements.get(i).encode(buf);
+        }
     }
 
     public static CitizenView decode(FriendlyByteBuf buf) {
@@ -195,8 +245,13 @@ public record CitizenView(UUID kingdomId, boolean canManage, int population, int
         for (int i = 0; i < decreeCount; i++) {
             decrees.add(RulerInfo.readDecree(buf));
         }
+        int settlementCount = KingdomView.readSize(buf, MAX_SETTLEMENTS);
+        List<SettlementRow> settlements = new ArrayList<>(settlementCount);
+        for (int i = 0; i < settlementCount; i++) {
+            settlements.add(SettlementRow.decode(buf));
+        }
         return new CitizenView(kingdomId, canManage, population, bedsUsed, bedsTotal, foodDays, mood, storehouses, growth,
-                citizens, chronicle, production, decrees);
+                citizens, chronicle, production, decrees, settlements);
     }
 
     static String readProfession(FriendlyByteBuf buf) {

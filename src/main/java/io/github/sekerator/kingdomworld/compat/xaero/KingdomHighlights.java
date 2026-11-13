@@ -245,7 +245,8 @@ final class KingdomHighlights implements ClientMapModel.Listener {
     private static io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city(String askedDimension, int chunkX, int chunkZ) {
         for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city
                 : io.github.sekerator.kingdomworld.client.map.ClientRoadCache.data().cities()) {
-            if (city.id() != 0 && city.dimension().equals(askedDimension) && city.x() >> 4 == chunkX && city.z() >> 4 == chunkZ) {
+            if (city.id() != 0 && !city.capitalOfPlan() && city.dimension().equals(askedDimension) && city.x() >> 4 == chunkX
+                    && city.z() >> 4 == chunkZ) {
                 return city;
             }
         }

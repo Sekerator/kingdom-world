@@ -1,0 +1,118 @@
+package io.github.sekerator.kingdomworld.core.npc;
+
+import io.github.sekerator.kingdomworld.core.land.TerrainClass;
+import io.github.sekerator.kingdomworld.core.land.Tier;
+
+import java.util.SplittableRandom;
+
+/**
+ * The life of a settlement in numbers while it is data, a day at a time: its people grow toward its houses while they have
+ * food, its food is what its land yields less what its people eat, hunger takes people and contentment, and its guard and
+ * militia follow its rank and people. Only numbers: nothing here becomes money or goods.
+ */
+public final class SettlementLife {
+    /** How much the people grow in a day while fed and below the houses: a fiftieth. */
+    public static final double GROWTH = 0.02;
+    /** Days of food a settlement starts with. */
+    public static final int START_FOOD_DAYS = 10;
+    /** Days of food a settlement keeps at most. */
+    public static final int MAX_FOOD_DAYS = 30;
+    public static final int START_PROSPERITY = 50;
+    public static final int MAX_PROSPERITY = 100;
+
+    /**
+     * What a day leaves of a settlement.
+     */
+    public record Day(int population, int food, int guards, int militia, int prosperity) {
+    }
+
+    private SettlementLife() {
+    }
+
+    /**
+     * The people of a rank, least and most; the seed picks between them. A capital is counted by its own people.
+     */
+    public static int[] people(Tier tier) {
+        return switch (tier) {
+            case CITY -> new int[]{80, 150};
+            case TOWN -> new int[]{25, 45};
+            case VILLAGE -> new int[]{10, 25};
+            case HAMLET -> new int[]{4, 8};
+            case CAPITAL -> new int[]{0, 0};
+        };
+    }
+
+    /**
+     * The houses of a settlement of a rank and seed: how many people it may hold.
+     */
+    public static int housing(Tier tier, long seed) {
+        int[] range = people(tier);
+        return range[1] == 0 ? 0 : new SplittableRandom(seed ^ 0x484F555345L).nextInt(range[0], range[1] + 1);
+    }
+
+    /**
+     * The people a settlement starts with: three quarters of its houses.
+     */
+    public static int startingPopulation(int housing) {
+        return (int) Math.round(housing * 0.75);
+    }
+
+    /**
+     * The guard of a rank: a city keeps 8, a town 4, a village and a hamlet none.
+     */
+    public static int guards(Tier tier) {
+        return switch (tier) {
+            case CITY -> 8;
+            case TOWN -> 4;
+            default -> 0;
+        };
+    }
+
+    /**
+     * The militia: in a village a tenth of its people, elsewhere none.
+     */
+    public static int militia(Tier tier, int population) {
+        return tier == Tier.VILLAGE ? population / 10 : 0;
+    }
+
+    /**
+     * What a person of the land of a class grows in a day, in hundredths of what a person eats.
+     */
+    public static int yield(TerrainClass terrain) {
+        return switch (terrain) {
+            case LAND -> 130;
+            case RIVER -> 125;
+            case HILLS -> 110;
+            case BEACH, LAKE -> 100;
+            case OCEAN -> 90;
+            case SWAMP -> 80;
+            case STEEP -> 60;
+            case DESERT -> 50;
+            case UNKNOWN -> 100;
+        };
+    }
+
+    /**
+     * A day of a settlement.
+     *
+     * @param fertility what a person grows in a day, in hundredths of what a person eats
+     */
+    public static Day day(Tier tier, int population, int housing, int food, int prosperity, int fertility) {
+        int people = Math.max(0, population);
+        long harvest = (long) people * Math.max(0, fertility) / 100;
+        long stock = (long) food + harvest - people;
+        int prosper = prosperity;
+        if (stock < 0) {
+            // Hunger: some go away, the rest grow discontent; there is nothing to eat left.
+            people = Math.max(0, people - Math.max(1, (int) Math.round(people * GROWTH)));
+            prosper -= 3;
+            stock = 0;
+        } else if (people < housing) {
+            people = Math.min(housing, people + Math.max(1, (int) Math.round(people * GROWTH)));
+            prosper += 1;
+        }
+        stock = Math.min(stock, (long) Math.max(people, housing) * MAX_FOOD_DAYS);
+        prosper = Math.max(0, Math.min(MAX_PROSPERITY, prosper));
+        return new Day(people, (int) stock, guards(tier), militia(tier, people), prosper);
+    }
+}

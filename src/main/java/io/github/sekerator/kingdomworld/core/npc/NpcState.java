@@ -21,6 +21,12 @@ public final class NpcState {
     /** The camps of the royal army of every kingdom. */
     private final Map<UUID, List<ArmyCamp>> camps = new LinkedHashMap<>();
     private int nextSiteId = 1;
+    /** The settlements of the states of the world and the roads planned between them, by their numbers. */
+    private final Map<Integer, Settlement> settlements = new LinkedHashMap<>();
+    private final Map<Integer, PlannedRoad> plannedRoads = new LinkedHashMap<>();
+    private int nextSettlementId = 1;
+    private int nextPlannedRoadId = 1;
+    private long settlementsVersion;
     private int planCursor;
     private int planShift;
     private int planPass;
@@ -30,6 +36,119 @@ public final class NpcState {
     public void setChangeListener(Runnable listener) {
         changeListener = Objects.requireNonNull(listener, "listener");
         sites.values().forEach(site -> site.setChangeListener(listener));
+        settlements.values().forEach(settlement -> settlement.setChangeListener(this::settlementChanged));
+    }
+
+    // ---------------------------------------------------------------- settlements
+
+    private void settlementChanged() {
+        settlementsVersion++;
+        changeListener.run();
+    }
+
+    /**
+     * Grows whenever a settlement or a planned road is added or changes.
+     */
+    public long settlementsVersion() {
+        return settlementsVersion;
+    }
+
+    public Collection<Settlement> settlements() {
+        return Collections.unmodifiableCollection(settlements.values());
+    }
+
+    public Optional<Settlement> settlement(int id) {
+        return Optional.ofNullable(settlements.get(id));
+    }
+
+    /**
+     * The settlements of a kingdom, in the order they were added.
+     */
+    public List<Settlement> settlementsOf(UUID kingdomId) {
+        List<Settlement> list = new ArrayList<>();
+        for (Settlement settlement : settlements.values()) {
+            if (settlement.kingdomId().equals(kingdomId)) {
+                list.add(settlement);
+            }
+        }
+        return list;
+    }
+
+    /**
+     * Adds a settlement with the next number.
+     */
+    public Settlement addSettlement(UUID kingdomId, int province, int parent, io.github.sekerator.kingdomworld.core.land.Tier tier, int x, int z,
+                                    long seed, NpcNames.Name name) {
+        Settlement settlement = new Settlement(nextSettlementId++, kingdomId, province, parent, tier, x, z, seed, name);
+        settlement.setChangeListener(this::settlementChanged);
+        settlements.put(settlement.id(), settlement);
+        settlementChanged();
+        return settlement;
+    }
+
+    public Collection<PlannedRoad> plannedRoads() {
+        return Collections.unmodifiableCollection(plannedRoads.values());
+    }
+
+    /**
+     * Adds a road of the plan with the next number.
+     */
+    public PlannedRoad addPlannedRoad(int from, int to, io.github.sekerator.kingdomworld.core.road.RoadClass roadClass, int[] xs, int[] zs) {
+        PlannedRoad road = new PlannedRoad(nextPlannedRoadId++, from, to, roadClass, xs, zs, 0);
+        plannedRoads.put(road.id(), road);
+        settlementChanged();
+        return road;
+    }
+
+    /**
+     * Records the real road laid along a road of the plan.
+     */
+    public void setRoadOf(int plannedRoad, long roadId) {
+        PlannedRoad road = plannedRoads.get(plannedRoad);
+        if (road != null) {
+            plannedRoads.put(plannedRoad, road.withRoad(roadId));
+            settlementChanged();
+        }
+    }
+
+    /**
+     * The names of every settlement and of every town of the kingdoms of the world, in the Latin alphabet: a new settlement takes
+     * none of them.
+     */
+    public java.util.Set<String> settlementNames() {
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (Settlement settlement : settlements.values()) {
+            names.add(settlement.name().latin());
+        }
+        for (NpcKingdom kingdom : kingdoms.values()) {
+            names.add(kingdom.name().latin());
+            kingdom.towns().forEach(town -> names.add(town.latin()));
+        }
+        return names;
+    }
+
+    public int nextSettlementId() {
+        return nextSettlementId;
+    }
+
+    public int nextPlannedRoadId() {
+        return nextPlannedRoadId;
+    }
+
+    public void restoreSettlement(Settlement settlement) {
+        settlement.setChangeListener(this::settlementChanged);
+        settlements.put(settlement.id(), settlement);
+        nextSettlementId = Math.max(nextSettlementId, settlement.id() + 1);
+    }
+
+    public void restorePlannedRoad(PlannedRoad road) {
+        plannedRoads.put(road.id(), road);
+        nextPlannedRoadId = Math.max(nextPlannedRoadId, road.id() + 1);
+    }
+
+    public void restoreSettlementIds(int nextSettlement, int nextRoad) {
+        nextSettlementId = Math.max(nextSettlementId, nextSettlement);
+        nextPlannedRoadId = Math.max(nextPlannedRoadId, nextRoad);
     }
 
     // ---------------------------------------------------------------- the plan
@@ -238,10 +357,30 @@ public final class NpcState {
         rulers.remove(kingdomId);
         rulers.values().forEach(memory -> memory.forgetRelation(kingdomId));
         NpcKingdom removed = kingdoms.remove(kingdomId);
+        removeSettlementsOf(kingdomId);
         if (removed != null) {
             changeListener.run();
         }
         return Optional.ofNullable(removed);
+    }
+
+    /**
+     * Forgets the settlements of a kingdom that is gone and the roads planned to or from them.
+     */
+    public void removeSettlementsOf(UUID kingdomId) {
+        java.util.Set<Integer> gone = new java.util.HashSet<>();
+        settlements.values().removeIf(settlement -> {
+            if (settlement.kingdomId().equals(kingdomId)) {
+                gone.add(settlement.id());
+                return true;
+            }
+            return false;
+        });
+        if (gone.isEmpty()) {
+            return;
+        }
+        plannedRoads.values().removeIf(road -> gone.contains(road.from()) || gone.contains(road.to()));
+        settlementChanged();
     }
 
     // ---------------------------------------------------------------- rulers

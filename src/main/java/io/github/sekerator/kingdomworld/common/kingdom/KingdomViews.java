@@ -135,7 +135,17 @@ public final class KingdomViews {
                 people = KingdomWorldApi.state(server).citizens().registry().count(kingdomId);
                 soldiers = io.github.sekerator.kingdomworld.common.army.ArmyWork.state(server).soldiersOf(kingdomId).size();
             }
-            return io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo.of(npc, raising, people, soldiers);
+            int settlements = 0;
+            int settlementPeople = 0;
+            for (io.github.sekerator.kingdomworld.core.npc.Settlement settlement : npcState.settlementsOf(kingdomId)) {
+                if (settlement.tier() != io.github.sekerator.kingdomworld.core.land.Tier.CAPITAL
+                        && settlement.status() != io.github.sekerator.kingdomworld.core.npc.Settlement.Status.RUINED) {
+                    settlements++;
+                    settlementPeople += settlement.population();
+                }
+            }
+            return io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo.of(npc, raising, people, soldiers)
+                    .withSettlements(settlements, settlementPeople);
         }).orElse(null);
     }
 

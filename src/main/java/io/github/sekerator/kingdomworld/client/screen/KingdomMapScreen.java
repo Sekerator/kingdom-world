@@ -45,6 +45,12 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     private static final int LIST_ROW = 11;
     /** Below this many pixels a chunk, towns are left out and only capitals are drawn. */
     private static final double TOWN_CELL = 1.5;
+    /** The settlement under the pointer, drawn as a card over the map; null for none. */
+    private io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity hoveredSettlement;
+    /** The settlement whose card the client self-check shows, as if the pointer were on it. */
+    private io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity settlementForCheck;
+    private int pointerX;
+    private int pointerY;
     /** Pixels a chunk from which the names of the provinces show. */
     private static final double PROVINCE_NAME_CELL = 0.5;
     private static final int MAX_PROVINCE_NAMES = 300;
@@ -520,8 +526,11 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         KingdomMapInfo holder = ClientTerritoryCache.kingdom(ClientProvinceMap.owner(id));
         Component held = holder == null ? Component.translatable("kingdomworld.screen.map.province.nobody")
                 : Component.translatable("kingdomworld.screen.map.province.held", holder.name());
-        return Component.translatable("kingdomworld.screen.map.province.line", provinceName(entry.nameSeed(), cyrillic),
+        Component line = Component.translatable("kingdomworld.screen.map.province.line", provinceName(entry.nameSeed(), cyrillic),
                 Component.translatable("kingdomworld.province.kind." + entry.kind().id()), held);
+        // The main settlement of the province, when the server sent its settlements.
+        io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity seat = io.github.sekerator.kingdomworld.client.map.ClientRoadCache.seatOf(id);
+        return seat == null ? line : Component.translatable("kingdomworld.screen.map.province.seat", line, seat.name());
     }
 
     /**
@@ -1251,6 +1260,9 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
 
     @Override
     protected void renderContent(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        pointerX = mouseX;
+        pointerY = mouseY;
+        hoveredSettlement = settlementForCheck;
         graphics.fill(0, 0, width, height, 0xFF1A140C);
         int left = mapLeft();
         int top = mapTop();
@@ -1307,6 +1319,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         drawHeader(graphics);
         drawFooter(graphics, mouseX, mouseY);
         drawCard(graphics);
+        drawSettlementCard(graphics);
     }
 
     private void drawHeader(GuiGraphics graphics) {
@@ -1694,6 +1707,12 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         }
         for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city
                 : io.github.sekerator.kingdomworld.client.map.ClientRoadCache.data().cities()) {
+            if (city.settlement() != null) {
+                if (city.dimension().equals(dimension)) {
+                    drawSettlement(graphics, city);
+                }
+                continue;
+            }
             if (!city.dimension().equals(dimension) || city.id() != 0 && cell < TOWN_CELL) {
                 continue;
             }
@@ -1737,6 +1756,154 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
                 }
             }
         }
+    }
+
+    /**
+     * Pixels a chunk from which a settlement of a rank shows: the cities from far out, the hamlets only close.
+     */
+    static double settlementCell(io.github.sekerator.kingdomworld.core.land.Tier tier) {
+        return switch (tier) {
+            case CAPITAL -> 0;
+            case CITY -> 0.4;
+            case TOWN -> 1.5;
+            case VILLAGE -> 3;
+            case HAMLET -> 6;
+        };
+    }
+
+    /**
+     * Pixels a chunk from which the name of a settlement of a rank shows beside it.
+     */
+    private static double settlementNameCell(io.github.sekerator.kingdomworld.core.land.Tier tier) {
+        return switch (tier) {
+            case CAPITAL -> Double.MAX_VALUE;
+            case CITY -> 1.5;
+            case TOWN -> 6;
+            case VILLAGE -> 12;
+            case HAMLET -> 24;
+        };
+    }
+
+    /**
+     * A settlement of a state of the world by its rank: a city as a large house with a tower, a town as a house, a village as a
+     * small house and a hamlet as a dot; dashed around while it lives as data and is not raised yet. The capital has its crown.
+     */
+    private void drawSettlement(GuiGraphics graphics, io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city) {
+        io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapSettlement settlement = city.settlement();
+        io.github.sekerator.kingdomworld.core.land.Tier tier = settlement.tier();
+        if (tier == io.github.sekerator.kingdomworld.core.land.Tier.CAPITAL || cell < settlementCell(tier)) {
+            return;
+        }
+        int x = blockScreenX(city.x() + 0.5);
+        int y = blockScreenZ(city.z() + 0.5);
+        int half = switch (tier) {
+            case CITY -> 5;
+            case TOWN -> 4;
+            case VILLAGE -> 3;
+            default -> 2;
+        };
+        if (x - half - 1 < mapLeft() || x + half + 2 > mapRight() || y - half - 1 < mapTop() || y + half + 2 > mapBottom()) {
+            return;
+        }
+        int wall = 0xFF000000 | city.color();
+        int outline = 0xFF2B1D0E;
+        if (settlement.data()) {
+            // Not raised yet: a dashed frame around a pale sign.
+            for (int i = -half - 1; i <= half + 1; i++) {
+                if (((i + half + 1) / 2) % 2 == 0) {
+                    graphics.fill(x + i, y - half - 1, x + i + 1, y - half, outline);
+                    graphics.fill(x + i, y + half + 1, x + i + 1, y + half + 2, outline);
+                    graphics.fill(x - half - 1, y + i, x - half, y + i + 1, outline);
+                    graphics.fill(x + half + 1, y + i, x + half + 2, y + i + 1, outline);
+                }
+            }
+            wall = 0xA0000000 | city.color();
+        } else {
+            graphics.fill(x - half - 1, y - half - 1, x + half + 2, y + half + 2, outline);
+        }
+        switch (tier) {
+            case CITY -> {
+                // A large house with a tower: a wall in the color of the kingdom, a red roof and a dark tower on the left.
+                graphics.fill(x - half, y - 1, x + half + 1, y + half + 1, wall);
+                graphics.fill(x - half + 1, y - half + 2, x + half, y - 1, 0xFFB03020);
+                graphics.fill(x - half, y - half, x - half + 3, y - 1, 0xFF4A3A2A);
+            }
+            case TOWN -> {
+                graphics.fill(x - half, y - 1, x + half + 1, y + half + 1, wall);
+                graphics.fill(x - half + 1, y - half + 1, x + half, y - 1, 0xFFB03020);
+            }
+            case VILLAGE -> {
+                graphics.fill(x - half, y, x + half + 1, y + half + 1, wall);
+                graphics.fill(x - half, y - half, x + half + 1, y, 0xFF8B5A2B);
+            }
+            default -> graphics.fill(x - half, y - half, x + half + 1, y + half + 1, wall);
+        }
+        if (Math.abs(pointerX - x) <= half + 1 && Math.abs(pointerY - y) <= half + 1) {
+            hoveredSettlement = city;
+        }
+        if (cell >= settlementNameCell(tier)) {
+            int maxName = Math.min(MAX_CAPITAL_NAME, mapRight() - mapLeft() - 8);
+            int nameWidth = font.width(fit(city.name(), maxName));
+            int nameX = Mth.clamp(x - nameWidth / 2, mapLeft() + 3, mapRight() - 3 - nameWidth);
+            int nameY = y + half + 3;
+            if (nameY + 10 > mapBottom()) {
+                nameY = y - half - 12;
+            }
+            int[] box = {nameX - 2, nameY - 1, nameX + nameWidth + 2, nameY + 9};
+            if (labels.stream().noneMatch(other -> box[0] < other[2] && other[0] < box[2] && box[1] < other[3] && other[1] < box[3])) {
+                graphics.fill(box[0], box[1], box[2], box[3], 0xB0100C08);
+                name(graphics, city.name(), nameX, nameY, settlement.data() ? 0xFFC8B898 : 0xFFF0E0C0, maxName);
+                labels.add(box);
+            }
+        }
+    }
+
+    /**
+     * The card of the settlement under the pointer: its name, rank, people, guard and province.
+     */
+    private void drawSettlementCard(GuiGraphics graphics) {
+        io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city = hoveredSettlement;
+        if (city == null || city.settlement() == null || planning != null) {
+            return;
+        }
+        io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapSettlement settlement = city.settlement();
+        List<Component> lines = new java.util.ArrayList<>();
+        Component tier = Component.translatable("kingdomworld.settlement.tier." + settlement.tier().name().toLowerCase(java.util.Locale.ROOT));
+        lines.add(settlement.data() ? Component.translatable("kingdomworld.screen.map.settlement.planned", tier) : tier);
+        lines.add(Component.translatable("kingdomworld.screen.map.settlement.people", settlement.population()));
+        if (settlement.guards() > 0 || settlement.militia() > 0) {
+            lines.add(Component.translatable("kingdomworld.screen.map.settlement.guard", settlement.guards(), settlement.militia()));
+        }
+        io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket.Entry province = ClientProvinceMap.province(settlement.province());
+        if (province != null && minecraft != null) {
+            boolean cyrillic = io.github.sekerator.kingdomworld.core.citizen.CitizenNames.alphabetFor(minecraft.getLanguageManager().getSelected())
+                    == io.github.sekerator.kingdomworld.core.citizen.CitizenNames.Alphabet.CYRILLIC;
+            lines.add(Component.translatable("kingdomworld.screen.map.settlement.province", provinceName(province.nameSeed(), cyrillic)));
+        }
+        int maxWidth = Math.min(MAX_CARD_NAME + 40, mapRight() - mapLeft() - 12);
+        int inner = font.width(fit(city.name(), maxWidth));
+        for (Component line : lines) {
+            inner = Math.max(inner, font.width(line));
+        }
+        int cardWidth = Math.min(inner + 12, maxWidth + 12);
+        int cardHeight = 16 + lines.size() * 11;
+        int x = Mth.clamp(pointerX + 12, mapLeft() + 2, Math.max(mapLeft() + 2, mapRight() - cardWidth - 2));
+        int y = Mth.clamp(pointerY + 12, mapTop() + 2, Math.max(mapTop() + 2, mapBottom() - cardHeight - 2));
+        graphics.fill(x, y, x + cardWidth, y + cardHeight, 0xF0201810);
+        graphics.renderOutline(x, y, cardWidth, cardHeight, 0xFF000000 | city.color());
+        name(graphics, city.name(), x + 6, y + 5, 0xFF000000 | FoundKingdomScreen.readable(city.color()), cardWidth - 12);
+        int lineY = y + 17;
+        for (Component line : lines) {
+            fittedLabel(graphics, line, x + 6, lineY, 0xFFE8E8E8, x + cardWidth - 6);
+            lineY += 11;
+        }
+    }
+
+    /**
+     * The settlement under the pointer, for the client self-check.
+     */
+    public void hoverSettlementForCheck(io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city) {
+        settlementForCheck = city;
     }
 
     private void drawCamps(GuiGraphics graphics) {

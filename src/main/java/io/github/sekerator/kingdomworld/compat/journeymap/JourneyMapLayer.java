@@ -342,7 +342,7 @@ final class JourneyMapLayer implements ClientMapModel.Listener {
         for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city
                 : io.github.sekerator.kingdomworld.client.map.ClientRoadCache.data().cities()) {
             // Capitals (id 0) have their own marker.
-            if (!city.dimension().equals(dimension) || city.id() == 0) {
+            if (!city.dimension().equals(dimension) || city.id() == 0 || city.capitalOfPlan()) {
                 continue;
             }
             MarkerOverlay marker = cities.get(city.id());

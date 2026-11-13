@@ -20,7 +20,7 @@ import java.util.Objects;
  */
 public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String rulerLatin, String rulerCyrillic, Gender rulerGender,
                              RulerCharacter character, List<RulerCharacter.Trait> traits, NpcLevel level, int towns, boolean raising,
-                             int people, int soldiers) {
+                             int people, int soldiers, int settlements, int settlementPeople) {
     /** The most people or soldiers a kingdom of the world is shown with. */
     public static final int MAX_COUNT = 100_000;
     private static final int MAX_NAME = 64;
@@ -35,6 +35,12 @@ public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String ruler
         this(nameLatin, nameCyrillic, rulerLatin, rulerCyrillic, rulerGender, character, traits, level, towns, raising, 0, 0);
     }
 
+    public NpcKingdomInfo(String nameLatin, String nameCyrillic, String rulerLatin, String rulerCyrillic, Gender rulerGender,
+                          RulerCharacter character, List<RulerCharacter.Trait> traits, NpcLevel level, int towns, boolean raising, int people,
+                          int soldiers) {
+        this(nameLatin, nameCyrillic, rulerLatin, rulerCyrillic, rulerGender, character, traits, level, towns, raising, people, soldiers, 0, 0);
+    }
+
     public NpcKingdomInfo {
         Objects.requireNonNull(nameLatin, "nameLatin");
         Objects.requireNonNull(nameCyrillic, "nameCyrillic");
@@ -44,7 +50,8 @@ public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String ruler
         Objects.requireNonNull(character, "character");
         Objects.requireNonNull(level, "level");
         traits = List.copyOf(traits);
-        if (traits.size() > 2 || towns < 0 || people < 0 || people > MAX_COUNT || soldiers < 0 || soldiers > MAX_COUNT) {
+        if (traits.size() > 2 || towns < 0 || people < 0 || people > MAX_COUNT || soldiers < 0 || soldiers > MAX_COUNT || settlements < 0
+                || settlements > MAX_COUNT || settlementPeople < 0 || settlementPeople > MAX_COUNT) {
             throw new IllegalArgumentException("Kingdom of the world out of range");
         }
     }
@@ -71,6 +78,14 @@ public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String ruler
                 kingdom.towns().size(), raising, bounded(people), bounded(soldiers));
     }
 
+    /**
+     * The same kingdom with its settlements that live as data and their people (not counting the capital).
+     */
+    public NpcKingdomInfo withSettlements(int count, int people) {
+        return new NpcKingdomInfo(nameLatin, nameCyrillic, rulerLatin, rulerCyrillic, rulerGender, character, traits, level, towns, raising,
+                this.people, soldiers, bounded(count), bounded(people));
+    }
+
     private static int bounded(int count) {
         return Math.max(0, Math.min(MAX_COUNT, count));
     }
@@ -89,6 +104,8 @@ public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String ruler
         buf.writeBoolean(raising);
         buf.writeVarInt(people);
         buf.writeVarInt(soldiers);
+        buf.writeVarInt(settlements);
+        buf.writeVarInt(settlementPeople);
     }
 
     public static NpcKingdomInfo decode(FriendlyByteBuf buf) {
@@ -117,8 +134,13 @@ public record NpcKingdomInfo(String nameLatin, String nameCyrillic, String ruler
         if (people < 0 || people > MAX_COUNT || soldiers < 0 || soldiers > MAX_COUNT) {
             throw new DecoderException("People out of range: " + people + ", " + soldiers);
         }
+        int settlements = buf.readVarInt();
+        int settlementPeople = buf.readVarInt();
+        if (settlements < 0 || settlements > MAX_COUNT || settlementPeople < 0 || settlementPeople > MAX_COUNT) {
+            throw new DecoderException("Settlements out of range: " + settlements + ", " + settlementPeople);
+        }
         return new NpcKingdomInfo(nameLatin, nameCyrillic, rulerLatin, rulerCyrillic, gender, character, traits, level, towns, raising,
-                people, soldiers);
+                people, soldiers, settlements, settlementPeople);
     }
 
     /**

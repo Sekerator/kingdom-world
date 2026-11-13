@@ -27,7 +27,7 @@ public final class ClientRoadHandlers {
         }
     }
 
-    public static void handleMap(RoadViews.MapData data) {
-        ClientRoadCache.replace(data);
+    public static void handleMap(RoadViews.MapChange change) {
+        ClientRoadCache.apply(change);
     }
 }

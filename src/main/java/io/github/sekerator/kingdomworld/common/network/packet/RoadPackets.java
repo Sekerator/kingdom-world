@@ -192,19 +192,19 @@ public final class RoadPackets {
     }
 
     /**
-     * Server to client: cities, roads and known camps for the maps.
+     * Server to client: what changed of the cities, roads and known camps for the maps, by kingdoms.
      */
-    public record MapSync(RoadViews.MapData data) {
+    public record MapSync(RoadViews.MapChange change) {
         public void encode(FriendlyByteBuf buf) {
-            data.encode(buf);
+            change.encode(buf);
         }
 
         public static MapSync decode(FriendlyByteBuf buf) {
-            return new MapSync(RoadViews.MapData.decode(buf));
+            return new MapSync(RoadViews.MapChange.decode(buf));
         }
 
         public static void handle(MapSync message, Supplier<NetworkEvent.Context> context) {
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientRoadHandlers.handleMap(message.data()));
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientRoadHandlers.handleMap(message.change()));
         }
     }
 }

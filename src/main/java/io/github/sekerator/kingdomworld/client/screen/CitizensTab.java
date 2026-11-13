@@ -289,8 +289,15 @@ final class CitizensTab {
             case CHRONICLE -> view.chronicle().size() + view.decrees().size();
             case PRODUCTION -> view.production().size();
             case LIFE -> LifeRows.rows(life).size();
-            default -> rows().size();
+            default -> rows().size() + settlementRows().size();
         };
+    }
+
+    /**
+     * The settlements of a state of the world, listed after its citizens while no filter is chosen.
+     */
+    private List<CitizenView.SettlementRow> settlementRows() {
+        return view == null || filter != 0 ? List.of() : view.settlements();
     }
 
     void init(int left, int top, int panelWidth, int panelHeight) {
@@ -385,7 +392,8 @@ final class CitizensTab {
 
     private void renderList(GuiGraphics graphics, int x, int right, int listTop, int rows) {
         List<CitizenView.Entry> entries = rows();
-        if (entries.isEmpty()) {
+        List<CitizenView.SettlementRow> settlements = settlementRows();
+        if (entries.isEmpty() && settlements.isEmpty()) {
             screen.paragraph(graphics, Component.translatable(view.citizens().isEmpty() ? KEY + "empty" : KEY + "none_match"),
                     x, listTop + 5, right - x, 3, 0xFFB8B8B8);
             return;
@@ -393,6 +401,19 @@ final class CitizensTab {
         int professionX = x + NAME_COLUMN;
         int stateX = professionX + professionWidth + 6;
         int placeX = mode == Mode.WORK ? right - MIN_PLACE_COLUMN : stateX + stateWidth + 6;
+        boolean cyrillic = io.github.sekerator.kingdomworld.core.citizen.CitizenNames.alphabetFor(
+                net.minecraft.client.Minecraft.getInstance().getLanguageManager().getSelected())
+                == io.github.sekerator.kingdomworld.core.citizen.CitizenNames.Alphabet.CYRILLIC;
+        for (int i = Math.max(0, entries.size() - scroll); i < rows && scroll + i < entries.size() + settlements.size(); i++) {
+            CitizenView.SettlementRow settlement = settlements.get(scroll + i - entries.size());
+            int y = listTop + i * ROW + 4;
+            screen.name(graphics, cyrillic ? settlement.cyrillic() : settlement.latin(), x, y, 0xFFF0D070, NAME_COLUMN - 4);
+            Component tier = Component.translatable("kingdomworld.settlement.tier." + settlement.tier().name().toLowerCase(Locale.ROOT));
+            screen.label(graphics, settlement.data() ? Component.translatable(KEY + "settlement.planned", tier) : tier, professionX + 4, y,
+                    0xFFD0D0D0, stateX - 2);
+            screen.label(graphics, Component.translatable(KEY + "settlement.numbers", settlement.population(), settlement.housing(),
+                    settlement.food(), settlement.guards() + settlement.militia()), stateX, y, settlement.food() == 0 ? 0xFFFF8080 : 0xFFA0E0A0, right);
+        }
         for (int i = 0; i < rows && scroll + i < entries.size(); i++) {
             CitizenView.Entry entry = entries.get(scroll + i);
             int y = listTop + i * ROW + 4;

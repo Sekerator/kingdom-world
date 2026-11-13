@@ -29,6 +29,10 @@ import java.util.UUID;
  * kingdoms: [ { kingdom, site, level, latin, cyrillic, character, traits: [id], ruler, gender, towns: [ { latin, cyrillic } ],
  *              founded, turn, camps (format 5): [ { x, z, y, status } ] } ]
  * rulers: see {@link RulerNbt} (format 2)
+ * settlements (format 6): [ { id, kingdom, province, parent, tier, x, z, seed, latin, cyrillic, status, stage, step, ground, given,
+ *              city, people, houses, food, guards, militia, prosperity, fertility, day, seen, folded: [long] } ]
+ * roads (format 6): [ { id, from, to, class, xs, zs, road } ]
+ * plan.settlement, plan.road (format 6): the next numbers
  * </pre>
  */
 final class NpcNbt {
@@ -42,7 +46,27 @@ final class NpcNbt {
         plan.putInt("pass", state.planPass());
         plan.putBoolean("done", state.planned());
         plan.putInt("next", state.nextSiteId());
+        plan.putInt("settlement", state.nextSettlementId());
+        plan.putInt("road", state.nextPlannedRoadId());
         tag.put("plan", plan);
+        ListTag settlements = new ListTag();
+        for (io.github.sekerator.kingdomworld.core.npc.Settlement settlement : state.settlements()) {
+            settlements.add(writeSettlement(settlement));
+        }
+        tag.put("settlements", settlements);
+        ListTag roads = new ListTag();
+        for (io.github.sekerator.kingdomworld.core.npc.PlannedRoad road : state.plannedRoads()) {
+            CompoundTag entry = new CompoundTag();
+            entry.putInt("id", road.id());
+            entry.putInt("from", road.from());
+            entry.putInt("to", road.to());
+            entry.putString("class", road.roadClass().name());
+            entry.putIntArray("xs", road.xs());
+            entry.putIntArray("zs", road.zs());
+            entry.putLong("road", road.roadId());
+            roads.add(entry);
+        }
+        tag.put("roads", roads);
         ListTag sites = new ListTag();
         for (NpcSite site : state.sites()) {
             CompoundTag entry = new CompoundTag();
@@ -201,6 +225,84 @@ final class NpcNbt {
             }
         }
         RulerNbt.read(tag, state, problems);
+        // Format 6: the settlements and the roads planned between them; older data has none.
+        ListTag settlements = tag.getList("settlements", Tag.TAG_COMPOUND);
+        for (int i = 0; i < settlements.size(); i++) {
+            try {
+                state.restoreSettlement(readSettlement(settlements.getCompound(i)));
+            } catch (RuntimeException e) {
+                problems.add("settlement " + i + ": " + e.getMessage());
+            }
+        }
+        ListTag roads = tag.getList("roads", Tag.TAG_COMPOUND);
+        for (int i = 0; i < roads.size(); i++) {
+            CompoundTag entry = roads.getCompound(i);
+            try {
+                io.github.sekerator.kingdomworld.core.road.RoadClass roadClass = io.github.sekerator.kingdomworld.core.road.RoadClass.valueOf(
+                        entry.getString("class"));
+                state.restorePlannedRoad(new io.github.sekerator.kingdomworld.core.npc.PlannedRoad(entry.getInt("id"), entry.getInt("from"),
+                        entry.getInt("to"), roadClass, entry.getIntArray("xs"), entry.getIntArray("zs"), entry.getLong("road")));
+            } catch (RuntimeException e) {
+                problems.add("planned road " + i + ": " + e.getMessage());
+            }
+        }
+        state.restoreSettlementIds(plan.getInt("settlement"), plan.getInt("road"));
         return problems;
+    }
+
+    static CompoundTag writeSettlement(io.github.sekerator.kingdomworld.core.npc.Settlement settlement) {
+        CompoundTag entry = new CompoundTag();
+        entry.putInt("id", settlement.id());
+        entry.putUUID("kingdom", settlement.kingdomId());
+        entry.putInt("province", settlement.province());
+        entry.putInt("parent", settlement.parent());
+        entry.putString("tier", settlement.tier().name());
+        entry.putInt("x", settlement.x());
+        entry.putInt("z", settlement.z());
+        entry.putLong("seed", settlement.seed());
+        entry.putString("latin", settlement.name().latin());
+        entry.putString("cyrillic", settlement.name().cyrillic());
+        entry.putString("status", settlement.status().id());
+        entry.putString("stage", settlement.stage());
+        entry.putInt("step", settlement.step());
+        entry.putInt("ground", settlement.groundY());
+        entry.putInt("given", settlement.givenFlags());
+        entry.putLong("city", settlement.cityId());
+        entry.putInt("people", settlement.population());
+        entry.putInt("houses", settlement.housing());
+        entry.putInt("food", settlement.food());
+        entry.putInt("guards", settlement.guards());
+        entry.putInt("militia", settlement.militia());
+        entry.putInt("prosperity", settlement.prosperity());
+        entry.putInt("fertility", settlement.fertility());
+        entry.putLong("day", settlement.lastDay());
+        entry.putLong("seen", settlement.lastPlayerTick());
+        long[] folded = settlement.folded();
+        if (folded.length > 0) {
+            entry.putLongArray("folded", folded);
+        }
+        return entry;
+    }
+
+    static io.github.sekerator.kingdomworld.core.npc.Settlement readSettlement(CompoundTag entry) {
+        if (!entry.hasUUID("kingdom")) {
+            throw new IllegalArgumentException("kingdom");
+        }
+        io.github.sekerator.kingdomworld.core.land.Tier tier = io.github.sekerator.kingdomworld.core.land.Tier.valueOf(entry.getString("tier"));
+        String latin = entry.getString("latin");
+        if (latin.isEmpty()) {
+            throw new IllegalArgumentException("name");
+        }
+        io.github.sekerator.kingdomworld.core.npc.Settlement settlement = new io.github.sekerator.kingdomworld.core.npc.Settlement(entry.getInt("id"),
+                entry.getUUID("kingdom"), entry.getInt("province"), entry.getInt("parent"), tier, entry.getInt("x"), entry.getInt("z"),
+                entry.getLong("seed"), new NpcNames.Name(latin, entry.getString("cyrillic")));
+        String status = entry.getString("status");
+        settlement.restore(io.github.sekerator.kingdomworld.core.npc.Settlement.Status.byId(status)
+                        .orElseThrow(() -> new IllegalArgumentException("status " + status)), entry.getString("stage"), entry.getInt("step"),
+                entry.getInt("ground"), entry.getInt("given"), entry.getLong("city"), entry.getInt("people"), entry.getInt("houses"),
+                entry.getInt("food"), entry.getInt("guards"), entry.getInt("militia"), entry.getInt("prosperity"),
+                entry.contains("fertility") ? entry.getInt("fertility") : 100, entry.getLong("day"), entry.getLong("seen"),
+                entry.getLongArray("folded"));
+        return settlement;
     }
 }

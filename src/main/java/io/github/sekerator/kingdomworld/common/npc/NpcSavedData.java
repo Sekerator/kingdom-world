@@ -35,9 +35,10 @@ public final class NpcSavedData extends SavedData {
      * Current layout of the saved data. Increase it together with a migration step. Format 2 added the memories of the rulers;
      * data of format 1 has none and is read as it is, every ruler starting with an empty memory. Format 3 added places founded as
      * data before their buildings stand (status {@code founded}) and whether their treasury got its founding money; older data has
-     * neither and is read as it is.
+     * neither and is read as it is. Format 6 added the settlements of the states of the world and the roads planned between them;
+     * older data has none and is read as it is.
      */
-    public static final int FORMAT_VERSION = 5;
+    public static final int FORMAT_VERSION = 6;
     static final String TAG_FORMAT_VERSION = "formatVersion";
 
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -175,6 +176,14 @@ public final class NpcSavedData extends SavedData {
 
     static Path dataFile(MinecraftServer server) {
         return server.getWorldPath(LevelResource.ROOT).resolve("data").resolve(DATA_NAME + ".dat");
+    }
+
+    /**
+     * Saves the kingdoms of the world as the game does, only the file is written off the server thread.
+     */
+    @Override
+    public void save(java.io.File file) {
+        io.github.sekerator.kingdomworld.common.data.AsyncSave.save(this, file, DATA_NAME);
     }
 
     @Override

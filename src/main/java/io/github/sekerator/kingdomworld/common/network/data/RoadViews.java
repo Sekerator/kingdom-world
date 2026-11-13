@@ -352,13 +352,33 @@ public final class RoadViews {
     /**
      * A city on the map; id 0 stands for a capital, which the maps draw from the kingdoms and only add the level to.
      *
-     * @param kingdom the size of the kingdom of the world a capital belongs to, from the first minute of the world; {@code null}
-     *                for other cities and for kingdoms of players
+     * @param kingdom    the size of the kingdom of the world a capital belongs to, from the first minute of the world; {@code null}
+     *                   for other cities and for kingdoms of players
+     * @param settlement what a settlement of a state of the world is, for the settlements of the plan; {@code null} for others
      */
     public record MapCity(long id, UUID kingdomId, String name, String dimension, int x, int z, int color, CityLevel level,
-                          @Nullable MapKingdom kingdom) {
+                          @Nullable MapKingdom kingdom, @Nullable MapSettlement settlement) {
         public MapCity(long id, UUID kingdomId, String name, String dimension, int x, int z, int color, CityLevel level) {
-            this(id, kingdomId, name, dimension, x, z, color, level, null);
+            this(id, kingdomId, name, dimension, x, z, color, level, null, null);
+        }
+
+        public MapCity(long id, UUID kingdomId, String name, String dimension, int x, int z, int color, CityLevel level,
+                       @Nullable MapKingdom kingdom) {
+            this(id, kingdomId, name, dimension, x, z, color, level, kingdom, null);
+        }
+
+        /**
+         * Whether it is the capital of a state of the plan, which the maps draw from the kingdoms as any capital.
+         */
+        public boolean capitalOfPlan() {
+            return settlement != null && settlement.tier() == io.github.sekerator.kingdomworld.core.land.Tier.CAPITAL;
+        }
+
+        /**
+         * The same city under another name.
+         */
+        public MapCity named(String other) {
+            return new MapCity(id, kingdomId, other, dimension, x, z, color, level, kingdom, settlement);
         }
 
         void encode(FriendlyByteBuf buf) {
@@ -374,11 +394,45 @@ public final class RoadViews {
             if (kingdom != null) {
                 kingdom.encode(buf);
             }
+            buf.writeBoolean(settlement != null);
+            if (settlement != null) {
+                settlement.encode(buf);
+            }
         }
 
         static MapCity decode(FriendlyByteBuf buf) {
             return new MapCity(buf.readVarLong(), buf.readUUID(), buf.readUtf(NAME), buf.readUtf(NAME), buf.readInt(), buf.readInt(), buf.readInt(),
-                    readEnum(buf, CityLevel.class), buf.readBoolean() ? MapKingdom.decode(buf) : null);
+                    readEnum(buf, CityLevel.class), buf.readBoolean() ? MapKingdom.decode(buf) : null, buf.readBoolean() ? MapSettlement.decode(buf) : null);
+        }
+    }
+
+    /**
+     * A settlement of a state of the world on the map: its rank, its numbers and its province.
+     *
+     * @param data whether it lives as data, not raised in the world yet: the maps draw it dashed
+     */
+    public record MapSettlement(io.github.sekerator.kingdomworld.core.land.Tier tier, int population, int guards, int militia, int province,
+                                boolean data) {
+        public MapSettlement {
+            java.util.Objects.requireNonNull(tier, "tier");
+            if (population < 0 || population > NpcKingdomInfo.MAX_COUNT || guards < 0 || guards > NpcKingdomInfo.MAX_COUNT || militia < 0
+                    || militia > NpcKingdomInfo.MAX_COUNT || province < 0) {
+                throw new IllegalArgumentException("Settlement out of range");
+            }
+        }
+
+        void encode(FriendlyByteBuf buf) {
+            buf.writeEnum(tier);
+            buf.writeVarInt(population);
+            buf.writeVarInt(guards);
+            buf.writeVarInt(militia);
+            buf.writeVarInt(province);
+            buf.writeBoolean(data);
+        }
+
+        static MapSettlement decode(FriendlyByteBuf buf) {
+            return new MapSettlement(readEnum(buf, io.github.sekerator.kingdomworld.core.land.Tier.class), buf.readVarInt(), buf.readVarInt(),
+                    buf.readVarInt(), buf.readVarInt(), buf.readBoolean());
         }
     }
 
@@ -475,6 +529,80 @@ public final class RoadViews {
         static MapRoad decode(FriendlyByteBuf buf) {
             return new MapRoad(buf.readVarLong(), buf.readUUID(), buf.readUtf(NAME), readEnum(buf, RoadClass.class), buf.readInt(), buf.readVarInt(),
                     readInts(buf, MAX_POINTS), readInts(buf, MAX_POINTS));
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof MapRoad road && id == road.id && kingdomId.equals(road.kingdomId) && dimension.equals(road.dimension)
+                    && roadClass == road.roadClass && color == road.color && built == road.built && java.util.Arrays.equals(xs, road.xs)
+                    && java.util.Arrays.equals(zs, road.zs);
+        }
+
+        @Override
+        public int hashCode() {
+            return java.util.Objects.hash(id, kingdomId, dimension, roadClass, color, built, java.util.Arrays.hashCode(xs), java.util.Arrays.hashCode(zs));
+        }
+    }
+
+    /**
+     * The cities and roads of one kingdom on the map, as one part: the maps get again only the parts whose version changed.
+     */
+    public record MapPart(UUID kingdomId, long version, List<MapCity> cities, List<MapRoad> roads) {
+        public MapPart {
+            java.util.Objects.requireNonNull(kingdomId, "kingdom");
+            cities = List.copyOf(cities);
+            roads = List.copyOf(roads);
+        }
+
+        /**
+         * About how many bytes the part takes in a packet.
+         */
+        public int weight() {
+            int weight = 32;
+            for (MapCity city : cities) {
+                weight += 64 + city.name().length() + city.dimension().length();
+            }
+            for (MapRoad road : roads) {
+                weight += 48 + road.dimension().length() + 10 * road.xs().length;
+            }
+            return weight;
+        }
+
+        void encode(FriendlyByteBuf buf) {
+            buf.writeUUID(kingdomId);
+            buf.writeVarLong(version);
+            writeList(buf, cities, (b, row) -> row.encode(b));
+            writeList(buf, roads, (b, row) -> row.encode(b));
+        }
+
+        static MapPart decode(FriendlyByteBuf buf) {
+            return new MapPart(buf.readUUID(), buf.readVarLong(), readList(buf, 4_096, MapCity::decode), readList(buf, 4_096, MapRoad::decode));
+        }
+    }
+
+    /**
+     * A change of what the maps draw: the parts of kingdoms that changed, the kingdoms gone from the maps, and the camps and walls
+     * as a whole; with {@code reset} the maps forget the parts they had first.
+     */
+    public record MapChange(boolean reset, List<MapPart> parts, List<UUID> dropped, List<MapCamp> camps, List<MapWall> walls) {
+        public MapChange {
+            parts = List.copyOf(parts);
+            dropped = List.copyOf(dropped);
+            camps = List.copyOf(camps);
+            walls = List.copyOf(walls);
+        }
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeBoolean(reset);
+            writeList(buf, parts, (b, row) -> row.encode(b));
+            writeList(buf, dropped, FriendlyByteBuf::writeUUID);
+            writeList(buf, camps, (b, row) -> row.encode(b));
+            writeList(buf, walls, (b, row) -> row.encode(b));
+        }
+
+        public static MapChange decode(FriendlyByteBuf buf) {
+            return new MapChange(buf.readBoolean(), readList(buf, 1_024, MapPart::decode), readList(buf, 4_096, FriendlyByteBuf::readUUID),
+                    readList(buf, 1_024, MapCamp::decode), readList(buf, 1_024, MapWall::decode));
         }
     }
 

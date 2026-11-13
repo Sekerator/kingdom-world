@@ -4276,5 +4276,18 @@
   "kingdomworld.province.kind.core": "province",
   "kingdomworld.province.kind.frontier": "borderland",
   "kingdomworld.province.kind.wild": "wild land",
-  "kingdomworld.screen.throne.land": "Land: %s chunks, of them %s claimed of %s"
+  "kingdomworld.screen.throne.land": "Land: %s chunks, of them %s claimed of %s",
+  "kingdomworld.settlement.tier.capital": "Capital",
+  "kingdomworld.settlement.tier.city": "City",
+  "kingdomworld.settlement.tier.town": "Town",
+  "kingdomworld.settlement.tier.village": "Village",
+  "kingdomworld.settlement.tier.hamlet": "Hamlet",
+  "kingdomworld.screen.map.settlement.planned": "%s (not raised yet)",
+  "kingdomworld.screen.map.settlement.people": "People: %s",
+  "kingdomworld.screen.map.settlement.guard": "Guard: %s, militia: %s",
+  "kingdomworld.screen.map.settlement.province": "Province: %s",
+  "kingdomworld.screen.map.province.seat": "%s, main settlement %s",
+  "kingdomworld.screen.throne.npc.settlements": "Settlements: %s, %s in them",
+  "kingdomworld.screen.citizens.settlement.planned": "%s (not raised)",
+  "kingdomworld.screen.citizens.settlement.numbers": "%s of %s people, food for %s days, guard %s"
 }

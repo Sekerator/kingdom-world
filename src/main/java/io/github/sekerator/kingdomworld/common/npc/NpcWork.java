@@ -143,6 +143,8 @@ public final class NpcWork {
         NpcSpawner.reset();
         NpcRulers.reset();
         NpcCamps.reset();
+        SettlementIndex.reset();
+        SettlementWork.reset();
     }
 
     static void loaded(MinecraftServer server) {
@@ -163,6 +165,7 @@ public final class NpcWork {
         NpcSpawner.tick(server);
         NpcPlanning.tick(server);
         NpcFounding.tick(server);
+        SettlementWork.tick(server);
         io.github.sekerator.kingdomworld.common.command.PerfCommands.countWork(System.nanoTime() - started);
         if (server.getTickCount() % TRIGGER_TICKS == 0) {
             NpcBackground.tick(server);

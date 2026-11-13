@@ -4276,5 +4276,18 @@
   "kingdomworld.province.kind.core": "провинция",
   "kingdomworld.province.kind.frontier": "окраина",
   "kingdomworld.province.kind.wild": "дикая земля",
-  "kingdomworld.screen.throne.land": "Земли: %s чанков, из них заявлено %s из %s"
+  "kingdomworld.screen.throne.land": "Земли: %s чанков, из них заявлено %s из %s",
+  "kingdomworld.settlement.tier.capital": "Столица",
+  "kingdomworld.settlement.tier.city": "Крупный город",
+  "kingdomworld.settlement.tier.town": "Небольшой город",
+  "kingdomworld.settlement.tier.village": "Деревня",
+  "kingdomworld.settlement.tier.hamlet": "Посёлок",
+  "kingdomworld.screen.map.settlement.planned": "%s (ещё не отстроено)",
+  "kingdomworld.screen.map.settlement.people": "Жители: %s",
+  "kingdomworld.screen.map.settlement.guard": "Стража: %s, ополчение: %s",
+  "kingdomworld.screen.map.settlement.province": "Провинция: %s",
+  "kingdomworld.screen.map.province.seat": "%s, главное поселение %s",
+  "kingdomworld.screen.throne.npc.settlements": "Поселения: %s, в них %s",
+  "kingdomworld.screen.citizens.settlement.planned": "%s (не отстроено)",
+  "kingdomworld.screen.citizens.settlement.numbers": "%s из %s жителей, еды на %s дн., стража %s"
 }

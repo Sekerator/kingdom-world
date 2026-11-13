@@ -90,6 +90,14 @@ public final class RulerView {
     public int cityLevel;
 
     public int population;
+    /** The settlements of the state that live as data (not its capital) and their numbers: people, houses, guard and militia. */
+    public int settlements;
+    public int settlementPeople;
+    public int settlementHousing;
+    public int settlementGuards;
+    public int settlementMilitia;
+    /** Settlements of the state without food in store. */
+    public int hungrySettlements;
     public int bedsUsed;
     public int bedsTotal;
     public int foodDays = 10;
