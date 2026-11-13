@@ -99,6 +99,39 @@ public final class GatheringGameTests {
         return citizen;
     }
 
+    /**
+     * A place in the coordinates of a test, for the messages of failures: the helper of the game turns its own answer half
+     * round for a test that is not turned, so it is not used.
+     */
+    static BlockPos local(GameTestHelper helper, BlockPos absolute) {
+        return absolute.subtract(helper.absolutePos(BlockPos.ZERO));
+    }
+
+    /**
+     * The blocks of a layer of a test as rows of letters, north to south, for the messages of failures: "." air, "~" a fluid,
+     * "#" a full block, otherwise the first letter of the block.
+     */
+    static String map(GameTestHelper helper, int fromX, int fromZ, int toX, int toZ, int y) {
+        StringBuilder text = new StringBuilder();
+        for (int z = fromZ; z <= toZ; z++) {
+            text.append(z == fromZ ? "" : "/");
+            for (int x = fromX; x <= toX; x++) {
+                BlockPos pos = helper.absolutePos(new BlockPos(x, y, z));
+                BlockState state = helper.getLevel().getBlockState(pos);
+                if (state.isAir()) {
+                    text.append('.');
+                } else if (!state.getFluidState().isEmpty()) {
+                    text.append('~');
+                } else if (state.isCollisionShapeFullBlock(helper.getLevel(), pos)) {
+                    text.append('#');
+                } else {
+                    text.append(net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(state.getBlock()).getPath().charAt(0));
+                }
+            }
+        }
+        return text.toString();
+    }
+
     static StorehouseInventory storehouse(ServerLevel level, BlockPos absolute) {
         level.setBlockAndUpdate(absolute, ModRegistries.STOREHOUSE.get().defaultBlockState());
         return KingdomSavedData.get(level.getServer()).storehouses()
@@ -106,11 +139,32 @@ public final class GatheringGameTests {
                 .orElseThrow(() -> new IllegalStateException("The storehouse has no inventory"));
     }
 
+    /** Blocks around a box cleared for a test within which lava and water could still flow into it. */
+    private static final int FLUID_REACH = 8;
     /**
-     * Sets every block of a box (absolute, inclusive) to air: the test's own blocks are cleared before and after.
+     * Blocks over a box within which water could still fall into it: the game clears the space some twenty blocks over the
+     * template of a test, and the water of the aquifers around that shaft falls down it.
+     */
+    private static final int FLUID_ABOVE = 24;
+
+    /**
+     * Sets every block of a box (absolute, inclusive) to air: the test's own blocks are cleared before and after. The tests
+     * stand deep under the land of an ordinary world, where the aquifers are lava and water: around a box under the sea level
+     * the lava and water within {@value #FLUID_REACH} blocks, and {@value #FLUID_ABOVE} over it, turn to stone, so that none
+     * flows in.
      */
     static void clear(ServerLevel level, BlockPos from, BlockPos to) {
-        for (BlockPos pos : BlockPos.betweenClosed(from, to)) {
+        BlockPos low = new BlockPos(Math.min(from.getX(), to.getX()), Math.min(from.getY(), to.getY()), Math.min(from.getZ(), to.getZ()));
+        BlockPos high = new BlockPos(Math.max(from.getX(), to.getX()), Math.max(from.getY(), to.getY()), Math.max(from.getZ(), to.getZ()));
+        if (low.getY() < level.getSeaLevel()) {
+            for (BlockPos pos : BlockPos.betweenClosed(low.offset(-FLUID_REACH, -FLUID_REACH, -FLUID_REACH),
+                    high.offset(FLUID_REACH, FLUID_ABOVE, FLUID_REACH))) {
+                if (level.getBlockState(pos).getBlock() instanceof net.minecraft.world.level.block.LiquidBlock && !inside(pos, low, high)) {
+                    level.setBlock(pos, Blocks.STONE.defaultBlockState(), 2 | 16);
+                }
+            }
+        }
+        for (BlockPos pos : BlockPos.betweenClosed(low, high)) {
             if (!level.getBlockState(pos).isAir()) {
                 level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2 | 16);
             }
@@ -121,6 +175,11 @@ public final class GatheringGameTests {
                 new net.minecraft.world.phys.AABB(from, to).inflate(2.0))) {
             item.discard();
         }
+    }
+
+    private static boolean inside(BlockPos pos, BlockPos low, BlockPos high) {
+        return pos.getX() >= low.getX() && pos.getX() <= high.getX() && pos.getY() >= low.getY() && pos.getY() <= high.getY()
+                && pos.getZ() >= low.getZ() && pos.getZ() <= high.getZ();
     }
 
     /**
@@ -150,6 +209,7 @@ public final class GatheringGameTests {
     static void end(GameTestHelper helper, Kingdom kingdom, Citizen citizen, BlockPos from, BlockPos to) {
         CitizenGameTests.finish(helper, kingdom, citizen);
         clear(helper.getLevel(), from, to);
+        TestChunks.release(helper.getLevel(), from);
     }
 
     // ---------------------------------------------------------------- lumberjack

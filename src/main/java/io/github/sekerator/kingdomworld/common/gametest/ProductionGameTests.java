@@ -128,14 +128,22 @@ public final class ProductionGameTests {
 
     // ---------------------------------------------------------------- near players
 
+    /**
+     * The corner of the box a test of a workshop clears: the zone of a post reaches 7 blocks around it, the tests stand 8 blocks
+     * apart, and a furnace or a table another test left in the zone would be the workshop the worker goes to.
+     */
+    private static final BlockPos ZONE_FROM = new BlockPos(-7, 0, -7);
+
     @GameTest(template = EMPTY, batch = "kingdomworld_workshop_smelter", timeoutTicks = 1800)
     public static void smelterFillsAVanillaFurnaceAndTakesTheIngot(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         level.setDayTime(1_000L);
-        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos from = helper.absolutePos(ZONE_FROM);
         BlockPos to = helper.absolutePos(new BlockPos(7, 3, 6));
         GatheringGameTests.clear(level, from, to);
+        // The worker walks beyond the chunks the game holds for the structure of the test: the box is held too.
+        TestChunks.hold(level, from, to);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Foundry", UUID.randomUUID());
         helper.setBlock(new BlockPos(5, 0, 2), Blocks.FURNACE);
         StorehouseInventory store = GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(0, 0, 4)));
@@ -164,9 +172,11 @@ public final class ProductionGameTests {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         level.setDayTime(1_000L);
-        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos from = helper.absolutePos(ZONE_FROM);
         BlockPos to = helper.absolutePos(new BlockPos(7, 3, 6));
         GatheringGameTests.clear(level, from, to);
+        // The worker walks beyond the chunks the game holds for the structure of the test: the box is held too.
+        TestChunks.hold(level, from, to);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Glassworks", UUID.randomUUID());
         // The nearer furnace holds glass in its output: iron put into it would never come out.
         helper.setBlock(new BlockPos(3, 0, 1), Blocks.FURNACE);
@@ -208,9 +218,11 @@ public final class ProductionGameTests {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         level.setDayTime(1_000L);
-        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos from = helper.absolutePos(ZONE_FROM);
         BlockPos to = helper.absolutePos(new BlockPos(7, 3, 6));
         GatheringGameTests.clear(level, from, to);
+        // The worker walks beyond the chunks the game holds for the structure of the test: the box is held too.
+        TestChunks.hold(level, from, to);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Kitchens", UUID.randomUUID());
         helper.setBlock(new BlockPos(5, 0, 2), Blocks.SMOKER);
         StorehouseInventory store = GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(0, 0, 4)));
@@ -236,9 +248,11 @@ public final class ProductionGameTests {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         level.setDayTime(1_000L);
-        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos from = helper.absolutePos(ZONE_FROM);
         BlockPos to = helper.absolutePos(new BlockPos(7, 3, 6));
         GatheringGameTests.clear(level, from, to);
+        // The worker walks beyond the chunks the game holds for the structure of the test: the box is held too.
+        TestChunks.hold(level, from, to);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Joinery", UUID.randomUUID());
         helper.setBlock(new BlockPos(5, 0, 2), Blocks.CRAFTING_TABLE);
         StorehouseInventory store = GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(0, 0, 4)));
@@ -249,8 +263,18 @@ public final class ProductionGameTests {
         Order planks = order(server, kingdom, Items.OAK_PLANKS, Order.Kind.MAKE, 4);
 
         helper.succeedWhen(() -> {
+            io.github.sekerator.kingdomworld.common.citizen.CitizenEntity body = io.github.sekerator.kingdomworld.common.citizen.CitizenBodies.body(worker.id());
             helper.assertTrue(stored(server, kingdom, Items.OAK_PLANKS) == 4, "Expected 4 planks in the storehouse, got "
-                    + stored(server, kingdom, Items.OAK_PLANKS));
+                    + stored(server, kingdom, Items.OAK_PLANKS) + ": logs " + stored(server, kingdom, Items.OAK_LOG) + ", worker "
+                    + worker.workStatus() + ", body " + (body == null ? "none" : GatheringGameTests.local(helper, body.blockPosition()).toShortString()
+                    + " holding " + body.getMainHandItem() + (body.isAlive() ? "" : " dead") + ", health " + body.getHealth()
+                    + (body.isWounded() ? " wounded" : "") + (helper.getLevel().isDay() ? "" : " in the dark") + ", going to "
+                    + (body.getNavigation().getTargetPos() == null ? "nothing" : GatheringGameTests.local(helper, body.getNavigation().getTargetPos()).toShortString())
+                    + ", on " + helper.getLevel().getBlockState(body.blockPosition().below()).getBlock() + ", goals "
+                    + body.goalSelector.getRunningGoals().map(goal -> goal.getGoal().getClass().getSimpleName()).toList()
+                    + ", reservations " + Production.reservations().hold(worker.id())) + ", table " + helper.getBlockState(new BlockPos(5, 0, 2))
+                    + ", storehouse " + helper.getBlockState(new BlockPos(0, 0, 4)) + ", feet " + GatheringGameTests.map(helper, -7, -7, 7, 7, 0)
+                    + ", heads " + GatheringGameTests.map(helper, -7, -7, 7, 7, 1) + ", floor " + GatheringGameTests.map(helper, -7, -7, 7, 7, -1));
             helper.assertTrue(stored(server, kingdom, Items.OAK_LOG) == 1, "More than one log was used");
             Production.plan(server, kingdom.id());
             helper.assertTrue(KingdomWorldApi.state(server).orders().get(kingdom.id(), planks.id()).isEmpty(), "The finished order stayed");
@@ -263,9 +287,11 @@ public final class ProductionGameTests {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         level.setDayTime(1_000L);
-        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos from = helper.absolutePos(ZONE_FROM);
         BlockPos to = helper.absolutePos(new BlockPos(7, 3, 6));
         GatheringGameTests.clear(level, from, to);
+        // The worker walks beyond the chunks the game holds for the structure of the test: the box is held too.
+        TestChunks.hold(level, from, to);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Forges", UUID.randomUUID());
         helper.setBlock(new BlockPos(5, 0, 2), Blocks.SMITHING_TABLE);
         StorehouseInventory store = GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(0, 0, 4)));
@@ -294,9 +320,11 @@ public final class ProductionGameTests {
     public static void smithMakesAnIronSwordThroughAChainFromRawIron(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
-        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos from = helper.absolutePos(ZONE_FROM);
         BlockPos to = helper.absolutePos(new BlockPos(9, 3, 9));
         GatheringGameTests.clear(level, from, to);
+        // The worker walks beyond the chunks the game holds for the structure of the test: the box is held too.
+        TestChunks.hold(level, from, to);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Armoury", UUID.randomUUID());
         StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 4);
         fill(store, new ItemStack(Items.RAW_IRON, 2), new ItemStack(Items.COAL), new ItemStack(Items.STICK));
@@ -329,6 +357,7 @@ public final class ProductionGameTests {
         } finally {
             CitizenGameTests.finish(helper, kingdom, smith, smelter);
             GatheringGameTests.clear(level, from, to);
+            TestChunks.release(level, from);
         }
         helper.succeed();
     }
@@ -337,9 +366,11 @@ public final class ProductionGameTests {
     public static void aReservationKeepsTwoWorkersOffOneIngredient(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
-        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos from = helper.absolutePos(ZONE_FROM);
         BlockPos to = helper.absolutePos(new BlockPos(9, 3, 9));
         GatheringGameTests.clear(level, from, to);
+        // The worker walks beyond the chunks the game holds for the structure of the test: the box is held too.
+        TestChunks.hold(level, from, to);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Two Carpenters", UUID.randomUUID());
         StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 4);
         fill(store, new ItemStack(Items.OAK_LOG));
@@ -375,6 +406,7 @@ public final class ProductionGameTests {
             Production.release(early.id());
             CitizenGameTests.finish(helper, kingdom, early, late);
             GatheringGameTests.clear(level, from, to);
+            TestChunks.release(level, from);
         }
         helper.succeed();
     }
@@ -383,9 +415,11 @@ public final class ProductionGameTests {
     public static void aKeepOrderHoldsItsQuota(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
-        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos from = helper.absolutePos(ZONE_FROM);
         BlockPos to = helper.absolutePos(new BlockPos(9, 3, 9));
         GatheringGameTests.clear(level, from, to);
+        // The worker walks beyond the chunks the game holds for the structure of the test: the box is held too.
+        TestChunks.hold(level, from, to);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Stick Stores", UUID.randomUUID());
         StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 4);
         fill(store, new ItemStack(Items.BIRCH_PLANKS, 20));
@@ -408,6 +442,7 @@ public final class ProductionGameTests {
         } finally {
             CitizenGameTests.finish(helper, kingdom, worker);
             GatheringGameTests.clear(level, from, to);
+            TestChunks.release(level, from);
         }
         helper.succeed();
     }
@@ -416,9 +451,11 @@ public final class ProductionGameTests {
     public static void makingFarFromPlayersNeverDuplicatesOrLoses(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
-        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos from = helper.absolutePos(ZONE_FROM);
         BlockPos to = helper.absolutePos(new BlockPos(9, 3, 9));
         GatheringGameTests.clear(level, from, to);
+        // The worker walks beyond the chunks the game holds for the structure of the test: the box is held too.
+        TestChunks.hold(level, from, to);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Honest Mills", UUID.randomUUID());
         StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 4);
         fill(store, new ItemStack(Items.OAK_LOG, 5));
@@ -447,6 +484,7 @@ public final class ProductionGameTests {
         } finally {
             CitizenGameTests.finish(helper, kingdom, worker);
             GatheringGameTests.clear(level, from, to);
+            TestChunks.release(level, from);
         }
         helper.succeed();
     }
