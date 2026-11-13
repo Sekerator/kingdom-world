@@ -80,7 +80,9 @@ final class WorkCommands {
                                         .then(Commands.argument("value", IntegerArgumentType.integer(1, 64))
                                                 .executes(context -> set(context, pos -> KingdomWorldApi.state(context.getSource().getServer())
                                                         .setPostRadius(null, pos, IntegerArgumentType.getInteger(context, "value"),
-                                                                GatheringSettings.rules().maxRadius())))))
+                                                                GatheringSettings.rules().maxRadius(KingdomWorldApi.state(context.getSource()
+                                                                        .getServer()).citizens().posts().get(pos)
+                                                                        .map(WorkPost::professionId).orElse("")))))))
                                 .then(Commands.literal("seats")
                                         .then(Commands.argument("value", IntegerArgumentType.integer(1, 16))
                                                 .executes(context -> set(context, pos -> KingdomWorldApi.state(context.getSource().getServer())

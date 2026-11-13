@@ -29,6 +29,8 @@ public enum WorkStatus {
     /** The tool there is cannot harvest what is left in the zone (for example an ore that needs iron). */
     TOOL_TOO_WEAK(true),
     NO_TREES(true),
+    /** A lumberjack with no sapling to plant where a tree stood: none in its bag, the post's container or the storehouses. */
+    NO_SAPLINGS(true),
     NO_ROCK(true),
     /** Every tunnel of the mine is dug; another goal or depth starts a new mine. */
     MINE_WORKED_OUT(true),

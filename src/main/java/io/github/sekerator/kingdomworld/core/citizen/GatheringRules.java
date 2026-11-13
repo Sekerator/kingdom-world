@@ -10,6 +10,9 @@ import java.util.Objects;
  *
  * @param defaultRadius     radius of the zone of a new post, in blocks (smaller if the land is smaller)
  * @param maxRadius         largest radius of a zone
+ * @param lumberjackDefaultRadius radius of the zone of a lumberjack's post, in blocks; it is not cut to the land, since
+ *                          the lumberjack fells and plants only on the kingdom's own chunks anyway
+ * @param lumberjackMaxRadius largest radius of the zone of a lumberjack's post
  * @param maxSeats          most workers one post takes
  * @param maxTreeBlocks     most logs of one tree a lumberjack fells
  * @param mineLevels        most levels a mine has, one every {@link #MINE_LEVEL_STEP} blocks, or every
@@ -20,9 +23,9 @@ import java.util.Objects;
  * @param riskMultiplier    multiplies every risk of accidents far from players; 0 turns them off
  * @param risks             the accident risk of each profession per minute of work, by profession id
  */
-public record GatheringRules(int defaultRadius, int maxRadius, int maxSeats, int maxTreeBlocks, int mineLevels, int maxHerd,
-                             int carrierRange, int carrierItemsPerMinute, double riskMultiplier,
-                             Map<String, TaskRisks.Risk> risks) {
+public record GatheringRules(int defaultRadius, int maxRadius, int lumberjackDefaultRadius, int lumberjackMaxRadius, int maxSeats,
+                             int maxTreeBlocks, int mineLevels, int maxHerd, int carrierRange, int carrierItemsPerMinute,
+                             double riskMultiplier, Map<String, TaskRisks.Risk> risks) {
     /** Ticks of a game day spent working; workers rest at night. */
     public static final long WORK_TICKS_PER_DAY = CitizenNeeds.TICKS_PER_DAY / 2;
     /** Blocks between two levels of a mine. */
@@ -36,11 +39,11 @@ public record GatheringRules(int defaultRadius, int maxRadius, int maxSeats, int
     /** Least time of watched work, in ticks, that makes a measurement. */
     public static final long MEASURE_TICKS = 2_400L;
 
-    public static final GatheringRules DEFAULT = new GatheringRules(8, 16, 4, 160, 8, 12, 48, 64, 1.0, TaskRisks.DEFAULTS);
+    public static final GatheringRules DEFAULT = new GatheringRules(8, 16, 16, 32, 4, 160, 8, 12, 48, 64, 1.0, TaskRisks.DEFAULTS);
 
     public GatheringRules {
-        if (defaultRadius < 1 || maxRadius < defaultRadius || maxSeats < 1 || maxTreeBlocks < 1 || mineLevels < 1
-                || maxHerd < 2 || carrierRange < 1 || carrierItemsPerMinute < 0) {
+        if (defaultRadius < 1 || maxRadius < defaultRadius || lumberjackDefaultRadius < 1 || lumberjackMaxRadius < lumberjackDefaultRadius
+                || maxSeats < 1 || maxTreeBlocks < 1 || mineLevels < 1 || maxHerd < 2 || carrierRange < 1 || carrierItemsPerMinute < 0) {
             throw new IllegalArgumentException("Gathering rules out of range");
         }
         if (!Double.isFinite(riskMultiplier) || riskMultiplier < 0.0) {
@@ -132,5 +135,49 @@ public record GatheringRules(int defaultRadius, int maxRadius, int maxSeats, int
      */
     public int radiusForNewPost(int largestInside) {
         return Math.max(1, Math.min(defaultRadius, largestInside));
+    }
+
+    /**
+     * Whether the zone of a post of the profession must lie entirely on the kingdom's land. A lumberjack's zone need not:
+     * it fells and plants only on the kingdom's own chunks of it, so a larger zone near the border loses nothing.
+     */
+    public static boolean boundToLand(String professionId) {
+        return !Professions.LUMBERJACK.id().equals(professionId);
+    }
+
+    /**
+     * The radius a post of the profession starts with.
+     */
+    public int defaultRadius(String professionId) {
+        return Professions.LUMBERJACK.id().equals(professionId) ? lumberjackDefaultRadius : defaultRadius;
+    }
+
+    /**
+     * The largest radius of a post of the profession.
+     */
+    public int maxRadius(String professionId) {
+        return Professions.LUMBERJACK.id().equals(professionId) ? lumberjackMaxRadius : maxRadius;
+    }
+
+    /**
+     * The radius a new post of the profession gets: its default one, cut to the land where the profession needs that.
+     *
+     * @param largestInside largest radius whose zone lies entirely on the kingdom's land
+     */
+    public int radiusForNewPost(String professionId, int largestInside) {
+        int radius = defaultRadius(professionId);
+        return Math.max(1, boundToLand(professionId) ? Math.min(radius, largestInside) : radius);
+    }
+
+    /**
+     * The radius a post keeps when it takes up a profession: at most the largest one of the new profession, and for a
+     * lumberjack at least its own default, since a grove needs room.
+     */
+    public int radiusOnProfession(String professionId, int radius) {
+        int result = Math.min(radius, maxRadius(professionId));
+        if (Professions.LUMBERJACK.id().equals(professionId)) {
+            result = Math.max(result, lumberjackDefaultRadius);
+        }
+        return Math.max(1, result);
     }
 }

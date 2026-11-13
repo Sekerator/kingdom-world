@@ -80,6 +80,8 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue farmRadius;
         public final ForgeConfigSpec.IntValue workPostDefaultRadius;
         public final ForgeConfigSpec.IntValue workPostMaxRadius;
+        public final ForgeConfigSpec.IntValue lumberjackDefaultRadius;
+        public final ForgeConfigSpec.IntValue lumberjackMaxRadius;
         public final ForgeConfigSpec.IntValue workPostMaxSeats;
         public final ForgeConfigSpec.IntValue maxTreeBlocks;
         public final ForgeConfigSpec.IntValue mineLevels;
@@ -237,11 +239,19 @@ public final class KingdomWorldConfig {
 
             builder.comment("Work posts and the gathering professions: lumberjack, miner, fisher, herder and carrier.").push("work");
             workPostDefaultRadius = builder
-                    .comment("Radius of the zone of a new work post, in blocks (smaller if the kingdom's land around it is smaller).")
+                    .comment("Radius of the zone of a new work post, in blocks (smaller if the kingdom's land around it is smaller); lumberjacks have their own.")
                     .defineInRange("workPostDefaultRadius", 8, 1, 64);
             workPostMaxRadius = builder
-                    .comment("Largest radius of the zone of a work post, in blocks. A zone never reaches beyond the kingdom's land.")
+                    .comment("Largest radius of the zone of a work post, in blocks; lumberjacks have their own. Such a zone never reaches beyond the kingdom's land.")
                     .defineInRange("workPostMaxRadius", 16, 1, 64);
+            lumberjackDefaultRadius = builder
+                    .comment("Radius of the zone of a lumberjack's post, in blocks. Posts of lumberjacks with a smaller radius get it once",
+                            "when the world is loaded by this version. A lumberjack's zone may reach beyond the kingdom's land; it fells",
+                            "and plants only on the kingdom's own chunks.")
+                    .defineInRange("lumberjackDefaultRadius", 16, 1, 64);
+            lumberjackMaxRadius = builder
+                    .comment("Largest radius of the zone of a lumberjack's post, in blocks.")
+                    .defineInRange("lumberjackMaxRadius", 32, 1, 64);
             workPostMaxSeats = builder
                     .comment("Most workers one work post takes.")
                     .defineInRange("workPostMaxSeats", 4, 1, 16);

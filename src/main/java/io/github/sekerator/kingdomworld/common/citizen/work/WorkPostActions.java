@@ -53,8 +53,8 @@ public final class WorkPostActions {
     // ---------------------------------------------------------------- a post appears
 
     /**
-     * A new post was found on kingdom land: its zone gets the default radius, or less where the land is smaller,
-     * and a survey estimates what it yields.
+     * A new post was found on kingdom land: its zone gets the default radius of its profession, or less where the land
+     * is smaller and the profession needs its zone on the land, and a survey estimates what it yields.
      */
     public static void onPostFound(ServerLevel level, WorldPos pos) {
         MinecraftServer server = level.getServer();
@@ -64,9 +64,10 @@ public final class WorkPostActions {
             return;
         }
         GatheringRules rules = GatheringSettings.rules();
-        int inside = WorkZone.largestRadiusWithin(pos, rules.defaultRadius(),
+        String profession = post.get().professionId();
+        int inside = WorkZone.largestRadiusWithin(pos, rules.defaultRadius(profession),
                 chunk -> post.get().kingdomId().equals(state.territory().ownerOf(pos.dimension(), chunk)));
-        state.citizens().setPostRadius(post.get(), rules.radiusForNewPost(inside));
+        state.citizens().setPostRadius(post.get(), rules.radiusForNewPost(profession, inside));
         PostContainers.Container container = PostContainers.find(level, pos);
         post.get().setHasContainer(container != null);
         PostWork.refreshStatus(server, post.get());
@@ -172,7 +173,7 @@ public final class WorkPostActions {
         }
         return new WorkPostView(new BlockPos(post.pos().x(), post.pos().y(), post.pos().z()), post.kingdomId(),
                 state.membership().hasPermission(player.getUUID(), post.kingdomId(), Permission.MANAGE_CITIZENS),
-                post.professionId(), post.radius(), Math.max(post.radius(), rules.maxRadius()), post.seats(),
+                post.professionId(), post.radius(), Math.max(post.radius(), rules.maxRadius(post.professionId())), post.seats(),
                 Math.max(post.seats(), rules.maxSeats() + io.github.sekerator.kingdomworld.common.construction.BuildingEffects.extraSeats(server,
                         post.pos())), post.animal(), animals, post.herdSize(), Math.max(post.herdSize(), rules.maxHerd()),
                 post.status(), container, post.yield().measured(), (int) Math.min(1_000_000, Math.round(post.yield().total())),
@@ -241,7 +242,8 @@ public final class WorkPostActions {
 
     public static KingdomActions.Feedback setRadius(ServerPlayer player, WorldPos pos, int radius) {
         Outcome outcome = KingdomWorldApi.change(player.server, "set the radius of a work post",
-                state -> state.setPostRadius(player.getUUID(), pos, radius, GatheringSettings.rules().maxRadius()));
+                state -> state.setPostRadius(player.getUUID(), pos, radius, GatheringSettings.rules().maxRadius(
+                        state.citizens().posts().get(pos).map(WorkPost::professionId).orElse(""))));
         if (outcome.ok()) {
             ZoneSurveys.request(pos);
         }

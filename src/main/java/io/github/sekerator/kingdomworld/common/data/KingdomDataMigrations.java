@@ -192,7 +192,7 @@ final class KingdomDataMigrations {
      * version lists every upgrade it has; data without one gets it on load. Applied after the format migrations.
      */
     static final java.util.List<String> UPGRADES = java.util.List.of("guild_rights", "army_rights", "magic_rights", "law_rights",
-            "diplomacy_rights", "nobility_rights");
+            "diplomacy_rights", "nobility_rights", "lumberjack_radius");
 
     /**
      * Applies the upgrades the data does not list yet.
@@ -255,7 +255,33 @@ final class KingdomDataMigrations {
             }
             changed = true;
         }
+        if (!applied.contains("lumberjack_radius")) {
+            // Lumberjacks got a radius of their own: their posts with a smaller one get its default once.
+            int radius = io.github.sekerator.kingdomworld.common.citizen.work.GatheringSettings.rulesOrDefault().lumberjackDefaultRadius();
+            ListTag kingdoms = tag.getList(KingdomSavedData.TAG_KINGDOMS, Tag.TAG_COMPOUND);
+            for (int i = 0; i < kingdoms.size(); i++) {
+                widenLumberjacks(kingdoms.getCompound(i), radius);
+            }
+            changed = true;
+        }
         return changed;
+    }
+
+    /**
+     * Gives the posts of lumberjacks of a kingdom with a smaller radius the given one.
+     */
+    static void widenLumberjacks(CompoundTag kingdom, int radius) {
+        if (!kingdom.contains(CitizenNbt.POPULATION, Tag.TAG_COMPOUND)) {
+            return;
+        }
+        ListTag posts = kingdom.getCompound(CitizenNbt.POPULATION).getList(CitizenNbt.POSTS, Tag.TAG_COMPOUND);
+        for (int j = 0; j < posts.size(); j++) {
+            CompoundTag post = posts.getCompound(j);
+            if (io.github.sekerator.kingdomworld.core.citizen.Professions.LUMBERJACK.id().equals(post.getString("profession"))
+                    && post.contains("radius", Tag.TAG_INT) && post.getInt("radius") < radius) {
+                post.putInt("radius", radius);
+            }
+        }
     }
 
     /**

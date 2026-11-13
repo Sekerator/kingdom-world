@@ -1,12 +1,15 @@
 package io.github.sekerator.kingdomworld.common.citizen.work;
 
+import io.github.sekerator.kingdomworld.KingdomWorld;
 import io.github.sekerator.kingdomworld.core.citizen.WorkZone;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.ItemTags;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
@@ -49,6 +52,15 @@ public final class Trees {
     /** How far from the logs leaves still belong to the tree. */
     private static final int LEAF_DISTANCE = 6;
 
+    /** Rolls of the loot table of a kind of leaves that look for its sapling; a sapling dropped once in 40 is found. */
+    private static final int SAPLING_ROLLS = 1_000;
+    /**
+     * Saplings that grow only four in a square, like the dark oak: a single one never becomes a tree. Packs add those of
+     * other mods to the item tag {@code kingdomworld:saplings_in_fours}.
+     */
+    public static final TagKey<Item> SAPLINGS_IN_FOURS = TagKey.create(Registries.ITEM,
+            ResourceLocation.fromNamespaceAndPath(KingdomWorld.MOD_ID, "saplings_in_fours"));
+
     /** The sapling each kind of leaves drops, found once by rolling its loot table. */
     private static final Map<Block, Item> SAPLING_OF = new HashMap<>();
 
@@ -57,9 +69,15 @@ public final class Trees {
      *
      * @param bases  logs standing on the ground, where saplings go
      * @param logs   every log, from the top down
-     * @param leaves the natural leaves of its crown
+     * @param leaves the natural leaves of its crown: those no log of another tree is nearer to
      */
     public record Tree(List<BlockPos> bases, List<BlockPos> logs, List<BlockPos> leaves, @Nullable BlockState leafState) {
+        /**
+         * The same tree with the kind of leaves it had, for a tree half felled whose crown has gone.
+         */
+        public Tree withLeafState(@Nullable BlockState state) {
+            return new Tree(bases, logs, leaves, leafState != null ? leafState : state);
+        }
     }
 
     private Trees() {
@@ -159,6 +177,17 @@ public final class Trees {
      */
     @Nullable
     public static Tree find(ServerLevel level, BlockPos base, WorkZone zone, LandCheck land, int maxLogs) {
+        return find(level, base, zone, land, maxLogs, false);
+    }
+
+    /**
+     * Finds a tree as {@link #find(ServerLevel, BlockPos, WorkZone, LandCheck, int)} does.
+     *
+     * @param felling whether the tree is one the lumberjack began to fell: its upper logs are gone and with them the leaves,
+     *                so it is not asked to have a crown
+     */
+    @Nullable
+    public static Tree find(ServerLevel level, BlockPos base, WorkZone zone, LandCheck land, int maxLogs, boolean felling) {
         BlockState baseState = level.getBlockState(base);
         if (!isLog(baseState) || isWorkedWood(baseState) || isLying(baseState)) {
             return null;
@@ -203,7 +232,7 @@ public final class Trees {
                 }
             }
         }
-        if (leaves.size() < MIN_LEAVES) {
+        if (leaves.size() < MIN_LEAVES && !felling) {
             return null;
         }
         while (!frontier.isEmpty() && leaves.size() < MAX_LEAVES) {
@@ -219,7 +248,9 @@ public final class Trees {
                     continue;
                 }
                 BlockState state = level.getBlockState(side);
-                if (isNaturalLeaves(state)) {
+                // Leaves nearer to a log of another tree belong to that tree: taking them would strip its crown, and a
+                // trunk without leaves is no tree any more, it would stand bare for ever.
+                if (isNaturalLeaves(state) && (!state.hasProperty(LeavesBlock.DISTANCE) || state.getValue(LeavesBlock.DISTANCE) >= d + 1)) {
                     leaves.add(side);
                     distance.put(side, d + 1);
                     frontier.add(side);
@@ -323,8 +354,8 @@ public final class Trees {
     }
 
     /**
-     * The sapling a kind of leaves drops, or {@code null} if it drops none: found by rolling the leaves' loot table
-     * a number of times, once per kind of leaves.
+     * The sapling a kind of leaves drops, or {@code null} if it drops none: found once per kind of leaves by rolling the
+     * leaves' loot table, and failing that by the name ({@code mod:birch_leaves} gives {@code mod:birch_sapling}).
      */
     @Nullable
     public static Item saplingOf(ServerLevel level, BlockState leaves) {
@@ -333,23 +364,49 @@ public final class Trees {
             return SAPLING_OF.get(block);
         }
         Item found = null;
-        LootParams.Builder params = new LootParams.Builder(level)
-                .withParameter(LootContextParams.ORIGIN, Vec3.ZERO)
-                .withParameter(LootContextParams.TOOL, ItemStack.EMPTY);
-        for (int roll = 0; roll < 200 && found == null; roll++) {
-            for (ItemStack drop : leaves.getDrops(params)) {
-                if (isSapling(drop)) {
-                    found = drop.getItem();
-                    break;
+        try {
+            LootParams.Builder params = new LootParams.Builder(level)
+                    .withParameter(LootContextParams.ORIGIN, Vec3.ZERO)
+                    .withParameter(LootContextParams.TOOL, ItemStack.EMPTY);
+            for (int roll = 0; roll < SAPLING_ROLLS && found == null; roll++) {
+                for (ItemStack drop : leaves.getDrops(params)) {
+                    if (isSapling(drop)) {
+                        found = drop.getItem();
+                        break;
+                    }
                 }
             }
+        } catch (RuntimeException e) {
+            // A loot table of a mod that asks for more than a block broken by hand gives nothing here.
+            found = null;
+        }
+        if (found == null) {
+            found = saplingByName(block);
         }
         SAPLING_OF.put(block, found);
         return found;
     }
 
+    @Nullable
+    private static Item saplingByName(Block leaves) {
+        ResourceLocation id = ForgeRegistries.BLOCKS.getKey(leaves);
+        if (id == null || !id.getPath().endsWith("_leaves")) {
+            return null;
+        }
+        String wood = id.getPath().substring(0, id.getPath().length() - "_leaves".length());
+        Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.fromNamespaceAndPath(id.getNamespace(), wood + "_sapling"));
+        return item != null && isSapling(new ItemStack(item)) ? item : null;
+    }
+
     public static boolean isSapling(ItemStack stack) {
         return stack.is(ItemTags.SAPLINGS) && stack.getItem() instanceof BlockItem;
+    }
+
+    /**
+     * Whether a sapling grows only four in a square (a dark oak).
+     */
+    public static boolean growsInFours(ItemStack stack) {
+        return stack.is(SAPLINGS_IN_FOURS);
     }
 
     /**

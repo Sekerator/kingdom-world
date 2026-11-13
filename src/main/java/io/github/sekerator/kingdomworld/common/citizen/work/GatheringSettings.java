@@ -80,9 +80,22 @@ public final class GatheringSettings {
     private static GatheringRules fromConfig() {
         KingdomWorldConfig.Server config = KingdomWorldConfig.SERVER;
         int max = config.workPostMaxRadius.get();
-        return new GatheringRules(Math.min(config.workPostDefaultRadius.get(), max), max, config.workPostMaxSeats.get(),
+        int lumberjackMax = config.lumberjackMaxRadius.get();
+        return new GatheringRules(Math.min(config.workPostDefaultRadius.get(), max), max,
+                Math.min(config.lumberjackDefaultRadius.get(), lumberjackMax), lumberjackMax, config.workPostMaxSeats.get(),
                 config.maxTreeBlocks.get(), config.mineLevels.get(), config.maxHerdSize.get(), config.carrierRange.get(),
                 config.carrierItemsPerMinute.get(), config.taskRiskMultiplier.get(), TaskRisks.parseAll(config.professionRisks.get()));
+    }
+
+    /**
+     * The rules of the config, or the defaults while the config is not loaded yet (saved data read early, unit tests).
+     */
+    public static GatheringRules rulesOrDefault() {
+        try {
+            return rules();
+        } catch (RuntimeException e) {
+            return GatheringRules.DEFAULT;
+        }
     }
 
     /**

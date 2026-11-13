@@ -65,6 +65,16 @@ public record PostYield(Map<String, Double> outputs, Map<String, Double> inputs,
                 actions * (1.0 - w) + sample.actions * w, true);
     }
 
+    /**
+     * The rates raised to at least those of {@code floor}, item by item, and the tool uses likewise; inputs and whether the
+     * rates were measured stay.
+     */
+    public PostYield atLeast(PostYield floor) {
+        Map<String, Double> raised = new LinkedHashMap<>(outputs);
+        floor.outputs.forEach((item, rate) -> raised.merge(item, rate, Math::max));
+        return new PostYield(raised, inputs, Math.max(actions, floor.actions), measured);
+    }
+
     private static Map<String, Double> mix(Map<String, Double> old, Map<String, Double> sample, double w) {
         Map<String, Double> result = new LinkedHashMap<>();
         for (Map.Entry<String, Double> entry : old.entrySet()) {

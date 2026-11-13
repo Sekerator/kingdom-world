@@ -147,6 +147,31 @@ class WorkPostsTest {
     }
 
     @Test
+    void aLumberjacksZoneHasItsOwnRadiusAndMayReachBeyondTheLand() {
+        citizens.addSite(pos(8, 8), SiteKinds.WORK_POST, realm);
+        WorkPost post = citizens.posts().get(pos(8, 8)).orElseThrow();
+        GatheringRules rules = GatheringRules.DEFAULT;
+        assertTrue(state.setPostRadius(king, pos(8, 8), 4, rules.maxRadius()).ok());
+        // A post that becomes a lumberjack's grows to the lumberjack's own radius.
+        assertTrue(state.setPostProfession(king, pos(8, 8), "lumberjack").ok());
+        assertEquals(rules.lumberjackDefaultRadius(), post.radius());
+        // The land reaches 24 blocks west of the post at most, but a lumberjack works only on its own chunks of the zone
+        // anyway: its zone grows up to the lumberjack's largest radius.
+        assertTrue(state.setPostRadius(king, pos(8, 8), 32, rules.maxRadius("lumberjack")).ok());
+        assertEquals(KingdomError.VALUE_OUT_OF_RANGE, state.setPostRadius(king, pos(8, 8), 33, rules.maxRadius("lumberjack")).error());
+        // Another profession takes the zone back to its own largest radius and onto the land.
+        assertTrue(state.setPostProfession(king, pos(8, 8), "miner").ok());
+        assertEquals(16, post.radius());
+        assertEquals(KingdomError.ZONE_OUTSIDE_LAND, state.setPostRadius(king, pos(8, 8), 25, 32).error());
+        // Back to a lumberjack, the zone keeps a radius larger than the default.
+        assertTrue(state.setPostProfession(king, pos(8, 8), "lumberjack").ok());
+        assertTrue(state.setPostRadius(king, pos(8, 8), 28, rules.maxRadius("lumberjack")).ok());
+        assertTrue(state.setPostProfession(king, pos(8, 8), "unemployed").ok());
+        assertTrue(state.setPostProfession(king, pos(8, 8), "lumberjack").ok());
+        assertEquals(16, post.radius(), "the zone of a post without a profession lay on the land");
+    }
+
+    @Test
     void hiringTakesTheNearestCitizenWithoutWork() {
         citizens.addSite(pos(8, 8), SiteKinds.WORK_POST, realm);
         assertEquals(KingdomError.NOT_A_POST_PROFESSION, state.hire(king, pos(8, 8)).outcome().error());

@@ -72,6 +72,7 @@ public final class CitizenEvents {
             io.github.sekerator.kingdomworld.common.production.ProductionSettings.refresh();
             var rules = GatheringSettings.rules();
             KingdomWorldApi.state(server).citizens().setPostDefaults(rules.defaultRadius(), Math.max(2, rules.maxHerd() / 2));
+            KingdomWorldApi.state(server).citizens().setPostRules(rules);
             CitizenBodies.update(server);
             CitizenCare.update(server);
         }
@@ -128,6 +129,7 @@ public final class CitizenEvents {
         GatheringSettings.reset();
         PostWork.reset();
         io.github.sekerator.kingdomworld.common.citizen.work.MinerBehavior.reset();
+        io.github.sekerator.kingdomworld.common.citizen.work.LumberjackBehavior.reset();
         ZoneSurveys.reset();
         io.github.sekerator.kingdomworld.common.production.ProductionSettings.reset();
         io.github.sekerator.kingdomworld.common.production.Production.reset();

@@ -133,6 +133,18 @@ public final class PostWork {
     }
 
     /**
+     * A sapling was planted at the post near players: what goes back into the ground is not part of what the post
+     * yields, so the rates of the work far from players do not hand it out.
+     */
+    public static void planted(WorkPost post, ItemStack stack) {
+        Stats stats = STATS.get(post.pos());
+        if (stats != null && !stack.isEmpty()) {
+            long count = stack.getCount();
+            stats.gathered.computeIfPresent(itemId(stack), (id, had) -> had > count ? had - count : null);
+        }
+    }
+
+    /**
      * The tool was used at the post near players.
      */
     public static void acted(WorkPost post, int uses) {

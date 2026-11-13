@@ -327,6 +327,152 @@ public final class GatheringGameTests {
         });
     }
 
+    /**
+     * A natural oak of four logs with a crown two blocks around its top, its leaves told how far they are from the logs.
+     */
+    private static void oak(GameTestHelper helper, int x, int z) {
+        for (int y = 0; y < 4; y++) {
+            helper.setBlock(new BlockPos(x, y, z), Blocks.OAK_LOG);
+        }
+        BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, false);
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                for (int y = 3; y <= 4; y++) {
+                    BlockPos pos = new BlockPos(x + dx, y, z + dz);
+                    if (!(dx == 0 && dz == 0 && y == 3) && helper.getBlockState(pos).isAir()) {
+                        helper.setBlock(pos, leaves);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Lets the leaves of a box work out how far they are from the logs, as leaves that grew do.
+     */
+    private static void settleLeaves(GameTestHelper helper, BlockPos from, BlockPos to) {
+        for (BlockPos pos : BlockPos.betweenClosed(helper.absolutePos(from), helper.absolutePos(to))) {
+            BlockState state = helper.getLevel().getBlockState(pos);
+            if (state.getBlock() instanceof LeavesBlock) {
+                helper.getLevel().scheduleTick(pos.immutable(), state.getBlock(), 1);
+            }
+        }
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_work_lumberjack_replant", timeoutTicks = 1600)
+    public static void lumberjackReplantsATreeAndLeavesTheCrownOfItsNeighbour(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        level.setDayTime(1_000L);
+        BlockPos from = helper.absolutePos(new BlockPos(-2, 0, -2));
+        BlockPos to = helper.absolutePos(new BlockPos(14, 8, 6));
+        clear(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Replanted Wood", UUID.randomUUID());
+        // Two oaks whose crowns touch: the lumberjack fells the nearer one first.
+        oak(helper, 5, 1);
+        oak(helper, 10, 1);
+        settleLeaves(helper, new BlockPos(2, 3, -2), new BlockPos(13, 4, 4));
+        // The storehouse has the axe only; a sapling waits in the chest of the post, whatever the leaves drop.
+        StorehouseInventory store = storehouse(level, helper.absolutePos(new BlockPos(0, 0, 4)));
+        store.insertItem(0, new ItemStack(Items.IRON_AXE), false);
+        helper.setBlock(new BlockPos(-1, 0, 0), Blocks.CHEST);
+        ChestBlockEntity chest = (ChestBlockEntity) helper.getBlockEntity(new BlockPos(-1, 0, 0));
+        chest.setItem(0, new ItemStack(Items.OAK_SAPLING));
+        WorldPos postPos = post(helper, new BlockPos(0, 0, 0), "lumberjack");
+        Citizen worker = worker(helper, kingdom, "lumberjack", postPos, helper.absolutePos(new BlockPos(2, 0, 0)));
+
+        helper.succeedWhen(() -> {
+            for (int y = 1; y < 4; y++) {
+                helper.assertTrue(!helper.getBlockState(new BlockPos(5, y, 1)).is(Blocks.OAK_LOG), "The nearer oak still stands");
+            }
+            helper.assertTrue(helper.getBlockState(new BlockPos(5, 0, 1)).is(Blocks.OAK_SAPLING), "No oak sapling where the oak stood");
+            // The neighbour keeps its crown, so that it stays a tree the lumberjack fells in its turn.
+            int leaves = 0;
+            for (BlockPos side : List.of(new BlockPos(9, 3, 1), new BlockPos(11, 3, 1), new BlockPos(10, 3, 0), new BlockPos(10, 3, 2),
+                    new BlockPos(10, 4, 1))) {
+                if (helper.getBlockState(side).is(Blocks.OAK_LEAVES)) {
+                    leaves++;
+                }
+            }
+            helper.assertTrue(helper.getBlockState(new BlockPos(10, 3, 1)).is(Blocks.OAK_LOG) && leaves >= 4,
+                    "The crown of the neighbouring oak was stripped: " + leaves + " leaves at its top");
+            end(helper, kingdom, worker, from, to);
+        });
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_work_lumberjack_grove", timeoutTicks = 2400)
+    public static void lumberjackPlantsNewSaplingsOnlyOnFreeNaturalGround(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        level.setDayTime(1_000L);
+        UUID king = UUID.randomUUID();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest New Grove", king);
+        // New saplings need the open sky: the grove lies on a platform of grass over the surface of the world, on land of the
+        // kingdom two chunks east of its capital, beyond the square of a village.
+        ChunkPos capital = new ChunkPos(helper.absolutePos(new BlockPos(2, 0, 2)));
+        for (int dx = 2; dx <= 3; dx++) {
+            for (int dz = 0; dz <= 1; dz++) {
+                ChunkPos chunk = new ChunkPos(capital.x + dx, capital.z + dz);
+                helper.assertTrue(KingdomWorldApi.claimChunk(level, chunk, kingdom.id(), king).ok(), "No land for the grove at " + chunk);
+                level.setChunkForced(chunk.x, chunk.z, true);
+                level.getChunk(chunk.x, chunk.z);
+            }
+        }
+        int minX = (capital.x + 2) << 4;
+        int minZ = capital.z << 4;
+        int top = level.getMinBuildHeight();
+        for (int x = minX; x < minX + 32; x++) {
+            for (int z = minZ; z < minZ + 32; z++) {
+                top = Math.max(top, level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z));
+            }
+        }
+        int y = Math.min(top + 2, level.getMaxBuildHeight() - 40);
+        BlockPos low = new BlockPos(minX + 2, y, minZ + 2);
+        BlockPos high = new BlockPos(minX + 29, y, minZ + 29);
+        for (BlockPos pos : BlockPos.betweenClosed(low, high)) {
+            level.setBlock(pos, Blocks.GRASS_BLOCK.defaultBlockState(), 2 | 16);
+        }
+        BlockPos center = new BlockPos(minX + 16, y + 1, minZ + 16);
+        // Things of people near three spots of the grid: a plank of a house, a path, a field.
+        BlockPos plank = center.offset(6, 0, 1);
+        BlockPos path = center.offset(-5, -1, 2);
+        BlockPos field = center.offset(1, -1, 7);
+        level.setBlock(plank, Blocks.OAK_PLANKS.defaultBlockState(), 2 | 16);
+        level.setBlock(path, Blocks.DIRT_PATH.defaultBlockState(), 2 | 16);
+        level.setBlock(field, Blocks.FARMLAND.defaultBlockState(), 2 | 16);
+        StorehouseInventory store = storehouse(level, center.offset(0, 0, -2));
+        store.insertItem(0, new ItemStack(Items.IRON_AXE), false);
+        store.insertItem(1, new ItemStack(Items.OAK_SAPLING, 16), false);
+        WorldPos postPos = post(level, center, "lumberjack");
+        KingdomWorldApi.change(server, "test", state -> state.setPostRadius(null, postPos, 10, 32));
+        Citizen worker = worker(helper, kingdom, "lumberjack", postPos, center.offset(1, 0, 1));
+
+        helper.succeedWhen(() -> {
+            int planted = 0;
+            for (BlockPos pos : BlockPos.betweenClosed(low.above(), high.above())) {
+                if (!level.getBlockState(pos).is(Blocks.OAK_SAPLING)) {
+                    continue;
+                }
+                planted++;
+                helper.assertTrue(io.github.sekerator.kingdomworld.core.citizen.Groves.onGrid(center.getX(), center.getZ(), pos.getX(), pos.getZ()),
+                        "A sapling off the grid at " + pos);
+                for (BlockPos built : List.of(plank, path, field)) {
+                    helper.assertTrue(Math.max(Math.abs(built.getX() - pos.getX()), Math.abs(built.getZ() - pos.getZ())) > 2,
+                            "A sapling at " + pos + " next to " + level.getBlockState(built));
+                }
+            }
+            helper.assertTrue(planted >= 3, "Only " + planted + " new saplings were planted");
+            CitizenGameTests.finish(helper, kingdom, worker);
+            for (BlockPos pos : BlockPos.betweenClosed(low, high.above(2))) {
+                level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2 | 16);
+            }
+            for (int dx = 2; dx <= 3; dx++) {
+                for (int dz = 0; dz <= 1; dz++) {
+                    level.setChunkForced(capital.x + dx, capital.z + dz, false);
+                }
+            }
+        });
+    }
+
     // ---------------------------------------------------------------- miner
 
     /**
@@ -403,8 +549,9 @@ public final class GatheringGameTests {
         level.setBlockAndUpdate(stand, Blocks.AIR.defaultBlockState());
         level.setBlockAndUpdate(stand.above(), Blocks.AIR.defaultBlockState());
         GatheringRules rules = GatheringRules.DEFAULT;
-        GatheringSettings.override(new GatheringRules(rules.defaultRadius(), rules.maxRadius(), rules.maxSeats(), rules.maxTreeBlocks(), 1,
-                rules.maxHerd(), rules.carrierRange(), rules.carrierItemsPerMinute(), 0.0, rules.risks()));
+        GatheringSettings.override(new GatheringRules(rules.defaultRadius(), rules.maxRadius(), rules.lumberjackDefaultRadius(),
+                rules.lumberjackMaxRadius(), rules.maxSeats(), rules.maxTreeBlocks(), 1, rules.maxHerd(), rules.carrierRange(),
+                rules.carrierItemsPerMinute(), 0.0, rules.risks()));
         GatheringSettings.overrideMine(new MineRules(3, 8, 24, 0, Map.of()));
         StorehouseInventory store = storehouse(level, new BlockPos(x0 + 1, y, z0 + 1));
         store.insertItem(0, new ItemStack(Items.STONE_PICKAXE), false);
@@ -805,8 +952,9 @@ public final class GatheringGameTests {
 
     static GatheringRules safeRules(double deathChance) {
         GatheringRules rules = GatheringRules.DEFAULT;
-        return new GatheringRules(rules.defaultRadius(), rules.maxRadius(), rules.maxSeats(), rules.maxTreeBlocks(), rules.mineLevels(),
-                rules.maxHerd(), rules.carrierRange(), rules.carrierItemsPerMinute(), deathChance > 0 ? 1.0 : 0.0,
+        return new GatheringRules(rules.defaultRadius(), rules.maxRadius(), rules.lumberjackDefaultRadius(), rules.lumberjackMaxRadius(),
+                rules.maxSeats(), rules.maxTreeBlocks(), rules.mineLevels(), rules.maxHerd(), rules.carrierRange(),
+                rules.carrierItemsPerMinute(), deathChance > 0 ? 1.0 : 0.0,
                 Map.of("miner", new TaskRisks.Risk(0.0, deathChance)));
     }
 

@@ -173,7 +173,8 @@ public abstract class PostWorkGoal extends Goal {
                 }
             }
             case WORK -> {
-                if (status == WorkStatus.WORKING || status == WorkStatus.WAITING || status == WorkStatus.NONE) {
+                if (status == WorkStatus.WORKING || status == WorkStatus.WAITING || status == WorkStatus.NONE
+                        || status == WorkStatus.NO_SAPLINGS) {
                     PostWork.worked(post);
                 }
                 WorkStatus result = work((ServerLevel) body.level());
@@ -226,6 +227,14 @@ public abstract class PostWorkGoal extends Goal {
      */
     protected boolean deliversToPost() {
         return true;
+    }
+
+    /**
+     * How many of a carried stack may go into the container of the post now; the rest goes on to a storehouse. Everything
+     * by default; a lumberjack leaves only a few dozen saplings there for its work.
+     */
+    protected int containerRoom(ItemStack stack, IItemHandler container) {
+        return stack.getCount();
     }
 
     /**
@@ -378,22 +387,42 @@ public abstract class PostWorkGoal extends Goal {
                     .get(new WorldPos(Dimensions.id(level), deliverTo.getX(), deliverTo.getY(), deliverTo.getZ())).orElse(null);
         }
         boolean moved = false;
+        boolean heldBack = false;
         if (target != null) {
             for (int slot = 0; slot < body.carried().getContainerSize(); slot++) {
                 ItemStack stack = body.carried().getItem(slot);
-                if (!stack.isEmpty()) {
-                    ItemStack rest = ItemHandlerHelper.insertItemStacked(target, stack, false);
-                    moved |= rest.getCount() != stack.getCount();
-                    body.carried().setItem(slot, rest);
+                if (stack.isEmpty()) {
+                    continue;
                 }
+                int allowed = deliverToContainer ? Math.max(0, Math.min(stack.getCount(), containerRoom(stack, target))) : stack.getCount();
+                heldBack |= allowed < stack.getCount();
+                if (allowed <= 0) {
+                    continue;
+                }
+                ItemStack rest = ItemHandlerHelper.insertItemStacked(target, stack.copyWithCount(allowed), false);
+                int put = allowed - rest.getCount();
+                moved |= put > 0;
+                stack.shrink(put);
+                body.carried().setItem(slot, stack.isEmpty() ? ItemStack.EMPTY : stack);
             }
         }
-        if (!moved && deliverToContainer && target != null) {
-            // The container is full: the worker takes its harvest to a storehouse instead.
-            deliverToContainer = false;
-            deliverTo = nearestStorehouse(level);
-            if (deliverTo != null) {
+        if ((!moved || heldBack) && deliverToContainer && target != null) {
+            // The container is full, or holds as much of something as the work wants there: the worker takes the rest of
+            // its harvest to a storehouse.
+            BlockPos storehouse = nearestStorehouse(level);
+            if (storehouse != null) {
+                deliverToContainer = false;
+                deliverTo = storehouse;
                 return;
+            }
+            if (heldBack) {
+                // No storehouse within reach: what was held back goes into the container after all.
+                for (int slot = 0; slot < body.carried().getContainerSize(); slot++) {
+                    ItemStack stack = body.carried().getItem(slot);
+                    if (!stack.isEmpty()) {
+                        body.carried().setItem(slot, ItemHandlerHelper.insertItemStacked(target, stack, false));
+                    }
+                }
             }
         }
         deliverTo = null;

@@ -26,6 +26,7 @@ public final class Citizens {
     private final ProductionLedger ledger = new ProductionLedger();
     private int newPostRadius = GatheringRules.DEFAULT.defaultRadius();
     private int newHerdSize = GatheringRules.DEFAULT.maxHerd() / 2;
+    private GatheringRules postRules = GatheringRules.DEFAULT;
 
     private java.util.function.BiPredicate<UUID, WorldPos> homeRule = (kingdom, bed) -> true;
 
@@ -62,6 +63,17 @@ public final class Citizens {
     public void setPostDefaults(int radius, int herdSize) {
         this.newPostRadius = Math.max(1, radius);
         this.newHerdSize = Math.max(2, herdSize);
+    }
+
+    /**
+     * The rules of work posts of the server: the radii each profession allows.
+     */
+    public GatheringRules postRules() {
+        return postRules;
+    }
+
+    public void setPostRules(GatheringRules rules) {
+        this.postRules = Objects.requireNonNull(rules, "rules");
     }
 
     // ---------------------------------------------------------------- citizens
