@@ -225,6 +225,33 @@ public final class ScaleGameTests {
             AsyncSave.save(data, file, "test");
             AsyncSave.await();
             helper.assertTrue(read(file).equals("new"), "The save that failed was not written again");
+
+            // A write fails while the last save of a stopping server has already looked: the server waiting for the writer
+            // writes it again.
+            data.value = "last";
+            data.setDirty();
+            AsyncSave.failNextForTest(new IllegalStateException("the writer stopped"));
+            AsyncSave.save(data, file, "test");
+            AsyncSave.save(data, file, "test");
+            AsyncSave.await();
+            helper.assertTrue(read(file).equals("last"), "The last save of a stopping server was lost: " + read(file));
+
+            // Making the tag fails after a write that failed: the write is still made again later.
+            data.value = "kept";
+            data.setDirty();
+            AsyncSave.failNextForTest(new IllegalStateException("the writer stopped"));
+            AsyncSave.save(data, file, "test");
+            AsyncSave.awaitWriterForTest();
+            data.broken = true;
+            try {
+                AsyncSave.save(data, file, "test");
+                helper.fail("A broken tag did not fail");
+            } catch (IllegalStateException expected) {
+                // The game would stop this save; the mark of the write to make again must stay.
+            }
+            data.broken = false;
+            AsyncSave.await();
+            helper.assertTrue(read(file).equals("kept"), "A write that failed was forgotten when making the tag failed: " + read(file));
         } finally {
             try {
                 Files.deleteIfExists(folder.resolve("kingdomworld_test.dat"));
@@ -249,9 +276,13 @@ public final class ScaleGameTests {
      */
     private static final class Saved extends SavedData {
         String value = "";
+        boolean broken;
 
         @Override
         public CompoundTag save(CompoundTag tag) {
+            if (broken) {
+                throw new IllegalStateException("the tag could not be made");
+            }
             tag.putString("value", value);
             return tag;
         }

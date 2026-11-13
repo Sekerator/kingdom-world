@@ -31,6 +31,8 @@ public final class AsyncSave {
     private static final long STOP_WAIT_SECONDS = 60;
 
     private static final Set<Path> FAILED = ConcurrentHashMap.newKeySet();
+    /** The data last saved into every file, so that a write that failed can be made again when the server waits for the writer. */
+    private static final Map<Path, SavedData> SAVED = new ConcurrentHashMap<>();
     private static final Map<String, Long> THREAD_NANOS = new ConcurrentHashMap<>();
     private static final AsyncFileWriter WRITER = new AsyncFileWriter("KingdomWorld save writer", (file, error) -> {
         FAILED.add(file);
@@ -54,14 +56,14 @@ public final class AsyncSave {
      */
     public static void save(SavedData data, File file, String name) {
         Path path = file.toPath();
-        boolean retry = FAILED.remove(path);
-        if (!data.isDirty() && !retry) {
+        if (!data.isDirty() && !FAILED.contains(path)) {
             return;
         }
         long start = System.nanoTime();
-        CompoundTag root = new CompoundTag();
-        root.put("data", data.save(new CompoundTag()));
-        NbtUtils.addCurrentDataVersion(root);
+        // The tag first: should making it fail, the mark of a write to make again stays.
+        CompoundTag root = tag(data);
+        FAILED.remove(path);
+        SAVED.put(path, data);
         data.setDirty(false);
         RuntimeException failure = failForTest;
         WRITER.submit(path, target -> {
@@ -84,13 +86,43 @@ public final class AsyncSave {
         return THREAD_NANOS.getOrDefault(name, 0L);
     }
 
+    private static CompoundTag tag(SavedData data) {
+        CompoundTag root = new CompoundTag();
+        root.put("data", data.save(new CompoundTag()));
+        NbtUtils.addCurrentDataVersion(root);
+        return root;
+    }
+
     /**
-     * Waits until every save handed to the writer is written or has failed.
+     * Waits until every save handed to the writer is written or has failed, then writes once more, at once, every file whose
+     * last write failed: the saves of a stopping server are not lost to a write that failed after its last save looked.
      */
     public static void await() {
         if (!WRITER.await(STOP_WAIT_SECONDS, TimeUnit.SECONDS)) {
             LOGGER.error("The writer of the saves of KingdomWorld did not end within {} s", STOP_WAIT_SECONDS);
+            return;
         }
+        for (Path path : Set.copyOf(FAILED)) {
+            SavedData data = SAVED.get(path);
+            if (data == null) {
+                continue;
+            }
+            try {
+                CompoundTag root = tag(data);
+                AsyncFileWriter.writeNow(path, target -> NbtIo.writeCompressed(root, target.toFile()));
+                FAILED.remove(path);
+                LOGGER.info("{} was written again after a write that failed", path);
+            } catch (java.io.IOException | RuntimeException e) {
+                LOGGER.error("Could not write {} again: the file stays as it was", path, e);
+            }
+        }
+    }
+
+    /**
+     * Waits for the writer alone, without writing again what failed, for game tests.
+     */
+    public static void awaitWriterForTest() {
+        WRITER.await(STOP_WAIT_SECONDS, TimeUnit.SECONDS);
     }
 
     /**
