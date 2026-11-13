@@ -10,12 +10,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The guide book "Kingdoms: a Guide": a table of contents and twelve chapters, read page by page. The pages are cut from the
+ * The guide book "Kingdoms: a Guide": a table of contents and fifteen chapters, read page by page. The pages are cut from the
  * translated text by the width of the screen, so the book reads the same in every language and on a narrow screen; a chapter
  * title too long for its line is shortened and shown in full on hover. The book remembers where it was left open.
  */
 public class GuideScreen extends KingdomScreen {
-    public static final int CHAPTERS = 12;
+    public static final int CHAPTERS = 15;
     /** The widest the pages get, so that lines stay easy to read on a wide screen. */
     private static final int MAX_WIDTH = 420;
     private static final int HEADER = 22;
