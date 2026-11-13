@@ -1447,7 +1447,7 @@ Invoke-Phase 'run1' {
         # and a camp of robbers far from the way. The caravan of the deal below takes the road. All of it must survive the
         # restart. Consent to cross foreign land is covered by the game tests.
         Send-ServerCommand $server 'kingdomworld admin roads status'
-        if (Wait-ForLog $server 'Roads: 0 cities, 0 roads, camps: 0, caravans on roads: 0, data format 1' $CommandTimeout $ConsoleFailPattern) {
+        if (Wait-ForLog $server 'Roads: 0 cities, 0 roads, camps: 0, caravans on roads: 0, data format 2' $CommandTimeout $ConsoleFailPattern) {
             Write-Ok '[run1] the road data is writable and empty'
         } else {
             Add-Failure '[run1] the road data is not writable or not empty'
@@ -3206,7 +3206,7 @@ Invoke-Phase 'run2' {
                 Send-ServerCommand $server 'kingdomworld admin roads status'
                 # The kingdoms of the world raised in the first launch have cities and roads of their own, and the one that goes on
                 # appearing adds to them: no fewer cities and roads than before the restart, the same camps, a caravan on its way.
-                $roadsNow = Wait-ForLog $server 'Roads: (\d+) cit(?:y|ies), (\d+) roads?, camps: (\d+), caravans on roads: (\d+), data format 1' $CommandTimeout $ConsoleFailPattern
+                $roadsNow = Wait-ForLog $server 'Roads: (\d+) cit(?:y|ies), (\d+) roads?, camps: (\d+), caravans on roads: (\d+), data format 2' $CommandTimeout $ConsoleFailPattern
                 $roadsThen = [regex]::Match([string]$script:RoadsLine, '^(\d+) cit(?:y|ies), (\d+) roads?, camps: (\d+), caravans on roads: (\d+)$')
                 if ($roadsNow -and $roadsThen.Success -and [int]$roadsNow.Groups[1].Value -ge [int]$roadsThen.Groups[1].Value -and [int]$roadsNow.Groups[2].Value -ge [int]$roadsThen.Groups[2].Value -and [int]$roadsNow.Groups[3].Value -eq [int]$roadsThen.Groups[3].Value -and [int]$roadsNow.Groups[4].Value -ge 1) {
                     Write-Ok "[run2] the cities, the roads, the camp and the caravans on their way survived the restart: $($script:RoadsLine) -> $($roadsNow.Value.Trim())"
