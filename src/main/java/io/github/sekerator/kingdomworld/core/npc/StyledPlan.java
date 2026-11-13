@@ -90,6 +90,11 @@ public final class StyledPlan {
     private static final int[][] CORNERS = {{-1, -1}, {1, -1}, {-1, 1}, {1, 1}};
     /** The half-rows of a ring in the order they are filled: {side, half}. */
     private static final int[][] ORDER = {{SOUTH, 0}, {SOUTH, 1}, {EAST, 1}, {EAST, 0}, {WEST, 1}, {WEST, 0}, {NORTH, 0}, {NORTH, 1}};
+    /**
+     * The half-rows of the last ring in the order their houses go up by turns, as indexes into {@link #ORDER}: a half of every
+     * side before the other half of any, so that a side is not left without houses when the homes run out.
+     */
+    private static final int[] TURNS = {0, 2, 4, 6, 1, 3, 5, 7};
 
     private StyledPlan() {
     }
@@ -446,24 +451,26 @@ public final class StyledPlan {
         }
         boolean[] full = new boolean[rows.size()];
         int poor = homes[0] + Math.max(0, wanted - homes[0]) / 3;
-        byTurns(rows, starts, full, true, style, random, homes, poor);
-        byTurns(rows, starts, full, false, style, random, homes, wanted);
-        byTurns(rows, starts, full, true, style, random, homes, wanted);
+        byTurns(rows, starts, full, row -> row.side == NORTH, style, random, homes, poor);
+        byTurns(rows, starts, full, row -> row.side != NORTH, style, random, homes, wanted);
+        byTurns(rows, starts, full, row -> true, style, random, homes, wanted);
     }
 
     /**
-     * Puts up houses on the rows of the north side or on the others by turns until none fits or the beds reach {@code limit}.
+     * Puts up houses on the rows taken by turns, a side after a side ({@link #TURNS}), until none fits or the beds reach
+     * {@code limit}.
      *
      * @param full the rows found full, kept
      */
-    private static void byTurns(List<Row> rows, int[] starts, boolean[] full, boolean north, String style, SplittableRandom random,
-                                int[] homes, int limit) {
+    private static void byTurns(List<Row> rows, int[] starts, boolean[] full, java.util.function.Predicate<Row> taken, String style,
+                                SplittableRandom random, int[] homes, int limit) {
         boolean more = true;
         for (int round = 0; more && round < 24; round++) {
             more = false;
-            for (int i = 0; i < rows.size() && homes[0] < limit; i++) {
+            for (int turn = 0; turn < TURNS.length && homes[0] < limit; turn++) {
+                int i = TURNS[turn];
                 Row row = rows.get(i);
-                if ((row.side == NORTH) != north || full[i]) {
+                if (!taken.test(row) || full[i]) {
                     continue;
                 }
                 full[i] = !house(row, style, random, homes, starts[i]);
@@ -513,8 +520,9 @@ public final class StyledPlan {
 
     /**
      * Sets the buildings of a row on the ground: the room left cut into random shares between them and after the last one, the
-     * first by the avenue. Wide gaps get a tree, houses with a deep back garden a tree in it, houses set back as far as they go a
-     * front garden; the room after the last building of the outer ring is a free lot when it is wide enough.
+     * first by the avenue. Wide gaps get trees, in rows in a deep ring, buildings with a deep back garden a tree in it or an
+     * orchard in rows, houses set back as far as they go a front garden; the room after the last building of the outer ring is a
+     * free lot when it is wide enough.
      */
     private static void place(Row row, SplittableRandom random, List<Plot> plots, Extras extras, boolean outer) {
         int n = row.items.size();

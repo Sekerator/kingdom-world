@@ -590,12 +590,19 @@ class StyledPlanTest {
                 templates.add(plot.template());
                 quarters.add(plot.quarter());
                 setbacks.add(setback(composition, plot));
+                // The poor live along the north wall and towards the north corners, the merchants of the outer ring by the market.
+                if (plot.quarter().equals("poor")) {
+                    assertTrue(plot.z() < 0, c.at() + "a house of the poor south of the throne: " + plot);
+                }
+                if (plot.quarter().equals("merchant")) {
+                    assertTrue(plot.z() > 0, c.at() + "a house of merchants north of the throne: " + plot);
+                }
             }
             assertTrue(setbacks.size() > 1, c.at() + "setbacks " + setbacks);
             assertTrue(setbacks.stream().allMatch(s -> s >= 0 && s <= 2), c.at() + "setbacks " + setbacks);
+            assertEquals(Set.of("noble", "merchant", "craft", "poor"), quarters, c.at());
             if (c.level() == NpcLevel.LARGE) {
                 assertTrue(templates.size() >= 4, c.at() + "house templates " + templates);
-                assertEquals(Set.of("noble", "merchant", "craft", "poor"), quarters, c.at());
             }
         });
     }
