@@ -27,10 +27,11 @@ import java.util.SplittableRandom;
  * the house of the adventurers' guild and the tower of the mages by the south avenue, the treasury, the tavern, the court and the
  * infirmary on the other sides, the houses of the nobles between them, monuments, a chapel, a clock tower or a park in its open
  * corners. The second ring looks out to the wall: the market on the south, the craftsmen and the yards of the builders and
- * carriers on the east and west, the barracks of the army on the north, and houses of merchants, craftsmen and the poor behind
- * them, the poorer the nearer the corners. Avenues run from the square to the gates of the wall, which stand in squares of their
- * own; towers stand in the corners of the wall. Houses stand back from their street by up to two blocks, some behind a front
- * garden, the gaps between them differ, and trees stand in wide gaps, behind houses and on the greens.
+ * carriers on the east and west, the barracks of the army on the north, and houses behind them: the merchants by the market, the
+ * craftsmen on the east and west, the poor along the north wall and towards the north corners. Avenues run from the square to
+ * the gates of the wall, which stand in squares of their own; towers stand in the corners of the wall. Houses stand back from
+ * their street by up to two blocks, some behind a front garden, the gaps between them differ, and trees stand in wide gaps, in
+ * rows in the deep gardens behind the buildings and on the greens.
  *
  * <p>All positions are in blocks from the throne, x to the east and z to the south.
  *
@@ -401,19 +402,21 @@ public final class StyledPlan {
     }
 
     /**
-     * The quarter of a house of the outer ring by where it begins in the room its row has for houses: the first third the
-     * merchants on the south side by the market and the craftsmen elsewhere, the middle third the craftsmen, the far third by
-     * the corners and the wall the poor.
+     * The quarter of a house of the outer ring by its side and where it begins in the room its row has for houses: the poor along
+     * the north wall behind the castle and in the far halves of the rows running from the east and west avenues to the north
+     * corners, the merchants by the market on the south, the craftsmen between.
      *
      * @param offset blocks from the beginning of the room for houses
      * @param room   the length of that room
      */
     private static String quarterAt(Row row, int offset, int room) {
-        int third = room <= 0 ? 2 : offset * 3 / room;
-        if (third == 0) {
-            return row.side == SOUTH ? MERCHANT : CRAFT;
-        }
-        return third == 1 ? CRAFT : POOR;
+        boolean near = room > 0 && offset * 2 < room;
+        return switch (row.side) {
+            case NORTH -> POOR;
+            case SOUTH -> row.half == 1 || near ? MERCHANT : CRAFT;
+            // The half of a side north of its avenue runs towards the north corner.
+            default -> row.half == 1 || near ? CRAFT : POOR;
+        };
     }
 
     /**
@@ -423,23 +426,73 @@ public final class StyledPlan {
      * @param homes the beds of the capital so far, counted on
      */
     private static void houses(Row row, String style, SplittableRandom random, int[] homes, int wanted) {
-        Entry last = row.items.isEmpty() ? null : row.items.get(row.items.size() - 1).entry();
         int start = row.next();
         for (int guard = 0; guard < 24 && homes[0] < wanted; guard++) {
-            String quarter = row.ring == 0 ? NOBLE : quarterAt(row, row.next() - start, row.length() - start);
-            int setback = random.nextInt(SETBACK + 1);
-            List<Entry> fitting = fitting(pool(style, quarter), row, last);
-            if (fitting.isEmpty() && row.ring > 0) {
-                fitting = fitting(pool(style, ""), row, last);
-            }
-            if (fitting.isEmpty()) {
+            if (!house(row, style, random, homes, start)) {
                 break;
             }
-            Entry house = fitting.get(random.nextInt(fitting.size()));
-            row.items.add(new Item(house, Math.min(setback, row.depth - house.depth()), quarter, true));
-            homes[0] += house.beds();
-            last = house;
         }
+    }
+
+    /**
+     * The houses of the last ring, put up by turns, a house to a row, so that the homes of the level run out evenly over the
+     * sides instead of leaving the last of them empty: the poor rows along the north wall first, up to a third of the homes
+     * left, then the other rows, then whatever room is left on every side.
+     */
+    private static void outerHouses(List<Row> rows, String style, SplittableRandom random, int[] homes, int wanted) {
+        int[] starts = new int[rows.size()];
+        for (int i = 0; i < rows.size(); i++) {
+            starts[i] = rows.get(i).next();
+        }
+        boolean[] full = new boolean[rows.size()];
+        int poor = homes[0] + Math.max(0, wanted - homes[0]) / 3;
+        byTurns(rows, starts, full, true, style, random, homes, poor);
+        byTurns(rows, starts, full, false, style, random, homes, wanted);
+        byTurns(rows, starts, full, true, style, random, homes, wanted);
+    }
+
+    /**
+     * Puts up houses on the rows of the north side or on the others by turns until none fits or the beds reach {@code limit}.
+     *
+     * @param full the rows found full, kept
+     */
+    private static void byTurns(List<Row> rows, int[] starts, boolean[] full, boolean north, String style, SplittableRandom random,
+                                int[] homes, int limit) {
+        boolean more = true;
+        for (int round = 0; more && round < 24; round++) {
+            more = false;
+            for (int i = 0; i < rows.size() && homes[0] < limit; i++) {
+                Row row = rows.get(i);
+                if ((row.side == NORTH) != north || full[i]) {
+                    continue;
+                }
+                full[i] = !house(row, style, random, homes, starts[i]);
+                more |= !full[i];
+            }
+        }
+    }
+
+    /**
+     * Puts up the next house of a row, of the quarter where it begins and with its setback, not like the building before it.
+     *
+     * @param start where the room of the row for houses begins
+     * @return whether a house fitted
+     */
+    private static boolean house(Row row, String style, SplittableRandom random, int[] homes, int start) {
+        Entry last = row.items.isEmpty() ? null : row.items.get(row.items.size() - 1).entry();
+        String quarter = row.ring == 0 ? NOBLE : quarterAt(row, row.next() - start, row.length() - start);
+        int setback = random.nextInt(SETBACK + 1);
+        List<Entry> fitting = fitting(pool(style, quarter), row, last);
+        if (fitting.isEmpty() && row.ring > 0) {
+            fitting = fitting(pool(style, ""), row, last);
+        }
+        if (fitting.isEmpty()) {
+            return false;
+        }
+        Entry house = fitting.get(random.nextInt(fitting.size()));
+        row.items.add(new Item(house, Math.min(setback, row.depth - house.depth()), quarter, true));
+        homes[0] += house.beds();
+        return true;
     }
 
     private static List<Entry> fitting(List<Entry> pool, Row row, Entry last) {
@@ -505,25 +558,33 @@ public final class StyledPlan {
             int[] middle = row.point(along, across);
             Plot plot = new Plot(entry.id(), middle[0], middle[1], row.facing, mirror, item.quarter());
             plots.add(plot);
-            if (item.house()) {
-                if (item.setback() == SETBACK) {
-                    extras.gardens().add(garden(row, plot, entry, lo, hi));
-                }
-                int back = row.depth - item.setback() - entry.depth();
-                if (back >= TREE_BACK) {
-                    // The middle of the back garden, between the back of the house and the back of its ring.
-                    int behind = item.setback() + entry.depth() + (back - 1) / 2;
-                    extras.trees().add(row.point(along, row.behind(behind)));
+            if (item.house() && item.setback() == SETBACK) {
+                extras.gardens().add(garden(row, plot, entry, lo, hi));
+            }
+            int back = row.depth - item.setback() - entry.depth();
+            if (back >= TREE_BACK) {
+                // The garden behind a building up to the back of its ring: a tree in its middle, an orchard in rows where it is
+                // deep and wide.
+                int lines = Math.max(1, back / TREE_STEP);
+                int count = Math.max(1, (width + 2) / TREE_STEP);
+                for (int r = 0; r < lines; r++) {
+                    int behind = item.setback() + entry.depth() + (back * (2 * r + 1)) / (2 * lines);
+                    for (int t = 0; t < count; t++) {
+                        int spot = lo + (width * (2 * t + 1)) / (2 * count);
+                        extras.trees().add(row.point(spot, row.behind(behind)));
+                    }
                 }
             }
             int gap = i < n - 1 ? GAP + shares[i] : shares[i];
             if (gap >= TREE_GAP) {
-                // One tree in the middle of a gap, more along a long one.
+                // One tree in the middle of a gap, more along a long one, and further rows of them in a deep ring.
                 int count = Math.max(1, (gap + 1) / TREE_STEP);
                 for (int t = 0; t < count; t++) {
                     int offset = (gap * (2 * t + 1) + count) / (2 * count);
                     int mid = backwards ? lo - offset : hi + offset;
-                    extras.trees().add(row.point(mid, row.behind(3)));
+                    for (int behind = 3; behind <= row.depth - TREE_CLEAR; behind += TREE_STEP) {
+                        extras.trees().add(row.point(mid, row.behind(behind)));
+                    }
                 }
             }
             if (i == n - 1 && outer && gap >= LOT + GAP) {
@@ -642,16 +703,26 @@ public final class StyledPlan {
         Extras extras = new Extras(new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
         int rings = shape.rings().length;
         int[] beds = {0};
+        int homeBeds = HOMES[level.ordinal()];
         for (int ring = 0; ring < rings; ring++) {
             boolean outer = ring == rings - 1;
-            for (Row row : rows(shape, ring)) {
+            List<Row> list = rows(shape, ring);
+            for (Row row : list) {
                 for (Item item : queue(level, style, rank, row)) {
                     if (row.fits(item.entry())) {
                         row.items.add(item);
                         beds[0] += TemplateCatalog.bunks(item.entry()) ? 0 : item.entry().beds();
                     }
                 }
-                houses(row, style, random, beds, HOMES[level.ordinal()]);
+            }
+            if (outer) {
+                outerHouses(list, style, random, beds, homeBeds);
+            } else {
+                for (Row row : list) {
+                    houses(row, style, random, beds, homeBeds);
+                }
+            }
+            for (Row row : list) {
                 place(row, random, plots, extras, outer);
             }
             if (ring == 0) {
