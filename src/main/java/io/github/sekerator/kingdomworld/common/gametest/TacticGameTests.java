@@ -184,10 +184,10 @@ public final class TacticGameTests {
                 }
                 helper.assertTrue(near >= 5, near + " of 6 soldiers reached their target");
                 helper.assertTrue(sides.size() >= 4, "The soldiers stand on " + sides.size() + " sides of their target, not around it");
-                // Someone stands on the far side: the back of the target is closed.
-                helper.assertTrue(bodies.stream().anyMatch(body -> body.getX() > target.getX() + 1.0 && body.getZ() > target.getZ() - 0.5
-                        || body.getZ() > target.getZ() + 1.0 && body.getX() > target.getX() - 0.5), "Nobody closed the back of the target: "
-                        + ring(bodies, target));
+                // Someone stands on the far side, beyond the target from where the squad came (the north-west): the back of the
+                // target is closed. A soldier striking stands a block from its target, so half a block beyond it counts.
+                helper.assertTrue(bodies.stream().anyMatch(body -> ((body.getX() - target.getX()) + (body.getZ() - target.getZ())) / Math.sqrt(2) > 0.5),
+                        "Nobody closed the back of the target: " + ring(bodies, target));
             } finally {
                 end(helper, kingdom, area, citizens, List.of(target));
             }
@@ -326,10 +326,10 @@ public final class TacticGameTests {
             try {
                 for (CitizenEntity body : bodies) {
                     helper.assertTrue(body.isAlive() && !body.isInLava() && !body.isOnFire(), "A soldier went into the lava: "
-                            + helper.relativePos(body.blockPosition()).toShortString() + (body.isAlive() ? "" : " dead") + (body.isInLava() ? " in lava" : "")
+                            + GatheringGameTests.local(helper, body.blockPosition()).toShortString() + (body.isAlive() ? "" : " dead") + (body.isInLava() ? " in lava" : "")
                             + (body.isOnFire() ? " on fire" : "") + ", role " + role(body) + ", target at "
-                            + helper.relativePos(target.blockPosition()).toShortString() + ", squad at "
-                            + bodies.stream().map(other -> helper.relativePos(other.blockPosition()).toShortString()).toList()
+                            + GatheringGameTests.local(helper, target.blockPosition()).toShortString() + ", squad at "
+                            + bodies.stream().map(other -> GatheringGameTests.local(helper, other.blockPosition()).toShortString()).toList()
                             + "; the first in: " + entered[0]);
                     BlockPos under = body.blockPosition().below();
                     helper.assertTrue(!level.getBlockState(under).is(Blocks.LAVA) && !level.getBlockState(body.blockPosition()).is(Blocks.LAVA),

@@ -208,7 +208,7 @@ public final class ArmyGameTests {
             // on its place).
             Soldier record = ArmyWork.state(server).soldier(citizen.id()).orElse(null);
             helper.assertTrue(record != null, "The soldier is gone: " + (body.isAlive() ? "its body lives at "
-                    + helper.relativePos(body.blockPosition()).toShortString() : "its body died of " + body.getLastDamageSource()));
+                    + GatheringGameTests.local(helper, body.blockPosition()).toShortString() : "its body died of " + body.getLastDamageSource()));
             helper.assertTrue(record.kills() >= 1 && record.experience() > 0, "The kill gave no experience of war");
             end(helper, kingdom, from(helper), to(helper), citizen);
         });
