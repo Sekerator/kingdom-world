@@ -56,8 +56,14 @@ public final class SettlementGameTests {
     private static final String EMPTY = "empty";
     /** The middle of the rings of these tests, far from the land of every other test, those of the plan of states included. */
     private static final int FAR = 260_000;
-    /** The provinces of these tests are numbered after this, apart from those of the other tests of the plan. */
+    /**
+     * The provinces of these tests are numbered after these, apart from those of the other tests of the plan and below the
+     * last number of a province ({@link ProvinceMap#MAX_ID}); each test has {@value #SPAN} numbers of its own.
+     */
     private static final int BASE = 56_000;
+    private static final int RAISE_BASE = 52_000;
+    private static final int FOLD_BASE = 48_000;
+    private static final int SPAN = 4_000;
 
     private SettlementGameTests() {
     }
@@ -94,10 +100,10 @@ public final class SettlementGameTests {
         helper.runAfterDelay(1, () -> repeat(helper, tick + 1, limit, step, end, cleanUp, where));
     }
 
-    private static void cleanUp(MinecraftServer server, TerritoryIndex territory, int[] sites) {
+    private static void cleanUp(MinecraftServer server, TerritoryIndex territory, int base, int[] sites) {
         ProvinceMap map = territory.provinceMap().orElseThrow();
-        for (Province province : map.provinces()) {
-            if (province.id() > BASE && province.id() < BASE + 4_000) {
+        for (Province province : List.copyOf(map.provinces())) {
+            if (province.id() > base && province.id() < base + SPAN) {
                 territory.clearProvince(province.id());
             }
         }
@@ -113,7 +119,7 @@ public final class SettlementGameTests {
         MinecraftServer server = helper.getLevel().getServer();
         TerritoryIndex territory = LandEvents.attach(server);
         ProvinceMap map = territory.provinceMap().orElseThrow();
-        cleanUp(server, territory, new int[0]);
+        cleanUp(server, territory, BASE, new int[0]);
         LandPlanning.Job job = new LandPlanning.Job(server, ring(FAR, -FAR, BASE), new SurveySavedData(), map, territory, true, () -> {
         });
         repeat(helper, 0, 20_000, () -> {
@@ -177,7 +183,7 @@ public final class SettlementGameTests {
             }
             helper.assertTrue(roads >= all.size() - sites.length, roads + " road(s) for " + all.size() + " settlements");
             helper.succeed();
-        }, () -> cleanUp(server, territory, job.sites()), () -> job.progress() + ", " + Arrays.toString(job.stageWork()));
+        }, () -> cleanUp(server, territory, BASE, job.sites()), () -> job.progress() + ", " + Arrays.toString(job.stageWork()));
     }
 
     @GameTest(template = EMPTY, batch = "kingdomworld_settlements_restart", timeoutTicks = 24_000)
@@ -294,6 +300,7 @@ public final class SettlementGameTests {
         MinecraftServer server = helper.getLevel().getServer();
         TerritoryIndex territory = LandEvents.attach(server);
         ProvinceMap map = territory.provinceMap().orElseThrow();
+        cleanUp(server, territory, base, new int[0]);
         LandPlanning.Job job = new LandPlanning.Job(server, ring(x, z, base), new SurveySavedData(), map, territory, true, () -> {
         });
         repeat(helper, 0, 20_000, () -> {
@@ -313,12 +320,12 @@ public final class SettlementGameTests {
             helper.assertTrue(settlement != null, "The first state has no settlement of rank " + tier);
             check.accept(server, settlement);
             helper.succeed();
-        }, () -> cleanUp(server, territory, job.sites()), () -> job.progress().toString());
+        }, () -> cleanUp(server, territory, base, job.sites()), () -> job.progress().toString());
     }
 
     @GameTest(template = EMPTY, batch = "kingdomworld_settlements_raise", timeoutTicks = 24_000)
     public static void aVillageRisesAndGoesOnAfterARestartWithoutCopies(GameTestHelper helper) {
-        withSettlement(helper, FAR, FAR, BASE + 10_000, Tier.VILLAGE, (server, village) -> {
+        withSettlement(helper, FAR, FAR, RAISE_BASE, Tier.VILLAGE, (server, village) -> {
             // Halfway: the raising stops as a restart stops it, and goes on from the stage and step the village kept.
             io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.runNow(server, village, 40);
             String stopped = village.stage() + " " + village.step();
@@ -352,7 +359,7 @@ public final class SettlementGameTests {
 
     @GameTest(template = EMPTY, batch = "kingdomworld_settlements_fold", timeoutTicks = 24_000)
     public static void theCitizensOfAVillageFoldAndComeBackAsThemselves(GameTestHelper helper) {
-        withSettlement(helper, -FAR, FAR, BASE + 20_000, Tier.VILLAGE, (server, village) -> {
+        withSettlement(helper, -FAR, FAR, FOLD_BASE, Tier.VILLAGE, (server, village) -> {
             io.github.sekerator.kingdomworld.common.npc.SettlementRaiser.runNow(server, village, 20_000);
             KingdomWorldState world = KingdomWorldApi.state(server);
             java.util.List<UUID> before = new java.util.ArrayList<>();
