@@ -21,14 +21,16 @@
     related to kingdomworld. The JVM class loading log is also checked to prove that no class of the mod's client
     package is loaded on the dedicated server.
 
-    -OldWorld <folder> runs one launch on a copy of a world saved by an older version instead of the two, and
+    -OldWorld <folder> runs one launch on a copy of a world saved by an older version instead of the two: the old
+    world must keep its plan of capitals without provinces, though Forge gives its config, made before the key, the new
+    default plan = "states".
     -Load adds the load of a busy server to the second launch.
 
     -States runs a new world with the plan of states (plan = "states") instead of the scenarios: the first launch waits
     for the plan to be made and measures it (the time of every stage, the worst tick of the plan, the states founded and
     their provinces, the memory of the tiles, the size of the files), the second checks that the plan stays made and the
-    provinces stay where they were. With -OldWorld it asks for the plan of states in the config of the old world and
-    checks that the old world keeps the plan it had, without provinces.
+    provinces stay where they were. With -OldWorld it writes plan = "states" into the config of the old world even
+    where the key says "legacy", and the old world must still keep the plan it had, without provinces.
 
     With -Pack the server lives in "server-pack" and additionally gets the server-side and common mods of the
     modpack instance (client-only mods are skipped). The modpack folder is only read, never modified.
@@ -278,12 +280,13 @@ function Initialize-Server([string]$ModJar) {
     # The life of cities: nobody falls ill by chance and fairs open only when the smoke test opens one.
     $serverDefaults += "[life]`n`tsickChance = 0`n`tfairEveryDays = 0`n"
     # The kingdoms of the world stand from the start: they keep 3000 blocks from the spawn, so that the kingdoms the smoke check
-    # calls up nearer (at -700 -700, 1500 and 2200 blocks out) find free land.
+    # calls up nearer (at -700 -700, 1500 and 2200 blocks out) find free land. The scenarios keep the plan of capitals
+    # (plan = "legacy"), which is no longer the default of a new world.
     # With -States the new world lays out its states instead: the plan of the smoke check is the plan of the world.
     if ($States) {
         $serverDefaults += "[npcKingdoms]`n`tplan = `"states`"`n"
     } else {
-        $serverDefaults += "[npcKingdoms]`n`tminSpawnDistance = 3000`n"
+        $serverDefaults += "[npcKingdoms]`n`tplan = `"legacy`"`n`tminSpawnDistance = 3000`n"
     }
     # With map mods the web maps are updated every second, so that the checks do not wait for the default 5 s.
     if ($MapModsDir) { $serverDefaults += "[maps]`n`twebMapUpdateSeconds = 1`n" }
@@ -672,7 +675,7 @@ if ($OldWorld) {
     $target = Join-Path $ServerDir 'world'
     if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
     Copy-Item -LiteralPath $OldWorld -Destination $target -Recurse
-    # The old world is asked for the plan of states: a plan of capitals begun stays, and no provinces appear.
+    # With -States the config of the old world asks for the plan of states even where it said "legacy".
     $oldConfig = Join-Path $target 'serverconfig\kingdomworld-server.toml'
     if ($States -and (Test-Path -LiteralPath $oldConfig)) {
         $text = [System.IO.File]::ReadAllText($oldConfig)
@@ -697,13 +700,13 @@ if ($OldWorld) {
         Start-Sleep -Seconds 3
         $rates = [regex]::Matches((Get-LatestLog), '(\S+): rate \d+, money (\d+),')
         if ($rates.Count -gt 0) { Write-Ok "[old-world] money of the old kingdoms: $(@($rates | ForEach-Object { $_.Groups[1].Value + ' ' + $_.Groups[2].Value }) -join ', ')" } else { Add-Failure '[old-world] no money of the old kingdoms' }
-        if ($States) {
-            $none = Invoke-ServerCommand $server 'kingdomworld admin land plan' 'No plan of states was begun in this world'
-            $begun = Count-WholeLog 'The plan of the states of the world begins'
-            if ($none -and $begun -eq 0) { Write-Ok '[old-world] asked for states, the old world keeps its plan of capitals' } else { Add-Failure '[old-world] the old world got a plan of states' }
-            $info = Invoke-ServerCommand $server 'kingdomworld admin land info' 'Provinces in \S+: (\d+) \((\d+) held\), (\d+) tile'
-            if ($info -and ($oldProvinces -or [int]$info.Groups[1].Value -eq 0)) { Write-Ok "[old-world] $($info.Value)" } else { Add-Failure "[old-world] provinces appeared in the old world: $(if ($info) { $info.Value } else { 'no answer' })" }
-        }
+        # Forge gives a config of the old world without the key the new default plan = "states" (with -States it is written in
+        # even where the key was set): the old world keeps its plan of capitals all the same, and no provinces appear.
+        $none = Invoke-ServerCommand $server 'kingdomworld admin land plan' 'No plan of states was begun in this world'
+        $begun = Count-WholeLog 'The plan of the states of the world begins'
+        if ($none -and $begun -eq 0) { Write-Ok '[old-world] the old world keeps its plan of capitals' } else { Add-Failure '[old-world] the old world got a plan of states' }
+        $info = Invoke-ServerCommand $server 'kingdomworld admin land info' 'Provinces in \S+: (\d+) \((\d+) held\), (\d+) tile'
+        if ($info -and ($oldProvinces -or [int]$info.Groups[1].Value -eq 0)) { Write-Ok "[old-world] $($info.Value)" } else { Add-Failure "[old-world] provinces appeared in the old world: $(if ($info) { $info.Value } else { 'no answer' })" }
     }
     Write-Summary
     if ($script:Failures.Count -gt 0) { exit 1 }

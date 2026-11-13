@@ -1769,10 +1769,12 @@ public final class KingdomWorldConfig {
                     .defineInRange("growthChunks", r.growthChunks(), 0, 64);
             builder.pop();
             io.github.sekerator.kingdomworld.core.land.StateRules s = io.github.sekerator.kingdomworld.core.land.StateRules.defaults(0, 0);
-            plan = builder.comment("How a new world plans its kingdoms of the world: \"legacy\" places capitals with a little land each,",
-                            "\"states\" lays out large states with provinces over a survey of the land. It acts only on a world whose plan is not",
-                            "made yet; a plan made is never made again.")
-                    .define("plan", "legacy", value -> "legacy".equals(value) || "states".equals(value));
+            plan = builder.comment("How a new world plans its kingdoms of the world: \"states\" lays out large states with provinces",
+                            "over a survey of the land, \"legacy\" places capitals with a little land each as before. It acts only on a",
+                            "new world: a plan begun or made is never made again, and a world that lived longer than a minute before its",
+                            "plan began (every world of 1.3.0 and older) keeps its capitals whatever this says. For capitals in a new",
+                            "world, set \"legacy\" in defaultconfigs/kingdomworld-server.toml before the world is made.")
+                    .define("plan", "states", value -> "legacy".equals(value) || "states".equals(value));
             stateChunks = builder.comment("The land of a state of the plan of states, in chunks: least and most of a small, a medium and a",
                             "large state, in this order; the seed of the world picks between them.")
                     .defineList("stateChunks", java.util.List.of(s.minChunks()[0], s.maxChunks()[0], s.minChunks()[1], s.maxChunks()[1],

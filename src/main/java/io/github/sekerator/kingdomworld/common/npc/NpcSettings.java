@@ -35,7 +35,7 @@ public final class NpcSettings {
     }
 
     /**
-     * Whether a new world lays out large states with provinces ("states") or places capitals as before ("legacy").
+     * Whether a new world lays out large states with provinces ("states", the default) or places capitals as before ("legacy").
      */
     public static boolean states() {
         if (planOverride != null) {
@@ -44,7 +44,7 @@ public final class NpcSettings {
         try {
             return "states".equals(KingdomWorldConfig.SERVER.npcKingdoms.plan.get());
         } catch (IllegalStateException e) {
-            return false;
+            return true;
         }
     }
 

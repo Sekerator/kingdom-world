@@ -108,6 +108,8 @@ public final class LandPlanning {
     /** What the plan of the provinces file says it is. */
     public static final String KIND = "states";
     static final int TAG_VERSION = 1;
+    /** Ticks a world may have lived before its plan began and still count as new: an older one keeps the plan of capitals. */
+    static final long NEW_WORLD_TICKS = 1_200L;
     /** Mixed into the seed of the world for the seed of the plan. */
     private static final long SALT = 0x5374617465734C6EL;
 
@@ -144,7 +146,8 @@ public final class LandPlanning {
 
     /**
      * Whether the plan of the kingdoms of a world is the plan of states: one was begun already (it goes on whatever the config
-     * says now), or the config asks for it and the plan of capitals has not begun.
+     * says now), or the config asks for it in a new world: the plan of capitals has not begun and the world has lived no longer
+     * than {@value #NEW_WORLD_TICKS} ticks.
      */
     public static boolean wanted(MinecraftServer server, boolean statesConfigured) {
         if (world != null && world.server == server) {
@@ -158,13 +161,17 @@ public final class LandPlanning {
             return true;
         }
         NpcState state = NpcWork.state(server);
-        boolean legacyBegun = !state.sites().isEmpty() || state.planCursor() > 0 || state.planPass() > 0;
+        // A world that lived before its plan began (every world of 1.3.0 and older, one whose kingdoms of the world were switched
+        // on later, one whose plan was reset with nothing left) keeps the plan of capitals: the plan of states is for a new world,
+        // whose plan is chosen in its first tick. The config of an older world gets "states" from Forge as a key it did not have.
+        boolean legacyBegun = !state.sites().isEmpty() || state.planCursor() > 0 || state.planPass() > 0 || state.planned()
+                || KingdomWorldApi.gameTime(server) > NEW_WORLD_TICKS;
         return wanted(provinces.hasPlan(), statesConfigured, legacyBegun);
     }
 
     /**
-     * The choice of the plan: a plan of states begun goes on; otherwise one begins only when the config asks for it and the plan of
-     * capitals has not begun.
+     * The choice of the plan: a plan of states begun goes on; otherwise one begins only when the config asks for it and the world
+     * keeps no plan of capitals (one begun, or one owed to a world that lived before its plan began).
      */
     public static boolean wanted(boolean statesBegun, boolean statesConfigured, boolean legacyBegun) {
         return statesBegun || (statesConfigured && !legacyBegun);

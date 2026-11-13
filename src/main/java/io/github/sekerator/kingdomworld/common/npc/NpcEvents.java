@@ -58,6 +58,11 @@ public final class NpcEvents {
     private static void onServerStarted(ServerStartedEvent event) {
         MinecraftServer server = event.getServer();
         NpcWork.reset();
+        // The world of the game tests keeps the plan of capitals whatever the config says (it is no longer the default); the tests
+        // of the plan of states make plans of their own.
+        if (server instanceof net.minecraft.gametest.framework.GameTestServer) {
+            NpcSettings.overridePlan("legacy");
+        }
         NpcSavedData data = NpcSavedData.get(server);
         NpcState state = data.state();
         NpcWork.loaded(server);

@@ -342,7 +342,7 @@ public final class LandPlanGameTests {
     @GameTest(template = EMPTY, batch = "kingdomworld_land_legacy")
     public static void aWorldThatDoesNotAskForStatesKeepsThePlanOfCapitals(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
-        helper.assertTrue(!NpcSettings.states(), "The config of the tests asks for the plan of states");
+        helper.assertTrue(!NpcSettings.states(), "The world of the tests asks for the plan of states");
         helper.assertTrue(!LandPlanning.wanted(false, false, false), "A new world not asking for states got them");
         helper.assertTrue(!LandPlanning.wanted(false, false, true), "A world of capitals got states");
         helper.assertTrue(LandPlanning.wanted(false, true, false), "A new world asking for states did not get them");
