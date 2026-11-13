@@ -630,6 +630,20 @@ public final class NpcPlanning {
         }
 
         /**
+         * How far from the throne the ground is looked at, in blocks.
+         */
+        public static int reach(NpcLevel kingdom) {
+            return NpcComposition.districtWall(kingdom) + 8;
+        }
+
+        /**
+         * How much the ground of a capital may differ in height on a pass of the plan.
+         */
+        public static int roughness(NpcLevel kingdom, int relax) {
+            return CAPITAL_ROUGHNESS[kingdom.ordinal()] + ROUGHNESS_PER_PASS * Math.min(relax, 3);
+        }
+
+        /**
          * How many looks at the height of the ground the next look takes: one for the biome of the throne and the nine columns,
          * two for a column of the grid (the ground and the surface of the water).
          */

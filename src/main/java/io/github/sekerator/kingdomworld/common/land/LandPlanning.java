@@ -76,6 +76,11 @@ public final class LandPlanning {
     static final int REGIONS_IN_FLIGHT = 32;
     /** Passes over the throne candidates of a state, each asking less of the ground. */
     static final int THRONE_PASSES = 4;
+    /**
+     * How much more than a capital allows the heights of the survey under its square may differ before the candidate is given up
+     * without a look at the world: the survey sees the ground once every 64 blocks.
+     */
+    static final int ROUGH_SLACK = 12;
     /** Chunks around the land of a kingdom the states keep away from. */
     static final int KINGDOM_MARGIN = 4;
     /** What the plan of the provinces file says it is. */
@@ -701,6 +706,11 @@ public final class LandPlanning {
                     break;
                 }
                 int cell = state.throneCandidates().get(c);
+                if ((judge == null || judgeCursor != cursor) && tooRough(raster, cell, state.level(), relax)) {
+                    // The survey shows ground far too rough for the square of the capital: no look at the world is needed.
+                    cursor++;
+                    continue;
+                }
                 if (judge == null || judgeCursor != cursor) {
                     judge = new NpcPlanning.CapitalJudge(server.overworld(), raster.centerX(cell), raster.centerZ(cell), state.level(), relax);
                     judgeCursor = cursor;
@@ -728,6 +738,32 @@ public final class LandPlanning {
             }
             progress.moveTo(cursor);
             return cursor >= count * perState;
+        }
+
+        /**
+         * Whether the dry cells of the survey under the square of a capital at a cell differ in height by far more than the capital
+         * allows on a pass.
+         */
+        private static boolean tooRough(SurveyRaster raster, int cell, NpcLevel level, int relax) {
+            // The cells the square reaches into from the middle of the cell of the throne.
+            int reach = (NpcPlanning.CapitalJudge.reach(level) - SurveyRaster.CELL / 2 + SurveyRaster.CELL - 1) / SurveyRaster.CELL;
+            int low = Integer.MAX_VALUE;
+            int high = Integer.MIN_VALUE;
+            for (int dz = -reach; dz <= reach; dz++) {
+                for (int dx = -reach; dx <= reach; dx++) {
+                    int x = raster.cellX(cell) + dx;
+                    int z = raster.cellZ(cell) + dz;
+                    if (!raster.contains(x, z)) {
+                        continue;
+                    }
+                    int near = raster.index(x, z);
+                    if (raster.terrain(near).dry() && raster.terrain(near) != io.github.sekerator.kingdomworld.core.land.TerrainClass.RIVER) {
+                        low = Math.min(low, raster.groundHeight(near));
+                        high = Math.max(high, raster.groundHeight(near));
+                    }
+                }
+            }
+            return high - low > NpcPlanning.CapitalJudge.roughness(level, relax) + ROUGH_SLACK;
         }
 
         private boolean provinces() {

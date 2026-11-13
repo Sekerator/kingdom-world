@@ -59,6 +59,34 @@ public final class SurveyProbes {
         return SurveyClassifier.Probe.LAND;
     }
 
+    /** The guess of the height is not trusted this close to the level of the sea: the height itself is looked at there. */
+    public static final int SEA_BAND = 8;
+
+    /**
+     * A guess of the height of the ground at a block, from the depth of the noise of the generator: where it crosses zero, the
+     * line along which the generator lays the land before its hills and caves. One look at two heights instead of a column of
+     * the noise; a few blocks off (some blocks lower on land), about a hundred times cheaper than {@link #floor}. Null when the
+     * generator has no such depth (a flat world, a generator of a mod without it).
+     */
+    public static Integer guess(ServerLevel level, int x, int z) {
+        net.minecraft.world.level.levelgen.DensityFunction depth = level.getChunkSource().randomState().router().depth();
+        double low = depth.compute(new net.minecraft.world.level.levelgen.DensityFunction.SinglePointContext(x, 0, z));
+        double high = depth.compute(new net.minecraft.world.level.levelgen.DensityFunction.SinglePointContext(x, 128, z));
+        double slope = (high - low) / 128.0;
+        if (!(slope < -1e-6) || Double.isNaN(low)) {
+            return null;
+        }
+        double y = -low / slope;
+        return (int) Math.round(Math.max(level.getMinBuildHeight(), Math.min(level.getMaxBuildHeight(), y)));
+    }
+
+    /**
+     * Whether a guess of the height lies so near the level of the sea that the height itself must be looked at.
+     */
+    public static boolean nearSea(int guess, int seaLevel) {
+        return Math.abs(guess - seaLevel) <= SEA_BAND;
+    }
+
     /**
      * The height of the ground at a block, the bottom of the water where there is water over it: the first block above the
      * ground, so that ground at the level of the sea or below lies under the water of a sea or a lake.

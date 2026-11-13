@@ -4,7 +4,9 @@ import io.github.sekerator.kingdomworld.core.land.SurveyClassifier.Probe;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SurveyClassifierTest {
     private static final int SEA = 63;
@@ -90,6 +92,20 @@ class SurveyClassifierTest {
         assertEquals(TerrainClass.LAND, SurveyClassifier.chunk(Probe.HILL, DRY, SEA));
         assertEquals(TerrainClass.LAND, SurveyClassifier.chunk(Probe.DESERT, DRY, SEA));
         assertEquals(TerrainClass.LAND, SurveyClassifier.chunk(Probe.LAND, SEA + 1, SEA));
+    }
+
+    @Test
+    void theHeightDecidesOnlyWhereNoPointSaysWater() {
+        assertTrue(SurveyClassifier.heightDecides(new Probe[]{Probe.LAND, Probe.HILL, Probe.SWAMP, Probe.DESERT}));
+        assertTrue(SurveyClassifier.heightDecides(new Probe[]{Probe.MOUNTAIN, Probe.LAND, Probe.LAND, Probe.LAND}));
+        assertFalse(SurveyClassifier.heightDecides(new Probe[]{Probe.LAND, Probe.LAND, Probe.LAND, Probe.RIVER}));
+        assertFalse(SurveyClassifier.heightDecides(new Probe[]{Probe.OCEAN, Probe.LAND, Probe.LAND, Probe.LAND}));
+        assertFalse(SurveyClassifier.heightDecides(new Probe[]{Probe.BEACH, Probe.LAND, Probe.LAND, Probe.LAND}));
+        // Where the height does not decide, the class is the same whatever the height.
+        for (Probe[] probes : new Probe[][]{{Probe.RIVER, Probe.LAND, Probe.LAND, Probe.LAND}, {Probe.OCEAN, Probe.OCEAN, Probe.OCEAN, Probe.LAND},
+                {Probe.BEACH, Probe.LAND, Probe.LAND, Probe.LAND}}) {
+            assertEquals(SurveyClassifier.cell(probes, SEA - 20, SEA), SurveyClassifier.cell(probes, SEA + 20, SEA));
+        }
     }
 
     @Test

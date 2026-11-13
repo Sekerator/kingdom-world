@@ -83,6 +83,19 @@ public final class SurveyClassifier {
     }
 
     /**
+     * Whether the height of the ground decides the class of a cell with these points: no point says the sea, a river or the shore.
+     * Elsewhere a guess of the height is enough.
+     */
+    public static boolean heightDecides(Probe[] probes) {
+        for (Probe probe : probes) {
+            if (probe == Probe.OCEAN || probe == Probe.RIVER || probe == Probe.BEACH) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * The class of a chunk probed in its middle, for a border drawn along the water: the sea, a river, the shore, a lake, a swamp
      * or land.
      *
