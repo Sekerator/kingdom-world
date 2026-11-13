@@ -1348,6 +1348,7 @@
   "commands.kingdomworld.admin.guild.squad.sent": "Отряд #%s ушёл на контракт #%s, вернётся через тиков: %s",
   "commands.kingdomworld.admin.guild.squad.returned": "Вернулось отрядов: %s",
   "commands.kingdomworld.admin.guild.hired": "Стали авантюристами: %s в королевстве %s",
+  "commands.kingdomworld.admin.guild.branch": "Отделение %s: ранг %s, выполнено контрактов %s, глава гильдии %s",
   "commands.kingdomworld.admin.guild.monsters.header": "Ранги монстров: %s",
   "commands.kingdomworld.admin.guild.monsters.entry": "%s: ранг %s, сила %s%s",
   "commands.kingdomworld.admin.guild.monsters.boss": ", босс",

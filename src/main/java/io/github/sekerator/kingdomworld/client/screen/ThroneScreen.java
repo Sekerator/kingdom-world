@@ -839,7 +839,8 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private List<Component> overviewLines() {
         List<Component> lines = new ArrayList<>();
         if (view.npc() != null) {
-            lines.addAll(npcLines(view.npc()));
+            // The overview has no room for one more line: the ranks of the guilds are told over the line of the size.
+            lines.addAll(npcLines(view.npc(), false));
         } else {
             lines.add(Component.translatable("kingdomworld.screen.throne.ruler", PlayerNames.display(view.rulerName())));
         }
@@ -1683,6 +1684,9 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             int width = Math.min(font.width(line), lineRight - x);
             if (view.npc() != null && index == 1) {
                 hoverText(x, y, width, npcHint());
+                if (view.npc().ranked()) {
+                    hoverText(x, y, width, npcGuilds(view.npc().adventurers(), view.npc().mages()));
+                }
             }
             if (index == styleIndex) {
                 for (Component hover : StylePicker.captionLines(font, view.style())) {

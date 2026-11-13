@@ -339,7 +339,10 @@ public final class GuildWork {
         boolean house = !io.github.sekerator.kingdomworld.common.construction.BuildingEffects.working(server, kingdomId, GUILD_HOUSE).isEmpty()
                 || io.github.sekerator.kingdomworld.common.construction.BuildingTemplates.all().stream()
                 .noneMatch(template -> GUILD_HOUSE.equals(template.role()));
-        Rank rank = rules.branchRankOf(branch.done(), house);
+        // A branch keeps a rank it reached (or an operator gave it) within the limit of its house, and rises with its contracts.
+        Rank cap = house ? rules.branchRankWithHouse : rules.branchRankWithoutHouse;
+        Rank kept = branch.rank().ordinal() > cap.ordinal() ? cap : branch.rank();
+        Rank rank = Rank.max(kept, rules.branchRankOf(branch.done(), house));
         if (rank != branch.rank() && guild.setBranchRank(kingdomId, rank, rules)) {
             LOGGER.info("The branch of the guild of {} is of rank {} now ({} contract(s) finished{})", kingdomId, rank.label(), branch.done(),
                     house ? ", with a guild house" : "");

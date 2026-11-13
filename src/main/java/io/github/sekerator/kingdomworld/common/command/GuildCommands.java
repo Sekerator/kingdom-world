@@ -138,6 +138,11 @@ public final class GuildCommands {
                                 .then(Commands.argument("squad", LongArgumentType.longArg(1))
                                         .then(Commands.argument("contract", LongArgumentType.longArg(1)).executes(GuildCommands::send))))
                         .then(Commands.literal("return").executes(context -> bringBack(context.getSource()))))
+                .then(Commands.literal("branch")
+                        .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
+                                .executes(context -> branch(context, false))
+                                .then(Commands.argument("rank", StringArgumentType.word()).suggests(RANKS)
+                                        .executes(context -> branch(context, true)))))
                 .then(Commands.literal("hire")
                         .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
                                 .then(Commands.argument("count", IntegerArgumentType.integer(1, 64)).executes(GuildCommands::hire))))
@@ -480,6 +485,30 @@ public final class GuildCommands {
         int count = GuildWork.bringBackAll(source.getServer());
         source.sendSuccess(() -> Component.translatable(ADMIN + "squad.returned", count), true);
         return count;
+    }
+
+    /**
+     * Shows the rank of the branch of a kingdom, with its contracts finished and its head, or sets the rank. A branch of players
+     * keeps a rank it was given within the limit of its guild house.
+     */
+    private static int branch(CommandContext<CommandSourceStack> context, boolean set) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        MinecraftServer server = source.getServer();
+        Kingdom kingdom = kingdom(context, "kingdom");
+        if (set) {
+            Rank rank = rankArgument(context);
+            if (!writable(source)) {
+                return 0;
+            }
+            GuildWork.change(server, "set the rank of a branch", guild -> {
+                guild.setBranchRank(kingdom.id(), rank, GuildSettings.rules());
+                return Outcome.DONE;
+            });
+        }
+        io.github.sekerator.kingdomworld.core.guild.Branch branch = GuildWork.state(server).branchOrDefault(kingdom.id(), GuildSettings.rules());
+        String head = GuildWork.head(server, kingdom.id()).map(citizen -> citizen.name(io.github.sekerator.kingdomworld.core.citizen.CitizenNames.Alphabet.LATIN)).orElse("-");
+        source.sendSuccess(() -> Component.translatable(ADMIN + "branch", kingdom.name(), branch.rank().label(), branch.done(), head), set);
+        return 1;
     }
 
     private static int hire(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

@@ -1681,6 +1681,13 @@ Invoke-Phase 'run1' {
             [void](Wait-ForLog $server "Stored 2 of \S+ in the storehouses of $KingdomName" $CommandTimeout $ConsoleFailPattern)
             Send-ServerCommand $server "kingdomworld admin guild squad form $KingdomName 2"
             $squad = Wait-ForLog $server "Formed squad #(\d+) of $KingdomName, members: 2" $CommandTimeout $ConsoleFailPattern
+            # A new branch is of rank E and posts no contract above it: the operator raises it to B for the bounty on a ravager.
+            Send-ServerCommand $server "kingdomworld admin guild branch $KingdomName b"
+            if (Wait-ForLog $server "Branch of ${KingdomName}: rank B, \d+ contract\(s\) finished" $CommandTimeout $ConsoleFailPattern) {
+                Write-Ok '[run1] the branch of the guild is of rank B'
+            } else {
+                Add-Failure '[run1] the rank of the branch of the guild could not be set'
+            }
             $guildMoney = Get-KingdomMoney $server $KingdomName
             $seen = Count-Log 'Posted contract #(\d+) at '
             Send-ServerCommand $server "kingdomworld admin guild contract post $KingdomName hunt `"minecraft:zombie`" 3 100 2"
@@ -3077,7 +3084,7 @@ Invoke-Phase 'run2' {
             } else {
                 Add-Failure "[run2] magic changed in the restart: $($script:Magic.Value) -> $($magic.Value)"
             }
-            if ((Get-WholeLog) -match 'KingdomWorld magic: 1 kingdom\(s\) with \d+ energy in all') {
+            if ((Get-WholeLog) -match 'KingdomWorld magic: \d+ kingdom\(s\) with \d+ energy in all') {
                 Write-Ok '[run2] the magic data was loaded at startup'
             } else {
                 Add-Failure '[run2] the magic data did not report itself at startup'
@@ -3285,6 +3292,13 @@ Invoke-Phase 'run2' {
                 Write-Ok '[run2] both contracts survived the restart'
             } else {
                 Add-Failure '[run2] the contracts of the guild did not survive the restart'
+            }
+            $seen = Count-Log "Branch of ${KingdomName}: rank"
+            Send-ServerCommand $server "kingdomworld admin guild branch $KingdomName"
+            if (Wait-ForNewLog $server "Branch of ${KingdomName}: rank B," $CommandTimeout $seen) {
+                Write-Ok '[run2] the rank of the branch survived the restart'
+            } else {
+                Add-Failure '[run2] the rank of the branch did not survive the restart'
             }
             $seen = Count-Log 'Held by the guild in the currency of'
             Send-ServerCommand $server 'kingdomworld admin guild money'

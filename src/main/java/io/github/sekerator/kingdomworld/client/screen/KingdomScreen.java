@@ -135,8 +135,15 @@ public abstract class KingdomScreen extends Screen {
      * ranks of its guilds.
      */
     protected static List<Component> npcLines(io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo npc) {
+        return npcLines(npc, true);
+    }
+
+    /**
+     * @param guilds whether the ranks of the guilds get a line of their own; where room is short they are told on hover instead
+     */
+    protected static List<Component> npcLines(io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo npc, boolean guilds) {
         List<Component> lines = new java.util.ArrayList<>(npcBasics(npc));
-        if (npc.ranked()) {
+        if (guilds && npc.ranked()) {
             lines.add(npcGuilds(npc.adventurers(), npc.mages()));
         }
         return lines;
