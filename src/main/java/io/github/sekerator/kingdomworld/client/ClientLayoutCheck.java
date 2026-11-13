@@ -33,6 +33,7 @@ import io.github.sekerator.kingdomworld.core.citizen.CitizenNames;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
 import io.github.sekerator.kingdomworld.core.citizen.Gender;
+import io.github.sekerator.kingdomworld.core.citizen.MineGoal;
 import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
 import io.github.sekerator.kingdomworld.common.network.data.KingdomMapInfo;
 import io.github.sekerator.kingdomworld.common.network.data.KingdomView;
@@ -86,6 +87,8 @@ final class ClientLayoutCheck {
     private static final List<Integer> SCREENSHOT_SCALES = List.of(2, 4);
     /** Narrowest GUI the game allows: it never picks a scale that makes the screen smaller than 320x240. */
     private static final int NARROWEST_SCREEN = 320;
+    /** With {@code -PclientSelfTestOnly=<text>} only the screens whose name holds the text are checked. */
+    private static final String ONLY = System.getProperty("kingdomworld.clientSelfTest.only", "");
     private static final String LONG_KINGDOM = "Великое Северное Королевство Щит";
     private static final String LONG_PLAYER = "WWWWWWWWWWWWWWWW";
     /** A ruler of the world with long decrees and every kind of need, its names in the current language. */
@@ -243,6 +246,9 @@ final class ClientLayoutCheck {
                 int guiHeight = (int) Math.ceil(window[1] / (double) scale);
                 String size = window[0] + "x" + window[1] + " scale " + requested + (scale != requested ? " (effective " + scale + ")" : "");
                 for (Case check : cases()) {
+                    if (!ONLY.isEmpty() && !check.name().contains(ONLY)) {
+                        continue;
+                    }
                     LayoutCheck.begin(language + " " + size + " " + check.name());
                     Screen screen = check.screen().get();
                     screen.init(minecraft, guiWidth, guiHeight);
@@ -562,7 +568,17 @@ final class ClientLayoutCheck {
                 measured, measured ? 999_999 : 0, 9_999_999L, list, 9_999, !profession.equals("cook"), stations,
                 profession.equals("builder") ? new ItemStack(Items.SPRUCE_STAIRS) : current, 45,
                 profession.equals("builder") ? Component.translatable("kingdomworld.screen.post.site", Component.literal(LONG_KINGDOM),
-                        "-30000000 319 29999999", 100) : Component.empty());
+                        "-30000000 319 29999999", 100) : Component.empty())
+                .withGoal(profession.equals("miner") ? mineGoal("forge:ores/iron", MineGoal.MAX_AMOUNT, 23, true) : WorkPostView.Goal.NONE);
+    }
+
+    /**
+     * The goal of a mine in a world as tall as worlds get, among ores of other mods with long names.
+     */
+    private static WorkPostView.Goal mineGoal(String ore, int amount, long stock, boolean autoDepth) {
+        return new WorkPostView.Goal(List.of("forge:ores/coal", "forge:ores/copper", "forge:ores/diamond", "forge:ores/iron",
+                "forge:ores/netherite_scrap", "examplemod:ores/very_long_named_ore_of_the_northern_mountains"), ore, amount, stock,
+                autoDepth, autoDepth ? 16 : -2_026, -2_026, 2_031);
     }
 
     private static WorkPostScreen post(WorkPostView view, Component status) {
@@ -1185,6 +1201,14 @@ final class ClientLayoutCheck {
         cases.add(new Case("post-lumberjack-no-trees", () -> post(postView("lumberjack", WorkStatus.NO_TREES, true, 3, false, false),
                 Component.empty())));
         cases.add(new Case("post-miner-no-tool", () -> post(postView("miner", WorkStatus.NO_TOOL, true, 4, true, false), longError)));
+        cases.add(new Case("post-miner-goal", () -> post(postView("miner", WorkStatus.WORKING, true, 2, true, true), Component.empty())));
+        cases.add(new Case("post-miner-goal-met", () -> post(postView("miner", WorkStatus.WORKING, true, 1, true, true)
+                .withGoal(mineGoal("examplemod:ores/very_long_named_ore_of_the_northern_mountains", MineGoal.MAX_AMOUNT, 9_999_999L, false)),
+                Component.empty())));
+        cases.add(new Case("post-miner-anything", () -> post(postView("miner", WorkStatus.MINE_WORKED_OUT, true, 1, false, false)
+                .withGoal(mineGoal("", 0, 0L, true)), Component.empty())));
+        cases.add(new Case("post-miner-goal-read-only", () -> post(postView("miner", WorkStatus.WORKING, false, 1, true, true)
+                .withGoal(mineGoal("examplemod:ores/very_long_named_ore_of_the_northern_mountains", 64, 64L, false)), Component.empty())));
         cases.add(new Case("post-fisher-no-water", () -> post(postView("fisher", WorkStatus.NO_WATER, true, 1, false, true),
                 Component.empty())));
         cases.add(new Case("post-herder", () -> post(postView("herder", WorkStatus.NO_FEED, true, 2, true, true), Component.empty())));

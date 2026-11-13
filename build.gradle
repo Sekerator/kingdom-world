@@ -48,6 +48,10 @@ minecraft {
             if (project.hasProperty('clientSelfTest')) {
                 property 'kingdomworld.clientSelfTest', project.property('clientSelfTest')
             }
+            // "-PclientSelfTestOnly=<text>" limits the layout check to the screens whose name holds the text.
+            if (project.hasProperty('clientSelfTestOnly')) {
+                property 'kingdomworld.clientSelfTest.only', project.property('clientSelfTestOnly')
+            }
             if (project.hasProperty('clientSelfTestScreenshots')) {
                 property 'kingdomworld.clientSelfTest.screenshots', project.property('clientSelfTestScreenshots')
             }

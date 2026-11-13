@@ -6,6 +6,8 @@ import io.github.sekerator.kingdomworld.common.citizen.CitizenBodies;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenEntity;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenSimulation;
 import io.github.sekerator.kingdomworld.common.citizen.work.GatheringSettings;
+import io.github.sekerator.kingdomworld.common.citizen.work.MineOres;
+import io.github.sekerator.kingdomworld.common.citizen.work.MinerBehavior;
 import io.github.sekerator.kingdomworld.common.citizen.work.PostWork;
 import io.github.sekerator.kingdomworld.common.data.KingdomSavedData;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
@@ -15,6 +17,9 @@ import io.github.sekerator.kingdomworld.core.citizen.CauseOfDeath;
 import io.github.sekerator.kingdomworld.core.citizen.Citizen;
 import io.github.sekerator.kingdomworld.core.citizen.DeathRecord;
 import io.github.sekerator.kingdomworld.core.citizen.GatheringRules;
+import io.github.sekerator.kingdomworld.core.citizen.MineGoal;
+import io.github.sekerator.kingdomworld.core.citizen.MinePlan;
+import io.github.sekerator.kingdomworld.core.citizen.MineRules;
 import io.github.sekerator.kingdomworld.core.citizen.PostYield;
 import io.github.sekerator.kingdomworld.core.citizen.TaskRisks;
 import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
@@ -324,57 +329,238 @@ public final class GatheringGameTests {
 
     // ---------------------------------------------------------------- miner
 
-    @GameTest(template = EMPTY, batch = "kingdomworld_work_miner", timeoutTicks = 1600)
-    public static void minerDigsRockAndOreButNotChestsLandOfOthersOrLava(GameTestHelper helper) {
+    /**
+     * A block of rock around a miner's post for a test: the post stands one block from the southern edge of the capital
+     * chunk, the chunk south of it is given up, and the mine is kept small (one level, three blocks of corridor each way,
+     * branches of eight) so that a miner digs all of it within a test.
+     */
+    private record MineSite(Kingdom kingdom, WorldPos postPos, BlockPos stand, BlockPos from, BlockPos to, int edgeZ,
+                            List<MinePlan.Cell> cells) {
+        List<MinePlan.Cell> of(MinePlan.Kind kind) {
+            List<MinePlan.Cell> found = new java.util.ArrayList<>();
+            for (MinePlan.Cell cell : cells) {
+                if (cell.kind() == kind) {
+                    found.add(cell);
+                }
+            }
+            return found;
+        }
+
+        boolean planned(BlockPos pos) {
+            for (MinePlan.Cell cell : cells) {
+                if (cell.x() == pos.getX() && cell.z() == pos.getZ()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /**
+         * A block of the wall of a cell that no tunnel of the plan goes through, with the next block behind it, or
+         * {@code null} if every side of the cell is a tunnel.
+         */
+        BlockPos wall(MinePlan.Cell cell) {
+            for (net.minecraft.core.Direction direction : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+                BlockPos side = at(cell).relative(direction);
+                if (!planned(side) && !planned(side.relative(direction))) {
+                    return side;
+                }
+            }
+            return null;
+        }
+    }
+
+    private static BlockPos at(MinePlan.Cell cell) {
+        return new BlockPos(cell.x(), cell.y(), cell.z());
+    }
+
+    private static boolean dug(ServerLevel level, MinePlan.Cell cell) {
+        return level.getBlockState(at(cell)).isAir() && level.getBlockState(at(cell).above()).isAir();
+    }
+
+    private static MineSite mineSite(GameTestHelper helper, String name) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
-        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Deep Halls", UUID.randomUUID());
+        Kingdom kingdom = CitizenGameTests.found(helper, name, UUID.randomUUID());
         BlockPos throne = helper.absolutePos(new BlockPos(2, 0, 2));
         ChunkPos capital = new ChunkPos(throne);
         int y = throne.getY();
-        // The post stands two blocks from the eastern edge of the capital chunk; the chunk east of it is given up.
-        int x0 = capital.getMaxBlockX() - 1;
-        int z0 = capital.getMiddleBlockZ();
-        BlockPos from = new BlockPos(x0 - 4, y, z0 - 4);
-        BlockPos to = new BlockPos(x0 + 4, y + 2, z0 + 4);
-        clear(level, from, to);
+        int x0 = capital.getMiddleBlockX();
+        int z0 = capital.getMaxBlockZ() - 1;
+        BlockPos from = new BlockPos(x0 - 8, y - 1, z0 - 14);
+        BlockPos to = new BlockPos(x0 + 8, y + 4, z0 + 3);
         KingdomWorldApi.change(server, "test", state -> state.unclaim(null, kingdom.id(), Dimensions.id(level),
-                ChunkKey.of(capital.x + 1, capital.z)));
-        for (BlockPos pos : BlockPos.betweenClosed(new BlockPos(x0 - 3, y, z0 - 3), new BlockPos(x0 + 3, y + 1, z0 + 3))) {
-            level.setBlockAndUpdate(pos, Blocks.STONE.defaultBlockState());
+                ChunkKey.of(capital.x, capital.z + 1)));
+        // Solid rock with a floor and a roof, so that the caves of the world around the test do not matter; the throne
+        // of the kingdom keeps its place.
+        for (BlockPos pos : BlockPos.betweenClosed(from, to)) {
+            if (pos.getX() != throne.getX() || pos.getZ() != throne.getZ() || pos.getY() < throne.getY()) {
+                level.setBlock(pos, Blocks.STONE.defaultBlockState(), 2 | 16);
+            }
         }
-        BlockPos coal = new BlockPos(x0 + 1, y, z0 + 1);
-        BlockPos outside = new BlockPos(x0 + 2, y, z0 + 1);
-        BlockPos chest = new BlockPos(x0 - 2, y, z0 + 1);
-        BlockPos lava = new BlockPos(x0 - 1, y, z0 + 2);
+        // Room for the miner to stand behind its post, and a storehouse beside it.
+        BlockPos stand = new BlockPos(x0, y, z0 + 1);
+        level.setBlockAndUpdate(stand, Blocks.AIR.defaultBlockState());
+        level.setBlockAndUpdate(stand.above(), Blocks.AIR.defaultBlockState());
+        GatheringRules rules = GatheringRules.DEFAULT;
+        GatheringSettings.override(new GatheringRules(rules.defaultRadius(), rules.maxRadius(), rules.maxSeats(), rules.maxTreeBlocks(), 1,
+                rules.maxHerd(), rules.carrierRange(), rules.carrierItemsPerMinute(), 0.0, rules.risks()));
+        GatheringSettings.overrideMine(new MineRules(3, 8, 24, Map.of()));
+        StorehouseInventory store = storehouse(level, new BlockPos(x0 + 1, y, z0 + 1));
+        store.insertItem(0, new ItemStack(Items.STONE_PICKAXE), false);
+        WorldPos postPos = post(level, new BlockPos(x0, y, z0), "miner");
+        List<MinePlan.Cell> cells = MinerBehavior.cells(level, PostWork.post(server, postPos).orElseThrow());
+        for (MinePlan.Cell cell : cells) {
+            helper.assertTrue(cell.x() >= from.getX() && cell.x() <= to.getX() && cell.z() >= from.getZ() && cell.z() <= to.getZ()
+                    && cell.y() == y, "The mine of the test leaves its rock: " + cell);
+        }
+        return new MineSite(kingdom, postPos, stand, from, to, capital.getMaxBlockZ(), cells);
+    }
+
+    private static void endMine(GameTestHelper helper, MineSite site, Citizen worker) {
+        GatheringSettings.override(null);
+        GatheringSettings.overrideMine(null);
+        end(helper, site.kingdom(), worker, site.from(), site.to());
+    }
+
+    private static String minerState(MinecraftServer server, MineSite site, Citizen worker) {
+        CitizenEntity body = CitizenBodies.body(worker.id());
+        return "worker " + worker.workStatus() + ", post " + PostWork.post(server, site.postPos()).map(WorkPost::status).orElse(null)
+                + ", body " + (body == null ? "none" : body.blockPosition().toShortString() + " holding " + body.getMainHandItem());
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_work_miner", timeoutTicks = 3000)
+    public static void minerDigsRockAndOreButNotChestsLandOfOthersOrLava(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        MineSite site = mineSite(helper, "GameTest Deep Halls");
+        Kingdom kingdom = site.kingdom();
+        List<MinePlan.Cell> corridor = site.of(MinePlan.Kind.CORRIDOR);
+        List<MinePlan.Cell> branches = site.of(MinePlan.Kind.BRANCH);
+        helper.assertTrue(corridor.size() >= 3 && !branches.isEmpty(), "The mine of the test has no corridor with branches");
+        // Coal lies in the way of the corridor, a chest in the way of the first branch, lava behind the wall of the
+        // corridor, and one branch runs up to the land given up.
+        BlockPos coal = at(corridor.get(0));
+        BlockPos chest = at(branches.get(0));
+        MinePlan.Cell besideLava = null;
+        BlockPos lava = null;
+        for (int i = 1; i < corridor.size() && lava == null; i++) {
+            besideLava = corridor.get(i);
+            lava = site.wall(besideLava);
+        }
+        MinePlan.Cell edge = null;
+        for (MinePlan.Cell cell : site.cells()) {
+            if (cell.z() == site.edgeZ()) {
+                edge = cell;
+            }
+        }
+        helper.assertTrue(lava != null && edge != null, "The mine of the test has no wall for the lava or does not reach the edge of the land");
+        BlockPos outside = at(edge).south();
         level.setBlockAndUpdate(coal, Blocks.COAL_ORE.defaultBlockState());
         level.setBlockAndUpdate(chest, Blocks.CHEST.defaultBlockState().setValue(ChestBlock.FACING, net.minecraft.core.Direction.NORTH));
         level.setBlockAndUpdate(lava, Blocks.LAVA.defaultBlockState());
-        // Room for the miner to stand behind its post.
-        level.setBlockAndUpdate(new BlockPos(x0, y, z0 - 1), Blocks.AIR.defaultBlockState());
-        level.setBlockAndUpdate(new BlockPos(x0, y + 1, z0 - 1), Blocks.AIR.defaultBlockState());
-        StorehouseInventory store = storehouse(level, new BlockPos(x0 - 4, y, z0 - 4));
-        store.insertItem(0, new ItemStack(Items.STONE_PICKAXE), false);
-        WorldPos postPos = post(level, new BlockPos(x0, y, z0), "miner");
-        KingdomWorldApi.change(server, "test", state -> state.setPostRadius(null, postPos, 3, 16));
-        Citizen worker = worker(helper, kingdom, "miner", postPos, new BlockPos(x0, y, z0 - 1));
+        Citizen worker = worker(helper, kingdom, "miner", site.postPos(), site.stand());
+        MinePlan.Cell entrance = site.cells().get(0);
+        MinePlan.Cell dry = besideLava;
+        MinePlan.Cell last = edge;
+        BlockPos walled = lava;
 
         helper.succeedWhen(() -> {
-            CitizenEntity body = CitizenBodies.body(worker.id());
-            helper.assertTrue(level.getBlockState(new BlockPos(x0, y, z0 + 1)).isAir()
-                    && level.getBlockState(new BlockPos(x0, y + 1, z0 + 1)).isAir(), "The entrance of the mine is not dug: worker "
-                    + worker.workStatus() + ", post " + PostWork.post(server, postPos).map(WorkPost::status).orElse(null) + ", body "
-                    + (body == null ? "none" : body.blockPosition().toShortString() + " holding " + body.getMainHandItem()) + ", capital "
-                    + capital + ", entrance " + level.getBlockState(new BlockPos(x0, y, z0 + 1)) + " over "
-                    + level.getBlockState(new BlockPos(x0, y - 1, z0 + 1)));
-            helper.assertTrue(level.getBlockState(coal).isAir(), "The coal ore was not mined");
-            helper.assertTrue(level.getBlockState(new BlockPos(x0 - 1, y, z0 + 1)).isAir(), "The tunnel next to the lava was not dug");
-            helper.assertTrue(level.getBlockState(lava).is(net.minecraftforge.common.Tags.Blocks.COBBLESTONE), "The lava was not walled off");
+            helper.assertTrue(dug(level, entrance), "The entrance of the mine is not dug: " + minerState(server, site, worker)
+                    + ", entrance " + level.getBlockState(at(entrance)) + " over " + level.getBlockState(at(entrance).below()));
+            helper.assertTrue(level.getBlockState(coal).isAir(), "The coal ore was not mined: " + minerState(server, site, worker));
+            helper.assertTrue(dug(level, dry), "The tunnel next to the lava was not dug: " + minerState(server, site, worker));
+            helper.assertTrue(level.getBlockState(walled).is(net.minecraftforge.common.Tags.Blocks.COBBLESTONE), "The lava was not walled off");
             helper.assertTrue(level.getBlockState(chest).is(Blocks.CHEST), "The miner broke a chest");
+            helper.assertTrue(dug(level, last), "The branch to the edge of the land was not dug: " + minerState(server, site, worker));
             helper.assertTrue(level.getBlockState(outside).is(Blocks.STONE), "The miner dug on land that is not the kingdom's");
             helper.assertTrue(produced(server, kingdom, "miner", "minecraft:coal") >= 1, "The coal was not counted");
-            end(helper, kingdom, worker, from, to);
+            endMine(helper, site, worker);
         });
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_work_miner_vein", timeoutTicks = 3000)
+    public static void minerTakesTheVeinBesideItsCorridorButNotOreItCannotSee(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        MineSite site = mineSite(helper, "GameTest Iron Vein");
+        Kingdom kingdom = site.kingdom();
+        List<MinePlan.Cell> corridor = site.of(MinePlan.Kind.CORRIDOR);
+        MinePlan.Cell beside = null;
+        BlockPos first = null;
+        for (int i = 0; i < corridor.size() && first == null; i++) {
+            beside = corridor.get(i);
+            first = site.wall(beside);
+        }
+        helper.assertTrue(first != null, "The corridor of the test has no wall for a vein");
+        // The vein starts in the wall of the corridor, goes one block deeper into the rock and one block up there; one
+        // more block of ore lies over the corridor behind a block of rock.
+        BlockPos second = first.offset(first.getX() - beside.x(), 0, first.getZ() - beside.z());
+        BlockPos third = second.above();
+        BlockPos rock = first.above();
+        BlockPos hidden = at(beside).above(3);
+        for (BlockPos ore : List.of(first, second, third, hidden)) {
+            level.setBlockAndUpdate(ore, Blocks.IRON_ORE.defaultBlockState());
+        }
+        Citizen worker = worker(helper, kingdom, "miner", site.postPos(), site.stand());
+        MinePlan.Cell tunnel = beside;
+        BlockPos start = first;
+
+        helper.succeedWhen(() -> {
+            helper.assertTrue(dug(level, tunnel), "The corridor beside the vein is not dug: " + minerState(server, site, worker));
+            helper.assertTrue(level.getBlockState(start).isAir(), "The ore in the wall of the corridor was not taken: "
+                    + minerState(server, site, worker));
+            helper.assertTrue(level.getBlockState(second).isAir() && level.getBlockState(third).isAir(),
+                    "The miner did not follow the vein from the ore it took: " + level.getBlockState(second) + ", " + level.getBlockState(third));
+            helper.assertTrue(level.getBlockState(rock).is(Blocks.STONE), "The miner dug rock around the vein");
+            helper.assertTrue(level.getBlockState(hidden).is(Blocks.IRON_ORE), "The miner took ore it could not see");
+            helper.assertTrue(produced(server, kingdom, "miner", "minecraft:raw_iron") >= 3, "The ore of the vein was not counted: "
+                    + produced(server, kingdom, "miner", "minecraft:raw_iron"));
+            endMine(helper, site, worker);
+        });
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_work_miner_goal")
+    public static void theGoalOfAMineIsMetWhenTheStorehousesHoldTheAmount(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Iron Goal", UUID.randomUUID());
+        StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 0);
+        WorldPos postPos = post(helper, new BlockPos(1, 0, 0), "miner");
+        try {
+            WorkPost post = PostWork.post(server, postPos).orElseThrow();
+            helper.assertTrue(post.mineGoal().equals(MineGoal.ANYTHING), "A new post does not dig anything: " + post.mineGoal());
+            helper.assertTrue(MinerBehavior.depth(level, post) == postPos.y(), "Anything is not dug at the level of the post");
+            helper.assertTrue(MineOres.kinds().contains("forge:ores/iron"), "Iron is not among the kinds of ore: " + MineOres.kinds());
+            helper.assertTrue(MineOres.drop(level, "forge:ores/iron") == Items.RAW_IRON, "Iron ore does not count as raw iron: "
+                    + MineOres.drop(level, "forge:ores/iron"));
+            helper.assertTrue(KingdomWorldApi.change(server, "test",
+                    state -> state.setPostMineGoal(null, postPos, "forge:ores/iron", 8, true, 0)).ok(), "The goal was not set");
+            int depth = GatheringSettings.mine().depth(post.mineGoal(), postPos.y(), level.getMinBuildHeight());
+            helper.assertTrue(MinerBehavior.depth(level, post) == depth && depth <= Math.min(16, postPos.y()),
+                    "The mine for iron is not at the depth of iron: " + MinerBehavior.depth(level, post));
+            for (MinePlan.Cell cell : MinerBehavior.cells(level, post)) {
+                helper.assertTrue(cell.kind() == MinePlan.Kind.STAIR || cell.y() <= depth, "A tunnel lies over the working depth: " + cell);
+            }
+
+            helper.assertTrue(MinerBehavior.stock(level, post) == 0 && !post.mineGoal().metBy(MinerBehavior.stock(level, post)),
+                    "The goal is met with empty storehouses");
+            store.insertItem(0, new ItemStack(Items.RAW_IRON, 5), false);
+            store.insertItem(1, new ItemStack(Items.IRON_INGOT, 32), false);
+            helper.assertTrue(MinerBehavior.stock(level, post) == 5 && !post.mineGoal().metBy(5), "Five of eight met the goal, or ingots counted");
+            store.insertItem(2, new ItemStack(Items.RAW_IRON, 3), false);
+            helper.assertTrue(MinerBehavior.stock(level, post) == 8 && post.mineGoal().metBy(MinerBehavior.stock(level, post)),
+                    "The goal is not met with the amount in the storehouses: " + MinerBehavior.stock(level, post));
+            // The stock falls below the amount: the goal stands again.
+            store.extractItem(2, 1, false);
+            helper.assertTrue(!post.mineGoal().metBy(MinerBehavior.stock(level, post)), "The goal stays met with less than the amount");
+            // Without a limit the goal is never met.
+            KingdomWorldApi.change(server, "test", state -> state.setPostMineGoal(null, postPos, "forge:ores/iron", 0, true, 0));
+            helper.assertTrue(!post.mineGoal().metBy(MinerBehavior.stock(level, post)), "A goal without a limit was met");
+        } finally {
+            CitizenGameTests.finish(helper, kingdom);
+        }
+        helper.succeed();
     }
 
     // ---------------------------------------------------------------- fisher
@@ -719,6 +905,11 @@ public final class GatheringGameTests {
         ItemStack axe = new ItemStack(Items.IRON_AXE);
         axe.setDamageValue(17);
         data.gear().set(citizen.id(), EquipmentSlot.MAINHAND, axe);
+        // A mine with a goal: a kind of ore, an amount and a depth set by hand.
+        WorldPos minePos = new WorldPos("minecraft:overworld", 12, 64, 12);
+        data.state().citizens().addSite(minePos, io.github.sekerator.kingdomworld.core.citizen.SiteKinds.WORK_POST, kingdom.id());
+        data.state().setPostProfession(null, minePos, "miner");
+        data.state().setPostMineGoal(null, minePos, "forge:ores/iron", 64, false, -20);
 
         CompoundTag saved = data.save(new CompoundTag());
         KingdomSavedData reloaded = KingdomSavedData.load(saved);
@@ -726,6 +917,10 @@ public final class GatheringGameTests {
         WorkPost back = reloaded.state().citizens().posts().get(postPos).orElse(null);
         helper.assertTrue(back != null && back.professionId().equals("lumberjack") && back.seats() == 2, "The post lost its settings");
         helper.assertTrue(back.workers().contains(citizen.id()), "The post lost its worker");
+        helper.assertTrue(back.mineGoal().equals(MineGoal.ANYTHING), "A post without a goal came back with one: " + back.mineGoal());
+        WorkPost mine = reloaded.state().citizens().posts().get(minePos).orElse(null);
+        helper.assertTrue(mine != null && mine.mineGoal().equals(new MineGoal("forge:ores/iron", 64, false, -20)),
+                "The mine lost its goal: " + (mine == null ? null : mine.mineGoal()));
         helper.assertTrue(back.yield().measured() && back.producedOn(5L) == 12L, "The post lost its yield or production");
         helper.assertTrue(reloaded.state().citizens().get(citizen.id()).orElseThrow().workStatus() == WorkStatus.NO_TREES,
                 "The citizen lost the state of its work");
