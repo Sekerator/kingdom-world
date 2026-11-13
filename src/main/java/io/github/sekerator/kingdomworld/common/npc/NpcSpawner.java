@@ -2421,7 +2421,7 @@ public final class NpcSpawner {
     /**
      * Pays for every block of a road without taking anything from the storehouses: the road is part of the founding.
      */
-    private static void payRoad(MinecraftServer server, ServerLevel level, Road road) {
+    public static void payRoad(MinecraftServer server, ServerLevel level, Road road) {
         String wood = woodOf(level, new BlockPos(road.from().x(), 64, road.from().z()));
         RoadWork.change(server, "pay the road of a kingdom of the world", roads -> {
             for (Road.Section section : road.sections()) {

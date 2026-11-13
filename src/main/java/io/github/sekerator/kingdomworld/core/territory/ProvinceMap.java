@@ -32,12 +32,50 @@ public final class ProvinceMap {
     public static final int MAX_ID = 0xFFFF;
 
     /**
-     * A province held for a buyer until a day.
+     * A province held for a buyer until a day: the bearer of a charter, who paid its price into escrow and founds a kingdom
+     * there.
+     *
+     * @param seller   the kingdom that sold it, or null when unknown
+     * @param currency the currency of the money held, or null when nothing is held
+     * @param amount   the money held in escrow for the seller
      */
-    public record SaleHold(UUID buyer, long untilDay) {
+    public record SaleHold(UUID buyer, long untilDay, UUID seller, UUID currency, long amount) {
         public SaleHold {
             Objects.requireNonNull(buyer, "buyer");
+            if (amount < 0 || (amount > 0 && currency == null)) {
+                throw new IllegalArgumentException("Money of a hold out of range: " + amount);
+            }
         }
+
+        public SaleHold(UUID buyer, long untilDay) {
+            this(buyer, untilDay, null, null, 0);
+        }
+    }
+
+    /**
+     * The money held for the sellers of provinces in a currency.
+     */
+    public long heldMoney(UUID currency) {
+        long sum = 0;
+        for (SaleHold hold : holds) {
+            if (hold != null && hold.amount() > 0 && currency.equals(hold.currency())) {
+                sum += hold.amount();
+            }
+        }
+        return sum;
+    }
+
+    /**
+     * The provinces held for buyers, by number.
+     */
+    public java.util.Map<Integer, SaleHold> holds() {
+        java.util.Map<Integer, SaleHold> map = new java.util.LinkedHashMap<>();
+        for (int id = 1; id < holds.length; id++) {
+            if (holds[id] != null && byId[id] != null) {
+                map.put(id, holds[id]);
+            }
+        }
+        return map;
     }
 
     private final String dimension;

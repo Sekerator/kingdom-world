@@ -74,6 +74,7 @@ public final class RoadWork {
     public static void reset() {
         lastDay = Long.MIN_VALUE;
         RoadPlanning.reset();
+        PlannedRoads.reset();
         RoadBuilding.reset();
         RoadCaravans.reset();
         BanditWork.reset();
@@ -141,7 +142,7 @@ public final class RoadWork {
         if (!kingdomId.equals(KingdomWorldApi.ownerAt(level, pos))) {
             return Outcome.fail(KingdomError.CONSTRUCTION_OUTSIDE_LAND);
         }
-        RoadRules rules = RoadSettings.rules();
+        RoadRules rules = RoadSettings.rulesFor(server, kingdomId);
         City[] made = new City[1];
         Outcome outcome = change(server, "found a city", roads -> {
             Outcome check = roads.checkCity(kingdomId, dimension, pos.getX(), pos.getZ(), capitals(server, dimension), rules);

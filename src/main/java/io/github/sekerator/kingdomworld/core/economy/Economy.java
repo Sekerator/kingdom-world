@@ -47,8 +47,8 @@ public final class Economy {
     private CurrencyUnits defaultUnits = CurrencyUnits.DEFAULT;
     private long defaultPollTax = EconomyRules.DEFAULT.defaultPollTax();
     private int defaultSalesTaxPermille;
-    /** Money of each currency held outside these books, in the escrow of guild contracts. */
-    private java.util.function.ToLongFunction<UUID> heldElsewhere = currency -> 0L;
+    /** Money of each currency held outside these books: in the escrow of guild contracts, for the sellers of provinces. */
+    private final Map<String, java.util.function.ToLongFunction<UUID>> heldElsewhere = new LinkedHashMap<>();
     private Runnable changeListener = () -> {
     };
 
@@ -218,7 +218,10 @@ public final class Economy {
                 sum = Money.addCapped(sum, escrow.amount());
             }
         }
-        return Money.addCapped(sum, Math.max(0, heldElsewhere.applyAsLong(currency)));
+        for (java.util.function.ToLongFunction<UUID> held : heldElsewhere.values()) {
+            sum = Money.addCapped(sum, Math.max(0, held.applyAsLong(currency)));
+        }
+        return sum;
     }
 
     /**
@@ -845,7 +848,82 @@ public final class Economy {
      * of a currency counts it.
      */
     public void setHeldElsewhere(java.util.function.ToLongFunction<UUID> held) {
-        this.heldElsewhere = Objects.requireNonNull(held, "held");
+        setHeldElsewhere("guild", held);
+    }
+
+    /**
+     * Tells the books how much money of each currency one holder outside them keeps, by its name; a new one of the same
+     * name takes its place.
+     */
+    public void setHeldElsewhere(String holder, java.util.function.ToLongFunction<UUID> held) {
+        heldElsewhere.put(Objects.requireNonNull(holder, "holder"), Objects.requireNonNull(held, "held"));
+    }
+
+    // ---------------------------------------------------------------- provinces bought
+
+    /**
+     * What a kingdom pays in its own currency for a price in the currency of another, by the rates of today: rounded up, -1
+     * when it is more than any money.
+     */
+    public long landCost(UUID buyer, UUID seller, long price) {
+        return buyer.equals(seller) ? price : ExchangeRates.priceIn(price, rate(seller), rate(buyer), 0);
+    }
+
+    /**
+     * Whether a kingdom could pay another for a province.
+     */
+    public Outcome checkLandPayment(UUID buyer, UUID seller, long price) {
+        long cost = landCost(buyer, seller, price);
+        if (cost < 0 || !Money.isPayment(Math.max(1, cost))) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        Outcome check = checkHoldFromTreasury(buyer, Math.max(1, cost));
+        if (!check.ok()) {
+            return check;
+        }
+        if (!canReleaseToTreasury(seller, buyer, Math.max(1, cost))) {
+            return Outcome.fail(treasuries.containsKey(seller) ? KingdomError.TOO_MUCH_MONEY : KingdomError.UNKNOWN_KINGDOM);
+        }
+        return Outcome.DONE;
+    }
+
+    /**
+     * A province is paid for: the buyer's treasury pays the price, set in the currency of the seller, in its own currency by
+     * the rates of today, into the reserves of the seller; a line "Land" on both sides, in the books of both or not at all.
+     * Nothing is made or lost: the same money moves.
+     *
+     * @return what the buyer paid in its currency, or the reason it could not
+     */
+    public Exchanged landPayment(UUID buyer, UUID seller, long price, long day) {
+        Outcome check = checkLandPayment(buyer, seller, price);
+        if (!check.ok()) {
+            return new Exchanged(check, 0);
+        }
+        long cost = Math.max(1, landCost(buyer, seller, price));
+        holdFromTreasury(buyer, cost, LedgerCategory.LAND, day);
+        Outcome released = releaseToTreasury(seller, buyer, cost, LedgerCategory.LAND, day);
+        if (!released.ok()) {
+            releaseToTreasury(buyer, buyer, cost, LedgerCategory.LAND, day);
+            return new Exchanged(released, 0);
+        }
+        noteLandIncome(seller, buyer, cost, day);
+        return new Exchanged(Outcome.DONE, cost);
+    }
+
+    /**
+     * Money of another currency a seller of a province took into its reserves: its journal shows what it is worth in its own
+     * currency under "Land", as money of its own would be shown. Nothing on the balances changes.
+     */
+    public void noteLandIncome(UUID seller, UUID currency, long amount, long day) {
+        Treasury treasury = treasuries.get(seller);
+        if (treasury == null || currency.equals(seller) || amount <= 0) {
+            return;
+        }
+        long worth = ExchangeRates.convert(amount, rate(currency), rate(seller), 0);
+        if (worth > 0) {
+            treasury.journal().record(day, LedgerCategory.LAND, worth, 0);
+            changed();
+        }
     }
 
     /**

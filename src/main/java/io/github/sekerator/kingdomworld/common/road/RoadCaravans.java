@@ -105,8 +105,8 @@ public final class RoadCaravans {
      */
     public static TravelPlan plan(MinecraftServer server, String dimension, int fromX, int fromZ, int toX, int toZ) {
         double pace = TradeSettings.rules().caravanBlocksPerMinute();
-        return RoadNetwork.plan(RoadWork.state(server).roads(), dimension, fromX, fromZ, toX, toZ, pace, RoadSettings.rules(), 1_200L,
-                24_000L * 30);
+        return RoadNetwork.plan(RoadWork.state(server).roads(), PlannedRoads.tracks(server, dimension), dimension, fromX, fromZ, toX, toZ, pace,
+                RoadSettings.rules(), 1_200L, 24_000L * 30);
     }
 
     /**

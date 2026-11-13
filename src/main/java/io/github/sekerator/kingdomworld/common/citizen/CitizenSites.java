@@ -132,7 +132,7 @@ public final class CitizenSites {
         // Places recorded in chunks that are no longer claimed are checked as well.
         for (Site site : allSites(state)) {
             ChunkRef ref = new ChunkRef(site.pos().dimension(), site.pos().chunk());
-            if (state.territory().ownerOf(ref.dimension(), ref.chunk()) == null) {
+            if (io.github.sekerator.kingdomworld.common.land.Wilderness.placeOwner(server, ref.dimension(), ref.chunk()) == null) {
                 ROUND.add(ref);
             }
         }
@@ -179,7 +179,8 @@ public final class CitizenSites {
         Citizens citizens = state.citizens();
         String dimension = Dimensions.id(level);
         long key = ChunkKey.of(chunk.getPos().x, chunk.getPos().z);
-        UUID owner = state.territory().ownerOf(dimension, key);
+        // The wilds of a kingdom of the world hold no places of it: a bed or a workbench of a player there is nobody's.
+        UUID owner = io.github.sekerator.kingdomworld.common.land.Wilderness.placeOwner(server, dimension, key);
 
         // Forget what is no longer there or no longer on the owner's land.
         for (Site site : citizens.sites().sitesInChunk(dimension, key)) {
@@ -238,7 +239,7 @@ public final class CitizenSites {
         if (kind == null || KingdomWorldApi.isReadOnly(level.getServer())) {
             return;
         }
-        UUID owner = KingdomWorldApi.ownerAt(level, pos);
+        UUID owner = io.github.sekerator.kingdomworld.common.land.Wilderness.placeOwner(level.getServer(), Dimensions.id(level), ChunkKey.of(pos.getX() >> 4, pos.getZ() >> 4));
         if (owner != null) {
             WorldPos at = new WorldPos(Dimensions.id(level), pos.getX(), pos.getY(), pos.getZ());
             if (KingdomWorldApi.state(level.getServer()).citizens().addSite(at, kind, owner) && kind.equals(SiteKinds.WORK_POST)) {

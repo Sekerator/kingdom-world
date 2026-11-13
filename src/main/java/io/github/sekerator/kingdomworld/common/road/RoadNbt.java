@@ -30,7 +30,8 @@ import java.util.UUID;
  *
  * <pre>
  * cities: [ { id, kingdom, name, dim, x, y, z, founded } ]
- * roads: [ { id, kingdom, class, dim, from: { kind, city, kingdom?, x, z }, to, cells: [x, y, z, kind * 256 + depth, ...], mode,
+ * roads: [ { id, kingdom, class, dim, from: { kind, city, kingdom?, x, z }, to, start: [x, y, z], steps: [byte], jumps: [x, y, z, ...],
+ *            kinds: [kind * 256 + depth, run, ...] (format 2, see RoadCells; format 1 wrote cells: [x, y, z, kind * 256 + depth, ...]), mode,
  *            created, status, paused, traffic, sections: [ { builder, paid, placed, condition, repairing, repairPaid,
  *            pool: [ { item, count } ] } ] } ]
  * crossings: [ { id, road, requester, owner, mode, status, sections, created, expires } ]
@@ -135,15 +136,12 @@ final class RoadNbt {
         entry.putString("dim", road.dimension());
         entry.put("from", writeEndpoint(road.from()));
         entry.put("to", writeEndpoint(road.to()));
-        int[] cells = new int[road.cells().size() * 4];
-        for (int i = 0; i < road.cells().size(); i++) {
-            RouteCell cell = road.cells().get(i);
-            cells[i * 4] = cell.x();
-            cells[i * 4 + 1] = cell.y();
-            cells[i * 4 + 2] = cell.z();
-            cells[i * 4 + 3] = cell.kind().ordinal() * 256 + Math.min(255, cell.depth());
-        }
-        entry.putIntArray("cells", cells);
+        // The way a byte a block: a road of a thousand blocks takes a kilobyte instead of sixteen.
+        io.github.sekerator.kingdomworld.core.road.RoadCells.Packed way = io.github.sekerator.kingdomworld.core.road.RoadCells.pack(road.cells());
+        entry.putIntArray("start", way.start());
+        entry.putByteArray("steps", way.steps());
+        entry.putIntArray("jumps", way.jumps());
+        entry.putIntArray("kinds", way.kinds());
         entry.putString("mode", road.mode().id());
         entry.putLong("created", road.created());
         entry.putString("status", road.status().id());
@@ -172,7 +170,14 @@ final class RoadNbt {
         return entry;
     }
 
-    private static Road readRoad(CompoundTag entry) {
+    /**
+     * The way of a road as either format wrote it.
+     */
+    static List<RouteCell> readCells(CompoundTag entry) {
+        if (entry.contains("steps", Tag.TAG_BYTE_ARRAY)) {
+            return new ArrayList<>(io.github.sekerator.kingdomworld.core.road.RoadCells.unpack(new io.github.sekerator.kingdomworld.core.road.RoadCells.Packed(
+                    entry.getIntArray("start"), entry.getByteArray("steps"), entry.getIntArray("jumps"), entry.getIntArray("kinds"))));
+        }
         int[] packed = entry.getIntArray("cells");
         if (packed.length % 4 != 0) {
             throw new IllegalArgumentException("cells of a road are damaged");
@@ -185,6 +190,11 @@ final class RoadNbt {
             }
             cells.add(new RouteCell(packed[i], packed[i + 1], packed[i + 2], RouteCell.Kind.values()[kind], packed[i + 3] % 256, null));
         }
+        return cells;
+    }
+
+    private static Road readRoad(CompoundTag entry) {
+        List<RouteCell> cells = readCells(entry);
         RoadClass roadClass = RoadClass.byId(entry.getString("class")).orElseThrow(() -> new IllegalArgumentException("unknown class"));
         Road.Mode mode = Road.Mode.valueOf(entry.getString("mode").toUpperCase(java.util.Locale.ROOT));
         Road.Status status = Road.Status.valueOf(entry.getString("status").toUpperCase(java.util.Locale.ROOT));

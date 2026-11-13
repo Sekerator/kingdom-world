@@ -30,8 +30,8 @@ import java.util.Optional;
  */
 public final class RoadSavedData extends SavedData {
     public static final String DATA_NAME = KingdomWorld.MOD_ID + "_roads";
-    /** Current layout of the saved data. Increase it together with a migration step. */
-    public static final int FORMAT_VERSION = 1;
+    /** Current layout of the saved data. Increase it together with a migration step. 2: the way of a road a byte a block. */
+    public static final int FORMAT_VERSION = 2;
     static final String TAG_FORMAT_VERSION = "formatVersion";
 
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -169,6 +169,15 @@ public final class RoadSavedData extends SavedData {
 
     static Path dataFile(MinecraftServer server) {
         return server.getWorldPath(LevelResource.ROOT).resolve("data").resolve(DATA_NAME + ".dat");
+    }
+
+    /**
+     * Saves the roads as the game does, only the file is written by {@link io.github.sekerator.kingdomworld.common.data.AsyncSave}
+     * off the server thread.
+     */
+    @Override
+    public void save(java.io.File file) {
+        io.github.sekerator.kingdomworld.common.data.AsyncSave.save(this, file, DATA_NAME);
     }
 
     @Override

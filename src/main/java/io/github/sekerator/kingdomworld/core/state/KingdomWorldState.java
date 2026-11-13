@@ -192,7 +192,20 @@ public final class KingdomWorldState {
      */
     public CreateKingdomResult found(UUID id, String rawName, int color, UUID founder, Capital capital, long gameTime,
                                      KingdomRules rules, String style) {
+        return found(id, rawName, color, founder, capital, gameTime, rules, style, chunk -> false);
+    }
+
+    /**
+     * Founds a kingdom of an architectural style on land granted to its founder: a province it bought with a charter. The
+     * throne may stand in the chunks granted, and they are no foreign land near it; the land of other kingdoms outside them is
+     * checked as always. The caller hands the province over once the kingdom stands.
+     *
+     * @param granted the chunks granted to the founder, in the dimension of the capital
+     */
+    public CreateKingdomResult found(UUID id, String rawName, int color, UUID founder, Capital capital, long gameTime,
+                                     KingdomRules rules, String style, java.util.function.LongPredicate granted) {
         Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(granted, "granted");
         Objects.requireNonNull(rules, "rules");
         if (founder != null && membership.kingdomOf(founder).isPresent()) {
             return new CreateKingdomResult.Rejected(CreateKingdomResult.Error.ALREADY_IN_KINGDOM);
@@ -204,10 +217,10 @@ public final class KingdomWorldState {
             if (!rules.allowedDimensions().contains(dimension)) {
                 return new CreateKingdomResult.Rejected(CreateKingdomResult.Error.DIMENSION_NOT_ALLOWED);
             }
-            if (territory.ownerOf(dimension, chunk) != null) {
+            if (territory.claimOwner(dimension, chunk) != null || (territory.ownerOf(dimension, chunk) != null && !granted.test(chunk))) {
                 return new CreateKingdomResult.Rejected(CreateKingdomResult.Error.INSIDE_OTHER_KINGDOM);
             }
-            if (territory.hasForeignLandWithin(dimension, chunk, rules.minChunksFromOtherKingdom(), null)) {
+            if (territory.hasForeignLandWithin(dimension, chunk, rules.minChunksFromOtherKingdom(), null, granted)) {
                 return new CreateKingdomResult.Rejected(CreateKingdomResult.Error.TOO_CLOSE_TO_OTHER_KINGDOM);
             }
             initialChunks = ClaimRules.initialClaim(territory, dimension, chunk, rules.initialClaimRadius(), rules.claimBufferChunks());

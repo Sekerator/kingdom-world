@@ -62,7 +62,8 @@ public record BanditRules(boolean enabled, int maxCamps, int minDistance, double
      */
     public static final class Builder {
         public boolean enabled = true;
-        public int maxCamps = 8;
+        /** The states of the world have wide wilds: twice the camps of before, in new configs. */
+        public int maxCamps = 16;
         public int minDistance = 192;
         public double spawnChance = 0.2;
         public int startBandits = 3;

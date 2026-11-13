@@ -71,6 +71,29 @@ public record RoadRules(int maxCities, int minCityDistance, int maxRoads, int ma
         return copy;
     }
 
+    /**
+     * The same rules for a search of its own: at most so many steps and so long a way; a road between settlements is searched
+     * so a stretch at a time.
+     */
+    public RoadRules forSearch(int searchNodes, int routeLength) {
+        int nodes = Math.max(nodesPerTick, searchNodes);
+        return new RoadRules(maxCities, minCityDistance, maxRoads, Math.max(16, routeLength), nodesPerTick, nodes, chunksPerTick, maxBridge,
+                maxFill, slopeCost, bridgeCost, fillCost, foreignCost, secondsPerBlock, wearPerDay, repairShare, caravanSpeed, playerSpeed,
+                horseSpeed, speedOnRoads, crossingDays, autoRepair, repairBelow, rememberConsent, townPeople, townBuildings, cityPeople,
+                cityBuildings, wallRadius);
+    }
+
+    /**
+     * The same rules for a kingdom of the world: its cities are those of its plan, without the limit of the cities of players,
+     * and it keeps up to so many roads.
+     */
+    public RoadRules forWorldKingdom(int worldMaxRoads) {
+        return new RoadRules(Math.max(maxCities, 256), minCityDistance, Math.max(0, worldMaxRoads), maxRouteLength, nodesPerTick, maxNodes,
+                chunksPerTick, maxBridge, maxFill, slopeCost, bridgeCost, fillCost, foreignCost, secondsPerBlock, wearPerDay, repairShare,
+                caravanSpeed, playerSpeed, horseSpeed, speedOnRoads, crossingDays, autoRepair, repairBelow, rememberConsent, townPeople,
+                townBuildings, cityPeople, cityBuildings, wallRadius);
+    }
+
     public double secondsPerBlock(RoadClass value) {
         return secondsPerBlock[value.ordinal()];
     }

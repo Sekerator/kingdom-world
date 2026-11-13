@@ -31,6 +31,12 @@ public final class LandEvents {
     public static void register() {
         MinecraftForge.EVENT_BUS.addListener(LandEvents::onServerStarted);
         MinecraftForge.EVENT_BUS.addListener(LandEvents::onServerTick);
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.server.ServerStoppedEvent event) -> {
+            Wilderness.reset();
+            StateGrowth.reset();
+        });
+        // Players act in the wilds of the kingdoms of the world as on land of nobody.
+        Wilderness.register();
     }
 
     private static void onServerStarted(ServerStartedEvent event) {
@@ -46,6 +52,10 @@ public final class LandEvents {
         if (territory.provinceChunksPending()) {
             territory.drainProvinceChunks(CHUNKS_PER_TICK);
         }
+        if (server.getTickCount() % 20 == 7) {
+            territory.provinceMap().ifPresent(map -> ProvinceTrade.expire(server, map));
+        }
+        StateGrowth.tick(server);
     }
 
     /**
@@ -59,6 +69,8 @@ public final class LandEvents {
         if (territory.provinceMap().orElse(null) != map) {
             check(server, map, territory);
             territory.attachProvinces(map);
+            // The money of charters waits in escrow for the sellers: it counts with the money of its currency.
+            KingdomWorldApi.state(server).economy().setHeldElsewhere("charters", map::heldMoney);
         }
         return territory;
     }

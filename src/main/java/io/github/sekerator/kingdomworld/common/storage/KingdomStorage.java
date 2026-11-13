@@ -40,11 +40,17 @@ public final class KingdomStorage {
     }
 
     /**
-     * The kingdom a storehouse belongs to: the owner of the land it stands on. The one place where this is decided.
+     * The kingdom a storehouse belongs to: the owner of the land it stands on, but nobody in the wilds of a kingdom of the
+     * world (a storehouse of a player there is not one of the kingdom). The one place where this is decided.
      */
     @Nullable
     public static UUID owner(TerritoryIndex territory, WorldPos pos) {
-        return territory.ownerOf(pos.dimension(), pos.chunk());
+        UUID owner = territory.ownerOf(pos.dimension(), pos.chunk());
+        if (owner == null || territory.claimOwner(pos.dimension(), pos.chunk()) != null) {
+            return owner;
+        }
+        net.minecraft.server.MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+        return server != null && io.github.sekerator.kingdomworld.common.land.Wilderness.isWild(server, pos.dimension(), pos.chunk()) ? null : owner;
     }
 
     /**

@@ -21,6 +21,22 @@ public final class RoadNetwork {
     public static final int POINT_EVERY = 4;
     /** The longest piece of a way across country, in blocks. */
     public static final double PIECE = 64.0;
+    /** How many times faster than across country a caravan goes along a track of the plan not laid as a road yet. */
+    public static final double TRACK_SPEED = 1.2;
+
+    /**
+     * A road of the plan not laid yet: a track along its rough line, a little faster than across country.
+     *
+     * @param xs the blocks of its points along x
+     * @param zs the blocks of its points along z
+     */
+    public record Track(int[] xs, int[] zs) {
+        public Track {
+            if (xs.length != zs.length || xs.length < 2) {
+                throw new IllegalArgumentException("A track needs two points at least");
+            }
+        }
+    }
 
     private record Node(int x, int z, Road road, int boundary) {
     }
@@ -160,6 +176,17 @@ public final class RoadNetwork {
      */
     public static TravelPlan plan(Collection<Road> roads, String dimension, int fromX, int fromZ, int toX, int toZ, double blocksPerMinute,
                                   RoadRules rules, long minTicks, long maxTicks) {
+        return plan(roads, List.of(), dimension, fromX, fromZ, toX, toZ, blocksPerMinute, rules, minTicks, maxTicks);
+    }
+
+    /**
+     * The fastest way of a caravan between two points of a dimension, by the roads and the tracks of the plan: trade goes along
+     * the network of the states before it is paved.
+     *
+     * @param tracks the roads of the plan of the dimension not laid yet
+     */
+    public static TravelPlan plan(Collection<Road> roads, Collection<Track> tracks, String dimension, int fromX, int fromZ, int toX, int toZ,
+                                  double blocksPerMinute, RoadRules rules, long minTicks, long maxTicks) {
         // Whether a road is taken is read anew for every trip: a road is paid for and let through without a change of the roads.
         List<Road> taken = new ArrayList<>();
         for (Road road : roads) {
@@ -169,7 +196,11 @@ public final class RoadNetwork {
             taken.add(road);
         }
         Skeleton skeleton = skeleton(dimension, taken);
-        int total = skeleton.nodes.size() + 2;
+        int trackPoints = 0;
+        for (Track track : tracks) {
+            trackPoints += track.xs().length;
+        }
+        int total = skeleton.nodes.size() + 2 + trackPoints;
         List<Node> nodes = new ArrayList<>(total);
         nodes.add(new Node(fromX, fromZ, null, -1));
         nodes.add(new Node(toX, toZ, null, -1));
@@ -177,6 +208,34 @@ public final class RoadNetwork {
         List<List<Edge>> edges = new ArrayList<>(total);
         for (int i = 0; i < total; i++) {
             edges.add(new ArrayList<>());
+        }
+        // The tracks of the plan: their points after those of the roads, each to the next a little faster than across country,
+        // and the ends of tracks joined where they meet at a settlement.
+        List<Integer> ends = new ArrayList<>();
+        int trackAt = skeleton.nodes.size() + 2;
+        for (Track track : tracks) {
+            for (int p = 0; p < track.xs().length; p++) {
+                nodes.add(new Node(track.xs()[p], track.zs()[p], null, -1));
+                if (p > 0) {
+                    double length = distance(nodes.get(trackAt + p - 1), nodes.get(trackAt + p));
+                    double ticks = ticks(length, blocksPerMinute * TRACK_SPEED);
+                    edges.get(trackAt + p - 1).add(new Edge(trackAt + p, ticks, length, null, 0, null, true));
+                    edges.get(trackAt + p).add(new Edge(trackAt + p - 1, ticks, length, null, 0, null, true));
+                }
+            }
+            ends.add(trackAt);
+            ends.add(trackAt + track.xs().length - 1);
+            trackAt += track.xs().length;
+        }
+        for (int i = 0; i < ends.size(); i++) {
+            for (int j = i + 1; j < ends.size(); j++) {
+                double length = distance(nodes.get(ends.get(i)), nodes.get(ends.get(j)));
+                if (length <= JUNCTION) {
+                    double ticks = ticks(length, blocksPerMinute);
+                    edges.get(ends.get(i)).add(new Edge(ends.get(j), ticks, length, null, 0, null, true));
+                    edges.get(ends.get(j)).add(new Edge(ends.get(i), ticks, length, null, 0, null, true));
+                }
+            }
         }
         // How fast a section is depends on whether it is built and how worn it is, and on the rules and the pace of the trip.
         for (int r = 0; r < skeleton.roads.length; r++) {
@@ -201,7 +260,7 @@ public final class RoadNetwork {
         for (int i = 2; i < total; i++) {
             addStraight(nodes, edges, i, 1, blocksPerMinute);
         }
-        for (int i = 2; i < total; i++) {
+        for (int i = 2; i < skeleton.nodes.size() + 2; i++) {
             List<Edge> from = edges.get(i);
             for (Link link : skeleton.links.get(i - 2)) {
                 from.add(new Edge(link.to(), ticks(link.length(), blocksPerMinute), link.length(), null, 0, null, true));

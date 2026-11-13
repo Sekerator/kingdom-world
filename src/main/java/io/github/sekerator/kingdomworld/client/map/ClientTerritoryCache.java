@@ -89,6 +89,7 @@ public final class ClientTerritoryCache {
 
     public static void clear() {
         ClientProvinceMap.clear();
+        ClientProvinceOffers.clear();
         OWNERS.clear();
         KINGDOMS.clear();
         coarseStep = 0;

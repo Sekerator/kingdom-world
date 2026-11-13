@@ -48,8 +48,8 @@ public final class RoadPlanning {
     public static final int SNAP = 48;
     /** Ticks a plan is kept for the king to confirm. */
     private static final long PLAN_TICKS = 20L * 60 * 15;
-    /** Searches running at once at most. */
-    private static final int MAX_JOBS = 4;
+    /** Searches running at once at most, the one for a road of the plan of the states counted. */
+    static final int MAX_JOBS = 4;
     /** Time the searches for roads take in a tick at most, besides the slice under way. */
     private static final long SEARCH_NANOS = 5_000_000L;
     /** Steps of a search between two looks at the time. */
@@ -201,7 +201,7 @@ public final class RoadPlanning {
                 return Outcome.fail(KingdomError.ROUTE_SEARCHING);
             }
         }
-        if (JOBS.size() >= MAX_JOBS) {
+        if (PlannedRoads.searching(kingdomId) || jobCount() >= MAX_JOBS) {
             return Outcome.fail(KingdomError.ROUTE_SEARCHING);
         }
         RoadRules rules = RoadSettings.rules();
@@ -312,10 +312,17 @@ public final class RoadPlanning {
     }
 
     /**
-     * Whether a search for a kingdom runs.
+     * Whether a search for a kingdom runs, for a road of its own or of the plan of the states.
      */
     public static boolean searching(UUID kingdomId) {
-        return JOBS.values().stream().anyMatch(job -> job.kingdomId.equals(kingdomId));
+        return PlannedRoads.searching(kingdomId) || JOBS.values().stream().anyMatch(job -> job.kingdomId.equals(kingdomId));
+    }
+
+    /**
+     * Searches running, the one for a road of the plan of the states counted.
+     */
+    static int jobCount() {
+        return JOBS.size() + (PlannedRoads.searching() ? 1 : 0);
     }
 
     /**
@@ -407,7 +414,7 @@ public final class RoadPlanning {
         if (!RoadWork.mayManage(server, actor, kingdomId)) {
             return Outcome.fail(KingdomError.NO_PERMISSION);
         }
-        RoadRules rules = RoadSettings.rules();
+        RoadRules rules = RoadSettings.rulesFor(server, kingdomId);
         List<Crossing> sent = new ArrayList<>();
         long now = KingdomWorldApi.gameTime(server);
         Outcome outcome = RoadWork.change(server, "plan a road", roads -> {

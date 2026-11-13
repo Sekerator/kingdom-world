@@ -57,7 +57,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "36";
+    public static final String PROTOCOL_VERSION = "37";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -297,6 +297,11 @@ public final class KingdomWorldNetwork {
                 io.github.sekerator.kingdomworld.common.network.packet.ProvinceDeltaPacket::encode,
                 io.github.sekerator.kingdomworld.common.network.packet.ProvinceDeltaPacket::decode,
                 io.github.sekerator.kingdomworld.common.network.packet.ProvinceDeltaPacket::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Request.class, NetworkDirection.PLAY_TO_SERVER, io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Request::encode, io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Request::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Request::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Offers.class, NetworkDirection.PLAY_TO_CLIENT, io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Offers::encode, io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Offers::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Offers::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Buy.class, NetworkDirection.PLAY_TO_SERVER, io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Buy::encode, io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Buy::decode, io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Buy::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

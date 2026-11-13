@@ -183,6 +183,8 @@ public final class KingdomWorldConfig {
         public final Nobility nobility;
         /** How squads of soldiers, guards, adventurers and robbers fight near players. */
         public final Tactics tactics;
+        /** The land of the states of the world: their wilds and the sale of their provinces. */
+        public final Land land;
         /** The guide book given to new players. */
         public final ForgeConfigSpec.BooleanValue giveGuideOnFirstJoin;
 
@@ -503,6 +505,7 @@ public final class KingdomWorldConfig {
             siege = new Siege(builder);
             nobility = new Nobility(builder);
             tactics = new Tactics(builder);
+            land = new Land(builder);
 
             builder.comment("The guide book: chapters on founding a kingdom and on everything after it.").push("guide");
             giveGuideOnFirstJoin = builder.comment("Whether every player gets the guide book once, the first time they join the world.",
@@ -1146,6 +1149,25 @@ public final class KingdomWorldConfig {
         }
     }
 
+    /**
+     * The land of the states of the world.
+     */
+    public static final class Land {
+        public final ForgeConfigSpec.BooleanValue wildernessOpen;
+        public final ForgeConfigSpec.DoubleValue provincePricePerChunk;
+
+        Land(ForgeConfigSpec.Builder builder) {
+            builder.comment("The land of the states of the world: their wilds and the sale of their provinces.").push("land");
+            wildernessOpen = builder.comment("Whether the wilds of a kingdom of the world, the land of its provinces where nobody lives",
+                            "(no claim, building, wall or road), are as free to players as land of nobody; the law holds where it lives.")
+                    .define("wildernessOpen", true);
+            provincePricePerChunk = builder.comment("The price of a chunk of a province a ruler of the world sells, in its currency, before",
+                            "its character and what it thinks of the buyer (a merchant asks 0.85 of it, a warrior 1.4); a province costs at least 1500.")
+                    .defineInRange("provincePricePerChunk", 3.0, 0.5, 100.0);
+            builder.pop();
+        }
+    }
+
     public static final class Magic {
         public final ForgeConfigSpec.LongValue baseCapacity;
         public final ForgeConfigSpec.LongValue accumulatorCapacity;
@@ -1774,6 +1796,7 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue maxCities;
         public final ForgeConfigSpec.IntValue minCityDistance;
         public final ForgeConfigSpec.IntValue maxRoads;
+        public final ForgeConfigSpec.IntValue npcMaxRoads;
         public final ForgeConfigSpec.IntValue maxRouteLength;
         public final ForgeConfigSpec.IntValue searchStepsPerTick;
         public final ForgeConfigSpec.IntValue maxSearchSteps;
@@ -1829,7 +1852,10 @@ public final class KingdomWorldConfig {
                     .defineInRange("maxCities", r.maxCities, 0, 256);
             minCityDistance = builder.comment("Blocks between two cities, or a city and a capital, at least.")
                     .defineInRange("minCityDistance", r.minCityDistance, 0, 10_000);
-            maxRoads = builder.comment("Roads one kingdom keeps at most.").defineInRange("maxRoads", r.maxRoads, 0, 1_024);
+            maxRoads = builder.comment("Roads one kingdom of players keeps at most; its cities are limited by maxCities and",
+                    "minCityDistance.").defineInRange("maxRoads", r.maxRoads, 0, 1_024);
+            npcMaxRoads = builder.comment("Roads one kingdom of the world keeps at most: the roads between the settlements of its plan;",
+                    "its settlements are those of its plan, not limited by maxCities.").defineInRange("npcMaxRoads", 200, 0, 4_096);
             maxRouteLength = builder.comment("The longest road, in blocks along its way.")
                     .defineInRange("maxRouteLength", r.maxRouteLength, 16, 8_192);
             searchStepsPerTick = builder.comment("Steps of the search for the way of a road the server makes in one tick.")

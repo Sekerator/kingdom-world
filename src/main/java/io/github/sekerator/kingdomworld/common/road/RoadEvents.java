@@ -78,6 +78,8 @@ public final class RoadEvents {
             // The searches belong to the work of the appearance of kingdoms of the world, whose roads they find.
             long started = System.nanoTime();
             RoadPlanning.tickSearch(server);
+            // The roads of the plan of the states, one at a time along their lines.
+            PlannedRoads.tick(server);
             io.github.sekerator.kingdomworld.common.command.PerfCommands.countWork(System.nanoTime() - started);
         } catch (RuntimeException e) {
             LOGGER.error("KingdomWorld search for roads failed", e);

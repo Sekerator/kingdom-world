@@ -110,7 +110,7 @@ public final class CitizenEvents {
     private static void onChunkLoad(ChunkEvent.Load event) {
         if (event.getLevel() instanceof ServerLevel level && event.getChunk() instanceof LevelChunk chunk
                 && level.getServer().isSameThread()
-                && KingdomWorldApi.ownerOfChunk(level, chunk.getPos().x, chunk.getPos().z) != null) {
+                && io.github.sekerator.kingdomworld.common.land.Wilderness.placeOwner(level.getServer(), Dimensions.id(level), ChunkKey.of(chunk.getPos().x, chunk.getPos().z)) != null) {
             CitizenSites.scheduleChunk(Dimensions.id(level), ChunkKey.of(chunk.getPos().x, chunk.getPos().z));
         }
     }

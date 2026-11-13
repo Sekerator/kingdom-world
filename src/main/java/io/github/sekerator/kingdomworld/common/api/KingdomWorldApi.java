@@ -269,7 +269,13 @@ public final class KingdomWorldApi {
         economyDefaults(state);
         Capital capital = new Capital(Dimensions.id(level), throne.getX(), throne.getY(), throne.getZ());
         String known = io.github.sekerator.kingdomworld.core.npc.ArchitecturalStyles.known(style) ? style : "";
-        return state.found(id, name, color & Kingdom.MAX_COLOR, founder, capital, gameTime(server), rules(), known);
+        // A province bought with a charter is the founder's to found its kingdom on.
+        CreateKingdomResult result = state.found(id, name, color & Kingdom.MAX_COLOR, founder, capital, gameTime(server), rules(), known,
+                io.github.sekerator.kingdomworld.common.land.ProvinceTrade.granted(server, founder, capital.dimension()));
+        if (result instanceof CreateKingdomResult.Created created) {
+            io.github.sekerator.kingdomworld.common.land.ProvinceTrade.founded(server, founder, created.kingdom());
+        }
+        return result;
     }
 
     /**
