@@ -17,13 +17,18 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * What the client knows about land in its current dimension: owners of the chunks it has asked for and the
- * map facts of the kingdoms seen. Display only; the server stays the source of truth. Map integrations can
- * read it and follow changes with {@link #addListener(TerritoryListener)}. Used on the client main thread.
+ * map facts of the kingdoms seen. Display only; the server stays the source of truth. The owner of a chunk is the kingdom
+ * that claimed it, otherwise the holder of its province ({@link ClientProvinceMap}). Map integrations can read it and follow
+ * changes with {@link #addListener(TerritoryListener)}: claims chunk by chunk everywhere, provinces chunk by chunk only within
+ * {@value ClientProvinceMap#NEAR_CHUNKS} chunks of the player (a province of thousands of chunks changes hands as one event, see
+ * {@link ClientMapModel}). Used on the client main thread.
  */
 public final class ClientTerritoryCache {
     private static final Map<Long, UUID> OWNERS = new HashMap<>();
     private static final Map<UUID, KingdomMapInfo> KINGDOMS = new HashMap<>();
     private static final List<TerritoryListener> LISTENERS = new CopyOnWriteArrayList<>();
+    /** Listeners of the claims alone: the integrations of this mod that read the provinces whole. */
+    private static final List<TerritoryListener> CLAIM_LISTENERS = new CopyOnWriteArrayList<>();
     private static String dimension;
     private static boolean hasArea;
     private static int areaMinX;
@@ -48,9 +53,42 @@ public final class ClientTerritoryCache {
 
     public static void removeListener(TerritoryListener listener) {
         LISTENERS.remove(listener);
+        CLAIM_LISTENERS.remove(listener);
+    }
+
+    /**
+     * Follows the claims alone, chunk by chunk, for an integration that reads the provinces whole from {@link ClientProvinceMap}.
+     */
+    public static void addClaimListener(TerritoryListener listener) {
+        CLAIM_LISTENERS.add(Objects.requireNonNull(listener, "listener"));
+    }
+
+    static boolean hasListeners() {
+        return !LISTENERS.isEmpty();
+    }
+
+    /**
+     * Remembers the map facts of a kingdom the provinces name.
+     */
+    static void remember(KingdomMapInfo info) {
+        KINGDOMS.put(info.id(), info);
+    }
+
+    /**
+     * A chunk of a province near the player changed hands: the listeners of every chunk hear of it, unless a claim covers it.
+     */
+    static void provinceChunkChanged(int chunkX, int chunkZ, UUID oldOwner, UUID newOwner) {
+        long key = ChunkKey.of(chunkX, chunkZ);
+        if (OWNERS.containsKey(key)) {
+            return;
+        }
+        for (TerritoryListener listener : LISTENERS) {
+            listener.onChunkChanged(ClientProvinceMap.dimension(), key, oldOwner, newOwner);
+        }
     }
 
     public static void clear() {
+        ClientProvinceMap.clear();
         OWNERS.clear();
         KINGDOMS.clear();
         coarseStep = 0;
@@ -71,7 +109,21 @@ public final class ClientTerritoryCache {
         return dimension;
     }
 
+    /**
+     * The owner of a chunk: the kingdom that claimed it, otherwise the holder of its province.
+     */
     public static UUID ownerOf(int chunkX, int chunkZ) {
+        UUID claimed = OWNERS.get(ChunkKey.of(chunkX, chunkZ));
+        if (claimed != null) {
+            return claimed;
+        }
+        return dimension == null || dimension.equals(ClientProvinceMap.dimension()) ? ClientProvinceMap.ownerAt(chunkX, chunkZ) : null;
+    }
+
+    /**
+     * The kingdom that claimed a chunk, or {@code null}: land held as provinces does not count.
+     */
+    public static UUID claimOwnerOf(int chunkX, int chunkZ) {
         return OWNERS.get(ChunkKey.of(chunkX, chunkZ));
     }
 
@@ -211,8 +263,17 @@ public final class ClientTerritoryCache {
         long key = ChunkKey.of(chunkX, chunkZ);
         UUID old = owner == null ? OWNERS.remove(key) : OWNERS.put(key, owner);
         if (!Objects.equals(old, owner)) {
-            for (TerritoryListener listener : LISTENERS) {
+            for (TerritoryListener listener : CLAIM_LISTENERS) {
                 listener.onChunkChanged(dimension, key, old, owner);
+            }
+            // Where a claim comes or goes over a province, the owner of the chunk is the holder of the province.
+            UUID underneath = dimension != null && dimension.equals(ClientProvinceMap.dimension()) ? ClientProvinceMap.ownerAt(chunkX, chunkZ) : null;
+            UUID before = old == null ? underneath : old;
+            UUID after = owner == null ? underneath : owner;
+            if (!Objects.equals(before, after)) {
+                for (TerritoryListener listener : LISTENERS) {
+                    listener.onChunkChanged(dimension, key, before, after);
+                }
             }
         }
     }

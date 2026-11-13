@@ -169,6 +169,14 @@ public final class ClientPacketHandlers {
         ClientTerritoryCache.applyDelta(packet);
     }
 
+    public static void handleProvinceSnapshot(io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket packet) {
+        io.github.sekerator.kingdomworld.client.map.ClientProvinceMap.apply(packet);
+    }
+
+    public static void handleProvinceDelta(io.github.sekerator.kingdomworld.common.network.packet.ProvinceDeltaPacket packet) {
+        io.github.sekerator.kingdomworld.client.map.ClientProvinceMap.apply(packet);
+    }
+
     public static void handleTerritorySnapshot(io.github.sekerator.kingdomworld.common.network.packet.TerritorySnapshotPacket packet) {
         ClientTerritoryCache.applySnapshot(packet);
         io.github.sekerator.kingdomworld.client.map.ClientMapSync.onSnapshot(packet);

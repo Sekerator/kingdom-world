@@ -1,6 +1,8 @@
 package io.github.sekerator.kingdomworld.core.territory;
 
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -47,10 +49,14 @@ public final class ProvinceMap {
     private int[] chunkCount = new int[16];
     private int owned;
     private long version;
+    private long chunksVersion;
     private long cachedKey = Long.MIN_VALUE;
     private char[] cachedTile;
     private Runnable changeListener = () -> {
     };
+    /** Tiles whose chunks changed, and provinces described or forgotten, since they were last drained: for those who send them. */
+    private final LongOpenHashSet touchedTiles = new LongOpenHashSet();
+    private final IntOpenHashSet touchedProvinces = new IntOpenHashSet();
 
     public ProvinceMap(String dimension) {
         this.dimension = Objects.requireNonNull(dimension, "dimension");
@@ -72,6 +78,13 @@ public final class ProvinceMap {
      */
     public long version() {
         return version;
+    }
+
+    /**
+     * Grows with every change of the chunks of the provinces alone: their outlines are drawn anew only then.
+     */
+    public long chunksVersion() {
+        return chunksVersion;
     }
 
     // ---------------------------------------------------------------- reading
@@ -275,6 +288,7 @@ public final class ProvinceMap {
         int id = province.id();
         grow(id);
         byId[id] = province;
+        touchedProvinces.add(id);
         changed();
     }
 
@@ -355,7 +369,9 @@ public final class ProvinceMap {
             return 0;
         }
         int removed = 0;
+        chunksVersion++;
         for (long key : tileKeysOf(id)) {
+            touchedTiles.add(key);
             char[] tile = tiles.get(key);
             for (int i = 0; i < TILE_CHUNKS; i++) {
                 if (tile[i] == id) {
@@ -373,6 +389,7 @@ public final class ProvinceMap {
         ownerById[id] = null;
         acquired[id] = 0;
         holds[id] = null;
+        touchedProvinces.add(id);
         cachedKey = Long.MIN_VALUE;
         cachedTile = null;
         changed();
@@ -387,6 +404,8 @@ public final class ProvinceMap {
             throw new IllegalArgumentException("A tile has " + TILE_CHUNKS + " chunks");
         }
         long key = tileKey(tileX, tileZ);
+        touchedTiles.add(key);
+        chunksVersion++;
         char[] old = tiles.remove(key);
         if (old != null) {
             for (char id : old) {
@@ -427,6 +446,8 @@ public final class ProvinceMap {
             cachedTile = null;
         }
         tile[index] = (char) id;
+        touchedTiles.add(key);
+        chunksVersion++;
         if (old != 0) {
             chunkCount[old]--;
         }
@@ -471,6 +492,24 @@ public final class ProvinceMap {
     private void changed() {
         version++;
         changeListener.run();
+    }
+
+    /**
+     * The tiles whose chunks changed since the last call, forgotten then: for the one who sends them to players.
+     */
+    public long[] drainTouchedTiles() {
+        long[] keys = touchedTiles.toLongArray();
+        touchedTiles.clear();
+        return keys;
+    }
+
+    /**
+     * The provinces described anew or forgotten since the last call, forgotten then: for the one who sends them to players.
+     */
+    public int[] drainTouchedProvinces() {
+        int[] ids = touchedProvinces.toIntArray();
+        touchedProvinces.clear();
+        return ids;
     }
 
     // ---------------------------------------------------------------- runs

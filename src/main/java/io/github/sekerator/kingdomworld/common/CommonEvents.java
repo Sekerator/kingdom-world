@@ -59,6 +59,7 @@ public final class CommonEvents {
         io.github.sekerator.kingdomworld.common.nobility.NobilityEvents.register();
         io.github.sekerator.kingdomworld.common.land.LandEvents.register();
         io.github.sekerator.kingdomworld.common.land.RegionHeaders.register();
+        io.github.sekerator.kingdomworld.common.land.ProvinceSync.register();
         io.github.sekerator.kingdomworld.common.data.AsyncSave.register();
         io.github.sekerator.kingdomworld.common.command.PerfCommands.register();
     }

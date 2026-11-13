@@ -33,7 +33,8 @@ import java.util.UUID;
 
 /**
  * Game tests of the land sent to map integrations on clients: a client gets the land of its dimension, only the
- * square around the player when the land is larger than the limit, and never land of a kingdom hidden from it.
+ * square around the player when the land is larger than the limit, and never land of a kingdom hidden from it; the provinces of
+ * its dimension with the holders it may see, a province changing hands as one change.
  */
 @GameTestHolder(KingdomWorld.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -133,5 +134,118 @@ public final class MapGameTests {
             KingdomWorldApi.dissolveKingdom(server, far.id());
         }
         helper.succeed();
+    }
+
+    /**
+     * The provinces reach a client as the snapshot of its dimension: the tiles, the table and the holders it may see; a hidden
+     * holder reaches it as nobody; a province changing hands is one change however large it is; the atlas of the server sees the
+     * holder of a province.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_maps_provinces")
+    public static void provincesReachAClientAsItMaySeeThem(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos throne = helper.absolutePos(new BlockPos(1, 1, 1));
+        ChunkPos center = new ChunkPos(throne);
+        clearNear(level, center, 30);
+        int held = 65_301;
+        int wild = 65_302;
+        io.github.sekerator.kingdomworld.core.territory.TerritoryIndex territory =
+                io.github.sekerator.kingdomworld.common.land.LandEvents.attach(server);
+        io.github.sekerator.kingdomworld.core.territory.ProvinceMap map = territory.provinceMap().orElseThrow();
+        for (int id : new int[]{held, wild}) {
+            if (map.exists(id)) {
+                territory.clearProvince(id);
+            }
+        }
+        Kingdom holder = found(helper, throne, "GameTest Province Map", 0x2E8B57);
+        ServerPlayer viewer = new ServerPlayer(server, level, new GameProfile(UUID.randomUUID(), "kw-province-viewer"));
+        String dimension = io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level);
+        try {
+            map.define(io.github.sekerator.kingdomworld.core.territory.Province.plain(held, (center.x + 8) * 16, center.z * 16,
+                    io.github.sekerator.kingdomworld.core.land.ProvinceKind.CORE));
+            map.define(io.github.sekerator.kingdomworld.core.territory.Province.plain(wild, (center.x + 20) * 16, center.z * 16,
+                    io.github.sekerator.kingdomworld.core.land.ProvinceKind.WILD));
+            territory.fillProvince(held, center.x + 6, center.z - 2, center.x + 10, center.z + 2);
+            territory.fillProvince(wild, center.x + 15, center.z - 5, center.x + 24, center.z + 4);
+            territory.transferProvince(held, holder.id(), 0);
+
+            // The snapshot of the dimension: tiles with both provinces, the table, the holder named.
+            UUID[] told = new UUID[map.provinces().stream().mapToInt(io.github.sekerator.kingdomworld.core.territory.Province::id).max().orElse(0) + 1];
+            List<io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket> parts =
+                    io.github.sekerator.kingdomworld.common.land.ProvinceSync.snapshot(server, dimension, viewer.getUUID(), told);
+            helper.assertTrue(!parts.isEmpty() && parts.get(0).reset(), "The snapshot does not start the provinces over");
+            helper.assertTrue(holder.id().equals(ownerIn(parts, held)), "The holder of a province did not reach the client");
+            helper.assertTrue(ownerIn(parts, wild) == null && hasProvince(parts, wild), "The wild province is missing or held");
+            helper.assertTrue(chunkOf(parts, center.x + 8, center.z) == held && chunkOf(parts, center.x + 20, center.z) == wild,
+                    "The tiles of the provinces did not reach the client");
+            for (io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket part : parts) {
+                FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+                part.encode(buf);
+                helper.assertTrue(buf.readableBytes() <= 256 * 1024, "A part of the snapshot takes " + buf.readableBytes() + " bytes");
+                io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket.decode(buf);
+            }
+
+            // A holder hidden from the viewer reaches it as nobody, and is not named.
+            TerritorySnapshots.setVisibility((player, kingdom) -> !kingdom.equals(holder.id()) || !viewer.getUUID().equals(player));
+            List<io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket> hidden =
+                    io.github.sekerator.kingdomworld.common.land.ProvinceSync.snapshot(server, dimension, viewer.getUUID(), new UUID[0]);
+            helper.assertTrue(ownerIn(hidden, held) == null && hidden.get(0).palette().stream().noneMatch(k -> k.id().equals(holder.id())),
+                    "A hidden holder of a province reached the client");
+            TerritorySnapshots.setVisibility(null);
+
+            // A province of a hundred chunks changing hands is one change.
+            io.github.sekerator.kingdomworld.common.land.ProvinceSync.listen(server);
+            int before = io.github.sekerator.kingdomworld.common.land.ProvinceSync.pendingOwners().size();
+            territory.transferProvince(wild, holder.id(), 0);
+            java.util.Map<Integer, UUID> pending = io.github.sekerator.kingdomworld.common.land.ProvinceSync.pendingOwners();
+            helper.assertTrue(holder.id().equals(pending.get(wild)) && pending.size() <= before + 1,
+                    "A province changing hands is not one change: " + pending);
+
+            // The atlas of the server sees the holder of a province.
+            MapAreaPacket area = KingdomViews.mapArea(level, viewer.getUUID(), center.x + 4, center.z - 4, 9, 9);
+            int index = area.ownerIndex(center.x + 8, center.z);
+            helper.assertTrue(index >= 0 && area.palette().get(index).id().equals(holder.id()), "The atlas does not see the province");
+            MapAreaPacket far = KingdomViews.mapArea(level, viewer.getUUID(), center.x - 64, center.z - 64, 64, 64, 4);
+            helper.assertTrue(far.palette().stream().anyMatch(k -> k.id().equals(holder.id())), "The atlas zoomed out does not see the province");
+            helper.assertTrue(dimension.equals(map.dimension()), "The provinces lie in another dimension");
+        } finally {
+            TerritorySnapshots.setVisibility(null);
+            for (int id : new int[]{held, wild}) {
+                if (map.exists(id)) {
+                    territory.clearProvince(id);
+                }
+            }
+            KingdomWorldApi.dissolveKingdom(server, holder.id());
+        }
+        helper.succeed();
+    }
+
+    private static UUID ownerIn(List<io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket> parts, int id) {
+        for (io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket part : parts) {
+            for (int i = 0; i < part.provinces().size(); i++) {
+                if (part.provinces().get(i).id() == id) {
+                    int index = part.owners()[i] - 1;
+                    return index < 0 ? null : part.palette().get(index).id();
+                }
+            }
+        }
+        return null;
+    }
+
+    private static boolean hasProvince(List<io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket> parts, int id) {
+        return parts.stream().anyMatch(part -> part.provinces().stream().anyMatch(entry -> entry.id() == id));
+    }
+
+    private static int chunkOf(List<io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket> parts, int chunkX, int chunkZ) {
+        long key = io.github.sekerator.kingdomworld.core.territory.ProvinceMap.tileKey(chunkX >> 5, chunkZ >> 5);
+        for (io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket part : parts) {
+            for (int i = 0; i < part.tileKeys().length; i++) {
+                if (part.tileKeys()[i] == key && part.tiles().get(i).length > 0) {
+                    return part.tiles().get(i)[io.github.sekerator.kingdomworld.core.territory.ProvinceMap.indexInTile(chunkX, chunkZ)];
+                }
+            }
+        }
+        return 0;
     }
 }

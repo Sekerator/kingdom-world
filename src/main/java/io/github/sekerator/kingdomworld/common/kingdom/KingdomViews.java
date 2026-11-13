@@ -165,8 +165,10 @@ public final class KingdomViews {
         boolean hasCapital = territory.isPresent() && territory.get().dimension().equals(dimension);
         Capital capital = territory.map(Territory::capital).orElse(null);
         io.github.sekerator.kingdomworld.common.network.data.NpcKingdomInfo npc = npcInfo(server, kingdom);
+        // The land of a kingdom is its claims and its provinces.
+        int land = (int) Math.min(Integer.MAX_VALUE, state.territory().landSize(kingdom.id()));
         return new KingdomMapInfo(kingdom.id(), kingdom.name(), kingdom.color(), PlayerNames.name(server, kingdom.rulerId()),
-                members, territory.map(Territory::size).orElse(0), population(state, kingdom, npc), hasCapital,
+                members, land, population(state, kingdom, npc), hasCapital,
                 hasCapital ? capital.chunkX() : 0, hasCapital ? capital.chunkZ() : 0, npc);
     }
 
@@ -188,7 +190,8 @@ public final class KingdomViews {
 
     /**
      * Owners of a rectangle of squares of {@code step} by {@code step} chunks, for a map zoomed far out: a square shows the owner
-     * of the first claimed chunk found in it. Only the claims are gone through, so a large area costs as much as the land.
+     * of the first claimed chunk found in it, otherwise the holder of the province at its middle. The claims are gone through
+     * (they are few), then one look at the provinces a square: at most 128 by 128 looks however wide the area.
      */
     public static MapAreaPacket mapArea(ServerLevel level, @org.jetbrains.annotations.Nullable UUID viewer, int minX, int minZ,
                                         int width, int height, int step) {
@@ -208,6 +211,19 @@ public final class KingdomViews {
                 cells[z * width + x] = indexOf(server, state, entry.getValue(), dimension, paletteIndex, palette);
             }
         }
+        if (state.territory().provinceMap().isPresent()) {
+            for (int z = 0; z < height; z++) {
+                for (int x = 0; x < width; x++) {
+                    if (cells[z * width + x] != 0) {
+                        continue;
+                    }
+                    UUID owner = state.territory().ownerOf(dimension, ChunkKey.of(minX + x * step + step / 2, minZ + z * step + step / 2));
+                    if (owner != null && TerritorySnapshots.canSee(viewer, owner)) {
+                        cells[z * width + x] = indexOf(server, state, owner, dimension, paletteIndex, palette);
+                    }
+                }
+            }
+        }
         return new MapAreaPacket(dimension, minX, minZ, width, height, palette, cells, step);
     }
 
@@ -216,26 +232,16 @@ public final class KingdomViews {
         MinecraftServer server = level.getServer();
         KingdomWorldState state = KingdomWorldApi.state(server);
         String dimension = Dimensions.id(level);
-        Map<Long, UUID> claims = state.territory().claimsIn(dimension);
         int[] cells = new int[width * height];
         Map<UUID, Integer> paletteIndex = new LinkedHashMap<>();
         List<KingdomMapInfo> palette = new ArrayList<>();
-        if (!claims.isEmpty()) {
-            if (claims.size() < cells.length) {
-                for (Map.Entry<Long, UUID> entry : claims.entrySet()) {
-                    int x = ChunkKey.x(entry.getKey()) - minX;
-                    int z = ChunkKey.z(entry.getKey()) - minZ;
-                    if (x >= 0 && z >= 0 && x < width && z < height && TerritorySnapshots.canSee(viewer, entry.getValue())) {
-                        cells[z * width + x] = indexOf(server, state, entry.getValue(), dimension, paletteIndex, palette);
-                    }
-                }
-            } else {
-                for (int z = 0; z < height; z++) {
-                    for (int x = 0; x < width; x++) {
-                        UUID owner = claims.get(ChunkKey.of(minX + x, minZ + z));
-                        if (owner != null && TerritorySnapshots.canSee(viewer, owner)) {
-                            cells[z * width + x] = indexOf(server, state, owner, dimension, paletteIndex, palette);
-                        }
+        if (state.territory().hasLand(dimension)) {
+            // One look a chunk (the claim, then the province), at most 128 by 128 of them.
+            for (int z = 0; z < height; z++) {
+                for (int x = 0; x < width; x++) {
+                    UUID owner = state.territory().ownerOf(dimension, ChunkKey.of(minX + x, minZ + z));
+                    if (owner != null && TerritorySnapshots.canSee(viewer, owner)) {
+                        cells[z * width + x] = indexOf(server, state, owner, dimension, paletteIndex, palette);
                     }
                 }
             }

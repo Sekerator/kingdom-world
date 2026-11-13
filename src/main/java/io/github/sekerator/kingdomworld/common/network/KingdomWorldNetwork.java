@@ -57,7 +57,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "29";
+    public static final String PROTOCOL_VERSION = "31";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -289,6 +289,14 @@ public final class KingdomWorldNetwork {
                 ArmyMapPackets.View::decode, ArmyMapPackets.View::handle);
         add(id++, ArmyMapPackets.Command.class, NetworkDirection.PLAY_TO_SERVER, ArmyMapPackets.Command::encode,
                 ArmyMapPackets.Command::decode, ArmyMapPackets.Command::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket.class, NetworkDirection.PLAY_TO_CLIENT,
+                io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.ProvinceSnapshotPacket::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.ProvinceDeltaPacket.class, NetworkDirection.PLAY_TO_CLIENT,
+                io.github.sekerator.kingdomworld.common.network.packet.ProvinceDeltaPacket::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.ProvinceDeltaPacket::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.ProvinceDeltaPacket::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,
