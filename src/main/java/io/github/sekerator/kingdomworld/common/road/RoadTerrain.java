@@ -101,6 +101,11 @@ final class RoadTerrain implements Terrain {
 
     private Column[] read(ChunkAccess chunk, int chunkX, int chunkZ) {
         UUID owner = KingdomWorldApi.ownerOfChunk(level, chunkX, chunkZ);
+        if (owner != null && io.github.sekerator.kingdomworld.common.land.Wilderness.isWild(level.getServer(), io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level),
+                io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(chunkX, chunkZ))) {
+            // The wilds of a kingdom of the world are crossed as land of nobody: no consent, no further cost.
+            owner = null;
+        }
         Column[] columns = new Column[256];
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         for (int lx = 0; lx < 16; lx++) {

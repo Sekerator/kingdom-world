@@ -297,7 +297,9 @@ public final class RoadBlocks {
     static boolean allowedAt(ServerLevel level, io.github.sekerator.kingdomworld.core.road.Road road, BlockPos pos,
                              java.util.Set<UUID> consented) {
         UUID owner = KingdomWorldApi.ownerAt(level, pos);
-        return owner == null || owner.equals(road.kingdomId()) || consented.contains(owner);
+        return owner == null || owner.equals(road.kingdomId()) || consented.contains(owner)
+                || io.github.sekerator.kingdomworld.common.land.Wilderness.isWild(level.getServer(), io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level),
+                io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(pos.getX() >> 4, pos.getZ() >> 4));
     }
 
     /**
