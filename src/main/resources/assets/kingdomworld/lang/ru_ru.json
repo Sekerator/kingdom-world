@@ -2624,7 +2624,7 @@
   "commands.kingdomworld.admin.companions.no_owner": "Нет игрока %s: укажите UUID или имя известного игрока",
   "commands.kingdomworld.admin.companions.no_companion": "У игрока %s нет спутников",
   "commands.kingdomworld.admin.companions.funded": "Счёт игрока %s в валюте: +%s",
-  "commands.kingdomworld.admin.companions.bought": "%s купил невольника %s за %s, id %s",
+  "commands.kingdomworld.admin.companions.bought": "%s купил невольника %s за %s, id %s; деньги валюты %s -> %s, казна %s -> %s",
   "commands.kingdomworld.admin.companions.packed": "В рюкзак спутника %3$s положено %2$s: %1$s",
   "commands.kingdomworld.admin.companions.bad_item": "Неизвестный предмет %s",
   "commands.kingdomworld.admin.companions.gear": "Снаряжение спутника %s, сила %s:",

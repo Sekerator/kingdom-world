@@ -289,6 +289,11 @@ public final class CompanionCommands {
         if (!writable(source)) {
             return 0;
         }
+        // The money of the currency and the treasury are read in the same tick as the purchase, so that what the kingdom
+        // earns meanwhile (a house buying its bread, say) does not blur the check that no money appears.
+        io.github.sekerator.kingdomworld.core.economy.Economy economy = KingdomWorldApi.state(server).economy();
+        long moneyBefore = economy.supply(kingdom.id());
+        long treasuryBefore = economy.treasury(kingdom.id()).map(io.github.sekerator.kingdomworld.core.economy.Treasury::funds).orElse(0L);
         enroll(server, owner);
         CompanionState state = CompanionWork.state(server);
         CompanionRules rules = CompanionSettings.rules();
@@ -307,8 +312,10 @@ public final class CompanionCommands {
             return 0;
         }
         Companion companion = made.companion().orElseThrow();
+        long moneyAfter = economy.supply(kingdom.id());
+        long treasuryAfter = economy.treasury(kingdom.id()).map(io.github.sekerator.kingdomworld.core.economy.Treasury::funds).orElse(0L);
         source.sendSuccess(() -> Component.translatable(ADMIN + "bought", PlayerNames.name(server, owner), CompanionTexts.name(companion),
-                slave.get().price(), companion.id().toString()), true);
+                slave.get().price(), companion.id().toString(), moneyBefore, moneyAfter, treasuryBefore, treasuryAfter), true);
         return 1;
     }
 

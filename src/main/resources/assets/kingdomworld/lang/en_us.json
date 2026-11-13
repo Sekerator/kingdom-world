@@ -2624,7 +2624,7 @@
   "commands.kingdomworld.admin.companions.no_owner": "No player %s: give a UUID or the name of a known player",
   "commands.kingdomworld.admin.companions.no_companion": "Player %s has no companion",
   "commands.kingdomworld.admin.companions.funded": "Account of %s in the currency: +%s",
-  "commands.kingdomworld.admin.companions.bought": "%s bought the slave %s for %s, id %s",
+  "commands.kingdomworld.admin.companions.bought": "%s bought the slave %s for %s, id %s; money of the currency %s -> %s, treasury %s -> %s",
   "commands.kingdomworld.admin.companions.packed": "Put %s of %s into the pack of %s",
   "commands.kingdomworld.admin.companions.bad_item": "Unknown item %s",
   "commands.kingdomworld.admin.companions.gear": "Gear of %s, strength %s:",

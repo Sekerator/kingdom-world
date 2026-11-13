@@ -1755,20 +1755,25 @@ Invoke-Phase 'run1' {
         } else {
             Add-Failure '[run1] the companion data is not writable or not empty'
         }
-        $before = Get-KingdomMoney $server $KingdomName
         Send-ServerCommand $server "kingdomworld admin companions fund $($script:CompanionOwner) $KingdomName 5000"
         [void](Wait-ForLog $server 'Account of .* in the currency: \+' $CommandTimeout $ConsoleFailPattern)
-        $funded = Get-KingdomMoney $server $KingdomName
+        # The command reads the money of the currency and the treasury in the tick of the purchase: between two commands the
+        # kingdom may earn a little on its own (a house buying its bread), which is not what this checks.
         Send-ServerCommand $server "kingdomworld admin companions buy $($script:CompanionOwner) $KingdomName"
-        $bought = Wait-ForLog $server ' bought the slave .* for (\d+), id ' $CommandTimeout $ConsoleFailPattern
-        $after = Get-KingdomMoney $server $KingdomName
+        $bought = Wait-ForLog $server ' bought the slave .* for (\d+), id \S+; money of the currency (\d+) -> (\d+), treasury (-?\d+) -> (-?\d+)' $CommandTimeout $ConsoleFailPattern
         if (-not $bought) {
             Add-Failure '[run1] the slave could not be bought'
-        } elseif ($before -ge 0 -and $funded -eq $before + 5000 -and $after -eq $funded) {
-            $script:CompanionMoney = $after
-            Write-Ok "[run1] a slave bought for $($bought.Groups[1].Value): the price went to the treasury, no money appeared ($funded before, $after after)"
         } else {
-            Add-Failure "[run1] buying a slave changed the money: $before, funded $funded, after $after"
+            $price = [int64]$bought.Groups[1].Value
+            $before = [int64]$bought.Groups[2].Value
+            $after = [int64]$bought.Groups[3].Value
+            $paid = [int64]$bought.Groups[5].Value - [int64]$bought.Groups[4].Value
+            if ($price -gt 0 -and $after -eq $before -and $paid -eq $price) {
+                $script:CompanionMoney = $after
+                Write-Ok "[run1] a slave bought for ${price}: the price went to the treasury, no money appeared ($before before, $after after)"
+            } else {
+                Add-Failure "[run1] buying a slave changed the money: price $price, money $before -> $after, treasury got $paid"
+            }
         }
         Send-ServerCommand $server "kingdomworld admin companions pack $($script:CompanionOwner) minecraft:iron_ingot 7"
         if (-not (Wait-ForLog $server 'Put 7 of minecraft:iron_ingot into the pack of ' $CommandTimeout $ConsoleFailPattern)) {
