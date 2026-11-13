@@ -21,6 +21,77 @@ public final class NpcSettings {
     private NpcSettings() {
     }
 
+    /** The plan of a new world given by a game test, or null for the config. */
+    private static String planOverride;
+
+    /**
+     * Gives the way a new world plans its kingdoms for game tests, or null for the config.
+     */
+    public static void overridePlan(String plan) {
+        planOverride = plan;
+    }
+
+    /**
+     * Whether a new world lays out large states with provinces ("states") or places capitals as before ("legacy").
+     */
+    public static boolean states() {
+        if (planOverride != null) {
+            return "states".equals(planOverride);
+        }
+        try {
+            return "states".equals(KingdomWorldConfig.SERVER.npcKingdoms.plan.get());
+        } catch (IllegalStateException e) {
+            return false;
+        }
+    }
+
+    /**
+     * The rules of the plan of states around a spawn, from the config.
+     */
+    public static io.github.sekerator.kingdomworld.core.land.StateRules stateRules(int spawnX, int spawnZ) {
+        NpcRules npc = rules();
+        io.github.sekerator.kingdomworld.core.land.StateRules d = io.github.sekerator.kingdomworld.core.land.StateRules.defaults(spawnX, spawnZ);
+        try {
+            KingdomWorldConfig.NpcKingdoms c = KingdomWorldConfig.SERVER.npcKingdoms;
+            List<? extends Integer> chunks = c.stateChunks.get();
+            int[] least = d.minChunks();
+            int[] most = d.maxChunks();
+            if (chunks.size() == 6) {
+                for (int i = 0; i < 3; i++) {
+                    least[i] = chunks.get(2 * i);
+                    most[i] = Math.max(chunks.get(2 * i), chunks.get(2 * i + 1));
+                }
+            }
+            return new io.github.sekerator.kingdomworld.core.land.StateRules(spawnX, spawnZ, c.spawnZone.get(), npc.radius(), c.gapBlocks.get(),
+                    c.neutralShare.get(), d.ringShare(), quota(npc.sizeQuota()), least, most);
+        } catch (IllegalStateException e) {
+            return d;
+        }
+    }
+
+    private static int[] quota(int[] quota) {
+        int left = io.github.sekerator.kingdomworld.core.land.StateRules.MAX_STATES;
+        for (int i = 2; i >= 0; i--) {
+            quota[i] = Math.min(quota[i], left);
+            left -= quota[i];
+        }
+        return quota;
+    }
+
+    /**
+     * The sizes of the provinces of the plan of states, from the config.
+     */
+    public static io.github.sekerator.kingdomworld.core.land.ProvinceRules provinceRules() {
+        int chunks = 1600;
+        try {
+            chunks = KingdomWorldConfig.SERVER.npcKingdoms.provinceChunks.get();
+        } catch (IllegalStateException e) {
+            // The defaults while the config is not loaded.
+        }
+        int cells = Math.max(4, Math.round(chunks / 16f));
+        return new io.github.sekerator.kingdomworld.core.land.ProvinceRules(cells, Math.max(1, cells / 2), Math.max(cells, cells * 8 / 5));
+    }
+
     public static NpcRules rules() {
         if (override != null) {
             return override;
@@ -83,6 +154,7 @@ public final class NpcSettings {
         rulerOverride = null;
         build = null;
         buildOverride = null;
+        planOverride = null;
     }
 
     private static NpcBuildRules buildFromConfig() {

@@ -57,6 +57,8 @@ public final class ProvinceSavedData extends SavedData {
 
     private ProvinceMap map = new ProvinceMap(DEFAULT_DIMENSION);
     private CompoundTag plan = new CompoundTag();
+    /** Makes the plan of the world as it stands while it is being made, when the file is written; null when it is not. */
+    private java.util.function.Supplier<CompoundTag> planSource;
     private ListTag adoption = new ListTag();
     private CompoundTag preserved;
     private String readOnlyReason;
@@ -89,11 +91,28 @@ public final class ProvinceSavedData extends SavedData {
      * Where the plan of the world has got to; empty until the plan of states begins.
      */
     public CompoundTag plan() {
-        return plan.copy();
+        java.util.function.Supplier<CompoundTag> source = planSource;
+        return source != null ? source.get() : plan.copy();
+    }
+
+    /**
+     * Whether a plan of the world was begun.
+     */
+    public boolean hasPlan() {
+        return planSource != null || !plan.isEmpty();
     }
 
     public void setPlan(CompoundTag stage) {
         plan = stage.copy();
+        setDirty();
+    }
+
+    /**
+     * Has the plan of the world made by a source whenever the file is written, while the plan is being made: it changes every
+     * tick, and is put into a tag only for a save. Null goes back to the plan last set.
+     */
+    public void setPlanSource(java.util.function.Supplier<CompoundTag> source) {
+        planSource = source;
         setDirty();
     }
 
@@ -369,7 +388,7 @@ public final class ProvinceSavedData extends SavedData {
             tiles.add(tile);
         }
         tag.put(TAG_TILES, tiles);
-        tag.put(TAG_PLAN, plan.copy());
+        tag.put(TAG_PLAN, plan());
         tag.put(TAG_ADOPTION, adoption.copy());
         return tag;
     }

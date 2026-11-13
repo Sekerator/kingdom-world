@@ -138,6 +138,7 @@ public final class NpcWork {
         NAMES_VERSION.incrementAndGet();
         lastDay = Long.MIN_VALUE;
         NpcPlanning.reset();
+        io.github.sekerator.kingdomworld.common.land.LandPlanning.reset();
         NpcFounding.reset();
         NpcSpawner.reset();
         NpcRulers.reset();

@@ -1374,6 +1374,12 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue backgroundChunksPerTick;
         public final ForgeConfigSpec.IntValue backgroundPauseTickMillis;
         public final ForgeConfigSpec.IntValue foundingClaimsPerTick;
+        public final ForgeConfigSpec.ConfigValue<String> plan;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> stateChunks;
+        public final ForgeConfigSpec.IntValue provinceChunks;
+        public final ForgeConfigSpec.IntValue gapBlocks;
+        public final ForgeConfigSpec.IntValue spawnZone;
+        public final ForgeConfigSpec.DoubleValue neutralShare;
 
         NpcKingdoms(ForgeConfigSpec.Builder builder) {
             io.github.sekerator.kingdomworld.core.npc.NpcRules d = io.github.sekerator.kingdomworld.core.npc.NpcRules.DEFAULT;
@@ -1384,7 +1390,7 @@ public final class KingdomWorldConfig {
             generate = builder.comment("Whether kingdoms of the world are planned and appear.").define("generate", d.generate());
             count = builder.comment("How many kingdoms a world plans.").defineInRange("count", d.count(), 0, 256);
             radius = builder.comment("How far from the spawn of the world their capitals may lie, in blocks.")
-                    .defineInRange("radius", d.radius(), 256, 1_000_000);
+                    .defineInRange("radius", io.github.sekerator.kingdomworld.core.land.StateRules.RADIUS, 256, 1_000_000);
             minDistance = builder.comment("The least distance between two capitals, in blocks.")
                     .defineInRange("minDistance", d.minDistance(), 256, 100_000);
             minSpawnDistance = builder.comment("The least distance of a capital from the spawn of the world, in blocks.")
@@ -1532,6 +1538,23 @@ public final class KingdomWorldConfig {
                             "the borders grow slowly; claims look at the region files and never load or generate chunks. 0 turns it off.")
                     .defineInRange("growthChunks", r.growthChunks(), 0, 64);
             builder.pop();
+            io.github.sekerator.kingdomworld.core.land.StateRules s = io.github.sekerator.kingdomworld.core.land.StateRules.defaults(0, 0);
+            plan = builder.comment("How a new world plans its kingdoms of the world: \"legacy\" places capitals with a little land each,",
+                            "\"states\" lays out large states with provinces over a survey of the land. It acts only on a world whose plan is not",
+                            "made yet; a plan made is never made again.")
+                    .define("plan", "legacy", value -> "legacy".equals(value) || "states".equals(value));
+            stateChunks = builder.comment("The land of a state of the plan of states, in chunks: least and most of a small, a medium and a",
+                            "large state, in this order; the seed of the world picks between them.")
+                    .defineList("stateChunks", java.util.List.of(s.minChunks()[0], s.maxChunks()[0], s.minChunks()[1], s.maxChunks()[1],
+                            s.minChunks()[2], s.maxChunks()[2]), value -> value instanceof Integer number && number >= 16 && number <= 1_048_576);
+            provinceChunks = builder.comment("About how large a province of the plan of states is, in chunks.")
+                    .defineInRange("provinceChunks", 1600, 256, 65_536);
+            gapBlocks = builder.comment("The least neutral land between two states of the plan, in blocks.")
+                    .defineInRange("gapBlocks", io.github.sekerator.kingdomworld.core.land.StateRules.GAP_BLOCKS, 0, 10_000);
+            spawnZone = builder.comment("No state of the plan comes this close to the spawn of the world, in blocks.")
+                    .defineInRange("spawnZone", io.github.sekerator.kingdomworld.core.land.StateRules.SPAWN_ZONE, 0, 100_000);
+            neutralShare = builder.comment("The share of the land of the world the states of the plan leave neutral at least.")
+                    .defineInRange("neutralShare", io.github.sekerator.kingdomworld.core.land.StateRules.NEUTRAL_SHARE, 0.0, 0.95);
             builder.pop();
         }
 

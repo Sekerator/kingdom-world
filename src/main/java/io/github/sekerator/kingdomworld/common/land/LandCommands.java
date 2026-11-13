@@ -9,6 +9,8 @@ import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.land.ProvinceKind;
+import io.github.sekerator.kingdomworld.core.land.SurveyRaster;
+import io.github.sekerator.kingdomworld.core.land.TerrainClass;
 import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
 import io.github.sekerator.kingdomworld.core.territory.Province;
 import io.github.sekerator.kingdomworld.core.territory.ProvinceMap;
@@ -17,6 +19,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.phys.Vec3;
 
@@ -24,6 +27,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -37,6 +41,8 @@ import java.util.UUID;
  * province clear &lt;id&gt;                                         a province given up and forgotten
  * land info                                                     provinces, tiles and memory
  * land unlock                                                   leaves read-only mode, with a backup of the file
+ * land survey                                                   how far the survey of the land has got and what it found
+ * land plan                                                     the stage of the plan of states and the time of each stage
  * </pre>
  */
 public final class LandCommands {
@@ -89,7 +95,9 @@ public final class LandCommands {
     public static LiteralArgumentBuilder<CommandSourceStack> land() {
         return Commands.literal("land")
                 .then(Commands.literal("info").executes(context -> landInfo(context.getSource())))
-                .then(Commands.literal("unlock").executes(context -> unlock(context.getSource())));
+                .then(Commands.literal("unlock").executes(context -> unlock(context.getSource())))
+                .then(Commands.literal("survey").executes(context -> survey(context.getSource())))
+                .then(Commands.literal("plan").executes(context -> plan(context.getSource())));
     }
 
     private static int fill(CommandContext<CommandSourceStack> context) {
@@ -201,6 +209,96 @@ public final class LandCommands {
         source.sendSuccess(() -> Component.translatable(LAND + "info", map.dimension(), map.size(), heldCount, map.tileCount(),
                 map.memoryBytes() / 1024, territory.provincesPending(), ProvinceSavedData.FORMAT_VERSION, readOnly), false);
         return map.size();
+    }
+
+    /**
+     * How far the survey of the land has got and what it found: the share of each class among the cells done, and the share of
+     * dry land among the cells the survey looked at.
+     */
+    private static int survey(CommandSourceStack source) {
+        SurveySavedData data = SurveySavedData.get(source.getServer());
+        if (!data.started()) {
+            source.sendSuccess(() -> Component.translatable(LAND + "survey_none"), false);
+            return 0;
+        }
+        SurveyRaster raster = data.raster(null);
+        int done = data.complete() ? data.cells() : data.nextCell();
+        TerrainClass[] kinds = TerrainClass.values();
+        int[] counts = new int[kinds.length];
+        int known = 0;
+        int dry = 0;
+        for (int cell = 0; cell < done; cell++) {
+            TerrainClass terrain = raster.terrain(cell);
+            counts[terrain.ordinal()]++;
+            if (terrain != TerrainClass.UNKNOWN) {
+                known++;
+                if (terrain.dry()) {
+                    dry++;
+                }
+            }
+        }
+        List<TerrainClass> present = new ArrayList<>();
+        for (TerrainClass terrain : kinds) {
+            if (counts[terrain.ordinal()] > 0) {
+                present.add(terrain);
+            }
+        }
+        present.sort((a, b) -> Integer.compare(counts[b.ordinal()], counts[a.ordinal()]));
+        MutableComponent shares = Component.empty();
+        for (int i = 0; i < present.size(); i++) {
+            TerrainClass terrain = present.get(i);
+            if (i > 0) {
+                shares.append(", ");
+            }
+            shares.append(Component.translatable(LAND + "terrain." + terrain.key())).append(" " + percent(counts[terrain.ordinal()], done));
+        }
+        if (present.isEmpty()) {
+            shares.append("-");
+        }
+        Component state = Component.translatable(LAND + (data.complete() ? "survey_complete" : "survey_running"));
+        int reach = data.radius() + SurveySavedData.MARGIN;
+        String dryShare = percent(dry, known);
+        source.sendSuccess(() -> Component.translatable(LAND + "survey", data.spawnX(), data.spawnZ(), reach, done, data.cells(), state,
+                shares, dryShare), false);
+        return done;
+    }
+
+    /**
+     * The stage of the plan of states, how much of it is done, and the time of every stage so far.
+     */
+    private static int plan(CommandSourceStack source) {
+        Optional<LandPlanning.Job> found = LandPlanning.describe(source.getServer());
+        if (found.isEmpty()) {
+            source.sendSuccess(() -> Component.translatable(LAND + "plan_none"), false);
+            return 0;
+        }
+        LandPlanning.Job job = found.get();
+        io.github.sekerator.kingdomworld.core.land.PlanProgress progress = job.progress();
+        int[] work = job.stageWork();
+        Component stage = Component.translatable(LAND + "stage." + progress.stage().key());
+        Component working = job.working() ? Component.translatable(LAND + "plan_working") : Component.empty();
+        String total = String.format(Locale.ROOT, "%.1f", progress.totalWallMillis() / 1000.0);
+        String worst = String.format(Locale.ROOT, "%.2f", progress.worstTickNanos() / 1e6);
+        Component worstStage = Component.translatable(LAND + "stage." + progress.worstStage().key());
+        source.sendSuccess(() -> Component.translatable(LAND + "plan", stage, work[0], work[1], total, worst, worstStage, working), false);
+        job.failure().ifPresent(why -> source.sendFailure(Component.translatable(LAND + "plan_failed", why)));
+        for (io.github.sekerator.kingdomworld.core.land.PlanProgress.Stage each : io.github.sekerator.kingdomworld.core.land.PlanProgress.Stage.values()) {
+            if (progress.ticks(each) == 0) {
+                continue;
+            }
+            String server = String.format(Locale.ROOT, "%.0f", progress.workNanos(each) / 1e6);
+            String lasted = String.format(Locale.ROOT, "%.1f", progress.wallMillis(each) / 1000.0);
+            source.sendSuccess(() -> Component.translatable(LAND + "plan_stage", Component.translatable(LAND + "stage." + each.key()),
+                    progress.ticks(each), server, lasted), false);
+        }
+        if (progress.done()) {
+            source.sendSuccess(() -> Component.translatable(LAND + "plan_made", job.report()), false);
+        }
+        return progress.stage().ordinal();
+    }
+
+    private static String percent(int part, int whole) {
+        return String.format(Locale.ROOT, "%.1f%%", whole == 0 ? 0.0 : 100.0 * part / whole);
     }
 
     private static int unlock(CommandSourceStack source) {

@@ -42,7 +42,7 @@ import java.util.concurrent.CompletableFuture;
  * thread) or that lies near the land of a kingdom is shifted around before it is given up, so that no kingdom appears on
  * someone else's land or over what players built. Only records are written; the world is not touched.
  */
-final class NpcPlanning {
+public final class NpcPlanning {
     private static final Logger LOGGER = LogUtils.getLogger();
     /** Ground around the throne of a capital of the first layout may differ by this many blocks at most. */
     private static final int MAX_ROUGHNESS = 7;
@@ -226,6 +226,11 @@ final class NpcPlanning {
         if (!rules.generate() || state.planned()) {
             return false;
         }
+        // A new world asked for the plan of states, or one begun, makes it instead of the plan of capitals.
+        if (planner == null && io.github.sekerator.kingdomworld.common.land.LandPlanning.wanted(server, NpcSettings.states())) {
+            io.github.sekerator.kingdomworld.common.land.LandPlanning.tick(server);
+            return false;
+        }
         ServerLevel level = server.overworld();
         if (planner == null) {
             BlockPos spawn = level.getSharedSpawnPos();
@@ -302,7 +307,7 @@ final class NpcPlanning {
      * Adds a place of the layout of districts to the plan: its style by the climate of its land and its number in the plan, and
      * the wood that grows there, both read from the generator of the world without generating a chunk.
      */
-    static NpcSite addSite(MinecraftServer server, int x, int z, NpcLevel kingdom, long seed, List<int[]> towns) {
+    public static NpcSite addSite(MinecraftServer server, int x, int z, NpcLevel kingdom, long seed, List<int[]> towns) {
         ServerLevel level = server.overworld();
         NpcState state = NpcWork.state(server);
         Holder<Biome> biome = biomeAt(level, x, z);
@@ -495,7 +500,7 @@ final class NpcPlanning {
      *
      * @param relax the pass of the plan: later passes allow rougher ground and a brook or two
      */
-    static boolean suitableCapital(ServerLevel level, int x, int z, NpcLevel kingdom, int relax) {
+    public static boolean suitableCapital(ServerLevel level, int x, int z, NpcLevel kingdom, int relax) {
         return Boolean.TRUE.equals(suitableCapital(level, x, z, kingdom, relax, null));
     }
 
