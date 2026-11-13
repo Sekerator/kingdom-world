@@ -72,6 +72,16 @@ minecraft {
     }
 }
 
+// Every run of the game tests starts in a new world: what a failed test leaves on its place (lava, stone, a kingdom) must not
+// wait for whatever test of a later run comes to stand there. "-PkeepGameTestWorld" runs them in the world of the last run.
+tasks.matching { it.name == 'runGameTestServer' }.configureEach {
+    doFirst {
+        if (!project.hasProperty('keepGameTestWorld')) {
+            delete file('run-gametest/world')
+        }
+    }
+}
+
 mixin {
     add sourceSets.main, "${mod_id}.refmap.json"
     config "${mod_id}.mixins.json"
