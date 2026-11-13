@@ -41,6 +41,8 @@ public final class Citizen {
     private double workProgress;
     private WorkStatus workStatus = WorkStatus.NONE;
     private int payPercent = io.github.sekerator.kingdomworld.core.economy.Payroll.NOTHING_EXPECTED;
+    /** The settlement of a state it lives in, or 0 for a citizen of a capital or of a kingdom of players. */
+    private int settlement;
 
     private Runnable changeListener = () -> {
     };
@@ -64,6 +66,25 @@ public final class Citizen {
 
     void setChangeListener(Runnable listener) {
         this.changeListener = Objects.requireNonNull(listener, "listener");
+    }
+
+    /**
+     * The settlement of a state the citizen lives in, or 0.
+     */
+    public int settlement() {
+        return settlement;
+    }
+
+    public void setSettlement(int value) {
+        settlement = Math.max(0, value);
+        changeListener.run();
+    }
+
+    /**
+     * Puts back the settlement as it was saved, without telling anybody.
+     */
+    public void restoreSettlement(int value) {
+        settlement = Math.max(0, value);
     }
 
     /**

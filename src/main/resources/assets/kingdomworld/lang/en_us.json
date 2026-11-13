@@ -4339,5 +4339,11 @@
   "kingdomworld.screen.throne.npc.settlements": "Settlements: %s, %s in them",
   "kingdomworld.screen.citizens.settlement.planned": "%s (not raised)",
   "kingdomworld.screen.citizens.settlement.numbers": "%s of %s people, food for %s days, guard %s",
-  "kingdomworld.screen.map.chunk_short": "%s, %s"
+  "kingdomworld.screen.map.chunk_short": "%s, %s",
+  "commands.kingdomworld.admin.npc.settlement.none": "No settlement %s",
+  "commands.kingdomworld.admin.npc.settlement.info": "%s: %s people, %s named, %s folded, %s houses, %s food, guard %s, militia %s",
+  "commands.kingdomworld.admin.npc.settlement.not_waiting": "Settlement %s does not wait to be raised (%s)",
+  "commands.kingdomworld.admin.npc.settlement.raised": "Settlement %s rises with the full budget",
+  "commands.kingdomworld.admin.npc.settlement.folded": "Settlement %s: %s citizen(s) folded into its numbers",
+  "commands.kingdomworld.admin.npc.settlement.unfolded": "Settlement %s: %s citizen(s) came back"
 }

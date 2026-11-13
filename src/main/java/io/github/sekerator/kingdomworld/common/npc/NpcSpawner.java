@@ -1161,7 +1161,7 @@ public final class NpcSpawner {
      *
      * @param out how many columns outside the square, from 1
      */
-    private static int ramp(ServerLevel level, UUID id, int x, int z, int height, int out, NpcGround.Soil soil) {
+    static int ramp(ServerLevel level, UUID id, int x, int z, int height, int out, NpcGround.Soil soil) {
         int ground = NpcGround.groundAt(level, x, z);
         int changed = NpcGround.clearTrees(level, id, x, z);
         if (Math.abs(ground - height) > out) {
@@ -1583,7 +1583,7 @@ public final class NpcSpawner {
     /**
      * A field of a crop.
      */
-    private static void field(ServerLevel level, UUID id, int cx, int cz, Block planted) {
+    static void field(ServerLevel level, UUID id, int cx, int cz, Block planted) {
         CropBlock crop = (CropBlock) planted;
         int y = NpcGround.groundAt(level, cx, cz);
         for (int dx = -5; dx <= 5; dx++) {
@@ -1673,7 +1673,7 @@ public final class NpcSpawner {
     /**
      * A post of work with its profession and seats; none where nobody works at it.
      */
-    private static void post(ServerLevel level, UUID id, BlockPos pos, String profession, int seats) {
+    static void post(ServerLevel level, UUID id, BlockPos pos, String profession, int seats) {
         if (seats <= 0) {
             return;
         }

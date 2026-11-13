@@ -54,8 +54,16 @@ final class NpcBackground {
         NpcBuildRules rules = NpcSettings.build();
         Optional<NpcSite> spawning = state.spawning();
         Optional<NpcSite> near = nearest(server, state, true);
+        Optional<io.github.sekerator.kingdomworld.core.npc.Settlement> nearSettlement = nearestSettlement(server, state, true);
         if (spawning.isPresent()) {
             NpcSite site = spawning.get();
+            if (near.isEmpty() && nearSettlement.isPresent() && NpcSpawner.inBackground() && !watched(server, site)) {
+                // One place rises at a time: a settlement a player came to goes before a capital nobody watches.
+                LOGGER.info("A player came near {}; {} waits", nearSettlement.get(), site);
+                NpcSpawner.putAside(server, site);
+                SettlementRaiser.start(server, nearSettlement.get(), false);
+                return;
+            }
             if (near.isPresent() && near.get().id() != site.id() && NpcSpawner.inBackground() && !watched(server, site)) {
                 // A player came to another place: the one nobody watches waits, the other goes first.
                 LOGGER.info("A player came near the place of a kingdom of the world: {}; {} waits", near.get(), site);
@@ -73,17 +81,106 @@ final class NpcBackground {
             }
             return;
         }
+        Optional<io.github.sekerator.kingdomworld.core.npc.Settlement> raising = SettlementRaiser.raising(state);
         if (near.isPresent()) {
             LOGGER.info("A player came near the place of a kingdom of the world: {}", near.get());
+            raising.ifPresent(settlement -> SettlementRaiser.putAside(server, settlement));
             NpcSpawner.start(server, near.get(), false);
             return;
         }
+        if (nearSettlement.isPresent()) {
+            io.github.sekerator.kingdomworld.core.npc.Settlement settlement = nearSettlement.get();
+            if (raising.isEmpty() || raising.get().id() != settlement.id()) {
+                if (raising.isEmpty() || SettlementRaiser.inBackground() || !watched(server, raising.get())) {
+                    LOGGER.info("A player came near {}", settlement);
+                    SettlementRaiser.start(server, settlement, false);
+                }
+            } else if (SettlementRaiser.inBackground()) {
+                SettlementRaiser.setBackground(false);
+            }
+            return;
+        }
+        if (raising.isPresent()) {
+            // A settlement raised for a player who went away goes on with the small budget while players are online.
+            if (!SettlementRaiser.inBackground() && !watched(server, raising.get()) && rules.background() && playersOnline(server)) {
+                SettlementRaiser.setBackground(true);
+            }
+            return;
+        }
         if (rules.background() && !waiting(server)) {
-            nearest(server, state, false).ifPresent(site -> {
-                LOGGER.info("The buildings of the kingdom of the world of {} are raised in the background", site);
-                NpcSpawner.start(server, site, true);
+            Optional<NpcSite> capital = nearest(server, state, false);
+            if (capital.isPresent()) {
+                LOGGER.info("The buildings of the kingdom of the world of {} are raised in the background", capital.get());
+                NpcSpawner.start(server, capital.get(), true);
+                return;
+            }
+            // When every capital stands, the large cities and then the small towns near players, as the config names them.
+            nearestSettlement(server, state, false).ifPresent(settlement -> {
+                LOGGER.info("{} is raised in the background", settlement);
+                SettlementRaiser.start(server, settlement, true);
             });
         }
+    }
+
+    /**
+     * Whether a player is within the distance at which a settlement rises at once.
+     */
+    private static boolean watched(MinecraftServer server, io.github.sekerator.kingdomworld.core.npc.Settlement settlement) {
+        double reach = SettlementSettings.triggerChunks(settlement.tier()) * 16.0;
+        for (ServerPlayer player : server.overworld().players()) {
+            if (player.isSpectator() || player instanceof FakePlayer) {
+                continue;
+            }
+            double dx = player.getX() - settlement.x();
+            double dz = player.getZ() - settlement.z();
+            if (dx * dx + dz * dz <= reach * reach) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The settlement still to be raised that is nearest to a player.
+     *
+     * @param close whether only one within the distance of its rank at which it rises at once counts; otherwise one of the ranks
+     *              raised in the background within the distance of the background, the larger ranks first
+     */
+    static Optional<io.github.sekerator.kingdomworld.core.npc.Settlement> nearestSettlement(MinecraftServer server, NpcState state, boolean close) {
+        if (state.settlements().isEmpty()) {
+            return Optional.empty();
+        }
+        int reach = close ? 16 * 16 : SettlementSettings.backgroundBlocks();
+        io.github.sekerator.kingdomworld.core.npc.Settlement best = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (ServerPlayer player : server.overworld().players()) {
+            if (player.isSpectator() || player instanceof FakePlayer) {
+                continue;
+            }
+            for (io.github.sekerator.kingdomworld.core.npc.Settlement settlement : SettlementIndex.near(server, (int) player.getX(), (int) player.getZ(), reach)) {
+                if (!SettlementRaiser.waiting(settlement)) {
+                    continue;
+                }
+                double dx = player.getX() - settlement.x();
+                double dz = player.getZ() - settlement.z();
+                double distance = dx * dx + dz * dz;
+                if (close) {
+                    double trigger = SettlementSettings.triggerChunks(settlement.tier()) * 16.0;
+                    if (distance > trigger * trigger) {
+                        continue;
+                    }
+                } else if (!SettlementSettings.background(settlement.tier())) {
+                    continue;
+                }
+                boolean higher = best != null && settlement.tier().ordinal() < best.tier().ordinal();
+                boolean same = best != null && settlement.tier() == best.tier();
+                if (best == null || (!close && higher) || ((close || same) && distance < bestDistance)) {
+                    best = settlement;
+                    bestDistance = distance;
+                }
+            }
+        }
+        return Optional.ofNullable(best);
     }
 
     /**

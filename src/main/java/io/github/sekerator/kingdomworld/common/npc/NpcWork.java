@@ -147,6 +147,7 @@ public final class NpcWork {
         NpcCamps.reset();
         SettlementIndex.reset();
         SettlementWork.reset();
+        SettlementRaiser.reset();
     }
 
     static void loaded(MinecraftServer server) {
@@ -165,6 +166,7 @@ public final class NpcWork {
         // The appearance of the kingdoms of the world, its plan and its founding are measured as one work.
         long started = System.nanoTime();
         NpcSpawner.tick(server);
+        SettlementRaiser.tick(server);
         NpcPlanning.tick(server);
         NpcFounding.tick(server);
         SettlementWork.tick(server);

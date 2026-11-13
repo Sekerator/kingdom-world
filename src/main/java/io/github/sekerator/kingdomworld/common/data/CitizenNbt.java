@@ -54,6 +54,8 @@ public final class CitizenNbt {
     private static final String SEED = "seed";
     private static final String GENDER = "gender";
     private static final String SKIN = "skin";
+    /** The settlement of a state a citizen lives in; kept only when it has one, so that format 9 does not change. */
+    private static final String SETTLEMENT = "settlement";
     private static final String BORN = "born";
     private static final String HEALTH = "health";
     private static final String MAX_HEALTH = "maxHealth";
@@ -192,6 +194,9 @@ public final class CitizenNbt {
         tag.putInt(SEED, citizen.nameSeed());
         tag.putString(GENDER, citizen.gender().id());
         tag.putInt(SKIN, citizen.skin());
+        if (citizen.settlement() != 0) {
+            tag.putInt(SETTLEMENT, citizen.settlement());
+        }
         tag.putLong(BORN, citizen.birthTick());
         tag.putFloat(HEALTH, citizen.health());
         if (citizen.maxHealth() != Citizen.MAX_HEALTH) {
@@ -388,6 +393,7 @@ public final class CitizenNbt {
                 WorkStatus.byId(tag.getString(WORK_STATUS)));
         citizen.restorePay(tag.contains(PAY, Tag.TAG_INT) ? tag.getInt(PAY)
                 : io.github.sekerator.kingdomworld.core.economy.Payroll.NOTHING_EXPECTED);
+        citizen.restoreSettlement(tag.getInt(SETTLEMENT));
         return citizen;
     }
 

@@ -72,7 +72,68 @@ public final class NpcCommands {
                 .then(Commands.literal("remove")
                         .then(Commands.argument("id", IntegerArgumentType.integer(1))
                                 .executes(context -> remove(context, false))
-                                .then(Commands.literal("buildings").executes(context -> remove(context, true)))));
+                                .then(Commands.literal("buildings").executes(context -> remove(context, true)))))
+                .then(Commands.literal("settlement")
+                        .then(Commands.literal("info")
+                                .then(Commands.argument("id", IntegerArgumentType.integer(1)).executes(NpcCommands::settlementInfo)))
+                        .then(Commands.literal("raise")
+                                .then(Commands.argument("id", IntegerArgumentType.integer(1)).executes(NpcCommands::settlementRaise)))
+                        .then(Commands.literal("fold")
+                                .then(Commands.argument("id", IntegerArgumentType.integer(1)).executes(context -> settlementFold(context, true))))
+                        .then(Commands.literal("unfold")
+                                .then(Commands.argument("id", IntegerArgumentType.integer(1)).executes(context -> settlementFold(context, false)))));
+    }
+
+    private static Optional<io.github.sekerator.kingdomworld.core.npc.Settlement> settlement(CommandContext<CommandSourceStack> context) {
+        int id = IntegerArgumentType.getInteger(context, "id");
+        Optional<io.github.sekerator.kingdomworld.core.npc.Settlement> settlement = NpcWork.state(context.getSource().getServer()).settlement(id);
+        if (settlement.isEmpty()) {
+            context.getSource().sendFailure(Component.translatable(ADMIN + "settlement.none", id));
+        }
+        return settlement;
+    }
+
+    private static int settlementInfo(CommandContext<CommandSourceStack> context) {
+        Optional<io.github.sekerator.kingdomworld.core.npc.Settlement> settlement = settlement(context);
+        if (settlement.isEmpty()) {
+            return 0;
+        }
+        io.github.sekerator.kingdomworld.core.npc.Settlement s = settlement.get();
+        MinecraftServer server = context.getSource().getServer();
+        long named = KingdomWorldApi.state(server).citizens().registry().citizensOf(s.kingdomId()).stream()
+                .filter(citizen -> citizen.settlement() == s.id()).count();
+        context.getSource().sendSuccess(() -> Component.translatable(ADMIN + "settlement.info", SettlementRaiser.describe(s), s.population(),
+                named, s.folded().length, s.housing(), s.food(), s.guards(), s.militia()), false);
+        return 1;
+    }
+
+    private static int settlementRaise(CommandContext<CommandSourceStack> context) {
+        Optional<io.github.sekerator.kingdomworld.core.npc.Settlement> settlement = settlement(context);
+        if (settlement.isEmpty()) {
+            return 0;
+        }
+        MinecraftServer server = context.getSource().getServer();
+        if (!SettlementRaiser.waiting(settlement.get()) && settlement.get().status() != io.github.sekerator.kingdomworld.core.npc.Settlement.Status.RAISING) {
+            context.getSource().sendFailure(Component.translatable(ADMIN + "settlement.not_waiting", settlement.get().id(),
+                    settlement.get().status().id()));
+            return 0;
+        }
+        NpcWork.state(server).spawning().ifPresent(site -> NpcSpawner.putAside(server, site));
+        SettlementRaiser.start(server, settlement.get(), false);
+        context.getSource().sendSuccess(() -> Component.translatable(ADMIN + "settlement.raised", settlement.get().id()), true);
+        return 1;
+    }
+
+    private static int settlementFold(CommandContext<CommandSourceStack> context, boolean fold) {
+        Optional<io.github.sekerator.kingdomworld.core.npc.Settlement> settlement = settlement(context);
+        if (settlement.isEmpty()) {
+            return 0;
+        }
+        MinecraftServer server = context.getSource().getServer();
+        int moved = fold ? SettlementResidents.foldNow(server, settlement.get()) : SettlementResidents.unfoldNow(server, settlement.get());
+        context.getSource().sendSuccess(() -> Component.translatable(fold ? ADMIN + "settlement.folded" : ADMIN + "settlement.unfolded",
+                settlement.get().id(), moved), true);
+        return 1;
     }
 
     private static NpcLevel size(CommandContext<CommandSourceStack> context) {

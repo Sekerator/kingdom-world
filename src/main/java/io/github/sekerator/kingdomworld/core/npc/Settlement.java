@@ -52,8 +52,8 @@ public final class Settlement {
     private final int province;
     private final int parent;
     private final Tier tier;
-    private final int x;
-    private final int z;
+    private int x;
+    private int z;
     private final long seed;
     private final NpcNames.Name name;
     private Status status = Status.DATA;
@@ -95,7 +95,33 @@ public final class Settlement {
         this.name = Objects.requireNonNull(name, "name");
     }
 
-    public void setChangeListener(Runnable listener) {
+    /** The flag of the stores it was founded with. */
+    public static final int GIVEN_STORES = 4;
+    /** The flag of a place moved once because its own was turned down. */
+    public static final int GIVEN_MOVED = 8;
+    /** The flag of its laws. */
+    public static final int GIVEN_LAWS = 2;
+    /** The flag of its guard come from abroad. */
+    public static final int GIVEN_GUARDS = 16;
+
+    /**
+     * Moves the settlement to another place, when its own was turned down by the world.
+     */
+    public void moveTo(int newX, int newZ) {
+        x = newX;
+        z = newZ;
+        changed();
+    }
+
+    /**
+     * Its people as a number: the citizens of a settlement that no longer stands go to another one.
+     */
+    public void setPopulation(int value) {
+        population = Math.max(0, value);
+        changed();
+    }
+
+        public void setChangeListener(Runnable listener) {
         changeListener = Objects.requireNonNull(listener, "listener");
     }
 

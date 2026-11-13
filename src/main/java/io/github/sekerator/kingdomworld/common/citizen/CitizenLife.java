@@ -89,6 +89,46 @@ public final class CitizenLife {
     }
 
     /**
+     * A settler of a settlement of a state arrives: always the same person for the same world, settlement and slot (its id,
+     * name, gender, look and age come from them), so that a citizen folded into the numbers of its settlement comes back as
+     * itself. Nothing happens if the citizen is there already.
+     *
+     * @param born when it was born, from what its settlement kept of it; {@link Long#MIN_VALUE} for its age by the slot
+     * @return the settler, or empty if the data is read-only or it exists
+     */
+    public static Optional<Citizen> settle(MinecraftServer server, UUID kingdomId, int settlement, long settlementSeed, int slot, WorldPos place,
+                                           long born) {
+        UUID id = settlerId(server.overworld().getSeed(), settlement, slot);
+        if (KingdomWorldApi.state(server).citizens().get(id).isPresent()) {
+            return Optional.empty();
+        }
+        long mixed = io.github.sekerator.kingdomworld.core.npc.Settler.mix(settlementSeed, slot);
+        long now = KingdomWorldApi.gameTime(server);
+        long birth = born != Long.MIN_VALUE ? born : now - (ADULT_DAYS + Math.floorMod(mixed >>> 40, 21)) * CitizenNeeds.TICKS_PER_DAY;
+        Citizen citizen = new Citizen(id, kingdomId, (int) mixed, (mixed & (1L << 33)) == 0 ? Gender.MALE : Gender.FEMALE,
+                (int) Math.floorMod(mixed >>> 34, SKINS), birth, place);
+        citizen.restoreSettlement(settlement);
+        Outcome outcome = KingdomWorldApi.change(server, "add a settler", state -> {
+            if (state.kingdoms().get(kingdomId).isEmpty()) {
+                return Outcome.fail(io.github.sekerator.kingdomworld.core.kingdom.KingdomError.UNKNOWN_KINGDOM);
+            }
+            state.citizens().add(citizen);
+            io.github.sekerator.kingdomworld.common.construction.BuildingEffects.freeBed(server, kingdomId, place)
+                    .ifPresent(free -> state.citizens().assignHome(citizen, free.pos()));
+            return Outcome.DONE;
+        });
+        return outcome.ok() ? Optional.of(citizen) : Optional.empty();
+    }
+
+    /**
+     * The id of a settler: the same for the same world, settlement and slot.
+     */
+    public static UUID settlerId(long worldSeed, int settlement, int slot) {
+        return UUID.nameUUIDFromBytes(("kingdomworld:settler:" + worldSeed + ":" + settlement + ":" + slot)
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    /**
      * A citizen dies for good: it leaves the population, its places become free, the chronicle remembers it and
      * the king and the members who manage citizens are told.
      */

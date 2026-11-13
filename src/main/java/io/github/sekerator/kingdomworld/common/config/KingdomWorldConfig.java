@@ -1604,6 +1604,11 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue gapBlocks;
         public final ForgeConfigSpec.IntValue spawnZone;
         public final ForgeConfigSpec.DoubleValue neutralShare;
+        public final ForgeConfigSpec.ConfigValue<List<? extends Integer>> settlementTriggerChunks;
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> backgroundTiers;
+        public final ForgeConfigSpec.IntValue backgroundSettlementBlocks;
+        public final ForgeConfigSpec.IntValue maxNamedCitizens;
+        public final ForgeConfigSpec.IntValue settlerKeepDays;
 
         NpcKingdoms(ForgeConfigSpec.Builder builder) {
             io.github.sekerator.kingdomworld.core.npc.NpcRules d = io.github.sekerator.kingdomworld.core.npc.NpcRules.DEFAULT;
@@ -1780,6 +1785,22 @@ public final class KingdomWorldConfig {
                     .defineInRange("spawnZone", io.github.sekerator.kingdomworld.core.land.StateRules.SPAWN_ZONE, 0, 100_000);
             neutralShare = builder.comment("The share of the land of the world the states of the plan leave neutral at least.")
                     .defineInRange("neutralShare", io.github.sekerator.kingdomworld.core.land.StateRules.NEUTRAL_SHARE, 0.0, 0.95);
+            settlementTriggerChunks = builder.comment("A player this close to a settlement of a state not raised yet, in chunks, makes it rise at once:",
+                            "a large city, a small town, a village and a hamlet, in this order.")
+                    .defineList("settlementTriggerChunks", java.util.List.of(16, 14, 12, 10),
+                            value -> value instanceof Integer number && number >= 0 && number <= 64);
+            backgroundTiers = builder.comment("The ranks of settlements raised in the background near players, after the capitals: \"city\",",
+                            "\"town\", \"village\", \"hamlet\". The others rise only when a player comes near.")
+                    .defineList("backgroundTiers", java.util.List.of("city", "town"),
+                            value -> value instanceof String tier && java.util.List.of("city", "town", "village", "hamlet").contains(tier));
+            backgroundSettlementBlocks = builder.comment("Settlements are raised in the background only this close to a player online, in blocks.")
+                    .defineInRange("backgroundSettlementBlocks", 2000, 0, 100_000);
+            maxNamedCitizens = builder.comment("Named citizens in the world at most: above it newcomers and the citizens of settlements wait, and",
+                            "the citizens of settlements nobody visited longest are folded into numbers first.")
+                    .defineInRange("maxNamedCitizens", 5000, 100, 100_000);
+            settlerKeepDays = builder.comment("Game days the citizens of a settlement stay named after the last player was near it; then those",
+                            "who hold nothing are folded into its numbers until a player comes again.")
+                    .defineInRange("settlerKeepDays", 2, 1, 60);
             builder.pop();
         }
 

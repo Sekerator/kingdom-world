@@ -165,6 +165,50 @@ public final class RoadWork {
         return outcome;
     }
 
+    /**
+     * Founds the town of a settlement of a state of the world at its town hall: a state holds many more towns than a kingdom
+     * founds, so only the distance between towns is kept, not their number.
+     *
+     * @return the town, or empty if it stands too close to another town or off the land of its kingdom
+     */
+    public static Optional<City> foundSettlementCity(ServerLevel level, UUID kingdomId, BlockPos pos, String name) {
+        MinecraftServer server = level.getServer();
+        String dimension = Dimensions.id(level);
+        Optional<City> there = state(server).cityAt(dimension, pos.getX(), pos.getY(), pos.getZ());
+        if (there.isPresent()) {
+            return there;
+        }
+        if (KingdomWorldApi.kingdom(server, kingdomId).isEmpty() || !kingdomId.equals(KingdomWorldApi.ownerAt(level, pos))) {
+            return Optional.empty();
+        }
+        RoadRules rules = RoadSettings.rules();
+        City[] made = new City[1];
+        Outcome outcome = change(server, "found the town of a settlement", roads -> {
+            double min = (double) rules.minCityDistance() * rules.minCityDistance();
+            for (City city : roads.cities()) {
+                if (city.dimension().equals(dimension) && city.distanceSqr(pos.getX(), pos.getZ()) < min) {
+                    return Outcome.fail(KingdomError.CITY_TOO_CLOSE);
+                }
+            }
+            for (int[] capital : capitals(server, dimension)) {
+                double dx = capital[0] - pos.getX();
+                double dz = capital[1] - pos.getZ();
+                if (dx * dx + dz * dz < min) {
+                    return Outcome.fail(KingdomError.CITY_TOO_CLOSE);
+                }
+            }
+            String chosen = name.length() > City.MAX_NAME ? name.substring(0, City.MAX_NAME).strip() : name;
+            made[0] = roads.addCity(kingdomId, chosen, dimension, pos.getX(), pos.getY(), pos.getZ(), KingdomWorldApi.gameTime(server));
+            return Outcome.DONE;
+        });
+        if (!outcome.ok()) {
+            LOGGER.warn("The town of the settlement {} was not founded at {}: {}", name, pos.toShortString(), outcome.error());
+            return Optional.empty();
+        }
+        RoadSync.changed();
+        return Optional.of(made[0]);
+    }
+
     static void hallPlaced(ServerLevel level, ServerPlayer player, BlockPos pos, @Nullable String name) {
         if (player instanceof FakePlayer) {
             return;

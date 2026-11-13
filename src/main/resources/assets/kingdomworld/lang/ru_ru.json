@@ -4339,5 +4339,11 @@
   "kingdomworld.screen.throne.npc.settlements": "Поселения: %s, в них %s",
   "kingdomworld.screen.citizens.settlement.planned": "%s (не отстроено)",
   "kingdomworld.screen.citizens.settlement.numbers": "%s из %s жителей, еды на %s дн., стража %s",
-  "kingdomworld.screen.map.chunk_short": "%s, %s"
+  "kingdomworld.screen.map.chunk_short": "%s, %s",
+  "commands.kingdomworld.admin.npc.settlement.none": "Нет поселения %s",
+  "commands.kingdomworld.admin.npc.settlement.info": "%s: жителей %s, именных %s, свёрнуто %s, жильё %s, еда %s, стража %s, ополчение %s",
+  "commands.kingdomworld.admin.npc.settlement.not_waiting": "Поселение %s не ждёт подъёма (%s)",
+  "commands.kingdomworld.admin.npc.settlement.raised": "Поселение %s поднимается на полном бюджете",
+  "commands.kingdomworld.admin.npc.settlement.folded": "Поселение %s: свёрнуто в числа жителей: %s",
+  "commands.kingdomworld.admin.npc.settlement.unfolded": "Поселение %s: вернулось жителей: %s"
 }
