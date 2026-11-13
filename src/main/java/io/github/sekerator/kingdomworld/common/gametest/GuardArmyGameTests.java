@@ -87,11 +87,25 @@ public final class GuardArmyGameTests {
 
     // ---------------------------------------------------------------- helpers
 
+    /**
+     * The fenced area of a test, with its chunks kept loaded and ticking until {@link #end}: the world of the game tests ticks
+     * the entities only in the chunks of the structures of the tests, and the stand-ins of players hold no chunks, so a body at
+     * the far end of a long area would stand frozen whenever no other test happens to lie there.
+     */
     private static BlockPos[] area(GameTestHelper helper, int toX, int toZ) {
         BlockPos from = helper.absolutePos(new BlockPos(-2, 0, -2));
         BlockPos to = helper.absolutePos(new BlockPos(toX, 3, toZ));
         GatheringGameTests.enclose(helper.getLevel(), from, to);
+        forceChunks(helper.getLevel(), from, to, true);
         return new BlockPos[]{from, to};
+    }
+
+    private static void forceChunks(ServerLevel level, BlockPos a, BlockPos b, boolean forced) {
+        for (int cx = Math.min(a.getX(), b.getX()) >> 4; cx <= Math.max(a.getX(), b.getX()) >> 4; cx++) {
+            for (int cz = Math.min(a.getZ(), b.getZ()) >> 4; cz <= Math.max(a.getZ(), b.getZ()) >> 4; cz++) {
+                level.setChunkForced(cx, cz, forced);
+            }
+        }
     }
 
     private static void noon(ServerLevel level) {
@@ -172,6 +186,7 @@ public final class GuardArmyGameTests {
 
     private static void end(GameTestHelper helper, Kingdom kingdom, BlockPos[] area, List<ServerPlayer> players, Citizen... citizens) {
         MinecraftServer server = helper.getLevel().getServer();
+        forceChunks(helper.getLevel(), area[0], area[1], false);
         LawSettings.override(null);
         ArmySettings.overrideForce(null);
         WarWork.markPresent(kingdom.id(), null);
@@ -395,7 +410,12 @@ public final class GuardArmyGameTests {
                     + (duty == null ? "none" : duty.role() + " at " + duty.target()) + ", target " + bodies[index].getTarget() + ", path "
                     + !bodies[index].getNavigation().isDone() + ", alive " + bodies[index].isAlive() + ", called "
                     + ArmyRelief.isCalled(staff[index].id()) + ", bodies in the world " + level.getEntities(
-                    net.minecraft.world.level.entity.EntityTypeTest.forClass(CitizenEntity.class), entity -> true).size());
+                    net.minecraft.world.level.entity.EntityTypeTest.forClass(CitizenEntity.class), entity -> true).size() + ", pursuit "
+                    + java.util.Optional.ofNullable(io.github.sekerator.kingdomworld.common.law.LawWork.pursuit(server, bodies[index]))
+                    .map(p -> p.player().getGameProfile().getName() + (p.urgent() ? " urgent" : "")).orElse("none") + ", fights "
+                    + io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehaviors.fights(bodies[index]) + ", goals "
+                    + bodies[index].goalSelector.getRunningGoals().map(goal -> goal.getGoal().getClass().getSimpleName()).toList() + ", ticking "
+                    + level.isPositionEntityTicking(bodies[index].blockPosition()));
         };
         helper.runAtTickTime(5, () -> {
             helper.assertTrue(LawAlarms.active(server, kingdom.id()).isEmpty(), "An alarm before anything happened");
