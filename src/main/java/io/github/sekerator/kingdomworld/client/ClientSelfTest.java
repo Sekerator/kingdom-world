@@ -71,6 +71,7 @@ public final class ClientSelfTest {
     private static ClientRoadShowcase roadShowcase;
     private static ClientSiegeShowcase siegeShowcase;
     private static ClientNpcShowcase npcShowcase;
+    private static ClientProvinceShowcase provinceShowcase;
     private static ClientBackgroundCheck backgroundCheck;
     private static ClientLifeShowcase lifeShowcase;
     private static volatile BlockPos throne;
@@ -210,6 +211,25 @@ public final class ClientSelfTest {
             }
             backgroundCheck.tick();
             if (backgroundCheck.finished()) {
+                LOGGER.info(PREFIX + "finished");
+                quit = true;
+            }
+            return;
+        }
+        if ("provinces".equals(MODE) && minecraft.player != null && minecraft.getSingleplayerServer() != null) {
+            if (provinceShowcase == null) {
+                String folder = System.getProperty("kingdomworld.clientSelfTest.screenshots");
+                Path screenshots = folder != null && !folder.isEmpty() ? Path.of(folder)
+                        : minecraft.gameDirectory.toPath().resolve("kingdomworld-layout");
+                LOGGER.info(PREFIX + "provinces showcase started, screenshots go to {}", screenshots.resolve("provinces"));
+                provinceShowcase = new ClientProvinceShowcase(screenshots);
+            }
+            provinceShowcase.tick();
+            if (provinceShowcase.finished()) {
+                if (provinceShowcase.failed()) {
+                    LOGGER.error(PREFIX + "provinces showcase failed, exiting with code 1");
+                    System.exit(1);
+                }
                 LOGGER.info(PREFIX + "finished");
                 quit = true;
             }
