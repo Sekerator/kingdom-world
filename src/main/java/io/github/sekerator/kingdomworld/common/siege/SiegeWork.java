@@ -7,22 +7,31 @@ import io.github.sekerator.kingdomworld.common.citizen.CitizenEntity;
 import io.github.sekerator.kingdomworld.common.diplomacy.WarEvents;
 import io.github.sekerator.kingdomworld.common.diplomacy.WarWork;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
+import io.github.sekerator.kingdomworld.common.npc.NpcWork;
 import io.github.sekerator.kingdomworld.common.road.RoadWork;
 import io.github.sekerator.kingdomworld.core.army.Order;
 import io.github.sekerator.kingdomworld.core.citizen.Professions;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.diplomacy.Bond;
 import io.github.sekerator.kingdomworld.core.diplomacy.DiplomacyState;
+import io.github.sekerator.kingdomworld.core.diplomacy.PeaceTerms;
 import io.github.sekerator.kingdomworld.core.diplomacy.War;
+import io.github.sekerator.kingdomworld.core.npc.NpcState;
+import io.github.sekerator.kingdomworld.core.npc.Settlement;
 import io.github.sekerator.kingdomworld.core.road.City;
 import io.github.sekerator.kingdomworld.core.road.RouteCell;
 import io.github.sekerator.kingdomworld.core.road.Wall;
 import io.github.sekerator.kingdomworld.core.siege.Conquest;
 import io.github.sekerator.kingdomworld.core.siege.Gate;
+import io.github.sekerator.kingdomworld.core.siege.Hold;
+import io.github.sekerator.kingdomworld.core.siege.ProvinceHolds;
 import io.github.sekerator.kingdomworld.core.siege.SiegeRules;
 import io.github.sekerator.kingdomworld.core.siege.SiegeState;
 import io.github.sekerator.kingdomworld.core.siege.WarLand;
 import io.github.sekerator.kingdomworld.core.territory.Capital;
+import io.github.sekerator.kingdomworld.core.territory.Province;
+import io.github.sekerator.kingdomworld.core.territory.ProvinceMap;
+import io.github.sekerator.kingdomworld.core.territory.TerritoryIndex;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -48,6 +57,9 @@ public final class SiegeWork {
     /** Blocks from a player within which a place is played in the world rather than far from players. */
     static final double WATCHED = 64.0;
 
+    /** Seconds of the journal of conquests run at most at once for game tests. */
+    static final int FORCED_CONQUEST_SECONDS = 10_000;
+
     private static long lastTick = Long.MIN_VALUE;
     private static long busiest;
 
@@ -69,6 +81,7 @@ public final class SiegeWork {
         SiegeHolds.reset();
         SiegeRepair.reset();
         SiegeNpc.reset();
+        SiegeConquests.reset();
     }
 
     // ---------------------------------------------------------------- open land
@@ -211,6 +224,56 @@ public final class SiegeWork {
     public static int capitalProvince(MinecraftServer server, UUID kingdomId) {
         return RoadWork.capital(server, kingdomId).map(capital -> KingdomWorldApi.state(server).territory().provinceAt(capital.dimension(),
                 io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(capital.x() >> 4, capital.z() >> 4))).orElse(0);
+    }
+
+    /**
+     * The provinces a peace hands over whole in a war on a state, for its claim: when the attacker wins and the defender holds
+     * provinces, as many of the provinces the attacker took as the terms ask for land (the first taken first), and for a city
+     * one province where people live (the one of the city the terms name, else the first taken); never the province of the
+     * capital, which only an annexation takes. Empty for a peace on a kingdom without provinces, a peace for the throne (an
+     * annexation) and a peace the defender won.
+     */
+    public static List<Integer> provincesOfPeace(MinecraftServer server, War war, PeaceTerms terms) {
+        if (terms.isWhite() || !terms.claims() || terms.throne() || !war.attacker().equals(terms.winner())) {
+            return List.of();
+        }
+        UUID loser = war.defender();
+        TerritoryIndex territory = KingdomWorldApi.state(server).territory();
+        Optional<ProvinceMap> attached = territory.provinceMap();
+        if (attached.isEmpty() || territory.provincesOf(loser).isEmpty()) {
+            return List.of();
+        }
+        ProvinceMap map = attached.get();
+        NpcState npc = NpcWork.state(server);
+        List<Hold> holds = state(server).holdsOf(war.id());
+        int capital = capitalProvince(server, loser);
+        List<Integer> provinces = new ArrayList<>();
+        if (terms.landChunks() > 0) {
+            provinces.addAll(Conquest.provincesToCede(holds, terms.winner(), loser, war.id(), terms.provinces(), capital));
+        }
+        if (!terms.city().isEmpty()) {
+            String named = terms.city();
+            Conquest.provinceOfCity(holds, terms.winner(), loser, war.id(), named, id -> seatName(map, npc, (int) id, named),
+                    id -> map.province((int) id).map(province -> ProvinceHolds.settled(province, seatOf(npc, province))).orElse(false),
+                    capital).filter(id -> !provinces.contains(id)).ifPresent(provinces::add);
+        }
+        return provinces;
+    }
+
+    @Nullable
+    private static Settlement seatOf(NpcState npc, Province province) {
+        return province.seat() == 0 ? null : npc.settlement((int) province.seat()).orElse(null);
+    }
+
+    /**
+     * The name of the main settlement of a province as the terms may name it: in the alphabet the terms use.
+     */
+    private static String seatName(ProvinceMap map, NpcState npc, int id, String named) {
+        Settlement seat = map.province(id).map(province -> seatOf(npc, province)).orElse(null);
+        if (seat == null) {
+            return "";
+        }
+        return named.equalsIgnoreCase(seat.name().cyrillic()) ? seat.name().cyrillic() : seat.name().latin();
     }
 
     static Optional<Seat> seat(MinecraftServer server, UUID kingdomId, long cityId) {
@@ -360,11 +423,15 @@ public final class SiegeWork {
     }
 
     /**
-     * Turns claims into conquests and carries out every step of them, for game tests.
+     * Turns claims into conquests and carries them out until the journal is empty (a step of many things takes several
+     * seconds), at most {@value #FORCED_CONQUEST_SECONDS} seconds of the journal, for game tests.
      */
     public static void forceConquests(MinecraftServer server) {
-        for (int i = 0; i < Conquest.Step.values().length + 1; i++) {
+        for (int i = 0; i < FORCED_CONQUEST_SECONDS; i++) {
             SiegeConquests.tick(server, SiegeSettings.rules(), KingdomWorldApi.gameTime(server));
+            if (state(server).conquests().isEmpty() && WarWork.state(server).claims().isEmpty()) {
+                return;
+            }
         }
     }
 

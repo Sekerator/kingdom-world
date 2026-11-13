@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SettlementLifeTest {
@@ -118,6 +119,32 @@ class SettlementLifeTest {
         assertTrue(state.settlementsVersion() > version);
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> village.promote(Tier.VILLAGE));
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> village.promote(Tier.CAPITAL));
+    }
+
+    @Test
+    void aSettlementGoesToAnotherKingdomWithItsProvince() {
+        UUID winner = UUID.fromString("00000000-0000-4000-8000-000000000002");
+        NpcState state = new NpcState();
+        int[] changes = {0};
+        state.setChangeListener(() -> changes[0]++);
+        Settlement town = state.addSettlement(KINGDOM, 7, 0, Tier.TOWN, 100, -200, 42, new NpcNames.Name("Ostbrook", "Остбрук"));
+        town.found(40, 30, 125);
+        int guards = town.guards();
+        long version = state.settlementsVersion();
+        int before = changes[0];
+        assertTrue(state.moveSettlement(town.id(), winner));
+        assertEquals(winner, town.kingdomId());
+        assertTrue(state.settlementsVersion() > version, "the maps and the index of settlements see the change");
+        assertTrue(changes[0] > before, "the data is to be saved");
+        assertEquals(List.of(), state.settlementsOf(KINGDOM));
+        assertEquals(List.of(town), state.settlementsOf(winner));
+        assertEquals(7, town.province());
+        assertEquals(guards, town.guards(), "its people and numbers stay as they are");
+        assertEquals(30, town.population());
+        long after = state.settlementsVersion();
+        assertFalse(state.moveSettlement(town.id(), winner), "a second time finds it moved already");
+        assertFalse(state.moveSettlement(9_999, winner), "no such settlement");
+        assertEquals(after, state.settlementsVersion());
     }
 
     @Test

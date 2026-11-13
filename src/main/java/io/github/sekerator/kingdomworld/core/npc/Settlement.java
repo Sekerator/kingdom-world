@@ -48,7 +48,8 @@ public final class Settlement {
     }
 
     private final int id;
-    private final UUID kingdomId;
+    /** Its kingdom; it changes only when its province changes hands, through {@link NpcState#moveSettlement}. */
+    private UUID kingdomId;
     private final int province;
     private final int parent;
     private Tier tier;
@@ -159,6 +160,13 @@ public final class Settlement {
 
     public UUID kingdomId() {
         return kingdomId;
+    }
+
+    /**
+     * Gives the settlement to another kingdom; the state that keeps it tells the change (see {@link NpcState#moveSettlement}).
+     */
+    void setKingdom(UUID kingdomId) {
+        this.kingdomId = Objects.requireNonNull(kingdomId, "kingdom");
     }
 
     public int province() {

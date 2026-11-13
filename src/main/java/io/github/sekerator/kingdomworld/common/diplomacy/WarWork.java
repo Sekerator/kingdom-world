@@ -908,7 +908,8 @@ public final class WarWork {
 
     /**
      * Ends a war on terms: the indemnity moves between the treasuries first, then the truce, vassalage, tribute and claims are
-     * recorded. Peace is refused if the loser cannot pay; a side that gave in or a war ended by an operator pays what it has.
+     * recorded. Peace is refused if the loser cannot pay; a side that gave in or a war ended by an operator pays what it has. In
+     * a war on a state the claim names the provinces the winner took that the terms hand over whole.
      */
     public static Outcome end(MinecraftServer server, War war, War.Result how, PeaceTerms asked) {
         if (isReadOnly(server)) {
@@ -935,7 +936,8 @@ public final class WarWork {
                 return paid;
             }
         }
-        Outcome ended = state.endWar(war.id(), how, terms, now, day, rules);
+        List<Integer> provinces = io.github.sekerator.kingdomworld.common.siege.SiegeWork.provincesOfPeace(server, war, terms);
+        Outcome ended = state.endWar(war.id(), how, terms, now, day, rules, provinces);
         if (!ended.ok()) {
             LOGGER.error("War #{} could not end after its indemnity was paid: {}", war.id(), ended.error());
             return ended;

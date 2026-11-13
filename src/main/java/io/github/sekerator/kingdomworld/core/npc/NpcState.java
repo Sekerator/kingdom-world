@@ -86,6 +86,23 @@ public final class NpcState {
         return settlement;
     }
 
+    /**
+     * Gives a settlement to another kingdom, when its province changed hands in a war or by a treaty: everything else of it stays
+     * as it is, and the change is seen like any change of a settlement.
+     *
+     * @return whether it changed hands; false for no such settlement or one of that kingdom already
+     */
+    public boolean moveSettlement(int id, UUID kingdomId) {
+        Objects.requireNonNull(kingdomId, "kingdom");
+        Settlement settlement = settlements.get(id);
+        if (settlement == null || settlement.kingdomId().equals(kingdomId)) {
+            return false;
+        }
+        settlement.setKingdom(kingdomId);
+        settlementChanged();
+        return true;
+    }
+
     public Collection<PlannedRoad> plannedRoads() {
         return Collections.unmodifiableCollection(plannedRoads.values());
     }
