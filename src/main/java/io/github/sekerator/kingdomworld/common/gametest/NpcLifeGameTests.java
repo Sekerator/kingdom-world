@@ -15,6 +15,7 @@ import io.github.sekerator.kingdomworld.core.citizen.Citizen;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
 import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
+import io.github.sekerator.kingdomworld.core.economy.LedgerCategory;
 import io.github.sekerator.kingdomworld.core.economy.Treasury;
 import io.github.sekerator.kingdomworld.core.economy.TreasuryJournal;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
@@ -201,8 +202,15 @@ public final class NpcLifeGameTests {
                     && army.officer(id, branch, io.github.sekerator.kingdomworld.core.army.Post.VICE_CAPTAIN).isPresent(),
                     "The " + branch.id() + " has lost an officer");
         }
-        helper.assertTrue(funds * 3 >= NpcRules.DEFAULT.money(size), "The treasury is running dry: " + funds + " of "
-                + NpcRules.DEFAULT.money(size));
+        // A ruler spends what lies above the reserve its rules make it keep (the expenses of so many days), so a treasury may
+        // settle at that reserve: it keeps a third of the money the kingdom appeared with, or at least the wages of those days.
+        long money = NpcRules.DEFAULT.money(size);
+        long wages = KingdomWorldApi.treasury(server, id).orElseThrow().journal()
+                .totals(PostWork.gameDay(server), TreasuryJournal.Period.TODAY)
+                .getOrDefault(LedgerCategory.WAGES, TreasuryJournal.Totals.ZERO).expense();
+        long kept = Math.min(money / 3, NpcSettings.rulers().reserveDays() * wages);
+        helper.assertTrue(funds >= kept, "The treasury is running dry: " + funds + " of " + money + ", at least " + kept
+                + " kept (a third of it or " + NpcSettings.rulers().reserveDays() + " days of wages of " + wages + ")");
     }
 
     private static void log(MinecraftServer server, String name, UUID id, int day, Map<String, Integer> decrees) {
