@@ -24,6 +24,12 @@
     -OldWorld <folder> runs one launch on a copy of a world saved by an older version instead of the two, and
     -Load adds the load of a busy server to the second launch.
 
+    -States runs a new world with the plan of states (plan = "states") instead of the scenarios: the first launch waits
+    for the plan to be made and measures it (the time of every stage, the worst tick of the plan, the states founded and
+    their provinces, the memory of the tiles, the size of the files), the second checks that the plan stays made and the
+    provinces stay where they were. With -OldWorld it asks for the plan of states in the config of the old world and
+    checks that the old world keeps the plan it had, without provinces.
+
     With -Pack the server lives in "server-pack" and additionally gets the server-side and common mods of the
     modpack instance (client-only mods are skipped). The modpack folder is only read, never modified.
 
@@ -77,6 +83,7 @@ param(
     [switch]$WithoutMod,
     [switch]$SkipBuild,
     [switch]$Load,
+    [switch]$States,
     [string]$OldWorld = '',
     [string[]]$JvmArgs = @(),
     [int]$LoadMinutes = 30,
@@ -271,7 +278,12 @@ function Initialize-Server([string]$ModJar) {
     $serverDefaults += "[life]`n`tsickChance = 0`n`tfairEveryDays = 0`n"
     # The kingdoms of the world stand from the start: they keep 3000 blocks from the spawn, so that the kingdoms the smoke check
     # calls up nearer (at -700 -700, 1500 and 2200 blocks out) find free land.
-    $serverDefaults += "[npcKingdoms]`n`tminSpawnDistance = 3000`n"
+    # With -States the new world lays out its states instead: the plan of the smoke check is the plan of the world.
+    if ($States) {
+        $serverDefaults += "[npcKingdoms]`n`tplan = `"states`"`n"
+    } else {
+        $serverDefaults += "[npcKingdoms]`n`tminSpawnDistance = 3000`n"
+    }
     # With map mods the web maps are updated every second, so that the checks do not wait for the default 5 s.
     if ($MapModsDir) { $serverDefaults += "[maps]`n`twebMapUpdateSeconds = 1`n" }
     [System.IO.File]::WriteAllText((Join-Path $defaults 'kingdomworld-server.toml'), $serverDefaults, $utf8)
@@ -659,6 +671,15 @@ if ($OldWorld) {
     $target = Join-Path $ServerDir 'world'
     if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
     Copy-Item -LiteralPath $OldWorld -Destination $target -Recurse
+    # The old world is asked for the plan of states: a plan of capitals begun stays, and no provinces appear.
+    $oldConfig = Join-Path $target 'serverconfig\kingdomworld-server.toml'
+    if ($States -and (Test-Path -LiteralPath $oldConfig)) {
+        $text = [System.IO.File]::ReadAllText($oldConfig)
+        $text = [regex]::Replace($text, '(?m)^(\s*)plan = "[a-z]+"\s*$', '')
+        $text = [regex]::Replace($text, '(?m)^\[npcKingdoms\]\s*$', "[npcKingdoms]`n`tplan = `"states`"")
+        [System.IO.File]::WriteAllText($oldConfig, $text, $script:Utf8NoBom)
+    }
+    $oldProvinces = Test-Path -LiteralPath (Join-Path $target 'data\kingdomworld_provinces.dat')
     Invoke-Phase 'old-world' {
         param($server)
         $loaded = Wait-ForLog $server 'KingdomWorld loaded (\d+) kingdom\(s\) with (\d+) citizen\(s\)[^\r\n]*data format (\d+)' 10
@@ -675,6 +696,66 @@ if ($OldWorld) {
         Start-Sleep -Seconds 3
         $rates = [regex]::Matches((Get-LatestLog), '(\S+): rate \d+, money (\d+),')
         if ($rates.Count -gt 0) { Write-Ok "[old-world] money of the old kingdoms: $(@($rates | ForEach-Object { $_.Groups[1].Value + ' ' + $_.Groups[2].Value }) -join ', ')" } else { Add-Failure '[old-world] no money of the old kingdoms' }
+        if ($States) {
+            $none = Invoke-ServerCommand $server 'kingdomworld admin land plan' 'No plan of states was begun in this world'
+            $begun = Count-WholeLog 'The plan of the states of the world begins'
+            if ($none -and $begun -eq 0) { Write-Ok '[old-world] asked for states, the old world keeps its plan of capitals' } else { Add-Failure '[old-world] the old world got a plan of states' }
+            $info = Invoke-ServerCommand $server 'kingdomworld admin land info' 'Provinces in \S+: (\d+) \((\d+) held\), (\d+) tile'
+            if ($info -and ($oldProvinces -or [int]$info.Groups[1].Value -eq 0)) { Write-Ok "[old-world] $($info.Value)" } else { Add-Failure "[old-world] provinces appeared in the old world: $(if ($info) { $info.Value } else { 'no answer' })" }
+        }
+    }
+    Write-Summary
+    if ($script:Failures.Count -gt 0) { exit 1 }
+    exit 0
+}
+
+# A new world with the plan of states: the plan is made, measured, and stays made after the restart.
+if ($States) {
+    $script:StatesPlan = $null
+    $script:StatesProvinces = $null
+    Invoke-Phase 'states' {
+        param($server)
+        $made = Wait-ForStartLog $server 'The plan of the states of the world is made: ([^\r\n]*)' ($NpcTimeout * 2)
+        if (-not $made) {
+            Add-Failure '[states] the plan of states was not made'
+            [void](Invoke-ServerCommand $server 'kingdomworld admin land plan' 'Plan of states: [^\r\n]*')
+            return
+        }
+        $script:StatesPlan = $made.Groups[1].Value
+        Write-Ok "[states] $($script:StatesPlan)"
+        $count = [regex]::Match($script:StatesPlan, '^(\d+) state\(s\)')
+        if ($count.Success -and [int]$count.Groups[1].Value -eq 8) { Write-Ok '[states] 8 states were laid out' } else { Add-Failure "[states] not 8 states: $($script:StatesPlan)" }
+        $worst = [regex]::Match($script:StatesPlan, 'the worst tick ([\d.]+) ms \((\w+)\)')
+        if ($worst.Success -and [double]$worst.Groups[1].Value -le 10) { Write-Ok "[states] the worst tick of the plan $($worst.Groups[1].Value) ms ($($worst.Groups[2].Value))" } elseif ($worst.Success) { Add-Warning "[states] the worst tick of the plan $($worst.Groups[1].Value) ms ($($worst.Groups[2].Value))" }
+        $holds = [regex]::Matches((Get-WholeLog), 'The state of the world [^\r\n]* holds its (\d+) province\(s\)')
+        $notFounded = [regex]::Matches((Get-WholeLog), 'The state of the plan at [^\r\n]* was not founded[^\r\n]*')
+        foreach ($line in $notFounded) { Write-Host "    $($line.Value)" }
+        if ($holds.Count -eq 8) { Write-Ok "[states] 8 states founded, holding $(@($holds | ForEach-Object { $_.Groups[1].Value }) -join ', ') provinces" } else { Add-Failure "[states] $($holds.Count) state(s) founded and given their provinces" }
+        Send-ServerCommand $server 'kingdomworld admin land plan'
+        Send-ServerCommand $server 'kingdomworld admin land survey'
+        $info = Invoke-ServerCommand $server 'kingdomworld admin land info' 'Provinces in \S+: (\d+) \((\d+) held\), (\d+) tile\(s\), about (\d+) KB'
+        if ($info) {
+            $script:StatesProvinces = $info.Groups[1].Value
+            Write-Ok "[states] $($info.Value)"
+        } else {
+            Add-Failure '[states] no answer about the provinces'
+        }
+        Send-ServerCommand $server 'save-all flush'
+        [void](Wait-ForLog $server 'Saved the game' $CommandTimeout)
+        Sync-Server $server
+        foreach ($name in @('kingdomworld_provinces.dat', 'kingdomworld_survey.dat')) {
+            $file = Join-Path $ServerDir "world\data\$name"
+            if (Test-Path -LiteralPath $file) { Write-Ok ("[states] {0}: {1:N0} KB" -f $name, ((Get-Item -LiteralPath $file).Length / 1KB)) } else { Add-Failure "[states] $name was not written" }
+        }
+        foreach ($line in [regex]::Matches((Get-WholeLog), 'Plan of states: [^\r\n]*|  (survey of the land|land already used|states|thrones|provinces|borders along the water|map of the land|settlements|roads|founding): [^\r\n]*|Survey of the land around [^\r\n]*')) { Write-Host "    $($line.Value)" }
+    }
+    Invoke-Phase 'states-restart' {
+        param($server)
+        $plan = Invoke-ServerCommand $server 'kingdomworld admin land plan' 'Plan of states: (\S+)'
+        if ($plan -and $plan.Groups[1].Value -eq 'made') { Write-Ok '[states-restart] the plan stays made' } else { Add-Failure "[states-restart] the plan after the restart: $(if ($plan) { $plan.Value } else { 'no answer' })" }
+        if ((Count-WholeLog 'The plan of the states of the world (begins|goes on)') -eq 0) { Write-Ok '[states-restart] the plan is not made again' } else { Add-Failure '[states-restart] the plan began again after the restart' }
+        $info = Invoke-ServerCommand $server 'kingdomworld admin land info' 'Provinces in \S+: (\d+) \((\d+) held\)'
+        if ($info -and $info.Groups[1].Value -eq $script:StatesProvinces) { Write-Ok "[states-restart] $($info.Value)" } else { Add-Failure "[states-restart] the provinces changed: $(if ($info) { $info.Value } else { 'no answer' }), before $($script:StatesProvinces)" }
     }
     Write-Summary
     if ($script:Failures.Count -gt 0) { exit 1 }
