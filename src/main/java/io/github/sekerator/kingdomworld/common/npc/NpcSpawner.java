@@ -45,6 +45,7 @@ import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomColors;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomNames;
 import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
+import io.github.sekerator.kingdomworld.core.npc.BackgroundPace;
 import io.github.sekerator.kingdomworld.core.npc.NpcComposition;
 import io.github.sekerator.kingdomworld.core.npc.NpcKingdom;
 import io.github.sekerator.kingdomworld.core.npc.NpcNames;
@@ -115,8 +116,17 @@ public final class NpcSpawner {
     private static final long SLOW_TICK_NANOS = 50_000_000L;
     /** Ticks between two saves of the world by the game itself. */
     private static final int AUTOSAVE_TICKS = 6_000;
-    /** A tick that took this long before the background came to it is left to the rest of the server. */
-    private static final long LATE_TICK_NANOS = 20_000_000L;
+    /** Time a part that goes by time gets in a small step of the background. */
+    private static final long SMALL_STEP_NANOS = 2_500_000L;
+    /** Whether the step being made is a small one. */
+    private static boolean smallStep;
+
+    /**
+     * The time a part of a step that goes by time gets: less in a small step.
+     */
+    private static long budget(long nanos) {
+        return smallStep ? Math.min(nanos, SMALL_STEP_NANOS) : nanos;
+    }
     /** Time of a tick the looks at the workplaces of a kingdom that just stood take at most, before its chunks go. */
     private static final long SURVEY_NANOS = 10_000_000L;
     /** Chunks of land claimed in a tick for every chunk the rules let an appearance look through. */
@@ -181,9 +191,14 @@ public final class NpcSpawner {
         long paused;
         /** Whether the background did nothing in the last tick: that tick is not its own. */
         boolean pausedLast;
-        /** Whether the guard and the army of the appearance got their posts; then the citizens it settles, from this one. */
-        boolean garrisonFounded;
+        /** Whether the last tick of the background was a small step in a tick that was long before it. */
+        boolean smallLast;
+        /** Whether the background works in a tick, by how long the tick took before it came to it. */
+        final BackgroundPace pace = new BackgroundPace();
+        /** The citizen the settling after the army goes on from. */
         int settled;
+        /** The post the hiring of the citizens goes on from. */
+        int hireIndex;
         /** Whether the background goes on without players. */
         boolean forced;
         /** Work posts still to be looked at before the chunks go; null before the kingdom settles. */
@@ -210,6 +225,7 @@ public final class NpcSpawner {
     static void reset() {
         job = null;
         LAYING.clear();
+        RELEASING.clear();
     }
 
     /**
@@ -218,6 +234,7 @@ public final class NpcSpawner {
     public static void resetForTests() {
         job = null;
         LAYING.clear();
+        RELEASING.clear();
     }
 
     public static Timing lastTiming() {
@@ -417,20 +434,38 @@ public final class NpcSpawner {
             job.background = startBackground;
             job.forced = startForced;
         }
-        if (job.background && (NpcBackground.waiting(server, job.forced) || PerfCommands.sinceTickStart() > LATE_TICK_NANOS)) {
-            // The background waits for players and for short ticks, and goes on in the next tick when this one took long before
-            // the work came to it; its chunks stay asked for.
+        if (job.background && NpcBackground.waiting(server, job.forced)) {
+            // The background waits for players and for short ticks; its chunks stay asked for.
             job.paused++;
             job.pausedLast = true;
             return;
         }
+        boolean small = false;
+        if (job.background) {
+            // A tick that took long before the work came to it is left to the rest of the server, but never for good: after a
+            // run of them the background goes on with a small step.
+            BackgroundPace.Step decided = job.pace.decide(PerfCommands.sinceTickStart());
+            int[] minute = job.pace.minuteOver();
+            if (minute != null && minute[1] > 0) {
+                LOGGER.info("The background appearance of {} is short of time: {} of {} ticks of the last minute took more than {} ms before it "
+                        + "came to them, it went on with {} small step(s)", site, minute[0], minute[2], BackgroundPace.LATE_NANOS / 1_000_000L, minute[1]);
+            }
+            if (decided == BackgroundPace.Step.SKIP) {
+                job.paused++;
+                job.pausedLast = true;
+                return;
+            }
+            small = decided == BackgroundPace.Step.SMALL;
+        }
         // The tick an appearance starts in belongs to what started it (a player coming near, a command looking for land), and the
         // tick the game saves the world in (every 6000 ticks) to the save. A tick in which the appearance only waited for the
         // game to load or generate its chunks is the game's own: it is counted in the average and told of in the log, but it is
-        // not the worst tick of the work of the appearance (the chunks are asked for a few at a time for that reason).
+        // not the worst tick of the work of the appearance (the chunks are asked for a few at a time for that reason). Neither
+        // is a tick that was long before a small step came to it.
         int last = server.getTickCount() - 1;
-        boolean own = !job.pausedLast;
+        boolean own = !job.pausedLast && !job.smallLast;
         job.pausedLast = false;
+        job.smallLast = small;
         if (own && job.ticks > 1 && last % AUTOSAVE_TICKS != 0) {
             // The last tick as the game and this work made it: the game's own time of a tick leaves out the handlers of END in which
             // this work runs, and the whole tick holds the work of every other system too.
@@ -466,8 +501,22 @@ public final class NpcSpawner {
         running.idle = false;
         try {
             long started = System.nanoTime();
-            step(server, level, site, running);
-            pace(running, System.nanoTime() - started);
+            double scale = running.scale;
+            smallStep = small;
+            if (small) {
+                // The fewest blocks, and the parts that go by time get little of it.
+                running.scale = 0;
+            }
+            try {
+                step(server, level, site, running);
+            } finally {
+                smallStep = false;
+            }
+            if (small) {
+                running.scale = scale;
+            } else {
+                pace(running, System.nanoTime() - started);
+            }
             // The last step of an appearance lets the job go.
             running.lastWaited = !running.loaded || running.idle;
         } catch (RuntimeException e) {
@@ -1244,7 +1293,7 @@ public final class NpcSpawner {
             String key = id + "/" + templateId + "/" + anchor.asLong();
             ConstructionWork.Laying laying = LAYING.computeIfAbsent(key, k -> new ConstructionWork.Laying(level, id, template.get(), anchor, placement,
                     materials));
-            Optional<KingdomWorldState.ConstructionChange> laid = laying.step(LAY_NANOS);
+            Optional<KingdomWorldState.ConstructionChange> laid = laying.step(budget(LAY_NANOS));
             if (laid.isEmpty()) {
                 // The time of the step is spent: the rest of the budget goes too.
                 used[0] = Math.max(1, budget);
@@ -2032,7 +2081,7 @@ public final class NpcSpawner {
             return;
         }
         // Work: the posts take the citizens without work nearest to them, the farmers find their composters.
-        if (!hireSome(state, id)) {
+        if (!hireSome(state, id, job)) {
             return;
         }
         int farmers = job.composition.jobs().getOrDefault("farmer", 0);
@@ -2062,20 +2111,28 @@ public final class NpcSpawner {
      *
      * @return whether every post is full or nobody is left without work; otherwise the rest is hired in the next tick
      */
-    private static boolean hireSome(KingdomWorldState state, UUID id) {
+    private static boolean hireSome(KingdomWorldState state, UUID id, Job job) {
         long started = System.nanoTime();
-        for (WorkPost post : state.citizens().posts().all()) {
-            if (!post.kingdomId().equals(id) || !post.hasProfession()) {
-                continue;
-            }
-            while (post.freeSeats() > 0 && state.hire(null, post.pos()).outcome().ok()) {
-                if (System.nanoTime() - started > PEOPLE_NANOS) {
-                    return false;
+        List<WorkPost> posts = state.citizens().posts().postsOf(id);
+        boolean worked = false;
+        // The posts are gone through once, from the one the last step stopped at.
+        while (job.hireIndex < posts.size()) {
+            WorkPost post = posts.get(job.hireIndex);
+            if (post.hasProfession()) {
+                while (post.freeSeats() > 0 && state.hire(null, post.pos()).outcome().ok()) {
+                    if (System.nanoTime() - started > budget(PEOPLE_NANOS)) {
+                        return false;
+                    }
                 }
+            }
+            job.hireIndex++;
+            worked = true;
+            if (System.nanoTime() - started > budget(PEOPLE_NANOS)) {
+                return false;
             }
         }
         // The farmers are chosen in a tick of their own when the hiring took most of this one.
-        return System.nanoTime() - started <= PEOPLE_NANOS / 2;
+        return !worked || System.nanoTime() - started <= budget(PEOPLE_NANOS) / 2;
     }
 
     /**
@@ -2098,7 +2155,7 @@ public final class NpcSpawner {
             }
             return;
         }
-        if (!hireSome(state, id)) {
+        if (!hireSome(state, id, job)) {
             return;
         }
         int soldiers = composition.soldiers();
@@ -2177,7 +2234,7 @@ public final class NpcSpawner {
             if (have >= want) {
                 break;
             }
-            if (joined > 0 && System.nanoTime() - started > ARMY_NANOS) {
+            if (joined > 0 && System.nanoTime() - started > budget(ARMY_NANOS)) {
                 return;
             }
             if (citizen.professionId().equals(Professions.UNEMPLOYED.id())) {
@@ -2196,13 +2253,14 @@ public final class NpcSpawner {
         if (!NpcGarrison.enlistSome(server, site)) {
             return;
         }
-        if (!job.garrisonFounded) {
+        if (site.step() == 0) {
+            // The guard and the army get their posts once: the step of the stage remembers it over a restart.
             NpcGarrison.found(server, site, job.composition);
-            job.garrisonFounded = true;
+            site.setStep(1);
             return;
         }
         // The soldiers moved into the bunks of the barracks: whoever has no bed yet takes one of those they left, a part a tick.
-        job.settled = io.github.sekerator.kingdomworld.common.citizen.CitizenSimulation.settleSome(server, id, job.settled, PEOPLE_NANOS);
+        job.settled = io.github.sekerator.kingdomworld.common.citizen.CitizenSimulation.settleSome(server, id, job.settled, budget(PEOPLE_NANOS));
         if (job.settled >= 0) {
             return;
         }
