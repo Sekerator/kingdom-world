@@ -17,7 +17,8 @@ import java.util.UUID;
  * a reserve of a few days of its income. The head pays only through these methods; what it pays the crown for (materials of
  * the storehouses) goes to the treasury of the kingdom, what it pays abroad leaves the world.
  *
- * <p>Cities have no heads yet; this is ready for them and spends nothing until then.
+ * <p>The governors of cities ({@link GovernorFunds}) pay out of what the king gives them today; once they pay out of the treasuries
+ * of their cities they go through these methods, a construction most simply through {@link #payWorks} and {@link #refundWorks}.
  */
 public final class CityFunds {
     private CityFunds() {
@@ -48,6 +49,30 @@ public final class CityFunds {
         CityPurses.PurseKey key = CityPurses.PurseKey.cityTreasury(kingdom, city);
         return toCrown ? economy.purseToTreasury(key, amount, LedgerCategory.CITIES, line, day)
                 : economy.purseLeaves(key, city, amount, CityPurses.Outflow.IMPORT, day);
+    }
+
+    /**
+     * A construction of the city pays the crown for its materials: the goods it takes from the storehouses of the kingdom, or what
+     * the crown buys abroad for it. The money goes from the treasury of the city into the treasury of the kingdom (Materials in the
+     * journal of the city, Cities in the journal of the treasury of the kingdom), granted money first; nothing moves when the city
+     * may not spend that much ({@link #available}). A governor buying abroad for its city pays first, orders the import of the
+     * crown and gives back with {@link #refundWorks} what the crown could not buy after all.
+     */
+    public static Outcome payWorks(Economy economy, UUID kingdom, long city, long amount, long day, CityEconomyRules rules) {
+        return spend(economy, kingdom, city, amount, CityLedger.MATERIALS, true, day, rules);
+    }
+
+    /**
+     * What a construction of the city paid the crown for and did not get goes back from the treasury of the kingdom into the
+     * treasury of the city; nothing moves when the treasury of the kingdom cannot pay it.
+     */
+    public static Outcome refundWorks(Economy economy, UUID kingdom, long city, long amount, long day) {
+        if (!Money.isPayment(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        economy.openCityTreasury(kingdom, city);
+        return economy.treasuryToPurse(CityPurses.PurseKey.cityTreasury(kingdom, city), amount, LedgerCategory.CITIES, CityLedger.MATERIALS,
+                day);
     }
 
     /**
