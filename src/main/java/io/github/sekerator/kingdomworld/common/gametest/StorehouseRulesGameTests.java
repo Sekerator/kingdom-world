@@ -54,6 +54,8 @@ public final class StorehouseRulesGameTests {
         TestChunks.hold(level, from, to);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Wood Yard", UUID.randomUUID());
         StorehouseInventory common = GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(1, 0, 2)));
+        // A lumberjack without an axe does not go to work, and only a round of work ends with what it carries brought in.
+        common.insertItem(0, new ItemStack(Items.IRON_AXE), false);
         StorehouseInventory wood = GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(6, 0, -6)));
         wood.setAccepts(StorehouseRules.Accepts.of(List.of("lumberjack")));
         StorehouseInventory food = GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(-2, 0, 1)));

@@ -219,13 +219,20 @@ public final class GatheringGameTests {
 
     // ---------------------------------------------------------------- lumberjack
 
+    /**
+     * How high over its post the box of a lumberjack's test is cleared. A lumberjack looks at its zone, up to 32 blocks over the
+     * post, column by column from the top down to the first ground, as under the open sky; the tests stand deep under the land,
+     * where the shaft the game clears over a test ends in rock that would be the ground of every column.
+     */
+    static final int OPEN_ABOVE = 33;
+
     @GameTest(template = EMPTY, batch = "kingdomworld_work_lumberjack", timeoutTicks = 1200)
     public static void lumberjackFellsNaturalTreesAndSparesBuildings(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         level.setDayTime(1_000L);
         BlockPos from = helper.absolutePos(new BlockPos(-2, 0, -2));
-        BlockPos to = helper.absolutePos(new BlockPos(9, 8, 6));
+        BlockPos to = helper.absolutePos(new BlockPos(9, OPEN_ABOVE, 6));
         clear(level, from, to);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Woodland", UUID.randomUUID());
         // A natural oak: four logs with leaves that grew there.
@@ -274,7 +281,7 @@ public final class GatheringGameTests {
         MinecraftServer server = level.getServer();
         level.setDayTime(1_000L);
         BlockPos from = helper.absolutePos(new BlockPos(-2, 0, -2));
-        BlockPos to = helper.absolutePos(new BlockPos(9, 8, 6));
+        BlockPos to = helper.absolutePos(new BlockPos(9, OPEN_ABOVE, 6));
         clear(level, from, to);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Log Cabins", UUID.randomUUID());
         for (int y = 0; y < 4; y++) {
@@ -364,7 +371,7 @@ public final class GatheringGameTests {
         ServerLevel level = helper.getLevel();
         level.setDayTime(1_000L);
         BlockPos from = helper.absolutePos(new BlockPos(-2, 0, -2));
-        BlockPos to = helper.absolutePos(new BlockPos(14, 8, 6));
+        BlockPos to = helper.absolutePos(new BlockPos(14, OPEN_ABOVE, 6));
         clear(level, from, to);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Replanted Wood", UUID.randomUUID());
         // Two oaks whose crowns touch: the lumberjack fells the nearer one first.
