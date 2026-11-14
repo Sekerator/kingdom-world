@@ -150,8 +150,20 @@ public final class CitizenWhereabouts {
      */
     @Nullable
     public static BlockPos idleTarget(MinecraftServer server, Citizen citizen, WorldPos at, boolean workHours) {
+        return idleTarget(server, citizen, at, workHours, false);
+    }
+
+    /**
+     * Where a body walks back to by itself, asked again on the way: a body that walks back already goes on home though it is no
+     * longer far, until a hold or its work comes up.
+     *
+     * @param going whether the body walks back already
+     */
+    @Nullable
+    public static BlockPos idleTarget(MinecraftServer server, Citizen citizen, WorldPos at, boolean workHours, boolean going) {
         boolean hasWork = io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehaviors.get(citizen.professionId()).isPresent();
-        if (!Whereabouts.walksBack(away(server, citizen, at), hold(server, citizen, at), workHours, hasWork)) {
+        Whereabouts.Hold hold = hold(server, citizen, at);
+        if (going ? !Whereabouts.walksOn(hold, workHours, hasWork) : !Whereabouts.walksBack(away(server, citizen, at), hold, workHours, hasWork)) {
             return null;
         }
         WorldPos target = Whereabouts.target(citizen.home(), citizen.workplace());

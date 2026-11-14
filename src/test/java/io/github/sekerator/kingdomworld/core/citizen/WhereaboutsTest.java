@@ -98,4 +98,17 @@ class WhereaboutsTest {
             }
         }
     }
+
+    @Test
+    void aWalkBackGoesOnHomeUntilWorkOrAHoldComesUp() {
+        // No longer far is no reason to stop: the walks about home hold a body only close to it.
+        assertTrue(Whereabouts.walksOn(Whereabouts.Hold.NONE, false, false), "on the way home");
+        assertTrue(Whereabouts.walksOn(Whereabouts.Hold.NONE, true, false), "without work of its own");
+        assertFalse(Whereabouts.walksOn(Whereabouts.Hold.NONE, true, true), "its hours of work began");
+        for (Whereabouts.Hold hold : Whereabouts.Hold.values()) {
+            if (hold != Whereabouts.Hold.NONE) {
+                assertFalse(Whereabouts.walksOn(hold, false, false), "held: " + hold);
+            }
+        }
+    }
 }

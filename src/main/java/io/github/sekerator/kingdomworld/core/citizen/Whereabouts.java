@@ -178,7 +178,16 @@ public final class Whereabouts {
      * @param hasWork   whether its profession has work of its own
      */
     public static boolean walksBack(Away away, Hold hold, boolean workHours, boolean hasWork) {
-        return away != Away.NONE && hold == Hold.NONE && !(workHours && hasWork);
+        return away != Away.NONE && walksOn(hold, workHours, hasWork);
+    }
+
+    /**
+     * Whether a body that walks back already goes on: all the way home, wherever it is now, unless a hold or its work came up. A walk
+     * that ended as soon as the body was no longer far would leave it out of the reach of its walks about home ({@link #HOME_RANGE}
+     * and the few blocks of a step of the walk), where they hold it to nothing and it drifts off again.
+     */
+    public static boolean walksOn(Hold hold, boolean workHours, boolean hasWork) {
+        return hold == Hold.NONE && !(workHours && hasWork);
     }
 
     /**

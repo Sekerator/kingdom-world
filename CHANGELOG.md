@@ -56,6 +56,7 @@
 - В сетевом протоколе: сохранение флага и справочник флагов всех королевств (полный при входе, дальше только изменения). Флаг хранится в данных королевства ключом `flag`, только когда он не по умолчанию; испорченный флаг читается как флаг по умолчанию, формат данных прежний. Справочник: новая страница «Флаг» в разделе «Королевство» и «Флаги на постройках» в разделе о строительстве.
 - **Исправлено: двойной склад для воронок.** Когда половину двойного склада ломают, воронки и трубы в том же тике видят у оставшейся половины только её ячейки.
 - **Исправлено: проверка места на складах.** Работа вдали от игроков, мастерские, монетный двор и «Вернуть» считают место так же, как потом кладут вещи: склад за складом по порядку, сначала на неполные стопки, затем в пустые ячейки. Раньше неполная стопка дальнего склада засчитывалась, хотя вещь уходила в пустую ячейку ближнего, и то, чему потом не хватало места, пропадало.
+- **Исправлено: житель, ушедший далеко, доходит до дома.** Прогулка назад обрывалась, как только житель оказывался ближе 64 блоков, а прогулка у дома держит тело только в пределах своих 32 блоков и шага: в промежутке житель снова уходил куда попало. Теперь начатый путь домой идёт до дома, пока не начнётся работа или жителя что-то не удержит.
 
 ### 1.5.1
 
@@ -284,6 +285,7 @@ A kingdom of players no longer runs into the limits of the server: its beds, its
 - In the network protocol: saving a flag and the directory of the flags of all kingdoms (all of it on joining, the changes afterwards). The flag is kept in the data of a kingdom under the key `flag`, only when it is not the default; a broken flag reads as the default, and the data format is unchanged. The guide has a new page "The flag" in the section "Kingdom" and "Flags on buildings" in the section on construction.
 - **Fixed: a double storehouse for hoppers.** When a half of a double storehouse is broken, hoppers and pipes see only the slots of the half left within the same tick.
 - **Fixed: the room of the storehouses.** Work far from players, workshops, the mint and Send back count the room as the things are put away afterwards: storehouse after storehouse in their order, onto the stacks that are not full first, then into empty slots. Before, a half stack in a farther storehouse was counted though the item went into an empty slot of a nearer one, and what then found no room was lost.
+- **Fixed: a citizen gone far gets home.** The walk back ended as soon as the citizen was within 64 blocks, while the walks about home hold a body only within their 32 blocks and a step: in between it drifted off again. Now a walk home that began goes on to the home unless its work begins or something holds the citizen.
 
 ### 1.5.1
 

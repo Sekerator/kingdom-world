@@ -141,12 +141,12 @@ public final class ReturnGoals {
                 return false;
             }
             look = 0;
-            target = idleTarget();
+            target = idleTarget(false);
             return target != null;
         }
 
         @Nullable
-        private BlockPos idleTarget() {
+        private BlockPos idleTarget(boolean going) {
             if (body.citizenId() == null || body.getServer() == null) {
                 return null;
             }
@@ -158,7 +158,7 @@ public final class ReturnGoals {
             return io.github.sekerator.kingdomworld.common.citizen.CitizenWhereabouts.idleTarget(body.getServer(), citizen.get(),
                     new io.github.sekerator.kingdomworld.core.citizen.WorldPos(
                             io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(body.level()), here.getX(), here.getY(), here.getZ()),
-                    io.github.sekerator.kingdomworld.common.life.LifeWork.works(body));
+                    io.github.sekerator.kingdomworld.common.life.LifeWork.works(body), going);
         }
 
         @Override
@@ -166,10 +166,11 @@ public final class ReturnGoals {
             if (target == null || body.returnTarget() != null || body.isFrightened() || body.blockPosition().distSqr(target) <= BACK_SQR) {
                 return false;
             }
-            // Looked at again now and then: hours of work that began or a hold that came up end the walk.
+            // Looked at again now and then: hours of work that began or a hold that came up end the walk, which otherwise goes on
+            // home, past the reach of being far, into the reach of the walks about home.
             if (++look >= LOOK_TICKS) {
                 look = 0;
-                return idleTarget() != null;
+                return idleTarget(true) != null;
             }
             return true;
         }
