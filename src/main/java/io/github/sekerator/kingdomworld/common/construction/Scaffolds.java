@@ -17,6 +17,11 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -44,6 +49,8 @@ public final class Scaffolds {
     private static final int TAKE_DOWN_PER_SECOND = 256;
     /** Ticks the roads and buildings around a construction are looked at again. */
     private static final long WAYS_TICKS = 1_200;
+    /** Ticks a fall does a citizen no harm after the scaffolds under it were taken down. */
+    private static final int SAFE_TICKS = 200;
 
     /**
      * A column a builder stands on or climbs: its scaffolds from {@code ground} up to below {@code top}.
@@ -286,6 +293,62 @@ public final class Scaffolds {
     }
 
     /**
+     * Before a scaffold nobody holds is taken down: citizens on its column over it (a body come back where it last stood, on
+     * top of a column, after a restart) are set on the ground beside its foot and kept from harm by a fall, so that no citizen is
+     * ever hurt by scaffolds; a scaffold a player stands on stays for now.
+     *
+     * @return whether the scaffold may be taken down now
+     */
+    static boolean makeWayDown(ServerLevel level, BlockPos pos) {
+        AABB column = new AABB(pos.getX(), pos.getY() + 1, pos.getZ(), pos.getX() + 1, pos.getY() + Scaffolding.MAX_HEIGHT + 4, pos.getZ() + 1);
+        List<LivingEntity> over = level.getEntitiesOfClass(LivingEntity.class, column, entity -> entity.isAlive()
+                && Mth.floor(entity.getX()) == pos.getX() && Mth.floor(entity.getZ()) == pos.getZ());
+        if (over.isEmpty()) {
+            return true;
+        }
+        for (LivingEntity entity : over) {
+            if (entity instanceof Player) {
+                return false;
+            }
+        }
+        BlockPos foot = foot(level, pos);
+        for (LivingEntity entity : over) {
+            if (entity instanceof io.github.sekerator.kingdomworld.common.citizen.CitizenEntity citizen) {
+                citizen.keepSafeFromFalls(SAFE_TICKS);
+                citizen.getNavigation().stop();
+                if (foot != null) {
+                    citizen.moveTo(foot.getX() + 0.5, foot.getY(), foot.getZ() + 0.5, citizen.getYRot(), citizen.getXRot());
+                    citizen.setDeltaMovement(Vec3.ZERO);
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Where a body stands on the ground at the foot of a column: beside it where there is room, else on the ground under it.
+     */
+    @Nullable
+    private static BlockPos foot(ServerLevel level, BlockPos pos) {
+        BlockPos.MutableBlockPos cursor = pos.mutable();
+        for (int i = 0; i <= Scaffolding.MAX_HEIGHT + 4 && cursor.getY() > level.getMinBuildHeight(); i++) {
+            BlockPos below = cursor.below();
+            if (!is(level.getBlockState(below)) && firm(level, below)) {
+                BlockPos ground = cursor.immutable();
+                for (Direction side : Direction.Plane.HORIZONTAL) {
+                    BlockPos beside = ground.relative(side);
+                    if (open(level, beside) && open(level, beside.above()) && firm(level, beside.below()) && !is(level.getBlockState(beside.below()))) {
+                        return beside;
+                    }
+                }
+                return ground;
+            }
+            cursor.move(Direction.DOWN);
+        }
+        return null;
+    }
+
+    /**
      * Takes down the scaffolds of a construction that nobody stands on, where their place is loaded, from the top down.
      *
      * @param load whether places not loaded are loaded for it (an operator finishing the construction at once)
@@ -305,6 +368,9 @@ public final class Scaffolds {
                 level.getChunk(pos);
             }
             if (is(level.getBlockState(pos))) {
+                if (!makeWayDown(level, pos)) {
+                    continue;
+                }
                 level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
             }
             construction.removeScaffold(cell);
@@ -341,6 +407,9 @@ public final class Scaffolds {
                     continue;
                 }
                 if (is(level.getBlockState(pos))) {
+                    if (!makeWayDown(level, pos)) {
+                        continue;
+                    }
                     level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
                     budget--;
                 }
@@ -362,6 +431,9 @@ public final class Scaffolds {
                     continue;
                 }
                 if (is(level.getBlockState(pos))) {
+                    if (!makeWayDown(level, pos)) {
+                        continue;
+                    }
                     level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
                     budget--;
                 }

@@ -4,6 +4,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.github.sekerator.kingdomworld.KingdomWorld;
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
+import io.github.sekerator.kingdomworld.common.citizen.CitizenBodies;
+import io.github.sekerator.kingdomworld.common.citizen.CitizenEntity;
 import io.github.sekerator.kingdomworld.common.construction.BuildingTemplate;
 import io.github.sekerator.kingdomworld.common.construction.BuildingTemplates;
 import io.github.sekerator.kingdomworld.common.construction.ConstructionSettings;
@@ -43,7 +45,8 @@ import java.util.UUID;
 /**
  * Game tests of the scaffolding of the builders: a builder near players puts up the walls and the roof of a house too high to
  * reach from the ground from scaffolds and leaves none behind; scaffolds go only on the land of the kingdom and never into a
- * block holding something; a cancelled construction takes its scaffolds down.
+ * block holding something; a cancelled construction takes its scaffolds down; a citizen found on top of a column nobody holds
+ * (a body come back where it last stood after a restart) is set on the ground unharmed before the column comes down.
  */
 @GameTestHolder(KingdomWorld.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -220,6 +223,46 @@ public final class ScaffoldingGameTests {
             GatheringGameTests.clear(level, from, to);
             BuildingTemplates.removeForTest(template.id());
         }
+    }
+
+    // ---------------------------------------------------------------- a citizen on a column nobody holds
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_scaffold_restart", timeoutTicks = 200)
+    public static void aCitizenOnAColumnNobodyHoldsIsSetOnTheGroundUnharmed(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos to = helper.absolutePos(new BlockPos(12, 12, 12));
+        GatheringGameTests.clear(level, from, to);
+        ground(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Fallers", UUID.randomUUID());
+        BuildingTemplate template = ConstructionGameTests.hut("scaffold_restart");
+        Construction construction = lay(helper, kingdom, template, helper.absolutePos(new BlockPos(7, 0, 8)));
+        // A column of eight scaffolds, as a builder left it before the server stopped, and a citizen on top of it.
+        List<BlockPos> column = new ArrayList<>();
+        for (int y = 0; y < 8; y++) {
+            column.add(helper.absolutePos(new BlockPos(9, y, 8)));
+        }
+        for (BlockPos cell : column) {
+            helper.assertTrue(Scaffolds.put(level, construction, cell), "No scaffold at " + GatheringGameTests.local(helper, cell));
+        }
+        Citizen citizen = CitizenGameTests.newcomer(helper, kingdom, 1, 1);
+        CitizenBodies.force(citizen.id(), true);
+        CitizenEntity body = CitizenBodies.spawnAt(level, citizen, column.get(column.size() - 1).above());
+        helper.assertTrue(body != null, "No body for the citizen");
+        float health = body.getHealth();
+        BlockPos base = column.get(0);
+
+        helper.succeedWhen(() -> {
+            for (BlockPos cell : column) {
+                helper.assertTrue(level.getBlockState(cell).isAir(), "A scaffold still stands at " + GatheringGameTests.local(helper, cell));
+            }
+            helper.assertTrue(body.isAlive() && body.onGround(), "The citizen is not standing on the ground");
+            helper.assertTrue(body.getY() < base.getY() + 0.5, "The citizen is not on the ground: " + body.getY());
+            helper.assertTrue(body.getHealth() >= health, "The citizen was hurt by the fall: " + body.getHealth() + " of " + health);
+            CitizenGameTests.finish(helper, kingdom, citizen);
+            GatheringGameTests.clear(level, from, to);
+            BuildingTemplates.removeForTest(template.id());
+        });
     }
 
     // ---------------------------------------------------------------- a cancelled construction

@@ -88,6 +88,9 @@ final class BuilderGoal extends PostWorkGoal {
     private Scaffolding.Spot spot;
     /** Columns of the current step the builder could not get to, packed with y 0. */
     private final Set<Long> refused = new HashSet<>();
+    /** The columns of the current step not tried yet, best first; looked for once a step, {@code null} until then. */
+    @Nullable
+    private List<Scaffolding.Spot> spots;
     /** Whether the builder works on the current step from the nearest point it gets to. */
     private boolean nearest;
 
@@ -149,6 +152,7 @@ final class BuilderGoal extends PostWorkGoal {
 
     private void forgetSpot() {
         spot = null;
+        spots = null;
         refused.clear();
         nearest = false;
     }
@@ -441,7 +445,7 @@ final class BuilderGoal extends PostWorkGoal {
                 return columnGoal == feet();
             }
             // The column does not reach the block: down, and on to another place.
-            leaving = true;
+            refuseColumn(on);
             return false;
         }
         if (nearest) {
@@ -488,17 +492,20 @@ final class BuilderGoal extends PostWorkGoal {
      * @return whether one was chosen; when none is left the builder works from the nearest point it gets to
      */
     private boolean chooseSpot(ServerLevel level, Construction construction, BuildPlan steps, BlockPos target, ConstructionRules rules) {
-        List<Scaffolding.Spot> spots = Scaffolding.candidates(target.getX(), target.getY(), target.getZ(), rules.reach(), body.getEyeHeight(),
-                Scaffolds.world(level, construction, steps, target), Mth.floor(body.getX()), feet(), Mth.floor(body.getZ()), refused::contains);
-        if (spots.isEmpty()) {
-            startNear();
-            return false;
+        if (spots == null) {
+            // The columns are looked for once a step; those the builder cannot get to are taken off the list as it tries them.
+            spots = new ArrayList<>(Scaffolding.candidates(target.getX(), target.getY(), target.getZ(), rules.reach(), body.getEyeHeight(),
+                    Scaffolds.world(level, construction, steps, target), Mth.floor(body.getX()), feet(), Mth.floor(body.getZ()), refused::contains));
         }
         int paths = 0;
-        for (Scaffolding.Spot candidate : spots) {
+        while (!spots.isEmpty()) {
             if (paths >= PATHS_PER_TICK || !PathBudget.tryAcquire()) {
                 // The others are looked at in the next tick.
                 return false;
+            }
+            Scaffolding.Spot candidate = spots.remove(0);
+            if (refused.contains(Scaffolding.pack(candidate.x(), 0, candidate.z()))) {
+                continue;
             }
             paths++;
             BlockPos base = new BlockPos(candidate.x(), candidate.ground(), candidate.z());
@@ -516,6 +523,8 @@ final class BuilderGoal extends PostWorkGoal {
                 return false;
             }
         }
+        // No column left to try.
+        startNear();
         return false;
     }
 
@@ -534,7 +543,21 @@ final class BuilderGoal extends PostWorkGoal {
     private void startNear() {
         nearest = true;
         spot = null;
+        spots = null;
         walking = 0;
+    }
+
+    /**
+     * The column the builder stands on does not serve the block (no room to climb, a place that takes no scaffold, no height
+     * that reaches it): the builder comes down and tries another column, or works from as near as it gets after a few.
+     */
+    private void refuseColumn(Column on) {
+        refused.add(Scaffolding.pack(on.x(), 0, on.z()));
+        spot = null;
+        leaving = true;
+        if (refused.size() >= COLUMN_TRIES) {
+            startNear();
+        }
     }
 
     /**
@@ -586,6 +609,8 @@ final class BuilderGoal extends PostWorkGoal {
             // A scaffold under it was broken: it comes down onto the next one, unharmed. Standing on nothing for long (in water),
             // it gives the column up.
             if (++airborne > AIRBORNE_TICKS) {
+                refused.add(Scaffolding.pack(on.x(), 0, on.z()));
+                spot = null;
                 takeColumnDownNow();
             }
             return false;
@@ -619,15 +644,13 @@ final class BuilderGoal extends PostWorkGoal {
         BlockPos under = new BlockPos(on.x(), feet, on.z());
         if (construction == null || !Scaffolds.open(level, under.above(2)) || !Scaffolds.placeable(level, construction, under)) {
             // No room overhead, or the place takes no scaffold any longer: down, and another place.
-            refused.add(Scaffolding.pack(on.x(), 0, on.z()));
-            leaving = true;
+            refuseColumn(on);
             return;
         }
         body.moveTo(on.x() + 0.5, feet + 1, on.z() + 0.5, body.getYRot(), body.getXRot());
         if (!Scaffolds.put(level, construction, under)) {
             body.moveTo(on.x() + 0.5, feet, on.z() + 0.5, body.getYRot(), body.getXRot());
-            refused.add(Scaffolding.pack(on.x(), 0, on.z()));
-            leaving = true;
+            refuseColumn(on);
             return;
         }
         body.setDeltaMovement(Vec3.ZERO);

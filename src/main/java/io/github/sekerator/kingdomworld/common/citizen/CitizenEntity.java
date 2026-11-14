@@ -381,6 +381,11 @@ public class CitizenEntity extends PathfinderMob {
     @Override
     public void aiStep() {
         super.aiStep();
+        if (!level().isClientSide && onGround() && level().getBlockState(blockPosition().below())
+                .is(io.github.sekerator.kingdomworld.common.registry.ModRegistries.SCAFFOLDING.get())) {
+            // Whoever stands on scaffolds (a body come back on top of a column, one that walks off its edge) comes down unharmed.
+            keepSafeFromFalls(100);
+        }
         if (!level().isClientSide && isSleeping() && tickCount % 20 == 0
                 && io.github.sekerator.kingdomworld.common.life.DayGoal.shouldWake(this)) {
             stopSleeping();
