@@ -414,10 +414,12 @@ public final class NobilityWork {
         return new Stability.Inputs(-1, mood, taxPercent(server, kingdomId), exhaustion, defeats, feast, -1);
     }
 
+    /**
+     * How heavy the taxes of a kingdom weigh, in percent: the heavier of the poll tax against the usual one and of the taxes of
+     * its cities against the usual burden, see {@link io.github.sekerator.kingdomworld.core.commerce.TaxBurden}.
+     */
     static int taxPercent(MinecraftServer server, UUID kingdomId) {
-        long usual = EconomySettings.rules().defaultPollTax();
-        long tax = KingdomWorldApi.state(server).economy().treasury(kingdomId).map(Treasury::pollTax).orElse(usual);
-        return usual <= 0 ? 100 : (int) Math.min(1_000, tax * 100 / usual);
+        return io.github.sekerator.kingdomworld.common.commerce.CommerceWork.taxBurden(server, kingdomId);
     }
 
     static NobilityState.Context context(MinecraftServer server, UUID kingdomId, long day) {
@@ -612,6 +614,13 @@ public final class NobilityWork {
                 }
             } else if (economy.nobilityPayment(kingdomId, share, day).ok()) {
                 state.house(grant.house()).ifPresent(house -> state.addWealth(house, share));
+            } else {
+                continue;
+            }
+            // The share of the fief of a city is what the crown pays for that city.
+            if (grant.fief().kind() == Fief.Kind.CITY && io.github.sekerator.kingdomworld.common.commerce.CityOf.active(server, kingdomId)) {
+                economy.cityTally(kingdomId, grant.fief().city()).add(io.github.sekerator.kingdomworld.core.economy.CityStatement.Line.CROWN_NOBLES,
+                        share);
             }
         }
     }

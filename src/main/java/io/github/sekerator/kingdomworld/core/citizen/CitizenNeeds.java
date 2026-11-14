@@ -46,8 +46,15 @@ public final class CitizenNeeds {
      *                     between {@link #MIN_LIFE} and {@link #MAX_LIFE} counts
      * @param unrest       mood the stability of the kingdom gives: unrest takes, a steady crown adds; between
      *                     {@link #MIN_LIFE} and {@link #MAX_LIFE} counts
+     * @param means        mood the money of the city of the citizen gives, see
+     *                     {@link io.github.sekerator.kingdomworld.core.commerce.CityMeans}: between its bounds counts
      */
-    public record MoodInputs(float food, boolean hasHome, boolean wounded, int recentDeaths, int payPercent, int comfort, int life, int unrest) {
+    public record MoodInputs(float food, boolean hasHome, boolean wounded, int recentDeaths, int payPercent, int comfort, int life, int unrest,
+                             int means) {
+        public MoodInputs(float food, boolean hasHome, boolean wounded, int recentDeaths, int payPercent, int comfort, int life, int unrest) {
+            this(food, hasHome, wounded, recentDeaths, payPercent, comfort, life, unrest, 0);
+        }
+
         public MoodInputs(float food, boolean hasHome, boolean wounded, int recentDeaths, int payPercent, int comfort, int life) {
             this(food, hasHome, wounded, recentDeaths, payPercent, comfort, life, 0);
         }
@@ -145,6 +152,8 @@ public final class CitizenNeeds {
         mood += Math.max(0, Math.min(MAX_COMFORT, inputs.comfort()));
         mood += Math.max(MIN_LIFE, Math.min(MAX_LIFE, inputs.life()));
         mood += Math.max(MIN_LIFE, Math.min(MAX_LIFE, inputs.unrest()));
+        mood += Math.max(io.github.sekerator.kingdomworld.core.commerce.CityMeans.MIN,
+                Math.min(io.github.sekerator.kingdomworld.core.commerce.CityMeans.MAX, inputs.means()));
         return Math.max(0, Math.min(MAX_MOOD, mood));
     }
 

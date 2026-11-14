@@ -8,10 +8,11 @@ package io.github.sekerator.kingdomworld.core.road;
  * @param folkPerBed   townsfolk one free bed of a city holds, a family
  * @param folkDensity  people one block of the square of a city holds at most when built densely: a city whose people need
  *                     more room than its level gives grows its square by them, without an upper limit
- * @param folkDues     coins one of the townsfolk pays into the treasury a day
+ * @param folkDues     coins one of the townsfolk pays into the treasury a day; 0 by default, since the townsfolk earn nothing
+ *                     yet and dues would be money out of nothing
  */
 public record FolkRules(int namedPerCity, int folkPerBed, int folkDensity, long folkDues) {
-    public static final FolkRules DEFAULT = new FolkRules(64, 4, 8, 1);
+    public static final FolkRules DEFAULT = new FolkRules(64, 4, 8, 0);
 
     public FolkRules {
         if (namedPerCity < 0 || folkPerBed < 1 || folkDensity < 1 || folkDues < 0) {

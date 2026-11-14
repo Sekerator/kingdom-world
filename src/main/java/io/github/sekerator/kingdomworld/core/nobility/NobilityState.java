@@ -1128,6 +1128,17 @@ public final class NobilityState {
         changed();
     }
 
+    /**
+     * The loyalty of a house falls: the crown took the treasury of the city it holds.
+     */
+    public void loseLoyalty(long houseId, int amount) {
+        NobleHouse house = houses.get(houseId);
+        if (house != null && amount > 0) {
+            house.changeLoyalty(-amount);
+            changed();
+        }
+    }
+
     public void adminContent(UUID kingdomId, Faction faction, int value) {
         Court court = court(kingdomId);
         court.changeContent(faction, value - court.content(faction));

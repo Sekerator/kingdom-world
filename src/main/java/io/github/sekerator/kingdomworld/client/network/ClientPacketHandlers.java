@@ -76,6 +76,12 @@ public final class ClientPacketHandlers {
         }
     }
 
+    public static void handleCityDetail(io.github.sekerator.kingdomworld.common.network.data.CityViews.CityDetail detail) {
+        if (Minecraft.getInstance().screen instanceof ThroneScreen throne) {
+            throne.updateCityDetail(detail);
+        }
+    }
+
     public static void handleBank(io.github.sekerator.kingdomworld.common.network.data.BankView view, boolean open) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.BankScreen bank && bank.pos().equals(view.pos())) {

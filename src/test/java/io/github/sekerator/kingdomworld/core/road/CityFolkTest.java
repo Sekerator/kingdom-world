@@ -14,6 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class CityFolkTest {
     private static final FolkRules RULES = FolkRules.DEFAULT;
+    /** The rules with the old dues of a coin a head, which a server may still set. */
+    private static final FolkRules PAYING = new FolkRules(64, 4, 8, 1);
     private static final int DAILY = 6;
     /** Plenty of food, no other eaters, the quota of named citizens reached, a good mood, a treasury with room. */
     private static final long PLENTY = 1_000_000_000L;
@@ -62,7 +64,8 @@ class CityFolkTest {
         CityFolk.Result result = CityFolk.day(day(100, 100, 30L * DAILY), RULES);
         assertEquals(70, result.leftHungry());
         assertEquals(30, result.folk(), "those who ate stay, and nobody comes while some went hungry");
-        assertEquals(30, result.dues(), "only those who stay pay");
+        assertEquals(0, result.dues(), "by default the townsfolk pay nothing");
+        assertEquals(30, CityFolk.day(day(100, 100, 30L * DAILY), PAYING).dues(), "only those who stay pay");
         assertEquals(600, CityFolk.ration(100, DAILY));
         CityFolk.Result free = CityFolk.day(new CityFolk.Day(100, 0.0, 100, 0, 0, 0, 64, 3, 64, 50, PLENTY), RULES);
         assertEquals(0, free.leftHungry(), "townsfolk who need no food never go hungry");
@@ -101,13 +104,24 @@ class CityFolkTest {
 
     @Test
     void aFullTreasuryTakesNoMoreThanItHasRoomFor() {
-        CityFolk.Result paid = CityFolk.day(day(200, 100, 200L * DAILY), RULES);
+        CityFolk.Result paid = CityFolk.day(day(200, 100, 200L * DAILY), PAYING);
         assertEquals(200, paid.dues(), "a coin a head a day");
         CityFolk.Day full = new CityFolk.Day(200, 0.0, 100, DAILY, 200L * DAILY, PLENTY, 64, 3, 64, 60, 37);
-        assertEquals(37, CityFolk.day(full, RULES).dues());
+        assertEquals(37, CityFolk.day(full, PAYING).dues());
         CityFolk.Day none = new CityFolk.Day(200, 0.0, 100, DAILY, 200L * DAILY, PLENTY, 64, 3, 64, 60, 0);
-        assertEquals(0, CityFolk.day(none, RULES).dues());
+        assertEquals(0, CityFolk.day(none, PAYING).dues());
         assertEquals(400, CityFolk.dues(200, new FolkRules(64, 4, 8, 2)));
+    }
+
+    @Test
+    void theTownsfolkPayNoDuesOutOfNothingByDefault() {
+        assertEquals(0, FolkRules.DEFAULT.folkDues(), "dues out of nothing would make money; the townsfolk earn nothing yet");
+        assertEquals(0, CityFolk.day(day(200, 100, 200L * DAILY), RULES).dues());
+        assertEquals(0, io.github.sekerator.kingdomworld.core.Limits.effective(io.github.sekerator.kingdomworld.core.Limits.FOLK_DUES, 1),
+                "the old default 1 of a written config is read as 0");
+        assertEquals(2, io.github.sekerator.kingdomworld.core.Limits.effective(io.github.sekerator.kingdomworld.core.Limits.FOLK_DUES, 2),
+                "any other value stays as it is written");
+        assertEquals("0", io.github.sekerator.kingdomworld.core.Limits.effectiveText(io.github.sekerator.kingdomworld.core.Limits.FOLK_DUES, "1"));
     }
 
     @Test

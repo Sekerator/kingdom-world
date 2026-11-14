@@ -76,7 +76,7 @@ public final class CityPeople {
     /**
      * The capital and the cities of a kingdom, the capital first.
      */
-    static List<CityWalls.Place> places(MinecraftServer server, UUID kingdomId) {
+    public static List<CityWalls.Place> places(MinecraftServer server, UUID kingdomId) {
         List<CityWalls.Place> result = new ArrayList<>();
         CityWalls.place(server, kingdomId, 0).ifPresent(result::add);
         for (City city : RoadWork.state(server).citiesOf(kingdomId)) {
@@ -161,6 +161,30 @@ public final class CityPeople {
             result.add(new Census(places.get(i), named[i], mood, beds[i], free[i], houses[i], free[i] > 0 ? best[i] : null));
         }
         return result;
+    }
+
+    /**
+     * The city of a kingdom a place belongs to, by the rule of the beds and homes: the nearest city whose square holds it, else
+     * the nearest town hall or throne in its world, else the capital; -1 for none. The same rule tells where a citizen lives,
+     * counts and pays.
+     *
+     * @param places the places of the kingdom, {@link #places}
+     * @param index  the index of each city among them
+     */
+    public static long cityIdOf(MinecraftServer server, UUID kingdomId, List<CityWalls.Place> places, Map<Long, Integer> index, WorldPos pos) {
+        int i = cityOf(server, kingdomId, places, index, pos);
+        return i < 0 ? -1 : places.get(i).cityId();
+    }
+
+    /**
+     * The index of each city among the places of a kingdom.
+     */
+    public static Map<Long, Integer> index(List<CityWalls.Place> places) {
+        Map<Long, Integer> index = new HashMap<>();
+        for (int i = 0; i < places.size(); i++) {
+            index.put(places.get(i).cityId(), i);
+        }
+        return index;
     }
 
     /**

@@ -40,7 +40,9 @@ public final class FolkSettings {
     private static FolkRules fromConfig() {
         try {
             KingdomWorldConfig.Server config = KingdomWorldConfig.SERVER;
-            return new FolkRules(config.namedPerCity.get(), config.folkPerBed.get(), config.folkDensity.get(), config.folkDues.get());
+            return new FolkRules(config.namedPerCity.get(), config.folkPerBed.get(), config.folkDensity.get(),
+                    io.github.sekerator.kingdomworld.core.Limits.effective(io.github.sekerator.kingdomworld.core.Limits.FOLK_DUES,
+                            config.folkDues.get()));
         } catch (RuntimeException e) {
             // The config is not loaded (a unit check or a client without a server): the defaults hold.
             return FolkRules.DEFAULT;

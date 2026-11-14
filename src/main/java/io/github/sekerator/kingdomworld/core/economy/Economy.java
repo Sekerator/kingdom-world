@@ -49,6 +49,10 @@ public final class Economy {
     private int defaultSalesTaxPermille;
     /** Money of each currency held outside these books: in the escrow of guild contracts, for the sellers of provinces. */
     private final Map<String, java.util.function.ToLongFunction<UUID>> heldElsewhere = new LinkedHashMap<>();
+    /** The purses of the townspeople, the treasuries of the cities and the tills of the shops. */
+    private final CityPurses purses = new CityPurses();
+    /** What the treasury of each city keeps besides its money, by kingdom and city. */
+    private final Map<String, CityTreasury> cityTreasuries = new LinkedHashMap<>();
     private Runnable changeListener = () -> {
     };
 
@@ -100,8 +104,21 @@ public final class Economy {
      * @param pay      what each citizen got, by citizen id
      * @param percents how much of its usual wage each citizen got, see {@link Payroll#percent}
      */
-    public record Payday(List<TaxPaid> taxes, Map<UUID, Long> pay, Map<UUID, Integer> percents, Payroll.Summary summary) {
-        public static final Payday NONE = new Payday(List.of(), Map.of(), Map.of(), Payroll.Summary.NONE);
+    public record Payday(List<TaxPaid> taxes, Map<UUID, Long> pay, Map<UUID, Integer> percents, Payroll.Summary summary,
+                         Map<UUID, Long> cities) {
+        public static final Payday NONE = new Payday(List.of(), Map.of(), Map.of(), Payroll.Summary.NONE, Map.of());
+
+        public Payday(List<TaxPaid> taxes, Map<UUID, Long> pay, Map<UUID, Integer> percents, Payroll.Summary summary) {
+            this(taxes, pay, percents, summary, Map.of());
+        }
+
+        /**
+         * The city into whose purse the wage of a citizen went, or -1 when it left the world.
+         */
+        public long cityOf(UUID citizen) {
+            Long city = cities.get(citizen);
+            return city == null ? -1 : city;
+        }
     }
 
     /**
@@ -221,7 +238,7 @@ public final class Economy {
         for (java.util.function.ToLongFunction<UUID> held : heldElsewhere.values()) {
             sum = Money.addCapped(sum, Math.max(0, held.applyAsLong(currency)));
         }
-        return sum;
+        return Money.addCapped(sum, purses.total(currency));
     }
 
     /**
@@ -561,6 +578,18 @@ public final class Economy {
         Treasury to = treasuries.get(winner);
         if (from == null || to == null || winner.equals(loser)) {
             return new Annexed(Outcome.fail(KingdomError.UNKNOWN_CURRENCY), 0, 0, Map.of(), 0);
+        }
+        // What the cities of the loser still hold joins its treasury and goes to the winner with it.
+        sweepPurses(loser, day);
+        // Money of the loser the winner seized from its cities becomes money of the winner by the rates, before the currency of
+        // the loser becomes old.
+        long seized = to.reserve(loser);
+        if (seized > 0) {
+            long seizedWorth = ExchangeRates.convert(seized, rate(loser), rate(winner), 0);
+            if (seizedWorth > 0 && to.canReceive(seizedWorth)) {
+                to.spendReserve(loser, seized);
+                to.receive(seizedWorth, LedgerCategory.WAR, day);
+            }
         }
         // As much as the treasury of the winner can take; the rest stays with the loser until there is room.
         long funds = Math.max(0, from.funds());
@@ -1114,10 +1143,14 @@ public final class Economy {
      * The kingdom was dissolved: its treasury is gone, its currency becomes old. Accounts in it stay.
      */
     public void retire(UUID kingdomId, String kingdomName, int color, long gameTime) {
-        Treasury treasury = treasuries.remove(kingdomId);
-        if (treasury == null) {
+        if (!treasuries.containsKey(kingdomId)) {
             return;
         }
+        // The money of its cities joins its treasury first, so that it goes with it as the money of the kingdom.
+        sweepPurses(kingdomId, Math.floorDiv(gameTime, 24_000L));
+        purses.forget(kingdomId);
+        cityTreasuries.values().removeIf(city -> city.kingdomId().equals(kingdomId));
+        Treasury treasury = treasuries.remove(kingdomId);
         retired.put(kingdomId, new RetiredCurrency(kingdomId, treasury.currencyName(), kingdomName, color, treasury.units(), gameTime));
         // Reserves of the old currency in other treasuries cannot be spent any more.
         for (Treasury other : treasuries.values()) {
@@ -1484,6 +1517,17 @@ public final class Economy {
      * @param claims    the citizens on the payroll
      */
     public Payday payday(UUID kingdomId, long day, List<UUID> taxpayers, List<WageClaim> claims, EconomyRules rules) {
+        return payday(kingdomId, day, taxpayers, claims, rules, citizen -> -1);
+    }
+
+    /**
+     * The daily payday of a kingdom whose wages stay in its cities: the wage of each citizen goes into the purse of the
+     * townspeople of its city, written into the journal as wages as before.
+     *
+     * @param cityOf the city of each citizen (0 the capital), or -1 for a wage that leaves the world as before
+     */
+    public Payday payday(UUID kingdomId, long day, List<UUID> taxpayers, List<WageClaim> claims, EconomyRules rules,
+                         java.util.function.ToLongFunction<UUID> cityOf) {
         Treasury treasury = treasuries.get(kingdomId);
         if (treasury == null || treasury.lastPayday() >= day) {
             return Payday.NONE;
@@ -1537,11 +1581,548 @@ public final class Economy {
         if (!treasury.spend(total, LedgerCategory.WAGES, day)) {
             throw new IllegalStateException("Wages of " + kingdomId + " exceeded its funds");
         }
+        Map<UUID, Long> cities = new LinkedHashMap<>();
+        for (int i = 0; i < claims.size(); i++) {
+            long city = paid[i] <= 0 ? -1 : cityOf.applyAsLong(claims.get(i).citizenId());
+            if (city < 0) {
+                continue;
+            }
+            CityPurses.PurseKey key = CityPurses.PurseKey.cityPurse(kingdomId, city);
+            CityStatement.Tally tally = openCityTreasury(kingdomId, city).tally();
+            tally.add(CityStatement.Line.CROWN_WAGES, paid[i]);
+            if (purses.canReceive(key, paid[i])) {
+                purses.set(key, purses.balance(key) + paid[i]);
+                tally.add(CityStatement.Line.PURSE_IN, paid[i]);
+                cities.put(claims.get(i).citizenId(), city);
+            } else {
+                // A purse that cannot hold more lets the wage go, as all wages went before.
+                purses.noteOutflow(kingdomId, city, CityPurses.Outflow.PURSE_FULL, paid[i], day);
+            }
+        }
         Payroll.Summary summary = new Payroll.Summary(day, due, total, claims.size(), underpaid);
         treasury.setLastPayroll(summary);
         treasury.setLastPayday(day);
         changed();
-        return new Payday(List.copyOf(taxes), pay, percents, summary);
+        return new Payday(List.copyOf(taxes), pay, percents, summary, cities);
+    }
+
+    // ---------------------------------------------------------------- the money of the cities
+
+    private static String cityKey(UUID kingdom, long city) {
+        return kingdom + "/" + city;
+    }
+
+    /**
+     * The purses of the townspeople, the treasuries of the cities and the tills of the shops.
+     */
+    public CityPurses purses() {
+        return purses;
+    }
+
+    /**
+     * What a purse holds.
+     */
+    public long purse(CityPurses.PurseKey key) {
+        return purses.balance(key);
+    }
+
+    public Optional<CityTreasury> cityTreasury(UUID kingdom, long city) {
+        return Optional.ofNullable(cityTreasuries.get(cityKey(kingdom, city)));
+    }
+
+    /**
+     * The treasury of a city, opened the first time it is needed.
+     */
+    public CityTreasury openCityTreasury(UUID kingdom, long city) {
+        CityTreasury found = cityTreasuries.get(cityKey(kingdom, city));
+        if (found != null) {
+            return found;
+        }
+        CityTreasury made = new CityTreasury(kingdom, city);
+        cityTreasuries.put(cityKey(kingdom, city), made);
+        changed();
+        return made;
+    }
+
+    public Collection<CityTreasury> cityTreasuries() {
+        return Collections.unmodifiableCollection(cityTreasuries.values());
+    }
+
+    public List<CityTreasury> cityTreasuriesOf(UUID kingdom) {
+        List<CityTreasury> result = new ArrayList<>();
+        for (CityTreasury city : cityTreasuries.values()) {
+            if (city.kingdomId().equals(kingdom)) {
+                result.add(city);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Forgets what a city kept besides its money, once its money went elsewhere.
+     */
+    public void dropCityTreasury(UUID kingdom, long city) {
+        if (cityTreasuries.remove(cityKey(kingdom, city)) != null) {
+            changed();
+        }
+    }
+
+    /**
+     * The city a purse belongs to: its own id for a purse or a treasury of a city; -1 for a till, whose city the caller knows.
+     */
+    private static long cityOf(CityPurses.PurseKey key) {
+        return key.kind() == CityPurses.PurseKind.TILL ? -1 : key.id();
+    }
+
+    private void credit(CityPurses.PurseKey key, long amount, CityLedger line, long day) {
+        purses.set(key, purses.balance(key) + amount);
+        if (key.kind() == CityPurses.PurseKind.CITY_TREASURY) {
+            CityTreasury city = openCityTreasury(key.kingdom(), key.id());
+            city.journal().record(day, line, amount, 0);
+            switch (line) {
+                case TITHE -> city.tally().add(CityStatement.Line.TITHE, amount);
+                case SALES_TAX -> city.tally().add(CityStatement.Line.SALES_TAX, amount);
+                case GRANT -> {
+                    city.tally().add(CityStatement.Line.GRANTED, amount);
+                    city.tally().add(CityStatement.Line.CROWN_GRANTS, amount);
+                    city.setGranted(Money.addCapped(city.granted(), amount));
+                }
+                default -> {
+                }
+            }
+        } else if (key.kind() == CityPurses.PurseKind.CITY_PURSE) {
+            openCityTreasury(key.kingdom(), key.id()).tally().add(CityStatement.Line.PURSE_IN, amount);
+        }
+    }
+
+    private void debit(CityPurses.PurseKey key, long amount, CityLedger line, long day) {
+        long left = purses.balance(key) - amount;
+        purses.set(key, left);
+        if (key.kind() == CityPurses.PurseKind.CITY_TREASURY) {
+            CityTreasury city = openCityTreasury(key.kingdom(), key.id());
+            city.journal().record(day, line, 0, amount);
+            switch (line) {
+                case CROWN_SHARE, IDLE_SHARE, RECALL -> {
+                    city.tally().add(CityStatement.Line.TO_CROWN, amount);
+                    city.tally().add(CityStatement.Line.CROWN_SHARE, amount);
+                }
+                case MATERIALS, IMPORTS, PURCHASES, OTHER -> {
+                    city.tally().add(CityStatement.Line.SPENT, amount);
+                    // What the crown granted is spent first.
+                    city.setGranted(Math.max(0, city.granted() - amount));
+                }
+                default -> {
+                }
+            }
+            city.setGranted(Math.min(city.granted(), left));
+        }
+    }
+
+    /**
+     * Money moves between two purses of one kingdom, written into the journal of a treasury of a city among them under a line.
+     */
+    public Outcome purseMove(CityPurses.PurseKey from, CityPurses.PurseKey to, long amount, CityLedger line, long day) {
+        if (!from.kingdom().equals(to.kingdom())) {
+            return Outcome.fail(KingdomError.SAME_CURRENCY);
+        }
+        if (!Money.isAmount(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (amount == 0 || from.equals(to)) {
+            return Outcome.DONE;
+        }
+        if (purses.balance(from) < amount) {
+            return Outcome.fail(KingdomError.NOT_ENOUGH_MONEY);
+        }
+        if (!purses.canReceive(to, amount)) {
+            return Outcome.fail(KingdomError.TOO_MUCH_MONEY);
+        }
+        debit(from, amount, line, day);
+        credit(to, amount, line, day);
+        changed();
+        return Outcome.DONE;
+    }
+
+    public Outcome purseMove(CityPurses.PurseKey from, CityPurses.PurseKey to, long amount) {
+        return purseMove(from, to, amount, CityLedger.OTHER, today);
+    }
+
+    /**
+     * Money of a purse goes into the treasury of its kingdom, under a category of its journal and, for the treasury of a city,
+     * a line of the city's.
+     */
+    public Outcome purseToTreasury(CityPurses.PurseKey key, long amount, LedgerCategory category, CityLedger line, long day) {
+        Treasury treasury = treasuries.get(key.kingdom());
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (!Money.isAmount(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (amount == 0) {
+            return Outcome.DONE;
+        }
+        if (purses.balance(key) < amount) {
+            return Outcome.fail(KingdomError.NOT_ENOUGH_MONEY);
+        }
+        if (!treasury.canReceive(amount)) {
+            return Outcome.fail(KingdomError.TOO_MUCH_MONEY);
+        }
+        debit(key, amount, line, day);
+        treasury.receive(amount, category, day);
+        changed();
+        return Outcome.DONE;
+    }
+
+    public Outcome purseToTreasury(CityPurses.PurseKey key, long amount, LedgerCategory category, long day) {
+        return purseToTreasury(key, amount, category, CityLedger.OTHER, day);
+    }
+
+    /**
+     * Money of the treasury of a kingdom goes into one of its purses.
+     */
+    public Outcome treasuryToPurse(CityPurses.PurseKey key, long amount, LedgerCategory category, CityLedger line, long day) {
+        Treasury treasury = treasuries.get(key.kingdom());
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (!Money.isAmount(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (amount == 0) {
+            return Outcome.DONE;
+        }
+        if (treasury.funds() < amount) {
+            return Outcome.fail(KingdomError.TREASURY_EMPTY);
+        }
+        if (!purses.canReceive(key, amount)) {
+            return Outcome.fail(KingdomError.TOO_MUCH_MONEY);
+        }
+        treasury.spend(amount, category, day);
+        credit(key, amount, line, day);
+        changed();
+        return Outcome.DONE;
+    }
+
+    public Outcome treasuryToPurse(CityPurses.PurseKey key, long amount, LedgerCategory category, long day) {
+        return treasuryToPurse(key, amount, category, CityLedger.OTHER, day);
+    }
+
+    /**
+     * Whether a player could pay a shop: the price into its till and the tax on the sale into the treasury of its city, from
+     * the account or with coins the caller takes, in the currency of the kingdom of the shop only.
+     *
+     * @param player the player paying from the account, or {@code null} for coins
+     */
+    public Outcome checkPlayerPurchase(UUID player, CityPurses.PurseKey till, CityPurses.PurseKey cityTreasury, long price, long tax) {
+        if (!treasuries.containsKey(till.kingdom()) || !till.kingdom().equals(cityTreasury.kingdom())) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (!Money.isAmount(price) || !Money.isAmount(tax) || !Money.isPayment(price + tax)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (player != null && accounts.balance(player, till.kingdom()) < price + tax) {
+            return Outcome.fail(KingdomError.NOT_ENOUGH_MONEY);
+        }
+        if (!purses.canReceive(till, price) || !purses.canReceive(cityTreasury, tax)) {
+            return Outcome.fail(KingdomError.TOO_MUCH_MONEY);
+        }
+        return Outcome.DONE;
+    }
+
+    /**
+     * A player pays a shop: the price into its till, the tax into the treasury of its city. Coins are taken from the inventory
+     * by the caller, who also counts them out of the hands of players as a bank does when they are handed in.
+     *
+     * @param player the player paying from the account, or {@code null} for coins
+     */
+    public Outcome playerPurchase(UUID player, CityPurses.PurseKey till, CityPurses.PurseKey cityTreasury, long price, long tax, long day) {
+        Outcome check = checkPlayerPurchase(player, till, cityTreasury, price, tax);
+        if (!check.ok()) {
+            return check;
+        }
+        if (player != null) {
+            accounts.debit(player, till.kingdom(), price + tax);
+        }
+        if (price > 0) {
+            credit(till, price, CityLedger.OTHER, day);
+        }
+        if (tax > 0) {
+            credit(cityTreasury, tax, CityLedger.SALES_TAX, day);
+        }
+        changed();
+        return Outcome.DONE;
+    }
+
+    /**
+     * Money of a purse leaves the world: goods from afar, the upkeep of a shop, goods a city bought abroad, a purse too full.
+     *
+     * @param city the city it is counted for; for a purse or a treasury of a city its own is taken
+     */
+    public Outcome purseLeaves(CityPurses.PurseKey key, long city, long amount, CityPurses.Outflow outflow, long day) {
+        if (!Money.isAmount(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (amount == 0) {
+            return Outcome.DONE;
+        }
+        if (purses.balance(key) < amount) {
+            return Outcome.fail(KingdomError.NOT_ENOUGH_MONEY);
+        }
+        debit(key, amount, outflow == CityPurses.Outflow.IMPORT ? CityLedger.IMPORTS : CityLedger.OTHER, day);
+        long counted = cityOf(key) >= 0 ? cityOf(key) : city;
+        purses.noteOutflow(key.kingdom(), counted, outflow, amount, day);
+        changed();
+        return Outcome.DONE;
+    }
+
+    /**
+     * Money of a purse goes to a holder outside the books in the same moment (the purse of a house of citizens, which the books
+     * count through {@link #setHeldElsewhere}).
+     *
+     * @return what moved: as much as the purse holds, at most the amount
+     */
+    public long purseHold(CityPurses.PurseKey key, long amount) {
+        long moved = Math.max(0, Math.min(amount, purses.balance(key)));
+        if (moved > 0) {
+            purses.set(key, purses.balance(key) - moved);
+            if (key.kind() == CityPurses.PurseKind.CITY_TREASURY) {
+                CityTreasury city = openCityTreasury(key.kingdom(), key.id());
+                city.setGranted(Math.min(city.granted(), purses.balance(key)));
+            }
+            changed();
+        }
+        return moved;
+    }
+
+    /**
+     * Money a holder outside the books kept comes back into a purse; the holder lets it go in the same moment.
+     *
+     * @return what the purse took: all of it, unless the purse cannot hold more or its kingdom is gone
+     */
+    public long purseRelease(CityPurses.PurseKey key, long amount, long day) {
+        if (amount <= 0 || !purses.canReceive(key, amount) || !treasuries.containsKey(key.kingdom())) {
+            return 0;
+        }
+        credit(key, amount, CityLedger.OTHER, day);
+        changed();
+        return amount;
+    }
+
+    /**
+     * Every purse of a kingdom goes into its treasury as far as it has room, written as money of the cities: a kingdom that is
+     * dissolved or annexed.
+     *
+     * @return what moved
+     */
+    public long sweepPurses(UUID kingdom, long day) {
+        Treasury treasury = treasuries.get(kingdom);
+        if (treasury == null) {
+            return 0;
+        }
+        long moved = 0;
+        for (CityPurses.PurseKey key : purses.keysOf(kingdom)) {
+            long amount = purses.balance(key);
+            if (amount > 0 && treasury.canReceive(amount)) {
+                debit(key, amount, CityLedger.OTHER, day);
+                treasury.receive(amount, LedgerCategory.CITIES, day);
+                moved += amount;
+            }
+        }
+        if (moved > 0) {
+            changed();
+        }
+        return moved;
+    }
+
+    /**
+     * Purses of a kingdom go to a winner of a war, into its reserves of the currency of the loser; what the winner cannot take
+     * goes into the treasury of the loser.
+     *
+     * @return what the winner took
+     */
+    public long seizePurses(List<CityPurses.PurseKey> keys, UUID winner, long day) {
+        Treasury to = treasuries.get(winner);
+        long seized = 0;
+        for (CityPurses.PurseKey key : keys) {
+            long amount = purses.balance(key);
+            if (amount <= 0) {
+                continue;
+            }
+            Treasury loser = treasuries.get(key.kingdom());
+            if (to != null && !winner.equals(key.kingdom()) && to.canReceiveReserve(key.kingdom(), amount)) {
+                debit(key, amount, CityLedger.OTHER, day);
+                to.receiveReserve(key.kingdom(), amount);
+                long worth = ExchangeRates.convert(amount, rate(key.kingdom()), rate(winner), 0);
+                if (worth > 0) {
+                    to.journal().record(day, LedgerCategory.WAR, worth, 0);
+                }
+                seized += amount;
+            } else if (loser != null && loser.canReceive(amount)) {
+                debit(key, amount, CityLedger.OTHER, day);
+                loser.receive(amount, LedgerCategory.CITIES, day);
+            }
+        }
+        changed();
+        return seized;
+    }
+
+    /**
+     * The crown grants a city money from the treasury of the kingdom; written as a transfer for the crown, as a grant for the
+     * city, which spends it before its own.
+     */
+    public Outcome cityGrant(UUID kingdom, long city, long amount, long day) {
+        if (!Money.isPayment(amount)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        return treasuryToPurse(CityPurses.PurseKey.cityTreasury(kingdom, city), amount, LedgerCategory.TRANSFERS, CityLedger.GRANT, day);
+    }
+
+    /**
+     * What the crown took from a city.
+     *
+     * @param taken  all it took
+     * @param beyond of that, what was not granted to the city before: its people resent it
+     */
+    public record Recall(Outcome outcome, long taken, long beyond) {
+    }
+
+    /**
+     * The crown takes money of a city into the treasury of the kingdom, no more than it holds besides what its head promised
+     * its constructions; what was granted and not spent goes first.
+     */
+    public Recall cityRecall(UUID kingdom, long city, long amount, long day) {
+        if (!Money.isPayment(amount)) {
+            return new Recall(Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE), 0, 0);
+        }
+        CityTreasury treasury = openCityTreasury(kingdom, city);
+        CityPurses.PurseKey key = treasury.key();
+        long free = Math.max(0, purses.balance(key) - treasury.committed());
+        if (amount > free) {
+            return new Recall(Outcome.fail(KingdomError.NOT_ENOUGH_MONEY), 0, 0);
+        }
+        long granted = Math.min(treasury.granted(), amount);
+        long beyond = amount - granted;
+        long grantedBefore = treasury.granted();
+        Outcome moved = purseToTreasury(key, amount, LedgerCategory.TRANSFERS, CityLedger.RECALL, day);
+        if (!moved.ok()) {
+            return new Recall(moved, 0, 0);
+        }
+        treasury.setGranted(Math.min(Math.max(0, grantedBefore - granted), purses.balance(key)));
+        if (beyond > 0) {
+            treasury.setRecalledUntil(day + CityTreasury.RECALL_DAYS - 1);
+        }
+        changed();
+        return new Recall(Outcome.DONE, amount, beyond);
+    }
+
+    /**
+     * What the head of a city promises a construction, or gives back; never more than its treasury holds.
+     *
+     * @return whether it could
+     */
+    public boolean cityCommit(UUID kingdom, long city, long delta) {
+        CityTreasury treasury = openCityTreasury(kingdom, city);
+        long next = treasury.committed() + delta;
+        if (next < 0 || next > purses.balance(treasury.key())) {
+            return false;
+        }
+        treasury.setCommitted(next);
+        changed();
+        return true;
+    }
+
+    /**
+     * Sets the taxes and the share of the crown of a city, in thousandths; {@link CityTreasury#AS_KINGDOM} follows the kingdom.
+     */
+    public Outcome setCityTaxes(UUID kingdom, long city, int salesTax, int tithe, int crownShare) {
+        if (!treasuries.containsKey(kingdom)) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (!inRange(salesTax, CityEconomyRules.MAX_SALES_TAX_PERCENT, true) || !inRange(tithe, CityEconomyRules.MAX_TITHE_PERCENT, true)
+                || !inRange(crownShare, CityEconomyRules.MAX_CROWN_SHARE_PERCENT, true)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        CityTreasury treasury = openCityTreasury(kingdom, city);
+        if (treasury.salesTaxSetting() == salesTax && treasury.titheSetting() == tithe && treasury.crownShareSetting() == crownShare) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        treasury.setTaxes(salesTax, tithe, crownShare);
+        changed();
+        return Outcome.DONE;
+    }
+
+    /**
+     * Sets the taxes and the share of the crown every city of a kingdom follows unless set for itself, in thousandths.
+     */
+    public Outcome setKingdomCityTaxes(UUID kingdom, int salesTax, int tithe, int crownShare) {
+        Treasury treasury = treasuries.get(kingdom);
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (!inRange(salesTax, CityEconomyRules.MAX_SALES_TAX_PERCENT, false) || !inRange(tithe, CityEconomyRules.MAX_TITHE_PERCENT, false)
+                || !inRange(crownShare, CityEconomyRules.MAX_CROWN_SHARE_PERCENT, false)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (treasury.citySalesTaxSetting() == salesTax && treasury.cityTitheSetting() == tithe && treasury.crownShareSetting() == crownShare) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        treasury.setCityTaxes(salesTax, tithe, crownShare);
+        // A city set above the kingdom's new taxes keeps no more than them.
+        capCityTaxes(kingdom, salesTax, tithe);
+        changed();
+        return Outcome.DONE;
+    }
+
+    private static boolean inRange(int permille, int maxPercent, boolean asKingdom) {
+        return (asKingdom && permille == CityTreasury.AS_KINGDOM) || (permille >= 0 && permille <= maxPercent * 10);
+    }
+
+    /**
+     * Lowers the taxes of the cities of a kingdom set above the given ones down to them.
+     */
+    public void capCityTaxes(UUID kingdom, int salesTax, int tithe) {
+        boolean changed = false;
+        for (CityTreasury city : cityTreasuriesOf(kingdom)) {
+            changed |= city.capTaxes(salesTax, tithe);
+        }
+        if (changed) {
+            changed();
+        }
+    }
+
+    /**
+     * The tally of the day of a city, for the lines the books do not write themselves (taverns, exports, goods).
+     */
+    public CityStatement.Tally cityTally(UUID kingdom, long city) {
+        return openCityTreasury(kingdom, city).tally();
+    }
+
+    /**
+     * Ends the day of a city: what it wrote becomes its statement.
+     */
+    public CityStatement sealCity(UUID kingdom, long city, long day) {
+        CityTreasury treasury = openCityTreasury(kingdom, city);
+        CityStatement statement = treasury.seal(day, purses.balance(treasury.key()));
+        changed();
+        return statement;
+    }
+
+    /**
+     * Restores a purse read from saved data.
+     */
+    public void restorePurse(CityPurses.PurseKey key, long amount) {
+        purses.restore(key, amount);
+    }
+
+    /**
+     * Money of a purse of a kind this version does not know goes into the treasury of its kingdom, as far as it has room.
+     */
+    public void restoreUnknownPurse(UUID kingdom, long amount) {
+        Treasury treasury = treasuries.get(kingdom);
+        if (treasury != null && Money.isAmount(amount) && treasury.canReceive(amount)) {
+            treasury.receive(amount, LedgerCategory.CITIES, today);
+        }
     }
 
     // ---------------------------------------------------------------- saved data
@@ -1564,6 +2145,13 @@ public final class Economy {
      */
     public void forget(UUID kingdomId) {
         treasuries.remove(kingdomId);
+    }
+
+    /**
+     * Restores the treasury of a city read from saved data.
+     */
+    public void restoreCityTreasury(CityTreasury city) {
+        cityTreasuries.put(cityKey(city.kingdomId(), city.cityId()), city);
     }
 
     public void restoreAccount(UUID player, UUID currency, long amount) {

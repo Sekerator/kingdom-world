@@ -341,7 +341,10 @@ public final class WarWork {
     }
 
     /**
-     * What a kingdom earned on a day: taxes, trade, the law and the taverns, not transfers, wars or the money of its founding.
+     * What a kingdom earned on a day: taxes, trade, the law, the taverns and the goods sold to the shops of its citizens, and all
+     * the taxes its cities collected that day, not transfers, wars, the money of its founding or the share its cities send the
+     * crown (the taxes of the cities count already when they are collected, so that a share of the crown of 0 and a treasury
+     * taken back hide nothing from the nobles and from tributes).
      */
     public static long income(MinecraftServer server, UUID kingdomId, long day) {
         Optional<Treasury> treasury = KingdomWorldApi.state(server).economy().treasury(kingdomId);
@@ -350,11 +353,15 @@ public final class WarWork {
         }
         Map<LedgerCategory, TreasuryJournal.Totals> totals = treasury.get().journal().days().getOrDefault(day, Map.of());
         long sum = 0;
-        for (LedgerCategory category : List.of(LedgerCategory.TAXES, LedgerCategory.TRADE, LedgerCategory.LAW, LedgerCategory.LIFE)) {
+        for (LedgerCategory category : INCOME) {
             sum += totals.getOrDefault(category, TreasuryJournal.Totals.ZERO).income();
         }
-        return sum;
+        return sum + io.github.sekerator.kingdomworld.core.economy.CityTaxIncome.of(KingdomWorldApi.state(server).economy(), kingdomId, day);
     }
+
+    /** What counts as income of a kingdom in its journal. */
+    public static final List<LedgerCategory> INCOME = List.of(LedgerCategory.TAXES, LedgerCategory.TRADE, LedgerCategory.LAW,
+            LedgerCategory.LIFE, LedgerCategory.COMMERCE);
 
     /**
      * Money from the treasury of one kingdom to another, in the currency of the payer, in the books of both or not at all.

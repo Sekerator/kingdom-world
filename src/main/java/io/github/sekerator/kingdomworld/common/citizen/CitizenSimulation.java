@@ -270,7 +270,8 @@ public final class CitizenSimulation {
             int comfort = io.github.sekerator.kingdomworld.common.construction.BuildingEffects.comfort(server, kingdomId, citizen.home());
             int target = CitizenNeeds.targetMood(new CitizenNeeds.MoodInputs(citizen.food(), citizen.home() != null || quartered,
                     citizen.state() == CitizenState.WOUNDED, recentDeaths, citizen.payPercent(), comfort,
-                    io.github.sekerator.kingdomworld.common.life.LifeWork.mood(server, citizen), unrest));
+                    io.github.sekerator.kingdomworld.common.life.LifeWork.mood(server, citizen), unrest,
+                    io.github.sekerator.kingdomworld.common.commerce.CommerceWork.means(server, citizen)));
             citizen.setMood(CitizenNeeds.nextMood(citizen.mood(), target));
             if (body == null) {
                 // An ill citizen gets less done.

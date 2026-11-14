@@ -51,7 +51,8 @@ final class TreasuryTab {
         MINT,
         PAYMENTS,
         RESERVES,
-        DEBTORS;
+        DEBTORS,
+        CITIES;
 
         String id() {
             return name().toLowerCase(Locale.ROOT);
@@ -59,6 +60,7 @@ final class TreasuryTab {
     }
 
     private final ThroneScreen screen;
+    private final TreasuryCities cities;
     private TreasuryView view;
     private Mode mode = Mode.OVERVIEW;
     private TreasuryJournal.Period period = TreasuryJournal.Period.TODAY;
@@ -97,6 +99,26 @@ final class TreasuryTab {
 
     TreasuryTab(ThroneScreen screen) {
         this.screen = screen;
+        this.cities = new TreasuryCities(screen);
+    }
+
+    /**
+     * Shows the window of a city in the view of the cities.
+     */
+    void setCityDetail(io.github.sekerator.kingdomworld.common.network.data.CityViews.CityDetail detail) {
+        cities.setDetail(detail);
+        if (mode != Mode.CITIES) {
+            mode = Mode.CITIES;
+        }
+    }
+
+    /**
+     * Shows the view of the cities as the treasuries of the cities or what they bring the crown, for checks.
+     */
+    void showCities(boolean crown, boolean editing, String amount) {
+        mode = Mode.CITIES;
+        cities.setCrownView(crown);
+        cities.fillForCheck(editing, amount);
     }
 
     TreasuryView view() {
@@ -112,6 +134,7 @@ final class TreasuryTab {
         if (first || nameText == null) {
             nameText = view.currencyName();
         }
+        cities.viewChanged(view);
     }
 
     void setMode(Mode value) {
@@ -124,6 +147,12 @@ final class TreasuryTab {
     }
 
     String checkName() {
+        if (mode == Mode.CITIES) {
+            return cities.checkName();
+        }
+        if (mode == Mode.OVERVIEW && view != null && view.cities().enabled()) {
+            return "treasury-overview-cities";
+        }
         return "treasury-" + mode.id() + (mode == Mode.JOURNAL ? "-" + period.id() : "");
     }
 
@@ -163,33 +192,39 @@ final class TreasuryTab {
         return lines;
     }
 
+    private static Component joined(Component first, Component second) {
+        return Component.empty().append(first).append(" · ").append(second);
+    }
+
     private List<Component> overviewLines() {
         List<Component> lines = new ArrayList<>();
         CurrencyUnits units = units();
-        lines.add(Component.translatable(KEY + "currency", currencyName()));
-        lines.add(Component.translatable(KEY + "rate", io.github.sekerator.kingdomworld.common.trade.TradeTexts.rate(view.rate())));
+        // Pairs of short lines share one, so that the overview with the line of the cities fits the smallest screen.
+        lines.add(joined(Component.translatable(KEY + "currency", currencyName()),
+                Component.translatable(KEY + "rate", io.github.sekerator.kingdomworld.common.trade.TradeTexts.rate(view.rate()))));
         lines.add(Component.translatable(KEY + "coin_values", MoneyTexts.coins(Denomination.GOLD, 1),
                 MoneyTexts.coins(Denomination.COPPER, units.gold()), MoneyTexts.coins(Denomination.SILVER, 1),
                 MoneyTexts.coins(Denomination.COPPER, units.silver())));
         lines.add(Component.translatable(KEY + "tax", money(view.pollTax()), view.taxpayers()));
         TreasuryView.Payroll payroll = view.lastPayroll();
-        lines.add(payroll.day() < 0 ? Component.translatable(KEY + "payroll_none")
-                : Component.translatable(KEY + "payroll", money(payroll.paid()), money(payroll.due()), payroll.percent(), payroll.citizens()));
+        Component next = Component.translatable(KEY + "next_payday", Math.max(1, (view.untilPayday() + 1_199) / 1_200));
+        lines.add(joined(payroll.day() < 0 ? Component.translatable(KEY + "payroll_none")
+                : Component.translatable(KEY + "payroll", money(payroll.paid()), money(payroll.due()), payroll.percent(), payroll.citizens()), next));
         if (payroll.day() >= 0 && payroll.underpaid() > 0) {
             lines.add(Component.translatable(KEY + "underpaid", payroll.underpaid()));
         }
-        lines.add(Component.translatable(KEY + "next_payday", Math.max(1, (view.untilPayday() + 1_199) / 1_200)));
         TreasuryView.Mint mint = view.mint();
         if (mint.posts() == 0) {
             lines.add(Component.translatable(KEY + "mint_none"));
         } else {
-            lines.add(Component.translatable(KEY + "mint", mint.posts(), mint.workers(),
-                    Component.translatable("kingdomworld.work.status." + mint.status().id())));
-            lines.add(Component.translatable(mint.toVault() ? KEY + "minted_vault" : KEY + "minted_balance", money(mint.today()),
-                    money(mint.week())));
+            lines.add(joined(Component.translatable(KEY + "mint", mint.posts(), mint.workers(),
+                    Component.translatable("kingdomworld.work.status." + mint.status().id())),
+                    Component.translatable(mint.toVault() ? KEY + "minted_vault" : KEY + "minted_balance", money(mint.today()),
+                            money(mint.week()))));
         }
         lines.add(view.debtorCount() == 0 ? Component.translatable(KEY + "debts_none")
                 : Component.translatable(KEY + "debts", view.debtorCount(), money(view.debtTotal())));
+        cities.overviewLine(view).ifPresent(lines::add);
         return lines;
     }
 
@@ -242,7 +277,7 @@ final class TreasuryTab {
         int payments = paymentLabelWidth + BOX_WIDTH + GAP + Math.max(payWidth, coinChoiceWidth + GAP + takeWidth);
         settings = Math.max(settings, payments);
         int wages = professionWidth + 90 + 2 * (stepWidth + GAP);
-        int mint = measureMint(font);
+        int mint = Math.max(measureMint(font), cities.measure(font));
         int messages = 0;
         for (String key : List.of("loading", "journal_empty", "debtors_none", "read_only", "payroll_none", "mint_none", "debts_none",
                 "payments_read_only", "coins_read_only", "reserves_none", "mint_metals_none")) {
@@ -324,6 +359,7 @@ final class TreasuryTab {
             case MINT -> view.mint().metals().size();
             case DEBTORS -> view.debtors().size();
             case RESERVES -> view.reserves().size();
+            case CITIES -> cities.rowCount(view);
             default -> 0;
         };
     }
@@ -368,6 +404,9 @@ final class TreasuryTab {
                 screen.rebuild();
             }));
         }
+        if (cities.consumeReset()) {
+            scroll = 0;
+        }
         int rows = visible(top, panelHeight);
         scroll = Math.max(0, Math.min(scroll, rowCount() - rows));
         if (mode == Mode.SETTINGS) {
@@ -379,6 +418,23 @@ final class TreasuryTab {
         if (mode == Mode.MINT) {
             initMint(right, top, rows);
         }
+        if (mode == Mode.CITIES) {
+            cities.setScroll(scroll);
+            cities.init(view, x + modeWidth + GAP, buttonsY(top), x, right, listTop(top));
+        }
+    }
+
+    /**
+     * A click in the tab: on the row of a city.
+     */
+    boolean click(int left, int top, int panelWidth, int panelHeight, double mouseX, double mouseY) {
+        if (view == null || mode != Mode.CITIES) {
+            return false;
+        }
+        int x = left + KingdomScreen.PAD;
+        int right = left + panelWidth - KingdomScreen.PAD;
+        cities.setScroll(scroll);
+        return cities.click(view, listTop(top), top + panelHeight - ThroneScreen.BOTTOM_AREA, x, right, mouseX, mouseY);
     }
 
     /**
@@ -545,6 +601,9 @@ final class TreasuryTab {
     }
 
     private int visible(int top, int panelHeight) {
+        if (mode == Mode.CITIES && view != null) {
+            return cities.visible(view, listTop(top), top + panelHeight - ThroneScreen.BOTTOM_AREA);
+        }
         if (mode == Mode.MINT) {
             return Math.max(1, (top + panelHeight - ThroneScreen.BOTTOM_AREA - mintTop(top)) / MINT_ROW);
         }
@@ -589,6 +648,16 @@ final class TreasuryTab {
             case PAYMENTS -> renderPayments(graphics, x, right, top, panelHeight);
             case DEBTORS -> renderDebtors(graphics, font, x, right, listTop, rows);
             case RESERVES -> renderReserves(graphics, x, right, listTop, rows);
+            case CITIES -> {
+                cities.setScroll(scroll);
+                if (cities.detail() != null) {
+                    int titleX = x + modeWidth + GAP + cities.backWidth() + 6;
+                    int pageRoom = count > rows ? font.width(Component.translatable("kingdomworld.screen.throne.page", scroll + 1,
+                            Math.min(count, scroll + rows), count)) + 6 : 0;
+                    screen.name(graphics, cities.title().getString(), titleX, buttonsY(top) + 4, 0xFFF0D070, right - pageRoom - titleX);
+                }
+                cities.render(graphics, font, view, x, right, listTop, top + panelHeight - ThroneScreen.BOTTOM_AREA);
+            }
         }
     }
 
@@ -798,7 +867,7 @@ final class TreasuryTab {
      * Whether the tab has a text field the player is typing into, so that the screen keeps keys for it.
      */
     boolean editing() {
-        return mode == Mode.SETTINGS || mode == Mode.PAYMENTS;
+        return mode == Mode.SETTINGS || mode == Mode.PAYMENTS || mode == Mode.CITIES;
     }
 
     /**
@@ -820,6 +889,8 @@ final class TreasuryTab {
         return switch (mode) {
             case SETTINGS -> Component.translatable(KEY + "settings_hint");
             case PAYMENTS -> Component.translatable(KEY + "payments_hint");
+            case CITIES -> Component.translatable(cities.detail() != null ? "kingdomworld.screen.cities.panel_hint"
+                    : "kingdomworld.screen.cities.hint");
             default -> Component.empty();
         };
     }

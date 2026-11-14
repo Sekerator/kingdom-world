@@ -39,7 +39,11 @@ public enum LedgerCategory {
     /** The share of the nobles of their fiefs, demands of the court, spies, ransoms and what spies took. */
     NOBILITY,
     /** Provinces bought and sold. */
-    LAND;
+    LAND,
+    /** The share of the crown of the taxes of the cities, what they keep beyond their reserve, and goods they buy of the crown. */
+    CITIES,
+    /** Goods sold to the shops of the citizens and bought back from them. */
+    COMMERCE;
 
     public String id() {
         return name().toLowerCase(Locale.ROOT);

@@ -1051,6 +1051,8 @@ public final class CityWalls {
     public static void handOver(MinecraftServer server, long cityId, UUID from, UUID to, long newCity) {
         // The townsfolk stay with their city, wall or no wall.
         RoadWork.state(server).handOverCharter(cityId, from, to, newCity);
+        // The shops of the city close, its treasury and its purse go to the winner.
+        io.github.sekerator.kingdomworld.common.commerce.CityMoney.handOver(server, cityId, from, to);
         Optional<Wall> wall = RoadWork.state(server).wallOf(cityId, from);
         if (wall.isEmpty()) {
             return;

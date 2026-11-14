@@ -198,6 +198,8 @@ public final class KingdomWorldConfig {
         public final NpcKingdoms npcKingdoms;
         /** The day of citizens, taverns, rumors, light illnesses, festivals and fairs. */
         public final Life life;
+        /** The treasuries of the cities, the taxes of citizens and their shops. */
+        public final CityEconomy cityEconomy;
         /** Relations, treaties, wars and peace between kingdoms. */
         public final War war;
         public final Siege siege;
@@ -259,8 +261,9 @@ public final class KingdomWorldConfig {
                             "level gives grows its square (for the law, the guards and construction) by them, without an upper limit.")
                     .defineInRange("folkDensity", 8, 1, 1_000);
             folkDues = builder
-                    .comment("Coins one of the townsfolk pays into the treasury a day (a farmer earns 6). A full treasury takes no more.")
-                    .defineInRange("folkDues", 1, 0, 1_000_000);
+                    .comment("Coins one of the townsfolk pays into the treasury a day. 0 by default: the townsfolk earn nothing of their own yet,",
+                            "and their dues would be money out of nothing. The old default 1 is read as 0.")
+                    .defineInRange("folkDues", 0, 0, 1_000_000);
             farmRadius = builder
                     .comment("How far, in blocks, a farmer works around its composter.")
                     .defineInRange("farmRadius", 8, 1, 32);
@@ -595,6 +598,7 @@ public final class KingdomWorldConfig {
             law = new Law(builder);
             npcKingdoms = new NpcKingdoms(builder);
             life = new Life(builder);
+            cityEconomy = new CityEconomy(builder);
             war = new War(builder);
             siege = new Siege(builder);
             nobility = new Nobility(builder);
@@ -1640,6 +1644,138 @@ public final class KingdomWorldConfig {
                     1_000_000L);
             bodyRange = builder.comment("A companion told to stand or guard a place is in the world while its owner is this near, in blocks.")
                     .defineInRange("bodyRange", d.bodyRange, 16, 512);
+            builder.pop();
+        }
+    }
+
+    /**
+     * The treasuries of the cities of the kingdoms of players, the taxes of their citizens and the shops of the citizens.
+     */
+    public static final class CityEconomy {
+        public final ForgeConfigSpec.BooleanValue enabled;
+        public final ForgeConfigSpec.IntValue salesTaxPercent;
+        public final ForgeConfigSpec.IntValue tithePercent;
+        public final ForgeConfigSpec.IntValue crownSharePercent;
+        public final ForgeConfigSpec.IntValue idleReserveDays;
+        public final ForgeConfigSpec.IntValue headReserveDays;
+        public final ForgeConfigSpec.IntValue cityReserveDays;
+        public final ForgeConfigSpec.IntValue crownShareFairPercent;
+        public final ForgeConfigSpec.IntValue purseKeepDays;
+        public final ForgeConfigSpec.IntValue afarPercent;
+        public final ForgeConfigSpec.IntValue basketFood;
+        public final ForgeConfigSpec.IntValue basketClothing;
+        public final ForgeConfigSpec.IntValue basketTools;
+        public final ForgeConfigSpec.IntValue basketHousehold;
+        public final ForgeConfigSpec.IntValue basketLuxury;
+        public final ForgeConfigSpec.IntValue businessUpkeepPercent;
+        public final ForgeConfigSpec.IntValue turnoverPerWorker;
+        public final ForgeConfigSpec.IntValue familyShopPercent;
+        public final ForgeConfigSpec.IntValue fairIncomePercent;
+        public final ForgeConfigSpec.IntValue minMarginPercent;
+        public final ForgeConfigSpec.IntValue maxMarginPercent;
+        public final ForgeConfigSpec.IntValue marginStepPercent;
+        public final ForgeConfigSpec.IntValue keeperUsualIncome;
+        public final ForgeConfigSpec.IntValue closeAfterDays;
+        public final ForgeConfigSpec.IntValue shopCredit;
+        public final ForgeConfigSpec.IntValue takeFromCrownPercent;
+        public final ForgeConfigSpec.IntValue stockDays;
+        public final ForgeConfigSpec.IntValue tavernEveningPrice;
+        public final ForgeConfigSpec.IntValue evasionStartPercent;
+        public final ForgeConfigSpec.IntValue evasionMaxPercent;
+
+        CityEconomy(ForgeConfigSpec.Builder builder) {
+            io.github.sekerator.kingdomworld.core.economy.CityEconomyRules d = io.github.sekerator.kingdomworld.core.economy.CityEconomyRules.DEFAULT;
+            builder.comment("The money of the cities of the kingdoms of players: wages stay in the purse of the townspeople of each city, its",
+                    "treasury takes the taxes of its people and sends the crown its share, and citizens without a post keep shops that",
+                    "buy goods of the crown and sell them to the townspeople and players. Kingdoms of the world live as before.",
+                    "Money is in copper coins of the kingdom.").push("cityEconomy");
+            enabled = builder
+                    .comment("Whether wages stay in the cities, cities keep treasuries and citizens keep shops. Off: wages leave the world as",
+                            "before, no shop opens and no treasury of a city takes money.")
+                    .define("enabled", d.enabled());
+            salesTaxPercent = builder
+                    .comment("The tax on the sales of the shops a kingdom starts with, in percent, on top of the price.")
+                    .defineInRange("salesTaxPercent", d.salesTaxPercent(), 0, 25);
+            tithePercent = builder
+                    .comment("The tithe of what shopkeepers earned the day before a kingdom starts with, in percent.")
+                    .defineInRange("tithePercent", d.tithePercent(), 0, 50);
+            crownSharePercent = builder
+                    .comment("The share of the taxes of a day a city sends the crown that a kingdom starts with, in percent.")
+                    .defineInRange("crownSharePercent", d.crownSharePercent(), 0, 100);
+            idleReserveDays = builder
+                    .comment("Days of its own share of the taxes a city without a head keeps; more goes to the crown the same day.")
+                    .defineInRange("idleReserveDays", d.idleReserveDays(), 0, 365);
+            headReserveDays = builder
+                    .comment("Days of its income the head of a city never spends.")
+                    .defineInRange("headReserveDays", d.headReserveDays(), 0, 365);
+            cityReserveDays = builder
+                    .comment("Days of its own share a city with a head keeps besides what it saves for; more goes to the crown.")
+                    .defineInRange("cityReserveDays", d.cityReserveDays(), 0, 365);
+            crownShareFairPercent = builder
+                    .comment("Above this share of the crown the people of a city with a head feel that it keeps nothing for itself.")
+                    .defineInRange("crownShareFairPercent", d.crownShareFairPercent(), 0, 100);
+            purseKeepDays = builder
+                    .comment("Days of what comes into the purse of the townspeople of a city it keeps; more leaves the world.")
+                    .defineInRange("purseKeepDays", d.purseKeepDays(), 0, 365);
+            afarPercent = builder
+                    .comment("The share of their purse the townspeople spend a day on goods from afar; it leaves the world.")
+                    .defineInRange("afarPercent", d.afarPercent(), 0, 100);
+            basketFood = builder.comment("The share of their purse the townspeople spend on food, in percent.")
+                    .defineInRange("basketFood", d.basketShare(0), 0, 100);
+            basketClothing = builder.comment("The share of their purse the townspeople spend on clothing, in percent.")
+                    .defineInRange("basketClothing", d.basketShare(1), 0, 100);
+            basketTools = builder.comment("The share of their purse the townspeople spend on tools, in percent.")
+                    .defineInRange("basketTools", d.basketShare(2), 0, 100);
+            basketHousehold = builder.comment("The share of their purse the townspeople spend on household goods, in percent.")
+                    .defineInRange("basketHousehold", d.basketShare(3), 0, 100);
+            basketLuxury = builder.comment("The share of their purse the townspeople spend on luxury, in percent, from the level of a town;",
+                            "in a village it goes to household goods.")
+                    .defineInRange("basketLuxury", d.basketShare(4), 0, 100);
+            businessUpkeepPercent = builder
+                    .comment("The share of the takings of a shop its upkeep takes out of the world: rent, firewood, small things.")
+                    .defineInRange("businessUpkeepPercent", d.businessUpkeepPercent(), 0, 100);
+            turnoverPerWorker = builder
+                    .comment("The worth of goods one shopkeeper sells a day at most.")
+                    .defineInRange("turnoverPerWorker", (int) d.turnoverPerWorker(), 0, 1_000_000);
+            familyShopPercent = builder
+                    .comment("The strength of a shop the family of a house keeps in the evening, in percent of a shopkeeper.")
+                    .defineInRange("familyShopPercent", d.familyShopPercent(), 0, 100);
+            fairIncomePercent = builder
+                    .comment("The income a shopkeeper aims at with the margin, in percent of its usual income.")
+                    .defineInRange("fairIncomePercent", d.fairIncomePercent(), 0, 1_000);
+            minMarginPercent = builder.comment("The smallest margin of a shop, in percent of what it paid.")
+                    .defineInRange("minMarginPercent", d.minMarginPercent(), 0, 1_000);
+            maxMarginPercent = builder.comment("The largest margin of a shop, in percent of what it paid.")
+                    .defineInRange("maxMarginPercent", d.maxMarginPercent(), 0, 1_000);
+            marginStepPercent = builder.comment("Points the margin of a shop moves a day at most.")
+                    .defineInRange("marginStepPercent", d.marginStepPercent(), 0, 1_000);
+            keeperUsualIncome = builder
+                    .comment("What a shopkeeper usually earns a day; its mood follows what it earns against it, never below that of the idle.")
+                    .defineInRange("keeperUsualIncome", (int) d.keeperUsualIncome(), 0, 1_000_000);
+            closeAfterDays = builder
+                    .comment("Days in a row of earning less than half the usual after which a shop closes; a place where a shop closed",
+                            "of poverty waits as long before another opens there.")
+                    .defineInRange("closeAfterDays", d.closeAfterDays(), 1, 365);
+            shopCredit = builder
+                    .comment("The worth of the goods the crown gives a new shop on credit at its own price, paid back first from its takings.")
+                    .defineInRange("shopCredit", (int) d.shopCredit(), 0, 1_000_000);
+            takeFromCrownPercent = builder
+                    .comment("The share of the free stock of an item all shops of a kingdom together take from the crown a day.")
+                    .defineInRange("takeFromCrownPercent", d.takeFromCrownPercent(), 0, 100);
+            stockDays = builder
+                    .comment("Days of its sales a shop keeps in stock.")
+                    .defineInRange("stockDays", d.stockDays(), 0, 365);
+            tavernEveningPrice = builder
+                    .comment("What an evening at a tavern of the crown costs a citizen, from the purse of its city to the crown.",
+                            "An empty purse still gets its evening, and the crown nothing.")
+                    .defineInRange("tavernEveningPrice", (int) d.tavernEveningPrice(), 0, 1_000_000);
+            evasionStartPercent = builder
+                    .comment("Above this burden of the sales tax and the tithe of a city together, in percent, its people start to evade",
+                            "them: two points for every point above it.")
+                    .defineInRange("evasionStartPercent", d.evasionStartPercent(), 0, 100);
+            evasionMaxPercent = builder
+                    .comment("The most of the taxes of a city its people evade, in percent.")
+                    .defineInRange("evasionMaxPercent", d.evasionMaxPercent(), 0, 100);
             builder.pop();
         }
     }

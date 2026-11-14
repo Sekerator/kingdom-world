@@ -299,6 +299,8 @@ public final class KingdomWorldState {
         }
         trade.closeMarket(kingdomId);
         construction.removeKingdom(kingdomId);
+        // The purses, treasuries and tills of its cities go into its treasury before it goes.
+        economy.sweepPurses(kingdomId, day);
         economy.retire(kingdomId, kingdom.get().name(), kingdom.get().color(), gameTime);
         citizens.removeKingdom(kingdomId);
         orders.removeKingdom(kingdomId);
@@ -895,6 +897,40 @@ public final class KingdomWorldState {
     }
 
     /**
+     * Sets the sales tax, the tithe and the share of the crown every city of a kingdom follows, in thousandths.
+     *
+     * @param actor the player, who needs {@link Permission#MANAGE_TREASURY}; {@code null} for an administrator
+     */
+    public Outcome setKingdomCityTaxes(UUID actor, UUID kingdomId, int salesTax, int tithe, int crownShare) {
+        Outcome check = checkTreasury(actor, kingdomId);
+        return check.ok() ? economy.setKingdomCityTaxes(kingdomId, salesTax, tithe, crownShare) : check;
+    }
+
+    /**
+     * Sets the taxes and the share of the crown of one city, in thousandths; -1 follows the kingdom.
+     */
+    public Outcome setCityTaxes(UUID actor, UUID kingdomId, long city, int salesTax, int tithe, int crownShare) {
+        Outcome check = checkTreasury(actor, kingdomId);
+        return check.ok() ? economy.setCityTaxes(kingdomId, city, salesTax, tithe, crownShare) : check;
+    }
+
+    /**
+     * The crown grants a city money of the treasury of the kingdom.
+     */
+    public Outcome grantCity(UUID actor, UUID kingdomId, long city, long amount, long day) {
+        Outcome check = checkTreasury(actor, kingdomId);
+        return check.ok() ? economy.cityGrant(kingdomId, city, amount, day) : check;
+    }
+
+    /**
+     * The crown takes money of a city back into the treasury of the kingdom.
+     */
+    public Economy.Recall recallCity(UUID actor, UUID kingdomId, long city, long amount, long day) {
+        Outcome check = checkTreasury(actor, kingdomId);
+        return check.ok() ? economy.cityRecall(kingdomId, city, amount, day) : new Economy.Recall(check, 0, 0);
+    }
+
+    /**
      * The treasury pays a player onto the player's account.
      *
      * @param actor the player, who needs {@link Permission#MANAGE_TREASURY}; {@code null} for an administrator
@@ -987,6 +1023,16 @@ public final class KingdomWorldState {
      *                 guard and the army
      */
     public Economy.Payday payday(UUID kingdomId, long day, EconomyRules rules, java.util.function.ToIntFunction<UUID> permille) {
+        return payday(kingdomId, day, rules, permille, citizen -> -1);
+    }
+
+    /**
+     * The daily payday of a kingdom whose wages stay in its cities.
+     *
+     * @param cityOf the city into whose purse the wage of a citizen goes, -1 for a wage that leaves the world
+     */
+    public Economy.Payday payday(UUID kingdomId, long day, EconomyRules rules, java.util.function.ToIntFunction<UUID> permille,
+                                 java.util.function.ToLongFunction<UUID> cityOf) {
         Optional<Kingdom> kingdom = kingdoms.get(kingdomId);
         Optional<Treasury> treasury = economy.treasury(kingdomId);
         if (kingdom.isEmpty() || treasury.isEmpty()) {
@@ -1005,7 +1051,7 @@ public final class KingdomWorldState {
         for (Citizen citizen : people) {
             claims.add(new Economy.WageClaim(citizen.id(), citizen.professionId(), permille.applyAsInt(citizen.id())));
         }
-        Economy.Payday payday = economy.payday(kingdomId, day, taxpayers, claims, rules);
+        Economy.Payday payday = economy.payday(kingdomId, day, taxpayers, claims, rules, cityOf);
         for (Citizen citizen : people) {
             Integer percent = payday.percents().get(citizen.id());
             if (percent != null) {

@@ -39,22 +39,71 @@ public final class EconomyPackets {
     /**
      * Client to server: show me the treasury of this kingdom.
      */
-    public record TreasuryRequest(UUID kingdomId) {
+    public record TreasuryRequest(UUID kingdomId, int cityPage) {
         public static final RequestPolicy POLICY = new RequestPolicy("treasury_view", 0, 20, 10_000L);
+
+        public TreasuryRequest(UUID kingdomId) {
+            this(kingdomId, -1);
+        }
 
         public void encode(FriendlyByteBuf buf) {
             buf.writeUUID(kingdomId);
+            buf.writeVarInt(cityPage + 1);
         }
 
         public static TreasuryRequest decode(FriendlyByteBuf buf) {
-            return new TreasuryRequest(buf.readUUID());
+            return new TreasuryRequest(buf.readUUID(), buf.readVarInt() - 1);
         }
 
         public static void handle(TreasuryRequest message, Supplier<NetworkEvent.Context> context) {
             ServerPlayer sender = context.get().getSender();
             if (ServerRequestGuard.admit(sender, POLICY)) {
+                if (message.cityPage() >= 0) {
+                    io.github.sekerator.kingdomworld.common.commerce.CityTreasuryActions.setPage(sender, message.cityPage());
+                }
                 TreasuryActions.sendView(sender, message.kingdomId());
             }
+        }
+    }
+
+    /**
+     * Client to server: show me the window of a city of this kingdom.
+     */
+    public record CityDetailRequest(UUID kingdomId, long cityId) {
+        public static final RequestPolicy POLICY = new RequestPolicy("city_detail", 0, 20, 10_000L);
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUUID(kingdomId);
+            buf.writeVarLong(cityId);
+        }
+
+        public static CityDetailRequest decode(FriendlyByteBuf buf) {
+            return new CityDetailRequest(buf.readUUID(), buf.readVarLong());
+        }
+
+        public static void handle(CityDetailRequest message, Supplier<NetworkEvent.Context> context) {
+            ServerPlayer sender = context.get().getSender();
+            if (ServerRequestGuard.admit(sender, POLICY)
+                    && ServerRequestGuard.requireRange(sender, POLICY, "city", message.cityId(), 0, Long.MAX_VALUE)) {
+                io.github.sekerator.kingdomworld.common.commerce.CityTreasuryActions.sendDetail(sender, message.kingdomId(), message.cityId());
+            }
+        }
+    }
+
+    /**
+     * Server to client: the window of a city.
+     */
+    public record CityDetailResponse(io.github.sekerator.kingdomworld.common.network.data.CityViews.CityDetail detail) {
+        public void encode(FriendlyByteBuf buf) {
+            detail.encode(buf);
+        }
+
+        public static CityDetailResponse decode(FriendlyByteBuf buf) {
+            return new CityDetailResponse(io.github.sekerator.kingdomworld.common.network.data.CityViews.CityDetail.decode(buf));
+        }
+
+        public static void handle(CityDetailResponse message, Supplier<NetworkEvent.Context> context) {
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientPacketHandlers.handleCityDetail(message.detail()));
         }
     }
 
@@ -93,7 +142,15 @@ public final class EconomyPackets {
             /** Whether the mint strikes coins from the metal in {@code text}: 1 or 0 in {@code amount}. */
             MINT_STRIKE,
             /** How many of the metal in {@code text} stay in the storehouses, in {@code amount}. */
-            MINT_KEEP
+            MINT_KEEP,
+            /** The sales tax, the tithe and the share of the crown of the kingdom in thousandths, as {@code "tax,tithe,share"}. */
+            CITY_DEFAULTS,
+            /** The same of one city, as {@code "city,tax,tithe,share"}, -1 for that of the kingdom. */
+            CITY_SET,
+            /** The crown grants the city in {@code text} the money in {@code amount}. */
+            CITY_GRANT,
+            /** The crown takes back from the city in {@code text} the money in {@code amount}. */
+            CITY_RECALL
         }
 
         /** The longest text of a change: a metal of the mint. */

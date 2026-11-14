@@ -228,6 +228,10 @@ public final class NobilityActions {
         var economy = KingdomWorldApi.state(server).economy();
         return switch (demand.kind()) {
             case LOWER_TAX -> {
+                // The heavier of the poll tax and the taxes of the cities is lowered by the share asked.
+                if (io.github.sekerator.kingdomworld.common.commerce.CommerceWork.citiesHeavier(server, kingdomId)) {
+                    yield io.github.sekerator.kingdomworld.common.commerce.CommerceWork.lowerCityTaxes(server, kingdomId, demand.value());
+                }
                 long tax = economy.treasury(kingdomId).map(Treasury::pollTax).orElse(0L);
                 long lower = Math.max(0, tax * (100 - Math.min(100, demand.value())) / 100);
                 yield lower == tax ? Outcome.DONE : economy.setPollTax(kingdomId, lower, EconomySettings.rules().maxPollTax());

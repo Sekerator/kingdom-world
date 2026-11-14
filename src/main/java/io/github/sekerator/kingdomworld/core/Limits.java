@@ -18,6 +18,13 @@ public final class Limits {
     public static final String CONSTRUCTIONS = "construction.maxConstructionsPerKingdom";
     /** The path of the distance between cities, not a limit of a number but read the same way. */
     public static final String CITY_DISTANCE = "roads.minCityDistance";
+    /**
+     * The path of the dues of the townsfolk, not a limit but read the same way: the old default 1 made money out of nothing and
+     * is read as 0.
+     */
+    public static final String FOLK_DUES = "citizens.folkDues";
+    /** The dues of the townsfolk the configurations of servers held by default before. */
+    public static final int OLD_FOLK_DUES = 1;
 
     /** The blocks between cities the configurations of servers held by default before they counted along x or z. */
     public static final int OLD_CITY_DISTANCE = 160;
@@ -77,6 +84,9 @@ public final class Limits {
         if (CITY_DISTANCE.equals(path)) {
             return cityDistance(configured, WALL_RADIUS_DEFAULT);
         }
+        if (FOLK_DUES.equals(path)) {
+            return configured == OLD_FOLK_DUES ? 0 : configured;
+        }
         Integer old = OLD_DEFAULTS.get(path);
         return old != null && configured == old ? 0 : configured;
     }
@@ -86,7 +96,7 @@ public final class Limits {
      * no whole number, or the value of another path, stays as it is.
      */
     public static String effectiveText(String path, String raw) {
-        if (raw == null || !isLimit(path) && !CITY_DISTANCE.equals(path)) {
+        if (raw == null || !isLimit(path) && !CITY_DISTANCE.equals(path) && !FOLK_DUES.equals(path)) {
             return raw;
         }
         try {

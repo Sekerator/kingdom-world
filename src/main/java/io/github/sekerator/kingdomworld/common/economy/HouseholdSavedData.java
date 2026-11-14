@@ -30,8 +30,31 @@ public final class HouseholdSavedData extends SavedData {
 
     private final Map<Long, Purse> purses = new LinkedHashMap<>();
 
+    /** Whether the books of the economy count this data already. */
+    private boolean wired;
+
     public static HouseholdSavedData get(MinecraftServer server) {
-        return server.overworld().getDataStorage().computeIfAbsent(HouseholdSavedData::load, HouseholdSavedData::new, DATA_NAME);
+        HouseholdSavedData data = server.overworld().getDataStorage().computeIfAbsent(HouseholdSavedData::load, HouseholdSavedData::new,
+                DATA_NAME);
+        if (!data.wired) {
+            data.wired = true;
+            // The money set aside for houses is money of the currency of each kingdom: the supply counts it.
+            io.github.sekerator.kingdomworld.common.api.KingdomWorldApi.state(server).economy().setHeldElsewhere("households", data::total);
+        }
+        return data;
+    }
+
+    /**
+     * All the money set aside for the houses of a kingdom, in its currency.
+     */
+    public long total(UUID currency) {
+        long sum = 0;
+        for (Purse purse : purses.values()) {
+            if (purse.kingdomId().equals(currency)) {
+                sum = io.github.sekerator.kingdomworld.core.economy.Money.addCapped(sum, purse.amount());
+            }
+        }
+        return sum;
     }
 
     /**

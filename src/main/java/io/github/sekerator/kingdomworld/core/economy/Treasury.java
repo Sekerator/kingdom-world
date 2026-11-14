@@ -34,6 +34,10 @@ public final class Treasury {
     private final Map<UUID, Long> reserves = new LinkedHashMap<>();
     /** The metals whose setting the king changed; the others have {@link MintMetals#defaultFor}. */
     private final Map<String, MintMetals.Setting> mintMetals = new LinkedHashMap<>();
+    /** The taxes of the cities and the share of the crown in thousandths, -1 while the kingdom keeps those of the config. */
+    private int citySalesTaxPermille = -1;
+    private int cityTithePermille = -1;
+    private int crownSharePermille = -1;
     private long lastPayday = NO_PAYDAY;
     private Payroll.Summary lastPayroll = Payroll.Summary.NONE;
     private Runnable changeListener = () -> {
@@ -143,6 +147,54 @@ public final class Treasury {
         if (previous == null || previous != value) {
             changed();
         }
+    }
+
+    /**
+     * The tax on the sales of the shops of the cities in thousandths: what the king set, or the default of the config.
+     */
+    public int citySalesTax(int configured) {
+        return citySalesTaxPermille >= 0 ? citySalesTaxPermille : configured;
+    }
+
+    public int cityTithe(int configured) {
+        return cityTithePermille >= 0 ? cityTithePermille : configured;
+    }
+
+    public int crownShare(int configured) {
+        return crownSharePermille >= 0 ? crownSharePermille : configured;
+    }
+
+    /**
+     * What the king set, -1 for the default of the config.
+     */
+    public int citySalesTaxSetting() {
+        return citySalesTaxPermille;
+    }
+
+    public int cityTitheSetting() {
+        return cityTithePermille;
+    }
+
+    public int crownShareSetting() {
+        return crownSharePermille;
+    }
+
+    void setCityTaxes(int salesTax, int tithe, int crownShare) {
+        if (salesTax != citySalesTaxPermille || tithe != cityTithePermille || crownShare != crownSharePermille) {
+            citySalesTaxPermille = salesTax;
+            cityTithePermille = tithe;
+            crownSharePermille = crownShare;
+            changed();
+        }
+    }
+
+    /**
+     * Restores the taxes of the cities from saved data, -1 for a key that was not saved. Does not notify.
+     */
+    public void restoreCityTaxes(int salesTax, int tithe, int crownShare) {
+        citySalesTaxPermille = salesTax < 0 ? -1 : Math.min(salesTax, CityEconomyRules.MAX_SALES_TAX_PERCENT * 10);
+        cityTithePermille = tithe < 0 ? -1 : Math.min(tithe, CityEconomyRules.MAX_TITHE_PERCENT * 10);
+        crownSharePermille = crownShare < 0 ? -1 : Math.min(crownShare, CityEconomyRules.MAX_CROWN_SHARE_PERCENT * 10);
     }
 
     public Map<UUID, Long> debts() {

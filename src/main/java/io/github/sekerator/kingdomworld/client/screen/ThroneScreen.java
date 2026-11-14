@@ -289,6 +289,19 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
+     * Shows the window of a city the server sent, if it belongs to the kingdom on screen.
+     */
+    public void updateCityDetail(io.github.sekerator.kingdomworld.common.network.data.CityViews.CityDetail detail) {
+        if (!detail.kingdomId().equals(view.id())) {
+            return;
+        }
+        treasury.setCityDetail(detail);
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
+    }
+
+    /**
      * Whether the treasury tab got its view, for the self-check.
      */
     public boolean treasuryShown() {
@@ -2008,6 +2021,9 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         }
         if (tab == Tab.CONSTRUCTION && button == 0) {
             return construction.click(left(), top() + contentOffset, panelWidth, panelHeight - contentOffset, mouseX, mouseY);
+        }
+        if (tab == Tab.TREASURY && button == 0 && treasury.click(left(), top() + contentOffset, panelWidth, panelHeight - contentOffset, mouseX, mouseY)) {
+            return true;
         }
         return tab == Tab.ORDERS && button == 0 && orders.click(left(), top() + contentOffset, panelWidth, panelHeight - contentOffset, mouseX, mouseY);
     }

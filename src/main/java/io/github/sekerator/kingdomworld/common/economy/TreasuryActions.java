@@ -115,7 +115,8 @@ public final class TreasuryActions {
                 treasury.units().gold(), treasury.balance(), treasury.vault(), journal, treasury.pollTax(), rules.maxPollTax(), taxpayers,
                 untilPayday, new TreasuryView.Payroll(payroll.day(), payroll.due(), payroll.paid(), payroll.citizens(), payroll.underpaid()),
                 wages, rules.maxWage(), debtors, debts.size(), debtTotal, mint(server, state, kingdomId, treasury, today),
-                state.economy().rate(kingdomId), reserves(state, treasury)));
+                state.economy().rate(kingdomId), reserves(state, treasury),
+                io.github.sekerator.kingdomworld.common.commerce.CityTreasuryActions.cities(server, kingdomId, viewer)));
     }
 
     private static List<TreasuryView.Reserve> reserves(KingdomWorldState state, Treasury treasury) {
@@ -203,9 +204,16 @@ public final class TreasuryActions {
             case MINT_STRIKE -> setMintMetal(player, kingdom, change.text(), change.amount() != 0, null);
             case MINT_KEEP -> setMintMetal(player, kingdom, change.text(), null,
                     change.amount() > MintMetals.MAX_KEEP ? -1 : (int) change.amount());
+            case CITY_DEFAULTS, CITY_SET, CITY_GRANT, CITY_RECALL ->
+                    io.github.sekerator.kingdomworld.common.commerce.CityTreasuryActions.handle(player, kingdom, change);
         };
         KingdomActions.reply(player, feedback);
         sendView(player, kingdom);
+        if (change.action() == EconomyPackets.TreasuryChange.Action.CITY_SET || change.action() == EconomyPackets.TreasuryChange.Action.CITY_GRANT
+                || change.action() == EconomyPackets.TreasuryChange.Action.CITY_RECALL) {
+            io.github.sekerator.kingdomworld.common.commerce.CityTreasuryActions.sendDetail(player, kingdom,
+                    io.github.sekerator.kingdomworld.common.commerce.CityTreasuryActions.cityOfText(change.text()));
+        }
     }
 
     public static KingdomActions.Feedback setPollTax(ServerPlayer player, UUID kingdom, long amount) {

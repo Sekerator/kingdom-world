@@ -57,7 +57,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "63";
+    public static final String PROTOCOL_VERSION = "64";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -358,6 +358,10 @@ public final class KingdomWorldNetwork {
                 ConstructionPackets.CommissionCancel::decode, ConstructionPackets.CommissionCancel::handle);
         add(id++, RoadPackets.Found.class, NetworkDirection.PLAY_TO_SERVER, RoadPackets.Found::encode, RoadPackets.Found::decode,
                 RoadPackets.Found::handle);
+        add(id++, EconomyPackets.CityDetailRequest.class, NetworkDirection.PLAY_TO_SERVER, EconomyPackets.CityDetailRequest::encode,
+                EconomyPackets.CityDetailRequest::decode, EconomyPackets.CityDetailRequest::handle);
+        add(id++, EconomyPackets.CityDetailResponse.class, NetworkDirection.PLAY_TO_CLIENT, EconomyPackets.CityDetailResponse::encode,
+                EconomyPackets.CityDetailResponse::decode, EconomyPackets.CityDetailResponse::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

@@ -1,6 +1,10 @@
 package io.github.sekerator.kingdomworld.common.data;
 
 import io.github.sekerator.kingdomworld.core.citizen.Profession;
+import io.github.sekerator.kingdomworld.core.economy.CityLedger;
+import io.github.sekerator.kingdomworld.core.economy.CityPurses;
+import io.github.sekerator.kingdomworld.core.economy.CityStatement;
+import io.github.sekerator.kingdomworld.core.economy.CityTreasury;
 import io.github.sekerator.kingdomworld.core.economy.Coins;
 import io.github.sekerator.kingdomworld.core.economy.CurrencyUnits;
 import io.github.sekerator.kingdomworld.core.economy.Economy;
@@ -21,6 +25,7 @@ import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -35,7 +40,10 @@ import java.util.UUID;
  * economy:  { accounts: [ { player, currency, balance } ],
  *             retired: [ { id, name, kingdom, color, silver, gold, time } ],
  *             rates: [ { currency, rate } ], rateDay, escrows: [ { id, payer, payee, currency, amount } ], nextEscrow,
- *             coinsOut: [ { currency, amount } ] }
+ *             coinsOut: [ { currency, amount } ], purses?: [ { kind, kingdom, id, amount } ],
+ *             cityTreasuries?: [ { kingdom, city, salesTax, tithe, crownShare, granted, recalledUntil, committed, lastDay,
+ *                                  journal: [ { day, entries } ], statements: [ { day, lines } ], today: { line: amount } } ] }
+ * treasury, optional keys: citySalesTax, cityTithe, crownShare
  * </pre>
  *
  * <p>Reading is strict like {@link KingdomNbt}: what cannot be understood throws {@link IllegalArgumentException}, so the
@@ -78,6 +86,12 @@ public final class EconomyNbt {
     private static final String METAL = "metal";
     private static final String STRIKE = "strike";
     private static final String KEEP = "keep";
+    private static final String CITY_SALES_TAX = "citySalesTax";
+    private static final String CITY_TITHE = "cityTithe";
+    private static final String CROWN_SHARE = "crownShare";
+    private static final String PURSES = "purses";
+    private static final String CITY_TREASURIES = "cityTreasuries";
+    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
 
     private EconomyNbt() {
     }
@@ -150,6 +164,16 @@ public final class EconomyNbt {
             mint.add(entry);
         });
         tag.put(MINT, mint);
+        // The taxes of the cities only when the king set them; without the key the config holds.
+        if (treasury.citySalesTaxSetting() >= 0) {
+            tag.putInt(CITY_SALES_TAX, treasury.citySalesTaxSetting());
+        }
+        if (treasury.cityTitheSetting() >= 0) {
+            tag.putInt(CITY_TITHE, treasury.cityTitheSetting());
+        }
+        if (treasury.crownShareSetting() >= 0) {
+            tag.putInt(CROWN_SHARE, treasury.crownShareSetting());
+        }
         return tag;
     }
 
@@ -246,6 +270,9 @@ public final class EconomyNbt {
             mint.put(metal, new MintMetals.Setting(entry.getBoolean(STRIKE), keep));
         }
         treasury.restoreMintMetals(mint);
+        treasury.restoreCityTaxes(tag.contains(CITY_SALES_TAX, Tag.TAG_INT) ? tag.getInt(CITY_SALES_TAX) : -1,
+                tag.contains(CITY_TITHE, Tag.TAG_INT) ? tag.getInt(CITY_TITHE) : -1,
+                tag.contains(CROWN_SHARE, Tag.TAG_INT) ? tag.getInt(CROWN_SHARE) : -1);
         return treasury;
     }
 
@@ -306,7 +333,115 @@ public final class EconomyNbt {
             coins.add(entry);
         });
         tag.put("coinsOut", coins);
+        // The money of the cities, and what their treasuries keep; worlds saved before have neither.
+        ListTag purses = new ListTag();
+        economy.purses().all().forEach((key, amount) -> {
+            CompoundTag entry = new CompoundTag();
+            entry.putString("kind", key.kind().id());
+            entry.putUUID(KINGDOM, key.kingdom());
+            entry.putLong(ID, key.id());
+            entry.putLong(AMOUNT, amount);
+            purses.add(entry);
+        });
+        tag.put(PURSES, purses);
+        ListTag cities = new ListTag();
+        for (CityTreasury city : economy.cityTreasuries()) {
+            cities.add(writeCity(city));
+        }
+        tag.put(CITY_TREASURIES, cities);
         return tag;
+    }
+
+    public static CompoundTag writeCity(CityTreasury city) {
+        CompoundTag tag = new CompoundTag();
+        tag.putUUID(KINGDOM, city.kingdomId());
+        tag.putLong("city", city.cityId());
+        tag.putInt("salesTax", city.salesTaxSetting());
+        tag.putInt("tithe", city.titheSetting());
+        tag.putInt(CROWN_SHARE, city.crownShareSetting());
+        tag.putLong("granted", city.granted());
+        tag.putLong("recalledUntil", city.recalledUntil());
+        tag.putLong("committed", city.committed());
+        tag.putLong("lastDay", city.lastDay());
+        ListTag journal = new ListTag();
+        city.journal().days().forEach((day, entries) -> {
+            CompoundTag dayTag = new CompoundTag();
+            dayTag.putLong(DAY, day);
+            CompoundTag entriesTag = new CompoundTag();
+            entries.forEach((line, totals) -> {
+                CompoundTag totalsTag = new CompoundTag();
+                totalsTag.putLong(IN, totals.income());
+                totalsTag.putLong(OUT, totals.expense());
+                entriesTag.put(line.id(), totalsTag);
+            });
+            dayTag.put(ENTRIES, entriesTag);
+            journal.add(dayTag);
+        });
+        tag.put(JOURNAL, journal);
+        ListTag statements = new ListTag();
+        for (CityStatement statement : city.statements()) {
+            CompoundTag entry = new CompoundTag();
+            entry.putLong(DAY, statement.day());
+            entry.put("lines", lines(statement.values()));
+            statements.add(entry);
+        }
+        tag.put("statements", statements);
+        tag.put("today", lines(city.tally().snapshot()));
+        return tag;
+    }
+
+    private static CompoundTag lines(long[] values) {
+        CompoundTag tag = new CompoundTag();
+        for (CityStatement.Line line : CityStatement.Line.values()) {
+            if (values[line.ordinal()] != 0) {
+                tag.putLong(line.id(), values[line.ordinal()]);
+            }
+        }
+        return tag;
+    }
+
+    private static long[] lines(CompoundTag tag) {
+        long[] values = new long[CityStatement.LINES];
+        for (String key : tag.getAllKeys()) {
+            // A line of a newer version is left out: a statement is a report, not money.
+            CityStatement.Line.byId(key).ifPresent(line -> values[line.ordinal()] = Math.max(0, Math.min(Money.MAX, tag.getLong(key))));
+        }
+        return values;
+    }
+
+    /**
+     * Reads what the treasury of a city keeps besides its money.
+     *
+     * @throws IllegalArgumentException if it names no kingdom
+     */
+    public static CityTreasury readCity(CompoundTag tag) {
+        if (!tag.hasUUID(KINGDOM)) {
+            throw new IllegalArgumentException("a treasury of a city without a kingdom");
+        }
+        CityTreasury city = new CityTreasury(tag.getUUID(KINGDOM), tag.getLong("city"));
+        city.restore(tag.contains("salesTax") ? tag.getInt("salesTax") : -1, tag.contains("tithe") ? tag.getInt("tithe") : -1,
+                tag.contains(CROWN_SHARE) ? tag.getInt(CROWN_SHARE) : -1, tag.getLong("granted"),
+                tag.contains("recalledUntil") ? tag.getLong("recalledUntil") : -1, tag.getLong("committed"),
+                tag.contains("lastDay") ? tag.getLong("lastDay") : -1);
+        for (CompoundTag dayTag : compounds(tag, JOURNAL, "a treasury of a city")) {
+            Map<CityLedger, TreasuryJournal.Totals> entries = new EnumMap<>(CityLedger.class);
+            CompoundTag entriesTag = compound(dayTag, ENTRIES, "a treasury of a city");
+            for (String key : entriesTag.getAllKeys()) {
+                Optional<CityLedger> line = CityLedger.byId(key);
+                if (line.isEmpty()) {
+                    continue;
+                }
+                CompoundTag totals = compound(entriesTag, key, "a treasury of a city");
+                entries.put(line.get(), new TreasuryJournal.Totals(Math.max(0, Math.min(Money.MAX, totals.getLong(IN))),
+                        Math.max(0, Math.min(Money.MAX, totals.getLong(OUT)))));
+            }
+            city.journal().restore(dayTag.getLong(DAY), entries);
+        }
+        for (CompoundTag entry : compounds(tag, "statements", "a treasury of a city")) {
+            city.restoreStatement(new CityStatement(entry.getLong(DAY), lines(compound(entry, "lines", "a statement"))));
+        }
+        city.tally().restore(lines(compound(tag, "today", "a treasury of a city")));
+        return city;
     }
 
     /**
@@ -368,6 +503,30 @@ public final class EconomyNbt {
                     continue;
                 }
                 economy.restoreCoinsOut(entry.getUUID(CURRENCY), entry.getLong(AMOUNT));
+            }
+        } catch (IllegalArgumentException e) {
+            problems.add(e.getMessage());
+        }
+        try {
+            for (CompoundTag entry : compounds(tag, PURSES, "purses of cities")) {
+                long amount = entry.getLong(AMOUNT);
+                if (!entry.hasUUID(KINGDOM) || !Money.isAmount(amount)) {
+                    problems.add("a purse of a city cannot be read");
+                    continue;
+                }
+                UUID kingdom = entry.getUUID(KINGDOM);
+                Optional<CityPurses.PurseKind> kind = CityPurses.PurseKind.byId(entry.getString("kind"));
+                if (kind.isEmpty()) {
+                    // A kind of a newer version: its money goes to the treasury of its kingdom, nothing is lost.
+                    LOGGER.warn("A purse of the unknown kind '{}' of {} holding {}: its money goes to the treasury of the kingdom",
+                            entry.getString("kind"), kingdom, amount);
+                    economy.restoreUnknownPurse(kingdom, amount);
+                    continue;
+                }
+                economy.restorePurse(new CityPurses.PurseKey(kind.get(), kingdom, entry.getLong(ID)), amount);
+            }
+            for (CompoundTag entry : compounds(tag, CITY_TREASURIES, "treasuries of cities")) {
+                economy.restoreCityTreasury(readCity(entry));
             }
         } catch (IllegalArgumentException e) {
             problems.add(e.getMessage());

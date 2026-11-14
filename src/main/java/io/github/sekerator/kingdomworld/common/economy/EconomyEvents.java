@@ -55,6 +55,21 @@ public final class EconomyEvents {
         MinecraftForge.EVENT_BUS.addListener(EconomyEvents::onReload);
         MinecraftForge.EVENT_BUS.addListener(EconomyEvents::onTags);
         MinecraftForge.EVENT_BUS.addListener(EconomyEvents::onServerStarted);
+        MinecraftForge.EVENT_BUS.addListener(EconomyEvents::onEveryTick);
+    }
+
+    /**
+     * The days of the cities run a little in every tick after a payday.
+     */
+    private static void onEveryTick(TickEvent.ServerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) {
+            return;
+        }
+        try {
+            io.github.sekerator.kingdomworld.common.commerce.CommerceWork.tick(event.getServer());
+        } catch (RuntimeException e) {
+            LOGGER.error("KingdomWorld could not live the days of the cities", e);
+        }
     }
 
     /**
@@ -75,6 +90,8 @@ public final class EconomyEvents {
         MinterBehavior.reset();
         Households.reset();
         ItemPrices.invalidate();
+        io.github.sekerator.kingdomworld.common.commerce.CityEconomySettings.reset();
+        io.github.sekerator.kingdomworld.common.commerce.CommerceWork.reset();
     }
 
     /**
@@ -109,6 +126,7 @@ public final class EconomyEvents {
         }
         MinecraftServer server = event.getServer();
         EconomySettings.refresh();
+        io.github.sekerator.kingdomworld.common.commerce.CityEconomySettings.refresh();
         EconomyRules rules = EconomySettings.rules();
         KingdomWorldState state = KingdomWorldApi.state(server);
         state.economy().setDefaults(rules.units(), rules.defaultPollTax());
@@ -164,15 +182,25 @@ public final class EconomyEvents {
      */
     public static Economy.Payday payday(MinecraftServer server, Kingdom kingdom, long day) {
         KingdomWorldState state = KingdomWorldApi.state(server);
+        // In a kingdom of players the wages stay in the purse of the townspeople of the city of each citizen; elsewhere they
+        // leave the world as before.
+        java.util.function.ToLongFunction<UUID> cityOf = citizen -> -1;
+        if (io.github.sekerator.kingdomworld.common.commerce.CityOf.active(server, kingdom.id())
+                && state.economy().treasury(kingdom.id()).map(t -> t.lastPayday() != Treasury.NO_PAYDAY && t.lastPayday() < day).orElse(false)) {
+            Map<UUID, Long> cities = io.github.sekerator.kingdomworld.common.commerce.CityOf.refresh(server, kingdom.id());
+            cityOf = citizen -> cities.getOrDefault(citizen, 0L);
+        }
         // Officers of the guard and the army are paid more than fighters.
         Economy.Payday payday = state.payday(kingdom.id(), day, EconomySettings.rules(),
-                citizen -> io.github.sekerator.kingdomworld.common.army.ArmyStaff.wagePermille(server, citizen));
+                citizen -> io.github.sekerator.kingdomworld.common.army.ArmyStaff.wagePermille(server, citizen), cityOf);
         if (payday == Economy.Payday.NONE) {
             return payday;
         }
-        // Of every wage a share goes home with the citizen; the rest leaves the world.
+        // Of every wage a share goes home with the citizen; the rest stays in its city, or leaves the world.
         Households.onPayday(server, kingdom.id(), payday);
         citizenTax(server, state, kingdom, payday, day);
+        // The shops pay their keepers, and the cities live their day.
+        io.github.sekerator.kingdomworld.common.commerce.CommerceWork.payday(server, kingdom.id(), day);
         CurrencyUnits units = state.economy().units(kingdom.id()).orElse(CurrencyUnits.DEFAULT);
         for (Economy.TaxPaid tax : payday.taxes()) {
             if (tax.tax() > 0 && tax.paid() >= tax.tax() && tax.debt() == 0) {

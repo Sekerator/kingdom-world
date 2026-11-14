@@ -12,6 +12,7 @@ import io.github.sekerator.kingdomworld.core.citizen.Citizen;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.construction.Building;
 import io.github.sekerator.kingdomworld.core.construction.BuildingRoles;
+import io.github.sekerator.kingdomworld.core.economy.CityPurses;
 import io.github.sekerator.kingdomworld.core.economy.Coins;
 import io.github.sekerator.kingdomworld.core.economy.CurrencyUnits;
 import io.github.sekerator.kingdomworld.core.economy.Denomination;
@@ -194,7 +195,17 @@ public final class Households {
                 continue;
             }
             long before = data.amount(house.get().id());
-            long after = Math.min(rules.purseMax(), Money.addCapped(before, share));
+            long city = payday.cityOf(pay.getKey());
+            long after;
+            if (city >= 0) {
+                // The wage lies in the purse of the townspeople of the city: the share of the house moves from there, and what
+                // does not fit into the purse of the house stays in the city.
+                long want = Math.max(0, Math.min(share, rules.purseMax() - before));
+                long moved = state.economy().purseHold(CityPurses.PurseKey.cityPurse(kingdomId, city), want);
+                after = before + moved;
+            } else {
+                after = Math.min(rules.purseMax(), Money.addCapped(before, share));
+            }
             data.set(house.get().id(), kingdomId, after);
             aside += after - before;
         }
@@ -242,7 +253,9 @@ public final class Households {
         UUID kingdom = purse.kingdomId();
         if (found.isEmpty() || !BuildingRoles.HOUSE.equals(found.get().role()) || !found.get().kingdomId().equals(kingdom)
                 || state.economy().treasury(kingdom).isEmpty()) {
-            // The house is gone or changed hands: its purse goes with it.
+            // The house is gone or changed hands: its purse goes back to the townspeople of the capital of its kingdom; with the
+            // kingdom gone it leaves the world, as wages did before.
+            backToCity(server, kingdom, 0, purse.amount());
             data.set(buildingId, kingdom, 0);
             CONTAINERS.remove(buildingId);
             return true;
@@ -255,7 +268,8 @@ public final class Households {
         BlockPos at = containerOf(level, house);
         IItemHandler container = at == null ? null : handler(level, at);
         if (container == null) {
-            // A house without a chest keeps nothing: the money leaves the world.
+            // A house without a chest keeps nothing: the money goes back to the townspeople of its city.
+            backToCity(server, kingdom, cityOfHouse(server, house), purse.amount());
             data.set(buildingId, kingdom, 0);
             return true;
         }
@@ -337,8 +351,35 @@ public final class Households {
                 state.economy().coinsIssued(kingdom, given);
             }
         }
-        // What the house could not take leaves the world, as the whole wage did before houses kept anything.
+        // What the house could not take goes back to the townspeople of its city; without the money of the cities it leaves
+        // the world, as the whole wage did before houses kept anything.
+        backToCity(server, kingdom, cityOfHouse(server, house), left - given);
         data.set(buildingId, kingdom, 0);
         return true;
+    }
+
+    /**
+     * The city a house belongs to, by the rule of the beds and homes.
+     */
+    private static long cityOfHouse(MinecraftServer server, Building house) {
+        var places = io.github.sekerator.kingdomworld.common.road.CityPeople.places(server, house.kingdomId());
+        long city = io.github.sekerator.kingdomworld.common.road.CityPeople.cityIdOf(server, house.kingdomId(), places,
+                io.github.sekerator.kingdomworld.common.road.CityPeople.index(places), house.anchor());
+        return Math.max(0, city);
+    }
+
+    /**
+     * Money of the purse of a house goes back into the purse of the townspeople of a city, when the money of the cities of the
+     * kingdom stays in them; else it leaves the world.
+     */
+    private static void backToCity(MinecraftServer server, UUID kingdom, long city, long amount) {
+        if (amount <= 0 || !io.github.sekerator.kingdomworld.common.commerce.CityOf.active(server, kingdom)) {
+            return;
+        }
+        long back = KingdomWorldApi.state(server).economy().purseRelease(CityPurses.PurseKey.cityPurse(kingdom, city), amount,
+                TreasuryActions.day(server));
+        if (back < amount) {
+            LOGGER.debug("{} of the purse of a house of {} could not go back to its city and left the world", amount - back, kingdom);
+        }
     }
 }

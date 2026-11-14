@@ -36,11 +36,20 @@ import java.util.UUID;
  * @param mint           the mint of the kingdom and the settings of its metals
  * @param rate           the exchange rate of the kingdom's currency
  * @param reserves       money of other currencies the treasury holds
+ * @param cities         the treasuries of the cities and what they bring the crown
  */
 public record TreasuryView(UUID kingdomId, boolean canManage, boolean canTakeCoins, boolean isKing, String kingdomName, String currencyName, long silver, long gold,
                            long balance, Coins vault, List<JournalRow> journal, long pollTax, long maxPollTax, int taxpayers,
                            long untilPayday, Payroll lastPayroll, List<Wage> wages, long maxWage, List<Debtor> debtors, int debtorCount,
-                           long debtTotal, Mint mint, long rate, List<Reserve> reserves) {
+                           long debtTotal, Mint mint, long rate, List<Reserve> reserves, CityViews.Cities cities) {
+    public TreasuryView(UUID kingdomId, boolean canManage, boolean canTakeCoins, boolean isKing, String kingdomName, String currencyName, long silver,
+                        long gold, long balance, Coins vault, List<JournalRow> journal, long pollTax, long maxPollTax, int taxpayers,
+                        long untilPayday, Payroll lastPayroll, List<Wage> wages, long maxWage, List<Debtor> debtors, int debtorCount,
+                        long debtTotal, Mint mint, long rate, List<Reserve> reserves) {
+        this(kingdomId, canManage, canTakeCoins, isKing, kingdomName, currencyName, silver, gold, balance, vault, journal, pollTax, maxPollTax,
+                taxpayers, untilPayday, lastPayroll, wages, maxWage, debtors, debtorCount, debtTotal, mint, rate, reserves, CityViews.Cities.NONE);
+    }
+
     public static final int MAX_DEBTORS = 64;
     public static final int MAX_WAGES = 64;
     public static final int MAX_JOURNAL = 64;
@@ -174,6 +183,7 @@ public record TreasuryView(UUID kingdomId, boolean canManage, boolean canTakeCoi
         Objects.requireNonNull(kingdomName, "kingdomName");
         Objects.requireNonNull(currencyName, "currencyName");
         Objects.requireNonNull(vault, "vault");
+        Objects.requireNonNull(cities, "cities");
         journal = List.copyOf(journal);
         wages = List.copyOf(wages);
         debtors = List.copyOf(debtors);
@@ -253,6 +263,7 @@ public record TreasuryView(UUID kingdomId, boolean canManage, boolean canTakeCoi
             buf.writeVarLong(reserve.gold());
             buf.writeVarLong(reserve.worth());
         }
+        cities.encode(buf);
     }
 
     public static TreasuryView decode(FriendlyByteBuf buf) {
@@ -300,7 +311,8 @@ public record TreasuryView(UUID kingdomId, boolean canManage, boolean canTakeCoi
                     buf.readVarLong(), buf.readVarLong(), amount(buf)));
         }
         return new TreasuryView(kingdomId, canManage, canTakeCoins, isKing, kingdomName, currencyName, silver, gold, balance, vault, journal, pollTax,
-                maxPollTax, taxpayers, untilPayday, payroll, wages, maxWage, debtors, allDebtors, debtTotal, mint, rate, reserves);
+                maxPollTax, taxpayers, untilPayday, payroll, wages, maxWage, debtors, allDebtors, debtTotal, mint, rate, reserves,
+                CityViews.Cities.decode(buf));
     }
 
     static long amount(FriendlyByteBuf buf) {

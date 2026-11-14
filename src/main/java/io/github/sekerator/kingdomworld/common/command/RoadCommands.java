@@ -224,11 +224,14 @@ public final class RoadCommands {
     private static int removeCity(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         long id = LongArgumentType.getLong(context, "id");
+        java.util.Optional<io.github.sekerator.kingdomworld.core.road.City> city = RoadWork.state(source.getServer()).city(id);
         Outcome outcome = RoadWork.change(source.getServer(), "remove a city", roads -> roads.removeCity(id).isPresent() ? Outcome.DONE
                 : Outcome.fail(io.github.sekerator.kingdomworld.core.kingdom.KingdomError.UNKNOWN_CITY));
         if (!outcome.ok()) {
             return refused(source, outcome);
         }
+        city.ifPresent(removed -> io.github.sekerator.kingdomworld.common.commerce.CityMoney.cityRemoved(source.getServer(),
+                removed.kingdomId(), removed.id()));
         RoadSync.changed();
         source.sendSuccess(() -> Component.translatable(ADMIN + "city_removed", id), true);
         return 1;
