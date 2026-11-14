@@ -235,7 +235,8 @@ public final class ScaffoldingGameTests {
         GatheringGameTests.clear(level, from, to);
         ground(level, from, to);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Fallers", UUID.randomUUID());
-        BuildingTemplate template = ConstructionGameTests.hut("scaffold_restart");
+        // A house tall enough for the column: scaffolds stand at most two blocks over the top of a construction.
+        BuildingTemplate template = tallHouse("scaffold_restart");
         Construction construction = lay(helper, kingdom, template, helper.absolutePos(new BlockPos(7, 0, 8)));
         // A column of eight scaffolds, as a builder left it before the server stopped, and a citizen on top of it.
         List<BlockPos> column = new ArrayList<>();
