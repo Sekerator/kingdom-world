@@ -206,9 +206,18 @@ public final class GatheringGameTests {
         }
     }
 
+    /**
+     * What a profession of the kingdom of a test gathered, today and yesterday: the ledger counts by the day of the game, a test
+     * may begin before midnight and end after it, and the kingdom of a test is new, so that yesterday is the test too.
+     */
     static long produced(MinecraftServer server, Kingdom kingdom, String profession, String item) {
-        return KingdomWorldApi.state(server).citizens().ledger().today(kingdom.id(), PostWork.gameDay(server)).counts()
-                .getOrDefault(profession, Map.of()).getOrDefault(item, 0L);
+        long day = PostWork.gameDay(server);
+        long total = 0;
+        for (long d = day - 1; d <= day; d++) {
+            total += KingdomWorldApi.state(server).citizens().ledger().today(kingdom.id(), d).counts()
+                    .getOrDefault(profession, Map.of()).getOrDefault(item, 0L);
+        }
+        return total;
     }
 
     static void end(GameTestHelper helper, Kingdom kingdom, Citizen citizen, BlockPos from, BlockPos to) {
