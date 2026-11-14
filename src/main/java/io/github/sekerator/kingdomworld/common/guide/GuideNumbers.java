@@ -69,7 +69,7 @@ public final class GuideNumbers {
      * The default value at {@code path} written as text, or empty for a path that holds no plain value.
      */
     public static Optional<String> defaultValue(String path) {
-        return value(path).map(value -> text(value.getDefault()));
+        return value(path).map(value -> io.github.sekerator.kingdomworld.core.Limits.effectiveText(path, text(value.getDefault())));
     }
 
     /**
@@ -84,7 +84,17 @@ public final class GuideNumbers {
             } catch (IllegalStateException e) {
                 return text(value.getDefault());
             }
-        }).map(text -> io.github.sekerator.kingdomworld.core.Limits.effectiveText(path, text));
+        }).map(text -> {
+            if (io.github.sekerator.kingdomworld.core.Limits.CITY_DISTANCE.equals(path)) {
+                // The distance the server keeps, from its walls as well as from the number written.
+                try {
+                    return Integer.toString(io.github.sekerator.kingdomworld.common.road.RoadSettings.rules().minCityDistance());
+                } catch (RuntimeException e) {
+                    return io.github.sekerator.kingdomworld.core.Limits.effectiveText(path, text);
+                }
+            }
+            return io.github.sekerator.kingdomworld.core.Limits.effectiveText(path, text);
+        });
     }
 
     /**
@@ -165,7 +175,7 @@ public final class GuideNumbers {
             if (child instanceof UnmodifiableConfig inner) {
                 collect(inner, path + ".", values);
             } else if (child instanceof ForgeConfigSpec.ConfigValue<?> value && !(value.getDefault() instanceof Collection<?>)) {
-                values.put(path, text(value.getDefault()));
+                values.put(path, io.github.sekerator.kingdomworld.core.Limits.effectiveText(path, text(value.getDefault())));
             }
         }
     }

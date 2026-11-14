@@ -21,11 +21,15 @@ public final class Limits {
 
     /** The blocks between cities the configurations of servers held by default before they counted along x or z. */
     public static final int OLD_CITY_DISTANCE = 160;
+    /** The village wall radius of a server by default. */
+    public static final int WALL_RADIUS_DEFAULT = 24;
+    /** Blocks of land between the walls of two large cities at least. */
+    public static final int CITY_GAP = 16;
     /**
-     * Blocks between two cities by default, along x or z: two large cities (a wall of 48 blocks around the middle) keep 16
-     * blocks of land between their walls and squares.
+     * Blocks between two cities by default, along x or z, with the default walls: two large cities (a wall 48 blocks from the
+     * middle) keep 16 blocks of land between their walls and squares.
      */
-    public static final int CITY_DISTANCE_DEFAULT = 112;
+    public static final int CITY_DISTANCE_DEFAULT = cityDistance(WALL_RADIUS_DEFAULT);
 
     /** The old defaults of the limits, read as none; the old distance between cities read as the new one. */
     private static final Map<String, Integer> OLD_DEFAULTS = Map.of(CITIZENS, 200, CITIES, 6, ROADS, 32, CONSTRUCTIONS, 4);
@@ -48,12 +52,30 @@ public final class Limits {
     }
 
     /**
+     * The least distance between two cities, along x or z, that keeps the walls of two large cities apart: a large city has a
+     * wall twice the village radius from its middle, and {@link #CITY_GAP} blocks of land stay between two of them.
+     */
+    public static int cityDistance(int wallRadius) {
+        return 4 * Math.max(0, wallRadius) + CITY_GAP;
+    }
+
+    /**
+     * The distance between cities a server runs with: never less than its walls need ({@link #cityDistance}); 0, the default,
+     * and the defaults of older configurations (160, then 112) give just that, a larger number written is used as it is.
+     */
+    public static int cityDistance(int configured, int wallRadius) {
+        int byWalls = cityDistance(wallRadius);
+        int written = configured == OLD_CITY_DISTANCE || configured == CITY_DISTANCE_DEFAULT ? 0 : configured;
+        return Math.max(written, byWalls);
+    }
+
+    /**
      * The value a server runs with for the value written in its configuration: the old default of a limit counts as none,
-     * the old distance between cities as the new one, anything else as it is written.
+     * the distance between cities as {@link #cityDistance(int, int)} with the default walls, anything else as it is written.
      */
     public static int effective(String path, int configured) {
         if (CITY_DISTANCE.equals(path)) {
-            return configured == OLD_CITY_DISTANCE ? CITY_DISTANCE_DEFAULT : configured;
+            return cityDistance(configured, WALL_RADIUS_DEFAULT);
         }
         Integer old = OLD_DEFAULTS.get(path);
         return old != null && configured == old ? 0 : configured;

@@ -62,6 +62,19 @@ class LimitsTest {
     }
 
     @Test
+    void theDistanceBetweenCitiesFollowsTheWalls() {
+        assertEquals(112, Limits.cityDistance(24), "two large cities with walls 48 blocks from their middle, 16 blocks apart");
+        assertEquals(176, Limits.cityDistance(40));
+        assertEquals(112, Limits.cityDistance(0, 24));
+        assertEquals(176, Limits.cityDistance(0, 40), "an operator who raised the walls gets the distance they need");
+        assertEquals(176, Limits.cityDistance(160, 40), "the old default follows the walls too");
+        assertEquals(176, Limits.cityDistance(112, 40));
+        assertEquals(112, Limits.cityDistance(50, 24), "never closer than the walls need");
+        assertEquals(300, Limits.cityDistance(300, 24), "a larger number written is kept");
+        assertEquals(300, Limits.cityDistance(300, 40));
+    }
+
+    @Test
     void theGuideGetsTheLimitsTheServerRunsWith() {
         assertTrue(Limits.isLimit(Limits.CITIES) && Limits.isLimit(Limits.CITIZENS) && Limits.isLimit(Limits.ROADS)
                 && Limits.isLimit(Limits.CONSTRUCTIONS));

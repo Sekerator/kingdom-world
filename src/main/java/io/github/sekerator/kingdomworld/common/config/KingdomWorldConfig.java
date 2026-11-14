@@ -1955,10 +1955,10 @@ public final class KingdomWorldConfig {
             maxCities = builder.comment("Cities one kingdom founds at most with town halls, besides its capital; 0 is no limit.",
                             "The old default 6 is read as 0.")
                     .defineInRange("maxCities", r.maxCities, 0, 100_000);
-            minCityDistance = builder.comment("Blocks between two cities, or a city and a capital, at least, along x or z: 112 keeps 16 blocks",
-                            "between the walls of two large cities (a wall 48 blocks from the middle, 4 times wallRadius plus 16 in general).",
-                            "The old default 160 is read as 112.")
-                    .defineInRange("minCityDistance", r.minCityDistance, 0, 10_000);
+            minCityDistance = builder.comment("Blocks between two cities, or a city and a capital, at least, along x or z. Never less than the walls",
+                            "of two large cities need with 16 blocks between them: 4 times wallRadius plus 16 (112 with the default walls).",
+                            "0, the default, is just that; a larger number written here is used. The old defaults 160 and 112 are read as 0.")
+                    .defineInRange("minCityDistance", 0, 0, 10_000);
             maxRoads = builder.comment("Roads one kingdom of players keeps at most; 0 is no limit. The old default 32 is read as 0.")
                     .defineInRange("maxRoads", r.maxRoads, 0, 1_000_000);
             npcMaxRoads = builder.comment("Roads one kingdom of the world keeps at most: the roads between the settlements of its plan;",

@@ -16,6 +16,7 @@
 - **Старые миры.** Данные дорог и городов получили необязательный список `charters`; в старых мирах его нет, и города начинают без народа, а отсчёт новосёлов каждого города идёт от последнего новосёла королевства, так что после обновления не приходит толпа сразу.
 - **Сколько держит сервер.** Народ стоит серверу один проход по кроватям и жителям королевства в его шаг (как и прежде) и один день народа на город в сутки. 100 городов по 64 именных жителя это 6400 тел и записей, а народ сверх них в любых числах (миллион и больше) стоит 100 коротких расчётов в игровой день.
 - Справочник (главы «Жители», «Города и дороги», «Деньги») и README рассказывают об этом.
+- **Расстояние между городами по стенам.** Наименьшее расстояние между городами (`minCityDistance`) теперь считается от радиуса стен: 4 × `wallRadius` + 16 вдоль x или z, 112 при стенах по умолчанию. Если оператор поднял `wallRadius`, города сами встают дальше, и стены двух больших городов не сходятся. 0 в конфиге (теперь по умолчанию) и прежние значения по умолчанию 160 и 112 значат «по стенам», большее число берётся как записано.
 
 ### 1.5.2
 
@@ -232,6 +233,7 @@ The cities of a kingdom of players grow each by itself, and large cities live by
 - **Older worlds.** The data of roads and cities has a new optional list `charters`; older worlds have none, their cities start without townsfolk, and the count of newcomers of each city starts from the last newcomer of the kingdom, so no crowd comes at once after the update.
 - **What the server holds.** The townsfolk cost the server one pass over the beds and citizens of a kingdom in its step (as before) and one day of the townsfolk a city a day. 100 cities of 64 named citizens each are 6400 bodies and records, and the townsfolk beyond them in any numbers (a million and more) cost 100 short reckonings a game day.
 - The guide (the chapters Citizens, Cities and roads, Money) and README tell about it.
+- **The distance between cities by the walls.** The least distance between cities (`minCityDistance`) now comes from the radius of the walls: 4 × `wallRadius` + 16 along x or z, 112 with the default walls. When an operator raised `wallRadius`, cities keep further apart by themselves and the walls of two large cities never meet. 0 in the configuration (the default now) and the old defaults 160 and 112 mean "by the walls", a larger number is taken as written.
 
 ### 1.5.2
 

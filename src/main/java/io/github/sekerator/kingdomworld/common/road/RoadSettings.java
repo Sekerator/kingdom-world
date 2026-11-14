@@ -134,7 +134,9 @@ public final class RoadSettings {
             KingdomWorldConfig.Roads c = KingdomWorldConfig.SERVER.roads;
             // The old defaults of a configuration written before (6 cities, 32 roads, 160 blocks) are read as the new ones.
             b.maxCities = Limits.effective(Limits.CITIES, c.maxCities.get());
-            b.minCityDistance = Limits.effective(Limits.CITY_DISTANCE, c.minCityDistance.get());
+            b.wallRadius = c.wallRadius.get();
+            // Never closer than the walls of two large cities need: from the wall radius, which an operator may have raised.
+            b.minCityDistance = Limits.cityDistance(c.minCityDistance.get(), b.wallRadius);
             b.maxRoads = Limits.effective(Limits.ROADS, c.maxRoads.get());
             b.maxRouteLength = c.maxRouteLength.get();
             b.nodesPerTick = c.searchStepsPerTick.get();
@@ -157,7 +159,6 @@ public final class RoadSettings {
             b.townBuildings = c.townBuildings.get();
             b.cityPeople = Math.max(c.cityPeople.get(), b.townPeople);
             b.cityBuildings = Math.max(c.cityBuildings.get(), b.townBuildings);
-            b.wallRadius = c.wallRadius.get();
         } catch (IllegalStateException e) {
             // The config is not loaded yet: the defaults count.
         }
