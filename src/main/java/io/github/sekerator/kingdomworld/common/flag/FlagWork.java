@@ -115,6 +115,8 @@ public final class FlagWork {
     private static long buildingsVersion = -1;
     /** The places of the flags of walls and thrones, worked out again every time they are looked at. */
     private static Map<String, Map<Long, UUID>> placeIndex;
+    /** The tick of the server the places were worked out in. */
+    private static int placesTick = -1;
     /** While the keeper takes a flag away itself: the flag that goes marks nothing. */
     private static boolean quiet;
     /** Blocks changed in this tick. */
@@ -155,6 +157,7 @@ public final class FlagWork {
         buildingsOf = null;
         buildingsVersion = -1;
         placeIndex = null;
+        placesTick = -1;
         quiet = false;
         FlagSpotCache.clear();
     }
@@ -517,7 +520,7 @@ public final class FlagWork {
         String dimension = Dimensions.id(level);
         boolean place = flag.origin() == KingdomFlagBlockEntity.Origin.THRONE || flag.origin() == KingdomFlagBlockEntity.Origin.WALL;
         Building building = place ? null : buildingAt(server, dimension, pos);
-        UUID owner = place ? places(server).getOrDefault(dimension, Map.of()).get(pos.asLong()) : null;
+        UUID owner = place ? placeOwner(server, dimension, pos) : null;
         UUID kingdom = owner != null ? owner : kingdomOf(level, pos, flag);
         if (kingdom == null) {
             return true;
@@ -568,12 +571,14 @@ public final class FlagWork {
     }
 
     /**
-     * Takes a flag away without a word: nothing is marked and nothing drops.
+     * Takes a flag away without a word: nothing is marked and nothing drops. Nothing leans on a flag, so its neighbours are not
+     * told, as when one is put up: a neighbour told reads the blocks around it, which may lie in a chunk not loaded yet beyond the
+     * edge of the loaded world.
      */
     private static void takeAway(ServerLevel level, BlockPos pos) {
         quiet = true;
         try {
-            level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+            level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
         } finally {
             quiet = false;
         }
@@ -831,12 +836,28 @@ public final class FlagWork {
     // ---------------------------------------------------------------- thrones and walls
 
     /**
+     * The kingdom whose throne or wall a flag stands at the place of, if any. The places are those of chunks loaded when they were
+     * worked out: a flag of a chunk loaded since then, not found there, has them worked out again, once a tick at most, before it is
+     * taken for a flag whose wall or throne is gone.
+     */
+    @Nullable
+    private static UUID placeOwner(MinecraftServer server, String dimension, BlockPos pos) {
+        UUID owner = places(server).getOrDefault(dimension, Map.of()).get(pos.asLong());
+        if (owner == null && placesTick != server.getTickCount()) {
+            placeIndex = null;
+            owner = places(server).getOrDefault(dimension, Map.of()).get(pos.asLong());
+        }
+        return owner;
+    }
+
+    /**
      * The places of the flags of thrones and walls in loaded places, by dimension.
      */
     private static Map<String, Map<Long, UUID>> places(MinecraftServer server) {
         if (placeIndex != null) {
             return placeIndex;
         }
+        placesTick = server.getTickCount();
         Map<String, Map<Long, UUID>> result = new HashMap<>();
         for (Place place : allPlaces(server)) {
             result.computeIfAbsent(Dimensions.id(place.level()), key -> new HashMap<>()).put(place.pos().asLong(), place.kingdom());
