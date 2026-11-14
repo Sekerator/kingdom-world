@@ -361,7 +361,7 @@ public final class Scaffolds {
         String dimension = construction.dimension();
         for (long cell : Scaffolding.takeDownOrder(construction.scaffolds())) {
             BlockPos pos = BlockPos.of(cell);
-            if (inUse(dimension, pos.getX(), pos.getY(), pos.getZ(), now) || !load && !level.isLoaded(pos)) {
+            if (inUse(dimension, pos.getX(), pos.getY(), pos.getZ(), now) || !load && !ChunkHold.loaded(level, pos)) {
                 continue;
             }
             if (load) {
@@ -403,7 +403,7 @@ public final class Scaffolds {
                     break;
                 }
                 BlockPos pos = BlockPos.of(cell);
-                if (!level.isLoaded(pos) || inUse(construction.dimension(), pos.getX(), pos.getY(), pos.getZ(), now)) {
+                if (!ChunkHold.loaded(level, pos) || inUse(construction.dimension(), pos.getX(), pos.getY(), pos.getZ(), now)) {
                     continue;
                 }
                 if (is(level.getBlockState(pos))) {
@@ -427,7 +427,7 @@ public final class Scaffolds {
                     state.construction().forgetLeftScaffold(entry.getKey(), cell);
                     continue;
                 }
-                if (!level.isLoaded(pos) || inUse(entry.getKey(), pos.getX(), pos.getY(), pos.getZ(), now)) {
+                if (!ChunkHold.loaded(level, pos) || inUse(entry.getKey(), pos.getX(), pos.getY(), pos.getZ(), now)) {
                     continue;
                 }
                 if (is(level.getBlockState(pos))) {

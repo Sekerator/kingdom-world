@@ -129,6 +129,71 @@ public final class ConstructionBook {
         return Optional.of(removed);
     }
 
+    // ---------------------------------------------------------------- items to drop
+
+    /**
+     * Items that did not fit into the storehouses where nothing was loaded: they are dropped at their place, once, when its
+     * chunk is loaded, rather than the chunk being loaded in the tick for them.
+     *
+     * @param since the tick the first of them waited
+     */
+    public record Drop(String dimension, int x, int y, int z, String item, int count, UUID kingdomId, long since) {
+        public long chunk() {
+            return io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(x >> 4, z >> 4);
+        }
+
+        private Drop more(int count) {
+            return new Drop(dimension, x, y, z, item, this.count + count, kingdomId, since);
+        }
+    }
+
+    private record DropKey(String dimension, int x, int y, int z, String item, UUID kingdomId) {
+    }
+
+    private final Map<DropKey, Drop> drops = new LinkedHashMap<>();
+
+    /**
+     * Keeps items to be dropped at a place; the same item at the same place adds up.
+     */
+    public void addDrop(String dimension, int x, int y, int z, String item, int count, UUID kingdomId, long now) {
+        if (count <= 0) {
+            return;
+        }
+        DropKey key = new DropKey(dimension, x, y, z, item, kingdomId);
+        Drop old = drops.get(key);
+        drops.put(key, old == null ? new Drop(dimension, x, y, z, item, count, kingdomId, now) : old.more(count));
+        changed();
+    }
+
+    public List<Drop> drops() {
+        return List.copyOf(drops.values());
+    }
+
+    /**
+     * Takes the items waiting in a chunk out of the book, to be dropped in the same step.
+     */
+    public List<Drop> takeDrops(String dimension, long chunk) {
+        List<Drop> taken = new ArrayList<>();
+        java.util.Iterator<Drop> all = drops.values().iterator();
+        while (all.hasNext()) {
+            Drop drop = all.next();
+            if (drop.dimension().equals(dimension) && drop.chunk() == chunk) {
+                taken.add(drop);
+                all.remove();
+            }
+        }
+        if (!taken.isEmpty()) {
+            changed();
+        }
+        return taken;
+    }
+
+    public void restoreDrop(Drop drop) {
+        DropKey key = new DropKey(drop.dimension(), drop.x(), drop.y(), drop.z(), drop.item(), drop.kingdomId());
+        Drop old = drops.get(key);
+        drops.put(key, old == null ? drop : old.more(drop.count()));
+    }
+
     // ---------------------------------------------------------------- scaffolds left behind
 
     /** Most scaffolds kept to be taken down after their constructions went away. */

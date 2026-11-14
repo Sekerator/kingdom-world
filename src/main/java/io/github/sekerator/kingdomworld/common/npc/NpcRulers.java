@@ -27,7 +27,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.ChunkPos;
 import org.slf4j.Logger;
 
 import java.util.ArrayDeque;
@@ -51,10 +50,6 @@ public final class NpcRulers {
     private static final Logger LOGGER = LogUtils.getLogger();
     /** Ticks between two looks for deals and roads waiting for an answer of a ruler. */
     private static final int ANSWER_TICKS = 100;
-    /** Ticks between two looks for buildings of rulers that wait for their place to be loaded. */
-    private static final int LOAD_TICKS = 200;
-    /** Ticks the place of a building is kept loaded so that its paid blocks are put in. */
-    private static final int KEEP_LOADED_TICKS = 400;
     private static final Deque<UUID> DUE = new ArrayDeque<>();
     private static final Map<UUID, RulerView> LAST_VIEWS = new ConcurrentHashMap<>();
     private static RulerActions.Job job;
@@ -70,9 +65,6 @@ public final class NpcRulers {
     private static int answerCursor;
     /** Deals a ruler could neither take nor decline; they are not looked at again until they run out. */
     private static final Set<Long> UNANSWERABLE = new LinkedHashSet<>();
-    private static long loadingConstruction = -1;
-    private static final List<Long> loadingChunks = new ArrayList<>();
-    private static int loadingTicks;
     private static long turns;
     private static long busyTicks;
     private static long sumNanos;
@@ -108,9 +100,6 @@ public final class NpcRulers {
         cursor = 0;
         answerCursor = 0;
         UNANSWERABLE.clear();
-        loadingConstruction = -1;
-        loadingChunks.clear();
-        loadingTicks = 0;
         turns = 0;
         busyTicks = 0;
         sumNanos = 0;
@@ -239,9 +228,6 @@ public final class NpcRulers {
         boolean worked = work(server);
         if (server.getTickCount() % ANSWER_TICKS == 0) {
             worked |= answerAll(server);
-        }
-        if (server.getTickCount() % LOAD_TICKS == 0 || loadingConstruction >= 0) {
-            keepPlacesLoaded(server);
         }
         if (worked) {
             long spent = System.nanoTime() - start;
@@ -792,46 +778,6 @@ public final class NpcRulers {
     }
 
     // ---------------------------------------------------------------- buildings far from players
-
-    /**
-     * Keeps the place of a construction of a ruler loaded for a while when its builders paid for blocks that wait for the place
-     * to be loaded, one construction at a time, so that buildings of kingdoms nobody visits are finished too.
-     */
-    private static void keepPlacesLoaded(MinecraftServer server) {
-        ServerLevel level = server.overworld();
-        if (loadingConstruction >= 0) {
-            loadingTicks++;
-            Optional<Construction> construction = KingdomWorldApi.state(server).construction().get(loadingConstruction);
-            if (loadingTicks < KEEP_LOADED_TICKS && construction.isPresent() && construction.get().status() == Construction.Status.WAITING_FOR_LOAD) {
-                return;
-            }
-            for (long key : loadingChunks) {
-                ChunkPos pos = new ChunkPos(ChunkKey.x(key), ChunkKey.z(key));
-                level.getChunkSource().removeRegionTicket(RulerActions.TICKET, pos, 0, pos);
-            }
-            loadingChunks.clear();
-            loadingConstruction = -1;
-            loadingTicks = 0;
-            return;
-        }
-        KingdomWorldState state = KingdomWorldApi.state(server);
-        for (NpcKingdom kingdom : NpcWork.state(server).kingdoms()) {
-            for (Construction construction : state.construction().of(kingdom.kingdomId())) {
-                if (construction.status() != Construction.Status.WAITING_FOR_LOAD
-                        || !construction.dimension().equals(Dimensions.id(level))) {
-                    continue;
-                }
-                loadingConstruction = construction.id();
-                loadingTicks = 0;
-                for (long key : construction.box().chunks()) {
-                    loadingChunks.add(key);
-                    ChunkPos pos = new ChunkPos(ChunkKey.x(key), ChunkKey.z(key));
-                    level.getChunkSource().addRegionTicket(RulerActions.TICKET, pos, 0, pos);
-                }
-                return;
-            }
-        }
-    }
 
     /**
      * The attitude of a ruler to a player: from the player's name under its law and their dealings.

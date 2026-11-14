@@ -166,6 +166,11 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue earthworkMaxSize;
         public final ForgeConfigSpec.IntValue earthworkMaxHeight;
         public final ForgeConfigSpec.IntValue builderRadius;
+        public final ForgeConfigSpec.BooleanValue siteLoading;
+        public final ForgeConfigSpec.IntValue siteLoadChunksPerTick;
+        public final ForgeConfigSpec.IntValue siteLoadPauseMillis;
+        public final ForgeConfigSpec.BooleanValue helpOtherCities;
+        public final ForgeConfigSpec.DoubleValue remoteSpeed;
         public final ForgeConfigSpec.DoubleValue builderReach;
         public final ForgeConfigSpec.DoubleValue builderFarReach;
         public final ForgeConfigSpec.IntValue builderGiveUpSeconds;
@@ -523,8 +528,24 @@ public final class KingdomWorldConfig {
                     .comment("How far earthworks may dig down or fill up from the ground of a column, in blocks.")
                     .defineInRange("earthworkMaxHeight", 32, 4, 64);
             builderRadius = builder
-                    .comment("How far from its work post a builder takes constructions, in blocks.")
+                    .comment("How far from its work post a builder takes constructions, in blocks; a post in a city takes those of its city too.")
                     .defineInRange("builderRadius", 64, 8, 512);
+            siteLoading = builder
+                    .comment("Whether the server loads the place of a construction or a wall far from players for a while, one at a time, so",
+                            "that what the builders paid for is put in and the building is finished without a player near it.")
+                    .define("siteLoading", true);
+            siteLoadChunksPerTick = builder
+                    .comment("Chunks the loading of places asks for in one tick at most.")
+                    .defineInRange("siteLoadChunksPerTick", 2, 1, 16);
+            siteLoadPauseMillis = builder
+                    .comment("Places are not loaded while the average tick of the server is longer than this, in milliseconds.")
+                    .defineInRange("siteLoadPauseMillis", 35, 5, 1_000);
+            helpOtherCities = builder
+                    .comment("Whether builders without a construction of their own help with constructions no post reaches, in other cities.")
+                    .define("helpOtherCities", true);
+            remoteSpeed = builder
+                    .comment("How fast builders help a city no road of the kingdom leads to from theirs, against 1 by road.")
+                    .defineInRange("remoteSpeed", 0.75, 0.05, 1.0);
             builderReach = builder
                     .comment("How far a builder places blocks from where it stands, in blocks.")
                     .defineInRange("builderReach", 4.5, 1.0, 16.0);

@@ -290,7 +290,7 @@ public final class Earthworks {
         }
         for (int cx = (minX - 1) >> 4; cx <= (maxX + 1) >> 4; cx++) {
             for (int cz = (minZ - 1) >> 4; cz <= (maxZ + 1) >> 4; cz++) {
-                if (!level.hasChunk(cx, cz)) {
+                if (!ChunkHold.loaded(level, cx, cz)) {
                     return Survey.failed(KingdomError.AREA_NOT_LOADED);
                 }
             }
@@ -591,7 +591,7 @@ public final class Earthworks {
             return false;
         }
         for (long chunk : built.chunks) {
-            if (!level.hasChunk(ChunkKey.x(chunk), ChunkKey.z(chunk))) {
+            if (!ChunkHold.loaded(level, ChunkKey.x(chunk), ChunkKey.z(chunk))) {
                 return false;
             }
         }

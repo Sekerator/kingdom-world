@@ -50,7 +50,8 @@ with the place of a problem, and the list of what is missing. The buttons of the
 | waits for a builder | hire a builder nearer |
 | lacks materials | bring or order them |
 | a container with items is in the way | empty it |
-| blocks wait for the place to be loaded | come closer |
+| blocks paid for: N, put in when the place is loaded | nothing: the server loads the place by itself (see below) |
+| the blocks are being put in | nothing: the place is loaded now and the blocks go in |
 | part of the place is no longer our land | get the land back |
 
 If the kingdom loses the land under a construction (gives a chunk up or another kingdom takes it), nothing is broken or
@@ -61,9 +62,16 @@ to the storehouses if it is cancelled. Other states are "paused", "the template 
 ### Far from players
 
 With nobody around, builders work by the pace formula: every block is paid in one go (from the materials at the site
-first, then from the storehouses, all or nothing) and queued, and the blocks are placed in batches once every chunk of
-the construction is loaded. The queue and the steps done are saved, so a server restart in the middle of a construction
-neither loses nor doubles anything. A message tells when a construction is laid out and when it is finished.
+first, then from the storehouses, all or nothing) and queued. The blocks are placed when the place is loaded, and nobody
+has to go there: the server loads the places of far constructions and walls by itself, one at a time on the whole
+server, for a minute or two. In that time the blocks paid for go in, the scaffolds come down, the finished building is
+entered into the register and its beds, posts and storehouses go into the data at once, so newcomers move into a far
+house without a player. A place is taken when everything, much or long ago was paid for; kingdoms of players and of the
+world take turns. While the server is overloaded the loading waits.
+
+The queue and the steps done are saved, so a server restart in the middle of a construction neither loses nor doubles
+anything. What did not fit into full storehouses where nothing was loaded is kept with the constructions and dropped at
+its place once that is loaded. A message tells when a construction is laid out and when it is finished.
 
 ## blueprints | Blueprints and the catalog
 @icon kingdomworld:blueprint

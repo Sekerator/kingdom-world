@@ -93,9 +93,19 @@ public final class RoadBlocks {
 
     static void store(ServerLevel level, UUID kingdomId, BlockPos at, ItemStack stack) {
         ItemStack rest = KingdomStorage.insert(level.getServer(), kingdomId, stack, ConstructionWork.worldPos(level, at));
-        if (!rest.isEmpty()) {
-            level.getChunk(at);
+        if (rest.isEmpty()) {
+            return;
+        }
+        if (io.github.sekerator.kingdomworld.common.construction.ChunkHold.loaded(level, at)) {
             Containers.dropItemStack(level, at.getX() + 0.5, at.getY() + 0.5, at.getZ() + 0.5, rest);
+        } else {
+            // Nothing is loaded there: the items wait to be dropped once the place is loaded, nothing is loaded in the tick for them.
+            net.minecraft.resources.ResourceLocation id = net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(rest.getItem());
+            if (id != null) {
+                io.github.sekerator.kingdomworld.common.api.KingdomWorldApi.state(level.getServer()).construction().addDrop(
+                        io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level), at.getX(), at.getY(), at.getZ(), id.toString(),
+                        rest.getCount(), kingdomId, io.github.sekerator.kingdomworld.common.api.KingdomWorldApi.gameTime(level.getServer()));
+            }
         }
     }
 

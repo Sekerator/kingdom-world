@@ -36,7 +36,8 @@ import java.util.Map;
  *                  box, fingerprint, built, admin, integrity, checked, autoRepair, damaged: [longs] } ],
  *   blueprints: [ { id, kingdom, name, category, role, size: [3 ints], palette: [state strings], blocks: [ints],
  *                   anchor: [3 ints], entrance, created, author } ],
- *   leftScaffolds?: [ { dimension, cells: [longs] } ]
+ *   leftScaffolds?: [ { dimension, cells: [longs] } ],
+ *   drops?: [ { dimension, x, y, z, item, count, kingdom, since } ]
  * }
  * </pre>
  *
@@ -79,6 +80,22 @@ public final class ConstructionNbt {
         });
         if (!left.isEmpty()) {
             tag.put("leftScaffolds", left);
+        }
+        ListTag drops = new ListTag();
+        for (ConstructionBook.Drop drop : book.drops()) {
+            CompoundTag entry = new CompoundTag();
+            entry.putString("dimension", drop.dimension());
+            entry.putInt("x", drop.x());
+            entry.putInt("y", drop.y());
+            entry.putInt("z", drop.z());
+            entry.putString("item", drop.item());
+            entry.putInt("count", drop.count());
+            entry.putUUID("kingdom", drop.kingdomId());
+            entry.putLong("since", drop.since());
+            drops.add(entry);
+        }
+        if (!drops.isEmpty()) {
+            tag.put("drops", drops);
         }
         return tag;
     }
@@ -333,6 +350,14 @@ public final class ConstructionNbt {
         for (int i = 0; i < left.size(); i++) {
             CompoundTag entry = left.getCompound(i);
             book.restoreLeftScaffolds(entry.getString("dimension"), entry.getLongArray("cells"));
+        }
+        ListTag drops = tag.getList("drops", Tag.TAG_COMPOUND);
+        for (int i = 0; i < drops.size(); i++) {
+            CompoundTag entry = drops.getCompound(i);
+            if (entry.hasUUID("kingdom") && !entry.getString("item").isEmpty() && entry.getInt("count") > 0) {
+                book.restoreDrop(new ConstructionBook.Drop(entry.getString("dimension"), entry.getInt("x"), entry.getInt("y"), entry.getInt("z"),
+                        entry.getString("item"), entry.getInt("count"), entry.getUUID("kingdom"), entry.getLong("since")));
+            }
         }
         book.restoreCounters(tag.getLong("nextConstruction"), tag.getLong("nextBuilding"));
         book.restoreBlueprintCounter(tag.getLong("nextBlueprint"));

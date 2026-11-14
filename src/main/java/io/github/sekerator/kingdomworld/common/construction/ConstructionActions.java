@@ -104,7 +104,8 @@ public final class ConstructionActions {
             sites.add(new ConstructionView.Site(construction.id(), template.map(BuildingTemplate::name).orElse(Component.literal(construction.templateId())),
                     template.map(BuildingTemplate::icon).orElse(ItemStack.EMPTY), ConstructionWork.blockPos(construction.anchor()),
                     construction.priority(), construction.paused(), construction.orderMissing(), construction.status(), statusPos, percent, placed,
-                    total, ConstructionWork.builders(construction, now), missing, construction.kind()));
+                    total, ConstructionWork.builders(construction, now), missing, construction.kind(), construction.pending().size(),
+                    SiteLoader.serving(construction.id())));
         }
         List<ConstructionView.Building> buildings = new ArrayList<>();
         for (BuildingEffects.Effect effect : BuildingEffects.of(server, kingdomId)) {

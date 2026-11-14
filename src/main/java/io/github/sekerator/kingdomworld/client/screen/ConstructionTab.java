@@ -251,6 +251,12 @@ final class ConstructionTab {
     }
 
     static Component status(ConstructionView.Site entry) {
+        if (entry.placing()) {
+            return Component.translatable(KEY + "status_placing");
+        }
+        if (entry.status() == Construction.Status.WAITING_FOR_LOAD && entry.paid() > 0) {
+            return Component.translatable(KEY + "status_paid", entry.paid());
+        }
         Component name = Component.translatable("kingdomworld.construction.status." + entry.status().id());
         if (entry.statusPos() != null) {
             return Component.translatable(KEY + "status_at", name, coordinates(entry.statusPos()));

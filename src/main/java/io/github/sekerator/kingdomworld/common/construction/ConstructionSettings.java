@@ -85,6 +85,61 @@ public final class ConstructionSettings {
     }
 
     /**
+     * Whether places of constructions far from players are loaded for a while to be built.
+     */
+    public static boolean siteLoading() {
+        try {
+            return KingdomWorldConfig.SERVER.siteLoading.get();
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return true;
+        }
+    }
+
+    /**
+     * Chunks the loading of places asks for in one tick at most.
+     */
+    public static int siteLoadChunksPerTick() {
+        try {
+            return KingdomWorldConfig.SERVER.siteLoadChunksPerTick.get();
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return 2;
+        }
+    }
+
+    /**
+     * The average tick above which no place is loaded, in milliseconds.
+     */
+    public static int siteLoadPauseMillis() {
+        try {
+            return KingdomWorldConfig.SERVER.siteLoadPauseMillis.get();
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return 35;
+        }
+    }
+
+    /**
+     * Whether builders without a construction help constructions no post reaches.
+     */
+    public static boolean helpOtherCities() {
+        try {
+            return KingdomWorldConfig.SERVER.helpOtherCities.get();
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return true;
+        }
+    }
+
+    /**
+     * How fast builders help a city no road of the kingdom leads to, against 1 by road.
+     */
+    public static double remoteSpeed() {
+        try {
+            return KingdomWorldConfig.SERVER.remoteSpeed.get();
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return 0.75;
+        }
+    }
+
+    /**
      * How far earthworks may dig down or fill up from the ground of a column, in blocks.
      */
     public static int earthworkDepth() {

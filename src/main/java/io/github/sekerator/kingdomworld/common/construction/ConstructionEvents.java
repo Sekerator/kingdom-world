@@ -38,6 +38,7 @@ public final class ConstructionEvents {
             return;
         }
         long tick = event.getServer().getTickCount();
+        SiteLoader.tick(event.getServer());
         if (tick % 20 == 0) {
             ConstructionSettings.refresh();
             ConstructionWork.tick(event.getServer(), tick);
@@ -48,6 +49,7 @@ public final class ConstructionEvents {
      * Forgets everything kept in memory, when the server stops.
      */
     public static void reset() {
+        SiteLoader.reset();
         ConstructionWork.reset();
         ConstructionSettings.reset();
     }

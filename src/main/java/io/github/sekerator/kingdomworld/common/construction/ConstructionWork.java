@@ -295,7 +295,7 @@ public final class ConstructionWork {
         }
         for (int cx = box.minX() >> 4; cx <= box.maxX() >> 4; cx++) {
             for (int cz = box.minZ() >> 4; cz <= box.maxZ() >> 4; cz++) {
-                if (!level.hasChunk(cx, cz)) {
+                if (!ChunkHold.loaded(level, cx, cz)) {
                     return new Survey(KingdomError.AREA_NOT_LOADED, List.of(), List.of());
                 }
             }
@@ -591,9 +591,15 @@ public final class ConstructionWork {
                 int count = Math.min(left, new ItemStack(item).getMaxStackSize());
                 left -= count;
                 ItemStack rest = KingdomStorage.insert(server, construction.kingdomId(), new ItemStack(item, count), construction.anchor());
-                if (!rest.isEmpty() && level != null) {
-                    level.getChunk(at);
+                if (rest.isEmpty() || level == null) {
+                    continue;
+                }
+                if (ChunkHold.loaded(level, at)) {
                     Containers.dropItemStack(level, at.getX() + 0.5, at.getY() + 0.5, at.getZ() + 0.5, rest);
+                } else {
+                    // Nothing is loaded there: the items wait in the book and are dropped once the place is loaded.
+                    KingdomWorldApi.state(server).construction().addDrop(construction.dimension(), at.getX(), at.getY(), at.getZ(),
+                            entry.getKey(), rest.getCount(), construction.kingdomId(), KingdomWorldApi.gameTime(server));
                 }
             }
         }
@@ -1021,7 +1027,7 @@ public final class ConstructionWork {
     public static boolean loaded(ServerLevel level, Box box) {
         for (int cx = box.minX() >> 4; cx <= box.maxX() >> 4; cx++) {
             for (int cz = box.minZ() >> 4; cz <= box.maxZ() >> 4; cz++) {
-                if (!level.hasChunk(cx, cz)) {
+                if (!ChunkHold.loaded(level, cx, cz)) {
                     return false;
                 }
             }
@@ -1052,7 +1058,8 @@ public final class ConstructionWork {
             if (level == null) {
                 continue;
             }
-            if (!construction.pending().isEmpty() && budget > 0) {
+            // The place the loader of places serves gets its steps there, a few a tick, not hundreds in this one.
+            if (!construction.pending().isEmpty() && budget > 0 && !SiteLoader.serving(construction.id())) {
                 budget -= applyPending(level, construction, plan.get(), budget);
             }
             if (finished(construction, plan.get())) {

@@ -873,8 +873,11 @@ public final class CityWalls {
             if (level == null) {
                 continue;
             }
-            for (Road.Section section : wall.sections()) {
-                placeSection(level, wall, section, Integer.MAX_VALUE);
+            // The wall the loader of places serves gets its columns there, a few a tick.
+            if (!io.github.sekerator.kingdomworld.common.construction.SiteLoader.servingWall(wall.id())) {
+                for (Road.Section section : wall.sections()) {
+                    placeSection(level, wall, section, Integer.MAX_VALUE);
+                }
             }
             if (wall.built() && wall.buildingId() == 0) {
                 register(server, wall);
@@ -896,7 +899,7 @@ public final class CityWalls {
         while (section.placed() < section.paid() && done < budget) {
             Wall.Block block = blocks.get(section.placed());
             BlockPos base = new BlockPos(block.x(), block.y(), block.z());
-            if (!level.isLoaded(base)) {
+            if (!io.github.sekerator.kingdomworld.common.construction.ChunkHold.loaded(level, base)) {
                 break;
             }
             String item = section.pool().keySet().stream().findFirst().orElse(null);

@@ -86,11 +86,15 @@ public final class BuilderBehavior implements ProfessionBehavior {
                 continue;
             }
             ConstructionWork.worked(construction, citizen.id(), now);
+            boolean waited = !construction.pending().isEmpty();
             double budget = construction.carry() + rules.blocks(intervalTicks, citizen.experience(), EconomySettings.workSpeed(citizen.mood()));
             ConstructionRules.Progress progress = ConstructionRules.work(plan.get(), construction, budget,
                     cost -> ConstructionWork.pay(server, construction, cost));
             construction.setCarry(progress.carry());
             if (progress.steps() > 0) {
+                if (!waited && !construction.pending().isEmpty()) {
+                    SiteLoader.pendingGrew(construction, now);
+                }
                 citizen.addExperience(progress.steps());
                 post.addProduced(PostWork.gameDay(server), progress.steps());
                 if (!construction.status().isProblem() || construction.status() == Construction.Status.NO_MATERIALS) {

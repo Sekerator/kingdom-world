@@ -90,11 +90,21 @@ public record ConstructionView(UUID kingdomId, boolean canManage, int maxConstru
      *
      * @param statusPos where the problem of the status is, or {@code null}
      */
+    /**
+     * @param paid    steps paid for far from players that wait for the place to be loaded
+     * @param placing whether the server holds the place loaded now and puts them in
+     */
     public record Site(long id, Component name, ItemStack icon, BlockPos pos, Construction.Priority priority, boolean paused, boolean orderMissing,
                        Construction.Status status, @Nullable BlockPos statusPos, int percent, int placed, int total, int builders,
-                       List<Missing> missing, Construction.Kind kind) {
+                       List<Missing> missing, Construction.Kind kind, int paid, boolean placing) {
         public Site {
             missing = List.copyOf(missing.subList(0, Math.min(missing.size(), MAX_MISSING)));
+        }
+
+        public Site(long id, Component name, ItemStack icon, BlockPos pos, Construction.Priority priority, boolean paused, boolean orderMissing,
+                    Construction.Status status, @Nullable BlockPos statusPos, int percent, int placed, int total, int builders, List<Missing> missing,
+                    Construction.Kind kind) {
+            this(id, name, icon, pos, priority, paused, orderMissing, status, statusPos, percent, placed, total, builders, missing, kind, 0, false);
         }
 
         public Site(long id, Component name, ItemStack icon, BlockPos pos, Construction.Priority priority, boolean paused, boolean orderMissing,
@@ -179,6 +189,8 @@ public record ConstructionView(UUID kingdomId, boolean canManage, int maxConstru
                 buf.writeBoolean(missing.ordered());
             }
             buf.writeEnum(site.kind());
+            buf.writeVarInt(site.paid());
+            buf.writeBoolean(site.placing());
         }
         buf.writeVarInt(buildings.size());
         for (Building building : buildings) {
@@ -272,8 +284,9 @@ public record ConstructionView(UUID kingdomId, boolean canManage, int maxConstru
             for (int j = 0; j < missingCount; j++) {
                 missing.add(new Missing(buf.readItem(), buf.readVarInt(), buf.readUtf(MAX_TEXT), buf.readBoolean(), buf.readBoolean()));
             }
+            Construction.Kind kind = KingdomView.readEnum(buf, Construction.Kind.class);
             sites.add(new Site(id, name, icon, pos, priority, paused, orderMissing, status, statusPos, percent, placed, total, builders, missing,
-                    KingdomView.readEnum(buf, Construction.Kind.class)));
+                    kind, buf.readVarInt(), buf.readBoolean()));
         }
         int buildingCount = readCount(buf, MAX_BUILDINGS);
         List<Building> buildings = new ArrayList<>(buildingCount);

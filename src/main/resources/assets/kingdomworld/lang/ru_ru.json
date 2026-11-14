@@ -1916,6 +1916,8 @@
   "kingdomworld.screen.construction.summary.own": "Своих чертежей: %s из %s",
   "kingdomworld.screen.construction.summary.sites": "Строек: %s из %s",
   "kingdomworld.screen.construction.summary.sites_all": "Строек: %s",
+  "kingdomworld.screen.construction.status_paid": "Оплачено блоков: %s, поставят при подгрузке",
+  "kingdomworld.screen.construction.status_placing": "Ставятся блоки",
   "kingdomworld.screen.construction.summary.buildings": "Зданий: %s, укрепления: %s",
   "kingdomworld.screen.construction.no_templates": "На сервере нет шаблонов зданий",
   "kingdomworld.screen.construction.no_sites": "Ничего не строится. Возьмите чертёж в каталоге",
