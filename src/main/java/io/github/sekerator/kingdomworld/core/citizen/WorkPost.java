@@ -20,9 +20,12 @@ public final class WorkPost {
     public static final String NO_ANIMAL = "";
     /** Longest animal id; ids travel over the network and into saved data. */
     public static final int MAX_ANIMAL_LENGTH = 128;
+    /** Longest name a player may give a post. */
+    public static final int MAX_NAME_LENGTH = 32;
 
     private final WorldPos pos;
     private final UUID kingdomId;
+    private String name = "";
     private String professionId = Professions.UNEMPLOYED.id();
     private int radius;
     private int seats = 1;
@@ -68,6 +71,45 @@ public final class WorkPost {
     }
 
     // ---------------------------------------------------------------- settings
+
+    /**
+     * The name a player gave the post, empty for the default one (its profession and its number).
+     */
+    public String name() {
+        return name;
+    }
+
+    void setName(String value) {
+        String next = value == null ? "" : value.strip();
+        if (!next.equals(name)) {
+            name = next;
+            changed();
+        }
+    }
+
+    /**
+     * Restores the name from saved data. Does not notify.
+     */
+    public void restoreName(String value) {
+        name = value == null ? "" : value.strip();
+    }
+
+    /**
+     * Whether a player may give a post this name: at most {@link #MAX_NAME_LENGTH} characters without control characters or
+     * the formatting sign of the game; empty gives the post its default name back.
+     */
+    public static boolean isValidName(String value) {
+        if (value == null || value.length() > MAX_NAME_LENGTH) {
+            return false;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (Character.isISOControl(c) || c == '§') {
+                return false;
+            }
+        }
+        return true;
+    }
 
     /**
      * The profession of the post; {@code unemployed} while none is chosen.

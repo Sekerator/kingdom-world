@@ -205,15 +205,151 @@ class WorkPostsTest {
         assertTrue(citizens.assignWorkplace(other, pos(8, 8)));
         citizens.removeSite(pos(8, 8));
         assertNull(other.workplace());
+        assertEquals("unemployed", other.professionId(), "the work went away with the post");
         assertTrue(citizens.posts().get(pos(8, 8)).isEmpty());
 
         // A post replaced by another kind of place disappears with its workers.
         citizens.addSite(pos(4, 4), SiteKinds.WORK_POST, realm);
         state.setPostProfession(null, pos(4, 4), "carrier");
-        assertTrue(citizens.assignWorkplace(other, pos(4, 4)));
+        assertTrue(state.assign(null, pos(4, 4), other.id()).ok());
         citizens.addSite(pos(4, 4), SiteKinds.BED, realm);
         assertNull(other.workplace());
+        assertEquals("unemployed", other.professionId());
         assertTrue(citizens.posts().get(pos(4, 4)).isEmpty());
+    }
+
+    @Test
+    void aBrokenPostLeavesItsWorkersWithoutWorkAndANewOneTakesAnybody() {
+        List<Citizen> freed = new java.util.ArrayList<>();
+        citizens.setFreedListener(freed::add);
+        citizens.addSite(pos(8, 8), SiteKinds.WORK_POST, realm);
+        state.setPostProfession(king, pos(8, 8), "lumberjack");
+        state.setPostSeats(king, pos(8, 8), 2, 4);
+        Citizen first = citizen("unemployed");
+        Citizen second = citizen("unemployed");
+        assertTrue(state.assign(king, pos(8, 8), first.id()).ok());
+        assertTrue(state.assign(king, pos(8, 8), second.id()).ok());
+        first.addExperience(120);
+
+        citizens.removeSite(pos(8, 8));
+        assertEquals(List.of(first, second), freed, "the game hears who lost the work, after the post is gone");
+        for (Citizen worker : List.of(first, second)) {
+            assertEquals("unemployed", worker.professionId());
+            assertNull(worker.workplace());
+            assertEquals(WorkStatus.NONE, worker.workStatus());
+        }
+        assertEquals(120, first.experience(), "what a worker learned stays with it");
+
+        // A new post in the same place: anybody may be put on it at once, nobody has to be dismissed at the throne first.
+        citizens.addSite(pos(8, 8), SiteKinds.WORK_POST, realm);
+        assertEquals(KingdomError.NOT_A_POST_PROFESSION, state.assign(king, pos(8, 8), first.id()).error(), "first a profession");
+        assertTrue(state.setPostProfession(king, pos(8, 8), "miner").ok());
+        assertTrue(state.assign(king, pos(8, 8), first.id()).ok());
+        assertEquals("miner", first.professionId());
+        assertEquals(pos(8, 8), first.workplace());
+        assertEquals(2, freed.size(), "a post nobody worked at frees nobody");
+    }
+
+    @Test
+    void aCitizenGivenAPostProfessionAtTheThroneIsOnlyWithoutAPost() {
+        citizens.addSite(pos(8, 8), SiteKinds.WORK_POST, realm);
+        citizens.addSite(pos(12, 12), SiteKinds.WORK_POST, realm);
+        state.setPostProfession(king, pos(8, 8), "lumberjack");
+        Citizen idle = citizen("unemployed");
+        Citizen made = citizen("unemployed");
+        made.setLastPos(pos(30, 30));
+        assertTrue(state.setProfession(king, made.id(), "lumberjack").ok());
+        assertNull(made.workplace());
+        assertTrue(Workforce.withoutPost(made));
+        assertEquals(Workforce.Candidate.IDLE_SAME, Workforce.candidate(made, citizens.posts().get(pos(8, 8)).orElseThrow()));
+
+        // Hiring at the post takes the lumberjack without a post before anybody without work, however far it stands.
+        KingdomWorldState.Hiring hiring = state.hire(king, pos(8, 8));
+        assertTrue(hiring.outcome().ok());
+        assertEquals(made, hiring.citizen().orElseThrow());
+        assertEquals(pos(8, 8), made.workplace());
+        assertEquals("unemployed", idle.professionId());
+
+        // A post that gets the profession takes the lumberjack from the other post in one step.
+        state.setPostProfession(king, pos(12, 12), "lumberjack");
+        assertTrue(state.assign(king, pos(12, 12), made.id()).ok());
+        assertEquals(pos(12, 12), made.workplace());
+        assertTrue(citizens.posts().get(pos(8, 8)).orElseThrow().workers().isEmpty());
+    }
+
+    @Test
+    void aWorkerMovesBetweenPostsAndProfessionsInOneStep() {
+        citizens.addSite(pos(8, 8), SiteKinds.WORK_POST, realm);
+        citizens.addSite(pos(12, 12), SiteKinds.WORK_POST, realm);
+        state.setPostProfession(king, pos(8, 8), "miner");
+        state.setPostProfession(king, pos(12, 12), "fisher");
+        Citizen worker = citizen("unemployed");
+        assertTrue(state.assign(king, pos(8, 8), worker.id()).ok());
+        worker.addExperience(30);
+        WorkPost mine = citizens.posts().get(pos(8, 8)).orElseThrow();
+        WorkPost pond = citizens.posts().get(pos(12, 12)).orElseThrow();
+        assertEquals(Workforce.Candidate.OTHER_WORK, Workforce.candidate(worker, pond));
+        assertTrue(Workforce.candidate(worker, pond).transfer());
+
+        assertTrue(state.assign(king, pos(12, 12), worker.id()).ok());
+        assertEquals("fisher", worker.professionId());
+        assertEquals(pos(12, 12), worker.workplace());
+        assertTrue(mine.workers().isEmpty(), "the old seat is free");
+        assertEquals(List.of(worker.id()), List.copyOf(pond.workers()));
+        assertEquals(30, worker.experience());
+        assertEquals(KingdomError.UNCHANGED, state.assign(king, pos(12, 12), worker.id()).error());
+        assertEquals(Workforce.Candidate.HERE, Workforce.candidate(worker, pond));
+    }
+
+    @Test
+    void assigningNeedsTheRightASeatAndNoSoldier() {
+        citizens.addSite(pos(8, 8), SiteKinds.WORK_POST, realm);
+        state.setPostProfession(king, pos(8, 8), "carrier");
+        Citizen one = citizen("unemployed");
+        Citizen two = citizen("unemployed");
+        Citizen soldier = citizen("warrior");
+        assertEquals(KingdomError.NO_PERMISSION, state.assign(UUID.randomUUID(), pos(8, 8), one.id()).error());
+        assertEquals(KingdomError.UNKNOWN_POST, state.assign(king, pos(99, 99), one.id()).error());
+        assertEquals(KingdomError.UNKNOWN_CITIZEN, state.assign(king, pos(8, 8), UUID.randomUUID()).error());
+        assertEquals(KingdomError.ARMY_PROFESSION, state.assign(king, pos(8, 8), soldier.id()).error());
+        assertEquals(Workforce.Candidate.SOLDIER, Workforce.candidate(soldier, citizens.posts().get(pos(8, 8)).orElseThrow()));
+        assertTrue(state.assign(king, pos(8, 8), one.id()).ok());
+        assertEquals(KingdomError.NO_FREE_SEAT, state.assign(king, pos(8, 8), two.id()).error());
+        assertEquals("unemployed", two.professionId(), "a refused citizen keeps what it had");
+    }
+
+    @Test
+    void aPostIsClearedAndRenamed() {
+        citizens.addSite(pos(8, 8), SiteKinds.WORK_POST, realm);
+        state.setPostProfession(king, pos(8, 8), "smelter");
+        state.setPostSeats(king, pos(8, 8), 3, 4);
+        WorkPost post = citizens.posts().get(pos(8, 8)).orElseThrow();
+        assertEquals(KingdomError.UNCHANGED, state.clearPost(king, pos(8, 8)).error());
+        Citizen a = citizen("unemployed");
+        Citizen b = citizen("unemployed");
+        state.assign(king, pos(8, 8), a.id());
+        state.assign(king, pos(8, 8), b.id());
+        assertEquals(KingdomError.NO_PERMISSION, state.clearPost(UUID.randomUUID(), pos(8, 8)).error());
+        assertTrue(state.clearPost(king, pos(8, 8)).ok());
+        assertTrue(post.workers().isEmpty());
+        assertEquals("unemployed", a.professionId());
+        assertEquals("unemployed", b.professionId());
+
+        assertEquals("", post.name());
+        assertEquals(1, citizens.postNumber(post));
+        assertTrue(state.renamePost(king, pos(8, 8), "  Северная плавильня  ").ok());
+        assertEquals("Северная плавильня", post.name());
+        assertEquals(KingdomError.UNCHANGED, state.renamePost(king, pos(8, 8), "Северная плавильня").error());
+        assertEquals(KingdomError.VALUE_OUT_OF_RANGE, state.renamePost(king, pos(8, 8), "x".repeat(WorkPost.MAX_NAME_LENGTH + 1)).error());
+        assertEquals(KingdomError.VALUE_OUT_OF_RANGE, state.renamePost(king, pos(8, 8), "\u00A7cRed").error());
+        assertEquals(KingdomError.NO_PERMISSION, state.renamePost(UUID.randomUUID(), pos(8, 8), "Mine").error());
+        assertTrue(state.renamePost(king, pos(8, 8), "").ok(), "an empty name gives the default one back");
+        assertEquals("", post.name());
+
+        // The number counts the posts of the profession in the order they were found.
+        citizens.addSite(pos(12, 12), SiteKinds.WORK_POST, realm);
+        state.setPostProfession(king, pos(12, 12), "smelter");
+        assertEquals(2, citizens.postNumber(citizens.posts().get(pos(12, 12)).orElseThrow()));
     }
 
     @Test

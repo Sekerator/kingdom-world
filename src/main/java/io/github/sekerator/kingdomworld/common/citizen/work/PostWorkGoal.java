@@ -72,6 +72,17 @@ public abstract class PostWorkGoal extends Goal {
         setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
     }
 
+    /**
+     * What the worker is at: getting ready, working or carrying what it gathered away.
+     */
+    public io.github.sekerator.kingdomworld.core.citizen.Workforce.Doing doing() {
+        return switch (phase) {
+            case PREPARE -> io.github.sekerator.kingdomworld.core.citizen.Workforce.Doing.PREPARING;
+            case DELIVER -> io.github.sekerator.kingdomworld.core.citizen.Workforce.Doing.CARRYING;
+            default -> io.github.sekerator.kingdomworld.core.citizen.Workforce.Doing.WORKING;
+        };
+    }
+
     // ---------------------------------------------------------------- goal
 
     @Override

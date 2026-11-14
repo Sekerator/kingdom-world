@@ -57,7 +57,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "46";
+    public static final String PROTOCOL_VERSION = "48";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -302,6 +302,12 @@ public final class KingdomWorldNetwork {
         add(id++, io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Offers.class, NetworkDirection.PLAY_TO_CLIENT, io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Offers::encode, io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Offers::decode,
                 io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Offers::handle);
         add(id++, io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Buy.class, NetworkDirection.PLAY_TO_SERVER, io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Buy::encode, io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Buy::decode, io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Buy::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Request.class, NetworkDirection.PLAY_TO_SERVER, io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Request::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Request::decode, io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Request::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.View.class, NetworkDirection.PLAY_TO_CLIENT, io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.View::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.View::decode, io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.View::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Action.class, NetworkDirection.PLAY_TO_SERVER, io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Action::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Action::decode, io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Action::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

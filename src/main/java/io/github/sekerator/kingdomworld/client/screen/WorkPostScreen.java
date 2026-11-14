@@ -30,9 +30,10 @@ import java.util.UUID;
  * from each and how many of each stay in the storehouses), why it stands still if it does, what it yields and who works
  * there. The buttons that go through choices (profession, animals, ore) take the next one on a left
  * click and the one before on a right click. Members with the right to manage citizens change
- * the settings, hire citizens without work and dismiss workers; everybody else of the kingdom only looks. Every
- * button sends an intent; the server decides and answers with the result and a fresh screen. Widths come from the
- * translated texts.
+ * the settings, hire citizens (those without work and those of the profession without a post first, any other worker
+ * with a confirmation that it moves here) and dismiss workers; everybody else of the kingdom only looks. Opened from the
+ * window of the workers the screen manages the post from afar and goes back there. Every button sends an intent; the
+ * server decides and answers with the result and a fresh screen. Widths come from the translated texts.
  */
 public class WorkPostScreen extends KingdomScreen implements ResultListener {
     private static final String KEY = "kingdomworld.screen.post.";
@@ -81,9 +82,56 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
     private static final int KEEP_STEP = 16;
     private static final int KEEP_BIG_STEP = 64;
 
+    /** The window of the workers this screen was opened from, {@code null} when opened at the post. */
+    @org.jetbrains.annotations.Nullable
+    private final net.minecraft.client.gui.screens.Screen parent;
+
     public WorkPostScreen(WorkPostView view) {
+        this(view, null);
+    }
+
+    public WorkPostScreen(WorkPostView view, @org.jetbrains.annotations.Nullable net.minecraft.client.gui.screens.Screen parent) {
         super(Component.translatable("block.kingdomworld.work_post"));
         this.view = view;
+        this.parent = parent;
+    }
+
+    /**
+     * Whether a view is of the post this screen shows.
+     */
+    public boolean shows(WorkPostView other) {
+        return view.pos().equals(other.pos()) && (view.place().dimension().isEmpty() || other.place().dimension().isEmpty()
+                || view.place().dimension().equals(other.place().dimension()));
+    }
+
+    /**
+     * Asks the server for the post again, for example after a worker was chosen in the window of the workers.
+     */
+    public void refresh() {
+        if (net.minecraft.client.Minecraft.getInstance().getConnection() != null) {
+            send(WorkPostActionPacket.Action.REFRESH, 0, "", null);
+        }
+    }
+
+    /**
+     * The post as the window of the workers knows it: its dimension and place.
+     */
+    private io.github.sekerator.kingdomworld.common.network.data.WorkforceView.PostRef ref() {
+        String dimension = view.place().dimension();
+        if (dimension.isEmpty() && minecraft != null && minecraft.level != null) {
+            dimension = io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(minecraft.level);
+        }
+        return new io.github.sekerator.kingdomworld.common.network.data.WorkforceView.PostRef(dimension, view.pos());
+    }
+
+    @Override
+    public void onClose() {
+        if (parent instanceof WorkforceScreen workforce) {
+            workforce.refresh();
+        }
+        if (minecraft != null) {
+            minecraft.setScreen(parent);
+        }
     }
 
     @Override
@@ -368,7 +416,12 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
     }
 
     private Component title() {
-        return Component.translatable(KEY + "title", view.pos().getX(), view.pos().getY(), view.pos().getZ());
+        WorkPostView.Place place = view.place();
+        if (place.name().isEmpty() && place.number() <= 0) {
+            return Component.translatable(KEY + "title", view.pos().getX(), view.pos().getY(), view.pos().getZ());
+        }
+        return Component.translatable(KEY + "title_named", WorkforceScreen.postName(place.name(), view.profession(), place.number()),
+                view.pos().getX(), view.pos().getY(), view.pos().getZ());
     }
 
     // ---------------------------------------------------------------- layout
@@ -426,7 +479,8 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         // The longest numbers the lines can show.
         view = new WorkPostView(new BlockPos(-30_000_000, 319, 29_999_999), saved.kingdomId(), saved.canManage(), saved.profession(),
                 64, 64, 16, 16, saved.animal(), saved.animals(), 64, 64, WorkStatus.ZONE_PARTLY_OUTSIDE, false, true,
-                999_999, 9_999_999L, List.of(), 9_999, saved.auto(), saved.stations(), saved.current(), 100, saved.site());
+                999_999, 9_999_999L, List.of(), 9_999, saved.auto(), saved.stations(), saved.current(), 100, saved.site())
+                .withPlace(saved.place());
         info = Math.max(info, font.width(title()));
         for (WorkStatus value : WorkStatus.values()) {
             info = Math.max(info, font.width(Component.translatable(KEY + "status", statusText(value))));
@@ -559,9 +613,16 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
                 mintWidgets(x, y);
             }
             int right = left() + panelWidth - PAD;
-            Button hire = addRenderableWidget(Button.builder(hireLabel(), b -> send(WorkPostActionPacket.Action.HIRE, 0, "", null))
+            // The candidates: those without work and those of the profession without a post first, then any other worker.
+            Button hire = addRenderableWidget(Button.builder(hireLabel(), b -> {
+                        if (minecraft != null) {
+                            minecraft.setScreen(WorkforceScreen.chooseCitizen(this, view.kingdomId(), ref()));
+                        }
+                    })
                     .bounds(right - hireWidth, workersTop(), hireWidth, ROW - 2).build());
-            hire.active = view.unemployed() > 0 && view.workers().size() < view.seats() && !view.profession().equals(Professions.UNEMPLOYED.id());
+            hire.active = view.workers().size() < view.seats() && !view.profession().equals(Professions.UNEMPLOYED.id());
+            hire.setTooltip(Tooltip.create(Component.translatable(view.profession().equals(Professions.UNEMPLOYED.id()) ? KEY + "hire_no_profession"
+                    : view.workers().size() >= view.seats() ? KEY + "hire_full" : KEY + "hire_hint", view.unemployed())));
             int rows = visibleWorkers();
             scroll = Math.max(0, Math.min(scroll, view.workers().size() - rows));
             for (int i = 0; i < rows && scroll + i < view.workers().size(); i++) {
@@ -577,8 +638,9 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
             // treasury.
             mintWidgets(x, y);
         }
-        int doneWidth = Math.max(50, buttonWidth(Component.translatable("gui.done")));
-        addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose())
+        Component doneLabel = Component.translatable(parent != null ? "gui.back" : "gui.done");
+        int doneWidth = Math.max(50, buttonWidth(doneLabel));
+        addRenderableWidget(Button.builder(doneLabel, b -> onClose())
                 .bounds(left() + panelWidth - PAD - doneWidth, top() + panelHeight - 26, doneWidth, 20).build());
     }
 
@@ -698,7 +760,7 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
     }
 
     private void send(WorkPostActionPacket.Action action, int value, String text, UUID target) {
-        KingdomWorldNetwork.sendToServer(new WorkPostActionPacket(view.pos(), action, Math.max(0, value), text, target));
+        KingdomWorldNetwork.sendToServer(new WorkPostActionPacket(view.pos(), action, Math.max(0, value), text, target, view.place().dimension()));
     }
 
     @Override
@@ -728,8 +790,8 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         int right = left + panelWidth - PAD;
         graphics.fill(left, top, left + panelWidth, top + panelHeight, 0xF0201810);
         graphics.renderOutline(left, top, panelWidth, panelHeight, 0xFFB08850);
-        Component title = title();
-        centeredLabel(graphics, title, width / 2, top + 7, 0xFFF0D070, left + PAD, right);
+        // A long name of the post is shortened and shown in full on hover.
+        centeredName(graphics, title().getString(), width / 2, top + 7, 0xFFF0D070, right - left - PAD);
 
         int x = left + PAD;
         int y = top + TOP;

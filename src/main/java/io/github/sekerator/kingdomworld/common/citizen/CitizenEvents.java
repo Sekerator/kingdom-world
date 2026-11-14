@@ -73,6 +73,8 @@ public final class CitizenEvents {
             var rules = GatheringSettings.rules();
             KingdomWorldApi.state(server).citizens().setPostDefaults(rules.defaultRadius(), Math.max(2, rules.maxHerd() / 2));
             KingdomWorldApi.state(server).citizens().setPostRules(rules);
+            // The workers of a post that went away put its tools back and their bodies follow the change.
+            KingdomWorldApi.state(server).citizens().setFreedListener(citizen -> CitizenActions.afterProfessionChange(server, citizen));
             CitizenBodies.update(server);
             CitizenCare.update(server);
         }

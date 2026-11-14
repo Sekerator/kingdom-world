@@ -26,19 +26,21 @@ import java.util.UUID;
  * @param measured       whether the yield was measured (otherwise it is an estimate of the zone)
  * @param perDay         items one worker gathers in a game day, rounded
  * @param producedToday  items gathered at the post today
- * @param unemployed     citizens without work in the kingdom, who could be hired
+ * @param unemployed     citizens who could take a seat without leaving other work: those without work and those of the
+ *                       post's profession without a post
  * @param auto           for a workshop: whether it works on its own when nothing is ordered
  * @param stations       for a workshop: the workstations in its zone, by kind with their number
  * @param current        for a workshop: what it makes now, empty if nothing
  * @param progress       how far the current item is, in percent
  * @param goal           for a miner: what the post is asked for
  * @param mint           for a minter: the metals of the mint of the kingdom
+ * @param place          the dimension of the post, its name and number
  */
 public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, String profession, int radius, int maxRadius,
                            int seats, int maxSeats, String animal, List<String> animals, int herdSize, int maxHerd,
                            WorkStatus status, boolean container, boolean measured, int perDay, long producedToday,
                            List<Worker> workers, int unemployed, boolean auto, List<Station> stations, ItemStack current,
-                           int progress, net.minecraft.network.chat.Component site, Goal goal, Mint mint) {
+                           int progress, net.minecraft.network.chat.Component site, Goal goal, Mint mint, Place place) {
     public static final int MAX_WORKERS = 16;
     public static final int MAX_ORES = 128;
 
@@ -122,6 +124,51 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
     }
 
     /**
+     * Where a post is and what it is called.
+     *
+     * @param dimension the dimension of the post, empty for the one of the viewer
+     * @param name      the name the post was given, empty for its default name
+     * @param number    its number among the posts of its profession, 0 if not known
+     */
+    public record Place(String dimension, String name, int number) {
+        public static final Place NONE = new Place("", "", 0);
+        private static final int MAX_DIMENSION = 128;
+
+        public Place {
+            dimension = dimension == null ? "" : dimension;
+            name = name == null ? "" : name;
+        }
+
+        void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(dimension, MAX_DIMENSION);
+            buf.writeUtf(name, WorkPost.MAX_NAME_LENGTH);
+            buf.writeVarInt(number);
+        }
+
+        static Place decode(FriendlyByteBuf buf) {
+            return new Place(buf.readUtf(MAX_DIMENSION), buf.readUtf(WorkPost.MAX_NAME_LENGTH), buf.readVarInt());
+        }
+    }
+
+    /**
+     * The view of a post without a known place.
+     */
+    public WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, String profession, int radius, int maxRadius,
+                        int seats, int maxSeats, String animal, List<String> animals, int herdSize, int maxHerd,
+                        WorkStatus status, boolean container, boolean measured, int perDay, long producedToday,
+                        List<Worker> workers, int unemployed, boolean auto, List<Station> stations, ItemStack current,
+                        int progress, net.minecraft.network.chat.Component site, Goal goal, Mint mint) {
+        this(pos, kingdomId, canManage, profession, radius, maxRadius, seats, maxSeats, animal, animals, herdSize, maxHerd, status,
+                container, measured, perDay, producedToday, workers, unemployed, auto, stations, current, progress, site, goal, mint, Place.NONE);
+    }
+
+    public WorkPostView withPlace(Place value) {
+        return new WorkPostView(pos, kingdomId, canManage, profession, radius, maxRadius, seats, maxSeats, animal, animals, herdSize,
+                maxHerd, status, container, measured, perDay, producedToday, workers, unemployed, auto, stations, current, progress,
+                site, goal, mint, value);
+    }
+
+    /**
      * The view of a post that is not a mint.
      */
     public WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, String profession, int radius, int maxRadius,
@@ -136,7 +183,7 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
     public WorkPostView withMint(Mint value) {
         return new WorkPostView(pos, kingdomId, canManage, profession, radius, maxRadius, seats, maxSeats, animal, animals, herdSize,
                 maxHerd, status, container, measured, perDay, producedToday, workers, unemployed, auto, stations, current, progress,
-                site, goal, value);
+                site, goal, value, place);
     }
 
     /**
@@ -154,7 +201,7 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
     public WorkPostView withGoal(Goal value) {
         return new WorkPostView(pos, kingdomId, canManage, profession, radius, maxRadius, seats, maxSeats, animal, animals, herdSize,
                 maxHerd, status, container, measured, perDay, producedToday, workers, unemployed, auto, stations, current, progress,
-                site, value, mint);
+                site, value, mint, place);
     }
     public static final int MAX_ANIMALS = 16;
     public static final int MAX_STATIONS = 16;
@@ -190,6 +237,7 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
         Objects.requireNonNull(current, "current");
         Objects.requireNonNull(goal, "goal");
         Objects.requireNonNull(mint, "mint");
+        Objects.requireNonNull(place, "place");
         progress = Math.max(0, Math.min(100, progress));
         if (animals.size() > MAX_ANIMALS || workers.size() > MAX_WORKERS || stations.size() > MAX_STATIONS) {
             throw new IllegalArgumentException("Work post view too large");
@@ -236,6 +284,7 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
         buf.writeComponent(site);
         goal.encode(buf);
         mint.encode(buf);
+        place.encode(buf);
     }
 
     public static WorkPostView decode(FriendlyByteBuf buf) {
@@ -280,6 +329,6 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
         net.minecraft.network.chat.Component site = buf.readComponent();
         return new WorkPostView(pos, kingdomId, canManage, profession, radius, maxRadius, seats, maxSeats, animal, animals, herdSize,
                 maxHerd, status, container, measured, perDay, produced, workers, unemployed, auto, stations, current, progress, site,
-                Goal.decode(buf), Mint.decode(buf));
+                Goal.decode(buf), Mint.decode(buf), Place.decode(buf));
     }
 }

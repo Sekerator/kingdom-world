@@ -566,7 +566,8 @@ public final class KingdomWorldState {
     }
 
     /**
-     * Gives the citizen without work nearest to a post the post's profession and a seat there.
+     * Gives a post the nearest citizen of its profession who has no workplace (one given the profession at the throne, say),
+     * or else the nearest citizen without work, who takes the post's profession.
      */
     public Hiring hire(UUID actor, WorldPos pos) {
         Outcome check = checkPost(actor, pos);
@@ -581,23 +582,97 @@ public final class KingdomWorldState {
             return Hiring.failed(KingdomError.NO_FREE_SEAT);
         }
         Citizen best = null;
+        int bestRank = Integer.MAX_VALUE;
         double bestDistance = Double.POSITIVE_INFINITY;
         for (Citizen citizen : citizens.registry().citizensOf(post.kingdomId())) {
-            if (!citizen.professionId().equals(Professions.UNEMPLOYED.id())) {
+            int rank = io.github.sekerator.kingdomworld.core.citizen.Workforce.candidate(citizen, post).hireRank();
+            if (rank < 0) {
                 continue;
             }
             double distance = citizen.lastPos().distanceSqr(pos);
-            if (best == null || distance < bestDistance) {
+            if (best == null || rank < bestRank || rank == bestRank && distance < bestDistance) {
                 best = citizen;
+                bestRank = rank;
                 bestDistance = distance;
             }
         }
         if (best == null) {
             return Hiring.failed(KingdomError.NO_UNEMPLOYED);
         }
-        citizens.setProfession(best, post.professionId());
-        citizens.assignWorkplace(best, pos);
+        citizens.assignToPost(best, post);
         return new Hiring(Outcome.DONE, Optional.of(best));
+    }
+
+    /**
+     * Puts a citizen on a post: one without work, one of the post's profession without a post, or one who works elsewhere and
+     * moves here in one step, taking the post's profession. Soldiers come and go through the army.
+     *
+     * @param actor the player, who needs {@link Permission#MANAGE_CITIZENS} in the post's kingdom; {@code null} for an
+     *              administrator
+     */
+    public Outcome assign(UUID actor, WorldPos pos, UUID citizenId) {
+        Outcome check = checkPost(actor, pos);
+        if (!check.ok()) {
+            return check;
+        }
+        WorkPost post = citizens.posts().get(pos).orElseThrow();
+        Optional<Citizen> citizen = citizens.get(citizenId);
+        if (citizen.isEmpty() || !citizen.get().kingdomId().equals(post.kingdomId())) {
+            return Outcome.fail(KingdomError.UNKNOWN_CITIZEN);
+        }
+        if (!post.hasProfession()) {
+            return Outcome.fail(KingdomError.NOT_A_POST_PROFESSION);
+        }
+        if (Professions.isMilitary(citizen.get().professionId())) {
+            return Outcome.fail(KingdomError.ARMY_PROFESSION);
+        }
+        if (post.workers().contains(citizenId)) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        if (post.freeSeats() <= 0) {
+            return Outcome.fail(KingdomError.NO_FREE_SEAT);
+        }
+        return citizens.assignToPost(citizen.get(), post) ? Outcome.DONE : Outcome.fail(KingdomError.NO_FREE_SEAT);
+    }
+
+    /**
+     * Everybody who works at a post is without work again.
+     *
+     * @return the outcome; {@link KingdomError#UNCHANGED} if nobody worked there
+     */
+    public Outcome clearPost(UUID actor, WorldPos pos) {
+        Outcome check = checkPost(actor, pos);
+        if (!check.ok()) {
+            return check;
+        }
+        WorkPost post = citizens.posts().get(pos).orElseThrow();
+        if (post.workers().isEmpty()) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        for (UUID worker : List.copyOf(post.workers())) {
+            citizens.get(worker).ifPresent(citizen -> citizens.setProfession(citizen, Professions.UNEMPLOYED.id()));
+        }
+        return Outcome.DONE;
+    }
+
+    /**
+     * Gives a post a name; an empty one gives it its default name back.
+     */
+    public Outcome renamePost(UUID actor, WorldPos pos, String name) {
+        Outcome check = checkPost(actor, pos);
+        if (!check.ok()) {
+            return check;
+        }
+        String next = name == null ? "" : name.strip();
+        if (!WorkPost.isValidName(next)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        WorkPost post = citizens.posts().get(pos).orElseThrow();
+        if (post.name().equals(next)) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        citizens.setPostName(post, next);
+        return Outcome.DONE;
     }
 
     /**

@@ -60,6 +60,7 @@ final class CitizensTab {
     private CitizenView view;
     private io.github.sekerator.kingdomworld.common.network.data.LifeViews.TabView life;
     private int festivalWidth;
+    private int workersWidth;
     private int filter;
     private Mode mode = Mode.CITIZENS;
     private int scroll;
@@ -233,6 +234,7 @@ final class CitizensTab {
         }
         pageWidth = font.width(Component.translatable("kingdomworld.screen.throne.page", 500, 500, 500));
         festivalWidth = screen.buttonWidth(Component.translatable(KEY + "life.call"));
+        workersWidth = screen.buttonWidth(Component.translatable(KEY + "workers"));
         dayWidth = font.width(Component.translatable(KEY + "day", 99_999));
         professionLabelWidth = 0;
         for (Profession profession : professions()) {
@@ -242,7 +244,7 @@ final class CitizensTab {
         countWidth = Math.max(font.width(Component.translatable(KEY + "production.today", 9_999_999L)),
                 font.width(Component.translatable(KEY + "production.yesterday", 9_999_999L)));
 
-        int buttons = filterWidth + GAP + modeWidth + GAP + festivalWidth + 8 + pageWidth;
+        int buttons = filterWidth + GAP + modeWidth + GAP + Math.max(festivalWidth, workersWidth) + 8 + pageWidth;
         int list = NAME_COLUMN + professionWidth + 6 + stateWidth + 6 + MIN_PLACE_COLUMN;
         int deaths = NAME_COLUMN + 120 + 6 + dayWidth;
         int production = professionLabelWidth + 2 * (countWidth + 6) + 60;
@@ -324,6 +326,17 @@ final class CitizensTab {
             festival.setTooltip(net.minecraft.client.gui.components.Tooltip.create(LifeRows.festivalHint(life)));
         }
 
+        if (listsCitizens() && view.canManage()) {
+            // The window of the workers: who does what, what is lacking, the posts, all without walking to them.
+            Button workers = screen.add(Button.builder(Component.translatable(KEY + "workers"),
+                    b -> KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Request(
+                            view.kingdomId(), true, io.github.sekerator.kingdomworld.common.network.data.WorkforceView.Query.of(
+                                    io.github.sekerator.kingdomworld.common.network.data.WorkforceView.Mode.CITIZENS,
+                                    io.github.sekerator.kingdomworld.common.citizen.WorkforceActions.DEFAULT_PAGE))))
+                    .bounds(left + KingdomScreen.PAD + filterWidth + GAP + modeWidth + GAP, buttonsY, workersWidth, ROW - 2).build());
+            workers.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable(KEY + "workers_hint")));
+        }
+
         int rows = visibleRows(top, panelHeight);
         scroll = Math.max(0, Math.min(scroll, rowCount() - rows));
         if (!listsCitizens() || !view.canManage()) {
@@ -371,7 +384,8 @@ final class CitizensTab {
         int rows = visibleRows(top, panelHeight);
         int count = rowCount();
         // The button of the festival may leave no room for the page on a narrow screen; the rows still scroll.
-        int buttonsRight = x + filterWidth + GAP + modeWidth + (mode == Mode.LIFE && life != null && life.canManage() ? GAP + festivalWidth : 0);
+        int buttonsRight = x + filterWidth + GAP + modeWidth + (mode == Mode.LIFE && life != null && life.canManage() ? GAP + festivalWidth
+                : listsCitizens() && view.canManage() ? GAP + workersWidth : 0);
         if (count > rows) {
             Component page = Component.translatable("kingdomworld.screen.throne.page", scroll + 1, Math.min(count, scroll + rows), count);
             int pageX = right - font.width(page);

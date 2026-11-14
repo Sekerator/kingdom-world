@@ -30,6 +30,16 @@ public final class WorkGoal extends Goal {
         return work;
     }
 
+    /**
+     * What the work of the body is at, for the window of the workers; {@code null} for a profession without work of its own.
+     */
+    public io.github.sekerator.kingdomworld.core.citizen.Workforce.Doing doing() {
+        if (work instanceof io.github.sekerator.kingdomworld.common.citizen.work.PostWorkGoal post) {
+            return post.doing();
+        }
+        return work == null ? null : io.github.sekerator.kingdomworld.core.citizen.Workforce.Doing.WORKING;
+    }
+
     @Override
     public boolean canUse() {
         Goal goal = current();

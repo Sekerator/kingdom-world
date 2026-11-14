@@ -53,7 +53,8 @@ class SideIsolationTest {
             "io/github/sekerator/kingdomworld/common/network/packet/TerritoryDeltaPacket.java",
             "io/github/sekerator/kingdomworld/common/network/packet/TerritorySnapshotPacket.java",
             "io/github/sekerator/kingdomworld/common/network/packet/TradePackets.java",
-            "io/github/sekerator/kingdomworld/common/network/packet/WorkPostViewPacket.java");
+            "io/github/sekerator/kingdomworld/common/network/packet/WorkPostViewPacket.java",
+            "io/github/sekerator/kingdomworld/common/network/packet/WorkforcePackets.java");
 
     /**
      * Compat modules of client-only mods. They are client code: they may use client classes, and the compat loader

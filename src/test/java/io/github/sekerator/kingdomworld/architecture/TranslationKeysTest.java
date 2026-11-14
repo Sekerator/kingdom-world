@@ -471,6 +471,37 @@ class TranslationKeysTest {
         for (WorkStatus status : WorkStatus.values()) {
             used.add("kingdomworld.work.status." + status.id());
         }
+        // The window of the workers: what citizens do and lack, in rows and counted, and its empty lists.
+        for (io.github.sekerator.kingdomworld.core.citizen.Workforce.Doing doing : io.github.sekerator.kingdomworld.core.citizen.Workforce.Doing.values()) {
+            if (doing != io.github.sekerator.kingdomworld.core.citizen.Workforce.Doing.WORKING
+                    && doing != io.github.sekerator.kingdomworld.core.citizen.Workforce.Doing.STANDING) {
+                used.add("kingdomworld.workforce.doing." + doing.id());
+            }
+        }
+        for (String work : List.of("farmer", "lumberjack", "miner", "fisher", "herder", "carrier", "smelter", "cook", "crafter", "smith", "minter",
+                "merchant", "registrar", "adventurer", "builder", "mage", "innkeeper", "other")) {
+            used.add("kingdomworld.workforce.doing.work." + work);
+        }
+        for (io.github.sekerator.kingdomworld.core.citizen.Workforce.Need need : io.github.sekerator.kingdomworld.core.citizen.Workforce.Need.values()) {
+            used.add("kingdomworld.workforce.lack." + need.id());
+            used.add("kingdomworld.workforce.need." + need.id());
+        }
+        for (String tool : List.of("axe", "pickaxe", "fishing_rod", "shears", "weapon")) {
+            for (String need : List.of("tool", "better_tool")) {
+                used.add("kingdomworld.workforce.lack." + need + "." + tool);
+                used.add("kingdomworld.workforce.need." + need + "." + tool);
+            }
+        }
+        for (String who : List.of("workers", "citizens")) {
+            for (Plurals.Form form : Plurals.Form.values()) {
+                used.add("kingdomworld.workforce.count." + who + "." + form.suffix());
+            }
+        }
+        for (String mode : List.of("citizens", "posts", "choose_post", "choose_citizen")) {
+            used.add("kingdomworld.screen.workforce.empty." + mode);
+        }
+        used.add("kingdomworld.screen.workforce.tab.citizens");
+        used.add("kingdomworld.screen.workforce.tab.posts");
         for (NameProblem problem : NameProblem.values()) {
             used.add("kingdomworld.screen.found.problem." + problem.name().toLowerCase(Locale.ROOT));
         }

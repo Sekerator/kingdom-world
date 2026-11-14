@@ -99,6 +99,7 @@ public final class CitizenNbt {
     private static final String GOAL_ORE = "goal_ore";
     private static final String GOAL_AMOUNT = "goal_amount";
     private static final String GOAL_DEPTH = "goal_depth";
+    private static final String POST_NAME = "name";
 
     /**
      * What was read for one kingdom, not yet restored.
@@ -163,6 +164,9 @@ public final class CitizenNbt {
     private static CompoundTag writePost(WorkPost post) {
         CompoundTag tag = new CompoundTag();
         tag.put(POS, writePos(post.pos()));
+        if (!post.name().isEmpty()) {
+            tag.putString(POST_NAME, post.name());
+        }
         tag.putString(PROFESSION, post.professionId());
         tag.putInt(RADIUS, post.radius());
         tag.putInt(SEATS, post.seats());
@@ -344,6 +348,9 @@ public final class CitizenNbt {
             throw new IllegalArgumentException(where + " has an invalid goal of its mine");
         }
         post.restoreMineGoal(new MineGoal(ore, amount, autoDepth, depth));
+        // Posts saved before they had names keep the default one; a name that is no longer allowed gives way to it.
+        String postName = tag.getString(POST_NAME).strip();
+        post.restoreName(WorkPost.isValidName(postName) ? postName : "");
         return post;
     }
 

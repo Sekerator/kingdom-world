@@ -39,7 +39,8 @@ import java.util.UUID;
 
 /**
  * What players do with work posts: open the screen, change the settings, hire and dismiss workers. Members of the
- * post's kingdom see the screen; changing anything needs the right to manage citizens. The server checks every
+ * post's kingdom see the screen; changing anything needs the right to manage citizens. Those who have that right manage a
+ * post from afar too, from the window of the workers; everybody else stands at the post. The server checks every
  * request (rights, distance to the post, ranges of the values) and answers with the result and a fresh screen.
  */
 public final class WorkPostActions {
@@ -129,9 +130,12 @@ public final class WorkPostActions {
                 }
             });
         }
+        // Those who take a seat without leaving other work: without work, or of the post's profession without a post.
         int unemployed = 0;
         for (Citizen citizen : state.citizens().registry().citizensOf(post.kingdomId())) {
-            if (citizen.professionId().equals(Professions.UNEMPLOYED.id())) {
+            io.github.sekerator.kingdomworld.core.citizen.Workforce.Candidate candidate =
+                    io.github.sekerator.kingdomworld.core.citizen.Workforce.candidate(citizen, post);
+            if (candidate.hireRank() >= 0) {
                 unemployed++;
             }
         }
@@ -185,7 +189,8 @@ public final class WorkPostActions {
                 post.status(), container, post.yield().measured(), (int) Math.min(1_000_000, Math.round(post.yield().total())),
                 post.producedOn(PostWork.gameDay(server)), workers, unemployed, post.auto(), stations,
                 current == null ? net.minecraft.world.item.ItemStack.EMPTY : new net.minecraft.world.item.ItemStack(current),
-                progress, site, goal, mint);
+                progress, site, goal, mint).withPlace(new WorkPostView.Place(post.pos().dimension(), post.name(),
+                state.citizens().postNumber(post)));
     }
 
     // ---------------------------------------------------------------- changes
@@ -195,22 +200,31 @@ public final class WorkPostActions {
      */
     public static void handle(ServerPlayer player, WorkPostActionPacket packet) {
         MinecraftServer server = player.server;
-        WorldPos at = new WorldPos(Dimensions.id(player.level()), packet.pos().getX(), packet.pos().getY(), packet.pos().getZ());
+        String here = Dimensions.id(player.level());
+        String dimension = packet.dimension().isEmpty() ? here : packet.dimension();
+        WorldPos at = new WorldPos(dimension, packet.pos().getX(), packet.pos().getY(), packet.pos().getZ());
         Optional<WorkPost> post = PostWork.post(server, at);
         if (post.isEmpty()) {
             KingdomActions.reply(player, KingdomActions.Feedback.error(KingdomError.UNKNOWN_POST));
             return;
         }
-        if (player.distanceToSqr(Vec3.atCenterOf(packet.pos())) > MAX_DISTANCE_SQR) {
-            KingdomActions.reply(player, KingdomActions.Feedback.fail(KEY + "too_far"));
-            return;
-        }
-        if (!KingdomWorldApi.state(server).membership().isMember(player.getUUID(), post.get().kingdomId())) {
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        if (!state.membership().isMember(player.getUUID(), post.get().kingdomId())) {
             KingdomActions.reply(player, KingdomActions.Feedback.error(KingdomError.NO_PERMISSION));
             return;
         }
+        boolean near = dimension.equals(here) && player.distanceToSqr(Vec3.atCenterOf(packet.pos())) <= MAX_DISTANCE_SQR;
+        if (!near && !state.membership().hasPermission(player.getUUID(), post.get().kingdomId(), Permission.MANAGE_CITIZENS)) {
+            // From afar only those who manage the citizens, from the window of the workers; everybody else walks to the post.
+            KingdomActions.reply(player, KingdomActions.Feedback.fail(KEY + "too_far"));
+            return;
+        }
+        if (packet.action() == WorkPostActionPacket.Action.OPEN) {
+            send(player, post.get(), true);
+            return;
+        }
         KingdomActions.Feedback feedback = switch (packet.action()) {
-            case REFRESH -> null;
+            case REFRESH, OPEN -> null;
             case PROFESSION -> setProfession(player, at, packet.text());
             case RADIUS -> setRadius(player, at, packet.value());
             case SEATS -> setSeats(player, at, packet.value());

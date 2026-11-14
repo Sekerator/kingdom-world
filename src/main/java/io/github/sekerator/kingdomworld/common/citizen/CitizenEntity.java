@@ -308,6 +308,32 @@ public class CitizenEntity extends PathfinderMob {
     }
 
     /**
+     * What the body is busy with by the goals it follows now, for the window of the workers; {@code null} when none of them
+     * tells (the body strolls or waits between two steps of its work).
+     */
+    @Nullable
+    public io.github.sekerator.kingdomworld.core.citizen.Workforce.Doing doing() {
+        if (isSleeping()) {
+            return io.github.sekerator.kingdomworld.core.citizen.Workforce.Doing.SLEEPING;
+        }
+        for (net.minecraft.world.entity.ai.goal.WrappedGoal running : goalSelector.getRunningGoals().toList()) {
+            net.minecraft.world.entity.ai.goal.Goal goal = running.getGoal();
+            io.github.sekerator.kingdomworld.core.citizen.Workforce.Doing doing = null;
+            if (goal instanceof io.github.sekerator.kingdomworld.common.life.DayGoal day) {
+                doing = day.doing();
+            } else if (goal instanceof WorkGoal work) {
+                doing = work.doing();
+            } else if (goal instanceof CitizenGoals.SeekCareGoal) {
+                doing = io.github.sekerator.kingdomworld.core.citizen.Workforce.Doing.HEALING;
+            }
+            if (doing != null) {
+                return doing;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Whether the citizen should go to an infirmary: wounded or ill.
      */
     public boolean needsCare() {

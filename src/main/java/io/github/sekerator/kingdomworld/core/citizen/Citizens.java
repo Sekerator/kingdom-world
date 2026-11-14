@@ -29,6 +29,16 @@ public final class Citizens {
     private GatheringRules postRules = GatheringRules.DEFAULT;
 
     private java.util.function.BiPredicate<UUID, WorldPos> homeRule = (kingdom, bed) -> true;
+    private java.util.function.Consumer<Citizen> freedListener = citizen -> {
+    };
+
+    /**
+     * Hears every worker who lost its work because its post went away, once the post is gone.
+     */
+    public void setFreedListener(java.util.function.Consumer<Citizen> listener) {
+        freedListener = listener == null ? citizen -> {
+        } : listener;
+    }
 
     public void setChangeListener(Runnable listener) {
         registry.setChangeListener(listener);
@@ -144,23 +154,27 @@ public final class Citizens {
         if (current.isPresent() && current.get().kind().equals(kind) && current.get().kingdomId().equals(kingdomId)) {
             return false;
         }
-        current.ifPresent(this::evict);
+        List<Citizen> freed = current.map(this::evict).orElse(List.of());
         posts.remove(pos);
         sites.put(pos, kind, kingdomId);
         if (kind.equals(SiteKinds.WORK_POST)) {
             posts.put(pos, kingdomId, newPostRadius, newHerdSize);
         }
+        freed.forEach(freedListener);
         return true;
     }
 
     /**
-     * Forgets a place, for example a broken bed; its occupants lose it.
+     * Forgets a place, for example a broken bed; its occupants lose it. The workers of a work post that goes away are
+     * without work again, keeping what they learned, so that a new post in its place may take anybody at once.
      */
     public Optional<Site> removeSite(WorldPos pos) {
         Optional<Site> site = sites.get(pos);
-        site.ifPresent(this::evict);
+        List<Citizen> freed = site.map(this::evict).orElse(List.of());
         posts.remove(pos);
-        return sites.remove(pos);
+        Optional<Site> removed = sites.remove(pos);
+        freed.forEach(freedListener);
+        return removed;
     }
 
     /**
@@ -217,6 +231,27 @@ public final class Citizens {
             return false;
         }
         return assign(citizen, workplace, profession.get().workplaceKind(), false);
+    }
+
+    /**
+     * Puts a citizen on a post in one step: it takes the post's profession and leaves whatever work it had, a seat at another
+     * post as well, so that moving a worker from post to post needs no dismissal in between. What it learned stays.
+     *
+     * @return whether the citizen now works there
+     */
+    public boolean assignToPost(Citizen citizen, WorkPost post) {
+        if (!post.hasProfession() || !post.kingdomId().equals(citizen.kingdomId()) || !citizen.isAlive()
+                || registry.get(citizen.id()).isEmpty() || posts.get(post.pos()).orElse(null) != post) {
+            return false;
+        }
+        if (post.workers().contains(citizen.id())) {
+            return true;
+        }
+        if (post.freeSeats() <= 0) {
+            return false;
+        }
+        setProfession(citizen, post.professionId());
+        return assignPost(citizen, post);
     }
 
     private boolean assignPost(Citizen citizen, WorkPost post) {
@@ -301,15 +336,27 @@ public final class Citizens {
         }
     }
 
-    private void evict(Site site) {
+    /**
+     * The occupants of a place that goes away lose it; the workers of a work post lose their profession with it.
+     *
+     * @return the workers who are without work now
+     */
+    private List<Citizen> evict(Site site) {
+        List<Citizen> freed = new ArrayList<>();
         Optional<WorkPost> post = posts.get(site.pos());
         if (post.isPresent()) {
             for (UUID worker : List.copyOf(post.get().workers())) {
-                registry.get(worker).ifPresent(this::releaseWorkplace);
+                registry.get(worker).ifPresent(citizen -> {
+                    releaseWorkplace(citizen);
+                    if (!Professions.UNEMPLOYED.id().equals(citizen.professionId()) && !Professions.isMilitary(citizen.professionId())) {
+                        setProfession(citizen, Professions.UNEMPLOYED.id());
+                        freed.add(citizen);
+                    }
+                });
             }
         }
         if (site.occupant() == null) {
-            return;
+            return freed;
         }
         registry.get(site.occupant()).ifPresent(citizen -> {
             if (site.pos().equals(citizen.home())) {
@@ -320,6 +367,7 @@ public final class Citizens {
             }
         });
         sites.setOccupant(site.pos(), null);
+        return freed;
     }
 
     // ---------------------------------------------------------------- work posts
@@ -361,6 +409,25 @@ public final class Citizens {
 
     public void setPostMineGoal(WorkPost post, MineGoal goal) {
         post.setMineGoal(goal);
+    }
+
+    public void setPostName(WorkPost post, String name) {
+        post.setName(name);
+    }
+
+    /**
+     * The number of a post among the posts of its kingdom with the same profession, from 1, in the order they were found; it
+     * names a post nobody gave a name ("Lumberjack 3").
+     */
+    public int postNumber(WorkPost post) {
+        int number = 0;
+        for (WorkPost other : posts.postsOf(post.kingdomId(), post.professionId())) {
+            number++;
+            if (other == post) {
+                return number;
+            }
+        }
+        return Math.max(1, number);
     }
 
     // ---------------------------------------------------------------- persistence

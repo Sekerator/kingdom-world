@@ -38,6 +38,9 @@ public final class KingdomWorldClient {
     /** Opens the player's window of the law; J by default. */
     public static final KeyMapping LAW_KEY = new KeyMapping("key.kingdomworld.law", KeyConflictContext.IN_GAME,
             InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_J, "key.categories.kingdomworld");
+    /** Opens the window of the workers; no key by default, the pack has few free ones. */
+    public static final KeyMapping WORKERS_KEY = new KeyMapping("key.kingdomworld.workers", KeyConflictContext.IN_GAME,
+            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, "key.categories.kingdomworld");
     private static boolean titleScreenSeen;
 
     private KingdomWorldClient() {
@@ -93,6 +96,7 @@ public final class KingdomWorldClient {
         event.register(MAP_KEY);
         event.register(PARTY_KEY);
         event.register(LAW_KEY);
+        event.register(WORKERS_KEY);
         event.register(io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.ROTATE_KEY);
         event.register(io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.MIRROR_KEY);
     }
@@ -137,6 +141,14 @@ public final class KingdomWorldClient {
         while (PARTY_KEY.consumeClick()) {
             if (minecraft.player != null && minecraft.screen == null && minecraft.getConnection() != null) {
                 KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.CompanionPackets.PartyRequest());
+            }
+        }
+        while (WORKERS_KEY.consumeClick()) {
+            if (minecraft.player != null && minecraft.screen == null && minecraft.getConnection() != null) {
+                KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Request(null, true,
+                        io.github.sekerator.kingdomworld.common.network.data.WorkforceView.Query.of(
+                                io.github.sekerator.kingdomworld.common.network.data.WorkforceView.Mode.CITIZENS,
+                                io.github.sekerator.kingdomworld.common.citizen.WorkforceActions.DEFAULT_PAGE)));
             }
         }
         while (LAW_KEY.consumeClick()) {

@@ -1635,6 +1635,9 @@ final class ClientLayoutCheck {
         NobilityLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         LifeLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)),
                 (role, manage) -> citizensMode(view(KingdomView.Relation.MEMBER, role), manage, false, "life"));
+        WorkforceLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)));
+        WorkforceLayoutCases.posts((name, screen) -> cases.add(new Case(name, screen)),
+                (profession, manage) -> postView(profession, WorkStatus.WORKING, manage, 3, true, true));
         return cases;
     }
 }

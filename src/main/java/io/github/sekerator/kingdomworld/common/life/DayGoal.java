@@ -52,6 +52,19 @@ public final class DayGoal extends Goal {
         setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK, Flag.JUMP));
     }
 
+    /**
+     * What the plan of the evening or the night has the body do, for the window of the workers; {@code null} while it has none.
+     */
+    @Nullable
+    public io.github.sekerator.kingdomworld.core.citizen.Workforce.Doing doing() {
+        return switch (plan) {
+            case FESTIVAL -> io.github.sekerator.kingdomworld.core.citizen.Workforce.Doing.FESTIVAL;
+            case TAVERN -> io.github.sekerator.kingdomworld.core.citizen.Workforce.Doing.TAVERN;
+            case SLEEP -> io.github.sekerator.kingdomworld.core.citizen.Workforce.Doing.SLEEPING;
+            default -> null;
+        };
+    }
+
     private void think() {
         plan = Plan.NONE;
         target = null;

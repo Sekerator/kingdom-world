@@ -145,10 +145,28 @@ public final class ClientPacketHandlers {
 
     public static void handleWorkPostView(WorkPostViewPacket packet) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.screen instanceof WorkPostScreen screen && screen.pos().equals(packet.view().pos())) {
+        if (minecraft.screen instanceof WorkPostScreen screen && screen.shows(packet.view())) {
             screen.update(packet.view());
         } else if (packet.open()) {
-            ClientHooks.openWorkPost(packet.view());
+            if (minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.WorkforceScreen workforce) {
+                // Opened from the window of the workers: closing it goes back there.
+                minecraft.setScreen(new WorkPostScreen(packet.view(), workforce));
+            } else {
+                ClientHooks.openWorkPost(packet.view());
+            }
+        }
+    }
+
+    /**
+     * A page of the window of the workers: for the open window, or the window opened by the key, the throne or the command.
+     */
+    public static void handleWorkforceView(io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.View packet) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.WorkforceScreen screen) {
+            screen.update(packet.view());
+        } else if (packet.open()) {
+            net.minecraft.client.gui.screens.Screen parent = minecraft.screen instanceof ThroneScreen ? minecraft.screen : null;
+            minecraft.setScreen(new io.github.sekerator.kingdomworld.client.screen.WorkforceScreen(parent, packet.view()));
         }
     }
 
