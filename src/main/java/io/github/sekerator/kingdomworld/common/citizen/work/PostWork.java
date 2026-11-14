@@ -333,7 +333,8 @@ public final class PostWork {
      */
     public static boolean fits(MinecraftServer server, WorkPost post, List<ItemStack> stacks) {
         PostContainers.Container container = loadedContainer(server, post);
-        return KingdomStorage.fitsFor(server, post.kingdomId(), post.professionId(), stacks, container == null ? null : container.handler());
+        return KingdomStorage.fitsFor(server, post.kingdomId(), post.professionId(), stacks, container == null ? null : container.handler(),
+                post.pos());
     }
 
     /**

@@ -55,6 +55,7 @@
 - **Старые миры.** Каждое здание получает свои флаги, когда игроки впервые оказываются рядом. Простые красные знамёна (и знамёна ткани королевств мира) без узоров и без имени на местах флагов у нежилых зданий, в том числе в замках королевств мира, становятся флагами королевства, и за эти знамёна ничего не возвращается. Знамёна с узорами или с именем остаются. Что хранитель знает, лежит в новом файле `kingdomworld_flags.dat`; нечитаемый файл читается как пустой. При откате на старую версию мода блоки флагов исчезают.
 - В сетевом протоколе: сохранение флага и справочник флагов всех королевств (полный при входе, дальше только изменения). Флаг хранится в данных королевства ключом `flag`, только когда он не по умолчанию; испорченный флаг читается как флаг по умолчанию, формат данных прежний. Справочник: новая страница «Флаг» в разделе «Королевство» и «Флаги на постройках» в разделе о строительстве.
 - **Исправлено: двойной склад для воронок.** Когда половину двойного склада ломают, воронки и трубы в том же тике видят у оставшейся половины только её ячейки.
+- **Исправлено: проверка места на складах.** Работа вдали от игроков, мастерские, монетный двор и «Вернуть» считают место так же, как потом кладут вещи: склад за складом по порядку, сначала на неполные стопки, затем в пустые ячейки. Раньше неполная стопка дальнего склада засчитывалась, хотя вещь уходила в пустую ячейку ближнего, и то, чему потом не хватало места, пропадало.
 
 ### 1.5.1
 
@@ -282,6 +283,7 @@ A kingdom of players no longer runs into the limits of the server: its beds, its
 - **Older worlds.** Every building gets its flags when players first come near it. Plain red banners (and the banners of the cloth of kingdoms of the world) without patterns and without a name at the places of flags of buildings other than houses, the castles of kingdoms of the world included, become flags of the kingdom, and nothing is given back for those banners. Banners with patterns or a name stay. What the keeper knows lies in the new file `kingdomworld_flags.dat`; a file that cannot be read reads as empty. Going back to an older version of the mod, the blocks of flags vanish.
 - In the network protocol: saving a flag and the directory of the flags of all kingdoms (all of it on joining, the changes afterwards). The flag is kept in the data of a kingdom under the key `flag`, only when it is not the default; a broken flag reads as the default, and the data format is unchanged. The guide has a new page "The flag" in the section "Kingdom" and "Flags on buildings" in the section on construction.
 - **Fixed: a double storehouse for hoppers.** When a half of a double storehouse is broken, hoppers and pipes see only the slots of the half left within the same tick.
+- **Fixed: the room of the storehouses.** Work far from players, workshops, the mint and Send back count the room as the things are put away afterwards: storehouse after storehouse in their order, onto the stacks that are not full first, then into empty slots. Before, a half stack in a farther storehouse was counted though the item went into an empty slot of a nearer one, and what then found no room was lost.
 
 ### 1.5.1
 

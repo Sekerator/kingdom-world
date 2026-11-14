@@ -31,8 +31,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Game tests of where workers take their goods: a lumberjack brings wood to the storehouse of wood past a nearer common one, and a
- * worker of a post in a city finds a storehouse a hundred blocks away inside the city but none beyond its wall.
+ * Game tests of where workers take their goods: a lumberjack brings wood to the storehouse of wood past a nearer common one, the
+ * room of the storehouses is counted in the order things are put away, and a worker of a post in a city finds a storehouse a
+ * hundred blocks away inside the city but none beyond its wall.
  */
 @GameTestHolder(KingdomWorld.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -78,6 +79,47 @@ public final class StorehouseRulesGameTests {
                     "Wood went past the storehouse of wood");
             GatheringGameTests.end(helper, kingdom, worker, from, to);
         });
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_storehouse_room")
+    public static void theRoomOfTheStorehousesIsCountedInTheOrderThingsArePutAway(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, 3));
+        BlockPos to = helper.absolutePos(new BlockPos(7, 2, 6));
+        GatheringGameTests.clear(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Full Stores", UUID.randomUUID());
+        try {
+            // The nearer storehouse has a single empty slot; the farther one a half stack of cobblestone and no empty slot.
+            StorehouseInventory nearer = GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(0, 0, 4)));
+            StorehouseInventory farther = GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(6, 0, 4)));
+            for (int slot = 0; slot < StorehouseInventory.SLOTS; slot++) {
+                if (slot < StorehouseInventory.SLOTS - 1) {
+                    nearer.insertItem(slot, new ItemStack(Items.DIRT, 64), false);
+                }
+                farther.insertItem(slot, slot == 0 ? new ItemStack(Items.COBBLESTONE, 32) : new ItemStack(Items.DIRT, 64), false);
+            }
+            BlockPos at = helper.absolutePos(new BlockPos(0, 0, 5));
+            WorldPos near = new WorldPos(Dimensions.id(level), at.getX(), at.getY(), at.getZ());
+            // Put away nearest first, the cobblestone takes the empty slot of the nearer storehouse and leaves no room for the coal,
+            // though the half stack of the farther one could have taken it.
+            List<ItemStack> goods = List.of(new ItemStack(Items.COBBLESTONE, 20), new ItemStack(Items.COAL, 3));
+            helper.assertFalse(KingdomStorage.fits(server, kingdom.id(), goods, near), "The cobblestone and the coal were counted as fitting");
+            helper.assertFalse(KingdomStorage.fitsCarried(server, kingdom.id(), "miner", goods, near),
+                    "What a miner carries was counted as fitting");
+            // The coal first takes the empty slot, and the cobblestone goes onto the half stack: all of it fits.
+            List<ItemStack> other = List.of(new ItemStack(Items.COAL, 3), new ItemStack(Items.COBBLESTONE, 20));
+            helper.assertTrue(KingdomStorage.fits(server, kingdom.id(), other, near), "The coal and then the cobblestone did not fit");
+            // The count says what really happens.
+            ItemStack cobblestone = KingdomStorage.insert(server, kingdom.id(), new ItemStack(Items.COBBLESTONE, 20), near);
+            ItemStack coal = KingdomStorage.insert(server, kingdom.id(), new ItemStack(Items.COAL, 3), near);
+            helper.assertTrue(cobblestone.isEmpty() && coal.getCount() == 3, "Expected the coal alone to find no room, left "
+                    + cobblestone + " and " + coal);
+        } finally {
+            GatheringGameTests.clear(level, from, to);
+            CitizenGameTests.finish(helper, kingdom);
+        }
+        helper.succeed();
     }
 
     @GameTest(template = EMPTY, batch = "kingdomworld_storehouse_city")

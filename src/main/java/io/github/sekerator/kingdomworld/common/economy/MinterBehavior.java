@@ -282,7 +282,7 @@ public final class MinterBehavior implements ProfessionBehavior {
             return Struck.NO_METAL;
         }
         ItemStack ingot = new ItemStack(metal);
-        if (!KingdomStorage.fits(server, kingdom, List.of(ingot))) {
+        if (!KingdomStorage.fits(server, kingdom, List.of(ingot), post.pos())) {
             return Struck.TREASURY_FULL;
         }
         List<ItemStack> taken = KingdomStorage.take(server, kingdom, stack -> CoinItem.is(stack, currency, denomination), rate.count(), post.pos());

@@ -67,7 +67,7 @@ public final class FarmerBehavior implements ProfessionBehavior {
         int whole = (int) Math.min(Math.floor(progress), 64.0 * 9);
         List<ItemStack> harvest = PostWork.stacks(Map.of(citizen.workProduct(), whole));
         if (farm.isPresent() ? !PostWork.fits(server, farm.get(), harvest)
-                : !KingdomStorage.fitsFor(server, citizen.kingdomId(), citizen.professionId(), harvest)) {
+                : !KingdomStorage.fitsFor(server, citizen.kingdomId(), citizen.professionId(), harvest, citizen.workplace())) {
             // Nowhere to bring all of the harvest: it waits in the fields rather than rot there, and the farmer says why.
             PostWork.setStatus(server, citizen, KingdomStorage.hasStorehouseFor(server, citizen.kingdomId(), citizen.professionId())
                     ? io.github.sekerator.kingdomworld.core.citizen.WorkStatus.STORAGE_FULL

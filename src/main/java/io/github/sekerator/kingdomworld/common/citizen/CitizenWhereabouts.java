@@ -114,7 +114,14 @@ public final class CitizenWhereabouts {
                 cargo.add(stack);
             }
         }
-        return cargo.isEmpty() || io.github.sekerator.kingdomworld.common.storage.KingdomStorage.fits(server, citizen.kingdomId(), cargo);
+        if (cargo.isEmpty()) {
+            return true;
+        }
+        // Counted from where the body is given up, as it gives its goods then.
+        WorldPos near = body.relocation() != null ? body.relocation()
+                : new WorldPos(Dimensions.id(body.level()), body.getBlockX(), body.getBlockY(), body.getBlockZ());
+        return io.github.sekerator.kingdomworld.common.storage.KingdomStorage.fitsCarried(server, citizen.kingdomId(), citizen.professionId(),
+                cargo, near);
     }
 
     /**

@@ -455,7 +455,7 @@ public final class Production {
                 }
             }
         }
-        if (!KingdomStorage.fitsFor(server, kingdom, post.professionId(), outputs)) {
+        if (!KingdomStorage.fitsFor(server, kingdom, post.professionId(), outputs, near)) {
             return Made.STORAGE_FULL;
         }
         List<ItemStack> taken = KingdomStorage.takePlanned(server, plan);
