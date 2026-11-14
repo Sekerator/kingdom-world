@@ -56,8 +56,15 @@ public final class FlagSavedData extends SavedData {
     }
 
     private final Map<Long, Record> buildings = new HashMap<>();
-    /** Places of flags of walls and thrones taken down by members, by dimension, with the kingdom they were of. */
-    private final Map<String, Map<Long, UUID>> places = new HashMap<>();
+    /**
+     * A place of a flag of a wall or a throne a member took down: the kingdom it was of and what it hung on, the packed place of
+     * the throne or the id of the wall.
+     */
+    record Off(UUID kingdom, long anchor) {
+    }
+
+    /** Places of flags of walls and thrones taken down by members, by dimension. */
+    private final Map<String, Map<Long, Off>> places = new HashMap<>();
 
     public static FlagSavedData get(MinecraftServer server) {
         return server.overworld().getDataStorage().computeIfAbsent(FlagSavedData::load, FlagSavedData::new, DATA_NAME);
@@ -118,15 +125,20 @@ public final class FlagSavedData extends SavedData {
         return record != null && record.off.contains(pos);
     }
 
-    public void takenDown(String dimension, long pos, UUID kingdom) {
-        if (!kingdom.equals(places.computeIfAbsent(dimension, key -> new HashMap<>()).put(pos, kingdom))) {
+    public void takenDown(String dimension, long pos, UUID kingdom, long anchor) {
+        Off off = new Off(kingdom, anchor);
+        if (!off.equals(places.computeIfAbsent(dimension, key -> new HashMap<>()).put(pos, off))) {
             setDirty();
         }
     }
 
-    public boolean isOff(String dimension, long pos) {
-        Map<Long, UUID> taken = places.get(dimension);
-        return taken != null && taken.containsKey(pos);
+    /**
+     * Whether a member took down the flag of a place while it was of this kingdom and hung on the same throne or wall: after a
+     * conquest or a move of the throne the place flies a flag again.
+     */
+    public boolean isOff(String dimension, long pos, UUID kingdom, long anchor) {
+        Map<Long, Off> taken = places.get(dimension);
+        return taken != null && new Off(kingdom, anchor).equals(taken.get(pos));
     }
 
     /**
@@ -137,8 +149,8 @@ public final class FlagSavedData extends SavedData {
         if (buildings.keySet().removeIf(id -> book.building(id).isEmpty())) {
             setDirty();
         }
-        for (Map<Long, UUID> taken : places.values()) {
-            if (taken.values().removeIf(kingdom -> KingdomWorldApi.kingdom(server, kingdom).isEmpty())) {
+        for (Map<Long, Off> taken : places.values()) {
+            if (taken.values().removeIf(off -> KingdomWorldApi.kingdom(server, off.kingdom()).isEmpty())) {
                 setDirty();
             }
         }
@@ -163,12 +175,12 @@ public final class FlagSavedData extends SavedData {
             ListTag dimensions = tag.getList("dimensions", Tag.TAG_COMPOUND);
             for (int i = 0; i < dimensions.size(); i++) {
                 CompoundTag one = dimensions.getCompound(i);
-                Map<Long, UUID> taken = data.places.computeIfAbsent(one.getString("dimension"), key -> new HashMap<>());
+                Map<Long, Off> taken = data.places.computeIfAbsent(one.getString("dimension"), key -> new HashMap<>());
                 ListTag off = one.getList("off", Tag.TAG_COMPOUND);
                 for (int j = 0; j < off.size(); j++) {
                     CompoundTag place = off.getCompound(j);
                     if (place.hasUUID("kingdom")) {
-                        taken.put(place.getLong("pos"), place.getUUID("kingdom"));
+                        taken.put(place.getLong("pos"), new Off(place.getUUID("kingdom"), place.getLong("anchor")));
                     }
                 }
             }
@@ -210,10 +222,11 @@ public final class FlagSavedData extends SavedData {
             CompoundTag one = new CompoundTag();
             one.putString("dimension", dimension);
             ListTag off = new ListTag();
-            taken.forEach((pos, kingdom) -> {
+            taken.forEach((pos, was) -> {
                 CompoundTag place = new CompoundTag();
                 place.putLong("pos", pos);
-                place.putUUID("kingdom", kingdom);
+                place.putUUID("kingdom", was.kingdom());
+                place.putLong("anchor", was.anchor());
                 off.add(place);
             });
             one.put("off", off);

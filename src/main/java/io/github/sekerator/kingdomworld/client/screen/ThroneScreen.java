@@ -213,6 +213,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
 
     public void update(KingdomView newView) {
         this.view = newView;
+        this.headerFlag = null;
         if (newView.relation() != KingdomView.Relation.MEMBER) {
             tab = Tab.OVERVIEW;
         }
@@ -961,9 +962,25 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         return new int[]{nameLeft - HEADER_FLAG_ROOM / 2, nameLeft + nameWidth + HEADER_FLAG_ROOM / 2 - HEADER_FLAG_WIDTH};
     }
 
-    private void renderHeaderFlags(GuiGraphics graphics) {
-        int y = top() + 6;
-        KingdomFlag flag = ClientFlags.flag(view.id()).orElse(KingdomFlags.standard(view.color()));
+    /**
+     * The layers and the hover lines of the flag in the header, worked out again only when the directory of flags or the kingdom
+     * on screen changed.
+     */
+    private record HeaderFlag(long version, UUID kingdom, int color,
+                              List<com.mojang.datafixers.util.Pair<net.minecraft.core.Holder<net.minecraft.world.level.block.entity.BannerPattern>,
+                                      net.minecraft.world.item.DyeColor>> layers, List<Component> hover) {
+    }
+
+    @org.jetbrains.annotations.Nullable
+    private HeaderFlag headerFlag;
+
+    private HeaderFlag headerFlag() {
+        long version = ClientFlags.version();
+        if (headerFlag != null && headerFlag.version() == version && headerFlag.kingdom().equals(view.id()) && headerFlag.color() == view.color()) {
+            return headerFlag;
+        }
+        java.util.Optional<KingdomFlag> told = ClientFlags.flag(view.id());
+        KingdomFlag flag = told.orElse(KingdomFlags.standard(view.color()));
         List<Component> hover = new ArrayList<>();
         hover.add(Component.translatable("kingdomworld.screen.throne.flag.hover", kingdomName(view.name(), view.npc())));
         hover.add(Component.translatable("kingdomworld.screen.flag.field", FlagPatterns.colorName(flag.base())).withStyle(ChatFormatting.GRAY));
@@ -972,9 +989,18 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
                 hover.add(FlagPatterns.name(layer.pattern(), layer.dye()).copy().withStyle(ChatFormatting.GRAY));
             }
         }
+        // The flag the server told is drawn from the layers the directory keeps ready.
+        headerFlag = new HeaderFlag(version, view.id(), view.color(), told.isPresent() ? ClientFlags.layers(view.id()) : ClientFlags.layers(flag),
+                List.copyOf(hover));
+        return headerFlag;
+    }
+
+    private void renderHeaderFlags(GuiGraphics graphics) {
+        int y = top() + 6;
+        HeaderFlag flag = headerFlag();
         for (int x : headerFlags()) {
-            FlagRendering.drawGui(graphics, ClientFlags.layers(flag), x, y, HEADER_FLAG_SCALE);
-            for (Component line : hover) {
+            FlagRendering.drawGui(graphics, flag.layers(), x, y, HEADER_FLAG_SCALE);
+            for (Component line : flag.hover()) {
                 hoverText(x, y + 1, HEADER_FLAG_WIDTH, line);
             }
         }

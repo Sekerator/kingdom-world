@@ -100,6 +100,10 @@ public final class FlagWork {
     /** The flags loaded in the world, by dimension. */
     private static final Map<String, Set<Long>> LOADED = new HashMap<>();
     private static final ArrayDeque<Ref> WALK = new ArrayDeque<>();
+    /** The flags in the walk, each once: a chunk that unloads and loads again before its flags are walked adds none twice. */
+    private static final Set<Ref> QUEUED = new HashSet<>();
+    /** The places of the added flags of buildings, by building, for the stamp they were worked out for. */
+    private static final Map<Long, AddedPlaces> ADDED = new HashMap<>();
     /** Buildings waiting for a pass, and those that wait for a tick before it. */
     private static final LinkedHashSet<Long> PASSES = new LinkedHashSet<>();
     private static final Map<Long, Long> LATER = new HashMap<>();
@@ -122,10 +126,18 @@ public final class FlagWork {
     private record ChunkRef(String dimension, int x, int z) {
     }
 
+    private record AddedPlaces(long stamp, Set<Long> places) {
+    }
+
     /**
      * A place of a flag of a wall or a throne.
      */
-    private record Place(ServerLevel level, BlockPos pos, BlockState state, UUID kingdom, KingdomFlagBlockEntity.Origin origin) {
+    /**
+     * @param support what the flag leans on
+     * @param anchor  what the place hangs on: the packed place of the throne, or the id of the wall
+     */
+    private record Place(ServerLevel level, BlockPos pos, BlockState state, BlockPos support, UUID kingdom, KingdomFlagBlockEntity.Origin origin,
+                         long anchor) {
     }
 
     private FlagWork() {
@@ -134,6 +146,8 @@ public final class FlagWork {
     public static void reset() {
         LOADED.clear();
         WALK.clear();
+        QUEUED.clear();
+        ADDED.clear();
         PASSES.clear();
         LATER.clear();
         CHUNKS.clear();
@@ -233,8 +247,10 @@ public final class FlagWork {
      */
     public static void loaded(ServerLevel level, BlockPos pos) {
         String dimension = Dimensions.id(level);
-        if (LOADED.computeIfAbsent(dimension, key -> new HashSet<>()).add(pos.asLong())) {
-            WALK.add(new Ref(dimension, pos.asLong()));
+        LOADED.computeIfAbsent(dimension, key -> new HashSet<>()).add(pos.asLong());
+        Ref ref = new Ref(dimension, pos.asLong());
+        if (QUEUED.add(ref)) {
+            WALK.add(ref);
         }
     }
 
@@ -267,6 +283,10 @@ public final class FlagWork {
         if (KingdomWorldApi.isReadOnly(server)) {
             return;
         }
+        if (flag.origin() == KingdomFlagBlockEntity.Origin.THRONE || flag.origin() == KingdomFlagBlockEntity.Origin.WALL) {
+            // The flags of thrones and walls are looked at every few seconds anyway.
+            return;
+        }
         Building building = buildingAt(server, Dimensions.id(level), pos);
         if (building != null) {
             FlagSavedData.get(server).markDirty(building.id());
@@ -284,11 +304,16 @@ public final class FlagWork {
             return;
         }
         String dimension = Dimensions.id(level);
+        if (flag.origin() == KingdomFlagBlockEntity.Origin.THRONE || flag.origin() == KingdomFlagBlockEntity.Origin.WALL) {
+            // Off for this kingdom at this throne or wall: a new owner or a throne moved here puts it up again.
+            long anchor = allPlaces(server).stream().filter(place -> place.level() == level && place.pos().equals(pos))
+                    .mapToLong(Place::anchor).findFirst().orElse(0L);
+            FlagSavedData.get(server).takenDown(dimension, pos.asLong(), flag.kingdom(), anchor);
+            return;
+        }
         Building building = buildingAt(server, dimension, pos);
         if (building != null) {
             FlagSavedData.get(server).takenDown(building.id(), pos.asLong());
-        } else {
-            FlagSavedData.get(server).takenDown(dimension, pos.asLong(), flag.kingdom());
         }
     }
 
@@ -308,7 +333,13 @@ public final class FlagWork {
      * A construction was finished: a building built, raised or repaired gets its flags, at once when its whole site is loaded.
      */
     public static void completed(MinecraftServer server, Building building, Construction.Kind kind) {
-        if (kind != Construction.Kind.BUILD && kind != Construction.Kind.UPGRADE && kind != Construction.Kind.REPAIR) {
+        if (kind != Construction.Kind.BUILD && kind != Construction.Kind.UPGRADE && kind != Construction.Kind.REPAIR
+                || KingdomWorldApi.isReadOnly(server)) {
+            return;
+        }
+        long now = KingdomWorldApi.gameTime(server);
+        if (!SiegeRepair.calm(server, building.kingdomId(), now)) {
+            later(building.id(), now + 200);
             return;
         }
         ServerLevel level = ConstructionWork.level(server, building.anchor().dimension());
@@ -352,13 +383,13 @@ public final class FlagWork {
      */
     @Nullable
     static UUID kingdomOf(ServerLevel level, BlockPos pos, KingdomFlagBlockEntity flag) {
+        if (flag.origin() == KingdomFlagBlockEntity.Origin.WALL || flag.origin() == KingdomFlagBlockEntity.Origin.THRONE) {
+            return flag.kingdom();
+        }
         MinecraftServer server = level.getServer();
         Building building = buildingAt(server, Dimensions.id(level), pos);
         if (building != null) {
             return building.kingdomId();
-        }
-        if (flag.origin() == KingdomFlagBlockEntity.Origin.WALL || flag.origin() == KingdomFlagBlockEntity.Origin.THRONE) {
-            return flag.kingdom();
         }
         UUID owner = KingdomWorldApi.ownerAt(level, pos);
         return owner != null ? owner : flag.kingdom();
@@ -459,16 +490,20 @@ public final class FlagWork {
             }
             Set<Long> set = LOADED.get(ref.dimension());
             if (set == null || !set.contains(ref.pos())) {
+                QUEUED.remove(ref);
                 continue;
             }
             ServerLevel level = ConstructionWork.level(server, ref.dimension());
             BlockPos pos = BlockPos.of(ref.pos());
             if (level == null || !level.isLoaded(pos) || !(level.getBlockEntity(pos) instanceof KingdomFlagBlockEntity flag)) {
                 set.remove(ref.pos());
+                QUEUED.remove(ref);
                 continue;
             }
             if (check(server, level, pos, flag)) {
                 WALK.add(ref);
+            } else {
+                QUEUED.remove(ref);
             }
         }
     }
@@ -480,8 +515,10 @@ public final class FlagWork {
      */
     private static boolean check(MinecraftServer server, ServerLevel level, BlockPos pos, KingdomFlagBlockEntity flag) {
         String dimension = Dimensions.id(level);
-        Building building = buildingAt(server, dimension, pos);
-        UUID kingdom = kingdomOf(level, pos, flag);
+        boolean place = flag.origin() == KingdomFlagBlockEntity.Origin.THRONE || flag.origin() == KingdomFlagBlockEntity.Origin.WALL;
+        Building building = place ? null : buildingAt(server, dimension, pos);
+        UUID owner = place ? places(server).getOrDefault(dimension, Map.of()).get(pos.asLong()) : null;
+        UUID kingdom = owner != null ? owner : kingdomOf(level, pos, flag);
         if (kingdom == null) {
             return true;
         }
@@ -492,10 +529,16 @@ public final class FlagWork {
         // With the flags of buildings, walls and thrones switched off, those that stand stay; none are put up or put back.
         boolean kept = !KingdomWorldConfig.SERVER.buildingFlags.get();
         boolean belongs = kept || switch (flag.origin()) {
-            case ADDED -> building != null && building.kingdomId().equals(kingdom) && addedPlaces(building).contains(pos.asLong());
-            case THRONE -> !throneLoaded(server, kingdom)
-                    || kingdom.equals(places(server).getOrDefault(dimension, Map.of()).get(pos.asLong()));
-            case WALL -> kingdom.equals(places(server).getOrDefault(dimension, Map.of()).get(pos.asLong()));
+            case ADDED -> {
+                if (building == null) {
+                    yield false;
+                }
+                Set<Long> places = addedPlaces(building);
+                // A building whose template changed is left as it is.
+                yield places == null || places.contains(pos.asLong());
+            }
+            case THRONE -> owner != null || !throneLoaded(server, kingdom);
+            case WALL -> owner != null;
             case TEMPLATE -> true;
         };
         if (!belongs) {
@@ -569,19 +612,28 @@ public final class FlagWork {
     }
 
     /**
-     * The packed places of the world where a building gets flags besides those of its template.
+     * The packed places of the world where a building gets flags besides those of its template, worked out once for each stamp
+     * of the building; {@code null} while its template is not the one it was built by (a mod or a data pack changed it).
      */
+    @Nullable
     private static Set<Long> addedPlaces(Building building) {
+        long stamp = stamp(building);
+        AddedPlaces cached = ADDED.get(building.id());
+        if (cached != null && cached.stamp() == stamp) {
+            return cached.places();
+        }
         Optional<BuildingTemplate> template = BuildingWork.currentTemplate(building);
-        if (template.isEmpty() || !KingdomWorldConfig.SERVER.buildingFlags.get()) {
-            return Set.of();
+        if (template.isEmpty()) {
+            return null;
         }
         Set<Long> result = new HashSet<>();
         BlockPos anchor = ConstructionWork.blockPos(building.anchor());
         for (FlagSpots.Spot spot : FlagSpotCache.of(building, template.get()).added()) {
             result.add(template.get().place(new BlockPos(spot.x(), spot.y(), spot.z()), anchor, building.placement()).asLong());
         }
-        return result;
+        Set<Long> places = Set.copyOf(result);
+        ADDED.put(building.id(), new AddedPlaces(stamp, places));
+        return places;
     }
 
     private static boolean loaded(ServerLevel level, @Nullable Box box) {
@@ -615,8 +667,15 @@ public final class FlagWork {
             }
             Building building = found.get();
             ServerLevel level = ConstructionWork.level(server, building.anchor().dimension());
-            if (level == null || BuildingWork.currentTemplate(building).isEmpty() || !loaded(level, building.box())) {
-                // Without a template (a wall, a gate) there is nothing to do; an unloaded site waits for its chunks to load.
+            if (BuildingWork.currentTemplate(building).isEmpty()) {
+                // Without a template (a wall, a gate) or with one that changed there is nothing to do: the stamp keeps the loading of
+                // its chunks from bringing it back.
+                FlagSavedData.get(server).stamp(id, stamp(building));
+                finished.add(id);
+                continue;
+            }
+            if (level == null || !loaded(level, building.box())) {
+                // An unloaded site waits for its chunks to load.
                 finished.add(id);
                 continue;
             }
@@ -718,9 +777,10 @@ public final class FlagWork {
                 budget[1]--;
             }
         }
-        // Added flags no longer at a place of the building go.
+        // Added flags no longer at a place of the building go; switched off, those that stand stay.
         Box box = building.box();
-        Set<Long> loadedHere = LOADED.getOrDefault(building.anchor().dimension(), Set.of());
+        Set<Long> loadedHere = KingdomWorldConfig.SERVER.buildingFlags.get() ? LOADED.getOrDefault(building.anchor().dimension(), Set.of())
+                : Set.of();
         for (long packed : List.copyOf(loadedHere)) {
             BlockPos pos = BlockPos.of(packed);
             if (box == null || !box.contains(pos.getX(), pos.getY(), pos.getZ()) || added.contains(packed)) {
@@ -806,7 +866,8 @@ public final class FlagWork {
             for (Direction side : new Direction[]{facing.getClockWise(), facing.getCounterClockWise()}) {
                 BlockPos pos = throne.relative(side);
                 if (level.isLoaded(pos)) {
-                    result.add(new Place(level, pos, FlagBlocks.standing(rotation), territory.kingdomId(), KingdomFlagBlockEntity.Origin.THRONE));
+                    result.add(new Place(level, pos, FlagBlocks.standing(rotation), pos.below(), territory.kingdomId(),
+                            KingdomFlagBlockEntity.Origin.THRONE, throne.asLong()));
                 }
             }
         }
@@ -858,7 +919,8 @@ public final class FlagWork {
                 continue;
             }
             taken.add(index);
-            result.add(new Place(level, support.relative(out), FlagBlocks.wall(out), wall.kingdomId(), KingdomFlagBlockEntity.Origin.WALL));
+            result.add(new Place(level, support.relative(out), FlagBlocks.wall(out), support, wall.kingdomId(), KingdomFlagBlockEntity.Origin.WALL,
+                    wall.id()));
         }
         return result;
     }
@@ -880,12 +942,13 @@ public final class FlagWork {
             if (FlagBlocks.is(there)) {
                 continue;
             }
-            if (data.isOff(dimension, pos.asLong()) || !there.isAir() || !calm.computeIfAbsent(place.kingdom(),
-                    kingdom -> SiegeRepair.calm(server, kingdom, now))) {
+            if (data.isOff(dimension, pos.asLong(), place.kingdom(), place.anchor()) || !there.isAir()
+                    || !calm.computeIfAbsent(place.kingdom(), kingdom -> SiegeRepair.calm(server, kingdom, now))) {
                 continue;
             }
             BlockPos cloth = place.origin() == KingdomFlagBlockEntity.Origin.WALL ? pos.below() : pos.above();
-            if (!level.getBlockState(cloth).isAir() || !place.state().canSurvive(level, pos)
+            // What a flag on a wall leans on may lie in the next chunk: it is read only when loaded, never loaded for it.
+            if (!level.isLoaded(place.support()) || !level.getBlockState(cloth).isAir() || !place.state().canSurvive(level, pos)
                     || !level.getEntitiesOfClass(net.minecraft.world.entity.Entity.class, new AABB(pos)).isEmpty()) {
                 continue;
             }
