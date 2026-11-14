@@ -192,4 +192,34 @@ class CityGrowthTest {
         assertEquals(new GovernorNote(GovernorNote.Kind.BUILDS, "x", 0), GovernorNote.parse("builds|x|many"));
         assertEquals("", GovernorNote.NONE.encode());
     }
+
+    @Test
+    void aCityOutOfRoomWidensByARingOfItsLandOrSaysItNeedsLand() {
+        assertEquals(CityGrowth.LEAST_RING, CityGrowth.ring(0));
+        assertEquals(11, CityGrowth.ring(7));
+        assertEquals(CityGrowth.WIDEST_RING, CityGrowth.ring(40), "a ring is never wider than sixteen blocks");
+        RulerView view = village();
+        CityGrowth.Decision house = CityGrowth.decide(view, crew(1, 0), RULES);
+        CityGrowth.Decision wider = CityGrowth.outOfRoom(house, true, 48, CityGrowth.ring(7));
+        assertEquals(CityGrowth.Kind.EXPAND, wider.kind());
+        assertEquals(59, wider.extent());
+        assertEquals(house.template(), wider.template(), "what was wanted is built in the new ring");
+        assertEquals(new GovernorNote(GovernorNote.Kind.EXPANDS, house.template(), 59), wider.note());
+        assertEquals(1_000_016, CityGrowth.outOfRoom(house, true, 1_000_000, 16).extent(), "without an upper limit");
+        CityGrowth.Decision stuck = CityGrowth.outOfRoom(house, false, 48, 11);
+        assertEquals(CityGrowth.Kind.NEEDS_LAND, stuck.kind());
+        assertEquals(GovernorNote.Kind.NEEDS_LAND, stuck.note().kind());
+        assertEquals(0, stuck.extent());
+    }
+
+    @Test
+    void theRingIsTheChunksBeyondTheSquare() {
+        // A square of 24 blocks around the middle of a chunk holds the three by three chunks around it whole: the ring of 8 is the
+        // chunks around them, up to 32 blocks from the middle.
+        java.util.List<int[]> ring = CityGrowth.ringChunks(8, 8, 24, 8);
+        assertTrue(ring.stream().noneMatch(chunk -> chunk[0] == 0 && chunk[1] == 0), "the chunk of the town hall is no ring");
+        assertTrue(ring.stream().anyMatch(chunk -> chunk[0] == 2 && chunk[1] == 0), "a chunk at the edge is in the ring");
+        assertTrue(ring.stream().allMatch(chunk -> Math.abs(chunk[0]) <= 2 && Math.abs(chunk[1]) <= 2), "nothing beyond the ring");
+        assertEquals(25 - 9, ring.size());
+    }
 }

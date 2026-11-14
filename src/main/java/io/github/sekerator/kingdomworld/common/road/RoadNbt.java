@@ -42,7 +42,7 @@ import java.util.UUID;
  * walls: [ { id, city, kingdom, class, dim, cx, cz, cells: [x, y, z, ...], gates: [cell], created, building, placed: [pos],
  *           sections: [ { paid, placed, pool } ] } ]
  * consents: ["owner>requester"]
- * charters: [ { kingdom, city, folk?, carry?, day?, arrival?, mayor?, mayorSince?, paused?, note?, decided?, spentDay?, spent?,
+ * charters: [ { kingdom, city, folk?, carry?, day?, arrival?, mayor?, mayorSince?, paused?, note?, decided?, spentDay?, spent?, extent?,
  *              refused?: [ { template, until } ] } ] (a missing key is nothing yet; data written before has none)
  * nextCity, nextRoad, nextCrossing, nextCamp, nextWall
  * </pre>
@@ -486,6 +486,9 @@ final class RoadNbt {
             entry.putLong("spentDay", charter.spentDay());
             entry.putLong("spent", charter.spentOnDay());
         }
+        if (charter.extent() > 0) {
+            entry.putInt("extent", charter.extent());
+        }
         if (!charter.refused().isEmpty()) {
             ListTag refused = new ListTag();
             charter.refused().forEach((template, until) -> {
@@ -517,6 +520,7 @@ final class RoadNbt {
         if (entry.contains("spentDay", Tag.TAG_LONG)) {
             charter.restoreSpent(entry.getLong("spentDay"), entry.getLong("spent"));
         }
+        charter.setExtent(entry.getInt("extent"));
         ListTag refused = entry.getList("refused", Tag.TAG_COMPOUND);
         for (int i = 0; i < refused.size(); i++) {
             CompoundTag one = refused.getCompound(i);

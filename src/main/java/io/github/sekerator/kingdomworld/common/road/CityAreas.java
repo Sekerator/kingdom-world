@@ -159,7 +159,9 @@ public final class CityAreas {
         for (int i = 0; i < places.size(); i++) {
             CityWalls.Place place = places.get(i);
             Optional<Wall> wall = roads.wallOf(place.cityId(), place.kingdomId());
-            int people = CityWalls.peopleRadius(counts[i][0]);
+            // The square is never narrower than its people need nor than its governor widened it on the land of its kingdom.
+            int people = Math.max(CityWalls.peopleRadius(counts[i][0]), roads.charter(place.kingdomId(), place.cityId())
+                    .map(io.github.sekerator.kingdomworld.core.road.CityCharter::extent).orElse(0));
             boolean landOnly = ofPlayers.computeIfAbsent(place.kingdomId(),
                     id -> !io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, id));
             Area area;

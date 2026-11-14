@@ -99,7 +99,7 @@ class RemotePacketsTest {
         UUID kingdom = UUID.randomUUID();
         RoadViews.CityRow row = new RoadViews.CityRow(4, "Ольховка", 100, 64, -200, false, 2, io.github.sekerator.kingdomworld.core.road.CityLevel.TOWN,
                 30, 12, 0, null, 0, 0, 936, 40, 7, 2, 1, 3).withGovernor(RoadViews.CityRow.HOUSE, "Стрелостенград", "baron", true,
-                net.minecraft.network.chat.Component.translatable("kingdomworld.governor.note.builds", "Малый дом"));
+                net.minecraft.network.chat.Component.translatable("kingdomworld.governor.note.builds", "Малый дом"), true);
         RoadViews.RoadTabView view = new RoadViews.RoadTabView(kingdom, true, false, 3, 0, 0, List.of(row), List.of(), List.of(), List.of(),
                 List.of(), List.of(), 112, 12, 6, 40, 20, true, 300, 120, 2,
                 new io.github.sekerator.kingdomworld.common.network.data.TradeViews.Currency(kingdom, "крона", "Северная Корона", 0x2E6E9E, 10, 100, 1),
@@ -121,6 +121,7 @@ class RemotePacketsTest {
         assertEquals(true, back.paused());
         assertEquals(row.note(), back.note());
         assertEquals(936, back.folk());
+        assertEquals(true, back.needsLand());
         RoadViews.RoadTabView plain = new RoadViews.RoadTabView(kingdom, true, false, 3, 0, 0, List.of(), List.of(), List.of(), List.of(),
                 List.of(), List.of());
         buf = buffer();

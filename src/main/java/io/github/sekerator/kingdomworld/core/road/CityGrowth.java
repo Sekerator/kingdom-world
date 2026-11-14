@@ -47,8 +47,17 @@ public final class CityGrowth {
         /** It orders a wall round the city. */
         WALL,
         /** Nothing is wanted. */
-        DONE
+        DONE,
+        /** The places of the city ran out: it widens its square by a ring on the land of its kingdom and builds on. */
+        EXPAND,
+        /** The places of the city ran out and no land of its kingdom lies around it. */
+        NEEDS_LAND
     }
+
+    /** The least ring a governor widens its city by, in blocks. */
+    public static final int LEAST_RING = 8;
+    /** The widest ring a governor widens its city by at once, in blocks. */
+    public static final int WIDEST_RING = 16;
 
     /**
      * What a governor decided.
@@ -58,8 +67,9 @@ public final class CityGrowth {
      * @param missing  what the materials it lacks are worth
      * @param wall     the class of the wall ordered, else {@code null}
      * @param sites    the constructions and orders it waits for
+     * @param extent   the radius it widens the square of the city to, in blocks, else 0
      */
-    public record Decision(Kind kind, String role, String template, long missing, Wall.WallClass wall, int sites) {
+    public record Decision(Kind kind, String role, String template, long missing, Wall.WallClass wall, int sites, int extent) {
         public Decision {
             Objects.requireNonNull(kind, "kind");
             role = role == null ? "" : role;
@@ -67,11 +77,11 @@ public final class CityGrowth {
         }
 
         static Decision of(Kind kind) {
-            return new Decision(kind, "", "", 0, null, 0);
+            return new Decision(kind, "", "", 0, null, 0, 0);
         }
 
         static Decision building(Kind kind, RulerView.Option option) {
-            return new Decision(kind, option.role(), option.template(), option.missing(), null, 0);
+            return new Decision(kind, option.role(), option.template(), option.missing(), null, 0, 0);
         }
 
         /**
@@ -87,6 +97,8 @@ public final class CityGrowth {
                 case LACK -> new GovernorNote(GovernorNote.Kind.LACKS, template, missing);
                 case WALL -> new GovernorNote(GovernorNote.Kind.WALL, wall == null ? "" : wall.name().toLowerCase(java.util.Locale.ROOT), 0);
                 case DONE -> GovernorNote.of(GovernorNote.Kind.DONE);
+                case EXPAND -> new GovernorNote(GovernorNote.Kind.EXPANDS, template, extent);
+                case NEEDS_LAND -> new GovernorNote(GovernorNote.Kind.NEEDS_LAND, template, 0);
             };
         }
     }
@@ -200,6 +212,54 @@ public final class CityGrowth {
     }
 
     /**
+     * How wide a ring a governor widens its city by for a building: room for the building and the street around it, from
+     * {@value #LEAST_RING} to {@value #WIDEST_RING} blocks.
+     *
+     * @param size the longer side of the building
+     */
+    public static int ring(int size) {
+        return Math.max(LEAST_RING, Math.min(WIDEST_RING, Math.max(0, size) + 4));
+    }
+
+    /**
+     * What a governor does when the places of its city ran out for what it wants (no place by the data, or an order of its that
+     * found none in the world): it widens the square of the city by a ring when land of its kingdom lies in that ring, without an
+     * upper limit, and builds on; else it says the city needs land around it. A wall is never laid out anew for it.
+     *
+     * @param wanted     what it decided before it found no place
+     * @param landAround whether land of the kingdom lies in the ring around the square
+     * @param radius     the radius of the square of the city now
+     * @param ring       how wide a ring it would widen the city by ({@link #ring})
+     */
+    public static Decision outOfRoom(Decision wanted, boolean landAround, int radius, int ring) {
+        if (!landAround) {
+            return new Decision(Kind.NEEDS_LAND, wanted.role(), wanted.template(), wanted.missing(), null, 0, 0);
+        }
+        long wider = (long) Math.max(0, radius) + Math.max(LEAST_RING, ring);
+        return new Decision(Kind.EXPAND, wanted.role(), wanted.template(), wanted.missing(), null, 0, (int) Math.min(Integer.MAX_VALUE / 2, wider));
+    }
+
+    /**
+     * The chunks of the ring a city of a radius would widen by: those that hold a block farther than the radius from the middle
+     * and no farther than the radius and the ring, as chunk x and z.
+     */
+    public static java.util.List<int[]> ringChunks(int x, int z, int radius, int ring) {
+        java.util.List<int[]> chunks = new java.util.ArrayList<>();
+        int outer = radius + ring;
+        for (int cx = (x - outer) >> 4; cx <= (x + outer) >> 4; cx++) {
+            for (int cz = (z - outer) >> 4; cz <= (z + outer) >> 4; cz++) {
+                // The farthest block of the chunk from the middle, along x or z.
+                int far = Math.max(Math.max(Math.abs((cx << 4) - x), Math.abs((cx << 4) + 15 - x)),
+                        Math.max(Math.abs((cz << 4) - z), Math.abs((cz << 4) + 15 - z)));
+                if (far > radius) {
+                    chunks.add(new int[]{cx, cz});
+                }
+            }
+        }
+        return chunks;
+    }
+
+    /**
      * What the governor of a city does today.
      *
      * @param view what it sees of its city: its level, beds, storehouses, the buildings standing and planned, and in
@@ -219,7 +279,7 @@ public final class CityGrowth {
             // Builders of other cities help where nobody builds.
         }
         if (situation.sites() >= Math.max(1, situation.builders())) {
-            return new Decision(Kind.WAIT, "", "", 0, null, situation.sites());
+            return new Decision(Kind.WAIT, "", "", 0, null, situation.sites(), 0);
         }
         for (String role : wantedRoles(view, rules, situation.character())) {
             RulerView.Option option = null;
@@ -239,7 +299,7 @@ public final class CityGrowth {
         }
         if (!situation.wall()) {
             Wall.WallClass wall = view.cityLevel >= CityLevel.CITY.ordinal() ? Wall.WallClass.STONE : Wall.WallClass.PALISADE;
-            return new Decision(Kind.WALL, "", "", 0, wall, 0);
+            return new Decision(Kind.WALL, "", "", 0, wall, 0, 0);
         }
         return Decision.of(Kind.DONE);
     }

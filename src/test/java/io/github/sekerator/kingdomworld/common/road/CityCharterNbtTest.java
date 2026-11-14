@@ -61,6 +61,7 @@ class CityCharterNbtTest {
         city.setDecidedDay(9);
         city.spend(9, 75);
         city.refuse("kingdomworld:market", 11);
+        city.setExtent(72);
         CompoundTag tag = new CompoundTag();
         RoadNbt.write(state, tag);
         RoadState read = new RoadState();
@@ -73,6 +74,7 @@ class CityCharterNbtTest {
         assertEquals(9, back.decidedDay());
         assertEquals(75, back.spent(9));
         assertTrue(back.refuses("kingdomworld:market", 11));
+        assertEquals(72, back.extent());
         assertTrue(read.mayoralty(mayor).isPresent());
     }
 
@@ -95,6 +97,7 @@ class CityCharterNbtTest {
         assertTrue(back.note().isEmpty());
         assertEquals(CityCharter.NEVER, back.decidedDay());
         assertTrue(back.refused().isEmpty());
+        assertEquals(0, back.extent());
     }
 
     @Test

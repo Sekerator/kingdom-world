@@ -733,6 +733,7 @@ public final class CityGovernors {
         price(server, kingdomId, cityId, view, rules, character, charter, day);
         CityGrowth.Situation situation = situation(server, kingdomId, cityId, charter, day, governed, view, rules, character);
         CityGrowth.Decision decision = CityGrowth.decide(view, situation, rules);
+        decision = room(server, kingdomId, cityId, decision);
         GovernorNote before = GovernorNote.parse(charter.note());
         Component city = cityName(server, kingdomId, cityId);
         Component line = null;
@@ -748,6 +749,20 @@ public final class CityGovernors {
                 if (ordered.ok()) {
                     line = Component.translatable(KEY + "summary.build", city, templateName(decision.template()));
                 }
+            }
+            case EXPAND -> {
+                // The square of the city is wider from now on; what found no place looks again, and what was wanted is ordered.
+                boolean waiting = stuck(server, kingdomId, cityId);
+                charter.setExtent(decision.extent());
+                RoadWork.state(server).charterChanged();
+                CityAreas.invalidate();
+                RemoteWorks.retryGovernorOrders(server, kingdomId, cityId);
+                line = Component.translatable(KEY + "summary.expand", city, decision.extent());
+                if (!decision.template().isEmpty() && !waiting
+                        && RemoteWorks.orderForGovernor(server, kingdomId, decision.template(), cityId).ok()) {
+                    line = Component.translatable(KEY + "summary.expand_build", city, decision.extent(), templateName(decision.template()));
+                }
+                LOGGER.info("The governor of city {} of {} widened it to {} blocks", cityId, kingdomId, decision.extent());
             }
             case WALL -> {
                 Outcome ordered = CityWalls.order(server, null, kingdomId, cityId, decision.wall());
@@ -775,6 +790,7 @@ public final class CityGovernors {
                 case SAVES -> Component.translatable(KEY + "summary.saves", city, templateName(note.subject()), money(server, kingdomId, note.amount()));
                 case LACKS -> Component.translatable(KEY + "summary.lacks", city, templateName(note.subject()));
                 case NO_BUILDER -> Component.translatable(KEY + "summary.no_builder", city);
+                case NEEDS_LAND -> Component.translatable(KEY + "summary.needs_land", city);
                 default -> null;
             };
         }
@@ -782,6 +798,64 @@ public final class CityGovernors {
             summary(kingdomId, line);
         }
         LOGGER.debug("The governor of city {} of {} decided {} {}", cityId, kingdomId, decision.kind(), decision.template());
+    }
+
+    /**
+     * Whether an order of the governor of a city found no place in it.
+     */
+    static boolean stuck(MinecraftServer server, UUID kingdomId, long cityId) {
+        for (Commission commission : KingdomWorldApi.state(server).construction().commissionsOf(kingdomId)) {
+            if (commission.origin() == Commission.Origin.GOVERNOR && commission.cityId() == cityId
+                    && commission.state() == Commission.State.NO_PLACE) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * What a governor does when the places of its city ran out: an order of its found no place, or the building it wants has no
+     * place by the data. It widens the square of the city by a ring when land of its kingdom lies there, else it says the city
+     * needs land around it. Otherwise its decision stands.
+     */
+    static CityGrowth.Decision room(MinecraftServer server, UUID kingdomId, long cityId, CityGrowth.Decision decision) {
+        String template = decision.kind() == CityGrowth.Kind.BUILD ? decision.template() : "";
+        boolean stuck = false;
+        for (Commission commission : KingdomWorldApi.state(server).construction().commissionsOf(kingdomId)) {
+            if (commission.origin() == Commission.Origin.GOVERNOR && commission.cityId() == cityId
+                    && commission.state() == Commission.State.NO_PLACE) {
+                stuck = true;
+                template = template.isEmpty() ? commission.templateId() : template;
+            }
+        }
+        if (!stuck && (decision.kind() != CityGrowth.Kind.BUILD || hasPlace(server, kingdomId, cityId, template))) {
+            return decision;
+        }
+        Optional<CityAreas.Area> area = CityAreas.of(server, kingdomId).stream().filter(found -> found.cityId() == cityId).findFirst();
+        if (area.isEmpty()) {
+            return decision;
+        }
+        int size = BuildingTemplates.get(template).map(found -> Math.max(found.sizeX(), found.sizeZ())).orElse(CityGrowth.LEAST_RING);
+        int ring = CityGrowth.ring(size);
+        boolean land = false;
+        for (int[] chunk : CityGrowth.ringChunks(area.get().x(), area.get().z(), area.get().radius(), ring)) {
+            if (CityPlots.ownLand(server, kingdomId, area.get().dimension(),
+                    io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(chunk[0], chunk[1]))) {
+                land = true;
+                break;
+            }
+        }
+        CityGrowth.Decision wanted = decision.kind() == CityGrowth.Kind.BUILD ? decision
+                : new CityGrowth.Decision(CityGrowth.Kind.BUILD, "", template, 0, null, 0, 0);
+        return CityGrowth.outOfRoom(wanted, land, area.get().radius(), ring);
+    }
+
+    /**
+     * Whether a template has a place in the square of a city by the data: its land, nothing laid out there, clear of roads.
+     */
+    static boolean hasPlace(MinecraftServer server, UUID kingdomId, long cityId, String templateId) {
+        Optional<BuildingTemplate> template = BuildingTemplates.get(templateId);
+        return template.isEmpty() || !CityPlots.places(server, kingdomId, cityId, template.get(), null, java.util.Set.of(), 1).isEmpty();
     }
 
     /**
@@ -1009,6 +1083,9 @@ public final class CityGovernors {
             case BUILDS, LACKS -> Component.translatable(KEY + "note." + note.kind().id(), templateName(note.subject()));
             case SAVES -> Component.translatable(KEY + "note.saves", templateName(note.subject()), money(server, kingdomId, note.amount()));
             case WALL -> Component.translatable(KEY + "note.wall." + (note.subject().equals("stone") ? "stone" : "palisade"));
+            case EXPANDS -> note.subject().isEmpty() ? Component.translatable(KEY + "note.expands", note.amount())
+                    : Component.translatable(KEY + "note.expands_build", note.amount(), templateName(note.subject()));
+            case NEEDS_LAND -> Component.translatable(KEY + "note.needs_land");
         };
     }
 

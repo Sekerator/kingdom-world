@@ -145,6 +145,20 @@ public final class RemoteWorks {
     }
 
     /**
+     * The orders of the governor of a city that found no place wait no longer: its square was widened, and they look at the new
+     * places at their next turn.
+     */
+    public static void retryGovernorOrders(MinecraftServer server, UUID kingdomId, long cityId) {
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        for (Commission commission : List.copyOf(state.construction().commissionsOf(kingdomId))) {
+            if (commission.origin() == Commission.Origin.GOVERNOR && commission.cityId() == cityId
+                    && commission.state() == Commission.State.NO_PLACE) {
+                state.construction().putCommission(commission.withState(Commission.State.WAITING, "", 0));
+            }
+        }
+    }
+
+    /**
      * Orders a building at a point of the land of the kingdom, turned as asked: the point itself or a place within a few blocks.
      */
     public static Outcome orderAt(MinecraftServer server, @Nullable UUID actor, UUID kingdomId, String templateId, Materials materials,

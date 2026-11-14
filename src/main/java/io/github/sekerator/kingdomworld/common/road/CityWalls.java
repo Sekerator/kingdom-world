@@ -227,7 +227,14 @@ public final class CityWalls {
      * {@link io.github.sekerator.kingdomworld.core.road.CityFolk#radius}).
      */
     static int radiusOf(MinecraftServer server, UUID kingdomId, long cityId, CityLevel level, int people) {
-        return Math.max(baseRadius(server, kingdomId, cityId, level), peopleRadius(people));
+        return Math.max(Math.max(baseRadius(server, kingdomId, cityId, level), peopleRadius(people)), extent(server, kingdomId, cityId));
+    }
+
+    /**
+     * The radius the governor of a city widened its square to on the land of its kingdom, 0 if it never did.
+     */
+    static int extent(MinecraftServer server, UUID kingdomId, long cityId) {
+        return RoadWork.state(server).charter(kingdomId, cityId).map(io.github.sekerator.kingdomworld.core.road.CityCharter::extent).orElse(0);
     }
 
     /**

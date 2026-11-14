@@ -48,7 +48,11 @@ public record GovernorNote(Kind kind, String subject, long amount) {
         /** It ordered a wall round the city. */
         WALL,
         /** The city has every building its level wants. */
-        DONE;
+        DONE,
+        /** It widened the square of the city to the radius in the amount, its places having run out. */
+        EXPANDS,
+        /** Its places ran out and no land of the kingdom lies around the city to widen it on. */
+        NEEDS_LAND;
 
         public String id() {
             return name().toLowerCase(Locale.ROOT);

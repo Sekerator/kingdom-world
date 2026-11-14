@@ -174,4 +174,16 @@ class CityCharterTest {
         assertEquals(CityCharter.NEVER, charter.mayorSince());
         assertTrue(charter.empty());
     }
+
+    @Test
+    void aCityWidenedByItsGovernorKeepsItsSquare() {
+        CityCharter charter = new CityCharter(US, 3);
+        charter.setExtent(-4);
+        assertEquals(0, charter.extent());
+        charter.setExtent(64);
+        assertFalse(charter.empty(), "a widened city remembers it");
+        charter.clearGovernor();
+        assertEquals(64, charter.extent(), "the city stays as wide when its governor goes");
+        assertEquals(64, charter.movedTo(THEM, 4).extent(), "and when it changes hands");
+    }
 }

@@ -34,6 +34,8 @@ public final class CityCharter {
     private long decidedDay = NEVER;
     private long spentDay = NEVER;
     private long spent;
+    /** The radius its governor widened the square of the city to, in blocks; 0 while it never did. */
+    private int extent;
     /** Templates of buildings the king gave up, by the last game day they are not ordered again. */
     private final Map<String, Long> refused = new LinkedHashMap<>();
 
@@ -198,6 +200,18 @@ public final class CityCharter {
     }
 
     /**
+     * The radius a governor widened the square of the city to, in blocks, on the land of its kingdom; 0 while none did. The
+     * square is never narrower than it, as it is never narrower than its people need.
+     */
+    public int extent() {
+        return extent;
+    }
+
+    public void setExtent(int value) {
+        extent = Math.max(0, value);
+    }
+
+    /**
      * Templates the king gave up, by the last game day they are not ordered again.
      */
     public Map<String, Long> refused() {
@@ -244,11 +258,12 @@ public final class CityCharter {
     }
 
     /**
-     * The same city under another kingdom and id: its townsfolk stay with it, its mayor and pause do not, nor what its governor
-     * decided, spent or remembered.
+     * The same city under another kingdom and id: its townsfolk and its square stay with it, its mayor and pause do not, nor what
+     * its governor decided, spent or remembered.
      */
     public CityCharter movedTo(UUID kingdom, long city) {
         CityCharter moved = new CityCharter(kingdom, city);
+        moved.extent = extent;
         moved.folk = folk;
         moved.folkCarry = folkCarry;
         moved.lastDay = lastDay;
@@ -261,6 +276,6 @@ public final class CityCharter {
      */
     public boolean empty() {
         return folk == 0 && folkCarry == 0.0 && lastDay == NEVER && lastArrival == NEVER && mayor == null && !paused && note.isEmpty()
-                && decidedDay == NEVER && spentDay == NEVER && refused.isEmpty();
+                && decidedDay == NEVER && spentDay == NEVER && refused.isEmpty() && extent == 0;
     }
 }

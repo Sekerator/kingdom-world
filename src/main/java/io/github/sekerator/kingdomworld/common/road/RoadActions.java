@@ -101,7 +101,8 @@ public final class RoadActions {
                 : governor.grant().title().id(), charter.map(io.github.sekerator.kingdomworld.core.road.CityCharter::paused).orElse(false),
                 governor.present() ? CityGovernors.noteWithSpending(server, kingdomId, cityId, charter.map(io.github.sekerator.kingdomworld.core.road.CityCharter::note)
                         .map(io.github.sekerator.kingdomworld.core.road.GovernorNote::parse).orElse(io.github.sekerator.kingdomworld.core.road.GovernorNote.NONE))
-                        : Component.empty());
+                        : Component.empty(), governor.present() && charter.map(found -> io.github.sekerator.kingdomworld.core.road.GovernorNote
+                        .parse(found.note()).kind() == io.github.sekerator.kingdomworld.core.road.GovernorNote.Kind.NEEDS_LAND).orElse(false));
     }
 
     static String endpointName(MinecraftServer server, Endpoint endpoint) {

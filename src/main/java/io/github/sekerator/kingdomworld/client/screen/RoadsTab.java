@@ -250,6 +250,9 @@ final class RoadsTab {
                     Component.translatable("kingdomworld.governor.title." + (row.governorTitle().isEmpty() ? "baron" : row.governorTitle())));
             default -> Component.translatable(KEY + "no_governor");
         };
+        if (row.needsLand() && row.governor() != RoadViews.CityRow.NO_GOVERNOR) {
+            return Component.translatable(KEY + "governor_needs_land", who);
+        }
         return row.paused() && row.governor() != RoadViews.CityRow.NO_GOVERNOR ? Component.translatable(KEY + "governor_paused", who) : who;
     }
 
@@ -726,7 +729,8 @@ final class RoadsTab {
         text(graphics, name, x, y + 4, row.capital() ? 0xFFF0D070 : 0xFFFFFFFF, right - x - whereWidth - governorWidth - stateWidth - 18, hint);
         text(graphics, state, right - whereWidth - governorWidth - stateWidth - 12, y + 4, row.wallClass() == null ? 0xFFB8B8B8 : 0xFFA0E0A0,
                 stateWidth, hint);
-        int governorColor = row.governor() == RoadViews.CityRow.NO_GOVERNOR ? 0xFF9A9A9A : row.paused() ? 0xFFFFC080 : 0xFFE0D0A0;
+        int governorColor = row.governor() == RoadViews.CityRow.NO_GOVERNOR ? 0xFF9A9A9A : row.paused() || row.needsLand() ? 0xFFFFC080
+                : 0xFFE0D0A0;
         text(graphics, governor, right - whereWidth - governorWidth - 6, y + 4, governorColor, governorWidth, hint);
         text(graphics, where, right - whereWidth, y + 4, 0xFFB8B8B8, whereWidth, null);
     }
