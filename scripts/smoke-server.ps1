@@ -69,6 +69,11 @@
     BlueMap starts only after the download of the game's resources is accepted, so the script accepts it in the
     server's BlueMap config. Nothing of this folder is modified.
 
+.PARAMETER SiteLoadPauseMillis
+    The average tick in milliseconds above which the places far from players and the orders from the capital go on slowly
+    (siteLoadPauseMillis of the server config). 5, the least, keeps a busy server's pace for most of the run, as on a server of
+    a large pack of mods. 0 leaves the default of the mod.
+
 .PARAMETER Port
     Server port. By default 25599, or 25598 with -Pack. Give each copy of the repository its own port (and its
     own -TestEnvRoot) when several smoke tests run on one machine at the same time.
@@ -96,6 +101,7 @@ param(
     [string]$Memory = '',
     [ValidateRange(0, 65535)]
     [int]$Port = 0,
+    [int]$SiteLoadPauseMillis = 0,
     [string]$MapModsDir = ''
 )
 
@@ -290,6 +296,8 @@ function Initialize-Server([string]$ModJar) {
     }
     # With map mods the web maps are updated every second, so that the checks do not wait for the default 5 s.
     if ($MapModsDir) { $serverDefaults += "[maps]`n`twebMapUpdateSeconds = 1`n" }
+    # The pace of a busy server for the places far from players and the orders, when asked for.
+    if ($SiteLoadPauseMillis -gt 0) { $serverDefaults += "[construction]`n`tsiteLoadPauseMillis = $SiteLoadPauseMillis`n" }
     [System.IO.File]::WriteAllText((Join-Path $defaults 'kingdomworld-server.toml'), $serverDefaults, $utf8)
 
     foreach ($dir in @('world', 'logs', 'crash-reports', 'smoke-logs')) {
