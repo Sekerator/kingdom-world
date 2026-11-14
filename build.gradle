@@ -69,6 +69,10 @@ minecraft {
             property 'forge.enabledGameTestNamespaces', mod_id
             // No mob spawning and no weather in the world of the game tests, as in the test server of the game.
             property 'kingdomworld.gameTestWorld', 'true'
+            // "-PgameTestOnly=lumberjack,storehouse" runs only the tests whose name or batch holds one of the words.
+            if (project.hasProperty('gameTestOnly')) {
+                property 'kingdomworld.gameTestOnly', project.property('gameTestOnly').toString()
+            }
         }
 
         data {

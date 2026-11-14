@@ -73,6 +73,42 @@ public final class CommonEvents {
         io.github.sekerator.kingdomworld.common.command.CompanionCommands.registerChat(event.getDispatcher());
     }
 
+    /**
+     * Keeps only the game tests whose name or batch holds one of the comma separated words ("gradlew runGameTestServer
+     * -PgameTestOnly=lumberjack,storehouse"), to run again the few that failed. The tests start on the first tick of the server,
+     * after this event; the field has its name of the game only in the development runs, where alone the property is given.
+     */
+    @SuppressWarnings("unchecked")
+    private static void onlyGameTests(net.minecraft.gametest.framework.GameTestServer server, String only) {
+        java.util.List<String> words = java.util.Arrays.stream(only.toLowerCase(java.util.Locale.ROOT).split(","))
+                .map(String::trim).filter(word -> !word.isEmpty()).toList();
+        try {
+            java.lang.reflect.Field field = net.minecraft.gametest.framework.GameTestServer.class.getDeclaredField("testBatches");
+            field.setAccessible(true);
+            java.util.List<net.minecraft.gametest.framework.GameTestBatch> batches =
+                    (java.util.List<net.minecraft.gametest.framework.GameTestBatch>) field.get(server);
+            java.util.List<net.minecraft.gametest.framework.GameTestBatch> kept = new java.util.ArrayList<>();
+            int tests = 0;
+            for (net.minecraft.gametest.framework.GameTestBatch batch : batches) {
+                String batchName = batch.getName().toLowerCase(java.util.Locale.ROOT);
+                java.util.List<net.minecraft.gametest.framework.TestFunction> chosen = batch.getTestFunctions().stream()
+                        .filter(test -> words.stream().anyMatch(word -> batchName.contains(word)
+                                || test.getTestName().toLowerCase(java.util.Locale.ROOT).contains(word)))
+                        .toList();
+                if (!chosen.isEmpty()) {
+                    kept.add(new net.minecraft.gametest.framework.GameTestBatch(batch.getName(), chosen, batch::runBeforeBatchFunction,
+                            batch::runAfterBatchFunction));
+                    tests += chosen.size();
+                }
+            }
+            batches.clear();
+            batches.addAll(kept);
+            LOGGER.info("KingdomWorld game tests: only {} test(s) in {} batch(es) matching {}", tests, kept.size(), words);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            LOGGER.warn("KingdomWorld game tests: could not keep only the tests matching {}, running them all", words, e);
+        }
+    }
+
     private static void onServerStarted(ServerStartedEvent event) {
         if (Boolean.getBoolean("kingdomworld.gameTestWorld")) {
             // The game tests run in an ordinary world kept by the properties of the server: as in the test server of the game,
@@ -83,6 +119,10 @@ public final class CommonEvents {
             level.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_WEATHER_CYCLE).set(false, event.getServer());
             level.setWeatherParameters(1_000_000, 0, false, false);
             LOGGER.info("KingdomWorld game tests: no mob spawning, no weather cycle, clear weather");
+            String only = System.getProperty("kingdomworld.gameTestOnly", "");
+            if (!only.isBlank() && event.getServer() instanceof net.minecraft.gametest.framework.GameTestServer server) {
+                onlyGameTests(server, only);
+            }
         }
         KingdomWorldConfig.Server config = KingdomWorldConfig.SERVER;
         LOGGER.info("KingdomWorld server config: maxActiveNpcs={}, simulationIntervalTicks={}, afkTimeoutSeconds={}, combatTagSeconds={}",
