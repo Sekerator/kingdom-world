@@ -1216,6 +1216,19 @@ final class ClientLayoutCheck {
                             io.github.sekerator.kingdomworld.core.economy.CurrencyUnits.DEFAULT)));
             return screen;
         }));
+        // The throne being moved: the line of the throne says so and its button calls the move off; the answers of the server.
+        cases.add(new Case("throne-king-overview-moving", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING).withThroneMove(true, 1),
+                "overview", Component.empty())));
+        cases.add(new Case("throne-king-overview-move-started", () -> {
+            ThroneScreen screen = throne(view(KingdomView.Relation.MEMBER, Role.KING).withThroneMove(true, 1), "overview", Component.empty());
+            screen.onResult(true, Component.translatable("kingdomworld.throne_move.started"));
+            return screen;
+        }));
+        cases.add(new Case("throne-king-overview-move-too-soon", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING).withThroneMove(false, 1),
+                "overview", Component.translatable("kingdomworld.throne_move.too_soon",
+                        io.github.sekerator.kingdomworld.common.trade.TradeTexts.ticks(23_000)))));
+        cases.add(new Case("throne-subject-overview-moving", () -> throne(view(KingdomView.Relation.MEMBER, Role.SUBJECT).withThroneMove(true, 1),
+                "overview", Component.empty())));
         cases.add(new Case("throne-king-members", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "members", Component.empty())));
         cases.add(new Case("throne-king-rights", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "rights", Component.empty())));
         cases.add(new Case("throne-subject-overview", () -> throne(view(KingdomView.Relation.MEMBER, Role.SUBJECT), "overview", Component.empty())));
@@ -1624,6 +1637,17 @@ final class ClientLayoutCheck {
         cases.add(new Case("confirm-crown", () -> new ConfirmScreen(yes -> {
         }, Component.translatable("kingdomworld.screen.throne.confirm_title"),
                 Component.translatable("kingdomworld.screen.throne.crown.confirm", LONG_PLAYER))));
+        // Moving the throne: the question before the move with the days between moves, without them, and before calling it off.
+        cases.add(new Case("confirm-throne-move", () -> new ConfirmScreen(yes -> {
+        }, Component.translatable("kingdomworld.screen.throne.confirm_title"),
+                Component.translatable("kingdomworld.screen.throne.move.confirm", LONG_KINGDOM,
+                        io.github.sekerator.kingdomworld.common.trade.TradeTexts.days(KingdomView.MAX_THRONE_MOVE_DAYS)))));
+        cases.add(new Case("confirm-throne-move-any-time", () -> new ConfirmScreen(yes -> {
+        }, Component.translatable("kingdomworld.screen.throne.confirm_title"),
+                Component.translatable("kingdomworld.screen.throne.move.confirm.any_time", LONG_KINGDOM))));
+        cases.add(new Case("confirm-throne-move-cancel", () -> new ConfirmScreen(yes -> {
+        }, Component.translatable("kingdomworld.screen.throne.confirm_title"),
+                Component.translatable("kingdomworld.screen.throne.move.cancel.confirm"))));
         GuildLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         ArmyLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         MagicLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));

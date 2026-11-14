@@ -128,6 +128,14 @@ public final class TerritorySync {
         LAST_OWNER.remove(playerId);
     }
 
+    /**
+     * The map facts of kingdoms are compared with what was sent at the end of this tick rather than at the next turn: a throne
+     * moved, and the atlas and the maps of other mods show the capital at its new place at once.
+     */
+    public static void infoChanged() {
+        infoTicks = INFO_CHECK_INTERVAL_TICKS;
+    }
+
     public static void reset() {
         PENDING.clear();
         LAST_OWNER.clear();

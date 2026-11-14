@@ -162,6 +162,8 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     private boolean styleSent;
     private int changeStyleWidth;
     private int confirmStyleWidth;
+    /** The width of the button at the end of the line of the throne that moves it or calls the move off. */
+    private int moveThroneWidth;
 
     public ThroneScreen(KingdomView view) {
         super(Component.literal(view.name()));
@@ -851,7 +853,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
                 ? Component.translatable("kingdomworld.screen.throne.land", view.chunks() + provinces, view.chunks(), view.chunkLimit())
                 : Component.translatable("kingdomworld.screen.throne.chunks", view.chunks(), view.chunkLimit()));
         if (view.capital() != null) {
-            lines.add(Component.translatable("kingdomworld.screen.throne.capital",
+            lines.add(Component.translatable(view.throneMoving() ? "kingdomworld.screen.throne.capital.moving" : "kingdomworld.screen.throne.capital",
                     view.capital().getX(), view.capital().getY(), view.capital().getZ()));
         }
         Component style = styleLine();
@@ -860,6 +862,53 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         }
         lines.addAll(rulerLines());
         return lines;
+    }
+
+    // ---------------------------------------------------------------- moving the throne
+
+    /**
+     * Whether the viewer may move the throne: only the king of a kingdom of players with land; the rulers of the world keep their
+     * thrones where they stand.
+     */
+    private boolean canMoveThrone() {
+        return isMember() && view.viewerRole() == Role.KING && view.npc() == null && view.capital() != null;
+    }
+
+    /**
+     * Where the line of the throne stands among the lines of the overview, or -1 without one: after the ruler and the three lines
+     * of the people and the land.
+     */
+    private int capitalLineIndex() {
+        if (view.capital() == null) {
+            return -1;
+        }
+        return (view.npc() != null ? npcLines(view.npc(), false).size() : 1) + 3;
+    }
+
+    /**
+     * The button at the end of the line of the throne: it moves the throne, or calls off the move going on.
+     */
+    private Component moveThroneLabel() {
+        return Component.translatable(view.throneMoving() ? "kingdomworld.screen.throne.move.cancel" : "kingdomworld.screen.throne.move");
+    }
+
+    /**
+     * What the king is asked before the move starts: what comes next, and when the throne may move again.
+     */
+    private Component moveThroneQuestion() {
+        if (view.throneMoving()) {
+            return Component.translatable("kingdomworld.screen.throne.move.cancel.confirm");
+        }
+        return view.throneMoveDays() > 0
+                ? Component.translatable("kingdomworld.screen.throne.move.confirm", view.name(),
+                io.github.sekerator.kingdomworld.common.trade.TradeTexts.days(view.throneMoveDays()))
+                : Component.translatable("kingdomworld.screen.throne.move.confirm.any_time", view.name());
+    }
+
+    private void moveThrone() {
+        boolean moving = view.throneMoving();
+        confirm(moveThroneQuestion(), () -> send(moving ? KingdomActionPacket.Action.CANCEL_THRONE_MOVE : KingdomActionPacket.Action.MOVE_THRONE,
+                null, 0));
     }
 
     // ---------------------------------------------------------------- style
@@ -1139,6 +1188,12 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         if (canChangeStyle()) {
             overview = Math.max(overview, styleColumn() + PAD + STYLE_TEXT - 4);
         }
+        moveThroneWidth = buttonWidth(moveThroneLabel());
+        int capitalIndex = capitalLineIndex();
+        if (capitalIndex >= 0 && canMoveThrone()) {
+            // The button that moves the throne stands at the end of the line of the throne.
+            overview = Math.max(overview, font.width(overviewLines().get(capitalIndex)) + 4 + moveThroneWidth);
+        }
         int bottom = doneWidth + PAD;
         for (Component action : overviewActions()) {
             bottom += buttonWidth(action) + GAP;
@@ -1261,6 +1316,13 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             int styleY = top + contentOffset + CONTENT_TOP + 4 + styleIndex * overviewStep(lines.size(), rulerLines().size());
             addRenderableWidget(Button.builder(Component.translatable("kingdomworld.screen.throne.style.change"), button -> openStylePicker())
                     .bounds(left + panelWidth - PAD - changeStyleWidth, styleY - 3, changeStyleWidth, STYLE_BUTTON_HEIGHT).build());
+        }
+        int capitalIndex = capitalLineIndex();
+        if (capitalIndex >= 0 && canMoveThrone()) {
+            List<Component> lines = overviewLines();
+            int capitalY = top + contentOffset + CONTENT_TOP + 4 + capitalIndex * overviewStep(lines.size(), rulerLines().size());
+            addRenderableWidget(Button.builder(moveThroneLabel(), button -> moveThrone())
+                    .bounds(left + panelWidth - PAD - moveThroneWidth, capitalY - 3, moveThroneWidth, STYLE_BUTTON_HEIGHT).build());
         }
         int y = top + panelHeight - 26;
         int x = left + PAD;
@@ -1667,6 +1729,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         List<Component> lines = overviewLines();
         int rulerFirst = lines.size() - rulerLines().size();
         int styleIndex = styleLineIndex();
+        int capitalIndex = capitalLineIndex();
         int step = overviewStep(lines.size(), lines.size() - rulerFirst);
         // While a message of the status is shown, the lines of the ruler that would run into it wait until it goes; they never
         // run into the buttons.
@@ -1677,8 +1740,9 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             if (index >= rulerFirst && y + 9 > limit) {
                 break;
             }
-            // The line of the style ends before the button that changes it.
-            int lineRight = index == styleIndex && canChangeStyle() ? right - PAD - changeStyleWidth - 4 : right - PAD;
+            // The lines of the style and of the throne end before the buttons that change them.
+            int lineRight = index == styleIndex && canChangeStyle() ? right - PAD - changeStyleWidth - 4
+                    : index == capitalIndex && canMoveThrone() ? right - PAD - moveThroneWidth - 4 : right - PAD;
             fittedLabel(graphics, line, x, y, index >= rulerFirst ? 0xFFD8E8C8 : 0xFFE8E8E8, lineRight);
             int width = Math.min(font.width(line), lineRight - x);
             if (view.npc() != null && index == 1) {
@@ -1691,6 +1755,9 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
                 for (Component hover : StylePicker.captionLines(font, view.style())) {
                     hoverText(x, y, width, hover);
                 }
+            }
+            if (index == capitalIndex && view.throneMoving()) {
+                hoverText(x, y, width, Component.translatable("kingdomworld.screen.throne.move.pending"));
             }
             if (index >= rulerFirst) {
                 for (Component hover : rulerHover(index - rulerFirst)) {

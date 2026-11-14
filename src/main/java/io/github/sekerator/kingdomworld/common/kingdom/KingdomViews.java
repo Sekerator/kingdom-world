@@ -94,7 +94,9 @@ public final class KingdomViews {
                 state.chunkLimit(kingdom.id(), KingdomWorldApi.rules()), state.citizens().registry().count(kingdom.id()),
                 capital, relation, viewerRole, viewerPermissions,
                 memberEntries, applications, rightsTable, npcInfo(server, kingdom), rulerInfo(server, kingdom, viewer),
-                KingdomStyles.of(server, kingdom.id()), KingdomStyles.changeCost());
+                KingdomStyles.of(server, kingdom.id()), KingdomStyles.changeCost())
+                // Whether the throne is being moved is the business of the kingdom: told to its members alone.
+                .withThroneMove(viewerRole != null && state.throneMoves().pending(kingdom.id()).isPresent(), ThroneMoving.cooldownDays());
     }
 
     /**

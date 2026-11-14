@@ -373,6 +373,34 @@ public final class TerritoryIndex {
     }
 
     /**
+     * Moves the capital of a kingdom to another block of its own claims, as when its throne is moved: the new capital chunk
+     * becomes the one that cannot be given up and that the land is joined to, the old one an ordinary claim. Nobody owns a
+     * chunk other than before, so the claim listeners are not told.
+     *
+     * @throws IllegalArgumentException if the kingdom has no land, the capital lies in another dimension or in a chunk the
+     *                                  kingdom has not claimed
+     */
+    public void moveCapital(UUID kingdomId, Capital capital) {
+        Objects.requireNonNull(capital, "capital");
+        Territory territory = territories.get(kingdomId);
+        if (territory == null) {
+            throw new IllegalArgumentException("Kingdom " + kingdomId + " has no territory");
+        }
+        if (!territory.dimension().equals(capital.dimension())) {
+            throw new IllegalArgumentException("The capital of " + kingdomId + " stays in " + territory.dimension());
+        }
+        if (!territory.chunks.contains(capital.chunk())) {
+            throw new IllegalArgumentException("Kingdom " + kingdomId + " has not claimed chunk " + ChunkKey.format(capital.chunk()));
+        }
+        if (territory.capital().equals(capital)) {
+            return;
+        }
+        territory.moveCapital(capital);
+        version++;
+        changeListener.run();
+    }
+
+    /**
      * Removes all land of a kingdom: its claims, and its provinces become nobody's.
      *
      * @return the chunks it claimed

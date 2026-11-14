@@ -38,6 +38,7 @@ import io.github.sekerator.kingdomworld.core.territory.ClaimRules;
 import io.github.sekerator.kingdomworld.core.territory.KingdomStats;
 import io.github.sekerator.kingdomworld.core.territory.Territory;
 import io.github.sekerator.kingdomworld.core.territory.TerritoryIndex;
+import io.github.sekerator.kingdomworld.core.territory.ThroneMoves;
 import io.github.sekerator.kingdomworld.core.trade.Caravan;
 import io.github.sekerator.kingdomworld.core.trade.Deal;
 import io.github.sekerator.kingdomworld.core.trade.Goods;
@@ -73,6 +74,7 @@ public final class KingdomWorldState {
     private final Economy economy = new Economy();
     private final TradeBook trade = new TradeBook();
     private final ConstructionBook construction = new ConstructionBook();
+    private final ThroneMoves throneMoves = new ThroneMoves();
 
     /**
      * Called after every change of any part, used to mark the data for saving.
@@ -82,6 +84,7 @@ public final class KingdomWorldState {
         kingdoms.setChangeListener(listener);
         membership.setChangeListener(listener);
         territory.setChangeListener(listener);
+        throneMoves.setChangeListener(listener);
         citizens.setChangeListener(listener);
         orders.setChangeListener(listener);
         economy.setChangeListener(listener);
@@ -131,6 +134,13 @@ public final class KingdomWorldState {
      */
     public ConstructionBook construction() {
         return construction;
+    }
+
+    /**
+     * The moves of thrones going on and when each throne last moved.
+     */
+    public ThroneMoves throneMoves() {
+        return throneMoves;
     }
 
     // ---------------------------------------------------------------- queries
@@ -282,6 +292,7 @@ public final class KingdomWorldState {
         economy.retire(kingdomId, kingdom.get().name(), kingdom.get().color(), gameTime);
         citizens.removeKingdom(kingdomId);
         orders.removeKingdom(kingdomId);
+        throneMoves.removeKingdom(kingdomId);
         territory.remove(kingdomId);
         membership.unregister(kingdomId);
         kingdoms.remove(kingdomId);
@@ -297,6 +308,7 @@ public final class KingdomWorldState {
         construction.removeKingdom(kingdomId);
         citizens.removeKingdom(kingdomId);
         orders.removeKingdom(kingdomId);
+        throneMoves.removeKingdom(kingdomId);
         territory.remove(kingdomId);
         membership.unregister(kingdomId);
         kingdoms.remove(kingdomId);
@@ -1585,6 +1597,113 @@ public final class KingdomWorldState {
         }
         found.setOrderMissing(value);
         return check;
+    }
+
+    // ---------------------------------------------------------------- moving the throne
+
+    /**
+     * The king starts moving the throne of a kingdom with land. The old throne stays the heart of the kingdom until the throne
+     * handed out for the move, which carries {@code moveId}, is placed on its land.
+     *
+     * @param gameTime current game time in ticks
+     * @param cooldown ticks that must pass after the throne last moved before it moves again
+     * @param atWar    whether the kingdom takes part in a war, declared or fought, or is besieged
+     */
+    public Outcome beginThroneMove(UUID actor, UUID kingdomId, UUID moveId, long gameTime, long cooldown, boolean atWar) {
+        Objects.requireNonNull(moveId, "moveId");
+        Optional<KingdomError> error = checkKing(actor, kingdomId);
+        if (error.isPresent()) {
+            return Outcome.fail(error.get());
+        }
+        if (territory.territory(kingdomId).isEmpty()) {
+            return Outcome.fail(KingdomError.NO_CAPITAL);
+        }
+        if (throneMoves.pending(kingdomId).isPresent()) {
+            return Outcome.fail(KingdomError.THRONE_MOVE_PENDING);
+        }
+        if (atWar) {
+            return Outcome.fail(KingdomError.THRONE_MOVE_AT_WAR);
+        }
+        if (gameTime < throneMoves.nextAllowed(kingdomId, cooldown)) {
+            return Outcome.fail(KingdomError.THRONE_MOVE_TOO_SOON);
+        }
+        throneMoves.begin(kingdomId, new ThroneMoves.Move(moveId, gameTime));
+        return Outcome.DONE;
+    }
+
+    /**
+     * The king calls off the move of the throne: the throne handed out for it does nothing any more, and a new move may start
+     * at once.
+     */
+    public Outcome cancelThroneMove(UUID actor, UUID kingdomId) {
+        Optional<KingdomError> error = checkKing(actor, kingdomId);
+        if (error.isPresent()) {
+            return Outcome.fail(error.get());
+        }
+        return throneMoves.cancel(kingdomId).isPresent() ? Outcome.DONE : Outcome.fail(KingdomError.NO_THRONE_MOVE);
+    }
+
+    /**
+     * Why the throne handed out for the move {@code moveId} may not stand at a block, or empty if it may: the move must still
+     * be going on, only the king places it, not while the kingdom is at war or besieged, and only on a chunk the kingdom
+     * claimed, in the dimension of its capital (not on the land of others, nor in the wilds of its provinces).
+     *
+     * @param actor the player placing it
+     * @param atWar whether the kingdom takes part in a war, declared or fought, or is besieged
+     */
+    public Optional<KingdomError> checkThronePlace(UUID actor, UUID kingdomId, UUID moveId, String dimension, int x, int z,
+                                                   boolean atWar) {
+        if (kingdoms.get(kingdomId).isEmpty() || !throneMoves.isPending(kingdomId, moveId)) {
+            return Optional.of(KingdomError.THRONE_MOVE_VOID);
+        }
+        Optional<KingdomError> error = checkKing(actor, kingdomId);
+        if (error.isPresent()) {
+            return error;
+        }
+        if (atWar) {
+            return Optional.of(KingdomError.THRONE_MOVE_AT_WAR);
+        }
+        Optional<Territory> land = territory.territory(kingdomId);
+        if (land.isEmpty()) {
+            return Optional.of(KingdomError.NO_CAPITAL);
+        }
+        long chunk = ChunkKey.of(x >> 4, z >> 4);
+        if (land.get().dimension().equals(dimension) && land.get().contains(chunk)) {
+            return Optional.empty();
+        }
+        if (land.get().dimension().equals(dimension) && kingdomId.equals(territory.ownerOf(dimension, chunk))) {
+            return Optional.of(KingdomError.THRONE_MOVE_WILD);
+        }
+        return Optional.of(KingdomError.THRONE_MOVE_OUTSIDE);
+    }
+
+    /**
+     * The throne handed out for the move {@code moveId} was placed at {@code capital}: the capital of the kingdom moves there
+     * with everything that follows it (the protection of the throne, the chunk that cannot be given up), the old capital
+     * chunk becomes an ordinary claim and the move is over. Checks as {@link #checkThronePlace}; the caller takes the old
+     * throne away.
+     */
+    public Outcome finishThroneMove(UUID actor, UUID kingdomId, UUID moveId, Capital capital, long gameTime, boolean atWar) {
+        Optional<KingdomError> error = checkThronePlace(actor, kingdomId, moveId, capital.dimension(), capital.x(), capital.z(), atWar);
+        if (error.isPresent()) {
+            return Outcome.fail(error.get());
+        }
+        territory.moveCapital(kingdomId, capital);
+        throneMoves.finish(kingdomId, gameTime);
+        return Outcome.DONE;
+    }
+
+    /**
+     * Refuses anybody but the king of an existing kingdom.
+     */
+    private Optional<KingdomError> checkKing(UUID actor, UUID kingdomId) {
+        if (kingdoms.get(kingdomId).isEmpty()) {
+            return Optional.of(KingdomError.UNKNOWN_KINGDOM);
+        }
+        boolean king = actor != null && membership.memberOf(actor)
+                .filter(member -> member.role() == Role.KING && kingdomId.equals(membership.kingdomOf(actor).orElse(null)))
+                .isPresent();
+        return king ? Optional.empty() : Optional.of(KingdomError.NOT_KING);
     }
 
     // ---------------------------------------------------------------- changes of ruler

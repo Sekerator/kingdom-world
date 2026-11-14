@@ -395,7 +395,23 @@ public enum KingdomError {
     /** Earthworks whose height or slopes would reach above or below the world. */
     EARTHWORK_OUTSIDE_WORLD,
     /** Earthworks with more blocks to look at than one survey takes. */
-    EARTHWORK_TOO_MUCH;
+    EARTHWORK_TOO_MUCH,
+    /** The throne is being moved already: the throne handed out for it waits to be placed. */
+    THRONE_MOVE_PENDING,
+    /** No move of the throne was started. */
+    NO_THRONE_MOVE,
+    /** A throne handed out for a move that was finished or called off, or of a kingdom that is gone. */
+    THRONE_MOVE_VOID,
+    /** A kingdom at war, declared or fought, or besieged keeps its throne where it stands. */
+    THRONE_MOVE_AT_WAR,
+    /** The throne moved too short a time ago. */
+    THRONE_MOVE_TOO_SOON,
+    /** A moved throne stands only on land the kingdom claimed, in the dimension of its capital. */
+    THRONE_MOVE_OUTSIDE,
+    /** Land of a province of the kingdom that it has not claimed: the wilds of the province. */
+    THRONE_MOVE_WILD,
+    /** The thrones of the kingdoms of the world are not moved. */
+    THRONE_MOVE_WORLD;
 
     /**
      * Lower case identifier, used for translation keys.

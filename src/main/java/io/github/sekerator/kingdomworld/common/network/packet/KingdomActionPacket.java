@@ -40,7 +40,11 @@ public record KingdomActionPacket(Action action, @Nullable UUID target, int valu
         ABDICATE,
         LEAVE,
         DISSOLVE,
-        SET_STYLE
+        SET_STYLE,
+        /** The king starts moving the throne and gets the throne for it. */
+        MOVE_THRONE,
+        /** The king calls the move of the throne off. */
+        CANCEL_THRONE_MOVE
     }
 
     public static KingdomActionPacket setPermission(Role role, Permission permission, boolean granted) {

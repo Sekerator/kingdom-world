@@ -10,6 +10,7 @@ import io.github.sekerator.kingdomworld.core.npc.ArchitecturalStyles;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import io.github.sekerator.kingdomworld.core.territory.Capital;
 import io.github.sekerator.kingdomworld.core.territory.Territory;
+import io.github.sekerator.kingdomworld.core.territory.ThroneMoves;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.LongArrayTag;
@@ -28,7 +29,7 @@ import java.util.UUID;
  *
  * <pre>
  * { id, name, color, ruler?, createdGameTime, style?,
- *   capital?: { dimension, x, y, z }, chunks: long[],
+ *   capital?: { dimension, x, y, z }, chunks: long[], throneMove?: { id, started }, throneMoved?: long,
  *   members: [ { player, role, joined } ],
  *   permissions?: { &lt;role&gt;: [ &lt;permission&gt;, ... ] },
  *   applications: [ { player, time } ], invitations: [ { player, time } ],
@@ -57,6 +58,9 @@ public final class KingdomNbt {
     static final String APPLICATIONS = "applications";
     static final String INVITATIONS = "invitations";
     static final String TIME = "time";
+    static final String THRONE_MOVE = "throneMove";
+    static final String THRONE_MOVED = "throneMoved";
+    static final String STARTED = "started";
 
     private KingdomNbt() {
     }
@@ -95,6 +99,13 @@ public final class KingdomNbt {
             tag.put(CAPITAL, capitalTag);
             tag.put(CHUNKS, new LongArrayTag(territory.get().chunks().stream().mapToLong(Long::longValue).toArray()));
         }
+        state.throneMoves().pending(kingdom.id()).ifPresent(move -> {
+            CompoundTag moveTag = new CompoundTag();
+            moveTag.putUUID(ID, move.id());
+            moveTag.putLong(STARTED, move.started());
+            tag.put(THRONE_MOVE, moveTag);
+        });
+        state.throneMoves().lastMoved(kingdom.id()).ifPresent(time -> tag.putLong(THRONE_MOVED, time));
         Optional<KingdomMembers> members = state.membership().kingdom(kingdom.id());
         if (members.isPresent()) {
             ListTag memberList = new ListTag();
@@ -223,6 +234,10 @@ public final class KingdomNbt {
                 io.github.sekerator.kingdomworld.core.economy.CurrencyUnits.DEFAULT,
                 io.github.sekerator.kingdomworld.core.economy.EconomyRules.DEFAULT.defaultPollTax());
         state.restore(kingdom, capital, chunks, rights, members, applications, invitations);
+        if (capital != null) {
+            state.throneMoves().restore(kingdom.id(), readThroneMove(tag), tag.contains(THRONE_MOVED, Tag.TAG_LONG)
+                    ? java.util.OptionalLong.of(tag.getLong(THRONE_MOVED)) : java.util.OptionalLong.empty());
+        }
         try {
             state.citizens().restore(kingdom.id(), population.sites(), population.posts(), population.citizens(),
                     population.lastArrival(), population.chronicle(), population.production());
@@ -234,6 +249,18 @@ public final class KingdomNbt {
             throw e;
         }
         return kingdom;
+    }
+
+    /**
+     * The move of the throne going on. Data from before thrones moved has none; a move that cannot be read is dropped rather
+     * than locking the data: the throne handed out for it then does nothing, and the king starts a new move.
+     */
+    private static Optional<ThroneMoves.Move> readThroneMove(CompoundTag tag) {
+        if (!tag.contains(THRONE_MOVE, Tag.TAG_COMPOUND)) {
+            return Optional.empty();
+        }
+        CompoundTag moveTag = tag.getCompound(THRONE_MOVE);
+        return moveTag.hasUUID(ID) ? Optional.of(new ThroneMoves.Move(moveTag.getUUID(ID), moveTag.getLong(STARTED))) : Optional.empty();
     }
 
     private static ListTag writePending(Map<UUID, Long> pending) {

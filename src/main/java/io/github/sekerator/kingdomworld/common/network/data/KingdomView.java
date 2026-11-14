@@ -25,15 +25,19 @@ import java.util.UUID;
  * @param viewerRole the viewer's position, or {@code null} if the viewer is not a member
  * @param style      the architectural style of the kingdom, or empty
  * @param styleFee   what changing the style costs the treasury
+ * @param throneMoving   whether its king started moving the throne and has not placed the new one; told to members only
+ * @param throneMoveDays game days that must pass after the throne moved before it moves again
  */
 public record KingdomView(UUID id, String name, int color, String rulerName, int memberCount, int chunks,
                           int chunkLimit, int population, @Nullable BlockPos capital, Relation relation, @Nullable Role viewerRole,
                           EnumSet<Permission> viewerPermissions, List<MemberEntry> members,
                           List<PendingEntry> applications, Map<Role, EnumSet<Permission>> rights, @Nullable NpcKingdomInfo npc,
-                          @Nullable RulerInfo ruler, String style, long styleFee) {
+                          @Nullable RulerInfo ruler, String style, long styleFee, boolean throneMoving, int throneMoveDays) {
     public static final int MAX_MEMBERS = 1000;
     public static final int MAX_APPLICATIONS = 100;
     public static final int MAX_STYLE = 32;
+    /** The most days between moves of a throne the server configures. */
+    public static final int MAX_THRONE_MOVE_DAYS = 365;
 
     /**
      * How the viewer relates to the kingdom.
@@ -74,6 +78,18 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
         if (members.size() > MAX_MEMBERS || applications.size() > MAX_APPLICATIONS) {
             throw new IllegalArgumentException("Kingdom view too large");
         }
+        throneMoveDays = Math.max(0, Math.min(MAX_THRONE_MOVE_DAYS, throneMoveDays));
+    }
+
+    /**
+     * A view that tells nothing of moving the throne.
+     */
+    public KingdomView(UUID id, String name, int color, String rulerName, int memberCount, int chunks, int chunkLimit, int population,
+                       @Nullable BlockPos capital, Relation relation, @Nullable Role viewerRole, EnumSet<Permission> viewerPermissions,
+                       List<MemberEntry> members, List<PendingEntry> applications, Map<Role, EnumSet<Permission>> rights,
+                       @Nullable NpcKingdomInfo npc, @Nullable RulerInfo ruler, String style, long styleFee) {
+        this(id, name, color, rulerName, memberCount, chunks, chunkLimit, population, capital, relation, viewerRole, viewerPermissions, members,
+                applications, rights, npc, ruler, style, styleFee, false, 0);
     }
 
     public KingdomView(UUID id, String name, int color, String rulerName, int memberCount, int chunks, int chunkLimit, int population,
@@ -107,7 +123,7 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
      */
     public KingdomView withNpc(@Nullable NpcKingdomInfo info) {
         return new KingdomView(id, name, color, rulerName, memberCount, chunks, chunkLimit, population, capital, relation, viewerRole,
-                viewerPermissions, members, applications, rights, info, ruler, style, styleFee);
+                viewerPermissions, members, applications, rights, info, ruler, style, styleFee, throneMoving, throneMoveDays);
     }
 
     /**
@@ -115,7 +131,15 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
      */
     public KingdomView withRuler(@Nullable RulerInfo info) {
         return new KingdomView(id, name, color, rulerName, memberCount, chunks, chunkLimit, population, capital, relation, viewerRole,
-                viewerPermissions, members, applications, rights, npc, info, style, styleFee);
+                viewerPermissions, members, applications, rights, npc, info, style, styleFee, throneMoving, throneMoveDays);
+    }
+
+    /**
+     * The same view telling whether the throne is being moved and how many days pass between moves.
+     */
+    public KingdomView withThroneMove(boolean moving, int days) {
+        return new KingdomView(id, name, color, rulerName, memberCount, chunks, chunkLimit, population, capital, relation, viewerRole,
+                viewerPermissions, members, applications, rights, npc, ruler, style, styleFee, moving, days);
     }
 
     public boolean can(Permission permission) {
@@ -163,6 +187,8 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
         RulerInfo.write(buf, ruler);
         buf.writeUtf(style, MAX_STYLE);
         buf.writeVarLong(styleFee);
+        buf.writeBoolean(throneMoving);
+        buf.writeVarInt(throneMoveDays);
     }
 
     public static KingdomView decode(FriendlyByteBuf buf) {
@@ -199,8 +225,10 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
         RulerInfo rulerInfo = RulerInfo.read(buf);
         String style = buf.readUtf(MAX_STYLE);
         long styleFee = buf.readVarLong();
+        boolean throneMoving = buf.readBoolean();
+        int throneMoveDays = buf.readVarInt();
         return new KingdomView(id, name, color, ruler, memberCount, chunks, chunkLimit, population, capital, relation, role,
-                permissions, members, applications, rights, npc, rulerInfo, style, styleFee);
+                permissions, members, applications, rights, npc, rulerInfo, style, styleFee, throneMoving, throneMoveDays);
     }
 
     static int readSize(FriendlyByteBuf buf, int max) {

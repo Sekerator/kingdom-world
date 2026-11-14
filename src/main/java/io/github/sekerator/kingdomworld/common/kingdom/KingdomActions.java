@@ -243,6 +243,8 @@ public final class KingdomActions {
             case DISSOLVE -> feedback = dissolve(player);
             case SET_STYLE -> feedback = kingdomBefore == null ? Feedback.error(KingdomError.NOT_IN_KINGDOM)
                     : KingdomStyles.change(server, player.getUUID(), kingdomBefore, ArchitecturalStyles.id(packet.value()));
+            case MOVE_THRONE -> feedback = ThroneMoving.begin(player);
+            case CANCEL_THRONE_MOVE -> feedback = ThroneMoving.cancel(player);
             default -> feedback = Feedback.error(KingdomError.NO_PERMISSION);
         }
         reply(player, feedback);

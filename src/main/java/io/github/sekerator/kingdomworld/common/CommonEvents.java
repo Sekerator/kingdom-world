@@ -42,6 +42,7 @@ public final class CommonEvents {
         MinecraftForge.EVENT_BUS.addListener(CommonEvents::onPlayerLoggedIn);
         MinecraftForge.EVENT_BUS.addListener(CommonEvents::onPlayerLoggedOut);
         ProtectionEvents.register();
+        io.github.sekerator.kingdomworld.common.kingdom.ThroneMoving.register();
         CitizenEvents.register();
         io.github.sekerator.kingdomworld.common.economy.EconomyEvents.register();
         io.github.sekerator.kingdomworld.common.trade.TradeEvents.register();
@@ -152,6 +153,7 @@ public final class CommonEvents {
         ServerRequestGuard.forget(event.getEntity().getUUID());
         ProtectionService.forget(event.getEntity().getUUID());
         TerritorySync.forget(event.getEntity().getUUID());
+        io.github.sekerator.kingdomworld.common.kingdom.ThroneMoving.forget(event.getEntity().getUUID());
         KingdomCommand.forget(event.getEntity().getUUID());
     }
 }

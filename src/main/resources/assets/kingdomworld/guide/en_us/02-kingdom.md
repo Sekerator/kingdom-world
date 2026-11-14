@@ -60,6 +60,8 @@ The lines of the overview: the ruler, the number of members and citizens, the la
 
 The king sees a **"Change style"** button: with it he goes through the styles and picks a new one. New buildings follow the chosen style, those standing stay as they are, and the treasury pays {cfg:kingdom.styleChangeCost} copper coins.
 
+In the line of the throne the king sees a **"Move throne"** button: with it the throne moves to another place of the kingdom's land, a throne hall for example (see [Moving the throne](throne_move)). While a move goes on, the line of the throne says "(being moved)" and the button becomes **"Cancel move"**.
+
 The throne of a kingdom of the world shows, instead of a player ruler, the size of the ancient kingdom, the leaning of its ruler, its people, the ranks of its guilds, the number of its settlements, the latest decree, its needs and its attitude to you. Hover a line to see more. Such a ruler takes every subject who applies, and its throne is taken only by war (see [Rulers of the world](rulers)).
 
 ### Tabs of a member
@@ -85,7 +87,45 @@ The tabs stand in one or more rows by the width of the screen. On the narrowest 
 
 ### Protection of the throne
 
-The heart of a kingdom never breaks: anyone who tries sees "The heart of a kingdom cannot be broken", and the king gets the hint "Dissolve the kingdom first: /kingdom dissolve". A throne can be taken away only by war (see [Capture and destruction](capture)).
+The heart of a kingdom never breaks: anyone who tries sees "The heart of a kingdom cannot be broken", and the king gets the hint "Move the throne from its screen or dissolve the kingdom". A throne can be taken away only by war (see [Capture and destruction](capture)), and its king may [move it](throne_move).
+
+## throne_move | Moving the throne
+@icon kingdomworld:throne
+When a throne was set up badly or belongs in a throne hall, the king moves it to another place of the kingdom's land. The kingdom is never without a heart, not for a minute: the old throne works until the new one stands.
+
+### How to move it
+
+1. Open the throne screen and on the Overview tab press **"Move throne"** in the line of the throne. Only the king of a kingdom of players sees the button.
+2. The screen asks for a confirmation and tells what comes next.
+3. You get a **throne for the move** {item:kingdomworld:throne}: it shines, and its tooltip tells which kingdom it belongs to and that it is a move. With a full inventory the throne drops at your feet.
+4. Place it on any block of the kingdom's claimed land, in the dimension where the throne stands. At that very moment the capital moves there, and the old throne vanishes without a drop.
+
+### What moves with the throne
+
+- **The heart of the kingdom**: the new throne does not break, and the old place becomes an ordinary one.
+- **The main chunk**: the chunk of the new throne cannot be given up, and the chunk of the old one becomes an ordinary claim, which may go when the land does not fall apart without it (see [Claiming and releasing land](claiming)).
+- **The atlas and map mods**: the mark of the capital stands at the new throne at once.
+- **Sieges**: the enemy takes the throne hall at the new throne (see [Capture and destruction](capture)).
+- **The capital**: new citizens come to the new throne, and the area of a capital without a wall is counted from it. A capital with a wall stays the square of its wall (see [Cities](cities)).
+- **Roads**: new roads from the capital start at the new throne.
+- The throne screen, the commands and the distances to the capital.
+
+What is built stays where it is: roads, walls, gates and buildings do not move.
+
+### When it cannot be done
+
+- Only the king places the throne for the move. A member or a stranger sees "Only the king may do this", and keeps the throne.
+- Only on the claimed land of your kingdom: not on land of nobody, not on the land of another kingdom and not in another dimension. In the wilds of your own province, its unclaimed chunks, the throne does not stand either. A throne for a move founds no new kingdom.
+- While the kingdom is at war (declared or already fought) or besieged, a move can neither start nor finish. The throne for the move waits with you for the end of the war, and the move can be called off during the war too.
+- At least {cfg:kingdom.throneMoveCooldownDays} days of game time pass between moves (a game day lasts 20 minutes, 0 lifts the limit). The refusal tells how many minutes are left.
+
+Every refusal is told in a message, and the throne for the move stays with the player.
+
+### Calling it off
+
+Until the new throne stands, the line of the throne says "(being moved)" and its button is **"Cancel move"**. Once the move is called off, the throne for the move leaves the king's inventory, and anywhere else it vanishes with a message when somebody tries to place it, dropping nothing. So a throne lost or thrown away gives neither a second throne nor a copy. A new move can start at once: the one called off does not count.
+
+> The rulers of the world do not move their thrones.
 
 ## members | Subjects and applications
 @icon minecraft:player_head

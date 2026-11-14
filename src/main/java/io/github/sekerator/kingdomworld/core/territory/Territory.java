@@ -8,11 +8,11 @@ import java.util.UUID;
 
 /**
  * The land of one kingdom: its capital and the chunks it owns, all in the capital's dimension. Read-only view;
- * changes go through {@link TerritoryIndex}.
+ * changes go through {@link TerritoryIndex}. The capital moves with the throne, always within the claims of the kingdom.
  */
 public final class Territory {
     private final UUID kingdomId;
-    private final Capital capital;
+    private Capital capital;
     final Set<Long> chunks = new LinkedHashSet<>();
 
     Territory(UUID kingdomId, Capital capital) {
@@ -26,6 +26,10 @@ public final class Territory {
 
     public Capital capital() {
         return capital;
+    }
+
+    void moveCapital(Capital capital) {
+        this.capital = Objects.requireNonNull(capital, "capital");
     }
 
     public String dimension() {

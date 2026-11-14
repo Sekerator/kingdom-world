@@ -77,6 +77,14 @@ public final class WebMaps {
         }
     }
 
+    /**
+     * The web maps are brought up to date at the next tick rather than at their next turn: a capital moved, and its mark goes
+     * with it at once.
+     */
+    public static void soon() {
+        ticks = Integer.MAX_VALUE / 2;
+    }
+
     public static MapTexts texts() {
         return texts;
     }

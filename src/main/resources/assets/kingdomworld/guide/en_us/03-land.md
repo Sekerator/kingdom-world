@@ -9,7 +9,7 @@ The land of a kingdom is made of **chunks**: squares of 16 by 16 blocks through 
 
 - All the land lies in the dimension of the throne.
 - The land is connected: from any chunk you can reach the throne's chunk through side neighbours. An own province connects too: a claim that touches an own province is joined to the kingdom.
-- The throne's chunk cannot be given up.
+- The throne's chunk cannot be given up. When the throne [is moved](throne_move), the rule goes over to the chunk of the new throne.
 - A gap of {cfg:territory.claimBufferChunks} chunks stays between the land of different kingdoms (square distance, so diagonals count). At zero borders may touch.
 - The owner of a chunk is the kingdom that claimed it, otherwise the holder of its province. A claim always wins over a province.
 - The number of claims is bounded by [the limit of chunks](chunk_limit), and how to claim and give up land is told in [Claiming and releasing land](claiming).

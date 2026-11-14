@@ -53,8 +53,9 @@ public final class ModRegistries {
                     .sound(SoundType.WOOD)
                     .noOcclusion()
                     .pushReaction(PushReaction.BLOCK)));
+    /** The throne; one handed out for moving the throne of a kingdom carries the kingdom and the move. */
     public static final RegistryObject<Item> THRONE_ITEM = ITEMS.register("throne",
-            () -> new BlockItem(THRONE.get(), new Item.Properties()));
+            () -> new io.github.sekerator.kingdomworld.common.item.ThroneItem(THRONE.get(), new Item.Properties()));
     /** Founds a kingdom on an empty throne and is used up doing so. */
     public static final RegistryObject<Item> FOUNDER_CROWN = ITEMS.register("founder_crown",
             () -> new DescribedItem(new Item.Properties().stacksTo(1).rarity(Rarity.EPIC).fireResistant(),

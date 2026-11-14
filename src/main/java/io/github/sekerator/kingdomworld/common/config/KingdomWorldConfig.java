@@ -60,6 +60,7 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue minChunksFromOtherKingdom;
         public final ForgeConfigSpec.IntValue initialClaimRadius;
         public final ForgeConfigSpec.IntValue styleChangeCost;
+        public final ForgeConfigSpec.IntValue throneMoveCooldownDays;
         public final ForgeConfigSpec.IntValue baseMaxChunks;
         public final ForgeConfigSpec.IntValue chunksPerMember;
         public final ForgeConfigSpec.IntValue chunksPerCitizen;
@@ -588,6 +589,10 @@ public final class KingdomWorldConfig {
             styleChangeCost = builder
                     .comment("What changing the architectural style of a kingdom on the throne costs its treasury, in copper coins.")
                     .defineInRange("styleChangeCost", 2000, 0, 1_000_000_000);
+            throneMoveCooldownDays = builder
+                    .comment("Game days that must pass after the throne of a kingdom of players was moved before its king may start moving",
+                            "it again; 0 lets it move any time. A move called off does not count.")
+                    .defineInRange("throneMoveCooldownDays", 1, 0, 365);
             builder.pop();
 
             builder.comment("Kingdom land.").push("territory");
