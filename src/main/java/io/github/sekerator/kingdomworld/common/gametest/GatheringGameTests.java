@@ -551,10 +551,13 @@ public final class GatheringGameTests {
                 level.setBlock(pos, Blocks.STONE.defaultBlockState(), 2 | 16);
             }
         }
-        // Room for the miner to stand behind its post, and a storehouse beside it.
+        // Room for the miner to stand behind its post and to walk round it to the staircase in front (the mine lies north, where
+        // the land is), and a storehouse beside it.
         BlockPos stand = new BlockPos(x0, y, z0 + 1);
-        level.setBlockAndUpdate(stand, Blocks.AIR.defaultBlockState());
-        level.setBlockAndUpdate(stand.above(), Blocks.AIR.defaultBlockState());
+        for (BlockPos open : List.of(stand, stand.west(), stand.west().north())) {
+            level.setBlockAndUpdate(open, Blocks.AIR.defaultBlockState());
+            level.setBlockAndUpdate(open.above(), Blocks.AIR.defaultBlockState());
+        }
         GatheringRules rules = GatheringRules.DEFAULT;
         GatheringSettings.override(new GatheringRules(rules.defaultRadius(), rules.maxRadius(), rules.lumberjackDefaultRadius(),
                 rules.lumberjackMaxRadius(), rules.maxSeats(), rules.maxTreeBlocks(), 1, rules.maxHerd(), rules.carrierRange(),
@@ -581,8 +584,16 @@ public final class GatheringGameTests {
 
     private static String minerState(MinecraftServer server, MineSite site, Citizen worker) {
         CitizenEntity body = CitizenBodies.body(worker.id());
+        StringBuilder cells = new StringBuilder();
+        ServerLevel level = server.overworld();
+        for (int i = 0; i < Math.min(6, site.cells().size()); i++) {
+            MinePlan.Cell cell = site.cells().get(i);
+            cells.append(i == 0 ? "" : "; ").append(cell.kind()).append(' ').append(cell.x()).append(',').append(cell.y()).append(',')
+                    .append(cell.z()).append(" from ").append(cell.from()).append(dug(level, cell) ? " dug" : " closed");
+        }
         return "worker " + worker.workStatus() + ", post " + PostWork.post(server, site.postPos()).map(WorkPost::status).orElse(null)
-                + ", body " + (body == null ? "none" : body.blockPosition().toShortString() + " holding " + body.getMainHandItem());
+                + " at " + site.postPos().coordinates() + ", body " + (body == null ? "none" : body.blockPosition().toShortString() + " holding "
+                + body.getMainHandItem()) + ", cells " + cells;
     }
 
     @GameTest(template = EMPTY, batch = "kingdomworld_work_miner", timeoutTicks = 3000)
