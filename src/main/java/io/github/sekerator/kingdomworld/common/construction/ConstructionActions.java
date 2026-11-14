@@ -88,6 +88,12 @@ public final class ConstructionActions {
                 percent = plan.get().percent(construction);
                 placed = plan.get().placed(construction);
                 total = plan.get().places();
+                if (construction.kind() == Construction.Kind.EARTHWORK && plan.get().size() > 0) {
+                    // Earthworks are mostly digging: every block dug or filled counts.
+                    placed = construction.doneCount();
+                    total = plan.get().size();
+                    percent = (int) Math.min(100L, 100L * placed / total);
+                }
                 for (Map.Entry<String, Integer> entry : ConstructionWork.missing(server, construction, plan.get()).entrySet()) {
                     missing.add(new ConstructionView.Missing(OrderActions.sample(entry.getKey()), entry.getValue(),
                             ConstructionWork.gatherer(server, kingdomId, entry.getKey()), Production.orderable(server, entry.getKey()),
