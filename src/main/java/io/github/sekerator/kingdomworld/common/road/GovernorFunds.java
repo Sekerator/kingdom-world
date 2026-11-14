@@ -10,6 +10,9 @@ import io.github.sekerator.kingdomworld.common.trade.MarketStock;
 import io.github.sekerator.kingdomworld.common.trade.TradeSettings;
 import io.github.sekerator.kingdomworld.common.economy.TreasuryActions;
 import io.github.sekerator.kingdomworld.core.construction.Construction;
+import io.github.sekerator.kingdomworld.core.economy.CityEconomyRules;
+import io.github.sekerator.kingdomworld.core.economy.CityTreasury;
+import io.github.sekerator.kingdomworld.core.economy.Economy;
 import io.github.sekerator.kingdomworld.core.nobility.Court;
 import io.github.sekerator.kingdomworld.core.npc.RulerMind;
 import io.github.sekerator.kingdomworld.core.npc.RulerRules;
@@ -30,16 +33,59 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Where the money of the governors of cities comes from, in one place, so that the treasuries of the cities can take it over
- * later. Today a governor builds from the storehouses of the kingdom (its constructions take what they need there themselves)
- * and buys what they lack abroad with the money the king gives the governors a day: each city its fair share of it, the treasury
- * of the kingdom never below its reserve. What is spent is counted for the city and for the court; the purchase goes into the
- * journal of the treasury as any purchase abroad.
+ * Where the money of the governors of cities comes from, in one place. A governor builds from the storehouses of the kingdom (its
+ * constructions take what they need there themselves) and buys what they lack abroad.
+ *
+ * <p>Where the cities keep money of their own ({@link io.github.sekerator.kingdomworld.common.commerce.CityOf#active}), a governor
+ * pays out of the treasury of its city through {@link CityFunds}: what the city kept of its taxes and what the crown granted it,
+ * less a reserve of a few days of its income and what it promised its constructions. The money the king gives the governors a
+ * day goes into the treasuries of their cities as a grant, each city its fair share, never more than a week of shares granted
+ * and unspent and never so that the treasury of the kingdom falls below its reserve. The city pays the crown for an import first
+ * and gets back what the crown could not buy.
+ *
+ * <p>Elsewhere (a kingdom of the world, or the money of the cities switched off) a governor spends its share of the money of the
+ * king a day straight out of the treasury of the kingdom, never below its reserve. What is spent is counted for the city and for
+ * the court; the purchase goes into the journal of the treasury as any purchase abroad.
  */
 public final class GovernorFunds {
     private static final Logger LOGGER = LogUtils.getLogger();
 
+    /** How many shares of the money of the king a city holds granted and unspent at most. */
+    static final int GRANT_KEEP_DAYS = 7;
+
     private GovernorFunds() {
+    }
+
+    /**
+     * Whether the governors of a kingdom pay out of the treasuries of their cities.
+     */
+    public static boolean fromCity(MinecraftServer server, UUID kingdomId) {
+        return io.github.sekerator.kingdomworld.common.commerce.CityOf.active(server, kingdomId);
+    }
+
+    /**
+     * Once a day before the governor of a city decides, where it pays out of the treasury of its city: its share of the money of
+     * the king goes there as a grant ({@link CityGrowth#grant}).
+     *
+     * @return what was granted
+     */
+    public static long grantShare(MinecraftServer server, UUID kingdomId, long cityId, int governed, RulerView view, RulerRules rules) {
+        if (!fromCity(server, kingdomId)) {
+            return 0;
+        }
+        long share = CityGrowth.share(allowance(server, kingdomId), governed);
+        if (share <= 0) {
+            return 0;
+        }
+        Economy economy = KingdomWorldApi.state(server).economy();
+        long unspent = economy.cityTreasury(kingdomId, cityId).map(CityTreasury::granted).orElse(0L);
+        long amount = CityGrowth.grant(share, unspent, GRANT_KEEP_DAYS, view.balance, RulerMind.reserve(view, rules));
+        if (amount <= 0 || !economy.cityGrant(kingdomId, cityId, amount, TreasuryActions.day(server)).ok()) {
+            return 0;
+        }
+        view.balance -= amount;
+        LOGGER.debug("The king granted the governor of city {} of {} {} for the day", cityId, kingdomId, amount);
+        return amount;
     }
 
     /**
@@ -71,6 +117,10 @@ public final class GovernorFunds {
      * @param view     the money of the treasury and its expenses
      */
     public static long budget(MinecraftServer server, UUID kingdomId, CityCharter charter, long day, int governed, RulerView view, RulerRules rules) {
+        if (fromCity(server, kingdomId)) {
+            return CityFunds.available(KingdomWorldApi.state(server).economy(), kingdomId, charter.cityId(),
+                    io.github.sekerator.kingdomworld.common.commerce.CityEconomySettings.rules());
+        }
         return CityGrowth.budget(allowance(server, kingdomId), governed, charter.spent(day), view.balance, RulerMind.reserve(view, rules));
     }
 
@@ -103,6 +153,10 @@ public final class GovernorFunds {
             lacking.computeIfPresent(order.item(), (item, count) -> count - order.count() > 0 ? count - order.count() : null);
         }
         int left = rules.importMaxPerDay() - market.stats(TreasuryActions.day(server)).imported();
+        boolean fromCity = fromCity(server, kingdomId);
+        Economy economy = state.economy();
+        CityEconomyRules cityRules = io.github.sekerator.kingdomworld.common.commerce.CityEconomySettings.rules();
+        long today = TreasuryActions.day(server);
         long spent = 0;
         for (Map.Entry<String, Integer> entry : lacking.entrySet()) {
             if (left <= 0 || spent >= budget) {
@@ -121,10 +175,16 @@ public final class GovernorFunds {
                 continue;
             }
             long cost = Prices.importCost(worth, count, rules);
+            // Out of the treasury of the city: it pays the crown first, the crown buys, and what it could not buy goes back.
+            if (fromCity && !CityFunds.payWorks(economy, kingdomId, cityId, cost, today, cityRules).ok()) {
+                break;
+            }
             if (MarketActions.orderImport(server, null, kingdomId, item, count).success()) {
                 spent += cost;
                 left -= count;
                 LOGGER.info("The governor of city {} of {} bought {} {} abroad for {}", cityId, kingdomId, count, entry.getKey(), cost);
+            } else if (fromCity) {
+                CityFunds.refundWorks(economy, kingdomId, cityId, cost, today);
             }
         }
         if (spent > 0) {

@@ -150,7 +150,7 @@ You get a message about the tax and the debt, and a reminder when you join. Your
 
 ### Dues of the townsfolk
 
-The governors of the cities (mayors and houses of the nobility, see [Governors of cities](governors)) build from the storehouses and with the money the king gives them: Governors a day in the overview of the Roads tab, 0 by default. It is shared evenly by the cities with a governor; each city spends its share a day at most, the treasury never falls below its reserve (a few days of its expenses), and what is bought abroad goes into the journal of the treasury as any import. One with the right Treasury sets it. The wealth of houses of the nobility is never spent on buildings.
+The governors of the cities (mayors and houses of the nobility, see [Governors of cities](governors)) build from the storehouses and with the money the king gives them: Governors a day in the overview of the Roads tab, 0 by default. It is shared evenly by the cities with a governor; each city spends its share a day at most, the treasury never falls below its reserve (a few days of its expenses), and what is bought abroad goes into the journal of the treasury as any import. One with the right Treasury sets it. The wealth of houses of the nobility is never spent on buildings. In a kingdom of players they pay out of the treasuries of their cities instead, and the money of the king goes there as grants (see [Treasuries of cities](city_money)).
 
 The townsfolk of the cities (people who live in a city as a number, see [Arrival and growth](growth)) no longer pay dues out of nothing: by default they are {cfg:citizens.folkDues} copper coins a head a day, and the old value 1 of a config is read as 0. The townsfolk earn nothing of their own yet; that comes later. The taxes of citizens are taken by the cities: see [Treasuries of cities](city_money).
 
@@ -212,7 +212,7 @@ In a kingdom of players every city, the capital too, keeps a **treasury** of its
 | Tithe | keepers, of what they earned the day before | {cfg:cityEconomy.tithePercent}% | 0-50% |
 | Crown share | the treasury of the city at the end of its day | {cfg:cityEconomy.crownSharePercent}% | 0-100% |
 
-The wages of the crown are not taxed. The taxes go into the treasury of the city; at the end of its day the share of the crown of the taxes of that day goes into the treasury of the kingdom (category Cities). A city without a head keeps no more than {cfg:cityEconomy.idleReserveDays} days of its own share and sends the rest to the crown the same day. A city with a head keeps no more than {cfg:cityEconomy.cityReserveDays} days of its share besides what it saves for.
+The wages of the crown are not taxed. The taxes go into the treasury of the city; at the end of its day the share of the crown of the taxes of that day goes into the treasury of the kingdom (category Cities). A city without a head keeps no more than {cfg:cityEconomy.idleReserveDays} days of its own share and sends the rest to the crown the same day. A city with a head (a governor, see [Governors of cities](governors)) keeps no more than {cfg:cityEconomy.cityReserveDays} days of its share besides what it saves for.
 
 ### Evasion
 

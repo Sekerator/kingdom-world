@@ -730,6 +730,8 @@ public final class CityGovernors {
         RulerRules rules = NpcSettings.rulers();
         RulerCharacter character = governor.character();
         RulerView view = view(server, kingdomId, cityId, day, governor);
+        // Where the governor pays out of the treasury of its city, its share of the money of the king goes there first.
+        GovernorFunds.grantShare(server, kingdomId, cityId, governed, view, rules);
         price(server, kingdomId, cityId, view, rules, character, charter, day);
         CityGrowth.Situation situation = situation(server, kingdomId, cityId, charter, day, governed, view, rules, character);
         CityGrowth.Decision decision = CityGrowth.decide(view, situation, rules);
@@ -1028,9 +1030,13 @@ public final class CityGovernors {
             }
         }
         boolean wall = laying || RoadWork.state(server).wallOf(cityId, kingdomId).isPresent();
-        // Without money from the king a governor builds from the storehouses and the workshops alone.
+        // Without money a governor builds from the storehouses and the workshops alone: without money from the king, or, where it
+        // pays out of the treasury of its city, without money there either.
         long allowance = GovernorFunds.allowance(server, kingdomId);
         long budget = GovernorFunds.budget(server, kingdomId, charter, day, governed, view, rules);
+        if (GovernorFunds.fromCity(server, kingdomId)) {
+            allowance = Math.max(allowance, budget);
+        }
         return new CityGrowth.Situation(builders, others, unemployed, sites, postOrdered, wall, allowance, budget, character);
     }
 

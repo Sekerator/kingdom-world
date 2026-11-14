@@ -149,6 +149,25 @@ public final class CityGrowth {
     }
 
     /**
+     * What of its share of the allowance of a day goes into the treasury of a city whose governor pays out of it: the share, never
+     * so much that the city holds more granted and unspent money than the shares of some days, nor that the treasury of the
+     * kingdom falls below its reserve.
+     *
+     * @param share     the share of the city of the allowance ({@link #share})
+     * @param unspent   what the crown granted the city and it has not spent
+     * @param keepDays  how many shares the city holds granted and unspent at most
+     * @param balance   the money of the treasury of the kingdom
+     * @param reserve   what the treasury keeps for hard times ({@link RulerMind#reserve})
+     */
+    public static long grant(long share, long unspent, int keepDays, long balance, long reserve) {
+        if (share <= 0) {
+            return 0;
+        }
+        long room = io.github.sekerator.kingdomworld.core.economy.Money.multiplyCapped(share, Math.max(1, keepDays)) - Math.max(0, unspent);
+        return Math.max(0, Math.min(Math.min(share, room), balance - reserve));
+    }
+
+    /**
      * How much of a good of the storehouses a governor plans with: the given percent of it, so that the buildings of the king
      * find the rest.
      */

@@ -157,6 +157,19 @@ class CityGrowthTest {
     }
 
     @Test
+    void theShareOfACityGoesIntoItsTreasuryUpToAWeekUnspentAndAboveTheReserve() {
+        assertEquals(25, CityGrowth.grant(25, 0, 7, 10_000, 100));
+        assertEquals(25, CityGrowth.grant(25, 150, 7, 10_000, 100), "below a week of shares unspent the whole share comes");
+        assertEquals(15, CityGrowth.grant(25, 160, 7, 10_000, 100), "no more than a week of shares unspent");
+        assertEquals(0, CityGrowth.grant(25, 175, 7, 10_000, 100));
+        assertEquals(0, CityGrowth.grant(25, 500, 7, 10_000, 100), "more granted than a week takes nothing back");
+        assertEquals(10, CityGrowth.grant(25, 0, 7, 1_000, 990), "never below the reserve of the kingdom");
+        assertEquals(0, CityGrowth.grant(25, 0, 7, 500, 990));
+        assertEquals(0, CityGrowth.grant(0, 0, 7, 10_000, 100), "no allowance, no grant");
+        assertEquals(25, CityGrowth.grant(25, 0, 0, 10_000, 100), "at least one share");
+    }
+
+    @Test
     void aGovernorPlansWithItsShareOfTheStoresOnly() {
         assertEquals(50, CityGrowth.usable(100, 50));
         assertEquals(0, CityGrowth.usable(100, 0));

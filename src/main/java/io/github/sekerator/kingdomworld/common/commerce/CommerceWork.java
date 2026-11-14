@@ -208,11 +208,11 @@ public final class CommerceWork {
     }
 
     /**
-     * Whether a city has a head who spends its money. Heads of cities come with a later step of the cities; until then none
-     * has one, and every city keeps only a week of its own share.
+     * Whether a city has a head who spends its money: a governor, a mayor or a house of the nobility. A city without one keeps
+     * only a week of its own share; a city with one keeps a month of it besides what it promised its constructions.
      */
     public static boolean hasHead(MinecraftServer server, UUID kingdom, long city) {
-        return false;
+        return io.github.sekerator.kingdomworld.common.road.CityGovernors.governor(server, kingdom, city).present();
     }
 
     // ---------------------------------------------------------------- the burden of the taxes
