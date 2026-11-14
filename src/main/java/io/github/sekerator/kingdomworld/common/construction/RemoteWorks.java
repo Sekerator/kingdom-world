@@ -329,13 +329,17 @@ public final class RemoteWorks {
      */
     static void tick(MinecraftServer server) {
         RELEASING.removeIf(ChunkHold::release);
-        if (KingdomWorldApi.isReadOnly(server) || ChunkHold.paused(server)) {
+        if (KingdomWorldApi.isReadOnly(server)) {
             return;
         }
         if (job == null) {
-            if (server.getTickCount() % PICK_EVERY == 0) {
+            if (server.getTickCount() % ChunkHold.pickEvery(server, PICK_EVERY) == 0) {
                 pick(server);
             }
+            return;
+        }
+        // While the server is busy the order goes on once a second: slower, never stopped.
+        if (!ChunkHold.workDue(server)) {
             return;
         }
         Job current = job;

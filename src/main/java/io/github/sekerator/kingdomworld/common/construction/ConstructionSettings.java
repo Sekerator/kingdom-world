@@ -106,10 +106,24 @@ public final class ConstructionSettings {
         }
     }
 
+    /** For the game tests: the average tick above which the server counts as busy, {@code null} for the config. */
+    private static Integer pauseForTests;
+
     /**
-     * The average tick above which no place is loaded, in milliseconds.
+     * For the game tests: the server counts as busy above this average tick (0 for always), {@code null} for the config again.
+     */
+    public static void siteLoadPauseForTests(@org.jetbrains.annotations.Nullable Integer millis) {
+        pauseForTests = millis;
+    }
+
+    /**
+     * The average tick above which the server counts as busy and the places far from players and the orders go on slowly, in
+     * milliseconds.
      */
     public static int siteLoadPauseMillis() {
+        if (pauseForTests != null) {
+            return pauseForTests;
+        }
         try {
             return KingdomWorldConfig.SERVER.siteLoadPauseMillis.get();
         } catch (IllegalStateException | IllegalArgumentException e) {

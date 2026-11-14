@@ -122,11 +122,14 @@ public final class SiteLoader {
      */
     static void tick(MinecraftServer server) {
         if (target != null) {
-            step(server);
+            // While the server is busy the place is worked once a second, its chunks still let go one every two ticks.
+            if (target.releasing || ChunkHold.workDue(server)) {
+                step(server);
+            }
             return;
         }
-        if (server.getTickCount() % PICK_EVERY != 0 || !ConstructionSettings.siteLoading() || KingdomWorldApi.isReadOnly(server)
-                || ChunkHold.paused(server)) {
+        if (server.getTickCount() % ChunkHold.pickEvery(server, PICK_EVERY) != 0 || !ConstructionSettings.siteLoading()
+                || KingdomWorldApi.isReadOnly(server)) {
             return;
         }
         long now = KingdomWorldApi.gameTime(server);
@@ -178,9 +181,6 @@ public final class SiteLoader {
         }
         if (current.ticks > HOLD_TICKS) {
             letGo(server, current, true);
-            return;
-        }
-        if (ChunkHold.paused(server)) {
             return;
         }
         boolean done = switch (current.ref.kind()) {

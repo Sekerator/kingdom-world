@@ -37,6 +37,7 @@
 - **Бароны из жителей.** Дом знати из жителя начинает без богатства, не считается в пределе `maxHouses`, его глава умирает только вместе с жителем (казнь по заговору убивает и жителя), а когда жителя нет, дом получает наследника. Нелояльный дом может увести свой город из королевства.
 - **Что видно.** Строка города во вкладке «Дороги»: «Глава: Ирма, староста», «Дом «Веломир», барон» или «Без главы»; подсказка: что глава решил, потрачено сегодня из доли, жители с народом. Раз в играемый день одна сводка членам с правом «Стройка», если что-то было.
 - **Старые миры.** Новые ключи сохранений необязательные: у записей городов `mayor`, `paused`, `note` и другие, у дома знати `citizen`, у двора `governorAllowance`, `governorSpentDay` и `governorSpent`. Города, которые уже пожалованы дому знати, после обновления начинают строиться сами; первая сводка говорит об этом.
+- **Дальние стройки на занятом сервере.** Если средний тик сервера (за последние 100 тиков) дольше `siteLoadPauseMillis` (35 мс), например на сервере с большой сборкой модов, дальние стройки, стены и заказы из столицы больше не встают, а идут медленнее: новое место или заказ раз в 5 секунд, работа каждого раз в секунду, а отпущенные чанки освобождаются как обычно.
 
 **Экономика жителей, этап 1: казна городов и лавки жителей.** Сетевой протокол 64.
 
@@ -304,6 +305,7 @@ The cities of a kingdom of players grow each by itself and build by themselves u
 - **Barons of the common people.** A house raised from a citizen starts without wealth, does not count against `maxHouses`, its head dies only with the citizen (an execution for a plot kills the citizen too), and once the citizen is gone the house gets an heir. A disloyal house may take its city out of the kingdom.
 - **What you see.** The row of a city in the Roads tab: "Governor: Irma, elder", "House Velomir, baron" or "No governor"; its hint: what the governor decided, what it spent today of its share, the people with the townsfolk. Once a played day one summary for the members with the right Construction when something happened.
 - **Old worlds.** The new keys of the saves are optional: `mayor`, `paused`, `note` and others in the records of cities, `citizen` of a house, `governorAllowance`, `governorSpentDay` and `governorSpent` of a court. Cities granted to a house before start building by themselves after the update; the first summary says so.
+- **Far constructions on a busy server.** While the average tick of the server (of the last 100) is longer than `siteLoadPauseMillis` (35 ms), on a server with a large pack of mods for one, far constructions, walls and orders from the capital no longer stop but go on slower: a new place or order every 5 seconds and the work of each once a second, while chunks let go are freed as usual.
 
 **The economy of citizens, stage 1: treasuries of cities and shops of citizens.** Network protocol 64.
 

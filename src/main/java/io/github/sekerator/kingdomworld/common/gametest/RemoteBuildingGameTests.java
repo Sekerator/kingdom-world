@@ -252,6 +252,36 @@ public final class RemoteBuildingGameTests {
         });
     }
 
+    /**
+     * A server whose ticks are long all the time still finishes a far house: slowly, a place every few seconds and its work once
+     * a second, never stopped.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_remote_busy", timeoutTicks = 12_000)
+    public static void aFarHouseIsFinishedOnABusyServerToo(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Busy Builders", UUID.randomUUID());
+        BuildingTemplate template = house("busy_house");
+        BlockPos anchor = new BlockPos(helper.absolutePos(BlockPos.ZERO).getX() + FAR, HIGH, helper.absolutePos(BlockPos.ZERO).getZ() + 64);
+        Construction construction = paidFar(helper, kingdom, template, anchor);
+        long id = construction.id();
+        // Every tick counts as long; the setting is given back before the time of the test runs out too, so that no later test
+        // runs on a busy server.
+        ConstructionSettings.siteLoadPauseForTests(0);
+        helper.runAfterDelay(11_900, () -> ConstructionSettings.siteLoadPauseForTests(null));
+        helper.assertTrue(io.github.sekerator.kingdomworld.common.construction.ChunkHold.busy(server), "The server does not count as busy");
+        helper.succeedWhen(() -> {
+            KingdomWorldState state = KingdomWorldApi.state(server);
+            helper.assertTrue(state.construction().get(id).isEmpty(), "The far house is not finished on a busy server: "
+                    + SiteLoader.describe().orElse("no place held"));
+            helper.assertTrue(state.construction().buildingsOf(kingdom.id()).stream().anyMatch(building -> building.templateId().equals(template.id().toString())),
+                    "The far house is not in the register");
+            ConstructionSettings.siteLoadPauseForTests(null);
+            CitizenGameTests.finish(helper, kingdom);
+            BuildingTemplates.removeForTest(template.id());
+        });
+    }
+
     @GameTest(template = EMPTY, batch = "kingdomworld_remote_wall", timeoutTicks = 6_000)
     public static void aFarWallIsPutUpAndRegistered(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();

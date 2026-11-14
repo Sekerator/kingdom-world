@@ -189,11 +189,33 @@ public final class ChunkHold {
         held.clear();
     }
 
+    /** Ticks between two rounds of work of a place or an order while the server is busy: once a second. */
+    public static final int BUSY_EVERY = 20;
+    /** Ticks between two new places or orders taken up while the server is busy: one every five seconds. */
+    public static final int BUSY_PICK_EVERY = 100;
+
     /**
-     * Whether the holds wait: the server is busy, its average tick longer than {@code siteLoadPauseMillis}.
+     * Whether the server is busy: its average tick of the last hundred longer than {@code siteLoadPauseMillis}. The places far
+     * from players and the orders from the capital are then worked slowly, never stopped: a server whose ticks are long all the
+     * time, of a large pack of mods among others, still finishes them.
      */
-    public static boolean paused(MinecraftServer server) {
+    public static boolean busy(MinecraftServer server) {
         return server.getAverageTickTime() > ConstructionSettings.siteLoadPauseMillis();
+    }
+
+    /**
+     * Whether a round of work of the places far from players and of the orders is due this tick: every tick, or once
+     * {@value #BUSY_EVERY} ticks while the server is busy.
+     */
+    public static boolean workDue(MinecraftServer server) {
+        return !busy(server) || server.getTickCount() % BUSY_EVERY == 0;
+    }
+
+    /**
+     * Ticks between two new places or orders taken up: as given, at least {@value #BUSY_PICK_EVERY} while the server is busy.
+     */
+    public static int pickEvery(MinecraftServer server, int every) {
+        return busy(server) ? Math.max(every, BUSY_PICK_EVERY) : every;
     }
 
     /**

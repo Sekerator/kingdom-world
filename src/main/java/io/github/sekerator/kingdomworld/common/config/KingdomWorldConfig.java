@@ -541,7 +541,8 @@ public final class KingdomWorldConfig {
                     .comment("Chunks the loading of places asks for in one tick at most.")
                     .defineInRange("siteLoadChunksPerTick", 2, 1, 16);
             siteLoadPauseMillis = builder
-                    .comment("Places are not loaded while the average tick of the server is longer than this, in milliseconds.")
+                    .comment("While the average tick of the server is longer than this, in milliseconds, places and orders go on slowly: a new",
+                            "place or order every five seconds and the work of each once a second.")
                     .defineInRange("siteLoadPauseMillis", 35, 5, 1_000);
             helpOtherCities = builder
                     .comment("Whether builders without a construction of their own help with constructions no post reaches, in other cities.")
