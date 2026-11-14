@@ -86,6 +86,14 @@ public final class CommerceSavedData extends SavedData {
         public void wantMaterials(long worth) {
             wantedMaterials = io.github.sekerator.kingdomworld.core.economy.Money.addCapped(wantedMaterials, Math.max(0, worth));
         }
+
+        /**
+         * Marks the shops of the city as short of goods of the crown, for game tests.
+         */
+        public void markShortForTests(String what) {
+            short_ = true;
+            missing = what;
+        }
     }
 
     /**
@@ -377,6 +385,21 @@ public final class CommerceSavedData extends SavedData {
 
     void restoreCity(String key, CityTrade trade) {
         cities.put(key, trade);
+    }
+
+    /**
+     * Forgets what the shops of the cities of a kingdom could not get of the crown, in the cities that have no shops left as well.
+     */
+    void clearShortages(UUID kingdom) {
+        String prefix = kingdom + "/";
+        for (Map.Entry<String, CityTrade> entry : cities.entrySet()) {
+            CityTrade trade = entry.getValue();
+            if (entry.getKey().startsWith(prefix) && (trade.short_ || !trade.missing.isEmpty())) {
+                trade.short_ = false;
+                trade.missing = "";
+                setDirty();
+            }
+        }
     }
 
     public void forgetCity(UUID kingdom, long city) {

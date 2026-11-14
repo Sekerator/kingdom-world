@@ -196,6 +196,30 @@ public final class CommerceGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_commerce_short", timeoutTicks = 200)
+    public static void aCityLeftShortOfGoodsWithoutShopsOpensAShopAgain(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Short", UUID.randomUUID());
+        try {
+            StorehouseInventory storehouse = CitizenGameTests.storehouse(helper, 0, 0, 1);
+            storehouse.insertItem(0, new ItemStack(Items.BREAD, 64), false);
+            merchantHouse(helper, kingdom, new BlockPos(3, 0, 3), new BlockPos(8, 3, 8));
+            livingIn(helper, kingdom, bed(helper, kingdom, 5, 5));
+            Economy economy = KingdomWorldApi.state(server).economy();
+            economy.adminTreasury(kingdom.id(), 5_000, day(server));
+            long day = day(server);
+            // The shops of the city were short of goods of the crown on the day its last shop closed.
+            CommerceSavedData.get(server).city(kingdom.id(), 0).markShortForTests("minecraft:bread");
+            live(server, kingdom, day + 1);
+            List<Business> shops = CommerceSavedData.get(server).shopsOf(kingdom.id(), 0);
+            helper.assertTrue(shops.size() == 1, "A city short of goods on the day its last shop closed opens no shop again: " + shops.size());
+            helper.assertFalse(CommerceSavedData.get(server).city(kingdom.id(), 0).crownShort(), "The city is still short of goods without shops");
+        } finally {
+            CitizenGameTests.finish(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
     @GameTest(template = EMPTY, batch = "kingdomworld_commerce_buy", timeoutTicks = 200)
     public static void aPlayerBuysWithTheAccountAndWithCoins(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();

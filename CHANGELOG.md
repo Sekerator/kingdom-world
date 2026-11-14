@@ -48,6 +48,7 @@
 - **Налоги и стабильность.** Уход от тяжёлых налогов, достаток города в настроении жителей, налоги городов в стабильности, в требованиях знати и в доходе для дани и долей знати.
 - **Народ больше не платит подать из ничего:** `folkDues` по умолчанию 0, прежнее значение 1 в конфиге читается как 0. Свой заработок народ получит на следующем этапе.
 - **Что видит король:** вид «города» вкладки «Казна» (казна городов и польза короне, окно города), строка городов в обзоре и в **/kingdom treasury**, казна города в подсказке вкладки «Дороги». Новый раздел конфига `[cityEconomy]`, глава справочника «Казна городов» и раздел README.
+- **Исправлено: город переставал открывать лавки.** Если последняя лавка города закрывалась в день, когда лавкам города не хватило товаров короны, город больше никогда не открывал лавок, а его окно говорило «нет товаров» и при полных складах. Вчерашняя нехватка теперь забывается во всех городах королевства, и в тех, где лавок не осталось.
 
 **Экономика жителей, этап 2: мастерские жителей и казённые закупки.** Сетевой протокол 66.
 
@@ -317,6 +318,7 @@ The cities of a kingdom of players grow each by itself and build by themselves u
 - **Taxes and stability.** Evasion of heavy taxes, the means of a city in the mood of its people, the taxes of the cities in stability, in the demands of the nobles and in the income for tributes and the shares of the nobles.
 - **The townsfolk no longer pay dues out of nothing:** `folkDues` is 0 by default, and the old value 1 of a config is read as 0. Their own earnings come in the next stage.
 - **What the king sees:** the view "cities" of the Treasury tab (treasuries of cities and use to the crown, the window of a city), the line of the cities in the overview and in **/kingdom treasury**, the treasury of a city in the hover of the Roads tab. A new section `[cityEconomy]` of the config, a chapter "Treasuries of cities" of the guide and a part of README.
+- **Fixed: a city stopped opening shops.** If the last shop of a city closed on a day its shops were short of goods of the crown, the city never opened a shop again, and its window told of no goods even with full storehouses. The shortage of yesterday is now forgotten in every city of the kingdom, in those without shops left as well.
 
 **The economy of citizens, stage 2: workshops of citizens and the buying of the crown.** Network protocol 66.
 

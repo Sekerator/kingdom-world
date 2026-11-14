@@ -533,6 +533,8 @@ public final class Shops {
      */
     private static boolean beginRestock(MinecraftServer server, UUID kingdom, Restock restock) {
         CommerceSavedData data = CommerceSavedData.get(server);
+        // Yesterday's shortage is forgotten in every city, so that a city whose last shop closed on a short day opens shops again.
+        data.clearShortages(kingdom);
         List<Business> shops = data.shopsOf(kingdom);
         // The plans of yesterday that were not made are forgotten.
         for (Business shop : shops) {
@@ -547,10 +549,6 @@ public final class Shops {
         Market market = state.trade().market(kingdom, tradeRules);
         for (Business shop : shops) {
             restock.trades.computeIfAbsent(shop.cityId(), city -> data.city(kingdom, city));
-        }
-        for (CommerceSavedData.CityTrade trade : restock.trades.values()) {
-            trade.short_ = false;
-            trade.missing = "";
         }
         if (!market.sellToCitizens()) {
             LOGGER.debug("The market of {} sells nothing to the shops of citizens", kingdom);
