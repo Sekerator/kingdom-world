@@ -126,6 +126,8 @@ public final class KingdomWorldClient {
     }
 
     private static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
+        event.registerBlockEntityRenderer(ModRegistries.KINGDOM_FLAG_BLOCK_ENTITY.get(),
+                io.github.sekerator.kingdomworld.client.flag.KingdomFlagRenderer::new);
         event.registerEntityRenderer(ModRegistries.CITIZEN.get(), CitizenRenderer::new);
         event.registerEntityRenderer(io.github.sekerator.kingdomworld.common.companion.CompanionRegistries.COMPANION.get(),
                 io.github.sekerator.kingdomworld.client.render.CompanionRenderer::new);

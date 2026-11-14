@@ -170,6 +170,7 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue templateMaxWidth;
         public final ForgeConfigSpec.IntValue templateMaxHeight;
         public final ForgeConfigSpec.IntValue templateMaxLength;
+        public final ForgeConfigSpec.BooleanValue buildingFlags;
         /** The army: soldiers, squads, mercenaries and battles. */
         public final Army army;
         /** Energy of kingdoms and the mage tower. */
@@ -530,6 +531,10 @@ public final class KingdomWorldConfig {
             templateMaxLength = builder
                     .comment("Largest building template along z, in blocks.")
                     .defineInRange("templateMaxLength", 48, 1, 256);
+            buildingFlags = builder
+                    .comment("Whether buildings get the flags of their kingdom their templates do not have, and walls and thrones get",
+                            "theirs; false puts up and puts back none of them, while the flags of templates stay part of the templates.")
+                    .define("buildingFlags", true);
             roleIntegrityPercent = builder
                     .comment("A building plays its role (home, storehouse, faster workshop and so on) while at least this share of it stands, in percent.")
                     .defineInRange("roleIntegrityPercent", 70, 0, 100);

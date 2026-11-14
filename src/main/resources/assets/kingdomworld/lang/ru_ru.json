@@ -18,6 +18,8 @@
   "kingdomworld.kingdom.error.name_taken": "Королевство с названием %1$s уже существует",
   "kingdomworld.kingdom.error.id_taken": "Не удалось основать королевство %1$s из-за совпадения идентификатора, попробуйте ещё раз",
   "block.kingdomworld.throne": "Трон",
+  "block.kingdomworld.kingdom_flag": "Флаг королевства",
+  "block.kingdomworld.kingdom_wall_flag": "Флаг королевства",
   "item.kingdomworld.founder_crown": "Корона основателя",
   "item.kingdomworld.kingdom_atlas": "Атлас королевств",
   "key.categories.kingdomworld": "Королевства (KingdomWorld)",

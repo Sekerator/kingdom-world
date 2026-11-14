@@ -155,7 +155,7 @@ The buttons at the bottom:
 
 Keys: Delete removes a layer, Ctrl+Up and Ctrl+Down move it, Up and Down pick a row, Ctrl+Z and Ctrl+Y undo and redo, Enter saves. While the flag is changed and not saved, "Back" and Esc first ask whether to leave without saving.
 
-The window tells you when another kingdom already flies the same flag: that is allowed. A pattern of a mod that is gone shows as "Pattern of a missing mod" and is dropped the next time the flag is saved.
+A new flag shows at once on every building of the kingdom (see [Flags on buildings](building_flags)). The window tells you when another kingdom already flies the same flag: that is allowed. A pattern of a mod that is gone shows as "Pattern of a missing mod" and is dropped the next time the flag is saved.
 
 ### Flags of the kingdoms of the world
 

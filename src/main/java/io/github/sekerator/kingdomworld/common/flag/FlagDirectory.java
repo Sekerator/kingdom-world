@@ -20,6 +20,8 @@ import java.util.UUID;
 public final class FlagDirectory {
     /** What the clients were last told, or {@code null} before the first check. */
     private static Map<UUID, FlagPackets.Entry> lastSent;
+    /** How many times changes were told, for tests. */
+    private static int told;
 
     private FlagDirectory() {
     }
@@ -74,9 +76,18 @@ public final class FlagDirectory {
         for (FlagPackets.Directory packet : FlagPackets.Directory.split(false, changed, removed)) {
             KingdomWorldNetwork.sendToAll(packet);
         }
+        told++;
+    }
+
+    /**
+     * How many times changes of flags were told to the clients since the server started.
+     */
+    public static int told() {
+        return told;
     }
 
     public static void reset() {
         lastSent = null;
+        told = 0;
     }
 }

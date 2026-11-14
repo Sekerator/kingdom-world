@@ -124,6 +124,8 @@ final class ClientNpcShowcase {
     private volatile float pitch = Float.NaN;
     /** The large kingdom, whose garrison the shots of soldiers look for. */
     private volatile UUID garrisonKingdom;
+    /** The castle of the capital, where its flags are counted. */
+    private volatile io.github.sekerator.kingdomworld.core.construction.Box castleBox;
     /** The lengths of the ticks of the server while the alarm lasted, a hundred at a time. */
     private final List<long[]> alarmTicks = new java.util.concurrent.CopyOnWriteArrayList<>();
     /** The same while the armies fought. */
@@ -230,6 +232,9 @@ final class ClientNpcShowcase {
                 if (name.equals(BATTLE)) {
                     measureBattle(server, playerId);
                 }
+                if (name.equals("npc-palace")) {
+                    server.execute(() -> countFlags(server));
+                }
                 shoot(name);
             }
             return;
@@ -287,6 +292,33 @@ final class ClientNpcShowcase {
      * On the server: the player on the square wounds the twelve nearest fighters of the guard, so that the alarm goes
      * through all its steps and the whole garrison, guard and army, comes to the player.
      */
+    /**
+     * Counts the flags of the kingdom and the banners left in its castle, and tells the flag it was given.
+     */
+    private void countFlags(IntegratedServer server) {
+        io.github.sekerator.kingdomworld.core.construction.Box box = castleBox;
+        if (box == null) {
+            return;
+        }
+        ServerLevel level = server.overworld();
+        int flags = 0;
+        int banners = 0;
+        java.util.Set<UUID> kingdoms = new java.util.HashSet<>();
+        for (BlockPos pos : BlockPos.betweenClosed(box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY() + 2, box.maxZ())) {
+            net.minecraft.world.level.block.state.BlockState state = level.getBlockState(pos);
+            if (io.github.sekerator.kingdomworld.common.block.FlagBlocks.is(state)) {
+                flags++;
+                if (level.getBlockEntity(pos) instanceof io.github.sekerator.kingdomworld.common.block.KingdomFlagBlockEntity flag && flag.kingdom() != null) {
+                    kingdoms.add(flag.kingdom());
+                }
+            } else if (state.getBlock() instanceof net.minecraft.world.level.block.AbstractBannerBlock) {
+                banners++;
+            }
+        }
+        LOGGER.info(PREFIX + "the castle of the kingdom of the world flies {} flag(s) of {} and keeps {} banner(s); its flag is {}", flags,
+                kingdoms, banners, garrisonKingdom == null ? "?" : KingdomWorldApi.kingdom(server, garrisonKingdom).map(k -> k.flag()).orElse(null));
+    }
+
     private void raiseAlarm(IntegratedServer server, UUID playerId) {
         ServerPlayer player = server.getPlayerList().getPlayer(playerId);
         if (player == null) {
@@ -1343,6 +1375,7 @@ final class ClientNpcShowcase {
         Optional<Building> standing = standing(server, site, kingdom, castle);
         if (standing.isPresent()) {
             io.github.sekerator.kingdomworld.core.construction.Box box = standing.get().box();
+            castleBox = box;
             int height = Math.max(4, box.maxY() - y + 1);
             frames.put("npc-palace", new Frame(box.minX(), box.minZ(), box.maxX(), box.maxZ(), y, height, Math.floorMod(castle.facing(), 4),
                     site.x(), site.z(), inside(composition)));

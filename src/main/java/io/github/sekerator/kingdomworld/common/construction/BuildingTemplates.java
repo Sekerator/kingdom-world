@@ -341,8 +341,9 @@ public final class BuildingTemplates {
                 : new ItemStack(ForgeRegistries.ITEMS.getValue(iconId));
         BlockPos anchor = anchor(json, template);
         Facing entrance = Facing.byId(string(json, "entrance", "south")).orElse(Facing.SOUTH);
-        List<BlockCost> costs = new ArrayList<>(template.blocks().size());
-        for (BuildingTemplate.Block block : template.blocks()) {
+        List<BuildingTemplate.Block> blocks = category == BuildingTemplate.Category.HOUSING ? template.blocks() : flagged(template.blocks());
+        List<BlockCost> costs = new ArrayList<>(blocks.size());
+        for (BuildingTemplate.Block block : blocks) {
             costs.add(TemplateBlocks.cost(block.state()));
         }
         TemplateCost cost = TemplateCost.of(costs);
@@ -355,8 +356,35 @@ public final class BuildingTemplates {
             problem = Component.translatable(KEY + "empty");
         }
         return new BuildingTemplate(template.id(), nameKey, fallback, category, type, role, params, level, upgradesTo, null, icon,
-                template.sizeX(), template.sizeY(), template.sizeZ(), anchor, entrance, template.blocks(), costs, cost, fingerprint(template),
+                template.sizeX(), template.sizeY(), template.sizeZ(), anchor, entrance, blocks, costs, cost, fingerprint(template),
                 problem);
+    }
+
+    /**
+     * The blocks of a template with its red banners made flags of the kingdom: a red banner of the built-in templates is the
+     * cloth of the kingdom, turned or facing as it was. Banners of other colors stay ornaments. The fingerprint is still taken
+     * from the blocks as they were, so that no building built before changes its hash.
+     */
+    static List<BuildingTemplate.Block> flagged(List<BuildingTemplate.Block> blocks) {
+        List<BuildingTemplate.Block> result = null;
+        for (int i = 0; i < blocks.size(); i++) {
+            BuildingTemplate.Block block = blocks.get(i);
+            BlockState flag = null;
+            if (block.state().is(Blocks.RED_BANNER)) {
+                flag = io.github.sekerator.kingdomworld.common.block.FlagBlocks.standing(
+                        block.state().getValue(net.minecraft.world.level.block.BannerBlock.ROTATION));
+            } else if (block.state().is(Blocks.RED_WALL_BANNER)) {
+                flag = io.github.sekerator.kingdomworld.common.block.FlagBlocks.wall(
+                        block.state().getValue(net.minecraft.world.level.block.WallBannerBlock.FACING));
+            }
+            if (flag != null) {
+                if (result == null) {
+                    result = new ArrayList<>(blocks);
+                }
+                result.set(i, new BuildingTemplate.Block(block.pos(), flag));
+            }
+        }
+        return result == null ? blocks : List.copyOf(result);
     }
 
     /**

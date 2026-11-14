@@ -88,7 +88,7 @@ Click a building to see its card:
 The cost comes from the blocks of the template. Doors, beds and tall plants cost one item for two blocks, a double slab
 two, candles and sea pickles by their number. Liquids are not built (the card says how many are left out), air and fire
 cost nothing. Containers are placed empty, and the texts of signs and the patterns of banners in the template are not
-taken over.
+taken over. Flags of the kingdom cost nothing (see [Flags on buildings](building_flags)).
 
 ### Wood and stone
 
@@ -291,6 +291,35 @@ building from the register; one cancelled half way leaves it damaged.
 
 > The walls and gates of cities are kept in the Roads tab, where a wall put up again only adds what is missing (see
 > [Walls and gates](walls)).
+
+## building_flags | Flags on buildings
+@icon minecraft:red_banner
+The buildings of a kingdom fly its flags. A flag on a building always shows the flag the kingdom flies now: once the king saves a new one (see [The flag](flag)), every building shows it at once, and no block changes.
+
+### Where they hang
+
+- The red banners of the built-in buildings other than houses became flags of the kingdom: in castles, gates of walls, camps, guilds, taverns and workshops. Banners of other colors stay ornaments, and the red banners of houses stay the cloth of the home.
+- A building with few flags of its own gets the ones it lacks: a house one, the others one, two or three by the area of their footprint. A flag hangs on the wall by the door at the height of its top, and with two wanted, one on each side. Where the door has no room, a flag stands on the roof, on the tops of towers, and where there is no roof either, at the front corners of the site. A building of defense gets one more on its roof.
+- Two flags stand beside the throne, left and right, where the place is free. When the throne is moved they move with it.
+- A city wall flies flags on its outer side beside every gate and every 32 blocks along it.
+- Flags go only into empty places: they replace nothing and dig nothing out.
+
+### What happens to them
+
+- A flag drops nothing, whoever breaks it: a player, an explosion, a machine or a builder. A flag has no item.
+- A stranger cannot break a flag in peace, as any block of the kingdom.
+- A member of the kingdom may take down any flag. The place stays empty until the template or the owner of the building changes.
+- A flag knocked down by an explosion, in a fight or left without support comes back by itself half a minute later, and in a war once the city is calm.
+- A conquered city flies the flag of the winner, and the flags of a dissolved kingdom are taken down.
+- Flags never stand in the way of the builders: in the way of a construction or an upgrade they are taken down without a drop, and once the work is done they go up at their new places.
+- Flags do not count in the integrity of a building, are not repaired for materials and cost nothing in the price of a template.
+- In a blueprint of your own, flags of the kingdom stay flags and red banners stay banners (see [Blueprints of your own](own_blueprints)).
+
+### Older worlds
+
+Flags appear on buildings when players come near: no chunk is ever loaded for them. Plain banners without patterns and without a name at the places of flags of buildings other than houses become flags of the kingdom, and nothing is given back for them. Banners with patterns or a name stay.
+
+> The key buildingFlags in the section [construction] of the server config (true by default) switches off added flags and the flags of walls and thrones: those that hang stay, new ones are not put up or put back. The flags of templates stay part of the templates.
 
 ## own_blueprints | Blueprints of your own
 @icon kingdomworld:architect_ruler

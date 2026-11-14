@@ -935,6 +935,13 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
+     * Opens the editor of the flag as its button does, for the client self-test.
+     */
+    public void openFlagForCheck() {
+        openFlag();
+    }
+
+    /**
      * Opens the editor of the flag: the king of a kingdom of players draws it there, everyone else looks at it.
      */
     private void openFlag() {

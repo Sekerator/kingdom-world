@@ -18,6 +18,8 @@
   "kingdomworld.kingdom.error.name_taken": "A kingdom named %1$s already exists",
   "kingdomworld.kingdom.error.id_taken": "Could not found kingdom %1$s because of an id collision, please try again",
   "block.kingdomworld.throne": "Throne",
+  "block.kingdomworld.kingdom_flag": "Kingdom Flag",
+  "block.kingdomworld.kingdom_wall_flag": "Kingdom Flag",
   "item.kingdomworld.founder_crown": "Founder's Crown",
   "item.kingdomworld.kingdom_atlas": "Kingdom Atlas",
   "key.categories.kingdomworld": "KingdomWorld",

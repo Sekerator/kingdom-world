@@ -141,6 +141,41 @@ public class FlagScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
+     * Picks a pattern as a click on it does, for the client self-test: on the layer picked, or added on top.
+     */
+    public void pickPatternForCheck(String pattern, boolean add) {
+        pickPattern(pattern, add || selected == 0);
+    }
+
+    /**
+     * Picks a colour of the palette as a click on it does, for the client self-test.
+     */
+    public void pickColorForCheck(int dye) {
+        pickColor(dye);
+    }
+
+    /**
+     * Picks a row as a click on it does, for the client self-test.
+     */
+    public void selectForCheck(int row) {
+        selected = Math.max(0, Math.min(row, working.layers().size()));
+    }
+
+    /**
+     * Saves as the button does, for the client self-test.
+     */
+    public void saveForCheck() {
+        save();
+    }
+
+    /**
+     * Where the name of a row begins, in the coordinates of the screen, for the client self-test.
+     */
+    public int[] rowTextForCheck(int row) {
+        return new int[]{columnX() + FlagRendering.width(iconScale) + 4, rowY(row) + (rowHeight - 8) / 2};
+    }
+
+    /**
      * The flag the kingdom flies, as the server told it, or the flag of its colour until it did.
      */
     private KingdomFlag current() {
@@ -390,8 +425,7 @@ public class FlagScreen extends KingdomScreen implements ResultListener {
         return working.withLayer(selected - 1, new KingdomFlag.Layer(pattern, layer.dye()));
     }
 
-    private void pickPattern(String pattern) {
-        boolean add = hasShiftDown() || selected == 0;
+    private void pickPattern(String pattern, boolean add) {
         KingdomFlag next = patterned(pattern, add);
         if (next == null) {
             status = Component.translatable(KEY + "max", KingdomFlag.MAX_LAYERS);
@@ -650,7 +684,7 @@ public class FlagScreen extends KingdomScreen implements ResultListener {
         }
         int cell = cellAt(mx, my);
         if (cell >= 0) {
-            pickPattern(patterns.get(cell));
+            pickPattern(patterns.get(cell), hasShiftDown() || selected == 0);
             return true;
         }
         return false;

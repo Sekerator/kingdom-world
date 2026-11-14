@@ -64,4 +64,19 @@ class TemplateCostTest {
         assertEquals(Map.of(), BlockCost.part("a:b").asMap());
         assertEquals(Map.of("a:b", 2), BlockCost.twice("a:b").asMap());
     }
+
+    @Test
+    void aFlagOfTheKingdomCostsNothingAndIsPlaced() {
+        BlockCost flag = BlockCost.free();
+        assertEquals(BlockCost.Kind.FREE, flag.kind());
+        assertTrue(flag.placed(), "the builders put it up");
+        assertEquals(0, flag.items());
+        assertEquals(Map.of(), flag.asMap());
+        TemplateCost cost = TemplateCost.of(List.of(BlockCost.one("minecraft:stone"), flag, flag));
+        assertEquals(Map.of("minecraft:stone", 1), cost.items());
+        assertEquals(3, cost.blocks(), "flags are blocks of the building");
+        assertEquals(1, cost.total());
+        assertTrue(cost.buildable(), "a flag has no item and still never makes a template unbuildable");
+        assertEquals(BlockCost.Kind.FREE, BlockCost.Kind.values()[BlockCost.Kind.values().length - 1], "the last kind, after the others");
+    }
 }

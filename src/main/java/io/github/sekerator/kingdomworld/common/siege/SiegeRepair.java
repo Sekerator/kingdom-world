@@ -114,7 +114,8 @@ public final class SiegeRepair {
      * @return whether it was written down
      */
     public static boolean broken(MinecraftServer server, UUID kingdom, ServerLevel level, BlockPos pos, BlockState state, long war) {
-        if (state.isAir() || SiegeGates.isLeafPlace(pos)) {
+        if (state.isAir() || SiegeGates.isLeafPlace(pos) || io.github.sekerator.kingdomworld.common.block.FlagBlocks.is(state)) {
+            // A flag has no item to order: the keeper of the flags puts it back once the city is calm.
             return false;
         }
         String dimension = Dimensions.id(level);
@@ -218,6 +219,19 @@ public final class SiegeRepair {
 
     // ---------------------------------------------------------------- putting back
 
+    /**
+     * Whether a kingdom is calm enough to put things back: at peace, or at war with no enemy near its cities for a while.
+     */
+    public static boolean calm(MinecraftServer server, UUID kingdom, long now) {
+        return calm(server, SiegeSettings.rules(), kingdom, now);
+    }
+
+    static boolean calm(MinecraftServer server, SiegeRules rules, UUID kingdom, long now) {
+        boolean atWar = WarWork.state(server).fightsAnyWar(kingdom);
+        boolean quiet = rules.repairQuietTicks() > 0 && now - SiegeWork.state(server).lastEnemyNear(kingdom) >= rules.repairQuietTicks();
+        return !atWar || quiet;
+    }
+
     static void tick(MinecraftServer server, SiegeRules rules, long now) {
         SiegeState state = SiegeWork.state(server);
         WarDamage damage = state.damage();
@@ -227,9 +241,7 @@ public final class SiegeRepair {
                 state.changed();
                 continue;
             }
-            boolean atWar = WarWork.state(server).fightsAnyWar(kingdom);
-            boolean quiet = rules.repairQuietTicks() > 0 && now - state.lastEnemyNear(kingdom) >= rules.repairQuietTicks();
-            if (atWar && !quiet) {
+            if (!calm(server, rules, kingdom, now)) {
                 continue;
             }
             // What was damaged in peace waits until the offender is gone or kept still for a while.

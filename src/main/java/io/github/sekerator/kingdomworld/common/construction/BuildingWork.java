@@ -131,7 +131,7 @@ public final class BuildingWork {
     /**
      * The template a building was built from, of its materials, if it is still the same.
      */
-    static Optional<BuildingTemplate> currentTemplate(Building building) {
+    public static Optional<BuildingTemplate> currentTemplate(Building building) {
         return ConstructionWork.template(building).filter(template -> template.fingerprint() == building.fingerprint());
     }
 

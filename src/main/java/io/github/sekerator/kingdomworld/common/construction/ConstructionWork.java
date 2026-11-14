@@ -310,7 +310,7 @@ public final class ConstructionWork {
                 // Scaffolds left standing are taken down by themselves, or give way to the block.
                 continue;
             }
-            if (isProtected(level, at, there)) {
+            if (blocksWork(level, at, there)) {
                 if (conflicts.size() < 256) {
                     conflicts.add(at.immutable());
                 }
@@ -341,6 +341,14 @@ public final class ConstructionWork {
         }
         ResourceLocation id = ForgeRegistries.BLOCKS.getKey(state.getBlock());
         return id != null && KingdomWorld.MOD_ID.equals(id.getNamespace());
+    }
+
+    /**
+     * Whether a block keeps the builders from their work: a protected block ({@link #isProtected}) other than a flag of a
+     * kingdom, which they take down without a drop and which comes back where the new template wants it.
+     */
+    public static boolean blocksWork(BlockGetter level, BlockPos pos, BlockState state) {
+        return isProtected(level, pos, state) && !io.github.sekerator.kingdomworld.common.block.FlagBlocks.is(state);
     }
 
     /**
@@ -722,7 +730,7 @@ public final class ConstructionWork {
             // block placed there replaces it.
             return StepResult.DONE;
         }
-        if (isProtected(level, pos, state) || holdsItems(level, pos)) {
+        if (blocksWork(level, pos, state) || holdsItems(level, pos)) {
             return StepResult.BLOCKED;
         }
         if (TemplateBlocks.isLiquid(state)) {
@@ -742,6 +750,10 @@ public final class ConstructionWork {
     public static void place(ServerLevel level, BlockPos pos, BlockState state, Item item) {
         level.setBlock(pos, state, Block.UPDATE_ALL);
         BlockState placed = level.getBlockState(pos);
+        if (io.github.sekerator.kingdomworld.common.block.FlagBlocks.is(placed)) {
+            // A flag shows its kingdom at once, not white for a moment.
+            io.github.sekerator.kingdomworld.common.flag.FlagWork.placed(level, pos);
+        }
         if (placed.getBlock() == state.getBlock()) {
             placed.getBlock().setPlacedBy(level, pos, placed, FakePlayerFactory.get(level, PLACER), new ItemStack(item));
             // Beds and other places of citizens count at once, as when a player places them.
@@ -1350,6 +1362,9 @@ public final class ConstructionWork {
         state.construction().remove(construction.id());
         giveBack(server, construction, construction.takeAllDelivered());
         BuildingEffects.changed();
+        if (building != null) {
+            io.github.sekerator.kingdomworld.common.flag.FlagWork.completed(server, building, construction.kind());
+        }
         LOGGER.info("Construction {} ({}) of {} finished at {}{}", construction.id(), construction.kind().id(), construction.templateId(),
                 construction.anchor().coordinates(), admin ? " by an operator" : "");
         Component name = template == null ? Component.literal(construction.templateId()) : template.name();
@@ -1440,7 +1455,7 @@ public final class ConstructionWork {
                         }
                     } else {
                         BlockState there = level.getBlockState(at);
-                        if (!isProtected(level, at, there) && !holdsItems(level, at)) {
+                        if (!blocksWork(level, at, there) && !holdsItems(level, at)) {
                             if (!there.isAir() && !there.canBeReplaced()) {
                                 clear(level, at, null, ItemStack.EMPTY, drops);
                             }
@@ -1494,7 +1509,8 @@ public final class ConstructionWork {
         BlockPos anchor = blockPos(building.anchor());
         for (int index = 0; index < template.get().blocks().size(); index++) {
             BlockCost cost = template.get().costs().get(index);
-            if (cost.kind() == BlockCost.Kind.NOTHING || cost.kind() == BlockCost.Kind.LIQUID) {
+            // A flag gone is never damage: its kingdom puts it back, or a member took it down.
+            if (cost.kind() == BlockCost.Kind.NOTHING || cost.kind() == BlockCost.Kind.LIQUID || cost.kind() == BlockCost.Kind.FREE) {
                 continue;
             }
             BuildingTemplate.Block block = template.get().blocks().get(index);
@@ -1539,7 +1555,7 @@ public final class ConstructionWork {
         while (progress[0] < blocks.size() && budget-- > 0) {
             int index = progress[0]++;
             BlockCost cost = template.get().costs().get(index);
-            if (cost.kind() == BlockCost.Kind.NOTHING || cost.kind() == BlockCost.Kind.LIQUID) {
+            if (cost.kind() == BlockCost.Kind.NOTHING || cost.kind() == BlockCost.Kind.LIQUID || cost.kind() == BlockCost.Kind.FREE) {
                 continue;
             }
             BuildingTemplate.Block block = blocks.get(index);

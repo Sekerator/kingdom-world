@@ -166,6 +166,10 @@ public final class TemplateBlocks {
         if (isLiquid(state)) {
             return BlockCost.liquid(blockId);
         }
+        if (io.github.sekerator.kingdomworld.common.block.FlagBlocks.is(state)) {
+            // A flag of the kingdom has no item: it is put up for nothing.
+            return BlockCost.free();
+        }
         Block block = state.getBlock();
         Item item = block.asItem();
         if (state.getBlock() instanceof PistonHeadBlock) {

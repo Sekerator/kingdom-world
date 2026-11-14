@@ -25,7 +25,9 @@ public record BlockCost(String item, Kind kind, int count) {
         /** Air, fire and the like: nothing to build. */
         NOTHING,
         /** A block no item makes (a portal, a spawner, bedrock): the template cannot be built. */
-        UNOBTAINABLE
+        UNOBTAINABLE,
+        /** A block placed for nothing: the flag of a kingdom, which has no item. */
+        FREE
     }
 
     public static final BlockCost NOTHING = new BlockCost("", Kind.NOTHING, 0);
@@ -61,6 +63,13 @@ public record BlockCost(String item, Kind kind, int count) {
     }
 
     /**
+     * A block placed for nothing.
+     */
+    public static BlockCost free() {
+        return new BlockCost("", Kind.FREE, 0);
+    }
+
+    /**
      * Items placing the block takes.
      */
     public int items() {
@@ -76,7 +85,7 @@ public record BlockCost(String item, Kind kind, int count) {
      * Whether a builder places the block at all; parts come with their main block, liquids and nothing are left out.
      */
     public boolean placed() {
-        return kind == Kind.ONE || kind == Kind.DOUBLE || kind == Kind.SEVERAL;
+        return kind == Kind.ONE || kind == Kind.DOUBLE || kind == Kind.SEVERAL || kind == Kind.FREE;
     }
 
     /**

@@ -67,6 +67,9 @@ import java.util.UUID;
  *       they had before the post showed its profession, puts up a post of every profession and saves screenshots of them
  *       close by day and at night, from 32 and 64 blocks, without smooth lighting and as an item in the hand (see
  *       {@link ClientPostShowcase}).</li>
+ *   <li>{@code flag}: in a copy of a test world, founds a kingdom with a walled capital and three buildings, draws a flag of
+ *       three layers in the editor and saves it, and saves screenshots of the editor, the throne screen and the flags in the
+ *       world; the fingerprints of templates that had red banners go to the log (see {@link ClientFlagShowcase}).</li>
  *   <li>{@code maps}: in a singleplayer world with map mods ({@code -PwithMaps}), shows kingdoms and a caravan on them
  *       and saves screenshots in English and Russian (see {@link ClientMapsSelfTest}).</li>
  * </ul>
@@ -90,6 +93,7 @@ public final class ClientSelfTest {
     private static ClientEarthworkShowcase earthworkShowcase;
     private static ClientScaffoldingShowcase scaffoldingShowcase;
     private static ClientWhereaboutsShowcase whereaboutsShowcase;
+    private static ClientFlagShowcase flagShowcase;
     private static ClientBackgroundCheck backgroundCheck;
     private static ClientLifeShowcase lifeShowcase;
     private static ClientPostShowcase postShowcase;
@@ -311,6 +315,25 @@ public final class ClientSelfTest {
             if (whereaboutsShowcase.finished()) {
                 if (whereaboutsShowcase.failed()) {
                     LOGGER.error(PREFIX + "whereabouts showcase failed, exiting with code 1");
+                    System.exit(1);
+                }
+                LOGGER.info(PREFIX + "finished");
+                quit = true;
+            }
+            return;
+        }
+        if ("flag".equals(MODE) && minecraft.player != null && minecraft.getSingleplayerServer() != null) {
+            if (flagShowcase == null) {
+                String folder = System.getProperty("kingdomworld.clientSelfTest.screenshots");
+                Path screenshots = folder != null && !folder.isEmpty() ? Path.of(folder)
+                        : minecraft.gameDirectory.toPath().resolve("kingdomworld-layout");
+                LOGGER.info(PREFIX + "flag showcase started, screenshots go to {}", screenshots.resolve("kingdom-flags"));
+                flagShowcase = new ClientFlagShowcase(screenshots);
+            }
+            flagShowcase.tick();
+            if (flagShowcase.finished()) {
+                if (flagShowcase.failed()) {
+                    LOGGER.error(PREFIX + "flag showcase failed, exiting with code 1");
                     System.exit(1);
                 }
                 LOGGER.info(PREFIX + "finished");

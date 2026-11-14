@@ -149,6 +149,18 @@ public final class ModRegistries {
                     .isSuffocating((state, level, pos) -> false)
                     .isViewBlocking((state, level, pos) -> false)
                     .pushReaction(PushReaction.DESTROY)));
+    /**
+     * The flag of a kingdom on a pole and on a wall: no item, no drops, drawn with the flag its kingdom flies now.
+     */
+    public static final RegistryObject<Block> KINGDOM_FLAG = BLOCKS.register("kingdom_flag",
+            () -> new io.github.sekerator.kingdomworld.common.block.KingdomFlagBlock(flagProperties()));
+    public static final RegistryObject<Block> KINGDOM_WALL_FLAG = BLOCKS.register("kingdom_wall_flag",
+            () -> new io.github.sekerator.kingdomworld.common.block.KingdomWallFlagBlock(flagProperties()));
+    public static final RegistryObject<BlockEntityType<io.github.sekerator.kingdomworld.common.block.KingdomFlagBlockEntity>>
+            KINGDOM_FLAG_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("kingdom_flag",
+            () -> BlockEntityType.Builder.of(io.github.sekerator.kingdomworld.common.block.KingdomFlagBlockEntity::new,
+                    KINGDOM_FLAG.get(), KINGDOM_WALL_FLAG.get()).build(null));
+
     /** The survey stakes: mark a rectangle of land for earthworks by the builders. */
     public static final RegistryObject<Item> SURVEY_STAKES = ITEMS.register("survey_stakes",
             () -> new io.github.sekerator.kingdomworld.common.construction.SurveyStakesItem(new Item.Properties().stacksTo(1)));
@@ -164,6 +176,21 @@ public final class ModRegistries {
                     .build(KingdomWorld.MOD_ID + ":citizen"));
 
     private ModRegistries() {
+    }
+
+    /**
+     * What a flag of a kingdom is made of: the cloth and pole of a banner.
+     */
+    private static BlockBehaviour.Properties flagProperties() {
+        return BlockBehaviour.Properties.of()
+                .mapColor(MapColor.WOOD)
+                .forceSolidOn()
+                .instrument(net.minecraft.world.level.block.state.properties.NoteBlockInstrument.BASS)
+                .noCollission()
+                .strength(1.0f)
+                .sound(SoundType.WOOD)
+                .ignitedByLava()
+                .noLootTable();
     }
 
     public static void register(IEventBus modBus) {
