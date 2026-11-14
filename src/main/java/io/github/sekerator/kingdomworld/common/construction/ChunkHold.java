@@ -37,8 +37,9 @@ public final class ChunkHold {
     private final ServerLevel level;
     private final List<ChunkPos> chunks;
     private final Set<Long> held = new LinkedHashSet<>();
-    private int lastRefresh = Integer.MIN_VALUE;
-    private int lastRelease = Integer.MIN_VALUE;
+    /** The ticks the tickets were last given again and a chunk last let go; never at first. */
+    private long lastRefresh = NEVER;
+    private long lastRelease = NEVER;
     private boolean releasing;
 
     /**
@@ -89,7 +90,7 @@ public final class ChunkHold {
             held.add(pos.toLong());
             added++;
         }
-        if (tick - lastRefresh >= REFRESH) {
+        if (due(tick, lastRefresh, REFRESH)) {
             lastRefresh = tick;
             for (ChunkPos pos : chunks) {
                 if (held.contains(pos.toLong())) {
@@ -138,7 +139,7 @@ public final class ChunkHold {
         if (held.isEmpty()) {
             return true;
         }
-        if (tick - lastRelease < 2) {
+        if (!due(tick, lastRelease, 2)) {
             return false;
         }
         lastRelease = tick;
@@ -147,6 +148,17 @@ public final class ChunkHold {
         ChunkPos pos = new ChunkPos(key);
         level.getChunkSource().removeRegionTicket(TICKET, pos, 0, pos);
         return held.isEmpty();
+    }
+
+    /** A tick long before any: whatever is done every so many ticks is due at once. */
+    static final long NEVER = Long.MIN_VALUE / 4;
+
+    /**
+     * Whether something done every so many ticks, last at {@code last}, is due at {@code tick}; counted in long, so that the first
+     * time ({@link #NEVER}) does not wrap round to a tick in the future.
+     */
+    static boolean due(int tick, long last, int every) {
+        return (long) tick - last >= every;
     }
 
     /**

@@ -35,6 +35,17 @@ class RemotePlacesTest {
     }
 
     @Test
+    void aHoldGivesItsTicketsAgainAndLetsGoFromTheFirstTick() {
+        assertTrue(ChunkHold.due(0, ChunkHold.NEVER, 200), "the first refresh is due at once");
+        assertTrue(ChunkHold.due(Integer.MAX_VALUE, ChunkHold.NEVER, 2), "late in a long game as well");
+        assertTrue(ChunkHold.due(300, ChunkHold.NEVER, 2), "the first chunk is let go at once");
+        assertFalse(ChunkHold.due(301, 300, 2), "then one every two ticks");
+        assertTrue(ChunkHold.due(302, 300, 2));
+        assertFalse(ChunkHold.due(399, 200, 200));
+        assertTrue(ChunkHold.due(400, 200, 200), "the tickets are given again every 200 ticks");
+    }
+
+    @Test
     void onlyTheRoadsNearACityAreLookedAt() {
         List<int[]> cells = List.of(new int[]{0, 0}, new int[]{40, 0}, new int[]{0, -41}, new int[]{-40, 40});
         List<int[]> near = CityPlots.within(cells, 0, 0, 40);
