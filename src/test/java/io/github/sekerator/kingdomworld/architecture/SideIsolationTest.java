@@ -33,6 +33,7 @@ class SideIsolationTest {
             "io/github/sekerator/kingdomworld/common/network/packet/ArmyPackets.java",
             "io/github/sekerator/kingdomworld/common/network/packet/BorderCrossingPacket.java",
             "io/github/sekerator/kingdomworld/common/network/packet/CitizenViewPacket.java",
+            "io/github/sekerator/kingdomworld/common/network/packet/CommercePackets.java",
             "io/github/sekerator/kingdomworld/common/network/packet/CompanionPackets.java",
             "io/github/sekerator/kingdomworld/common/network/packet/ConstructionPackets.java",
             "io/github/sekerator/kingdomworld/common/network/packet/EarthworkPackets.java",
