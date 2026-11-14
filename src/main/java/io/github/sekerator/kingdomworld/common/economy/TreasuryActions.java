@@ -17,6 +17,7 @@ import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
 import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
 import io.github.sekerator.kingdomworld.core.economy.EconomyRules;
 import io.github.sekerator.kingdomworld.core.economy.LedgerCategory;
+import io.github.sekerator.kingdomworld.core.economy.MintMetals;
 import io.github.sekerator.kingdomworld.core.economy.Money;
 import io.github.sekerator.kingdomworld.core.economy.Treasury;
 import io.github.sekerator.kingdomworld.core.economy.TreasuryJournal;
@@ -155,7 +156,28 @@ public final class TreasuryActions {
                 .getOrDefault(LedgerCategory.MINTING, TreasuryJournal.Totals.ZERO);
         TreasuryJournal.Totals week = treasury.journal().totals(today, TreasuryJournal.Period.WEEK)
                 .getOrDefault(LedgerCategory.MINTING, TreasuryJournal.Totals.ZERO);
-        return new TreasuryView.Mint(posts, workers, best, day.income(), week.income(), EconomySettings.rules().mintToVault());
+        return new TreasuryView.Mint(posts, workers, best, day.income(), week.income(), EconomySettings.rules().mintToVault(),
+                mintMetals(server, kingdomId));
+    }
+
+    /**
+     * The metals of the mint's config that have an item, each once, with what the mint of a kingdom does with them and how
+     * many of them its storehouses hold.
+     */
+    public static List<TreasuryView.MintMetal> mintMetals(MinecraftServer server, UUID kingdomId) {
+        List<TreasuryView.MintMetal> metals = new ArrayList<>();
+        MintRates rates = EconomySettings.mintRates();
+        for (MintRates.Rate rate : rates.rates()) {
+            net.minecraft.world.item.Item item = rates.metal(rate);
+            if (item == null || metals.size() >= TreasuryView.MAX_METALS || metals.stream().anyMatch(metal -> metal.metal().equals(rate.target()))) {
+                continue;
+            }
+            MintMetals.Setting setting = MinterBehavior.setting(server, kingdomId, rate.target());
+            long stock = io.github.sekerator.kingdomworld.common.storage.KingdomStorage.count(server, kingdomId, stack -> rates.rateOf(stack) == rate);
+            metals.add(new TreasuryView.MintMetal(rate.target(), new net.minecraft.world.item.ItemStack(item), rate.coin(), rate.count(),
+                    setting.strike(), setting.keep(), Math.min(Money.MAX, stock)));
+        }
+        return metals;
     }
 
     // ---------------------------------------------------------------- changes
@@ -176,6 +198,9 @@ public final class TreasuryActions {
             case RENAME -> rename(player, kingdom, change.text());
             case PAY -> payByName(player, kingdom, change.text(), change.amount());
             case TAKE_COINS -> takeCoins(player, kingdom, change.text(), change.amount());
+            case MINT_STRIKE -> setMintMetal(player, kingdom, change.text(), change.amount() != 0, null);
+            case MINT_KEEP -> setMintMetal(player, kingdom, change.text(), null,
+                    change.amount() > MintMetals.MAX_KEEP ? -1 : (int) change.amount());
         };
         KingdomActions.reply(player, feedback);
         sendView(player, kingdom);
@@ -200,6 +225,36 @@ public final class TreasuryActions {
         }
         return KingdomActions.Feedback.ok(KEY + "wage_set", CitizenTexts.profession(profession),
                 MoneyTexts.amount(amount, units(player.server, kingdom)));
+    }
+
+    /**
+     * Sets whether the mint of a kingdom strikes coins from a metal of the config, or how many of it stay in the storehouses.
+     * Kingdoms of the world strike every metal; their settings are not changed.
+     *
+     * @param strike whether to strike, or {@code null} to leave it
+     * @param keep   items to leave in the storehouses, or {@code null} to leave it
+     */
+    public static KingdomActions.Feedback setMintMetal(ServerPlayer player, UUID kingdom, String metal, Boolean strike, Integer keep) {
+        MinecraftServer server = player.server;
+        Optional<TreasuryView.MintMetal> found = mintMetals(server, kingdom).stream().filter(entry -> entry.metal().equals(metal)).findFirst();
+        if (found.isEmpty() || keep != null && (keep < 0 || keep > MintMetals.MAX_KEEP)) {
+            return KingdomActions.Feedback.error(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, kingdom)) {
+            return KingdomActions.Feedback.error(KingdomError.NO_PERMISSION);
+        }
+        MintMetals.Setting before = new MintMetals.Setting(found.get().strike(), found.get().keep());
+        MintMetals.Setting after = strike != null ? before.withStrike(strike) : before.withKeep(keep == null ? before.keep() : keep);
+        Outcome outcome = KingdomWorldApi.change(server, "set a metal of the mint", state -> state.setMintMetal(player.getUUID(), kingdom, metal, after));
+        if (!outcome.ok()) {
+            return KingdomActions.Feedback.error(outcome.error());
+        }
+        Component name = found.get().item().getHoverName();
+        if (strike != null) {
+            return KingdomActions.Feedback.ok(strike ? KEY + "mint_on" : KEY + "mint_off", name);
+        }
+        return after.keep() == 0 ? KingdomActions.Feedback.ok(KEY + "mint_keep_none", name)
+                : KingdomActions.Feedback.ok(KEY + "mint_keep", name, after.keep());
     }
 
     public static KingdomActions.Feedback rename(ServerPlayer player, UUID kingdom, String name) {

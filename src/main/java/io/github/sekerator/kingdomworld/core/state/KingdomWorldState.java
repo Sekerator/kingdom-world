@@ -826,6 +826,16 @@ public final class KingdomWorldState {
     }
 
     /**
+     * Sets whether the mint of a kingdom strikes coins from a metal and how many of it it leaves in the storehouses.
+     *
+     * @param actor a member with the right to manage the treasury; {@code null} for an administrator
+     */
+    public Outcome setMintMetal(UUID actor, UUID kingdomId, String metal, io.github.sekerator.kingdomworld.core.economy.MintMetals.Setting setting) {
+        Outcome check = checkTreasury(actor, kingdomId);
+        return check.ok() ? economy.setMintMetal(kingdomId, metal, setting) : check;
+    }
+
+    /**
      * Renames the currency of a kingdom; only its king may.
      *
      * @param actor the king; {@code null} for an administrator

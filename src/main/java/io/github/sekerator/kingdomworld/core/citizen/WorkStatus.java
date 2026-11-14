@@ -51,6 +51,8 @@ public enum WorkStatus {
     NO_WORKSTATION(true),
     /** A workshop that has work but not the ingredients for it. */
     NO_INGREDIENTS(true),
+    /** A minter with metal in the storehouses that the king turned off or asked to keep there, and no other. */
+    MINT_HELD(true),
     /** Furnace work without anything to burn in the storehouses. */
     NO_FUEL(true),
     /** A workshop with nothing ordered and nothing to do on its own. */

@@ -22,6 +22,7 @@ import io.github.sekerator.kingdomworld.core.economy.CurrencyUnits;
 import io.github.sekerator.kingdomworld.core.economy.Denomination;
 import io.github.sekerator.kingdomworld.core.economy.Economy;
 import io.github.sekerator.kingdomworld.core.economy.MintChoice;
+import io.github.sekerator.kingdomworld.core.economy.MintMetals;
 import io.github.sekerator.kingdomworld.core.economy.Money;
 import io.github.sekerator.kingdomworld.core.economy.Treasury;
 import io.github.sekerator.kingdomworld.core.production.Order;
@@ -48,7 +49,8 @@ import java.util.UUID;
  * storehouses at the rates of the config (copper into copper coins, iron and silver into silver coins, gold into gold
  * coins). The coins go into the treasury: into its vault, or onto its balance. One striking takes one item from the
  * storehouses and gives the treasury its coins in the same moment, or does nothing at all, so no coin appears without
- * its metal and no metal vanishes without its coins. Metal a keep order holds or a workshop set aside is left alone.
+ * its metal and no metal vanishes without its coins. Metal a keep order holds or a workshop set aside is left alone, and
+ * so is a metal the king turned off and what the king asked to stay in the storehouses ({@link MintMetals}).
  * With metal for more than one kind of coin, the minter strikes the kind the vault holds the least worth of, or, when
  * coins go straight onto the balance, the kinds take turns ({@link MintChoice}), so a steady flow of one metal does not
  * leave the others waiting.
@@ -71,6 +73,8 @@ public final class MinterBehavior implements ProfessionBehavior {
     public enum Struck {
         DONE,
         NO_METAL,
+        /** Metal there is, but the king turned it off or it stays in the storehouses. */
+        HELD,
         TREASURY_FULL,
         NO_TREASURY
     }
@@ -144,16 +148,45 @@ public final class MinterBehavior implements ProfessionBehavior {
     }
 
     /**
-     * The metal the post's minter would strike next, or {@code null} if the storehouses hold none it may use. Of the
-     * kinds of coin there is metal for, the one {@link MintChoice} picks; of the metal for that kind, the first rate of
-     * the config that has some.
+     * The metal the post's minter would strike next, or {@code null} if the storehouses hold none it may use.
      */
     @Nullable
     public static ItemStack nextMetal(MinecraftServer server, WorkPost post) {
+        return pick(server, post).metal();
+    }
+
+    /**
+     * What a minter strikes next.
+     *
+     * @param metal one item of the metal, or of old coins to melt; {@code null} if there is nothing to strike
+     * @param held  whether there is nothing to strike only because of the settings of the mint
+     */
+    public record Pick(@Nullable ItemStack metal, boolean held) {
+    }
+
+    /**
+     * What the mint of a kingdom does with a metal of the config: what the king set for a kingdom of players, every metal
+     * and nothing left back for a kingdom of the world.
+     */
+    public static MintMetals.Setting setting(MinecraftServer server, UUID kingdom, String metal) {
+        if (io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, kingdom)) {
+            return MintMetals.EVERYTHING;
+        }
+        return KingdomWorldApi.state(server).economy().treasury(kingdom).map(treasury -> treasury.mintMetal(metal))
+                .orElse(MintMetals.defaultFor(metal));
+    }
+
+    /**
+     * The metal the post's minter would strike next. Old coins of dissolved kingdoms are melted first. Of the kinds of coin
+     * there is metal for, the one {@link MintChoice} picks; of the metal for that kind, the first rate of the config that
+     * has some. A metal the king turned off is not struck, and of the others as many stay in the storehouses as the king
+     * asked ({@link MintMetals}).
+     */
+    public static Pick pick(MinecraftServer server, WorkPost post) {
         UUID kingdom = post.kingdomId();
         ItemStack old = nextOldCoin(server, kingdom);
         if (old != null) {
-            return old;
+            return new Pick(old, false);
         }
         MintRates rates = EconomySettings.mintRates();
         List<ItemStack> seen = new ArrayList<>();
@@ -163,28 +196,34 @@ public final class MinterBehavior implements ProfessionBehavior {
                 seen.add(sample);
             }
         }
-        // The first metal of every kind of coin, in the order of the rates.
-        Map<Denomination, ItemStack> first = new LinkedHashMap<>();
+        // The metal there is, in the order of the rates.
+        List<MintMetals.Candidate> candidates = new ArrayList<>();
+        List<ItemStack> samples = new ArrayList<>();
+        List<String> metals = new ArrayList<>();
         for (MintRates.Rate rate : rates.rates()) {
-            if (first.containsKey(rate.coin())) {
-                continue;
+            if (rates.metal(rate) != null) {
+                metals.add(rate.target());
             }
             for (ItemStack sample : seen) {
-                if (rates.rateOf(sample) == rate && free(server, kingdom, sample) > 0) {
-                    first.put(rate.coin(), sample.copyWithCount(1));
-                    break;
+                if (rates.rateOf(sample) == rate) {
+                    candidates.add(new MintMetals.Candidate(rate.target(), rate.coin(), free(server, kingdom, sample)));
+                    samples.add(sample);
                 }
             }
         }
-        if (first.isEmpty()) {
-            return null;
+        Map<String, MintMetals.Setting> settings = new HashMap<>();
+        MintMetals.Choice choice = MintMetals.choose(candidates, metals,
+                metal -> settings.computeIfAbsent(metal, key -> setting(server, kingdom, key)));
+        if (choice.first().isEmpty()) {
+            return new Pick(null, choice.held());
         }
-        List<Denomination> available = List.copyOf(first.keySet());
+        List<Denomination> available = choice.available(candidates);
         Optional<Treasury> treasury = KingdomWorldApi.state(server).economy().treasury(kingdom);
         Optional<Denomination> coin = EconomySettings.rules().mintToVault() && treasury.isPresent()
                 ? MintChoice.forVault(available, treasury.get().vault(), treasury.get().units())
                 : MintChoice.inTurn(available, lastCoin(post));
-        return first.get(coin.orElse(available.get(0)));
+        int index = choice.first().get(coin.orElse(available.get(0)));
+        return new Pick(samples.get(index).copyWithCount(1), false);
     }
 
     /**
@@ -275,9 +314,10 @@ public final class MinterBehavior implements ProfessionBehavior {
         if (treasury.isEmpty() || KingdomWorldApi.isReadOnly(server)) {
             return Struck.NO_TREASURY;
         }
-        ItemStack metal = nextMetal(server, post);
+        Pick pick = pick(server, post);
+        ItemStack metal = pick.metal();
         if (metal == null) {
-            return Struck.NO_METAL;
+            return pick.held() ? Struck.HELD : Struck.NO_METAL;
         }
         if (metal.is(ModRegistries.COIN.get())) {
             return melt(server, post, metal, watched);
@@ -313,10 +353,11 @@ public final class MinterBehavior implements ProfessionBehavior {
         return Struck.DONE;
     }
 
-    static WorkStatus status(Struck struck) {
+    public static WorkStatus status(Struck struck) {
         return switch (struck) {
             case DONE -> WorkStatus.WORKING;
             case NO_METAL -> WorkStatus.NO_INGREDIENTS;
+            case HELD -> WorkStatus.MINT_HELD;
             case TREASURY_FULL -> WorkStatus.STORAGE_FULL;
             case NO_TREASURY -> WorkStatus.UNKNOWN;
         };

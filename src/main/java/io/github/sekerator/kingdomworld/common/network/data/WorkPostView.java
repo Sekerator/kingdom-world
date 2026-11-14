@@ -32,12 +32,13 @@ import java.util.UUID;
  * @param current        for a workshop: what it makes now, empty if nothing
  * @param progress       how far the current item is, in percent
  * @param goal           for a miner: what the post is asked for
+ * @param mint           for a minter: the metals of the mint of the kingdom
  */
 public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, String profession, int radius, int maxRadius,
                            int seats, int maxSeats, String animal, List<String> animals, int herdSize, int maxHerd,
                            WorkStatus status, boolean container, boolean measured, int perDay, long producedToday,
                            List<Worker> workers, int unemployed, boolean auto, List<Station> stations, ItemStack current,
-                           int progress, net.minecraft.network.chat.Component site, Goal goal) {
+                           int progress, net.minecraft.network.chat.Component site, Goal goal, Mint mint) {
     public static final int MAX_WORKERS = 16;
     public static final int MAX_ORES = 128;
 
@@ -95,6 +96,50 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
     }
 
     /**
+     * The metals of the mint of a minter's kingdom, which the window of the post shows and changes like the treasury tab.
+     *
+     * @param canManage whether the viewer has the right to manage the treasury, which the settings of the mint need
+     * @param metals    the metals of the config and what the mint does with each
+     */
+    public record Mint(boolean canManage, List<TreasuryView.MintMetal> metals) {
+        public static final Mint NONE = new Mint(false, List.of());
+
+        public Mint {
+            metals = List.copyOf(metals);
+            if (metals.size() > TreasuryView.MAX_METALS) {
+                throw new IllegalArgumentException("Too many metals of the mint");
+            }
+        }
+
+        void encode(FriendlyByteBuf buf) {
+            buf.writeBoolean(canManage);
+            TreasuryView.MintMetal.encodeAll(buf, metals);
+        }
+
+        static Mint decode(FriendlyByteBuf buf) {
+            return new Mint(buf.readBoolean(), TreasuryView.MintMetal.decodeAll(buf));
+        }
+    }
+
+    /**
+     * The view of a post that is not a mint.
+     */
+    public WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, String profession, int radius, int maxRadius,
+                        int seats, int maxSeats, String animal, List<String> animals, int herdSize, int maxHerd,
+                        WorkStatus status, boolean container, boolean measured, int perDay, long producedToday,
+                        List<Worker> workers, int unemployed, boolean auto, List<Station> stations, ItemStack current,
+                        int progress, net.minecraft.network.chat.Component site, Goal goal) {
+        this(pos, kingdomId, canManage, profession, radius, maxRadius, seats, maxSeats, animal, animals, herdSize, maxHerd, status,
+                container, measured, perDay, producedToday, workers, unemployed, auto, stations, current, progress, site, goal, Mint.NONE);
+    }
+
+    public WorkPostView withMint(Mint value) {
+        return new WorkPostView(pos, kingdomId, canManage, profession, radius, maxRadius, seats, maxSeats, animal, animals, herdSize,
+                maxHerd, status, container, measured, perDay, producedToday, workers, unemployed, auto, stations, current, progress,
+                site, goal, value);
+    }
+
+    /**
      * The view of a post that is not a mine.
      */
     public WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, String profession, int radius, int maxRadius,
@@ -109,7 +154,7 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
     public WorkPostView withGoal(Goal value) {
         return new WorkPostView(pos, kingdomId, canManage, profession, radius, maxRadius, seats, maxSeats, animal, animals, herdSize,
                 maxHerd, status, container, measured, perDay, producedToday, workers, unemployed, auto, stations, current, progress,
-                site, value);
+                site, value, mint);
     }
     public static final int MAX_ANIMALS = 16;
     public static final int MAX_STATIONS = 16;
@@ -144,6 +189,7 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
         stations = List.copyOf(stations);
         Objects.requireNonNull(current, "current");
         Objects.requireNonNull(goal, "goal");
+        Objects.requireNonNull(mint, "mint");
         progress = Math.max(0, Math.min(100, progress));
         if (animals.size() > MAX_ANIMALS || workers.size() > MAX_WORKERS || stations.size() > MAX_STATIONS) {
             throw new IllegalArgumentException("Work post view too large");
@@ -189,6 +235,7 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
         buf.writeVarInt(progress);
         buf.writeComponent(site);
         goal.encode(buf);
+        mint.encode(buf);
     }
 
     public static WorkPostView decode(FriendlyByteBuf buf) {
@@ -233,6 +280,6 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
         net.minecraft.network.chat.Component site = buf.readComponent();
         return new WorkPostView(pos, kingdomId, canManage, profession, radius, maxRadius, seats, maxSeats, animal, animals, herdSize,
                 maxHerd, status, container, measured, perDay, produced, workers, unemployed, auto, stations, current, progress, site,
-                Goal.decode(buf));
+                Goal.decode(buf), Mint.decode(buf));
     }
 }

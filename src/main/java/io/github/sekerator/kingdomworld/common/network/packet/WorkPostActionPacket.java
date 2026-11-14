@@ -19,7 +19,7 @@ import java.util.function.Supplier;
  * the result and a refreshed screen.
  *
  * @param value  a number for the settings that take one
- * @param text   a profession, animal or ore id for the settings that take one, otherwise empty
+ * @param text   a profession, animal, ore or metal id for the settings that take one, otherwise empty
  * @param target the worker to dismiss, otherwise {@code null}
  */
 public record WorkPostActionPacket(BlockPos pos, Action action, int value, String text, @Nullable UUID target) {
@@ -40,7 +40,11 @@ public record WorkPostActionPacket(BlockPos pos, Action action, int value, Strin
         /** How much of it the storehouses should hold, in {@code value}; 0 for no limit. */
         GOAL_AMOUNT,
         /** The depth of the mine, in {@code value}: 0 for the depth of the kind of ore, otherwise y + {@link #DEPTH_OFFSET}. */
-        GOAL_DEPTH
+        GOAL_DEPTH,
+        /** Whether the mint of the kingdom strikes coins from the metal in {@code text}: 1 or 0 in {@code value}. */
+        MINT_STRIKE,
+        /** How many of the metal in {@code text} stay in the storehouses, in {@code value}. */
+        MINT_KEEP
     }
 
     /** Added to a height so that it travels as a positive number. */

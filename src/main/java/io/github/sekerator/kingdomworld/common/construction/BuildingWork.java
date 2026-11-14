@@ -451,7 +451,9 @@ public final class BuildingWork {
             }
             container.setChanged();
         }
-        IItemHandler handler = entity.getCapability(ForgeCapabilities.ITEM_HANDLER, null).orElse(null);
+        // A half of a double storehouse gives up only its own half: the other stays standing with its contents.
+        IItemHandler handler = entity instanceof io.github.sekerator.kingdomworld.common.storage.StorehouseBlockEntity storehouse
+                ? storehouse.ownHandler() : entity.getCapability(ForgeCapabilities.ITEM_HANDLER, null).orElse(null);
         if (handler != null) {
             for (int slot = 0; slot < handler.getSlots(); slot++) {
                 for (int guard = 0; guard < 64; guard++) {

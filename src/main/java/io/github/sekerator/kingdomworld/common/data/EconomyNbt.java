@@ -5,6 +5,7 @@ import io.github.sekerator.kingdomworld.core.economy.Coins;
 import io.github.sekerator.kingdomworld.core.economy.CurrencyUnits;
 import io.github.sekerator.kingdomworld.core.economy.Economy;
 import io.github.sekerator.kingdomworld.core.economy.LedgerCategory;
+import io.github.sekerator.kingdomworld.core.economy.MintMetals;
 import io.github.sekerator.kingdomworld.core.economy.Money;
 import io.github.sekerator.kingdomworld.core.economy.Payroll;
 import io.github.sekerator.kingdomworld.core.economy.RetiredCurrency;
@@ -29,7 +30,8 @@ import java.util.UUID;
  * <pre>
  * treasury: { name, silver, gold, balance, vault: { copper, silver, gold }, pollTax, salesTax, wages: { profession: amount },
  *             debts: [ { player, amount } ], lastPayday, payroll: { day, due, paid, citizens, underpaid },
- *             journal: [ { day, entries: { category: { in, out } } } ], reserves: [ { currency, amount } ] }
+ *             journal: [ { day, entries: { category: { in, out } } } ], reserves: [ { currency, amount } ],
+ *             mint: [ { metal, strike, keep } ] }
  * economy:  { accounts: [ { player, currency, balance } ],
  *             retired: [ { id, name, kingdom, color, silver, gold, time } ],
  *             rates: [ { currency, rate } ], rateDay, escrows: [ { id, payer, payee, currency, amount } ], nextEscrow,
@@ -72,6 +74,10 @@ public final class EconomyNbt {
     private static final String KINGDOM = "kingdom";
     private static final String COLOR = "color";
     private static final String TIME = "time";
+    private static final String MINT = "mint";
+    private static final String METAL = "metal";
+    private static final String STRIKE = "strike";
+    private static final String KEEP = "keep";
 
     private EconomyNbt() {
     }
@@ -134,6 +140,16 @@ public final class EconomyNbt {
             reserves.add(entry);
         });
         tag.put("reserves", reserves);
+        // Only what the king changed; the other metals have their defaults.
+        ListTag mint = new ListTag();
+        treasury.mintMetals().forEach((metal, setting) -> {
+            CompoundTag entry = new CompoundTag();
+            entry.putString(METAL, metal);
+            entry.putBoolean(STRIKE, setting.strike());
+            entry.putInt(KEEP, setting.keep());
+            mint.add(entry);
+        });
+        tag.put(MINT, mint);
         return tag;
     }
 
@@ -219,6 +235,17 @@ public final class EconomyNbt {
             reserves.put(entry.getUUID(CURRENCY), entry.getLong(AMOUNT));
         }
         treasury.restoreReserves(reserves);
+        // Treasuries saved before the mint had settings strike by the defaults.
+        Map<String, MintMetals.Setting> mint = new LinkedHashMap<>();
+        for (CompoundTag entry : compounds(tag, MINT, where)) {
+            String metal = entry.getString(METAL);
+            int keep = entry.getInt(KEEP);
+            if (!MintMetals.isValidMetal(metal) || keep < 0 || keep > MintMetals.MAX_KEEP || mint.containsKey(metal)) {
+                throw new IllegalArgumentException(where + " has a setting of the mint that cannot be read");
+            }
+            mint.put(metal, new MintMetals.Setting(entry.getBoolean(STRIKE), keep));
+        }
+        treasury.restoreMintMetals(mint);
         return treasury;
     }
 

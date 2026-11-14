@@ -246,7 +246,7 @@ final class ClientLayoutCheck {
                 int guiHeight = (int) Math.ceil(window[1] / (double) scale);
                 String size = window[0] + "x" + window[1] + " scale " + requested + (scale != requested ? " (effective " + scale + ")" : "");
                 for (Case check : cases()) {
-                    if (!ONLY.isEmpty() && !check.name().contains(ONLY)) {
+                    if (!ONLY.isEmpty() && java.util.Arrays.stream(ONLY.split(",")).noneMatch(part -> check.name().contains(part.strip()))) {
                         continue;
                     }
                     LayoutCheck.begin(language + " " + size + " " + check.name());
@@ -569,7 +569,35 @@ final class ClientLayoutCheck {
                 profession.equals("builder") ? new ItemStack(Items.SPRUCE_STAIRS) : current, 45,
                 profession.equals("builder") ? Component.translatable("kingdomworld.screen.post.site", Component.literal(LONG_KINGDOM),
                         "-30000000 319 29999999", 100) : Component.empty())
-                .withGoal(profession.equals("miner") ? mineGoal("forge:ores/iron", MineGoal.MAX_AMOUNT, 23, true) : WorkPostView.Goal.NONE);
+                .withGoal(profession.equals("miner") ? mineGoal("forge:ores/iron", MineGoal.MAX_AMOUNT, 23, true) : WorkPostView.Goal.NONE)
+                .withMint(profession.equals("minter") ? new WorkPostView.Mint(canManage, mintMetals()) : WorkPostView.Mint.NONE);
+    }
+
+    /**
+     * The window of a double storehouse, both halves partly filled, the last slot of each half too.
+     */
+    private static io.github.sekerator.kingdomworld.client.screen.StorehouseScreen storehouse(Component title) {
+        net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
+        net.minecraft.world.entity.player.Inventory inventory = minecraft.player != null ? minecraft.player.getInventory()
+                : new net.minecraft.world.entity.player.Inventory(null);
+        io.github.sekerator.kingdomworld.common.storage.StorehouseMenu menu = io.github.sekerator.kingdomworld.common.storage.StorehouseMenu.client(0,
+                inventory);
+        net.minecraft.world.item.Item[] items = {Items.COPPER_INGOT, Items.IRON_INGOT, Items.GOLD_INGOT, Items.BREAD, Items.OAK_LOG, Items.WHEAT};
+        for (int slot = 0; slot < io.github.sekerator.kingdomworld.common.storage.StorehouseMenu.SLOTS; slot += 5) {
+            menu.getSlot(slot).set(new ItemStack(items[(slot / 5) % items.length], 1 + slot % 64));
+        }
+        menu.getSlot(53).set(new ItemStack(Items.IRON_INGOT, 64));
+        menu.getSlot(107).set(new ItemStack(Items.GOLD_INGOT, 64));
+        return new io.github.sekerator.kingdomworld.client.screen.StorehouseScreen(menu, inventory, title);
+    }
+
+    /**
+     * A minter's post whose viewer has one right and not the other: the citizens without the treasury, or the treasury without
+     * the citizens; or a mint without metals in the config.
+     */
+    private static WorkPostView minterView(WorkStatus status, boolean citizens, boolean treasury, boolean metals) {
+        WorkPostView view = postView("minter", status, citizens, 2, false, true);
+        return view.withMint(new WorkPostView.Mint(treasury, metals ? mintMetals() : List.of()));
     }
 
     /**
@@ -709,7 +737,27 @@ final class ClientLayoutCheck {
                 new io.github.sekerator.kingdomworld.common.network.data.TreasuryView.Payroll(empty ? -1 : 5, MUCH, MUCH / 3, 9_999, 9_999),
                 wages, 200, debtors, empty ? 0 : 9_999, empty ? 0 : MUCH,
                 new io.github.sekerator.kingdomworld.common.network.data.TreasuryView.Mint(empty ? 0 : 99, 999, WorkStatus.NO_INGREDIENTS, MUCH,
-                        MUCH, true), 9_990_000L, reserves(empty));
+                        MUCH, true, empty ? List.of() : mintMetals()), 9_990_000L, reserves(empty));
+    }
+
+    /**
+     * The metals of a mint: those of the game, one of them off and kept back, and metals of other mods with long names, more than
+     * fit without scrolling.
+     */
+    private static List<io.github.sekerator.kingdomworld.common.network.data.TreasuryView.MintMetal> mintMetals() {
+        List<io.github.sekerator.kingdomworld.common.network.data.TreasuryView.MintMetal> metals = new ArrayList<>();
+        int max = io.github.sekerator.kingdomworld.core.economy.MintMetals.MAX_KEEP;
+        metals.add(new io.github.sekerator.kingdomworld.common.network.data.TreasuryView.MintMetal("#forge:ingots/copper",
+                new ItemStack(Items.COPPER_INGOT), io.github.sekerator.kingdomworld.core.economy.Denomination.COPPER, 5, true, 0, 9_999_999L));
+        metals.add(new io.github.sekerator.kingdomworld.common.network.data.TreasuryView.MintMetal("#forge:ingots/iron",
+                new ItemStack(Items.IRON_INGOT), io.github.sekerator.kingdomworld.core.economy.Denomination.SILVER, 2, false, max, 9_999_999L));
+        metals.add(new io.github.sekerator.kingdomworld.common.network.data.TreasuryView.MintMetal("#forge:ingots/silver",
+                longNamed(Items.IRON_INGOT), io.github.sekerator.kingdomworld.core.economy.Denomination.SILVER, 3, true, max - 1, 12L));
+        metals.add(new io.github.sekerator.kingdomworld.common.network.data.TreasuryView.MintMetal("#forge:ingots/gold",
+                new ItemStack(Items.GOLD_INGOT), io.github.sekerator.kingdomworld.core.economy.Denomination.GOLD, 1, true, 64, 0L));
+        metals.add(new io.github.sekerator.kingdomworld.common.network.data.TreasuryView.MintMetal("examplemod:very_long_named_ingot",
+                longNamed(Items.NETHERITE_INGOT), io.github.sekerator.kingdomworld.core.economy.Denomination.GOLD, 4_096, false, 0, 9_999_999L));
+        return metals;
     }
 
     private static List<io.github.sekerator.kingdomworld.common.network.data.TreasuryView.Reserve> reserves(boolean empty) {
@@ -1342,6 +1390,23 @@ final class ClientLayoutCheck {
         cases.add(new Case("bank-error", () -> bank(false, "abc", longError, false)));
         cases.add(new Case("bank-empty", () -> bank(true, "", Component.empty(), false)));
         cases.add(new Case("post-minter", () -> post(postView("minter", WorkStatus.NO_INGREDIENTS, true, 4, false, true), Component.empty())));
+        cases.add(new Case("post-minter-held", () -> post(minterView(WorkStatus.MINT_HELD, true, true, true),
+                Component.translatable("kingdomworld.treasury.mint_keep", longNamed(Items.IRON_INGOT).getHoverName(), 10_000), true)));
+        cases.add(new Case("post-minter-no-treasury", () -> post(minterView(WorkStatus.WORKING, true, false, true), Component.empty())));
+        cases.add(new Case("post-minter-treasury-only", () -> post(minterView(WorkStatus.MINT_HELD, false, true, true), Component.empty())));
+        cases.add(new Case("post-minter-read-only", () -> post(minterView(WorkStatus.WORKING, false, false, true), Component.empty())));
+        cases.add(new Case("post-minter-no-metals", () -> post(minterView(WorkStatus.NO_INGREDIENTS, true, true, false), Component.empty())));
+        cases.add(new Case("throne-treasury-mint", () -> treasury(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "mint", "today",
+                Component.translatable("kingdomworld.treasury.mint_off", longNamed(Items.IRON_INGOT).getHoverName()))));
+        cases.add(new Case("throne-treasurer-mint", () -> treasury(view(KingdomView.Relation.MEMBER, Role.TREASURER), true, false, "mint",
+                "today", Component.empty())));
+        cases.add(new Case("throne-subject-mint", () -> treasury(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, false, "mint",
+                "today", Component.empty())));
+        cases.add(new Case("throne-treasury-mint-empty", () -> treasury(view(KingdomView.Relation.MEMBER, Role.KING), true, true, "mint",
+                "today", Component.empty())));
+        cases.add(new Case("storehouse-double", () -> storehouse(Component.translatable("kingdomworld.storehouse.double"))));
+        cases.add(new Case("storehouse-double-long-title", () -> storehouse(Component.literal(LONG_KINGDOM + " " + LONG_KINGDOM))));
+        cases.add(new Case("storehouse-double-model", io.github.sekerator.kingdomworld.client.screen.StorehouseModelPreview::new));
         cases.add(new Case("post-builder", () -> post(postView("builder", WorkStatus.WORKING, true, 4, false, true), Component.empty())));
         cases.add(new Case("post-builder-idle", () -> post(postView("builder", WorkStatus.NO_MATERIALS, false, 16, false, false), longError)));
         cases.add(new Case("throne-construction-catalog", () -> construction(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "catalog",

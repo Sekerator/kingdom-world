@@ -1,7 +1,46 @@
 {
   "variants": {
-    "": {
+    "facing=north,type=single": {
       "model": "kingdomworld:block/storehouse"
+    },
+    "facing=north,type=left": {
+      "model": "kingdomworld:block/storehouse_left"
+    },
+    "facing=north,type=right": {
+      "model": "kingdomworld:block/storehouse_right"
+    },
+    "facing=east,type=single": {
+      "model": "kingdomworld:block/storehouse"
+    },
+    "facing=east,type=left": {
+      "model": "kingdomworld:block/storehouse_left",
+      "y": 90
+    },
+    "facing=east,type=right": {
+      "model": "kingdomworld:block/storehouse_right",
+      "y": 90
+    },
+    "facing=south,type=single": {
+      "model": "kingdomworld:block/storehouse"
+    },
+    "facing=south,type=left": {
+      "model": "kingdomworld:block/storehouse_left",
+      "y": 180
+    },
+    "facing=south,type=right": {
+      "model": "kingdomworld:block/storehouse_right",
+      "y": 180
+    },
+    "facing=west,type=single": {
+      "model": "kingdomworld:block/storehouse"
+    },
+    "facing=west,type=left": {
+      "model": "kingdomworld:block/storehouse_left",
+      "y": 270
+    },
+    "facing=west,type=right": {
+      "model": "kingdomworld:block/storehouse_right",
+      "y": 270
     }
   }
 }

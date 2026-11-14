@@ -32,6 +32,8 @@ public final class Treasury {
     private final Map<String, Long> wages = new LinkedHashMap<>();
     private final Map<UUID, Long> debts = new LinkedHashMap<>();
     private final Map<UUID, Long> reserves = new LinkedHashMap<>();
+    /** The metals whose setting the king changed; the others have {@link MintMetals#defaultFor}. */
+    private final Map<String, MintMetals.Setting> mintMetals = new LinkedHashMap<>();
     private long lastPayday = NO_PAYDAY;
     private Payroll.Summary lastPayroll = Payroll.Summary.NONE;
     private Runnable changeListener = () -> {
@@ -277,6 +279,55 @@ public final class Treasury {
     }
 
     // ---------------------------------------------------------------- reserves of other currencies
+
+    /**
+     * What the mint strikes from a metal of the config and how many of it it leaves in the storehouses.
+     */
+    public MintMetals.Setting mintMetal(String metal) {
+        MintMetals.Setting set = mintMetals.get(metal);
+        return set != null ? set : MintMetals.defaultFor(metal);
+    }
+
+    /**
+     * The metals whose setting the king changed.
+     */
+    public Map<String, MintMetals.Setting> mintMetals() {
+        return Collections.unmodifiableMap(mintMetals);
+    }
+
+    /**
+     * @return {@code false} if the treasury keeps the most settings already and this would be one more
+     */
+    boolean setMintMetal(String metal, MintMetals.Setting setting) {
+        if (setting.equals(mintMetal(metal))) {
+            return true;
+        }
+        if (setting.equals(MintMetals.defaultFor(metal))) {
+            mintMetals.remove(metal);
+        } else {
+            if (!mintMetals.containsKey(metal) && mintMetals.size() >= MintMetals.MAX_SETTINGS) {
+                return false;
+            }
+            mintMetals.put(metal, setting);
+        }
+        changed();
+        return true;
+    }
+
+    /**
+     * Restores the settings of the mint from saved data. Does not notify.
+     */
+    public void restoreMintMetals(Map<String, MintMetals.Setting> values) {
+        mintMetals.clear();
+        values.forEach((metal, setting) -> {
+            if (!MintMetals.isValidMetal(metal) || mintMetals.size() >= MintMetals.MAX_SETTINGS) {
+                throw new IllegalArgumentException("Setting of the mint for '" + metal + "' out of range");
+            }
+            if (!setting.equals(MintMetals.defaultFor(metal))) {
+                mintMetals.put(metal, Objects.requireNonNull(setting, "setting"));
+            }
+        });
+    }
 
     /**
      * Money of other currencies the treasury holds, by currency: what players exchanged at its bank or paid on its

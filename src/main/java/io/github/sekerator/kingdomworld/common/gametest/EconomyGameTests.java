@@ -126,6 +126,7 @@ public final class EconomyGameTests {
         BlockPos to = helper.absolutePos(new BlockPos(8, 3, 8));
         GatheringGameTests.clear(level, from, to);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Mint Town", UUID.randomUUID());
+        strikeIron(server, kingdom);
         StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 4);
         store.insertItem(0, new ItemStack(Items.IRON_INGOT, 3), false);
         store.insertItem(1, new ItemStack(Items.GOLD_INGOT, 2), false);
@@ -213,6 +214,7 @@ public final class EconomyGameTests {
         BlockPos to = helper.absolutePos(new BlockPos(8, 3, 8));
         GatheringGameTests.clear(level, from, to);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Copper Town", UUID.randomUUID());
+        strikeIron(server, kingdom);
         StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 4);
         store.insertItem(0, new ItemStack(Items.COPPER_INGOT, 64), false);
         store.insertItem(1, new ItemStack(Items.IRON_INGOT, 2), false);
@@ -236,6 +238,90 @@ public final class EconomyGameTests {
             GatheringGameTests.clear(level, from, to);
         }
         helper.succeed();
+    }
+
+    /**
+     * The king of a kingdom of players turns iron on: the mint leaves it alone until then.
+     */
+    private static void strikeIron(MinecraftServer server, Kingdom kingdom) {
+        io.github.sekerator.kingdomworld.core.kingdom.Outcome outcome = KingdomWorldApi.change(server, "test",
+                state -> state.setMintMetal(null, kingdom.id(), IRON, new io.github.sekerator.kingdomworld.core.economy.MintMetals.Setting(true, 0)));
+        if (!outcome.ok()) {
+            throw new IllegalStateException("Iron was not turned on: " + outcome.error());
+        }
+    }
+
+    private static final String IRON = "#forge:ingots/iron";
+    private static final String COPPER = "#forge:ingots/copper";
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_economy_mint_metals")
+    public static void theMintLeavesIronAndWhatTheKingKeepsBack(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos to = helper.absolutePos(new BlockPos(8, 3, 8));
+        GatheringGameTests.clear(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Iron Keep", UUID.randomUUID());
+        StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 4);
+        store.insertItem(0, new ItemStack(Items.IRON_INGOT, 3), false);
+        store.insertItem(1, new ItemStack(Items.COPPER_INGOT, 4), false);
+        helper.setBlock(new BlockPos(6, 0, 1), ModRegistries.MINT.get());
+        WorldPos postPos = GatheringGameTests.post(helper, new BlockPos(5, 0, 1), "minter");
+        WorkPost post = PostWork.post(server, postPos).orElseThrow();
+        try {
+            // A new kingdom of players strikes copper and leaves its iron.
+            Treasury treasury = treasury(server, kingdom);
+            helper.assertTrue(!treasury.mintMetal(IRON).strike() && treasury.mintMetal(COPPER).strike(),
+                    "Iron must be off and copper on in a new kingdom");
+            for (int i = 0; i < 4; i++) {
+                helper.assertTrue(MinterBehavior.strike(server, post, false) == MinterBehavior.Struck.DONE, "Striking copper " + i + " failed");
+            }
+            helper.assertTrue(count(server, kingdom, Items.IRON_INGOT) == 3, "The mint took iron that is off");
+            helper.assertTrue(count(server, kingdom, Items.COPPER_INGOT) == 0, "Copper was left");
+            helper.assertTrue(treasury.vault().equals(new Coins(20, 0, 0)), "The vault holds " + treasury.vault());
+            // Only iron is left, and it is off: the post says why it stands still.
+            MinterBehavior.Struck held = MinterBehavior.strike(server, post, false);
+            helper.assertTrue(held == MinterBehavior.Struck.HELD, "Expected the mint to be held, got " + held);
+            helper.assertTrue(MinterBehavior.status(held) == WorkStatus.MINT_HELD, "The post must say the metals are off or kept");
+
+            // Copper to keep back: of five ingots the mint takes two and leaves three.
+            store.insertItem(1, new ItemStack(Items.COPPER_INGOT, 5), false);
+            KingdomWorldApi.change(server, "test", state -> state.setMintMetal(null, kingdom.id(), COPPER,
+                    new io.github.sekerator.kingdomworld.core.economy.MintMetals.Setting(true, 3)));
+            helper.assertTrue(MinterBehavior.strike(server, post, false) == MinterBehavior.Struck.DONE, "The first copper ingot over the keep");
+            helper.assertTrue(MinterBehavior.strike(server, post, false) == MinterBehavior.Struck.DONE, "The second copper ingot over the keep");
+            helper.assertTrue(MinterBehavior.strike(server, post, false) == MinterBehavior.Struck.HELD, "The mint took copper it was to keep");
+            helper.assertTrue(count(server, kingdom, Items.COPPER_INGOT) == 3, "Three copper ingots must stay");
+
+            // The king turns iron on: the mint strikes it.
+            strikeIron(server, kingdom);
+            helper.assertTrue(MinterBehavior.strike(server, post, false) == MinterBehavior.Struck.DONE, "Iron was not struck once on");
+            helper.assertTrue(count(server, kingdom, Items.IRON_INGOT) == 2, "One iron ingot should be gone");
+
+            // Every metal off: the mint is held even with nothing in the storehouses.
+            store.takeAll();
+            for (var metal : TreasuryActions.mintMetals(server, kingdom.id())) {
+                KingdomWorldApi.change(server, "test", state -> state.setMintMetal(null, kingdom.id(), metal.metal(),
+                        new io.github.sekerator.kingdomworld.core.economy.MintMetals.Setting(false, 0)));
+            }
+            helper.assertTrue(MinterBehavior.strike(server, post, false) == MinterBehavior.Struck.HELD, "Every metal off must hold the mint");
+            // The settings are kept with the treasury and saved with it.
+            CompoundTag saved = io.github.sekerator.kingdomworld.common.data.EconomyNbt.write(treasury);
+            CompoundTag kingdomTag = new CompoundTag();
+            kingdomTag.put("treasury", saved);
+            Treasury read = io.github.sekerator.kingdomworld.common.data.EconomyNbt.read(kingdomTag, kingdom.id(), kingdom.name(),
+                    treasury.units(), 0);
+            helper.assertTrue(!read.mintMetal(COPPER).strike() && read.mintMetal(COPPER).keep() == 0 && !read.mintMetal(IRON).strike(),
+                    "The settings of the mint were not saved");
+        } finally {
+            CitizenGameTests.finish(helper, kingdom);
+            GatheringGameTests.clear(level, from, to);
+        }
+        helper.succeed();
+    }
+
+    private static long count(MinecraftServer server, Kingdom kingdom, net.minecraft.world.item.Item item) {
+        return KingdomStorage.count(server, kingdom.id(), stack -> stack.is(item));
     }
 
     @GameTest(template = EMPTY, batch = "kingdomworld_economy_mint_body", timeoutTicks = 1200)

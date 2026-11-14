@@ -71,9 +71,10 @@ final class MintGoal extends PostWorkGoal {
             }
         }
         if (metal == null) {
-            metal = MinterBehavior.nextMetal(server, post);
+            MinterBehavior.Pick pick = MinterBehavior.pick(server, post);
+            metal = pick.metal();
             if (metal == null) {
-                return WorkStatus.NO_INGREDIENTS;
+                return pick.held() ? WorkStatus.MINT_HELD : WorkStatus.NO_INGREDIENTS;
             }
             timer = 0;
             total = MinterBehavior.ticks(citizen.get());

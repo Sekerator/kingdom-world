@@ -66,6 +66,8 @@ public final class KingdomWorldClient {
         event.enqueueWork(() -> net.minecraft.client.gui.screens.MenuScreens.register(
                 io.github.sekerator.kingdomworld.common.companion.CompanionRegistries.MENU.get(),
                 io.github.sekerator.kingdomworld.client.screen.CompanionScreen::new));
+        event.enqueueWork(() -> net.minecraft.client.gui.screens.MenuScreens.register(ModRegistries.STOREHOUSE_MENU.get(),
+                io.github.sekerator.kingdomworld.client.screen.StorehouseScreen::new));
         LOGGER.debug("KingdomWorld client setup complete");
     }
 

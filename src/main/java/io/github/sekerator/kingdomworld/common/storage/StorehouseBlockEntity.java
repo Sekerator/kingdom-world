@@ -18,11 +18,13 @@ import net.minecraftforge.items.IItemHandlerModifiable;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
+
 /**
  * The block entity of a storehouse. It holds no items itself: it offers the storehouse's inventory, which lives in
  * the kingdom data, as an item handler capability, so hoppers, Create funnels, chutes and belts and pipes of other
- * mods put items in and take them out. While the kingdom data is read-only the handler accepts and gives nothing,
- * because the change could not be saved.
+ * mods put items in and take them out. A half of a double storehouse offers both halves, as a large chest does. While
+ * the kingdom data is read-only the handler accepts and gives nothing, because the change could not be saved.
  */
 public class StorehouseBlockEntity extends BlockEntity {
     private LazyOptional<IItemHandler> handler = LazyOptional.empty();
@@ -44,10 +46,20 @@ public class StorehouseBlockEntity extends BlockEntity {
     }
 
     /**
-     * The handler that every container access goes through; {@code null} on the client.
+     * The handler that every container access goes through: this storehouse, or both halves of a double one; {@code null}
+     * on the client.
      */
     @Nullable
     public IItemHandlerModifiable handler() {
+        return level instanceof ServerLevel server ? StorehouseBlock.handler(server, StorehouseBlock.halves(server, worldPosition)) : null;
+    }
+
+    /**
+     * The handler of this storehouse alone, the one half of a double storehouse; {@code null} on the client. What empties or
+     * looks into the block itself (to break or replace it) takes this, not the capability, which shows both halves.
+     */
+    @Nullable
+    public IItemHandlerModifiable ownHandler() {
         return level instanceof ServerLevel server ? new Handler(server, worldPosition) : null;
     }
 
@@ -55,7 +67,7 @@ public class StorehouseBlockEntity extends BlockEntity {
     public @NotNull <T> LazyOptional<T> getCapability(@NotNull Capability<T> capability, @Nullable Direction side) {
         if (capability == ForgeCapabilities.ITEM_HANDLER && level instanceof ServerLevel server && !remove) {
             if (!handler.isPresent()) {
-                Handler created = new Handler(server, worldPosition);
+                Joined created = new Joined(server, worldPosition);
                 handler = LazyOptional.of(() -> created);
             }
             return handler.cast();
@@ -71,7 +83,89 @@ public class StorehouseBlockEntity extends BlockEntity {
     }
 
     /**
-     * Looks the inventory up on every access, so it is always the one in the kingdom data.
+     * What hoppers and pipes see: this storehouse, or both halves of a double one with the left one's slots first. Which it
+     * is is looked up once a tick, so a hopper that holds the handler sees the storehouses join and part.
+     */
+    private static final class Joined implements IItemHandlerModifiable {
+        private static final IItemHandlerModifiable[] NONE = new IItemHandlerModifiable[0];
+
+        private final ServerLevel level;
+        private final BlockPos pos;
+        private long tick = Long.MIN_VALUE;
+        private IItemHandlerModifiable[] parts = NONE;
+
+        private Joined(ServerLevel level, BlockPos pos) {
+            this.level = level;
+            this.pos = pos.immutable();
+        }
+
+        private IItemHandlerModifiable[] parts() {
+            long now = level.getGameTime();
+            if (now != tick) {
+                tick = now;
+                List<BlockPos> halves = StorehouseBlock.halves(level, pos);
+                IItemHandlerModifiable[] found = new IItemHandlerModifiable[halves.size()];
+                for (int i = 0; i < found.length; i++) {
+                    found[i] = new Handler(level, halves.get(i));
+                }
+                parts = found;
+            }
+            return parts;
+        }
+
+        @Nullable
+        private IItemHandlerModifiable part(int slot) {
+            IItemHandlerModifiable[] all = parts();
+            int index = slot / StorehouseInventory.SLOTS;
+            return slot >= 0 && index < all.length ? all[index] : null;
+        }
+
+        @Override
+        public int getSlots() {
+            return parts().length * StorehouseInventory.SLOTS;
+        }
+
+        @Override
+        public @NotNull ItemStack getStackInSlot(int slot) {
+            IItemHandlerModifiable part = part(slot);
+            return part == null ? ItemStack.EMPTY : part.getStackInSlot(slot % StorehouseInventory.SLOTS);
+        }
+
+        @Override
+        public @NotNull ItemStack insertItem(int slot, @NotNull ItemStack stack, boolean simulate) {
+            IItemHandlerModifiable part = part(slot);
+            return part == null ? stack : part.insertItem(slot % StorehouseInventory.SLOTS, stack, simulate);
+        }
+
+        @Override
+        public @NotNull ItemStack extractItem(int slot, int amount, boolean simulate) {
+            IItemHandlerModifiable part = part(slot);
+            return part == null ? ItemStack.EMPTY : part.extractItem(slot % StorehouseInventory.SLOTS, amount, simulate);
+        }
+
+        @Override
+        public int getSlotLimit(int slot) {
+            IItemHandlerModifiable part = part(slot);
+            return part == null ? 0 : part.getSlotLimit(slot % StorehouseInventory.SLOTS);
+        }
+
+        @Override
+        public boolean isItemValid(int slot, @NotNull ItemStack stack) {
+            IItemHandlerModifiable part = part(slot);
+            return part != null && part.isItemValid(slot % StorehouseInventory.SLOTS, stack);
+        }
+
+        @Override
+        public void setStackInSlot(int slot, @NotNull ItemStack stack) {
+            IItemHandlerModifiable part = part(slot);
+            if (part != null) {
+                part.setStackInSlot(slot % StorehouseInventory.SLOTS, stack);
+            }
+        }
+    }
+
+    /**
+     * One storehouse. Looks the inventory up on every access, so it is always the one in the kingdom data.
      */
     private static final class Handler implements IItemHandlerModifiable {
         private final ServerLevel level;

@@ -630,7 +630,9 @@ public final class ConstructionWork {
         if (entity instanceof Container container && !container.isEmpty()) {
             return true;
         }
-        IItemHandler handler = entity.getCapability(ForgeCapabilities.ITEM_HANDLER, null).orElse(null);
+        // A half of a double storehouse holds only what is in its own half.
+        IItemHandler handler = entity instanceof io.github.sekerator.kingdomworld.common.storage.StorehouseBlockEntity storehouse
+                ? storehouse.ownHandler() : entity.getCapability(ForgeCapabilities.ITEM_HANDLER, null).orElse(null);
         if (handler != null) {
             for (int slot = 0; slot < handler.getSlots(); slot++) {
                 if (!handler.getStackInSlot(slot).isEmpty()) {

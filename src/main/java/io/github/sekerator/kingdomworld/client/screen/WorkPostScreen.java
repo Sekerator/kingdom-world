@@ -26,8 +26,9 @@ import java.util.UUID;
 
 /**
  * The screen of a work post: its profession, the radius of its zone, its seats, the animals of a herd, the goal of
- * a mine (the kind of ore, how much of it is needed and the depth), why it stands still if it does, what it yields
- * and who works there. The buttons that go through choices (profession, animals, ore) take the next one on a left
+ * a mine (the kind of ore, how much of it is needed and the depth), the metals of the mint of a minter (whether it strikes
+ * from each and how many of each stay in the storehouses), why it stands still if it does, what it yields and who works
+ * there. The buttons that go through choices (profession, animals, ore) take the next one on a left
  * click and the one before on a right click. Members with the right to manage citizens change
  * the settings, hire citizens without work and dismiss workers; everybody else of the kingdom only looks. Every
  * button sends an intent; the server decides and answers with the result and a fresh screen. Widths come from the
@@ -71,6 +72,14 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
     private int depthValueWidth;
     private int amountValueWidth;
     private int oreWidth;
+    private int metalWidth;
+    private int strikeWidth;
+    private int keepValueWidth;
+    /** The metal of the mint the row of a minter shows; empty for the first one. */
+    private String mintMetal = "";
+    /** Step of the ingots to keep; with Shift the big one. */
+    private static final int KEEP_STEP = 16;
+    private static final int KEEP_BIG_STEP = 64;
 
     public WorkPostScreen(WorkPostView view) {
         super(Component.translatable("block.kingdomworld.work_post"));
@@ -109,6 +118,43 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
 
     private boolean isMiner() {
         return view.profession().equals(Professions.MINER.id());
+    }
+
+    private boolean isMinter() {
+        return view.profession().equals(Professions.MINTER.id());
+    }
+
+    /**
+     * The metal of the mint the row shows, or {@code null} if the mint has none.
+     */
+    @org.jetbrains.annotations.Nullable
+    private io.github.sekerator.kingdomworld.common.network.data.TreasuryView.MintMetal metal() {
+        List<io.github.sekerator.kingdomworld.common.network.data.TreasuryView.MintMetal> metals = view.mint().metals();
+        if (metals.isEmpty()) {
+            return null;
+        }
+        for (io.github.sekerator.kingdomworld.common.network.data.TreasuryView.MintMetal metal : metals) {
+            if (metal.metal().equals(mintMetal)) {
+                return metal;
+            }
+        }
+        return metals.get(0);
+    }
+
+    private static Component strikeLabel(boolean strike) {
+        return Component.translatable(strike ? KEY + "mint.strike_on" : KEY + "mint.strike_off");
+    }
+
+    /**
+     * For a minter: how many of the metal shown the storehouses hold, in the place of the container, which a minter does
+     * not use.
+     */
+    private Component metalStockLine() {
+        var metal = metal();
+        if (metal == null) {
+            return Component.translatable(KEY + "mint.no_metals");
+        }
+        return Component.translatable(KEY + "mint.stock", metal.item().getHoverName(), metal.stock());
     }
 
     private static Component oreName(String id) {
@@ -238,14 +284,15 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
      */
     private List<Component> labels() {
         return List.of(Component.translatable(KEY + "profession"), Component.translatable(isMiner() ? KEY + "goal.depth" : KEY + "radius"),
-                Component.translatable(hasAuto() ? KEY + "mode" : isMiner() ? KEY + "goal.ore" : KEY + "herd"));
+                Component.translatable(hasAuto() ? KEY + "mode" : isMiner() ? KEY + "goal.ore" : isMinter() ? KEY + "mint.metal" : KEY + "herd"));
     }
 
     /**
      * Labels of the second column: seats, animals.
      */
     private List<Component> secondLabels() {
-        return List.of(Component.translatable(KEY + "seats"), Component.translatable(isMiner() ? KEY + "goal.amount" : KEY + "animal"));
+        return List.of(Component.translatable(KEY + "seats"), Component.translatable(isMiner() ? KEY + "goal.amount"
+                : isMinter() ? KEY + "mint.keep" : KEY + "animal"));
     }
 
     private static int stepperWidth() {
@@ -256,7 +303,14 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
      * Width of the first column of controls: a stepper, or for a mine the wider of its depth and its ore.
      */
     private int firstColumnWidth() {
+        if (isMinter()) {
+            return Math.max(stepperWidth(), metalWidth + GAP + strikeWidth);
+        }
         return isMiner() ? Math.max(2 * SMALL + 2 * GAP + depthValueWidth, oreWidth) : stepperWidth();
+    }
+
+    private int keepStepperWidth() {
+        return 2 * SMALL + 2 * GAP + keepValueWidth;
     }
 
     private int amountStepperWidth() {
@@ -291,6 +345,10 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
             return List.of(Component.translatable(KEY + "status", statusText(view.status())), siteLine(), placingLine(),
                     Component.translatable(KEY + "placed_today", view.producedToday()));
         }
+        if (isMinter()) {
+            return List.of(Component.translatable(KEY + "status", statusText(view.status())), stationsLine(), currentLine(), metalStockLine(),
+                    workshopYieldLine());
+        }
         if (isWorkshop()) {
             return List.of(Component.translatable(KEY + "status", statusText(view.status())), stationsLine(), currentLine(), containerLine(),
                     workshopYieldLine());
@@ -306,7 +364,7 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
      * rather than sizing the panel.
      */
     private boolean isNameLine(int index) {
-        return (isWorkshop() || isBuilder()) && (index == 1 || index == 2);
+        return (isWorkshop() || isBuilder()) && (index == 1 || index == 2) || isMinter() && index == 3;
     }
 
     private Component title() {
@@ -352,9 +410,17 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
             oreWidth = Math.max(oreWidth, font.width(oreName(ore)) + CycleButton.ICON_SPACE + LayoutCheck.BUTTON_TEXT_MARGIN + 8);
         }
         oreWidth = Math.min(oreWidth, ORE_WIDTH);
+        // The metal button shortens a long name too; hovering shows it in full.
+        metalWidth = font.width(Component.translatable(KEY + "mint.no_metals")) / 2 + CycleButton.ICON_SPACE + LayoutCheck.BUTTON_TEXT_MARGIN + 8;
+        for (var metal : view.mint().metals()) {
+            metalWidth = Math.max(metalWidth, font.width(metal.item().getHoverName()) + CycleButton.ICON_SPACE + LayoutCheck.BUTTON_TEXT_MARGIN + 8);
+        }
+        metalWidth = Math.min(metalWidth, ORE_WIDTH - 20);
+        strikeWidth = Math.max(buttonWidth(strikeLabel(true)), buttonWidth(strikeLabel(false)));
+        keepValueWidth = Math.max(VALUE_WIDTH, font.width(Integer.toString(io.github.sekerator.kingdomworld.core.economy.MintMetals.MAX_KEEP)) + 4);
         // The animal button shortens its text when it has to; a few letters must show.
         int controls = labelWidth + 6 + Math.max(Math.max(professionWidth, modeWidth), firstColumnWidth() + 12 + secondLabelWidth + 6
-                + Math.max(stepperWidth(), isMiner() ? amountStepperWidth() : Math.min(animalWidth, 80)));
+                + Math.max(stepperWidth(), isMiner() ? amountStepperWidth() : isMinter() ? keepStepperWidth() : Math.min(animalWidth, 80)));
         int info = font.width(title()) + 2 * PAD;
         WorkPostView saved = view;
         // The longest numbers the lines can show.
@@ -377,6 +443,9 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
             info = Math.max(info, Math.max(font.width(Component.translatable(KEY + "made_today", 9_999_999L)),
                     font.width(Component.translatable(KEY + "no_stations"))));
             info = Math.max(info, font.width(Component.translatable(KEY + "current_none")));
+        }
+        if (isMinter()) {
+            info = Math.max(info, font.width(Component.translatable(KEY + "mint.no_metals")));
         }
         if (isMiner()) {
             info = Math.max(info, Math.max(font.width(Component.translatable(KEY + "goal.stock", 9_999_999L, MineGoal.MAX_AMOUNT)),
@@ -407,7 +476,7 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
     }
 
     private int settingRows() {
-        return isHerder() || hasAuto() || isMiner() ? 3 : 2;
+        return isHerder() || hasAuto() || isMiner() || isMinter() ? 3 : 2;
     }
 
     private int secondColumnX() {
@@ -486,6 +555,9 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
                         .bounds(x, y + 2 * ROW, modeWidth, ROW - 2).build());
                 mode.setTooltip(Tooltip.create(Component.translatable(KEY + "mode_hint")));
             }
+            if (isMinter()) {
+                mintWidgets(x, y);
+            }
             int right = left() + panelWidth - PAD;
             Button hire = addRenderableWidget(Button.builder(hireLabel(), b -> send(WorkPostActionPacket.Action.HIRE, 0, "", null))
                     .bounds(right - hireWidth, workersTop(), hireWidth, ROW - 2).build());
@@ -499,6 +571,11 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
                                 b -> send(WorkPostActionPacket.Action.DISMISS, 0, "", id))
                         .bounds(right - dismissWidth, listTop() + i * WORKER_ROW, dismissWidth, WORKER_ROW - 2).build());
             }
+        }
+        if (!manage && isMinter()) {
+            // Without the right to manage citizens the metals are still there to look at, and to change with the right to the
+            // treasury.
+            mintWidgets(x, y);
         }
         int doneWidth = Math.max(50, buttonWidth(Component.translatable("gui.done")));
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose())
@@ -550,6 +627,52 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
                 .bounds(amountX + SMALL + GAP + amountValueWidth + GAP, y + 2 * ROW, SMALL, ROW - 2).build());
         more.active = !goal.ore().isEmpty() && goal.amount() < MineGoal.MAX_AMOUNT;
         more.setTooltip(Tooltip.create(Component.translatable(KEY + "goal.amount_hint")));
+    }
+
+    /**
+     * The metals of the mint of a minter's kingdom: which one the row shows (a choice of the window only), whether the mint
+     * strikes from it and how many of it stay in the storehouses. The two settings belong to the treasury and need its right.
+     */
+    private void mintWidgets(int x, int y) {
+        var metal = metal();
+        if (metal == null) {
+            return;
+        }
+        List<io.github.sekerator.kingdomworld.common.network.data.TreasuryView.MintMetal> metals = view.mint().metals();
+        int chosen = Math.max(0, metals.indexOf(metal));
+        Component name = metal.item().getHoverName();
+        int rowY = y + 2 * ROW;
+        CycleButton choice = addRenderableWidget(new CycleButton(x, rowY, metalWidth, ROW - 2,
+                Component.literal(fit(name.getString(), metalWidth - CycleButton.ICON_SPACE - LayoutCheck.BUTTON_TEXT_MARGIN - 4)), metal.item(),
+                direction -> {
+                    mintMetal = metals.get(Math.floorMod(chosen + direction, metals.size())).metal();
+                    rebuildWidgets();
+                }));
+        choice.setTooltip(CycleButton.hinted(Component.translatable(KEY + "mint.metal_hint", name,
+                io.github.sekerator.kingdomworld.common.economy.MoneyTexts.coins(metal.coin(), metal.count()))));
+        if (!view.mint().canManage()) {
+            return;
+        }
+        Button strike = addRenderableWidget(Button.builder(strikeLabel(metal.strike()),
+                        b -> send(WorkPostActionPacket.Action.MINT_STRIKE, metal.strike() ? 0 : 1, metal.metal(), null))
+                .bounds(x + metalWidth + GAP, rowY, strikeWidth, ROW - 2).build());
+        strike.setTooltip(Tooltip.create(Component.translatable(metal.strike() ? KEY + "mint.strike_on_hint" : KEY + "mint.strike_off_hint", name)));
+        int keepX = secondControlsX();
+        Button less = addRenderableWidget(Button.builder(Component.literal("-"),
+                        b -> send(WorkPostActionPacket.Action.MINT_KEEP, Math.max(0, metal.keep() - keepStep()), metal.metal(), null))
+                .bounds(keepX, rowY, SMALL, ROW - 2).build());
+        less.active = metal.keep() > 0;
+        less.setTooltip(Tooltip.create(Component.translatable(KEY + "mint.keep_hint")));
+        Button more = addRenderableWidget(Button.builder(Component.literal("+"),
+                        b -> send(WorkPostActionPacket.Action.MINT_KEEP,
+                                Math.min(io.github.sekerator.kingdomworld.core.economy.MintMetals.MAX_KEEP, metal.keep() + keepStep()), metal.metal(), null))
+                .bounds(keepX + SMALL + GAP + keepValueWidth + GAP, rowY, SMALL, ROW - 2).build());
+        more.active = metal.keep() < io.github.sekerator.kingdomworld.core.economy.MintMetals.MAX_KEEP;
+        more.setTooltip(Tooltip.create(Component.translatable(KEY + "mint.keep_hint")));
+    }
+
+    private static int keepStep() {
+        return hasShiftDown() ? KEEP_BIG_STEP : KEEP_STEP;
     }
 
     private static int amountStep() {
@@ -617,7 +740,7 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         int secondControls = secondControlsX();
         for (int row = 0; row < settingRows(); row++) {
             label(graphics, labels.get(row), x, y + row * ROW + 5, 0xFFE8E8E8, controls - 2);
-            if (row == 1 || row == 2 && (isHerder() || isMiner())) {
+            if (row == 1 || row == 2 && (isHerder() || isMiner() || isMinter())) {
                 label(graphics, second.get(row - 1), secondX, y + row * ROW + 5, 0xFFE8E8E8, secondControls - 2);
             }
         }
@@ -642,6 +765,9 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
         value(graphics, view.seats(), view.maxSeats(), secondControls, y + ROW, manage, right);
         if (hasAuto() && !manage) {
             label(graphics, modeName(view.auto()), controls, y + 2 * ROW + 5, 0xFFFFFFFF, right);
+        }
+        if (isMinter()) {
+            renderMint(graphics, controls, secondControls, y + 2 * ROW, right);
         }
         if (isHerder()) {
             value(graphics, view.herdSize(), view.maxHerd(), controls, y + 2 * ROW, manage, secondX - 4);
@@ -696,6 +822,26 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
             color = 0xFFB8B8B8;
         }
         paragraph(graphics, bottom, x, top + panelHeight - BOTTOM_AREA + 2, panelWidth - 2 * PAD, STATUS_LINES, color);
+    }
+
+    /**
+     * The settings of the metal the row of a minter shows: as text where the viewer may not change them.
+     */
+    private void renderMint(GuiGraphics graphics, int controls, int secondControls, int rowY, int right) {
+        var metal = metal();
+        if (metal == null) {
+            label(graphics, Component.translatable(KEY + "mint.no_metals"), controls, rowY + 5, 0xFFB8B8B8, right);
+            return;
+        }
+        Component keep = Component.literal(Integer.toString(metal.keep()));
+        if (view.mint().canManage()) {
+            int keepLeft = secondControls + SMALL + GAP;
+            centeredLabel(graphics, keep, keepLeft + keepValueWidth / 2, rowY + 5, 0xFFFFFFFF, keepLeft, keepLeft + keepValueWidth);
+        } else {
+            int strikeX = controls + metalWidth + GAP + 4;
+            label(graphics, strikeLabel(metal.strike()), strikeX, rowY + 5, metal.strike() ? 0xFFA0E0A0 : 0xFFFF9070, secondColumnX() - 4);
+            label(graphics, keep, secondControls, rowY + 5, 0xFFFFFFFF, right);
+        }
     }
 
     private void value(GuiGraphics graphics, int value, int max, int x, int y, boolean manage, int right) {

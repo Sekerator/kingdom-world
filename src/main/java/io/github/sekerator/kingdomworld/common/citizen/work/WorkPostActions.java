@@ -171,6 +171,12 @@ public final class WorkPostActions {
             goal = new WorkPostView.Goal(ores, asked.ore(), asked.amount(), MinerBehavior.stock(level, post), asked.autoDepth(),
                     MinerBehavior.depth(level, post), lowest, post.pos().y());
         }
+        WorkPostView.Mint mint = WorkPostView.Mint.NONE;
+        if (post.professionId().equals(Professions.MINTER.id())) {
+            // The settings of the mint belong to the treasury: they need its right, not the one of the citizens.
+            mint = new WorkPostView.Mint(state.membership().hasPermission(player.getUUID(), post.kingdomId(), Permission.MANAGE_TREASURY),
+                    io.github.sekerator.kingdomworld.common.economy.TreasuryActions.mintMetals(server, post.kingdomId()));
+        }
         return new WorkPostView(new BlockPos(post.pos().x(), post.pos().y(), post.pos().z()), post.kingdomId(),
                 state.membership().hasPermission(player.getUUID(), post.kingdomId(), Permission.MANAGE_CITIZENS),
                 post.professionId(), post.radius(), Math.max(post.radius(), rules.maxRadius(post.professionId())), post.seats(),
@@ -179,7 +185,7 @@ public final class WorkPostActions {
                 post.status(), container, post.yield().measured(), (int) Math.min(1_000_000, Math.round(post.yield().total())),
                 post.producedOn(PostWork.gameDay(server)), workers, unemployed, post.auto(), stations,
                 current == null ? net.minecraft.world.item.ItemStack.EMPTY : new net.minecraft.world.item.ItemStack(current),
-                progress, site, goal);
+                progress, site, goal, mint);
     }
 
     // ---------------------------------------------------------------- changes
@@ -217,6 +223,10 @@ public final class WorkPostActions {
             case GOAL_ORE -> setGoalOre(player, at, packet.text());
             case GOAL_AMOUNT -> setGoalAmount(player, at, packet.value());
             case GOAL_DEPTH -> setGoalDepth(player, at, packet.value() == 0, packet.value() - WorkPostActionPacket.DEPTH_OFFSET);
+            case MINT_STRIKE -> io.github.sekerator.kingdomworld.common.economy.TreasuryActions.setMintMetal(player, post.get().kingdomId(),
+                    packet.text(), packet.value() != 0, null);
+            case MINT_KEEP -> io.github.sekerator.kingdomworld.common.economy.TreasuryActions.setMintMetal(player, post.get().kingdomId(),
+                    packet.text(), null, packet.value());
         };
         if (feedback != null) {
             KingdomActions.reply(player, feedback);

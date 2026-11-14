@@ -89,8 +89,15 @@ public final class EconomyPackets {
             WAGE,
             RENAME,
             PAY,
-            TAKE_COINS
+            TAKE_COINS,
+            /** Whether the mint strikes coins from the metal in {@code text}: 1 or 0 in {@code amount}. */
+            MINT_STRIKE,
+            /** How many of the metal in {@code text} stay in the storehouses, in {@code amount}. */
+            MINT_KEEP
         }
+
+        /** The longest text of a change: a metal of the mint. */
+        static final int MAX_TEXT = Math.max(KingdomNames.MAX_LENGTH * 2, io.github.sekerator.kingdomworld.core.economy.MintMetals.MAX_METAL_LENGTH);
 
         public TreasuryChange {
             text = text == null ? "" : text;
@@ -99,12 +106,12 @@ public final class EconomyPackets {
         public void encode(FriendlyByteBuf buf) {
             buf.writeUUID(kingdomId);
             buf.writeEnum(action);
-            buf.writeUtf(text, KingdomNames.MAX_LENGTH * 2);
+            buf.writeUtf(text, MAX_TEXT);
             buf.writeVarLong(amount);
         }
 
         public static TreasuryChange decode(FriendlyByteBuf buf) {
-            return new TreasuryChange(buf.readUUID(), KingdomView.readEnum(buf, Action.class), buf.readUtf(KingdomNames.MAX_LENGTH * 2),
+            return new TreasuryChange(buf.readUUID(), KingdomView.readEnum(buf, Action.class), buf.readUtf(MAX_TEXT),
                     buf.readVarLong());
         }
 
@@ -112,7 +119,9 @@ public final class EconomyPackets {
             ServerPlayer sender = context.get().getSender();
             if (!ServerRequestGuard.admit(sender, POLICY)
                     || !ServerRequestGuard.requireLength(sender, POLICY, "text", message.text(),
-                    message.action() == Action.WAGE ? Profession.MAX_ID_LENGTH : KingdomNames.MAX_LENGTH * 2)
+                    message.action() == Action.WAGE ? Profession.MAX_ID_LENGTH
+                            : message.action() == Action.MINT_STRIKE || message.action() == Action.MINT_KEEP
+                            ? io.github.sekerator.kingdomworld.core.economy.MintMetals.MAX_METAL_LENGTH : KingdomNames.MAX_LENGTH * 2)
                     || !ServerRequestGuard.requireRange(sender, POLICY, "amount", message.amount(), 0, Money.MAX)) {
                 return;
             }

@@ -4,12 +4,15 @@ import io.github.sekerator.kingdomworld.core.citizen.Profession;
 import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
 import io.github.sekerator.kingdomworld.core.economy.Coins;
 import io.github.sekerator.kingdomworld.core.economy.CurrencyUnits;
+import io.github.sekerator.kingdomworld.core.economy.Denomination;
 import io.github.sekerator.kingdomworld.core.economy.LedgerCategory;
+import io.github.sekerator.kingdomworld.core.economy.MintMetals;
 import io.github.sekerator.kingdomworld.core.economy.Money;
 import io.github.sekerator.kingdomworld.core.economy.TreasuryJournal;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomNames;
 import io.netty.handler.codec.DecoderException;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,7 +33,7 @@ import java.util.UUID;
  * @param debtors        the subjects who owe the most, at most {@link #MAX_DEBTORS}
  * @param debtorCount    every subject who owes something
  * @param debtTotal      what all of them owe together
- * @param mint           the mint of the kingdom
+ * @param mint           the mint of the kingdom and the settings of its metals
  * @param rate           the exchange rate of the kingdom's currency
  * @param reserves       money of other currencies the treasury holds
  */
@@ -102,8 +105,68 @@ public record TreasuryView(UUID kingdomId, boolean canManage, boolean canTakeCoi
      * @param today   worth of the coins struck today
      * @param week    worth of the coins struck in the last seven days
      * @param toVault whether struck coins go into the vault
+     * @param metals  the metals of the config and what the mint does with each
      */
-    public record Mint(int posts, int workers, WorkStatus status, long today, long week, boolean toVault) {
+    public record Mint(int posts, int workers, WorkStatus status, long today, long week, boolean toVault, List<MintMetal> metals) {
+        public Mint {
+            metals = List.copyOf(metals);
+            if (metals.size() > MAX_METALS) {
+                throw new IllegalArgumentException("Too many metals of the mint");
+            }
+        }
+    }
+
+    /** The most metals of the mint a view carries. */
+    public static final int MAX_METALS = 32;
+
+    /**
+     * A metal of the mint and what the mint does with it.
+     *
+     * @param metal  the rate of the config: an item, or a tag after {@code #}
+     * @param item   an item of the metal, for its name and icon
+     * @param coin   the kind of coin one item gives
+     * @param count  how many of those coins
+     * @param strike whether the mint strikes coins from it
+     * @param keep   items of it that stay in the storehouses
+     * @param stock  items of it the storehouses hold
+     */
+    public record MintMetal(String metal, ItemStack item, Denomination coin, int count, boolean strike, int keep, long stock) {
+        public MintMetal {
+            Objects.requireNonNull(metal, "metal");
+            Objects.requireNonNull(item, "item");
+            Objects.requireNonNull(coin, "coin");
+        }
+
+        public static void encodeAll(FriendlyByteBuf buf, List<MintMetal> metals) {
+            buf.writeVarInt(metals.size());
+            for (MintMetal metal : metals) {
+                buf.writeUtf(metal.metal(), MintMetals.MAX_METAL_LENGTH);
+                buf.writeItem(metal.item());
+                buf.writeEnum(metal.coin());
+                buf.writeVarInt(metal.count());
+                buf.writeBoolean(metal.strike());
+                buf.writeVarInt(metal.keep());
+                buf.writeVarLong(metal.stock());
+            }
+        }
+
+        public static List<MintMetal> decodeAll(FriendlyByteBuf buf) {
+            int count = size(buf, MAX_METALS);
+            List<MintMetal> metals = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                String metal = buf.readUtf(MintMetals.MAX_METAL_LENGTH);
+                ItemStack item = buf.readItem();
+                Denomination coin = KingdomView.readEnum(buf, Denomination.class);
+                int coins = buf.readVarInt();
+                boolean strike = buf.readBoolean();
+                int keep = buf.readVarInt();
+                if (keep < 0 || keep > MintMetals.MAX_KEEP) {
+                    throw new DecoderException("Metal to keep out of range: " + keep);
+                }
+                metals.add(new MintMetal(metal, item, coin, coins, strike, keep, amount(buf)));
+            }
+            return metals;
+        }
     }
 
     public TreasuryView {
@@ -178,6 +241,7 @@ public record TreasuryView(UUID kingdomId, boolean canManage, boolean canTakeCoi
         buf.writeVarLong(mint.today());
         buf.writeVarLong(mint.week());
         buf.writeBoolean(mint.toVault());
+        MintMetal.encodeAll(buf, mint.metals());
         buf.writeVarLong(rate);
         buf.writeVarInt(reserves.size());
         for (Reserve reserve : reserves) {
@@ -227,7 +291,7 @@ public record TreasuryView(UUID kingdomId, boolean canManage, boolean canTakeCoi
         int allDebtors = buf.readVarInt();
         long debtTotal = amount(buf);
         Mint mint = new Mint(buf.readVarInt(), buf.readVarInt(), KingdomView.readEnum(buf, WorkStatus.class), amount(buf), amount(buf),
-                buf.readBoolean());
+                buf.readBoolean(), MintMetal.decodeAll(buf));
         long rate = buf.readVarLong();
         int reserveCount = size(buf, MAX_RESERVES);
         List<Reserve> reserves = new ArrayList<>(reserveCount);
@@ -247,7 +311,7 @@ public record TreasuryView(UUID kingdomId, boolean canManage, boolean canTakeCoi
         return value;
     }
 
-    private static int size(FriendlyByteBuf buf, int max) {
+    static int size(FriendlyByteBuf buf, int max) {
         int size = buf.readVarInt();
         if (size < 0 || size > max) {
             throw new DecoderException("List size out of range: " + size);

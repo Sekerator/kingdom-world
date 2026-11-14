@@ -1155,6 +1155,23 @@ public final class Economy {
     }
 
     /**
+     * Sets what the mint of a kingdom does with one metal of the config.
+     */
+    public Outcome setMintMetal(UUID kingdomId, String metal, MintMetals.Setting setting) {
+        Treasury treasury = treasuries.get(kingdomId);
+        if (treasury == null) {
+            return Outcome.fail(KingdomError.UNKNOWN_CURRENCY);
+        }
+        if (!MintMetals.isValidMetal(metal)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (setting.equals(treasury.mintMetal(metal))) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        return treasury.setMintMetal(metal, setting) ? Outcome.DONE : Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+    }
+
+    /**
      * Strikes coins into the treasury: into its vault, or straight onto its balance.
      */
     public Outcome mint(UUID kingdomId, Denomination denomination, long count, boolean toVault, long day) {

@@ -39,6 +39,8 @@ public final class ModRegistries {
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, KingdomWorld.MOD_ID);
     public static final DeferredRegister<EntityType<?>> ENTITY_TYPES = DeferredRegister.create(ForgeRegistries.ENTITY_TYPES, KingdomWorld.MOD_ID);
     public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITY_TYPES = DeferredRegister.create(ForgeRegistries.BLOCK_ENTITY_TYPES, KingdomWorld.MOD_ID);
+    public static final DeferredRegister<net.minecraft.world.inventory.MenuType<?>> MENUS = DeferredRegister.create(ForgeRegistries.MENU_TYPES,
+            KingdomWorld.MOD_ID);
 
     /**
      * Decorative seat that becomes the heart of a kingdom when one is founded on it. Immune to explosions and
@@ -75,6 +77,10 @@ public final class ModRegistries {
             () -> new BlockItem(STOREHOUSE.get(), new Item.Properties()));
     public static final RegistryObject<BlockEntityType<StorehouseBlockEntity>> STOREHOUSE_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register(
             "storehouse", () -> BlockEntityType.Builder.of(StorehouseBlockEntity::new, STOREHOUSE.get()).build(null));
+    /** The window of a double storehouse: both halves side by side. */
+    public static final RegistryObject<net.minecraft.world.inventory.MenuType<io.github.sekerator.kingdomworld.common.storage.StorehouseMenu>>
+            STOREHOUSE_MENU = MENUS.register("storehouse_double", () -> net.minecraftforge.common.extensions.IForgeMenuType.create(
+            (id, inventory, buf) -> io.github.sekerator.kingdomworld.common.storage.StorehouseMenu.client(id, inventory)));
     /** Wounded citizens heal faster here. */
     public static final RegistryObject<Block> INFIRMARY = BLOCKS.register("infirmary", () -> new InfirmaryBlock(
             BlockBehaviour.Properties.of()
@@ -145,6 +151,7 @@ public final class ModRegistries {
         ITEMS.register(modBus);
         ENTITY_TYPES.register(modBus);
         BLOCK_ENTITY_TYPES.register(modBus);
+        MENUS.register(modBus);
         io.github.sekerator.kingdomworld.common.guild.GuildRegistries.register(modBus);
         io.github.sekerator.kingdomworld.common.army.ArmyRegistries.register(modBus);
         io.github.sekerator.kingdomworld.common.magic.MagicRegistries.register(modBus);

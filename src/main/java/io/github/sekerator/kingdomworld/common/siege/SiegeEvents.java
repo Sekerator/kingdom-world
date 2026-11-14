@@ -247,6 +247,10 @@ public final class SiegeEvents {
         if (state.placedByOutsider(dimension, pos.asLong()) || !holdsAnything(level, pos)) {
             return;
         }
+        if (level.getBlockState(pos).getBlock() instanceof io.github.sekerator.kingdomworld.common.storage.StorehouseBlock) {
+            // Both halves of a double storehouse are one container to rob.
+            pos = io.github.sekerator.kingdomworld.common.storage.StorehouseBlock.halves(level, pos).get(0);
+        }
         UUID own = SiegeWork.kingdomOf(server, event.getEntity());
         DiplomacyState diplomacy = WarWork.state(server);
         long war = diplomacy.warBetween(own, owner).map(w -> w.id()).orElse(0L);

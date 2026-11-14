@@ -27,10 +27,11 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * The "Treasury" tab of the throne screen: what the treasury holds (its balance and the coins in its vault) and four
+ * The "Treasury" tab of the throne screen: what the treasury holds (its balance and the coins in its vault) and its
  * views: an overview (currency, tax, the last payday, the mint, debts), the journal of income and expenses by category
  * for today, yesterday and seven days, the settings of taxes, wages and the name of the currency (for members with
- * the right to manage the treasury; the name only for the king), and the subjects in debt. Every change is an intent
+ * the right to manage the treasury; the name only for the king), the metals of the mint (which of them it strikes and
+ * how many of each stay in the storehouses), payments, reserves and the subjects in debt. Every change is an intent
  * the server checks; it answers with a fresh view.
  */
 final class TreasuryTab {
@@ -47,6 +48,7 @@ final class TreasuryTab {
         OVERVIEW,
         JOURNAL,
         SETTINGS,
+        MINT,
         PAYMENTS,
         RESERVES,
         DEBTORS;
@@ -83,6 +85,15 @@ final class TreasuryTab {
     private int payWidth;
     private int coinChoiceWidth;
     private int takeWidth;
+    private int mintNameWidth;
+    private int mintStockWidth;
+    private int mintToggleWidth;
+    private int mintValueWidth;
+    /** Step of the ingots to keep; with Shift the big one. */
+    private static final int KEEP_STEP = 16;
+    private static final int KEEP_BIG_STEP = 64;
+    /** Height of a row of a metal: one pixel under its buttons, so that three metals fit on the smallest screen. */
+    private static final int MINT_ROW = ROW - 1;
 
     TreasuryTab(ThroneScreen screen) {
         this.screen = screen;
@@ -231,12 +242,39 @@ final class TreasuryTab {
         int payments = paymentLabelWidth + BOX_WIDTH + GAP + Math.max(payWidth, coinChoiceWidth + GAP + takeWidth);
         settings = Math.max(settings, payments);
         int wages = professionWidth + 90 + 2 * (stepWidth + GAP);
+        int mint = measureMint(font);
         int messages = 0;
         for (String key : List.of("loading", "journal_empty", "debtors_none", "read_only", "payroll_none", "mint_none", "debts_none",
-                "payments_read_only", "coins_read_only", "reserves_none")) {
+                "payments_read_only", "coins_read_only", "reserves_none", "mint_metals_none")) {
             messages = Math.max(messages, Math.min(320, font.width(Component.translatable(KEY + key))));
         }
-        return Math.max(Math.max(buttons, settings), Math.max(wages, messages));
+        return Math.max(Math.max(Math.max(buttons, settings), Math.max(wages, messages)), mint);
+    }
+
+    /**
+     * Widths of the columns of the metals of the mint: the name of a metal is shortened and shown in full on hover, the others
+     * fit their widest text.
+     */
+    private int measureMint(Font font) {
+        mintToggleWidth = Math.max(Math.max(screen.buttonWidth(strikeLabel(true)), screen.buttonWidth(strikeLabel(false))),
+                font.width(Component.translatable(KEY + "mint_header_strike")) + 4);
+        mintValueWidth = Math.max(font.width(Integer.toString(io.github.sekerator.kingdomworld.core.economy.MintMetals.MAX_KEEP)), 24) + 4;
+        mintStockWidth = Math.max(font.width(Component.translatable(KEY + "mint_header_stock")), font.width("9999999")) + 8;
+        int names = font.width(Component.translatable(KEY + "mint_header_metal"));
+        for (TreasuryView.MintMetal metal : view == null ? List.<TreasuryView.MintMetal>of() : view.mint().metals()) {
+            names = Math.max(names, font.width(metal.item().getHoverName()));
+        }
+        mintNameWidth = Math.min(110, names + 6);
+        int keepHeader = font.width(Component.translatable(KEY + "mint_header_keep"));
+        return 20 + mintNameWidth + mintStockWidth + mintToggleWidth + GAP + 4 + Math.max(keepStepperWidth(), keepHeader);
+    }
+
+    private int keepStepperWidth() {
+        return 2 * stepWidth + 2 * GAP + mintValueWidth;
+    }
+
+    private static Component strikeLabel(boolean strike) {
+        return Component.translatable(strike ? KEY + "mint_strike_on" : KEY + "mint_strike_off");
     }
 
     private static int buttonsY(int top) {
@@ -283,6 +321,7 @@ final class TreasuryTab {
         return switch (mode) {
             case JOURNAL -> journalRows().size();
             case SETTINGS -> view.wages().size();
+            case MINT -> view.mint().metals().size();
             case DEBTORS -> view.debtors().size();
             case RESERVES -> view.reserves().size();
             default -> 0;
@@ -290,7 +329,25 @@ final class TreasuryTab {
     }
 
     private int rowsTop(int top) {
-        return mode == Mode.SETTINGS ? wagesTop(top) : listTop(top);
+        return mode == Mode.SETTINGS ? wagesTop(top) : mode == Mode.MINT ? mintTop(top) : listTop(top);
+    }
+
+    /**
+     * Where the rows of the metals start: under the line of the column titles.
+     */
+    private static int mintTop(int top) {
+        return listTop(top) + LINE;
+    }
+
+    /**
+     * Where the stepper of the ingots to keep starts: at the right edge.
+     */
+    private int keepX(int right) {
+        return right - keepStepperWidth();
+    }
+
+    private int toggleX(int right) {
+        return keepX(right) - 4 - GAP - mintToggleWidth;
     }
 
     // ---------------------------------------------------------------- widgets
@@ -319,6 +376,45 @@ final class TreasuryTab {
         if (mode == Mode.PAYMENTS) {
             initPayments(x, top);
         }
+        if (mode == Mode.MINT) {
+            initMint(right, top, rows);
+        }
+    }
+
+    /**
+     * For every metal of the mint: a button that turns striking from it on and off, and a stepper of the ingots that stay
+     * in the storehouses. Only for members with the right to manage the treasury.
+     */
+    private void initMint(int right, int top, int rows) {
+        if (!view.canManage()) {
+            return;
+        }
+        List<TreasuryView.MintMetal> metals = view.mint().metals();
+        int keepX = keepX(right);
+        for (int i = 0; i < rows && scroll + i < metals.size(); i++) {
+            TreasuryView.MintMetal metal = metals.get(scroll + i);
+            int rowY = mintTop(top) + i * MINT_ROW;
+            Button toggle = screen.add(Button.builder(strikeLabel(metal.strike()),
+                            b -> send(EconomyPackets.TreasuryChange.Action.MINT_STRIKE, metal.metal(), metal.strike() ? 0 : 1))
+                    .bounds(toggleX(right), rowY, mintToggleWidth, ROW - 2).build());
+            toggle.setTooltip(Tooltip.create(Component.translatable(metal.strike() ? KEY + "mint_strike_on_hint" : KEY + "mint_strike_off_hint",
+                    metal.item().getHoverName())));
+            Button less = screen.add(Button.builder(Component.literal("-"),
+                            b -> send(EconomyPackets.TreasuryChange.Action.MINT_KEEP, metal.metal(), Math.max(0, metal.keep() - keepStep())))
+                    .bounds(keepX, rowY, stepWidth, ROW - 2).build());
+            less.active = metal.keep() > 0;
+            less.setTooltip(Tooltip.create(Component.translatable(KEY + "mint_keep_hint")));
+            Button more = screen.add(Button.builder(Component.literal("+"),
+                            b -> send(EconomyPackets.TreasuryChange.Action.MINT_KEEP, metal.metal(),
+                                    Math.min(io.github.sekerator.kingdomworld.core.economy.MintMetals.MAX_KEEP, metal.keep() + keepStep())))
+                    .bounds(keepX + stepWidth + GAP + mintValueWidth + GAP, rowY, stepWidth, ROW - 2).build());
+            more.active = metal.keep() < io.github.sekerator.kingdomworld.core.economy.MintMetals.MAX_KEEP;
+            more.setTooltip(Tooltip.create(Component.translatable(KEY + "mint_keep_hint")));
+        }
+    }
+
+    private static int keepStep() {
+        return net.minecraft.client.gui.screens.Screen.hasShiftDown() ? KEEP_BIG_STEP : KEEP_STEP;
     }
 
     private static Component coinChoiceLabel(Denomination coin) {
@@ -449,6 +545,9 @@ final class TreasuryTab {
     }
 
     private int visible(int top, int panelHeight) {
+        if (mode == Mode.MINT) {
+            return Math.max(1, (top + panelHeight - ThroneScreen.BOTTOM_AREA - mintTop(top)) / MINT_ROW);
+        }
         return mode == Mode.JOURNAL ? journalLines(top, panelHeight) : visibleRows(rowsTop(top), top, panelHeight);
     }
 
@@ -486,6 +585,7 @@ final class TreasuryTab {
             case OVERVIEW -> renderOverview(graphics, x, right, listTop, top, panelHeight);
             case JOURNAL -> renderJournal(graphics, font, x, right, listTop, rows);
             case SETTINGS -> renderSettings(graphics, font, x, right, top, rows);
+            case MINT -> renderMint(graphics, font, x, right, top, rows);
             case PAYMENTS -> renderPayments(graphics, x, right, top, panelHeight);
             case DEBTORS -> renderDebtors(graphics, font, x, right, listTop, rows);
             case RESERVES -> renderReserves(graphics, x, right, listTop, rows);
@@ -580,6 +680,55 @@ final class TreasuryTab {
         }
     }
 
+    /**
+     * The metals of the mint: the name (in full and with the coins of one item on hover), how many the storehouses hold,
+     * whether the mint strikes from it and how many of it stay in the storehouses.
+     */
+    private void renderMint(GuiGraphics graphics, Font font, int x, int right, int top, int rows) {
+        List<TreasuryView.MintMetal> metals = view.mint().metals();
+        int headerY = listTop(top) + 1;
+        if (metals.isEmpty()) {
+            screen.paragraph(graphics, Component.translatable(KEY + "mint_metals_none"), x, headerY + 3, right - x, 3, 0xFFB8B8B8);
+            return;
+        }
+        int toggleX = toggleX(right);
+        int keepX = keepX(right);
+        int stockRight = toggleX - 6;
+        int nameX = x + 20;
+        int nameRight = stockRight - mintStockWidth;
+        screen.label(graphics, Component.translatable(KEY + "mint_header_metal"), nameX, headerY, 0xFF9A9A9A, nameRight);
+        Component stockHeader = Component.translatable(KEY + "mint_header_stock");
+        screen.label(graphics, stockHeader, stockRight - font.width(stockHeader), headerY, 0xFF9A9A9A, stockRight);
+        Component strikeHeader = Component.translatable(KEY + "mint_header_strike");
+        screen.centeredLabel(graphics, strikeHeader, toggleX + mintToggleWidth / 2, headerY, 0xFF9A9A9A, toggleX - 2,
+                toggleX + mintToggleWidth + 2);
+        Component keepHeader = Component.translatable(KEY + "mint_header_keep");
+        screen.centeredLabel(graphics, keepHeader, keepX + keepStepperWidth() / 2, headerY, 0xFF9A9A9A, keepX - 4, right);
+        boolean manage = view.canManage();
+        for (int i = 0; i < rows && scroll + i < metals.size(); i++) {
+            TreasuryView.MintMetal metal = metals.get(scroll + i);
+            int rowY = mintTop(top) + i * MINT_ROW;
+            graphics.renderItem(metal.item(), x, rowY);
+            String name = metal.item().getHoverName().getString();
+            int drawn = screen.name(graphics, name, nameX, rowY + 5, metal.strike() ? 0xFFFFFFFF : 0xFFB0B0B0, nameRight - 4 - nameX);
+            screen.hoverText(x, rowY + 5, drawn + 20, Component.translatable(KEY + "mint_rate", metal.item().getHoverName(),
+                    MoneyTexts.coins(metal.coin(), metal.count())));
+            Component stock = Component.literal(Long.toString(metal.stock()));
+            int color = !metal.strike() || metal.stock() <= metal.keep() ? 0xFFB0B0B0 : 0xFFD0D0D0;
+            screen.label(graphics, stock, stockRight - font.width(stock), rowY + 5, color, stockRight);
+            Component keep = Component.literal(Integer.toString(metal.keep()));
+            if (manage) {
+                int valueLeft = keepX + stepWidth + GAP;
+                screen.centeredLabel(graphics, keep, valueLeft + mintValueWidth / 2, rowY + 5, 0xFFFFFFFF, valueLeft, valueLeft + mintValueWidth);
+            } else {
+                Component strike = strikeLabel(metal.strike());
+                screen.centeredLabel(graphics, strike, toggleX + mintToggleWidth / 2, rowY + 5, metal.strike() ? 0xFFA0E0A0 : 0xFFFF9070,
+                        toggleX, toggleX + mintToggleWidth);
+                screen.centeredLabel(graphics, keep, keepX + keepStepperWidth() / 2, rowY + 5, 0xFFFFFFFF, keepX, right);
+            }
+        }
+    }
+
     private void renderPayments(GuiGraphics graphics, int x, int right, int top, int panelHeight) {
         int y = listTop(top);
         int labelRight = x + paymentLabelWidth - 2;
@@ -661,6 +810,9 @@ final class TreasuryTab {
         }
         if (view != null && mode == Mode.PAYMENTS && noteInHint && !view.canTakeCoins()) {
             return Component.translatable(KEY + "coins_read_only");
+        }
+        if (view != null && mode == Mode.MINT && !view.mint().metals().isEmpty()) {
+            return Component.translatable(view.canManage() ? KEY + "mint_hint" : KEY + "mint_read_only");
         }
         if (view == null || !view.canManage()) {
             return Component.empty();
