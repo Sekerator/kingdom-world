@@ -163,6 +163,59 @@ public final class GovernorGameTests {
         helper.succeed();
     }
 
+    /**
+     * A city whose governor's order found no place for want of room widens its square by a ring over the land of its kingdom, and
+     * the order looks for a place again; an order kept from its place by a block of a player widens nothing.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_governor_expand", timeoutTicks = 200)
+    public static void aCityOutOfRoomWidensOverItsOwnLandOnly(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Wider City", UUID.randomUUID());
+        BuildingTemplate template = house("governor_wider");
+        Citizen[] people = capitalWithoutBeds(helper, kingdom);
+        try {
+            helper.assertTrue(CityGovernors.appoint(server, null, kingdom.id(), people[1].id(), 0).success(), "The carrier was not made mayor");
+            played(server, kingdom);
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.construction.RemoteWorks.orderForGovernor(server, kingdom.id(),
+                    template.id().toString(), 0).ok(), "The governor's order was refused");
+            Commission order = governorOrders(server, kingdom, 0).get(0);
+            int before = io.github.sekerator.kingdomworld.common.road.CityAreas.of(server, kingdom.id()).stream()
+                    .filter(area -> area.cityId() == 0).findFirst().orElseThrow().radius();
+            // A block of a player in the way is no want of room.
+            KingdomWorldApi.state(server).construction().putCommission(order.withState(Commission.State.NO_PLACE, "blocked|1|2|3",
+                    KingdomWorldApi.gameTime(server) + 24_000));
+            CityGovernors.decideNow(server, kingdom.id(), 0);
+            helper.assertTrue(RoadWork.state(server).charter(kingdom.id(), 0).map(CityCharter::extent).orElse(0) == 0,
+                    "A city widened for an order kept by a block of a player");
+            // Every place of the data looked at in vain: the city widens over its own land and the order looks again.
+            KingdomWorldApi.state(server).construction().putCommission(order.withState(Commission.State.NO_PLACE, "no_place",
+                    KingdomWorldApi.gameTime(server) + 24_000));
+            CityGovernors.decideNow(server, kingdom.id(), 0);
+            int extent = RoadWork.state(server).charter(kingdom.id(), 0).map(CityCharter::extent).orElse(0);
+            helper.assertTrue(extent > before, "The city did not widen: extent " + extent + ", square " + before + ", note "
+                    + RoadWork.state(server).charter(kingdom.id(), 0).map(CityCharter::note).orElse(""));
+            io.github.sekerator.kingdomworld.common.road.CityAreas.Area wider = io.github.sekerator.kingdomworld.common.road.CityAreas
+                    .of(server, kingdom.id()).stream().filter(area -> area.cityId() == 0).findFirst().orElseThrow();
+            helper.assertTrue(wider.radius() >= extent, "The square of the city is not wider: " + wider.radius());
+            helper.assertTrue(governorOrders(server, kingdom, 0).stream().noneMatch(found -> found.state() == Commission.State.NO_PLACE),
+                    "The order does not look for a place again");
+            // The wider square counts only on the land of the kingdom.
+            String dimension = io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(helper.getLevel());
+            for (int dx = -wider.radius(); dx <= wider.radius(); dx += 8) {
+                int x = wider.x() + dx;
+                int z = wider.z() + wider.radius();
+                boolean own = kingdom.id().equals(KingdomWorldApi.state(server).territory().ownerOf(dimension,
+                        io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(x >> 4, z >> 4)));
+                helper.assertTrue(io.github.sekerator.kingdomworld.common.road.CityAreas.inCity(server, kingdom.id(), dimension, x, z) == own,
+                        "The edge of the wider square at " + x + " " + z + " is the city " + !own + " though the land is the kingdom's " + own);
+            }
+        } finally {
+            CitizenGameTests.finish(helper, kingdom, people);
+            BuildingTemplates.removeForTest(template.id());
+        }
+        helper.succeed();
+    }
+
     @GameTest(template = EMPTY, batch = "kingdomworld_governor_dismissed", timeoutTicks = 200)
     public static void aDismissedGovernorStopsAndItsOrdersGo(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();

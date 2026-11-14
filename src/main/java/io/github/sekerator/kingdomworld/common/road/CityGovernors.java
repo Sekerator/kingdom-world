@@ -816,22 +816,34 @@ public final class CityGovernors {
     }
 
     /**
-     * What a governor does when the places of its city ran out: an order of its found no place, or the building it wants has no
-     * place by the data. It widens the square of the city by a ring when land of its kingdom lies there, else it says the city
-     * needs land around it. Otherwise its decision stands.
+     * What a governor does when the places of its city ran out: the building it wants has no place by the data, or, when it wants
+     * nothing else today, an order of its found no place. It widens the square of the city by a ring when land of its kingdom lies
+     * there, else it says the city needs land around it. Otherwise its decision stands: a post of builders, a wall and a building
+     * that has a place are ordered though another order waits for a place, and an order kept from its place by a block of a
+     * player, by a failure or by anything but the room of the city widens nothing.
      */
     static CityGrowth.Decision room(MinecraftServer server, UUID kingdomId, long cityId, CityGrowth.Decision decision) {
-        String template = decision.kind() == CityGrowth.Kind.BUILD ? decision.template() : "";
-        boolean stuck = false;
-        for (Commission commission : KingdomWorldApi.state(server).construction().commissionsOf(kingdomId)) {
-            if (commission.origin() == Commission.Origin.GOVERNOR && commission.cityId() == cityId
-                    && commission.state() == Commission.State.NO_PLACE) {
-                stuck = true;
-                template = template.isEmpty() ? commission.templateId() : template;
+        String template;
+        if (decision.kind() == CityGrowth.Kind.BUILD) {
+            if (hasPlace(server, kingdomId, cityId, decision.template())) {
+                return decision;
             }
-        }
-        if (!stuck && (decision.kind() != CityGrowth.Kind.BUILD || hasPlace(server, kingdomId, cityId, template))) {
+            template = decision.template();
+        } else if (decision.kind() == CityGrowth.Kind.ORDER_POST || decision.kind() == CityGrowth.Kind.WALL) {
             return decision;
+        } else {
+            template = "";
+            boolean stuck = false;
+            for (Commission commission : KingdomWorldApi.state(server).construction().commissionsOf(kingdomId)) {
+                if (commission.origin() == Commission.Origin.GOVERNOR && commission.cityId() == cityId
+                        && commission.state() == Commission.State.NO_PLACE && outOfRoom(commission.reason())) {
+                    stuck = true;
+                    template = template.isEmpty() ? commission.templateId() : template;
+                }
+            }
+            if (!stuck) {
+                return decision;
+            }
         }
         Optional<CityAreas.Area> area = CityAreas.of(server, kingdomId).stream().filter(found -> found.cityId() == cityId).findFirst();
         if (area.isEmpty()) {
@@ -850,6 +862,14 @@ public final class CityGovernors {
         CityGrowth.Decision wanted = decision.kind() == CityGrowth.Kind.BUILD ? decision
                 : new CityGrowth.Decision(CityGrowth.Kind.BUILD, "", template, 0, null, 0, 0);
         return CityGrowth.outOfRoom(wanted, land, area.get().radius(), ring);
+    }
+
+    /**
+     * Whether an order found no place for want of room in its city: every place of the data was looked at in vain, and no block of
+     * a player nor a failure kept it.
+     */
+    static boolean outOfRoom(String reason) {
+        return reason.equals("no_place") || reason.equals("no_post_place");
     }
 
     /**
