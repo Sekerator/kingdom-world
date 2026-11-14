@@ -147,6 +147,10 @@ The tax is taken from the account only, never from coins in the inventory. What 
 
 You get a message about the tax and the debt, and a reminder when you join. Your own debt shows in the [bank](bank) window and with **/kingdom balance**; all debtors show in the view "debtors" of the Treasury tab. A debt has no interest, and guards never attack for one. But with a debt above {cfg:law.debtLimit} copper coins the kingdom's market sells to you only for coins and takes no new lots from you (see [Fines and punishment](fines)).
 
+### Dues of the townsfolk
+
+The townsfolk of the cities (people who live in a city as a number, see [Arrival and growth](growth)) pay dues into the treasury once a game day: {cfg:citizens.folkDues} a head a day, in copper coins. They go into the journal of the treasury as taxes. A full treasury takes no more, as with the poll tax.
+
 ### Tax on sales
 
 Apart from that the king sets a tax on the sales of players' lots at the market: the Market tab, the view "settings", the box "Tax on lots, %:". A new market has {cfg:trade.defaultSalesTaxPercent}%, the highest is {cfg:trade.maxSalesTaxPercent}%. More in [The market stall](stall).

@@ -25,14 +25,14 @@ Every living citizen adds {cfg:territory.chunksPerCitizen} chunks to the kingdom
 
 ## growth | Arrival and growth
 @icon minecraft:red_bed
-New citizens are not bought or bred: they come to the throne by themselves. The check runs once per step of the simulation, and a newcomer arrives when every condition holds:
+New citizens are not bought or bred: they come by themselves. Every city of the kingdom, the capital too, grows by itself, so several cities fill at the same time. The check runs once per step of the simulation, and a newcomer comes to a city when every condition holds:
 
-1. **A free bed** on the kingdom's land.
-2. **Food:** the storehouses feed everybody, the newcomer included, for {cfg:citizens.growthFoodDays} days (see [Food](food)).
-3. **Time:** {cfg:citizens.growthIntervalMinutes} min. have passed since the last arrival. That is at an average mood of 50; content citizens (100) shorten it to three quarters, miserable ones (0) make it up to twice as long.
+1. **A free bed in that city.** A bed belongs to the city whose square holds it (the nearer one where the squares of two cities meet), and outside every square to the nearest town hall or throne.
+2. **Food:** the storehouses feed everybody, the newcomer and the townsfolk of the cities included, for {cfg:citizens.growthFoodDays} days (see [Food](food)).
+3. **Time:** {cfg:citizens.growthIntervalMinutes} min. have passed since the last arrival in that city. That is at an average mood of its citizens of 50; content ones (100) shorten it to three quarters, miserable ones (0) make it up to twice as long.
 4. **The limit of the server** on the citizens of a kingdom: {cfg:citizens.maxCitizensPerKingdom}. There is none by default, and only the beds, the food and the time bound the growth. The most named citizens of the world ({cfg:npcKingdoms.maxNamedCitizens}) bounds only the kingdoms of the world, and kingdoms of players grow beyond it too.
 
-The newcomer appears at the throne, at once takes the nearest free bed (a house first) and comes **without work**: you give it a profession (see [Professions](professions)). The king and the members with the Citizens right are told "A new citizen, ..., has come to ...".
+The newcomer appears at the town hall of its city (at the throne in the capital), at once takes a free bed of that city (a house first) and comes **without work**: you give it a profession (see [Professions](professions)). The king and the members with the Citizens right are told "A new citizen, ..., has come to ...".
 
 ### Which beds will do
 
@@ -47,6 +47,17 @@ The Citizens tab of the throne window names the reason:
 - "Newcomers need more food in the storehouses";
 - "A newcomer arrived recently; the next comes later";
 - "The kingdom has as many citizens as it may".
+
+### Townsfolk
+
+Once a city has {cfg:citizens.namedPerCity} named citizens (those whose home is in it), its next newcomers stay **townsfolk**: people of the city who live there as a number, without a body or a record. A city of thousands so costs the server next to nothing. Named citizens are never folded into the number, and when a city has fewer of them (one died or moved away), its next newcomer comes out of the townsfolk and becomes a named citizen.
+
+- **Where they live.** The townsfolk have no beds of their own: they live in the free beds of the city no named citizen took, {cfg:citizens.folkPerBed} to a bed (a family). Named citizens always come first: a homeless citizen may take such a bed, and the townsfolk beyond the room then leave.
+- **Once a game day** the townsfolk of a city eat their ration from the storehouses as citizens far from players do, and pay dues into the treasury (see [Taxes](taxes)). Those who get no food leave, and the king and the members with the Citizens right are told.
+- **They grow** by 3% a day, at least one, while the city has {cfg:citizens.namedPerCity} named citizens, room in its beds, food in the storehouses for everybody for {cfg:citizens.growthFoodDays} days and named citizens of a mood of at least 50. The newcomers of the city become townsfolk too.
+- **Where to see them.** On the Roads tab, the cities view, when hovering a city: "Citizens: 64 (+936 townsfolk)" and "Beds: 300, 12 free". The townsfolk count for the level of the city and the stock of food on the Citizens tab.
+
+The key `namedPerCity` 0 in the server config turns townsfolk off: every newcomer is named then. Kingdoms of the world live without townsfolk; their distant settlements fold into numbers in their own way.
 
 > To start, place a storehouse with bread and a couple of beds near the throne. Every citizen eats, so the stock of food needed grows with the population.
 

@@ -665,6 +665,36 @@ public final class Economy {
     }
 
     /**
+     * How much the treasury of a kingdom can still take; 0 for a kingdom without one.
+     */
+    public long treasuryRoom(UUID kingdomId) {
+        Treasury treasury = treasuries.get(kingdomId);
+        if (treasury == null) {
+            return 0;
+        }
+        return Math.max(0, Money.MAX - Math.max(Math.max(0, treasury.balance()), Math.max(0, treasury.funds())));
+    }
+
+    /**
+     * The townsfolk of the cities of a kingdom pay their dues into its treasury, as taxes; what a full treasury cannot take
+     * is not taken.
+     *
+     * @return what was paid
+     */
+    public long folkDues(UUID kingdomId, long amount, long day) {
+        Treasury treasury = treasuries.get(kingdomId);
+        if (treasury == null || amount <= 0) {
+            return 0;
+        }
+        long paid = Math.min(amount, treasuryRoom(kingdomId));
+        if (paid <= 0 || !treasury.receive(paid, LedgerCategory.TAXES, day)) {
+            return 0;
+        }
+        changed();
+        return paid;
+    }
+
+    /**
      * The army pays mercenaries from the treasury: the money leaves the world.
      */
     public Outcome armyPayment(UUID kingdomId, long amount, long day) {

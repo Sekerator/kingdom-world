@@ -53,6 +53,23 @@ public final class CitizenLife {
      * @return the newcomer, or empty if the data is read-only
      */
     public static Optional<Citizen> arrive(MinecraftServer server, UUID kingdomId, WorldPos place, boolean announce, boolean bed) {
+        return arrive(server, kingdomId, place, null, announce, bed);
+    }
+
+    /**
+     * A new citizen arrives at {@code place}, the town hall of a city, and moves into a free bed of that city.
+     *
+     * @param home the free bed it moves into; the free bed nearest to the place, as {@link #arrive}, when it is gone meanwhile
+     *             or {@code null}
+     * @return the newcomer, or empty if the data is read-only
+     */
+    public static Optional<Citizen> arriveInto(MinecraftServer server, UUID kingdomId, WorldPos place, @org.jetbrains.annotations.Nullable WorldPos home,
+                                               boolean announce) {
+        return arrive(server, kingdomId, place, home, announce, true);
+    }
+
+    private static Optional<Citizen> arrive(MinecraftServer server, UUID kingdomId, WorldPos place, @org.jetbrains.annotations.Nullable WorldPos home,
+                                            boolean announce, boolean bed) {
         RandomSource random = server.overworld().getRandom();
         long now = KingdomWorldApi.gameTime(server);
         Citizen citizen = new Citizen(UUID.randomUUID(), kingdomId, random.nextInt(),
@@ -65,6 +82,11 @@ public final class CitizenLife {
             state.citizens().add(citizen);
             state.citizens().registry().markArrival(kingdomId, now);
             // The same beds the simulation offers: a house first, never a room of a tavern or the bed of a player.
+            if (bed && home != null && state.citizens().sites().get(home).map(site -> site.isFree() && kingdomId.equals(site.kingdomId()))
+                    .orElse(false) && io.github.sekerator.kingdomworld.common.construction.BuildingEffects.bedUsable(server, kingdomId, home)
+                    && state.citizens().assignHome(citizen, home)) {
+                return Outcome.DONE;
+            }
             if (bed) {
                 io.github.sekerator.kingdomworld.common.construction.BuildingEffects.freeBed(server, kingdomId, place)
                         .ifPresent(free -> state.citizens().assignHome(citizen, free.pos()));

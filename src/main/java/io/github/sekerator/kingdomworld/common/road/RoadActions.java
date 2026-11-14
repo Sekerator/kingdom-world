@@ -63,7 +63,7 @@ public final class RoadActions {
     }
 
     private static RoadViews.CityRow cityRow(MinecraftServer server, RoadState roads, UUID kingdomId, long cityId, String name, int x, int y, int z,
-                                             int roadCount) {
+                                             int roadCount, java.util.Map<Long, CityPeople.Census> census) {
         CityWalls.Place place = new CityWalls.Place(kingdomId, cityId, "", x, y, z, name);
         int[] counts = CityWalls.place(server, kingdomId, cityId).map(found -> CityWalls.counts(server, found)).orElse(new int[2]);
         CityLevel level = CityLevel.of(counts[0], counts[1], RoadSettings.rules());
@@ -77,8 +77,13 @@ public final class RoadActions {
             }
             return units == 0 ? 1000 : (int) Math.round(1000.0 * placed / units);
         }).orElse(0);
-        return new RoadViews.CityRow(cityId, place.name(), x, y, z, cityId == 0, roadCount, level, counts[0], counts[1], wall.map(Wall::id).orElse(0L),
-                wall.map(Wall::wallClass).orElse(null), built, wall.map(w -> w.gates().size()).orElse(0));
+        CityPeople.Census people = census.get(cityId);
+        int folk = roads.folk(kingdomId, cityId);
+        int freeBeds = people == null ? 0 : io.github.sekerator.kingdomworld.core.road.CityFolk.bedsLeft(people.freeBeds(), folk,
+                io.github.sekerator.kingdomworld.common.citizen.FolkSettings.rules());
+        return new RoadViews.CityRow(cityId, place.name(), x, y, z, cityId == 0, roadCount, level, people == null ? 0 : people.named(), counts[1],
+                wall.map(Wall::id).orElse(0L), wall.map(Wall::wallClass).orElse(null), built, wall.map(w -> w.gates().size()).orElse(0), folk,
+                people == null ? 0 : people.beds(), freeBeds);
     }
 
     static String endpointName(MinecraftServer server, Endpoint endpoint) {
@@ -105,13 +110,18 @@ public final class RoadActions {
         // Towns of kingdoms of the world are named in the alphabet of the viewer.
         net.minecraft.server.level.ServerPlayer reader = viewer == null ? null : server.getPlayerList().getPlayer(viewer);
         String language = reader == null ? "en_us" : reader.getLanguage();
+        // Who lives in each city and its beds, counted once for all of them.
+        java.util.Map<Long, CityPeople.Census> census = new java.util.HashMap<>();
+        for (CityPeople.Census city : CityPeople.census(server, kingdomId)) {
+            census.put(city.cityId(), city);
+        }
         capital.ifPresent(c -> cities.add(cityRow(server, roads, kingdomId, 0,
                 io.github.sekerator.kingdomworld.common.npc.NpcWork.localKingdom(kingdomId, kingdom.get().name(), language), c.x(), c.y(), c.z(),
-                countRoads(roads, Endpoint.Kind.CAPITAL, 0, kingdomId))));
+                countRoads(roads, Endpoint.Kind.CAPITAL, 0, kingdomId), census)));
         for (City city : roads.citiesOf(kingdomId)) {
             cities.add(cityRow(server, roads, kingdomId, city.id(), io.github.sekerator.kingdomworld.common.npc.NpcWork.localCity(city.name(),
                     language), city.x(), city.y(), city.z(),
-                    countRoads(roads, Endpoint.Kind.CITY, city.id(), null)));
+                    countRoads(roads, Endpoint.Kind.CITY, city.id(), null), census));
         }
         List<RoadViews.RoadRow> roadRows = new ArrayList<>();
         for (Road road : roads.roadsOf(kingdomId)) {

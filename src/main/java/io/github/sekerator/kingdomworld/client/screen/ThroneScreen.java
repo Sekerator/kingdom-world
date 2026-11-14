@@ -407,6 +407,14 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
+     * Where the text of a row of the list of the roads tab was drawn last, {x, y} in the coordinates of the screen; for the
+     * self-check.
+     */
+    public int[] roadsRowForCheck(int row) {
+        return roads.rowForCheck(row);
+    }
+
+    /**
      * Whether the guild tab got its view, for the self-check.
      */
     public boolean guildShown() {

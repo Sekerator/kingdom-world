@@ -433,11 +433,17 @@ public final class CitizenSimulation {
     }
 
     /**
-     * A newcomer arrives at the throne if there is a free bed, enough food and the last arrival is long enough ago.
+     * A newcomer arrives at the throne if there is a free bed, enough food and the last arrival is long enough ago. In a kingdom
+     * of players every city grows by itself instead, and a city full of named citizens grows by its townsfolk (see
+     * {@link io.github.sekerator.kingdomworld.common.road.CityPeople}).
      */
     private static void grow(MinecraftServer server, KingdomWorldState state, UUID kingdomId, CitizenRules rules, long now) {
         Optional<Territory> territory = state.territory().territory(kingdomId);
         if (territory.isEmpty()) {
+            return;
+        }
+        if (io.github.sekerator.kingdomworld.common.road.CityPeople.growsByCity(server, kingdomId)) {
+            io.github.sekerator.kingdomworld.common.road.CityPeople.step(server, kingdomId, rules, now);
             return;
         }
         CitizenRegistry registry = state.citizens().registry();
@@ -513,6 +519,9 @@ public final class CitizenSimulation {
      * Why newcomers do or do not arrive right now, for the throne screen and commands.
      */
     public static CitizenNeeds.GrowthCheck growthCheck(MinecraftServer server, UUID kingdomId) {
+        if (io.github.sekerator.kingdomworld.common.road.CityPeople.growsByCity(server, kingdomId)) {
+            return io.github.sekerator.kingdomworld.common.road.CityPeople.growthCheck(server, kingdomId, CitizenSettings.rules());
+        }
         KingdomWorldState state = KingdomWorldApi.state(server);
         CitizenRegistry registry = state.citizens().registry();
         List<Citizen> people = registry.citizensOf(kingdomId);

@@ -51,11 +51,12 @@ final class RoadLayoutCases {
         List<RoadViews.SquadRow> squads = new ArrayList<>();
         if (!empty) {
             cities.add(new RoadViews.CityRow(0, LONG_KINGDOM, -29_999_999, 319, 29_999_999, true, 256, CityLevel.CITY, 99_999, 99_999, MUCH,
-                    Wall.WallClass.STONE, 1000, 64));
+                    Wall.WallClass.STONE, 1000, 64, 999_999_999, 999_999, 999_999));
             CityLevel[] levels = CityLevel.values();
             for (int i = 0; i < 16; i++) {
                 cities.add(new RoadViews.CityRow(i + 1L, LONG_CITY, -29_999_999, -64, 29_999_999 - i, false, 256, levels[i % levels.length], 99_999,
-                        99_999, i % 3 == 0 ? 0 : MUCH - i, i % 3 == 0 ? null : Wall.WallClass.values()[i % 2], i * 70, 64));
+                        99_999, i % 3 == 0 ? 0 : MUCH - i, i % 3 == 0 ? null : Wall.WallClass.values()[i % 2], i * 70, 64, i % 2 == 0 ? 0 : 936 * i,
+                        99_999, i * 3));
             }
             Road.Status[] statuses = Road.Status.values();
             for (int i = 0; i < 20; i++) {

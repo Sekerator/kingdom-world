@@ -69,6 +69,7 @@ public final class CitizenEvents {
         long tick = server.getTickCount();
         if (tick % CitizenBodies.UPDATE_INTERVAL == 0) {
             CitizenSettings.refresh();
+            FolkSettings.refresh();
             GatheringSettings.refresh();
             io.github.sekerator.kingdomworld.common.production.ProductionSettings.refresh();
             var rules = GatheringSettings.rules();
@@ -137,6 +138,7 @@ public final class CitizenEvents {
         CitizenSites.reset();
         WorkPostLooks.reset();
         CitizenSettings.reset();
+        FolkSettings.reset();
         GatheringSettings.reset();
         PostWork.reset();
         io.github.sekerator.kingdomworld.common.citizen.work.MinerBehavior.reset();

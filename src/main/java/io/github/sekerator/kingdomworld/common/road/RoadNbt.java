@@ -3,6 +3,7 @@ package io.github.sekerator.kingdomworld.common.road;
 import io.github.sekerator.kingdomworld.core.road.BanditCamp;
 import io.github.sekerator.kingdomworld.core.road.CaravanRoute;
 import io.github.sekerator.kingdomworld.core.road.City;
+import io.github.sekerator.kingdomworld.core.road.CityCharter;
 import io.github.sekerator.kingdomworld.core.road.Crossing;
 import io.github.sekerator.kingdomworld.core.road.Endpoint;
 import io.github.sekerator.kingdomworld.core.road.Road;
@@ -41,6 +42,7 @@ import java.util.UUID;
  * walls: [ { id, city, kingdom, class, dim, cx, cz, cells: [x, y, z, ...], gates: [cell], created, building, placed: [pos],
  *           sections: [ { paid, placed, pool } ] } ]
  * consents: ["owner>requester"]
+ * charters: [ { kingdom, city, folk?, carry?, day?, arrival? } ] (a missing key is nothing yet; data written before has none)
  * nextCity, nextRoad, nextCrossing, nextCamp, nextWall
  * </pre>
  */
@@ -103,6 +105,13 @@ final class RoadNbt {
             consents.add(net.minecraft.nbt.StringTag.valueOf(pair));
         }
         tag.put("consents", consents);
+        ListTag charters = new ListTag();
+        for (CityCharter charter : state.charters()) {
+            if (!charter.empty()) {
+                charters.add(writeCharter(charter));
+            }
+        }
+        tag.put("charters", charters);
         tag.putLong("nextWall", state.counters()[4]);
         long[] counters = state.counters();
         tag.putLong("nextCity", counters[0]);
@@ -443,6 +452,37 @@ final class RoadNbt {
                 entry.getInt("checked"));
     }
 
+    static CompoundTag writeCharter(CityCharter charter) {
+        CompoundTag entry = new CompoundTag();
+        entry.putUUID("kingdom", charter.kingdomId());
+        entry.putLong("city", charter.cityId());
+        if (charter.folk() != 0) {
+            entry.putInt("folk", charter.folk());
+        }
+        if (charter.folkCarry() != 0.0) {
+            entry.putDouble("carry", charter.folkCarry());
+        }
+        if (charter.lastDay() != CityCharter.NEVER) {
+            entry.putLong("day", charter.lastDay());
+        }
+        if (charter.lastArrival() != CityCharter.NEVER) {
+            entry.putLong("arrival", charter.lastArrival());
+        }
+        return entry;
+    }
+
+    static CityCharter readCharter(CompoundTag entry) {
+        if (!entry.hasUUID("kingdom")) {
+            throw new IllegalArgumentException("no kingdom");
+        }
+        CityCharter charter = new CityCharter(entry.getUUID("kingdom"), entry.getLong("city"));
+        charter.setFolk(entry.getInt("folk"));
+        charter.setFolkCarry(entry.getDouble("carry"));
+        charter.setLastDay(entry.contains("day", Tag.TAG_LONG) ? entry.getLong("day") : CityCharter.NEVER);
+        charter.setLastArrival(entry.contains("arrival", Tag.TAG_LONG) ? entry.getLong("arrival") : CityCharter.NEVER);
+        return charter;
+    }
+
     /**
      * Reads everything it can into the state.
      *
@@ -507,6 +547,14 @@ final class RoadNbt {
         ListTag consents = tag.getList("consents", Tag.TAG_STRING);
         for (int i = 0; i < consents.size(); i++) {
             state.restoreConsent(consents.getString(i));
+        }
+        ListTag charters = tag.getList("charters", Tag.TAG_COMPOUND);
+        for (int i = 0; i < charters.size(); i++) {
+            try {
+                state.putCharter(readCharter(charters.getCompound(i)));
+            } catch (RuntimeException e) {
+                problems.add("city record " + i + ": " + e.getMessage());
+            }
         }
         state.restoreWallCounter(tag.getLong("nextWall"));
         state.restoreCounters(tag.getLong("nextCity"), tag.getLong("nextRoad"), tag.getLong("nextCrossing"), tag.getLong("nextCamp"));

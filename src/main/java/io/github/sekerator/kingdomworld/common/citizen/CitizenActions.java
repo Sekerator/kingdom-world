@@ -48,7 +48,9 @@ public final class CitizenActions {
         KingdomWorldState state = KingdomWorldApi.state(server);
         Citizens citizens = state.citizens();
         List<Citizen> people = citizens.registry().citizensOf(kingdomId);
-        double days = CitizenNeeds.foodDays(KingdomStorage.totalNutrition(server, kingdomId), people.size(),
+        // The townsfolk of the cities eat from the same storehouses.
+        long eaters = people.size() + io.github.sekerator.kingdomworld.common.road.RoadWork.state(server).folkOf(kingdomId);
+        double days = CitizenNeeds.foodDays(KingdomStorage.totalNutrition(server, kingdomId), (int) Math.min(Integer.MAX_VALUE, eaters),
                 CitizenSettings.rules().dailyNutrition());
         int foodDays = Double.isInfinite(days) ? CitizenView.UNLIMITED_FOOD : (int) Math.min(CitizenView.MAX_FOOD_DAYS, Math.floor(days));
         return new Summary(people.size(), citizens.sites().occupied(kingdomId, SiteKinds.BED),

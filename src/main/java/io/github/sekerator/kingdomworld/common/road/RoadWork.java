@@ -143,6 +143,12 @@ public final class RoadWork {
             return Outcome.fail(KingdomError.CONSTRUCTION_OUTSIDE_LAND);
         }
         RoadRules rules = RoadSettings.rulesFor(server, kingdomId);
+        // A city grown by its people beyond the square of its level holds the land around it: no other city is founded there.
+        for (CityAreas.Area area : CityAreas.of(server, kingdomId)) {
+            if (area.cityId() >= 0 && area.contains(dimension, pos.getX(), pos.getZ()) && area.grown(pos.getX(), pos.getZ())) {
+                return Outcome.fail(KingdomError.CITY_TOO_CLOSE);
+            }
+        }
         City[] made = new City[1];
         Outcome outcome = change(server, "found a city", roads -> {
             Outcome check = roads.checkCity(kingdomId, dimension, pos.getX(), pos.getZ(), capitals(server, dimension), rules);
@@ -293,6 +299,8 @@ public final class RoadWork {
     static void keepInStep(MinecraftServer server, RoadState roads, KingdomWorldState world) {
         Set<UUID> kingdoms = new HashSet<>();
         roads.cities().forEach(city -> kingdoms.add(city.kingdomId()));
+        // A kingdom with no city but its capital may still keep townsfolk there.
+        roads.charters().forEach(charter -> kingdoms.add(charter.kingdomId()));
         roads.roads().forEach(road -> kingdoms.addAll(road.builders()));
         roads.roads().forEach(road -> kingdoms.add(road.kingdomId()));
         kingdoms.removeIf(id -> world.kingdoms().get(id).isPresent());

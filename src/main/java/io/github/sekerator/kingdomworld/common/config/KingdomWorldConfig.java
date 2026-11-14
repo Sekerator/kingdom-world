@@ -78,6 +78,10 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue infirmaryCapacity;
         public final ForgeConfigSpec.IntValue woundedHealthPercent;
         public final ForgeConfigSpec.IntValue maxCitizensPerKingdom;
+        public final ForgeConfigSpec.IntValue namedPerCity;
+        public final ForgeConfigSpec.IntValue folkPerBed;
+        public final ForgeConfigSpec.IntValue folkDensity;
+        public final ForgeConfigSpec.IntValue folkDues;
         public final ForgeConfigSpec.IntValue farmRadius;
         public final ForgeConfigSpec.IntValue workPostDefaultRadius;
         public final ForgeConfigSpec.IntValue workPostMaxRadius;
@@ -237,6 +241,21 @@ public final class KingdomWorldConfig {
                     .comment("Newcomers stop arriving in a kingdom with this many citizens; 0 is no limit, the beds, the food and the mood decide.",
                             "The old default 200 is read as 0.")
                     .defineInRange("maxCitizensPerKingdom", 0, 0, 10_000_000);
+            namedPerCity = builder
+                    .comment("Named citizens a city (the capital too) of a kingdom of players takes. Its newcomers beyond them stay townsfolk:",
+                            "people of the city who live there as a number, eat, pay and grow without a body or a record, so that a large city",
+                            "costs the server little. Named citizens are never folded into the number. 0 makes no townsfolk.")
+                    .defineInRange("namedPerCity", 64, 0, 1_000_000);
+            folkPerBed = builder
+                    .comment("Townsfolk one free bed of a city holds (a family); named citizens always come first.")
+                    .defineInRange("folkPerBed", 4, 1, 64);
+            folkDensity = builder
+                    .comment("People one block of the square of a city holds when built densely: a city whose people need more room than its",
+                            "level gives grows its square (for the law, the guards and construction) by them, without an upper limit.")
+                    .defineInRange("folkDensity", 8, 1, 1_000);
+            folkDues = builder
+                    .comment("Coins one of the townsfolk pays into the treasury a day (a farmer earns 6). A full treasury takes no more.")
+                    .defineInRange("folkDues", 1, 0, 1_000_000);
             farmRadius = builder
                     .comment("How far, in blocks, a farmer works around its composter.")
                     .defineInRange("farmRadius", 8, 1, 32);

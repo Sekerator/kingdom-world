@@ -72,6 +72,9 @@ final class RoadsTab {
     private RoadViews.RoadTabView view;
     private Mode mode = Mode.OVERVIEW;
     private int scroll;
+    /** Where the list was drawn last, for the self-check: the left of its text and its top. */
+    private int drawnX;
+    private int drawnListTop;
     /** The road whose actions are shown, 0 for none. */
     private long acting;
     /** The road a squad is being chosen for, 0 for none. */
@@ -425,9 +428,18 @@ final class RoadsTab {
         }
     }
 
+    /**
+     * Where the text of a row of the list was drawn last, {x, y}; for the self-check, which puts the mouse over it.
+     */
+    int[] rowForCheck(int row) {
+        return new int[]{drawnX, drawnListTop + row * ROW + 4};
+    }
+
     void render(GuiGraphics graphics, Font font, int left, int top, int panelWidth, int panelHeight) {
         int x = left + KingdomScreen.PAD;
         int right = left + panelWidth - KingdomScreen.PAD;
+        drawnX = x;
+        drawnListTop = listTop(top);
         if (view == null) {
             screen.label(graphics, Component.translatable(KEY + "loading"), x, buttonsY(top) + 4, 0xFFB8B8B8, right);
             return;
@@ -521,7 +533,11 @@ final class RoadsTab {
                 : row.wallBuilt() >= 1000 ? RoadTexts.wallClass(row.wallClass())
                 : Component.translatable(KEY + "wall_building", RoadTexts.wallClass(row.wallClass()), TradeTexts.percent(permille(row.wallBuilt())));
         Component state = Component.translatable(KEY + "city_state", RoadTexts.level(row.level()), wall);
-        Component hint = Component.translatable(KEY + "city_hint", row.name(), RoadTexts.level(row.level()), row.people(), row.buildings(), wall,
+        // The townsfolk live in the city as a number beside its named citizens.
+        Component people = row.folk() > 0 ? Component.translatable(KEY + "city_people_folk", row.people(), row.folk())
+                : Component.literal(Integer.toString(row.people()));
+        Component beds = Component.translatable(KEY + "city_beds", row.beds(), row.freeBeds());
+        Component hint = Component.translatable(KEY + "city_hint", row.name(), RoadTexts.level(row.level()), people, row.buildings(), beds, wall,
                 RoadTexts.gates(row.gates()), where);
         int whereWidth = Math.min(screen.font().width(where), Math.max(0, (right - x) / 4));
         int stateWidth = Math.min(screen.font().width(state), Math.max(0, (right - x - whereWidth) / 2));

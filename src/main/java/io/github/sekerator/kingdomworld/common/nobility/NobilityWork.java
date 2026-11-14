@@ -570,7 +570,7 @@ public final class NobilityWork {
             return;
         }
         Map<Fief, Integer> people = people(server, kingdomId);
-        int all = Math.max(1, people.values().stream().mapToInt(Integer::intValue).sum());
+        int all = (int) Math.max(1, Math.min(Integer.MAX_VALUE, people.values().stream().mapToLong(Integer::longValue).sum()));
         NobilityRules rules = NobilitySettings.rules();
         for (Grant grant : grants) {
             long share = fiefShare(income, people.getOrDefault(grant.fief(), 0), all, rules.share(grant.title()));
@@ -604,8 +604,8 @@ public final class NobilityWork {
     }
 
     /**
-     * How many citizens live in each fief: in a city (near it, nearer to it than to the capital and the other cities), or in the
-     * march of the side of the capital they live on.
+     * How many people live in each fief: in a city (near it, nearer to it than to the capital and the other cities, and its
+     * townsfolk), or in the march of the side of the capital they live on (the townsfolk of the capital in all four alike).
      */
     public static Map<Fief, Integer> people(MinecraftServer server, UUID kingdomId) {
         Map<Fief, Integer> result = new HashMap<>();
@@ -628,6 +628,21 @@ public final class NobilityWork {
             }
             Fief fief = nearest != null ? Fief.city(nearest.id()) : Fief.march(Fief.side(at.x() - capital.get().x(), at.z() - capital.get().z()));
             result.merge(fief, 1, Integer::sum);
+        }
+        // The townsfolk live in their city; those of the capital, which is no fief, in the four marches around it alike.
+        if (capital.isPresent()) {
+            for (Map.Entry<Long, Integer> folk : io.github.sekerator.kingdomworld.common.road.CityPeople.folkByCity(server, kingdomId).entrySet()) {
+                if (folk.getKey() != 0) {
+                    result.merge(Fief.city(folk.getKey()), folk.getValue(), (a, b) -> (int) Math.min(Integer.MAX_VALUE, (long) a + b));
+                    continue;
+                }
+                for (int side = 0; side < 4; side++) {
+                    int part = folk.getValue() / 4 + (side < folk.getValue() % 4 ? 1 : 0);
+                    if (part > 0) {
+                        result.merge(Fief.march(side), part, (a, b) -> (int) Math.min(Integer.MAX_VALUE, (long) a + b));
+                    }
+                }
+            }
         }
         return result;
     }

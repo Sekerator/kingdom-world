@@ -18,7 +18,8 @@ import java.util.UUID;
  * Where the cities of each kingdom lie, for questions asked on every block event and every blow: whether a place is inside
  * a city of a kingdom. A city with a wall is the square of its wall with the wall itself; a city without one is the square
  * its wall would take at its level (a village, a town, a large city), or by the plan of a capital of a kingdom of the world
- * where that is wider. The squares are worked out once in
+ * where that is wider. A city of more people than that square holds, built densely, is wider by them, without an upper
+ * limit, but where it grew it lies on the land of its kingdom only. The squares are worked out once in
  * {@value #REFRESH_TICKS} ticks and sorted into cells of 512 blocks, so that asking costs a look at the few cities near the
  * place.
  */
@@ -32,10 +33,23 @@ public final class CityAreas {
      * @param cityId 0 for the capital
      * @param radius half the side of the square, in blocks
      * @param walled whether a wall stands around it
+     * @param base   half the side of the square by its level, plan and wall alone; beyond it, up to {@code radius}, the city
+     *               grew by its people and holds the land of its kingdom only
      */
-    public record Area(UUID kingdomId, long cityId, String dimension, int x, int z, int radius, boolean walled) {
+    public record Area(UUID kingdomId, long cityId, String dimension, int x, int z, int radius, boolean walled, int base) {
+        public Area(UUID kingdomId, long cityId, String dimension, int x, int z, int radius, boolean walled) {
+            this(kingdomId, cityId, dimension, x, z, radius, walled, radius);
+        }
+
         public boolean contains(String dimension, int px, int pz) {
             return this.dimension.equals(dimension) && Math.abs(px - x) <= radius && Math.abs(pz - z) <= radius;
+        }
+
+        /**
+         * Whether a place it contains lies where the city grew by its people, beyond the square of its level, plan and wall.
+         */
+        public boolean grown(int px, int pz) {
+            return Math.abs(px - x) > base || Math.abs(pz - z) > base;
         }
     }
 
@@ -127,30 +141,23 @@ public final class CityAreas {
         builtSignature = signature;
         RoadState roads = RoadWork.state(server);
         List<CityWalls.Place> places = CityWalls.places(server);
-        List<Optional<Wall>> walls = new ArrayList<>(places.size());
-        List<CityWalls.Place> open = new ArrayList<>();
-        for (CityWalls.Place place : places) {
-            Optional<Wall> wall = roads.wallOf(place.cityId(), place.kingdomId());
-            walls.add(wall);
-            if (wall.isEmpty()) {
-                open.add(place);
-            }
-        }
-        // The people and buildings of a kingdom are counted once for all of its cities without a wall.
-        int[][] counts = CityWalls.counts(server, open);
-        int next = 0;
+        // The people and buildings of a kingdom are counted once for all of its cities; the people of a city with a wall widen it
+        // beyond its wall when they need more room.
+        int[][] counts = CityWalls.counts(server, places);
         Map<UUID, List<Area>> built = new HashMap<>();
         Map<UUID, CellIndex<Area>> sorted = new HashMap<>();
         for (int i = 0; i < places.size(); i++) {
             CityWalls.Place place = places.get(i);
-            Optional<Wall> wall = walls.get(i);
+            Optional<Wall> wall = roads.wallOf(place.cityId(), place.kingdomId());
+            int people = CityWalls.peopleRadius(counts[i][0]);
             Area area;
             if (wall.isPresent()) {
                 Wall found = wall.get();
-                area = new Area(place.kingdomId(), place.cityId(), found.dimension(), found.centerX(), found.centerZ(), found.radius(), true);
+                area = new Area(place.kingdomId(), place.cityId(), found.dimension(), found.centerX(), found.centerZ(),
+                        Math.max(found.radius(), people), true, found.radius());
             } else {
-                int radius = CityWalls.radiusOf(server, place.kingdomId(), place.cityId(), CityWalls.level(counts[next++]));
-                area = new Area(place.kingdomId(), place.cityId(), place.dimension(), place.x(), place.z(), radius, false);
+                int base = CityWalls.baseRadius(server, place.kingdomId(), place.cityId(), CityWalls.level(counts[i]));
+                area = new Area(place.kingdomId(), place.cityId(), place.dimension(), place.x(), place.z(), Math.max(base, people), false, base);
             }
             built.computeIfAbsent(place.kingdomId(), k -> new ArrayList<>()).add(area);
             sorted.computeIfAbsent(place.kingdomId(), k -> new CellIndex<>(CELL_SHIFT)).add(area.dimension(),
@@ -220,7 +227,8 @@ public final class CityAreas {
 
     /**
      * The city of a kingdom a place lies in, if it lies in one: the first of {@link #of} that holds it. Only the cities whose
-     * square meets the cell of 512 blocks of the place are asked.
+     * square meets the cell of 512 blocks of the place are asked. Where a city grew by its people, only the land of its kingdom
+     * is in it.
      */
     public static Optional<Area> at(MinecraftServer server, UUID kingdomId, String dimension, int x, int z) {
         build(server);
@@ -229,11 +237,50 @@ public final class CityAreas {
             return Optional.empty();
         }
         for (Area area : index.at(dimension, x, z)) {
-            if (area.contains(dimension, x, z)) {
+            if (holds(server, area, dimension, x, z)) {
                 return Optional.of(area);
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * The city (0 for the capital, never a village of a state) of a kingdom whose square holds a place and whose middle is
+     * nearest to it, if any holds it: where the squares of two cities meet, the place belongs to the nearer one.
+     */
+    public static Optional<Area> nearestAt(MinecraftServer server, UUID kingdomId, String dimension, int x, int z) {
+        build(server);
+        CellIndex<Area> index = cells.get(kingdomId);
+        if (index == null) {
+            return Optional.empty();
+        }
+        Area best = null;
+        long bestDistance = Long.MAX_VALUE;
+        for (Area area : index.at(dimension, x, z)) {
+            if (area.cityId() < 0 || !holds(server, area, dimension, x, z)) {
+                continue;
+            }
+            long dx = (long) x - area.x();
+            long dz = (long) z - area.z();
+            long distance = dx * dx + dz * dz;
+            if (distance < bestDistance) {
+                best = area;
+                bestDistance = distance;
+            }
+        }
+        return Optional.ofNullable(best);
+    }
+
+    /**
+     * Whether a city holds a place: its square contains it, and where the city grew by its people the place lies on the land
+     * of its kingdom.
+     */
+    private static boolean holds(MinecraftServer server, Area area, String dimension, int x, int z) {
+        if (!area.contains(dimension, x, z)) {
+            return false;
+        }
+        return !area.grown(x, z) || area.kingdomId().equals(KingdomWorldApi.state(server).territory().ownerOf(dimension,
+                io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(x >> 4, z >> 4)));
     }
 
     /**

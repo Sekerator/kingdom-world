@@ -132,10 +132,21 @@ public final class KingdomCapsGameTests {
             }
             helper.assertTrue(citizens.registry().count(kingdom.id()) == 201, "The kingdom has " + citizens.registry().count(kingdom.id())
                     + " citizens");
+            // Without townsfolk every newcomer is a named citizen: the 202nd comes.
+            io.github.sekerator.kingdomworld.common.citizen.FolkSettings.override(new io.github.sekerator.kingdomworld.core.road.FolkRules(0, 4, 8, 1));
             CitizenSimulation.step(server, kingdom.id());
             int now = citizens.registry().count(kingdom.id());
             helper.assertTrue(now == 202, "No newcomer came to the kingdom of 201 citizens with free beds and food: " + now);
+            // With the quota of named citizens a city of so many grows by its townsfolk instead, and still grows.
+            io.github.sekerator.kingdomworld.common.citizen.FolkSettings.override(null);
+            io.github.sekerator.kingdomworld.core.road.RoadState roads = io.github.sekerator.kingdomworld.common.road.RoadWork.state(server);
+            roads.charter(kingdom.id(), 0).ifPresent(charter -> charter.setLastArrival(io.github.sekerator.kingdomworld.core.road.CityCharter.NEVER));
+            CitizenSimulation.step(server, kingdom.id());
+            helper.assertTrue(citizens.registry().count(kingdom.id()) == 202 && roads.folk(kingdom.id(), 0) == 1,
+                    "The capital full of named citizens did not grow by its townsfolk: " + citizens.registry().count(kingdom.id()) + " named, "
+                            + roads.folk(kingdom.id(), 0) + " townsfolk");
         } finally {
+            io.github.sekerator.kingdomworld.common.citizen.FolkSettings.override(null);
             CitizenGameTests.finish(helper, kingdom);
             GatheringGameTests.clear(level, from, to);
         }

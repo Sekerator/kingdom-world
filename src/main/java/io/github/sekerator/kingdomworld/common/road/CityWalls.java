@@ -138,19 +138,23 @@ public final class CityWalls {
     }
 
     /**
-     * Citizens living around a city and buildings standing around it.
+     * People living around a city, its townsfolk among them, and buildings standing around it.
      */
     public static int[] counts(MinecraftServer server, Place place) {
         return counts(server, List.of(place))[0];
     }
 
     /**
-     * Citizens living around and buildings standing around each of some cities, as {@link #counts(MinecraftServer, Place)}
-     * gives them, in the order of the cities: the people and buildings of each kingdom are gone through once for all of its
-     * cities, and one standing near two cities counts for both.
+     * People living around and buildings standing around each of some cities, as {@link #counts(MinecraftServer, Place)}
+     * gives them, in the order of the cities: the citizens and buildings of each kingdom are gone through once for all of its
+     * cities, and one standing near two cities counts for both. The townsfolk of each city count for it.
      */
     public static int[][] counts(MinecraftServer server, List<Place> places) {
         int[][] result = new int[places.size()][2];
+        io.github.sekerator.kingdomworld.core.road.RoadState roads = RoadWork.state(server);
+        for (int i = 0; i < places.size(); i++) {
+            result[i][0] = roads.folk(places.get(i).kingdomId(), places.get(i).cityId());
+        }
         Map<UUID, List<Integer>> byKingdom = new LinkedHashMap<>();
         for (int i = 0; i < places.size(); i++) {
             byKingdom.computeIfAbsent(places.get(i).kingdomId(), k -> new ArrayList<>()).add(i);
@@ -208,16 +212,36 @@ public final class CityWalls {
      * The radius of the square of a city: that of its wall if it has one, else the radius a wall of it would be laid out with.
      * That is the radius of the level of the city, and for a capital or a town of a kingdom of the world laid out in districts
      * never less than the radius of its plan, so that such a capital is one city from wall to wall before its wall stands, and
-     * keeps its radius when the wall is ordered again.
+     * keeps its radius when the wall is ordered again. A city of more people than its level has room for is wider still, by
+     * its people, without an upper limit: a wall ordered then is laid out around all of it.
      */
     public static int radiusOf(MinecraftServer server, UUID kingdomId, long cityId) {
-        return radiusOf(server, kingdomId, cityId, level(server, kingdomId, cityId));
+        int[] counts = place(server, kingdomId, cityId).map(place -> counts(server, place)).orElse(new int[2]);
+        return radiusOf(server, kingdomId, cityId, level(counts), counts[0]);
     }
 
     /**
-     * The radius of the square of a city whose level is known already, from {@link #counts(MinecraftServer, List)}.
+     * The radius of the square of a city whose level and people are known already, from {@link #counts(MinecraftServer, List)}:
+     * that of {@link #baseRadius}, and never less than its people need when built densely, however many they are (see
+     * {@link io.github.sekerator.kingdomworld.core.road.CityFolk#radius}).
      */
-    static int radiusOf(MinecraftServer server, UUID kingdomId, long cityId, CityLevel level) {
+    static int radiusOf(MinecraftServer server, UUID kingdomId, long cityId, CityLevel level, int people) {
+        return Math.max(baseRadius(server, kingdomId, cityId, level), peopleRadius(people));
+    }
+
+    /**
+     * The radius the people of a city need, built densely; 0 for a city whose level gives it room enough.
+     */
+    static int peopleRadius(long people) {
+        return io.github.sekerator.kingdomworld.core.road.CityFolk.radius(people,
+                io.github.sekerator.kingdomworld.common.citizen.FolkSettings.rules());
+    }
+
+    /**
+     * The radius of the square of a city by its level, the plan of a capital of a kingdom of the world and its wall, the room of
+     * its people left out: within it the city lies on any land; beyond it, where it grew by its people, on its own land only.
+     */
+    static int baseRadius(MinecraftServer server, UUID kingdomId, long cityId, CityLevel level) {
         int byLevel = level.wallRadius(RoadSettings.rules());
         int byPlan = io.github.sekerator.kingdomworld.common.npc.NpcWork.planRadius(server, kingdomId, cityId == 0);
         return Math.max(Math.max(byLevel, byPlan), RoadWork.state(server).wallOf(cityId, kingdomId).map(Wall::radius).orElse(0));
@@ -959,6 +983,8 @@ public final class CityWalls {
      * capital of an annexed kingdom that became a city of the winner.
      */
     public static void handOver(MinecraftServer server, long cityId, UUID from, UUID to, long newCity) {
+        // The townsfolk stay with their city, wall or no wall.
+        RoadWork.state(server).handOverCharter(cityId, from, to, newCity);
         Optional<Wall> wall = RoadWork.state(server).wallOf(cityId, from);
         if (wall.isEmpty()) {
             return;

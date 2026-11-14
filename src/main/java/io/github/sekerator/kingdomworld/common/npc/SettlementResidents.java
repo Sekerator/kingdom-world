@@ -327,9 +327,21 @@ public final class SettlementResidents {
      * The free beds of the settlements of a kingdom kept for their citizens to come back to.
      */
     public static int bedsKept(MinecraftServer server, UUID kingdomId) {
+        int kept = 0;
+        for (int[] settlement : bedsKeptAt(server, kingdomId)) {
+            kept += settlement[2];
+        }
+        return kept;
+    }
+
+    /**
+     * The free beds each settlement of a kingdom keeps for its citizens to come back to, with where it lies in the overworld:
+     * {x, z, beds} for every settlement that keeps any.
+     */
+    public static List<int[]> bedsKeptAt(MinecraftServer server, UUID kingdomId) {
         List<Settlement> own = NpcWork.state(server).settlementsOf(kingdomId);
         if (own.isEmpty()) {
-            return 0;
+            return List.of();
         }
         Map<Integer, Integer> present = new HashMap<>();
         for (Citizen citizen : KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdomId)) {
@@ -337,10 +349,13 @@ public final class SettlementResidents {
                 present.merge(citizen.settlement(), 1, Integer::sum);
             }
         }
-        int kept = 0;
+        List<int[]> kept = new ArrayList<>();
         for (Settlement settlement : own) {
             if (settlement.status() == Settlement.Status.STANDING) {
-                kept += Math.max(0, Math.min(settlement.population(), settlement.housing()) - present.getOrDefault(settlement.id(), 0));
+                int beds = Math.max(0, Math.min(settlement.population(), settlement.housing()) - present.getOrDefault(settlement.id(), 0));
+                if (beds > 0) {
+                    kept.add(new int[]{settlement.x(), settlement.z(), beds});
+                }
             }
         }
         return kept;

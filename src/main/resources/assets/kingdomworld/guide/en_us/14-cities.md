@@ -73,18 +73,28 @@ a village.
 - **Buildings**: buildings of the kingdom's register in the same square ([The roles of buildings](building_roles)).
   Walls and gates do not count.
 - A citizen or a building near two cities counts for both.
+- **The townsfolk** of a city (people who live there as a number, see [Arrival and growth](growth)) all count among
+  its citizens.
 
 ### What the level changes
 
 - **The radius of the wall and the square of the city**: {cfg:roads.wallRadius} blocks for a village, half as much
   again for a town ({cfg:roads.wallRadius*1.5}), twice as much for a large city ({cfg:roads.wallRadius*2}). The
   square of a city without a wall is the one a wall of its level would take: the law of damaged property holds in it.
+- **A city short of room.** When the people of a city (named and townsfolk) need more room than the square of its
+  level and wall gives, the square is wider by as much as they need built densely: {cfg:citizens.folkDensity} people
+  a block of area, without an upper limit. A large city outgrows its {cfg:roads.wallRadius*2} blocks at about 74
+  thousand people. Where it grew, it holds for the law, the guards and the storehouses on the kingdom's own land only,
+  and no other city is founded there. The wall is not rebuilt by itself: the king orders a new ring, laid around the
+  whole city.
 - **The entry fee**: only a large city charges one ([Guards](guards)).
 - **Fairs**: by default only a large city with a market holds them ([Festivals and fairs](festivals)).
 
 ### Where to see it
 
-In the Roads tab, view "cities": the level and wall of every city, and on hover its citizens and buildings. On the
+In the Roads tab, view "cities": the level and wall of every city, and on hover its citizens (named and townsfolk:
+"Citizens: 64 (+936 townsfolk)"), buildings and beds ("Beds: 300, 12 free": free of named citizens and townsfolk
+alike). The townsfolk go to the winner with their city when it is taken, annexed or breaks away. On the
 atlas the sign of a city or the crown of a capital has one to three golden marks: village, town, large city.
 
 > Capitals of kingdoms of the world laid out in districts are built for their level from the start: a small

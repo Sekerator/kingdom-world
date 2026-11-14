@@ -137,13 +137,17 @@ public final class RoadViews {
      * A city of the kingdom, or its capital (id 0).
      *
      * @param level     the level of the city by its people and buildings
+     * @param people    the named citizens whose home is in the city
      * @param wallId    its wall, 0 for none
      * @param wallClass the class of the wall, {@code null} for none
      * @param wallBuilt how much of the wall stands, in thousandths
      * @param gates     gates in the wall
+     * @param folk      its townsfolk, who live there as a number
+     * @param beds      the beds of the kingdom in it
+     * @param freeBeds  of those, the ones free of named citizens and townsfolk alike
      */
     public record CityRow(long id, String name, int x, int y, int z, boolean capital, int roads, CityLevel level, int people, int buildings,
-                          long wallId, @Nullable Wall.WallClass wallClass, int wallBuilt, int gates) {
+                          long wallId, @Nullable Wall.WallClass wallClass, int wallBuilt, int gates, int folk, int beds, int freeBeds) {
         void encode(FriendlyByteBuf buf) {
             buf.writeVarLong(id);
             buf.writeUtf(name, NAME);
@@ -159,6 +163,9 @@ public final class RoadViews {
             buf.writeVarInt(wallClass == null ? 0 : wallClass.ordinal() + 1);
             buf.writeVarInt(wallBuilt);
             buf.writeVarInt(gates);
+            buf.writeVarInt(Math.max(0, folk));
+            buf.writeVarInt(Math.max(0, beds));
+            buf.writeVarInt(Math.max(0, freeBeds));
         }
 
         static CityRow decode(FriendlyByteBuf buf) {
@@ -176,7 +183,8 @@ public final class RoadViews {
             int wallClass = buf.readVarInt();
             Wall.WallClass[] classes = Wall.WallClass.values();
             return new CityRow(id, name, x, y, z, capital, roads, level, people, buildings, wallId,
-                    wallClass <= 0 || wallClass > classes.length ? null : classes[wallClass - 1], buf.readVarInt(), buf.readVarInt());
+                    wallClass <= 0 || wallClass > classes.length ? null : classes[wallClass - 1], buf.readVarInt(), buf.readVarInt(),
+                    buf.readVarInt(), buf.readVarInt(), buf.readVarInt());
         }
     }
 

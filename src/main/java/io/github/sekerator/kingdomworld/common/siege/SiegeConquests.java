@@ -28,7 +28,6 @@ import io.github.sekerator.kingdomworld.core.npc.Settlement;
 import io.github.sekerator.kingdomworld.core.npc.SettlementGrid;
 import io.github.sekerator.kingdomworld.core.road.City;
 import io.github.sekerator.kingdomworld.core.road.RoadState;
-import io.github.sekerator.kingdomworld.core.road.Wall;
 import io.github.sekerator.kingdomworld.core.siege.Conquest;
 import io.github.sekerator.kingdomworld.core.siege.ConquestPace;
 import io.github.sekerator.kingdomworld.core.siege.Hold;
@@ -642,16 +641,14 @@ final class SiegeConquests {
         }
         boolean done = moving.size() <= 1;
         if (done && conquest.kind() == Conquest.Kind.ANNEX) {
-            Optional<Wall> capitalWall = roads.wallOf(0, conquest.loser());
             Optional<io.github.sekerator.kingdomworld.core.territory.Capital> capital = RoadWork.capital(server, conquest.loser());
             if (capital.isPresent()) {
                 String name = KingdomWorldApi.kingdom(server, conquest.loser()).map(Kingdom::name).orElse("?");
                 if (roads.cityAt(capital.get().dimension(), capital.get().x(), capital.get().y(), capital.get().z()).isEmpty()) {
                     City old = roads.addCity(conquest.winner(), name.length() > City.MAX_NAME ? name.substring(0, City.MAX_NAME) : name,
                             capital.get().dimension(), capital.get().x(), capital.get().y(), capital.get().z(), now);
-                    if (capitalWall.isPresent()) {
-                        CityWalls.handOver(server, 0, conquest.loser(), conquest.winner(), old.id());
-                    }
+                    // The wall, if it has one, and the townsfolk of the capital go with it.
+                    CityWalls.handOver(server, 0, conquest.loser(), conquest.winner(), old.id());
                 }
             }
         }

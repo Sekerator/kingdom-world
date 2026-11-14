@@ -27,6 +27,8 @@ public final class RoadState {
     private final Map<Long, BanditCamp> camps = new LinkedHashMap<>();
     private final Map<Long, CaravanRoute> routes = new LinkedHashMap<>();
     private final Map<Long, Wall> walls = new LinkedHashMap<>();
+    /** What each city of each kingdom keeps of its own, by kingdom and city (0 for the capital). */
+    private final Map<String, CityCharter> charters = new LinkedHashMap<>();
     /** Kingdoms that let the roads of another cross their land, as owner and requester. */
     private final java.util.Set<String> consents = new java.util.LinkedHashSet<>();
     private long nextWall = 1;
@@ -217,12 +219,100 @@ public final class RoadState {
         changed();
     }
 
+    /**
+     * Removes a city; what it kept of its own, its townsfolk among it, goes with it.
+     */
     public Optional<City> removeCity(long id) {
         City removed = cities.remove(id);
-        if (removed != null) {
+        boolean charter = id != 0 && charters.values().removeIf(found -> found.cityId() == id);
+        if (removed != null || charter) {
             changed();
         }
         return Optional.ofNullable(removed);
+    }
+
+    // ---------------------------------------------------------------- what cities keep
+
+    private static String charterKey(UUID kingdomId, long cityId) {
+        return kingdomId + "/" + cityId;
+    }
+
+    public Collection<CityCharter> charters() {
+        return Collections.unmodifiableCollection(charters.values());
+    }
+
+    /**
+     * What a city of a kingdom (0 for its capital) keeps of its own, if it kept anything yet.
+     */
+    public Optional<CityCharter> charter(UUID kingdomId, long cityId) {
+        return Optional.ofNullable(charters.get(charterKey(kingdomId, cityId)));
+    }
+
+    /**
+     * What a city of a kingdom (0 for its capital) keeps of its own; a city that kept nothing yet starts now, its last newcomer
+     * at the given time.
+     *
+     * @param lastArrival when the last newcomer came to a city that starts now, {@link CityCharter#NEVER} if none did
+     */
+    public CityCharter charterOf(UUID kingdomId, long cityId, long lastArrival) {
+        return charters.computeIfAbsent(charterKey(kingdomId, cityId), key -> {
+            CityCharter made = new CityCharter(kingdomId, cityId);
+            made.setLastArrival(lastArrival);
+            charterChanged();
+            return made;
+        });
+    }
+
+    public void putCharter(CityCharter charter) {
+        charters.put(charterKey(charter.kingdomId(), charter.cityId()), charter);
+        charterChanged();
+    }
+
+    /**
+     * The townsfolk of a city of a kingdom (0 for its capital).
+     */
+    public int folk(UUID kingdomId, long cityId) {
+        CityCharter charter = charters.get(charterKey(kingdomId, cityId));
+        return charter == null ? 0 : charter.folk();
+    }
+
+    /**
+     * The townsfolk of all cities of a kingdom.
+     */
+    public long folkOf(UUID kingdomId) {
+        long sum = 0;
+        for (CityCharter charter : charters.values()) {
+            if (charter.kingdomId().equals(kingdomId)) {
+                sum += charter.folk();
+            }
+        }
+        return sum;
+    }
+
+    /**
+     * What a city keeps changed: it is saved, while what is built from the cities and roads stays as it is.
+     */
+    public void charterChanged() {
+        listener.run();
+    }
+
+    /**
+     * A city goes to another kingdom under another id (a capital annexed becomes a city of the winner): what it kept goes with
+     * it, its townsfolk too.
+     */
+    public void handOverCharter(long cityId, UUID from, UUID to, long newCity) {
+        CityCharter charter = charters.remove(charterKey(from, cityId));
+        if (charter == null) {
+            return;
+        }
+        CityCharter moved = charter.movedTo(to, newCity);
+        CityCharter there = charters.get(charterKey(to, newCity));
+        if (there != null) {
+            // The winner kept something for that city already: the townsfolk of both live there now.
+            moved.setFolk((int) Math.min(CityCharter.MAX_FOLK, (long) moved.folk() + there.folk()));
+        }
+        charters.put(charterKey(to, newCity), moved);
+        changed();
     }
 
     // ---------------------------------------------------------------- roads
@@ -560,6 +650,7 @@ public final class RoadState {
     public List<Road> forgetKingdom(UUID kingdomId) {
         cities.values().removeIf(city -> city.kingdomId().equals(kingdomId));
         walls.values().removeIf(wall -> wall.kingdomId().equals(kingdomId));
+        charters.values().removeIf(charter -> charter.kingdomId().equals(kingdomId));
         consents.removeIf(pair -> pair.contains(kingdomId.toString()));
         List<Road> removed = new ArrayList<>();
         for (Road road : new ArrayList<>(roads.values())) {
