@@ -254,6 +254,9 @@ final class ConstructionTab {
         if (entry.placing()) {
             return Component.translatable(KEY + "status_placing");
         }
+        if (entry.carting() && (entry.status() == Construction.Status.NO_MATERIALS || entry.status() == Construction.Status.WORKING)) {
+            return Component.translatable(KEY + "status_carting");
+        }
         if (entry.status() == Construction.Status.WAITING_FOR_LOAD && entry.paid() > 0) {
             return Component.translatable(KEY + "status_paid", entry.paid());
         }
@@ -1031,8 +1034,11 @@ final class ConstructionTab {
         graphics.renderItem(entry.icon(), x, y + 1);
         screen.name(graphics, siteName(entry).getString(), x + 20, y + 5, 0xFFF0D070, right - backWidth - 6 - x - 20);
         int line = listTop(top);
-        screen.name(graphics, Component.translatable(KEY + "site_place", coordinates(entry.pos()), entry.builders()).getString(), x, line,
-                0xFFD0D0D0, right - x);
+        Component place = entry.helpers() > 0
+                ? Component.translatable(KEY + "site_place_helped", coordinates(entry.pos()), Math.max(0, entry.builders() - entry.helpers()),
+                entry.helpers(), entry.helperSpeed())
+                : Component.translatable(KEY + "site_place", coordinates(entry.pos()), entry.builders());
+        screen.name(graphics, place.getString(), x, line, 0xFFD0D0D0, right - x);
         line += LINE;
         Component progress = entry.kind() == Construction.Kind.DEMOLISH
                 ? Component.translatable(KEY + "progress_demolition", entry.percent())

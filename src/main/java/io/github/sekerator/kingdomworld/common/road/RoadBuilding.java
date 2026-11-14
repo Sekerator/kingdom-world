@@ -94,8 +94,8 @@ public final class RoadBuilding {
      */
     public static List<Citizen> freeBuilders(MinecraftServer server, UUID kingdomId) {
         List<Citizen> result = new ArrayList<>();
-        for (Citizen citizen : KingdomWorldApi.state(server).citizens().registry().all()) {
-            if (!citizen.kingdomId().equals(kingdomId) || !citizen.isAlive() || citizen.state() == CitizenState.WOUNDED
+        for (Citizen citizen : KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdomId)) {
+            if (!citizen.isAlive() || citizen.state() == CitizenState.WOUNDED
                     || !Professions.BUILDER.id().equals(citizen.professionId())) {
                 continue;
             }
@@ -140,23 +140,43 @@ public final class RoadBuilding {
                 }
             }
         }
+        Set<UUID> walling = new HashSet<>();
         for (io.github.sekerator.kingdomworld.core.road.Wall wall : roads.walls()) {
             if (!wall.allPaid()) {
                 kingdoms.add(wall.kingdomId());
+                walling.add(wall.kingdomId());
             }
         }
+        // Kingdoms with constructions no post may reach: their free builders help there.
+        Set<UUID> building = new HashSet<>();
+        for (io.github.sekerator.kingdomworld.core.construction.Construction construction : KingdomWorldApi.state(server).construction().all()) {
+            if (!construction.paused()) {
+                building.add(construction.kingdomId());
+            }
+        }
+        kingdoms.addAll(building);
+        io.github.sekerator.kingdomworld.common.construction.RemoteCrews.startSecond();
+        long now = KingdomWorldApi.gameTime(server);
         for (UUID kingdom : kingdoms) {
+            // Counted once a second for the helpers of far constructions and for the roads alike.
             List<Citizen> builders = freeBuilders(server, kingdom);
             if (builders.isEmpty()) {
+                continue;
+            }
+            List<Object[]> jobs = work(roads, kingdom);
+            boolean roadsWait = !jobs.isEmpty() || walling.contains(kingdom);
+            double left = building.contains(kingdom)
+                    ? io.github.sekerator.kingdomworld.common.construction.RemoteCrews.work(server, kingdom, builders, roadsWait, now) : 1.0;
+            if (!roadsWait) {
                 continue;
             }
             CREWS.put(kingdom, builders.size());
             double seconds = CARRY.getOrDefault(kingdom, 0.0);
             for (Citizen builder : builders) {
-                seconds += EconomySettings.workSpeed(builder.mood());
+                seconds += EconomySettings.workSpeed(builder.mood()) * left;
             }
             int blocks = 0;
-            for (Object[] job : work(roads, kingdom)) {
+            for (Object[] job : jobs) {
                 Road road = (Road) job[0];
                 Road.Section section = (Road.Section) job[1];
                 double per = rules.secondsPerBlock(road.roadClass());

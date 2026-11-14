@@ -102,6 +102,9 @@ public final class ConstructionWork {
 
     public static void reset() {
         PLANS.clear();
+        CITY_OF.clear();
+        Carts.reset();
+        RemoteCrews.reset();
         Earthworks.reset();
         CLAIMS.clear();
         DEFERRED.clear();
@@ -965,7 +968,7 @@ public final class ConstructionWork {
      */
     public static List<Construction> candidates(MinecraftServer server, WorkPost post) {
         ConstructionRules rules = ConstructionSettings.rules();
-        double reach = (double) rules.builderRadius() * rules.builderRadius();
+        long postCity = cityOf(server, post.kingdomId(), post.pos());
         List<Construction> result = new ArrayList<>();
         for (Construction construction : KingdomWorldApi.state(server).construction().of(post.kingdomId())) {
             Construction.Status status = construction.status();
@@ -975,7 +978,8 @@ public final class ConstructionWork {
                     || !construction.dimension().equals(post.pos().dimension())) {
                 continue;
             }
-            if (distanceSqr(construction.box(), post.pos()) <= reach) {
+            if (io.github.sekerator.kingdomworld.core.construction.BuilderReach.reaches(postCity, cityOf(server, construction),
+                    distanceSqr(construction.box(), post.pos()), rules.builderRadius())) {
                 result.add(construction);
             }
         }
@@ -984,6 +988,50 @@ public final class ConstructionWork {
             return priority != 0 ? priority : Double.compare(distanceSqr(a.box(), post.pos()), distanceSqr(b.box(), post.pos()));
         });
         return result;
+    }
+
+    /**
+     * Whether the builders of a post take a construction: in their radius, or in the city of the post (see
+     * {@link io.github.sekerator.kingdomworld.core.construction.BuilderReach}).
+     */
+    public static boolean reaches(MinecraftServer server, WorkPost post, Construction construction) {
+        return construction.kingdomId().equals(post.kingdomId()) && construction.dimension().equals(post.pos().dimension())
+                && io.github.sekerator.kingdomworld.core.construction.BuilderReach.reaches(cityOf(server, post.kingdomId(), post.pos()),
+                cityOf(server, construction), distanceSqr(construction.box(), post.pos()), ConstructionSettings.rules().builderRadius());
+    }
+
+    private record CityOf(long generation, long city) {
+    }
+
+    /** The city the middle of each construction lies in, worked out again when the squares of the cities are. */
+    private static final Map<Long, CityOf> CITY_OF = new java.util.HashMap<>();
+
+    /**
+     * The city of its kingdom the middle of a construction lies in, or {@link io.github.sekerator.kingdomworld.core.construction.BuilderReach#NO_CITY}.
+     */
+    public static long cityOf(MinecraftServer server, Construction construction) {
+        long generation = io.github.sekerator.kingdomworld.common.road.CityAreas.generation(server);
+        CityOf known = CITY_OF.get(construction.id());
+        if (known != null && known.generation() == generation) {
+            return known.city();
+        }
+        Box box = construction.box();
+        long city = cityOf(server, construction.kingdomId(), new WorldPos(construction.dimension(), (box.minX() + box.maxX()) / 2, box.minY(),
+                (box.minZ() + box.maxZ()) / 2));
+        if (CITY_OF.size() > 4 * Math.max(64, KingdomWorldApi.state(server).construction().all().size())) {
+            CITY_OF.clear();
+        }
+        CITY_OF.put(construction.id(), new CityOf(generation, city));
+        return city;
+    }
+
+    /**
+     * The city of a kingdom a place lies in (0 for the capital), or {@link io.github.sekerator.kingdomworld.core.construction.BuilderReach#NO_CITY}.
+     */
+    public static long cityOf(MinecraftServer server, UUID kingdomId, WorldPos pos) {
+        return io.github.sekerator.kingdomworld.common.road.CityAreas.at(server, kingdomId, pos.dimension(), pos.x(), pos.z())
+                .map(io.github.sekerator.kingdomworld.common.road.CityAreas.Area::cityId)
+                .orElse(io.github.sekerator.kingdomworld.core.construction.BuilderReach.NO_CITY);
     }
 
     /**
@@ -1080,6 +1128,7 @@ public final class ConstructionWork {
             refreshReservations(server);
         }
         Scaffolds.tick(server, now);
+        Carts.tick(server, now);
         if (tick % 200 == 0) {
             orderMissing(server);
             BuildingWork.autoRepair(server);

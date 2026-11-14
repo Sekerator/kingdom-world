@@ -211,11 +211,16 @@ final class BuilderGoal extends PostWorkGoal {
             return fetch(level, construction);
         }
         if (current.kind() == BuildPlan.Kind.PLACE && !construction.hasDelivered(current.cost())) {
-            if (!planFetch(level, construction, steps, current)) {
+            int fetching = planFetch(level, construction, steps, current, now);
+            if (fetching == NO_FETCH) {
                 construction.setStatus(Construction.Status.NO_MATERIALS);
                 ConstructionWork.defer(construction, step, now + BLOCKED_TICKS);
                 next(construction, me);
                 report(WorkStatus.NO_MATERIALS);
+            } else if (fetching == CART) {
+                // The kingdom has it in storehouses out of reach: a cart brings it, another block meanwhile.
+                ConstructionWork.defer(construction, step, now + Carts.CART_TICKS);
+                next(construction, me);
             }
             return null;
         }
@@ -725,27 +730,36 @@ final class BuilderGoal extends PostWorkGoal {
      *
      * @return whether one was found
      */
-    private boolean planFetch(ServerLevel level, Construction construction, BuildPlan steps, BuildPlan.Step current) {
+    /** {@link #planFetch}: nothing to fetch anywhere. */
+    private static final int NO_FETCH = 0;
+    /** {@link #planFetch}: the builder goes to a storehouse, or nothing is missing. */
+    private static final int WALK = 1;
+    /** {@link #planFetch}: a cart brings it from storehouses out of reach. */
+    private static final int CART = 2;
+
+    private int planFetch(ServerLevel level, Construction construction, BuildPlan steps, BuildPlan.Step current, long now) {
         for (Map.Entry<String, Integer> entry : current.cost().entrySet()) {
             int missing = entry.getValue() - construction.delivered().getOrDefault(entry.getKey(), 0);
             if (missing <= 0) {
                 continue;
             }
             if (ConstructionWork.available(level.getServer(), construction, entry.getKey()) < missing) {
-                return false;
-            }
-            BlockPos storehouse = storehouseWith(level, entry.getKey());
-            if (storehouse == null) {
-                return false;
+                return NO_FETCH;
             }
             int needed = ConstructionWork.needed(construction, steps).getOrDefault(entry.getKey(), missing);
+            BlockPos storehouse = storehouseWith(level, entry.getKey());
+            if (storehouse == null) {
+                // A village without a storehouse of its own: the materials come from storehouses of the kingdom out of reach.
+                Carts.order(construction, entry.getKey(), Math.max(missing, Math.min(Carts.LOAD, needed)), now);
+                return CART;
+            }
             fetchFrom = storehouse;
             fetchItem = entry.getKey();
             fetchAmount = Math.max(missing, Math.min(64, needed));
             walking = 0;
-            return true;
+            return WALK;
         }
-        return true;
+        return WALK;
     }
 
     /**

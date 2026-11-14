@@ -220,4 +220,103 @@ public final class RemoteBuildingGameTests {
             CitizenGameTests.finish(helper, kingdom);
         });
     }
+
+    // ---------------------------------------------------------------- builders of other cities
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_remote_helpers", timeoutTicks = 400)
+    public static void helpersPayForAConstructionNoPostReaches(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Helpers", UUID.randomUUID());
+        BuildingTemplate template = house("helped_house");
+        io.github.sekerator.kingdomworld.core.citizen.Citizen builder = null;
+        try {
+            io.github.sekerator.kingdomworld.common.storage.StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 4);
+            store.insertItem(0, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.COBBLESTONE, 64), false);
+            store.insertItem(1, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.RED_BED, 1), false);
+            WorldPos post = GatheringGameTests.post(helper, new BlockPos(6, 0, 6), "builder");
+            builder = CitizenGameTests.newcomer(helper, kingdom, 1, 1);
+            UUID id = builder.id();
+            helper.assertTrue(KingdomWorldApi.change(server, "test", state -> state.assign(null, post, id)).ok(), "The builder was not hired");
+            // A house laid out two thousand blocks away, where no post reaches, nothing paid for yet.
+            BlockPos anchor = new BlockPos(helper.absolutePos(BlockPos.ZERO).getX() + FAR, HIGH, helper.absolutePos(BlockPos.ZERO).getZ());
+            Construction construction = far(helper, kingdom, template, anchor, false);
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.construction.RemoteCrews.unreached(server, kingdom.id()).contains(construction),
+                    "A post reaches the far house");
+            for (int second = 0; second < 5; second++) {
+                io.github.sekerator.kingdomworld.common.road.RoadBuilding.tick(server);
+            }
+            helper.assertTrue(!construction.pending().isEmpty(), "The helper paid for nothing");
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.construction.RemoteCrews.helping(construction.id())[0] == 1,
+                    "The helper is not counted at the far house");
+            helper.assertTrue(CitizenGameTests.count(store, net.minecraft.world.item.Items.COBBLESTONE) < 64, "No cobblestone was taken");
+            helper.assertTrue(ConstructionWork.builders(construction, KingdomWorldApi.gameTime(server)) >= 1,
+                    "The far house has no builder and would stop");
+        } finally {
+            if (builder != null) {
+                CitizenGameTests.finish(helper, kingdom, builder);
+            } else {
+                CitizenGameTests.finish(helper, kingdom);
+            }
+            BuildingTemplates.removeForTest(template.id());
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_remote_cart", timeoutTicks = 2_400)
+    public static void aCartBringsMaterialsToAVillageWithoutAStorehouse(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos to = helper.absolutePos(new BlockPos(24, 4, 24));
+        GatheringGameTests.clear(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Carts", UUID.randomUUID());
+        BuildingTemplate template = house("carted_house");
+        // Small squares: the capital around its throne, the village around its town hall, the storehouse only in the capital.
+        io.github.sekerator.kingdomworld.core.road.RoadRules.Builder rules = io.github.sekerator.kingdomworld.common.road.RoadSettings.configuredRoads();
+        rules.wallRadius = 4;
+        rules.minCityDistance = 8;
+        io.github.sekerator.kingdomworld.common.road.RoadSettings.override(rules.build(), null);
+        io.github.sekerator.kingdomworld.core.citizen.Citizen builder = CitizenGameTests.newcomer(helper, kingdom, 1, 1);
+        io.github.sekerator.kingdomworld.common.storage.StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 4);
+        store.insertItem(0, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.COBBLESTONE, 64), false);
+        store.insertItem(1, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.RED_BED, 1), false);
+        helper.assertTrue(RoadWork.foundCity(level, null, kingdom.id(), helper.absolutePos(new BlockPos(16, 0, 16)), "Cartville").ok(),
+                "The village was not founded");
+        WorldPos post = GatheringGameTests.post(helper, new BlockPos(16, 0, 13), "builder");
+        UUID id = builder.id();
+        helper.assertTrue(KingdomWorldApi.change(server, "test", state -> state.assign(null, post, id)).ok(), "The builder was not hired");
+        io.github.sekerator.kingdomworld.common.citizen.CitizenBodies.force(id, true);
+        KingdomWorldState.ConstructionChange change = ConstructionWork.lay(level, null, kingdom.id(), template, helper.absolutePos(new BlockPos(16, 1, 20)),
+                Placement.NONE);
+        helper.assertTrue(change.construction().isPresent(), "The village house was refused: " + change.outcome());
+        Construction construction = change.construction().get();
+        helper.succeedWhen(() -> {
+            helper.assertTrue(construction.doneCount() > 0 || !construction.delivered().isEmpty(),
+                    "Nothing came to the village house from the storehouse of the capital");
+            helper.assertTrue(construction.status() != Construction.Status.NO_MATERIALS, "The village house lacks materials");
+            io.github.sekerator.kingdomworld.common.road.RoadSettings.override(null, null);
+            CitizenGameTests.finish(helper, kingdom, builder);
+            GatheringGameTests.clear(level, from, to);
+            BuildingTemplates.removeForTest(template.id());
+        });
+    }
+
+    /**
+     * A construction laid out far away from the data, paid for or not.
+     */
+    static Construction far(GameTestHelper helper, Kingdom kingdom, BuildingTemplate template, BlockPos anchor, boolean paid) {
+        if (paid) {
+            return paidFar(helper, kingdom, template, anchor);
+        }
+        MinecraftServer server = helper.getLevel().getServer();
+        Box box = template.box(anchor, Placement.NONE);
+        claim(server, kingdom, box.minX(), box.minZ(), box.maxX(), box.maxZ());
+        BuildPlan plan = ConstructionWork.plan(template, anchor, Placement.NONE, List.of());
+        KingdomWorldState.ConstructionChange change = KingdomWorldApi.state(server).layConstruction(null, kingdom.id(), template.id().toString(),
+                template.fingerprint(), new WorldPos(Dimensions.id(helper.getLevel()), anchor.getX(), anchor.getY(), anchor.getZ()), Placement.NONE,
+                box, List.of(), plan.size(), KingdomWorldApi.gameTime(server), ConstructionSettings.rules());
+        helper.assertTrue(change.construction().isPresent(), "The far construction was refused: " + change.outcome());
+        return change.construction().get();
+    }
 }

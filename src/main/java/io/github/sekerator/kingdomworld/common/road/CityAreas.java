@@ -73,6 +73,8 @@ public final class CityAreas {
     private static long villagesVersion = Long.MIN_VALUE;
     private static long villages;
     private static long signed;
+    /** Grows whenever the squares are worked out anew. */
+    private static long generation;
 
     private CityAreas() {
     }
@@ -139,6 +141,7 @@ public final class CityAreas {
             return;
         }
         builtSignature = signature;
+        generation++;
         RoadState roads = RoadWork.state(server);
         List<CityWalls.Place> places = CityWalls.places(server);
         // The people and buildings of a kingdom are counted once for all of its cities; the people of a city with a wall widen it
@@ -216,6 +219,14 @@ public final class CityAreas {
     private static boolean village(io.github.sekerator.kingdomworld.core.npc.Settlement settlement) {
         return settlement.status() == io.github.sekerator.kingdomworld.core.npc.Settlement.Status.STANDING && settlement.cityId() == 0
                 && settlement.tier() != io.github.sekerator.kingdomworld.core.land.Tier.CAPITAL;
+    }
+
+    /**
+     * A number that grows whenever the squares are worked out anew: what is worked out from them is worked out again then.
+     */
+    public static long generation(MinecraftServer server) {
+        build(server);
+        return generation;
     }
 
     /**

@@ -136,7 +136,24 @@ blocks no item makes (a portal, a spawner, bedrock, a command block), it cannot 
 @icon minecraft:iron_pickaxe
 Citizens with the profession **Builder** do the building. Place a [work post](work_posts) {item:kingdomworld:work_post}, choose the profession Builder in its window and hire people (up to {cfg:work.workPostMaxSeats} a post, see [The window of a post and hiring](post_window)).
 A builder needs no workstation. It takes the constructions of its kingdom within {cfg:construction.builderRadius} blocks
-of its post, the most urgent first; builders of several posts may work on one construction.
+of its post, the most urgent first; builders of several posts may work on one construction. A post of builders in a city
+or a village also takes every construction of its city, however far inside its square: one post is enough for a village,
+and several cities build at the same time, each with its own builders.
+
+### Helpers from other cities
+
+A construction no post reaches (a city without builders of its own, a place outside every city) is built by helpers: the
+builders of the kingdom who have no construction of their own. While roads and walls wait too, they give the far
+constructions half of their time, otherwise all of it; the most urgent and oldest construction comes first. Where a built
+road leads from the city of a helper to that of the construction they build at full speed, without one slower (by a
+quarter by default). They need not go there: they pay for the blocks, as builders far from players do, and the server puts
+them in, loading the place. The details of a construction say "building: N of its own, M helping (75%)".
+
+### Carts
+
+When a builder of a village near players needs a material no storehouse in its reach holds but a storehouse of the kingdom
+does, it is brought: ten seconds later it lies at the site, and meanwhile the builder places other blocks. The tab says
+"The materials are being brought from storehouses of the kingdom".
 
 ### The order of work
 

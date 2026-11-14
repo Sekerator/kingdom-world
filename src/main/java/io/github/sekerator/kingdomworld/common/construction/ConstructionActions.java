@@ -105,7 +105,8 @@ public final class ConstructionActions {
                     template.map(BuildingTemplate::icon).orElse(ItemStack.EMPTY), ConstructionWork.blockPos(construction.anchor()),
                     construction.priority(), construction.paused(), construction.orderMissing(), construction.status(), statusPos, percent, placed,
                     total, ConstructionWork.builders(construction, now), missing, construction.kind(), construction.pending().size(),
-                    SiteLoader.serving(construction.id())));
+                    SiteLoader.serving(construction.id()), RemoteCrews.helping(construction.id())[0], RemoteCrews.helping(construction.id())[1],
+                    Carts.coming(construction.id())));
         }
         List<ConstructionView.Building> buildings = new ArrayList<>();
         for (BuildingEffects.Effect effect : BuildingEffects.of(server, kingdomId)) {
