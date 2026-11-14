@@ -119,6 +119,10 @@ public final class ClientPacketHandlers {
         io.github.sekerator.kingdomworld.client.map.ClientTradeCache.replace(caravans);
     }
 
+    public static void handleFlags(io.github.sekerator.kingdomworld.common.network.packet.FlagPackets.Directory packet) {
+        io.github.sekerator.kingdomworld.client.flag.ClientFlags.apply(packet);
+    }
+
     public static void handleCurrencies(java.util.List<io.github.sekerator.kingdomworld.common.network.data.CurrencyInfo> currencies) {
         io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.replace(currencies);
     }

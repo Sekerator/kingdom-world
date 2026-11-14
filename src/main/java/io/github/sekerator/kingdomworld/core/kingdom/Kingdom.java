@@ -13,8 +13,10 @@ import java.util.UUID;
  * @param rulerId         the current ruler, or {@code null} while the throne is empty
  * @param createdGameTime game time in ticks at which the kingdom was founded
  * @param style           the architectural style its new buildings follow, or empty while none was chosen
+ * @param flag            the flag its king drew or the world gave it, or {@code null} for the flag of its colour, see
+ *                        {@link KingdomFlags#standard(int)}
  */
-public record Kingdom(UUID id, String name, int color, UUID rulerId, long createdGameTime, String style) {
+public record Kingdom(UUID id, String name, int color, UUID rulerId, long createdGameTime, String style, KingdomFlag flag) {
     public static final int MAX_COLOR = 0xFFFFFF;
 
     public Kingdom {
@@ -37,10 +39,17 @@ public record Kingdom(UUID id, String name, int color, UUID rulerId, long create
     }
 
     /**
-     * A kingdom without a chosen style.
+     * A kingdom with the flag of its colour.
+     */
+    public Kingdom(UUID id, String name, int color, UUID rulerId, long createdGameTime, String style) {
+        this(id, name, color, rulerId, createdGameTime, style, null);
+    }
+
+    /**
+     * A kingdom without a chosen style, with the flag of its colour.
      */
     public Kingdom(UUID id, String name, int color, UUID rulerId, long createdGameTime) {
-        this(id, name, color, rulerId, createdGameTime, "");
+        this(id, name, color, rulerId, createdGameTime, "", null);
     }
 
     public Optional<UUID> ruler() {
@@ -48,14 +57,21 @@ public record Kingdom(UUID id, String name, int color, UUID rulerId, long create
     }
 
     public Kingdom withRuler(UUID newRulerId) {
-        return new Kingdom(id, name, color, newRulerId, createdGameTime, style);
+        return new Kingdom(id, name, color, newRulerId, createdGameTime, style, flag);
     }
 
     public Kingdom withColor(int newColor) {
-        return new Kingdom(id, name, newColor, rulerId, createdGameTime, style);
+        return new Kingdom(id, name, newColor, rulerId, createdGameTime, style, flag);
     }
 
     public Kingdom withStyle(String newStyle) {
-        return new Kingdom(id, name, color, rulerId, createdGameTime, newStyle);
+        return new Kingdom(id, name, color, rulerId, createdGameTime, newStyle, flag);
+    }
+
+    /**
+     * The same kingdom under another flag; {@code null} for the flag of its colour.
+     */
+    public Kingdom withFlag(KingdomFlag newFlag) {
+        return new Kingdom(id, name, color, rulerId, createdGameTime, style, newFlag);
     }
 }

@@ -24,7 +24,9 @@ public final class KingdomColors {
         return PALETTE.get(Math.floorMod(id.hashCode(), PALETTE.size()));
     }
 
-    /** The sixteen dyes of the game with the colours it gives them, as {@code 0xRRGGBB}. */
+    /** How many dyes the game has. */
+    public static final int DYES = 16;
+    /** The sixteen dyes of the game by their number, with the colours it gives them, as {@code 0xRRGGBB}. */
     private static final List<String> DYE_NAMES = List.of("white", "orange", "magenta", "light_blue", "yellow", "lime", "pink", "gray",
             "light_gray", "cyan", "purple", "blue", "brown", "green", "red", "black");
     private static final int[] DYE_COLORS = {0xF9FFFE, 0xF9801D, 0xC74EBD, 0x3AB3DA, 0xFED83D, 0x80C71F, 0xF38BAA, 0x474F52,
@@ -35,6 +37,13 @@ public final class KingdomColors {
      * a kingdom wear it.
      */
     public static String dye(int color) {
+        return dyeName(nearestDye(color));
+    }
+
+    /**
+     * The number of the vanilla dye nearest to a color, white 0 to black 15 as the game numbers them.
+     */
+    public static int nearestDye(int color) {
         int r = color >> 16 & 0xFF;
         int g = color >> 8 & 0xFF;
         int b = color & 0xFF;
@@ -52,6 +61,34 @@ public final class KingdomColors {
                 best = i;
             }
         }
-        return DYE_NAMES.get(best);
+        return best;
+    }
+
+    /**
+     * The name of a dye by its number, for example {@code light_blue} for 3.
+     *
+     * @throws IndexOutOfBoundsException for a number that is no dye
+     */
+    public static String dyeName(int dye) {
+        return DYE_NAMES.get(dye);
+    }
+
+    /**
+     * The number of a dye by its name, or -1 for a name that is no dye.
+     */
+    public static int dyeIndex(String name) {
+        return DYE_NAMES.indexOf(name);
+    }
+
+    /**
+     * The colour the game gives a dye, as {@code 0xRRGGBB}.
+     *
+     * @throws IndexOutOfBoundsException for a number that is no dye
+     */
+    public static int dyeRgb(int dye) {
+        if (dye < 0 || dye >= DYES) {
+            throw new IndexOutOfBoundsException("Not a dye: " + dye);
+        }
+        return DYE_COLORS[dye];
     }
 }

@@ -50,6 +50,8 @@ trade, hire and go to war.
 - The names of kingdoms, cities and rulers are made in two alphabets and never repeat in a world. You see them in
   the language of your client: Cyrillic in Russian, Latin in English.
 - A kingdom of the world takes the color that other kingdoms have least.
+- The flag of a kingdom of the world lies on a field of its color and carries a motif of its architectural style, and
+  the character of its ruler adds favourite patterns and colors. It never changes ([The flag](flag)).
 
 ### What you can do with them
 

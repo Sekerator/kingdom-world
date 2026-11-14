@@ -180,6 +180,7 @@ public final class KingdomWorldClient {
 
     private static void onLoggingIn(ClientPlayerNetworkEvent.LoggingIn event) {
         io.github.sekerator.kingdomworld.client.guide.ClientGuideNumbers.clear();
+        io.github.sekerator.kingdomworld.client.flag.ClientFlags.clear();
         io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.clear();
         ClientKingdomCache.clear();
         ClientTerritoryCache.clear();
@@ -193,6 +194,7 @@ public final class KingdomWorldClient {
 
     private static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         io.github.sekerator.kingdomworld.client.guide.ClientGuideNumbers.clear();
+        io.github.sekerator.kingdomworld.client.flag.ClientFlags.clear();
         io.github.sekerator.kingdomworld.client.guide.GuideRecipes.clear();
         io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.clear();
         PartyHud.clear();

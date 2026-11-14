@@ -38,4 +38,31 @@ class KingdomColorsTest {
             assertTrue(DYES.contains(KingdomColors.dye(color)));
         }
     }
+
+    @Test
+    void theDyesAreNumberedAsTheGameNumbersThem() {
+        List<String> order = List.of("white", "orange", "magenta", "light_blue", "yellow", "lime", "pink", "gray", "light_gray", "cyan",
+                "purple", "blue", "brown", "green", "red", "black");
+        assertEquals(order.size(), KingdomColors.DYES);
+        for (int i = 0; i < KingdomColors.DYES; i++) {
+            assertEquals(order.get(i), KingdomColors.dyeName(i));
+            assertEquals(i, KingdomColors.dyeIndex(order.get(i)));
+            assertEquals(i, KingdomColors.nearestDye(KingdomColors.dyeRgb(i)), "the colour of a dye is nearest to itself");
+        }
+        assertEquals(-1, KingdomColors.dyeIndex("crimson"));
+        assertEquals(-1, KingdomColors.dyeIndex(""));
+        assertEquals(0x3C44AA, KingdomColors.dyeRgb(11));
+        org.junit.jupiter.api.Assertions.assertThrows(IndexOutOfBoundsException.class, () -> KingdomColors.dyeRgb(16));
+        org.junit.jupiter.api.Assertions.assertThrows(IndexOutOfBoundsException.class, () -> KingdomColors.dyeName(-1));
+    }
+
+    @Test
+    void theNearestDyeGivesTheSameDyeAsBefore() {
+        for (int color : List.of(0xB03A2E, 0x1F618D, 0x1E8449, 0xB7950B, 0x123456, 0xFEDCBA, 0x00FF00, 0, 0xFFFFFF)) {
+            assertEquals(KingdomColors.dye(color), KingdomColors.dyeName(KingdomColors.nearestDye(color)));
+        }
+        assertEquals(14, KingdomColors.nearestDye(0xB03A2E));
+        assertEquals(15, KingdomColors.nearestDye(0x000000));
+        assertEquals(0, KingdomColors.nearestDye(0xFFFFFF));
+    }
 }

@@ -1,6 +1,9 @@
 package io.github.sekerator.kingdomworld.client.screen;
 
 import io.github.sekerator.kingdomworld.client.ClientHooks;
+import io.github.sekerator.kingdomworld.client.flag.ClientFlags;
+import io.github.sekerator.kingdomworld.client.flag.FlagRendering;
+import io.github.sekerator.kingdomworld.common.flag.FlagPatterns;
 import io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory;
 import io.github.sekerator.kingdomworld.common.economy.MoneyTexts;
 import io.github.sekerator.kingdomworld.common.kingdom.PlayerNames;
@@ -16,6 +19,8 @@ import io.github.sekerator.kingdomworld.common.network.packet.StoragePackets;
 import io.github.sekerator.kingdomworld.common.network.packet.CitizenRequestPacket;
 import io.github.sekerator.kingdomworld.common.network.packet.KingdomActionPacket;
 import io.github.sekerator.kingdomworld.core.economy.CurrencyUnits;
+import io.github.sekerator.kingdomworld.core.kingdom.KingdomFlag;
+import io.github.sekerator.kingdomworld.core.kingdom.KingdomFlags;
 import io.github.sekerator.kingdomworld.core.membership.Permission;
 import io.github.sekerator.kingdomworld.core.membership.Role;
 import io.github.sekerator.kingdomworld.core.npc.ArchitecturalStyles;
@@ -61,6 +66,11 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     /** The least room beside the picture of a style for the current style and what the shown one is like. */
     private static final int STYLE_TEXT = 140;
     private static final int STYLE_BUTTON_HEIGHT = 14;
+    /** The small flags beside the name of the kingdom: 5x10, with the gaps to the name 18 in all. */
+    private static final int HEADER_FLAG_SCALE = 6;
+    private static final int HEADER_FLAG_WIDTH = 5;
+    private static final int HEADER_FLAG_HEIGHT = 10;
+    private static final int HEADER_FLAG_ROOM = 18;
     private static final List<Permission> EDITABLE_RIGHTS = List.of(Permission.BUILD, Permission.CONTAINERS,
             Permission.INTERACT, Permission.RECRUIT, Permission.TERRITORY, Permission.MANAGE_CITIZENS, Permission.MANAGE_PRODUCTION,
             Permission.MANAGE_TREASURY, Permission.MANAGE_MARKET, Permission.MANAGE_TRADE, Permission.MANAGE_GUILD,
@@ -918,6 +928,61 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
                 null, 0));
     }
 
+    // ---------------------------------------------------------------- flag
+
+    private static Component flagLabel() {
+        return Component.translatable("kingdomworld.screen.throne.flag");
+    }
+
+    /**
+     * Opens the editor of the flag: the king of a kingdom of players draws it there, everyone else looks at it.
+     */
+    private void openFlag() {
+        if (minecraft != null) {
+            minecraft.setScreen(new FlagScreen(this, view.id(), kingdomName(view.name(), view.npc()), view.color(), view.style(),
+                    canChangeStyle()));
+        }
+    }
+
+    /**
+     * Where the two small flags beside the name of the kingdom stand: left and right of the name as it is drawn.
+     */
+    private int[] headerFlags() {
+        String shown = fit(kingdomName(view.name(), view.npc()), panelWidth - 2 * PAD - HEADER_FLAG_ROOM);
+        int nameWidth = font.width(shown);
+        int nameLeft = width / 2 - nameWidth / 2;
+        return new int[]{nameLeft - HEADER_FLAG_ROOM / 2, nameLeft + nameWidth + HEADER_FLAG_ROOM / 2 - HEADER_FLAG_WIDTH};
+    }
+
+    private void renderHeaderFlags(GuiGraphics graphics) {
+        int y = top() + 6;
+        KingdomFlag flag = ClientFlags.flag(view.id()).orElse(KingdomFlags.standard(view.color()));
+        List<Component> hover = new ArrayList<>();
+        hover.add(Component.translatable("kingdomworld.screen.throne.flag.hover", kingdomName(view.name(), view.npc())));
+        hover.add(Component.translatable("kingdomworld.screen.flag.field", FlagPatterns.colorName(flag.base())).withStyle(ChatFormatting.GRAY));
+        for (KingdomFlag.Layer layer : flag.layers()) {
+            if (FlagPatterns.holder(layer.pattern()) != null) {
+                hover.add(FlagPatterns.name(layer.pattern(), layer.dye()).copy().withStyle(ChatFormatting.GRAY));
+            }
+        }
+        for (int x : headerFlags()) {
+            FlagRendering.drawGui(graphics, ClientFlags.layers(flag), x, y, HEADER_FLAG_SCALE);
+            for (Component line : hover) {
+                hoverText(x, y + 1, HEADER_FLAG_WIDTH, line);
+            }
+        }
+    }
+
+    private boolean overHeaderFlag(double mouseX, double mouseY) {
+        int y = top() + 6;
+        for (int x : headerFlags()) {
+            if (mouseX >= x && mouseX < x + HEADER_FLAG_WIDTH && mouseY >= y && mouseY < y + HEADER_FLAG_HEIGHT) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // ---------------------------------------------------------------- style
 
     /**
@@ -1208,6 +1273,8 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         if (isMember()) {
             bottom += buttonWidth(Component.translatable("kingdomworld.screen.throne.tab.territory")) + GAP;
         }
+        // The flag of the kingdom opens from the overview for everyone.
+        bottom += buttonWidth(flagLabel()) + GAP;
         if (canChangeStyle()) {
             bottom = Math.max(bottom, doneWidth + PAD + confirmStyleWidth + GAP);
         }
@@ -1334,9 +1401,14 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         int y = top + panelHeight - 26;
         int x = left + PAD;
         List<Component> actions = overviewActions();
+        // The flag comes after the other buttons of the row: after the territory, applying or declining.
+        int flagX = x;
         switch (view.relation()) {
-            case OUTSIDER -> addRenderableWidget(Button.builder(actions.get(0),
-                    button -> send(KingdomActionPacket.Action.APPLY, view.id(), 0)).bounds(x, y, buttonWidth(actions.get(0)), 20).build());
+            case OUTSIDER -> {
+                addRenderableWidget(Button.builder(actions.get(0),
+                        button -> send(KingdomActionPacket.Action.APPLY, view.id(), 0)).bounds(x, y, buttonWidth(actions.get(0)), 20).build());
+                flagX = x + buttonWidth(actions.get(0)) + GAP;
+            }
             case INVITED -> {
                 int acceptWidth = buttonWidth(actions.get(0));
                 addRenderableWidget(Button.builder(actions.get(0),
@@ -1344,6 +1416,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
                 addRenderableWidget(Button.builder(actions.get(1),
                                 button -> send(KingdomActionPacket.Action.DECLINE_INVITATION, view.id(), 0))
                         .bounds(x + acceptWidth + GAP, y, buttonWidth(actions.get(1)), 20).build());
+                flagX = x + acceptWidth + GAP + buttonWidth(actions.get(1)) + GAP;
             }
             case MEMBER -> {
                 Component label = actions.get(0);
@@ -1351,6 +1424,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
                 Component territory = Component.translatable("kingdomworld.screen.throne.tab.territory");
                 addRenderableWidget(Button.builder(territory, button -> ClientHooks.openTerritoryEditor(view))
                         .bounds(x + buttonWidth(label) + GAP, y, buttonWidth(territory), 20).build());
+                flagX = x + buttonWidth(label) + GAP + buttonWidth(territory) + GAP;
                 if (view.viewerRole() == Role.KING) {
                     addRenderableWidget(Button.builder(label.copy().withStyle(ChatFormatting.RED),
                             button -> confirm(Component.translatable("kingdomworld.screen.throne.dissolve.confirm", view.name()), () -> {
@@ -1366,6 +1440,7 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             default -> {
             }
         }
+        addRenderableWidget(Button.builder(flagLabel(), button -> openFlag()).bounds(flagX, y, buttonWidth(flagLabel()), 20).build());
     }
 
     private List<Row> rows() {
@@ -1642,7 +1717,8 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
         graphics.fill(left, top, right, top + panelHeight, 0xF0201810);
         graphics.renderOutline(left, top, panelWidth, panelHeight, 0xFF000000 | view.color());
         centeredName(graphics, kingdomName(view.name(), view.npc()), width / 2, top + 7, 0xFF000000 | FoundKingdomScreen.readable(view.color()),
-                panelWidth - 2 * PAD);
+                panelWidth - 2 * PAD - HEADER_FLAG_ROOM);
+        renderHeaderFlags(graphics);
         int inner = top + contentOffset;
         int innerHeight = panelHeight - contentOffset;
         switch (tab) {
@@ -1845,6 +1921,10 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (super.mouseClicked(mouseX, mouseY, button)) {
+            return true;
+        }
+        if (button == 0 && overHeaderFlag(mouseX, mouseY)) {
+            openFlag();
             return true;
         }
         if (tab == Tab.CONSTRUCTION && button == 0) {

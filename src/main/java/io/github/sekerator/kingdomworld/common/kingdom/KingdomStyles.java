@@ -194,7 +194,10 @@ public final class KingdomStyles {
         return KingdomActions.Feedback.ok(KEY + "changed", name(style), MoneyTexts.amount(cost, Purses.units(server, kingdomId)));
     }
 
-    private static boolean isKing(MinecraftServer server, UUID actor, UUID kingdomId) {
+    /**
+     * Whether a player is the king of a kingdom: only the king changes its style and its flag.
+     */
+    public static boolean isKing(MinecraftServer server, UUID actor, UUID kingdomId) {
         return KingdomWorldApi.state(server).membership().kingdom(kingdomId).flatMap(members -> members.member(actor))
                 .map(Member::role).filter(role -> role == Role.KING).isPresent();
     }

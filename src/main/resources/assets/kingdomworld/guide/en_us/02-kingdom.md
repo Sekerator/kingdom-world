@@ -25,7 +25,7 @@ There is one exception: a charter for a province. If you bought a charter (see [
 1. Place the throne. An empty throne is only decoration, and if you belong to no kingdom the game tells you once: "Take the Founder's Crown and right-click the throne to found a kingdom".
 2. Hold the crown and right-click the throne. Without the crown in hand you only get "Hold a Founder's Crown to found a kingdom".
 3. In the **"Found a kingdom"** screen enter a name: 3 to 32 characters, letters of any alphabet, digits, spaces, hyphen, apostrophe and underscore, starting with a letter or a digit. Extra spaces are removed, and the screen shows a mistake at once.
-4. Pick a **color** out of 16 (a random one is chosen at first). The land of the kingdom on the map, the middle of its coins and the banners of its great buildings wear it.
+4. Pick a **color** out of 16 (a random one is chosen at first). The land of the kingdom on the map, the middle of its coins and the banners of its great buildings wear it, and the default flag is a banner of this color, shown under the colors (see [The flag](flag)).
 5. Pick an **architectural style**: each of the eight styles has a picture, and the one marked "Suits the land" fits the climate around the throne and is chosen at first (see [Architectural styles](styles)).
 6. Press **"Found"**. The server checks everything again, and on a refusal the screen names the reason.
 
@@ -56,6 +56,7 @@ The server checks every action of the screen: without the right it does not happ
 The lines of the overview: the ruler, the number of members and citizens, the land ("Land: X of Y chunks", with provinces "Land: N chunks, of them X claimed of Y"), the position of the throne, the style and your position. Buttons at the bottom:
 
 - **"Territory"** opens the map for editing land (see [Claiming and releasing land](claiming));
+- **"Flag"** opens the flag window, and every player sees it (see [The flag](flag));
 - **"Leave kingdom"** for members, or a red **"Dissolve kingdom"** for the king, both with a confirmation (see [The crown, abdication and dissolving](crown)).
 
 The king sees a **"Change style"** button: with it he goes through the styles and picks a new one. New buildings follow the chosen style, those standing stay as they are, and the treasury pays {cfg:kingdom.styleChangeCost} copper coins.
@@ -126,6 +127,39 @@ Every refusal is told in a message, and the throne for the move stays with the p
 Until the new throne stands, the line of the throne says "(being moved)" and its button is **"Cancel move"**. Once the move is called off, the throne for the move leaves the king's inventory, and anywhere else it vanishes with a message when somebody tries to place it, dropping nothing. So a throne lost or thrown away gives neither a second throne nor a copy. A new move can start at once: the one called off does not count.
 
 > The rulers of the world do not move their thrones.
+
+## flag | The flag
+@icon minecraft:white_banner
+Every kingdom has a flag. In the throne window it shows as two small flags beside the name of the kingdom: hover over them to see its layers, or click to open the **flag window**. The **"Flag"** button at the bottom of the Overview tab opens the same window, and every player sees it.
+
+### The default flag
+
+Until the king draws one, the flag of a kingdom is a plain banner of the dye nearest to the color of its name. So the color chosen at founding sets the flag too (see [Founding a kingdom](founding)).
+
+### The flag window
+
+Only the king of a kingdom of players changes the flag. Subjects, outsiders and players of other kingdoms see the flag and the names of its layers, without buttons.
+
+- On the left is a large preview. While the mouse is over a pattern or a color, the preview shows what a click would make.
+- The **"Layers"** column: the first row is the color of the field, then the layers in the order they are drawn, the lowest first, as the tooltip of a banner lists them. A click picks a row. A layer has three buttons: "Up", "Down" and "Remove".
+- Under it is the **palette** of the 16 dyes of the game: a swatch paints the row picked.
+- On the right is the **grid of patterns**: every pattern of the loom, the six patterns the loom needs an item for (globe, creeper, skull, flower, thing and snout) for free, and the patterns of other mods. A click puts the pattern on the layer picked. With the field picked or with Shift held, the pattern is added as a new layer on top in the color of the brush. The brush is at first the dye that stands out most on the field, then the swatch picked last.
+- A flag holds at most 6 layers, as a banner from a loom.
+
+The buttons at the bottom:
+
+- **"Default"** brings back the plain flag of the color of the kingdom.
+- **"Random"** draws a flag the way the kingdoms of the world get theirs, in the style of your kingdom.
+- **"From banner"** takes the banner in your hand: the main hand first, then the other, and a shield with a banner works too. A banner of more than six layers gives its first six.
+- **"Save"** saves the flag. It costs nothing and takes effect at once, and the subjects get a message.
+
+Keys: Delete removes a layer, Ctrl+Up and Ctrl+Down move it, Up and Down pick a row, Ctrl+Z and Ctrl+Y undo and redo, Enter saves. While the flag is changed and not saved, "Back" and Esc first ask whether to leave without saving.
+
+The window tells you when another kingdom already flies the same flag: that is allowed. A pattern of a mod that is gone shows as "Pattern of a missing mod" and is dropped the next time the flag is saved.
+
+### Flags of the kingdoms of the world
+
+A kingdom of the world gets its flag as soon as it appears: a field of its color and a motif of its architectural style, and the character of its ruler adds favourite patterns and colors. The flag never changes, not even after a coup, and cannot be changed (see [Kingdoms of the world](world_kingdoms)).
 
 ## members | Subjects and applications
 @icon minecraft:player_head

@@ -45,6 +45,7 @@ public final class CommonEvents {
         io.github.sekerator.kingdomworld.common.kingdom.ThroneMoving.register();
         CitizenEvents.register();
         io.github.sekerator.kingdomworld.common.economy.EconomyEvents.register();
+        io.github.sekerator.kingdomworld.common.flag.FlagEvents.register();
         io.github.sekerator.kingdomworld.common.trade.TradeEvents.register();
         io.github.sekerator.kingdomworld.common.guild.GuildEvents.register();
         io.github.sekerator.kingdomworld.common.construction.ConstructionEvents.register();

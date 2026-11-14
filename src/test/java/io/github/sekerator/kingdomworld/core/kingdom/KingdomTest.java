@@ -7,6 +7,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class KingdomTest {
@@ -61,6 +62,27 @@ class KingdomTest {
         assertEquals("terem", kingdom.withRuler(null).style());
         assertEquals("terem", kingdom.withColor(0xABCDEF).style());
         assertEquals(new Kingdom(ID, "Valoria", 0xABCDEF, null, 7L, "terem"), kingdom.withRuler(null).withColor(0xABCDEF));
+    }
+
+    @Test
+    void theOldConstructorsGiveTheFlagOfTheColour() {
+        assertNull(new Kingdom(ID, "Valoria", 0, RULER, 7L).flag());
+        assertNull(new Kingdom(ID, "Valoria", 0, RULER, 7L, "terem").flag());
+        assertEquals(new Kingdom(ID, "Valoria", 0, RULER, 7L, "terem", null), new Kingdom(ID, "Valoria", 0, RULER, 7L, "terem"));
+    }
+
+    @Test
+    void everyChangeKeepsTheFlag() {
+        KingdomFlag flag = KingdomFlag.plain(11).added(new KingdomFlag.Layer("minecraft:cross", 0));
+        Kingdom kingdom = new Kingdom(ID, "Valoria", 0, RULER, 7L, "terem").withFlag(flag);
+        assertEquals(flag, kingdom.flag());
+        assertEquals(flag, kingdom.withRuler(null).flag());
+        assertEquals(flag, kingdom.withColor(0xABCDEF).flag());
+        assertEquals(flag, kingdom.withStyle("gothic").flag());
+        assertEquals("terem", kingdom.style());
+        assertNull(kingdom.withFlag(null).flag());
+        assertNotEquals(kingdom, kingdom.withFlag(null), "the flag is part of the kingdom, so changing it is a change");
+        assertEquals(kingdom, kingdom.withFlag(KingdomFlag.plain(11).added(new KingdomFlag.Layer("minecraft:cross", 0))));
     }
 
     @Test

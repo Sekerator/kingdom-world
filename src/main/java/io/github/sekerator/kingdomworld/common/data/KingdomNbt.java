@@ -1,5 +1,6 @@
 package io.github.sekerator.kingdomworld.common.data;
 
+import io.github.sekerator.kingdomworld.common.flag.FlagNbt;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.membership.KingdomMembers;
 import io.github.sekerator.kingdomworld.core.membership.Member;
@@ -28,7 +29,7 @@ import java.util.UUID;
  * NBT form of a kingdom with its land, members, rights, pending requests, population, orders and treasury (format 7; trade is kept at the root).
  *
  * <pre>
- * { id, name, color, ruler?, createdGameTime, style?,
+ * { id, name, color, ruler?, createdGameTime, style?, flag?: see {@link FlagNbt},
  *   capital?: { dimension, x, y, z }, chunks: long[], throneMove?: { id, started }, throneMoved?: long,
  *   members: [ { player, role, joined } ],
  *   permissions?: { &lt;role&gt;: [ &lt;permission&gt;, ... ] },
@@ -37,8 +38,9 @@ import java.util.UUID;
  * </pre>
  *
  * <p>Reading is strict: anything that cannot be understood throws {@link IllegalArgumentException}, so the
- * caller can keep the data read-only instead of silently dropping parts of it. The one exception is the architectural style:
- * a style this version does not know is read as none, so that a style dropped by a later version does not lock the data.
+ * caller can keep the data read-only instead of silently dropping parts of it. The exceptions are the architectural style:
+ * a style this version does not know is read as none, so that a style dropped by a later version does not lock the data; and the
+ * flag, which is read leniently (see {@link FlagNbt}): a flag that cannot be understood is read as the flag of the colour.
  */
 public final class KingdomNbt {
     static final String ID = "id";
@@ -80,6 +82,7 @@ public final class KingdomNbt {
         if (!kingdom.style().isEmpty()) {
             tag.putString(STYLE, kingdom.style());
         }
+        FlagNbt.put(tag, kingdom.flag());
         return tag;
     }
 
@@ -154,7 +157,7 @@ public final class KingdomNbt {
         UUID ruler = tag.hasUUID(RULER) ? tag.getUUID(RULER) : null;
         String style = tag.contains(STYLE, Tag.TAG_STRING) ? tag.getString(STYLE) : "";
         return new Kingdom(tag.getUUID(ID), tag.getString(NAME), tag.getInt(COLOR), ruler, tag.getLong(CREATED_GAME_TIME),
-                ArchitecturalStyles.known(style) ? style : "");
+                ArchitecturalStyles.known(style) ? style : "", FlagNbt.get(tag));
     }
 
     /**

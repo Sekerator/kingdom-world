@@ -57,7 +57,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "57";
+    public static final String PROTOCOL_VERSION = "58";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -344,6 +344,14 @@ public final class KingdomWorldNetwork {
                 io.github.sekerator.kingdomworld.common.network.packet.StorehousePackets.Accepts::encode,
                 io.github.sekerator.kingdomworld.common.network.packet.StorehousePackets.Accepts::decode,
                 io.github.sekerator.kingdomworld.common.network.packet.StorehousePackets.Accepts::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.FlagPackets.Save.class, NetworkDirection.PLAY_TO_SERVER,
+                io.github.sekerator.kingdomworld.common.network.packet.FlagPackets.Save::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.FlagPackets.Save::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.FlagPackets.Save::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.FlagPackets.Directory.class, NetworkDirection.PLAY_TO_CLIENT,
+                io.github.sekerator.kingdomworld.common.network.packet.FlagPackets.Directory::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.FlagPackets.Directory::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.FlagPackets.Directory::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

@@ -44,6 +44,10 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
     private static final int NARROW_STYLE_TOP = CHOICE_TOP + SWATCH + 4;
     private static final int NARROW_PICTURE_TOP = NARROW_STYLE_TOP + 11;
     private static final int PREVIEW_TOP = 160;
+    /** The flag of the chosen color: 10x20. */
+    private static final int FLAG_SCALE = 12;
+    private static final int FLAG_WIDTH = 10;
+    private static final int FLAG_HEIGHT = 20;
     private static final int STATUS_TOP = 172;
 
     private final BlockPos throne;
@@ -155,6 +159,7 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
         nameBox.setMaxLength(FoundKingdomPacket.MAX_RAW_NAME);
         nameBox.setValue(previous);
         nameBox.setResponder(value -> updateButtons());
+        io.github.sekerator.kingdomworld.client.flag.FlagRendering.bake();
         addRenderableWidget(nameBox);
         setInitialFocus(nameBox);
         if (narrow) {
@@ -304,6 +309,7 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
             }
             graphics.fill(x, y, x + SWATCH, y + SWATCH, 0xFF000000 | swatchColor);
         }
+        renderFlag(graphics);
         picker.render(this, graphics, font);
         Optional<NameProblem> problem = problem();
         String name = KingdomNames.normalize(nameBox.getValue());
@@ -318,6 +324,26 @@ public class FoundKingdomScreen extends KingdomScreen implements ResultListener 
         }
         paragraph(graphics, status, left + INSET, top + STATUS_TOP, panelWidth - 2 * INSET, STATUS_LINES,
                 statusIsError ? 0xFFFF8080 : 0xFFA0E0A0);
+    }
+
+    /**
+     * The flag the kingdom will fly until its king draws another: a banner of the dye nearest to the chosen color. It stands
+     * under the colors, or at the left of the picture of the style when the colors take one row above it.
+     */
+    private void renderFlag(GuiGraphics graphics) {
+        int x = colorsX();
+        int y = narrow ? top() + NARROW_PICTURE_TOP : swatchY(KingdomColors.PALETTE.size() - 1) + SWATCH + 6;
+        graphics.fill(x - 2, y - 2, x + FLAG_WIDTH + 2, y + FLAG_HEIGHT + 2, 0xFF100C08);
+        io.github.sekerator.kingdomworld.client.flag.FlagRendering.drawGui(graphics,
+                io.github.sekerator.kingdomworld.core.kingdom.KingdomFlags.standard(color), x, y, FLAG_SCALE);
+        Component label = Component.translatable("kingdomworld.screen.found.flag.label");
+        int labelX = x + FLAG_WIDTH + 6;
+        int labelY = y + (FLAG_HEIGHT - 8) / 2;
+        label(graphics, label, labelX, labelY, 0xFFE0E0E0, narrow ? picker.left() - 4 : colorsX() + column);
+        Component hint = Component.translatable("kingdomworld.screen.found.flag");
+        for (int stripe = y - 2; stripe < y + FLAG_HEIGHT + 2; stripe += LINE) {
+            hoverText(x - 2, stripe + 1, FLAG_WIDTH + 4 + 6 + font.width(label), hint);
+        }
     }
 
     /**

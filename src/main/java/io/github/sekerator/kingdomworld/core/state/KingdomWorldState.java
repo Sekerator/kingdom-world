@@ -261,6 +261,16 @@ public final class KingdomWorldState {
     }
 
     /**
+     * Gives a kingdom another flag; {@code null} for the flag of its colour.
+     *
+     * @return {@code false} if there is no such kingdom
+     */
+    public boolean setKingdomFlag(UUID kingdomId, io.github.sekerator.kingdomworld.core.kingdom.KingdomFlag flag) {
+        Optional<Kingdom> kingdom = kingdoms.get(kingdomId);
+        return kingdom.isPresent() && kingdoms.update(kingdom.get().withFlag(flag));
+    }
+
+    /**
      * Removes a kingdom with its members, pending requests, land, citizens and treasury; its currency becomes old.
      */
     public Optional<Kingdom> dissolve(UUID kingdomId) {
