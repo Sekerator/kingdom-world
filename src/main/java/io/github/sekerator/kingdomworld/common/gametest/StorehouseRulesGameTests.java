@@ -90,8 +90,13 @@ public final class StorehouseRulesGameTests {
         BlockPos inside = throne.offset(100, 0, 0);
         BlockPos beyond = throne.offset(130, 0, 0);
         TestChunks.hold(level, throne, beyond.offset(2, 0, 2));
+        // Land runs on from the capital to both storehouses: a chunk apart from the land of the kingdom is never claimed.
+        ChunkPos capital = new ChunkPos(throne);
+        for (int x = capital.x; x <= new ChunkPos(beyond).x; x++) {
+            KingdomWorldApi.claimChunk(level, new ChunkPos(x, capital.z), kingdom.id(), null);
+        }
         for (BlockPos at : List.of(inside, beyond)) {
-            KingdomWorldApi.claimChunk(level, new ChunkPos(at), kingdom.id(), null);
+            helper.assertTrue(kingdom.id().equals(KingdomWorldApi.ownerAt(level, at)), "The land of the test was not claimed at " + at);
         }
         Wall wall = null;
         try {
