@@ -607,22 +607,27 @@ public final class KingdomWorldState {
         }
         Citizen best = null;
         int bestRank = Integer.MAX_VALUE;
+        boolean bestKeeps = true;
         double bestDistance = Double.POSITIVE_INFINITY;
         for (Citizen citizen : citizens.registry().citizensOf(post.kingdomId())) {
             int rank = io.github.sekerator.kingdomworld.core.citizen.Workforce.candidate(citizen, post).hireRank();
             if (rank < 0) {
                 continue;
             }
+            // Townspeople who keep a shop come last among their rank: the post takes them only when nobody else is free.
+            boolean keeps = citizen.business() != 0;
             double distance = citizen.lastPos().distanceSqr(pos);
-            if (best == null || rank < bestRank || rank == bestRank && distance < bestDistance) {
+            if (best == null || rank < bestRank || rank == bestRank && (!keeps && bestKeeps || keeps == bestKeeps && distance < bestDistance)) {
                 best = citizen;
                 bestRank = rank;
+                bestKeeps = keeps;
                 bestDistance = distance;
             }
         }
         if (best == null) {
             return Hiring.failed(KingdomError.NO_UNEMPLOYED);
         }
+        // A keeper hired onto a post leaves its shop; the next day of its city finds another keeper, a family, or none.
         citizens.assignToPost(best, post);
         return new Hiring(Outcome.DONE, Optional.of(best));
     }
@@ -1109,6 +1114,14 @@ public final class KingdomWorldState {
     public Outcome setOpenToOutsiders(UUID actor, UUID kingdomId, boolean open, TradeRules rules) {
         Outcome check = checkMarket(actor, kingdomId);
         return check.ok() ? trade.setOpenToOutsiders(kingdomId, open, rules) : check;
+    }
+
+    /**
+     * Whether the crown sells goods to the shops of the citizens of a kingdom; the actor needs the right to manage the market.
+     */
+    public Outcome setSellToCitizens(UUID actor, UUID kingdomId, boolean sell, TradeRules rules) {
+        Outcome check = checkMarket(actor, kingdomId);
+        return check.ok() ? trade.setSellToCitizens(kingdomId, sell, rules) : check;
     }
 
     public Outcome setForeignCurrency(UUID actor, UUID kingdomId, boolean allowed, TradeRules rules) {

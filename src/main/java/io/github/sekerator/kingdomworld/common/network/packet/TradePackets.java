@@ -177,7 +177,9 @@ public final class TradePackets {
             SET_OPEN,
             SET_FOREIGN,
             SET_TAX,
-            SET_FEE
+            SET_FEE,
+            /** Whether the crown sells goods to the shops of citizens: 1 or 0 in {@code first}. */
+            SET_SELL_TO_CITIZENS
         }
 
         public MarketChange {

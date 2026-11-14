@@ -279,6 +279,8 @@ public final class Citizens {
             return false;
         }
         setProfession(citizen, post.professionId());
+        // A keeper of a shop who takes a post of the crown leaves the shop.
+        citizen.setBusiness(0);
         return assignPost(citizen, post);
     }
 

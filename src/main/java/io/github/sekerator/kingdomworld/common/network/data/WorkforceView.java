@@ -41,6 +41,8 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
     public static final int MAX_CONTENTS = 3;
     public static final int MAX_PROFESSIONS = 16;
     private static final int MAX_KEY = 24;
+    /** The longest name of the city of a shop. */
+    private static final int MAX_SHOP_CITY = 64;
     private static final int MAX_PLACE_NAME = 64;
     private static final int MAX_KINGDOM_NAME = 64;
     private static final int MAX_DIMENSION = 128;
@@ -387,7 +389,8 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
      */
     public record CitizenRow(UUID id, int seed, boolean female, String profession, CitizenState state, int health, int maxHealth, int mood,
                              String place, @Nullable Workplace workplace, Workforce.Doing doing, WorkStatus status, List<Lack> lacks,
-                             Workforce.Candidate candidate, int distance, Spot spot, int office, String officePlace, String postPlace) {
+                             Workforce.Candidate candidate, int distance, Spot spot, int office, String officePlace, String postPlace,
+                             String shopTrade, String shopCity) {
         public static final int OFFICE_NONE = 0;
         public static final int OFFICE_MAYOR = 1;
         public static final int OFFICE_BARON = 2;
@@ -403,10 +406,12 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
                           String place, @Nullable Workplace workplace, Workforce.Doing doing, WorkStatus status, List<Lack> lacks,
                           Workforce.Candidate candidate, int distance, Spot spot) {
             this(id, seed, female, profession, state, health, maxHealth, mood, place, workplace, doing, status, lacks, candidate, distance, spot,
-                    OFFICE_NONE, "", "");
+                    OFFICE_NONE, "", "", "", "");
         }
 
         public CitizenRow {
+            shopTrade = shopTrade == null ? "" : shopTrade;
+            shopCity = shopCity == null ? "" : shopCity.length() > MAX_SHOP_CITY ? shopCity.substring(0, MAX_SHOP_CITY) : shopCity;
             Objects.requireNonNull(spot, "spot");
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(profession, "profession");
@@ -457,6 +462,8 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
             buf.writeVarInt(office);
             buf.writeUtf(officePlace, MAX_KEY);
             buf.writeUtf(postPlace, MAX_KEY);
+            buf.writeUtf(shopTrade, MAX_KEY);
+            buf.writeUtf(shopCity, MAX_SHOP_CITY);
         }
 
         static CitizenRow decode(FriendlyByteBuf buf) {
@@ -487,7 +494,8 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
             }
             Workforce.Candidate candidate = KingdomView.readEnum(buf, Workforce.Candidate.class);
             return new CitizenRow(id, seed, female, profession, state, health, maxHealth, mood, place, workplace, doing, status, lacks, candidate,
-                    buf.readVarInt() - 1, Spot.decode(buf), buf.readVarInt(), buf.readUtf(MAX_KEY), buf.readUtf(MAX_KEY));
+                    buf.readVarInt() - 1, Spot.decode(buf), buf.readVarInt(), buf.readUtf(MAX_KEY), buf.readUtf(MAX_KEY), buf.readUtf(MAX_KEY),
+                    buf.readUtf(MAX_SHOP_CITY));
         }
     }
 

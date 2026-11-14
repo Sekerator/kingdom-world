@@ -507,6 +507,8 @@ public final class TradeWork {
         for (KingdomStorage.Total total : KingdomStorage.totals(server, kingdomId)) {
             goods = Money.addCapped(goods, (long) Math.min(Money.MAX, ItemPrices.value(server, total.sample()).amount() * total.count()));
         }
+        // The goods of the shops of its citizens are wealth of the kingdom too, though they lie in no storehouse.
+        goods = Money.addCapped(goods, io.github.sekerator.kingdomworld.common.commerce.Shops.goodsWorth(server, kingdomId));
         Treasury treasury = economy.treasury(kingdomId).orElseThrow();
         long coins = ExchangeRates.worth(treasury.vault().value(treasury.units()), economy.rate(kingdomId));
         long reserves = 0;

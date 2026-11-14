@@ -119,6 +119,8 @@ public class CitizenEntity extends PathfinderMob {
         goalSelector.addGoal(3, new OpenDoorGoal(this, true));
         goalSelector.addGoal(4, new io.github.sekerator.kingdomworld.common.life.DayGoal(this));
         goalSelector.addGoal(5, new WorkGoal(this));
+        // A keeper of a shop stands at its place during the hours of work.
+        goalSelector.addGoal(5, new io.github.sekerator.kingdomworld.common.commerce.KeeperGoal(this));
         goalSelector.addGoal(6, new io.github.sekerator.kingdomworld.common.citizen.goal.ReturnGoals.Idle(this));
         goalSelector.addGoal(7, new CitizenGoals.StrollNearHomeGoal(this));
         goalSelector.addGoal(8, new LookAtPlayerGoal(this, Player.class, 6.0f));
@@ -544,6 +546,10 @@ public class CitizenEntity extends PathfinderMob {
         }
         if (!level().isClientSide && player instanceof ServerPlayer serverPlayer && citizenId != null) {
             if (io.github.sekerator.kingdomworld.common.life.TavernActions.open(serverPlayer, this)) {
+                return InteractionResult.SUCCESS;
+            }
+            // A keeper opens its shop, a person of a house in the evening the shop of its family.
+            if (io.github.sekerator.kingdomworld.common.commerce.ShopActions.openForCitizen(serverPlayer, this)) {
                 return InteractionResult.SUCCESS;
             }
             // One who manages the citizens sees the post of the citizen, or the window of the workers; with Shift, who it is.

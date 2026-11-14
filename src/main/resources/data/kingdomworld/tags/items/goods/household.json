@@ -1,0 +1,14 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:torch",
+    "minecraft:candle",
+    "minecraft:lantern",
+    "minecraft:bowl",
+    "minecraft:bucket",
+    "minecraft:glass_bottle",
+    "minecraft:paper",
+    "minecraft:book",
+    "minecraft:flower_pot"
+  ]
+}

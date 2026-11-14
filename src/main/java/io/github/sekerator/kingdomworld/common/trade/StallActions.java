@@ -300,40 +300,6 @@ public final class StallActions {
         KingdomWorldNetwork.sendToPlayer(player, new TradePackets.StallOpen(view(player, pos, kingdom.get()), false));
     }
 
-    /**
-     * Money a player is about to pay: from the account, or coins with the change for them.
-     */
-    private record Payment(UUID currency, long cost, UUID payer, Coins coins, long change) {
-    }
-
-    private static Object preparePayment(ServerPlayer player, UUID kingdom, UUID currency, long cost, boolean account) {
-        Economy economy = KingdomWorldApi.state(player.server).economy();
-        if (account && LawWork.overDebtLimit(player.server, kingdom, player.getUUID())) {
-            // A debtor over the limit pays the market only in coins.
-            return KingdomActions.Feedback.error(KingdomError.DEBT_TOO_HIGH);
-        }
-        if (account) {
-            Outcome check = economy.checkPayKingdom(kingdom, currency, cost, player.getUUID());
-            return check.ok() ? new Payment(currency, cost, player.getUUID(), Coins.NONE, 0) : KingdomActions.Feedback.error(check.error());
-        }
-        Optional<CoinPayment.Plan> plan = Purses.plan(player, currency, cost);
-        if (plan.isEmpty()) {
-            return KingdomActions.Feedback.error(KingdomError.NOT_ENOUGH_MONEY);
-        }
-        Outcome check = economy.checkPayKingdom(kingdom, currency, cost, null);
-        return check.ok() ? new Payment(currency, cost, null, plan.get().coins(), plan.get().change())
-                : KingdomActions.Feedback.error(check.error());
-    }
-
-    /**
-     * Hands the change for coins back; what does not fit goes onto the account.
-     *
-     * @return the change that went onto the account
-     */
-    private static long change(ServerPlayer player, Payment payment) {
-        return payment.payer() == null && payment.change() > 0 ? Purses.payOut(player, payment.currency(), payment.change()) : 0;
-    }
-
     private static Component money(MinecraftServer server, UUID currency, long amount) {
         return MoneyTexts.amount(amount, Purses.units(server, currency));
     }
@@ -372,11 +338,11 @@ public final class StallActions {
         if (!GoodsStacks.fits(player.getInventory(), wanted)) {
             return KingdomActions.Feedback.error(KingdomError.NO_ROOM);
         }
-        Object prepared = preparePayment(player, kingdom.id(), currency, cost, account);
+        Object prepared = Purses.preparePayment(player, kingdom.id(), currency, cost, account);
         if (prepared instanceof KingdomActions.Feedback refused) {
             return refused;
         }
-        Payment payment = (Payment) prepared;
+        Purses.Payment payment = (Purses.Payment) prepared;
         WorldPos near = new WorldPos(Dimensions.id(player.level()), player.getBlockX(), player.getBlockY(), player.getBlockZ());
         List<ItemStack> goods = MarketStock.take(server, kingdom.id(), item, count, near);
         if (goods == null) {
@@ -397,7 +363,7 @@ public final class StallActions {
             LOGGER.error("A purchase at the market of {} failed after its checks: {}", kingdom.name(), paid.error());
             return KingdomActions.Feedback.error(paid.error());
         }
-        long toAccount = change(player, payment);
+        long toAccount = Purses.change(player, payment);
         for (ItemStack stack : goods) {
             GoodsStacks.give(player, stack);
         }
@@ -420,11 +386,11 @@ public final class StallActions {
         if (cost <= 0) {
             return Optional.empty();
         }
-        Object prepared = preparePayment(player, kingdom, kingdom, cost, account);
+        Object prepared = Purses.preparePayment(player, kingdom, kingdom, cost, account);
         if (prepared instanceof KingdomActions.Feedback refused) {
             return Optional.of(refused);
         }
-        Payment payment = (Payment) prepared;
+        Purses.Payment payment = (Purses.Payment) prepared;
         if (payment.payer() == null && !Purses.take(player, kingdom, payment.coins())) {
             return Optional.of(KingdomActions.Feedback.error(KingdomError.NOT_ENOUGH_MONEY));
         }
@@ -436,7 +402,7 @@ public final class StallActions {
             }
             return Optional.of(KingdomActions.Feedback.error(paid.error()));
         }
-        change(player, payment);
+        Purses.change(player, payment);
         LawWork.traded(player.server, kingdom, player.getUUID(), cost);
         return Optional.empty();
     }

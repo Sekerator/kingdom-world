@@ -127,6 +127,15 @@ public final class ModRegistries {
                     .sound(SoundType.WOOD)));
     public static final RegistryObject<Item> MARKET_STALL_ITEM = ITEMS.register("market_stall",
             () -> new BlockItem(MARKET_STALL.get(), new Item.Properties()));
+    /** A counter: a place for a shop of citizens in the square of a city. */
+    public static final RegistryObject<Block> SHOP_COUNTER = BLOCKS.register("shop_counter",
+            () -> new io.github.sekerator.kingdomworld.common.commerce.ShopCounterBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.WOOD)
+                    .strength(2.0f)
+                    .sound(SoundType.WOOD)
+                    .noOcclusion()));
+    public static final RegistryObject<Item> SHOP_COUNTER_ITEM = ITEMS.register("shop_counter",
+            () -> new BlockItem(SHOP_COUNTER.get(), new Item.Properties()));
     /** A blueprint of a building template, taken in the construction tab of the throne; it lays out constructions. */
     public static final RegistryObject<Item> BLUEPRINT = ITEMS.register("blueprint",
             () -> new io.github.sekerator.kingdomworld.common.construction.BlueprintItem(new Item.Properties().stacksTo(1)));
@@ -222,6 +231,7 @@ public final class ModRegistries {
             event.accept(BANK_ITEM);
             event.accept(MINT_ITEM);
             event.accept(MARKET_STALL_ITEM);
+            event.accept(SHOP_COUNTER_ITEM);
         } else if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) {
             event.accept(GUIDE_BOOK);
             event.accept(FOUNDER_CROWN);

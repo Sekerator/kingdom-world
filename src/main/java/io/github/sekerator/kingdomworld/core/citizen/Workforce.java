@@ -195,7 +195,9 @@ public final class Workforce {
                 result.add(citizen);
             }
         }
+        // Townspeople who keep a shop come after the others of their group.
         result.sort(Comparator.comparingInt((Citizen citizen) -> candidate(citizen, post).ordinal())
+                .thenComparing(citizen -> citizen.business() != 0)
                 .thenComparingDouble(citizen -> citizen.lastPos().dimension().equals(post.pos().dimension())
                         ? citizen.lastPos().distanceSqr(post.pos()) : Double.MAX_VALUE));
         return result;

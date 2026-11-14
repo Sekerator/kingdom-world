@@ -28,7 +28,12 @@ public final class TaxBurden {
      * The poll tax against the usual one, in percent; 100 without a usual tax.
      */
     public static int pollPercent(long pollTax, long usual) {
-        return usual <= 0 ? 100 : (int) Math.min(MAX_PERCENT, Math.max(0, pollTax) * 100 / usual);
+        if (usual <= 0) {
+            return 100;
+        }
+        java.math.BigInteger percent = java.math.BigInteger.valueOf(Math.max(0, pollTax)).multiply(java.math.BigInteger.valueOf(100))
+                .divide(java.math.BigInteger.valueOf(usual));
+        return (int) percent.min(java.math.BigInteger.valueOf(MAX_PERCENT)).longValue();
     }
 
     /**

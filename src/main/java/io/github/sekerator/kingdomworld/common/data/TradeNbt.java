@@ -112,6 +112,10 @@ public final class TradeNbt {
         tag.putUUID("kingdom", market.kingdomId());
         tag.putBoolean("open", market.openToOutsiders());
         tag.putBoolean("foreign", market.foreignCurrency());
+        if (!market.sellToCitizens()) {
+            // Only when the king stopped it: without the key the crown sells to the shops of citizens.
+            tag.putBoolean("sellToCitizens", false);
+        }
         tag.putInt("fee", market.exchangeFeePermille());
         ListTag sells = new ListTag();
         for (Market.SellEntry entry : market.sells()) {
@@ -307,6 +311,7 @@ public final class TradeNbt {
         }
         Market market = state.trade().restoreMarket(kingdom, tag.getInt("fee"));
         market.restore(sells, buys, exports, lots, imports, tag.getBoolean("open"), tag.getBoolean("foreign"), tag.getInt("fee"), stats, spent);
+        market.restoreSellToCitizens(!tag.contains("sellToCitizens") || tag.getBoolean("sellToCitizens"));
         return maxId;
     }
 

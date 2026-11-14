@@ -110,6 +110,15 @@ public final class TradeBook {
         return Outcome.DONE;
     }
 
+    public Outcome setSellToCitizens(UUID kingdomId, boolean sell, TradeRules rules) {
+        Market market = market(kingdomId, rules);
+        if (market.sellToCitizens() == sell) {
+            return Outcome.fail(KingdomError.UNCHANGED);
+        }
+        market.setSellToCitizens(sell);
+        return Outcome.DONE;
+    }
+
     public Outcome setForeignCurrency(UUID kingdomId, boolean allowed, TradeRules rules) {
         Market market = market(kingdomId, rules);
         if (market.foreignCurrency() == allowed) {

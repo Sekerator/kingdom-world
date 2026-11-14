@@ -143,7 +143,11 @@ public final class MarketActions {
         return Optional.of(new TradeViews.MarketView(kingdomId, state.membership().hasPermission(viewer, kingdomId, Permission.MANAGE_MARKET),
                 Purses.currency(server, kingdomId).orElseThrow(), sells, buys, StallActions.lotRows(server, market, viewer), exports, imports,
                 market.openToOutsiders(), market.foreignCurrency(), treasury.get().salesTaxPermille(), rules.maxSalesTaxPercent() * 10,
-                market.exchangeFeePermille(), rules.maxExchangeFeePercent() * 10, today, importable(server), rules.maxEntries()));
+                market.exchangeFeePermille(), rules.maxExchangeFeePercent() * 10, today, importable(server), rules.maxEntries(),
+                io.github.sekerator.kingdomworld.common.commerce.CityOf.active(server, kingdomId), market.sellToCitizens(),
+                treasury.get().journal().totals(day, io.github.sekerator.kingdomworld.core.economy.TreasuryJournal.Period.TODAY)
+                        .getOrDefault(io.github.sekerator.kingdomworld.core.economy.LedgerCategory.COMMERCE,
+                                io.github.sekerator.kingdomworld.core.economy.TreasuryJournal.Totals.ZERO).income()));
     }
 
     // ---------------------------------------------------------------- changes
@@ -215,6 +219,11 @@ public final class MarketActions {
                 case SET_OPEN -> {
                     outcome = KingdomWorldApi.change(server, "open a market", state -> state.setOpenToOutsiders(actor, kingdom, change.first() != 0, rules));
                     done = change.first() != 0 ? "opened" : "closed";
+                }
+                case SET_SELL_TO_CITIZENS -> {
+                    outcome = KingdomWorldApi.change(server, "sell to the shops of citizens",
+                            state -> state.setSellToCitizens(actor, kingdom, change.first() != 0, rules));
+                    done = change.first() != 0 ? "citizens_on" : "citizens_off";
                 }
                 case SET_FOREIGN -> {
                     outcome = KingdomWorldApi.change(server, "set foreign money",

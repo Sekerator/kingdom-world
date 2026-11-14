@@ -32,7 +32,7 @@ import java.util.UUID;
  * population: { lastArrival?, citizens: [ citizen ], chronicle: [ death ], sites: [ { kind, pos } ],
  *               posts: [ post ], production: [ { day, counts: { profession: { item: count } } } ] }
  * citizen: { id, seed, gender, skin, born, health, state, profession, pos, home?, workplace?, food, mood, xp,
- *            workCapacity, workProduct, workProgress, workStatus, pay? }
+ *            workCapacity, workProduct, workProgress, workStatus, pay?, settlement?, business? }
  * post:    { pos, profession, radius, seats, animal, herd, status, yield: { out: { item: rate }, in: { item: rate },
  *            actions, measured }, progress: { item: amount }, day, produced, container, auto, stations: { kind: count } }
  * death:   { citizen, seed, gender, profession, cause, killer, time, pos, killerType?, damage? }
@@ -57,6 +57,8 @@ public final class CitizenNbt {
     private static final String SKIN = "skin";
     /** The settlement of a state a citizen lives in; kept only when it has one, so that format 9 does not change. */
     private static final String SETTLEMENT = "settlement";
+    /** The shop a citizen keeps; kept only when it has one, so that the format does not change. */
+    private static final String BUSINESS = "business";
     private static final String BORN = "born";
     private static final String HEALTH = "health";
     private static final String MAX_HEALTH = "maxHealth";
@@ -216,6 +218,9 @@ public final class CitizenNbt {
         tag.putInt(SKIN, citizen.skin());
         if (citizen.settlement() != 0) {
             tag.putInt(SETTLEMENT, citizen.settlement());
+        }
+        if (citizen.business() != 0) {
+            tag.putLong(BUSINESS, citizen.business());
         }
         tag.putLong(BORN, citizen.birthTick());
         tag.putFloat(HEALTH, citizen.health());
@@ -433,6 +438,7 @@ public final class CitizenNbt {
         citizen.restorePay(tag.contains(PAY, Tag.TAG_INT) ? tag.getInt(PAY)
                 : io.github.sekerator.kingdomworld.core.economy.Payroll.NOTHING_EXPECTED);
         citizen.restoreSettlement(tag.getInt(SETTLEMENT));
+        citizen.restoreBusiness(tag.getLong(BUSINESS));
         return citizen;
     }
 

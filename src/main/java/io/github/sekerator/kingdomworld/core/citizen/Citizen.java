@@ -43,6 +43,8 @@ public final class Citizen {
     private int payPercent = io.github.sekerator.kingdomworld.core.economy.Payroll.NOTHING_EXPECTED;
     /** The settlement of a state it lives in, or 0 for a citizen of a capital or of a kingdom of players. */
     private int settlement;
+    /** The shop it keeps, or 0 for none. */
+    private long business;
 
     private Runnable changeListener = () -> {
     };
@@ -85,6 +87,28 @@ public final class Citizen {
      */
     public void restoreSettlement(int value) {
         settlement = Math.max(0, value);
+    }
+
+    /**
+     * The shop the citizen keeps, or 0: a townsperson keeping a shop stays unemployed by profession.
+     */
+    public long business() {
+        return business;
+    }
+
+    public void setBusiness(long value) {
+        long next = Math.max(0, value);
+        if (next != business) {
+            business = next;
+            changeListener.run();
+        }
+    }
+
+    /**
+     * Puts back the shop as it was saved, without telling anybody.
+     */
+    public void restoreBusiness(long value) {
+        business = Math.max(0, value);
     }
 
     /**

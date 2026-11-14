@@ -362,6 +362,18 @@ public final class KingdomWorldNetwork {
                 EconomyPackets.CityDetailRequest::decode, EconomyPackets.CityDetailRequest::handle);
         add(id++, EconomyPackets.CityDetailResponse.class, NetworkDirection.PLAY_TO_CLIENT, EconomyPackets.CityDetailResponse::encode,
                 EconomyPackets.CityDetailResponse::decode, EconomyPackets.CityDetailResponse::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.CommercePackets.ShopOpen.class, NetworkDirection.PLAY_TO_CLIENT,
+                io.github.sekerator.kingdomworld.common.network.packet.CommercePackets.ShopOpen::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.CommercePackets.ShopOpen::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.CommercePackets.ShopOpen::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.CommercePackets.ShopPage.class, NetworkDirection.PLAY_TO_SERVER,
+                io.github.sekerator.kingdomworld.common.network.packet.CommercePackets.ShopPage::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.CommercePackets.ShopPage::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.CommercePackets.ShopPage::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.CommercePackets.ShopTrade.class, NetworkDirection.PLAY_TO_SERVER,
+                io.github.sekerator.kingdomworld.common.network.packet.CommercePackets.ShopTrade::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.CommercePackets.ShopTrade::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.CommercePackets.ShopTrade::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

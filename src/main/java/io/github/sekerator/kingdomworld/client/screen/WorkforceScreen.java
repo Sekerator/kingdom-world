@@ -1218,6 +1218,11 @@ public class WorkforceScreen extends KingdomScreen implements ResultListener {
             if (row.soldier()) {
                 return Component.translatable(KEY + "in_army");
             }
+            if (row.profession().equals(Professions.UNEMPLOYED.id()) && !row.shopTrade().isEmpty()) {
+                // A townsperson keeping a shop: no post of the crown, but work of its own.
+                return Component.translatable(KEY + "keeper", Component.translatable("kingdomworld.business.trade." + row.shopTrade()),
+                        row.shopCity());
+            }
             if (row.profession().equals(Professions.UNEMPLOYED.id())) {
                 return Component.translatable(KEY + "no_work");
             }

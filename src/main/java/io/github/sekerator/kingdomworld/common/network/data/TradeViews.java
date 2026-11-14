@@ -263,7 +263,15 @@ public final class TradeViews {
     public record MarketView(UUID kingdomId, boolean canManage, Currency own, List<SellRow> sells, List<BuyRow> buys, List<LotRow> lots,
                              List<ExportRow> exports, List<ImportRow> imports, boolean openToOutsiders, boolean foreignCurrency,
                              int salesTaxPermille, int maxSalesTaxPermille, int feePermille, int maxFeePermille, Day day,
-                             List<String> importable, int maxEntries) {
+                             List<String> importable, int maxEntries, boolean citizenShops, boolean sellToCitizens, long soldToCitizens) {
+        public MarketView(UUID kingdomId, boolean canManage, Currency own, List<SellRow> sells, List<BuyRow> buys, List<LotRow> lots,
+                          List<ExportRow> exports, List<ImportRow> imports, boolean openToOutsiders, boolean foreignCurrency,
+                          int salesTaxPermille, int maxSalesTaxPermille, int feePermille, int maxFeePermille, Day day,
+                          List<String> importable, int maxEntries) {
+            this(kingdomId, canManage, own, sells, buys, lots, exports, imports, openToOutsiders, foreignCurrency, salesTaxPermille,
+                    maxSalesTaxPermille, feePermille, maxFeePermille, day, importable, maxEntries, false, true, 0);
+        }
+
         public MarketView {
             Objects.requireNonNull(kingdomId, "kingdomId");
             Objects.requireNonNull(own, "own");
@@ -340,6 +348,9 @@ public final class TradeViews {
                 buf.writeUtf(id, 256);
             }
             buf.writeVarInt(maxEntries);
+            buf.writeBoolean(citizenShops);
+            buf.writeBoolean(sellToCitizens);
+            buf.writeVarLong(soldToCitizens);
         }
 
         public static MarketView decode(FriendlyByteBuf buf) {
@@ -365,7 +376,7 @@ public final class TradeViews {
                     buf.readVarInt(), TreasuryView.amount(buf), TreasuryView.amount(buf), buf.readVarInt(), buf.readVarInt(), TreasuryView.amount(buf));
             List<String> importable = readList(buf, MAX_IMPORTABLE, b -> b.readUtf(256));
             return new MarketView(kingdomId, canManage, own, sells, buys, lots, exports, imports, open, foreign, tax, maxTax, fee, maxFee, day,
-                    importable, buf.readVarInt());
+                    importable, buf.readVarInt(), buf.readBoolean(), buf.readBoolean(), TreasuryView.amount(buf));
         }
     }
 

@@ -84,7 +84,7 @@ public final class CitizenSites {
     private static boolean mayBePlace(BlockState state) {
         return state.getBlock() instanceof BedBlock || state.is(ModRegistries.INFIRMARY.get())
                 || state.is(ModRegistries.STOREHOUSE.get()) || state.is(ModRegistries.WORK_POST.get())
-                || ProfessionBehaviors.isAnyWorkplace(state);
+                || state.is(ModRegistries.SHOP_COUNTER.get()) || ProfessionBehaviors.isAnyWorkplace(state);
     }
 
     /**
@@ -205,7 +205,9 @@ public final class CitizenSites {
                 }
             }
         }
+        List<BlockPos> counters = new java.util.ArrayList<>();
         if (owner == null) {
+            io.github.sekerator.kingdomworld.common.commerce.ShopCounters.scanned(level, key, null, counters);
             return;
         }
         LevelChunkSection[] sections = chunk.getSections();
@@ -220,6 +222,10 @@ public final class CitizenSites {
                 for (int z = 0; z < 16; z++) {
                     for (int x = 0; x < 16; x++) {
                         BlockState state1 = section.getBlockState(x, y, z);
+                        if (state1.is(ModRegistries.SHOP_COUNTER.get())) {
+                            counters.add(new BlockPos(chunk.getPos().getMinBlockX() + x, baseY + y, chunk.getPos().getMinBlockZ() + z));
+                            continue;
+                        }
                         String kind = kindOf(state1);
                         if (kind != null) {
                             pos.set(chunk.getPos().getMinBlockX() + x, baseY + y, chunk.getPos().getMinBlockZ() + z);
@@ -238,6 +244,7 @@ public final class CitizenSites {
                 }
             }
         }
+        io.github.sekerator.kingdomworld.common.commerce.ShopCounters.scanned(level, key, owner, counters);
     }
 
     /**

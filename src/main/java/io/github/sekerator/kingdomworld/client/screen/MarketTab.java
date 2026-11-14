@@ -154,7 +154,10 @@ final class MarketTab {
                     day.exportVolume(), money(day.exportIncome()), money(day.exportMaxIncome())));
             case IMPORT -> List.of(Component.translatable(KEY + "import_day", TradeTexts.items(day.imported()), day.importMax(),
                     money(day.importCost())));
-            default -> List.of(Component.translatable(KEY + "day", money(day.sold()), money(day.bought()), money(day.lotTax())));
+            default -> view.citizenShops()
+                    ? List.of(Component.translatable(KEY + "day_citizens", money(day.sold()), money(view.soldToCitizens()), money(day.bought()),
+                    money(day.lotTax())))
+                    : List.of(Component.translatable(KEY + "day", money(day.sold()), money(day.bought()), money(day.lotTax())));
         };
     }
 
@@ -171,7 +174,7 @@ final class MarketTab {
         cancelWidth = screen.buttonWidth(Component.translatable(KEY + "cancel"));
         setWidth = screen.buttonWidth(Component.translatable(KEY + "set"));
         toggleWidth = 0;
-        for (String key : List.of("open.on", "open.off", "foreign.on", "foreign.off")) {
+        for (String key : List.of("open.on", "open.off", "foreign.on", "foreign.off", "citizens.on", "citizens.off")) {
             toggleWidth = Math.max(toggleWidth, screen.buttonWidth(Component.translatable(KEY + key)));
         }
         labelWidth = 0;
@@ -412,6 +415,13 @@ final class MarketTab {
                 b -> send(TradePackets.MarketChange.Action.SET_OPEN, "", 0, view.openToOutsiders() ? 0 : 1, 0))
                 .bounds(x, y, toggleWidth, ROW - 2).build());
         open.active = view.canManage();
+        if (view.citizenShops()) {
+            Button citizens = screen.add(Button.builder(Component.translatable(view.sellToCitizens() ? KEY + "citizens.on" : KEY + "citizens.off"),
+                    b -> send(TradePackets.MarketChange.Action.SET_SELL_TO_CITIZENS, "", 0, view.sellToCitizens() ? 0 : 1, 0))
+                    .bounds(x + toggleWidth + GAP, y, toggleWidth, ROW - 2).build());
+            citizens.active = view.canManage();
+            citizens.setTooltip(Tooltip.create(Component.translatable("kingdomworld.market.sell_to_citizens_hint")));
+        }
         y += ROW + 1;
         Button foreign = screen.add(Button.builder(Component.translatable(view.foreignCurrency() ? KEY + "foreign.on" : KEY + "foreign.off"),
                 b -> send(TradePackets.MarketChange.Action.SET_FOREIGN, "", 0, view.foreignCurrency() ? 0 : 1, 0))

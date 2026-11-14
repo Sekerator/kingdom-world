@@ -109,4 +109,60 @@ public final class Purses {
         economy.coinsIssued(currency, given);
         return rest;
     }
+
+    // ---------------------------------------------------------------- paying with the account or with coins
+
+    /**
+     * Money a player is about to pay: from the account, or coins with the change for them.
+     *
+     * @param payer the player paying from the account, or {@code null} for coins
+     */
+    public record Payment(UUID currency, long cost, UUID payer, Coins coins, long change) {
+    }
+
+    /**
+     * Prepares a payment to a kingdom in a currency, from the account or with coins, without taking anything yet.
+     *
+     * @return a {@link Payment}, or the {@link io.github.sekerator.kingdomworld.common.kingdom.KingdomActions.Feedback} that refuses it
+     */
+    public static Object preparePayment(ServerPlayer player, UUID kingdom, UUID currency, long cost, boolean account) {
+        Economy economy = KingdomWorldApi.state(player.server).economy();
+        return preparePayment(player, kingdom, currency, cost, account, payer -> economy.checkPayKingdom(kingdom, currency, cost, payer));
+    }
+
+    /**
+     * Prepares a payment, with the check of whoever is paid.
+     *
+     * @param check whether the payment could be made, given the paying player or {@code null} for coins
+     */
+    public static Object preparePayment(ServerPlayer player, UUID kingdom, UUID currency, long cost, boolean account,
+                                        java.util.function.Function<UUID, io.github.sekerator.kingdomworld.core.kingdom.Outcome> check) {
+        if (account && io.github.sekerator.kingdomworld.common.law.LawWork.overDebtLimit(player.server, kingdom, player.getUUID())) {
+            // A debtor over the limit pays only in coins.
+            return io.github.sekerator.kingdomworld.common.kingdom.KingdomActions.Feedback.error(
+                    io.github.sekerator.kingdomworld.core.kingdom.KingdomError.DEBT_TOO_HIGH);
+        }
+        if (account) {
+            io.github.sekerator.kingdomworld.core.kingdom.Outcome outcome = check.apply(player.getUUID());
+            return outcome.ok() ? new Payment(currency, cost, player.getUUID(), Coins.NONE, 0)
+                    : io.github.sekerator.kingdomworld.common.kingdom.KingdomActions.Feedback.error(outcome.error());
+        }
+        Optional<CoinPayment.Plan> plan = plan(player, currency, cost);
+        if (plan.isEmpty()) {
+            return io.github.sekerator.kingdomworld.common.kingdom.KingdomActions.Feedback.error(
+                    io.github.sekerator.kingdomworld.core.kingdom.KingdomError.NOT_ENOUGH_MONEY);
+        }
+        io.github.sekerator.kingdomworld.core.kingdom.Outcome outcome = check.apply(null);
+        return outcome.ok() ? new Payment(currency, cost, null, plan.get().coins(), plan.get().change())
+                : io.github.sekerator.kingdomworld.common.kingdom.KingdomActions.Feedback.error(outcome.error());
+    }
+
+    /**
+     * Hands the change for coins back; what does not fit goes onto the account.
+     *
+     * @return the change that went onto the account
+     */
+    public static long change(ServerPlayer player, Payment payment) {
+        return payment.payer() == null && payment.change() > 0 ? payOut(player, payment.currency(), payment.change()) : 0;
+    }
 }

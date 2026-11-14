@@ -76,6 +76,15 @@ public final class ClientPacketHandlers {
         }
     }
 
+    public static void handleShop(io.github.sekerator.kingdomworld.common.network.data.ShopView view, boolean open) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.ShopScreen shop && shop.shopId() == view.shopId()) {
+            shop.update(view);
+        } else if (open) {
+            minecraft.setScreen(new io.github.sekerator.kingdomworld.client.screen.ShopScreen(view));
+        }
+    }
+
     public static void handleCityDetail(io.github.sekerator.kingdomworld.common.network.data.CityViews.CityDetail detail) {
         if (Minecraft.getInstance().screen instanceof ThroneScreen throne) {
             throne.updateCityDetail(detail);

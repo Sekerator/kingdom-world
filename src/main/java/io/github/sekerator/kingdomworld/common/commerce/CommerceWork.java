@@ -71,6 +71,7 @@ public final class CommerceWork {
         QUEUE.clear();
         MEANS.clear();
         CityOf.reset();
+        Shops.reset();
     }
 
     private static String key(UUID kingdom, long city) {
@@ -90,7 +91,11 @@ public final class CommerceWork {
         Economy economy = KingdomWorldApi.state(server).economy();
         boolean first = economy.cityTreasuriesOf(kingdom).isEmpty();
         List<CityWalls.Place> places = CityPeople.places(server, kingdom);
+        // The shops pay their keepers what they earned yesterday, before their tills are counted as anybody's.
+        Shops.payday(server, kingdom, day);
         orphans(server, kingdom, places, day);
+        // The shops of the kingdom buy of the crown once, before the days of the cities.
+        QUEUE.add(new Job(kingdom, -1, day));
         for (CityWalls.Place place : places) {
             economy.openCityTreasury(kingdom, place.cityId());
             QUEUE.add(new Job(kingdom, place.cityId(), day));
@@ -360,6 +365,10 @@ public final class CommerceWork {
     private static boolean step(MinecraftServer server, Job job, long start) {
         Economy economy = KingdomWorldApi.state(server).economy();
         if (economy.treasury(job.kingdom()).isEmpty() || !CityOf.active(server, job.kingdom())) {
+            return true;
+        }
+        if (job.city() < 0) {
+            Shops.restock(server, job.kingdom(), job.day());
             return true;
         }
         CityTreasury treasury = economy.openCityTreasury(job.kingdom(), job.city());

@@ -127,6 +127,8 @@ public final class Market {
     /** Money paid today for each item the kingdom buys. */
     private final Map<String, Long> spentToday = new LinkedHashMap<>();
     private boolean openToOutsiders = true;
+    /** Whether the crown sells goods to the shops of its citizens. */
+    private boolean sellToCitizens = true;
     private boolean foreignCurrency;
     private int exchangeFeePermille;
     private DayStats today = DayStats.empty(-1);
@@ -168,6 +170,24 @@ public final class Market {
 
     public List<ImportOrder> imports() {
         return Collections.unmodifiableList(imports);
+    }
+
+    public boolean sellToCitizens() {
+        return sellToCitizens;
+    }
+
+    void setSellToCitizens(boolean value) {
+        if (sellToCitizens != value) {
+            sellToCitizens = value;
+            changed();
+        }
+    }
+
+    /**
+     * Restores whether the crown sells to the shops of citizens. Does not notify.
+     */
+    public void restoreSellToCitizens(boolean value) {
+        sellToCitizens = value;
     }
 
     public boolean openToOutsiders() {

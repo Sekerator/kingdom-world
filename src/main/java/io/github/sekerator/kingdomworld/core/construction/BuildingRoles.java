@@ -40,6 +40,8 @@ public final class BuildingRoles {
     public static final String MERCHANTS = "merchants";
     /** Lots a market adds for every player. */
     public static final String LOTS = "lots";
+    /** Stalls of a market where the shops of citizens trade, one keeper each. */
+    public static final String STALLS = "stalls";
     /** How much farther guards and garrisons see from a tower, in blocks. */
     public static final String SIGHT = "sight";
     /** Strength of a wall for the wars to come. */
@@ -60,7 +62,8 @@ public final class BuildingRoles {
         register(new BuildingRole(HOUSE, BuildingRole.Requirement.BED, Map.of(COMFORT, 5.0), Map.of(COMFORT, 5.0)));
         register(new BuildingRole(WAREHOUSE, BuildingRole.Requirement.CONTAINER, Map.of(CONTAINERS, 8.0), Map.of(CONTAINERS, 8.0)));
         register(new BuildingRole(WORKSHOP, BuildingRole.Requirement.NONE, Map.of(SPEED, 1.25), Map.of(SPEED, 0.15)));
-        register(new BuildingRole(MARKET, BuildingRole.Requirement.NONE, ordered(MERCHANTS, 2.0, LOTS, 2.0), ordered(MERCHANTS, 1.0, LOTS, 2.0)));
+        register(new BuildingRole(MARKET, BuildingRole.Requirement.NONE, ordered(MERCHANTS, 2.0, LOTS, 2.0, STALLS, 2.0),
+                ordered(MERCHANTS, 1.0, LOTS, 2.0, STALLS, 1.0)));
         register(new BuildingRole(TOWER, BuildingRole.Requirement.NONE, Map.of(SIGHT, 16.0), Map.of(SIGHT, 8.0)));
         register(new BuildingRole(WALL, BuildingRole.Requirement.NONE, Map.of(FORTIFICATION, 100.0), Map.of(FORTIFICATION, 50.0)));
         register(new BuildingRole(WELL, BuildingRole.Requirement.NONE, ordered(MOOD, 4.0, RADIUS, 24.0), ordered(MOOD, 2.0, RADIUS, 8.0)));
@@ -77,6 +80,20 @@ public final class BuildingRoles {
         map.put(a, va);
         map.put(b, vb);
         return map;
+    }
+
+    private static Map<String, Double> ordered(String a, double va, String b, double vb, String c, double vc) {
+        Map<String, Double> map = ordered(a, va, b, vb);
+        map.put(c, vc);
+        return map;
+    }
+
+    /**
+     * The stalls of a market for the shops of citizens at a level, by the code: two at the first level and one more for each
+     * level after it. A role or template without the parameter has these.
+     */
+    public static int stalls(int level) {
+        return 2 + Math.max(0, level - 1);
     }
 
     /**

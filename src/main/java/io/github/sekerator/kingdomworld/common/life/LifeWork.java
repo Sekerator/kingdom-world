@@ -284,7 +284,27 @@ public final class LifeWork {
         citizen.setFood(citizen.food() + nutrition);
         served[1]++;
         life.visitedTavern(citizen.id(), today);
+        payEvening(server, citizen, today);
         return true;
+    }
+
+    /**
+     * An evening at a tavern of the crown costs a citizen of a kingdom of players its price, from the purse of the townspeople of
+     * its city to the crown. An empty purse still gets its evening, and the crown nothing.
+     */
+    private static void payEvening(MinecraftServer server, Citizen citizen, long today) {
+        UUID kingdom = citizen.kingdomId();
+        if (!io.github.sekerator.kingdomworld.common.commerce.CityOf.active(server, kingdom)) {
+            return;
+        }
+        long price = io.github.sekerator.kingdomworld.common.commerce.CityEconomySettings.rules().tavernEveningPrice();
+        long city = io.github.sekerator.kingdomworld.common.commerce.CityOf.of(server, citizen);
+        var economy = io.github.sekerator.kingdomworld.common.api.KingdomWorldApi.state(server).economy();
+        var purse = io.github.sekerator.kingdomworld.core.economy.CityPurses.PurseKey.cityPurse(kingdom, city);
+        long paid = Math.min(price, economy.purse(purse));
+        if (paid > 0 && economy.purseToTreasury(purse, paid, io.github.sekerator.kingdomworld.core.economy.LedgerCategory.LIFE, today).ok()) {
+            economy.cityTally(kingdom, city).add(io.github.sekerator.kingdomworld.core.economy.CityStatement.Line.CROWN_TAVERNS, paid);
+        }
     }
 
     /**

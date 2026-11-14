@@ -598,10 +598,22 @@ public final class WorkforceActions {
             }
         }
         io.github.sekerator.kingdomworld.common.road.CityGovernors.Office office = io.github.sekerator.kingdomworld.common.road.CityGovernors.office(server, citizen);
+        String shopTrade = "";
+        String shopCity = "";
+        if (citizen.business() != 0) {
+            Optional<io.github.sekerator.kingdomworld.core.commerce.Business> shop = io.github.sekerator.kingdomworld.common.commerce.CommerceSavedData
+                    .get(server).shop(citizen.business());
+            if (shop.isPresent()) {
+                shopTrade = shop.get().trade();
+                shopCity = io.github.sekerator.kingdomworld.common.road.CityWalls.place(server, shop.get().kingdomId(), shop.get().cityId())
+                        .map(io.github.sekerator.kingdomworld.common.road.CityWalls.Place::name).orElse("");
+            }
+        }
         return new WorkforceView.CitizenRow(citizen.id(), citizen.nameSeed(), citizen.gender() == Gender.FEMALE, citizen.professionId(),
                 citizen.state(), Math.round(citizen.health()), Math.round(citizen.maxHealth()), citizen.mood(), places.of(citizen), workplace,
                 doing(server, citizen), citizen.workStatus(), lacks(citizen), candidate, distance, spot, office.kind(), office.place(),
-                io.github.sekerator.kingdomworld.common.road.CityGovernors.cityKey(server, citizen.kingdomId(), citizen.workplace()));
+                io.github.sekerator.kingdomworld.common.road.CityGovernors.cityKey(server, citizen.kingdomId(), citizen.workplace()), shopTrade,
+                shopCity);
     }
 
     /**

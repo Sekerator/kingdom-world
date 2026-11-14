@@ -168,7 +168,7 @@ final class WorkforceLayoutCases {
                             i % 3 != 0, i % 2 == 0 ? "c12" : "", io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Away.values()[i % 3],
                             io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Hold.values()[i % 5], 99_999),
                     i == 5 ? WorkforceView.CitizenRow.OFFICE_BARON : i == 3 ? WorkforceView.CitizenRow.OFFICE_MAYOR : WorkforceView.CitizenRow.OFFICE_NONE,
-                    i == 5 || i == 3 ? "c12" : "", i % 2 == 0 ? "c12" : "c0"));
+                    i == 5 || i == 3 ? "c12" : "", i % 2 == 0 ? "c12" : "c0", "", ""));
         }
         return rows;
     }
