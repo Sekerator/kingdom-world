@@ -89,6 +89,8 @@ public final class KingdomSavedData extends SavedData {
             data.synced = true;
             data.state.territory().addListener(TerritorySync.LISTENER);
             data.state.territory().addListener(CitizenEvents.TERRITORY_LISTENER);
+            // The board of a post shows its profession: every post that comes, goes or changes is looked at in the tick.
+            data.state.citizens().setPostListener(io.github.sekerator.kingdomworld.common.citizen.work.WorkPostLooks::queue);
         }
         return data;
     }

@@ -1,7 +1,58 @@
 {
   "variants": {
-    "": {
+    "profession=none": {
       "model": "kingdomworld:block/work_post"
+    },
+    "profession=farmer": {
+      "model": "kingdomworld:block/work_post_farmer"
+    },
+    "profession=lumberjack": {
+      "model": "kingdomworld:block/work_post_lumberjack"
+    },
+    "profession=miner": {
+      "model": "kingdomworld:block/work_post_miner"
+    },
+    "profession=fisher": {
+      "model": "kingdomworld:block/work_post_fisher"
+    },
+    "profession=herder": {
+      "model": "kingdomworld:block/work_post_herder"
+    },
+    "profession=carrier": {
+      "model": "kingdomworld:block/work_post_carrier"
+    },
+    "profession=smelter": {
+      "model": "kingdomworld:block/work_post_smelter"
+    },
+    "profession=cook": {
+      "model": "kingdomworld:block/work_post_cook"
+    },
+    "profession=crafter": {
+      "model": "kingdomworld:block/work_post_crafter"
+    },
+    "profession=smith": {
+      "model": "kingdomworld:block/work_post_smith"
+    },
+    "profession=minter": {
+      "model": "kingdomworld:block/work_post_minter"
+    },
+    "profession=merchant": {
+      "model": "kingdomworld:block/work_post_merchant"
+    },
+    "profession=registrar": {
+      "model": "kingdomworld:block/work_post_registrar"
+    },
+    "profession=builder": {
+      "model": "kingdomworld:block/work_post_builder"
+    },
+    "profession=mage": {
+      "model": "kingdomworld:block/work_post_mage"
+    },
+    "profession=innkeeper": {
+      "model": "kingdomworld:block/work_post_innkeeper"
+    },
+    "profession=other": {
+      "model": "kingdomworld:block/work_post_other"
     }
   }
 }

@@ -306,7 +306,7 @@ public final class ConstructionWork {
             BlockPos at = template.place(block.pos(), anchor, placement);
             BlockState there = level.getBlockState(at);
             BlockState wanted = TemplateBlocks.transform(block.state(), placement);
-            if (there.equals(wanted) || there.isAir() || Scaffolds.is(there)) {
+            if (TemplateBlocks.sameBuilt(there, wanted) || there.isAir() || Scaffolds.is(there)) {
                 // Scaffolds left standing are taken down by themselves, or give way to the block.
                 continue;
             }
@@ -791,8 +791,8 @@ public final class ConstructionWork {
         }
         BlockState wanted = target(template, construction, step.block());
         BlockState there = level.getBlockState(at);
-        if (there.equals(wanted)) {
-            // Already standing (the second half of a door placed with the first): nothing to pay.
+        if (TemplateBlocks.sameBuilt(there, wanted)) {
+            // Already standing (the second half of a door placed with the first, a post showing its profession): nothing to pay.
             if (construction.isPending(index)) {
                 giveBack(level.getServer(), construction, step.cost());
             }

@@ -1,10 +1,12 @@
 package io.github.sekerator.kingdomworld.common.construction;
 
 import io.github.sekerator.kingdomworld.KingdomWorld;
+import io.github.sekerator.kingdomworld.common.block.WorkPostBlock;
 import io.github.sekerator.kingdomworld.core.construction.BlockCost;
 import io.github.sekerator.kingdomworld.core.construction.Facing;
 import io.github.sekerator.kingdomworld.core.construction.Placement;
 import io.github.sekerator.kingdomworld.core.construction.PlacementOrder;
+import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
@@ -77,6 +79,39 @@ public final class TemplateBlocks {
     public static String itemId(Item item) {
         ResourceLocation id = ForgeRegistries.ITEMS.getKey(item);
         return id == null || item == Items.AIR ? "" : id.toString();
+    }
+
+    /**
+     * Whether the properties of the block only show what the mod keeps elsewhere (the board of a work post shows the
+     * profession of the post): a template wants the block, and any of its states is what the template wants.
+     */
+    private static boolean lookOnly(BlockState state) {
+        return state.getBlock() instanceof WorkPostBlock;
+    }
+
+    /**
+     * A block of a template as text for the hash of the template: the state with its properties, or the block alone where the
+     * properties are only a look. So a look given to a block later leaves the hashes of the templates as they were, and the
+     * buildings and constructions of saved worlds keep their template.
+     */
+    public static String hashText(BlockState state) {
+        return lookOnly(state) ? state.getBlock().toString() : state.toString();
+    }
+
+    /**
+     * Whether what stands at a place of a template is what the template wants there: the same state, or the same block where
+     * its properties are only a look (a work post showing its profession on the place of a post).
+     */
+    public static boolean sameBuilt(BlockState there, BlockState wanted) {
+        return there.equals(wanted) || lookOnly(wanted) && there.is(wanted.getBlock());
+    }
+
+    /**
+     * A block as a blueprint of a player writes it: its id and properties, or the id alone where the properties are only a
+     * look, so that a blueprint taken of a post showing a profession is the blueprint it always was.
+     */
+    public static String blueprintText(BlockState state) {
+        return lookOnly(state) ? blockId(state) : BlockStateParser.serialize(state);
     }
 
     /**

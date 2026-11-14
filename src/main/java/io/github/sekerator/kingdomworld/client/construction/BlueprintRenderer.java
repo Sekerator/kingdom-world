@@ -73,10 +73,11 @@ public final class BlueprintRenderer {
             BlockState state = TemplateBlocks.transform(
                     io.github.sekerator.kingdomworld.common.construction.TemplateMaterials.substitute(template.states().get(i), materials), placement);
             BlockState there = minecraft.level.getBlockState(at);
-            if (!there.isAir() && !there.canBeReplaced() && !there.equals(state)) {
+            boolean built = TemplateBlocks.sameBuilt(there, state);
+            if (!there.isAir() && !there.canBeReplaced() && !built) {
                 obstacles.add(at);
             }
-            if (drawn < MAX_DRAWN && state.getRenderShape() == RenderShape.MODEL && !there.equals(state)) {
+            if (drawn < MAX_DRAWN && state.getRenderShape() == RenderShape.MODEL && !built) {
                 pose.pushPose();
                 pose.translate(at.getX() - camera.x, at.getY() - camera.y, at.getZ() - camera.z);
                 dispatcher.renderSingleBlock(state, pose, ghost, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, ModelData.EMPTY, null);

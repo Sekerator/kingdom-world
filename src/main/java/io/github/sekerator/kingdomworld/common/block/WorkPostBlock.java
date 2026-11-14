@@ -16,6 +16,8 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 
@@ -25,11 +27,23 @@ import java.util.List;
  * The work post: a workplace of citizens on the land of a kingdom. A right click opens its settings (profession,
  * zone, seats, the animals of a herd); a container next to it (a chest, a barrel, a crate of another mod)
  * receives what its workers gather.
+ *
+ * <p>The board on its sides shows the profession of the post ({@link #PROFESSION}). It is only a look that follows the data of
+ * the kingdom: changing it neither registers nor removes the post, since {@link #onPlace} and {@link #onRemove} only act when
+ * the block itself comes or goes.
  */
 public class WorkPostBlock extends Block {
+    /** What the board shows; set by the server from the profession of the post. */
+    public static final EnumProperty<WorkPostLook> PROFESSION = EnumProperty.create("profession", WorkPostLook.class);
 
     public WorkPostBlock(Properties properties) {
         super(properties);
+        registerDefaultState(stateDefinition.any().setValue(PROFESSION, WorkPostLook.NONE));
+    }
+
+    @Override
+    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
+        builder.add(PROFESSION);
     }
 
     @Override

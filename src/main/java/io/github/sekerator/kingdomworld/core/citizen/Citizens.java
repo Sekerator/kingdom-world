@@ -31,12 +31,23 @@ public final class Citizens {
     private java.util.function.BiPredicate<UUID, WorldPos> homeRule = (kingdom, bed) -> true;
     private java.util.function.Consumer<Citizen> freedListener = citizen -> {
     };
+    private java.util.function.Consumer<WorldPos> postListener = pos -> {
+    };
 
     /**
      * Hears every worker who lost its work because its post went away, once the post is gone.
      */
     public void setFreedListener(java.util.function.Consumer<Citizen> listener) {
         freedListener = listener == null ? citizen -> {
+        } : listener;
+    }
+
+    /**
+     * Hears the position of every work post that came, went or got another profession, once the change is made: the game
+     * shows the profession on the block. Restoring saved data says nothing.
+     */
+    public void setPostListener(java.util.function.Consumer<WorldPos> listener) {
+        postListener = listener == null ? pos -> {
         } : listener;
     }
 
@@ -143,8 +154,11 @@ public final class Citizens {
     public List<Citizen> removeKingdom(UUID kingdomId) {
         List<Citizen> removed = registry.removeKingdom(kingdomId);
         sites.removeKingdom(kingdomId);
-        posts.removeKingdom(kingdomId);
+        List<WorkPost> gone = posts.removeKingdom(kingdomId);
         ledger.removeKingdom(kingdomId);
+        for (WorkPost post : gone) {
+            postListener.accept(post.pos());
+        }
         return removed;
     }
 
@@ -162,12 +176,16 @@ public final class Citizens {
             return false;
         }
         List<Citizen> freed = current.map(this::evict).orElse(List.of());
-        posts.remove(pos);
+        boolean wasPost = posts.remove(pos).isPresent();
         sites.put(pos, kind, kingdomId);
-        if (kind.equals(SiteKinds.WORK_POST)) {
+        boolean isPost = kind.equals(SiteKinds.WORK_POST);
+        if (isPost) {
             posts.put(pos, kingdomId, newPostRadius, newHerdSize);
         }
         freed.forEach(freedListener);
+        if (wasPost || isPost) {
+            postListener.accept(pos);
+        }
         return true;
     }
 
@@ -178,9 +196,12 @@ public final class Citizens {
     public Optional<Site> removeSite(WorldPos pos) {
         Optional<Site> site = sites.get(pos);
         List<Citizen> freed = site.map(this::evict).orElse(List.of());
-        posts.remove(pos);
+        boolean wasPost = posts.remove(pos).isPresent();
         Optional<Site> removed = sites.remove(pos);
         freed.forEach(freedListener);
+        if (wasPost) {
+            postListener.accept(pos);
+        }
         return removed;
     }
 
@@ -389,6 +410,7 @@ public final class Citizens {
         post.setProfessionId(professionId);
         post.setStatus(!post.hasProfession() ? WorkStatus.NO_PROFESSION
                 : post.workers().isEmpty() ? WorkStatus.NO_WORKERS : WorkStatus.WORKING);
+        postListener.accept(post.pos());
     }
 
     /**

@@ -6,6 +6,7 @@ import io.github.sekerator.kingdomworld.client.screen.FoundKingdomScreen;
 import io.github.sekerator.kingdomworld.client.screen.KingdomMapScreen;
 import io.github.sekerator.kingdomworld.client.screen.ThroneScreen;
 import io.github.sekerator.kingdomworld.client.screen.WorkPostScreen;
+import io.github.sekerator.kingdomworld.common.block.WorkPostBlock;
 import io.github.sekerator.kingdomworld.common.citizen.work.WorkPostActions;
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenEntity;
@@ -62,6 +63,10 @@ import java.util.UUID;
  *   <li>{@code siege}: in a copy of a test world, puts up a stone wall with portcullises around a capital, sends soldiers of
  *       raiders at war with a ram to a gate and saves screenshots of the closed gate, the siege and the atlas
  *       (see {@link ClientSiegeShowcase}).</li>
+ *   <li>{@code posts}: in a copy of a test world, writes the hashes of built-in templates with a work post next to the values
+ *       they had before the post showed its profession, puts up a post of every profession and saves screenshots of them
+ *       close by day and at night, from 32 and 64 blocks, without smooth lighting and as an item in the hand (see
+ *       {@link ClientPostShowcase}).</li>
  *   <li>{@code maps}: in a singleplayer world with map mods ({@code -PwithMaps}), shows kingdoms and a caravan on them
  *       and saves screenshots in English and Russian (see {@link ClientMapsSelfTest}).</li>
  * </ul>
@@ -86,6 +91,7 @@ public final class ClientSelfTest {
     private static ClientScaffoldingShowcase scaffoldingShowcase;
     private static ClientBackgroundCheck backgroundCheck;
     private static ClientLifeShowcase lifeShowcase;
+    private static ClientPostShowcase postShowcase;
     private static volatile BlockPos throne;
     private static volatile UUID kingdomId;
     private static volatile BlockPos post;
@@ -197,6 +203,25 @@ public final class ClientSelfTest {
             if (lifeShowcase.finished()) {
                 if (lifeShowcase.failed()) {
                     LOGGER.error(PREFIX + "life showcase failed, exiting with code 1");
+                    System.exit(1);
+                }
+                LOGGER.info(PREFIX + "finished");
+                quit = true;
+            }
+            return;
+        }
+        if ("posts".equals(MODE) && minecraft.player != null && minecraft.getSingleplayerServer() != null) {
+            if (postShowcase == null) {
+                String folder = System.getProperty("kingdomworld.clientSelfTest.screenshots");
+                Path screenshots = folder != null && !folder.isEmpty() ? Path.of(folder)
+                        : minecraft.gameDirectory.toPath().resolve("kingdomworld-layout");
+                LOGGER.info(PREFIX + "work post showcase started, screenshots go to {}", screenshots.resolve("posts"));
+                postShowcase = new ClientPostShowcase(screenshots);
+            }
+            postShowcase.tick();
+            if (postShowcase.finished()) {
+                if (postShowcase.failed()) {
+                    LOGGER.error(PREFIX + "work post showcase failed, exiting with code 1");
                     System.exit(1);
                 }
                 LOGGER.info(PREFIX + "finished");
@@ -395,6 +420,10 @@ public final class ClientSelfTest {
                 minecraft.player.setXRot(10.0f);
                 long bodies = minecraft.level.getEntitiesOfClass(CitizenEntity.class, minecraft.player.getBoundingBox().inflate(32)).size();
                 LOGGER.info(PREFIX + "citizen bodies near the player: {}", bodies);
+                // The board of the post of the lumberjack shows its profession on the client too.
+                LOGGER.info(PREFIX + "work post of the lumberjack shows: {}", post == null ? "<no post>"
+                        : minecraft.level.getBlockState(post).getOptionalValue(WorkPostBlock.PROFESSION)
+                        .map(look -> look.getSerializedName()).orElse("<no post>"));
             }
             case 100 -> {
                 ClientHooks.openKingdomMap();

@@ -5,6 +5,7 @@ import io.github.sekerator.kingdomworld.common.citizen.goal.PathBudget;
 import io.github.sekerator.kingdomworld.common.citizen.goal.ScanBudget;
 import io.github.sekerator.kingdomworld.common.citizen.work.GatheringSettings;
 import io.github.sekerator.kingdomworld.common.citizen.work.PostWork;
+import io.github.sekerator.kingdomworld.common.citizen.work.WorkPostLooks;
 import io.github.sekerator.kingdomworld.common.citizen.work.ZoneSurveys;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
 import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
@@ -79,6 +80,7 @@ public final class CitizenEvents {
             CitizenCare.update(server);
         }
         CitizenSites.tick(server);
+        WorkPostLooks.tick(server);
         ZoneSurveys.tick(server);
         CitizenSimulation.tick(server, tick);
     }
@@ -111,10 +113,16 @@ public final class CitizenEvents {
     }
 
     private static void onChunkLoad(ChunkEvent.Load event) {
-        if (event.getLevel() instanceof ServerLevel level && event.getChunk() instanceof LevelChunk chunk
-                && level.getServer().isSameThread()
-                && io.github.sekerator.kingdomworld.common.land.Wilderness.placeOwner(level.getServer(), Dimensions.id(level), ChunkKey.of(chunk.getPos().x, chunk.getPos().z)) != null) {
+        if (!(event.getLevel() instanceof ServerLevel level) || !(event.getChunk() instanceof LevelChunk chunk)
+                || !level.getServer().isSameThread()) {
+            return;
+        }
+        if (io.github.sekerator.kingdomworld.common.land.Wilderness.placeOwner(level.getServer(), Dimensions.id(level), ChunkKey.of(chunk.getPos().x, chunk.getPos().z)) != null) {
             CitizenSites.scheduleChunk(Dimensions.id(level), ChunkKey.of(chunk.getPos().x, chunk.getPos().z));
+        } else if (!KingdomWorldApi.isReadOnly(level.getServer())) {
+            // Nobody scans land without an owner: a post there that still shows a profession (its kingdom gave the land up or
+            // was dissolved while the chunk was unloaded) is put right in the tick. Only the palettes are looked at here.
+            WorkPostLooks.checkUnowned(level, chunk);
         }
     }
 
@@ -127,6 +135,7 @@ public final class CitizenEvents {
         CitizenFear.reset();
         CitizenCare.reset();
         CitizenSites.reset();
+        WorkPostLooks.reset();
         CitizenSettings.reset();
         GatheringSettings.reset();
         PostWork.reset();

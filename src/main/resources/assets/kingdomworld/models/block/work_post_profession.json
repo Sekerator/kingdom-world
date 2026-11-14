@@ -1,0 +1,64 @@
+{
+  "parent": "minecraft:block/block",
+  "render_type": "minecraft:cutout_mipped",
+  "textures": {
+    "particle": "kingdomworld:block/work_post_side",
+    "top": "kingdomworld:block/work_post_top",
+    "bottom": "minecraft:block/spruce_planks",
+    "side": "kingdomworld:block/work_post_board"
+  },
+  "elements": [
+    {
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
+      "faces": {
+        "down": {"texture": "#bottom", "cullface": "down"},
+        "up": {"texture": "#top", "cullface": "up"},
+        "north": {"texture": "#side", "cullface": "north"},
+        "south": {"texture": "#side", "cullface": "south"},
+        "west": {"texture": "#side", "cullface": "west"},
+        "east": {"texture": "#side", "cullface": "east"}
+      }
+    },
+    {
+      "from": [4, 4, -0.1],
+      "to": [12, 12, -0.1],
+      "faces": {"north": {"uv": [4, 4, 12, 12], "texture": "#side", "cullface": "north"}}
+    },
+    {
+      "from": [4, 4, -0.1],
+      "to": [12, 12, -0.1],
+      "faces": {"north": {"uv": [0, 0, 16, 16], "texture": "#icon", "cullface": "north"}}
+    },
+    {
+      "from": [4, 4, 16.1],
+      "to": [12, 12, 16.1],
+      "faces": {"south": {"uv": [4, 4, 12, 12], "texture": "#side", "cullface": "south"}}
+    },
+    {
+      "from": [4, 4, 16.1],
+      "to": [12, 12, 16.1],
+      "faces": {"south": {"uv": [0, 0, 16, 16], "texture": "#icon", "cullface": "south"}}
+    },
+    {
+      "from": [-0.1, 4, 4],
+      "to": [-0.1, 12, 12],
+      "faces": {"west": {"uv": [4, 4, 12, 12], "texture": "#side", "cullface": "west"}}
+    },
+    {
+      "from": [-0.1, 4, 4],
+      "to": [-0.1, 12, 12],
+      "faces": {"west": {"uv": [0, 0, 16, 16], "texture": "#icon", "cullface": "west"}}
+    },
+    {
+      "from": [16.1, 4, 4],
+      "to": [16.1, 12, 12],
+      "faces": {"east": {"uv": [4, 4, 12, 12], "texture": "#side", "cullface": "east"}}
+    },
+    {
+      "from": [16.1, 4, 4],
+      "to": [16.1, 12, 12],
+      "faces": {"east": {"uv": [0, 0, 16, 16], "texture": "#icon", "cullface": "east"}}
+    }
+  ]
+}

@@ -448,7 +448,7 @@ public final class BuildingTemplates {
         text.append(template.sizeX()).append(',').append(template.sizeY()).append(',').append(template.sizeZ()).append(';');
         for (BuildingTemplate.Block block : template.blocks()) {
             text.append(block.pos().getX()).append(',').append(block.pos().getY()).append(',').append(block.pos().getZ()).append('=')
-                    .append(block.state()).append(';');
+                    .append(TemplateBlocks.hashText(block.state())).append(';');
         }
         for (byte b : text.toString().getBytes(StandardCharsets.UTF_8)) {
             hash ^= b & 0xFF;

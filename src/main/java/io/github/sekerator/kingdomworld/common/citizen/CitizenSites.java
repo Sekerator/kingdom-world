@@ -1,9 +1,11 @@
 package io.github.sekerator.kingdomworld.common.citizen;
 
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
+import io.github.sekerator.kingdomworld.common.block.WorkPostBlock;
 import io.github.sekerator.kingdomworld.common.citizen.work.MinerBehavior;
 import io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehaviors;
 import io.github.sekerator.kingdomworld.common.citizen.work.WorkPostActions;
+import io.github.sekerator.kingdomworld.common.citizen.work.WorkPostLooks;
 import io.github.sekerator.kingdomworld.common.citizen.work.ZoneSurveys;
 import io.github.sekerator.kingdomworld.common.data.KingdomSavedData;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
@@ -225,6 +227,12 @@ public final class CitizenSites {
                             if (citizens.addSite(at, kind, owner) && kind.equals(SiteKinds.WORK_POST)) {
                                 WorkPostActions.onPostFound(level, at);
                             }
+                            // A board showing another profession (a post of an old world, a profession changed while the
+                            // chunk was unloaded, a post set by a piston or a command) is put right in the tick.
+                            if (kind.equals(SiteKinds.WORK_POST)
+                                    && state1.getValue(WorkPostBlock.PROFESSION) != WorkPostLooks.lookOf(state, at)) {
+                                WorkPostLooks.queue(at);
+                            }
                         }
                     }
                 }
@@ -241,11 +249,15 @@ public final class CitizenSites {
             return;
         }
         UUID owner = io.github.sekerator.kingdomworld.common.land.Wilderness.placeOwner(level.getServer(), Dimensions.id(level), ChunkKey.of(pos.getX() >> 4, pos.getZ() >> 4));
-        if (owner != null) {
-            WorldPos at = new WorldPos(Dimensions.id(level), pos.getX(), pos.getY(), pos.getZ());
-            if (KingdomWorldApi.state(level.getServer()).citizens().addSite(at, kind, owner) && kind.equals(SiteKinds.WORK_POST)) {
-                WorkPostActions.onPostFound(level, at);
-            }
+        WorldPos at = new WorldPos(Dimensions.id(level), pos.getX(), pos.getY(), pos.getZ());
+        if (owner != null && KingdomWorldApi.state(level.getServer()).citizens().addSite(at, kind, owner)
+                && kind.equals(SiteKinds.WORK_POST)) {
+            WorkPostActions.onPostFound(level, at);
+        }
+        if (kind.equals(SiteKinds.WORK_POST)) {
+            // Placed where the data already knows a post (a settlement raised into the world from its data), the post takes the
+            // look of its profession; a new one, or one placed with a look by a structure or a schematic, goes back to none.
+            WorkPostLooks.queue(at);
         }
     }
 

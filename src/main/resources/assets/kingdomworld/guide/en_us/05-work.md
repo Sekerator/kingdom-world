@@ -21,6 +21,33 @@ A post works only on the kingdom's land. Placed outside it, it does nothing, and
 
 All of this is changed in the [window of the post](post_window).
 
+### The board of the profession
+
+The board on the sides of a post shows its profession:
+
+| Profession | On the board |
+|---|---|
+| Farmer | {item:minecraft:iron_hoe} an iron hoe |
+| Lumberjack | {item:minecraft:iron_axe} an axe |
+| Miner | {item:minecraft:iron_pickaxe} a pickaxe |
+| Fisher | {item:minecraft:fishing_rod} a fishing rod |
+| Herder | {item:minecraft:lead} a lead |
+| Carrier | {item:minecraft:bundle} a sack |
+| Smelter | {item:minecraft:iron_ingot} an ingot |
+| Cook | {item:minecraft:bread} bread |
+| Crafter | {item:minecraft:crafting_table} a crafting table |
+| Smith | {item:minecraft:iron_sword} a sword |
+| Minter | {item:kingdomworld:coin} a gold coin |
+| Merchant | {item:minecraft:emerald} an emerald |
+| Registrar | {item:minecraft:writable_book} a book and quill |
+| Builder | {item:kingdomworld:blueprint} a blueprint |
+| Mage | {item:minecraft:amethyst_shard} an amethyst shard |
+| Innkeeper | {item:minecraft:honey_bottle} a honey bottle |
+
+A post without a profession shows a crossed axe and pickaxe, as the post in the hand does, and a profession of another mod a sheet of paper {item:minecraft:paper} pinned to the board.
+
+The board changes as soon as the profession is chosen in the window of the post, in the [Workers window](workers_window), by a command or by a ruler of the world. A post on land given up or of a kingdom dissolved shows the axe and pickaxe again. The posts of older worlds take their board when a player comes near them. The board only shows the profession: the post in the inventory, its recipe and the buildings with it stay as they were.
+
 ### The container of a post
 
 The container is any block next to the post with an inventory hoppers can see: a {item:minecraft:chest} chest, a {item:minecraft:barrel} barrel, crates and storage of other mods. Workers put their harvest there, and [carriers](carrier) take it to the storehouses and bring the post what it asks for (torches, saplings, inputs of workshops). Without a container a worker carries its harvest to the nearest storehouse within 64 blocks itself, and far from players such a post yields less (see [Work far from players](work_far)). The window of the post says "Container: next to the post" or "No container: workers carry it to a storehouse".

@@ -14,7 +14,6 @@ import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
 import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
 import io.github.sekerator.kingdomworld.core.membership.Permission;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
-import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -162,7 +161,7 @@ public final class BlueprintCapture {
                             || stateThere.is(ModRegistries.STOREHOUSE.get()))) {
                         containers++;
                     }
-                    String text = BlockStateParser.serialize(stateThere);
+                    String text = TemplateBlocks.blueprintText(stateThere);
                     Integer index = palette.get(text);
                     if (index == null) {
                         if (palette.size() >= CustomBlueprint.MAX_PALETTE) {

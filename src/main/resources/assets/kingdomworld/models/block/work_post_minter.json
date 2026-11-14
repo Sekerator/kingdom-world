@@ -1,0 +1,4 @@
+{
+  "parent": "kingdomworld:block/work_post_profession",
+  "textures": {"icon": "kingdomworld:block/work_post_coin"}
+}
