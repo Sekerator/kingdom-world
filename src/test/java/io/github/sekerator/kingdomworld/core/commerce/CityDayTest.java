@@ -149,11 +149,12 @@ class CityDayTest {
     void theEndOfTheDayOfAShop() {
         CityDay.Result result = CityDay.result(200, 100, 30, 50, 10, 5);
         assertEquals(5, result.upkeep(), "five in a hundred of the takings");
-        assertEquals(30, result.debtPaid(), "the debt first");
-        assertEquals(200 - 5 - 10 - 30 - 50, result.profit(), "beyond the working money and what the keepers are owed");
-        CityDay.Result poor = CityDay.result(20, 20, 100, 50, 0, 5);
-        assertEquals(19, poor.debtPaid());
-        assertEquals(0, poor.profit());
+        assertEquals(30, result.debtPaid(), "the debt first, out of what is beyond the working money");
+        assertEquals(200 - 5 - 10 - 30 - 50, result.profit(), "beyond the working money, the debt and what the keepers are owed");
+        CityDay.Result young = CityDay.result(20, 20, 100, 50, 0, 5);
+        assertEquals(0, young.debtPaid(), "a young shop builds its working money first");
+        assertEquals(0, young.profit());
+        assertEquals(15, CityDay.earned(100, 80, 5), "its trade earned all the same");
         assertTrue(CityDay.poor(2, 5));
         assertFalse(CityDay.poor(3, 5));
     }

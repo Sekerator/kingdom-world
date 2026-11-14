@@ -342,6 +342,7 @@ public final class MinterBehavior implements ProfessionBehavior {
             return Struck.TREASURY_FULL;
         }
         PostWork.record(server, post, COIN_ID, rate.count());
+        io.github.sekerator.kingdomworld.common.commerce.CityGoods.minted(server, kingdom, post.pos(), worth);
         if (!toVault) {
             Map<String, Double> progress = new LinkedHashMap<>(post.progress());
             progress.put(LAST_COIN, (double) rate.coin().ordinal());

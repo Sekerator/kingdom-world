@@ -72,6 +72,7 @@ public final class CommerceWork {
         MEANS.clear();
         CityOf.reset();
         Shops.reset();
+        CityGoods.reset();
     }
 
     private static String key(UUID kingdom, long city) {
@@ -380,6 +381,10 @@ public final class CommerceWork {
         }
         settleTreasury(server, job.kingdom(), job.city(), job.day());
         purseOverflow(server, job.kingdom(), job.city(), job.day());
+        // What the people of the city ate from the storehouses, named and townsfolk.
+        long people = CityOf.counts(job.kingdom()).getOrDefault(job.city(), 0)
+                + io.github.sekerator.kingdomworld.common.road.RoadWork.state(server).folk(job.kingdom(), job.city());
+        economy.cityTally(job.kingdom(), job.city()).add(CityStatement.Line.GOODS_EATEN, CityGoods.eaten(server, job.kingdom(), people));
         CityStatement statement = economy.sealCity(job.kingdom(), job.city(), job.day());
         MEANS.remove(key(job.kingdom(), job.city()));
         LOGGER.debug("Day {} of city {} of {}: taxes {}, to the crown {}, purse in {}", job.day(), job.city(), job.kingdom(),

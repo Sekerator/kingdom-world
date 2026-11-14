@@ -36,6 +36,9 @@ class ShopPricingTest {
         assertEquals(200, ShopPricing.nextMargin(200, 6, 2, 0, 5, 50, 2), "nothing sold, nothing learned");
         assertEquals(500, ShopPricing.nextMargin(495, 600, 2, 10, 5, 50, 2), "at most the largest margin");
         assertEquals(50, ShopPricing.nextMargin(55, 0, 2, 10, 5, 50, 2), "at least the smallest margin");
+        // With an upkeep of 5%% a shop selling goods of 200 aims at (6 / 200 + 0.05) / 0.95 = 8.4%%, not below its upkeep.
+        assertEquals(84, ShopPricing.nextMargin(84, 6, 1, 200, 5, 50, 2, 5));
+        assertEquals(104, ShopPricing.nextMargin(124, 6, 1, 200, 5, 50, 2, 5));
     }
 
     @Test

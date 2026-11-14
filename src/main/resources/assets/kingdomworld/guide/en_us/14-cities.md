@@ -66,6 +66,20 @@ broken town hall gives the city up: the kingdom hears "The town hall of ... is g
 the roads stay. Cities show in the Roads tab of the throne window ([The Roads tab](roads_tab)) and on the atlas
 ([What the map shows](map_view)).
 
+## city_shops | Treasury and shops of a city
+@icon kingdomworld:shop_counter
+Every city of a kingdom of players keeps a treasury and a purse of the townspeople (see [Treasuries of cities](city_money)). The hover of the row of a city in the Roads tab shows "Treasury: N · a day +M (to the city a, to the crown b)".
+
+### The counter
+
+A **counter** {item:kingdomworld:shop_counter} is a place for a shop of citizens. A member of the kingdom with the Construction right puts it up in the square of a city of its kingdom, on its land, in a building or in the open. Elsewhere it is not placed and stays with the player. Put up as many counters as you like; a shop opens once the townspeople want more and a keeper is found. A broken counter closes its shop, and the crown buys its goods back into the storehouses.
+
+{recipe:kingdomworld:shop_counter}
+
+### Places of shops
+
+Shops stand in the houses of merchants and craftsmen, at the stalls of markets and at the counters of players (see [Townspeople and shops](shops)). A place works while it stands in the square of a city of its kingdom and its building works. The window of a city in the Treasury tab lists its shops and says why new ones do not open: "Shops have nowhere to open", "No free townspeople for shops" or "The crown gives the shops no goods". A click on a counter or on a keeper opens the window of the shop: a player buys from the account or with coins of the currency of the kingdom, the price with the sales tax. Shops serve strangers while the market is open to them.
+
 ## cities_levels | City levels
 @icon minecraft:bell
 Every city and every capital has a **level**: village, town or large city. The level is worked out by itself from

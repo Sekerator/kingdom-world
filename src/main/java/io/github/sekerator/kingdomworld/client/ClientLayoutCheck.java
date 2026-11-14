@@ -806,7 +806,74 @@ final class ClientLayoutCheck {
                 new io.github.sekerator.kingdomworld.common.network.data.TreasuryView.Payroll(empty ? -1 : 5, MUCH, MUCH / 3, 9_999, 9_999),
                 wages, 200, debtors, empty ? 0 : 9_999, empty ? 0 : MUCH,
                 new io.github.sekerator.kingdomworld.common.network.data.TreasuryView.Mint(empty ? 0 : 99, 999, WorkStatus.NO_INGREDIENTS, MUCH,
-                        MUCH, true, empty ? List.of() : mintMetals()), 9_990_000L, reserves(empty));
+                        MUCH, true, empty ? List.of() : mintMetals()), 9_990_000L, reserves(empty), cities(empty));
+    }
+
+    /**
+     * The cities of a kingdom with the largest numbers and long names, more than a page of them.
+     */
+    private static io.github.sekerator.kingdomworld.common.network.data.CityViews.Cities cities(boolean empty) {
+        List<io.github.sekerator.kingdomworld.common.network.data.CityViews.CityRow> rows = new ArrayList<>();
+        if (!empty) {
+            for (int i = 0; i < io.github.sekerator.kingdomworld.common.network.data.CityViews.PAGE; i++) {
+                String name = i == 0 ? LONG_KINGDOM : i % 3 == 1 ? "Сереброземье-над-Рекою XIV" : "Каменка " + i;
+                long sign = i % 2 == 0 ? 1 : -1;
+                rows.add(new io.github.sekerator.kingdomworld.common.network.data.CityViews.CityRow(i, name, i == 0, 999_999, 999_999, 999_999,
+                        999_999, MUCH, sign * 9_999_999L, -sign * 999_999L));
+            }
+        }
+        return new io.github.sekerator.kingdomworld.common.network.data.CityViews.Cities(true,
+                new io.github.sekerator.kingdomworld.common.network.data.CityViews.Taxes(250, 500, 1000), 25, 50, rows, 0, empty ? 0 : 200,
+                9_999_999L, MUCH);
+    }
+
+    /**
+     * The window of a city with the largest numbers and more shops than fit.
+     */
+    private static io.github.sekerator.kingdomworld.common.network.data.CityViews.CityDetail cityDetail(UUID kingdom, boolean canManage) {
+        List<io.github.sekerator.kingdomworld.common.network.data.CityViews.ShopRow> shops = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            shops.add(new io.github.sekerator.kingdomworld.common.network.data.CityViews.ShopRow(i, "general_store", i % 3 == 0 ? ""
+                    : LONG_PLAYER + ", " + LONG_PLAYER, i % 2 == 0 ? "trading" : "closing", MUCH, 500, MUCH));
+        }
+        long[] lines = new long[io.github.sekerator.kingdomworld.core.economy.CityStatement.LINES];
+        java.util.Arrays.fill(lines, 999_999);
+        return new io.github.sekerator.kingdomworld.common.network.data.CityViews.CityDetail(kingdom, 7, "Сереброземье-над-Рекою XIV", canManage,
+                MUCH, MUCH / 2, 0, new io.github.sekerator.kingdomworld.common.network.data.CityViews.Taxes(250, -1, 1000),
+                new io.github.sekerator.kingdomworld.common.network.data.CityViews.Taxes(250, 500, 1000), lines, lines, 7, 900,
+                new int[]{-15, 5, -5, -3, -15}, false, MUCH, shops, 999, io.github.sekerator.kingdomworld.common.network.data.CityViews.Blocked.NO_GOODS,
+                MUCH, longNamed(Items.NETHERITE_INGOT).getHoverName().getString());
+    }
+
+    private static ThroneScreen cities(KingdomView view, boolean canManage, boolean crown, boolean editing, boolean panel) {
+        ThroneScreen screen = throne(view, "treasury", Component.empty());
+        screen.updateTreasury(treasuryView(view.id(), canManage, view.viewerRole() == Role.KING, false));
+        screen.showTreasury("cities", "today");
+        screen.showCities(crown, editing, panel ? "999999g99s9c" : "");
+        if (panel) {
+            screen.updateCityDetail(cityDetail(view.id(), canManage));
+        }
+        return screen;
+    }
+
+    /**
+     * A shop with long names, the largest numbers and more goods than fit.
+     */
+    private static io.github.sekerator.kingdomworld.common.network.data.ShopView shopView(boolean canBuy) {
+        List<io.github.sekerator.kingdomworld.common.network.data.ShopView.Row> rows = new ArrayList<>();
+        for (int i = 0; i < 40; i++) {
+            rows.add(new io.github.sekerator.kingdomworld.common.network.data.ShopView.Row(i % 5 == 0 ? longNamed(Items.NETHERITE_SWORD) : tradeItem(i),
+                    999_999_999L, MUCH, MUCH / 10));
+        }
+        return new io.github.sekerator.kingdomworld.common.network.data.ShopView(7, UUID.randomUUID(), LONG_KINGDOM, LONG_CURRENCY, 10, 100,
+                "general_store", LONG_PLAYER + ", " + LONG_PLAYER, "closing", rows, 0, 200, 500, 250, MUCH, MUCH, canBuy,
+                canBuy ? "" : "kingdomworld.screen.shop.strangers");
+    }
+
+    private static io.github.sekerator.kingdomworld.client.screen.ShopScreen shop(boolean canBuy, String tab) {
+        io.github.sekerator.kingdomworld.client.screen.ShopScreen screen = new io.github.sekerator.kingdomworld.client.screen.ShopScreen(shopView(canBuy));
+        screen.showForCheck(tab, false, "9999");
+        return screen;
     }
 
     /**
@@ -943,7 +1010,8 @@ final class ClientLayoutCheck {
         }
         TradeViews.Day day = new TradeViews.Day(MUCH, MUCH, MUCH, 999, 999_999, 999_999, MUCH, MUCH, 999_999, 999_999, MUCH);
         return new TradeViews.MarketView(kingdom, canManage, ownCurrency(kingdom), sells, buys, lots, exports, imports, false, true, 250, 250,
-                100, 900, day, List.of("minecraft:iron_ingot", "minecraft:oak_log", "minecraft:cobblestone", "minecraft:wheat"), 256);
+                100, 900, day, List.of("minecraft:iron_ingot", "minecraft:oak_log", "minecraft:cobblestone", "minecraft:wheat"), 256, true, false,
+                MUCH);
     }
 
     private static ThroneScreen market(KingdomView view, boolean canManage, boolean empty, String mode, boolean form, String search,
@@ -1446,6 +1514,18 @@ final class ClientLayoutCheck {
                 Component.empty())));
         cases.add(new Case("throne-orders-edit", () -> orders(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "edit", longError)));
         cases.add(new Case("throne-king-treasury", () -> treasury(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "overview", "today",
+                Component.empty())));
+        cases.add(new Case("treasury-overview-cities", () -> treasury(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, false, "overview",
+                "today", Component.empty())));
+        cases.add(new Case("treasury-cities-treasury", () -> cities(view(KingdomView.Relation.MEMBER, Role.KING), true, false, false, false)));
+        cases.add(new Case("treasury-cities-treasury-edit", () -> cities(view(KingdomView.Relation.MEMBER, Role.KING), true, false, true, false)));
+        cases.add(new Case("treasury-cities-crown", () -> cities(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, true, false, false)));
+        cases.add(new Case("treasury-city-panel", () -> cities(view(KingdomView.Relation.MEMBER, Role.KING), true, false, false, true)));
+        cases.add(new Case("treasury-city-panel-subject", () -> cities(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, false, false, true)));
+        cases.add(new Case("shop-buy", () -> shop(true, "buy")));
+        cases.add(new Case("shop-buy-refused", () -> shop(false, "buy")));
+        cases.add(new Case("shop-about", () -> shop(true, "about")));
+        cases.add(new Case("market-sell-citizens", () -> market(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "settings", false, null,
                 Component.empty())));
         cases.add(new Case("throne-treasury-journal", () -> treasury(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "journal", "week",
                 Component.empty())));

@@ -458,6 +458,8 @@ public final class TradeWork {
             income += money;
             allowance -= count;
             incomeLeft -= money;
+            // The money and the goods count for the cities of the merchants.
+            io.github.sekerator.kingdomworld.common.commerce.CityGoods.exported(server, kingdomId, merchants, item, count, money);
         }
         if (sold > 0) {
             state.trade().recordExport(kingdomId, day, sold, income, rules);

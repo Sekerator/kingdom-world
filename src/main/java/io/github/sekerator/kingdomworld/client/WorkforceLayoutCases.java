@@ -48,6 +48,8 @@ final class WorkforceLayoutCases {
                 CitizenTexts.name(longestSeed(Gender.FEMALE), Gender.FEMALE)), true));
         add.accept("workforce-citizens-empty", () -> screen(new WorkforceView(new WorkforceView.Query(WorkforceView.Mode.CITIZENS, "-", "mage",
                 true, 0, 6, null, null), KINGDOM, LONG_PLACE, header(false), 0, List.of(), List.of(), List.of(), null, null), Component.empty(), true));
+        add.accept("workforce-keeper", () -> screen(new WorkforceView(WorkforceView.Query.of(WorkforceView.Mode.CITIZENS, 30), KINGDOM, LONG_PLACE,
+                header(true), 9_999, citizenRows(false, true), List.of(), List.of(), null, null), Component.empty(), true));
         add.accept("workforce-posts", () -> screen(posts(WorkforceView.Query.of(WorkforceView.Mode.POSTS, 30), false), Component.empty(), true));
         add.accept("workforce-posts-error", () -> screen(posts(new WorkforceView.Query(WorkforceView.Mode.POSTS, "c0", "unemployed", true, 0, 6,
                 null, null), false), Component.translatable("kingdomworld.error.no_free_seat"), false));
@@ -140,6 +142,13 @@ final class WorkforceLayoutCases {
     }
 
     private static List<WorkforceView.CitizenRow> citizenRows(boolean candidates) {
+        return citizenRows(candidates, false);
+    }
+
+    /**
+     * @param keepers whether the townspeople without work keep shops, with the longest names of cities
+     */
+    private static List<WorkforceView.CitizenRow> citizenRows(boolean candidates, boolean keepers) {
         List<WorkforceView.CitizenRow> rows = new ArrayList<>();
         String[] professions = {"registrar", "unemployed", "lumberjack", "warrior", "miner", "farmer", "adventurer", "dragon_tamer", "smelter",
                 "innkeeper", "carrier", "mage"};
@@ -156,8 +165,9 @@ final class WorkforceLayoutCases {
                 lacks.add(new WorkforceView.Lack(Workforce.Need.values()[i % Workforce.Need.values().length], ""));
                 lacks.add(new WorkforceView.Lack(Workforce.Need.STORAGE_SPACE, ""));
             }
-            WorkforceView.Workplace workplace = i % 4 == 1 ? null : new WorkforceView.Workplace(far(i), i % 5 != 3, i % 6 == 0 ? LONG_POST : "",
-                    99, profession, i % 7 == 6 ? WorkforceView.FAR : 99_999);
+            WorkforceView.Workplace workplace = i % 4 == 1 || keepers && profession.equals("unemployed") ? null
+                    : new WorkforceView.Workplace(far(i), i % 5 != 3, i % 6 == 0 ? LONG_POST : "", 99, profession, i % 7 == 6 ? WorkforceView.FAR : 99_999);
+            boolean keeper = keepers && profession.equals("unemployed");
             Workforce.Candidate candidate = candidates ? kinds[i % kinds.length]
                     : profession.equals("warrior") ? Workforce.Candidate.SOLDIER : Workforce.Candidate.OTHER_WORK;
             rows.add(new WorkforceView.CitizenRow(UUID.nameUUIDFromBytes(("workforce" + i).getBytes(StandardCharsets.UTF_8)),
@@ -168,7 +178,8 @@ final class WorkforceLayoutCases {
                             i % 3 != 0, i % 2 == 0 ? "c12" : "", io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Away.values()[i % 3],
                             io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Hold.values()[i % 5], 99_999),
                     i == 5 ? WorkforceView.CitizenRow.OFFICE_BARON : i == 3 ? WorkforceView.CitizenRow.OFFICE_MAYOR : WorkforceView.CitizenRow.OFFICE_NONE,
-                    i == 5 || i == 3 ? "c12" : "", i % 2 == 0 ? "c12" : "c0", "", ""));
+                    i == 5 || i == 3 ? "c12" : "", i % 2 == 0 ? "c12" : "c0", keeper ? "general_store" : "",
+                    keeper ? (i % 2 == 0 ? LONG_CYRILLIC : LONG_LATIN) : ""));
         }
         return rows;
     }

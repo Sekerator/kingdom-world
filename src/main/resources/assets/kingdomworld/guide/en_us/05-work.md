@@ -87,7 +87,7 @@ The **Hire… (N)** button opens the list "Whom to put on the post". The number 
 2. those without work: "Without work";
 3. other workers: "Moves over from another post" or "Leaves other work (now: ...)".
 
-In every group the nearest come first. The **Put on the post** button hires the chosen one. For a worker from other work the window first asks "Move the worker?", and after **Move** it comes here at once with the profession of the post. Soldiers and those who already work here are not listed. Hire… cannot be pressed while the post has no profession ("Choose the profession of the post first") or every seat is taken ("Every seat is taken: add seats or dismiss somebody").
+In every group the nearest come first, and townspeople keeping a shop last: hiring takes them out of the shop (see [Townspeople and shops](shops)). An unemployed keeper works not at a post but in its shop. The **Put on the post** button hires the chosen one. For a worker from other work the window first asks "Move the worker?", and after **Move** it comes here at once with the profession of the post. Soldiers and those who already work here are not listed. Hire… cannot be pressed while the post has no profession ("Choose the profession of the post first") or every seat is taken ("Every seat is taken: add seats or dismiss somebody").
 
 ### Moving to the post
 

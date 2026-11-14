@@ -380,6 +380,8 @@ public final class Production {
      * @param watched whether it was made near players, so that the work of the post is measured
      */
     public static void made(MinecraftServer server, WorkPost post, long orderId, ItemStack result, boolean watched) {
+        // The raw materials of a workshop count against its city.
+        io.github.sekerator.kingdomworld.common.commerce.CityGoods.raw(server, post.kingdomId(), post.pos(), result);
         if (watched) {
             PostWork.gathered(server, post, result);
             PostWork.acted(post, 1);

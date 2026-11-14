@@ -89,6 +89,18 @@ public final class RoadActions {
                 people == null ? 0 : people.named(), counts[1], wall.map(Wall::id).orElse(0L), wall.map(Wall::wallClass).orElse(null), built,
                 wall.map(w -> w.gates().size()).orElse(0), folk, people == null ? 0 : people.beds(), freeBeds, crew.builders(), crew.helpers(),
                 crew.sites());
+        // The treasury of the city: what it holds and what it took, kept and sent the crown a day, the last week.
+        boolean money = io.github.sekerator.kingdomworld.common.commerce.CityOf.active(server, kingdomId);
+        var economy = KingdomWorldApi.state(server).economy();
+        var city = economy.cityTreasury(kingdomId, cityId);
+        java.util.List<io.github.sekerator.kingdomworld.core.economy.CityStatement> statements = city
+                .map(io.github.sekerator.kingdomworld.core.economy.CityTreasury::statements).orElse(java.util.List.of());
+        long balance = city.map(found -> economy.purse(found.key())).orElse(0L);
+        long perDay = city.map(io.github.sekerator.kingdomworld.core.economy.CityTreasury::averageTaxSealed).orElse(0L);
+        long kept = io.github.sekerator.kingdomworld.core.economy.CityStatement.average(statements,
+                io.github.sekerator.kingdomworld.core.economy.CityStatement.Line.KEPT);
+        long toCrown = io.github.sekerator.kingdomworld.core.economy.CityStatement.average(statements,
+                io.github.sekerator.kingdomworld.core.economy.CityStatement.Line.TO_CROWN);
         // Who governs the city, a mayor who may govern no more losing the office as it is looked at.
         CityGovernors.Governor governor = CityGovernors.governor(server, kingdomId, cityId);
         java.util.Optional<io.github.sekerator.kingdomworld.core.road.CityCharter> charter = roads.charter(kingdomId, cityId);
@@ -97,7 +109,7 @@ public final class RoadActions {
             case HOUSE -> RoadViews.CityRow.HOUSE;
             case NONE -> RoadViews.CityRow.NO_GOVERNOR;
         };
-        return row.withGovernor(kind, CityGovernors.governorName(server, governor, alphabet), governor.grant() == null ? ""
+        return row.withMoney(money, balance, perDay, kept, toCrown).withGovernor(kind, CityGovernors.governorName(server, governor, alphabet), governor.grant() == null ? ""
                 : governor.grant().title().id(), charter.map(io.github.sekerator.kingdomworld.core.road.CityCharter::paused).orElse(false),
                 governor.present() ? CityGovernors.noteWithSpending(server, kingdomId, cityId, charter.map(io.github.sekerator.kingdomworld.core.road.CityCharter::note)
                         .map(io.github.sekerator.kingdomworld.core.road.GovernorNote::parse).orElse(io.github.sekerator.kingdomworld.core.road.GovernorNote.NONE))

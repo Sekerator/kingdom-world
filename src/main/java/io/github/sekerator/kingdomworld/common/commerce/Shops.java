@@ -563,6 +563,10 @@ public final class Shops {
             if (!onCredit) {
                 economy.cityTally(kingdom, shop.cityId()).add(CityStatement.Line.CROWN_GOODS_SOLD, cost);
             }
+            Item sold = items.get(take.item());
+            if (sold != null) {
+                CityGoods.out(server, kingdom, shop.cityId(), sold, count);
+            }
             if (shop.status() == Business.Status.EMPTY) {
                 shop.setStatus(shop.family() ? Business.Status.FAMILY : Business.Status.TRADING);
             }
@@ -858,12 +862,13 @@ public final class Shops {
             }
             shop.setProfitDue(shop.profitDue() + result.profit());
             int earners = shop.family() ? 1 : Math.max(1, shop.keepers().size());
-            long earned = result.profit() / earners;
+            // What the trade earned today, before what the shop keeps for its goods and its debt: whether it feeds its keepers.
+            long earned = CityDay.earned(sold[0], sold[1], result.upkeep()) / earners;
             long[] categories = new long[GoodsCategory.values().length];
             System.arraycopy(sold, 2, categories, 0, categories.length);
             shop.record(day, new Business.Day(sold[0], sold[1], 0, earned, categories));
             shop.setMarginPermille(ShopPricing.nextMargin(shop.marginPermille(), rules.fairIncome(), earners, sold[1], rules.minMarginPercent(),
-                    rules.maxMarginPercent(), rules.marginStepPercent()));
+                    rules.maxMarginPercent(), rules.marginStepPercent(), rules.businessUpkeepPercent()));
             boolean young = day - shop.opened() < 2;
             boolean poor = !young && CityDay.poor(earned, rules.keeperUsualIncome());
             shop.setPoorDays(poor ? shop.poorDays() + 1 : 0);

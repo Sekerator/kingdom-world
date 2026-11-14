@@ -319,6 +319,12 @@ public final class EconomyCommands {
         }
         long total = debts;
         source.sendSuccess(() -> Component.translatable(key + "debts", treasury.debts().size(), MoneyTexts.amount(total, units)), false);
+        if (io.github.sekerator.kingdomworld.common.commerce.CityOf.active(server, kingdom.id())) {
+            // The same line as the overview of the treasury tab: what the cities bring the crown and hold.
+            var cities = io.github.sekerator.kingdomworld.common.commerce.CityTreasuryActions.cities(server, kingdom.id(), new java.util.UUID(0, 0));
+            source.sendSuccess(() -> Component.translatable("kingdomworld.screen.cities.overview",
+                    MoneyTexts.amount(Math.max(0, cities.crownPerDay()), units), MoneyTexts.amount(cities.held(), units)), false);
+        }
         if (admin) {
             long supply = KingdomWorldApi.state(server).economy().supply(kingdom.id());
             source.sendSuccess(() -> Component.translatable(ADMIN + "info.raw", treasury.balance(), treasury.vault().copper(),

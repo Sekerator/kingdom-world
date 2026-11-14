@@ -162,6 +162,8 @@ public final class PostWork {
         long day = gameDay(server);
         KingdomWorldApi.state(server).citizens().ledger().record(post.kingdomId(), day, post.professionId(), itemId, count);
         post.addProduced(day, count);
+        // What the post made counts for its city too, at the price of export.
+        io.github.sekerator.kingdomworld.common.commerce.CityGoods.made(server, post.kingdomId(), post.pos(), itemId, count);
     }
 
     // ---------------------------------------------------------------- statuses

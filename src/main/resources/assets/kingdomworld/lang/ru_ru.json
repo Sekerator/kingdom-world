@@ -5233,5 +5233,6 @@
   "kingdomworld.goods.category.clothing": "Одежда",
   "kingdomworld.goods.category.tools": "Инструменты",
   "kingdomworld.goods.category.household": "Утварь",
-  "kingdomworld.goods.category.luxury": "Роскошь"
+  "kingdomworld.goods.category.luxury": "Роскошь",
+  "kingdomworld.screen.roads.city_treasury": "Казна: %s · за день +%s (городу %s, короне %s)"
 }

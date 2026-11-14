@@ -88,27 +88,36 @@ public final class ShopPricing {
     }
 
     /**
-     * The margin of the next day: towards what gives the keepers a fair income from yesterday's sales, at most a step a day,
-     * within bounds. Without sales yesterday it stays.
+     * The margin of the next day: towards what gives the keepers a fair income from yesterday's sales after the upkeep of the
+     * shop, at most a step a day, within bounds. Without sales yesterday it stays.
      *
-     * @param fairIncome what a keeper should earn a day
-     * @param keepers    the keepers of the shop
-     * @param soldCost   what the goods sold yesterday cost the shop
+     * @param fairIncome    what a keeper should earn a day
+     * @param keepers       the keepers of the shop
+     * @param soldCost      what the goods sold yesterday cost the shop
+     * @param upkeepPercent the share of the takings its upkeep takes
      */
-    public static int nextMargin(int marginPermille, long fairIncome, int keepers, long soldCost, int minPercent, int maxPercent, int stepPercent) {
+    public static int nextMargin(int marginPermille, long fairIncome, int keepers, long soldCost, int minPercent, int maxPercent, int stepPercent,
+                                 int upkeepPercent) {
         int min = minPercent * 10;
         int max = Math.max(min, maxPercent * 10);
         int current = Math.max(min, Math.min(max, marginPermille));
         if (soldCost <= 0) {
             return current;
         }
-        long target = Money.share(Money.multiplyCapped(Math.max(0, fairIncome), Math.max(1, keepers)), 1000, soldCost);
+        // m x cost - upkeep x cost x (1 + m) = fair income  =>  m = (fair / cost + upkeep) / (1 - upkeep)
+        long upkeep = Math.max(0, Math.min(900, upkeepPercent * 10L));
+        long fair = Money.share(Money.multiplyCapped(Math.max(0, fairIncome), Math.max(1, keepers)), 1000, soldCost);
+        long target = Money.share(Money.addCapped(fair, upkeep), 1000, 1000 - upkeep);
         int clampedTarget = (int) Math.max(min, Math.min(max, target));
         int step = stepPercent * 10;
         if (clampedTarget > current) {
             return Math.min(clampedTarget, current + step);
         }
         return Math.max(clampedTarget, current - step);
+    }
+
+    public static int nextMargin(int marginPermille, long fairIncome, int keepers, long soldCost, int minPercent, int maxPercent, int stepPercent) {
+        return nextMargin(marginPermille, fairIncome, keepers, soldCost, minPercent, maxPercent, stepPercent, 0);
     }
 
     /**

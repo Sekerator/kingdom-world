@@ -156,11 +156,17 @@ public final class RoadViews {
      * @param paused       whether the king stopped its governor
      * @param note         what its governor decided last, in words; empty without a governor
      * @param needsLand    whether its governor found no place left and no land of the kingdom around it to widen it on
+     * @param money        whether the cities of its kingdom keep money of their own
+     * @param treasury     what its treasury holds
+     * @param perDay       the taxes its treasury took a day, the last week
+     * @param kept         what it kept of them a day
+     * @param toCrown      what it sent the crown a day
      */
     public record CityRow(long id, String name, int x, int y, int z, boolean capital, int roads, CityLevel level, int people, int buildings,
                           long wallId, @Nullable Wall.WallClass wallClass, int wallBuilt, int gates, int folk, int beds, int freeBeds,
                           int builders, int helpers, int sites, int governor, String governorName, String governorTitle, boolean paused,
-                          net.minecraft.network.chat.Component note, boolean needsLand) {
+                          net.minecraft.network.chat.Component note, boolean needsLand, boolean money, long treasury, long perDay, long kept,
+                          long toCrown) {
         public static final int NO_GOVERNOR = 0;
         public static final int MAYOR = 1;
         public static final int HOUSE = 2;
@@ -181,7 +187,7 @@ public final class RoadViews {
                        long wallId, @Nullable Wall.WallClass wallClass, int wallBuilt, int gates, int folk, int beds, int freeBeds,
                        int builders, int helpers, int sites) {
             this(id, name, x, y, z, capital, roads, level, people, buildings, wallId, wallClass, wallBuilt, gates, folk, beds, freeBeds, builders,
-                    helpers, sites, NO_GOVERNOR, "", "", false, net.minecraft.network.chat.Component.empty(), false);
+                    helpers, sites, NO_GOVERNOR, "", "", false, net.minecraft.network.chat.Component.empty(), false, false, 0, 0, 0, 0);
         }
 
         /**
@@ -194,7 +200,17 @@ public final class RoadViews {
         public CityRow withGovernor(int kind, String who, String title, boolean stopped, net.minecraft.network.chat.Component decided,
                                     boolean landWanted) {
             return new CityRow(id, name, x, y, z, capital, roads, level, people, buildings, wallId, wallClass, wallBuilt, gates, folk, beds,
-                    freeBeds, builders, helpers, sites, kind, who, title, stopped, decided, landWanted);
+                    freeBeds, builders, helpers, sites, kind, who, title, stopped, decided, landWanted, money, treasury, perDay, kept, toCrown);
+        }
+
+        /**
+         * The same city with its treasury: whether the cities of its kingdom keep money, what it holds and what it took, kept and
+         * sent the crown a day.
+         */
+        public CityRow withMoney(boolean keeps, long held, long day, long keptDay, long crownDay) {
+            return new CityRow(id, name, x, y, z, capital, roads, level, people, buildings, wallId, wallClass, wallBuilt, gates, folk, beds,
+                    freeBeds, builders, helpers, sites, governor, governorName, governorTitle, paused, note, needsLand, keeps, held, day, keptDay,
+                    crownDay);
         }
 
         void encode(FriendlyByteBuf buf) {
@@ -224,6 +240,11 @@ public final class RoadViews {
             buf.writeBoolean(paused);
             buf.writeComponent(note);
             buf.writeBoolean(needsLand);
+            buf.writeBoolean(money);
+            buf.writeVarLong(Math.max(0, treasury));
+            buf.writeVarLong(Math.max(0, perDay));
+            buf.writeVarLong(Math.max(0, kept));
+            buf.writeVarLong(Math.max(0, toCrown));
         }
 
         static CityRow decode(FriendlyByteBuf buf) {
@@ -243,7 +264,8 @@ public final class RoadViews {
             return new CityRow(id, name, x, y, z, capital, roads, level, people, buildings, wallId,
                     wallClass <= 0 || wallClass > classes.length ? null : classes[wallClass - 1], buf.readVarInt(), buf.readVarInt(),
                     buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(),
-                    buf.readUtf(NAME), buf.readUtf(NAME), buf.readBoolean(), buf.readComponent(), buf.readBoolean());
+                    buf.readUtf(NAME), buf.readUtf(NAME), buf.readBoolean(), buf.readComponent(), buf.readBoolean(), buf.readBoolean(), buf.readVarLong(),
+                    buf.readVarLong(), buf.readVarLong(), buf.readVarLong());
         }
     }
 

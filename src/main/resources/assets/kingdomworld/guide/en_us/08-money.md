@@ -110,7 +110,7 @@ The treasury pays from its books first, then with coins of the vault, the small 
 
 ### The journal
 
-The journal of the treasury remembers income and expenses by category for 8 days. The categories: Taxes, Wages, Minting, Transfers, Admin, Trade, Exchange, Guild, Army, Magic, Companions, Law, Founding, Taverns and festivals, War: tributes and indemnities, Nobility: fiefs, demands and spies, Land: provinces.
+The journal of the treasury remembers income and expenses by category for 8 days. The categories: Taxes, Wages, Minting, Transfers, Admin, Trade, Exchange, Guild, Army, Magic, Companions, Law, Founding, Taverns and festivals, War: tributes and indemnities, Nobility: fiefs, demands and spies, Land: provinces, Cities (the share of the crown and what the treasuries of cities keep beyond their reserve), Shops of citizens (goods sold to the shops and their goods bought back).
 
 ### Views of the Treasury tab
 
@@ -122,7 +122,8 @@ The View button goes through the views: left click forward, right click back.
 - **minting**: which metals to strike and how many to keep;
 - **payments**: "To player:", "Amount:" and Pay (onto the account of a player who is online, a member of a kingdom or has an account); "From the vault:", the kind of coin and Take put coins of the vault into your inventory;
 - **reserves**: money of other currencies in the treasury and its worth;
-- **debtors**: who owes the treasury and how much.
+- **debtors**: who owes the treasury and how much;
+- **cities**: the taxes of the cities and a row of each city, its treasury or its use to the crown (see [Treasuries of cities](city_money)).
 
 ### Rights
 
@@ -151,7 +152,7 @@ You get a message about the tax and the debt, and a reminder when you join. Your
 
 The governors of the cities (mayors and houses of the nobility, see [Governors of cities](governors)) build from the storehouses and with the money the king gives them: Governors a day in the overview of the Roads tab, 0 by default. It is shared evenly by the cities with a governor; each city spends its share a day at most, the treasury never falls below its reserve (a few days of its expenses), and what is bought abroad goes into the journal of the treasury as any import. One with the right Treasury sets it. The wealth of houses of the nobility is never spent on buildings.
 
-The townsfolk of the cities (people who live in a city as a number, see [Arrival and growth](growth)) pay dues into the treasury once a game day: {cfg:citizens.folkDues} a head a day, in copper coins. They go into the journal of the treasury as taxes. A full treasury takes no more, as with the poll tax.
+The townsfolk of the cities (people who live in a city as a number, see [Arrival and growth](growth)) no longer pay dues out of nothing: by default they are {cfg:citizens.folkDues} copper coins a head a day, and the old value 1 of a config is read as 0. The townsfolk earn nothing of their own yet; that comes later. The taxes of citizens are taken by the cities: see [Treasuries of cities](city_money).
 
 ### Tax on sales
 
@@ -195,9 +196,43 @@ A citizen measures its pay against the usual wage of its profession. Without pay
 
 ### Where the money goes
 
-A citizen takes {cfg:economy.householdSharePercent}% of every wage paid home; the rest leaves the world. The chest of its house holds coins of the kingdom (at most {cfg:economy.householdCoinsMax} copper coins, what goes beyond leaves the world too) and a little food bought from the storehouses (up to {cfg:economy.householdFood} items; the price goes back to the treasury). Food is bought only while the storehouses hold more than a reserve for every citizen. Taking from the chest of a house is a theft from that citizen (see [Crimes](crimes)).
+A citizen takes {cfg:economy.householdSharePercent}% of every wage paid home. In a kingdom of players the rest goes into the purse of the townspeople of its city and is spent there (see [Treasuries of cities](city_money)); in the kingdoms of the world it leaves the world as before. The chest of its house holds coins of the kingdom (at most {cfg:economy.householdCoinsMax} copper coins, what goes beyond returns to the purse of the townspeople) and a little food bought from the storehouses (up to {cfg:economy.householdFood} items; the price goes back to the treasury). Food is bought only while the storehouses hold more than a reserve for every citizen. Taking from the chest of a house is a theft from that citizen (see [Crimes](crimes)).
 
 > Soldiers get a wage of their own, officers a multiple of it: see [Warriors and archers](soldiers).
+
+## city_money | Treasuries of cities
+@icon minecraft:emerald
+In a kingdom of players every city, the capital too, keeps a **treasury** of its own and a **purse of the townspeople**. The wage of a citizen goes into the purse of its city (the city of its home, of its post for one without a home, else the capital). The townspeople spend the purse in the [shops](shops) of their city; what is not spent waits, and beyond {cfg:cityEconomy.purseKeepDays} days of what comes in it leaves the world. Money never appears out of nothing: it only changes hands, comes from abroad with the merchants of the crown and from players, or leaves the world.
+
+### Taxes of citizens
+
+| Tax | Who pays | Default | Bounds |
+|---|---|---|---|
+| Sales tax | the buyer, on top of the price | {cfg:cityEconomy.salesTaxPercent}% | 0-25% |
+| Tithe | keepers, of what they earned the day before | {cfg:cityEconomy.tithePercent}% | 0-50% |
+| Crown share | the treasury of the city at the end of its day | {cfg:cityEconomy.crownSharePercent}% | 0-100% |
+
+The wages of the crown are not taxed. The taxes go into the treasury of the city; at the end of its day the share of the crown of the taxes of that day goes into the treasury of the kingdom (category Cities). A city without a head keeps no more than {cfg:cityEconomy.idleReserveDays} days of its own share and sends the rest to the crown the same day. A city with a head keeps no more than {cfg:cityEconomy.cityReserveDays} days of its share besides what it saves for.
+
+### Evasion
+
+The sales tax and the tithe together are the burden. Above {cfg:cityEconomy.evasionStartPercent}% the people evade the taxes, two points for every point of burden, at most {cfg:cityEconomy.evasionMaxPercent}%. What is not paid stays with the payer. Most is collected near 37% of burden, and with the heaviest taxes less than with light ones. The window of a city shows "Past the treasury: about N%", and the holders of the Treasury right get a list of the cities evading more than 20% once a day.
+
+### Means
+
+The money of a city moves the [mood](mood) of its citizens, from -15 to +8: a burden up to 15% gives +3, up to 25% nothing, above that -5, -10 and -15; shops of their own where the townspeople bought 90% of their basket yesterday +5 (60% +2); a treasury taken -5 for three days; a city with a head that sends nearly everything to the crown (a share above {cfg:cityEconomy.crownShareFairPercent}%) -3.
+
+### Grant and take back
+
+In the window of a city a holder of the Treasury right grants it money of the treasury of the kingdom or takes money back. A city spends what was granted first, it never goes back by itself, and taking it back offends nobody. Taking more than was granted is possible, but the people of the city resent it for three days, and the noble house that holds the city loses loyalty (up to 20).
+
+### The view "cities"
+
+The Treasury tab, the view "cities": at the top the taxes of the kingdom ("Sales tax 10% · Tithe 10% · Crown 50%") and the button Change. A switch shows "Treasuries of cities" (income, kept, to the crown, spent, treasury) or "Use to the crown" (money, goods, total); the numbers are averages a day over the last week, and the whole row shows on hover. A click on a city opens its window: the statement of a day, its own taxes (an empty field follows the kingdom), Grant and Take back, evasion, means, its shops and why new ones do not open.
+
+### Use to the crown
+
+The money of the crown from a city: goods sold to its shops and its treasury, evenings in its taverns, the exports of its merchants, the coins of its mints, the share and the surplus of its treasury, less the wages of the workers of the crown who live there, grants and the shares of the nobles of its fief. Goods: what its posts made at the price of export, less the raw materials of its workshops, what its people ate, what was sold to the shops and exported. A surplus beyond the target of the storehouses counts for less. A village is of use mostly by goods, a town and a large city by money too. The overview of the tab shows "Cities: to the crown +N a day, in their treasuries M", and **/kingdom treasury** prints the same.
 
 ## bank | The bank
 @icon kingdomworld:bank

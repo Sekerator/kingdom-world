@@ -289,6 +289,14 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
+     * Shows the view of the cities of the treasury tab, for checks: its treasuries or its use to the crown, the form of the taxes
+     * open or not, and an amount typed into the window of a city.
+     */
+    public void showCities(boolean crown, boolean editing, String amount) {
+        treasury.showCities(crown, editing, amount);
+    }
+
+    /**
      * Shows the window of a city the server sent, if it belongs to the kingdom on screen.
      */
     public void updateCityDetail(io.github.sekerator.kingdomworld.common.network.data.CityViews.CityDetail detail) {

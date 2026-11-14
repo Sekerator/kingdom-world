@@ -183,19 +183,21 @@ public final class CityDay {
     }
 
     /**
-     * The end of the day of a shop: its upkeep, its debt to the crown first, and what is in its till beyond two days of
-     * purchases, its debt and what it owes its keepers already is profit.
+     * The end of the day of a shop: its upkeep leaves the world, and what its till holds beyond the working money (two days of
+     * purchases) goes first to the debt to the crown and the rest is profit for its keepers, paid on the next payday. A young shop
+     * builds its working money before it pays back or pays out.
      *
      * @param till           what its till holds
-     * @param takings        what it sold today without the tax
+     * @param takings        what it sold today
      * @param workingCapital what it keeps for buying goods
      * @param profitDue      what it owes its keepers already
      */
     public static Result result(long till, long takings, long debt, long workingCapital, long profitDue, int upkeepPercent) {
         long upkeep = Math.min(Math.max(0, till), Money.share(Math.max(0, takings), Math.max(0, upkeepPercent), 100));
         long free = Math.max(0, till - upkeep - Math.max(0, profitDue));
-        long debtPaid = Math.min(Math.max(0, debt), free);
-        long profit = Math.max(0, free - debtPaid - Math.max(0, workingCapital) - (Math.max(0, debt) - debtPaid));
+        long excess = Math.max(0, free - Math.max(0, workingCapital));
+        long debtPaid = Math.min(Math.max(0, debt), excess);
+        long profit = excess - debtPaid;
         return new Result(upkeep, debtPaid, profit);
     }
 
@@ -215,6 +217,14 @@ public final class CityDay {
         }
         long perShop = Math.max(1, Money.multiplyCapped(2, turnoverPerWorker));
         return (int) Math.max(1, Math.min(1_000, Math.max(0, unspent) / perShop));
+    }
+
+    /**
+     * What the trade of a shop earned on a day: its takings less what the goods sold cost it and its upkeep. While a shop builds
+     * up its working money and pays back its debt it pays out less, but its trade feeds its keepers all the same.
+     */
+    public static long earned(long takings, long soldCost, long upkeep) {
+        return Math.max(0, takings - soldCost - upkeep);
     }
 
     /**

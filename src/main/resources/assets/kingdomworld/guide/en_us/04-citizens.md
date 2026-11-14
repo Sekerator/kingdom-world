@@ -100,6 +100,7 @@ A citizen's mood goes from 0 to 100, 50 being usual. Every step of the simulatio
 | Comfort of home, a well | up to +25 |
 | Tavern, festival, illness | -25...+25 |
 | Stability of the kingdom | -25...+25 |
+| Means of the city | -15...+8 |
 
 Notes:
 
@@ -107,7 +108,8 @@ Notes:
 - the wage is measured against the usual one: an unpaid wage lowers the mood, a generous one raises it (see [Wages](wages));
 - a house gives +5 by default (more at a higher level of the building), a working well within 24 blocks of the home another +4 (see [The roles of buildings](building_roles));
 - an evening at the tavern gives +{cfg:life.tavernMood} for {cfg:life.tavernMoodDays} days, a festival +{cfg:life.festivalMood} for {cfg:life.festivalMoodDays} days, an illness -{cfg:life.sickMood} (see [The tavern](tavern), [Festivals and fairs](festivals));
-- unrest and rebels lower the mood, a steady crown raises it (see [Nobility and factions](nobility)).
+- unrest and rebels lower the mood, a steady crown raises it (see [Nobility and factions](nobility));
+- the means of the city: light taxes and shops of their own please, heavy taxes and a treasury taken grieve (see [Treasuries of cities](city_money)).
 
 ### What it changes
 
@@ -118,6 +120,28 @@ Notes:
 The average mood shows in the Citizens tab of the throne window, the mood of each citizen in the [Workers window](workers_window) (the ☺ sign).
 
 > The cheapest mood is food and a home. A citizen with no food at all and no home loses 50 points of its target, a fed one with a home gets +25.
+
+## shops | Townspeople and shops
+@icon kingdomworld:shop_counter
+**Townspeople** are citizens without a post of the crown: unemployed by profession, no soldiers. They keep **shops**: they buy goods of the crown from the storehouses and sell them to the townspeople of their city and to players. A keeper stays unemployed by profession; the [workers window](workers_window) shows "Keeper: Shop, Kamenka".
+
+### Where shops open
+
+- a house of a merchant or a craftsman (a working building of the role house): one shop for two keepers, the townspeople living there first;
+- a market: stalls, {cfg:cityEconomy.turnoverPerWorker} worth a day a keeper and a quarter more for every level of the market;
+- a counter {item:kingdomworld:shop_counter}: one shop for two keepers, put up in the square of a city (see [Treasury and shops of a city](city_shops)).
+
+A shop opens by itself once a day of the city, when a place is free and there is a townsperson, and the city has no shops yet or its townspeople found too little to buy yesterday. A house without townspeople whose people have posts keeps a **family** shop in the evening, at half the strength ({cfg:cityEconomy.familyShopPercent}%).
+
+### How a shop trades
+
+A new shop gets its first goods on credit for {cfg:cityEconomy.shopCredit} copper coins at the price of the crown, the debt paid back out of its takings. Then it buys of the crown: only from the free stock of the storehouses, no more than {cfg:cityEconomy.takeFromCrownPercent}% of an item a day for all the shops of the kingdom together, and nothing edible below the rations of all the citizens for the days of growth. Its price is what it paid plus a margin (from {cfg:cityEconomy.minMarginPercent}% to {cfg:cityEconomy.maxMarginPercent}%, moving by itself towards a fair income of the keeper), the sales tax on top. The townspeople buy the cheapest first, so needless shops close by themselves: a keeper earning less than half the usual for {cfg:cityEconomy.closeAfterDays} days in a row closes the shop, and the crown buys its goods back into the storehouses.
+
+What a shop earned (beyond its working money and its debt) is paid to the keepers on the payday: the tithe to the treasury of the city, a fifth home, the rest into the purse of the townspeople. The mood of a keeper follows what it earns, but never below that of the idle. A keeper hired onto a post leaves the shop, and townspeople with a shop are hired last.
+
+### The tavern costs money
+
+An evening at a tavern of the crown costs a citizen {cfg:cityEconomy.tavernEveningPrice} copper coin from the purse of the townspeople of its city, and the money goes to the crown. An empty purse still gets its evening.
 
 ## daily_life | The day of a citizen
 @icon minecraft:clock

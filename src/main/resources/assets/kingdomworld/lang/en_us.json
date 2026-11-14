@@ -5233,5 +5233,6 @@
   "kingdomworld.goods.category.clothing": "Clothing",
   "kingdomworld.goods.category.tools": "Tools",
   "kingdomworld.goods.category.household": "Household goods",
-  "kingdomworld.goods.category.luxury": "Luxury"
+  "kingdomworld.goods.category.luxury": "Luxury",
+  "kingdomworld.screen.roads.city_treasury": "Treasury: %s · a day +%s (to the city %s, to the crown %s)"
 }

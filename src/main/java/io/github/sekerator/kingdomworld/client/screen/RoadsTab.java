@@ -722,6 +722,17 @@ final class RoadsTab {
         // Who governs the city and what it decided last.
         hint = row.governor() == RoadViews.CityRow.NO_GOVERNOR ? Component.translatable(KEY + "city_hint_no_governor", hint, governor)
                 : Component.translatable(KEY + "city_hint_governor", hint, governor, row.note());
+        if (row.money()) {
+            // The treasury of the city and what it took a day, split between the city and the crown.
+            io.github.sekerator.kingdomworld.core.economy.CurrencyUnits units = io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory
+                    .get(view.kingdomId()).map(io.github.sekerator.kingdomworld.common.network.data.CurrencyInfo::units)
+                    .orElse(io.github.sekerator.kingdomworld.core.economy.CurrencyUnits.DEFAULT);
+            hint = Component.empty().append(hint).append("\n").append(Component.translatable(KEY + "city_treasury",
+                    io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(row.treasury(), units),
+                    io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(row.perDay(), units),
+                    io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(row.kept(), units),
+                    io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(row.toCrown(), units)));
+        }
         int whereWidth = Math.min(screen.font().width(where), Math.max(0, (right - x) / 5));
         int governorWidth = Math.min(screen.font().width(governor), Math.max(0, (right - x - whereWidth) / 3));
         int stateWidth = Math.min(screen.font().width(state), Math.max(0, (right - x - whereWidth - governorWidth) / 2));
