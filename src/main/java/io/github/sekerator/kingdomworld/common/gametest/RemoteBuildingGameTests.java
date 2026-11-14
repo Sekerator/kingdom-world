@@ -307,12 +307,15 @@ public final class RemoteBuildingGameTests {
             Construction construction = far(helper, kingdom, template, anchor, false);
             helper.assertTrue(io.github.sekerator.kingdomworld.common.construction.RemoteCrews.unreached(server, kingdom.id()).contains(construction),
                     "A post reaches the far house");
+            StringBuilder seconds = new StringBuilder();
             for (int second = 0; second < 5; second++) {
                 io.github.sekerator.kingdomworld.common.road.RoadBuilding.tick(server);
+                seconds.append(' ').append(io.github.sekerator.kingdomworld.common.construction.RemoteCrews.helping(construction.id())[0])
+                        .append('/').append(construction.pending().size()).append('/').append(construction.status());
             }
             helper.assertTrue(!construction.pending().isEmpty(), "The helper paid for nothing");
             helper.assertTrue(io.github.sekerator.kingdomworld.common.construction.RemoteCrews.helping(construction.id())[0] == 1,
-                    "The helper is not counted at the far house");
+                    "The helper is not counted at the far house; helpers/pending/status by second:" + seconds);
             helper.assertTrue(CitizenGameTests.count(store, net.minecraft.world.item.Items.COBBLESTONE) < 64, "No cobblestone was taken");
             helper.assertTrue(ConstructionWork.builders(construction, KingdomWorldApi.gameTime(server)) >= 1,
                     "The far house has no builder and would stop");

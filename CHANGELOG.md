@@ -28,6 +28,7 @@
 - **Заказы строек вне предела короля.** Заказы, которые стройки и заказы из столицы дают мастерским на недостающее, больше не входят в `maxOrdersPerKingdom`: стройки многих городов заказывают материалы и не отнимают у короля его заказы. Вкладка «Заказы» показывает «x из 32» только по заказам короля.
 - **Расстояние между городами по стенам.** Наименьшее расстояние между городами (`minCityDistance`) теперь считается от радиуса стен: 4 × `wallRadius` + 16 вдоль x или z, 112 при стенах по умолчанию. Если оператор поднял `wallRadius`, города сами встают дальше, и стены двух больших городов не сходятся. 0 в конфиге (теперь по умолчанию) и прежние значения по умолчанию 160 и 112 значат «по стенам», большее число берётся как записано.
 - **Исправлено: дальние стройки делили чанки.** Два держателя одного чанка (соседние места заказа, загрузчик стройки и заказ) делили один тикет игры, и первый, отпуская чанк, выгружал его и для второго: заказ пропускал место как неровное или занятое и кончался «нет места». Теперь у каждого держателя свои тикеты, а заказ, у которого место выгрузилось (например, пока сервер был занят), ждёт и читает его заново.
+- **Исправлено: помощники дальних строек.** Помощники учитываются на дальней стройке и работают на ней и в те секунды, когда их работы ещё не хватило на целый шаг. Раньше в такую секунду окно их не показывало, а та же их доля работы доставалась ещё и каждой следующей дальней стройке королевства.
 
 ### 1.5.2
 
@@ -266,6 +267,7 @@ The cities of a kingdom of players grow each by itself, and large cities live by
 - **Orders of constructions outside the limit of the king.** The orders constructions and orders from the capital give the workshops for what they lack no longer count against `maxOrdersPerKingdom`: the constructions of many cities order materials without taking the orders of the king away. The Orders tab shows "x of 32" for the orders of the king only.
 - **The distance between cities by the walls.** The least distance between cities (`minCityDistance`) now comes from the radius of the walls: 4 × `wallRadius` + 16 along x or z, 112 with the default walls. When an operator raised `wallRadius`, cities keep further apart by themselves and the walls of two large cities never meet. 0 in the configuration (the default now) and the old defaults 160 and 112 mean "by the walls", a larger number is taken as written.
 - **Fixed: far constructions shared chunks.** Two holds of one chunk (places of an order side by side, the loader of a construction and an order) shared one ticket of the game, and the first to let the chunk go let it go for the other too: the order passed the place over as uneven or taken and ended with no place. Every hold now has tickets of its own, and an order whose place was let go (while the server was busy, for one) waits and reads it anew.
+- **Fixed: the helpers of far constructions.** Helpers count at a far construction and work there in the seconds their work does not come to a whole step yet too. Before, the window did not show them in such a second, and the same share of their work went to every next far construction of the kingdom as well.
 
 ### 1.5.2
 

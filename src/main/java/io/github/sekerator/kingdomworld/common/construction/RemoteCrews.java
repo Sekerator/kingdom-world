@@ -120,7 +120,17 @@ public final class RemoteCrews {
                 if (progress.starved()) {
                     construction.setStatus(Construction.Status.NO_MATERIALS);
                 }
-                continue;
+                if (progress.starved() || progress.carry() <= 0.0) {
+                    // Nothing the helpers could do here: their share goes to the next far construction.
+                    continue;
+                }
+                // The share went into the carry of this construction, short of a whole step yet: the helpers work here this second,
+                // and no other far construction gets the same share again.
+                for (Citizen helper : helpers) {
+                    ConstructionWork.worked(construction, helper.id(), now);
+                }
+                HELPING.put(construction.id(), new int[]{helpers.size(), home <= 0 ? 0 : (int) Math.round(100 * fast / home)});
+                return 1.0 - share;
             }
             for (Citizen helper : helpers) {
                 ConstructionWork.worked(construction, helper.id(), now);
