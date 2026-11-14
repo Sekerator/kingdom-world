@@ -1134,8 +1134,9 @@ Invoke-Phase 'run1' {
             }
         }
 
-        # Money: the treasury gets 1000 from an operator, a minter far from players strikes silver coins from five iron
-        # ingots of the storehouses, a payday pays the wages, and the worth of every item (of the mods too) is worked out.
+        # Money: the treasury gets 1000 from an operator, a minter far from players strikes gold coins from five gold ingots of
+        # the storehouses (a kingdom of players leaves iron until its king turns it on), a payday pays the wages, and the worth
+        # of every item (of the mods too) is worked out.
         if ($script:CitizenIds.Count -gt 0) {
             $rawPattern = 'Raw: balance (\d+), copper (\d+), silver (\d+), gold (\d+), funds (\d+), supply (\d+)'
             Send-ServerCommand $server "kingdomworld admin economy treasury $KingdomName add 1000"
@@ -1167,9 +1168,9 @@ Invoke-Phase 'run1' {
                 } else {
                     Add-Failure '[run1] the minter could not be appointed'
                 }
-                Send-ServerCommand $server "kingdomworld admin storage put minecraft:iron_ingot 5 $KingdomName"
-                if (-not (Wait-ForLog $server "Stored 5 of minecraft:iron_ingot in the storehouses of $KingdomName" $CommandTimeout $ConsoleFailPattern)) {
-                    Add-Failure '[run1] the iron for the mint could not be stored'
+                Send-ServerCommand $server "kingdomworld admin storage put minecraft:gold_ingot 5 $KingdomName"
+                if (-not (Wait-ForLog $server "Stored 5 of minecraft:gold_ingot in the storehouses of $KingdomName" $CommandTimeout $ConsoleFailPattern)) {
+                    Add-Failure '[run1] the gold for the mint could not be stored'
                 }
                 $runs = Count-Log "Ran 1 simulation step\(s\) of $KingdomName"
                 Send-ServerCommand $server "kingdomworld admin simulate $KingdomName 1"
@@ -1177,7 +1178,8 @@ Invoke-Phase 'run1' {
                 # The zone of the post is looked at over a few ticks before the minter knows its mint.
                 Start-Sleep -Seconds 3
                 # The smelter makes copper ingots of the ore the miner brings (more ores with the mods of the pack), and the minter
-                # strikes them too: where the land of the world gives copper, six steps are not enough for the iron as well.
+                # strikes them too: it strikes the kind of coin the vault holds the least worth of, so a gold coin comes as soon as
+                # the copper in the vault is worth anything.
                 $mintSteps = 12
                 $runs = Count-Log "Ran $mintSteps simulation step\(s\) of $KingdomName"
                 Send-ServerCommand $server "kingdomworld admin simulate $KingdomName $mintSteps"
@@ -1193,11 +1195,11 @@ Invoke-Phase 'run1' {
                     $vault = [int64]$raw.Groups[2].Value + 10 * [int64]$raw.Groups[3].Value + 100 * [int64]$raw.Groups[4].Value
                     $funds = [int64]$raw.Groups[5].Value
                 }
-                # With the mods of the pack the smelter may have made more iron ingots: the minter strikes them too, two silver coins each.
-                if ($raw -and [int64]$raw.Groups[1].Value -eq 1000 -and [int64]$raw.Groups[3].Value -ge 10 -and [int64]$raw.Groups[3].Value % 2 -eq 0 -and $funds -eq 1000 + $vault) {
-                    Write-Ok "[run1] the minter struck at least 10 silver coins from the iron ingots into the vault: $($raw.Value)"
+                # With the mods of the pack the smelter may make gold or silver ingots too: the minter strikes them as well.
+                if ($raw -and [int64]$raw.Groups[1].Value -eq 1000 -and [int64]$raw.Groups[4].Value -ge 1 -and $funds -eq 1000 + $vault) {
+                    Write-Ok "[run1] the minter struck gold coins from the gold ingots into the vault: $($raw.Value)"
                 } else {
-                    Add-Failure "[run1] expected at least 10 silver coins in the vault and 1000 on the books, got '$(if ($raw) { $raw.Value })'"
+                    Add-Failure "[run1] expected gold coins in the vault and 1000 on the books, got '$(if ($raw) { $raw.Value })'"
                 }
                 Send-ServerCommand $server "kingdomworld admin economy payday $KingdomName"
                 $pay = Wait-ForLog $server "Payday of $KingdomName on day (\d+): tax payers (\d+), taxes (\d+), wages (\d+) of (\d+), citizens (\d+)" $CommandTimeout $ConsoleFailPattern
