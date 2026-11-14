@@ -33,6 +33,7 @@ final class TreasuryCities {
     private static final int BOX = 30;
     private static final String[] LABELS = {"sales_tax", "tithe", "crown_share"};
     private static final int AMOUNT_BOX = 70;
+    private static final int MIN_AMOUNT_BOX = 40;
     /** Height of a row of a city. */
     static final int CITY_ROW = LINE + 2;
 
@@ -50,6 +51,10 @@ final class TreasuryCities {
     private String cityTithe = "";
     private String cityShare = "";
     private String amountText = "";
+    /** Where the amount and its buttons start, in the row of the view next to the button back. */
+    private int amountX;
+    private int amountY;
+    private int amountWidth = AMOUNT_BOX;
 
     private int toggleWidth;
     private int editWidth;
@@ -227,7 +232,22 @@ final class TreasuryCities {
     }
 
     private int panelTop(TreasuryView view, int listTop) {
-        return view.canManage() && detail != null && detail.canManage() ? listTop + 2 * ROW + 4 : listTop;
+        return managing(view) ? listTop + ROW + 4 : listTop;
+    }
+
+    /**
+     * Whether the window of a city shows its forms: the amount and its buttons then stand in the row of the view in place of the
+     * name of the city, which opens the lines instead, and the taxes take one row above the lines.
+     */
+    boolean managing(TreasuryView view) {
+        return view.canManage() && detail != null && detail.canManage();
+    }
+
+    /**
+     * Where the taxes of the window of a city end, so that the count of its lines fits to the right of them.
+     */
+    int taxRowEnd(int x) {
+        return x + taxLabelWidths[0] + taxLabelWidths[1] + taxLabelWidths[2] + 3 * (BOX + 6) + setWidth;
     }
 
     int visiblePanelLines(TreasuryView view, int listTop, int bottom) {
@@ -273,7 +293,7 @@ final class TreasuryCities {
         }).bounds(buttonsX, buttonsY, backWidth, ROW - 2).build());
         back.setTooltip(Tooltip.create(Component.translatable(KEY + "back_hint")));
         if (view.canManage() && detail.canManage()) {
-            initPanelForm(view, x, right, listTop);
+            initPanelForm(view, buttonsX + backWidth + GAP + 4, buttonsY, x, right, listTop);
         }
     }
 
@@ -334,7 +354,7 @@ final class TreasuryCities {
         set.setTooltip(Tooltip.create(Component.translatable(KEY + "edit_hint", cities.maxSalesTax(), cities.maxTithe())));
     }
 
-    private void initPanelForm(TreasuryView view, int x, int right, int listTop) {
+    private void initPanelForm(TreasuryView view, int formX, int formY, int x, int right, int listTop) {
         int fieldX = x;
         String[] texts = {citySales, cityTithe, cityShare};
         for (int i = 0; i < 3; i++) {
@@ -366,14 +386,18 @@ final class TreasuryCities {
             }
         }).bounds(fieldX, listTop, setWidth, ROW - 2).build());
         set.setTooltip(Tooltip.create(Component.translatable(KEY + "as_kingdom")));
-        int y = listTop + ROW + 1;
-        EditBox amount = new EditBox(screen.font(), x + 1, y + 1, AMOUNT_BOX - 2, ROW - 4, Component.translatable(KEY + "amount"));
+        int y = formY;
+        amountX = formX;
+        amountY = formY;
+        // The amount gives up some of its width on the smallest screens, so that both buttons stay inside the window.
+        amountWidth = Math.max(MIN_AMOUNT_BOX, Math.min(AMOUNT_BOX, right - formX - grantWidth - recallWidth - 2 * GAP));
+        EditBox amount = new EditBox(screen.font(), formX + 1, y + 1, amountWidth - 2, ROW - 4, Component.translatable(KEY + "amount"));
         amount.setMaxLength(Money.MAX_TEXT);
         amount.setValue(amountText);
         amount.setHint(Component.translatable(KEY + "amount"));
         amount.setResponder(value -> amountText = value);
         screen.add(amount);
-        int buttonX = x + AMOUNT_BOX + GAP;
+        int buttonX = formX + amountWidth + GAP;
         Button grant = screen.add(Button.builder(Component.translatable(KEY + "grant"), b -> Money.parse(amountText, view.units())
                 .filter(value -> value > 0).ifPresent(value -> send(view, EconomyPackets.TreasuryChange.Action.CITY_GRANT,
                         Long.toString(detail.cityId()), value))).bounds(buttonX, y, grantWidth, ROW - 2).build());
@@ -503,7 +527,8 @@ final class TreasuryCities {
             return lines;
         }
         CityViews.CityDetail d = detail;
-        lines.add(Component.translatable(KEY + "panel.treasury", money(view, d.balance()), money(view, d.granted())));
+        Component treasury = Component.translatable(KEY + "panel.treasury", money(view, d.balance()), money(view, d.granted()));
+        lines.add(managing(view) ? Component.translatable(KEY + "panel.named", d.name(), treasury) : treasury);
         lines.add(Component.translatable(KEY + "panel.taxes", percent(d.effective().salesTax()), percent(d.effective().tithe()),
                 percent(d.effective().crownShare())));
         lines.add(Component.translatable(KEY + "panel.day", money(view, d.average(CityStatement.Line.TITHE) + d.average(CityStatement.Line.SALES_TAX)),
@@ -563,12 +588,12 @@ final class TreasuryCities {
                 screen.label(graphics, Component.translatable(KEY + "label." + labels[i]), labelX, top + 5, 0xFFE8E8E8, labelX + taxLabelWidths[i]);
                 labelX += taxLabelWidths[i] + BOX + 6;
             }
-            int previewX = x + AMOUNT_BOX + GAP + grantWidth + GAP + recallWidth + 6;
+            int previewX = amountX + amountWidth + GAP + grantWidth + GAP + recallWidth + 6;
             if (!amountText.isBlank() && previewX + 8 < right) {
                 Optional<Long> parsed = Money.parse(amountText, view.units());
                 String shown = parsed.map(value -> MoneyTexts.amount(value, view.units()).getString())
                         .orElseGet(() -> Component.translatable("kingdomworld.screen.treasury.bad_amount").getString());
-                screen.name(graphics, shown, previewX, top + ROW + 6, parsed.isPresent() ? 0xFFB8B8B8 : 0xFFFF9070, right - previewX);
+                screen.name(graphics, shown, previewX, amountY + 4, parsed.isPresent() ? 0xFFB8B8B8 : 0xFFFF9070, right - previewX);
             }
         }
         int y = panelTop(view, listTop);

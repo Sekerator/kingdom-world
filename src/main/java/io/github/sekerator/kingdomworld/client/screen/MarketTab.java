@@ -154,10 +154,7 @@ final class MarketTab {
                     day.exportVolume(), money(day.exportIncome()), money(day.exportMaxIncome())));
             case IMPORT -> List.of(Component.translatable(KEY + "import_day", TradeTexts.items(day.imported()), day.importMax(),
                     money(day.importCost())));
-            default -> view.citizenShops()
-                    ? List.of(Component.translatable(KEY + "day_citizens", money(day.sold()), money(view.soldToCitizens()), money(day.bought()),
-                    money(day.lotTax())))
-                    : List.of(Component.translatable(KEY + "day", money(day.sold()), money(day.bought()), money(day.lotTax())));
+            default -> List.of(Component.translatable(KEY + "day", money(day.sold()), money(day.bought()), money(day.lotTax())));
         };
     }
 
@@ -420,7 +417,8 @@ final class MarketTab {
                     b -> send(TradePackets.MarketChange.Action.SET_SELL_TO_CITIZENS, "", 0, view.sellToCitizens() ? 0 : 1, 0))
                     .bounds(x + toggleWidth + GAP, y, toggleWidth, ROW - 2).build());
             citizens.active = view.canManage();
-            citizens.setTooltip(Tooltip.create(Component.translatable("kingdomworld.market.sell_to_citizens_hint")));
+            citizens.setTooltip(Tooltip.create(Component.translatable("kingdomworld.market.sell_to_citizens_today",
+                    Component.translatable("kingdomworld.market.sell_to_citizens_hint"), money(view.soldToCitizens()))));
         }
         y += ROW + 1;
         Button foreign = screen.add(Button.builder(Component.translatable(view.foreignCurrency() ? KEY + "foreign.on" : KEY + "foreign.off"),

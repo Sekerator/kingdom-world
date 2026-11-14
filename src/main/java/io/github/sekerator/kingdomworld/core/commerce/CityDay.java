@@ -220,6 +220,21 @@ public final class CityDay {
     }
 
     /**
+     * How much of a kind of goods a shop keeps in stock: the days of stock of what it sold of the kind a day lately, or one
+     * basket of its strength while it sold none of it (new, or without goods of the kind for a while), so that a kind the crown
+     * has again is tried.
+     *
+     * @param averageSold   the worth of the goods of the kind it sold a day lately, negative with no days written
+     * @param basketPercent the share of the kind in the basket of the townspeople, in percent
+     */
+    public static long stockTarget(long averageSold, double strength, int basketPercent, int stockDays) {
+        if (averageSold <= 0) {
+            return (long) (Math.max(0.0, strength) * basketPercent / 100.0);
+        }
+        return Money.multiplyCapped(stockDays, averageSold);
+    }
+
+    /**
      * What the trade of a shop earned on a day: its takings less what the goods sold cost it and its upkeep. While a shop builds
      * up its working money and pays back its debt it pays out less, but its trade feeds its keepers all the same.
      */

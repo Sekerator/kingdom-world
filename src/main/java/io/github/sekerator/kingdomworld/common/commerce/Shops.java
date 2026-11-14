@@ -391,7 +391,7 @@ public final class Shops {
     // ---------------------------------------------------------------- what the shops buy of the crown
 
     private static boolean newShop(Business shop) {
-        return shop.debt() == 0 && shop.goods().isEmpty() && shop.days().isEmpty();
+        return shop.startingOut();
     }
 
     /**
@@ -418,6 +418,7 @@ public final class Shops {
             trade.missing = "";
         }
         if (!market.sellToCitizens()) {
+            LOGGER.debug("The market of {} sells nothing to the shops of citizens", kingdom);
             return;
         }
         Map<String, Long> counts = KingdomStorage.countsById(server, kingdom);
@@ -441,8 +442,14 @@ public final class Shops {
         List<RestockPlan.Need> needs = new ArrayList<>();
         Set<Long> credit = new HashSet<>();
         Map<Long, Integer> marketLevels = marketLevels(server, kingdom);
+        // Why goods were not bought, for the debug log: shops closing or without keepers, items the crown cannot spare, items too
+        // dear to sell on.
+        int idle = 0;
+        int unspared = 0;
+        int dear = 0;
         for (Business shop : shops) {
             if (shop.status() == Business.Status.CLOSING || !shop.kept()) {
+                idle++;
                 continue;
             }
             boolean onCredit = newShop(shop);
@@ -455,8 +462,7 @@ public final class Shops {
             long left = budget;
             for (GoodsCategory category : GoodsCategory.values()) {
                 long average = shop.averageCategory(day, category.ordinal());
-                long target = average < 0 ? (long) (strength * rules.basketShare(category.ordinal()) / 100.0)
-                        : Money.multiplyCapped(rules.stockDays(), average);
+                long target = CityDay.stockTarget(average, strength, rules.basketShare(category.ordinal()), rules.stockDays());
                 long lacking = target - shop.goodsValue(category.ordinal());
                 if (lacking <= 0 || left <= 0) {
                     continue;
@@ -468,10 +474,12 @@ public final class Shops {
                 for (Item item : itemsOf(category)) {
                     String id = KingdomStorage.itemId(new ItemStack(item));
                     if (free.getOrDefault(id, 0L) <= 0) {
+                        unspared++;
                         continue;
                     }
                     long cost = crownPrice(server, kingdom, id, item, counts.getOrDefault(id, 0L));
                     if (!ShopPricing.worthBuying(cost * ShopPricing.MILLI, ceilingMilli(server, item))) {
+                        dear++;
                         continue;
                     }
                     double ratio = cost / worth(server, item);
@@ -501,6 +509,8 @@ public final class Shops {
             }
         }
         if (needs.isEmpty()) {
+            LOGGER.debug("The shops of {} bought nothing of the crown on day {}: {} shop(s), {} closing or without keepers, {} item(s) "
+                    + "the crown cannot spare, {} too dear to sell on", kingdom, day, shops.size(), idle, unspared, dear);
             return;
         }
         RestockPlan.Result plan = RestockPlan.allocate(needs, free, rules.takeFromCrownPercent(), nutrition, spare);
@@ -535,6 +545,8 @@ public final class Shops {
             LOGGER.debug("The storehouses of {} changed while the shops bought; they buy tomorrow", kingdom);
             return;
         }
+        long boughtItems = 0;
+        long boughtFor = 0;
         Map<String, Long> got = new HashMap<>();
         for (ItemStack stack : taken) {
             got.merge(KingdomStorage.itemId(stack), (long) stack.getCount(), Long::sum);
@@ -558,6 +570,8 @@ public final class Shops {
                 continue;
             }
             got.put(take.item(), have - count);
+            boughtItems += count;
+            boughtFor = Money.addCapped(boughtFor, cost);
             shop.addGoods(take.item(), take.category(), count, unit * ShopPricing.MILLI);
             shop.record(day, new Business.Day(0, 0, cost, 0, new long[GoodsCategory.values().length]));
             if (!onCredit) {
@@ -575,6 +589,7 @@ public final class Shops {
         for (Map.Entry<String, Long> rest : got.entrySet()) {
             insertAll(server, kingdom, rest.getKey(), rest.getValue(), near);
         }
+        LOGGER.debug("The shops of {} bought {} item(s) of the crown for {} on day {}", kingdom, boughtItems, boughtFor, day);
         data.setDirty();
     }
 

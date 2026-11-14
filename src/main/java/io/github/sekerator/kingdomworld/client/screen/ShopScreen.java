@@ -137,7 +137,8 @@ public class ShopScreen extends KingdomScreen implements ResultListener {
         countLabelWidth = font.width(Component.translatable("kingdomworld.screen.stall.count_label")) + 6;
         int tabs = 2 * (tabWidth + GAP) + 2 * (pageWidth + GAP);
         int controls = payWidth + GAP + countLabelWidth + BOX;
-        int inner = Math.max(Math.max(tabs, controls), 200 + actionWidth);
+        // Room for the name of an item, its price in words and the button, as far as the screen allows.
+        int inner = Math.max(Math.max(tabs, controls), 300 + actionWidth);
         for (Component line : aboutLines()) {
             inner = Math.max(inner, Math.min(360, font.width(line)));
         }

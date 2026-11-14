@@ -206,6 +206,8 @@ final class TreasuryTab {
                 MoneyTexts.coins(Denomination.COPPER, units.gold()), MoneyTexts.coins(Denomination.SILVER, 1),
                 MoneyTexts.coins(Denomination.COPPER, units.silver())));
         lines.add(Component.translatable(KEY + "tax", money(view.pollTax()), view.taxpayers()));
+        // The money of the cities comes early, so that the smallest screen shows it before the mint and the debts.
+        cities.overviewLine(view).ifPresent(lines::add);
         TreasuryView.Payroll payroll = view.lastPayroll();
         Component next = Component.translatable(KEY + "next_payday", Math.max(1, (view.untilPayday() + 1_199) / 1_200));
         lines.add(joined(payroll.day() < 0 ? Component.translatable(KEY + "payroll_none")
@@ -224,7 +226,6 @@ final class TreasuryTab {
         }
         lines.add(view.debtorCount() == 0 ? Component.translatable(KEY + "debts_none")
                 : Component.translatable(KEY + "debts", view.debtorCount(), money(view.debtTotal())));
-        cities.overviewLine(view).ifPresent(lines::add);
         return lines;
     }
 
@@ -635,9 +636,15 @@ final class TreasuryTab {
         screen.name(graphics, summary.get(1).getString(), x, y + LINE, 0xFFD0D0D0, right - x);
         int count = rowCount();
         int rows = visible(top, panelHeight);
+        boolean managingCity = mode == Mode.CITIES && cities.detail() != null && cities.managing(view);
         if (count > rows) {
             Component page = Component.translatable("kingdomworld.screen.throne.page", scroll + 1, Math.min(count, scroll + rows), count);
-            screen.label(graphics, page, right - font.width(page), buttonsY(top) + 4, 0xFF9A9A9A, right);
+            // The window of a city a manager sees has its forms in the row of the view; its count goes to the row of its taxes.
+            if (!managingCity) {
+                screen.label(graphics, page, right - font.width(page), buttonsY(top) + 4, 0xFF9A9A9A, right);
+            } else if (right - font.width(page) > cities.taxRowEnd(x) + 4) {
+                screen.label(graphics, page, right - font.width(page), listTop(top) + 5, 0xFF9A9A9A, right);
+            }
         }
         int listTop = listTop(top);
         switch (mode) {
@@ -650,7 +657,7 @@ final class TreasuryTab {
             case RESERVES -> renderReserves(graphics, x, right, listTop, rows);
             case CITIES -> {
                 cities.setScroll(scroll);
-                if (cities.detail() != null) {
+                if (cities.detail() != null && !managingCity) {
                     int titleX = x + modeWidth + GAP + cities.backWidth() + 6;
                     int pageRoom = count > rows ? font.width(Component.translatable("kingdomworld.screen.throne.page", scroll + 1,
                             Math.min(count, scroll + rows), count)) + 6 : 0;

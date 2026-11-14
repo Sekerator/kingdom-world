@@ -156,11 +156,11 @@ KingdomWorld: мод для Minecraft 1.20.1 (Forge) о королевствах
 
 | Город | Доход казны | Городу | Короне | Траты | Казна на 60-й день | Деньги короны | Товары | Итого короне | Лавок закрылось |
 |---|---|---|---|---|---|---|---|---|---|
-| Ольховка | 3 | 1 | 3 | 0 | 9 | -17 | +97 | **+80** | 0 из 1 |
-| Каменка | 9 | 5 | 4 | 4 | 38 | +76 | +56 | **+132** | 4 из 6 |
-| Белоград | 20 | 10 | 10 | 8 | 77 | +300 | -22 | **+278** | 13 из 16 |
+| Ольховка | 3 | 1 | 3 | 0 | 7 | -16 | +97 | **+81** | 0 из 1 |
+| Каменка | 9 | 5 | 4 | 4 | 36 | +79 | +55 | **+134** | 5 из 6 |
+| Белоград | 20 | 10 | 10 | 9 | 71 | +313 | -27 | **+286** | 15 из 16 |
 
-Казна королевства: 3 000 → 24 605 (по прежним правилам 2 700, без лавок и игроков 5 520). Масса денег валюты: 3 396 в первый день и 25 495 на 60-й: прибыль короны пришла из-за границы с купцами, и если король её не тратит, курс валюты слабеет. Тяжёлые налоги (20% + 30%) дают +77 / +117 / +252, наибольший итог при бремени 10-20%.
+Казна королевства: 3 000 → 25 430 (по прежним правилам 2 700, без лавок и игроков 5 520). Масса денег валюты: 3 396 в первый день и 26 198 на 60-й: прибыль короны пришла из-за границы с купцами, и если король её не тратит, курс валюты слабеет. Тяжёлые налоги (20% + 30%) дают +80 / +120 / +246, наибольший итог при бремени 10-20%.
 
 ### Торговля
 
@@ -1010,11 +1010,11 @@ Recipes (data pack, replaceable):
 
 | City | Taxes of the city | Kept | To the crown | Spent | Treasury on day 60 | Money of the crown | Goods | Use to the crown | Shops closed |
 |---|---|---|---|---|---|---|---|---|---|
-| Olkhovka | 3 | 1 | 3 | 0 | 9 | -17 | +97 | **+80** | 0 of 1 |
-| Kamenka | 9 | 5 | 4 | 4 | 38 | +76 | +56 | **+132** | 4 of 6 |
-| Belograd | 20 | 10 | 10 | 8 | 77 | +300 | -22 | **+278** | 13 of 16 |
+| Olkhovka | 3 | 1 | 3 | 0 | 7 | -16 | +97 | **+81** | 0 of 1 |
+| Kamenka | 9 | 5 | 4 | 4 | 36 | +79 | +55 | **+134** | 5 of 6 |
+| Belograd | 20 | 10 | 10 | 9 | 71 | +313 | -27 | **+286** | 15 of 16 |
 
-The treasury of the kingdom: 3,000 → 24,605 (2,700 under the old rules, 5,520 without shops and players). The money of the currency: 3,396 after the first day and 25,495 on day 60: the profit of the crown came from abroad with the merchants, and if the king does not spend it the exchange rate of the currency weakens. Heavy taxes (20% + 30%) give +77 / +117 / +252; the best total is at a burden of 10-20%.
+The treasury of the kingdom: 3,000 → 25,430 (2,700 under the old rules, 5,520 without shops and players). The money of the currency: 3,396 after the first day and 26,198 on day 60: the profit of the crown came from abroad with the merchants, and if the king does not spend it the exchange rate of the currency weakens. Heavy taxes (20% + 30%) give +80 / +120 / +246; the best total is at a burden of 10-20%.
 
 ### Trade
 

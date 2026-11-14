@@ -434,12 +434,11 @@ public final class CityBudget {
         long ceiling = ShopPricing.ceilingMilli(WORTH, Prices.importCost(WORTH, 1, rules.trade()));
         long cost = (long) WORTH;
         for (Business shop : model.shops) {
-            boolean fresh = shop.days().isEmpty() && shop.goods().isEmpty() && shop.debt() == 0;
+            boolean fresh = shop.startingOut();
             long budget = fresh ? city.shopCredit() : Math.max(0, economy.purse(CityPurses.PurseKey.till(kingdom, shop.id())) - shop.profitDue());
             for (GoodsCategory kind : GoodsCategory.values()) {
                 long average = shop.averageCategory(day, kind.ordinal());
-                long target = average < 0 ? (long) (strength(model, city, speed) * city.basketShare(kind.ordinal()) / 100.0)
-                        : Money.multiplyCapped(city.stockDays(), average);
+                long target = CityDay.stockTarget(average, strength(model, city, speed), city.basketShare(kind.ordinal()), city.stockDays());
                 long lacking = target - shop.goodsValue(kind.ordinal());
                 long count = Math.min((long) Math.ceil(Math.max(0, lacking) / WORTH), budget / cost);
                 if (count <= 0) {

@@ -95,6 +95,7 @@ public final class ClientSelfTest {
     private static ClientScaffoldingShowcase scaffoldingShowcase;
     private static ClientWhereaboutsShowcase whereaboutsShowcase;
     private static ClientFolkShowcase folkShowcase;
+    private static ClientCommerceShowcase commerceShowcase;
     private static ClientFlagShowcase flagShowcase;
     private static ClientBackgroundCheck backgroundCheck;
     private static ClientLifeShowcase lifeShowcase;
@@ -375,6 +376,25 @@ public final class ClientSelfTest {
             if (folkShowcase.finished()) {
                 if (folkShowcase.failed()) {
                     LOGGER.error(PREFIX + "folk showcase failed, exiting with code 1");
+                    System.exit(1);
+                }
+                LOGGER.info(PREFIX + "finished");
+                quit = true;
+            }
+            return;
+        }
+        if ("commerce".equals(MODE) && minecraft.player != null && minecraft.getSingleplayerServer() != null) {
+            if (commerceShowcase == null) {
+                String folder = System.getProperty("kingdomworld.clientSelfTest.screenshots");
+                Path screenshots = folder != null && !folder.isEmpty() ? Path.of(folder)
+                        : minecraft.gameDirectory.toPath().resolve("kingdomworld-layout");
+                LOGGER.info(PREFIX + "commerce showcase started, screenshots go to {}", screenshots.resolve("citizen-economy-1"));
+                commerceShowcase = new ClientCommerceShowcase(screenshots);
+            }
+            commerceShowcase.tick();
+            if (commerceShowcase.finished()) {
+                if (commerceShowcase.failed()) {
+                    LOGGER.error(PREFIX + "commerce showcase failed, exiting with code 1");
                     System.exit(1);
                 }
                 LOGGER.info(PREFIX + "finished");

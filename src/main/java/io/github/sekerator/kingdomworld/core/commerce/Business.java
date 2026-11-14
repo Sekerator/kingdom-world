@@ -386,6 +386,22 @@ public final class Business {
         return Optional.of(new Day(values[0], values[1], values[2], values[3], categories));
     }
 
+    /**
+     * Whether the shop is just starting out and gets its first goods on credit: it owes nothing, holds nothing and has never bought
+     * or sold, though the days it stood empty since it opened are written.
+     */
+    public boolean startingOut() {
+        if (debt != 0 || !goods.isEmpty()) {
+            return false;
+        }
+        for (long[] values : days.values()) {
+            if (values[0] != 0 || values[2] != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public Map<Long, Day> days() {
         Map<Long, Day> copy = new TreeMap<>();
         for (Long day : days.keySet()) {
