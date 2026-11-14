@@ -39,20 +39,29 @@ public final class ConstructionPackets {
     /**
      * Client to server: show me the construction of this kingdom.
      */
-    public record Request(UUID kingdomId) {
+    public record Request(UUID kingdomId, long city) {
         public static final RequestPolicy POLICY = new RequestPolicy("construction_view", 0, 20, 10_000L);
+
+        /**
+         * The constructions of every city.
+         */
+        public Request(UUID kingdomId) {
+            this(kingdomId, ConstructionView.ALL_CITIES);
+        }
 
         public void encode(FriendlyByteBuf buf) {
             buf.writeUUID(kingdomId);
+            buf.writeLong(city);
         }
 
         public static Request decode(FriendlyByteBuf buf) {
-            return new Request(buf.readUUID());
+            return new Request(buf.readUUID(), buf.readLong());
         }
 
         public static void handle(Request message, Supplier<NetworkEvent.Context> context) {
             ServerPlayer sender = context.get().getSender();
             if (ServerRequestGuard.admit(sender, POLICY)) {
+                ConstructionActions.filter(sender, message.city());
                 ConstructionActions.sendView(sender, message.kingdomId());
             }
         }

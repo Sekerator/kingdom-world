@@ -146,8 +146,19 @@ public final class RoadViews {
      * @param beds      the beds of the kingdom in it
      * @param freeBeds  of those, the ones free of named citizens and townsfolk alike
      */
+    /**
+     * @param builders citizens at the posts of builders of the city
+     * @param helpers  builders of other cities helping with its constructions now
+     * @param sites    its constructions
+     */
     public record CityRow(long id, String name, int x, int y, int z, boolean capital, int roads, CityLevel level, int people, int buildings,
-                          long wallId, @Nullable Wall.WallClass wallClass, int wallBuilt, int gates, int folk, int beds, int freeBeds) {
+                          long wallId, @Nullable Wall.WallClass wallClass, int wallBuilt, int gates, int folk, int beds, int freeBeds,
+                          int builders, int helpers, int sites) {
+        public CityRow(long id, String name, int x, int y, int z, boolean capital, int roads, CityLevel level, int people, int buildings,
+                       long wallId, @Nullable Wall.WallClass wallClass, int wallBuilt, int gates, int folk, int beds, int freeBeds) {
+            this(id, name, x, y, z, capital, roads, level, people, buildings, wallId, wallClass, wallBuilt, gates, folk, beds, freeBeds, 0, 0, 0);
+        }
+
         void encode(FriendlyByteBuf buf) {
             buf.writeVarLong(id);
             buf.writeUtf(name, NAME);
@@ -166,6 +177,9 @@ public final class RoadViews {
             buf.writeVarInt(Math.max(0, folk));
             buf.writeVarInt(Math.max(0, beds));
             buf.writeVarInt(Math.max(0, freeBeds));
+            buf.writeVarInt(builders);
+            buf.writeVarInt(helpers);
+            buf.writeVarInt(sites);
         }
 
         static CityRow decode(FriendlyByteBuf buf) {
@@ -184,7 +198,7 @@ public final class RoadViews {
             Wall.WallClass[] classes = Wall.WallClass.values();
             return new CityRow(id, name, x, y, z, capital, roads, level, people, buildings, wallId,
                     wallClass <= 0 || wallClass > classes.length ? null : classes[wallClass - 1], buf.readVarInt(), buf.readVarInt(),
-                    buf.readVarInt(), buf.readVarInt(), buf.readVarInt());
+                    buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt());
         }
     }
 

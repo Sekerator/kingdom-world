@@ -713,6 +713,21 @@ public final class RemoteWorks {
         return Component.translatable(KEY + "reason." + (reason.isEmpty() ? "none" : reason));
     }
 
+    /**
+     * Where an order stands, for the list of orders: waiting for its turn, looking for a place, the ground levelled, the item it
+     * lacks, why there is no place, or the limit of the server.
+     */
+    public static Component stateText(Commission commission) {
+        return switch (commission.state()) {
+            case WAITING -> commission.reason().startsWith("blocked|") ? Component.translatable(KEY + "state.waiting_blocked", reasonText(commission))
+                    : Component.translatable(KEY + "reason.none");
+            case LOOKING -> Component.translatable(KEY + "state.looking");
+            case LEVELLING -> Component.translatable(KEY + "state.levelling");
+            case LACKS_ITEM, NO_PLACE -> reasonText(commission);
+            case LIMIT -> Component.translatable(KEY + "state.limit");
+        };
+    }
+
     static Component cityName(MinecraftServer server, Commission commission) {
         if (commission.cityId() == Commission.CAPITAL) {
             return KingdomWorldApi.kingdom(server, commission.kingdomId()).map(Kingdom::name).map(name -> (Component) Component.literal(name))

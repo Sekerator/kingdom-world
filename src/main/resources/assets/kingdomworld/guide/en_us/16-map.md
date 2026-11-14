@@ -31,6 +31,10 @@ On hover the bottom shows which chunk it is (and its blocks), whose land it is a
 - **Looking**: the key K or the atlas.
 - **Editing land**: the "Territory" button of the throne screen, titled "Land of ..." (see [Claiming and releasing land](claiming)).
 - **Planning a road**: the "Plan a road" button in the Roads tab (see [Roads](roads)).
+- **Building**: the "On the map..." button of a building ordered for a city in the Construction tab. The outline of the
+  building with a mark on its entrance follows the cursor, a click places it, R or the Entrance button turns it, "Lay out"
+  sends the order; a right click or Esc resets. A chunk takes up to 64 pixels here, so that a small house is seen too (see
+  [How a kingdom builds](construction)).
 - **Founding a city**: the "Found a city" button in the Roads tab. The land of others is shaded, frames of the distance
   are drawn around cities, a click on your chunk chooses the place of the town hall, a right click resets (see [Cities](cities)).
 - **Army**: the "Army" button on the map.

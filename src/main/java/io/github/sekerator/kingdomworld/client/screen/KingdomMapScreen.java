@@ -136,6 +136,28 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     private String foundName = "";
     private boolean foundPost = true;
     private int foundRows = 1;
+    /** The kingdom a building is ordered for at a point of the map, or {@code null}. */
+    @Nullable
+    private KingdomView building;
+    /** What is ordered: the template, its name, its size, its wood and stone, and the square of the city it is ordered for. */
+    private BuildOrder buildOrder;
+    /** Where the entrance of the building faces. */
+    private io.github.sekerator.kingdomworld.core.construction.Facing buildFacing = io.github.sekerator.kingdomworld.core.construction.Facing.SOUTH;
+    /** The middle of the building placed with a click, as block x and z, or {@code null} while it follows the cursor. */
+    private int[] buildPoint;
+    /** What the server said of the place by its data, or {@code null} before it answered. */
+    @Nullable
+    private Boolean buildOk;
+    private int buildRows = 1;
+    /** The most pixels a chunk takes when a building is placed: a small house is still seen. */
+    private static final double BUILD_CELL = 64.0;
+
+    /**
+     * A building ordered at a point: the template, its name and size, its materials and the square of its city.
+     */
+    private record BuildOrder(long cityId, String template, Component name, int sizeX, int sizeZ, String wood, String stone, int cityX, int cityZ,
+                              int radius) {
+    }
 
     /**
      * @param editing the kingdom whose land is edited, or {@code null} to only look
@@ -179,6 +201,233 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         return screen;
     }
 
+    /**
+     * The atlas for ordering a building at a point of the land of the kingdom: its outline with a mark on its entrance follows
+     * the cursor, a click places it and the server says at once whether the data allows it there, R or the button turns the
+     * entrance, and the order is sent from the bottom row. What stands at the place is looked at when the order is worked on.
+     *
+     * @param cityId the city the building is for; the map opens on its square
+     */
+    public static KingdomMapScreen forBuilding(@Nullable net.minecraft.client.gui.screens.Screen parent, KingdomView view, long cityId,
+                                               String template, Component name, int sizeX, int sizeZ, String wood, String stone, int cityX, int cityZ,
+                                               int radius) {
+        KingdomMapScreen screen = new KingdomMapScreen(null, null, null, parent);
+        screen.building = view;
+        screen.buildOrder = new BuildOrder(cityId, template, name, Math.max(1, sizeX), Math.max(1, sizeZ), wood, stone, cityX, cityZ, radius);
+        screen.centerX = cityX / 16.0;
+        screen.centerZ = cityZ / 16.0;
+        screen.centered = true;
+        screen.cell = 24.0;
+        if (io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.template(template) == null
+                && net.minecraft.client.Minecraft.getInstance().getConnection() != null) {
+            KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.ConstructionPackets.TemplateRequest(template));
+        }
+        return screen;
+    }
+
+    /**
+     * Shows a building placed at a point with the answer of the server, used by the client self-check.
+     */
+    public void showBuildingForCheck(int x, int z, io.github.sekerator.kingdomworld.core.construction.Facing facing, @Nullable Boolean ok,
+                                     Component message) {
+        buildPoint = new int[]{x, z};
+        buildFacing = facing;
+        buildOk = ok;
+        status = message;
+        statusIsError = ok != null && !ok;
+    }
+
+    /**
+     * The server said whether the data allows the building at the point placed.
+     */
+    public void buildChecked(io.github.sekerator.kingdomworld.common.network.packet.ConstructionPackets.CheckResult result) {
+        if (building == null || buildPoint == null || !result.template().equals(buildOrder.template()) || result.pos().getX() != buildPoint[0]
+                || result.pos().getZ() != buildPoint[1]) {
+            return;
+        }
+        buildOk = result.ok();
+        status = result.message();
+        statusIsError = !result.ok();
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
+    }
+
+    private double maxCell() {
+        return building != null ? BUILD_CELL : MAX_CELL;
+    }
+
+    /**
+     * The entrance of the template as the server sent it, south while it has not.
+     */
+    private io.github.sekerator.kingdomworld.core.construction.Facing templateEntrance() {
+        io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.Template template =
+                io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.template(buildOrder.template());
+        return template == null ? io.github.sekerator.kingdomworld.core.construction.Facing.SOUTH : template.entrance();
+    }
+
+    /**
+     * The quarter turns that face the entrance of the template the way chosen.
+     */
+    private int buildRotation() {
+        io.github.sekerator.kingdomworld.core.construction.Facing entrance = templateEntrance();
+        for (int rotation = 0; rotation < 4; rotation++) {
+            if (new io.github.sekerator.kingdomworld.core.construction.Placement(rotation, false).apply(entrance) == buildFacing) {
+                return rotation;
+            }
+        }
+        return 0;
+    }
+
+    private Component facingLabel() {
+        return Component.translatable("kingdomworld.screen.map.build.facing",
+                Component.translatable("kingdomworld.screen.map.build.facing." + buildFacing.name().toLowerCase(java.util.Locale.ROOT)));
+    }
+
+    /**
+     * Turns the entrance a quarter, clockwise or back; the place is checked again.
+     */
+    private void turnBuilding(int direction) {
+        io.github.sekerator.kingdomworld.core.construction.Facing[] order = {io.github.sekerator.kingdomworld.core.construction.Facing.NORTH,
+                io.github.sekerator.kingdomworld.core.construction.Facing.EAST, io.github.sekerator.kingdomworld.core.construction.Facing.SOUTH,
+                io.github.sekerator.kingdomworld.core.construction.Facing.WEST};
+        int index = 0;
+        for (int i = 0; i < order.length; i++) {
+            if (order[i] == buildFacing) {
+                index = i;
+            }
+        }
+        buildFacing = order[Math.floorMod(index + direction, order.length)];
+        if (buildPoint != null) {
+            requestBuildCheck();
+        }
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
+    }
+
+    private void requestBuildCheck() {
+        buildOk = null;
+        status = Component.translatable("kingdomworld.screen.map.build.checking");
+        statusIsError = false;
+        if (minecraft != null && minecraft.getConnection() != null) {
+            KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.ConstructionPackets.Commission(building.id(),
+                    "at", buildOrder.template(), buildOrder.wood(), buildOrder.stone(), 0, buildPoint[0], buildPoint[1], buildRotation(), 1, true));
+        }
+    }
+
+    private void resetBuilding() {
+        buildPoint = null;
+        buildOk = null;
+        status = Component.empty();
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
+    }
+
+    /**
+     * The turn of the entrance, ordering the building and starting again, along the bottom of the map: in two rows when one
+     * does not hold them.
+     */
+    private void initBuilding() {
+        Component order = Component.translatable("kingdomworld.screen.map.build.order");
+        Component reset = Component.translatable("kingdomworld.screen.map.road.reset");
+        int facingWidth = 0;
+        for (io.github.sekerator.kingdomworld.core.construction.Facing facing : io.github.sekerator.kingdomworld.core.construction.Facing.values()) {
+            facingWidth = Math.max(facingWidth, buttonWidth(Component.translatable("kingdomworld.screen.map.build.facing",
+                    Component.translatable("kingdomworld.screen.map.build.facing." + facing.name().toLowerCase(java.util.Locale.ROOT)))));
+        }
+        int orderWidth = buttonWidth(order);
+        int resetWidth = buttonWidth(reset);
+        int available = mapRight() - mapLeft() - 8;
+        buildRows = facingWidth + 2 + orderWidth + 2 + resetWidth <= available ? 1 : 2;
+        int y = mapBottom() - 20;
+        int x = mapLeft() + 4;
+        int facingY = buildRows == 2 ? y - 18 : y;
+        Button turn = addRenderableWidget(new CycleButton(x, facingY, Math.min(facingWidth, available), 16, facingLabel(), this::turnBuilding));
+        turn.setTooltip(CycleButton.hinted(Component.translatable("kingdomworld.screen.map.build.facing.hint")));
+        if (buildRows == 1) {
+            x += facingWidth + 2;
+        }
+        Button go = addRenderableWidget(Button.builder(order, button -> {
+            if (buildPoint != null && minecraft != null && minecraft.getConnection() != null) {
+                KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.ConstructionPackets.Commission(building.id(),
+                        "at", buildOrder.template(), buildOrder.wood(), buildOrder.stone(), 0, buildPoint[0], buildPoint[1], buildRotation(), 1,
+                        false));
+                onClose();
+            }
+        }).bounds(x, y, orderWidth, 16).build());
+        go.active = buildPoint != null && !Boolean.FALSE.equals(buildOk) && building.can(Permission.MANAGE_CONSTRUCTION);
+        go.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomworld.screen.map.build.order.hint")));
+        x += orderWidth + 2;
+        addRenderableWidget(Button.builder(reset, button -> resetBuilding()).bounds(x, y, resetWidth, 16).build());
+    }
+
+    /**
+     * The square of the city and the outline of the building with a mark on its entrance: where it was placed, or under the
+     * cursor while it follows it; green when the server allowed it, red when not.
+     */
+    private void drawBuilding(GuiGraphics graphics, int mouseX, int mouseY) {
+        int cx0 = blockScreenX(buildOrder.cityX() - buildOrder.radius());
+        int cz0 = blockScreenZ(buildOrder.cityZ() - buildOrder.radius());
+        int cx1 = blockScreenX(buildOrder.cityX() + buildOrder.radius() + 1);
+        int cz1 = blockScreenZ(buildOrder.cityZ() + buildOrder.radius() + 1);
+        int square = 0x90F0C030;
+        mapFill(graphics, cx0, cz0, cx1, cz0 + 1, square);
+        mapFill(graphics, cx0, cz1 - 1, cx1, cz1, square);
+        mapFill(graphics, cx0, cz0, cx0 + 1, cz1, square);
+        mapFill(graphics, cx1 - 1, cz0, cx1, cz1, square);
+        int px;
+        int pz;
+        if (buildPoint != null) {
+            px = buildPoint[0];
+            pz = buildPoint[1];
+        } else if (insideMap(mouseX, mouseY)) {
+            px = blockAtX(mouseX);
+            pz = blockAtZ(mouseY);
+        } else {
+            return;
+        }
+        boolean turned = (buildRotation() & 1) == 1;
+        int sx = turned ? buildOrder.sizeZ() : buildOrder.sizeX();
+        int sz = turned ? buildOrder.sizeX() : buildOrder.sizeZ();
+        int minX = px - (sx - 1) / 2;
+        int minZ = pz - (sz - 1) / 2;
+        int x0 = blockScreenX(minX);
+        int z0 = blockScreenZ(minZ);
+        int x1 = Math.max(x0 + 2, blockScreenX(minX + sx));
+        int z1 = Math.max(z0 + 2, blockScreenZ(minZ + sz));
+        int color = buildPoint == null ? 0xFFFFFFFF : buildOk == null ? 0xFFF0D070 : buildOk ? 0xFF60E060 : 0xFFFF5050;
+        mapFill(graphics, x0, z0, x1, z1, (color & 0x00FFFFFF) | 0x40000000);
+        mapFill(graphics, x0, z0, x1, z0 + 1, color);
+        mapFill(graphics, x0, z1 - 1, x1, z1, color);
+        mapFill(graphics, x0, z0, x0 + 1, z1, color);
+        mapFill(graphics, x1 - 1, z0, x1, z1, color);
+        // The entrance: a mark in the middle of the side it faces.
+        int mx = (x0 + x1) / 2;
+        int mz = (z0 + z1) / 2;
+        int[] mark = switch (buildFacing) {
+            case NORTH -> new int[]{mx - 2, z0 - 2, mx + 3, z0 + 2};
+            case SOUTH -> new int[]{mx - 2, z1 - 2, mx + 3, z1 + 2};
+            case WEST -> new int[]{x0 - 2, mz - 2, x0 + 2, mz + 3};
+            case EAST -> new int[]{x1 - 2, mz - 2, x1 + 2, mz + 3};
+        };
+        mapFill(graphics, mark[0] - 1, mark[1] - 1, mark[2] + 1, mark[3] + 1, 0xFF2B1D0E);
+        mapFill(graphics, mark[0], mark[1], mark[2], mark[3], 0xFFF0C030);
+    }
+
+    /**
+     * The atlas opened on a place, going back to the screen it was opened from: a city chosen in the roads tab.
+     */
+    public static KingdomMapScreen centredOn(@Nullable net.minecraft.client.gui.screens.Screen parent, int blockX, int blockZ) {
+        KingdomMapScreen screen = new KingdomMapScreen(null, null, null, parent);
+        screen.centerX = blockX / 16.0;
+        screen.centerZ = blockZ / 16.0;
+        screen.centered = true;
+        screen.cell = Math.max(screen.cell, 16.0);
+        return screen;
+    }
+
     @Override
     public void onClose() {
         if (parent != null && minecraft != null) {
@@ -199,6 +448,9 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
 
     @Override
     public String checkName() {
+        if (building != null) {
+            return "map/build";
+        }
         if (founding != null) {
             return "map/found";
         }
@@ -705,7 +957,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             centerZ = player.getZ() / 16.0;
             centered = true;
         }
-        cell = Mth.clamp(cell, minCell(), MAX_CELL);
+        cell = Mth.clamp(cell, minCell(), maxCell());
         Component center = Component.translatable("kingdomworld.screen.map.center");
         Component done = Component.translatable("gui.done");
         int doneWidth = Math.max(50, buttonWidth(done));
@@ -713,7 +965,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         int doneX = width - PAD - doneWidth;
         int centerButtonX = doneX - 2 - centerWidth;
         buttonsLeft = centerButtonX;
-        if (editing == null && planning == null && founding == null) {
+        if (editing == null && planning == null && founding == null && building == null) {
             Component armyLabel = Component.translatable("kingdomworld.screen.map.army." + (army ? "lands" : "button"));
             int armyWidth = buttonWidth(Component.translatable("kingdomworld.screen.map.army.button"),
                     Component.translatable("kingdomworld.screen.map.army.lands"));
@@ -772,7 +1024,10 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         if (founding != null) {
             initFounding();
         }
-        if (editing == null && planning == null && founding == null && !army) {
+        if (building != null) {
+            initBuilding();
+        }
+        if (editing == null && planning == null && founding == null && building == null && !army) {
             if (!offersAsked && minecraft != null && minecraft.getConnection() != null) {
                 offersAsked = true;
                 KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Request());
@@ -1494,7 +1749,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         }
         double beforeX = centerX + (mouseX - (mapLeft() + mapRight()) / 2.0) / cell;
         double beforeZ = centerZ + (mouseY - (mapTop() + mapBottom()) / 2.0) / cell;
-        cell = Mth.clamp(cell * (delta > 0 ? 1.25 : 0.8), minCell(), MAX_CELL);
+        cell = Mth.clamp(cell * (delta > 0 ? 1.25 : 0.8), minCell(), maxCell());
         // Keep the point under the cursor where it was.
         centerX = beforeX - (mouseX - (mapLeft() + mapRight()) / 2.0) / cell;
         centerZ = beforeZ - (mouseY - (mapTop() + mapBottom()) / 2.0) / cell;
@@ -1569,6 +1824,16 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
 
     private void onMapClick(int chunkX, int chunkZ, int button) {
         UUID owner = ClientTerritoryCache.ownerOf(chunkX, chunkZ);
+        if (building != null) {
+            if (button == 1) {
+                resetBuilding();
+                return;
+            }
+            buildPoint = new int[]{blockAtX(pointerX), blockAtZ(pointerY)};
+            requestBuildCheck();
+            rebuildWidgets();
+            return;
+        }
         if (founding != null) {
             if (button == 1) {
                 foundChunk = null;
@@ -1697,7 +1962,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     }
 
     private void drawProvinceCard(GuiGraphics graphics) {
-        if (planning != null || founding != null || army) {
+        if (planning != null || founding != null || building != null || army) {
             return;
         }
         ProvinceCard card = provinceCard();
@@ -1723,6 +1988,15 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         }
         if (KingdomWorldClient.MAP_KEY.matches(keyCode, scanCode)) {
             onClose();
+            return true;
+        }
+        if (building != null && keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_R) {
+            turnBuilding(net.minecraft.client.gui.screens.Screen.hasShiftDown() ? -1 : 1);
+            return true;
+        }
+        if (building != null && buildPoint != null && keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
+            // Escape first drops the building placed, then closes the map.
+            resetBuilding();
             return true;
         }
         if (army && armyOrder != null && keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
@@ -1821,6 +2095,9 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         if (planning != null) {
             drawPlan(graphics);
         }
+        if (building != null) {
+            drawBuilding(graphics, mouseX, mouseY);
+        }
         drawPlayer(graphics, partialTick);
         if ((editing != null || founding != null) && insideMap(mouseX, mouseY)) {
             int x = screenX(chunkAtX(mouseX));
@@ -1851,6 +2128,14 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             heading = Component.translatable("kingdomworld.screen.map.title_roads", shown);
             if (!shown.equals(planning.name())) {
                 hoverFull(PAD, 7, font.width(heading), Component.translatable("kingdomworld.screen.map.title_roads", planning.name()));
+            }
+        } else if (building != null) {
+            int prefix = font.width(Component.translatable("kingdomworld.screen.map.title_build", ""));
+            String full = buildOrder.name().getString();
+            String shown = fit(full, available - prefix);
+            heading = Component.translatable("kingdomworld.screen.map.title_build", shown);
+            if (!shown.equals(full)) {
+                hoverFull(PAD, 7, font.width(heading), Component.translatable("kingdomworld.screen.map.title_build", full));
             }
         } else if (founding != null) {
             int prefix = font.width(Component.translatable("kingdomworld.screen.map.title_found", ""));
@@ -2057,7 +2342,9 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             }
             label(graphics, where, PAD, y, 0xFFE8E8E8, width - PAD);
         }
-        Component hint = founding != null
+        Component hint = building != null
+                ? Component.translatable("kingdomworld.screen.map.hint_build")
+                : founding != null
                 ? Component.translatable("kingdomworld.screen.map.hint_found", cityDistance)
                 : planning != null
                 ? Component.translatable("kingdomworld.screen.map.hint_roads")

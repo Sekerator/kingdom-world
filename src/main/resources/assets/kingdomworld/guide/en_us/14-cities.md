@@ -347,9 +347,18 @@ from you, known camps of robbers. The Plan a road button is here too ([Roads](ro
 
 ### Cities
 
-Every city and the capital: its level, its wall and how much of it is built, on hover the citizens and buildings.
-The Actions button of the chosen city: Put up a palisade, Put up a stone wall, Cut a gate where I stand
-([Walls and gates](walls)). Without cities the tab reminds you to place a town hall ([Cities](cities)).
+Every city and the capital: its level, its wall and how much of it is built; on hover the citizens and buildings, the
+builders of the city, the helpers from other cities, its constructions and what it needs for the next level ("For Town:
+citizens 7/12, buildings 4/6", say). The Actions button of the chosen city: Put up a palisade, Put up a stone wall, Cut a
+gate where I stand ([Walls and gates](walls)), Order a building (the catalog of the Construction tab with this city), Send
+a builder, Rename and On the map (the atlas on this city). Without cities the tab reminds you to place a town hall
+([Cities](cities)).
+
+Send a builder adds one builder to the city a click: a free seat at a post of builders of the city takes a builder without
+a post or a citizen without work (on an order of the king also a builder with nothing to build at the moment); without a
+free seat the post gets one more; without a post, or with a full one, a new post from the storehouses is set up near the
+town hall ([Orders from the capital](construction)). Nobody takes a worker of another profession off his work. The
+Construction and Citizens rights are needed.
 
 ### Roads
 

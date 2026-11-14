@@ -1,10 +1,13 @@
 package io.github.sekerator.kingdomworld.common.network;
 
+import io.github.sekerator.kingdomworld.common.network.data.ConstructionView;
 import io.github.sekerator.kingdomworld.common.network.data.RoadViews;
 import io.github.sekerator.kingdomworld.common.network.packet.ConstructionPackets;
 import io.github.sekerator.kingdomworld.common.network.packet.RoadPackets;
+import io.github.sekerator.kingdomworld.core.road.CityLevel;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -14,7 +17,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * The packets of building from the capital go there and back: an order of a building, at a point or of a post, giving it up,
- * founding a city from the map, and the distance between cities with the thresholds of the levels in the view of the roads.
+ * founding a city from the map, the cities and orders in the view of construction with its filter by city, and the distance
+ * between cities with the thresholds of the levels in the view of the roads.
  */
 class RemotePacketsTest {
     private static FriendlyByteBuf buffer() {
@@ -36,6 +40,32 @@ class RemotePacketsTest {
         cancel.encode(buf);
         assertEquals(cancel, ConstructionPackets.CommissionCancel.decode(buf));
         assertEquals(0, buf.readableBytes());
+    }
+
+    @Test
+    void theViewOfConstructionTellsTheCitiesAndTheOrders() {
+        UUID kingdom = UUID.randomUUID();
+        List<ConstructionView.Place> cities = List.of(new ConstructionView.Place(0, "Валория", 8, 8, 24, CityLevel.TOWN, 3, 0),
+                new ConstructionView.Place(7, "Новый Верхнеполянский Городок", -29_999_999, 29_999_999, 48, CityLevel.CITY, 99_999, 12));
+        List<ConstructionView.CommissionRow> orders = List.of(new ConstructionView.CommissionRow(4, "build", Component.literal("Дом"), 7, "no_place",
+                Component.translatable("kingdomworld.commission.reason.blocked", "1 64 -3")),
+                new ConstructionView.CommissionRow(5, "hall", Component.literal("Заречье"), ConstructionView.NO_CITY, "waiting", Component.empty()));
+        ConstructionView view = new ConstructionView(kingdom, true, 0, List.of(), List.of(), List.of(), 32, 0, cities, orders, 7);
+        FriendlyByteBuf buf = buffer();
+        view.encode(buf);
+        ConstructionView read = ConstructionView.decode(buf);
+        assertEquals(0, buf.readableBytes());
+        assertEquals(cities, read.cities());
+        assertEquals(orders, read.commissions());
+        assertEquals(7, read.cityFilter());
+        assertEquals("Новый Верхнеполянский Городок", read.cityName(7));
+        assertEquals("", read.cityName(3));
+
+        ConstructionPackets.Request request = new ConstructionPackets.Request(kingdom, 7);
+        buf = buffer();
+        request.encode(buf);
+        assertEquals(request, ConstructionPackets.Request.decode(buf));
+        assertEquals(ConstructionView.ALL_CITIES, new ConstructionPackets.Request(kingdom).city());
     }
 
     @Test

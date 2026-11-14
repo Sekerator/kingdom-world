@@ -17,11 +17,18 @@ import java.util.UUID;
  * built, the constructions under way with their progress and what they lack, and the register of finished buildings.
  */
 public record ConstructionView(UUID kingdomId, boolean canManage, int maxConstructions, List<Template> templates, List<Site> sites,
-                               List<Building> buildings, int maxBlueprints, long fortification) {
+                               List<Building> buildings, int maxBlueprints, long fortification, List<Place> cities, List<CommissionRow> commissions,
+                               long cityFilter) {
+    /** The filter of the constructions that shows those of every city. */
+    public static final long ALL_CITIES = Long.MIN_VALUE;
+    /** The city of a construction outside every city. */
+    public static final long NO_CITY = Long.MIN_VALUE;
+    public static final int MAX_CITIES = 512;
+    public static final int MAX_COMMISSIONS = 256;
     /** Most templates of the catalog sent: the built-in ones of all styles and the blueprints of the kingdom. */
     public static final int MAX_TEMPLATES = 512;
     public static final int MAX_COST = 64;
-    public static final int MAX_SITES = 64;
+    public static final int MAX_SITES = 256;
     public static final int MAX_MISSING = 24;
     public static final int MAX_BUILDINGS = 512;
     public static final int MAX_TEXT = 128;
@@ -35,10 +42,52 @@ public record ConstructionView(UUID kingdomId, boolean canManage, int maxConstru
         this(kingdomId, canManage, maxConstructions, templates, sites, buildings, 0, 0);
     }
 
+    public ConstructionView(UUID kingdomId, boolean canManage, int maxConstructions, List<Template> templates, List<Site> sites,
+                            List<Building> buildings, int maxBlueprints, long fortification) {
+        this(kingdomId, canManage, maxConstructions, templates, sites, buildings, maxBlueprints, fortification, List.of(), List.of(), ALL_CITIES);
+    }
+
     public ConstructionView {
         templates = List.copyOf(templates.subList(0, Math.min(templates.size(), MAX_TEMPLATES)));
         sites = List.copyOf(sites.subList(0, Math.min(sites.size(), MAX_SITES)));
         buildings = List.copyOf(buildings.subList(0, Math.min(buildings.size(), MAX_BUILDINGS)));
+        cities = List.copyOf(cities.subList(0, Math.min(cities.size(), MAX_CITIES)));
+        commissions = List.copyOf(commissions.subList(0, Math.min(commissions.size(), MAX_COMMISSIONS)));
+    }
+
+    /**
+     * A city of the kingdom a building may be ordered for: its square, its level and who builds there.
+     *
+     * @param id       0 for the capital
+     * @param builders citizens at the posts of builders of the city
+     * @param helpers  builders of other cities helping with its constructions now
+     */
+    public record Place(long id, String name, int x, int z, int radius, io.github.sekerator.kingdomworld.core.road.CityLevel level, int builders,
+                        int helpers) {
+    }
+
+    /**
+     * An order from the capital waiting to be worked on.
+     *
+     * @param kind   the id of its kind
+     * @param what   the building, the post or the city it orders
+     * @param city   its city, {@link #NO_CITY} for a point outside every city
+     * @param state  the id of its state
+     * @param reason why it waits, or where it stands
+     */
+    public record CommissionRow(long id, String kind, Component what, long city, String state, Component reason) {
+    }
+
+    /**
+     * The name of a city of the view, or empty when it is not among them.
+     */
+    public String cityName(long id) {
+        for (Place place : cities) {
+            if (place.id() == id) {
+                return place.name();
+            }
+        }
+        return "";
     }
 
     /**
@@ -96,13 +145,21 @@ public record ConstructionView(UUID kingdomId, boolean canManage, int maxConstru
      * @param helpers     builders of other cities who help with it, counted among the builders
      * @param helperSpeed how fast they help, in percent of their speed at home
      * @param carting     whether a cart brings materials from storehouses the builders cannot get to
+     * @param city        the city whose square holds its middle, 0 for the capital, {@link #NO_CITY} outside every city
      */
     public record Site(long id, Component name, ItemStack icon, BlockPos pos, Construction.Priority priority, boolean paused, boolean orderMissing,
                        Construction.Status status, @Nullable BlockPos statusPos, int percent, int placed, int total, int builders,
                        List<Missing> missing, Construction.Kind kind, int paid, boolean placing, int helpers, int helperSpeed,
-                       boolean carting) {
+                       boolean carting, long city) {
         public Site {
             missing = List.copyOf(missing.subList(0, Math.min(missing.size(), MAX_MISSING)));
+        }
+
+        public Site(long id, Component name, ItemStack icon, BlockPos pos, Construction.Priority priority, boolean paused, boolean orderMissing,
+                    Construction.Status status, @Nullable BlockPos statusPos, int percent, int placed, int total, int builders,
+                    List<Missing> missing, Construction.Kind kind, int paid, boolean placing, int helpers, int helperSpeed, boolean carting) {
+            this(id, name, icon, pos, priority, paused, orderMissing, status, statusPos, percent, placed, total, builders, missing, kind, paid,
+                    placing, helpers, helperSpeed, carting, NO_CITY);
         }
 
         public Site(long id, Component name, ItemStack icon, BlockPos pos, Construction.Priority priority, boolean paused, boolean orderMissing,
@@ -199,6 +256,7 @@ public record ConstructionView(UUID kingdomId, boolean canManage, int maxConstru
             buf.writeVarInt(site.helpers());
             buf.writeVarInt(site.helperSpeed());
             buf.writeBoolean(site.carting());
+            buf.writeLong(site.city());
         }
         buf.writeVarInt(buildings.size());
         for (Building building : buildings) {
@@ -229,6 +287,27 @@ public record ConstructionView(UUID kingdomId, boolean canManage, int maxConstru
         }
         buf.writeVarInt(maxBlueprints);
         buf.writeVarLong(fortification);
+        buf.writeVarInt(cities.size());
+        for (Place place : cities) {
+            buf.writeVarLong(place.id());
+            buf.writeUtf(place.name(), MAX_TEXT);
+            buf.writeInt(place.x());
+            buf.writeInt(place.z());
+            buf.writeVarInt(place.radius());
+            buf.writeEnum(place.level());
+            buf.writeVarInt(place.builders());
+            buf.writeVarInt(place.helpers());
+        }
+        buf.writeVarInt(commissions.size());
+        for (CommissionRow row : commissions) {
+            buf.writeVarLong(row.id());
+            buf.writeUtf(row.kind(), MAX_TEXT);
+            buf.writeComponent(row.what());
+            buf.writeLong(row.city());
+            buf.writeUtf(row.state(), MAX_TEXT);
+            buf.writeComponent(row.reason());
+        }
+        buf.writeLong(cityFilter);
     }
 
     static int readCount(FriendlyByteBuf buf, int max) {
@@ -294,7 +373,7 @@ public record ConstructionView(UUID kingdomId, boolean canManage, int maxConstru
             }
             Construction.Kind kind = KingdomView.readEnum(buf, Construction.Kind.class);
             sites.add(new Site(id, name, icon, pos, priority, paused, orderMissing, status, statusPos, percent, placed, total, builders, missing,
-                    kind, buf.readVarInt(), buf.readBoolean(), buf.readVarInt(), buf.readVarInt(), buf.readBoolean()));
+                    kind, buf.readVarInt(), buf.readBoolean(), buf.readVarInt(), buf.readVarInt(), buf.readBoolean(), buf.readLong()));
         }
         int buildingCount = readCount(buf, MAX_BUILDINGS);
         List<Building> buildings = new ArrayList<>(buildingCount);
@@ -328,6 +407,20 @@ public record ConstructionView(UUID kingdomId, boolean canManage, int maxConstru
         }
         int maxBlueprints = buf.readVarInt();
         long fortification = buf.readVarLong();
-        return new ConstructionView(kingdomId, canManage, maxConstructions, templates, sites, buildings, maxBlueprints, fortification);
+        int cityCount = readCount(buf, MAX_CITIES);
+        List<Place> cities = new ArrayList<>(cityCount);
+        for (int i = 0; i < cityCount; i++) {
+            cities.add(new Place(buf.readVarLong(), buf.readUtf(MAX_TEXT), buf.readInt(), buf.readInt(), buf.readVarInt(),
+                    KingdomView.readEnum(buf, io.github.sekerator.kingdomworld.core.road.CityLevel.class), buf.readVarInt(), buf.readVarInt()));
+        }
+        int commissionCount = readCount(buf, MAX_COMMISSIONS);
+        List<CommissionRow> commissions = new ArrayList<>(commissionCount);
+        for (int i = 0; i < commissionCount; i++) {
+            commissions.add(new CommissionRow(buf.readVarLong(), buf.readUtf(MAX_TEXT), buf.readComponent(), buf.readLong(), buf.readUtf(MAX_TEXT),
+                    buf.readComponent()));
+        }
+        long cityFilter = buf.readLong();
+        return new ConstructionView(kingdomId, canManage, maxConstructions, templates, sites, buildings, maxBlueprints, fortification, cities,
+                commissions, cityFilter);
     }
 }

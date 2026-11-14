@@ -75,7 +75,19 @@ its place once that is loaded. A message tells when a construction is laid out a
 
 ### Orders from the capital
 
-A building for a far city can be ordered from the throne window without going there. The server chooses the place: on
+A building for a far city can be ordered from the throne window without going there. In the Construction tab open a
+building of the catalog and choose a city with the Where button instead of "by hand" (with more than eight cities a list
+with a search by name opens): "Take the blueprint" becomes "Order", "On the map..." appears beside it, and the materials
+become "Style of the kingdom" by default. "Order" leaves the place to the server; "On the map..." opens the atlas: the
+outline of the building with a mark on its entrance follows the cursor, a click places it, R or the Entrance button turns
+it, the atlas tells at once whether the data allows it there (your land, other constructions, buildings, roads and walls),
+and "Lay out" sends the order. What stands at the place the atlas does not see: that is looked at when the building is
+laid out and told in a message. Orders show above the constructions in the Constructions view with their city and state
+("looking for a place", "the ground is being levelled", "put a work post into a storehouse", "no level free place, the
+first block in the way at x y z", "waits for its turn") and a Give up button; the City button above the list keeps the
+constructions and orders of one city, and every construction shows its city.
+
+The server chooses the place: on
 rings around the town hall of the city (around the throne for the capital), the nearest first, wholly inside the area of
 the city, its entrance towards the town hall, on your own land and no closer than two blocks to roads and walls. You can
 also pick a point on the atlas: the building stands there or a few blocks away, its entrance the way you chose.

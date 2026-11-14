@@ -86,7 +86,8 @@ public final class RoadPackets {
             RENAME_CITY,
             WALL_PALISADE,
             WALL_STONE,
-            GATE_HERE
+            GATE_HERE,
+            SEND_BUILDER
         }
 
         public TabChange {

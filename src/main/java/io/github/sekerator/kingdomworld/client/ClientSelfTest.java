@@ -85,6 +85,7 @@ public final class ClientSelfTest {
     private static ClientBuildingShowcase showcase;
     private static ClientCapitalShowcase capitalShowcase;
     private static ClientRoadShowcase roadShowcase;
+    private static ClientRemoteShowcase remoteShowcase;
     private static ClientSiegeShowcase siegeShowcase;
     private static ClientNpcShowcase npcShowcase;
     private static ClientTacticsCheck tacticsCheck;
@@ -247,6 +248,25 @@ public final class ClientSelfTest {
             if (roadShowcase.finished()) {
                 if (roadShowcase.failed()) {
                     LOGGER.error(PREFIX + "road showcase failed, exiting with code 1");
+                    System.exit(1);
+                }
+                LOGGER.info(PREFIX + "finished");
+                quit = true;
+            }
+            return;
+        }
+        if ("remote".equals(MODE) && minecraft.player != null && minecraft.getSingleplayerServer() != null) {
+            if (remoteShowcase == null) {
+                String folder = System.getProperty("kingdomworld.clientSelfTest.screenshots");
+                Path screenshots = folder != null && !folder.isEmpty() ? Path.of(folder)
+                        : minecraft.gameDirectory.toPath().resolve("kingdomworld-layout");
+                LOGGER.info(PREFIX + "remote building showcase started, screenshots go to {}", screenshots.resolve("remote-building"));
+                remoteShowcase = new ClientRemoteShowcase(screenshots);
+            }
+            remoteShowcase.tick();
+            if (remoteShowcase.finished()) {
+                if (remoteShowcase.failed()) {
+                    LOGGER.error(PREFIX + "remote building showcase failed, exiting with code 1");
                     System.exit(1);
                 }
                 LOGGER.info(PREFIX + "finished");

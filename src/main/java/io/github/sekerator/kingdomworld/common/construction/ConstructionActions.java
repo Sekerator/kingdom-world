@@ -49,8 +49,22 @@ public final class ConstructionActions {
 
     // ---------------------------------------------------------------- the view
 
+    /** The city each player filters the constructions by, when it is not all of them. */
+    private static final Map<UUID, Long> FILTERS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Remembers the city a player filters the constructions by; the views sent to the player afterwards follow it.
+     */
+    public static void filter(ServerPlayer player, long city) {
+        if (city == ConstructionView.ALL_CITIES) {
+            FILTERS.remove(player.getUUID());
+        } else {
+            FILTERS.put(player.getUUID(), city);
+        }
+    }
+
     public static void sendView(ServerPlayer player, UUID kingdomId) {
-        view(player.server, kingdomId, player.getUUID())
+        view(player.server, kingdomId, player.getUUID(), FILTERS.getOrDefault(player.getUUID(), ConstructionView.ALL_CITIES))
                 .ifPresent(view -> KingdomWorldNetwork.sendToPlayer(player, new ConstructionPackets.Response(view)));
     }
 
@@ -58,6 +72,14 @@ public final class ConstructionActions {
      * The construction of a kingdom for one of its members; empty for anybody else.
      */
     public static Optional<ConstructionView> view(MinecraftServer server, UUID kingdomId, UUID viewer) {
+        return view(server, kingdomId, viewer, ConstructionView.ALL_CITIES);
+    }
+
+    /**
+     * The construction of a kingdom for one of its members, the constructions and orders of one city only unless
+     * {@code filter} is {@link ConstructionView#ALL_CITIES}.
+     */
+    public static Optional<ConstructionView> view(MinecraftServer server, UUID kingdomId, UUID viewer, long filter) {
         KingdomWorldState state = KingdomWorldApi.state(server);
         if (!state.membership().isMember(viewer, kingdomId)) {
             return Optional.empty();
@@ -80,6 +102,10 @@ public final class ConstructionActions {
         long now = KingdomWorldApi.gameTime(server);
         List<ConstructionView.Site> sites = new ArrayList<>();
         for (Construction construction : state.construction().of(kingdomId)) {
+            long city = ConstructionWork.cityOf(server, construction);
+            if (filter != ConstructionView.ALL_CITIES && city != filter) {
+                continue;
+            }
             Optional<BuildingTemplate> template = ConstructionWork.template(construction);
             Optional<BuildPlan> plan = ConstructionWork.plan(construction);
             List<ConstructionView.Missing> missing = new ArrayList<>();
@@ -108,7 +134,17 @@ public final class ConstructionActions {
                     construction.priority(), construction.paused(), construction.orderMissing(), construction.status(), statusPos, percent, placed,
                     total, ConstructionWork.builders(construction, now), missing, construction.kind(), construction.pending().size(),
                     SiteLoader.serving(construction.id()), RemoteCrews.helping(construction.id())[0], RemoteCrews.helping(construction.id())[1],
-                    Carts.coming(construction.id())));
+                    Carts.coming(construction.id()), city));
+        }
+        List<ConstructionView.Place> cities = places(server, kingdomId);
+        List<ConstructionView.CommissionRow> commissions = new ArrayList<>();
+        for (io.github.sekerator.kingdomworld.core.construction.Commission commission : state.construction().commissionsOf(kingdomId)) {
+            long city = commission.cityId() == io.github.sekerator.kingdomworld.core.construction.Commission.OUTSIDE ? ConstructionView.NO_CITY
+                    : commission.cityId();
+            if (filter == ConstructionView.ALL_CITIES || city == filter) {
+                commissions.add(new ConstructionView.CommissionRow(commission.id(), commission.kind().id(), RemoteWorks.what(commission), city,
+                        commission.state().id(), RemoteWorks.stateText(commission)));
+            }
         }
         List<ConstructionView.Building> buildings = new ArrayList<>();
         for (BuildingEffects.Effect effect : BuildingEffects.of(server, kingdomId)) {
@@ -116,7 +152,29 @@ public final class ConstructionActions {
         }
         return Optional.of(new ConstructionView(kingdomId, state.membership().hasPermission(viewer, kingdomId, Permission.MANAGE_CONSTRUCTION),
                 rules.maxConstructions(), templates, sites, buildings, ConstructionSettings.buildings().maxBlueprints(),
-                BuildingEffects.fortification(server, kingdomId)));
+                BuildingEffects.fortification(server, kingdomId), cities, commissions, filter));
+    }
+
+    /**
+     * The capital and the cities of a kingdom, the capital first and the cities by name, with who builds in each.
+     */
+    static List<ConstructionView.Place> places(MinecraftServer server, UUID kingdomId) {
+        Map<Long, CityCrews.Crew> crews = CityCrews.of(server, kingdomId);
+        List<ConstructionView.Place> places = new ArrayList<>();
+        String capital = KingdomWorldApi.kingdom(server, kingdomId).map(io.github.sekerator.kingdomworld.core.kingdom.Kingdom::name).orElse("");
+        for (io.github.sekerator.kingdomworld.common.road.CityAreas.Area area : io.github.sekerator.kingdomworld.common.road.CityAreas.of(server, kingdomId)) {
+            if (area.cityId() < 0) {
+                continue;
+            }
+            String name = area.cityId() == 0 ? capital : io.github.sekerator.kingdomworld.common.road.RoadWork.state(server).city(area.cityId())
+                    .map(io.github.sekerator.kingdomworld.core.road.City::name).orElse("");
+            CityCrews.Crew crew = crews.getOrDefault(area.cityId(), CityCrews.Crew.NONE);
+            places.add(new ConstructionView.Place(area.cityId(), name, area.x(), area.z(), area.radius(),
+                    io.github.sekerator.kingdomworld.common.road.CityWalls.level(server, kingdomId, area.cityId()), crew.builders(), crew.helpers()));
+        }
+        places.sort(java.util.Comparator.comparing((ConstructionView.Place place) -> place.id() != 0).thenComparing(ConstructionView.Place::name)
+                .thenComparingLong(ConstructionView.Place::id));
+        return places;
     }
 
     /**

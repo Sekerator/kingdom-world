@@ -1142,6 +1142,72 @@ final class ClientLayoutCheck {
     /** The number of the city wall among the buildings of the layout check. */
     private static final long CITY_WALL = 9_999;
 
+    /** A long name of a city, as long as a city may be named. */
+    private static final String LONG_CITY_NAME = "Новый Верхнеполянский Городок";
+
+    /**
+     * The cities of a kingdom for the orders from the capital: the capital and long names, every level, five digit builders.
+     */
+    private static List<io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Place> remotePlaces(int count) {
+        List<io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Place> places = new ArrayList<>();
+        io.github.sekerator.kingdomworld.core.road.CityLevel[] levels = io.github.sekerator.kingdomworld.core.road.CityLevel.values();
+        for (int i = 0; i < count; i++) {
+            String name = LONG_CITY_NAME + " " + i;
+            places.add(new io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Place(i, i == 0 ? LONG_KINGDOM
+                    : name.substring(0, Math.min(32, name.length())), -29_999_999 + i, 29_999_999 - i, 128, levels[i % levels.length], 99_999,
+                    99_999));
+        }
+        return places;
+    }
+
+    /**
+     * The construction of a kingdom with many cities: constructions in cities and outside them, and orders from the capital in
+     * every state with long reasons.
+     */
+    private static io.github.sekerator.kingdomworld.common.network.data.ConstructionView remoteConstructionView(UUID kingdom, int cityCount) {
+        io.github.sekerator.kingdomworld.common.network.data.ConstructionView base = constructionView(kingdom, true, false);
+        List<io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Site> sites = new ArrayList<>();
+        for (int i = 0; i < base.sites().size(); i++) {
+            io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Site s = base.sites().get(i);
+            long city = i % 4 == 3 ? io.github.sekerator.kingdomworld.common.network.data.ConstructionView.NO_CITY : i % cityCount;
+            sites.add(new io.github.sekerator.kingdomworld.common.network.data.ConstructionView.Site(s.id(), s.name(), s.icon(), s.pos(), s.priority(),
+                    s.paused(), s.orderMissing(), s.status(), s.statusPos(), s.percent(), s.placed(), s.total(), s.builders(), s.missing(), s.kind(),
+                    s.paid(), s.placing(), 3, 75, s.carting(), city));
+        }
+        String far = "-29999999 319 29999999";
+        List<io.github.sekerator.kingdomworld.common.network.data.ConstructionView.CommissionRow> commissions = List.of(
+                new io.github.sekerator.kingdomworld.common.network.data.ConstructionView.CommissionRow(1, "build",
+                        Component.literal(LONG_KINGDOM + " " + LONG_KINGDOM), 1, "no_place",
+                        Component.translatable("kingdomworld.commission.reason.blocked", far)),
+                new io.github.sekerator.kingdomworld.common.network.data.ConstructionView.CommissionRow(2, "post",
+                        Component.translatable("kingdomworld.commission.post"), Math.min(2, cityCount - 1), "lacks_item",
+                        Component.translatable("kingdomworld.commission.reason.store", longNamed(Items.OAK_DOOR).getHoverName())),
+                new io.github.sekerator.kingdomworld.common.network.data.ConstructionView.CommissionRow(3, "at",
+                        Component.translatable("kingdomworld.building.small_house"), io.github.sekerator.kingdomworld.common.network.data.ConstructionView.NO_CITY,
+                        "levelling", Component.translatable("kingdomworld.commission.state.levelling")),
+                new io.github.sekerator.kingdomworld.common.network.data.ConstructionView.CommissionRow(4, "hall",
+                        Component.translatable("kingdomworld.commission.hall", LONG_CITY_NAME), io.github.sekerator.kingdomworld.common.network.data.ConstructionView.NO_CITY,
+                        "waiting", Component.translatable("kingdomworld.commission.reason.none")),
+                new io.github.sekerator.kingdomworld.common.network.data.ConstructionView.CommissionRow(5, "build",
+                        Component.translatable("kingdomworld.building.storehouse"), Math.min(3, cityCount - 1), "limit",
+                        Component.translatable("kingdomworld.commission.state.limit")),
+                new io.github.sekerator.kingdomworld.common.network.data.ConstructionView.CommissionRow(6, "build",
+                        Component.translatable("kingdomworld.building.workshop"), 0, "waiting",
+                        Component.translatable("kingdomworld.commission.state.waiting_blocked",
+                                Component.translatable("kingdomworld.commission.reason.blocked", far))));
+        return new io.github.sekerator.kingdomworld.common.network.data.ConstructionView(kingdom, true, 0, base.templates(), sites, base.buildings(), 256,
+                9_999_999L, remotePlaces(cityCount), commissions, io.github.sekerator.kingdomworld.common.network.data.ConstructionView.ALL_CITIES);
+    }
+
+    private static ThroneScreen remoteConstruction(int cityCount, String mode, String template, long where) {
+        KingdomView view = view(KingdomView.Relation.MEMBER, Role.KING);
+        ThroneScreen screen = throne(view, "construction", Component.empty());
+        screen.updateConstruction(remoteConstructionView(view.id(), cityCount));
+        screen.showConstruction(mode, template, 0);
+        screen.constructionWhere(where);
+        return screen;
+    }
+
     private static ThroneScreen constructionBuilding(KingdomView view, boolean canManage, long building, String work, Component status) {
         ThroneScreen screen = throne(view, "construction", status);
         screen.updateConstruction(constructionView(view.id(), canManage, false));
@@ -1550,6 +1616,31 @@ final class ClientLayoutCheck {
                 "own", "kingdomworld:custom/2", 0, longError)));
         cases.add(new Case("throne-construction-own-empty", () -> construction(view(KingdomView.Relation.MEMBER, Role.KING), true, true, "own", "",
                 0, Component.empty())));
+        // Orders from the capital: a template ordered for a city among many (a list opens) and among few (cycled), the constructions
+        // with the orders above them, the list of cities with a search, a new name for a city and a building placed on the atlas.
+        cases.add(new Case("throne-construction-catalog-template-city", () -> remoteConstruction(12, "catalog", "kingdomworld:storehouse2", 3)));
+        cases.add(new Case("throne-construction-catalog-template-city-few", () -> remoteConstruction(5, "catalog", "kingdomworld:custom/1", 2)));
+        cases.add(new Case("throne-construction-sites-commissions", () -> remoteConstruction(12, "sites", "", -2)));
+        cases.add(new Case("throne-construction-sites-commissions-few", () -> remoteConstruction(3, "sites", "", -2)));
+        cases.add(new Case("city-picker", () -> {
+            io.github.sekerator.kingdomworld.client.screen.CityPickerScreen screen = new io.github.sekerator.kingdomworld.client.screen.CityPickerScreen(
+                    null, remotePlaces(40), Component.translatable("kingdomworld.screen.construction.where",
+                    Component.translatable("kingdomworld.screen.construction.where.by_hand")), -2, id -> {
+            });
+            screen.searchForCheck("Город");
+            return screen;
+        }));
+        cases.add(new Case("rename-city", () -> new io.github.sekerator.kingdomworld.client.screen.RenameCityScreen(null, UUID.randomUUID(), 1,
+                LONG_CITY_NAME)));
+        cases.add(new Case("map-build", () -> {
+            fillMapData();
+            KingdomMapScreen screen = KingdomMapScreen.forBuilding(null, view(KingdomView.Relation.MEMBER, Role.KING), 1, "kingdomworld:storehouse2",
+                    Component.literal(LONG_KINGDOM + " " + LONG_KINGDOM), 13, 15, "kingdom", "", 16, -8, 48);
+            screen.showForCheck(1.0, -0.5, 40.0, null, Component.empty(), false);
+            screen.showBuildingForCheck(16, -8, io.github.sekerator.kingdomworld.core.construction.Facing.EAST, false,
+                    KingdomActions.errorMessage(KingdomError.CONSTRUCTION_OVERLAPS));
+            return screen;
+        }));
         cases.add(new Case("throne-construction-template-wood", () -> constructionTemplate(view(KingdomView.Relation.MEMBER, Role.KING), "catalog",
                 "kingdomworld:small_house0", 9, 5)));
         cases.add(new Case("throne-construction-template-wood-auto", () -> constructionTemplate(view(KingdomView.Relation.MEMBER, Role.KING),
@@ -1720,7 +1811,7 @@ final class ClientLayoutCheck {
             KingdomView founding = view(KingdomView.Relation.MEMBER, Role.KING);
             KingdomMapScreen screen = KingdomMapScreen.forFounding(null, founding, 112);
             screen.showForCheck(1.0, -0.5, 9.0, null, Component.translatable("kingdomworld.screen.map.found.too_close", 112), true);
-            screen.showFoundingForCheck(0, 0, "Новый Верхнеполянский Городок", true);
+            screen.showFoundingForCheck(0, 0, LONG_CITY_NAME, true);
             return screen;
         }));
         cases.add(new Case("confirm-dissolve", () -> new ConfirmScreen(yes -> {

@@ -430,6 +430,29 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
+     * Lays the widgets out again after a view was shown for the self-check.
+     */
+    public void refreshForCheck() {
+        rebuild();
+    }
+
+    /**
+     * Opens the catalog of the construction tab with a city chosen to order a building for.
+     */
+    void orderBuilding(long cityId) {
+        construction.orderFor(cityId);
+        selectTab("construction");
+        rebuild();
+    }
+
+    /**
+     * Chooses the city a template in detail is ordered for, for the layout check.
+     */
+    public void constructionWhere(long cityId) {
+        construction.whereForCheck(cityId);
+    }
+
+    /**
      * Shows the construction the server sent, if it belongs to the kingdom on screen.
      */
     public void updateConstruction(io.github.sekerator.kingdomworld.common.network.data.ConstructionView constructionView) {
@@ -795,7 +818,8 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
             KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.TradePackets.MarketRequest(view.id()));
         }
         if (target == Tab.CONSTRUCTION && Minecraft.getInstance().getConnection() != null) {
-            KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.ConstructionPackets.Request(view.id()));
+            KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.ConstructionPackets.Request(view.id(),
+                    construction.cityFilter()));
         }
         if (target == Tab.TRADE && Minecraft.getInstance().getConnection() != null) {
             KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.TradePackets.TradeRequest(view.id()));

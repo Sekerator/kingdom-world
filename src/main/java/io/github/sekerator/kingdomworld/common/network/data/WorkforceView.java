@@ -35,7 +35,7 @@ import java.util.UUID;
 public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Header header, int total, List<CitizenRow> citizens,
                             List<PostRow> posts, List<String> professions, @Nullable CitizenRow forCitizen, @Nullable PostRow forPost) {
     public static final int MAX_PAGE = 30;
-    public static final int MAX_PLACES = 64;
+    public static final int MAX_PLACES = 256;
     public static final int MAX_SHORTAGES = 32;
     public static final int MAX_LACKS = 6;
     public static final int MAX_CONTENTS = 3;

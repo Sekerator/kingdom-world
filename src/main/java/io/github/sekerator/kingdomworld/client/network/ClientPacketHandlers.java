@@ -142,6 +142,11 @@ public final class ClientPacketHandlers {
     }
 
     public static void handleConstructionCheck(io.github.sekerator.kingdomworld.common.network.packet.ConstructionPackets.CheckResult result) {
+        if (Minecraft.getInstance().screen instanceof io.github.sekerator.kingdomworld.client.screen.KingdomMapScreen map) {
+            // A building placed on the atlas, checked against the data.
+            map.buildChecked(result);
+            return;
+        }
         io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.accept(result);
     }
 

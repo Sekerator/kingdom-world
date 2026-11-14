@@ -74,13 +74,24 @@ final class ConstructionTab {
     @Nullable
     private BuildingPackets.Change.Action action;
     private int scroll;
-    /** The wood and the stone chosen for blueprints, as indices into the choices. */
-    private int wood;
+    /** The wood and the stone chosen for blueprints, as indices into the choices: the wood of the place by default. */
+    private int wood = 1;
     private int stone;
     /**
      * The style the catalog shows: {@link #ALL_STYLES}, {@link #OWN_STYLE} or the index of an architectural style.
      */
     private int filter = ALL_STYLES;
+    /** No city chosen for a template: its blueprint is taken by hand. */
+    static final long BY_HAND = -2;
+    /** The city a template is ordered for, or {@link #BY_HAND}. */
+    private long where = BY_HAND;
+    /** The most cities cycled through one by one; with more, a list with a search opens. */
+    static final int CYCLED_CITIES = 8;
+    /** The widest a name of a city stands on a button. */
+    private static final int CITY_BUTTON_NAME = 110;
+    private int mapWidth;
+    private int cityFilterWidth;
+    private int dropWidth;
 
     private int modeWidth;
     private int filterWidth;
@@ -102,6 +113,46 @@ final class ConstructionTab {
 
     void setView(ConstructionView view) {
         this.view = view;
+        if (where != BY_HAND && view.cityName(where).isEmpty() && view.cities().stream().noneMatch(place -> place.id() == where)) {
+            where = BY_HAND;
+        }
+    }
+
+    /**
+     * The city the constructions are shown for, as the server filters them.
+     */
+    long cityFilter() {
+        return view == null ? ConstructionView.ALL_CITIES : view.cityFilter();
+    }
+
+    /**
+     * Opens the catalog with a city chosen to order a building for, from the actions of a city in the roads tab.
+     */
+    void orderFor(long cityId) {
+        mode = Mode.CATALOG;
+        template = "";
+        site = 0;
+        building = 0;
+        action = null;
+        scroll = 0;
+        setWhere(cityId);
+    }
+
+    /**
+     * Chooses the city a template is ordered for; choosing a city after building by hand takes the style of the kingdom.
+     */
+    private void setWhere(long cityId) {
+        if (where == BY_HAND && cityId != BY_HAND) {
+            wood = 0;
+        }
+        where = cityId;
+    }
+
+    /**
+     * Chooses the city of a template in detail, for the layout check.
+     */
+    void whereForCheck(long cityId) {
+        setWhere(cityId);
     }
 
     String checkName() {
@@ -307,6 +358,7 @@ final class ConstructionTab {
      */
     static List<String> woodChoices() {
         List<String> choices = new ArrayList<>();
+        choices.add(Materials.KINGDOM);
         choices.add(Materials.AUTO);
         choices.add("");
         choices.addAll(TemplateMaterials.table().woods());
@@ -327,6 +379,9 @@ final class ConstructionTab {
     }
 
     private static Component woodLabel(String value) {
+        if (Materials.KINGDOM.equals(value)) {
+            return Component.translatable(KEY + "wood.kingdom");
+        }
         Component name = Materials.AUTO.equals(value) ? Component.translatable(KEY + "wood.auto")
                 : value.isEmpty() ? Component.translatable(KEY + "wood.own") : TemplateMaterials.woodName(value);
         return Component.translatable(KEY + "wood", name);
@@ -340,7 +395,7 @@ final class ConstructionTab {
      * The cost of a template built of the chosen materials: every block item becomes the one that stands for it.
      */
     static List<ConstructionView.Cost> cost(List<ConstructionView.Cost> cost, Materials materials) {
-        if (materials.stone().isEmpty() && (materials.wood().isEmpty() || Materials.AUTO.equals(materials.wood()))) {
+        if (materials.kingdomStyle() || materials.stone().isEmpty() && (materials.wood().isEmpty() || Materials.AUTO.equals(materials.wood()))) {
             return cost;
         }
         Map<net.minecraft.world.item.Item, Integer> counts = new LinkedHashMap<>();
@@ -435,7 +490,11 @@ final class ConstructionTab {
         for (Mode value : Mode.values()) {
             modeWidth = Math.max(modeWidth, screen.buttonWidth(modeLabel(value)));
         }
-        takeWidth = screen.buttonWidth(Component.translatable(KEY + "take"));
+        takeWidth = Math.max(screen.buttonWidth(Component.translatable(KEY + "take")), screen.buttonWidth(Component.translatable(KEY + "order")));
+        mapWidth = screen.buttonWidth(Component.translatable(KEY + "on_map"));
+        dropWidth = screen.buttonWidth(Component.translatable(KEY + "drop"));
+        cityFilterWidth = Math.max(screen.buttonWidth(Component.translatable(KEY + "city_filter", Component.translatable(KEY + "city_filter.all"))),
+                screen.buttonWidth(Component.translatable(KEY + "city_filter", "W".repeat(14))));
         backWidth = screen.buttonWidth(Component.translatable(KEY + "back"));
         priorityWidth = 0;
         for (Construction.Priority priority : Construction.Priority.values()) {
@@ -450,9 +509,11 @@ final class ConstructionTab {
             filterWidth = Math.max(filterWidth, screen.buttonWidth(filterLabel(i)));
         }
         int top = modeWidth + 8 + font.width(Component.translatable(KEY + "summary.buildings", 512, 99_999));
+        // The constructions have the filter of cities beside the button of the view.
+        top = Math.max(top, modeWidth + GAP + cityFilterWidth + 8 + font.width(Component.translatable(KEY + "summary.sites_all", 256)));
         // The catalog has the filter of styles beside the button of the view.
         top = Math.max(top, modeWidth + GAP + filterWidth + 8 + font.width(Component.translatable(KEY + "summary.catalog", 512)));
-        int detail = takeWidth + GAP + backWidth;
+        int detail = mapWidth + GAP + takeWidth + GAP + backWidth;
         int controls = Math.max(priorityWidth + GAP + pauseWidth, orderWidth + GAP + cancelWidth);
         int messages = 0;
         for (String key : List.of("loading", "no_templates", "no_sites", "no_buildings", "no_own", "read_only", "hint.catalog")) {
@@ -483,7 +544,7 @@ final class ConstructionTab {
         }
         return switch (mode) {
             case CATALOG, OWN -> templates().size();
-            case SITES -> view.sites().size();
+            case SITES -> view.commissions().size() + view.sites().size();
             case BUILDINGS -> view.buildings().size();
         };
     }
@@ -521,7 +582,77 @@ final class ConstructionTab {
 
     private List<Component> materialLabels() {
         Materials materials = chosen();
-        return List.of(woodLabel(materials.wood()), stoneLabel(materials.stone()));
+        return List.of(whereLabel(), woodLabel(materials.wood()), stoneLabel(materials.stone()));
+    }
+
+    /**
+     * The name of a city of the view, shortened to fit a button.
+     */
+    private String shortCity(long id) {
+        String name = view == null ? "" : view.cityName(id);
+        return screen.fitName(name, CITY_BUTTON_NAME);
+    }
+
+    private Component whereLabel() {
+        return where == BY_HAND ? Component.translatable(KEY + "where", Component.translatable(KEY + "where.by_hand"))
+                : Component.translatable(KEY + "where", shortCity(where));
+    }
+
+    private Component cityFilterLabel() {
+        long city = cityFilter();
+        return city == ConstructionView.ALL_CITIES ? Component.translatable(KEY + "city_filter", Component.translatable(KEY + "city_filter.all"))
+                : Component.translatable(KEY + "city_filter", shortCity(city));
+    }
+
+    /**
+     * The ids to cycle through: the choice without a city, then every city of the view.
+     */
+    private List<Long> cycle(long none) {
+        List<Long> ids = new ArrayList<>();
+        ids.add(none);
+        for (ConstructionView.Place place : view.cities()) {
+            ids.add(place.id());
+        }
+        return ids;
+    }
+
+    private static long step(List<Long> ids, long current, int direction) {
+        int index = Math.max(0, ids.indexOf(current));
+        return ids.get(Math.floorMod(index + direction, ids.size()));
+    }
+
+    /**
+     * A button that chooses a city: cycled through when the kingdom has few, a list with a search when it has many.
+     */
+    private Button cityButton(int x, int y, int width, Component label, Component none, long noneId, long current, java.util.function.LongConsumer chosen) {
+        if (view.cities().size() > CYCLED_CITIES) {
+            return Button.builder(label, b -> Minecraft.getInstance().setScreen(new CityPickerScreen(screen, view.cities(), none, noneId, id -> {
+                chosen.accept(id);
+                screen.rebuild();
+            }))).bounds(x, y, width, ROW - 2).build();
+        }
+        List<Long> ids = cycle(noneId);
+        return new CycleButton(x, y, width, ROW - 2, label, direction -> {
+            chosen.accept(step(ids, current, direction));
+            screen.rebuild();
+        });
+    }
+
+    /**
+     * Asks the server for the constructions and orders of one city, or of all.
+     */
+    private void filterSites(long city) {
+        if (view != null) {
+            scroll = 0;
+            send(new ConstructionPackets.Request(view.kingdomId(), city));
+        }
+    }
+
+    /**
+     * The rows of the list of constructions: the orders from the capital first, then the constructions.
+     */
+    private int commissionCount() {
+        return view == null || mode != Mode.SITES ? 0 : view.commissions().size();
     }
 
     private List<Component> buildingLabels(ConstructionView.Building entry) {
@@ -565,8 +696,24 @@ final class ConstructionTab {
                 }));
                 filterButton.setTooltip(CycleButton.hinted(Component.translatable(KEY + "filter.hint")));
             }
+            if (mode == Mode.SITES && !view.cities().isEmpty()) {
+                Button cities = screen.add(cityButton(x + modeWidth + GAP, buttonsY(top), cityFilterWidth, cityFilterLabel(),
+                        Component.translatable(KEY + "city_filter", Component.translatable(KEY + "city_filter.all")), ConstructionView.ALL_CITIES,
+                        cityFilter(), this::filterSites));
+                cities.setTooltip(Tooltip.create(cityFilter() == ConstructionView.ALL_CITIES ? Component.translatable(KEY + "city_filter.hint")
+                        : Component.translatable(KEY + "city_filter.hint_city", view.cityName(cityFilter()))));
+            }
             int rows = visibleRows(top, panelHeight);
             scroll = Math.max(0, Math.min(scroll, rowCount() - rows));
+            if (mode == Mode.SITES && view.canManage()) {
+                for (int i = 0; i < rows && scroll + i < commissionCount(); i++) {
+                    ConstructionView.CommissionRow row = view.commissions().get(scroll + i);
+                    long id = row.id();
+                    Button drop = screen.add(Button.builder(Component.translatable(KEY + "drop"), b -> send(new ConstructionPackets.CommissionCancel(
+                            view.kingdomId(), id))).bounds(right - dropWidth, listTop(top) + i * ROW + 1, dropWidth, ROW - 4).build());
+                    drop.setTooltip(Tooltip.create(Component.translatable(KEY + "drop_hint")));
+                }
+            }
             return;
         }
         screen.add(Button.builder(Component.translatable(KEY + "back"), b -> {
@@ -624,23 +771,47 @@ final class ConstructionTab {
 
     private void initTemplate(ConstructionView.Template shown, int x, int right, int top) {
         int buttonsRight = right - backWidth - GAP;
-        Button take = screen.add(Button.builder(Component.translatable(KEY + "take"), b -> {
+        boolean byHand = where == BY_HAND;
+        Button take = screen.add(Button.builder(Component.translatable(byHand ? KEY + "take" : KEY + "order"), b -> {
             Materials materials = chosen();
-            send(new ConstructionPackets.TakeBlueprint(view.kingdomId(), shown.id(), materials.wood(), materials.stone()));
+            if (where == BY_HAND) {
+                send(new ConstructionPackets.TakeBlueprint(view.kingdomId(), shown.id(), materials.wood(), materials.stone()));
+            } else {
+                send(new ConstructionPackets.Commission(view.kingdomId(), "build", shown.id(), materials.wood(), materials.stone(), where, 0, 0, 0,
+                        Construction.Priority.NORMAL.ordinal(), false));
+            }
         }).bounds(buttonsRight - takeWidth, buttonsY(top), takeWidth, ROW - 2).build());
         take.active = view.canManage() && shown.available();
-        take.setTooltip(Tooltip.create(Component.translatable(view.canManage() ? KEY + "take_hint" : KEY + "read_only")));
+        take.setTooltip(Tooltip.create(Component.translatable(!view.canManage() ? KEY + "read_only" : byHand ? KEY + "take_hint" : KEY + "order_city_hint",
+                byHand ? "" : view.cityName(where))));
+        if (!byHand) {
+            ConstructionView.Place place = view.cities().stream().filter(found -> found.id() == where).findFirst().orElse(null);
+            Button map = screen.add(Button.builder(Component.translatable(KEY + "on_map"), b -> {
+                Materials materials = chosen();
+                if (place != null && screen.view() != null) {
+                    Minecraft.getInstance().setScreen(KingdomMapScreen.forBuilding(screen, screen.view(), where, shown.id(), shown.name(),
+                            shown.sizeX(), shown.sizeZ(), materials.wood(), materials.stone(), place.x(), place.z(), place.radius()));
+                }
+            }).bounds(buttonsRight - takeWidth - GAP - mapWidth, buttonsY(top), mapWidth, ROW - 2).build());
+            map.active = view.canManage() && shown.available() && place != null;
+            map.setTooltip(Tooltip.create(Component.translatable(KEY + "on_map_hint")));
+        }
         int y = materialsTop(top, shown);
         List<Placed> placed = rows(materialLabels(), x, right, y);
-        Button woodButton = screen.add(new CycleButton(placed.get(0).x(), placed.get(0).y(), placed.get(0).width(), ROW - 2, placed.get(0).label(), direction -> {
+        Button whereButton = screen.add(cityButton(placed.get(0).x(), placed.get(0).y(), placed.get(0).width(), placed.get(0).label(),
+                Component.translatable(KEY + "where", Component.translatable(KEY + "where.by_hand")), BY_HAND, where, this::setWhere));
+        whereButton.setTooltip(Tooltip.create(byHand ? Component.translatable(KEY + "where_hint")
+                : Component.translatable(KEY + "where_hint_city", view.cityName(where))));
+        Button woodButton = screen.add(new CycleButton(placed.get(1).x(), placed.get(1).y(), placed.get(1).width(), ROW - 2, placed.get(1).label(), direction -> {
             wood = Cycle.step(wood, direction, woodChoices().size());
             screen.rebuild();
         }));
-        woodButton.setTooltip(CycleButton.hinted(Component.translatable(KEY + "wood_hint")));
-        Button stoneButton = screen.add(new CycleButton(placed.get(1).x(), placed.get(1).y(), placed.get(1).width(), ROW - 2, placed.get(1).label(), direction -> {
+        woodButton.setTooltip(CycleButton.hinted(Component.translatable(chosen().kingdomStyle() ? KEY + "wood_kingdom_hint" : KEY + "wood_hint")));
+        Button stoneButton = screen.add(new CycleButton(placed.get(2).x(), placed.get(2).y(), placed.get(2).width(), ROW - 2, placed.get(2).label(), direction -> {
             stone = Cycle.step(stone, direction, stoneChoices().size());
             screen.rebuild();
         }));
+        stoneButton.active = !chosen().kingdomStyle();
         stoneButton.setTooltip(CycleButton.hinted(Component.translatable(KEY + "stone_hint")));
         if (!shown.own() || !view.canManage()) {
             return;
@@ -648,7 +819,7 @@ final class ConstructionTab {
         // The kingdom's own blueprint is renamed and deleted from the top row, left of the blueprint button.
         int deleteWidth = screen.buttonWidth(ownLabels().get(1));
         int renameWidth = screen.buttonWidth(ownLabels().get(0));
-        int deleteX = buttonsRight - takeWidth - GAP - deleteWidth;
+        int deleteX = buttonsRight - takeWidth - GAP - (where == BY_HAND ? 0 : mapWidth + GAP) - deleteWidth;
         int renameX = deleteX - GAP - renameWidth;
         screen.add(Button.builder(ownLabels().get(0), b -> Minecraft.getInstance().setScreen(new RenameBlueprintScreen(screen, view.kingdomId(),
                 shown.blueprint(), shown.name().getString()))).bounds(renameX, buttonsY(top), renameWidth, ROW - 2).build());
@@ -662,7 +833,7 @@ final class ConstructionTab {
      * Where the name of a template in detail must end: before the buttons of the top row.
      */
     private int templateNameRight(ConstructionView.Template entry, int right) {
-        int buttons = backWidth + GAP + takeWidth;
+        int buttons = backWidth + GAP + takeWidth + (where == BY_HAND ? 0 : GAP + mapWidth);
         if (entry.own() && view != null && view.canManage()) {
             buttons += 2 * GAP + screen.buttonWidth(ownLabels().get(0)) + screen.buttonWidth(ownLabels().get(1));
         }
@@ -793,7 +964,13 @@ final class ConstructionTab {
         }
         switch (mode) {
             case CATALOG, OWN -> template = templates().get(scroll + row).id();
-            case SITES -> site = view.sites().get(scroll + row).id();
+            case SITES -> {
+                int index = scroll + row - commissionCount();
+                if (index < 0) {
+                    return false;
+                }
+                site = view.sites().get(index).id();
+            }
             case BUILDINGS -> {
                 building = view.buildings().get(scroll + row).id();
                 action = null;
@@ -833,7 +1010,8 @@ final class ConstructionTab {
             }
             return;
         }
-        int summaryX = x + modeWidth + 8 + (mode == Mode.CATALOG ? GAP + filterWidth : 0);
+        int summaryX = x + modeWidth + 8 + (mode == Mode.CATALOG ? GAP + filterWidth : 0)
+                + (mode == Mode.SITES && !view.cities().isEmpty() ? GAP + cityFilterWidth : 0);
         screen.name(graphics, summary().getString(), summaryX, buttonsY(top) + 5, 0xFFD0D0D0, right - summaryX);
         int rows = visibleRows(top, panelHeight);
         int count = rowCount();
@@ -853,7 +1031,14 @@ final class ConstructionTab {
             int y = listTop + i * ROW;
             switch (mode) {
                 case CATALOG, OWN -> renderTemplateRow(graphics, font, templates.get(scroll + i), x, right, y);
-                case SITES -> renderSiteRow(graphics, font, view.sites().get(scroll + i), x, right, y);
+                case SITES -> {
+                    int index = scroll + i - view.commissions().size();
+                    if (index < 0) {
+                        renderCommissionRow(graphics, font, view.commissions().get(scroll + i), x, view.canManage() ? right - dropWidth - 6 : right, y);
+                    } else {
+                        renderSiteRow(graphics, font, view.sites().get(index), x, right, y);
+                    }
+                }
                 case BUILDINGS -> renderBuildingRow(graphics, font, view.buildings().get(scroll + i), x, right, y);
             }
         }
@@ -901,7 +1086,43 @@ final class ConstructionTab {
         int drawnStatus = screen.name(graphics, status(entry).getString(), statusX, y + 5, statusColor(entry.status()), statusWidth);
         screen.hoverText(statusX, y + 5, drawnStatus, status(entry));
         int nameX = x + 20;
-        screen.name(graphics, siteName(entry).getString(), nameX, y + 5, 0xFFFFFFFF, statusX - 6 - nameX);
+        int nameRight = statusX - 6;
+        String city = entry.city() == ConstructionView.NO_CITY ? "" : view.cityName(entry.city());
+        if (!city.isEmpty()) {
+            // The city of the construction, shortened, the whole of it on hover.
+            int cityWidth = Math.min(font.width(city), (nameRight - nameX) / 3);
+            int cityX = nameRight - cityWidth;
+            int drawnCity = screen.name(graphics, city, cityX, y + 5, 0xFFB0B0B0, cityWidth);
+            screen.hoverText(cityX, y + 5, drawnCity, Component.translatable(KEY + "row.city", city));
+            nameRight = cityX - 6;
+        }
+        screen.name(graphics, siteName(entry).getString(), nameX, y + 5, 0xFFFFFFFF, nameRight - nameX);
+    }
+
+    /**
+     * An order from the capital above the constructions: what it orders, its city and where it stands; long texts are shortened
+     * and shown whole on hover.
+     */
+    private void renderCommissionRow(GuiGraphics graphics, Font font, ConstructionView.CommissionRow entry, int x, int right, int y) {
+        graphics.fill(x - 5, y + 2, x - 3, y + ROW - 3, 0xFF6090E0);
+        boolean waiting = entry.state().equals("no_place") || entry.state().equals("lacks_item") || entry.state().equals("limit");
+        int reasonWidth = Math.min(font.width(entry.reason()), (right - x) / 2);
+        int reasonX = right - reasonWidth;
+        int drawnReason = screen.name(graphics, entry.reason().getString(), reasonX, y + 5, waiting ? 0xFFFF9070 : 0xFFB0B0B0, reasonWidth);
+        screen.hoverText(reasonX, y + 5, drawnReason, entry.reason());
+        int nameRight = reasonX - 6;
+        String city = entry.city() == ConstructionView.NO_CITY ? Component.translatable("kingdomworld.commission.outside").getString()
+                : view.cityName(entry.city());
+        if (!city.isEmpty()) {
+            int cityWidth = Math.min(font.width(city), (nameRight - x) / 3);
+            int cityX = nameRight - cityWidth;
+            int drawnCity = screen.name(graphics, city, cityX, y + 5, 0xFFB0B0B0, cityWidth);
+            screen.hoverText(cityX, y + 5, drawnCity, Component.translatable(KEY + "row.city", city));
+            nameRight = cityX - 6;
+        }
+        Component what = Component.translatable(KEY + "row.commission", entry.what());
+        int drawn = screen.name(graphics, what.getString(), x, y + 5, 0xFFE0D090, nameRight - x);
+        screen.hoverText(x, y + 5, drawn, what);
     }
 
     private static Component integrity(ConstructionView.Building entry) {
@@ -994,7 +1215,8 @@ final class ConstructionTab {
                 0xFFD0D0D0, right - x);
         line += LINE;
         Materials materials = chosen();
-        Component note = Materials.AUTO.equals(materials.wood()) ? Component.translatable(KEY + "cost_auto") : Component.translatable(KEY + "cost");
+        Component note = materials.kingdomStyle() ? Component.translatable(KEY + "cost_kingdom")
+                : Materials.AUTO.equals(materials.wood()) ? Component.translatable(KEY + "cost_auto") : Component.translatable(KEY + "cost");
         if (entry.liquids() > 0) {
             screen.name(graphics, Component.translatable(KEY + "liquids", BlueprintRenderer.blocks(entry.liquids())).getString(), x, line,
                     0xFFB8B8B8, right - x);
@@ -1204,7 +1426,7 @@ final class ConstructionTab {
             return Component.translatable(mode == Mode.OWN ? KEY + "hint.own" : KEY + "hint.catalog");
         }
         if (mode == Mode.CATALOG || mode == Mode.OWN) {
-            return Component.translatable(KEY + "hint.template");
+            return Component.translatable(where == BY_HAND ? KEY + "hint.template" : KEY + "hint.template_city");
         }
         if (mode == Mode.SITES && selectedSite() == null) {
             return Component.translatable(KEY + "hint.sites");

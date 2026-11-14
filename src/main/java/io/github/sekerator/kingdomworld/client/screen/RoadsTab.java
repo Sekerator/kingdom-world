@@ -61,7 +61,11 @@ final class RoadsTab {
     private enum CityChoice {
         WALL_PALISADE,
         WALL_STONE,
-        GATE_HERE;
+        GATE_HERE,
+        ORDER_BUILDING,
+        SEND_BUILDER,
+        RENAME,
+        ON_MAP;
 
         String id() {
             return name().toLowerCase(Locale.ROOT);
@@ -149,6 +153,49 @@ final class RoadsTab {
             }
         }
         return null;
+    }
+
+    /**
+     * Does what was chosen for a city: the walls, a gate and a builder through the server, the catalog, the name and the atlas on
+     * the client.
+     */
+    private void cityAction(CityChoice choice, long cityId, @Nullable RoadViews.CityRow row) {
+        switch (choice) {
+            case ORDER_BUILDING -> {
+                actingCity = -1;
+                screen.orderBuilding(cityId);
+                return;
+            }
+            case RENAME -> {
+                if (row != null) {
+                    Minecraft.getInstance().setScreen(new RenameCityScreen(screen, view.kingdomId(), cityId, row.name()));
+                }
+                return;
+            }
+            case ON_MAP -> {
+                if (row != null && screen.view() != null) {
+                    Minecraft.getInstance().setScreen(KingdomMapScreen.centredOn(screen, row.x(), row.z()));
+                }
+                return;
+            }
+            default -> send(RoadPackets.TabChange.Action.valueOf(choice.name()), cityId, 0);
+        }
+        actingCity = -1;
+        screen.rebuild();
+    }
+
+    /**
+     * What a city needs for the next level, from the thresholds of the server: its citizens and buildings against those of a
+     * town or of a large city; empty at the top level.
+     */
+    private Component nextLevel(RoadViews.CityRow row) {
+        return switch (row.level()) {
+            case VILLAGE -> Component.translatable(KEY + "next_level", RoadTexts.level(io.github.sekerator.kingdomworld.core.road.CityLevel.TOWN),
+                    row.people() + row.folk(), view.townPeople(), row.buildings(), view.townBuildings());
+            case TOWN -> Component.translatable(KEY + "next_level", RoadTexts.level(io.github.sekerator.kingdomworld.core.road.CityLevel.CITY),
+                    row.people() + row.folk(), view.cityPeople(), row.buildings(), view.cityBuildings());
+            case CITY -> Component.translatable(KEY + "top_level");
+        };
     }
 
     private static Component cityChoiceLabel(CityChoice choice) {
@@ -319,13 +366,15 @@ final class RoadsTab {
             CityChoice[] choices = CityChoice.values();
             for (int i = 0; i < rows && scroll + i < choices.length; i++) {
                 CityChoice choice = choices[scroll + i];
-                Button button = screen.add(Button.builder(cityChoiceLabel(choice), b -> {
-                    send(RoadPackets.TabChange.Action.valueOf(choice.name()), cityId, 0);
-                    actingCity = -1;
-                    screen.rebuild();
-                }).bounds(x, listTop(top) + i * ROW, right - x, ROW - 2).build());
+                Button button = screen.add(Button.builder(cityChoiceLabel(choice), b -> cityAction(choice, cityId, row))
+                        .bounds(x, listTop(top) + i * ROW, right - x, ROW - 2).build());
                 button.setTooltip(Tooltip.create(Component.translatable(KEY + "city_action." + choice.id() + ".hint")));
-                button.active = view.canManage() && (choice != CityChoice.GATE_HERE || row != null && row.wallId() != 0);
+                button.active = switch (choice) {
+                    case GATE_HERE -> view.canManage() && row != null && row.wallId() != 0;
+                    case RENAME -> view.canManage() && row != null && !row.capital();
+                    case ON_MAP -> row != null;
+                    default -> view.canManage();
+                };
             }
             return;
         }
@@ -545,8 +594,9 @@ final class RoadsTab {
         Component people = row.folk() > 0 ? Component.translatable(KEY + "city_people_folk", row.people(), row.folk())
                 : Component.literal(Integer.toString(row.people()));
         Component beds = Component.translatable(KEY + "city_beds", row.beds(), row.freeBeds());
-        Component hint = Component.translatable(KEY + "city_hint", row.name(), RoadTexts.level(row.level()), people, row.buildings(), beds, wall,
-                RoadTexts.gates(row.gates()), where);
+        Component hint = Component.translatable(KEY + "city_hint_builders", Component.translatable(KEY + "city_hint", row.name(),
+                RoadTexts.level(row.level()), people, row.buildings(), beds, wall, RoadTexts.gates(row.gates()), where), row.builders(),
+                row.helpers(), row.sites(), nextLevel(row));
         int whereWidth = Math.min(screen.font().width(where), Math.max(0, (right - x) / 4));
         int stateWidth = Math.min(screen.font().width(state), Math.max(0, (right - x - whereWidth) / 2));
         Component name = row.capital() ? Component.translatable(KEY + "capital", row.name()) : Component.literal(row.name());

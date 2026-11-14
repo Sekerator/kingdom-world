@@ -63,7 +63,8 @@ public final class RoadActions {
     }
 
     private static RoadViews.CityRow cityRow(MinecraftServer server, RoadState roads, UUID kingdomId, long cityId, String name, int x, int y, int z,
-                                             int roadCount, java.util.Map<Long, CityPeople.Census> census) {
+                                             int roadCount, java.util.Map<Long, CityPeople.Census> census,
+                                             java.util.Map<Long, io.github.sekerator.kingdomworld.common.construction.CityCrews.Crew> crews) {
         CityWalls.Place place = new CityWalls.Place(kingdomId, cityId, "", x, y, z, name);
         int[] counts = CityWalls.place(server, kingdomId, cityId).map(found -> CityWalls.counts(server, found)).orElse(new int[2]);
         CityLevel level = CityLevel.of(counts[0], counts[1], RoadSettings.rules());
@@ -81,9 +82,11 @@ public final class RoadActions {
         int folk = roads.folk(kingdomId, cityId);
         int freeBeds = people == null ? 0 : io.github.sekerator.kingdomworld.core.road.CityFolk.bedsLeft(people.freeBeds(), folk,
                 io.github.sekerator.kingdomworld.common.citizen.FolkSettings.rules());
+        io.github.sekerator.kingdomworld.common.construction.CityCrews.Crew crew = crews.getOrDefault(cityId,
+                io.github.sekerator.kingdomworld.common.construction.CityCrews.Crew.NONE);
         return new RoadViews.CityRow(cityId, place.name(), x, y, z, cityId == 0, roadCount, level, people == null ? 0 : people.named(), counts[1],
                 wall.map(Wall::id).orElse(0L), wall.map(Wall::wallClass).orElse(null), built, wall.map(w -> w.gates().size()).orElse(0), folk,
-                people == null ? 0 : people.beds(), freeBeds);
+                people == null ? 0 : people.beds(), freeBeds, crew.builders(), crew.helpers(), crew.sites());
     }
 
     static String endpointName(MinecraftServer server, Endpoint endpoint) {
@@ -110,18 +113,20 @@ public final class RoadActions {
         // Towns of kingdoms of the world are named in the alphabet of the viewer.
         net.minecraft.server.level.ServerPlayer reader = viewer == null ? null : server.getPlayerList().getPlayer(viewer);
         String language = reader == null ? "en_us" : reader.getLanguage();
-        // Who lives in each city and its beds, counted once for all of them.
+        // Who lives in each city and its beds, and who builds there, counted once for all of them.
         java.util.Map<Long, CityPeople.Census> census = new java.util.HashMap<>();
         for (CityPeople.Census city : CityPeople.census(server, kingdomId)) {
             census.put(city.cityId(), city);
         }
+        java.util.Map<Long, io.github.sekerator.kingdomworld.common.construction.CityCrews.Crew> crews =
+                io.github.sekerator.kingdomworld.common.construction.CityCrews.of(server, kingdomId);
         capital.ifPresent(c -> cities.add(cityRow(server, roads, kingdomId, 0,
                 io.github.sekerator.kingdomworld.common.npc.NpcWork.localKingdom(kingdomId, kingdom.get().name(), language), c.x(), c.y(), c.z(),
-                countRoads(roads, Endpoint.Kind.CAPITAL, 0, kingdomId), census)));
+                countRoads(roads, Endpoint.Kind.CAPITAL, 0, kingdomId), census, crews)));
         for (City city : roads.citiesOf(kingdomId)) {
             cities.add(cityRow(server, roads, kingdomId, city.id(), io.github.sekerator.kingdomworld.common.npc.NpcWork.localCity(city.name(),
                     language), city.x(), city.y(), city.z(),
-                    countRoads(roads, Endpoint.Kind.CITY, city.id(), null), census));
+                    countRoads(roads, Endpoint.Kind.CITY, city.id(), null), census, crews));
         }
         List<RoadViews.RoadRow> roadRows = new ArrayList<>();
         for (Road road : roads.roadsOf(kingdomId)) {
@@ -342,6 +347,16 @@ public final class RoadActions {
                         change.action() == RoadPackets.TabChange.Action.WALL_STONE ? Wall.WallClass.STONE : Wall.WallClass.PALISADE);
                 yield outcome.ok() ? KingdomActions.Feedback.ok(KEY + "wall_ordered", CityWalls.place(server, kingdom, change.first())
                         .map(CityWalls.Place::name).orElse("?")) : KingdomActions.Feedback.error(outcome.error());
+            }
+            case SEND_BUILDER -> {
+                io.github.sekerator.kingdomworld.common.construction.RemotePosts.Sending sending =
+                        io.github.sekerator.kingdomworld.common.construction.RemotePosts.sendBuilder(server, actor, kingdom, change.first());
+                if (!sending.outcome().ok()) {
+                    yield KingdomActions.Feedback.error(sending.outcome().error());
+                }
+                yield sending.ordered() ? KingdomActions.Feedback.ok(KEY + "builder_post_ordered")
+                        : KingdomActions.Feedback.ok(KEY + "builder_sent", sending.hired().map(io.github.sekerator.kingdomworld.common.citizen.CitizenTexts::name)
+                        .orElse(Component.empty()));
             }
             case GATE_HERE -> {
                 Optional<Wall> wall = roads.wallOf(change.first(), kingdom);
