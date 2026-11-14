@@ -87,7 +87,11 @@ public final class CitizenWhereabouts {
             return Whereabouts.Hold.NONE;
         }
         if (body != null) {
-            // A body in another world than its home is taken from there; the citizen is home in the data.
+            // A body in another world than its home is taken from there; the citizen is home in the data. What it carries goes to
+            // the storehouses as it leaves, so a body with goods they have no room for stays rather than lose them.
+            if (!cargoFits(server, citizen, body)) {
+                return Whereabouts.Hold.CARGO;
+            }
             body.relocate(target);
             body.discard();
         }
@@ -99,12 +103,48 @@ public final class CitizenWhereabouts {
     }
 
     /**
-     * Where a body far from where it belongs and without anything to do walks back to: home, or its post without a home; {@code null}
-     * if it is near enough.
+     * Whether what a body carries would all go into the storehouses of the kingdom when the body is taken away: those of its work
+     * first and then any, as a body leaving the world gives them. A body that carries nothing always may.
+     */
+    public static boolean cargoFits(MinecraftServer server, Citizen citizen, CitizenEntity body) {
+        java.util.List<net.minecraft.world.item.ItemStack> cargo = new java.util.ArrayList<>();
+        for (int slot = 0; slot < body.carried().getContainerSize(); slot++) {
+            net.minecraft.world.item.ItemStack stack = body.carried().getItem(slot);
+            if (!stack.isEmpty()) {
+                cargo.add(stack);
+            }
+        }
+        return cargo.isEmpty() || io.github.sekerator.kingdomworld.common.storage.KingdomStorage.fits(server, citizen.kingdomId(), cargo);
+    }
+
+    /**
+     * Where a body sent back is put once its time is up, asked again then: home, or its post without a home, as they are now;
+     * {@code null} if something holds the citizen now (the army, an expedition, the land of another kingdom) or the place lies on
+     * the land of another kingdom.
      */
     @Nullable
-    public static BlockPos idleTarget(MinecraftServer server, Citizen citizen, WorldPos at) {
-        if (away(server, citizen, at) == Whereabouts.Away.NONE) {
+    public static WorldPos putBackTarget(MinecraftServer server, Citizen citizen, WorldPos at) {
+        if (hold(server, citizen, at) != Whereabouts.Hold.NONE) {
+            return null;
+        }
+        WorldPos target = Whereabouts.target(citizen.home(), citizen.workplace());
+        if (target == null) {
+            return null;
+        }
+        UUID owner = KingdomWorldApi.state(server).territory().ownerOf(target.dimension(), target.chunk());
+        return owner != null && !owner.equals(citizen.kingdomId()) ? null : target;
+    }
+
+    /**
+     * Where a body far from where it belongs walks back to by itself: home, or its post without a home; {@code null} if it is near
+     * enough, held somewhere, or has something to do (a citizen whose profession has work keeps to it through its hours).
+     *
+     * @param workHours whether it is the time of work of the citizen
+     */
+    @Nullable
+    public static BlockPos idleTarget(MinecraftServer server, Citizen citizen, WorldPos at, boolean workHours) {
+        boolean hasWork = io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehaviors.get(citizen.professionId()).isPresent();
+        if (!Whereabouts.walksBack(away(server, citizen, at), hold(server, citizen, at), workHours, hasWork)) {
             return null;
         }
         WorldPos target = Whereabouts.target(citizen.home(), citizen.workplace());

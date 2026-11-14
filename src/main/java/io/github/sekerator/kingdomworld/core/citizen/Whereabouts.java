@@ -143,7 +143,9 @@ public final class Whereabouts {
         /** On the land of another kingdom: in captivity or at a siege there. */
         ABROAD,
         /** It has neither a home nor a post to go to. */
-        NOWHERE;
+        NOWHERE,
+        /** Its body carries goods the storehouses have no room for, and its home is where the body cannot walk. */
+        CARGO;
 
         public String id() {
             return name().toLowerCase(Locale.ROOT);
@@ -166,6 +168,17 @@ public final class Whereabouts {
             return Hold.ABROAD;
         }
         return home == null && post == null ? Hold.NOWHERE : Hold.NONE;
+    }
+
+    /**
+     * Whether a body walks back by itself: only one that truly has nothing to do, gone far from where it belongs and held nowhere. A
+     * citizen whose profession has work keeps to it through its hours, between its rounds too, wherever the work takes it.
+     *
+     * @param workHours whether it is the time of work of the citizen
+     * @param hasWork   whether its profession has work of its own
+     */
+    public static boolean walksBack(Away away, Hold hold, boolean workHours, boolean hasWork) {
+        return away != Away.NONE && hold == Hold.NONE && !(workHours && hasWork);
     }
 
     /**

@@ -198,6 +198,7 @@ public final class KingdomWorldClient {
         PartyHud.clear();
         WantedHud.clear();
         CitizenFinder.reset();
+        io.github.sekerator.kingdomworld.client.map.ClientCitizenMap.clear();
         io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.clear();
         ClientKingdomCache.clear();
         ClientTerritoryCache.clear();

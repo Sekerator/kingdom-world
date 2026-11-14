@@ -680,9 +680,10 @@ public final class WorkforceActions {
     }
 
     /**
-     * The citizens of the player's kingdom in the world of the player, for the atlas: only to one who manages them.
+     * The citizens of the player's kingdom in a part of the map in the world of the player, for the atlas: only to one who manages
+     * them. All of them come, in as many packets as it takes.
      */
-    public static void sendMap(ServerPlayer player) {
+    public static void sendMap(ServerPlayer player, io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.Request area) {
         Optional<UUID> kingdom = ownKingdom(player);
         if (kingdom.isEmpty() || !mayManage(player, kingdom.get())) {
             KingdomWorldNetwork.sendToPlayer(player, io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.View.NONE);
@@ -691,11 +692,8 @@ public final class WorkforceActions {
         String dimension = Dimensions.id(player.level());
         List<io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.Dot> dots = new ArrayList<>();
         for (Citizen citizen : KingdomWorldApi.state(player.server).citizens().registry().citizensOf(kingdom.get())) {
-            if (dots.size() >= io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.MAX_DOTS) {
-                break;
-            }
             io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Seen seen = CitizenWhereabouts.seen(citizen);
-            if (!seen.pos().dimension().equals(dimension)) {
+            if (!seen.pos().dimension().equals(dimension) || !area.holds(seen.pos().x(), seen.pos().z())) {
                 continue;
             }
             dots.add(new io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.Dot(citizen.id(), citizen.nameSeed(),
@@ -703,8 +701,9 @@ public final class WorkforceActions {
                     seen.live(), CitizenWhereabouts.away(player.server, citizen, seen.pos())
                     != io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Away.NONE));
         }
-        KingdomWorldNetwork.sendToPlayer(player, new io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.View(true,
-                kingdom.get(), dimension, dots));
+        for (io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.View page : io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.View.pages(kingdom.get(), dimension, dots)) {
+            KingdomWorldNetwork.sendToPlayer(player, page);
+        }
     }
 
     /**
@@ -718,10 +717,11 @@ public final class WorkforceActions {
         }
         io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Seen seen = CitizenWhereabouts.seen(citizen.get());
         CitizenEntity body = CitizenBodies.body(citizenId);
-        int entity = body != null && seen.live() && body.level() == player.level() ? body.getId() : -1;
+        boolean outlined = body != null && seen.live() && body.level() == player.level();
         WorldPos at = seen.pos();
         KingdomWorldNetwork.sendToPlayer(player, new WorkforcePackets.Found(citizenId, citizen.get().nameSeed(),
-                citizen.get().gender() == Gender.FEMALE, entity, at.dimension(), new BlockPos(at.x(), at.y(), at.z()), seen.live()));
+                citizen.get().gender() == Gender.FEMALE, outlined ? body.getId() : -1, outlined ? body.getUUID() : WorkforcePackets.Found.NO_BODY,
+                at.dimension(), new BlockPos(at.x(), at.y(), at.z()), seen.live()));
         return KingdomActions.Feedback.ok(KEY + (seen.live() ? "found" : "found_last"), CitizenTexts.name(citizen.get()));
     }
 

@@ -84,4 +84,18 @@ class WhereaboutsTest {
         assertEquals(home, Whereabouts.target(home, post), "home first");
         assertEquals(post, Whereabouts.target(null, post));
     }
+
+    @Test
+    void onlyACitizenWithNothingToDoWalksBackByItself() {
+        assertTrue(Whereabouts.walksBack(Whereabouts.Away.FROM_HOME, Whereabouts.Hold.NONE, false, true), "after its hours of work");
+        assertTrue(Whereabouts.walksBack(Whereabouts.Away.FROM_POST, Whereabouts.Hold.NONE, true, false), "without work of its own");
+        assertFalse(Whereabouts.walksBack(Whereabouts.Away.FROM_HOME, Whereabouts.Hold.NONE, true, true),
+                "a carrier or a worker between its rounds keeps to its work");
+        assertFalse(Whereabouts.walksBack(Whereabouts.Away.NONE, Whereabouts.Hold.NONE, false, false), "near home it stays");
+        for (Whereabouts.Hold hold : Whereabouts.Hold.values()) {
+            if (hold != Whereabouts.Hold.NONE) {
+                assertFalse(Whereabouts.walksBack(Whereabouts.Away.FROM_HOME, hold, false, false), "held: " + hold);
+            }
+        }
+    }
 }

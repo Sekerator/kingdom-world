@@ -121,8 +121,10 @@ public final class ReturnGoals {
     }
 
     /**
-     * A body with nothing to do far from its home or its post walks back by itself. Soldiers, those running for their lives and those
-     * sent back already are left to their own goals; work, the day (festival, tavern, sleep) and care come first anyway.
+     * A body with nothing to do far from its home or its post walks back by itself. Soldiers, those running for their lives, those
+     * sent back already and those held somewhere (an expedition, the land of another kingdom) are left to their own goals, and so is a
+     * citizen whose profession has work through its hours of work, between its rounds too; work, the day (festival, tavern, sleep) and
+     * care come first anyway.
      */
     public static final class Idle extends Walk {
         @Nullable
@@ -155,12 +157,21 @@ public final class ReturnGoals {
             BlockPos here = body.blockPosition();
             return io.github.sekerator.kingdomworld.common.citizen.CitizenWhereabouts.idleTarget(body.getServer(), citizen.get(),
                     new io.github.sekerator.kingdomworld.core.citizen.WorldPos(
-                            io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(body.level()), here.getX(), here.getY(), here.getZ()));
+                            io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(body.level()), here.getX(), here.getY(), here.getZ()),
+                    io.github.sekerator.kingdomworld.common.life.LifeWork.works(body));
         }
 
         @Override
         public boolean canContinueToUse() {
-            return target != null && body.returnTarget() == null && !body.isFrightened() && body.blockPosition().distSqr(target) > BACK_SQR;
+            if (target == null || body.returnTarget() != null || body.isFrightened() || body.blockPosition().distSqr(target) <= BACK_SQR) {
+                return false;
+            }
+            // Looked at again now and then: hours of work that began or a hold that came up end the walk.
+            if (++look >= LOOK_TICKS) {
+                look = 0;
+                return idleTarget() != null;
+            }
+            return true;
         }
 
         @Override

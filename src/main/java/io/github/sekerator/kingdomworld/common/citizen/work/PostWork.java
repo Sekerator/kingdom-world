@@ -332,23 +332,8 @@ public final class PostWork {
      * place is loaded, then the storehouses of its work and the common ones.
      */
     public static boolean fits(MinecraftServer server, WorkPost post, List<ItemStack> stacks) {
-        List<ItemStack> rest = new ArrayList<>();
         PostContainers.Container container = loadedContainer(server, post);
-        if (container == null) {
-            rest.addAll(stacks);
-        } else {
-            net.minecraftforge.items.ItemStackHandler copy = new net.minecraftforge.items.ItemStackHandler(container.handler().getSlots());
-            for (int slot = 0; slot < container.handler().getSlots(); slot++) {
-                copy.setStackInSlot(slot, container.handler().getStackInSlot(slot).copy());
-            }
-            for (ItemStack stack : stacks) {
-                ItemStack left = net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(copy, stack.copy(), false);
-                if (!left.isEmpty()) {
-                    rest.add(left);
-                }
-            }
-        }
-        return rest.isEmpty() || KingdomStorage.fitsFor(server, post.kingdomId(), post.professionId(), rest);
+        return KingdomStorage.fitsFor(server, post.kingdomId(), post.professionId(), stacks, container == null ? null : container.handler());
     }
 
     /**

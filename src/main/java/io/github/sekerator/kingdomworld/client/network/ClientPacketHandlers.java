@@ -162,13 +162,10 @@ public final class ClientPacketHandlers {
     }
 
     /**
-     * A page of the window of the workers: for the open window, or the window opened by the key, the throne or the command.
-     */
-    /**
-     * The citizens of the player's kingdom for the atlas.
+     * A packet of the citizens of the player's kingdom for the atlas; the atlas shows them once the whole answer came.
      */
     public static void handleCitizenMap(io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.View packet) {
-        io.github.sekerator.kingdomworld.client.map.ClientCitizenMap.set(packet);
+        io.github.sekerator.kingdomworld.client.map.ClientCitizenMap.receive(packet);
     }
 
     /**
@@ -181,6 +178,9 @@ public final class ClientPacketHandlers {
         }
     }
 
+    /**
+     * A page of the window of the workers: for the open window, or the window opened by the key, the throne or the command.
+     */
     public static void handleWorkforceView(io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.View packet) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.WorkforceScreen screen) {

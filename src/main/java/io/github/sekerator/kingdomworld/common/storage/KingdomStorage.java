@@ -541,35 +541,92 @@ public final class KingdomStorage {
      * its profession and the common ones.
      */
     public static boolean fitsFor(MinecraftServer server, UUID kingdomId, String profession, List<ItemStack> stacks) {
-        return fitsInto(StorehouseRules.delivery(candidates(storehouses(server, kingdomId, null)), profession, null, 0, 0, 0), stacks);
+        return fitsFor(server, kingdomId, profession, stacks, null);
     }
 
-    private static boolean fitsInto(List<StorehouseInventory> inventories, List<ItemStack> stacks) {
-        if (inventories.isEmpty()) {
-            return stacks.stream().allMatch(ItemStack::isEmpty);
+    /**
+     * Whether all the stacks a worker of a profession made would fit together into a container of its own first and then the
+     * storehouses it brings things to.
+     *
+     * @param first the container the stacks go into before the storehouses, {@code null} for none
+     */
+    public static boolean fitsFor(MinecraftServer server, UUID kingdomId, String profession, List<ItemStack> stacks,
+                                  @Nullable net.minecraftforge.items.IItemHandler first) {
+        List<net.minecraftforge.items.IItemHandler> order = new ArrayList<>();
+        if (first != null) {
+            order.add(first);
         }
-        // Copies stand in for the storehouses, so that the stacks are tried one after another.
-        List<net.minecraftforge.items.ItemStackHandler> copies = new ArrayList<>();
-        for (StorehouseInventory inventory : inventories) {
-            net.minecraftforge.items.ItemStackHandler copy = new net.minecraftforge.items.ItemStackHandler(inventory.getSlots());
-            for (int slot = 0; slot < inventory.getSlots(); slot++) {
-                copy.setStackInSlot(slot, inventory.getStackInSlot(slot).copy());
-            }
-            copies.add(copy);
-        }
+        order.addAll(StorehouseRules.delivery(candidates(storehouses(server, kingdomId, null)), profession, null, 0, 0, 0));
+        return fitsInto(order, stacks);
+    }
+
+    /**
+     * Whether all the stacks fit into the storehouses together, counted without copying them: what is left of each kind of item
+     * goes into the stacks of the same item that are not full, and the rest needs empty slots. The storehouses are looked through
+     * one after another, and the count stops as soon as everything has room.
+     */
+    static boolean fitsInto(List<? extends net.minecraftforge.items.IItemHandler> inventories, List<ItemStack> stacks) {
+        // What is to be put away, one entry for each kind of item, and how many of it are left.
+        List<ItemStack> kinds = new ArrayList<>();
+        List<Integer> left = new ArrayList<>();
         for (ItemStack stack : stacks) {
-            ItemStack rest = stack.copy();
-            for (net.minecraftforge.items.ItemStackHandler copy : copies) {
-                rest = net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(copy, rest, false);
-                if (rest.isEmpty()) {
-                    break;
+            if (stack.isEmpty()) {
+                continue;
+            }
+            int same = -1;
+            for (int i = 0; i < kinds.size() && same < 0; i++) {
+                if (ItemStack.isSameItemSameTags(kinds.get(i), stack)) {
+                    same = i;
                 }
             }
-            if (!rest.isEmpty()) {
-                return false;
+            if (same < 0) {
+                kinds.add(stack);
+                left.add(stack.getCount());
+            } else {
+                left.set(same, left.get(same) + stack.getCount());
             }
         }
-        return true;
+        if (kinds.isEmpty()) {
+            return true;
+        }
+        int empty = 0;
+        for (net.minecraftforge.items.IItemHandler inventory : inventories) {
+            if (inventory instanceof StorehouseInventory storehouse && !storehouse.takesIn()) {
+                continue;
+            }
+            for (int slot = 0; slot < inventory.getSlots(); slot++) {
+                ItemStack there = inventory.getStackInSlot(slot);
+                if (there.isEmpty()) {
+                    empty++;
+                    continue;
+                }
+                for (int i = 0; i < kinds.size(); i++) {
+                    if (left.get(i) > 0 && ItemStack.isSameItemSameTags(kinds.get(i), there)) {
+                        int room = Math.min(inventory.getSlotLimit(slot), there.getMaxStackSize()) - there.getCount();
+                        if (room > 0) {
+                            left.set(i, Math.max(0, left.get(i) - room));
+                        }
+                        break;
+                    }
+                }
+            }
+            if (slotsNeeded(kinds, left) <= empty) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Empty slots the items left need: full stacks of each kind of item, and one more for the rest.
+     */
+    private static int slotsNeeded(List<ItemStack> kinds, List<Integer> left) {
+        int slots = 0;
+        for (int i = 0; i < kinds.size(); i++) {
+            int size = Math.max(1, Math.min(64, kinds.get(i).getMaxStackSize()));
+            slots += (left.get(i) + size - 1) / size;
+        }
+        return slots;
     }
 
     public static String itemId(ItemStack stack) {

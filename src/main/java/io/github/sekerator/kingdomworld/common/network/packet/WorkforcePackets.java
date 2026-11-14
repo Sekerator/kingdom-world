@@ -86,22 +86,28 @@ public final class WorkforcePackets {
      * Server to client: where a citizen looked for is, to outline its body and point at it.
      *
      * @param entity the id of its body in the world of the player, -1 if it has none there
+     * @param body   the UUID of that entity, so that the client outlines no other entity given the same id, {@link #NO_BODY} without
+     *               one
      * @param live   whether it has a body there now; otherwise the place is the last one known
      */
-    public record Found(UUID citizen, int seed, boolean female, int entity, String dimension, BlockPos pos, boolean live) {
+    public record Found(UUID citizen, int seed, boolean female, int entity, UUID body, String dimension, BlockPos pos, boolean live) {
+        /** The UUID of no body. */
+        public static final UUID NO_BODY = new UUID(0, 0);
+
         public void encode(FriendlyByteBuf buf) {
             buf.writeUUID(citizen);
             buf.writeInt(seed);
             buf.writeBoolean(female);
             buf.writeVarInt(entity + 1);
+            buf.writeUUID(body);
             buf.writeUtf(dimension, 128);
             buf.writeBlockPos(pos);
             buf.writeBoolean(live);
         }
 
         public static Found decode(FriendlyByteBuf buf) {
-            return new Found(buf.readUUID(), buf.readInt(), buf.readBoolean(), buf.readVarInt() - 1, buf.readUtf(128), buf.readBlockPos(),
-                    buf.readBoolean());
+            return new Found(buf.readUUID(), buf.readInt(), buf.readBoolean(), buf.readVarInt() - 1, buf.readUUID(), buf.readUtf(128),
+                    buf.readBlockPos(), buf.readBoolean());
         }
 
         public static void handle(Found message, Supplier<NetworkEvent.Context> context) {

@@ -4754,6 +4754,7 @@
   "kingdomworld.workforce.hold.expedition": "В походе гильдии: вернётся вместе с отрядом",
   "kingdomworld.workforce.hold.abroad": "На земле другого королевства, в плену или в осаде: вернуть нельзя",
   "kingdomworld.workforce.hold.nowhere": "Ни дома, ни поста: возвращаться некуда",
+  "kingdomworld.workforce.hold.cargo": "Несёт груз, которому нет места на складах, а дом в другом мире",
   "kingdomworld.workforce.returning.home": "%s идёт домой",
   "kingdomworld.workforce.returning.home.female": "%s идёт домой",
   "kingdomworld.workforce.returning.post": "%s идёт на пост",

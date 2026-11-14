@@ -45,7 +45,7 @@ public final class CitizenFinder {
         target = found;
         since = net.minecraft.Util.getMillis();
         if (found.entity() >= 0) {
-            CitizenHighlights.show(found.entity(), since);
+            CitizenHighlights.show(found.entity(), found.body(), since);
         } else {
             CitizenHighlights.clear();
         }
@@ -74,7 +74,8 @@ public final class CitizenFinder {
         String dimension = minecraft.level.dimension().location().toString();
         if (target.entity() >= 0 && dimension.equals(target.dimension())) {
             Entity body = minecraft.level.getEntity(target.entity());
-            if (body != null && body.isAlive()) {
+            // The entity of that id must still be the body found.
+            if (body != null && body.isAlive() && body.getUUID().equals(target.body())) {
                 return new WorldPos(dimension, body.getBlockX(), body.getBlockY(), body.getBlockZ());
             }
         }

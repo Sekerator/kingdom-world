@@ -61,6 +61,10 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     /** The grey of a boundary stone. */
     private static final int STONE = 0xFF9A9488;
     private static final long REQUEST_INTERVAL_MILLIS = 300L;
+    /** The citizens on the atlas are asked for again this often while they are shown. */
+    private static final long CITIZENS_REFRESH_MILLIS = 3_000L;
+    /** And at the soonest this long after the last time, when the map moved out of the part asked for. */
+    private static final long CITIZENS_MOVE_MILLIS = 1_000L;
     private static final int PARCHMENT = 0xFFE9D9B0;
     private static final int GRID = 0x22000000;
     private static final int REGION_GRID = 0x44000000;
@@ -230,6 +234,10 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     private boolean listing;
     /** Whether the citizens of the player's kingdom are shown; off when the atlas opens, so that the map stays clear. */
     private boolean citizens;
+    /** When the citizens were asked for last, in milliseconds, and the part of the map asked for, in chunks; {@code null} before. */
+    private long citizensAsked;
+    @Nullable
+    private int[] citizensArea;
     private int listOffset;
     @Nullable
     private List<KingdomEntry> listForCheck;
@@ -679,9 +687,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
                 buttonsLeft = citizensX;
                 Button citizensButton = addRenderableWidget(Button.builder(citizensLabel, button -> {
                     citizens = !citizens;
-                    if (citizens && minecraft != null && minecraft.getConnection() != null) {
-                        KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.Request());
-                    }
+                    requestCitizens(true);
                     rebuildWidgets();
                 }).bounds(citizensX, 3, citizensWidth, 16).build());
                 citizensButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(
@@ -861,6 +867,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     @Override
     public void tick() {
         requestVisibleArea(false);
+        requestCitizens(false);
         if (army && ++armyTicks % 40 == 0 && minecraft != null && minecraft.getConnection() != null) {
             KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.ArmyMapPackets.Request());
         }
@@ -1085,12 +1092,43 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
      */
     public void showCitizens(boolean on) {
         citizens = on;
-        if (on && minecraft != null && minecraft.getConnection() != null) {
-            KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.Request());
-        }
+        requestCitizens(true);
         if (minecraft != null) {
             rebuildWidgets();
         }
+    }
+
+    /**
+     * Asks the server for the citizens while they are shown: for the part of the map in view and as much again around it, when they
+     * are switched on, every {@link #CITIZENS_REFRESH_MILLIS} and when the map moved out of the part asked for, a second apart at
+     * the most.
+     *
+     * @param now whether to ask at once, as the citizens were switched on
+     */
+    private void requestCitizens(boolean now) {
+        if (!citizens || army || minecraft == null || minecraft.getConnection() == null) {
+            return;
+        }
+        int minX = visibleMinX();
+        int maxX = visibleMaxX();
+        int minZ = visibleMinZ();
+        int maxZ = visibleMaxZ();
+        long time = Util.getMillis();
+        boolean covered = citizensArea != null && citizensArea[0] <= minX && citizensArea[1] <= minZ && citizensArea[2] >= maxX
+                && citizensArea[3] >= maxZ;
+        if (!now && (time - citizensAsked < CITIZENS_MOVE_MILLIS || covered && time - citizensAsked < CITIZENS_REFRESH_MILLIS)) {
+            return;
+        }
+        int limit = ClaimChunkPacket.MAX_CHUNK_COORDINATE;
+        int spanX = (maxX - minX) / 2 + 1;
+        int spanZ = (maxZ - minZ) / 2 + 1;
+        int[] area = {
+                (int) Mth.clamp((long) minX - spanX, -limit, limit), (int) Mth.clamp((long) minZ - spanZ, -limit, limit),
+                (int) Mth.clamp((long) maxX + spanX, -limit, limit), (int) Mth.clamp((long) maxZ + spanZ, -limit, limit)};
+        citizensAsked = time;
+        citizensArea = area;
+        KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.Request(area[0], area[1],
+                area[2], area[3]));
     }
 
     /**
@@ -1098,7 +1136,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
      * from its home or post; the name, the profession and what it does on hover.
      */
     private void drawCitizens(GuiGraphics graphics) {
-        io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.View view = io.github.sekerator.kingdomworld.client.map.ClientCitizenMap.view();
+        io.github.sekerator.kingdomworld.client.map.ClientCitizenMap.Shown view = io.github.sekerator.kingdomworld.client.map.ClientCitizenMap.view();
         String dimension = dimension();
         if (!view.allowed() || (dimension != null && !view.dimension().equals(dimension))) {
             return;
@@ -1133,7 +1171,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
      */
     @org.jetbrains.annotations.Nullable
     private io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.Dot citizenAt(double mouseX, double mouseY) {
-        io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.View view = io.github.sekerator.kingdomworld.client.map.ClientCitizenMap.view();
+        io.github.sekerator.kingdomworld.client.map.ClientCitizenMap.Shown view = io.github.sekerator.kingdomworld.client.map.ClientCitizenMap.view();
         if (!citizens || army || !view.allowed()) {
             return null;
         }

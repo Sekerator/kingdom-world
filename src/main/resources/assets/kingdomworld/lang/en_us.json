@@ -4754,6 +4754,7 @@
   "kingdomworld.workforce.hold.expedition": "On an expedition of the guild: it comes back with its squad",
   "kingdomworld.workforce.hold.abroad": "On the land of another kingdom, in captivity or at a siege: it cannot be sent back",
   "kingdomworld.workforce.hold.nowhere": "It has neither a home nor a post to go to",
+  "kingdomworld.workforce.hold.cargo": "It carries goods the storehouses have no room for, and its home is in another world",
   "kingdomworld.workforce.returning.home": "%s goes home",
   "kingdomworld.workforce.returning.home.female": "%s goes home",
   "kingdomworld.workforce.returning.post": "%s goes to the post",

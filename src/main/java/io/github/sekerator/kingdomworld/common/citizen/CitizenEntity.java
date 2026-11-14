@@ -255,21 +255,39 @@ public class CitizenEntity extends PathfinderMob {
 
     /**
      * The body did not get where it was sent in time or got stuck: it is put by the place if that is loaded, else taken away with the
-     * citizen there in the data, its body coming back there with players.
+     * citizen there in the data, its body coming back there with players. What holds the citizen and whose land the place is are
+     * asked again first, as a minute went by: a citizen held now (the army, an expedition, the land of another kingdom), or one whose
+     * home or post lies on the land of another kingdom now, stays where it is. A body is not taken away while it carries goods the
+     * storehouses have no room for: it stays too, rather than lose them.
      */
     public void putBack() {
-        BlockPos target = returnTo;
         returnTo = null;
-        if (target == null || !(level() instanceof net.minecraft.server.level.ServerLevel server)) {
+        if (citizenId == null || !(level() instanceof net.minecraft.server.level.ServerLevel server)) {
             return;
         }
-        BlockPos spot = CitizenBodies.standingSpot(server, target);
+        java.util.Optional<io.github.sekerator.kingdomworld.core.citizen.Citizen> citizen =
+                io.github.sekerator.kingdomworld.common.api.KingdomWorldApi.state(server.getServer()).citizens().get(citizenId);
+        if (citizen.isEmpty()) {
+            return;
+        }
+        String dimension = io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(server);
+        BlockPos here = blockPosition();
+        WorldPos target = CitizenWhereabouts.putBackTarget(server.getServer(), citizen.get(),
+                new WorldPos(dimension, here.getX(), here.getY(), here.getZ()));
+        if (target == null) {
+            return;
+        }
+        BlockPos place = new BlockPos(target.x(), target.y(), target.z());
+        BlockPos spot = target.dimension().equals(dimension) ? CitizenBodies.standingSpot(server, place) : null;
         if (spot != null) {
             getNavigation().stop();
             teleportTo(spot.getX() + 0.5, spot.getY(), spot.getZ() + 0.5);
             return;
         }
-        relocate(new WorldPos(io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(server), target.getX(), target.getY(), target.getZ()));
+        if (!CitizenWhereabouts.cargoFits(server.getServer(), citizen.get(), this)) {
+            return;
+        }
+        relocate(target);
         discard();
     }
 
@@ -290,7 +308,7 @@ public class CitizenEntity extends PathfinderMob {
      */
     @Override
     public boolean isCurrentlyGlowing() {
-        if (level().isClientSide && CitizenHighlights.glows(getId(), net.minecraft.Util.getMillis())) {
+        if (level().isClientSide && CitizenHighlights.glows(getId(), getUUID(), net.minecraft.Util.getMillis())) {
             return true;
         }
         return super.isCurrentlyGlowing();
