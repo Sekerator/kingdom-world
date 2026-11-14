@@ -59,6 +59,7 @@
 - **Исправлено: житель, ушедший далеко, доходит до дома.** Прогулка назад обрывалась, как только житель оказывался ближе 64 блоков, а прогулка у дома держит тело только в пределах своих 32 блоков и шага: в промежутке житель снова уходил куда попало. Теперь начатый путь домой идёт до дома, пока не начнётся работа или жителя что-то не удержит.
 - **Исправлено: новое королевство мира сразу ставит стражу.** Поднимающаяся столица снова получает посты своего плана на последнем шаге появления: стража у ворот, складов и дворца, армия в резерве и в лагерях. Раньше солдаты до первого обхода правителя (до суток) стояли без постов, а солдаты лагерей занимали кровати в городе.
 - **Исправлено: флаги стен и тронов.** Флаг стены или трона в чанке, подгруженном позже других, больше не пропадает на несколько секунд (а во время войны надолго): места флагов считаются заново, прежде чем флаг сочтут лишним. Снятый флаг не трогает соседние блоки и не подгружает соседний чанк у края загруженного мира.
+- **Исправлено: флаги распущенного королевства.** Флаги зданий распущенного королевства снимаются и там, где земля под ними чужая (здание, взятое в осаде на земле, которая осталась у проигравшего), а не показывают флаг хозяина земли.
 
 ### 1.5.1
 
@@ -290,6 +291,7 @@ A kingdom of players no longer runs into the limits of the server: its beds, its
 - **Fixed: a citizen gone far gets home.** The walk back ended as soon as the citizen was within 64 blocks, while the walks about home hold a body only within their 32 blocks and a step: in between it drifted off again. Now a walk home that began goes on to the home unless its work begins or something holds the citizen.
 - **Fixed: a new kingdom of the world posts its guard at once.** A capital that is rising again gets the posts of its plan at the last step of its appearance: the guard at the gates, the stores and the palace, the army in reserve and in the camps. Before, the soldiers stood without posts until the first round of the ruler (up to a day), and the soldiers of the camps took beds in the city.
 - **Fixed: the flags of walls and thrones.** The flag of a wall or a throne in a chunk loaded after the others no longer goes for a few seconds (for long during a war): the places of the flags are worked out again before a flag is taken for one too many. A flag taken away no longer touches the blocks beside it nor loads the next chunk at the edge of the loaded world.
+- **Fixed: the flags of a dissolved kingdom.** The flags of the buildings of a dissolved kingdom are taken down also where the land under them is another's (a building taken in a siege on land the loser kept), instead of showing the flag of the owner of the land.
 
 ### 1.5.1
 

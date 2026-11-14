@@ -520,6 +520,12 @@ public final class FlagWork {
         String dimension = Dimensions.id(level);
         boolean place = flag.origin() == KingdomFlagBlockEntity.Origin.THRONE || flag.origin() == KingdomFlagBlockEntity.Origin.WALL;
         Building building = place ? null : buildingAt(server, dimension, pos);
+        if (!place && building == null && flag.kingdom() != null && KingdomWorldApi.kingdom(server, flag.kingdom()).isEmpty()) {
+            // The flag of a building of a kingdom dissolved goes with the building, though the land under it is another's (a
+            // building taken in a siege on land the loser kept).
+            takeAway(level, pos);
+            return false;
+        }
         UUID owner = place ? placeOwner(server, dimension, pos) : null;
         UUID kingdom = owner != null ? owner : kingdomOf(level, pos, flag);
         if (kingdom == null) {
