@@ -302,7 +302,8 @@ public final class ThroneMoving {
             tell(player, KingdomActions.errorMessage(outcome.error()));
             return;
         }
-        old.ifPresent(capitalBefore -> removeOldThrone(level, capitalBefore));
+        // A throne set up again on the very place of the old one (gone by a command or another mod) is the new throne itself.
+        old.filter(capitalBefore -> !capitalBefore.equals(capital)).ifPresent(capitalBefore -> removeOldThrone(level, capitalBefore));
         moved();
         Kingdom kingdom = state.kingdoms().get(kingdomId).orElse(null);
         if (kingdom == null) {

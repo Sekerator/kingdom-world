@@ -61,6 +61,7 @@
 - **Исправлено: новое королевство мира сразу ставит стражу.** Поднимающаяся столица снова получает посты своего плана на последнем шаге появления: стража у ворот, складов и дворца, армия в резерве и в лагерях. Раньше солдаты до первого обхода правителя (до суток) стояли без постов, а солдаты лагерей занимали кровати в городе.
 - **Исправлено: флаги стен и тронов.** Флаг стены или трона в чанке, подгруженном позже других, больше не пропадает на несколько секунд (а во время войны надолго): места флагов считаются заново, прежде чем флаг сочтут лишним. Снятый флаг не трогает соседние блоки и не подгружает соседний чанк у края загруженного мира.
 - **Исправлено: флаги распущенного королевства.** Флаги зданий распущенного королевства снимаются и там, где земля под ними чужая (здание, взятое в осаде на земле, которая осталась у проигравшего), а не показывают флаг хозяина земли.
+- **Исправлено: трон на старом месте.** Если старый трон убрали командой или другим модом, а король ставит перенесённый трон ровно на его место, этот трон больше не убирается вместе со «старым».
 
 ### 1.5.1
 
@@ -294,6 +295,7 @@ A kingdom of players no longer runs into the limits of the server: its beds, its
 - **Fixed: a new kingdom of the world posts its guard at once.** A capital that is rising again gets the posts of its plan at the last step of its appearance: the guard at the gates, the stores and the palace, the army in reserve and in the camps. Before, the soldiers stood without posts until the first round of the ruler (up to a day), and the soldiers of the camps took beds in the city.
 - **Fixed: the flags of walls and thrones.** The flag of a wall or a throne in a chunk loaded after the others no longer goes for a few seconds (for long during a war): the places of the flags are worked out again before a flag is taken for one too many. A flag taken away no longer touches the blocks beside it nor loads the next chunk at the edge of the loaded world.
 - **Fixed: the flags of a dissolved kingdom.** The flags of the buildings of a dissolved kingdom are taken down also where the land under them is another's (a building taken in a siege on land the loser kept), instead of showing the flag of the owner of the land.
+- **Fixed: a throne on its old place.** When the old throne was taken away by a command or another mod and the king sets the moved throne up on that very place, this throne is no longer taken away as the old one.
 
 ### 1.5.1
 
