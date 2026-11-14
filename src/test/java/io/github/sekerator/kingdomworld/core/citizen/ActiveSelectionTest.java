@@ -28,6 +28,20 @@ class ActiveSelectionTest {
     }
 
     @Test
+    void aHomeInAnotherCityThanThePostDoesNotKeepTheBody() {
+        Citizen citizen = new Citizen(UUID.randomUUID(), UUID.randomUUID(), 1, Gender.MALE, 0, 0L, new WorldPos(DIM, 5, 64, 5));
+        WorldPos home = new WorldPos(DIM, 0, 64, 0);
+        WorldPos post = new WorldPos(DIM, 900, 64, 0);
+        citizen.setHome(home);
+        citizen.setWorkplace(post);
+        assertEquals(List.of(home, post), ActiveSelection.anchors(citizen));
+        assertEquals(List.of(home, post), ActiveSelection.anchors(citizen, false));
+        assertEquals(List.of(post), ActiveSelection.anchors(citizen, true), "only the post, while the citizen waits for a bed in its city");
+        citizen.setWorkplace(null);
+        assertEquals(List.of(home), ActiveSelection.anchors(citizen, true), "without a post the home keeps the body");
+    }
+
+    @Test
     void nearestPlayersWinWhenOverTheLimit() {
         List<ActiveSelection.Candidate> candidates = new ArrayList<>();
         UUID far = UUID.randomUUID();

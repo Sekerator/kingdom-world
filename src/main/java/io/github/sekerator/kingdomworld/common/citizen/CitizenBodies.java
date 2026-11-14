@@ -121,7 +121,7 @@ public final class CitizenBodies {
                 // Adventurers on an expedition and soldiers on the road with a caravan have no body until they come back.
                 continue;
             }
-            List<WorldPos> anchors = new ArrayList<>(ActiveSelection.anchors(citizen));
+            List<WorldPos> anchors = new ArrayList<>(ActiveSelection.anchors(citizen, HomeFollowsPost.apart(server, citizen)));
             // Soldiers also have a body where their squad holds, patrols or guards, and near the player they follow.
             anchors.addAll(io.github.sekerator.kingdomworld.common.army.ArmyWork.anchors(server, citizen.id()));
             boolean active = ACTIVE.containsKey(citizen.id());

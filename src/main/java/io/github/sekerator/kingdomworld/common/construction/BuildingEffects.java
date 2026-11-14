@@ -474,12 +474,20 @@ public final class BuildingEffects {
      * is no soldier takes one only as the last bed of the kingdom. In a kingdom of players a bunk is a bed like any other.
      */
     public static Optional<Site> freeBed(MinecraftServer server, UUID kingdomId, WorldPos near, boolean soldier) {
+        return freeBed(server, kingdomId, near, soldier, bed -> true);
+    }
+
+    /**
+     * The free bed a homeless citizen gets, among the beds a test lets through (those of one city, say).
+     */
+    public static Optional<Site> freeBed(MinecraftServer server, UUID kingdomId, WorldPos near, boolean soldier,
+                                         java.util.function.Predicate<WorldPos> where) {
         Site best = null;
         double bestDistance = Double.MAX_VALUE;
         int bestRank = -1;
         boolean keeps = keepsBunks(server, kingdomId);
         for (Site bed : KingdomWorldApi.state(server).citizens().sites().sitesOf(kingdomId, SiteKinds.BED)) {
-            if (!bed.isFree() || !bedUsable(server, kingdomId, bed.pos())) {
+            if (!bed.isFree() || !where.test(bed.pos()) || !bedUsable(server, kingdomId, bed.pos())) {
                 continue;
             }
             boolean bunk = keeps && inBarracks(server, kingdomId, bed.pos());

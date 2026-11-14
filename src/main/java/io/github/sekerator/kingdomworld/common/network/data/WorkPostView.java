@@ -40,7 +40,8 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
                            int seats, int maxSeats, String animal, List<String> animals, int herdSize, int maxHerd,
                            WorkStatus status, boolean container, boolean measured, int perDay, long producedToday,
                            List<Worker> workers, int unemployed, boolean auto, List<Station> stations, ItemStack current,
-                           int progress, net.minecraft.network.chat.Component site, Goal goal, Mint mint, Place place) {
+                           int progress, net.minecraft.network.chat.Component site, Goal goal, Mint mint, Place place,
+                           net.minecraft.network.chat.Component home) {
     public static final int MAX_WORKERS = 16;
     public static final int MAX_ORES = 128;
 
@@ -165,7 +166,29 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
     public WorkPostView withPlace(Place value) {
         return new WorkPostView(pos, kingdomId, canManage, profession, radius, maxRadius, seats, maxSeats, animal, animals, herdSize,
                 maxHerd, status, container, measured, perDay, producedToday, workers, unemployed, auto, stations, current, progress,
-                site, goal, mint, value);
+                site, goal, mint, value, home);
+    }
+
+    /**
+     * The view of a post whose workers all live in its city.
+     */
+    public WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, String profession, int radius, int maxRadius,
+                        int seats, int maxSeats, String animal, List<String> animals, int herdSize, int maxHerd,
+                        WorkStatus status, boolean container, boolean measured, int perDay, long producedToday,
+                        List<Worker> workers, int unemployed, boolean auto, List<Station> stations, ItemStack current,
+                        int progress, net.minecraft.network.chat.Component site, Goal goal, Mint mint, Place place) {
+        this(pos, kingdomId, canManage, profession, radius, maxRadius, seats, maxSeats, animal, animals, herdSize, maxHerd, status,
+                container, measured, perDay, producedToday, workers, unemployed, auto, stations, current, progress, site, goal, mint, place,
+                net.minecraft.network.chat.Component.empty());
+    }
+
+    /**
+     * The post with what it says of its workers who live in another city: no bed in its city, where they live.
+     */
+    public WorkPostView withHome(net.minecraft.network.chat.Component value) {
+        return new WorkPostView(pos, kingdomId, canManage, profession, radius, maxRadius, seats, maxSeats, animal, animals, herdSize,
+                maxHerd, status, container, measured, perDay, producedToday, workers, unemployed, auto, stations, current, progress,
+                site, goal, mint, place, value);
     }
 
     /**
@@ -183,7 +206,7 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
     public WorkPostView withMint(Mint value) {
         return new WorkPostView(pos, kingdomId, canManage, profession, radius, maxRadius, seats, maxSeats, animal, animals, herdSize,
                 maxHerd, status, container, measured, perDay, producedToday, workers, unemployed, auto, stations, current, progress,
-                site, goal, value, place);
+                site, goal, value, place, home);
     }
 
     /**
@@ -201,7 +224,7 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
     public WorkPostView withGoal(Goal value) {
         return new WorkPostView(pos, kingdomId, canManage, profession, radius, maxRadius, seats, maxSeats, animal, animals, herdSize,
                 maxHerd, status, container, measured, perDay, producedToday, workers, unemployed, auto, stations, current, progress,
-                site, value, mint, place);
+                site, value, mint, place, home);
     }
     public static final int MAX_ANIMALS = 16;
     public static final int MAX_STATIONS = 16;
@@ -285,6 +308,7 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
         goal.encode(buf);
         mint.encode(buf);
         place.encode(buf);
+        buf.writeComponent(home);
     }
 
     public static WorkPostView decode(FriendlyByteBuf buf) {
@@ -329,6 +353,6 @@ public record WorkPostView(BlockPos pos, UUID kingdomId, boolean canManage, Stri
         net.minecraft.network.chat.Component site = buf.readComponent();
         return new WorkPostView(pos, kingdomId, canManage, profession, radius, maxRadius, seats, maxSeats, animal, animals, herdSize,
                 maxHerd, status, container, measured, perDay, produced, workers, unemployed, auto, stations, current, progress, site,
-                Goal.decode(buf), Mint.decode(buf), Place.decode(buf));
+                Goal.decode(buf), Mint.decode(buf), Place.decode(buf), buf.readComponent());
     }
 }

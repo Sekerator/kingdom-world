@@ -389,6 +389,15 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
     }
 
     private List<Component> infoLines() {
+        List<Component> lines = new java.util.ArrayList<>(postLines());
+        if (!view.home().getString().isEmpty()) {
+            // Workers who live in another city: there is no bed in the city of the post.
+            lines.add(view.home());
+        }
+        return lines;
+    }
+
+    private List<Component> postLines() {
         if (isBuilder()) {
             return List.of(Component.translatable(KEY + "status", statusText(view.status())), siteLine(), placingLine(),
                     Component.translatable(KEY + "placed_today", view.producedToday()));
@@ -412,6 +421,9 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
      * rather than sizing the panel.
      */
     private boolean isNameLine(int index) {
+        if (!view.home().getString().isEmpty() && index == postLines().size()) {
+            return true;
+        }
         return (isWorkshop() || isBuilder()) && (index == 1 || index == 2) || isMinter() && index == 3;
     }
 
@@ -847,7 +859,11 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
                 boolean met = view.goal().met() && !view.status().isProblem();
                 fittedLabel(graphics, info.get(i), x, infoY, met ? 0xFFA0E0A0 : color, right);
             } else if (isNameLine(i)) {
-                name(graphics, info.get(i).getString(), x, infoY + i * (LINE + 1), color, right - x);
+                int drawn = name(graphics, info.get(i).getString(), x, infoY + i * (LINE + 1), i == postLines().size() ? 0xFFFF9070 : color,
+                        right - x);
+                if (i == postLines().size()) {
+                    hoverText(x, infoY + i * (LINE + 1), drawn, info.get(i));
+                }
             } else {
                 label(graphics, info.get(i), x, infoY + i * (LINE + 1), color, right);
             }

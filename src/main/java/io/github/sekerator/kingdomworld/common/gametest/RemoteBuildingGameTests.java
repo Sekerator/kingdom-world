@@ -445,10 +445,18 @@ public final class RemoteBuildingGameTests {
         Citizen idle = CitizenGameTests.newcomer(helper, kingdom, 1, 1);
         StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 4);
         store.insertItem(0, new ItemStack(ModRegistries.WORK_POST_ITEM.get()), false);
+        // The citizen lives in the capital; a free bed waits in the far city.
+        WorldPos capitalBed = LifeGameTests.bed(helper, kingdom, new BlockPos(3, 0, 6));
+        helper.assertTrue(KingdomWorldApi.change(server, "test", state -> state.citizens().assignHome(idle, capitalBed)
+                ? io.github.sekerator.kingdomworld.core.kingdom.Outcome.DONE
+                : io.github.sekerator.kingdomworld.core.kingdom.Outcome.fail(io.github.sekerator.kingdomworld.core.kingdom.KingdomError.UNCHANGED)).ok(),
+                "The citizen got no home in the capital");
         BlockPos hall = new BlockPos(helper.absolutePos(BlockPos.ZERO).getX() + FAR, HIGH + 1, helper.absolutePos(BlockPos.ZERO).getZ());
         meadow(helper, kingdom, hall, 20, at -> {
         });
         long city = farCity(helper, kingdom, hall, "Postville");
+        WorldPos farBed = new WorldPos(Dimensions.id(level), hall.getX() + 6, hall.getY(), hall.getZ() + 6);
+        KingdomWorldApi.state(server).citizens().addSite(farBed, io.github.sekerator.kingdomworld.core.citizen.SiteKinds.BED, kingdom.id());
         helper.assertTrue(RemoteWorks.orderPost(server, null, kingdom.id(), city, Commission.Origin.KING).ok(), "The post was refused");
         UUID id = idle.id();
         helper.succeedWhen(() -> {
@@ -459,6 +467,10 @@ public final class RemoteBuildingGameTests {
                     .filter(found -> Math.abs(found.pos().x() - hall.getX()) <= 12 && Math.abs(found.pos().z() - hall.getZ()) <= 12).findFirst()
                     .orElseThrow(() -> new GameTestAssertException("No post of builders by the far town hall"));
             helper.assertTrue(post.workers().contains(id), "The citizen without work was not hired for the far post");
+            Citizen hired = state.citizens().get(id).orElseThrow();
+            helper.assertTrue(farBed.equals(hired.home()), "The citizen did not move to the bed of the city of its post: " + hired.home());
+            helper.assertTrue(state.citizens().sites().get(capitalBed).map(site -> site.isFree()).orElse(false),
+                    "The bed in the capital was not left");
             helper.assertTrue(CitizenGameTests.count(store, ModRegistries.WORK_POST_ITEM.get()) == 0, "The work post was not taken from the storehouse");
             helper.assertTrue(stands(level, new BlockPos(post.pos().x(), post.pos().y(), post.pos().z()), ModRegistries.WORK_POST.get()),
                     "No work post stands by the far town hall");

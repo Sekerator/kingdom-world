@@ -94,8 +94,16 @@ public final class ActiveSelection {
      * The places that decide whether a citizen has a body: home and workplace, or where it is if it has neither.
      */
     public static List<WorldPos> anchors(Citizen citizen) {
+        return anchors(citizen, false);
+    }
+
+    /**
+     * The places that decide whether a citizen has a body; with {@code homeAway} (its home lies in another city than its post,
+     * where it moves as soon as there is a bed) the home does not count, only the workplace.
+     */
+    public static List<WorldPos> anchors(Citizen citizen, boolean homeAway) {
         List<WorldPos> anchors = new ArrayList<>(2);
-        if (citizen.home() != null) {
+        if (citizen.home() != null && !(homeAway && citizen.workplace() != null)) {
             anchors.add(citizen.home());
         }
         if (citizen.workplace() != null) {

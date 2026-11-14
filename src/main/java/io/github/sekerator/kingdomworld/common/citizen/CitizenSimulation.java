@@ -367,6 +367,8 @@ public final class CitizenSimulation {
                 citizen.setWorkStatus(WorkStatus.NO_WORKPLACE);
             }
         }
+        // A post in another city than the home: the citizen moves to a free bed of the city of its post.
+        HomeFollowsPost.follow(server, citizens, citizen);
     }
 
     /**

@@ -190,7 +190,7 @@ public final class WorkPostActions {
                 post.producedOn(PostWork.gameDay(server)), workers, unemployed, post.auto(), stations,
                 current == null ? net.minecraft.world.item.ItemStack.EMPTY : new net.minecraft.world.item.ItemStack(current),
                 progress, site, goal, mint).withPlace(new WorkPostView.Place(post.pos().dimension(), post.name(),
-                state.citizens().postNumber(post)));
+                state.citizens().postNumber(post))).withHome(io.github.sekerator.kingdomworld.common.citizen.HomeFollowsPost.note(server, post));
     }
 
     // ---------------------------------------------------------------- changes

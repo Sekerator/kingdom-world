@@ -89,6 +89,13 @@ The **Hire… (N)** button opens the list "Whom to put on the post". The number 
 
 In every group the nearest come first. The **Put on the post** button hires the chosen one. For a worker from other work the window first asks "Move the worker?", and after **Move** it comes here at once with the profession of the post. Soldiers and those who already work here are not listed. Hire… cannot be pressed while the post has no profession ("Choose the profession of the post first") or every seat is taken ("Every seat is taken: add seats or dismiss somebody").
 
+### Moving to the post
+
+A citizen whose post stands in another city than its home (hired there, moved from afar or put on a post set up by an order
+from the capital) moves: once a game day it leaves its bed for the free bed of the city of the post nearest the post. While
+there is no such bed it keeps its home, and the window of the post says "No bed in ...: lives in ...". A post outside every
+city changes nothing.
+
 ### What changes do
 
 - A new profession of the post: workers of another profession leave the post but keep their profession and look for a free post of it by themselves. The radius follows the new profession: a lumberjack's is at least its default, the others' never beyond their land.
