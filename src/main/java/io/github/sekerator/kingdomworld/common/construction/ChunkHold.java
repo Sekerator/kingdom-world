@@ -9,7 +9,6 @@ import net.minecraft.world.level.ChunkPos;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -23,18 +22,27 @@ import java.util.Set;
  * unless they are given again, which the hold does every {@value #REFRESH} ticks while it lasts; they are never saved, so a
  * restart leaves nothing held. All holds together ask for at most {@code siteLoadChunksPerTick} new tickets a tick, and they let
  * their chunks go one every two ticks. No chunk is ever forced and none is loaded in the tick.
+ *
+ * <p>Every hold has tickets of its own, told apart by its number: the game takes two tickets of one type, distance and key for
+ * one, so that holds sharing a chunk with one key would share one ticket, and the first to let the chunk go would let it go for
+ * every other hold of it too.
  */
 public final class ChunkHold {
     /** Ticks a ticket lives unless it is given again: a holder that is gone frees its chunks by itself. */
     static final int LIFESPAN = 600;
     /** Ticks between two renewals of the tickets of a hold. */
     static final int REFRESH = 200;
-    static final TicketType<ChunkPos> TICKET = TicketType.create("kingdomworld_site", Comparator.comparingLong(ChunkPos::toLong), LIFESPAN);
+    static final TicketType<Long> TICKET = TicketType.create("kingdomworld_site", Long::compare, LIFESPAN);
+
+    /** The number of the last hold made: the key of the tickets of a hold. */
+    private static long lastId;
 
     private static int budgetTick = Integer.MIN_VALUE;
     private static int added;
 
     private final ServerLevel level;
+    /** The key of the tickets of this hold, its own. */
+    private final Long id = ++lastId;
     private final List<ChunkPos> chunks;
     private final Set<Long> held = new LinkedHashSet<>();
     /** The ticks the tickets were last given again and a chunk last let go; never at first. */
@@ -86,7 +94,7 @@ public final class ChunkHold {
             if (added >= most) {
                 break;
             }
-            level.getChunkSource().addRegionTicket(TICKET, pos, 0, pos);
+            level.getChunkSource().addRegionTicket(TICKET, pos, 0, id);
             held.add(pos.toLong());
             added++;
         }
@@ -94,10 +102,18 @@ public final class ChunkHold {
             lastRefresh = tick;
             for (ChunkPos pos : chunks) {
                 if (held.contains(pos.toLong())) {
-                    level.getChunkSource().addRegionTicket(TICKET, pos, 0, pos);
+                    level.getChunkSource().addRegionTicket(TICKET, pos, 0, id);
                 }
             }
         }
+    }
+
+    /**
+     * Gives every ticket of the hold again at its next {@link #hold()}: tickets that ran out while the hold was not kept (the
+     * server busy) come back at once rather than at the next renewal.
+     */
+    public void renew() {
+        lastRefresh = NEVER;
     }
 
     /**
@@ -146,7 +162,7 @@ public final class ChunkHold {
         long key = held.iterator().next();
         held.remove(key);
         ChunkPos pos = new ChunkPos(key);
-        level.getChunkSource().removeRegionTicket(TICKET, pos, 0, pos);
+        level.getChunkSource().removeRegionTicket(TICKET, pos, 0, id);
         return held.isEmpty();
     }
 
@@ -168,7 +184,7 @@ public final class ChunkHold {
         releasing = true;
         for (long key : held) {
             ChunkPos pos = new ChunkPos(key);
-            level.getChunkSource().removeRegionTicket(TICKET, pos, 0, pos);
+            level.getChunkSource().removeRegionTicket(TICKET, pos, 0, id);
         }
         held.clear();
     }

@@ -534,6 +534,16 @@ public final class RemoteWorks {
             next(server);
         }
 
+        /**
+         * Back to holding the place, its ground to be read from the first row once it is all loaded.
+         */
+        private void held() {
+            hold.renew();
+            ticks = 0;
+            row = 0;
+            phase = Phase.HOLD;
+        }
+
         private void hold(MinecraftServer server) {
             hold.hold();
             if (hold.ready()) {
@@ -553,6 +563,11 @@ public final class RemoteWorks {
          */
         private void measure(MinecraftServer server) {
             hold.hold();
+            if (!hold.ready()) {
+                // The place is not all loaded any more (its tickets ran out while the server was busy): it is held and read again.
+                held();
+                return;
+            }
             CityPlots.Plot place = plots.get(plot);
             Box box = place.box();
             int width = box.sizeX() + 2;
@@ -628,6 +643,12 @@ public final class RemoteWorks {
 
         private void lay(MinecraftServer server) {
             hold.hold();
+            if (!hold.ready()) {
+                // The laying out reads the place: it waits until the place is all loaded again, and reads it anew.
+                laying = null;
+                held();
+                return;
+            }
             Optional<KingdomWorldState.ConstructionChange> done = laying.step(LAY_NANOS);
             if (done.isEmpty()) {
                 return;

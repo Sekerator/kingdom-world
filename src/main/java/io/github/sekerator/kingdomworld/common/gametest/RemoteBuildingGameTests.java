@@ -71,6 +71,54 @@ public final class RemoteBuildingGameTests {
     private RemoteBuildingGameTests() {
     }
 
+    /**
+     * Two holds of one chunk far from the test: the first lets it go while the second still holds it, and the chunk stays
+     * loaded, as every hold has tickets of its own.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_remote_hold_shared", timeoutTicks = 3_000)
+    public static void twoHoldsOfOneChunkKeepItTillBothLetItGo(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos far = helper.absolutePos(BlockPos.ZERO).offset(FAR + 512, 0, FAR + 512);
+        long key = io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(far.getX() >> 4, far.getZ() >> 4);
+        io.github.sekerator.kingdomworld.common.construction.ChunkHold first = new io.github.sekerator.kingdomworld.common.construction.ChunkHold(
+                level, List.of(key));
+        io.github.sekerator.kingdomworld.common.construction.ChunkHold second = new io.github.sekerator.kingdomworld.common.construction.ChunkHold(
+                level, List.of(key));
+        int[] stage = {0};
+        int[] waited = {0};
+        helper.onEachTick(() -> {
+            switch (stage[0]) {
+                case 0 -> {
+                    first.hold();
+                    second.hold();
+                    if (first.ready() && second.ready()) {
+                        stage[0] = 1;
+                    }
+                }
+                case 1 -> {
+                    second.hold();
+                    if (first.release()) {
+                        stage[0] = 2;
+                    }
+                }
+                case 2 -> {
+                    second.hold();
+                    if (!io.github.sekerator.kingdomworld.common.construction.ChunkHold.loaded(level, far)) {
+                        second.releaseAll();
+                        stage[0] = 4;
+                        helper.fail("The chunk the second hold keeps was let go with the first");
+                    } else if (++waited[0] > 100) {
+                        second.releaseAll();
+                        stage[0] = 3;
+                    }
+                }
+                default -> {
+                }
+            }
+        });
+        helper.succeedWhen(() -> helper.assertTrue(stage[0] == 3, "The holds are at stage " + stage[0]));
+    }
+
     // ---------------------------------------------------------------- helpers
 
     /**
