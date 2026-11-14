@@ -74,6 +74,8 @@ public final class WebMaps {
             MinecraftForge.EVENT_BUS.addListener(WebMaps::onServerStarted);
             MinecraftForge.EVENT_BUS.addListener(WebMaps::onServerStopping);
             MinecraftForge.EVENT_BUS.addListener(WebMaps::onServerTick);
+            // A capital that moved shows at its new place at the next tick.
+            io.github.sekerator.kingdomworld.common.kingdom.TerritorySync.addInfoListener(WebMaps::soon);
         }
     }
 

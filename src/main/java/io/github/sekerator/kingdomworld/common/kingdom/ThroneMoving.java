@@ -340,13 +340,12 @@ public final class ThroneMoving {
 
     /**
      * What is worked out from the place of the throne learns at once that it moved: the squares of the cities, the cities on
-     * the maps, the capitals on the atlas and the maps of other mods, and the web maps.
+     * the maps, the capitals on the atlas and the maps of other mods, and the web maps, which listen to the map facts.
      */
     private static void moved() {
         io.github.sekerator.kingdomworld.common.road.CityAreas.invalidate();
         io.github.sekerator.kingdomworld.common.road.RoadSync.changed();
         TerritorySync.infoChanged();
-        io.github.sekerator.kingdomworld.compat.maps.WebMaps.soon();
     }
 
     /**

@@ -47,6 +47,11 @@ public final class TerritorySync {
     private static final int INFO_CHECK_INTERVAL_TICKS = 100;
     private static final Map<UUID, List<Object>> LAST_INFO = new HashMap<>();
     private static int infoTicks;
+    /**
+     * Told at once when the map facts of kingdoms changed: the web maps of other mods, which their own loader subscribes, so
+     * that this code never names them. Kept over restarts of the server.
+     */
+    private static final List<Runnable> INFO_LISTENERS = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     private TerritorySync() {
     }
@@ -134,6 +139,16 @@ public final class TerritorySync {
      */
     public static void infoChanged() {
         infoTicks = INFO_CHECK_INTERVAL_TICKS;
+        for (Runnable listener : INFO_LISTENERS) {
+            listener.run();
+        }
+    }
+
+    /**
+     * Something to tell whenever {@link #infoChanged()} is called.
+     */
+    public static void addInfoListener(Runnable listener) {
+        INFO_LISTENERS.add(java.util.Objects.requireNonNull(listener, "listener"));
     }
 
     public static void reset() {
