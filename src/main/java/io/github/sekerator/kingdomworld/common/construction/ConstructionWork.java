@@ -608,8 +608,9 @@ public final class ConstructionWork {
      */
     static void store(MinecraftServer server, UUID kingdomId, ServerLevel level, BlockPos at, List<ItemStack> drops) {
         for (ItemStack drop : drops) {
-            // The drops of the builders go to the storehouses of builders, then to the common ones.
+            // The drops of the builders go to the storehouses of builders, then to the common ones, then to any with room.
             ItemStack rest = KingdomStorage.insertFor(server, kingdomId, io.github.sekerator.kingdomworld.core.citizen.Professions.BUILDER.id(), drop, worldPos(level, at));
+            rest = KingdomStorage.insert(server, kingdomId, rest, worldPos(level, at));
             if (!rest.isEmpty()) {
                 Containers.dropItemStack(level, at.getX() + 0.5, at.getY() + 0.5, at.getZ() + 0.5, rest);
             }

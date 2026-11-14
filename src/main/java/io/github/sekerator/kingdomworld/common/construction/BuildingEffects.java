@@ -84,8 +84,6 @@ public final class BuildingEffects {
     private static MinecraftServer madeFor;
     /** Positions of the containers of each warehouse, as last seen. */
     private static final Map<Long, List<BlockPos>> CONTAINERS = new HashMap<>();
-    /** The dimension of every warehouse whose containers are known. */
-    private static final Map<Long, String> CONTAINER_DIMENSIONS = new HashMap<>();
 
     /**
      * A building among the effects: its kingdom and its place in the list of the kingdom.
@@ -110,8 +108,6 @@ public final class BuildingEffects {
         madeVersion = -1;
         madeFor = null;
         CONTAINERS.clear();
-        CONTAINER_DIMENSIONS.clear();
-        WarehouseStock.reset();
     }
 
     /**
@@ -695,59 +691,9 @@ public final class BuildingEffects {
             if (level == null || !ConstructionWork.loaded(level, building.box())) {
                 continue;
             }
-            List<BlockPos> found = scan(level, building);
-            CONTAINERS.put(building.id(), found);
-            CONTAINER_DIMENSIONS.put(building.id(), building.dimension());
-            for (BlockPos pos : found) {
-                IItemHandler handler = handler(level, pos);
-                if (handler != null) {
-                    WarehouseStock.remember(ConstructionWork.worldPos(level, pos), handler);
-                }
-            }
+            CONTAINERS.put(building.id(), scan(level, building));
         }
         CONTAINERS.keySet().retainAll(live);
-        CONTAINER_DIMENSIONS.keySet().retainAll(live);
-        List<WorldPos> known = new ArrayList<>();
-        CONTAINERS.forEach((id, positions) -> {
-            String dimension = CONTAINER_DIMENSIONS.get(id);
-            for (BlockPos pos : positions) {
-                known.add(new WorldPos(dimension, pos.getX(), pos.getY(), pos.getZ()));
-            }
-        });
-        WarehouseStock.keepOnly(known);
-    }
-
-    @org.jetbrains.annotations.Nullable
-    private static IItemHandler handler(ServerLevel level, BlockPos pos) {
-        BlockEntity entity = level.getBlockEntity(pos);
-        return entity == null ? null : entity.getCapability(ForgeCapabilities.ITEM_HANDLER, null).orElse(null);
-    }
-
-    /**
-     * A chunk unloads: what the containers of warehouses in it hold is remembered, so that the kingdom counts it while nobody is
-     * near.
-     */
-    static void onChunkUnload(ServerLevel level, net.minecraft.world.level.chunk.LevelChunk chunk) {
-        if (CONTAINERS.isEmpty()) {
-            return;
-        }
-        String dimension = io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level);
-        int chunkX = chunk.getPos().x;
-        int chunkZ = chunk.getPos().z;
-        CONTAINERS.forEach((id, positions) -> {
-            if (!dimension.equals(CONTAINER_DIMENSIONS.get(id))) {
-                return;
-            }
-            for (BlockPos pos : positions) {
-                if ((pos.getX() >> 4) == chunkX && (pos.getZ() >> 4) == chunkZ) {
-                    BlockEntity entity = chunk.getBlockEntity(pos);
-                    IItemHandler handler = entity == null ? null : entity.getCapability(ForgeCapabilities.ITEM_HANDLER, null).orElse(null);
-                    if (handler != null) {
-                        WarehouseStock.remember(new WorldPos(dimension, pos.getX(), pos.getY(), pos.getZ()), handler);
-                    }
-                }
-            }
-        });
     }
 
     static List<BlockPos> scan(ServerLevel level, Building building) {
@@ -802,11 +748,8 @@ public final class BuildingEffects {
                     break;
                 }
                 if (!level.isLoaded(pos)) {
-                    // Far from players a container counts with what it held when its place was last loaded.
-                    WorldPos at = ConstructionWork.worldPos(level, pos);
-                    if (WarehouseStock.seen(at) != null) {
-                        result.add(new WarehouseStock.Remembered(at, level, pos));
-                    }
+                    // A container whose place is not loaded is neither counted nor taken from: what cannot be taken is not
+                    // counted on either.
                     continue;
                 }
                 BlockEntity entity = level.getBlockEntity(pos);

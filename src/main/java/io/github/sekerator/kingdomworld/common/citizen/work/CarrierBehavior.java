@@ -344,13 +344,25 @@ public final class CarrierBehavior implements ProfessionBehavior {
                 }
             }
             // What a post's container holds goes to the storehouses of the work of that post first, then to the common ones.
-            Map<WorldPos, String> professions = new java.util.HashMap<>();
+            Map<WorldPos, Source> byPos = new java.util.HashMap<>();
             for (Source source : sources) {
-                professions.put(at(level, source.container().pos()), source.post().professionId());
+                byPos.put(at(level, source.container().pos()), source);
             }
-            java.util.function.Function<CarrierPlanner.Stock, Optional<WorldPos>> collectTarget = source -> KingdomStorage.deliveryTargets(level,
-                    post.kingdomId(), professions.getOrDefault(source.pos(), ""), home, blockPos(source.pos()), List.of()).stream()
-                    .findFirst().map(StorehouseInventory::pos);
+            java.util.function.Function<CarrierPlanner.Stock, Optional<WorldPos>> collectTarget = stock -> {
+                Source source = byPos.get(stock.pos());
+                List<ItemStack> goods = new ArrayList<>();
+                if (source != null) {
+                    IItemHandler handler = source.container().handler();
+                    for (int slot = 0; slot < handler.getSlots(); slot++) {
+                        ItemStack stack = handler.getStackInSlot(slot);
+                        if (!stack.isEmpty() && !source.keep().test(stack)) {
+                            goods.add(stack);
+                        }
+                    }
+                }
+                return KingdomStorage.deliveryTargets(level, post.kingdomId(), source == null ? "" : source.post().professionId(), home,
+                        blockPos(stock.pos()), goods).stream().findFirst().map(StorehouseInventory::pos);
+            };
             for (Source source : sources) {
                 stocks.add(new CarrierPlanner.Stock(at(level, source.container().pos()), takeable(source),
                         PostContainers.freeSlots(source.container().handler()), source.container().handler().getSlots()));

@@ -400,7 +400,9 @@ public final class Production {
         DONE,
         NO_INGREDIENTS,
         NO_FUEL,
-        STORAGE_FULL
+        STORAGE_FULL,
+        /** Every storehouse is given to other work. */
+        NO_STOREHOUSE
     }
 
     /**
@@ -410,6 +412,10 @@ public final class Production {
     public static Made makeAbstractly(MinecraftServer server, WorkPost post, Citizen citizen, ProductionPlanner.Job job, @Nullable Fuel fuel) {
         UUID kingdom = post.kingdomId();
         WorldPos near = post.pos();
+        if (!KingdomStorage.hasStorehouseFor(server, kingdom, post.professionId())) {
+            // Nothing is taken for a making whose result could go nowhere.
+            return Made.NO_STOREHOUSE;
+        }
         Map<String, Integer> wanted = new LinkedHashMap<>(job.picks());
         double bank = post.progress().getOrDefault(FUEL_BANK, 0.0);
         int fuelCount = 0;

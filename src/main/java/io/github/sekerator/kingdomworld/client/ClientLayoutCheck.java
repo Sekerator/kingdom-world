@@ -1501,10 +1501,10 @@ final class ClientLayoutCheck {
                 false, allStoreProfessions())));
         cases.add(new Case("storehouse-double-all", () -> storehouse(Component.translatable("kingdomworld.storehouse.double"), 2, true,
                 allStoreProfessions())));
-        cases.add(new Case("storehouse-accepts", () -> new io.github.sekerator.kingdomworld.client.screen.StorehouseAcceptsScreen(BlockPos.ZERO,
-                List.of("lumberjack", "farmer"))));
-        cases.add(new Case("storehouse-accepts-all", () -> new io.github.sekerator.kingdomworld.client.screen.StorehouseAcceptsScreen(BlockPos.ZERO,
-                List.of())));
+        cases.add(new Case("storehouse-accepts", () -> new io.github.sekerator.kingdomworld.client.screen.StorehouseAcceptsScreen(null,
+                BlockPos.ZERO, List.of("lumberjack", "farmer"))));
+        cases.add(new Case("storehouse-accepts-all", () -> new io.github.sekerator.kingdomworld.client.screen.StorehouseAcceptsScreen(null,
+                BlockPos.ZERO, List.of())));
         cases.add(new Case("post-builder", () -> post(postView("builder", WorkStatus.WORKING, true, 4, false, true), Component.empty())));
         cases.add(new Case("post-builder-idle", () -> post(postView("builder", WorkStatus.NO_MATERIALS, false, 16, false, false), longError)));
         cases.add(new Case("throne-construction-catalog", () -> construction(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "catalog",

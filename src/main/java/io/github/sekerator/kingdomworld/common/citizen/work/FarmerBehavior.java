@@ -61,6 +61,13 @@ public final class FarmerBehavior implements ProfessionBehavior {
         if (item == null || item == Items.AIR) {
             return;
         }
+        var farm = PostWork.postOf(server, citizen);
+        if (farm.isPresent() ? !PostWork.hasPlaceFor(server, farm.get())
+                : !KingdomStorage.hasStorehouseFor(server, citizen.kingdomId(), citizen.professionId())) {
+            // Every storehouse is given to other work: the harvest waits in the fields rather than rot there.
+            PostWork.setStatus(server, citizen, io.github.sekerator.kingdomworld.core.citizen.WorkStatus.NO_STOREHOUSE);
+            return;
+        }
         double progress = citizen.workProgress() + CitizenNeeds.farmOutput(citizen.workCapacity(), intervalTicks)
                 * io.github.sekerator.kingdomworld.common.economy.EconomySettings.workSpeed(citizen.mood());
         int whole = (int) Math.min(Math.floor(progress), 64.0 * 9);

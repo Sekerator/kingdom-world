@@ -142,7 +142,10 @@ public final class StorehouseRegistry {
                     List<String> professions = new ArrayList<>();
                     ListTag accepts = entry.getList(ACCEPTS, Tag.TAG_STRING);
                     for (int p = 0; p < accepts.size(); p++) {
-                        professions.add(accepts.getString(p));
+                        // A profession of a mod that was taken away is left out.
+                        if (io.github.sekerator.kingdomworld.core.citizen.Professions.REGISTRY.isKnown(accepts.getString(p))) {
+                            professions.add(accepts.getString(p));
+                        }
                     }
                     inventory.setAccepts(io.github.sekerator.kingdomworld.core.citizen.StorehouseRules.Accepts.of(professions));
                 }

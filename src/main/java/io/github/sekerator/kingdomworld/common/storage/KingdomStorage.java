@@ -210,10 +210,41 @@ public final class KingdomStorage {
         List<StorehouseRules.Candidate<StorehouseInventory>> result = new ArrayList<>(inventories.size());
         for (StorehouseInventory inventory : inventories) {
             WorldPos pos = inventory.pos();
-            result.add(new StorehouseRules.Candidate<>(inventory, pos.dimension(), pos.x(), pos.y(), pos.z(), inventory.accepts(),
+            result.add(new StorehouseRules.Candidate<>(inventory, pos.dimension(), pos.x(), pos.y(), pos.z(), acceptsOf(inventory),
                     inventory.takesIn()));
         }
         return result;
+    }
+
+    /**
+     * Whom a storehouse takes in from, of the professions the game knows now: a profession of a mod that was taken away does not
+     * shut the storehouse, and one given only such professions takes in from everybody.
+     */
+    public static StorehouseRules.Accepts acceptsOf(StorehouseInventory inventory) {
+        StorehouseRules.Accepts accepts = inventory.accepts();
+        if (accepts.all()) {
+            return accepts;
+        }
+        List<String> known = new ArrayList<>();
+        for (String profession : accepts.professions()) {
+            if (io.github.sekerator.kingdomworld.core.citizen.Professions.REGISTRY.isKnown(profession)) {
+                known.add(profession);
+            }
+        }
+        return known.size() == accepts.professions().size() ? accepts : StorehouseRules.Accepts.of(known);
+    }
+
+    /**
+     * Whether a worker of a profession has a storehouse to bring things to at all: one of its profession or a common one, wherever
+     * it stands. Work far from players that has none stands still rather than gather what would be lost.
+     */
+    public static boolean hasStorehouseFor(MinecraftServer server, UUID kingdomId, String profession) {
+        for (StorehouseInventory inventory : storehouses(server, kingdomId, null)) {
+            if (inventory.takesIn() && acceptsOf(inventory).kindFor(profession) != StorehouseRules.Kind.OTHERS) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static int x(@Nullable WorldPos pos) {
@@ -256,7 +287,7 @@ public final class KingdomStorage {
             if (!inventory.takesIn() || !level.isLoaded(at) || !level.getBlockState(at).is(io.github.sekerator.kingdomworld.common.registry.ModRegistries.STOREHOUSE.get())) {
                 continue;
             }
-            candidates.add(new StorehouseRules.Candidate<>(inventory, pos.dimension(), pos.x(), pos.y(), pos.z(), inventory.accepts(),
+            candidates.add(new StorehouseRules.Candidate<>(inventory, pos.dimension(), pos.x(), pos.y(), pos.z(), acceptsOf(inventory),
                     stacks == null || hasRoomFor(inventory, stacks)));
         }
         return StorehouseRules.delivery(candidates, profession, reach(level.getServer(), kingdomId, post), from.getX(), from.getY(),
@@ -273,7 +304,7 @@ public final class KingdomStorage {
         for (StorehouseInventory inventory : storehouses(level.getServer(), kingdomId, null)) {
             WorldPos pos = inventory.pos();
             if (inventory.takesIn() && level.isLoaded(new net.minecraft.core.BlockPos(pos.x(), pos.y(), pos.z()))) {
-                candidates.add(new StorehouseRules.Candidate<>(inventory, pos.dimension(), pos.x(), pos.y(), pos.z(), inventory.accepts(),
+                candidates.add(new StorehouseRules.Candidate<>(inventory, pos.dimension(), pos.x(), pos.y(), pos.z(), acceptsOf(inventory),
                         true));
             }
         }
@@ -429,21 +460,19 @@ public final class KingdomStorage {
             return null;
         }
         List<ItemStack> taken = new ArrayList<>();
-        for (Take take : takes) {
+        for (int i = 0; i < takes.size(); i++) {
+            Take take = takes.get(i);
             ItemStack expected = take.found().stack();
             ItemStack inSlot = take.found().inventory().getStackInSlot(take.found().slot());
             ItemStack stack = inSlot.getCount() >= take.count() && ItemStack.isSameItemSameTags(inSlot, expected)
                     ? take.found().inventory().extractItem(take.found().slot(), take.count(), false) : ItemStack.EMPTY;
             if (stack.getCount() != take.count()) {
-                // Something changed: everything goes back where it came from, or anywhere else.
+                // Something changed: everything taken goes back into the very slot it came from, in the same tick.
                 if (!stack.isEmpty()) {
-                    taken.add(stack);
+                    putBack(server, take, stack);
                 }
-                for (ItemStack back : taken) {
-                    ItemStack rest = net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(take.found().inventory(), back, false);
-                    if (!rest.isEmpty()) {
-                        insert(server, take.found().inventory().pos(), rest);
-                    }
+                for (int j = i - 1; j >= 0; j--) {
+                    putBack(server, takes.get(j), taken.get(j));
                 }
                 return null;
             }
@@ -452,10 +481,22 @@ public final class KingdomStorage {
         return taken;
     }
 
-    private static void insert(MinecraftServer server, WorldPos at, ItemStack stack) {
-        UUID owner = KingdomSavedData.get(server).state().territory().ownerOf(at.dimension(), at.chunk());
-        if (owner != null) {
-            insert(server, owner, stack, at);
+    /**
+     * Puts a stack taken by a plan back where it was taken from: into its slot, which was emptied of it in the same tick, else into
+     * the same storehouse, and only if neither can take it into the other storehouses of the kingdom.
+     */
+    private static void putBack(MinecraftServer server, Take take, ItemStack stack) {
+        StorehouseInventory inventory = take.found().inventory();
+        ItemStack rest = inventory.insertItem(take.found().slot(), stack, false);
+        if (!rest.isEmpty()) {
+            rest = net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inventory, rest, false);
+        }
+        if (!rest.isEmpty()) {
+            WorldPos at = inventory.pos();
+            UUID owner = KingdomSavedData.get(server).state().territory().ownerOf(at.dimension(), at.chunk());
+            if (owner != null) {
+                insert(server, owner, rest, at);
+            }
         }
     }
 

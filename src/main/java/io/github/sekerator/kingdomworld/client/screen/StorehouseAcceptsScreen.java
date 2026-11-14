@@ -30,6 +30,8 @@ public class StorehouseAcceptsScreen extends KingdomScreen {
     private static final int TOGGLE = 16;
     private static final int GAP = 4;
 
+    @org.jetbrains.annotations.Nullable
+    private final net.minecraft.client.gui.screens.Screen parent;
     private final BlockPos pos;
     private final Set<String> chosen;
     private final List<String> professions;
@@ -37,8 +39,13 @@ public class StorehouseAcceptsScreen extends KingdomScreen {
     private int panelHeight;
     private boolean sent;
 
-    public StorehouseAcceptsScreen(BlockPos pos, List<String> accepts) {
+    /**
+     * @param parent the window of the storehouse, still open on the server, to go back to
+     */
+    public StorehouseAcceptsScreen(@org.jetbrains.annotations.Nullable net.minecraft.client.gui.screens.Screen parent, BlockPos pos,
+                                   List<String> accepts) {
         super(Component.translatable(KEY + "title"));
+        this.parent = parent;
         this.pos = pos.immutable();
         this.chosen = new LinkedHashSet<>(accepts);
         this.professions = choices(accepts);
@@ -134,17 +141,17 @@ public class StorehouseAcceptsScreen extends KingdomScreen {
     }
 
     /**
-     * Sends the setting, or only asks for the window of the storehouse again.
+     * Sends the setting, or leaves it, and goes back to the window of the storehouse.
      */
     private void send(boolean apply) {
-        if (!sent) {
+        if (apply && !sent) {
             sent = true;
             if (Minecraft.getInstance().getConnection() != null) {
-                KingdomWorldNetwork.sendToServer(new StorehousePackets.Accepts(pos, apply, apply ? List.copyOf(chosen) : List.of()));
+                KingdomWorldNetwork.sendToServer(new StorehousePackets.Accepts(pos, true, List.copyOf(chosen)));
             }
         }
         if (minecraft != null) {
-            minecraft.setScreen(null);
+            minecraft.setScreen(parent);
         }
     }
 

@@ -190,8 +190,8 @@ the side, result from below); tables of mods built on the vanilla crafting table
 
 An ingredient that takes several items (any planks, any stone) is made up of several of them, as at a crafting table:
 a plank of oak in one storehouse and a plank of spruce in another make sticks together. The kingdom sees the
-ingredients in all its storehouses at once: in any storehouse, either half of a double one and the containers of
-buildings with the Warehouse role, near players and far from them.
+ingredients in all its storehouses at once, near players and far from them: in any storehouse and either half of a
+double one, and in the containers of buildings with the Warehouse role while their place is loaded.
 
 Near players a worker sets the ingredients aside in the storehouses, takes them from the container of the post or
 fetches them itself from the storehouse where they lie, the nearest first, then from the next; what lies in storehouses
@@ -200,9 +200,10 @@ below. A furnace whose output holds some other item is left alone. Any fuel that
 tools, food and the ingredients themselves; a campfire needs none. The worker carries the result to a storehouse.
 
 Far from players each thing is made in one go: the ingredients and fuel leave the storehouses and the result goes there
-in the same tick, or nothing happens at all. Far from players the containers of a warehouse count with what they held
-when their place was last loaded, and the work takes from the container itself, loading its place for a moment. After a
-restart of the server such a building counts from the first time its place is loaded. Without room in the storehouses the work stands still. A post without a
+in the same tick, or nothing happens at all. The containers of a warehouse count and give only while their place is
+loaded: far from players neither orders nor work count on them. Without room in the storehouses the work stands still, and
+without a storehouse of the work or a common one the post says "Nowhere to deliver: no storehouse for this work" and uses
+nothing up. A post without a
 container next to it, or a kingdom without a single carrier at work, works a quarter slower.
 
 ### Time

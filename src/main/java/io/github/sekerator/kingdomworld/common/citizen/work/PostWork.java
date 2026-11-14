@@ -247,6 +247,11 @@ public final class PostWork {
             setStatus(server, citizen, ZoneSurveys.zoneStatus(post.pos()));
             return;
         }
+        if (!hasPlaceFor(server, post)) {
+            // Every storehouse is given to other work and the post has no container: nothing is gathered or used up.
+            setStatus(server, citizen, WorkStatus.NO_STOREHOUSE);
+            return;
+        }
         double factor = (post.hasContainer() ? 1.0 : GatheringRules.SELF_CARRY_FACTOR)
                 * io.github.sekerator.kingdomworld.common.economy.EconomySettings.workSpeed(citizen.mood());
         Map<String, Integer> needed = GatheringRules.abstractInputs(rates, 1, interval, factor);
@@ -303,6 +308,14 @@ public final class PostWork {
      *
      * @return what fit nowhere
      */
+    /**
+     * Whether what the work of a post gathers has somewhere to go: the container of the post, a storehouse of its work or a common
+     * one.
+     */
+    public static boolean hasPlaceFor(MinecraftServer server, WorkPost post) {
+        return post.hasContainer() || KingdomStorage.hasStorehouseFor(server, post.kingdomId(), post.professionId());
+    }
+
     public static ItemStack deliver(MinecraftServer server, WorkPost post, ItemStack stack) {
         ItemStack rest = stack;
         ServerLevel level = level(server, post.pos());

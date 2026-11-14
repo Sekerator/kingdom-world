@@ -151,6 +151,7 @@ public final class WorkshopBehavior implements ProfessionBehavior {
                 status = made > 0 ? WorkStatus.WORKING : switch (result) {
                     case NO_FUEL -> WorkStatus.NO_FUEL;
                     case STORAGE_FULL -> WorkStatus.STORAGE_FULL;
+                    case NO_STOREHOUSE -> WorkStatus.NO_STOREHOUSE;
                     default -> WorkStatus.NO_INGREDIENTS;
                 };
                 break;

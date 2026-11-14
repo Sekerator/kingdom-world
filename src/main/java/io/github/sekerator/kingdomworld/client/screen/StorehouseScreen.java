@@ -96,12 +96,10 @@ public class StorehouseScreen extends AbstractContainerScreen<StorehouseMenu> {
 
     private void openSettings() {
         if (minecraft != null) {
-            // The window of the storehouse closes; the server opens it again when the setting is done.
+            // The window of the storehouse stays open on the server: the setting comes back to it, and the server opens it again
+            // with the new setting.
             StorehouseMenu.Settings settings = menu.settings();
-            if (minecraft.player != null) {
-                minecraft.player.closeContainer();
-            }
-            minecraft.setScreen(new StorehouseAcceptsScreen(settings.pos(), settings.accepts()));
+            minecraft.setScreen(new StorehouseAcceptsScreen(this, settings.pos(), settings.accepts()));
         }
     }
 

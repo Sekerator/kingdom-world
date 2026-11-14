@@ -387,6 +387,78 @@ public final class ProductionGameTests {
         helper.succeed();
     }
 
+    /**
+     * A plan to take from two storehouses fails at the second, which changed meanwhile: what was taken from the first goes back
+     * into the very slot it came from, and nothing moves anywhere else.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_storehouse_plan_back")
+    public static void aFailedPlanPutsEverythingBackWhereItWas(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Honest Shelves", UUID.randomUUID());
+        try {
+            StorehouseInventory first = CitizenGameTests.storehouse(helper, 0, 0, 4);
+            StorehouseInventory second = CitizenGameTests.storehouse(helper, 4, 0, 4);
+            first.setStackInSlot(7, new ItemStack(Items.OAK_PLANKS, 5));
+            second.setStackInSlot(3, new ItemStack(Items.SPRUCE_PLANKS, 5));
+            StorehouseInventory third = CitizenGameTests.storehouse(helper, 2, 0, 0);
+            List<KingdomStorage.Take> plan = KingdomStorage.plan(server, kingdom.id(), java.util.Map.of("minecraft:oak_planks", 3,
+                    "minecraft:spruce_planks", 3), item -> 0, CitizenGameTests.at(helper, 0, 0, 4));
+            helper.assertTrue(plan != null && plan.size() == 2, "No plan over both storehouses: " + plan);
+            // The storehouse the plan takes from last changes before the plan is carried out.
+            KingdomStorage.Take last = plan.get(1);
+            last.found().inventory().setStackInSlot(last.found().slot(), ItemStack.EMPTY);
+            helper.assertTrue(KingdomStorage.takePlanned(server, plan) == null, "A plan that could not be carried out took something");
+            KingdomStorage.Take firstTake = plan.get(0);
+            ItemStack back = firstTake.found().inventory().getStackInSlot(firstTake.found().slot());
+            helper.assertTrue(back.getCount() == 5 && ItemStack.isSameItemSameTags(back, firstTake.found().stack()),
+                    "What was taken did not go back into its slot: " + back);
+            helper.assertTrue(third.isEmpty(), "What was taken went to another storehouse");
+        } finally {
+            CitizenGameTests.finish(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Far from players a crafter whose kingdom has only a storehouse of farmers makes nothing and takes nothing: there is nowhere
+     * its planks could go. The logs stay, the post says so.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_workshop_no_storehouse")
+    public static void workFarFromPlayersWithoutAStorehouseForItWaits(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos from = helper.absolutePos(ZONE_FROM);
+        BlockPos to = helper.absolutePos(new BlockPos(9, 3, 9));
+        GatheringGameTests.clear(level, from, to);
+        TestChunks.hold(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Locked Barns", UUID.randomUUID());
+        StorehouseInventory barn = CitizenGameTests.storehouse(helper, 0, 0, 4);
+        barn.setAccepts(io.github.sekerator.kingdomworld.core.citizen.StorehouseRules.Accepts.of(List.of("farmer")));
+        fill(barn, new ItemStack(Items.OAK_LOG, 4));
+        helper.setBlock(new BlockPos(6, 0, 1), Blocks.CRAFTING_TABLE);
+        WorldPos postPos = GatheringGameTests.post(helper, new BlockPos(5, 0, 1), "crafter");
+        Citizen worker = farWorker(helper, kingdom, "crafter", postPos);
+        surveyed(server, postPos);
+        try {
+            order(server, kingdom, Items.OAK_PLANKS, Order.Kind.MAKE, 8);
+            steps(server, kingdom, 3);
+            helper.assertTrue(stored(server, kingdom, Items.OAK_LOG) == 4 && stored(server, kingdom, Items.OAK_PLANKS) == 0,
+                    "Logs were used for planks that could go nowhere: logs " + stored(server, kingdom, Items.OAK_LOG) + ", planks "
+                            + stored(server, kingdom, Items.OAK_PLANKS));
+            helper.assertTrue(worker.workStatus() == WorkStatus.NO_STOREHOUSE, "Expected no storehouse for the work, got " + worker.workStatus());
+            // A common storehouse lets the work go on.
+            CitizenGameTests.storehouse(helper, 2, 0, 4);
+            steps(server, kingdom, 3);
+            helper.assertTrue(stored(server, kingdom, Items.OAK_PLANKS) > 0, "The crafter did not work with a common storehouse");
+        } finally {
+            CitizenGameTests.finish(helper, kingdom, worker);
+            GatheringGameTests.clear(level, from, to);
+            TestChunks.release(level, from);
+        }
+        helper.succeed();
+    }
+
     @GameTest(template = EMPTY, batch = "kingdomworld_workshop_smithing", timeoutTicks = 1600)
     public static void smithUpgradesToNetheriteAtTheSmithingTable(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();

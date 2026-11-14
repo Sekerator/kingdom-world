@@ -302,34 +302,34 @@ public class StorehouseBlock extends BaseEntityBlock {
     }
 
     /**
-     * A player set whom the storehouse at a position takes in from, both halves of a double one alike, in its window; the window
-     * opens again with the setting.
+     * A player set whom the storehouse at a position takes in from, both halves of a double one alike, from its window. Only a
+     * player who has the window of that very storehouse open (it opened it through the protection and the law like any container)
+     * and may change it does; the window opens again with the setting. Anything else is left as it is: the packet never opens a
+     * storehouse.
      *
-     * @param apply false to go back to the window without a change
+     * @param apply false for nothing to change
      */
     public static void setAccepts(net.minecraft.server.level.ServerPlayer player, BlockPos pos, boolean apply, List<String> professions) {
         ServerLevel level = player.serverLevel();
-        if (!level.isLoaded(pos) || !(level.getBlockEntity(pos) instanceof StorehouseBlockEntity)
-                || player.distanceToSqr(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) > 8.0 * 8.0) {
+        if (!apply || !(player.containerMenu instanceof StorehouseMenu menu) || !menu.settings().pos().equals(pos) || !menu.stillValid(player)
+                || !level.isLoaded(pos) || !(level.getBlockEntity(pos) instanceof StorehouseBlockEntity)) {
             return;
         }
-        if (apply) {
-            if (!mayEdit(level, pos, player)) {
-                player.displayClientMessage(Component.translatable("kingdomworld.storehouse.no_right").withStyle(ChatFormatting.RED), true);
-            } else {
-                List<String> known = new ArrayList<>();
-                for (String profession : professions) {
-                    if (io.github.sekerator.kingdomworld.core.citizen.Professions.REGISTRY.isKnown(profession)) {
-                        known.add(profession);
-                    }
-                }
-                io.github.sekerator.kingdomworld.core.citizen.StorehouseRules.Accepts accepts =
-                        io.github.sekerator.kingdomworld.core.citizen.StorehouseRules.Accepts.of(known);
-                StorehouseRegistry registry = KingdomSavedData.get(level.getServer()).storehouses();
-                for (BlockPos half : halves(level, pos)) {
-                    registry.get(StorehouseBlockEntity.position(level, half)).ifPresent(inventory -> inventory.setAccepts(accepts));
-                }
+        if (!mayEdit(level, pos, player)) {
+            player.displayClientMessage(Component.translatable("kingdomworld.storehouse.no_right").withStyle(ChatFormatting.RED), true);
+            return;
+        }
+        List<String> known = new ArrayList<>();
+        for (String profession : professions) {
+            if (io.github.sekerator.kingdomworld.core.citizen.Professions.REGISTRY.isKnown(profession)) {
+                known.add(profession);
             }
+        }
+        io.github.sekerator.kingdomworld.core.citizen.StorehouseRules.Accepts accepts =
+                io.github.sekerator.kingdomworld.core.citizen.StorehouseRules.Accepts.of(known);
+        StorehouseRegistry registry = KingdomSavedData.get(level.getServer()).storehouses();
+        for (BlockPos half : halves(level, pos)) {
+            registry.get(StorehouseBlockEntity.position(level, half)).ifPresent(inventory -> inventory.setAccepts(accepts));
         }
         open(level, pos, player, false);
     }

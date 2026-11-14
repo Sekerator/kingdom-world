@@ -18,7 +18,6 @@ public final class ConstructionEvents {
         MinecraftForge.EVENT_BUS.addListener(ConstructionEvents::onReload);
         MinecraftForge.EVENT_BUS.addListener(ConstructionEvents::onTags);
         MinecraftForge.EVENT_BUS.addListener(ConstructionEvents::onServerTick);
-        MinecraftForge.EVENT_BUS.addListener(ConstructionEvents::onChunkUnload);
     }
 
     private static void onReload(AddReloadListenerEvent event) {
@@ -42,13 +41,6 @@ public final class ConstructionEvents {
         if (tick % 20 == 0) {
             ConstructionSettings.refresh();
             ConstructionWork.tick(event.getServer(), tick);
-        }
-    }
-
-    private static void onChunkUnload(net.minecraftforge.event.level.ChunkEvent.Unload event) {
-        if (event.getLevel() instanceof net.minecraft.server.level.ServerLevel level && level.getServer().isSameThread()
-                && event.getChunk() instanceof net.minecraft.world.level.chunk.LevelChunk chunk) {
-            BuildingEffects.onChunkUnload(level, chunk);
         }
     }
 

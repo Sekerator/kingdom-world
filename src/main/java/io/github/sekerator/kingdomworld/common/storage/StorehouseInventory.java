@@ -46,7 +46,7 @@ public class StorehouseInventory extends ItemStackHandler {
     }
 
     /**
-     * Whether items may be put in: a container of a warehouse whose place is not loaded only gives.
+     * Whether items may be put in: a container of a warehouse that is gone or whose place was unloaded takes nothing.
      */
     public boolean takesIn() {
         return true;
