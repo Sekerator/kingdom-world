@@ -44,6 +44,19 @@ public final class EarthworkGameTests {
     private EarthworkGameTests() {
     }
 
+    /** How high over the floor of the test its plot is cleared and looked at from. */
+    private static final int OPEN_ABOVE = 9;
+
+    /**
+     * Clears the place of the test up to {@link #OPEN_ABOVE} and has the land of plots looked at from just over it: the tests stand
+     * deep under the land, in the caves of the world beyond the small box the game clears, and the rock over them would be the
+     * surface of every column.
+     */
+    private static void open(GameTestHelper helper) {
+        GatheringGameTests.clear(helper.getLevel(), helper.absolutePos(new BlockPos(-1, 0, -1)), helper.absolutePos(new BlockPos(10, OPEN_ABOVE, 10)));
+        Earthworks.lookFromForTests(helper.absolutePos(new BlockPos(0, OPEN_ABOVE + 1, 0)).getY());
+    }
+
     /**
      * Flat land of earth one block thick over the floor of the test, from 0 to 9 both ways.
      */
@@ -98,8 +111,9 @@ public final class EarthworkGameTests {
 
     private static void end(GameTestHelper helper, Kingdom kingdom, Citizen... citizens) {
         ConstructionSettings.override(null);
+        Earthworks.lookFromForTests(null);
         CitizenGameTests.finish(helper, kingdom, citizens);
-        GatheringGameTests.clear(helper.getLevel(), helper.absolutePos(new BlockPos(-1, 0, -1)), helper.absolutePos(new BlockPos(10, 8, 10)));
+        GatheringGameTests.clear(helper.getLevel(), helper.absolutePos(new BlockPos(-1, 0, -1)), helper.absolutePos(new BlockPos(10, OPEN_ABOVE, 10)));
     }
 
     @GameTest(template = EMPTY, batch = "kingdomworld_earthwork_hill", timeoutTicks = 400)
@@ -107,6 +121,7 @@ public final class EarthworkGameTests {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         ConstructionSettings.override(FAST);
+        open(helper);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Diggers", UUID.randomUUID());
         floor(helper, 1);
         // A hill of stone three blocks high on the earth, and a tree on it.
@@ -150,6 +165,7 @@ public final class EarthworkGameTests {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         ConstructionSettings.override(FAST);
+        open(helper);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Fillers", UUID.randomUUID());
         floor(helper, 3);
         // A pit of three by three, two blocks deep.
@@ -187,6 +203,7 @@ public final class EarthworkGameTests {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         ConstructionSettings.override(FAST);
+        open(helper);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Careful Diggers", UUID.randomUUID());
         floor(helper, 1);
         for (int x = 3; x <= 5; x++) {

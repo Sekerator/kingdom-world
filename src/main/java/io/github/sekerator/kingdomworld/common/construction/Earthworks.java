@@ -83,6 +83,12 @@ public final class Earthworks {
     /** The tool the ground is broken with, so that stone gives cobblestone and ore its ore. */
     private static final ItemStack PICK = new ItemStack(Items.IRON_PICKAXE);
     private static final String COBBLESTONE = "minecraft:cobblestone";
+    /**
+     * The height below which the land of a plot is looked at, the top of the world in play. The game tests stand deep under the land
+     * of their world, the rock over them being the surface of every column: they look at their plots from below that rock, as if
+     * the sky were open over them.
+     */
+    private static int lookFrom = Integer.MAX_VALUE;
 
     /**
      * What the plan of earthworks is made into: the template of their fill, the plan of their steps, the chunks the steps touch
@@ -241,10 +247,24 @@ public final class Earthworks {
     }
 
     /**
+     * The height just over the highest block of a column, below {@link #lookFrom}.
+     */
+    private static int surface(ServerLevel level, int x, int z) {
+        return Math.min(level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z), lookFrom);
+    }
+
+    /**
+     * For the game tests: the land of plots is looked at from below this height, {@code null} for the top of the world again.
+     */
+    public static void lookFromForTests(@Nullable Integer y) {
+        lookFrom = y == null ? Integer.MAX_VALUE : y;
+    }
+
+    /**
      * The height of the solid ground of a column: below trees, plants, snow and water.
      */
     static int groundAt(ServerLevel level, int x, int z) {
-        int y = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z) - 1;
+        int y = surface(level, x, z) - 1;
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, y, z);
         while (y > level.getMinBuildHeight() && soft(level.getBlockState(pos.setY(y)))) {
             y--;
@@ -304,7 +324,7 @@ public final class Earthworks {
         int[] top = new int[sizeX * sizeZ];
         for (int dz = 0; dz < sizeZ; dz++) {
             for (int dx = 0; dx < sizeX; dx++) {
-                top[dz * sizeX + dx] = level.getHeight(Heightmap.Types.WORLD_SURFACE, minX + dx, minZ + dz) - 1;
+                top[dz * sizeX + dx] = surface(level, minX + dx, minZ + dz) - 1;
             }
         }
         Earthwork shape = new Earthwork(minX, minZ, sizeX, sizeZ, request.mode(), request.target(), request.smooth(), ground, top, Map.of(), Map.of());
