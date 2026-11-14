@@ -4673,5 +4673,7 @@
   "kingdomworld.error.throne_move_wild": "These are the wilds of a province of the kingdom, not a claimed chunk: the throne for the move stands only on claimed land",
   "kingdomworld.error.throne_move_world": "The rulers of the world do not move their thrones",
   "kingdomworld.construction.finished.earthwork": "Earthworks finished: %s at %s",
-  "kingdomworld.screen.construction.kind.earthwork": "Earthworks: %s"
+  "kingdomworld.screen.construction.kind.earthwork": "Earthworks: %s",
+  "block.kingdomworld.scaffolding": "Builder's Scaffolding",
+  "block.kingdomworld.scaffolding.hint": "Scaffolding of the builders: it costs nothing, and they take it down once the work no longer needs it"
 }

@@ -49,7 +49,6 @@ with the place of a problem, and the list of what is missing. The buttons of the
 | waits for a builder | hire a builder nearer |
 | lacks materials | bring or order them |
 | a container with items is in the way | empty it |
-| a block cannot be reached | clear the way |
 | blocks wait for the place to be loaded | come closer |
 | part of the place is no longer our land | get the land back |
 
@@ -143,12 +142,31 @@ tag kingdomworld:unclearable (a spawner, reinforced deepslate, budding amethyst,
 mod. Blocks are placed the way a player places them, so storehouses, work posts, stalls and blocks of other mods in the
 building register as if a player had placed them.
 
-### Reach
+### Reach and scaffolding
 
-A builder walks up to the place and puts a block from up to {cfg:construction.builderReach} blocks away. If it cannot
-come closer it places from the nearest point up to {cfg:construction.builderFarReach} blocks away, and if even that
-fails, after {cfg:construction.builderGiveUpSeconds} s it goes on with another block, and the construction shows the
-hard place.
+A builder walks up to a place from which it reaches the block: up to {cfg:construction.builderReach} blocks away. It
+gets to a roof, the top of a high wall and overhanging parts on **scaffolding**, as a player jumps and places a block
+under its feet:
+
+1. It picks a column on the site or within 3 blocks around it: where the fewest scaffolds are needed, near itself and not
+   where walls still go up.
+2. It climbs the column to the height from which it reaches and places everything it reaches from there (the blocks of
+   the same layer first).
+3. It comes down taking the scaffolding apart from the top and moves the column on to the next group of blocks.
+
+Scaffolding is free: the block Builder's Scaffolding has no item, takes nothing from the storehouses and drops nothing.
+It goes only into air, grass or a layer of snow, only on the kingdom's land and never on a road, a wall, a building of
+others, the site of another construction, a chest or a post. A column is up to 16 blocks high. A player may break
+scaffolding and the builder puts it up again; a builder does not fall off scaffolding, and a fall does it no harm.
+Right-clicking scaffolding with an empty hand tells what it is.
+
+No scaffolding is left behind: a construction is finished only once none is left, and after a restart of the server, a
+cancel, a demolition and in unloaded chunks (once they load) it is taken down by itself. Scaffolding where the blueprint
+wants a block gives way to the block. Builders work the same way on [earthworks](earthworks).
+
+When scaffolding does not help either (the block is walled in, there is no room for a column), the builder places the
+block from the nearest point it got to: at once if it stands within {cfg:construction.builderFarReach} blocks,
+otherwise after {cfg:construction.builderGiveUpSeconds} s. A block out of reach never stops a construction.
 
 ### Speed and risk
 
@@ -170,8 +188,8 @@ profession counts (see [Health, the infirmary and death](health)).
 ### The window of a builder's post
 
 The window shows the current construction and how far it is, what is being placed, how many blocks were placed today
-and why work stands still: "No construction within reach", "Not enough materials", "A container with items is in the
-way" or "Cannot reach a block".
+and why work stands still: "No construction within reach", "Not enough materials" or "A container with items is in
+the way".
 
 > Builders also build [roads](roads) and the [walls](walls) of cities. Keep a storehouse and a builder's post near the
 > site and planks, cobblestone and glass in stock: then large buildings rise without pauses.

@@ -112,6 +112,7 @@ public final class ConstructionWork {
         BuildingWork.reset();
         BuildingEffects.reset();
         CustomTemplates.reset();
+        Scaffolds.reset();
         integrityTurn = 0;
     }
 
@@ -305,7 +306,8 @@ public final class ConstructionWork {
             BlockPos at = template.place(block.pos(), anchor, placement);
             BlockState there = level.getBlockState(at);
             BlockState wanted = TemplateBlocks.transform(block.state(), placement);
-            if (there.equals(wanted) || there.isAir()) {
+            if (there.equals(wanted) || there.isAir() || Scaffolds.is(there)) {
+                // Scaffolds left standing are taken down by themselves, or give way to the block.
                 continue;
             }
             if (isProtected(level, at, there)) {
@@ -332,6 +334,10 @@ public final class ConstructionWork {
     public static boolean isProtected(BlockGetter level, BlockPos pos, BlockState state) {
         if (state.getDestroySpeed(level, pos) < 0 || state.is(TemplateBlocks.UNCLEARABLE)) {
             return true;
+        }
+        if (Scaffolds.is(state)) {
+            // The scaffolding of the builders is nothing to keep: it goes when the work is done.
+            return false;
         }
         ResourceLocation id = ForgeRegistries.BLOCKS.getKey(state.getBlock());
         return id != null && KingdomWorld.MOD_ID.equals(id.getNamespace());
@@ -709,7 +715,9 @@ public final class ConstructionWork {
      */
     public static StepResult clear(ServerLevel level, BlockPos pos, @Nullable LivingEntity breaker, ItemStack tool, List<ItemStack> drops) {
         BlockState state = level.getBlockState(pos);
-        if (state.isAir()) {
+        if (state.isAir() || Scaffolds.is(state)) {
+            // A scaffold is not in the way: it drops nothing and its builders take it down when they no longer need it, and a
+            // block placed there replaces it.
             return StepResult.DONE;
         }
         if (isProtected(level, pos, state) || holdsItems(level, pos)) {
@@ -802,7 +810,7 @@ public final class ConstructionWork {
             if (before != null) {
                 return before;
             }
-        } else if (!there.isAir() && !there.canBeReplaced()) {
+        } else if (!there.isAir() && !there.canBeReplaced() && !Scaffolds.is(there)) {
             StepResult cleared = clear(level, at, builder, tool, drops);
             if (cleared != StepResult.DONE) {
                 return cleared;
@@ -1034,6 +1042,12 @@ public final class ConstructionWork {
                 budget -= applyPending(level, construction, plan.get(), budget);
             }
             if (finished(construction, plan.get())) {
+                // The scaffolds go before the construction is finished: a builder still on one comes down first, and those
+                // where nothing is loaded wait for their place to be loaded.
+                if (!Scaffolds.takeDownAll(level, construction, false, now)) {
+                    construction.setStatus(builders(construction, now) > 0 ? Construction.Status.WORKING : Construction.Status.WAITING_FOR_LOAD);
+                    continue;
+                }
                 complete(server, construction, false);
                 continue;
             }
@@ -1044,6 +1058,7 @@ public final class ConstructionWork {
         if (tick % 100 == 0) {
             refreshReservations(server);
         }
+        Scaffolds.tick(server, now);
         if (tick % 200 == 0) {
             orderMissing(server);
             BuildingWork.autoRepair(server);
@@ -1078,10 +1093,16 @@ public final class ConstructionWork {
         pending.sort(Integer::compare);
         List<ItemStack> drops = new ArrayList<>();
         boolean blocked = false;
+        long now = KingdomWorldApi.gameTime(level.getServer());
         for (int step : pending) {
             // A container in the way stops the building, not the rest of the clearing.
             if (done >= budget || (blocked && plan.step(step).kind() == BuildPlan.Kind.PLACE)) {
                 break;
+            }
+            BuildPlan.Step at = plan.step(step);
+            if (Scaffolds.inUse(construction.dimension(), at.x(), at.y(), at.z(), now)) {
+                // A builder stands on a scaffold there: the block waits until the column is taken down.
+                continue;
             }
             StepResult result = doStep(level, construction, plan, template.get(), step, null, ItemStack.EMPTY, drops, false);
             if (result == StepResult.OUTSIDE_LAND) {
@@ -1092,7 +1113,6 @@ public final class ConstructionWork {
                 continue;
             }
             if (result == StepResult.BLOCKED) {
-                BuildPlan.Step at = plan.step(step);
                 construction.setStatus(Construction.Status.BLOCKED, new WorldPos(construction.dimension(), at.x(), at.y(), at.z()));
                 blocked = true;
                 continue;
@@ -1385,6 +1405,8 @@ public final class ConstructionWork {
         Optional<BuildPlan> plan = plan(construction);
         Optional<BuildingTemplate> template = template(construction);
         if (level != null && plan.isPresent() && template.isPresent()) {
+            // Scaffolds nobody stands on go first; those of builders on them now go when they come down.
+            Scaffolds.takeDownAll(level, construction, true, KingdomWorldApi.gameTime(server));
             List<ItemStack> drops = new ArrayList<>();
             int done = 0;
             for (BuildPlan.Step step : plan.get().steps()) {

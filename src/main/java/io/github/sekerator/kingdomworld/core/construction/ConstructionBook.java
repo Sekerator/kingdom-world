@@ -119,6 +119,7 @@ public final class ConstructionBook {
         if (removed == null) {
             return Optional.empty();
         }
+        leave(removed);
         removed.setChangeListener(() -> {
         });
         if (removed.building() > 0) {
@@ -126,6 +127,90 @@ public final class ConstructionBook {
         }
         changed();
         return Optional.of(removed);
+    }
+
+    // ---------------------------------------------------------------- scaffolds left behind
+
+    /** Most scaffolds kept to be taken down after their constructions went away. */
+    public static final int MAX_LEFT_SCAFFOLDS = 65_536;
+
+    /** Scaffolds of constructions that went away while some stood where nothing was loaded, by dimension. */
+    private final Map<String, java.util.Set<Long>> leftScaffolds = new LinkedHashMap<>();
+
+    /**
+     * The scaffolds of a construction that goes away are taken down by the work of construction later, where their place is loaded.
+     */
+    private void leave(Construction construction) {
+        java.util.Set<Long> cells = construction.takeScaffolds();
+        if (!cells.isEmpty()) {
+            leaveScaffolds(construction.dimension(), cells);
+        }
+    }
+
+    /**
+     * Scaffolds to be taken down once their place is loaded, though no construction keeps them.
+     */
+    public void leaveScaffolds(String dimension, Collection<Long> cells) {
+        java.util.Set<Long> left = leftScaffolds.computeIfAbsent(dimension, key -> new java.util.LinkedHashSet<>());
+        int before = left.size();
+        for (long cell : cells) {
+            if (leftScaffoldCount() >= MAX_LEFT_SCAFFOLDS) {
+                break;
+            }
+            left.add(cell);
+        }
+        if (left.isEmpty()) {
+            leftScaffolds.remove(dimension);
+        }
+        if (left.size() != before) {
+            changed();
+        }
+    }
+
+    /**
+     * Scaffolds no construction keeps, by dimension; read only.
+     */
+    public Map<String, java.util.Set<Long>> leftScaffolds() {
+        Map<String, java.util.Set<Long>> copy = new LinkedHashMap<>();
+        leftScaffolds.forEach((dimension, cells) -> copy.put(dimension, java.util.Collections.unmodifiableSet(cells)));
+        return java.util.Collections.unmodifiableMap(copy);
+    }
+
+    public int leftScaffoldCount() {
+        int count = 0;
+        for (java.util.Set<Long> cells : leftScaffolds.values()) {
+            count += cells.size();
+        }
+        return count;
+    }
+
+    /**
+     * A scaffold left behind was taken down, or something else stands in its place.
+     */
+    public void forgetLeftScaffold(String dimension, long cell) {
+        java.util.Set<Long> left = leftScaffolds.get(dimension);
+        if (left != null && left.remove(cell)) {
+            if (left.isEmpty()) {
+                leftScaffolds.remove(dimension);
+            }
+            changed();
+        }
+    }
+
+    /**
+     * Restores the scaffolds left behind from saved data. Does not notify.
+     */
+    public void restoreLeftScaffolds(String dimension, long[] cells) {
+        java.util.Set<Long> left = leftScaffolds.computeIfAbsent(dimension, key -> new java.util.LinkedHashSet<>());
+        for (long cell : cells) {
+            if (leftScaffoldCount() >= MAX_LEFT_SCAFFOLDS) {
+                break;
+            }
+            left.add(cell);
+        }
+        if (left.isEmpty()) {
+            leftScaffolds.remove(dimension);
+        }
     }
 
     // ---------------------------------------------------------------- buildings
@@ -284,6 +369,7 @@ public final class ConstructionBook {
             }
             return false;
         });
+        removed.forEach(this::leave);
         boolean anyBuilding = buildings.values().removeIf(building -> building.kingdomId().equals(kingdomId));
         if (anyBuilding || removed.stream().anyMatch(construction -> construction.building() > 0)) {
             version++;

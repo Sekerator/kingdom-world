@@ -358,6 +358,26 @@ public class CitizenEntity extends PathfinderMob {
 
     // ---------------------------------------------------------------- life
 
+    /** The tick until which a fall does the body no harm: a builder on its scaffolds. */
+    private int safeFromFallsUntil;
+
+    /**
+     * A fall does the body no harm for a while: it works on scaffolds, comes down them one block at a time and is set on the
+     * ground when they are taken down under it.
+     */
+    public void keepSafeFromFalls(int ticks) {
+        safeFromFallsUntil = Math.max(safeFromFallsUntil, tickCount + Math.max(0, ticks));
+        fallDistance = 0.0f;
+    }
+
+    @Override
+    public boolean causeFallDamage(float distance, float multiplier, DamageSource source) {
+        if (tickCount <= safeFromFallsUntil) {
+            return false;
+        }
+        return super.causeFallDamage(distance, multiplier, source);
+    }
+
     @Override
     public void aiStep() {
         super.aiStep();

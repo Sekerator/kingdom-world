@@ -4673,5 +4673,7 @@
   "kingdomworld.error.throne_move_wild": "Это дикая часть провинции королевства, а не заявленный чанк: трон для переноса ставят только на заявленную землю",
   "kingdomworld.error.throne_move_world": "Правители мира свой трон не переносят",
   "kingdomworld.construction.finished.earthwork": "Земляные работы завершены: %s у %s",
-  "kingdomworld.screen.construction.kind.earthwork": "Земляные работы: %s"
+  "kingdomworld.screen.construction.kind.earthwork": "Земляные работы: %s",
+  "block.kingdomworld.scaffolding": "Строительные леса",
+  "block.kingdomworld.scaffolding.hint": "Леса строителей: ставятся бесплатно и разбираются, когда больше не нужны"
 }

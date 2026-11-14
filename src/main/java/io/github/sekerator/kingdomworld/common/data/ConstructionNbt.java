@@ -31,11 +31,12 @@ import java.util.Map;
  *   constructions: [ { id, kingdom, template, fingerprint, dimension, x, y, z, rotation, mirror, box: [6 ints], created,
  *                      clear: [x, y, z, ...], steps, priority, paused, orderMissing, done: [longs], pending: [ints],
  *                      delivered: [ { item, count } ], orders: [ { item, order } ], status, statusPos?: [x, y, z], carry,
- *                      kind, building, wood, stone, skip: [longs], removed: [ { item, count } ], earthwork? } ],
+ *                      kind, building, wood, stone, skip: [longs], removed: [ { item, count } ], earthwork?, scaffolds?: [longs] } ],
  *   buildings: [ { id, kingdom, template, type, category, role, level, wood, stone, dimension, x, y, z, rotation, mirror,
  *                  box, fingerprint, built, admin, integrity, checked, autoRepair, damaged: [longs] } ],
  *   blueprints: [ { id, kingdom, name, category, role, size: [3 ints], palette: [state strings], blocks: [ints],
- *                   anchor: [3 ints], entrance, created, author } ]
+ *                   anchor: [3 ints], entrance, created, author } ],
+ *   leftScaffolds?: [ { dimension, cells: [longs] } ]
  * }
  * </pre>
  *
@@ -69,6 +70,16 @@ public final class ConstructionNbt {
             blueprints.add(write(blueprint));
         }
         tag.put("blueprints", blueprints);
+        ListTag left = new ListTag();
+        book.leftScaffolds().forEach((dimension, cells) -> {
+            CompoundTag entry = new CompoundTag();
+            entry.putString("dimension", dimension);
+            entry.putLongArray("cells", cells.stream().mapToLong(Long::longValue).toArray());
+            left.add(entry);
+        });
+        if (!left.isEmpty()) {
+            tag.put("leftScaffolds", left);
+        }
         return tag;
     }
 
@@ -211,6 +222,9 @@ public final class ConstructionNbt {
         if (construction.earthwork() != null) {
             tag.put("earthwork", writeEarthwork(construction.earthwork()));
         }
+        if (construction.hasScaffolds()) {
+            tag.putLongArray("scaffolds", construction.scaffolds().stream().mapToLong(Long::longValue).toArray());
+        }
         return tag;
     }
 
@@ -315,6 +329,11 @@ public final class ConstructionNbt {
                 problems.add("blueprint #" + i + ": " + e.getMessage());
             }
         }
+        ListTag left = tag.getList("leftScaffolds", Tag.TAG_COMPOUND);
+        for (int i = 0; i < left.size(); i++) {
+            CompoundTag entry = left.getCompound(i);
+            book.restoreLeftScaffolds(entry.getString("dimension"), entry.getLongArray("cells"));
+        }
         book.restoreCounters(tag.getLong("nextConstruction"), tag.getLong("nextBuilding"));
         book.restoreBlueprintCounter(tag.getLong("nextBlueprint"));
         return problems;
@@ -391,6 +410,7 @@ public final class ConstructionNbt {
         construction.restore(Construction.Priority.byId(tag.getString("priority")), tag.getBoolean("paused"), tag.getBoolean("orderMissing"),
                 BitSet.valueOf(tag.getLongArray("done")), pending, delivered, orders, Construction.Status.byId(tag.getString("status")), at,
                 tag.getDouble("carry"), readItems(tag, "removed"));
+        construction.restoreScaffolds(tag.getLongArray("scaffolds"));
         return construction;
     }
 

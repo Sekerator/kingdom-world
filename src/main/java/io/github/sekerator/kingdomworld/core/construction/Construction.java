@@ -87,8 +87,11 @@ public final class Construction {
         NO_MATERIALS(true),
         /** A container with items stands in the way; it is not broken. */
         BLOCKED(true),
-        /** A place the builders could not reach; they went on with the rest. */
-        UNREACHABLE(true),
+        /**
+         * A place the builders could not reach. No longer set: the builders put up scaffolds, or work from the nearest point
+         * they got to; kept so that older data and the network keep their numbers, and read as waiting for a builder.
+         */
+        UNREACHABLE(false),
         /** Blocks are paid for and wait to be placed when the place is loaded again. */
         WAITING_FOR_LOAD(false),
         /** Stopped by the king. */
@@ -521,6 +524,78 @@ public final class Construction {
         return all;
     }
 
+    // ---------------------------------------------------------------- scaffolds
+
+    /** Most scaffolds one construction keeps standing. */
+    public static final int MAX_SCAFFOLDS = 4_096;
+
+    private final Set<Long> scaffolds = new LinkedHashSet<>();
+
+    /**
+     * Where the builders of the construction put up scaffolds that are not taken down yet, packed as {@link Scaffolding#pack}
+     * packs them; in the dimension of the construction.
+     */
+    public Set<Long> scaffolds() {
+        return Collections.unmodifiableSet(scaffolds);
+    }
+
+    public boolean hasScaffolds() {
+        return !scaffolds.isEmpty();
+    }
+
+    /**
+     * A builder put up a scaffold.
+     *
+     * @return whether it is kept (a construction keeps at most {@link #MAX_SCAFFOLDS})
+     */
+    public boolean addScaffold(long cell) {
+        if (scaffolds.contains(cell)) {
+            return true;
+        }
+        if (scaffolds.size() >= MAX_SCAFFOLDS) {
+            return false;
+        }
+        scaffolds.add(cell);
+        changed();
+        return true;
+    }
+
+    /**
+     * A scaffold was taken down, or something else stands in its place now.
+     */
+    public void removeScaffold(long cell) {
+        if (scaffolds.remove(cell)) {
+            changed();
+        }
+    }
+
+    /**
+     * Takes every scaffold off the construction, for one that goes away while some still stand.
+     *
+     * @return where they stand
+     */
+    public Set<Long> takeScaffolds() {
+        Set<Long> all = new LinkedHashSet<>(scaffolds);
+        if (!all.isEmpty()) {
+            scaffolds.clear();
+            changed();
+        }
+        return all;
+    }
+
+    /**
+     * Restores the scaffolds from saved data. Does not notify.
+     */
+    public void restoreScaffolds(long[] cells) {
+        scaffolds.clear();
+        for (long cell : cells) {
+            if (scaffolds.size() >= MAX_SCAFFOLDS) {
+                break;
+            }
+            scaffolds.add(cell);
+        }
+    }
+
     // ---------------------------------------------------------------- status
 
     public Status status() {
@@ -586,8 +661,10 @@ public final class Construction {
         });
         this.orders.clear();
         this.orders.putAll(orders);
-        this.status = Objects.requireNonNull(status, "status");
-        this.statusPos = statusPos;
+        Objects.requireNonNull(status, "status");
+        // A place out of reach no longer stops a construction: the builders put up scaffolds or work from where they got to.
+        this.status = status == Status.UNREACHABLE ? Status.NO_BUILDER : status;
+        this.statusPos = status == Status.UNREACHABLE ? null : statusPos;
         this.carry = Double.isFinite(carry) ? Math.max(0.0, carry) : 0.0;
     }
 

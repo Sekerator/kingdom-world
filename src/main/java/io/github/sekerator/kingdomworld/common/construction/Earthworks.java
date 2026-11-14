@@ -234,7 +234,7 @@ public final class Earthworks {
      * Whether a block is not ground: air, a plant, leaves, a log, snow or a liquid.
      */
     private static boolean soft(BlockState state) {
-        return state.isAir() || state.canBeReplaced() || !state.getFluidState().isEmpty() || state.is(BlockTags.LEAVES) || Trees.isLog(state)
+        return state.isAir() || Scaffolds.is(state) || state.canBeReplaced() || !state.getFluidState().isEmpty() || state.is(BlockTags.LEAVES) || Trees.isLog(state)
                 || state.is(BlockTags.LOGS) || state.is(BlockTags.SAPLINGS) || state.is(BlockTags.FLOWERS) || state.is(Blocks.BAMBOO)
                 || state.is(Blocks.CACTUS) || state.is(Blocks.SUGAR_CANE) || state.is(BlockTags.SNOW) || state.is(Blocks.BROWN_MUSHROOM_BLOCK)
                 || state.is(Blocks.RED_MUSHROOM_BLOCK) || state.is(Blocks.MUSHROOM_STEM);
@@ -257,7 +257,7 @@ public final class Earthworks {
      * Something somebody made, a block holding items and a block of the mod may not be filled over.
      */
     static boolean fillable(ServerLevel level, BlockPos pos, BlockState state) {
-        if (state.isAir() || state.getBlock() instanceof LiquidBlock) {
+        if (state.isAir() || state.getBlock() instanceof LiquidBlock || Scaffolds.is(state)) {
             return true;
         }
         if (ConstructionWork.isProtected(level, pos, state) || ConstructionWork.holdsItems(level, pos) || state.hasBlockEntity()) {
@@ -346,7 +346,8 @@ public final class Earthworks {
                         key -> kingdomId.equals(KingdomWorldApi.ownerAt(level, new BlockPos(x, 0, z)))) && !ways.contains(BlockPos.asLong(x, 0, z));
                 for (int y = shape.digFrom(dx, dz); y <= shape.digTo(dx, dz); y++) {
                     BlockState state = level.getBlockState(pos.set(x, y, z));
-                    if (state.isAir()) {
+                    if (state.isAir() || Scaffolds.is(state)) {
+                        // Scaffolds are taken down by their builders: nothing to dig.
                         continue;
                     }
                     if (!column || inside(buildings, x, y, z) || ConstructionWork.isProtected(level, pos, state) || ConstructionWork.holdsItems(level, pos)
@@ -437,7 +438,7 @@ public final class Earthworks {
     /**
      * The columns roads and walls of any kingdom take within a box, {x, 0, z} packed: earthworks leave them as they are.
      */
-    private static Set<Long> ways(MinecraftServer server, Box area) {
+    static Set<Long> ways(MinecraftServer server, Box area) {
         Set<Long> taken = new HashSet<>();
         for (Road road : RoadWork.state(server).roads()) {
             for (RouteCell cell : road.cells()) {
@@ -747,7 +748,8 @@ public final class Earthworks {
     static ConstructionWork.StepResult beforeFill(ServerLevel level, Construction construction, BlockPos at, @Nullable LivingEntity breaker,
                                                   List<ItemStack> drops, boolean free) {
         BlockState there = level.getBlockState(at);
-        if (there.isAir() || there.getBlock() instanceof LiquidBlock || there.canBeReplaced() && !there.hasBlockEntity()) {
+        if (there.isAir() || there.getBlock() instanceof LiquidBlock || there.canBeReplaced() && !there.hasBlockEntity() || Scaffolds.is(there)) {
+            // A scaffold nobody stands on gives way to the fill as air does.
             return null;
         }
         if (ConstructionWork.isProtected(level, at, there) || ConstructionWork.holdsItems(level, at)) {

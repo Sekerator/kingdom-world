@@ -1,0 +1,4 @@
+{
+  "parent": "minecraft:block/scaffolding_stable",
+  "render_type": "minecraft:cutout"
+}

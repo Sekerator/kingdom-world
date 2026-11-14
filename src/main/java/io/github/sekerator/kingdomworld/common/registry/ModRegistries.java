@@ -133,6 +133,22 @@ public final class ModRegistries {
     /** The architect's ruler: marks a building in the world and saves it as a blueprint of the kingdom. */
     public static final RegistryObject<Item> ARCHITECT_RULER = ITEMS.register("architect_ruler",
             () -> new io.github.sekerator.kingdomworld.common.construction.ArchitectRulerItem(new Item.Properties().stacksTo(1)));
+    /**
+     * The scaffolding the builders put up under their feet to reach high places and take down afterwards: free, without an
+     * item and without drops.
+     */
+    public static final RegistryObject<Block> SCAFFOLDING = BLOCKS.register("scaffolding",
+            () -> new io.github.sekerator.kingdomworld.common.construction.ScaffoldBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.SAND)
+                    .instabreak()
+                    .sound(SoundType.SCAFFOLDING)
+                    .noOcclusion()
+                    .noLootTable()
+                    .isValidSpawn((state, level, pos, type) -> false)
+                    .isRedstoneConductor((state, level, pos) -> false)
+                    .isSuffocating((state, level, pos) -> false)
+                    .isViewBlocking((state, level, pos) -> false)
+                    .pushReaction(PushReaction.DESTROY)));
     /** The survey stakes: mark a rectangle of land for earthworks by the builders. */
     public static final RegistryObject<Item> SURVEY_STAKES = ITEMS.register("survey_stakes",
             () -> new io.github.sekerator.kingdomworld.common.construction.SurveyStakesItem(new Item.Properties().stacksTo(1)));
