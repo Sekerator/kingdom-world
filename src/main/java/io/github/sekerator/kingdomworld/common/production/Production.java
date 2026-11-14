@@ -221,8 +221,13 @@ public final class Production {
             job = ProductionPlanner.autoJob(orders, world, Recipes.autoRecipes(server, profession), stations, citizen.id());
         }
         if (job == null) {
-            boolean waiting = ProductionPlanner.ordersWaitFor(orders, world, profession);
-            return new Search(null, null, waiting ? WorkStatus.NO_INGREDIENTS : WorkStatus.NO_ORDERS);
+            // The post says what the window of orders says: ingredients missing, a workstation lacking, or nothing to do.
+            WorkStatus reason = switch (ProductionPlanner.waitFor(orders, world, profession, stations)) {
+                case INGREDIENTS -> WorkStatus.NO_INGREDIENTS;
+                case WORKSTATION -> WorkStatus.NO_WORKSTATION;
+                case NOTHING -> WorkStatus.NO_ORDERS;
+            };
+            return new Search(null, null, reason);
         }
         if (job.recipe().kind().needsFuel()) {
             Fuel fuel = chooseFuel(server, kingdom, job.recipe().kind(), job.picks().keySet(), citizen.id());

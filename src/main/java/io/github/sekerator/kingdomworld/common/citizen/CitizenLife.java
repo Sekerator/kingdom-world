@@ -7,6 +7,7 @@ import io.github.sekerator.kingdomworld.core.citizen.CauseOfDeath;
 import io.github.sekerator.kingdomworld.core.citizen.Citizen;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenNames;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds;
+import io.github.sekerator.kingdomworld.core.citizen.DeathCause;
 import io.github.sekerator.kingdomworld.core.citizen.DeathRecord;
 import io.github.sekerator.kingdomworld.core.citizen.Gender;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
@@ -14,13 +15,7 @@ import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
 import io.github.sekerator.kingdomworld.core.membership.Permission;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.damagesource.DamageTypes;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.monster.Enemy;
-import net.minecraft.world.entity.player.Player;
 import org.slf4j.Logger;
 
 import java.util.Optional;
@@ -134,6 +129,13 @@ public final class CitizenLife {
      */
     public static Optional<DeathRecord> die(MinecraftServer server, UUID citizenId, CauseOfDeath cause, String killer,
                                             WorldPos place) {
+        return die(server, citizenId, DeathCause.of(cause, killer), place);
+    }
+
+    /**
+     * A citizen dies for good, with the whole cause of its death (who killed, the kind of damage).
+     */
+    public static Optional<DeathRecord> die(MinecraftServer server, UUID citizenId, DeathCause cause, WorldPos place) {
         Optional<Citizen> citizen = KingdomWorldApi.state(server).citizens().get(citizenId);
         if (citizen.isEmpty()) {
             return Optional.empty();
@@ -141,7 +143,7 @@ public final class CitizenLife {
         long now = KingdomWorldApi.gameTime(server);
         DeathRecord[] record = new DeathRecord[1];
         Outcome outcome = KingdomWorldApi.change(server, "record the death of a citizen", state -> {
-            record[0] = state.citizens().die(citizenId, cause, killer, now, place).orElse(null);
+            record[0] = state.citizens().die(citizenId, cause, now, place).orElse(null);
             return Outcome.DONE;
         });
         if (!outcome.ok() || record[0] == null) {
@@ -168,50 +170,27 @@ public final class CitizenLife {
                 io.github.sekerator.kingdomworld.common.storage.KingdomStorage.insert(server, citizen.get().kingdomId(), kept, place);
             }
         }
-        LOGGER.info("Citizen {} ({}) of kingdom {} died: {} at {} in {}", citizen.get().name(CitizenNames.Alphabet.LATIN),
-                citizen.get().shortId(), citizen.get().kingdomId(), cause.id(), record[0].place().coordinates(),
-                record[0].place().dimension());
+        LOGGER.info("Citizen {} ({}) of kingdom {} died: {}{}{} at {} in {}", citizen.get().name(CitizenNames.Alphabet.LATIN),
+                citizen.get().shortId(), citizen.get().kingdomId(), cause.cause().id(),
+                cause.killerType().isEmpty() ? "" : " by " + cause.killerType(), cause.damage().isEmpty() ? "" : " (" + cause.damage() + ")",
+                record[0].place().coordinates(), record[0].place().dimension());
         Optional<Kingdom> kingdom = KingdomWorldApi.kingdom(server, citizen.get().kingdomId());
         kingdom.ifPresent(k -> KingdomActions.notifyMembers(server, k, Permission.MANAGE_CITIZENS,
-                net.minecraft.network.chat.Component.translatable(CitizenTexts.gendered("kingdomworld.citizen.died", citizen.get().gender()),
-                        CitizenTexts.name(citizen.get()), CitizenTexts.cause(cause, killer, citizen.get().gender()),
-                        CitizenTexts.place(record[0].place()))));
+                diedMessage(citizen.get(), cause, record[0].place())));
         return Optional.of(record[0]);
     }
 
     /**
-     * What killed a body, for the chronicle.
+     * What the king and those who manage the citizens are told of a death, with the whole cause.
      */
-    static CauseOfDeath causeOf(DamageSource source) {
-        Entity attacker = source.getEntity();
-        if (attacker instanceof Player) {
-            return CauseOfDeath.PLAYER;
+    static net.minecraft.network.chat.Component diedMessage(Citizen citizen, DeathCause cause, WorldPos place) {
+        Gender gender = citizen.gender();
+        if (cause.telling() == DeathCause.Telling.GAME) {
+            // The death message of the game holds the name itself.
+            return net.minecraft.network.chat.Component.translatable(CitizenTexts.gendered("kingdomworld.citizen.died_told", gender),
+                    CitizenTexts.death(cause, CitizenTexts.name(citizen), gender), CitizenTexts.place(place));
         }
-        if (attacker instanceof Enemy) {
-            return CauseOfDeath.MONSTER;
-        }
-        if (source.is(DamageTypes.STARVE)) {
-            return CauseOfDeath.STARVATION;
-        }
-        if (source.is(DamageTypes.LAVA)) {
-            return CauseOfDeath.LAVA;
-        }
-        if (source.is(DamageTypeTags.IS_FIRE)) {
-            return CauseOfDeath.FIRE;
-        }
-        if (source.is(DamageTypeTags.IS_FALL)) {
-            return CauseOfDeath.FALL;
-        }
-        if (source.is(DamageTypeTags.IS_DROWNING)) {
-            return CauseOfDeath.DROWNING;
-        }
-        if (attacker != null) {
-            return CauseOfDeath.MONSTER;
-        }
-        return CauseOfDeath.OTHER;
-    }
-
-    static String killerOf(DamageSource source) {
-        return source.getEntity() instanceof Player player ? player.getGameProfile().getName() : "";
+        return net.minecraft.network.chat.Component.translatable(CitizenTexts.gendered("kingdomworld.citizen.died", gender),
+                CitizenTexts.name(citizen), CitizenTexts.cause(cause, gender), CitizenTexts.place(place));
     }
 }

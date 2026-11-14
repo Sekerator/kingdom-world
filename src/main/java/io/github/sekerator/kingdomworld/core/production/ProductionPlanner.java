@@ -183,8 +183,10 @@ public final class ProductionPlanner {
         for (RecipeOption.Part part : chosen.parts()) {
             long total = (long) part.count() * crafts;
             String pick = pickChoice(world, protectedStock, part, total, depth, visited, used);
-            long available = available(world, protectedStock, pick, null) - used.getOrDefault(pick, 0);
-            used.merge(pick, (int) Math.min(Integer.MAX_VALUE, Math.min(total, Math.max(0, available))), Integer::sum);
+            // Every item the ingredient accepts counts, as at a crafting table: planks of oak and of spruce make sticks together.
+            long available = availableFor(world, protectedStock, part, used, null);
+            long others = available - Math.max(0, available(world, protectedStock, pick, null) - used.getOrDefault(pick, 0));
+            use(world, protectedStock, part, pick, Math.min(total, available), used);
             boolean lacksForOne = available < part.count();
             if (lacksForOne) {
                 ready = false;
@@ -193,6 +195,8 @@ public final class ProductionPlanner {
                 continue;
             }
             int shortBy = (int) Math.min(Order.MAX_AMOUNT, total - Math.max(0, available));
+            // A sub-order for the item picked asks only for what the other items of the ingredient leave missing.
+            int subAmount = (int) Math.min(Order.MAX_AMOUNT, Math.max(1, total - others));
             if (depth < world.maxDepth() && !visited.contains(pick) && hasWorkableRecipe(world, pick)) {
                 Order sub = null;
                 for (Order child : children) {
@@ -201,11 +205,11 @@ public final class ProductionPlanner {
                     }
                 }
                 if (sub == null) {
-                    sub = orders.addSub(world.kingdomId(), order, pick, (int) Math.min(Order.MAX_AMOUNT, total), world.gameTime()).orElse(null);
+                    sub = orders.addSub(world.kingdomId(), order, pick, subAmount, world.gameTime()).orElse(null);
                 }
                 if (sub != null) {
                     touched.add(sub.id());
-                    orders.setAmount(sub, (int) Math.min(Order.MAX_AMOUNT, total));
+                    orders.setAmount(sub, subAmount);
                     orders.setPriority(sub, order.priority());
                     int subNeed = need(world, protectedStock, sub);
                     if (subNeed > 0) {
@@ -234,6 +238,53 @@ public final class ProductionPlanner {
             status = lackingWithoutSupply ? Order.Status.MISSING : Order.Status.WAITING_FOR_PARTS;
         }
         order.plan(status, chosen.id(), new ArrayList<>(missing.values()), "", "");
+    }
+
+    /**
+     * Items an ingredient may take, of all the items it accepts: in stock, not set aside, not protected, not counted on already by
+     * other ingredients of the same making.
+     */
+    static long availableFor(World world, Map<String, Integer> protectedStock, RecipeOption.Part part, Map<String, Integer> used,
+                             UUID except) {
+        long total = 0;
+        for (String choice : new java.util.LinkedHashSet<>(part.choices())) {
+            total += Math.max(0, available(world, protectedStock, choice, except) - used.getOrDefault(choice, 0));
+        }
+        return total;
+    }
+
+    /**
+     * Counts {@code amount} items of an ingredient as used: of the item picked first, then of the others with most in stock.
+     */
+    private static void use(World world, Map<String, Integer> protectedStock, RecipeOption.Part part, String pick, long amount,
+                            Map<String, Integer> used) {
+        long left = amount;
+        for (String choice : byStock(world, protectedStock, part, pick, used, null)) {
+            if (left <= 0) {
+                break;
+            }
+            long free = Math.max(0, available(world, protectedStock, choice, null) - used.getOrDefault(choice, 0));
+            int taken = (int) Math.min(Integer.MAX_VALUE, Math.min(left, free));
+            if (taken > 0) {
+                used.merge(choice, taken, Integer::sum);
+                left -= taken;
+            }
+        }
+    }
+
+    /**
+     * The items an ingredient accepts, the one given first (if any), then by what may be used of them, most first; ties keep the
+     * order of the recipe.
+     */
+    private static List<String> byStock(World world, Map<String, Integer> protectedStock, RecipeOption.Part part, String first,
+                                        Map<String, Integer> used, UUID except) {
+        List<String> choices = new ArrayList<>(new java.util.LinkedHashSet<>(part.choices()));
+        Map<String, Long> free = new HashMap<>();
+        for (String choice : choices) {
+            free.put(choice, available(world, protectedStock, choice, except) - used.getOrDefault(choice, 0));
+        }
+        choices.sort(Comparator.comparing((String choice) -> !choice.equals(first)).thenComparing(choice -> -free.get(choice)));
+        return choices;
     }
 
     /** The cost of an item that cannot be had at all. */
@@ -278,6 +329,10 @@ public final class ProductionPlanner {
         }
 
         int part(RecipeOption.Part part, int depth, Set<String> visited) {
+            if (availableFor(world, protectedStock, part, Map.of(), null) >= part.count()) {
+                // Several items of the ingredient together are there.
+                return 0;
+            }
             int best = UNOBTAINABLE;
             for (String choice : part.choices()) {
                 best = Math.min(best, item(choice, part.count(), depth, visited));
@@ -370,19 +425,23 @@ public final class ProductionPlanner {
     static Map<String, Integer> picks(World world, Map<String, Integer> protectedStock, RecipeOption recipe, UUID worker) {
         Map<String, Integer> picks = new LinkedHashMap<>();
         for (RecipeOption.Part part : recipe.parts()) {
-            String best = null;
-            long bestCount = 0;
-            for (String choice : part.choices()) {
+            // The item there is most of; when no one item is enough, several items of the ingredient together, as at a crafting
+            // table.
+            int left = part.count();
+            for (String choice : byStock(world, protectedStock, part, null, picks, worker)) {
                 long count = available(world, protectedStock, choice, worker) - picks.getOrDefault(choice, 0);
-                if (count >= part.count() && count > bestCount) {
-                    best = choice;
-                    bestCount = count;
+                int taken = (int) Math.min(left, Math.max(0, count));
+                if (taken > 0) {
+                    picks.merge(choice, taken, Integer::sum);
+                    left -= taken;
+                }
+                if (left == 0) {
+                    break;
                 }
             }
-            if (best == null) {
+            if (left > 0) {
                 return null;
             }
-            picks.merge(best, part.count(), Integer::sum);
         }
         return picks;
     }
@@ -439,6 +498,47 @@ public final class ProductionPlanner {
             }
         }
         return null;
+    }
+
+    /**
+     * Why a worker of a profession at a post with the given workstations has nothing to make while orders are there.
+     */
+    public enum Wait {
+        /** No order waits for it: there is none, or the others of its profession are making all of it. */
+        NOTHING,
+        /** An order waits for ingredients. */
+        INGREDIENTS,
+        /** Orders could be made, but at a workstation the post does not have. */
+        WORKSTATION
+    }
+
+    /**
+     * Why a worker has nothing to make, as the window of orders tells it: an order missing ingredients (or waiting for its
+     * parts) waits for ingredients; an order ready to be made waits for a workstation the post lacks; an order all of which
+     * others are making already waits for nothing.
+     */
+    public static Wait waitFor(OrderBook orders, World world, String profession, Set<String> stations) {
+        Map<String, Integer> protectedStock = protectedStock(orders, world.kingdomId());
+        boolean station = false;
+        for (Order order : orders.ordersOf(world.kingdomId())) {
+            if (order.paused() || order.recipe().isEmpty() || order.status() == Order.Status.SATISFIED) {
+                continue;
+            }
+            RecipeOption recipe = world.book().recipe(order.recipe()).orElse(null);
+            if (recipe == null || !recipe.profession().equals(profession)) {
+                continue;
+            }
+            boolean ready = order.status() == Order.Status.READY || order.status() == Order.Status.WORKING;
+            if (ready && need(world, protectedStock, order) <= 0) {
+                continue;
+            }
+            if (ready && !stations.contains(recipe.kind().station())) {
+                station = true;
+                continue;
+            }
+            return Wait.INGREDIENTS;
+        }
+        return station ? Wait.WORKSTATION : Wait.NOTHING;
     }
 
     /**

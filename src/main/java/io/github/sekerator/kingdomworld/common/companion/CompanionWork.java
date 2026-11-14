@@ -8,7 +8,6 @@ import io.github.sekerator.kingdomworld.common.guild.GuildWork;
 import io.github.sekerator.kingdomworld.common.guild.MonsterRanks;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
 import io.github.sekerator.kingdomworld.common.kingdom.KingdomActions;
-import io.github.sekerator.kingdomworld.core.citizen.CauseOfDeath;
 import io.github.sekerator.kingdomworld.core.citizen.DeathRecord;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.companion.Companion;
@@ -28,11 +27,9 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Containers;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.monster.Enemy;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -324,8 +321,8 @@ public final class CompanionWork {
         WorldPos place = new WorldPos(Dimensions.id(level), pos.getX(), pos.getY(), pos.getZ());
         UUID kingdom = KingdomWorldApi.state(server).membership().kingdomOf(companion.owner()).orElse(companion.branch());
         long now = KingdomWorldApi.gameTime(server);
-        DeathRecord record = new DeathRecord(companion.id(), companion.nameSeed(), companion.gender(), CitizenTexts.COMPANION, causeOf(source),
-                source.getEntity() instanceof Player player ? player.getGameProfile().getName() : "", now, place);
+        DeathRecord record = new DeathRecord(companion.id(), companion.nameSeed(), companion.gender(), CitizenTexts.COMPANION,
+                io.github.sekerator.kingdomworld.common.citizen.DeathCauses.of(server, source), now, place);
         if (!KingdomWorldApi.isReadOnly(server) && KingdomWorldApi.kingdom(server, kingdom).isPresent()) {
             KingdomWorldApi.change(server, "remember a companion", world -> {
                 world.citizens().registry().remember(kingdom, record);
@@ -335,32 +332,6 @@ public final class CompanionWork {
         state(server).remove(id);
         tell(server, companion.owner(), Component.translatable(CitizenTexts.gendered(KEY + "died", companion.gender()), CompanionTexts.name(companion), place.coordinates())
                 .withStyle(ChatFormatting.RED));
-    }
-
-    private static CauseOfDeath causeOf(DamageSource source) {
-        Entity attacker = source.getEntity();
-        if (attacker instanceof Player) {
-            return CauseOfDeath.PLAYER;
-        }
-        if (attacker instanceof Enemy) {
-            return CauseOfDeath.MONSTER;
-        }
-        if (source.is(DamageTypes.STARVE)) {
-            return CauseOfDeath.STARVATION;
-        }
-        if (source.is(DamageTypes.LAVA)) {
-            return CauseOfDeath.LAVA;
-        }
-        if (source.is(DamageTypes.IN_FIRE) || source.is(DamageTypes.ON_FIRE)) {
-            return CauseOfDeath.FIRE;
-        }
-        if (source.is(DamageTypes.FALL)) {
-            return CauseOfDeath.FALL;
-        }
-        if (source.is(DamageTypes.DROWN)) {
-            return CauseOfDeath.DROWNING;
-        }
-        return CauseOfDeath.OTHER;
     }
 
     /**

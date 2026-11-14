@@ -264,6 +264,13 @@ final class CitizensTab {
         return Math.max(Math.max(Math.max(buttons, list), production), Math.max(Math.max(deaths, summary), messages));
     }
 
+    /**
+     * Where a line of the list stands, for the layout check.
+     */
+    int rowY(int top, int row) {
+        return listTop(top) + row * ROW + 4;
+    }
+
     private int listTop(int top) {
         return top + ThroneScreen.CONTENT_TOP + 2 * LINE + 2 + ROW + 4;
     }
@@ -518,15 +525,34 @@ final class CitizensTab {
                 continue;
             }
             CitizenView.Death death = (CitizenView.Death) entries.get(scroll + i);
-            screen.name(graphics, name(death.seed(), death.female()), x, y, 0xFFE8E8E8, NAME_COLUMN - 4);
-            Component day = Component.translatable(KEY + "day", death.day());
-            int dayX = right - font.width(day);
-            screen.label(graphics, day, dayX, y, 0xFF9A9A9A, right);
-            Component cause = Component.translatable(KEY + "death", CitizenTexts.profession(death.profession(), gender(death.female())),
-                    CitizenTexts.cause(death.cause(), death.killer(), gender(death.female())), death.place().getX(),
-                    death.place().getY(), death.place().getZ());
-            screen.name(graphics, cause.getString(), causeX, y, 0xFFD0B0B0, dayX - 6 - causeX);
+            renderDeath(graphics, font, death, x, causeX, right, y);
         }
+    }
+
+    /**
+     * One death: the name, what killed and the day; the profession, the place and the whole text on hover over the line. A kind of
+     * damage the chronicle tells by the death message of the game holds the name itself and takes the whole line.
+     */
+    private void renderDeath(GuiGraphics graphics, Font font, CitizenView.Death death, int x, int causeX, int right, int y) {
+        io.github.sekerator.kingdomworld.core.citizen.Gender gender = gender(death.female());
+        io.github.sekerator.kingdomworld.core.citizen.DeathCause cause = death.deathCause();
+        String name = name(death.seed(), death.female());
+        Component day = Component.translatable(KEY + "day", death.day());
+        int dayX = right - font.width(day);
+        screen.label(graphics, day, dayX, y, 0xFF9A9A9A, right);
+        Component whole = CitizenTexts.death(cause, Component.literal(name), gender);
+        if (cause.telling() == io.github.sekerator.kingdomworld.core.citizen.DeathCause.Telling.GAME) {
+            screen.name(graphics, whole.getString(), x, y, 0xFFD0B0B0, dayX - 6 - x);
+        } else {
+            screen.name(graphics, name, x, y, 0xFFE8E8E8, NAME_COLUMN - 4);
+            screen.name(graphics, CitizenTexts.cause(cause, gender).getString(), causeX, y, 0xFFD0B0B0, dayX - 6 - causeX);
+        }
+        int width = right - x;
+        screen.hoverText(x, y, width, whole);
+        screen.hoverText(x, y, width, Component.translatable(KEY + "death.profession", CitizenTexts.profession(death.profession(), gender)));
+        screen.hoverText(x, y, width, Component.translatable(KEY + "death.place", death.place().getX(), death.place().getY(),
+                death.place().getZ()));
+        screen.hoverText(x, y, width, day);
     }
 
     /**

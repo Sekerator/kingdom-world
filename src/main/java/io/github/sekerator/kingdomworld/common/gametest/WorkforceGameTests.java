@@ -122,6 +122,50 @@ public final class WorkforceGameTests {
         helper.succeed();
     }
 
+    /**
+     * The king clicks a citizen: one with a post opens the window of its post, one without a post the window of the workers at the
+     * page that lists it, chosen; a stranger and a member without the right to manage the citizens only learn who it is.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_workforce_click")
+    public static void aClickOnACitizenOpensItsPost(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        UUID kingId = UUID.randomUUID();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Clicked Citizens", kingId);
+        ServerPlayer king = player(helper, kingId, "kw-king");
+        ServerPlayer stranger = player(helper, UUID.randomUUID(), "kw-stranger");
+        Citizen worker = CitizenGameTests.newcomer(helper, kingdom, 1, 1);
+        Citizen idle = CitizenGameTests.newcomer(helper, kingdom, 2, 1);
+        try {
+            WorldPos at = post(helper, 5, 5);
+            helper.assertTrue(WorkPostActions.setProfession(king, at, "carrier").success(), "The post got no profession");
+            helper.assertTrue(WorkforceActions.assign(king, kingdom.id(), worker.id(), at).success(), "The worker was not put on the post");
+            for (Citizen citizen : java.util.List.of(worker, idle)) {
+                io.github.sekerator.kingdomworld.common.citizen.CitizenBodies.force(citizen.id(), true);
+            }
+            io.github.sekerator.kingdomworld.common.citizen.CitizenBodies.update(server);
+            var workerBody = io.github.sekerator.kingdomworld.common.citizen.CitizenBodies.body(worker.id());
+            var idleBody = io.github.sekerator.kingdomworld.common.citizen.CitizenBodies.body(idle.id());
+            helper.assertTrue(workerBody != null && idleBody != null, "No bodies were created");
+
+            WorkforceActions.ClickTarget post = WorkforceActions.clickTarget(king, workerBody).orElseThrow();
+            helper.assertTrue(post.post() != null && post.post().pos().equals(at), "A click on a worker did not open its post");
+            helper.assertTrue(WorkforceActions.openFor(king, workerBody), "The window of the post did not open");
+
+            WorkforceActions.ClickTarget list = WorkforceActions.clickTarget(king, idleBody).orElseThrow();
+            helper.assertTrue(list.post() == null && list.workers() != null && idle.id().equals(list.workers().citizen()),
+                    "A click on a citizen without a post did not open the window of the workers at it");
+            WorkforceView page = WorkforceActions.view(king, kingdom.id(), list.workers().withPageSize(1));
+            helper.assertTrue(page.citizens().size() == 1 && page.citizens().get(0).id().equals(idle.id()),
+                    "The window does not open at the page of the citizen");
+
+            helper.assertTrue(WorkforceActions.clickTarget(stranger, workerBody).isEmpty(), "A stranger opened the post of a citizen");
+            helper.assertTrue(!WorkforceActions.openFor(stranger, workerBody), "A stranger opened a window by a click");
+        } finally {
+            CitizenGameTests.finish(helper, kingdom, worker, idle);
+        }
+        helper.succeed();
+    }
+
     @GameTest(template = EMPTY, batch = "kingdomworld_workforce_window")
     public static void theWindowListsDismissesAndClears(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();

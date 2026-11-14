@@ -93,6 +93,17 @@ public class WorkforceScreen extends KingdomScreen implements ResultListener {
         this.view = view;
         this.query = view.query();
         this.kingdomId = view.kingdomId();
+        if (query.mode() == WorkforceView.Mode.CITIZENS && query.citizen() != null) {
+            // Opened by a click on a citizen: it is chosen in the list.
+            selected = query.citizen();
+        }
+    }
+
+    /**
+     * The citizen the list was opened at is chosen; the pages asked for from now on are the pages of the list itself.
+     */
+    private void settleFocus() {
+        query = query.withoutFocus();
     }
 
     private WorkforceScreen(@Nullable Screen parent, UUID kingdomId, WorkforceView.Query query) {
@@ -134,6 +145,7 @@ public class WorkforceScreen extends KingdomScreen implements ResultListener {
         query = asked;
         kingdomId = next.kingdomId();
         waiting = false;
+        settleFocus();
         if (minecraft != null) {
             rebuildWidgets();
         }
@@ -467,6 +479,8 @@ public class WorkforceScreen extends KingdomScreen implements ResultListener {
         } else if (view == null && !waiting) {
             // Opened without a page, from the window of a post: the first one is asked for now.
             request();
+        } else if (!waiting) {
+            settleFocus();
         }
         if (!query.mode().choice()) {
             int x = left + PAD;

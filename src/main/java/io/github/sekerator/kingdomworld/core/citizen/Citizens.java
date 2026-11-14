@@ -119,13 +119,20 @@ public final class Citizens {
      * kingdom's chronicle.
      */
     public Optional<DeathRecord> die(UUID id, CauseOfDeath cause, String killer, long gameTime, WorldPos place) {
+        return die(id, DeathCause.of(cause, killer), gameTime, place);
+    }
+
+    /**
+     * A citizen dies with the whole cause of its death (who killed, the kind of damage).
+     */
+    public Optional<DeathRecord> die(UUID id, DeathCause cause, long gameTime, WorldPos place) {
         Optional<Citizen> citizen = registry.get(id);
         if (citizen.isEmpty()) {
             return Optional.empty();
         }
         releaseHome(citizen.get());
         releaseWorkplace(citizen.get());
-        return registry.die(id, cause, killer, gameTime, place);
+        return registry.die(id, cause, gameTime, place);
     }
 
     /**

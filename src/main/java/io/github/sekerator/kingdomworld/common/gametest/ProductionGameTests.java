@@ -282,6 +282,111 @@ public final class ProductionGameTests {
         });
     }
 
+    /**
+     * A double storehouse of two halves facing north, its left half at {@code relative}; the inventories of both halves, the
+     * left one first.
+     */
+    private static List<StorehouseInventory> doubleStorehouse(GameTestHelper helper, BlockPos relative) {
+        net.minecraft.world.level.block.state.BlockState state = io.github.sekerator.kingdomworld.common.registry.ModRegistries.STOREHOUSE.get()
+                .defaultBlockState().setValue(io.github.sekerator.kingdomworld.common.storage.StorehouseBlock.FACING, net.minecraft.core.Direction.NORTH);
+        BlockPos right = relative.east();
+        helper.setBlock(relative, state.setValue(io.github.sekerator.kingdomworld.common.storage.StorehouseBlock.TYPE,
+                net.minecraft.world.level.block.state.properties.ChestType.LEFT));
+        helper.setBlock(right, state.setValue(io.github.sekerator.kingdomworld.common.storage.StorehouseBlock.TYPE,
+                net.minecraft.world.level.block.state.properties.ChestType.RIGHT));
+        var registry = io.github.sekerator.kingdomworld.common.data.KingdomSavedData.get(helper.getLevel().getServer()).storehouses();
+        return List.of(registry.get(CitizenGameTests.at(helper, relative.getX(), relative.getY(), relative.getZ())).orElseThrow(),
+                registry.get(CitizenGameTests.at(helper, right.getX(), right.getY(), right.getZ())).orElseThrow());
+    }
+
+    /**
+     * The planks a crafter needs lie on the far side of the workshop: one in a storehouse there, one in the far half of a double
+     * storehouse, none in the storehouse by the post. The crafter walks to both, takes what each holds and makes the sticks of a
+     * plank of oak and a plank of spruce together.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_workshop_far_storehouse", timeoutTicks = 2400)
+    public static void crafterFetchesFromTheStorehousesWhereTheMaterialLies(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        level.setDayTime(1_000L);
+        BlockPos from = helper.absolutePos(ZONE_FROM);
+        BlockPos to = helper.absolutePos(new BlockPos(7, 3, 6));
+        GatheringGameTests.clear(level, from, to);
+        TestChunks.hold(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Far Shelves", UUID.randomUUID());
+        helper.setBlock(new BlockPos(2, 0, -2), Blocks.CRAFTING_TABLE);
+        // A storehouse by the post holding nothing of what is needed: the worker does not stop there.
+        GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(1, 0, 1)));
+        StorehouseInventory far = GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(6, 0, 5)));
+        List<StorehouseInventory> halves = doubleStorehouse(helper, new BlockPos(-6, 0, 5));
+        fill(far, new ItemStack(Items.OAK_PLANKS, 1));
+        fill(halves.get(1), new ItemStack(Items.SPRUCE_PLANKS, 1));
+        WorldPos postPos = GatheringGameTests.post(helper, new BlockPos(0, 0, 0), "crafter");
+        surveyed(server, postPos);
+        Citizen worker = GatheringGameTests.worker(helper, kingdom, "crafter", postPos, helper.absolutePos(new BlockPos(1, 0, -1)));
+        order(server, kingdom, Items.STICK, Order.Kind.MAKE, 4);
+        boolean[] visitedFar = new boolean[2];
+
+        helper.succeedWhen(() -> {
+            io.github.sekerator.kingdomworld.common.citizen.CitizenEntity body = io.github.sekerator.kingdomworld.common.citizen.CitizenBodies.body(worker.id());
+            if (body != null) {
+                // The worker goes to the storehouses themselves, not only to the one by its post.
+                visitedFar[0] |= body.blockPosition().distSqr(helper.absolutePos(new BlockPos(6, 0, 5))) <= 16;
+                visitedFar[1] |= body.blockPosition().distSqr(helper.absolutePos(new BlockPos(-5, 0, 5))) <= 16;
+            }
+            helper.assertTrue(stored(server, kingdom, Items.STICK) == 4, "Expected 4 sticks, got " + stored(server, kingdom, Items.STICK)
+                    + ": worker " + worker.workStatus() + ", reservations " + Production.reservations().hold(worker.id())
+                    + ", body at " + (body == null ? "none" : GatheringGameTests.local(helper, body.blockPosition()).toShortString()));
+            helper.assertTrue(stored(server, kingdom, Items.OAK_PLANKS) == 0 && stored(server, kingdom, Items.SPRUCE_PLANKS) == 0,
+                    "The planks were not used together");
+            helper.assertTrue(visitedFar[0] && visitedFar[1], "The worker did not walk to the storehouses holding the planks: " + visitedFar[0]
+                    + " " + visitedFar[1]);
+            GatheringGameTests.end(helper, kingdom, worker, from, to);
+        });
+    }
+
+    /**
+     * Far from players the same planks, in a storehouse and in either half of a double storehouse, are counted together by the
+     * window of orders and the planner and taken by the making.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_workshop_far_storehouse_abstract")
+    public static void materialsOnEveryStorehouseCountFarFromPlayers(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos from = helper.absolutePos(ZONE_FROM);
+        BlockPos to = helper.absolutePos(new BlockPos(9, 3, 9));
+        GatheringGameTests.clear(level, from, to);
+        TestChunks.hold(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Scattered Stores", UUID.randomUUID());
+        StorehouseInventory single = CitizenGameTests.storehouse(helper, 0, 0, 4);
+        List<StorehouseInventory> halves = doubleStorehouse(helper, new BlockPos(-6, 0, 6));
+        fill(single, new ItemStack(Items.OAK_PLANKS, 1));
+        fill(halves.get(0), new ItemStack(Items.BIRCH_PLANKS, 1));
+        fill(halves.get(1), new ItemStack(Items.SPRUCE_PLANKS, 2));
+        helper.setBlock(new BlockPos(6, 0, 1), Blocks.CRAFTING_TABLE);
+        WorldPos postPos = GatheringGameTests.post(helper, new BlockPos(5, 0, 1), "crafter");
+        Citizen worker = farWorker(helper, kingdom, "crafter", postPos);
+        surveyed(server, postPos);
+        try {
+            helper.assertTrue(KingdomStorage.countsById(server, kingdom.id()).getOrDefault("minecraft:spruce_planks", 0L) == 2,
+                    "The far half of the double storehouse is not counted");
+            Order sticks = order(server, kingdom, Items.STICK, Order.Kind.MAKE, 8);
+            Production.plan(server, kingdom.id());
+            helper.assertTrue(sticks.status() == Order.Status.READY, "Four planks of three woods are not enough for the planner: "
+                    + sticks.status() + " " + sticks.missing());
+            steps(server, kingdom, 4);
+            helper.assertTrue(stored(server, kingdom, Items.STICK) == 8, "Expected 8 sticks, got " + stored(server, kingdom, Items.STICK)
+                    + ", worker " + worker.workStatus());
+            helper.assertTrue(stored(server, kingdom, Items.OAK_PLANKS) + stored(server, kingdom, Items.BIRCH_PLANKS)
+                    + stored(server, kingdom, Items.SPRUCE_PLANKS) == 0, "Planks were left or made");
+        } finally {
+            CitizenGameTests.finish(helper, kingdom, worker);
+            GatheringGameTests.clear(level, from, to);
+            TestChunks.release(level, from);
+        }
+        helper.succeed();
+    }
+
     @GameTest(template = EMPTY, batch = "kingdomworld_workshop_smithing", timeoutTicks = 1600)
     public static void smithUpgradesToNetheriteAtTheSmithingTable(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();

@@ -5,6 +5,7 @@ import io.github.sekerator.kingdomworld.core.citizen.CauseOfDeath;
 import io.github.sekerator.kingdomworld.core.citizen.Citizen;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenNames;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
+import io.github.sekerator.kingdomworld.core.citizen.DeathCause;
 import io.github.sekerator.kingdomworld.core.citizen.Gender;
 import io.github.sekerator.kingdomworld.core.citizen.Professions;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
@@ -67,10 +68,65 @@ public final class CitizenTexts {
     }
 
     public static Component cause(CauseOfDeath cause, String killer, Gender gender) {
-        if (cause == CauseOfDeath.PLAYER && killer != null && !killer.isEmpty()) {
-            return Component.translatable(gendered(DEATH + "player_named", gender), killer);
+        return cause(DeathCause.of(cause, killer), gender);
+    }
+
+    /**
+     * What killed, in the words of the chronicle: "killed by a monster (Zombie)", "suffocated in a block". A death the game tells in
+     * words of its own (the damage of another mod) is told by {@link #death}, which holds the name.
+     */
+    public static Component cause(DeathCause cause, Gender gender) {
+        String killer = cause.killer();
+        switch (cause.cause()) {
+            case PLAYER -> {
+                if (!killer.isEmpty()) {
+                    return Component.translatable(gendered(DEATH + "player_named", gender), killer);
+                }
+            }
+            case MONSTER, ANIMAL, GOLEM, CREATURE -> {
+                if (!cause.killerType().isEmpty()) {
+                    return Component.translatable(gendered(DEATH + cause.cause().id() + BY, gender), creature(cause.killerType(), killer));
+                }
+            }
+            case CITIZEN, SOLDIER -> {
+                if (!killer.isEmpty()) {
+                    return Component.translatable(gendered(DEATH + cause.cause().id() + OF, gender), killer);
+                }
+            }
+            default -> {
+                if (cause.telling() == DeathCause.Telling.WORD) {
+                    return Component.translatable(gendered(DEATH + "damage." + DeathCause.word(cause.damage()), gender));
+                }
+            }
         }
-        return Component.translatable(gendered(DEATH + cause.id(), gender));
+        return Component.translatable(gendered(DEATH + cause.cause().id(), gender));
+    }
+
+    /** Suffix of the causes that name the kind of creature that killed. */
+    private static final String BY = "_by";
+    /** Suffix of the causes that name the kingdom of who killed. */
+    private static final String OF = "_of";
+
+    /**
+     * A kind of creature, with its own name if it has one: "Wolf", "Wolf "Rex"".
+     */
+    public static Component creature(String type, String name) {
+        Component kind = net.minecraft.world.entity.EntityType.byString(type)
+                .<Component>map(net.minecraft.world.entity.EntityType::getDescription).orElse(Component.literal(type));
+        return name == null || name.isEmpty() ? kind : Component.translatable(DEATH + "named", kind, name);
+    }
+
+    /**
+     * A death as one sentence with the name: "Ivan Petrov, killed by a monster (Zombie)", or the death message of the game for a
+     * kind of damage the chronicle has no words for, "Ivan Petrov was killed by magic".
+     */
+    public static Component death(DeathCause cause, Component name, Gender gender) {
+        if (cause.telling() == DeathCause.Telling.GAME) {
+            String damage = cause.damage();
+            return Component.translatableWithFallback("death.attack." + damage, "%1$s (" + damage.replace("%", "%%") + ")", name,
+                    Component.translatable(DEATH + "someone"));
+        }
+        return Component.translatable(DEATH + "line", name, cause(cause, gender));
     }
 
     public static Component place(WorldPos pos) {

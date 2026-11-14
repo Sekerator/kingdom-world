@@ -712,6 +712,13 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
+     * A point on a line of the list of the Citizens tab, to hover over it; for the layout check.
+     */
+    public int[] citizensRowPoint(int row) {
+        return new int[]{left() + PAD + 40, citizens.rowY(top() + contentOffset, row) + 3};
+    }
+
+    /**
      * Shows a view of the citizens tab by name ({@code citizens}, {@code work}, {@code production},
      * {@code chronicle}); for the layout check.
      */

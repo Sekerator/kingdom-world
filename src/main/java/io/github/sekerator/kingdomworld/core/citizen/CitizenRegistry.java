@@ -216,12 +216,19 @@ public final class CitizenRegistry {
      * by the caller.
      */
     public Optional<DeathRecord> die(UUID id, CauseOfDeath cause, String killer, long gameTime, WorldPos place) {
+        return die(id, DeathCause.of(cause, killer), gameTime, place);
+    }
+
+    /**
+     * Marks a citizen dead with the whole cause of its death (who killed, the kind of damage).
+     */
+    public Optional<DeathRecord> die(UUID id, DeathCause cause, long gameTime, WorldPos place) {
         Citizen citizen = byId.get(id);
         if (citizen == null) {
             return Optional.empty();
         }
         DeathRecord record = new DeathRecord(id, citizen.nameSeed(), citizen.gender(), citizen.professionId(), cause,
-                killer, gameTime, place == null ? citizen.lastPos() : place);
+                gameTime, place == null ? citizen.lastPos() : place);
         citizen.markDead();
         remove(id);
         addToChronicle(citizen.kingdomId(), record);

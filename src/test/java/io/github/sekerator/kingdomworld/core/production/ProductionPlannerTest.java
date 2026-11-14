@@ -109,6 +109,61 @@ class ProductionPlannerTest {
         assertEquals(sticks.id(), job.order());
     }
 
+    /**
+     * Two storehouses, one with a plank of oak and one with a plank of spruce: a stick takes two planks of any wood, as at a
+     * crafting table, so the two together are enough, while each alone is not.
+     */
+    @Test
+    void anIngredientOfATagIsMadeUpOfSeveralOfItsItems() {
+        stock.put("oak_planks", 1L);
+        stock.put("spruce_planks", 1L);
+        Order sticks = order("stick", Order.Kind.MAKE, 4);
+        refresh();
+        assertEquals(Order.Status.READY, sticks.status(), "two kinds of planks together are enough");
+        assertTrue(sticks.missing().isEmpty());
+        ProductionPlanner.Job job = ProductionPlanner.nextJob(orders, world(), "crafter", SMITHY, UUID.randomUUID());
+        assertNotNull(job);
+        assertEquals(Map.of("oak_planks", 1, "spruce_planks", 1), job.picks());
+    }
+
+    @Test
+    void severalItemsOfATagAskOnlyForWhatTheyLackTogether() {
+        stock.put("oak_planks", 3L);
+        stock.put("spruce_planks", 2L);
+        stock.put("oak_log", 1L);
+        // Twelve sticks are three makings of two planks: six planks, five are there.
+        Order sticks = order("stick", Order.Kind.MAKE, 12);
+        refresh();
+        assertEquals(Order.Status.READY, sticks.status(), "a making can start at once");
+        Order planks = sub(sticks, "oak_planks");
+        assertNotNull(planks, "the plank still missing is made of the wood there is most of");
+        assertEquals(4, planks.amount(), "the other wood counts: the sub-order needs only one more plank than there is of oak");
+        assertNull(sub(sticks, "spruce_planks"));
+        // The planks wanted go first; a making of sticks takes one kind when one kind is enough.
+        ProductionPlanner.Job job = ProductionPlanner.nextJob(orders, world(), "crafter", SMITHY, UUID.randomUUID());
+        assertNotNull(job);
+        assertEquals(planks.id(), job.order());
+        assertEquals(Map.of("oak_planks", 2), ProductionPlanner.picks(world(), Map.of(), BOOK.recipe("stick").orElseThrow(), null));
+    }
+
+    @Test
+    void aWorkerWithoutWorkSaysWhatTheOrdersWaitFor() {
+        Order sticks = order("stick", Order.Kind.MAKE, 4);
+        refresh();
+        assertEquals(ProductionPlanner.Wait.INGREDIENTS, ProductionPlanner.waitFor(orders, world(), "crafter", SMITHY),
+                "no planks and no logs");
+        stock.put("oak_planks", 2L);
+        refresh();
+        assertEquals(Order.Status.READY, sticks.status());
+        assertEquals(ProductionPlanner.Wait.WORKSTATION, ProductionPlanner.waitFor(orders, world(), "crafter", FOUNDRY),
+                "the planks are there, the crafting table is not");
+        UUID first = UUID.randomUUID();
+        ProductionPlanner.Job job = ProductionPlanner.nextJob(orders, world(), "crafter", SMITHY, first);
+        reservations.reserve(first, new Reservations.Hold(KINGDOM, job.order(), job.picks(), "stick", 4));
+        assertEquals(ProductionPlanner.Wait.NOTHING, ProductionPlanner.waitFor(orders, world(), "crafter", SMITHY),
+                "another crafter is making all of it");
+    }
+
     @Test
     void aRecipeWhoseIngredientsAreThereIsPreferred() {
         stock.put("iron_block", 1L);

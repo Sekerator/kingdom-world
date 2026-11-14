@@ -158,6 +158,10 @@ public class StorehouseBlock extends BaseEntityBlock {
     @Override
     public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
         super.setPlacedBy(level, pos, state, placer, stack);
+        if (level instanceof ServerLevel server && placer instanceof Player player) {
+            // A storehouse off the land of the kingdom says so at once, before anything is put into it.
+            tellLand(server, pos, player);
+        }
         if (level instanceof ServerLevel && state.getValue(TYPE) == ChestType.SINGLE) {
             for (Direction side : Direction.Plane.HORIZONTAL) {
                 BlockPos at = pos.relative(side);
@@ -255,14 +259,43 @@ public class StorehouseBlock extends BaseEntityBlock {
             return InteractionResult.CONSUME;
         }
         StorehouseContainer container = new StorehouseContainer(server, halves, handler);
+        boolean outside = landOwner(server, pos) == null;
         if (halves.size() == 2) {
             player.openMenu(new SimpleMenuProvider((id, inventory, p) -> new StorehouseMenu(id, inventory, container),
-                    Component.translatable("kingdomworld.storehouse.double")));
+                    Component.translatable(outside ? "kingdomworld.storehouse.double_outside" : "kingdomworld.storehouse.double")));
         } else {
             player.openMenu(new SimpleMenuProvider((id, inventory, p) -> ChestMenu.sixRows(id, inventory, container),
-                    Component.translatable("block.kingdomworld.storehouse")));
+                    Component.translatable(outside ? "kingdomworld.storehouse.outside_title" : "block.kingdomworld.storehouse")));
         }
+        tellLand(server, pos, player);
         return InteractionResult.CONSUME;
+    }
+
+    /**
+     * The kingdom whose common store a storehouse at the position belongs to, {@code null} if it stands on the land of none.
+     */
+    @Nullable
+    static java.util.UUID landOwner(ServerLevel level, BlockPos pos) {
+        return KingdomStorage.owner(KingdomWorldApi.state(level.getServer()).territory(), StorehouseBlockEntity.position(level, pos));
+    }
+
+    /**
+     * Tells a player whose storehouse is not one of its kingdom why: it stands off the land of every kingdom, or on the land of
+     * another kingdom. Citizens neither see nor use it for the player's kingdom then.
+     */
+    static void tellLand(ServerLevel level, BlockPos pos, Player player) {
+        java.util.UUID owner = landOwner(level, pos);
+        if (owner == null) {
+            player.displayClientMessage(Component.translatable("kingdomworld.storehouse.outside").withStyle(ChatFormatting.GOLD), true);
+            return;
+        }
+        java.util.Optional<java.util.UUID> own = KingdomWorldApi.kingdomOf(level.getServer(), player.getUUID())
+                .map(io.github.sekerator.kingdomworld.core.kingdom.Kingdom::id);
+        if (own.isPresent() && !own.get().equals(owner)) {
+            KingdomWorldApi.kingdom(level.getServer(), owner).ifPresent(kingdom -> player.displayClientMessage(Component.translatable(
+                    "kingdomworld.storehouse.foreign", io.github.sekerator.kingdomworld.common.protection.ProtectionService.shortName(kingdom.name()))
+                    .withStyle(ChatFormatting.GOLD), true));
+        }
     }
 
     @Override
@@ -317,5 +350,6 @@ public class StorehouseBlock extends BaseEntityBlock {
     public void appendHoverText(ItemStack stack, @Nullable BlockGetter level, List<Component> tooltip, TooltipFlag flag) {
         tooltip.add(Component.translatable("block.kingdomworld.storehouse.tooltip").withStyle(ChatFormatting.GRAY));
         tooltip.add(Component.translatable("block.kingdomworld.storehouse.tooltip_double").withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.translatable("block.kingdomworld.storehouse.tooltip_land").withStyle(ChatFormatting.GRAY));
     }
 }

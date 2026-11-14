@@ -39,7 +39,7 @@ public abstract class PostWorkGoal extends Goal {
     protected static final double REACH_SQR = 3.0 * 3.0;
     private static final double DELIVERY_REACH_SQR = 3.0 * 3.0;
     /** Farthest storehouse a worker without a container walks to, in blocks. */
-    private static final int STOREHOUSE_RANGE = 64;
+    protected static final int STOREHOUSE_RANGE = 64;
     /** A body farther than this from its post does not work. */
     private static final int MAX_DISTANCE = 96;
     private static final int GIVE_UP_TICKS = 300;

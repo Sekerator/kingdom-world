@@ -167,13 +167,19 @@ A healthy citizen falls ill with a chance of {cfg:life.sickChance} per mille a d
 
 Citizens are mortal. They are killed by monsters (zombies and illagers hunt citizens), players, falls, lava, fire, water, hunger (if the server allows it), and far from players by accidents at work (see [Work far from players](work_far)), battle and guild expeditions. Death is final:
 
-- the record goes to the chronicle of the kingdom: who, when, the cause and where (the Citizens tab, the "chronicle" view);
-- the king and the members with the Citizens right are told, for example "Citizen ... died: died in the mine";
+- the record goes to the chronicle of the kingdom: who, when, the cause and where (the Citizens tab, the "chronicle" view). A line of the chronicle is the name, the cause and the day; the profession, the place and the whole text of the line show on hover;
+- the king and the members with the Citizens right are told the same cause, for example "Citizen ... died: killed by a monster (Zombie)";
 - the tools and armor of the dead go back to a storehouse;
 - for three days every death spoils the neighbours' mood by 5 (no more than 20 for all of them);
 - the bed and the seat at the post are free again.
 
-Causes in the chronicle: killed by a monster, killed by a player, fell to death, burned, fell into lava, drowned, starved, died in the mine, was killed felling trees, drowned while fishing, was killed tending the herd, fell from a building going up, died at work, fell on an expedition, fell in battle, was killed by robbers.
+Causes in the chronicle:
+
+- **who killed:** a player by name; a monster, an animal, a golem or another creature with its kind and its own name if it has one ("killed by a monster (Skeleton)", "killed by an animal (Wolf "Rex")", "killed by a golem (Iron Golem)"); a citizen or a soldier of a kingdom by the name of the kingdom ("killed by a soldier of ..."); robbers;
+- **what killed:** fell to death, burned, fell into lava, drowned, starved, suffocated in a block, died in an explosion, was pricked to death by a cactus or a berry bush, was killed by magic, withered away, froze to death, was struck by lightning, was squashed by a falling block or anvil, fell out of the world and more. Damage the chronicle has no words of its own for (the damage of other mods, say) is told by the death message of the game itself: "... was killed by ...";
+- **far from players:** died in the mine, was killed felling trees, drowned while fishing, was killed tending the herd, fell from a building going up, died at work, fell on an expedition, fell in battle, was killed by robbers.
+
+Entries of earlier versions stay as they were: they know no kind of creature and no kind of damage.
 
 > Armor from the storehouses and experience lower the risk at work, and an infirmary brings the wounded back quickly: place it near the houses.
 
@@ -224,9 +230,10 @@ The Workers window shows what every citizen is doing, who lacks what and every p
 
 - the **Workers…** button in the Citizens tab of the throne window;
 - the command **/kingdom workers**, typed in the chat from anywhere;
-- the key "Window of the workers": unbound by default, set it in the controls settings (see [Keys and windows](keys)).
+- the key "Window of the workers": unbound by default, set it in the controls settings (see [Keys and windows](keys));
+- **a right click on a citizen** of your kingdom: for a citizen with a post the window of its post opens with all its settings, as a click on the post itself opens it (see [The window of a post and hiring](post_window)); for a citizen without a post (without work, of a profession without a post, an adventurer, a soldier) this window opens with the citizen chosen in the list, to put it on a post or dismiss it at once. An innkeeper at the counter still opens the tavern, and **Shift + right click** only names the citizen, as before.
 
-It needs the **Citizens** right; without it the window says "This needs the right Citizens".
+It needs the **Citizens** right; without it the window says "This needs the right Citizens". Without that right, and for the citizens of others, a click only names the citizen.
 
 ### The summary
 

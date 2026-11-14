@@ -428,7 +428,7 @@ public final class CitizenBodies {
         // The body drops what it held and wore itself; the stored copy of the gear goes with it.
         io.github.sekerator.kingdomworld.common.data.KingdomSavedData.get(level.getServer()).gear().takeAll(id);
         BlockPos pos = body.blockPosition();
-        CitizenLife.die(level.getServer(), id, CitizenLife.causeOf(source), CitizenLife.killerOf(source),
+        CitizenLife.die(level.getServer(), id, DeathCauses.of(level.getServer(), source),
                 new WorldPos(Dimensions.id(level), pos.getX(), pos.getY(), pos.getZ()));
     }
 

@@ -3,6 +3,7 @@ package io.github.sekerator.kingdomworld.common.network.data;
 import io.github.sekerator.kingdomworld.core.citizen.CauseOfDeath;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds;
 import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
+import io.github.sekerator.kingdomworld.core.citizen.DeathCause;
 import io.github.sekerator.kingdomworld.core.citizen.Profession;
 import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
 import io.netty.handler.codec.DecoderException;
@@ -115,16 +116,32 @@ public record CitizenView(UUID kingdomId, boolean canManage, int population, int
     /**
      * One entry of the chronicle.
      *
-     * @param day   game day of the death, counted from 1
-     * @param place where the citizen died
+     * @param day        game day of the death, counted from 1
+     * @param place      where the citizen died
+     * @param killerType the kind of creature that killed, empty if none
+     * @param damage     the kind of damage that killed, empty if unknown
      */
     public record Death(int seed, boolean female, String profession, CauseOfDeath cause, String killer, long day,
-                        BlockPos place) {
+                        BlockPos place, String killerType, String damage) {
         public Death {
             Objects.requireNonNull(profession, "profession");
             Objects.requireNonNull(cause, "cause");
             Objects.requireNonNull(place, "place");
-            killer = killer == null ? "" : killer;
+            DeathCause checked = new DeathCause(cause, killer, killerType, damage);
+            killer = checked.killer();
+            killerType = checked.killerType();
+            damage = checked.damage();
+        }
+
+        public Death(int seed, boolean female, String profession, CauseOfDeath cause, String killer, long day, BlockPos place) {
+            this(seed, female, profession, cause, killer, day, place, "", "");
+        }
+
+        /**
+         * The cause with who killed and the kind of damage.
+         */
+        public DeathCause deathCause() {
+            return new DeathCause(cause, killer, killerType, damage);
         }
     }
 
@@ -186,6 +203,8 @@ public record CitizenView(UUID kingdomId, boolean canManage, int population, int
             buf.writeUtf(death.killer(), MAX_KILLER);
             buf.writeVarLong(death.day());
             buf.writeBlockPos(death.place());
+            buf.writeUtf(death.killerType(), DeathCause.MAX_ID);
+            buf.writeUtf(death.damage(), DeathCause.MAX_ID);
         }
         buf.writeVarInt(production.size());
         for (Production entry : production) {
@@ -234,7 +253,7 @@ public record CitizenView(UUID kingdomId, boolean canManage, int population, int
         List<Death> chronicle = new ArrayList<>(deaths);
         for (int i = 0; i < deaths; i++) {
             chronicle.add(new Death(buf.readInt(), buf.readBoolean(), readProfession(buf), KingdomView.readEnum(buf, CauseOfDeath.class),
-                    buf.readUtf(MAX_KILLER), buf.readVarLong(), buf.readBlockPos()));
+                    buf.readUtf(MAX_KILLER), buf.readVarLong(), buf.readBlockPos(), buf.readUtf(DeathCause.MAX_ID), buf.readUtf(DeathCause.MAX_ID)));
         }
         int produced = KingdomView.readSize(buf, MAX_PRODUCTION);
         List<Production> production = new ArrayList<>(produced);

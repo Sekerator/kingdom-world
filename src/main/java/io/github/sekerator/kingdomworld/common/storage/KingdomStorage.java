@@ -173,12 +173,38 @@ public final class KingdomStorage {
         }
         ItemStack rest = stack.copy();
         for (StorehouseInventory inventory : storehouses(server, kingdomId, near)) {
+            if (!inventory.takesIn()) {
+                continue;
+            }
             rest = net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inventory, rest, false);
             if (rest.isEmpty()) {
                 break;
             }
         }
         return rest;
+    }
+
+    /**
+     * Takes up to {@code amount} items matching the filter out of one storehouse.
+     *
+     * @return the stacks taken; empty if nothing matched or the data is read-only
+     */
+    public static List<ItemStack> takeFrom(MinecraftServer server, StorehouseInventory inventory, Predicate<ItemStack> filter, int amount) {
+        List<ItemStack> taken = new ArrayList<>();
+        if (amount <= 0 || KingdomSavedData.get(server).isReadOnly()) {
+            return taken;
+        }
+        int left = amount;
+        for (int slot = 0; slot < inventory.getSlots() && left > 0; slot++) {
+            ItemStack stack = inventory.getStackInSlot(slot);
+            if (stack.isEmpty() || !filter.test(stack)) {
+                continue;
+            }
+            ItemStack extracted = inventory.extractItem(slot, Math.min(left, stack.getCount()), false);
+            left -= extracted.getCount();
+            merge(taken, extracted);
+        }
+        return taken;
     }
 
     /**
@@ -326,7 +352,8 @@ public final class KingdomStorage {
      * Whether all the stacks would fit into the kingdom's storehouses together.
      */
     public static boolean fits(MinecraftServer server, UUID kingdomId, List<ItemStack> stacks) {
-        List<StorehouseInventory> inventories = storehouses(server, kingdomId, null);
+        List<StorehouseInventory> inventories = new ArrayList<>(storehouses(server, kingdomId, null));
+        inventories.removeIf(inventory -> !inventory.takesIn());
         if (inventories.isEmpty()) {
             return stacks.stream().allMatch(ItemStack::isEmpty);
         }
@@ -363,6 +390,9 @@ public final class KingdomStorage {
      * Empty slots of a storehouse.
      */
     public static int freeSlots(StorehouseInventory inventory) {
+        if (!inventory.takesIn()) {
+            return 0;
+        }
         int free = 0;
         for (int slot = 0; slot < inventory.getSlots(); slot++) {
             if (inventory.getStackInSlot(slot).isEmpty()) {

@@ -8,6 +8,16 @@ import java.util.Locale;
 public enum CauseOfDeath {
     MONSTER,
     PLAYER,
+    /** Killed by an animal: a wolf, a bee, a polar bear. */
+    ANIMAL,
+    /** Killed by a golem. */
+    GOLEM,
+    /** Killed by a creature that is neither a monster, nor an animal, nor a golem (of another mod, say). */
+    CREATURE,
+    /** Killed by a citizen of a kingdom (of another one, or of its own). */
+    CITIZEN,
+    /** Killed by a soldier of a kingdom. */
+    SOLDIER,
     FALL,
     FIRE,
     LAVA,

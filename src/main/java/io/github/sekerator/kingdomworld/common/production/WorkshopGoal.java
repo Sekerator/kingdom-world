@@ -6,6 +6,7 @@ import io.github.sekerator.kingdomworld.common.citizen.work.PostWorkGoal;
 import io.github.sekerator.kingdomworld.common.citizen.work.ProfessionBehavior;
 import io.github.sekerator.kingdomworld.common.citizen.work.ZoneSurveys;
 import io.github.sekerator.kingdomworld.common.storage.KingdomStorage;
+import io.github.sekerator.kingdomworld.common.storage.StorehouseInventory;
 import io.github.sekerator.kingdomworld.core.citizen.Citizen;
 import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
@@ -42,6 +43,8 @@ final class WorkshopGoal extends PostWorkGoal {
     private static final int GIVE_UP_TICKS = 600;
     /** How long a worker waits at its post for carriers to bring its ingredients. */
     private static final int CARRIER_WAIT_TICKS = 200;
+    /** Storehouses a worker walks to for one making at most; what is still missing then comes from any storehouse. */
+    private static final int MAX_STOREHOUSES = 4;
 
     private enum Step {
         CHOOSE,
@@ -64,6 +67,8 @@ final class WorkshopGoal extends PostWorkGoal {
     private int walking;
     private int waited;
     private int extracted;
+    /** Storehouses the worker took from for this making. */
+    private int visited;
 
     WorkshopGoal(CitizenEntity body, ProfessionBehavior behavior) {
         super(body, behavior);
@@ -144,6 +149,7 @@ final class WorkshopGoal extends PostWorkGoal {
         walking = 0;
         waited = 0;
         extracted = 0;
+        visited = 0;
         Production.reserve(citizen.get().id(), post.kingdomId(), found, fuelNeeded);
         post.setCurrent(found.recipe().output(), 0.0);
         step = Step.FETCH;
@@ -244,9 +250,11 @@ final class WorkshopGoal extends PostWorkGoal {
             }
             return null;
         }
-        // Fetched from the storehouse by the worker itself.
+        // Fetched by the worker itself: from the storehouse where the items lie, the nearest first; items in storehouses out of
+        // reach come along through the nearest one, so that work never waits for a player to carry them over.
         if (storehouse == null) {
-            storehouse = nearestStorehouse(level);
+            StorehouseInventory holder = visited < MAX_STOREHOUSES ? storehouseWith(level, needed) : null;
+            storehouse = holder != null ? blockPos(holder.pos()) : nearestStorehouse(level);
             if (storehouse == null) {
                 return giveUp(WorkStatus.NO_STOREHOUSE);
             }
@@ -257,6 +265,22 @@ final class WorkshopGoal extends PostWorkGoal {
         }
         MinecraftServer server = level.getServer();
         WorldPos near = new WorldPos(post.pos().dimension(), storehouse.getX(), storehouse.getY(), storehouse.getZ());
+        if (visited < MAX_STOREHOUSES && takeHere(level, near, needed, citizen)) {
+            // Took what this storehouse holds; the rest from the next storehouse that holds it.
+            visited++;
+            walking = 0;
+            storehouse = null;
+            Reservations.Hold left = Production.reservations().hold(citizen.id());
+            if (left != null && !left.items().isEmpty() && visited < MAX_STOREHOUSES && storehouseWith(level, left.items()) != null) {
+                return null;
+            }
+            if (left == null || left.items().isEmpty()) {
+                step = Step.GO;
+                return null;
+            }
+            storehouse = new BlockPos(near.x(), near.y(), near.z());
+            needed = left.items();
+        }
         for (Map.Entry<String, Integer> entry : new LinkedHashMap<>(needed).entrySet()) {
             String item = entry.getKey();
             List<ItemStack> taken = KingdomStorage.take(server, post.kingdomId(), stack -> KingdomStorage.itemId(stack).equals(item),
@@ -275,6 +299,59 @@ final class WorkshopGoal extends PostWorkGoal {
         step = Step.GO;
         walking = 0;
         return null;
+    }
+
+    /**
+     * The nearest storehouse within reach whose place is loaded and that holds any of the items: a storehouse, either half of a
+     * double one, or a container of a warehouse.
+     */
+    @Nullable
+    private StorehouseInventory storehouseWith(ServerLevel level, Map<String, Integer> needed) {
+        BlockPos here = body.blockPosition();
+        WorldPos from = new WorldPos(post.pos().dimension(), here.getX(), here.getY(), here.getZ());
+        for (StorehouseInventory inventory : KingdomStorage.storehouses(level.getServer(), post.kingdomId(), from)) {
+            if (inventory.pos().distanceSqr(from) > (double) STOREHOUSE_RANGE * STOREHOUSE_RANGE) {
+                break;
+            }
+            if (!level.isLoaded(blockPos(inventory.pos())) || !holdsAny(inventory, needed)) {
+                continue;
+            }
+            return inventory;
+        }
+        return null;
+    }
+
+    private static BlockPos blockPos(WorldPos pos) {
+        return new BlockPos(pos.x(), pos.y(), pos.z());
+    }
+
+    /**
+     * Takes what the storehouse at the place holds of the items the worker set aside.
+     *
+     * @return whether it held any of them
+     */
+    private boolean takeHere(ServerLevel level, WorldPos at, Map<String, Integer> needed, Citizen citizen) {
+        MinecraftServer server = level.getServer();
+        boolean took = false;
+        for (StorehouseInventory inventory : KingdomStorage.storehouses(server, post.kingdomId(), at)) {
+            if (!inventory.pos().equals(at)) {
+                break;
+            }
+            for (Map.Entry<String, Integer> entry : new LinkedHashMap<>(needed).entrySet()) {
+                String item = entry.getKey();
+                int count = 0;
+                for (ItemStack stack : KingdomStorage.takeFrom(server, inventory, value -> KingdomStorage.itemId(value).equals(item),
+                        entry.getValue())) {
+                    count += stack.getCount();
+                    carry(stack);
+                }
+                if (count > 0) {
+                    took = true;
+                    Production.reservations().taken(citizen.id(), item, count);
+                }
+            }
+        }
+        return took;
     }
 
     private static boolean holdsAny(IItemHandler handler, Map<String, Integer> needed) {

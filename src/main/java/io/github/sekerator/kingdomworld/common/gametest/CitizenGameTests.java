@@ -266,6 +266,55 @@ public final class CitizenGameTests {
         helper.succeed();
     }
 
+    /**
+     * A citizen choked in a block is written in the chronicle as suffocated, with the kind of damage; one bitten by a wolf as killed
+     * by an animal, the wolf named; one struck by an iron golem as killed by a golem; and the king is told the same.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_citizen_death")
+    public static void theChronicleTellsWhatKilled(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Kingdom kingdom = found(helper, "GameTest Causes", UUID.randomUUID());
+        Citizen choked = newcomer(helper, kingdom, 1, 1);
+        Citizen bitten = newcomer(helper, kingdom, 3, 1);
+        Citizen struck = newcomer(helper, kingdom, 1, 3);
+        try {
+            for (Citizen citizen : List.of(choked, bitten, struck)) {
+                CitizenBodies.force(citizen.id(), true);
+            }
+            CitizenBodies.update(server);
+            CitizenEntity body = CitizenBodies.body(choked.id());
+            helper.assertTrue(body != null, "No body was created");
+            body.hurt(helper.getLevel().damageSources().inWall(), 100.0f);
+            DeathRecord record = KingdomWorldApi.state(server).citizens().registry().chronicle(kingdom.id()).get(0);
+            helper.assertTrue(record.citizenId().equals(choked.id()), "The chronicle misses the death");
+            helper.assertTrue(record.cause() == CauseOfDeath.OTHER && "inWall".equals(record.damage()),
+                    "Wrong cause: " + record.cause() + " " + record.damage());
+            helper.assertTrue(record.deathCause().telling() == io.github.sekerator.kingdomworld.core.citizen.DeathCause.Telling.WORD,
+                    "Suffocation is not told in words of the chronicle");
+            net.minecraft.network.chat.Component text = io.github.sekerator.kingdomworld.common.citizen.CitizenTexts.cause(record.deathCause(), record.gender());
+            helper.assertTrue(text.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents translatable
+                    && translatable.getKey().startsWith("kingdomworld.death.damage.suffocation"), "Wrong words: " + text);
+
+            net.minecraft.world.entity.animal.Wolf wolf = helper.spawn(net.minecraft.world.entity.EntityType.WOLF, new BlockPos(5, 1, 5));
+            wolf.setCustomName(net.minecraft.network.chat.Component.literal("Rex"));
+            CitizenBodies.body(bitten.id()).hurt(helper.getLevel().damageSources().mobAttack(wolf), 100.0f);
+            record = KingdomWorldApi.state(server).citizens().registry().chronicle(kingdom.id()).get(0);
+            helper.assertTrue(record.cause() == CauseOfDeath.ANIMAL && "minecraft:wolf".equals(record.killerType())
+                    && "Rex".equals(record.killer()), "A wolf is told as " + record.cause() + " " + record.killerType() + " " + record.killer());
+
+            net.minecraft.world.entity.animal.IronGolem golem = helper.spawn(net.minecraft.world.entity.EntityType.IRON_GOLEM, new BlockPos(6, 1, 6));
+            CitizenBodies.body(struck.id()).hurt(helper.getLevel().damageSources().mobAttack(golem), 100.0f);
+            record = KingdomWorldApi.state(server).citizens().registry().chronicle(kingdom.id()).get(0);
+            helper.assertTrue(record.cause() == CauseOfDeath.GOLEM && "minecraft:iron_golem".equals(record.killerType()),
+                    "A golem is told as " + record.cause() + " " + record.killerType());
+            wolf.discard();
+            golem.discard();
+        } finally {
+            finish(helper, kingdom, choked, bitten, struck);
+        }
+        helper.succeed();
+    }
+
     @GameTest(template = EMPTY, batch = "kingdomworld_citizen_protection")
     public static void aStrangersBlowAtACitizenIsACrimeNotRefused(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();

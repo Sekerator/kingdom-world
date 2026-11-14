@@ -463,6 +463,15 @@ class TranslationKeysTest {
         for (CauseOfDeath cause : CauseOfDeath.values()) {
             gendered.add("kingdomworld.death." + cause.id());
         }
+        // Who killed: the kind of creature, the kingdom of a citizen or soldier; the kinds of damage told in words of their own.
+        for (CauseOfDeath cause : List.of(CauseOfDeath.MONSTER, CauseOfDeath.ANIMAL, CauseOfDeath.GOLEM, CauseOfDeath.CREATURE)) {
+            gendered.add("kingdomworld.death." + cause.id() + "_by");
+        }
+        gendered.add("kingdomworld.death." + CauseOfDeath.CITIZEN.id() + "_of");
+        gendered.add("kingdomworld.death." + CauseOfDeath.SOLDIER.id() + "_of");
+        for (String word : io.github.sekerator.kingdomworld.core.citizen.DeathCause.words()) {
+            gendered.add("kingdomworld.death.damage." + word);
+        }
         for (CitizenNeeds.GrowthCheck check : CitizenNeeds.GrowthCheck.values()) {
             used.add("kingdomworld.screen.citizens.growth." + check.name().toLowerCase(Locale.ROOT));
         }

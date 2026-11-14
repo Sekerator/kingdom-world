@@ -439,6 +439,10 @@ public class CitizenEntity extends PathfinderMob {
             if (io.github.sekerator.kingdomworld.common.life.TavernActions.open(serverPlayer, this)) {
                 return InteractionResult.SUCCESS;
             }
+            // One who manages the citizens sees the post of the citizen, or the window of the workers; with Shift, who it is.
+            if (!serverPlayer.isSecondaryUseActive() && WorkforceActions.openFor(serverPlayer, this)) {
+                return InteractionResult.SUCCESS;
+            }
             CitizenTexts.describeTo(serverPlayer, this);
         }
         return InteractionResult.sidedSuccess(level().isClientSide);

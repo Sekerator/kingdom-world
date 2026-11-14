@@ -28,6 +28,13 @@ public class StorehouseInventory extends ItemStackHandler {
         return pos;
     }
 
+    /**
+     * Whether items may be put in: a container of a warehouse whose place is not loaded only gives.
+     */
+    public boolean takesIn() {
+        return true;
+    }
+
     void setChangeListener(Runnable listener) {
         this.changeListener = Objects.requireNonNull(listener, "listener");
     }

@@ -149,9 +149,14 @@ final class ClientLayoutCheck {
     /**
      * A screen to check; {@code screenshots} false checks it without saving pictures of it (the many pages of the guide).
      */
-    private record Case(String name, Supplier<Screen> screen, boolean screenshots) {
+    private record Case(String name, Supplier<Screen> screen, boolean screenshots,
+                        java.util.function.Function<Screen, int[]> mouse) {
         Case(String name, Supplier<Screen> screen) {
-            this(name, screen, true);
+            this(name, screen, true, null);
+        }
+
+        Case(String name, Supplier<Screen> screen, boolean screenshots) {
+            this(name, screen, screenshots, null);
         }
     }
 
@@ -221,6 +226,9 @@ final class ClientLayoutCheck {
         LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.protection.citizen",
                 ProtectionService.shortName(LONG_KINGDOM)), NARROWEST_SCREEN);
         LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.storehouse.read_only"), NARROWEST_SCREEN);
+        LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.storehouse.outside"), NARROWEST_SCREEN);
+        LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.storehouse.foreign",
+                ProtectionService.shortName(LONG_KINGDOM)), NARROWEST_SCREEN);
         LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.post.outside"), NARROWEST_SCREEN);
         LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.post.read_only"), NARROWEST_SCREEN);
         LayoutCheck.actionbar(minecraft.font, Component.translatable("block.kingdomworld.mint.use"), NARROWEST_SCREEN);
@@ -261,7 +269,7 @@ final class ClientLayoutCheck {
                     Path file = SCREENSHOT_SCALES.contains(requested) && check.screenshots()
                             ? screenshots.resolve(language).resolve(window[0] + "x" + window[1] + "-scale" + requested + "-" + check.name() + ".png")
                             : null;
-                    draw(screen, window[0], window[1], scale, file);
+                    draw(screen, window[0], window[1], scale, file, check.mouse() == null ? null : check.mouse().apply(screen));
                     problems.addAll(LayoutCheck.end());
                     checkedScreens++;
                 }
@@ -270,7 +278,11 @@ final class ClientLayoutCheck {
         LOGGER.info(PREFIX + "{} checked, {} problem(s) so far", language, problems.size());
     }
 
-    private void draw(Screen screen, int pixelWidth, int pixelHeight, int scale, Path file) {
+    /**
+     * @param mouse where the mouse stands, in the coordinates of the screen, so that what it hovers over shows; {@code null} for
+     *              nowhere
+     */
+    private void draw(Screen screen, int pixelWidth, int pixelHeight, int scale, Path file, int[] mouse) {
         RenderTarget target = new TextureTarget(pixelWidth, pixelHeight, true, Minecraft.ON_OSX);
         Matrix4f projection = RenderSystem.getProjectionMatrix();
         VertexSorting sorting = RenderSystem.getVertexSorting();
@@ -286,7 +298,7 @@ final class ClientLayoutCheck {
             modelView.translate(0.0f, 0.0f, -11000.0f);
             RenderSystem.applyModelViewMatrix();
             GuiGraphics graphics = new GuiGraphics(minecraft, minecraft.renderBuffers().bufferSource());
-            screen.render(graphics, -1000, -1000, 0.0f);
+            screen.render(graphics, mouse == null ? -1000 : mouse[0], mouse == null ? -1000 : mouse[1], 0.0f);
             graphics.flush();
             modelView.popPose();
             RenderSystem.applyModelViewMatrix();
@@ -456,13 +468,13 @@ final class ClientLayoutCheck {
                         i % 3 == 1 ? CitizenState.WOUNDED : CitizenState.HEALTHY, i % 4 == 3 ? null : far, 20 - i % 15, 50 + i,
                         i % 5 == 4 ? null : far, statuses[i % statuses.length]));
             }
-            CauseOfDeath[] causes = CauseOfDeath.values();
-            for (int i = 0; i < causes.length + 2; i++) {
+            List<io.github.sekerator.kingdomworld.core.citizen.DeathCause> causes = deathCauses();
+            for (int i = 0; i < causes.size(); i++) {
                 Gender gender = i % 2 == 0 ? Gender.MALE : Gender.FEMALE;
                 int seed = i < 2 ? longestNameSeed(gender) : i * 104_729;
-                CauseOfDeath cause = i < 2 ? CauseOfDeath.PLAYER : causes[i - 2];
-                deaths.add(new CitizenView.Death(seed, gender == Gender.FEMALE, i % 2 == 0 ? "unemployed" : "farmer", cause,
-                        i == 0 ? LONG_PLAYER : "", 99_999L - i, far));
+                io.github.sekerator.kingdomworld.core.citizen.DeathCause cause = causes.get(i);
+                deaths.add(new CitizenView.Death(seed, gender == Gender.FEMALE, i % 2 == 0 ? "unemployed" : "farmer", cause.cause(),
+                        cause.killer(), 99_999L - i, far, cause.killerType(), cause.damage()));
             }
         }
         List<CitizenView.Production> production = new ArrayList<>();
@@ -476,6 +488,32 @@ final class ClientLayoutCheck {
         }
         return new CitizenView(UUID.randomUUID(), canManage, empty ? 0 : 187, empty ? 0 : 180, empty ? 0 : 200,
                 empty ? 0 : CitizenView.MAX_FOOD_DAYS, empty ? 50 : 100, empty ? 0 : 999, growth, entries, deaths, production);
+    }
+
+    /**
+     * Every cause of death the chronicle tells, with the creatures, kingdoms and kinds of damage that make it longest; a kind of
+     * damage of the game without words of the chronicle, and one of a mod without a translation.
+     */
+    static List<io.github.sekerator.kingdomworld.core.citizen.DeathCause> deathCauses() {
+        List<io.github.sekerator.kingdomworld.core.citizen.DeathCause> causes = new ArrayList<>();
+        // The first lines are those a small window shows: a kind of damage, a creature with a name, the longest kingdom.
+        causes.add(new io.github.sekerator.kingdomworld.core.citizen.DeathCause(CauseOfDeath.OTHER, "", "", "inWall"));
+        causes.add(new io.github.sekerator.kingdomworld.core.citizen.DeathCause(CauseOfDeath.ANIMAL, "Рекс", "minecraft:wolf", "mob"));
+        causes.add(new io.github.sekerator.kingdomworld.core.citizen.DeathCause(CauseOfDeath.SOLDIER, LONG_KINGDOM, "kingdomworld:citizen", "mob"));
+        causes.add(io.github.sekerator.kingdomworld.core.citizen.DeathCause.of(CauseOfDeath.PLAYER, LONG_PLAYER));
+        causes.add(new io.github.sekerator.kingdomworld.core.citizen.DeathCause(CauseOfDeath.MONSTER, "", "minecraft:zombie", "mob"));
+        causes.add(new io.github.sekerator.kingdomworld.core.citizen.DeathCause(CauseOfDeath.MONSTER, "", "minecraft:wither_skeleton", "mob"));
+        causes.add(new io.github.sekerator.kingdomworld.core.citizen.DeathCause(CauseOfDeath.GOLEM, "", "minecraft:iron_golem", "mob"));
+        causes.add(new io.github.sekerator.kingdomworld.core.citizen.DeathCause(CauseOfDeath.CREATURE, "", "minecraft:villager", "mob"));
+        causes.add(new io.github.sekerator.kingdomworld.core.citizen.DeathCause(CauseOfDeath.CITIZEN, "Марка", "kingdomworld:citizen", "mob"));
+        for (String damage : List.of("explosion", "cactus", "sweetBerryBush", "magic", "wither", "freeze", "lightningBolt",
+                "fallingBlock", "fallingStalactite", "outOfWorld", "sting", "somemod.acid")) {
+            causes.add(new io.github.sekerator.kingdomworld.core.citizen.DeathCause(CauseOfDeath.OTHER, "", "", damage));
+        }
+        for (CauseOfDeath cause : CauseOfDeath.values()) {
+            causes.add(io.github.sekerator.kingdomworld.core.citizen.DeathCause.of(cause));
+        }
+        return causes.subList(0, Math.min(CitizenView.MAX_CHRONICLE, causes.size()));
     }
 
     private static ThroneScreen citizens(KingdomView view, CitizenView citizens, boolean chronicle, Component status) {
@@ -1240,6 +1278,13 @@ final class ClientLayoutCheck {
                 citizenView(true, false, CitizenNeeds.GrowthCheck.READY), false, longError)));
         cases.add(new Case("throne-steward-chronicle", () -> citizens(view(KingdomView.Relation.MEMBER, Role.STEWARD),
                 citizenView(true, false, CitizenNeeds.GrowthCheck.NO_FREE_BED), true, Component.empty())));
+        // A line of the chronicle hovered over: the whole text, the profession and the place.
+        cases.add(new Case("throne-chronicle-hover", () -> citizens(view(KingdomView.Relation.MEMBER, Role.STEWARD),
+                citizenView(true, false, CitizenNeeds.GrowthCheck.NO_FREE_BED), true, Component.empty()), true,
+                screen -> ((ThroneScreen) screen).citizensRowPoint(1)));
+        cases.add(new Case("throne-chronicle-hover-kingdom", () -> citizens(view(KingdomView.Relation.MEMBER, Role.STEWARD),
+                citizenView(true, false, CitizenNeeds.GrowthCheck.NO_FREE_BED), true, Component.empty()), true,
+                screen -> ((ThroneScreen) screen).citizensRowPoint(2)));
         cases.add(new Case("throne-subject-citizens", () -> citizens(view(KingdomView.Relation.MEMBER, Role.SUBJECT),
                 citizenView(false, false, CitizenNeeds.GrowthCheck.TOO_SOON), false, Component.empty())));
         cases.add(new Case("throne-citizens-empty", () -> citizens(view(KingdomView.Relation.MEMBER, Role.SUBJECT),

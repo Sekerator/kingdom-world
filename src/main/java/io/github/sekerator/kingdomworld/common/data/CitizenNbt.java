@@ -35,7 +35,7 @@ import java.util.UUID;
  *            workCapacity, workProduct, workProgress, workStatus, pay? }
  * post:    { pos, profession, radius, seats, animal, herd, status, yield: { out: { item: rate }, in: { item: rate },
  *            actions, measured }, progress: { item: amount }, day, produced, container, auto, stations: { kind: count } }
- * death:   { citizen, seed, gender, profession, cause, killer, time, pos }
+ * death:   { citizen, seed, gender, profession, cause, killer, time, pos, killerType?, damage? }
  * pos:     { dimension, x, y, z }
  * </pre>
  *
@@ -73,6 +73,10 @@ public final class CitizenNbt {
     private static final String CITIZEN = "citizen";
     private static final String CAUSE = "cause";
     private static final String KILLER = "killer";
+    /** The kind of creature that killed; kept only when known, so that older entries read as they are. */
+    private static final String KILLER_TYPE = "killerType";
+    /** The kind of damage that killed; kept only when known. */
+    private static final String DAMAGE = "damage";
     private static final String TIME = "time";
     private static final String DIMENSION = "dimension";
     private static final String WORK_STATUS = "workStatus";
@@ -248,6 +252,12 @@ public final class CitizenNbt {
         tag.putString(KILLER, record.killer());
         tag.putLong(TIME, record.gameTime());
         tag.put(POS, writePos(record.place()));
+        if (!record.killerType().isEmpty()) {
+            tag.putString(KILLER_TYPE, record.killerType());
+        }
+        if (!record.damage().isEmpty()) {
+            tag.putString(DAMAGE, record.damage());
+        }
         return tag;
     }
 
@@ -437,7 +447,7 @@ public final class CitizenNbt {
             throw new IllegalArgumentException("Chronicle entry of " + name + " has an invalid profession");
         }
         return new DeathRecord(tag.getUUID(CITIZEN), tag.getInt(SEED), gender, profession, CauseOfDeath.byId(tag.getString(CAUSE)),
-                tag.getString(KILLER), tag.getLong(TIME), readPos(tag, POS, name));
+                tag.getString(KILLER), tag.getLong(TIME), readPos(tag, POS, name), tag.getString(KILLER_TYPE), tag.getString(DAMAGE));
     }
 
     public static WorldPos readPos(CompoundTag parent, String key, String name) {

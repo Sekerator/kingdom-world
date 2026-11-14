@@ -81,6 +81,62 @@ public final class WorkforceActions {
     }
 
     /**
+     * What a click on a citizen opens: the window of its post, or the window of the workers at the citizen.
+     *
+     * @param post    the post of the citizen, {@code null} if it has none
+     * @param workers the page of the window of the workers with the citizen, {@code null} if the post opens
+     */
+    public record ClickTarget(UUID kingdomId, @Nullable WorkPost post, @Nullable WorkforceView.Query workers) {
+    }
+
+    /**
+     * What a click of a player on a citizen opens: for one who manages the citizens of the citizen's kingdom, the window of the
+     * citizen's post, as if the block of the post was clicked, or, for a citizen without a post (without work, of a profession
+     * without a post, an adventurer, a soldier), the window of the workers with the citizen chosen in the list; nothing for
+     * anybody else.
+     */
+    public static Optional<ClickTarget> clickTarget(ServerPlayer player, CitizenEntity body) {
+        UUID citizenId = body.citizenId();
+        Optional<Citizen> citizen = citizenId == null ? Optional.empty() : KingdomWorldApi.state(player.server).citizens().get(citizenId);
+        if (citizen.isEmpty() || !KingdomWorldApi.state(player.server).membership().isMember(player.getUUID(), citizen.get().kingdomId())
+                || !mayManage(player, citizen.get().kingdomId())) {
+            return Optional.empty();
+        }
+        UUID kingdomId = citizen.get().kingdomId();
+        Optional<WorkPost> post = PostWork.postOf(player.server, citizen.get()).filter(found -> found.kingdomId().equals(kingdomId));
+        if (post.isPresent()) {
+            return Optional.of(new ClickTarget(kingdomId, post.get(), null));
+        }
+        return Optional.of(new ClickTarget(kingdomId, null, focus(citizen.get().id(), DEFAULT_PAGE)));
+    }
+
+    /**
+     * A player clicked a citizen: the window of {@link #clickTarget} opens.
+     *
+     * @return whether a window opened; otherwise the player is told who the citizen is, as before
+     */
+    public static boolean openFor(ServerPlayer player, CitizenEntity body) {
+        Optional<ClickTarget> target = clickTarget(player, body);
+        if (target.isEmpty()) {
+            return false;
+        }
+        if (target.get().post() != null) {
+            io.github.sekerator.kingdomworld.common.citizen.work.WorkPostActions.send(player, target.get().post(), true);
+        } else {
+            send(player, target.get().kingdomId(), target.get().workers(), true);
+        }
+        return true;
+    }
+
+    /**
+     * The list of citizens at the page of one of them, which the window chooses: the window of the workers opened by a click on
+     * the citizen.
+     */
+    public static WorkforceView.Query focus(UUID citizenId, int pageSize) {
+        return new WorkforceView.Query(WorkforceView.Mode.CITIZENS, "", "", false, 0, pageSize, citizenId, null);
+    }
+
+    /**
      * A page asked for by the window, the key or the throne.
      *
      * @param kingdomId the kingdom, {@code null} for the player's own
@@ -133,7 +189,7 @@ public final class WorkforceActions {
                     }
                 }
                 rows.sort(Workforce.problemsFirst());
-                WorkforceView.Query page = clamp(query, rows.size());
+                WorkforceView.Query page = clamp(onPageOf(query, rows), rows.size());
                 List<WorkforceView.CitizenRow> shown = new ArrayList<>();
                 for (Citizen citizen : slice(rows, page)) {
                     shown.add(citizenRow(server, citizen, ownStanding(citizen), places, numbers, viewer.distance(citizen.workplace()), viewer));
@@ -228,6 +284,21 @@ public final class WorkforceActions {
 
     private static WorkforceView.PostRef ref(WorldPos pos) {
         return new WorkforceView.PostRef(pos.dimension(), new BlockPos(pos.x(), pos.y(), pos.z()));
+    }
+
+    /**
+     * The page of the citizen the list was opened at, if it is in the list; the page asked for otherwise.
+     */
+    private static WorkforceView.Query onPageOf(WorkforceView.Query query, List<Citizen> rows) {
+        if (query.citizen() == null) {
+            return query;
+        }
+        for (int i = 0; i < rows.size(); i++) {
+            if (rows.get(i).id().equals(query.citizen())) {
+                return query.withPage(i / query.pageSize());
+            }
+        }
+        return query;
     }
 
     /**

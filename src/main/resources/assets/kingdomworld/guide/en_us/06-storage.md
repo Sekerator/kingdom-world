@@ -15,7 +15,10 @@ middle row.
 ### Where to place it
 
 A storehouse works on the land of a kingdom: on its claimed chunks and in its provinces (see [The land of a kingdom](territory)). A storehouse in the wilds of a kingdom of the world, where it does not live, belongs to nobody: the
-kingdom does not count it. Whoever may build on the land may place one. Where exactly it stands does not matter: the
+kingdom does not count it. A storehouse off the land of the kingdom says so itself: when placed and when opened it tells
+"Off the land of a kingdom: not in the common store" (citizens do not use it), and its window is called
+"Storehouse off the Land". A storehouse on the land of another kingdom is part of that store, not
+yours, and says so too. Move such a storehouse onto your land or claim its chunk. Whoever may build on the land may place one. Where exactly it stands does not matter: the
 kingdom sees the sum of all its storehouses at once, even when their chunks are not loaded. Still, put storehouses near
 the work posts, so that workers and carriers walk less.
 
@@ -122,6 +125,9 @@ Warehouse are listed too. The Items button brings the goods back. The list scrol
 - The [Workers window](workers_window) says on top for how many days the storehouses hold food, and what workers lack:
   a tool, room in the storehouses, saplings.
 - The Orders tab shows the stock of every "Keep in stock" order (see [The king's orders](orders)).
+- A workshop post says "Not enough materials" only when an order really waits for materials; an order that can be made
+  only at a workstation the post lacks gives "No workstation in the zone", and an order others are making all of already
+  gives "No orders".
 
 ## workshops | Workshops
 @icon minecraft:furnace
@@ -156,13 +162,21 @@ the side, result from below); tables of mods built on the vanilla crafting table
 
 ### How the work goes
 
+An ingredient that takes several items (any planks, any stone) is made up of several of them, as at a crafting table:
+a plank of oak in one storehouse and a plank of spruce in another make sticks together. The kingdom sees the
+ingredients in all its storehouses at once: in any storehouse, either half of a double one and the containers of
+buildings with the Warehouse role, near players and far from them.
+
 Near players a worker sets the ingredients aside in the storehouses, takes them from the container of the post or
-fetches them itself, works by hand at tables, and really fills a furnace from above and the side and empties it from
+fetches them itself from the storehouse where they lie, the nearest first, then from the next; what lies in storehouses
+farther than 64 blocks or in places not loaded it takes through the nearest storehouse. It works by hand at tables, and really fills a furnace from above and the side and empties it from
 below. A furnace whose output holds some other item is left alone. Any fuel that burns is used (coal first), except
 tools, food and the ingredients themselves; a campfire needs none. The worker carries the result to a storehouse.
 
 Far from players each thing is made in one go: the ingredients and fuel leave the storehouses and the result goes there
-in the same tick, or nothing happens at all. Without room in the storehouses the work stands still. A post without a
+in the same tick, or nothing happens at all. Far from players the containers of a warehouse count with what they held
+when their place was last loaded, and the work takes from the container itself, loading its place for a moment. After a
+restart of the server such a building counts from the first time its place is loaded. Without room in the storehouses the work stands still. A post without a
 container next to it, or a kingdom without a single carrier at work, works a quarter slower.
 
 ### Time

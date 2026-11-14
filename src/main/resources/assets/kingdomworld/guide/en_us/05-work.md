@@ -33,7 +33,7 @@ The workers of a broken post, of a post on land given up or of a post something 
 
 ## post_window | The window of a post and hiring
 @icon minecraft:oak_sign
-A right click on a post opens its window. Every member of the kingdom may look; only those with the **Citizens** right (see [The rights of positions](rights)) change it, and no further than 10 blocks from the post. With that right a post is changed from afar too, with the Settings button of the [Workers window](workers_window); everybody else is told "Come closer to the post". To an outsider a post only names its kingdom.
+A right click on a post opens its window; one with the Citizens right opens it with a right click on a worker of the post as well (see [Workers window](workers_window)). Every member of the kingdom may look; only those with the **Citizens** right (see [The rights of positions](rights)) change it, and no further than 10 blocks from the post. With that right a post is changed from afar too, with the Settings button of the [Workers window](workers_window); everybody else is told "Come closer to the post". To an outsider a post only names its kingdom.
 
 ### What the window shows
 

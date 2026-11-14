@@ -84,7 +84,7 @@ public final class CitizenActions {
             }
             chronicle.add(new CitizenView.Death(record.nameSeed(), record.gender() == Gender.FEMALE, record.professionId(),
                     record.cause(), record.killer(), record.day(),
-                    new BlockPos(record.place().x(), record.place().y(), record.place().z())));
+                    new BlockPos(record.place().x(), record.place().y(), record.place().z()), record.killerType(), record.damage()));
         }
         return Optional.of(new CitizenView(kingdomId, state.membership().hasPermission(viewer, kingdomId, Permission.MANAGE_CITIZENS),
                 summary.population(), summary.bedsUsed(), summary.bedsTotal(), summary.foodDays(), summary.mood(),

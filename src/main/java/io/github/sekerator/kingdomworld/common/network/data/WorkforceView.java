@@ -94,7 +94,8 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
      * @param problems   whether only those with a problem are listed
      * @param page       the page, from 0
      * @param pageSize   rows on a page
-     * @param citizen    the citizen of {@link Mode#CHOOSE_POST}
+     * @param citizen    the citizen of {@link Mode#CHOOSE_POST}; in {@link Mode#CITIZENS} the citizen whose page is shown, the window
+     *                   opened by a click on it
      * @param post       the post of {@link Mode#CHOOSE_CITIZEN}
      */
     public record Query(Mode mode, String place, String profession, boolean problems, int page, int pageSize, @Nullable UUID citizen,
@@ -121,6 +122,13 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
 
         public Query withFilters(String newPlace, String newProfession, boolean newProblems) {
             return new Query(mode, newPlace, newProfession, newProblems, 0, pageSize, citizen, post);
+        }
+
+        /**
+         * The same list without the citizen it was opened at, once the window has chosen it.
+         */
+        public Query withoutFocus() {
+            return mode == Mode.CITIZENS && citizen != null ? new Query(mode, place, profession, problems, page, pageSize, null, post) : this;
         }
 
         public static Query choosePost(UUID citizen, int pageSize) {
