@@ -578,7 +578,7 @@ public final class FlagGameTests {
         CreateKingdomResult created = KingdomWorldApi.createKingdom(server, "GameTest Flag World", null);
         Kingdom world = ((CreateKingdomResult.Created) created).kingdom();
         NpcWork.state(server).putKingdom(new NpcKingdom(world.id(), -1, NpcLevel.SMALL, new NpcNames.Name("Flagland", "Флагландия"),
-                RulerCharacter.WARRIOR, List.of(), 1234, Gender.MALE, List.of(), KingdomWorldApi.gameTime(server), 0L));
+                RulerCharacter.WARRIOR, List.of(RulerCharacter.Trait.PATIENT), 1234, Gender.MALE, List.of(), KingdomWorldApi.gameTime(server), 0L));
         KingdomFlag good = KingdomFlag.plain(4).added(new KingdomFlag.Layer("minecraft:cross", 15));
         try {
             ServerPlayer subject = member(helper, kingdom, "kw-flag-subject");
@@ -658,7 +658,7 @@ public final class FlagGameTests {
         Kingdom seceded = ((CreateKingdomResult.Created) created).kingdom();
         // As a secession founds it: the kingdom first, its record of the world a moment later.
         NpcWork.state(server).putKingdom(new NpcKingdom(seceded.id(), -1, NpcLevel.SMALL, new NpcNames.Name("Seceda", "Сецеда"),
-                RulerCharacter.MERCHANT, List.of(), 99, Gender.FEMALE, List.of(), KingdomWorldApi.gameTime(server), 0L));
+                RulerCharacter.MERCHANT, List.of(RulerCharacter.Trait.PATIENT), 99, Gender.FEMALE, List.of(), KingdomWorldApi.gameTime(server), 0L));
         helper.succeedWhen(() -> {
             Optional<Kingdom> kingdom = KingdomWorldApi.kingdom(server, seceded.id());
             helper.assertTrue(kingdom.isPresent() && kingdom.get().flag() != null, "The kingdom that broke away has no flag of its own");
