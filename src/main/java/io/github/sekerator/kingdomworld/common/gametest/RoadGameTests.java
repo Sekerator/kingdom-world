@@ -451,7 +451,7 @@ public final class RoadGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = EMPTY, batch = "kingdomworld_roads_chest")
+    @GameTest(template = EMPTY, batch = "kingdomworld_roads_chest", timeoutTicks = 200)
     public static void aPlayerClearsACampAndTakesItsChest(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
@@ -464,55 +464,62 @@ public final class RoadGameTests {
         int[] dry = SurfaceLand.near(level, below.getX(), below.getZ(), (x, z) -> SurfaceLand.drySquare(level, x, z, 6, 2, 3));
         helper.assertTrue(dry != null, "No dry land for the camp within " + SurfaceLand.RINGS * SurfaceLand.STEP + " blocks of the test");
         BlockPos center = new BlockPos(dry[0], below.getY(), dry[1]);
-        // Items left over by an earlier run of the test world would count as the chest's.
-        level.getEntitiesOfClass(ItemEntity.class, new AABB(center).inflate(24)).forEach(ItemEntity::discard);
-        BanditCamp camp = BanditWork.found(server, dimension(helper), center.getX(), center.getZ(), 0);
-        try {
-            camp.addLoot(List.of(Goods.of("minecraft:wheat", 20), Goods.of("minecraft:iron_ingot", 3)));
-            BanditWork.build(level, camp);
-            BanditWork.moveLootToChest(server, camp);
-            helper.assertTrue(camp.chest().isPresent(), "The camp has no chest");
-            helper.assertTrue(camp.loot().isEmpty(), "The goods did not go into the chest");
-            BlockPos chest = BlockPos.of(camp.chest().getAsLong());
-            helper.assertTrue(level.getBlockState(chest).is(Blocks.CHEST), "No chest in the world");
-            BanditEntity leader = RoadRegistries.BANDIT_LEADER.get().create(level);
-            helper.assertTrue(leader != null, "No robber");
-            leader.setCampId(camp.id());
-            leader.moveTo(center.getX() + 0.5, center.getY() + 1, center.getZ() + 0.5);
-            level.addFreshEntity(leader);
-            ServerPlayer player = player(helper, UUID.randomUUID(), "Hero", 7, 1, 9);
-            leader.hurt(level.damageSources().playerAttack(player), 10_000.0f);
-            helper.assertTrue(camp.cleared(), "Killing the leader of an empty camp did not clear it");
-            int wool = 0;
-            for (long position : List.copyOf(camp.structure())) {
-                BlockPos pos = BlockPos.of(position);
-                if (level.getBlockState(pos).is(Blocks.BROWN_WOOL)) {
-                    wool++;
-                    BanditWork.breakCampBlock(level, pos, camp);
-                }
-            }
-            int inChest = 0;
-            if (level.getBlockEntity(chest) instanceof net.minecraft.world.Container container) {
-                for (int slot = 0; slot < container.getContainerSize(); slot++) {
-                    inChest += container.getItem(slot).getCount();
-                }
-            }
-            helper.assertTrue(inChest == 23, "The chest holds " + inChest + " items instead of 23");
-            BanditWork.breakCampBlock(level, chest, camp);
-            // Only what fell just now: items of earlier runs of the test world may load around later.
-            List<ItemEntity> drops = level.getEntitiesOfClass(ItemEntity.class, new AABB(chest).inflate(16), item -> item.getAge() == 0);
-            int wheat = drops.stream().filter(item -> item.getItem().is(Items.WHEAT)).mapToInt(item -> item.getItem().getCount()).sum();
-            int iron = drops.stream().filter(item -> item.getItem().is(Items.IRON_INGOT)).mapToInt(item -> item.getItem().getCount()).sum();
-            helper.assertTrue(wheat == 20 && iron == 3, "The chest did not give its goods: " + wheat + " wheat, " + iron + " iron");
-            helper.assertTrue(drops.stream().noneMatch(item -> item.getItem().is(Items.CHEST) || item.getItem().is(Items.BROWN_WOOL)
-                    || item.getItem().is(Items.CAMPFIRE)), "A block of the camp dropped itself (" + wool + " wool broken)");
-            helper.assertTrue(!level.getBlockState(chest).is(Blocks.CHEST), "The chest stayed");
-        } finally {
+        // The chunks of the camp are held for the test: in a chunk loaded only to be looked at, what the chest drops would be there
+        // but out of sight. Whatever falls there is looked for once they are loaded.
+        BlockPos campFrom = center.offset(-24, 0, -24);
+        TestChunks.hold(level, campFrom, center.offset(24, 0, 24));
+        helper.runAfterDelay(20, () -> {
+            // Items left over by an earlier run of the test world would count as the chest's.
             level.getEntitiesOfClass(ItemEntity.class, new AABB(center).inflate(24)).forEach(ItemEntity::discard);
-            RoadWork.state(server).removeCamp(camp.id());
-            GatheringGameTests.clear(level, from, to);
-        }
-        helper.succeed();
+            BanditCamp camp = BanditWork.found(server, dimension(helper), center.getX(), center.getZ(), 0);
+            try {
+                camp.addLoot(List.of(Goods.of("minecraft:wheat", 20), Goods.of("minecraft:iron_ingot", 3)));
+                BanditWork.build(level, camp);
+                BanditWork.moveLootToChest(server, camp);
+                helper.assertTrue(camp.chest().isPresent(), "The camp has no chest");
+                helper.assertTrue(camp.loot().isEmpty(), "The goods did not go into the chest");
+                BlockPos chest = BlockPos.of(camp.chest().getAsLong());
+                helper.assertTrue(level.getBlockState(chest).is(Blocks.CHEST), "No chest in the world");
+                BanditEntity leader = RoadRegistries.BANDIT_LEADER.get().create(level);
+                helper.assertTrue(leader != null, "No robber");
+                leader.setCampId(camp.id());
+                leader.moveTo(center.getX() + 0.5, center.getY() + 1, center.getZ() + 0.5);
+                level.addFreshEntity(leader);
+                ServerPlayer player = player(helper, UUID.randomUUID(), "Hero", 7, 1, 9);
+                leader.hurt(level.damageSources().playerAttack(player), 10_000.0f);
+                helper.assertTrue(camp.cleared(), "Killing the leader of an empty camp did not clear it");
+                int wool = 0;
+                for (long position : List.copyOf(camp.structure())) {
+                    BlockPos pos = BlockPos.of(position);
+                    if (level.getBlockState(pos).is(Blocks.BROWN_WOOL)) {
+                        wool++;
+                        BanditWork.breakCampBlock(level, pos, camp);
+                    }
+                }
+                int inChest = 0;
+                if (level.getBlockEntity(chest) instanceof net.minecraft.world.Container container) {
+                    for (int slot = 0; slot < container.getContainerSize(); slot++) {
+                        inChest += container.getItem(slot).getCount();
+                    }
+                }
+                helper.assertTrue(inChest == 23, "The chest holds " + inChest + " items instead of 23");
+                BanditWork.breakCampBlock(level, chest, camp);
+                // Only what fell just now: items of earlier runs of the test world may load around later.
+                List<ItemEntity> drops = level.getEntitiesOfClass(ItemEntity.class, new AABB(chest).inflate(16), item -> item.getAge() == 0);
+                int wheat = drops.stream().filter(item -> item.getItem().is(Items.WHEAT)).mapToInt(item -> item.getItem().getCount()).sum();
+                int iron = drops.stream().filter(item -> item.getItem().is(Items.IRON_INGOT)).mapToInt(item -> item.getItem().getCount()).sum();
+                helper.assertTrue(wheat == 20 && iron == 3, "The chest did not give its goods: " + wheat + " wheat, " + iron + " iron");
+                helper.assertTrue(drops.stream().noneMatch(item -> item.getItem().is(Items.CHEST) || item.getItem().is(Items.BROWN_WOOL)
+                        || item.getItem().is(Items.CAMPFIRE)), "A block of the camp dropped itself (" + wool + " wool broken)");
+                helper.assertTrue(!level.getBlockState(chest).is(Blocks.CHEST), "The chest stayed");
+            } finally {
+                level.getEntitiesOfClass(ItemEntity.class, new AABB(center).inflate(24)).forEach(ItemEntity::discard);
+                RoadWork.state(server).removeCamp(camp.id());
+                GatheringGameTests.clear(level, from, to);
+                TestChunks.release(level, campFrom);
+            }
+            helper.succeed();
+        });
     }
 
     @GameTest(template = EMPTY, batch = "kingdomworld_roads_peace", timeoutTicks = 200)
