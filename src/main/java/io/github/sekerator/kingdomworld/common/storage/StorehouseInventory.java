@@ -18,6 +18,9 @@ public class StorehouseInventory extends ItemStackHandler {
     private final WorldPos pos;
     private Runnable changeListener = () -> {
     };
+    /** Whom the storehouse takes in from: everybody, or the professions it was given. */
+    private io.github.sekerator.kingdomworld.core.citizen.StorehouseRules.Accepts accepts =
+            io.github.sekerator.kingdomworld.core.citizen.StorehouseRules.Accepts.ALL;
 
     public StorehouseInventory(WorldPos pos) {
         super(SLOTS);
@@ -26,6 +29,20 @@ public class StorehouseInventory extends ItemStackHandler {
 
     public WorldPos pos() {
         return pos;
+    }
+
+    /**
+     * Whom the storehouse takes in from: the workers of every profession, or of the professions it was given.
+     */
+    public io.github.sekerator.kingdomworld.core.citizen.StorehouseRules.Accepts accepts() {
+        return accepts;
+    }
+
+    public void setAccepts(io.github.sekerator.kingdomworld.core.citizen.StorehouseRules.Accepts accepts) {
+        if (!this.accepts.equals(accepts)) {
+            this.accepts = java.util.Objects.requireNonNull(accepts, "accepts");
+            changeListener.run();
+        }
     }
 
     /**

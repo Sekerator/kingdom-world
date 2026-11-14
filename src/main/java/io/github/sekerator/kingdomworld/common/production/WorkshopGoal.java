@@ -302,21 +302,15 @@ final class WorkshopGoal extends PostWorkGoal {
     }
 
     /**
-     * The nearest storehouse within reach whose place is loaded and that holds any of the items: a storehouse, either half of a
-     * double one, or a container of a warehouse.
+     * The nearest storehouse whose place is loaded and that holds any of the items, in the city of the post (anywhere on the land
+     * of the kingdom for a post outside the cities): a storehouse, either half of a double one, or a container of a warehouse.
      */
     @Nullable
     private StorehouseInventory storehouseWith(ServerLevel level, Map<String, Integer> needed) {
-        BlockPos here = body.blockPosition();
-        WorldPos from = new WorldPos(post.pos().dimension(), here.getX(), here.getY(), here.getZ());
-        for (StorehouseInventory inventory : KingdomStorage.storehouses(level.getServer(), post.kingdomId(), from)) {
-            if (inventory.pos().distanceSqr(from) > (double) STOREHOUSE_RANGE * STOREHOUSE_RANGE) {
-                break;
+        for (StorehouseInventory inventory : KingdomStorage.takingSources(level, post.kingdomId(), post.pos(), body.blockPosition())) {
+            if (holdsAny(inventory, needed)) {
+                return inventory;
             }
-            if (!level.isLoaded(blockPos(inventory.pos())) || !holdsAny(inventory, needed)) {
-                continue;
-            }
-            return inventory;
         }
         return null;
     }

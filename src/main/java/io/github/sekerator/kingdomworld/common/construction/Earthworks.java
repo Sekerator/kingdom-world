@@ -834,7 +834,7 @@ public final class Earthworks {
                     continue;
                 }
             }
-            rest = KingdomStorage.insert(server, construction.kingdomId(), rest, construction.anchor());
+            rest = KingdomStorage.insertFor(server, construction.kingdomId(), io.github.sekerator.kingdomworld.core.citizen.Professions.BUILDER.id(), rest, construction.anchor());
             if (rest.isEmpty() || !drop.hasTag() && EarthworkPlan.destination(id, 0, false) == EarthworkPlan.Destination.SPOIL) {
                 // Ground the storehouses have no room for goes to the spoil heap.
                 continue;

@@ -328,6 +328,10 @@ public final class KingdomWorldNetwork {
                 io.github.sekerator.kingdomworld.common.network.packet.GuidePackets.Numbers::encode,
                 io.github.sekerator.kingdomworld.common.network.packet.GuidePackets.Numbers::decode,
                 io.github.sekerator.kingdomworld.common.network.packet.GuidePackets.Numbers::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.StorehousePackets.Accepts.class, NetworkDirection.PLAY_TO_SERVER,
+                io.github.sekerator.kingdomworld.common.network.packet.StorehousePackets.Accepts::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.StorehousePackets.Accepts::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.StorehousePackets.Accepts::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

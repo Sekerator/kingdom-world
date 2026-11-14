@@ -47,8 +47,6 @@ final class FarmerWorkGoal extends Goal {
     private static final int MAX_TARGETS = 24;
     private static final double REACH_SQR = 2.4 * 2.4;
     private static final double STOREHOUSE_REACH_SQR = 3.0 * 3.0;
-    /** Farthest storehouse a farmer walks to, in blocks. */
-    private static final int STOREHOUSE_RANGE = 64;
     private static final int GIVE_UP_TICKS = 240;
 
     private enum Phase {
@@ -349,10 +347,10 @@ final class FarmerWorkGoal extends Goal {
             return;
         }
         if (storehouse == null) {
-            storehouse = nearestStorehouse(level);
+            storehouse = storehouseFor(level, true);
             ticksOnTarget = 0;
             if (storehouse == null) {
-                report(WorkStatus.NO_STOREHOUSE);
+                report(storehouseFor(level, false) == null ? WorkStatus.NO_STOREHOUSE : WorkStatus.STORAGE_FULL);
                 finish(400);
                 return;
             }
@@ -377,7 +375,18 @@ final class FarmerWorkGoal extends Goal {
                 }
             }
         }
+        BlockPos full = storehouse;
         storehouse = null;
+        if (!body.carried().isEmpty()) {
+            // The storehouse is full: the rest goes to the next storehouse of farmers, or a common one.
+            BlockPos next = storehouseFor(level, true);
+            if (next != null && !next.equals(full)) {
+                storehouse = next;
+                ticksOnTarget = 0;
+                return;
+            }
+            report(WorkStatus.STORAGE_FULL);
+        }
         finish(body.carried().isEmpty() ? 20 : 400);
     }
 
@@ -423,24 +432,28 @@ final class FarmerWorkGoal extends Goal {
         });
     }
 
+    /**
+     * The storehouse the farmer brings its harvest to: the nearest one of farmers, else the nearest common one, whose place is loaded
+     * and which lies in the city of its field (anywhere on the land of the kingdom outside the cities).
+     *
+     * @param room whether it must have room for some of the harvest
+     */
     @Nullable
-    private BlockPos nearestStorehouse(ServerLevel level) {
+    private BlockPos storehouseFor(ServerLevel level, boolean room) {
         UUID kingdom = body.kingdomId();
         if (kingdom == null) {
             return null;
         }
-        BlockPos here = body.blockPosition();
-        WorldPos near = new WorldPos(Dimensions.id(level), here.getX(), here.getY(), here.getZ());
-        for (StorehouseInventory inventory : KingdomStorage.storehouses(level.getServer(), kingdom, near)) {
-            if (inventory.pos().distanceSqr(near) > STOREHOUSE_RANGE * STOREHOUSE_RANGE) {
-                break;
-            }
-            BlockPos pos = new BlockPos(inventory.pos().x(), inventory.pos().y(), inventory.pos().z());
-            if (level.isLoaded(pos) && level.getBlockState(pos).is(ModRegistries.STOREHOUSE.get())) {
-                return pos;
+        java.util.List<ItemStack> carried = new java.util.ArrayList<>();
+        for (int slot = 0; slot < body.carried().getContainerSize(); slot++) {
+            if (!body.carried().getItem(slot).isEmpty()) {
+                carried.add(body.carried().getItem(slot));
             }
         }
-        return null;
+        WorldPos base = new WorldPos(Dimensions.id(level), center.getX(), center.getY(), center.getZ());
+        java.util.List<StorehouseInventory> targets = KingdomStorage.deliveryTargets(level, kingdom,
+                io.github.sekerator.kingdomworld.core.citizen.Professions.FARMER.id(), base, body.blockPosition(), room ? carried : null);
+        return targets.isEmpty() ? null : new BlockPos(targets.get(0).pos().x(), targets.get(0).pos().y(), targets.get(0).pos().z());
     }
 
     // ---------------------------------------------------------------- helpers

@@ -621,18 +621,36 @@ final class ClientLayoutCheck {
      * The window of a double storehouse, both halves partly filled, the last slot of each half too.
      */
     private static io.github.sekerator.kingdomworld.client.screen.StorehouseScreen storehouse(Component title) {
+        return storehouse(title, 2, true, List.of());
+    }
+
+    /**
+     * The window of a storehouse of one or two halves, partly filled, the last slot of each half too, with whom it takes in from.
+     *
+     * @param canEdit whether the viewer may change the setting (a button) or only reads it (a line)
+     */
+    private static io.github.sekerator.kingdomworld.client.screen.StorehouseScreen storehouse(Component title, int halves, boolean canEdit,
+                                                                                         List<String> accepts) {
         net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
         net.minecraft.world.entity.player.Inventory inventory = minecraft.player != null ? minecraft.player.getInventory()
                 : new net.minecraft.world.entity.player.Inventory(null);
         io.github.sekerator.kingdomworld.common.storage.StorehouseMenu menu = io.github.sekerator.kingdomworld.common.storage.StorehouseMenu.client(0,
-                inventory);
+                inventory, halves, new io.github.sekerator.kingdomworld.common.storage.StorehouseMenu.Settings(BlockPos.ZERO, canEdit, accepts));
         net.minecraft.world.item.Item[] items = {Items.COPPER_INGOT, Items.IRON_INGOT, Items.GOLD_INGOT, Items.BREAD, Items.OAK_LOG, Items.WHEAT};
-        for (int slot = 0; slot < io.github.sekerator.kingdomworld.common.storage.StorehouseMenu.SLOTS; slot += 5) {
+        int slots = halves * io.github.sekerator.kingdomworld.common.storage.StorehouseInventory.SLOTS;
+        for (int slot = 0; slot < slots; slot += 5) {
             menu.getSlot(slot).set(new ItemStack(items[(slot / 5) % items.length], 1 + slot % 64));
         }
         menu.getSlot(53).set(new ItemStack(Items.IRON_INGOT, 64));
-        menu.getSlot(107).set(new ItemStack(Items.GOLD_INGOT, 64));
+        if (halves == 2) {
+            menu.getSlot(107).set(new ItemStack(Items.GOLD_INGOT, 64));
+        }
         return new io.github.sekerator.kingdomworld.client.screen.StorehouseScreen(menu, inventory, title);
+    }
+
+    /** Every profession a storehouse may be given, for the longest line of its window. */
+    private static List<String> allStoreProfessions() {
+        return io.github.sekerator.kingdomworld.client.screen.StorehouseAcceptsScreen.choices(List.of());
     }
 
     /**
@@ -1471,6 +1489,22 @@ final class ClientLayoutCheck {
         cases.add(new Case("storehouse-double", () -> storehouse(Component.translatable("kingdomworld.storehouse.double"))));
         cases.add(new Case("storehouse-double-long-title", () -> storehouse(Component.literal(LONG_KINGDOM + " " + LONG_KINGDOM))));
         cases.add(new Case("storehouse-double-model", io.github.sekerator.kingdomworld.client.screen.StorehouseModelPreview::new));
+        // The single storehouse with the line of whom it takes in from: everybody, some professions, every profession.
+        cases.add(new Case("storehouse-single", () -> storehouse(Component.translatable("block.kingdomworld.storehouse"), 1, true, List.of())));
+        cases.add(new Case("storehouse-single-wood", () -> storehouse(Component.translatable("block.kingdomworld.storehouse"), 1, true,
+                List.of("lumberjack"))));
+        cases.add(new Case("storehouse-single-food-hover", () -> storehouse(Component.translatable("block.kingdomworld.storehouse"), 1, true,
+                List.of("farmer", "herder", "fisher")), true, screen -> new int[]{((net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) screen)
+                .getGuiLeft() + 40, ((net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) screen).getGuiTop()
+                + io.github.sekerator.kingdomworld.common.storage.StorehouseMenu.SETTINGS_TOP + 4}));
+        cases.add(new Case("storehouse-single-reader", () -> storehouse(Component.translatable("kingdomworld.storehouse.outside_title"), 1,
+                false, allStoreProfessions())));
+        cases.add(new Case("storehouse-double-all", () -> storehouse(Component.translatable("kingdomworld.storehouse.double"), 2, true,
+                allStoreProfessions())));
+        cases.add(new Case("storehouse-accepts", () -> new io.github.sekerator.kingdomworld.client.screen.StorehouseAcceptsScreen(BlockPos.ZERO,
+                List.of("lumberjack", "farmer"))));
+        cases.add(new Case("storehouse-accepts-all", () -> new io.github.sekerator.kingdomworld.client.screen.StorehouseAcceptsScreen(BlockPos.ZERO,
+                List.of())));
         cases.add(new Case("post-builder", () -> post(postView("builder", WorkStatus.WORKING, true, 4, false, true), Component.empty())));
         cases.add(new Case("post-builder-idle", () -> post(postView("builder", WorkStatus.NO_MATERIALS, false, 16, false, false), longError)));
         cases.add(new Case("throne-construction-catalog", () -> construction(view(KingdomView.Relation.MEMBER, Role.KING), true, false, "catalog",

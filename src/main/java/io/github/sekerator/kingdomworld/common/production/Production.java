@@ -449,7 +449,7 @@ public final class Production {
                 }
             }
         }
-        if (!KingdomStorage.fits(server, kingdom, outputs)) {
+        if (!KingdomStorage.fitsFor(server, kingdom, post.professionId(), outputs)) {
             return Made.STORAGE_FULL;
         }
         List<ItemStack> taken = KingdomStorage.takePlanned(server, plan);
@@ -463,7 +463,7 @@ public final class Production {
             post.setProgress(progress);
         }
         for (ItemStack output : outputs) {
-            ItemStack rest = KingdomStorage.insert(server, kingdom, output, near);
+            ItemStack rest = KingdomStorage.insertFor(server, kingdom, post.professionId(), output, near);
             if (!rest.isEmpty()) {
                 rest = PostWork.deliver(server, post, rest);
             }

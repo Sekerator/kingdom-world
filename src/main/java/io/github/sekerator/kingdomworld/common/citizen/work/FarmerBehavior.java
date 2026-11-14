@@ -73,7 +73,7 @@ public final class FarmerBehavior implements ProfessionBehavior {
             if (post.isPresent()) {
                 PostWork.deliver(server, post.get(), new ItemStack(item, count));
             } else {
-                KingdomStorage.insert(server, citizen.kingdomId(), new ItemStack(item, count), citizen.workplace());
+                KingdomStorage.insertFor(server, citizen.kingdomId(), citizen.professionId(), new ItemStack(item, count), citizen.workplace());
             }
             left -= count;
         }

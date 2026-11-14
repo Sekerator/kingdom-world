@@ -13,7 +13,6 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.context.BlockPlaceContext;
@@ -248,6 +247,19 @@ public class StorehouseBlock extends BaseEntityBlock {
             player.displayClientMessage(Component.translatable("kingdomworld.storehouse.read_only"), true);
             return InteractionResult.CONSUME;
         }
+        if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+            open(server, pos, serverPlayer, true);
+        }
+        return InteractionResult.CONSUME;
+    }
+
+    /**
+     * Opens the window of the storehouse at a position for a player: the storehouse, or both halves of a double one, with the line
+     * of whom it takes in from.
+     *
+     * @param tell whether to tell the player a storehouse off the land of its kingdom is no part of its store
+     */
+    static void open(ServerLevel server, BlockPos pos, net.minecraft.server.level.ServerPlayer player, boolean tell) {
         List<BlockPos> halves = halves(server, pos);
         IItemHandlerModifiable handler = handler(server, halves);
         if (handler != null && halves.size() == 2 && handler.getSlots() != StorehouseMenu.SLOTS) {
@@ -256,19 +268,70 @@ public class StorehouseBlock extends BaseEntityBlock {
             handler = handler(server, halves);
         }
         if (handler == null) {
-            return InteractionResult.CONSUME;
+            return;
         }
         StorehouseContainer container = new StorehouseContainer(server, halves, handler);
         boolean outside = landOwner(server, pos) == null;
-        if (halves.size() == 2) {
-            player.openMenu(new SimpleMenuProvider((id, inventory, p) -> new StorehouseMenu(id, inventory, container),
-                    Component.translatable(outside ? "kingdomworld.storehouse.double_outside" : "kingdomworld.storehouse.double")));
-        } else {
-            player.openMenu(new SimpleMenuProvider((id, inventory, p) -> ChestMenu.sixRows(id, inventory, container),
-                    Component.translatable(outside ? "kingdomworld.storehouse.outside_title" : "block.kingdomworld.storehouse")));
+        int count = halves.size();
+        StorehouseMenu.Settings settings = new StorehouseMenu.Settings(pos.immutable(), mayEdit(server, pos, player),
+                List.copyOf(KingdomSavedData.get(server.getServer()).storehouses().get(StorehouseBlockEntity.position(server, pos))
+                        .map(inventory -> inventory.accepts().professions()).orElse(java.util.Set.of())));
+        Component title = count == 2
+                ? Component.translatable(outside ? "kingdomworld.storehouse.double_outside" : "kingdomworld.storehouse.double")
+                : Component.translatable(outside ? "kingdomworld.storehouse.outside_title" : "block.kingdomworld.storehouse");
+        net.minecraftforge.network.NetworkHooks.openScreen(player, new SimpleMenuProvider((id, inventory, p) -> new StorehouseMenu(id,
+                inventory, container, count, settings), title), buf -> {
+            buf.writeVarInt(count);
+            settings.encode(buf);
+        });
+        if (tell) {
+            tellLand(server, pos, player);
         }
-        tellLand(server, pos, player);
-        return InteractionResult.CONSUME;
+    }
+
+    /**
+     * Whether a player may change whom the storehouse takes in from: a member of the kingdom on whose land it stands with the right
+     * to use the containers of the kingdom.
+     */
+    static boolean mayEdit(ServerLevel level, BlockPos pos, Player player) {
+        java.util.UUID owner = landOwner(level, pos);
+        return owner != null && !KingdomWorldApi.isReadOnly(level.getServer())
+                && KingdomWorldApi.state(level.getServer()).membership().isMember(player.getUUID(), owner)
+                && KingdomWorldApi.state(level.getServer()).membership().hasPermission(player.getUUID(), owner,
+                io.github.sekerator.kingdomworld.core.membership.Permission.CONTAINERS);
+    }
+
+    /**
+     * A player set whom the storehouse at a position takes in from, both halves of a double one alike, in its window; the window
+     * opens again with the setting.
+     *
+     * @param apply false to go back to the window without a change
+     */
+    public static void setAccepts(net.minecraft.server.level.ServerPlayer player, BlockPos pos, boolean apply, List<String> professions) {
+        ServerLevel level = player.serverLevel();
+        if (!level.isLoaded(pos) || !(level.getBlockEntity(pos) instanceof StorehouseBlockEntity)
+                || player.distanceToSqr(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) > 8.0 * 8.0) {
+            return;
+        }
+        if (apply) {
+            if (!mayEdit(level, pos, player)) {
+                player.displayClientMessage(Component.translatable("kingdomworld.storehouse.no_right").withStyle(ChatFormatting.RED), true);
+            } else {
+                List<String> known = new ArrayList<>();
+                for (String profession : professions) {
+                    if (io.github.sekerator.kingdomworld.core.citizen.Professions.REGISTRY.isKnown(profession)) {
+                        known.add(profession);
+                    }
+                }
+                io.github.sekerator.kingdomworld.core.citizen.StorehouseRules.Accepts accepts =
+                        io.github.sekerator.kingdomworld.core.citizen.StorehouseRules.Accepts.of(known);
+                StorehouseRegistry registry = KingdomSavedData.get(level.getServer()).storehouses();
+                for (BlockPos half : halves(level, pos)) {
+                    registry.get(StorehouseBlockEntity.position(level, half)).ifPresent(inventory -> inventory.setAccepts(accepts));
+                }
+            }
+        }
+        open(level, pos, player, false);
     }
 
     /**
@@ -303,7 +366,13 @@ public class StorehouseBlock extends BaseEntityBlock {
     public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean moving) {
         super.onPlace(state, level, pos, oldState, moving);
         if (level instanceof ServerLevel server && !oldState.is(this)) {
-            KingdomSavedData.get(server.getServer()).storehouses().getOrCreate(StorehouseBlockEntity.position(server, pos));
+            StorehouseRegistry registry = KingdomSavedData.get(server.getServer()).storehouses();
+            StorehouseInventory inventory = registry.getOrCreate(StorehouseBlockEntity.position(server, pos));
+            if (state.getValue(TYPE) != ChestType.SINGLE) {
+                // A half joining one that stood already takes on whom that one takes in from: a double storehouse has one setting.
+                registry.get(StorehouseBlockEntity.position(server, pos.relative(connectedDirection(state))))
+                        .ifPresent(partner -> inventory.setAccepts(partner.accepts()));
+            }
         }
     }
 

@@ -26,6 +26,7 @@ import net.minecraftforge.items.ItemHandlerHelper;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -38,8 +39,6 @@ import java.util.UUID;
 public abstract class PostWorkGoal extends Goal {
     protected static final double REACH_SQR = 3.0 * 3.0;
     private static final double DELIVERY_REACH_SQR = 3.0 * 3.0;
-    /** Farthest storehouse a worker without a container walks to, in blocks. */
-    protected static final int STOREHOUSE_RANGE = 64;
     /** A body farther than this from its post does not work. */
     private static final int MAX_DISTANCE = 96;
     private static final int GIVE_UP_TICKS = 300;
@@ -372,10 +371,11 @@ public abstract class PostWorkGoal extends Goal {
                 post.setHasContainer(container != null);
             }
             deliverToContainer = container != null;
-            deliverTo = container != null ? postPos : nearestStorehouse(level);
+            deliverTo = container != null ? postPos : storehouseFor(level, true);
             deliverTicks = 0;
             if (deliverTo == null) {
-                report(WorkStatus.NO_STOREHOUSE);
+                // No storehouse of this work or common one in reach, or all of them full.
+                report(storehouseFor(level, false) == null ? WorkStatus.NO_STOREHOUSE : WorkStatus.STORAGE_FULL);
                 finish(400);
                 return;
             }
@@ -417,10 +417,19 @@ public abstract class PostWorkGoal extends Goal {
                 body.carried().setItem(slot, stack.isEmpty() ? ItemStack.EMPTY : stack);
             }
         }
+        if (!deliverToContainer && target != null && hasCarried()) {
+            // The storehouse is full: the rest goes to the next one of this work, or a common one.
+            BlockPos next = storehouseFor(level, true);
+            if (next != null && !next.equals(deliverTo)) {
+                deliverTo = next;
+                deliverTicks = 0;
+                return;
+            }
+        }
         if ((!moved || heldBack) && deliverToContainer && target != null) {
             // The container is full, or holds as much of something as the work wants there: the worker takes the rest of
             // its harvest to a storehouse.
-            BlockPos storehouse = nearestStorehouse(level);
+            BlockPos storehouse = storehouseFor(level, true);
             if (storehouse != null) {
                 deliverToContainer = false;
                 deliverTo = storehouse;
@@ -438,7 +447,7 @@ public abstract class PostWorkGoal extends Goal {
         }
         deliverTo = null;
         if (hasCarried()) {
-            report(WorkStatus.STORAGE_FULL);
+            report(storehouseFor(level, false) == null ? WorkStatus.NO_STOREHOUSE : WorkStatus.STORAGE_FULL);
             finish(400);
         } else {
             finish(20);
@@ -446,18 +455,42 @@ public abstract class PostWorkGoal extends Goal {
     }
 
     /**
-     * The nearest loaded storehouse of the kingdom within reach, or {@code null}.
+     * The profession whose storehouses the worker brings things to: the profession of its post.
+     */
+    protected String deliveryProfession() {
+        return post.professionId();
+    }
+
+    /**
+     * The storehouse the worker brings what it carries to: the nearest one of its work, else the nearest common one, whose place is
+     * loaded and which lies in the city of its post (anywhere on the land of the kingdom for a post outside the cities); never a
+     * storehouse given to other professions.
+     *
+     * @param room whether it must have room for some of what the worker carries
+     * @return the place of the storehouse, or {@code null} if there is none
+     */
+    @Nullable
+    protected BlockPos storehouseFor(ServerLevel level, boolean room) {
+        List<ItemStack> carried = new java.util.ArrayList<>();
+        for (int slot = 0; slot < body.carried().getContainerSize(); slot++) {
+            if (!body.carried().getItem(slot).isEmpty()) {
+                carried.add(body.carried().getItem(slot));
+            }
+        }
+        List<StorehouseInventory> targets = KingdomStorage.deliveryTargets(level, post.kingdomId(), deliveryProfession(), post.pos(),
+                body.blockPosition(), room ? carried : null);
+        return targets.isEmpty() ? null : new BlockPos(targets.get(0).pos().x(), targets.get(0).pos().y(), targets.get(0).pos().z());
+    }
+
+    /**
+     * The nearest storehouse block whose place is loaded within the reach of the post, to take from or to come by what lies out of
+     * reach; {@code null} if there is none.
      */
     @Nullable
     protected BlockPos nearestStorehouse(ServerLevel level) {
-        BlockPos here = body.blockPosition();
-        WorldPos near = new WorldPos(Dimensions.id(level), here.getX(), here.getY(), here.getZ());
-        for (StorehouseInventory inventory : KingdomStorage.storehouses(level.getServer(), post.kingdomId(), near)) {
-            if (inventory.pos().distanceSqr(near) > (double) STOREHOUSE_RANGE * STOREHOUSE_RANGE) {
-                break;
-            }
+        for (StorehouseInventory inventory : KingdomStorage.takingSources(level, post.kingdomId(), post.pos(), body.blockPosition())) {
             BlockPos pos = new BlockPos(inventory.pos().x(), inventory.pos().y(), inventory.pos().z());
-            if (level.isLoaded(pos) && level.getBlockState(pos).is(ModRegistries.STOREHOUSE.get())) {
+            if (level.getBlockState(pos).is(ModRegistries.STOREHOUSE.get())) {
                 return pos;
             }
         }

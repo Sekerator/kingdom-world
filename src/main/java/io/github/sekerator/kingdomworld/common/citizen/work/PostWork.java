@@ -314,7 +314,8 @@ public final class PostWork {
             }
         }
         if (!rest.isEmpty()) {
-            rest = KingdomStorage.insert(server, post.kingdomId(), rest, post.pos());
+            // To the storehouses of the work of the post first, then to the common ones; never to those of other work.
+            rest = KingdomStorage.insertFor(server, post.kingdomId(), post.professionId(), rest, post.pos());
         }
         return rest;
     }

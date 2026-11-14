@@ -748,14 +748,15 @@ final class BuilderGoal extends PostWorkGoal {
         return true;
     }
 
+    /**
+     * The nearest storehouse holding the item whose place is loaded, in the city of the post (anywhere on the land of the kingdom for
+     * a post outside the cities).
+     */
     @Nullable
     private BlockPos storehouseWith(ServerLevel level, String item) {
-        BlockPos here = body.blockPosition();
-        WorldPos near = new WorldPos(post.pos().dimension(), here.getX(), here.getY(), here.getZ());
-        for (StorehouseInventory inventory : KingdomStorage.storehouses(level.getServer(), post.kingdomId(), near)) {
+        for (StorehouseInventory inventory : KingdomStorage.takingSources(level, post.kingdomId(), post.pos(), body.blockPosition())) {
             BlockPos pos = new BlockPos(inventory.pos().x(), inventory.pos().y(), inventory.pos().z());
-            if (!inventory.pos().dimension().equals(near.dimension()) || !level.isLoaded(pos)
-                    || !level.getBlockState(pos).is(ModRegistries.STOREHOUSE.get())) {
+            if (!level.getBlockState(pos).is(ModRegistries.STOREHOUSE.get())) {
                 continue;
             }
             for (int slot = 0; slot < inventory.getSlots(); slot++) {

@@ -22,6 +22,32 @@ yours, and says so too. Move such a storehouse onto your land or claim its chunk
 kingdom sees the sum of all its storehouses at once, even when their chunks are not loaded. Still, put storehouses near
 the work posts, so that workers and carriers walk less.
 
+Near players a worker of a post in a city walks to the storehouses of that city at any distance inside its border, and a
+worker of a post outside the cities (a far mine, a felling site) to any storehouse on the land of the kingdom. It walks
+only to storehouses whose chunk is loaded; no chunk is loaded for a storehouse. Far from players the work goes by its
+formulas, without distances.
+
+### Storehouses by profession
+
+Under the rows of slots the window of a storehouse has the line "Takes in from everybody" or "Takes in from: Lumberjack".
+One with the **Containers** right clicks it and chooses professions: so a storehouse of wood for the lumberjacks comes
+about, or one of food for the farmers and herders. With nothing chosen a storehouse takes in from everybody, as before;
+the whole list shows on hover over the line.
+
+- A worker brings what it gathered and made to the nearest storehouse of its profession first, even when a common one is
+  nearer, then, if there is none or it is full, to the nearest common one ("from everybody"). It never brings anything to a
+  storehouse given to other professions. Without a fitting storehouse the post says "Nowhere to deliver: no storehouse for
+  this work", and when they are all full "The storehouses are full".
+- A carrier takes the goods of a post by the profession of that post, a builder the drops of demolition and clearing as a
+  builder.
+- Any worker may take from any storehouse: the setting is about taking in only. Players, hoppers and pipes put things into
+  any storehouse.
+- The market, caravans, trophies, taxes and the mint put things into the common storehouses, and when there are none or they
+  are full into any storehouse with room, so that nothing is lost.
+- The kingdom still counts all storehouses together.
+- A double storehouse has one setting: a new half takes on the setting of the one that stood, and when a half is broken the
+  other keeps it.
+
 ### Who opens it
 
 Anybody can open a storehouse, like any chest. But taking from it without the right **Containers** is stealing from

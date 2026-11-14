@@ -1,0 +1,126 @@
+package io.github.sekerator.kingdomworld.common.gametest;
+
+import io.github.sekerator.kingdomworld.KingdomWorld;
+import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
+import io.github.sekerator.kingdomworld.common.citizen.CitizenBodies;
+import io.github.sekerator.kingdomworld.common.citizen.CitizenEntity;
+import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
+import io.github.sekerator.kingdomworld.common.road.CityAreas;
+import io.github.sekerator.kingdomworld.common.road.RoadWork;
+import io.github.sekerator.kingdomworld.common.storage.KingdomStorage;
+import io.github.sekerator.kingdomworld.common.storage.StorehouseInventory;
+import io.github.sekerator.kingdomworld.core.citizen.Citizen;
+import io.github.sekerator.kingdomworld.core.citizen.StorehouseRules;
+import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
+import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
+import io.github.sekerator.kingdomworld.core.road.RouteCell;
+import io.github.sekerator.kingdomworld.core.road.Wall;
+import net.minecraft.core.BlockPos;
+import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * Game tests of where workers take their goods: a lumberjack brings wood to the storehouse of wood past a nearer common one, and a
+ * worker of a post in a city finds a storehouse a hundred blocks away inside the city but none beyond its wall.
+ */
+@GameTestHolder(KingdomWorld.MOD_ID)
+@PrefixGameTestTemplate(false)
+public final class StorehouseRulesGameTests {
+    private static final String EMPTY = "empty";
+    private static final BlockPos ZONE_FROM = new BlockPos(-7, 0, -7);
+
+    private StorehouseRulesGameTests() {
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_storehouse_wood", timeoutTicks = 1200)
+    public static void aLumberjackBringsWoodToTheStorehouseOfWood(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        level.setDayTime(1_000L);
+        BlockPos from = helper.absolutePos(ZONE_FROM);
+        BlockPos to = helper.absolutePos(new BlockPos(7, 3, 7));
+        GatheringGameTests.clear(level, from, to);
+        TestChunks.hold(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Wood Yard", UUID.randomUUID());
+        StorehouseInventory common = GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(1, 0, 2)));
+        StorehouseInventory wood = GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(6, 0, -6)));
+        wood.setAccepts(StorehouseRules.Accepts.of(List.of("lumberjack")));
+        StorehouseInventory food = GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(-2, 0, 1)));
+        food.setAccepts(StorehouseRules.Accepts.of(List.of("farmer")));
+        WorldPos postPos = GatheringGameTests.post(helper, new BlockPos(0, 0, 0), "lumberjack");
+        Citizen worker = GatheringGameTests.worker(helper, kingdom, "lumberjack", postPos, helper.absolutePos(new BlockPos(1, 0, 1)));
+        List<StorehouseInventory> order = KingdomStorage.deliveryTargets(level, kingdom.id(), "lumberjack", postPos,
+                helper.absolutePos(new BlockPos(1, 0, 1)), List.of(new ItemStack(Items.OAK_LOG)));
+        helper.assertTrue(order.size() == 2 && order.get(0) == wood && order.get(1) == common,
+                "Expected the storehouse of wood, then the common one, not the one of farmers: " + order.stream().map(StorehouseInventory::pos).toList());
+        CitizenEntity body = CitizenBodies.body(worker.id());
+        helper.assertTrue(body != null, "No body for the lumberjack");
+        body.carried().addItem(new ItemStack(Items.OAK_LOG, 12));
+
+        helper.succeedWhen(() -> {
+            helper.assertTrue(CitizenGameTests.count(wood, Items.OAK_LOG) == 12, "Expected 12 logs in the storehouse of wood, got "
+                    + CitizenGameTests.count(wood, Items.OAK_LOG) + ", in the common one " + CitizenGameTests.count(common, Items.OAK_LOG)
+                    + ", worker " + worker.workStatus());
+            helper.assertTrue(CitizenGameTests.count(common, Items.OAK_LOG) == 0 && CitizenGameTests.count(food, Items.OAK_LOG) == 0,
+                    "Wood went past the storehouse of wood");
+            GatheringGameTests.end(helper, kingdom, worker, from, to);
+        });
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_storehouse_city")
+    public static void aStorehouseInsideTheCityIsFoundAtAnyDistance(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        String dimension = Dimensions.id(level);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Long Streets", UUID.randomUUID());
+        BlockPos throne = helper.absolutePos(new BlockPos(2, 0, 2));
+        BlockPos inside = throne.offset(100, 0, 0);
+        BlockPos beyond = throne.offset(130, 0, 0);
+        TestChunks.hold(level, throne, beyond.offset(2, 0, 2));
+        for (BlockPos at : List.of(inside, beyond)) {
+            KingdomWorldApi.claimChunk(level, new ChunkPos(at), kingdom.id(), null);
+        }
+        Wall wall = null;
+        try {
+            // A wall of the capital 110 blocks from the throne every way: the city reaches that far.
+            List<RouteCell> ring = new ArrayList<>();
+            for (int[] corner : new int[][]{{-110, -110}, {110, -110}, {110, 110}, {-110, 110}}) {
+                ring.add(new RouteCell(throne.getX() + corner[0], throne.getY(), throne.getZ() + corner[1], RouteCell.Kind.GROUND, 0, null));
+            }
+            wall = new Wall(RoadWork.state(server).nextWallId(), 0, kingdom.id(), Wall.WallClass.PALISADE, dimension, throne.getX(), throne.getZ(),
+                    ring, List.of(0), KingdomWorldApi.gameTime(server));
+            RoadWork.state(server).putWall(wall);
+            CityAreas.invalidate();
+            StorehouseInventory far = GatheringGameTests.storehouse(level, inside);
+            StorehouseInventory outside = GatheringGameTests.storehouse(level, beyond);
+            WorldPos postPos = GatheringGameTests.post(helper, new BlockPos(0, 0, 0), "crafter");
+            StorehouseRules.Reach reach = KingdomStorage.reach(server, kingdom.id(), postPos);
+            helper.assertTrue(reach.city() != null && reach.city().radius() >= 110, "The post is not in the city: " + reach);
+            List<StorehouseInventory> targets = KingdomStorage.deliveryTargets(level, kingdom.id(), "crafter", postPos,
+                    helper.absolutePos(BlockPos.ZERO), null);
+            helper.assertTrue(targets.contains(far), "A storehouse 100 blocks away inside the city was not found");
+            helper.assertTrue(!targets.contains(outside), "A storehouse beyond the wall was found");
+            helper.assertTrue(KingdomStorage.takingSources(level, kingdom.id(), postPos, helper.absolutePos(BlockPos.ZERO)).contains(far),
+                    "A worker may not take from the storehouse inside the city");
+        } finally {
+            if (wall != null) {
+                RoadWork.state(server).removeWall(wall.id());
+                CityAreas.invalidate();
+            }
+            CitizenGameTests.finish(helper, kingdom);
+            TestChunks.release(level, throne);
+        }
+        helper.succeed();
+    }
+}

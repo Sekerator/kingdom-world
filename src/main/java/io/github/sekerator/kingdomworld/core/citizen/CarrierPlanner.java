@@ -81,6 +81,31 @@ public final class CarrierPlanner {
     public static Optional<Task> next(WorldPos home, List<Stock> postContainers, List<Stock> storehouses,
                                       List<Request> requests, int capacity, int range) {
         double reach = (double) range * range;
+        List<Request> near = new ArrayList<>();
+        for (Request request : requests) {
+            if (home.distanceSqr(request.source()) <= reach) {
+                near.add(request);
+            }
+        }
+        List<Stock> inReach = new ArrayList<>();
+        for (Stock stock : storehouses) {
+            if (home.distanceSqr(stock.pos()) <= reach) {
+                inReach.add(stock);
+            }
+        }
+        return next(home, postContainers, source -> roomiest(storehouses, source.pos(), reach, home).map(Stock::pos), inReach, near,
+                capacity, range);
+    }
+
+    /**
+     * The next trip of a carrier near players, the storehouses chosen by the caller: collecting from the fullest post container
+     * within {@code range} of {@code home} into the storehouse {@code collectTarget} gives for it (the storehouses of the work of
+     * that post first), then supplying posts within the range from the storehouses of the requests, then balancing the storehouses
+     * given (the common ones in reach).
+     */
+    public static Optional<Task> next(WorldPos home, List<Stock> postContainers, java.util.function.Function<Stock, Optional<WorldPos>> collectTarget,
+                                      List<Stock> balanced, List<Request> requests, int capacity, int range) {
+        double reach = (double) range * range;
         Stock source = null;
         for (Stock stock : postContainers) {
             if (stock.items() > 0 && home.distanceSqr(stock.pos()) <= reach
@@ -89,18 +114,18 @@ public final class CarrierPlanner {
             }
         }
         if (source != null) {
-            Optional<Stock> target = roomiest(storehouses, source.pos(), reach, home);
+            Optional<WorldPos> target = collectTarget.apply(source);
             if (target.isPresent()) {
-                return Optional.of(new Task(Kind.COLLECT, source.pos(), target.get().pos(), "", Math.min(capacity, source.items())));
+                return Optional.of(new Task(Kind.COLLECT, source.pos(), target.get(), "", Math.min(capacity, source.items())));
             }
         }
         for (Request request : requests) {
-            if (request.amount() > 0 && home.distanceSqr(request.post()) <= reach && home.distanceSqr(request.source()) <= reach) {
+            if (request.amount() > 0 && home.distanceSqr(request.post()) <= reach) {
                 return Optional.of(new Task(Kind.SUPPLY, request.source(), request.post(), request.item(),
                         Math.min(capacity, request.amount())));
             }
         }
-        return balance(home, storehouses, capacity, reach);
+        return balance(home, balanced, capacity, Double.MAX_VALUE);
     }
 
     private static Optional<Stock> roomiest(List<Stock> storehouses, WorldPos near, double reach, WorldPos home) {

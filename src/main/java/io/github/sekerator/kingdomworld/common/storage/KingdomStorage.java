@@ -1,6 +1,7 @@
 package io.github.sekerator.kingdomworld.common.storage;
 
 import io.github.sekerator.kingdomworld.common.data.KingdomSavedData;
+import io.github.sekerator.kingdomworld.core.citizen.StorehouseRules;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.territory.TerritoryIndex;
 import net.minecraft.server.MinecraftServer;
@@ -163,7 +164,9 @@ public final class KingdomStorage {
     }
 
     /**
-     * Puts a stack into the kingdom's storehouses, nearest to {@code near} first.
+     * Puts a stack that comes in otherwise than from the work of a citizen (the market, caravans, trophies, taxes, the gear of the
+     * dead) into the kingdom's storehouses: the common ones first, nearest to {@code near} first, then any other with room, so that
+     * nothing is lost.
      *
      * @return what did not fit; the whole stack if the kingdom has no storehouse or the data is read-only
      */
@@ -171,17 +174,125 @@ public final class KingdomStorage {
         if (stack.isEmpty() || KingdomSavedData.get(server).isReadOnly()) {
             return stack;
         }
+        return insertInto(StorehouseRules.income(candidates(storehouses(server, kingdomId, null)), x(near), y(near), z(near)), stack);
+    }
+
+    /**
+     * Puts what a worker of a profession gathered or made into the kingdom's storehouses: those of its profession first, then the
+     * common ones, never those given to other professions; nearest to {@code near} first.
+     *
+     * @return what did not fit; the whole stack if no storehouse takes it in or the data is read-only
+     */
+    public static ItemStack insertFor(MinecraftServer server, UUID kingdomId, String profession, ItemStack stack, @Nullable WorldPos near) {
+        if (stack.isEmpty() || KingdomSavedData.get(server).isReadOnly()) {
+            return stack;
+        }
+        return insertInto(StorehouseRules.delivery(candidates(storehouses(server, kingdomId, null)), profession, null, x(near), y(near),
+                z(near)), stack);
+    }
+
+    private static ItemStack insertInto(List<StorehouseInventory> order, ItemStack stack) {
         ItemStack rest = stack.copy();
-        for (StorehouseInventory inventory : storehouses(server, kingdomId, near)) {
-            if (!inventory.takesIn()) {
-                continue;
-            }
+        for (StorehouseInventory inventory : order) {
             rest = net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inventory, rest, false);
             if (rest.isEmpty()) {
                 break;
             }
         }
         return rest;
+    }
+
+    /**
+     * The storehouses as the rules of {@link StorehouseRules} see them; those that take nothing in (containers of warehouses whose
+     * place is not loaded) have no room.
+     */
+    static List<StorehouseRules.Candidate<StorehouseInventory>> candidates(List<StorehouseInventory> inventories) {
+        List<StorehouseRules.Candidate<StorehouseInventory>> result = new ArrayList<>(inventories.size());
+        for (StorehouseInventory inventory : inventories) {
+            WorldPos pos = inventory.pos();
+            result.add(new StorehouseRules.Candidate<>(inventory, pos.dimension(), pos.x(), pos.y(), pos.z(), inventory.accepts(),
+                    inventory.takesIn()));
+        }
+        return result;
+    }
+
+    private static int x(@Nullable WorldPos pos) {
+        return pos == null ? 0 : pos.x();
+    }
+
+    private static int y(@Nullable WorldPos pos) {
+        return pos == null ? 0 : pos.y();
+    }
+
+    private static int z(@Nullable WorldPos pos) {
+        return pos == null ? 0 : pos.z();
+    }
+
+    // ---------------------------------------------------------------- where workers near players walk
+
+    /**
+     * How far a worker of a post walks to a storehouse near players: inside the city the post stands in, or anywhere on the land of
+     * the kingdom for a post outside the cities.
+     */
+    public static StorehouseRules.Reach reach(MinecraftServer server, UUID kingdomId, WorldPos post) {
+        return new StorehouseRules.Reach(post.dimension(), io.github.sekerator.kingdomworld.common.road.CityAreas
+                .at(server, kingdomId, post.dimension(), post.x(), post.z())
+                .map(area -> new StorehouseRules.Square(area.x(), area.z(), area.radius())).orElse(null));
+    }
+
+    /**
+     * The storehouses (blocks of the mod whose place is loaded) a worker of a profession near players brings things to, in the
+     * order it tries them: those of its profession nearest first, then the common ones, within the reach of its post; never those of
+     * other professions, nor those without room for any of the stacks.
+     *
+     * @param stacks what the worker brings, {@code null} to leave room out of the choice
+     */
+    public static List<StorehouseInventory> deliveryTargets(net.minecraft.server.level.ServerLevel level, UUID kingdomId, String profession,
+                                                            WorldPos post, net.minecraft.core.BlockPos from, List<ItemStack> stacks) {
+        List<StorehouseRules.Candidate<StorehouseInventory>> candidates = new ArrayList<>();
+        for (StorehouseInventory inventory : storehouses(level.getServer(), kingdomId, null)) {
+            WorldPos pos = inventory.pos();
+            net.minecraft.core.BlockPos at = new net.minecraft.core.BlockPos(pos.x(), pos.y(), pos.z());
+            if (!inventory.takesIn() || !level.isLoaded(at) || !level.getBlockState(at).is(io.github.sekerator.kingdomworld.common.registry.ModRegistries.STOREHOUSE.get())) {
+                continue;
+            }
+            candidates.add(new StorehouseRules.Candidate<>(inventory, pos.dimension(), pos.x(), pos.y(), pos.z(), inventory.accepts(),
+                    stacks == null || hasRoomFor(inventory, stacks)));
+        }
+        return StorehouseRules.delivery(candidates, profession, reach(level.getServer(), kingdomId, post), from.getX(), from.getY(),
+                from.getZ());
+    }
+
+    /**
+     * The storehouses whose place is loaded a worker near players may take from, within the reach of its post, nearest first: any
+     * storehouse, either half of a double one, the containers of warehouses.
+     */
+    public static List<StorehouseInventory> takingSources(net.minecraft.server.level.ServerLevel level, UUID kingdomId, WorldPos post,
+                                                          net.minecraft.core.BlockPos from) {
+        List<StorehouseRules.Candidate<StorehouseInventory>> candidates = new ArrayList<>();
+        for (StorehouseInventory inventory : storehouses(level.getServer(), kingdomId, null)) {
+            WorldPos pos = inventory.pos();
+            if (inventory.takesIn() && level.isLoaded(new net.minecraft.core.BlockPos(pos.x(), pos.y(), pos.z()))) {
+                candidates.add(new StorehouseRules.Candidate<>(inventory, pos.dimension(), pos.x(), pos.y(), pos.z(), inventory.accepts(),
+                        true));
+            }
+        }
+        return StorehouseRules.taking(candidates, reach(level.getServer(), kingdomId, post), from.getX(), from.getY(), from.getZ());
+    }
+
+    /**
+     * Whether a storehouse has room for some of the stacks: an empty slot, or a slot with the same item that is not full.
+     */
+    public static boolean hasRoomFor(StorehouseInventory inventory, List<ItemStack> stacks) {
+        if (stacks.isEmpty()) {
+            return freeSlots(inventory) > 0;
+        }
+        for (ItemStack stack : stacks) {
+            if (!stack.isEmpty() && net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inventory, stack.copyWithCount(1), true).isEmpty()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -354,6 +465,18 @@ public final class KingdomStorage {
     public static boolean fits(MinecraftServer server, UUID kingdomId, List<ItemStack> stacks) {
         List<StorehouseInventory> inventories = new ArrayList<>(storehouses(server, kingdomId, null));
         inventories.removeIf(inventory -> !inventory.takesIn());
+        return fitsInto(inventories, stacks);
+    }
+
+    /**
+     * Whether all the stacks a worker of a profession made would fit together into the storehouses it brings things to: those of
+     * its profession and the common ones.
+     */
+    public static boolean fitsFor(MinecraftServer server, UUID kingdomId, String profession, List<ItemStack> stacks) {
+        return fitsInto(StorehouseRules.delivery(candidates(storehouses(server, kingdomId, null)), profession, null, 0, 0, 0), stacks);
+    }
+
+    private static boolean fitsInto(List<StorehouseInventory> inventories, List<ItemStack> stacks) {
         if (inventories.isEmpty()) {
             return stacks.stream().allMatch(ItemStack::isEmpty);
         }

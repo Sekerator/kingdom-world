@@ -406,8 +406,11 @@ public final class CitizenBodies {
         for (int slot = 0; slot < body.carried().getContainerSize(); slot++) {
             ItemStack stack = body.carried().removeItemNoUpdate(slot);
             if (!stack.isEmpty()) {
-                // What does not fit is lost; the chunk may be unloading, so nothing is dropped into the world.
-                KingdomStorage.insert(server, citizen.get().kingdomId(), stack, citizen.get().lastPos());
+                // What does not fit is lost; the chunk may be unloading, so nothing is dropped into the world. The storehouses of
+                // the work first, then any with room, so that a carrier's load of goods of another post is not lost.
+                ItemStack rest = KingdomStorage.insertFor(server, citizen.get().kingdomId(), citizen.get().professionId(), stack,
+                        citizen.get().lastPos());
+                KingdomStorage.insert(server, citizen.get().kingdomId(), rest, citizen.get().lastPos());
             }
         }
     }

@@ -81,7 +81,7 @@ public final class ModRegistries {
     /** The window of a double storehouse: both halves side by side. */
     public static final RegistryObject<net.minecraft.world.inventory.MenuType<io.github.sekerator.kingdomworld.common.storage.StorehouseMenu>>
             STOREHOUSE_MENU = MENUS.register("storehouse_double", () -> net.minecraftforge.common.extensions.IForgeMenuType.create(
-            (id, inventory, buf) -> io.github.sekerator.kingdomworld.common.storage.StorehouseMenu.client(id, inventory)));
+            (id, inventory, buf) -> io.github.sekerator.kingdomworld.common.storage.StorehouseMenu.client(id, inventory, buf)));
     /** Wounded citizens heal faster here. */
     public static final RegistryObject<Block> INFIRMARY = BLOCKS.register("infirmary", () -> new InfirmaryBlock(
             BlockBehaviour.Properties.of()

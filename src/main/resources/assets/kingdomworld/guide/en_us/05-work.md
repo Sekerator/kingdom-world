@@ -365,13 +365,13 @@ The farmer brings in a harvest by formula from the number of plots it saw last t
 
 ## carrier | Carrier
 @icon minecraft:chest
-The **carrier** moves goods between posts and storehouses. It needs no tool and works within {cfg:work.carrierRange} blocks of its post.
+The **carrier** moves goods between posts and storehouses. It needs no tool; it serves the posts within {cfg:work.carrierRange} blocks of its own and the storehouses of its city (outside the cities any on the land of the kingdom). The goods of a post go to a storehouse of the profession of that post, then to a common one (see [Storehouses by profession](storehouses)).
 
 ### Three kinds of trips
 
 1. **Collecting:** from the containers of posts to the storehouses, the fullest first. This is the main work.
 2. **Supplying:** from a storehouse to the container of a post that asks for something: torches for a miner, saplings for a lumberjack, inputs for the orders of workshops (see [Workshops](workshops)).
-3. **Unloading:** from a storehouse more than 90% full to one less than half full that stands at least 24 blocks away.
+3. **Unloading:** from a storehouse more than 90% full to one less than half full that stands at least 24 blocks away; only between common storehouses.
 
 ### States
 

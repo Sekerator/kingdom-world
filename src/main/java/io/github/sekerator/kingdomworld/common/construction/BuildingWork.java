@@ -408,7 +408,8 @@ public final class BuildingWork {
         }
         MinecraftServer server = level.getServer();
         for (ItemStack stack : held) {
-            ItemStack rest = KingdomStorage.insert(server, construction.kingdomId(), stack, construction.anchor());
+            ItemStack rest = KingdomStorage.insertFor(server, construction.kingdomId(), io.github.sekerator.kingdomworld.core.citizen.Professions.BUILDER.id(), stack,
+                    construction.anchor());
             if (!rest.isEmpty()) {
                 Containers.dropItemStack(level, mainAt.getX() + 0.5, mainAt.getY() + 0.5, mainAt.getZ() + 0.5, rest);
             }

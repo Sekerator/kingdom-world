@@ -204,9 +204,11 @@ public final class CarrierBehavior implements ProfessionBehavior {
                 continue;
             }
             ItemStack taken = from.extractItem(slot, Math.min(amount - moved, stack.getCount()), false);
-            ItemStack rest = to == null ? taken : ItemHandlerHelper.insertItemStacked(to, taken, false);
+            String profession = source.post().professionId();
+            boolean admits = to != null && to.takesIn() && to.accepts().kindFor(profession) != io.github.sekerator.kingdomworld.core.citizen.StorehouseRules.Kind.OTHERS;
+            ItemStack rest = admits ? ItemHandlerHelper.insertItemStacked(to, taken, false) : taken;
             if (!rest.isEmpty()) {
-                rest = KingdomStorage.insert(server, kingdomId, rest, target);
+                rest = KingdomStorage.insertFor(server, kingdomId, profession, rest, target);
             }
             moved += taken.getCount() - rest.getCount();
             if (!rest.isEmpty()) {
@@ -233,6 +235,8 @@ public final class CarrierBehavior implements ProfessionBehavior {
         private CarrierPlanner.Task task;
         private boolean loaded;
         private int walking;
+        /** The profession of the post whose goods the carrier carries; empty for goods out of a storehouse. */
+        private String carriedFor = "";
 
         WorkGoal(CitizenEntity body, ProfessionBehavior behavior) {
             super(body, behavior);
@@ -257,6 +261,7 @@ public final class CarrierBehavior implements ProfessionBehavior {
                 task = plan(level).orElse(null);
                 loaded = false;
                 walking = 0;
+                carriedFor = task == null ? "" : sourceProfession(level, task);
                 if (task == null) {
                     return WorkStatus.NOTHING_TO_CARRY;
                 }
@@ -294,20 +299,58 @@ public final class CarrierBehavior implements ProfessionBehavior {
             return new BlockPos(pos.x(), pos.y(), pos.z());
         }
 
+        /**
+         * The profession of the post a trip collects from; empty for a trip out of a storehouse.
+         */
+        private String sourceProfession(ServerLevel level, CarrierPlanner.Task trip) {
+            if (trip.kind() != CarrierPlanner.Kind.COLLECT) {
+                return "";
+            }
+            for (Source source : sources(level, post.kingdomId())) {
+                if (at(level, source.container().pos()).equals(trip.from())) {
+                    return source.post().professionId();
+                }
+            }
+            return "";
+        }
+
+        /**
+         * What the carrier still carries goes where the goods of the post it took them from go; goods out of a storehouse to a
+         * common one.
+         */
+        @Override
+        protected String deliveryProfession() {
+            return carriedFor;
+        }
+
         private Optional<CarrierPlanner.Task> plan(ServerLevel level) {
             int range = GatheringSettings.rules().carrierRange();
             WorldPos home = post.pos();
             List<Source> sources = sources(level, post.kingdomId());
             List<CarrierPlanner.Stock> stocks = new ArrayList<>();
             List<CarrierPlanner.Request> requests = new ArrayList<>();
+            // The storehouses of the city of the carrier's post (of the whole land outside the cities) whose place is loaded.
             List<CarrierPlanner.Stock> storehouses = new ArrayList<>();
-            for (StorehouseInventory inventory : KingdomStorage.storehouses(level.getServer(), post.kingdomId(), home)) {
+            List<CarrierPlanner.Stock> common = new ArrayList<>();
+            for (StorehouseInventory inventory : KingdomStorage.takingSources(level, post.kingdomId(), home, body.blockPosition())) {
                 BlockPos pos = blockPos(inventory.pos());
-                if (inventory.pos().dimension().equals(home.dimension()) && level.isLoaded(pos) && isStorehouse(level, pos)) {
-                    storehouses.add(new CarrierPlanner.Stock(inventory.pos(), KingdomStorage.itemCount(inventory),
-                            KingdomStorage.freeSlots(inventory), inventory.getSlots()));
+                if (isStorehouse(level, pos)) {
+                    CarrierPlanner.Stock stock = new CarrierPlanner.Stock(inventory.pos(), KingdomStorage.itemCount(inventory),
+                            KingdomStorage.freeSlots(inventory), inventory.getSlots());
+                    storehouses.add(stock);
+                    if (inventory.accepts().all()) {
+                        common.add(stock);
+                    }
                 }
             }
+            // What a post's container holds goes to the storehouses of the work of that post first, then to the common ones.
+            Map<WorldPos, String> professions = new java.util.HashMap<>();
+            for (Source source : sources) {
+                professions.put(at(level, source.container().pos()), source.post().professionId());
+            }
+            java.util.function.Function<CarrierPlanner.Stock, Optional<WorldPos>> collectTarget = source -> KingdomStorage.deliveryTargets(level,
+                    post.kingdomId(), professions.getOrDefault(source.pos(), ""), home, blockPos(source.pos()), List.of()).stream()
+                    .findFirst().map(StorehouseInventory::pos);
             for (Source source : sources) {
                 stocks.add(new CarrierPlanner.Stock(at(level, source.container().pos()), takeable(source),
                         PostContainers.freeSlots(source.container().handler()), source.container().handler().getSlots()));
@@ -346,7 +389,7 @@ public final class CarrierBehavior implements ProfessionBehavior {
                     }
                 }
             }
-            return CarrierPlanner.next(home, stocks, storehouses, requests, body.carried().getContainerSize() * 64, range);
+            return CarrierPlanner.next(home, stocks, collectTarget, common, requests, body.carried().getContainerSize() * 64, range);
         }
 
         @Nullable

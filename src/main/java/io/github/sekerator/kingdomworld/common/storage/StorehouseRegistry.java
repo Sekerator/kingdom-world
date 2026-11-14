@@ -17,11 +17,13 @@ import java.util.Optional;
 
 /**
  * Every storehouse of the world by position, with its contents. Saved with the kingdom data:
- * {@code storehouses: [ { pos, items } ]}.
+ * {@code storehouses: [ { pos, items, accepts? } ]}, where {@code accepts} lists the professions the storehouse takes in from and
+ * is left out for a storehouse that takes in from everybody (as storehouses saved before it existed do).
  */
 public final class StorehouseRegistry {
     private static final String POS = "pos";
     private static final String ITEMS = "items";
+    private static final String ACCEPTS = "accepts";
 
     private final Map<WorldPos, StorehouseInventory> byPos = new LinkedHashMap<>();
     /** The storehouses of every chunk, so that a chunk is looked at without the whole world. */
@@ -98,6 +100,13 @@ public final class StorehouseRegistry {
             CompoundTag entry = new CompoundTag();
             entry.put(POS, CitizenNbt.writePos(inventory.pos()));
             entry.put(ITEMS, inventory.serializeNBT());
+            if (!inventory.accepts().all()) {
+                ListTag accepts = new ListTag();
+                for (String profession : inventory.accepts().professions()) {
+                    accepts.add(net.minecraft.nbt.StringTag.valueOf(profession));
+                }
+                entry.put(ACCEPTS, accepts);
+            }
             list.add(entry);
         }
         return list;
@@ -128,6 +137,14 @@ public final class StorehouseRegistry {
                 inventory.deserializeNBT(entry.getCompound(ITEMS));
                 if (inventory.getSlots() != StorehouseInventory.SLOTS) {
                     throw new IllegalArgumentException("storehouse #" + i + " has " + inventory.getSlots() + " slots");
+                }
+                if (entry.contains(ACCEPTS, Tag.TAG_LIST)) {
+                    List<String> professions = new ArrayList<>();
+                    ListTag accepts = entry.getList(ACCEPTS, Tag.TAG_STRING);
+                    for (int p = 0; p < accepts.size(); p++) {
+                        professions.add(accepts.getString(p));
+                    }
+                    inventory.setAccepts(io.github.sekerator.kingdomworld.core.citizen.StorehouseRules.Accepts.of(professions));
                 }
                 inventory.setChangeListener(changeListener);
                 byPos.put(pos, inventory);
