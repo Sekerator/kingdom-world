@@ -57,6 +57,7 @@
 - **Исправлено: двойной склад для воронок.** Когда половину двойного склада ломают, воронки и трубы в том же тике видят у оставшейся половины только её ячейки.
 - **Исправлено: проверка места на складах.** Работа вдали от игроков, мастерские, монетный двор и «Вернуть» считают место так же, как потом кладут вещи: склад за складом по порядку, сначала на неполные стопки, затем в пустые ячейки. Раньше неполная стопка дальнего склада засчитывалась, хотя вещь уходила в пустую ячейку ближнего, и то, чему потом не хватало места, пропадало.
 - **Исправлено: житель, ушедший далеко, доходит до дома.** Прогулка назад обрывалась, как только житель оказывался ближе 64 блоков, а прогулка у дома держит тело только в пределах своих 32 блоков и шага: в промежутке житель снова уходил куда попало. Теперь начатый путь домой идёт до дома, пока не начнётся работа или жителя что-то не удержит.
+- **Исправлено: новое королевство мира сразу ставит стражу.** Поднимающаяся столица снова получает посты своего плана на последнем шаге появления: стража у ворот, складов и дворца, армия в резерве и в лагерях. Раньше солдаты до первого обхода правителя (до суток) стояли без постов, а солдаты лагерей занимали кровати в городе.
 
 ### 1.5.1
 
@@ -286,6 +287,7 @@ A kingdom of players no longer runs into the limits of the server: its beds, its
 - **Fixed: a double storehouse for hoppers.** When a half of a double storehouse is broken, hoppers and pipes see only the slots of the half left within the same tick.
 - **Fixed: the room of the storehouses.** Work far from players, workshops, the mint and Send back count the room as the things are put away afterwards: storehouse after storehouse in their order, onto the stacks that are not full first, then into empty slots. Before, a half stack in a farther storehouse was counted though the item went into an empty slot of a nearer one, and what then found no room was lost.
 - **Fixed: a citizen gone far gets home.** The walk back ended as soon as the citizen was within 64 blocks, while the walks about home hold a body only within their 32 blocks and a step: in between it drifted off again. Now a walk home that began goes on to the home unless its work begins or something holds the citizen.
+- **Fixed: a new kingdom of the world posts its guard at once.** A capital that is rising again gets the posts of its plan at the last step of its appearance: the guard at the gates, the stores and the palace, the army in reserve and in the camps. Before, the soldiers stood without posts until the first round of the ruler (up to a day), and the soldiers of the camps took beds in the city.
 
 ### 1.5.1
 

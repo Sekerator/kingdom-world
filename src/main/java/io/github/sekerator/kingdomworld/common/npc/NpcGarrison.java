@@ -393,8 +393,11 @@ public final class NpcGarrison {
         if (found.isEmpty()) {
             return List.of();
         }
-        if (!NpcWork.built(server, kingdomId)) {
-            // A settlement a player came to before its capital rose has the posts of its own guard already.
+        NpcSite.Status status = found.get().status();
+        if (status == NpcSite.Status.PLANNED || status == NpcSite.Status.FOUNDED) {
+            // A settlement a player came to before its capital began to rise has the posts of its own guard already. A capital
+            // that is rising has the posts of its plan: its soldiers take them as the last step of its raising, before it is
+            // counted as standing.
             return SettlementGarrison.duties(server, kingdomId, io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(server.overworld()));
         }
         if (throne == null) {
