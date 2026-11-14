@@ -168,7 +168,9 @@ public final class NaturalGround {
         for (int x = box.minX(); x <= box.maxX(); x++) {
             for (int z = box.minZ(); z <= box.maxZ(); z++) {
                 pos.set(x, street, z);
-                if (!ChunkHold.loaded(level, pos) || !kingdomId.equals(KingdomWorldApi.ownerAt(level, pos))) {
+                if (!ChunkHold.loaded(level, pos) || !CityPlots.ownLand(level.getServer(), kingdomId,
+                        io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level),
+                        io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(x >> 4, z >> 4))) {
                     return pos.immutable();
                 }
                 int y = blocker(level, pos, x, z, street, bottom, top, Blocks.AIR.defaultBlockState(), Long.MIN_VALUE);

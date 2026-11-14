@@ -267,7 +267,8 @@ public final class RemotePosts {
                 }
                 int ground = NaturalGround.groundAt(level, x, z);
                 BlockPos post = new BlockPos(x, ground + 1, z);
-                if (!commission.kingdomId().equals(KingdomWorldApi.ownerAt(level, post))
+                if (!CityPlots.ownLand(server, commission.kingdomId(), commission.dimension(),
+                        io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(x >> 4, z >> 4))
                         || state.construction().overlapping(commission.dimension(), new Box(x, ground, z, x, ground + 2, z), -1).isPresent()) {
                     continue;
                 }

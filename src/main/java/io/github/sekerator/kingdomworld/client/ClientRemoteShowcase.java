@@ -363,10 +363,16 @@ final class ClientRemoteShowcase {
         }
     }
 
-    private static void claim(KingdomWorldState state, UUID kingdom, BlockPos middle, int radius) {
+    /**
+     * Gives the kingdom the chunks around a middle that nobody holds; the land of others stays theirs.
+     */
+    private static void claim(KingdomWorldState state, String dimension, UUID kingdom, BlockPos middle, int radius) {
         for (int cx = (middle.getX() - radius) >> 4; cx <= (middle.getX() + radius) >> 4; cx++) {
             for (int cz = (middle.getZ() - radius) >> 4; cz <= (middle.getZ() + radius) >> 4; cz++) {
-                state.territory().assign(kingdom, ChunkKey.of(cx, cz));
+                long chunk = ChunkKey.of(cx, cz);
+                if (state.territory().claimOwner(dimension, chunk) == null && state.territory().ownerOf(dimension, chunk) == null) {
+                    state.territory().assign(kingdom, chunk);
+                }
             }
         }
     }
@@ -379,7 +385,7 @@ final class ClientRemoteShowcase {
         level.getChunk(middle);
         int ground = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, middle.getX(), middle.getZ()) - 1;
         meadow(level, middle, radius, ground);
-        claim(KingdomWorldApi.state(server), kingdom, middle, radius + 2);
+        claim(KingdomWorldApi.state(server), Dimensions.id(level), kingdom, middle, radius + 2);
         BlockPos anchor = ConstructionWork.anchorAt(template, middle.getX(), ground + 1, middle.getZ(), Placement.NONE);
         Box box = template.box(anchor, Placement.NONE);
         BuildPlan plan = ConstructionWork.plan(template, anchor, Placement.NONE, List.of());
@@ -431,24 +437,32 @@ final class ClientRemoteShowcase {
             KingdomWorldState state = KingdomWorldApi.state(server);
             int distance = RoadSettings.rules().minCityDistance();
             cityDistance = distance;
-            // Two cities east and west of the capital, as close as the server allows.
-            BlockPos east = new BlockPos(origin.getX() + distance + 8, 0, origin.getZ());
-            BlockPos west = new BlockPos(origin.getX() - distance - 8, 0, origin.getZ());
+            String dimension = Dimensions.id(level);
+            claim(state, dimension, id, origin, 40);
+            // Two cities around the capital, as close as the server allows, where the land is nobody's.
             long[] ids = new long[2];
             int i = 0;
-            for (BlockPos at : List.of(east, west)) {
+            int step = distance + 8;
+            for (int[] way : new int[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {2, 0}, {-2, 0}, {0, 2}, {0, -2}}) {
+                if (i == 2) {
+                    break;
+                }
+                BlockPos at = new BlockPos(origin.getX() + way[0] * step, 0, origin.getZ() + way[1] * step);
                 level.getChunk(at);
                 int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, at.getX(), at.getZ());
-                claim(state, id, at, 48);
+                claim(state, dimension, id, at, 48);
                 BlockPos hall = new BlockPos(at.getX(), y, at.getZ());
                 String name = i == 0 ? "Новый Верхнеполянский Городок" : "Заречье";
                 if (!RoadWork.foundCity(level, null, id, hall, name).ok()) {
-                    failure = "the city " + name + " was not founded";
-                    return;
+                    LOGGER.info(PREFIX + "no city at {}, trying another side", hall.toShortString());
+                    continue;
                 }
-                ids[i++] = RoadWork.state(server).cityAt(Dimensions.id(level), hall.getX(), hall.getY(), hall.getZ()).orElseThrow().id();
+                ids[i++] = RoadWork.state(server).cityAt(dimension, hall.getX(), hall.getY(), hall.getZ()).orElseThrow().id();
             }
-            claim(state, id, origin, 120);
+            if (i < 2) {
+                failure = "the cities were not founded";
+                return;
+            }
             city = ids[0];
             CityAreas.Area area = CityAreas.of(server, id).stream().filter(found -> found.cityId() == ids[0]).findFirst().orElseThrow();
             cityX = area.x();

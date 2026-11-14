@@ -134,7 +134,8 @@ public final class RoadWork {
         if (!mayManage(server, actor, kingdomId)) {
             return Outcome.fail(KingdomError.NO_PERMISSION);
         }
-        if (!kingdomId.equals(KingdomWorldApi.state(server).territory().ownerOf(dimension,
+        // Only the land within the borders: claimed or in a province the kingdom holds, never the wild part of a province.
+        if (!kingdomId.equals(io.github.sekerator.kingdomworld.common.land.Wilderness.placeOwner(server, dimension,
                 io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(x >> 4, z >> 4)))) {
             return Outcome.fail(KingdomError.CONSTRUCTION_OUTSIDE_LAND);
         }

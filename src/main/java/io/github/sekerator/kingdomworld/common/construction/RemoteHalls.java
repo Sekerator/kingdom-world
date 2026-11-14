@@ -191,7 +191,8 @@ public final class RemoteHalls {
                 }
                 int ground = NaturalGround.groundAt(level, x, z);
                 BlockPos hall = new BlockPos(x, ground + 1, z);
-                if (!commission.kingdomId().equals(KingdomWorldApi.ownerAt(level, hall))
+                if (!CityPlots.ownLand(server, commission.kingdomId(), commission.dimension(),
+                        io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(x >> 4, z >> 4))
                         || state.construction().overlapping(commission.dimension(), new Box(x, ground, z, x, ground + 3, z), -1).isPresent()) {
                     continue;
                 }

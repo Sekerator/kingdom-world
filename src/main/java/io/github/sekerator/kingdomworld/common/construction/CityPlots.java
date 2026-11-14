@@ -127,9 +127,29 @@ public final class CityPlots {
     static boolean fits(MinecraftServer server, UUID kingdomId, String dimension, Box box, @Nullable UUID actor, List<int[]> footprint) {
         Box column = new Box(box.minX() - 1, LOWEST, box.minZ() - 1, box.maxX() + 1, HIGHEST, box.maxZ() + 1);
         KingdomWorldState state = KingdomWorldApi.state(server);
-        if (!state.checkLay(actor, kingdomId, dimension, column, ConstructionSettings.rules()).ok()) {
+        if (!ownLand(server, kingdomId, dimension, column) || !state.checkLay(actor, kingdomId, dimension, column, ConstructionSettings.rules()).ok()) {
             return false;
         }
         return !RoadFootprint.near(footprint, box, ROAD_MARGIN);
+    }
+
+    /**
+     * Whether a chunk is the land of a kingdom within its borders: claimed by it or in a province it holds, never land nobody
+     * holds, land of another kingdom or the wild part of a province of a kingdom of the world.
+     */
+    public static boolean ownLand(MinecraftServer server, UUID kingdomId, String dimension, long chunk) {
+        return kingdomId.equals(io.github.sekerator.kingdomworld.common.land.Wilderness.placeOwner(server, dimension, chunk));
+    }
+
+    /**
+     * Whether every chunk of a box is the land of a kingdom within its borders.
+     */
+    public static boolean ownLand(MinecraftServer server, UUID kingdomId, String dimension, Box box) {
+        for (long chunk : box.chunks()) {
+            if (!ownLand(server, kingdomId, dimension, chunk)) {
+                return false;
+            }
+        }
+        return true;
     }
 }

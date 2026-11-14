@@ -116,7 +116,7 @@ public final class RemoteWorks {
         if (!check.ok()) {
             return check;
         }
-        if (!kingdomId.equals(KingdomWorldApi.state(server).territory().ownerOf(dimension, ChunkKey.of(x >> 4, z >> 4)))) {
+        if (!CityPlots.ownLand(server, kingdomId, dimension, ChunkKey.of(x >> 4, z >> 4))) {
             return Outcome.fail(KingdomError.CONSTRUCTION_OUTSIDE_LAND);
         }
         long city = CityAreas.at(server, kingdomId, dimension, x, z).map(CityAreas.Area::cityId).orElse(Commission.OUTSIDE);
@@ -225,6 +225,9 @@ public final class RemoteWorks {
         BlockPos anchor = ConstructionWork.anchorAt(template, x, 0, z, placement);
         Box box = template.box(anchor, placement);
         Box column = new Box(box.minX() - 1, -4096, box.minZ() - 1, box.maxX() + 1, 4096, box.maxZ() + 1);
+        if (!CityPlots.ownLand(server, kingdomId, dimension, column)) {
+            return KingdomActions.Feedback.error(KingdomError.CONSTRUCTION_OUTSIDE_LAND).message();
+        }
         Outcome lay = KingdomWorldApi.state(server).checkLay(actor, kingdomId, dimension, column, ConstructionSettings.rules());
         if (!lay.ok()) {
             return KingdomActions.Feedback.error(lay.error()).message();
