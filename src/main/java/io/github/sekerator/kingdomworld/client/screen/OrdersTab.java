@@ -138,7 +138,7 @@ final class OrdersTab {
     }
 
     private Component summary() {
-        return Component.translatable(KEY + "summary", view.mainOrders(), view.maxOrders());
+        return Component.translatable(KEY + "summary", view.kingOrders(), view.maxOrders());
     }
 
     private static Component kindButton(Order.Kind kind) {
@@ -296,7 +296,7 @@ final class OrdersTab {
             if (view.canManage()) {
                 Button create = screen.add(Button.builder(Component.translatable(KEY + "new"), b -> openCreate())
                         .bounds(x, y, newWidth, ITEM_ROW - 2).build());
-                create.active = view.mainOrders() < view.maxOrders();
+                create.active = view.kingOrders() < view.maxOrders();
             }
             initList(left, top, panelWidth, panelHeight, right);
             return;

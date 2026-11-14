@@ -9,15 +9,26 @@ import io.github.sekerator.kingdomworld.common.construction.BuildingTemplate;
 import io.github.sekerator.kingdomworld.common.construction.BuildingTemplates;
 import io.github.sekerator.kingdomworld.common.construction.ConstructionSettings;
 import io.github.sekerator.kingdomworld.common.construction.ConstructionWork;
+import io.github.sekerator.kingdomworld.common.construction.RemoteWorks;
 import io.github.sekerator.kingdomworld.common.construction.SiteLoader;
 import io.github.sekerator.kingdomworld.common.kingdom.Dimensions;
+import io.github.sekerator.kingdomworld.common.production.Production;
+import io.github.sekerator.kingdomworld.common.registry.ModRegistries;
 import io.github.sekerator.kingdomworld.common.road.RoadWork;
+import io.github.sekerator.kingdomworld.common.storage.StorehouseInventory;
+import io.github.sekerator.kingdomworld.core.citizen.Citizen;
+import io.github.sekerator.kingdomworld.core.citizen.Professions;
+import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.construction.Box;
 import io.github.sekerator.kingdomworld.core.construction.BuildPlan;
+import io.github.sekerator.kingdomworld.core.construction.Commission;
 import io.github.sekerator.kingdomworld.core.construction.Construction;
+import io.github.sekerator.kingdomworld.core.construction.Materials;
 import io.github.sekerator.kingdomworld.core.construction.Placement;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
+import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
+import io.github.sekerator.kingdomworld.core.production.Order;
 import io.github.sekerator.kingdomworld.core.road.Road;
 import io.github.sekerator.kingdomworld.core.road.RoadState;
 import io.github.sekerator.kingdomworld.core.road.RouteCell;
@@ -25,11 +36,15 @@ import io.github.sekerator.kingdomworld.core.road.Wall;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
@@ -40,8 +55,9 @@ import java.util.UUID;
 
 /**
  * Game tests of building far from the capital: a house and a wall far from every player are finished by themselves, the place
- * is loaded for a while and let go again. Each test founds its kingdom in a batch of its own; the far places lie two thousand
- * blocks away, where nothing is loaded.
+ * is loaded for a while and let go again; orders from the capital pass over the blocks of players, set up posts of builders and
+ * leave the orders of the king alone. Each test founds its kingdom in a batch of its own; the far places lie two thousand
+ * blocks away, where nothing is loaded, on meadows made over the land.
  */
 @GameTestHolder(KingdomWorld.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -300,6 +316,188 @@ public final class RemoteBuildingGameTests {
             GatheringGameTests.clear(level, from, to);
             BuildingTemplates.removeForTest(template.id());
         });
+    }
+
+    // ---------------------------------------------------------------- orders from the capital
+
+    /**
+     * A flat meadow of grass far away at {@link #HIGH}, a radius around a middle, for a city whose places are looked at: it is
+     * loaded while it is made and let go again. The kingdom gets its land.
+     */
+    static void meadow(GameTestHelper helper, Kingdom kingdom, BlockPos middle, int radius, java.util.function.Consumer<ServerLevel> extra) {
+        ServerLevel level = helper.getLevel();
+        claim(level.getServer(), kingdom, middle.getX() - radius, middle.getZ() - radius, middle.getX() + radius, middle.getZ() + radius);
+        BlockPos from = new BlockPos(middle.getX() - radius, HIGH, middle.getZ() - radius);
+        BlockPos to = new BlockPos(middle.getX() + radius, HIGH, middle.getZ() + radius);
+        TestChunks.hold(level, from, to);
+        for (BlockPos pos : BlockPos.betweenClosed(from, to)) {
+            level.setBlock(pos, Blocks.GRASS_BLOCK.defaultBlockState(), 2);
+        }
+        extra.accept(level);
+        TestChunks.release(level, from);
+    }
+
+    /**
+     * A city founded far away over a meadow, its town hall on the grass.
+     */
+    static long farCity(GameTestHelper helper, Kingdom kingdom, BlockPos hall, String name) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Outcome founded = RoadWork.foundCity(helper.getLevel(), null, kingdom.id(), hall, name);
+        helper.assertTrue(founded.ok(), "The far city was not founded: " + founded);
+        return RoadWork.state(server).citiesOf(kingdom.id()).stream().filter(city -> city.name().equals(name)).findFirst().orElseThrow().id();
+    }
+
+    /**
+     * Whether a block of a place far away still stands, the place loaded for a moment to look.
+     */
+    static boolean stands(ServerLevel level, BlockPos pos, Block block) {
+        TestChunks.hold(level, pos, pos);
+        try {
+            return level.getBlockState(pos).is(block);
+        } finally {
+            TestChunks.release(level, pos);
+        }
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_remote_order_build", timeoutTicks = 12_000)
+    public static void anOrderPassesOverTheFenceAndTheChestOfAPlayer(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Orders", UUID.randomUUID());
+        BuildingTemplate template = house("ordered_house");
+        BlockPos hall = new BlockPos(helper.absolutePos(BlockPos.ZERO).getX() + FAR, HIGH + 1, helper.absolutePos(BlockPos.ZERO).getZ());
+        // A fence and a chest of a player on the nearest ring around the town hall.
+        BlockPos fence = hall.offset(0, 0, -5);
+        BlockPos chest = hall.offset(5, 0, 0);
+        meadow(helper, kingdom, hall, 32, at -> {
+            at.setBlock(fence, Blocks.OAK_FENCE.defaultBlockState(), 3);
+            at.setBlock(chest, Blocks.CHEST.defaultBlockState(), 3);
+        });
+        long city = farCity(helper, kingdom, hall, "Orderville");
+        helper.assertTrue(RemoteWorks.orderBuild(server, null, kingdom.id(), template.id().toString(), Materials.NONE, city,
+                Construction.Priority.NORMAL).ok(), "The order was refused");
+        helper.succeedWhen(() -> {
+            KingdomWorldState state = KingdomWorldApi.state(server);
+            helper.assertTrue(state.construction().commissionsOf(kingdom.id()).isEmpty(), "The order is not laid out yet: "
+                    + state.construction().commissionsOf(kingdom.id()));
+            Construction laid = state.construction().of(kingdom.id()).stream().filter(c -> c.templateId().equals(template.id().toString()))
+                    .findFirst().orElseThrow(() -> new GameTestAssertException("No house was laid out"));
+            Box box = laid.box();
+            Box wide = new Box(box.minX() - 1, box.minY() - 1, box.minZ() - 1, box.maxX() + 1, box.maxY() + 1, box.maxZ() + 1);
+            helper.assertTrue(!wide.contains(fence.getX(), fence.getY(), fence.getZ()), "The house was laid over the fence");
+            helper.assertTrue(!wide.contains(chest.getX(), chest.getY(), chest.getZ()), "The house was laid over the chest");
+            helper.assertTrue(box.minY() == HIGH + 1, "The house does not stand on the meadow: " + box);
+            helper.assertTrue(ConstructionWork.cityOf(server, laid) == city, "The house was laid outside its city");
+            ConstructionWork.cancel(server, null, kingdom.id(), laid.id());
+            helper.assertTrue(stands(level, fence, Blocks.OAK_FENCE), "The fence is gone");
+            helper.assertTrue(stands(level, chest, Blocks.CHEST), "The chest is gone");
+            RoadWork.state(server).removeCity(city);
+            CitizenGameTests.finish(helper, kingdom);
+            BuildingTemplates.removeForTest(template.id());
+        });
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_remote_order_at", timeoutTicks = 12_000)
+    public static void anOrderAtABuiltPlaceIsRefusedWithItsReason(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Orders At", UUID.randomUUID());
+        BuildingTemplate template = house("ordered_at_house");
+        BlockPos point = new BlockPos(helper.absolutePos(BlockPos.ZERO).getX() + FAR, HIGH + 1, helper.absolutePos(BlockPos.ZERO).getZ());
+        // The point and everything within reach of it is built over with the planks of a player.
+        meadow(helper, kingdom, point, 48, at -> {
+            for (BlockPos pos : BlockPos.betweenClosed(point.offset(-18, 0, -18), point.offset(18, 0, 18))) {
+                at.setBlock(pos, Blocks.OAK_PLANKS.defaultBlockState(), 2);
+            }
+        });
+        String dimension = Dimensions.id(level);
+        // On the map: a construction there already is told at once, free land is not refused.
+        Construction there = far(helper, kingdom, template, point.offset(30, 0, 0), false);
+        helper.assertTrue(RemoteWorks.checkPoint(server, null, kingdom.id(), template.id().toString(), dimension, point.getX() + 30,
+                point.getZ() - 2, 0) != null, "The map lets a house be ordered over another");
+        helper.assertTrue(RemoteWorks.checkPoint(server, null, kingdom.id(), template.id().toString(), dimension, point.getX(), point.getZ(), 0)
+                == null, "The map refuses the land of the kingdom");
+        ConstructionWork.cancel(server, null, kingdom.id(), there.id());
+        // In the world: the planks are seen when the order is worked on.
+        helper.assertTrue(RemoteWorks.orderAt(server, null, kingdom.id(), template.id().toString(), Materials.NONE, dimension, point.getX(),
+                point.getZ(), 2, Construction.Priority.NORMAL).ok(), "The order was refused on the map");
+        helper.succeedWhen(() -> {
+            KingdomWorldState state = KingdomWorldApi.state(server);
+            List<Commission> orders = state.construction().commissionsOf(kingdom.id());
+            helper.assertTrue(orders.size() == 1, "The order is gone");
+            Commission order = orders.get(0);
+            helper.assertTrue(order.state() == Commission.State.NO_PLACE, "The order does not say it has no place: " + order.state());
+            helper.assertTrue(order.reason().startsWith("blocked|"), "The order does not tell the block in the way: " + order.reason());
+            helper.assertTrue(state.construction().of(kingdom.id()).stream().noneMatch(c -> c.templateId().equals(template.id().toString())),
+                    "A house was laid over the planks");
+            RemoteWorks.cancel(server, null, kingdom.id(), order.id());
+            helper.assertTrue(stands(level, point, Blocks.OAK_PLANKS), "The planks are gone");
+            CitizenGameTests.finish(helper, kingdom);
+            BuildingTemplates.removeForTest(template.id());
+        });
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_remote_order_post", timeoutTicks = 6_000)
+    public static void aPostFromAfarHiresTheUnemployed(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Posts From Afar", UUID.randomUUID());
+        Citizen idle = CitizenGameTests.newcomer(helper, kingdom, 1, 1);
+        StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 4);
+        store.insertItem(0, new ItemStack(ModRegistries.WORK_POST_ITEM.get()), false);
+        BlockPos hall = new BlockPos(helper.absolutePos(BlockPos.ZERO).getX() + FAR, HIGH + 1, helper.absolutePos(BlockPos.ZERO).getZ());
+        meadow(helper, kingdom, hall, 20, at -> {
+        });
+        long city = farCity(helper, kingdom, hall, "Postville");
+        helper.assertTrue(RemoteWorks.orderPost(server, null, kingdom.id(), city, Commission.Origin.KING).ok(), "The post was refused");
+        UUID id = idle.id();
+        helper.succeedWhen(() -> {
+            KingdomWorldState state = KingdomWorldApi.state(server);
+            helper.assertTrue(state.construction().commissionsOf(kingdom.id()).isEmpty(), "The post is not set up yet: "
+                    + state.construction().commissionsOf(kingdom.id()));
+            WorkPost post = state.citizens().posts().postsOf(kingdom.id(), Professions.BUILDER.id()).stream()
+                    .filter(found -> Math.abs(found.pos().x() - hall.getX()) <= 12 && Math.abs(found.pos().z() - hall.getZ()) <= 12).findFirst()
+                    .orElseThrow(() -> new GameTestAssertException("No post of builders by the far town hall"));
+            helper.assertTrue(post.workers().contains(id), "The citizen without work was not hired for the far post");
+            helper.assertTrue(CitizenGameTests.count(store, ModRegistries.WORK_POST_ITEM.get()) == 0, "The work post was not taken from the storehouse");
+            helper.assertTrue(stands(level, new BlockPos(post.pos().x(), post.pos().y(), post.pos().z()), ModRegistries.WORK_POST.get()),
+                    "No work post stands by the far town hall");
+            RoadWork.state(server).removeCity(city);
+            CitizenGameTests.finish(helper, kingdom, idle);
+        });
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_remote_order_limit", timeoutTicks = 200)
+    public static void tenConstructionsOrderWhatTheyLackAndTheKingStillOrders(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Many Cities", UUID.randomUUID());
+        BuildingTemplate template = house("many_house");
+        try {
+            int ordered = 0;
+            for (int i = 0; i < 10; i++) {
+                BlockPos anchor = new BlockPos(helper.absolutePos(BlockPos.ZERO).getX() + FAR + i * 200, HIGH, helper.absolutePos(BlockPos.ZERO).getZ());
+                Construction construction = far(helper, kingdom, template, anchor, false);
+                construction.setOrderMissing(true);
+                if (ConstructionWork.orderItem(server, construction, "minecraft:oak_planks", 64)) {
+                    ordered++;
+                }
+            }
+            helper.assertTrue(ordered == 10, "Not every construction could order what it lacks: " + ordered);
+            KingdomWorldState state = KingdomWorldApi.state(server);
+            helper.assertTrue(state.kingOrders(kingdom.id()) == 0, "The orders of the constructions count against the king");
+            // The king may hold one order of his own: the ten of the constructions do not take its place.
+            KingdomWorldState.Ordering king = state.order(null, kingdom.id(), "minecraft:bread", Order.Kind.MAKE, 1, Order.Priority.NORMAL,
+                    KingdomWorldApi.gameTime(server), 1, found -> Production.orderable(server, found));
+            helper.assertTrue(king.outcome().ok(), "The order of the king was refused: " + king.outcome());
+            helper.assertTrue(state.kingOrders(kingdom.id()) == 1, "The order of the king is not counted");
+        } finally {
+            for (Construction construction : List.copyOf(KingdomWorldApi.state(server).construction().of(kingdom.id()))) {
+                ConstructionWork.cancel(server, null, kingdom.id(), construction.id());
+            }
+            CitizenGameTests.finish(helper, kingdom);
+            BuildingTemplates.removeForTest(template.id());
+        }
+        helper.succeed();
     }
 
     /**

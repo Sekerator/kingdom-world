@@ -73,6 +73,40 @@ The queue and the steps done are saved, so a server restart in the middle of a c
 anything. What did not fit into full storehouses where nothing was loaded is kept with the constructions and dropped at
 its place once that is loaded. A message tells when a construction is laid out and when it is finished.
 
+### Orders from the capital
+
+A building for a far city can be ordered from the throne window without going there. The server chooses the place: on
+rings around the town hall of the city (around the throne for the capital), the nearest first, wholly inside the area of
+the city, its entrance towards the town hall, on your own land and no closer than two blocks to roads and walls. You can
+also pick a point on the atlas: the building stands there or a few blocks away, its entrance the way you chose.
+
+Orders are worked on one at a time on the whole server, the kingdoms in turn, within a kingdom the urgent first, then the
+old. The server loads the place for a while and looks at the ground:
+
+- a building is laid out only where the ground is level and holds only what grew there: grass, flowers, trees, snow. A
+  fence, a chest, a field, a path, water, any placed block: the place is passed over, an order never touches a block of a
+  player;
+- ground two to four blocks uneven is levelled by earthworks first, the order waits for them; more than four blocks and
+  the place is passed over;
+- if there is no level free place, the order waits and tries again every game day, and the reason (the first block in
+  the way, say) shows in the list of orders.
+
+From then on it is an ordinary construction: the builders of the city and helpers build it, what it lacks is ordered
+from the workshops, and a message tells when it is laid out. The materials "Style of the kingdom" take the wood, the stone
+and the look of buildings from the style of the kingdom, as the rulers of the world build. If an operator brought back
+the limit of constructions and it is reached, the order waits until a construction is finished.
+
+Do not build your own things inside the box of a construction already laid out (its coordinates are in the Construction
+tab): the builders take what was placed there to a storehouse, as at any construction; chests and protected blocks stay.
+
+An order of a post of builders sets up a work post from the storehouses near the town hall (or orders one from the
+workshops and waits) and hires a builder without a post or a citizen without work for it, the nearest first, and on an
+order of the king also a builder with nothing to build at the moment. A worker of another profession is never taken off
+his work. Hiring needs the Citizens right as well.
+
+The orders constructions and orders from the capital give the workshops for what they lack do not count against the
+limit of orders of the king: the Orders tab counts only the orders you gave yourself.
+
 ## blueprints | Blueprints and the catalog
 @icon kingdomworld:blueprint
 ### The catalog

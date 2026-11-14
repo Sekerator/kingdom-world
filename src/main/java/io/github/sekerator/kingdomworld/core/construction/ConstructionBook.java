@@ -27,6 +27,11 @@ public final class ConstructionBook {
     private int blueprintRevision;
     /** Counts changes of the register of buildings and of the constructions that work on a building of it. */
     private long version;
+    /** Counts every construction or building that came or went: the index of places is made again after a change. */
+    private long layout;
+    private long indexedAt = -1;
+    /** Constructions and buildings by dimension and chunk, made when asked after a change. */
+    private final Map<String, Map<Long, List<Object>>> index = new java.util.HashMap<>();
     private Runnable changeListener = () -> {
     };
 
@@ -107,6 +112,7 @@ public final class ConstructionBook {
                 clear, steps, kind, building, materials, skip);
         construction.setChangeListener(changeListener);
         constructions.put(construction.id(), construction);
+        layout++;
         if (construction.building() > 0) {
             version++;
         }
@@ -119,6 +125,7 @@ public final class ConstructionBook {
         if (removed == null) {
             return Optional.empty();
         }
+        layout++;
         leave(removed);
         removed.setChangeListener(() -> {
         });
@@ -127,6 +134,70 @@ public final class ConstructionBook {
         }
         changed();
         return Optional.of(removed);
+    }
+
+    // ---------------------------------------------------------------- orders from afar
+
+    private final Map<Long, Commission> commissions = new LinkedHashMap<>();
+    private long nextCommission = 1;
+
+    /**
+     * Keeps an order from afar under the next free number.
+     */
+    public Commission addCommission(Commission commission) {
+        Commission numbered = commission.withId(nextCommission++);
+        commissions.put(numbered.id(), numbered);
+        changed();
+        return numbered;
+    }
+
+    /**
+     * Replaces an order with its new state.
+     */
+    public void putCommission(Commission commission) {
+        if (commissions.containsKey(commission.id())) {
+            commissions.put(commission.id(), commission);
+            changed();
+        }
+    }
+
+    public Optional<Commission> removeCommission(long id) {
+        Commission removed = commissions.remove(id);
+        if (removed != null) {
+            changed();
+        }
+        return Optional.ofNullable(removed);
+    }
+
+    public Optional<Commission> commission(long id) {
+        return Optional.ofNullable(commissions.get(id));
+    }
+
+    public List<Commission> commissions() {
+        return List.copyOf(commissions.values());
+    }
+
+    public List<Commission> commissionsOf(UUID kingdomId) {
+        List<Commission> result = new ArrayList<>();
+        for (Commission commission : commissions.values()) {
+            if (commission.kingdomId().equals(kingdomId)) {
+                result.add(commission);
+            }
+        }
+        return result;
+    }
+
+    public long nextCommissionId() {
+        return nextCommission;
+    }
+
+    public void restoreCommission(Commission commission) {
+        commissions.put(commission.id(), commission);
+        nextCommission = Math.max(nextCommission, commission.id() + 1);
+    }
+
+    public void restoreCommissionCounter(long next) {
+        nextCommission = Math.max(nextCommission, next);
     }
 
     // ---------------------------------------------------------------- items to drop
@@ -338,6 +409,7 @@ public final class ConstructionBook {
     }
 
     public void putBuilding(Building building) {
+        layout++;
         Building old = buildings.put(building.id(), building);
         if (!building.equals(old)) {
             if (old == null || reshaped(old, building)) {
@@ -359,6 +431,7 @@ public final class ConstructionBook {
     }
 
     public Optional<Building> removeBuilding(long id) {
+        layout++;
         Building removed = buildings.remove(id);
         if (removed != null) {
             version++;
@@ -381,13 +454,13 @@ public final class ConstructionBook {
      * and the building {@code exceptBuilding} (the one an upgrade works on).
      */
     public Optional<Object> overlapping(String dimension, Box box, long except, long exceptBuilding) {
-        for (Construction construction : constructions.values()) {
-            if (construction.id() != except && construction.dimension().equals(dimension) && construction.box().intersects(box)) {
+        for (Object found : near(dimension, box)) {
+            if (found instanceof Construction construction && construction.id() != except && construction.box().intersects(box)) {
                 return Optional.of(construction);
             }
         }
-        for (Building building : buildings.values()) {
-            if (building.id() != exceptBuilding && building.dimension().equals(dimension) && building.box().intersects(box)) {
+        for (Object found : near(dimension, box)) {
+            if (found instanceof Building building && building.id() != exceptBuilding && building.box().intersects(box)) {
                 return Optional.of(building);
             }
         }
@@ -398,8 +471,8 @@ public final class ConstructionBook {
      * A construction of any kingdom whose box meets the given one, other than {@code except}; buildings do not count.
      */
     public Optional<Construction> overlappingConstruction(String dimension, Box box, long except) {
-        for (Construction construction : constructions.values()) {
-            if (construction.id() != except && construction.dimension().equals(dimension) && construction.box().intersects(box)) {
+        for (Object found : near(dimension, box)) {
+            if (found instanceof Construction construction && construction.id() != except && construction.box().intersects(box)) {
                 return Optional.of(construction);
             }
         }
@@ -410,12 +483,58 @@ public final class ConstructionBook {
      * The construction whose box holds a position, if any.
      */
     public Optional<Construction> at(String dimension, int x, int y, int z) {
-        for (Construction construction : constructions.values()) {
-            if (construction.dimension().equals(dimension) && construction.box().contains(x, y, z)) {
+        for (Object found : near(dimension, new Box(x, y, z, x, y, z))) {
+            if (found instanceof Construction construction && construction.box().contains(x, y, z)) {
                 return Optional.of(construction);
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * The constructions and buildings whose chunks meet those of a box, each once, constructions first in the order they came.
+     */
+    public List<Object> near(String dimension, Box box) {
+        if (indexedAt != layout) {
+            index.clear();
+            for (Construction construction : constructions.values()) {
+                put(construction.dimension(), construction.box(), construction);
+            }
+            for (Building building : buildings.values()) {
+                put(building.dimension(), building.box(), building);
+            }
+            indexedAt = layout;
+        }
+        Map<Long, List<Object>> chunks = index.get(dimension);
+        if (chunks == null) {
+            return List.of();
+        }
+        java.util.LinkedHashSet<Object> found = new java.util.LinkedHashSet<>();
+        for (long chunk : box.chunks()) {
+            List<Object> here = chunks.get(chunk);
+            if (here != null) {
+                found.addAll(here);
+            }
+        }
+        List<Object> sorted = new ArrayList<>(found.size());
+        for (Object object : found) {
+            if (object instanceof Construction) {
+                sorted.add(object);
+            }
+        }
+        for (Object object : found) {
+            if (!(object instanceof Construction)) {
+                sorted.add(object);
+            }
+        }
+        return sorted;
+    }
+
+    private void put(String dimension, Box box, Object object) {
+        Map<Long, List<Object>> chunks = index.computeIfAbsent(dimension, key -> new java.util.HashMap<>());
+        for (long chunk : box.chunks()) {
+            chunks.computeIfAbsent(chunk, key -> new ArrayList<>()).add(object);
+        }
     }
 
     // ---------------------------------------------------------------- kingdoms
@@ -426,6 +545,8 @@ public final class ConstructionBook {
      * @return the constructions it had
      */
     public List<Construction> removeKingdom(UUID kingdomId) {
+        layout++;
+        commissions.values().removeIf(commission -> commission.kingdomId().equals(kingdomId));
         List<Construction> removed = new ArrayList<>();
         constructions.values().removeIf(construction -> {
             if (construction.kingdomId().equals(kingdomId)) {
@@ -458,6 +579,7 @@ public final class ConstructionBook {
      * @throws IllegalArgumentException if the number is taken
      */
     public void restore(Construction construction) {
+        layout++;
         if (constructions.containsKey(construction.id())) {
             throw new IllegalArgumentException("Two constructions with number " + construction.id());
         }
@@ -473,6 +595,7 @@ public final class ConstructionBook {
      * @throws IllegalArgumentException if the number is taken
      */
     public void restore(Building building) {
+        layout++;
         if (buildings.containsKey(building.id())) {
             throw new IllegalArgumentException("Two buildings with number " + building.id());
         }

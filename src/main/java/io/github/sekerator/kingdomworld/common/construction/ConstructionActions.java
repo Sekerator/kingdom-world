@@ -17,12 +17,14 @@ import io.github.sekerator.kingdomworld.core.construction.ConstructionRules;
 import io.github.sekerator.kingdomworld.core.construction.Placement;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
+import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
 import io.github.sekerator.kingdomworld.core.membership.Permission;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
@@ -390,6 +392,72 @@ public final class ConstructionActions {
         };
     }
 
+    // ---------------------------------------------------------------- orders from afar
+
+    /**
+     * A building, a post of builders or a building at a point ordered from the throne.
+     */
+    public static void commission(ServerPlayer player, ConstructionPackets.Commission message) {
+        KingdomActions.Feedback feedback = commission(player.server, player.getUUID(), player.serverLevel(), message);
+        KingdomWorldNetwork.sendToPlayer(player, new ActionResultPacket(feedback.success(), feedback.message()));
+        sendView(player, message.kingdomId());
+    }
+
+    static KingdomActions.Feedback commission(MinecraftServer server, @org.jetbrains.annotations.Nullable UUID actor, ServerLevel level,
+                                              ConstructionPackets.Commission message) {
+        io.github.sekerator.kingdomworld.core.construction.Commission.Kind kind =
+                io.github.sekerator.kingdomworld.core.construction.Commission.Kind.byId(message.kind());
+        if (kind == null || kind == io.github.sekerator.kingdomworld.core.construction.Commission.Kind.HALL) {
+            return KingdomActions.Feedback.error(KingdomError.UNKNOWN_TEMPLATE);
+        }
+        io.github.sekerator.kingdomworld.core.construction.Materials materials =
+                new io.github.sekerator.kingdomworld.core.construction.Materials(message.wood(), message.stone());
+        if (!materials.kingdomStyle() && !TemplateMaterials.known(materials)) {
+            return KingdomActions.Feedback.fail(KEY + "unknown_material");
+        }
+        Construction.Priority priority = Construction.Priority.values()[Math.max(0, Math.min(Construction.Priority.values().length - 1,
+                message.priority()))];
+        Outcome outcome = switch (kind) {
+            case BUILD -> RemoteWorks.orderBuild(server, actor, message.kingdomId(), message.template(), materials, message.cityId(), priority);
+            case AT -> RemoteWorks.orderAt(server, actor, message.kingdomId(), message.template(), materials,
+                    level.dimension().location().toString(), message.x(), message.z(), message.rotation(), priority);
+            case POST -> RemoteWorks.orderPost(server, actor, message.kingdomId(), message.cityId(),
+                    io.github.sekerator.kingdomworld.core.construction.Commission.Origin.KING);
+            case HALL -> Outcome.fail(KingdomError.UNKNOWN_TEMPLATE);
+        };
+        if (!outcome.ok()) {
+            return KingdomActions.Feedback.error(outcome.error());
+        }
+        Component what = kind == io.github.sekerator.kingdomworld.core.construction.Commission.Kind.POST
+                ? Component.translatable("kingdomworld.commission.post")
+                : BuildingTemplates.get(message.template()).map(BuildingTemplate::name).orElse(Component.literal(message.template()));
+        return KingdomActions.Feedback.ok("kingdomworld.commission.ordered", what);
+    }
+
+    /**
+     * Whether a building could be ordered at a point of the map by the data alone: the answer is drawn on the atlas at once,
+     * what stands there is looked at when the order is worked on.
+     */
+    public static void checkCommission(ServerPlayer player, ConstructionPackets.Commission message) {
+        String dimension = player.serverLevel().dimension().location().toString();
+        Component problem = RemoteWorks.checkPoint(player.server, player.getUUID(), message.kingdomId(), message.template(), dimension, message.x(),
+                message.z(), message.rotation());
+        KingdomWorldNetwork.sendToPlayer(player, new ConstructionPackets.CheckResult(message.template(), new BlockPos(message.x(), 0, message.z()),
+                message.rotation(), false, problem == null, problem == null ? Component.translatable("kingdomworld.commission.check_ok") : problem,
+                List.of()));
+    }
+
+    /**
+     * An order from afar given up.
+     */
+    public static void cancelCommission(ServerPlayer player, ConstructionPackets.CommissionCancel message) {
+        Outcome outcome = RemoteWorks.cancel(player.server, player.getUUID(), message.kingdomId(), message.commission());
+        KingdomActions.Feedback feedback = outcome.ok() ? KingdomActions.Feedback.ok("kingdomworld.commission.cancelled")
+                : KingdomActions.Feedback.error(outcome.error());
+        KingdomWorldNetwork.sendToPlayer(player, new ActionResultPacket(feedback.success(), feedback.message()));
+        sendView(player, message.kingdomId());
+    }
+
     // ---------------------------------------------------------------- the blueprint
 
     /**
@@ -411,6 +479,10 @@ public final class ConstructionActions {
 
     static KingdomActions.Feedback blueprint(ServerPlayer player, UUID kingdomId, String templateId,
                                              io.github.sekerator.kingdomworld.core.construction.Materials materials) {
+        if (materials.kingdomStyle()) {
+            // The style of the kingdom where the player stands now: the blueprint names its wood, stone and look.
+            materials = KingdomLooks.materials(player.server, kingdomId, templateId, player.blockPosition());
+        }
         if (!TemplateMaterials.known(materials)) {
             return KingdomActions.Feedback.fail(KEY + "unknown_material");
         }

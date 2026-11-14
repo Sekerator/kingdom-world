@@ -17,9 +17,10 @@ import java.util.UUID;
  * sub-orders under them, how far each is, and what is missing.
  *
  * @param canManage whether the viewer may give, change and cancel orders
- * @param maxOrders orders of the king the kingdom may have
+ * @param maxOrders  orders of the king the kingdom may have
+ * @param kingOrders orders of the king the limit counts: those of the constructions for what they lack do not
  */
-public record OrdersView(UUID kingdomId, boolean canManage, int maxOrders, List<Entry> orders) {
+public record OrdersView(UUID kingdomId, boolean canManage, int maxOrders, List<Entry> orders, int kingOrders) {
     public static final int MAX_ENTRIES = 256;
     public static final int MAX_MISSING = 8;
     /** Deepest a sub-order is shown. */
@@ -64,6 +65,10 @@ public record OrdersView(UUID kingdomId, boolean canManage, int maxOrders, List<
         }
     }
 
+    public OrdersView(UUID kingdomId, boolean canManage, int maxOrders, List<Entry> orders) {
+        this(kingdomId, canManage, maxOrders, orders, (int) orders.stream().filter(entry -> !entry.isSubOrder()).count());
+    }
+
     public OrdersView {
         Objects.requireNonNull(kingdomId, "kingdomId");
         orders = List.copyOf(orders);
@@ -89,6 +94,7 @@ public record OrdersView(UUID kingdomId, boolean canManage, int maxOrders, List<
         buf.writeUUID(kingdomId);
         buf.writeBoolean(canManage);
         buf.writeVarInt(maxOrders);
+        buf.writeVarInt(kingOrders);
         buf.writeVarInt(orders.size());
         for (Entry entry : orders) {
             buf.writeVarLong(entry.id());
@@ -115,6 +121,7 @@ public record OrdersView(UUID kingdomId, boolean canManage, int maxOrders, List<
         UUID kingdomId = buf.readUUID();
         boolean canManage = buf.readBoolean();
         int maxOrders = buf.readVarInt();
+        int kingOrders = buf.readVarInt();
         int size = KingdomView.readSize(buf, MAX_ENTRIES);
         List<Entry> orders = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
@@ -138,7 +145,7 @@ public record OrdersView(UUID kingdomId, boolean canManage, int maxOrders, List<
             orders.add(new Entry(id, depth, sample, kind, amount, progress, priority, paused, status, missing,
                     buf.readUtf(Profession.MAX_ID_LENGTH), buf.readUtf(Profession.MAX_ID_LENGTH)));
         }
-        return new OrdersView(kingdomId, canManage, maxOrders, orders);
+        return new OrdersView(kingdomId, canManage, maxOrders, orders, kingOrders);
     }
 
     /**

@@ -47,7 +47,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * at are remembered until a restart. Which template a ruler builds follows from the role it wants: every template of the role
  * may come up, by turns, so that the houses a ruler adds differ like those the kingdom appeared with.
  */
-final class RulerPlaces {
+public final class RulerPlaces {
     private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
     /** Blocks a plot beyond the wall keeps from fields, roads and the wall. */
     private static final int KEEP_CLEAR = 3;
@@ -142,14 +142,7 @@ final class RulerPlaces {
      * Materials the game knows: a wood, a stone or a look it does not know is left out, the rest kept.
      */
     private static Materials known(Materials wanted) {
-        if (TemplateMaterials.known(wanted)) {
-            return wanted;
-        }
-        io.github.sekerator.kingdomworld.core.construction.MaterialTable table = TemplateMaterials.table();
-        String wood = wanted.wood().isEmpty() || Materials.AUTO.equals(wanted.wood()) || table.hasWood(wanted.wood()) ? wanted.wood() : "";
-        String stone = wanted.stone().isEmpty() || table.hasStone(wanted.stone()) ? wanted.stone() : "";
-        String look = table.knows(wanted.appearance()) ? wanted.look() : "";
-        return new Materials(wood, stone, look);
+        return io.github.sekerator.kingdomworld.common.construction.KingdomLooks.known(wanted);
     }
 
     static void unfit(UUID kingdomId, BlockPos anchor) {
@@ -179,7 +172,7 @@ final class RulerPlaces {
      *
      * @param style the style of the kingdom ({@link #style(MinecraftServer, UUID)})
      */
-    static Optional<BuildingTemplate> template(String role, String style) {
+    public static Optional<BuildingTemplate> template(String role, String style) {
         return BuildingTemplates.all().stream().filter(t -> role.equals(t.role()) && usable(t, style))
                 .min(Comparator.comparingInt(BuildingTemplate::level).thenComparing(t -> t.id().toString()));
     }
@@ -189,7 +182,7 @@ final class RulerPlaces {
      *
      * @param style the style of the kingdom ({@link #style(MinecraftServer, UUID)})
      */
-    static List<BuildingTemplate> templates(String role, String style) {
+    public static List<BuildingTemplate> templates(String role, String style) {
         List<BuildingTemplate> list = new ArrayList<>();
         BuildingTemplates.all().stream().filter(t -> role.equals(t.role()) && t.level() <= 1 && usable(t, style))
                 .sorted(Comparator.comparing(t -> t.id().toString())).forEach(list::add);
@@ -407,13 +400,7 @@ final class RulerPlaces {
     }
 
     private static List<int[]> roadCells(MinecraftServer server, UUID id) {
-        List<int[]> cells = new ArrayList<>();
-        for (Road road : RoadWork.state(server).roadsOf(id)) {
-            for (RouteCell cell : road.cells()) {
-                cells.add(new int[]{cell.x(), cell.z()});
-            }
-        }
-        return cells;
+        return io.github.sekerator.kingdomworld.common.road.RoadFootprint.roads(server, id);
     }
 
     /**

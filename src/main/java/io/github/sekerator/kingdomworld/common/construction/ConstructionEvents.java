@@ -39,6 +39,7 @@ public final class ConstructionEvents {
         }
         long tick = event.getServer().getTickCount();
         SiteLoader.tick(event.getServer());
+        RemoteWorks.tick(event.getServer());
         if (tick % 20 == 0) {
             ConstructionSettings.refresh();
             ConstructionWork.tick(event.getServer(), tick);
@@ -50,6 +51,7 @@ public final class ConstructionEvents {
      */
     public static void reset() {
         SiteLoader.reset();
+        RemoteWorks.reset();
         ConstructionWork.reset();
         ConstructionSettings.reset();
     }

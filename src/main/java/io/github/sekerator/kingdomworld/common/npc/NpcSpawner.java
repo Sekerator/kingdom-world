@@ -1227,10 +1227,7 @@ public final class NpcSpawner {
      * Where to lay a template so that its footprint is centred on a point.
      */
     static BlockPos anchor(BuildingTemplate template, int centerX, int y, int centerZ, Placement placement) {
-        Box box = template.box(BlockPos.ZERO, placement);
-        int midX = Math.floorDiv(box.minX() + box.maxX(), 2);
-        int midZ = Math.floorDiv(box.minZ() + box.maxZ(), 2);
-        return new BlockPos(centerX - midX, y, centerZ - midZ);
+        return io.github.sekerator.kingdomworld.common.construction.ConstructionWork.anchorAt(template, centerX, y, centerZ, placement);
     }
 
     /**

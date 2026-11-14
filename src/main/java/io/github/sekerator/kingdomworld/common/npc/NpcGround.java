@@ -56,30 +56,17 @@ final class NpcGround {
     }
 
     /**
-     * The height of the solid ground of a column: below trees, plants, snow and water.
+     * See {@link io.github.sekerator.kingdomworld.common.construction.NaturalGround#groundAt}.
      */
     static int groundAt(ServerLevel level, int x, int z) {
-        int y = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z) - 1;
-        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, y, z);
-        while (y > level.getMinBuildHeight()) {
-            pos.setY(y);
-            BlockState state = level.getBlockState(pos);
-            if (!soft(state)) {
-                break;
-            }
-            y--;
-        }
-        return y;
+        return io.github.sekerator.kingdomworld.common.construction.NaturalGround.groundAt(level, x, z);
     }
 
     /**
-     * Whether a block is not ground: air, a plant, leaves, a log, snow or a liquid.
+     * See {@link io.github.sekerator.kingdomworld.common.construction.NaturalGround#soft}.
      */
     static boolean soft(BlockState state) {
-        return state.isAir() || state.canBeReplaced() || !state.getFluidState().isEmpty() || state.is(BlockTags.LEAVES)
-                || Trees.isLog(state) || state.is(BlockTags.SAPLINGS) || state.is(BlockTags.FLOWERS) || state.is(Blocks.BAMBOO)
-                || state.is(Blocks.CACTUS) || state.is(Blocks.SUGAR_CANE) || state.is(BlockTags.SNOW)
-                || state.is(Blocks.BROWN_MUSHROOM_BLOCK) || state.is(Blocks.RED_MUSHROOM_BLOCK) || state.is(Blocks.MUSHROOM_STEM);
+        return io.github.sekerator.kingdomworld.common.construction.NaturalGround.soft(state);
     }
 
     /**

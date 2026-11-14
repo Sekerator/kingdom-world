@@ -435,6 +435,8 @@ public final class ConstructionWork {
      */
     public static final class Laying {
         private final ServerLevel level;
+        @Nullable
+        private final UUID actor;
         private final UUID kingdomId;
         private final BuildingTemplate base;
         private final BlockPos anchor;
@@ -449,7 +451,16 @@ public final class ConstructionWork {
 
         public Laying(ServerLevel level, UUID kingdomId, BuildingTemplate base, BlockPos anchor, Placement placement,
                       io.github.sekerator.kingdomworld.core.construction.Materials chosen) {
+            this(level, null, kingdomId, base, anchor, placement, chosen);
+        }
+
+        /**
+         * @param actor the player the construction is laid out for, whose rights count, or {@code null} for the server
+         */
+        public Laying(ServerLevel level, @Nullable UUID actor, UUID kingdomId, BuildingTemplate base, BlockPos anchor, Placement placement,
+                      io.github.sekerator.kingdomworld.core.construction.Materials chosen) {
             this.level = level;
+            this.actor = actor;
             this.kingdomId = kingdomId;
             this.base = base;
             this.anchor = anchor;
@@ -479,7 +490,7 @@ public final class ConstructionWork {
                     case 1 -> {
                         materials = TemplateMaterials.resolve(chosen, level, anchor);
                         template = TemplateMaterials.apply(base, materials);
-                        KingdomWorldState.ConstructionChange refused = refusal(level, null, kingdomId, template, anchor, placement);
+                        KingdomWorldState.ConstructionChange refused = refusal(level, actor, kingdomId, template, anchor, placement);
                         if (refused != null) {
                             return Optional.of(refused);
                         }
@@ -497,7 +508,7 @@ public final class ConstructionWork {
                         stage = 4;
                     }
                     default -> {
-                        return Optional.of(record(level, null, kingdomId, template, anchor, placement, materials, survey, plan));
+                        return Optional.of(record(level, actor, kingdomId, template, anchor, placement, materials, survey, plan));
                     }
                 }
             } while (System.nanoTime() - started < nanos);
@@ -1035,6 +1046,16 @@ public final class ConstructionWork {
     }
 
     /**
+     * Where to lay a template so that its footprint is centred on a point.
+     */
+    public static BlockPos anchorAt(BuildingTemplate template, int centerX, int y, int centerZ, Placement placement) {
+        Box box = template.box(BlockPos.ZERO, placement);
+        int midX = Math.floorDiv(box.minX() + box.maxX(), 2);
+        int midZ = Math.floorDiv(box.minZ() + box.maxZ(), 2);
+        return new BlockPos(centerX - midX, y, centerZ - midZ);
+    }
+
+    /**
      * Squared distance from a position to the nearest block of a box.
      */
     public static double distanceSqr(Box box, WorldPos pos) {
@@ -1364,7 +1385,8 @@ public final class ConstructionWork {
         }
         KingdomWorldState.Ordering ordering = state.order(null, construction.kingdomId(), item, Order.Kind.MAKE,
                 Math.max(1, Math.min(Order.MAX_AMOUNT, count)), Order.Priority.NORMAL, KingdomWorldApi.gameTime(server),
-                ProductionSettings.rules().maxOrders(), id -> Production.orderable(server, id));
+                // The orders of constructions are no orders of the king: his limit does not stop them.
+                Integer.MAX_VALUE, id -> Production.orderable(server, id));
         ordering.order().ifPresent(order -> {
             construction.putOrder(item, order.id());
             LOGGER.info("Construction {} ordered {} x {} from the workshops", construction.id(), order.amount(), item);

@@ -196,90 +196,23 @@ final class SettlementRenewal {
     }
 
     /**
-     * Whether a column is as the land grew it or as the kingdom laid it: at its street and under it only the ground (or the
-     * paving the kingdom laid there), over it only air, wild plants, snow and trees with their crowns. A block made by
-     * somebody, a field, a crop, water, a solid block over the street or a container anywhere and the column is taken.
-     *
-     * @param street the height of the street: the ground below it, the open air above it
-     * @param laid   the top the kingdom laid at the street there
-     * @param hall   a place to pass over (the town hall a residence stands round), or {@link Long#MIN_VALUE}
+     * See {@link io.github.sekerator.kingdomworld.common.construction.NaturalGround#column}.
      */
     static boolean column(ServerLevel level, BlockPos.MutableBlockPos pos, int x, int z, int street, int from, int to, BlockState laid,
                           long hall) {
-        boolean log = false;
-        boolean leaves = false;
-        for (int by = from; by <= to; by++) {
-            BlockState there = level.getBlockState(pos.set(x, by, z));
-            if (pos.asLong() == hall) {
-                continue;
-            }
-            if (!there.isAir() && (NpcGround.protectedAt(level, pos, there) || there.hasBlockEntity())) {
-                return false;
-            }
-            if (there.is(BlockTags.LOGS)) {
-                log = true;
-                continue;
-            }
-            if (there.is(BlockTags.LEAVES)) {
-                if (placedLeaves(there)) {
-                    // A hedge or a roof of leaves: no trunk of a tree holds them.
-                    return false;
-                }
-                leaves |= log;
-                continue;
-            }
-            boolean fits = by <= street ? ground(there) || by == street && there.equals(laid) : wild(there);
-            if (!fits) {
-                return false;
-            }
-        }
-        // A trunk is a tree when its crown is over it; logs with nothing over them were laid by somebody.
-        return !log || leaves;
+        return io.github.sekerator.kingdomworld.common.construction.NaturalGround.column(level, pos, x, z, street, from, to, laid, hall);
     }
 
-    /**
-     * Whether leaves were placed by somebody rather than grown on a tree: placed leaves never fall, and leaves more than six
-     * blocks from a trunk would have fallen unless placed.
-     */
     static boolean placedLeaves(BlockState state) {
-        return state.hasProperty(LeavesBlock.PERSISTENT) && state.getValue(LeavesBlock.PERSISTENT)
-                || state.hasProperty(LeavesBlock.DISTANCE) && state.getValue(LeavesBlock.DISTANCE) >= LeavesBlock.DECAY_DISTANCE;
+        return io.github.sekerator.kingdomworld.common.construction.NaturalGround.placedLeaves(state);
     }
 
-    /**
-     * Whether a block is the ground as it grew: earth, sand, gravel, stone and ore, sandstone, terracotta, clay, snow and ice,
-     * or a hollow in it. Farmland, paths, water and everything made are not.
-     */
     static boolean ground(BlockState state) {
-        if (state.isAir()) {
-            return true;
-        }
-        if (!state.getFluidState().isEmpty() || state.hasBlockEntity()) {
-            return false;
-        }
-        return state.is(BlockTags.DIRT) || state.is(BlockTags.SAND) || state.is(Blocks.GRAVEL) || state.is(BlockTags.BASE_STONE_OVERWORLD)
-                || state.is(Blocks.SANDSTONE) || state.is(Blocks.RED_SANDSTONE) || state.is(BlockTags.TERRACOTTA) || state.is(Blocks.CLAY)
-                || state.is(Blocks.SNOW_BLOCK) || state.is(Blocks.POWDER_SNOW) || state.is(BlockTags.ICE) || state.is(BlockTags.COAL_ORES)
-                || state.is(BlockTags.IRON_ORES) || state.is(BlockTags.COPPER_ORES) || state.is(BlockTags.GOLD_ORES)
-                || state.is(BlockTags.REDSTONE_ORES) || state.is(BlockTags.LAPIS_ORES) || state.is(BlockTags.DIAMOND_ORES)
-                || state.is(BlockTags.EMERALD_ORES);
+        return io.github.sekerator.kingdomworld.common.construction.NaturalGround.ground(state);
     }
 
-    /**
-     * Whether a block may stand over the street on ground a building takes: air, a wild plant (grass, a fern, a flower, a
-     * sapling, a mushroom, a bush), a vine or a layer of snow. A crop, sugar cane, a pumpkin, water and every solid block may be
-     * somebody's, and are not.
-     */
     static boolean wild(BlockState state) {
-        if (state.isAir() || state.is(Blocks.SNOW) || state.is(Blocks.VINE)) {
-            return true;
-        }
-        if (!state.getFluidState().isEmpty() || state.hasBlockEntity()) {
-            return false;
-        }
-        return state.is(BlockTags.FLOWERS) || state.is(BlockTags.SAPLINGS) || state.is(Blocks.GRASS) || state.is(Blocks.TALL_GRASS)
-                || state.is(Blocks.FERN) || state.is(Blocks.LARGE_FERN) || state.is(Blocks.DEAD_BUSH) || state.is(Blocks.BROWN_MUSHROOM)
-                || state.is(Blocks.RED_MUSHROOM);
+        return io.github.sekerator.kingdomworld.common.construction.NaturalGround.wild(state);
     }
 
     /**

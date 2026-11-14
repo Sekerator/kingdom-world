@@ -746,10 +746,34 @@ public final class KingdomWorldState {
         if (!orderable.test(item)) {
             return Ordering.failed(KingdomError.NOT_ORDERABLE);
         }
-        if (orders.count(kingdomId) >= maxOrders) {
+        if (kingOrders(kingdomId) >= maxOrders) {
             return Ordering.failed(KingdomError.TOO_MANY_ORDERS);
         }
         return new Ordering(Outcome.DONE, Optional.of(orders.add(kingdomId, item, kind, amount, priority, gameTime)));
+    }
+
+    /**
+     * The orders the king gave himself, those the limit of orders counts: the orders the constructions and the orders from afar
+     * give the workshops for what they lack do not count, so that many cities building at once never take the place of the
+     * orders of the king, nor stop getting what they lack.
+     */
+    public int kingOrders(UUID kingdomId) {
+        java.util.Set<Long> ofWork = new java.util.HashSet<>();
+        for (io.github.sekerator.kingdomworld.core.construction.Construction construction : this.construction.of(kingdomId)) {
+            ofWork.addAll(construction.orders().values());
+        }
+        for (io.github.sekerator.kingdomworld.core.construction.Commission commission : this.construction.commissionsOf(kingdomId)) {
+            if (commission.order() > 0) {
+                ofWork.add(commission.order());
+            }
+        }
+        int count = 0;
+        for (io.github.sekerator.kingdomworld.core.production.Order order : orders.mainOrdersOf(kingdomId)) {
+            if (!ofWork.contains(order.id())) {
+                count++;
+            }
+        }
+        return count;
     }
 
     /**

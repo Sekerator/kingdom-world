@@ -352,6 +352,10 @@ public final class KingdomWorldNetwork {
                 io.github.sekerator.kingdomworld.common.network.packet.FlagPackets.Directory::encode,
                 io.github.sekerator.kingdomworld.common.network.packet.FlagPackets.Directory::decode,
                 io.github.sekerator.kingdomworld.common.network.packet.FlagPackets.Directory::handle);
+        add(id++, ConstructionPackets.Commission.class, NetworkDirection.PLAY_TO_SERVER, ConstructionPackets.Commission::encode,
+                ConstructionPackets.Commission::decode, ConstructionPackets.Commission::handle);
+        add(id++, ConstructionPackets.CommissionCancel.class, NetworkDirection.PLAY_TO_SERVER, ConstructionPackets.CommissionCancel::encode,
+                ConstructionPackets.CommissionCancel::decode, ConstructionPackets.CommissionCancel::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

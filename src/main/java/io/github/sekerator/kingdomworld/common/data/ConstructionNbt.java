@@ -4,6 +4,7 @@ import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.construction.Box;
 import io.github.sekerator.kingdomworld.core.construction.Building;
 import io.github.sekerator.kingdomworld.core.construction.BuildingRoles;
+import io.github.sekerator.kingdomworld.core.construction.Commission;
 import io.github.sekerator.kingdomworld.core.construction.Construction;
 import io.github.sekerator.kingdomworld.core.construction.ConstructionBook;
 import io.github.sekerator.kingdomworld.core.construction.CustomBlueprint;
@@ -37,7 +38,9 @@ import java.util.Map;
  *   blueprints: [ { id, kingdom, name, category, role, size: [3 ints], palette: [state strings], blocks: [ints],
  *                   anchor: [3 ints], entrance, created, author } ],
  *   leftScaffolds?: [ { dimension, cells: [longs] } ],
- *   drops?: [ { dimension, x, y, z, item, count, kingdom, since } ]
+ *   drops?: [ { dimension, x, y, z, item, count, kingdom, since } ],
+ *   nextCommission?, commissions?: [ { id, kingdom, kind, template, wood, stone, look, city, dimension, x, z, rotation, priority,
+ *                                      actor?, origin, created, state, after, reason, name, withPost, retryAt, order } ]
  * }
  * </pre>
  *
@@ -97,7 +100,63 @@ public final class ConstructionNbt {
         if (!drops.isEmpty()) {
             tag.put("drops", drops);
         }
+        ListTag commissions = new ListTag();
+        for (Commission commission : book.commissions()) {
+            commissions.add(write(commission));
+        }
+        if (!commissions.isEmpty()) {
+            tag.put("commissions", commissions);
+        }
+        tag.putLong("nextCommission", book.nextCommissionId());
         return tag;
+    }
+
+    static CompoundTag write(Commission commission) {
+        CompoundTag tag = new CompoundTag();
+        tag.putLong("id", commission.id());
+        tag.putUUID("kingdom", commission.kingdomId());
+        tag.putString("kind", commission.kind().id());
+        tag.putString("template", commission.templateId());
+        tag.putString("wood", commission.materials().wood());
+        tag.putString("stone", commission.materials().stone());
+        tag.putString("look", commission.materials().look());
+        tag.putLong("city", commission.cityId());
+        tag.putString("dimension", commission.dimension());
+        tag.putInt("x", commission.x());
+        tag.putInt("z", commission.z());
+        tag.putInt("rotation", commission.rotation());
+        tag.putString("priority", commission.priority().id());
+        if (commission.actor() != null) {
+            tag.putUUID("actor", commission.actor());
+        }
+        tag.putString("origin", commission.origin().id());
+        tag.putLong("created", commission.created());
+        tag.putString("state", commission.state().id());
+        tag.putLong("after", commission.after());
+        tag.putString("reason", commission.reason());
+        tag.putString("name", commission.name());
+        tag.putBoolean("withPost", commission.withPost());
+        tag.putLong("retryAt", commission.retryAt());
+        tag.putLong("order", commission.order());
+        return tag;
+    }
+
+    /**
+     * An order from afar as saved, or {@code null} for one of a kind or state this version does not know: it is left out.
+     */
+    static Commission readCommission(CompoundTag tag) {
+        Commission.Kind kind = Commission.Kind.byId(tag.getString("kind"));
+        Commission.State state = Commission.State.byId(tag.getString("state"));
+        Commission.Origin origin = Commission.Origin.byId(tag.getString("origin"));
+        if (kind == null || state == null || origin == null || !tag.hasUUID("kingdom")) {
+            return null;
+        }
+        return new Commission(tag.getLong("id"), tag.getUUID("kingdom"), kind, tag.getString("template"),
+                new io.github.sekerator.kingdomworld.core.construction.Materials(tag.getString("wood"), tag.getString("stone"), tag.getString("look")),
+                tag.getLong("city"), tag.getString("dimension"), tag.getInt("x"), tag.getInt("z"), tag.getInt("rotation"),
+                Construction.Priority.byId(tag.getString("priority")), tag.hasUUID("actor") ? tag.getUUID("actor") : null, origin,
+                tag.getLong("created"), state, tag.getLong("after"), tag.getString("reason"), tag.getString("name"), tag.getBoolean("withPost"),
+                tag.getLong("retryAt"), tag.getLong("order"));
     }
 
     private static void writeItems(CompoundTag tag, String key, Map<String, Integer> items) {
@@ -351,6 +410,14 @@ public final class ConstructionNbt {
             CompoundTag entry = left.getCompound(i);
             book.restoreLeftScaffolds(entry.getString("dimension"), entry.getLongArray("cells"));
         }
+        ListTag commissions = tag.getList("commissions", Tag.TAG_COMPOUND);
+        for (int i = 0; i < commissions.size(); i++) {
+            Commission commission = readCommission(commissions.getCompound(i));
+            if (commission != null && state.kingdoms().get(commission.kingdomId()).isPresent()) {
+                book.restoreCommission(commission);
+            }
+        }
+        book.restoreCommissionCounter(tag.getLong("nextCommission"));
         ListTag drops = tag.getList("drops", Tag.TAG_COMPOUND);
         for (int i = 0; i < drops.size(); i++) {
             CompoundTag entry = drops.getCompound(i);

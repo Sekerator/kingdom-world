@@ -76,6 +76,21 @@ public record Placement(int rotation, boolean mirror) {
     /**
      * Where a direction of the template points after placing.
      */
+    /**
+     * The placement that turns the entrance of a template towards a direction given as a step, the larger of its two parts
+     * deciding: towards a town hall from a place beside it.
+     */
+    public static Placement toward(Facing entrance, int dx, int dz) {
+        Facing towards = Math.abs(dx) >= Math.abs(dz) ? dx >= 0 ? Facing.EAST : Facing.WEST : dz >= 0 ? Facing.SOUTH : Facing.NORTH;
+        for (int rotation = 0; rotation < 4; rotation++) {
+            Placement candidate = new Placement(rotation, false);
+            if (candidate.apply(entrance) == towards) {
+                return candidate;
+            }
+        }
+        return new Placement(0, false);
+    }
+
     public Facing apply(Facing facing) {
         Facing result = mirror && (facing == Facing.EAST || facing == Facing.WEST) ? facing.opposite() : facing;
         for (int i = 0; i < rotation; i++) {

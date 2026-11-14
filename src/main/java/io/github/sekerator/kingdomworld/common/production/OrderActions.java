@@ -65,7 +65,7 @@ public final class OrderActions {
             add(orders, kingdomId, order, 0, stock, entries, limit, new HashSet<>());
         }
         return Optional.of(new OrdersView(kingdomId, state.membership().hasPermission(viewer, kingdomId, Permission.MANAGE_PRODUCTION),
-                ProductionSettings.rules().maxOrders(), entries));
+                ProductionSettings.rules().maxOrders(), entries, state.kingOrders(kingdomId)));
     }
 
     private static void add(OrderBook orders, UUID kingdomId, Order order, int depth, Map<String, Long> stock, List<OrdersView.Entry> into,

@@ -265,6 +265,84 @@ public final class ConstructionPackets {
     }
 
     /**
+     * Client to server: order from the throne a building for a city ({@code build}), a building at a point of the map turned as
+     * asked ({@code at}) or a post of builders for a city ({@code post}); the server finds the place and lays it out. With
+     * {@code check} a building at a point is only checked against the data (the land, other constructions, buildings, roads and
+     * walls) and the answer comes as a {@link CheckResult}.
+     *
+     * @param kind     the id of a {@link io.github.sekerator.kingdomworld.core.construction.Commission.Kind}
+     * @param wood     a wood species, {@code auto}, {@code kingdom} for the style of the kingdom, or empty for the template's own
+     * @param cityId   the city, 0 for the capital
+     * @param priority the ordinal of the priority
+     */
+    public record Commission(UUID kingdomId, String kind, String template, String wood, String stone, long cityId, int x, int z, int rotation,
+                             int priority, boolean check) {
+        public static final int MAX_KIND = 16;
+
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUUID(kingdomId);
+            buf.writeUtf(kind, MAX_KIND);
+            buf.writeUtf(template, MAX_TEMPLATE);
+            buf.writeUtf(wood, io.github.sekerator.kingdomworld.core.construction.Materials.MAX_ID);
+            buf.writeUtf(stone, io.github.sekerator.kingdomworld.core.construction.Materials.MAX_ID);
+            buf.writeVarLong(cityId);
+            buf.writeVarInt(x);
+            buf.writeVarInt(z);
+            buf.writeVarInt(rotation);
+            buf.writeVarInt(priority);
+            buf.writeBoolean(check);
+        }
+
+        public static Commission decode(FriendlyByteBuf buf) {
+            return new Commission(buf.readUUID(), buf.readUtf(MAX_KIND), buf.readUtf(MAX_TEMPLATE),
+                    buf.readUtf(io.github.sekerator.kingdomworld.core.construction.Materials.MAX_ID),
+                    buf.readUtf(io.github.sekerator.kingdomworld.core.construction.Materials.MAX_ID), buf.readVarLong(), buf.readVarInt(),
+                    buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readBoolean());
+        }
+
+        public static void handle(Commission message, Supplier<NetworkEvent.Context> context) {
+            ServerPlayer sender = context.get().getSender();
+            RequestPolicy policy = message.check() ? Place.CHECK : Place.LAY;
+            if (ServerRequestGuard.admit(sender, policy)
+                    && ServerRequestGuard.requireLength(sender, policy, "kind", message.kind(), MAX_KIND)
+                    && ServerRequestGuard.requireLength(sender, policy, "template", message.template(), MAX_TEMPLATE)
+                    && ServerRequestGuard.requireRange(sender, policy, "rotation", message.rotation(), 0, 3)
+                    && ServerRequestGuard.requireRange(sender, policy, "priority", message.priority(), 0, 16)
+                    && ServerRequestGuard.requireRange(sender, policy, "city", message.cityId(), 0, Long.MAX_VALUE)
+                    && ServerRequestGuard.requireRange(sender, policy, "x", message.x(), -30_000_000, 30_000_000)
+                    && ServerRequestGuard.requireRange(sender, policy, "z", message.z(), -30_000_000, 30_000_000)) {
+                if (message.check()) {
+                    ConstructionActions.checkCommission(sender, message);
+                } else {
+                    ConstructionActions.commission(sender, message);
+                }
+            }
+        }
+    }
+
+    /**
+     * Client to server: give up an order from afar.
+     */
+    public record CommissionCancel(UUID kingdomId, long commission) {
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUUID(kingdomId);
+            buf.writeVarLong(commission);
+        }
+
+        public static CommissionCancel decode(FriendlyByteBuf buf) {
+            return new CommissionCancel(buf.readUUID(), buf.readVarLong());
+        }
+
+        public static void handle(CommissionCancel message, Supplier<NetworkEvent.Context> context) {
+            ServerPlayer sender = context.get().getSender();
+            if (ServerRequestGuard.admit(sender, Change.POLICY)
+                    && ServerRequestGuard.requireRange(sender, Change.POLICY, "commission", message.commission(), 1, Long.MAX_VALUE)) {
+                ConstructionActions.cancelCommission(sender, message);
+            }
+        }
+    }
+
+    /**
      * Server to client: whether a template could be laid at a place, and if not, why and where.
      */
     public record CheckResult(String template, BlockPos pos, int rotation, boolean mirror, boolean ok, Component message,

@@ -15,6 +15,11 @@ public record Materials(String wood, String stone, String look) {
     public static final Materials NONE = new Materials("", "", "");
     /** The wood of the place, chosen by the biome when the construction is laid out. */
     public static final String AUTO = "auto";
+    /**
+     * For wood: the style of the kingdom (its wood, stone and look, as the rulers of the world build), decided when the
+     * construction is laid out; the stone is then ignored.
+     */
+    public static final String KINGDOM = "kingdom";
     /** Longest id of a wood or a stone. */
     public static final int MAX_ID = 128;
 
@@ -33,6 +38,13 @@ public record Materials(String wood, String stone, String look) {
 
     public Materials(String wood, String stone, Look look) {
         this(wood, stone, look.text());
+    }
+
+    /**
+     * Whether the style of the kingdom is asked for.
+     */
+    public boolean kingdomStyle() {
+        return KINGDOM.equals(wood);
     }
 
     public boolean none() {
