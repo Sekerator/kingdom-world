@@ -81,8 +81,9 @@ final class RoadLayoutCases {
                 squads.add(new RoadViews.SquadRow(MUCH - i, "#" + (MUCH - i), 32));
             }
         }
-        return new RoadViews.RoadTabView(kingdom, canManage, canManage, empty ? 0 : 999, 256, 1_024, cities, roads, crossings, camps, risks,
-                squads);
+        // A full view has no limits of cities and roads, as a server has by default; the empty one shows the longest limits.
+        return new RoadViews.RoadTabView(kingdom, canManage, canManage, empty ? 0 : 999, empty ? 100_000 : 0, empty ? 1_000_000 : 0, cities, roads,
+                crossings, camps, risks, squads);
     }
 
     private static ThroneScreen roadsTab(Function<Role, KingdomView> member, Role role, boolean canManage, boolean empty, String mode,

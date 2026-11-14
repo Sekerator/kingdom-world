@@ -202,7 +202,9 @@ public final class GuideSite {
     }
 
     private String number(GuideInline.Number number, String language) {
-        return GuideNumbersFormat.format(defaults.get(number.path()), number, language.equals("ru_ru"));
+        JsonObject lang = names.computeIfAbsent("kingdomworld/" + language, key -> lang("kingdomworld", language));
+        JsonElement noLimit = lang.get("kingdomworld.guide.no_limit");
+        return GuideNumbersFormat.format(defaults.get(number.path()), number, language.equals("ru_ru"), noLimit == null ? null : noLimit.getAsString());
     }
 
     /**

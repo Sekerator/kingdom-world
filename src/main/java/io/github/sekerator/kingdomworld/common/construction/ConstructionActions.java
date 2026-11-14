@@ -583,7 +583,7 @@ public final class ConstructionActions {
         if (state.construction().overlapping(dimension, box, -1).isPresent()) {
             return KingdomError.CONSTRUCTION_OVERLAPS;
         }
-        if (state.construction().count(kingdomId) >= ConstructionSettings.rules().maxConstructions()) {
+        if (ConstructionSettings.rules().full(state.construction().count(kingdomId))) {
             return KingdomError.TOO_MANY_CONSTRUCTIONS;
         }
         return null;

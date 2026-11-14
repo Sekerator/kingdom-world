@@ -111,7 +111,7 @@ public final class SettlementResidents {
         if (standing.isEmpty()) {
             return;
         }
-        boolean over = KingdomWorldApi.state(server).citizens().registry().size() > SettlementSettings.maxNamedCitizens();
+        boolean over = SettlementSettings.worldNamedCitizens(server) > SettlementSettings.maxNamedCitizens();
         if (over) {
             // Above the most of the world: the settlement nobody visited longest folds first.
             standing.sort(java.util.Comparator.comparingLong(Settlement::lastPlayerTick));
@@ -257,7 +257,8 @@ public final class SettlementResidents {
      */
     static int unfold(MinecraftServer server, Settlement settlement, int most, long deadline, boolean foldedOnly) {
         KingdomWorldState state = KingdomWorldApi.state(server);
-        if (state.citizens().registry().size() >= SettlementSettings.maxNamedCitizens()) {
+        // The most of the world bounds the kingdoms of the world: a settlement a kingdom of players won takes its people back.
+        if (NpcWork.isNpc(server, settlement.kingdomId()) && SettlementSettings.worldFull(server)) {
             return 0;
         }
         int target = Math.min(settlement.population(), settlement.housing());

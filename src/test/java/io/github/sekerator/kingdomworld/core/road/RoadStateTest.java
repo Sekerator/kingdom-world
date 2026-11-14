@@ -215,4 +215,76 @@ class RoadStateTest {
         legacy.restoreConsent(THEM + ">" + US + ">joint");
         assertTrue(legacy.consents().isEmpty());
     }
+
+    @Test
+    void withoutALimitAKingdomFoundsAsManyCitiesAsItHasRoomFor() {
+        RoadState state = new RoadState();
+        RoadRules rules = RoadRules.DEFAULT;
+        List<int[]> capitals = List.of(new int[]{0, 0});
+        for (int i = 1; i <= 120; i++) {
+            int x = i * rules.minCityDistance();
+            assertTrue(state.checkCity(US, WORLD, x, 0, capitals, rules).ok(), "city " + i);
+            state.addCity(US, "City " + i, WORLD, x, 64, 0, 0);
+        }
+        assertEquals(120, state.citiesOf(US).size());
+        assertTrue(state.checkCity(US, WORLD, 0, 5_000, capitals, rules).ok());
+        // A limit the server sets still holds.
+        RoadRules.Builder limited = new RoadRules.Builder();
+        limited.maxCities = 120;
+        assertEquals(KingdomError.TOO_MANY_CITIES, state.checkCity(US, WORLD, 0, 5_000, capitals, limited.build()).error());
+        assertTrue(state.checkCity(THEM, WORLD, 0, 5_000, capitals, limited.build()).ok());
+    }
+
+    @Test
+    void citiesKeepApartAlongXOrZSoThatTheSquaresOfLargeCitiesNeverMeet() {
+        RoadRules rules = RoadRules.DEFAULT;
+        int wall = CityLevel.CITY.wallRadius(rules);
+        assertEquals(48, wall);
+        assertEquals(112, rules.minCityDistance());
+        assertTrue(rules.minCityDistance() >= 2 * wall + 16, "16 blocks between the walls of two large cities");
+        RoadState state = new RoadState();
+        state.addCity(US, "Middle", WORLD, 0, 64, 0, 0);
+        List<int[]> capitals = List.of();
+        // Straight along an axis and on a slant alike: only as far apart as the squares need.
+        assertTrue(state.checkCity(THEM, WORLD, 112, 0, capitals, rules).ok());
+        assertTrue(state.checkCity(THEM, WORLD, 0, -112, capitals, rules).ok());
+        assertTrue(state.checkCity(THEM, WORLD, 112, 112, capitals, rules).ok());
+        assertTrue(state.checkCity(THEM, WORLD, 112, 80, capitals, rules).ok());
+        assertEquals(KingdomError.CITY_TOO_CLOSE, state.checkCity(THEM, WORLD, 111, 0, capitals, rules).error());
+        assertEquals(KingdomError.CITY_TOO_CLOSE, state.checkCity(THEM, WORLD, 80, 80, capitals, rules).error(),
+                "113 blocks along a straight line, but the squares of two large cities would meet");
+        for (int dx = -2 * wall; dx <= 2 * wall; dx += 8) {
+            for (int dz = -2 * wall; dz <= 2 * wall; dz += 8) {
+                assertTrue(rules.tooClose(dx, dz), "two large cities " + dx + " " + dz + " apart would share land");
+            }
+        }
+        // A capital counts the same way.
+        assertEquals(KingdomError.CITY_TOO_CLOSE, state.checkCity(US, WORLD, 500, 500 + 100, List.of(new int[]{500, 500}), rules).error());
+        assertTrue(state.checkCity(US, WORLD, 500, 500 + 112, List.of(new int[]{500, 500}), rules).ok());
+    }
+
+    @Test
+    void theCitiesOfOldWorldsStillStandFarEnough() {
+        // Cities founded before stand 160 blocks apart along a straight line: along x or z that is 113 blocks at least.
+        RoadRules rules = RoadRules.DEFAULT;
+        for (int angle = 0; angle < 360; angle += 5) {
+            double a = Math.toRadians(angle);
+            long dx = Math.round(160 * Math.cos(a));
+            long dz = Math.round(160 * Math.sin(a));
+            assertFalse(rules.tooClose(dx, dz), angle + " degrees");
+        }
+    }
+
+    @Test
+    void roadsHaveNoLimitByDefaultAndKingdomsOfTheWorldNoLimitOfCities() {
+        assertFalse(RoadRules.DEFAULT.roadsFull(1_000_000));
+        RoadRules.Builder limited = new RoadRules.Builder();
+        limited.maxRoads = 32;
+        assertTrue(limited.build().roadsFull(32));
+        assertFalse(limited.build().roadsFull(31));
+        RoadRules world = limited.build().forWorldKingdom(200);
+        assertEquals(0, world.maxCities());
+        assertEquals(200, world.maxRoads());
+        assertFalse(world.citiesFull(1_000));
+    }
 }

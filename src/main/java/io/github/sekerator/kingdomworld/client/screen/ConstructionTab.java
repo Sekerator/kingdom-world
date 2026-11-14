@@ -413,7 +413,8 @@ final class ConstructionTab {
         return switch (mode) {
             case CATALOG -> Component.translatable(KEY + "summary.catalog", templates().size());
             case OWN -> Component.translatable(KEY + "summary.own", templates().size(), view.maxBlueprints());
-            case SITES -> Component.translatable(KEY + "summary.sites", view.sites().size(), view.maxConstructions());
+            case SITES -> view.maxConstructions() > 0 ? Component.translatable(KEY + "summary.sites", view.sites().size(), view.maxConstructions())
+                    : Component.translatable(KEY + "summary.sites_all", view.sites().size());
             case BUILDINGS -> Component.translatable(KEY + "summary.buildings", view.buildings().size(), view.fortification());
         };
     }

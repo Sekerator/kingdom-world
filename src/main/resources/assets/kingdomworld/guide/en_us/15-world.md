@@ -372,10 +372,11 @@ back as themselves.
 
 ### Limits
 
-- Above {cfg:npcKingdoms.maxNamedCitizens} named citizens in the world, newcomers and returns wait, and the
-  settlements no player visited longest fold first.
-- The limit of {cfg:citizens.maxCitizensPerKingdom} citizens of a kingdom with settlements counts its capital only.
-  Settlements are bounded by their beds, and their free beds wait for their citizens.
+- Above {cfg:npcKingdoms.maxNamedCitizens} named citizens of the kingdoms of the world, their newcomers and returns
+  wait, and the settlements no player visited longest fold first. The citizens of kingdoms of players do not count
+  against it and never fold into numbers.
+- The limit of citizens of a kingdom ({cfg:citizens.maxCitizensPerKingdom}) counts the capital only for a kingdom with
+  settlements. Settlements are bounded by their beds, and their free beds wait for their citizens.
 - A settlement in the journal of conquests neither folds nor brings back citizens until it is the winner's. A
   settlement of a kingdom of players never folds its citizens, and those folded before come back.
 

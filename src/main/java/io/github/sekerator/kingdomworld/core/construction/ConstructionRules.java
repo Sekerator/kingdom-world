@@ -6,7 +6,8 @@ import java.util.function.Predicate;
 /**
  * The settings of construction and the formulas of the builders' work.
  *
- * @param maxConstructions constructions one kingdom may have at the same time
+ * @param maxConstructions constructions one kingdom may have at the same time; 0 (the default) is no limit, and the builders and
+ *                         the materials decide how many go on
  * @param builderRadius    how far from its post a builder takes constructions, in blocks
  * @param reach            how far a builder places blocks from where it stands, in blocks
  * @param farReach         how far it places when it cannot walk closer, in blocks
@@ -24,13 +25,20 @@ public record ConstructionRules(int maxConstructions, int builderRadius, double 
     /** Height above its feet from which placing a block counts as work at height. */
     public static final int HEIGHT = 4;
 
-    public static final ConstructionRules DEFAULT = new ConstructionRules(4, 64, 4.5, 12.0, 300, 40, 0.002, 48, 32, 48);
+    public static final ConstructionRules DEFAULT = new ConstructionRules(0, 64, 4.5, 12.0, 300, 40, 0.002, 48, 32, 48);
 
     public ConstructionRules {
-        if (maxConstructions < 1 || builderRadius < 1 || !(reach >= 1.0) || !(farReach >= reach) || giveUpTicks < 20 || ticksPerBlock < 1
+        if (maxConstructions < 0 || builderRadius < 1 || !(reach >= 1.0) || !(farReach >= reach) || giveUpTicks < 20 || ticksPerBlock < 1
                 || !(fallChance >= 0.0 && fallChance <= 1.0) || maxWidth < 1 || maxHeight < 1 || maxLength < 1) {
             throw new IllegalArgumentException("Construction rules out of range");
         }
+    }
+
+    /**
+     * Whether a kingdom with so many constructions may lay out no other; never without a limit.
+     */
+    public boolean full(int constructions) {
+        return io.github.sekerator.kingdomworld.core.Limits.reached(constructions, maxConstructions);
     }
 
     /**

@@ -2,6 +2,19 @@
 
 ## Русский
 
+### 1.5.2
+
+Королевство игроков больше не упирается в пределы сервера: сколько у него жителей, городов, дорог и строек, решают кровати, еда, строители, материалы и деньги. Города могут стоять ближе друг к другу. Сетевой протокол прежний (55): клиент и сервер должны быть версии 1.5.2. Сохранения читаются как есть.
+
+- **Без предела жителей.** `maxCitizensPerKingdom` в `[citizens]` теперь по умолчанию 0, и 0 значит «без предела»: новосёл приходит, пока есть свободная кровать, еда на складах и прошло время с прошлого прихода. Освобождённый раб поселяется так же.
+- **Без предела городов и дорог.** `maxCities` и `maxRoads` в `[roads]` по умолчанию 0, без предела. Во вкладке «Дороги» окна трона тогда пишется просто «Городов: N» и «Своих дорог: N», без «из 6» и «из 32». У королевств мира как раньше: их города задаёт план, дорог до `npcMaxRoads`.
+- **Без предела строек.** `maxConstructionsPerKingdom` в `[construction]` по умолчанию 0, без предела: сколько строек идёт на деле, решают строители и материалы. Во вкладке «Стройка» тогда «Строек: N». Правители мира по-прежнему ведут не больше двух строек сразу.
+- **Старые конфиги.** Конфиг сервера, где стоят прежние значения по умолчанию, читается по-новому без правки файла: 200 жителей, 6 городов, 32 дороги и 4 стройки считаются как 0 (без предела), 160 блоков между городами как 112. Любое другое число, записанное в конфиге, действует как записано; чтобы оставить предел почти прежним, впишите соседнее число (199, 5, 31, 3). Справочник показывает пределы, с которыми сервер работает на деле, и вместо 0 пишет «без предела».
+- **Города ближе.** `minCityDistance` по умолчанию 112 блоков вместо 160 и считается вдоль x или z, а не по прямой: области и стены городов квадратные, и так между стенами двух больших городов (стена в 48 блоках от середины) всегда остаётся 16 блоков земли, а их области для закона и стражи не накладываются. Города старых миров стоят не ближе 160 блоков по прямой, то есть не ближе 113 вдоль x или z, и остаются в силе. Планы королевств мира раскладывают свои города, как раньше, не ближе 160 блоков.
+- **Жители игроков не упираются в предел мира.** `maxNamedCitizens` (5000) теперь считает только жителей королевств мира: сверх него ждут их новосёлы и возвращения, а их дальние поселения сворачиваются в числа. Жители королевств игроков в этот предел не входят, не сворачиваются, и рост их королевств он не останавливает.
+- **Нагрузка от жителей.** Если шаг жителей перестаёт укладываться в свой бюджет (шаг королевства подошёл, а прошлый ещё идёт), сервер раз в 10 минут пишет предупреждение в лог, а операторам в сети раз в полчаса приходит строка в чат. `/kingdomworld admin perf report` второй строкой показывает именных жителей (всего, у игроков и у королевств мира), среднюю цену шага жителя и опоздавшие за минуту шаги.
+- Справочник (главы «Земля», «Жители», «Стройка», «Города и дороги», «Мир») и README рассказывают об этом.
+
 ### 1.5.1
 
 Летопись называет, от чего умер житель; мастерские видят материалы на всех складах королевства; склады можно отвести профессиям, а предел в 64 блока до склада заменила граница города; клик по жителю открывает его пост; на табличке поста работы видна его профессия. Сетевой протокол 55: клиент и сервер должны быть версии 1.5.1. Сохранения читаются как есть: старые записи летописи остаются без вида существа и рода урона.
@@ -174,6 +187,19 @@
 - **Нагрузка и баланс.** Замер нагрузки `admin perf`, тяжёлые места разнесены по тикам, жалование всех профессий по умолчанию.
 
 ## English
+
+### 1.5.2
+
+A kingdom of players no longer runs into the limits of the server: its beds, its food, its builders, its materials and its money decide how many citizens, cities, roads and constructions it has. Cities may stand closer to each other. The network protocol stays (55): client and server must both run 1.5.2. Saves load as they are.
+
+- **No limit of citizens.** `maxCitizensPerKingdom` in `[citizens]` is 0 by default now, and 0 means no limit: a newcomer comes while there is a free bed, food in the storehouses and the time since the last arrival has passed. A freed slave settles the same way.
+- **No limit of cities and roads.** `maxCities` and `maxRoads` in `[roads]` are 0 by default, no limit. The Roads tab of the throne screen then says just "Cities: N" and "Own roads: N", without "of 6" and "of 32". Kingdoms of the world stay as they were: their plan sets their cities, their roads go up to `npcMaxRoads`.
+- **No limit of constructions.** `maxConstructionsPerKingdom` in `[construction]` is 0 by default, no limit: the builders and the materials decide how many constructions go on. The Construction tab then says "Constructions: N". Rulers of the world still keep two constructions at a time at most.
+- **Older configurations.** A configuration of a server that holds the old defaults is read the new way without editing the file: 200 citizens, 6 cities, 32 roads and 4 constructions count as 0 (no limit), 160 blocks between cities as 112. Any other number written in the configuration works as written; to keep a limit close to the old one, write the next number (199, 5, 31, 3). The guide shows the limits the server really runs with and writes "no limit" instead of 0.
+- **Cities closer.** `minCityDistance` is 112 blocks by default instead of 160 and counts along x or z, not along a straight line: the areas and walls of cities are squares, so 16 blocks of land always stay between the walls of two large cities (a wall 48 blocks from the middle) and their areas for the law and the guards never overlap. The cities of older worlds stand at least 160 blocks apart along a straight line, that is at least 113 along x or z, and stay valid. The plans of the kingdoms of the world lay their towns out at least 160 blocks apart as before.
+- **The citizens of players do not run into the most of the world.** `maxNamedCitizens` (5000) counts only the citizens of kingdoms of the world now: above it their newcomers and returns wait and their distant settlements fold into numbers. The citizens of kingdoms of players do not count against it, never fold, and it never stops the growth of their kingdoms.
+- **The load of the citizens.** When the step of the citizens no longer fits its budget (the step of a kingdom comes due while the last one is still under way), the server writes a warning to its log every 10 minutes and the operators online get a line in the chat every half an hour. `/kingdomworld admin perf report` shows the named citizens (in all, of players and of the kingdoms of the world), the average cost of a citizen's step and the steps late in the last minute in a second line.
+- The guide (the chapters "Land", "Citizens", "Construction", "Cities and roads", "The world") and the README tell about it.
 
 ### 1.5.1
 

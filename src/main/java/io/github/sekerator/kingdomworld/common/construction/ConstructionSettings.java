@@ -106,7 +106,10 @@ public final class ConstructionSettings {
         KingdomWorldConfig.Server c = KingdomWorldConfig.SERVER;
         try {
             double reach = c.builderReach.get();
-            return new ConstructionRules(c.maxConstructionsPerKingdom.get(), c.builderRadius.get(), reach, Math.max(reach, c.builderFarReach.get()),
+            // The old default of a configuration written before (4) is read as no limit.
+            int most = io.github.sekerator.kingdomworld.core.Limits.effective(io.github.sekerator.kingdomworld.core.Limits.CONSTRUCTIONS,
+                    c.maxConstructionsPerKingdom.get());
+            return new ConstructionRules(most, c.builderRadius.get(), reach, Math.max(reach, c.builderFarReach.get()),
                     c.builderGiveUpSeconds.get() * 20, (int) Math.max(1, Math.round(c.builderSecondsPerBlock.get() * 20.0)),
                     c.builderFallChance.get(), c.templateMaxWidth.get(), c.templateMaxHeight.get(), c.templateMaxLength.get());
         } catch (IllegalStateException | IllegalArgumentException e) {

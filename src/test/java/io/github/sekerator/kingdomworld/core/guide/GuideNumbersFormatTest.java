@@ -51,4 +51,16 @@ class GuideNumbersFormatTest {
     private static String format(String raw, int index, char operator, double operand, boolean comma) {
         return GuideNumbersFormat.format(raw, number(index, operator, operand), comma);
     }
+
+    @Test
+    void aLimitOfZeroIsWrittenInWords() {
+        GuideInline.Number cities = new GuideInline.Number(io.github.sekerator.kingdomworld.core.Limits.CITIES, 0, (char) 0, 0);
+        assertEquals("без предела", GuideNumbersFormat.format("0", cities, true, "без предела"));
+        assertEquals("no limit", GuideNumbersFormat.format(" 0 ", cities, false, "no limit"));
+        assertEquals("6", GuideNumbersFormat.format("6", cities, false, "no limit"), "a limit the server sets is a number");
+        assertEquals("0", GuideNumbersFormat.format("0", cities, false), "without the words the number stays");
+        assertEquals("0", GuideNumbersFormat.format("0", number(0, (char) 0, 0), false, "no limit"), "a 0 that is no limit stays a number");
+        GuideInline.Number distance = new GuideInline.Number(io.github.sekerator.kingdomworld.core.Limits.CITY_DISTANCE, 0, (char) 0, 0);
+        assertEquals("0", GuideNumbersFormat.format("0", distance, false, "no limit"));
+    }
 }

@@ -30,7 +30,7 @@ New citizens are not bought or bred: they come to the throne by themselves. The 
 1. **A free bed** on the kingdom's land.
 2. **Food:** the storehouses feed everybody, the newcomer included, for {cfg:citizens.growthFoodDays} days (see [Food](food)).
 3. **Time:** {cfg:citizens.growthIntervalMinutes} min. have passed since the last arrival. That is at an average mood of 50; content citizens (100) shorten it to three quarters, miserable ones (0) make it up to twice as long.
-4. **The limit:** the kingdom has fewer than {cfg:citizens.maxCitizensPerKingdom} citizens. Besides, the whole world holds at most {cfg:npcKingdoms.maxNamedCitizens} named citizens.
+4. **The limit of the server** on the citizens of a kingdom: {cfg:citizens.maxCitizensPerKingdom}. There is none by default, and only the beds, the food and the time bound the growth. The most named citizens of the world ({cfg:npcKingdoms.maxNamedCitizens}) bounds only the kingdoms of the world, and kingdoms of players grow beyond it too.
 
 The newcomer appears at the throne, at once takes the nearest free bed (a house first) and comes **without work**: you give it a profession (see [Professions](professions)). The king and the members with the Citizens right are told "A new citizen, ..., has come to ...".
 

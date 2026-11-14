@@ -184,16 +184,13 @@ public final class RoadWork {
         RoadRules rules = RoadSettings.rules();
         City[] made = new City[1];
         Outcome outcome = change(server, "found the town of a settlement", roads -> {
-            double min = (double) rules.minCityDistance() * rules.minCityDistance();
             for (City city : roads.cities()) {
-                if (city.dimension().equals(dimension) && city.distanceSqr(pos.getX(), pos.getZ()) < min) {
+                if (city.dimension().equals(dimension) && rules.tooClose((long) city.x() - pos.getX(), (long) city.z() - pos.getZ())) {
                     return Outcome.fail(KingdomError.CITY_TOO_CLOSE);
                 }
             }
             for (int[] capital : capitals(server, dimension)) {
-                double dx = capital[0] - pos.getX();
-                double dz = capital[1] - pos.getZ();
-                if (dx * dx + dz * dz < min) {
+                if (rules.tooClose((long) capital[0] - pos.getX(), (long) capital[1] - pos.getZ())) {
                     return Outcome.fail(KingdomError.CITY_TOO_CLOSE);
                 }
             }

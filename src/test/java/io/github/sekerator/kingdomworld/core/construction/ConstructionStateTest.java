@@ -158,4 +158,22 @@ class ConstructionStateTest {
         assertTrue(state.construction().all().isEmpty());
         assertTrue(state.construction().buildings().isEmpty());
     }
+
+    @Test
+    void withoutALimitAKingdomLaysOutAsManyConstructionsAsItHasLandFor() {
+        KingdomWorldState state = new KingdomWorldState();
+        UUID king = UUID.randomUUID();
+        UUID kingdom = found(state, king, 0);
+        int laid = 0;
+        for (int x = -12; x <= 8; x += 4) {
+            for (int z = -12; z <= 8; z += 4) {
+                Box box = new Box(x, 64, z, x + 2, 66, z + 2);
+                assertTrue(state.layConstruction(king, kingdom, "test:house", 1L, new WorldPos(OVERWORLD, box.minX(), box.minY(), box.minZ()),
+                        Placement.NONE, box, List.of(), 10, 0, ConstructionRules.DEFAULT).outcome().ok(), x + " " + z);
+                laid++;
+            }
+        }
+        assertEquals(laid, state.construction().count(kingdom));
+        assertTrue(laid > 4, "more than the old limit of 4");
+    }
 }

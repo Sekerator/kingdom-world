@@ -78,6 +78,7 @@ public final class CitizenSimulation {
      */
     static void reset() {
         STEPS.clear();
+        CitizenLoad.reset();
     }
 
     /**
@@ -96,10 +97,17 @@ public final class CitizenSimulation {
         for (Kingdom kingdom : KingdomWorldApi.kingdoms(server)) {
             if (Math.floorMod(tick + kingdom.id().hashCode(), interval) == 0) {
                 UUID id = kingdom.id();
+                if (STEPS.running(id)) {
+                    // The last step of the kingdom is still under way a whole interval later: the steps do not fit the budget.
+                    CitizenLoad.late();
+                }
                 STEPS.due(id, () -> KingdomStep.begin(server, id));
             }
         }
-        STEPS.advance(CITIZENS_PER_TICK, NANOS_PER_TICK, System::nanoTime);
+        long start = System.nanoTime();
+        int done = STEPS.advance(CITIZENS_PER_TICK, NANOS_PER_TICK, System::nanoTime);
+        CitizenLoad.stepped(done, System.nanoTime() - start);
+        CitizenLoad.tick(server, tick);
     }
 
     /**
@@ -433,8 +441,10 @@ public final class CitizenSimulation {
             return;
         }
         CitizenRegistry registry = state.citizens().registry();
-        if (registry.size() >= io.github.sekerator.kingdomworld.common.npc.SettlementSettings.maxNamedCitizens()) {
-            // The world holds as many named citizens as it may: newcomers wait.
+        if (io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, kingdomId)
+                && io.github.sekerator.kingdomworld.common.npc.SettlementSettings.worldFull(server)) {
+            // The kingdoms of the world hold as many named citizens as they may: their newcomers wait. A kingdom of players grows
+            // while it has beds and food, however many citizens the world holds.
             return;
         }
         List<Citizen> people = registry.citizensOf(kingdomId);

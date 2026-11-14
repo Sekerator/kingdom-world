@@ -127,7 +127,8 @@ public final class LandRoadGameTests {
             RoadRules theirs = RoadSettings.rulesFor(server, state.id());
             helper.assertTrue(ours.maxRoads() == RoadSettings.rules().maxRoads() && ours.maxCities() == RoadSettings.rules().maxCities(),
                     "The limits of a kingdom of players changed");
-            helper.assertTrue(theirs.maxRoads() >= 200 && theirs.maxCities() >= 256, "A state keeps the limits of players: " + theirs.maxRoads());
+            helper.assertTrue(theirs.maxRoads() >= 200 && theirs.maxCities() == 0, "A state keeps the limits of players: " + theirs.maxRoads()
+                    + " roads, " + theirs.maxCities() + " cities");
             helper.succeed();
         } finally {
             forget(server, state);

@@ -13,13 +13,14 @@ package io.github.sekerator.kingdomworld.core.citizen;
  * @param dailyNutrition        food points a citizen eats per game day
  * @param infirmaryCapacity     wounded citizens one infirmary treats at the same time
  * @param woundedFraction       fraction of the maximum health below which a citizen is wounded
- * @param maxPerKingdom         newcomers stop arriving at this population
+ * @param maxPerKingdom         newcomers stop arriving at this population; 0 (the default) is no limit, and the beds, the
+ *                              food and the mood decide alone
  * @param farmRadius            horizontal reach of a farmer around the composter, in blocks
  */
 public record CitizenRules(int activationChunks, int maxActive, int simulationInterval, int growthFoodDays,
                            long growthIntervalTicks, boolean starvationCanKill, int dailyNutrition,
                            int infirmaryCapacity, float woundedFraction, int maxPerKingdom, int farmRadius) {
-    public static final CitizenRules DEFAULT = new CitizenRules(6, 300, 1200, 3, 10L * 1200L, false, 6, 4, 0.5f, 200, 8);
+    public static final CitizenRules DEFAULT = new CitizenRules(6, 300, 1200, 3, 10L * 1200L, false, 6, 4, 0.5f, 0, 8);
 
     public CitizenRules {
         if (activationChunks < 0 || maxActive < 0 || simulationInterval <= 0 || growthFoodDays < 0
@@ -30,5 +31,12 @@ public record CitizenRules(int activationChunks, int maxActive, int simulationIn
         if (!(woundedFraction > 0.0f && woundedFraction < 1.0f)) {
             throw new IllegalArgumentException("Wounded fraction must lie between 0 and 1: " + woundedFraction);
         }
+    }
+
+    /**
+     * Whether a kingdom of this population takes no newcomer for the limit of the server; never without a limit.
+     */
+    public boolean full(int population) {
+        return io.github.sekerator.kingdomworld.core.Limits.reached(population, maxPerKingdom);
     }
 }

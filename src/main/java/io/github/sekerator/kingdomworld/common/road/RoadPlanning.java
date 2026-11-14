@@ -418,7 +418,7 @@ public final class RoadPlanning {
         List<Crossing> sent = new ArrayList<>();
         long now = KingdomWorldApi.gameTime(server);
         Outcome outcome = RoadWork.change(server, "plan a road", roads -> {
-            if (roads.ownedRoads(kingdomId) >= rules.maxRoads()) {
+            if (rules.roadsFull(roads.ownedRoads(kingdomId))) {
                 return Outcome.fail(KingdomError.TOO_MANY_ROADS);
             }
             made[0] = roads.addRoad(kingdomId, roadClass, plan.dimension(), plan.from(), plan.to(), plan.cells(),

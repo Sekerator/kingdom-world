@@ -203,7 +203,7 @@ public final class CitizenNeeds {
      */
     public static GrowthCheck checkGrowth(int population, int eaters, int freeBeds, int freeHouseBeds, long nutrition, long ticksSinceArrival,
                                           int averageMood, CitizenRules rules) {
-        if (population >= rules.maxPerKingdom()) {
+        if (rules.full(population)) {
             return GrowthCheck.FULL;
         }
         if (freeBeds <= 0) {

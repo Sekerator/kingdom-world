@@ -33,8 +33,9 @@ views (left click forward, right click back):
 
 ### Constructions
 
-The top of the view says "Constructions: N of {cfg:construction.maxConstructionsPerKingdom}": a kingdom may not have
-more at the same time. Upgrades, repairs and demolitions of finished buildings count as constructions too. Click a
+The top of the view says "Constructions: N". The limit of constructions a kingdom has at the same time:
+{cfg:construction.maxConstructionsPerKingdom}; when the server sets one, the top says "Constructions: N of the limit". Without
+a limit the builders and the materials decide how many go on. Upgrades, repairs and demolitions of finished buildings count as constructions too. Click a
 construction to open its card: the place and how many builders are at work, "Built 45%: 120 of 260" (blocks), the state
 with the place of a problem, and the list of what is missing. The buttons of the card:
 

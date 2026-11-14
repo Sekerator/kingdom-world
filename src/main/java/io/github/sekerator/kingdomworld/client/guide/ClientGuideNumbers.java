@@ -79,6 +79,6 @@ public final class ClientGuideNumbers {
      * @param comma whether the language of the guide writes decimals with a comma
      */
     public static String text(GuideInline.Number number, boolean comma) {
-        return GuideNumbersFormat.format(raw(number.path()), number, comma);
+        return GuideNumbersFormat.format(raw(number.path()), number, comma, net.minecraft.client.resources.language.I18n.get("kingdomworld.guide.no_limit"));
     }
 }

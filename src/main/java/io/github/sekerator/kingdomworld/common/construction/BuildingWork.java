@@ -522,7 +522,7 @@ public final class BuildingWork {
         for (Building building : new ArrayList<>(state.construction().buildings())) {
             if (!building.autoRepair() || building.integrity() < 0 || building.integrity() >= rules.autoRepairBelow()
                     || building.damaged().isEmpty() || state.construction().forBuilding(building.id()).isPresent()
-                    || state.construction().count(building.kingdomId()) >= ConstructionSettings.rules().maxConstructions()) {
+                    || ConstructionSettings.rules().full(state.construction().count(building.kingdomId()))) {
                 continue;
             }
             KingdomWorldState.ConstructionChange change = orderRepair(server, null, building.kingdomId(), building.id());

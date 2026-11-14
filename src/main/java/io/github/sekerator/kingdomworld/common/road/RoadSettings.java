@@ -1,6 +1,7 @@
 package io.github.sekerator.kingdomworld.common.road;
 
 import io.github.sekerator.kingdomworld.common.config.KingdomWorldConfig;
+import io.github.sekerator.kingdomworld.core.Limits;
 import io.github.sekerator.kingdomworld.core.road.BanditRules;
 import io.github.sekerator.kingdomworld.core.road.RoadRules;
 
@@ -131,9 +132,10 @@ public final class RoadSettings {
         RoadRules.Builder b = new RoadRules.Builder();
         try {
             KingdomWorldConfig.Roads c = KingdomWorldConfig.SERVER.roads;
-            b.maxCities = c.maxCities.get();
-            b.minCityDistance = c.minCityDistance.get();
-            b.maxRoads = c.maxRoads.get();
+            // The old defaults of a configuration written before (6 cities, 32 roads, 160 blocks) are read as the new ones.
+            b.maxCities = Limits.effective(Limits.CITIES, c.maxCities.get());
+            b.minCityDistance = Limits.effective(Limits.CITY_DISTANCE, c.minCityDistance.get());
+            b.maxRoads = Limits.effective(Limits.ROADS, c.maxRoads.get());
             b.maxRouteLength = c.maxRouteLength.get();
             b.nodesPerTick = c.searchStepsPerTick.get();
             b.maxNodes = Math.max(c.maxSearchSteps.get(), b.nodesPerTick);

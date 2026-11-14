@@ -65,7 +65,7 @@ The land held already stays with the kingdom: nothing is taken away. The kingdom
 - The command /kingdom info writes the line "Chunks: X of Y" into the chat.
 - The message after every claim: "Chunk ... now belongs to ... (X of Y)".
 
-> A kingdom has {cfg:citizens.maxCitizensPerKingdom} citizens at most, so the limit from citizens is not endless either. If you need much more land at once, look for [a province for sale](buying_land).
+> The limit of citizens of a kingdom on the server: {cfg:citizens.maxCitizensPerKingdom}. Without one the land grows with the citizens, as many as the beds take and the storehouses feed. If you need much more land at once, look for [a province for sale](buying_land).
 
 ## claiming | Claiming and releasing land
 @icon minecraft:filled_map

@@ -44,7 +44,8 @@ public final class CitizenSettings {
                 config.simulationIntervalTicks.get(), config.growthFoodDays.get(),
                 config.growthIntervalMinutes.get() * 1_200L, config.starvationCanKill.get(), config.dailyNutrition.get(),
                 config.infirmaryCapacity.get(), config.woundedHealthPercent.get() / 100.0f,
-                config.maxCitizensPerKingdom.get(), config.farmRadius.get());
+                io.github.sekerator.kingdomworld.core.Limits.effective(io.github.sekerator.kingdomworld.core.Limits.CITIZENS,
+                        config.maxCitizensPerKingdom.get()), config.farmRadius.get());
     }
 
     /**

@@ -233,8 +233,9 @@ public final class KingdomWorldConfig {
                     .comment("Below this share of their health, in percent, citizens are wounded and seek the infirmary or home.")
                     .defineInRange("woundedHealthPercent", 50, 1, 99);
             maxCitizensPerKingdom = builder
-                    .comment("Newcomers stop arriving in a kingdom with this many citizens.")
-                    .defineInRange("maxCitizensPerKingdom", 200, 0, 10_000);
+                    .comment("Newcomers stop arriving in a kingdom with this many citizens; 0 is no limit, the beds, the food and the mood decide.",
+                            "The old default 200 is read as 0.")
+                    .defineInRange("maxCitizensPerKingdom", 0, 0, 10_000_000);
             farmRadius = builder
                     .comment("How far, in blocks, a farmer works around its composter.")
                     .defineInRange("farmRadius", 8, 1, 32);
@@ -492,8 +493,9 @@ public final class KingdomWorldConfig {
             guild = new Guild(builder);
             builder.comment("Construction: building templates, constructions and builders.").push("construction");
             maxConstructionsPerKingdom = builder
-                    .comment("Constructions one kingdom may have at the same time.")
-                    .defineInRange("maxConstructionsPerKingdom", 4, 1, 64);
+                    .comment("Constructions one kingdom may have at the same time; 0 is no limit, the builders and the materials decide.",
+                            "The old default 4 is read as 0.")
+                    .defineInRange("maxConstructionsPerKingdom", 0, 0, 100_000);
             earthworkMaxSize = builder
                     .comment("The widest and longest earthworks may be, in blocks.")
                     .defineInRange("earthworkMaxSize", 64, 8, 128);
@@ -1851,8 +1853,9 @@ public final class KingdomWorldConfig {
                             value -> value instanceof String tier && java.util.List.of("city", "town", "village", "hamlet").contains(tier));
             backgroundSettlementBlocks = builder.comment("Settlements are raised in the background only this close to a player online, in blocks.")
                     .defineInRange("backgroundSettlementBlocks", 2000, 0, 100_000);
-            maxNamedCitizens = builder.comment("Named citizens in the world at most: above it newcomers and the citizens of settlements wait, and",
-                            "the citizens of settlements nobody visited longest are folded into numbers first.")
+            maxNamedCitizens = builder.comment("Named citizens of the kingdoms of the world at most: above it their newcomers and the citizens of",
+                            "their settlements wait, and the citizens of settlements nobody visited longest are folded into numbers first. The",
+                            "citizens of kingdoms of players do not count: their kingdoms grow while they have beds and food.")
                     .defineInRange("maxNamedCitizens", 5000, 100, 100_000);
             settlerKeepDays = builder.comment("Game days the citizens of a settlement stay named after the last player was near it; then those",
                             "who hold nothing are folded into its numbers until a player comes again.")
@@ -1925,12 +1928,15 @@ public final class KingdomWorldConfig {
             io.github.sekerator.kingdomworld.core.road.BanditRules.Builder b = new io.github.sekerator.kingdomworld.core.road.BanditRules.Builder();
             builder.comment("Cities, roads between them, caravans on the roads and robbers.",
                     "Values given by class of road are in the order path, gravel, paved.").push("roads");
-            maxCities = builder.comment("Cities one kingdom founds at most with town halls, besides its capital.")
-                    .defineInRange("maxCities", r.maxCities, 0, 256);
-            minCityDistance = builder.comment("Blocks between two cities, or a city and a capital, at least.")
+            maxCities = builder.comment("Cities one kingdom founds at most with town halls, besides its capital; 0 is no limit.",
+                            "The old default 6 is read as 0.")
+                    .defineInRange("maxCities", r.maxCities, 0, 100_000);
+            minCityDistance = builder.comment("Blocks between two cities, or a city and a capital, at least, along x or z: 112 keeps 16 blocks",
+                            "between the walls of two large cities (a wall 48 blocks from the middle, 4 times wallRadius plus 16 in general).",
+                            "The old default 160 is read as 112.")
                     .defineInRange("minCityDistance", r.minCityDistance, 0, 10_000);
-            maxRoads = builder.comment("Roads one kingdom of players keeps at most; its cities are limited by maxCities and",
-                    "minCityDistance.").defineInRange("maxRoads", r.maxRoads, 0, 1_024);
+            maxRoads = builder.comment("Roads one kingdom of players keeps at most; 0 is no limit. The old default 32 is read as 0.")
+                    .defineInRange("maxRoads", r.maxRoads, 0, 1_000_000);
             npcMaxRoads = builder.comment("Roads one kingdom of the world keeps at most: the roads between the settlements of its plan;",
                     "its settlements are those of its plan, not limited by maxCities.").defineInRange("npcMaxRoads", 200, 0, 4_096);
             maxRouteLength = builder.comment("The longest road, in blocks along its way.")

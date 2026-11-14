@@ -35,7 +35,16 @@ class CitizenNeedsTest {
         assertEquals(CitizenNeeds.GrowthCheck.NOT_ENOUGH_FOOD, CitizenNeeds.checkGrowth(3, 1, enough - 1, interval, 50, RULES));
         assertEquals(CitizenNeeds.GrowthCheck.TOO_SOON, CitizenNeeds.checkGrowth(3, 1, enough, interval - 1, 50, RULES));
         assertEquals(CitizenNeeds.GrowthCheck.READY, CitizenNeeds.checkGrowth(0, 1, enough, Long.MAX_VALUE, 50, RULES));
-        assertEquals(CitizenNeeds.GrowthCheck.FULL, CitizenNeeds.checkGrowth(RULES.maxPerKingdom(), 5, enough * 100, interval, 50, RULES));
+        // No limit by default: a kingdom of 201 citizens, or of a hundred thousand, grows while it has a bed and food.
+        assertEquals(0, RULES.maxPerKingdom());
+        assertEquals(CitizenNeeds.GrowthCheck.READY, CitizenNeeds.checkGrowth(201, 5, enough * 1_000, interval, 50, RULES));
+        assertEquals(CitizenNeeds.GrowthCheck.READY, CitizenNeeds.checkGrowth(100_000, 5, enough * 100_000, interval, 50, RULES));
+        // A limit the server sets still holds.
+        CitizenRules limited = new CitizenRules(RULES.activationChunks(), RULES.maxActive(), RULES.simulationInterval(), RULES.growthFoodDays(),
+                RULES.growthIntervalTicks(), RULES.starvationCanKill(), RULES.dailyNutrition(), RULES.infirmaryCapacity(), RULES.woundedFraction(),
+                200, RULES.farmRadius());
+        assertEquals(CitizenNeeds.GrowthCheck.FULL, CitizenNeeds.checkGrowth(200, 5, enough * 100, interval, 50, limited));
+        assertEquals(CitizenNeeds.GrowthCheck.READY, CitizenNeeds.checkGrowth(199, 5, enough * 100, interval, 50, limited));
     }
 
     @Test

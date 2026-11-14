@@ -322,7 +322,7 @@ public final class PlannedRoads {
         Road[] made = new Road[1];
         List<Crossing> sent = new ArrayList<>();
         Outcome outcome = RoadWork.change(server, "lay a road of the plan", roads -> {
-            if (roads.ownedRoads(at.kingdomId()) >= rules.maxRoads()) {
+            if (rules.roadsFull(roads.ownedRoads(at.kingdomId()))) {
                 return Outcome.fail(KingdomError.TOO_MANY_ROADS);
             }
             made[0] = roads.addRoad(at.kingdomId(), planned.get().roadClass(), "minecraft:overworld", at.from(), at.to(), cells,

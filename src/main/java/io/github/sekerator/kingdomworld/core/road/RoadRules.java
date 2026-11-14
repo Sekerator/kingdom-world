@@ -3,9 +3,10 @@ package io.github.sekerator.kingdomworld.core.road;
 /**
  * Settings of cities and roads on a server.
  *
- * @param maxCities          cities one kingdom founds at most, besides its capital
- * @param minCityDistance    blocks between two cities (and a city and a capital) at least
- * @param maxRoads           roads one kingdom keeps at most
+ * @param maxCities          cities one kingdom founds at most, besides its capital; 0 (the default) is no limit
+ * @param minCityDistance    blocks between two cities (and a city and a capital) at least, along x or z: the squares of cities
+ *                           and their walls are squares
+ * @param maxRoads           roads one kingdom keeps at most; 0 (the default) is no limit
  * @param maxRouteLength     the longest road, in blocks along the way
  * @param nodesPerTick       steps of the search for a route the server makes in one tick
  * @param maxNodes           steps one search makes at most before it gives up
@@ -84,11 +85,33 @@ public record RoadRules(int maxCities, int minCityDistance, int maxRoads, int ma
     }
 
     /**
-     * The same rules for a kingdom of the world: its cities are those of its plan, without the limit of the cities of players,
-     * and it keeps up to so many roads.
+     * Whether a kingdom with so many cities, besides its capital, founds no other; never without a limit.
+     */
+    public boolean citiesFull(long cities) {
+        return io.github.sekerator.kingdomworld.core.Limits.reached(cities, maxCities);
+    }
+
+    /**
+     * Whether a kingdom with so many roads of its own lays out no other; never without a limit.
+     */
+    public boolean roadsFull(long roads) {
+        return io.github.sekerator.kingdomworld.core.Limits.reached(roads, maxRoads);
+    }
+
+    /**
+     * Whether a city this far from another city or a capital stands too close to it: less than {@link #minCityDistance} along x
+     * and along z, so that the squares of two cities, which are those of their walls, keep apart in every direction.
+     */
+    public boolean tooClose(long dx, long dz) {
+        return Math.max(Math.abs(dx), Math.abs(dz)) < minCityDistance;
+    }
+
+    /**
+     * The same rules for a kingdom of the world: its cities are those of its plan, without a limit of cities, and it keeps up
+     * to so many roads.
      */
     public RoadRules forWorldKingdom(int worldMaxRoads) {
-        return new RoadRules(Math.max(maxCities, 256), minCityDistance, Math.max(0, worldMaxRoads), maxRouteLength, nodesPerTick, maxNodes,
+        return new RoadRules(0, minCityDistance, Math.max(0, worldMaxRoads), maxRouteLength, nodesPerTick, maxNodes,
                 chunksPerTick, maxBridge, maxFill, slopeCost, bridgeCost, fillCost, foreignCost, secondsPerBlock, wearPerDay, repairShare,
                 caravanSpeed, playerSpeed, horseSpeed, speedOnRoads, crossingDays, autoRepair, repairBelow, rememberConsent, townPeople,
                 townBuildings, cityPeople, cityBuildings, wallRadius);
@@ -118,9 +141,9 @@ public record RoadRules(int maxCities, int minCityDistance, int maxRoads, int ma
      * Rules built step by step, from the defaults.
      */
     public static final class Builder {
-        public int maxCities = 6;
-        public int minCityDistance = 160;
-        public int maxRoads = 32;
+        public int maxCities = 0;
+        public int minCityDistance = io.github.sekerator.kingdomworld.core.Limits.CITY_DISTANCE_DEFAULT;
+        public int maxRoads = 0;
         public int maxRouteLength = 1_536;
         public int nodesPerTick = 3_000;
         public int maxNodes = 400_000;

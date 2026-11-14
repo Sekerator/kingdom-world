@@ -219,6 +219,10 @@ public final class PerfCommands {
         String slowTicks = String.format(Locale.ROOT, "%.2f", 100.0 * tickSlow / count);
         source.sendSuccess(() -> Component.translatable(ADMIN + "report", ticks, ms(tickSum / count), ms(tickWorst), slowTicks, ms(handlerSum / count),
                 ms(handlerWorst), handlerSlow, used, max, mod / 1024, all / (1024 * 1024)), false);
+        source.sendSuccess(() -> io.github.sekerator.kingdomworld.common.citizen.CitizenLoad.report(server), false);
+        if (io.github.sekerator.kingdomworld.common.citizen.CitizenLoad.lateLastMinute() > 0) {
+            source.sendFailure(Component.translatable(ADMIN + "citizens_late", io.github.sekerator.kingdomworld.common.citizen.CitizenLoad.lateLastMinute()));
+        }
         return 1;
     }
 

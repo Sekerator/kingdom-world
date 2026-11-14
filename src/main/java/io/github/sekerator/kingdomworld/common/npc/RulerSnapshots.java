@@ -343,7 +343,9 @@ final class RulerSnapshots {
                 BuildingTemplates.get(construction.templateId()).ifPresent(template -> view.planned.merge(template.role(), 1, Integer::sum));
             }
         }
-        view.maxConstructions = ConstructionSettings.rules().maxConstructions();
+        // Without a limit of the server the ruler keeps to its own most at a time.
+        int most = ConstructionSettings.rules().maxConstructions();
+        view.maxConstructions = most > 0 ? most : Integer.MAX_VALUE;
     }
 
     /**

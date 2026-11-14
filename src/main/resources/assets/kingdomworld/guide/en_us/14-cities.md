@@ -23,9 +23,11 @@ bricks at the bottom. Wool of any color will do.
 
 ### Limits
 
-- A kingdom of players founds at most {cfg:roads.maxCities} cities besides its capital.
+- The limit of cities of a kingdom of players, besides its capital: {cfg:roads.maxCities}. There is none by default:
+  as many cities as the land and the money allow.
 - A city stands at least {cfg:roads.minCityDistance} blocks from any other city or capital in its dimension,
-  those of other kingdoms included.
+  those of other kingdoms included, counted along x or z. The areas and walls of cities are squares, so the walls of two
+  large cities never meet: a strip of land stays between them.
 - Kingdoms of the world are not bound by these limits: the plan of the world sets their cities and settlements
   (see [Living settlements](settlements)).
 
@@ -208,8 +210,8 @@ and robbers lie in wait on roads less often.
 
 ### How many roads
 
-A kingdom of players keeps up to {cfg:roads.maxRoads} roads of its own, a kingdom of the world up to
-{cfg:roads.npcMaxRoads} (the roads between the settlements of its plan). How a road is built and mended and what
+The limit of roads of its own a kingdom of players keeps: {cfg:roads.maxRoads} (none by default). A kingdom of the world
+keeps up to {cfg:roads.npcMaxRoads} roads (the roads between the settlements of its plan). How a road is built and mended and what
 it gives: [Building and wear of roads](roads_building). A road across the land of others waits for their consent:
 [Roads across the land of others](roads_crossing).
 

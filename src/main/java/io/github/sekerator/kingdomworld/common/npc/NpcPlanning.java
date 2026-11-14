@@ -469,7 +469,7 @@ public final class NpcPlanning {
             }
         }
         int wanted = rules.towns(candidate.level());
-        int minCity = io.github.sekerator.kingdomworld.common.road.RoadSettings.rules().minCityDistance();
+        int minCity = townSpacing();
         // The columns of the next towns are asked off the tick at once.
         for (int i = judging.townIndex; i < Math.min(judging.townCandidates.size(), judging.townIndex + TOWNS_PER_TICK); i++) {
             int[] town = judging.townCandidates.get(i);
@@ -490,7 +490,7 @@ public final class NpcPlanning {
             List<int[]> chosen = suits ? List.of(town) : List.of();
             boolean apart = true;
             for (int[] other : judging.towns) {
-                apart &= Math.hypot(town[0] - other[0], town[1] - other[1]) >= Math.max(minCity, 112);
+                apart &= Math.hypot(town[0] - other[0], town[1] - other[1]) >= minCity;
             }
             if (!chosen.isEmpty() && apart) {
                 judging.towns.add(town);
@@ -859,5 +859,14 @@ public final class NpcPlanning {
         String id = biome.unwrapKey().map(key -> key.location().getPath()).orElse("");
         return !(id.contains("swamp") || id.contains("marsh") || id.contains("bog") || id.contains("ocean") || id.contains("river")
                 || id.contains("peak") || id.contains("mountain") || id.contains("volcan"));
+    }
+
+    /**
+     * Blocks between two towns of a plan of the world at least, along a straight line: 160, as the plans always had them, or
+     * the distance between cities of the server where that is larger. The cities of players may stand closer.
+     */
+    static int townSpacing() {
+        return Math.max(io.github.sekerator.kingdomworld.core.Limits.OLD_CITY_DISTANCE,
+                io.github.sekerator.kingdomworld.common.road.RoadSettings.rules().minCityDistance());
     }
 }

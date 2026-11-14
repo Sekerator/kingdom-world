@@ -1370,7 +1370,7 @@ public final class KingdomWorldState {
         if (construction.overlapping(dimension, box, -1, building).isPresent()) {
             return Outcome.fail(KingdomError.CONSTRUCTION_OVERLAPS);
         }
-        if (construction.count(kingdomId) >= rules.maxConstructions()) {
+        if (rules.full(construction.count(kingdomId))) {
             return Outcome.fail(KingdomError.TOO_MANY_CONSTRUCTIONS);
         }
         return Outcome.DONE;
@@ -1395,7 +1395,7 @@ public final class KingdomWorldState {
         if (construction.overlappingConstruction(dimension, box, -1).isPresent()) {
             return Outcome.fail(KingdomError.CONSTRUCTION_OVERLAPS);
         }
-        if (construction.count(kingdomId) >= rules.maxConstructions()) {
+        if (rules.full(construction.count(kingdomId))) {
             return Outcome.fail(KingdomError.TOO_MANY_CONSTRUCTIONS);
         }
         return Outcome.DONE;

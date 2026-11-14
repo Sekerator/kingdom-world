@@ -280,7 +280,7 @@ public final class CompanionActions {
             return KingdomActions.Feedback.error(check.error());
         }
         // A freed slave settles like any newcomer: within the population limit and with a free bed waiting.
-        if (world.citizens().registry().count(kingdom.get()) >= io.github.sekerator.kingdomworld.common.citizen.CitizenSettings.rules().maxPerKingdom()
+        if (io.github.sekerator.kingdomworld.common.citizen.CitizenSettings.rules().full(world.citizens().registry().count(kingdom.get()))
                 || io.github.sekerator.kingdomworld.common.construction.BuildingEffects.freeBeds(server, kingdom.get())[0] <= 0) {
             return KingdomActions.Feedback.fail(KEY + "no_room_to_settle");
         }

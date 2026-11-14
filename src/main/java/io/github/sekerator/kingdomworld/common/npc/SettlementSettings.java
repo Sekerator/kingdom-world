@@ -56,6 +56,31 @@ public final class SettlementSettings {
         }
     }
 
+    /**
+     * The named citizens of the kingdoms of the world, the ones {@link #maxNamedCitizens()} bounds: those of the kingdoms of
+     * players never count, their kingdoms grow while they have beds and food.
+     */
+    public static int worldNamedCitizens(net.minecraft.server.MinecraftServer server) {
+        io.github.sekerator.kingdomworld.core.citizen.CitizenRegistry registry =
+                io.github.sekerator.kingdomworld.common.api.KingdomWorldApi.state(server).citizens().registry();
+        int count = 0;
+        for (io.github.sekerator.kingdomworld.core.npc.NpcKingdom kingdom : NpcWork.state(server).kingdoms()) {
+            count += registry.count(kingdom.kingdomId());
+        }
+        return count;
+    }
+
+    /**
+     * Whether the kingdoms of the world hold as many named citizens as they may: their newcomers and the citizens of their
+     * settlements wait, and their settlements nobody visited longest fold first.
+     */
+    public static boolean worldFull(net.minecraft.server.MinecraftServer server) {
+        return worldNamedCitizens(server) >= maxNamedCitizens();
+    }
+
+    /**
+     * The named citizens of the kingdoms of the world at most; those of the kingdoms of players do not count.
+     */
     public static int maxNamedCitizens() {
         try {
             return KingdomWorldConfig.SERVER.npcKingdoms.maxNamedCitizens.get();

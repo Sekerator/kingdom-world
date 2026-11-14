@@ -182,24 +182,22 @@ public final class RoadState {
     }
 
     /**
-     * Whether a kingdom may found a city at a place: it has fewer than the most, and no other city or capital is near.
+     * Whether a kingdom may found a city at a place: it has fewer than the most, if the server sets one, and no other city or
+     * capital is near (along x or z, see {@link RoadRules#tooClose}).
      *
      * @param capitals the capitals of all kingdoms in the dimension, as x and z
      */
     public Outcome checkCity(UUID kingdomId, String dimension, int x, int z, Collection<int[]> capitals, RoadRules rules) {
-        if (citiesOf(kingdomId).size() >= rules.maxCities()) {
+        if (rules.citiesFull(citiesOf(kingdomId).size())) {
             return Outcome.fail(KingdomError.TOO_MANY_CITIES);
         }
-        double min = (double) rules.minCityDistance() * rules.minCityDistance();
         for (City city : cities.values()) {
-            if (city.dimension().equals(dimension) && city.distanceSqr(x, z) < min) {
+            if (city.dimension().equals(dimension) && rules.tooClose((long) city.x() - x, (long) city.z() - z)) {
                 return Outcome.fail(KingdomError.CITY_TOO_CLOSE);
             }
         }
         for (int[] capital : capitals) {
-            double dx = capital[0] - x;
-            double dz = capital[1] - z;
-            if (dx * dx + dz * dz < min) {
+            if (rules.tooClose((long) capital[0] - x, (long) capital[1] - z)) {
                 return Outcome.fail(KingdomError.CITY_TOO_CLOSE);
             }
         }

@@ -73,7 +73,9 @@ public final class GuideNumbers {
     }
 
     /**
-     * The value the running server has at {@code path}, or the default where the configuration of the server is not loaded.
+     * The value the running server has at {@code path}, or the default where the configuration of the server is not loaded. A
+     * limit is the one the server runs with: the old default of a configuration written before counts as none
+     * ({@link io.github.sekerator.kingdomworld.core.Limits#effective}).
      */
     public static Optional<String> current(String path) {
         return value(path).map(value -> {
@@ -82,7 +84,7 @@ public final class GuideNumbers {
             } catch (IllegalStateException e) {
                 return text(value.getDefault());
             }
-        });
+        }).map(text -> io.github.sekerator.kingdomworld.core.Limits.effectiveText(path, text));
     }
 
     /**

@@ -280,7 +280,7 @@ public final class NpcWork {
         List<int[]> chosen = new ArrayList<>();
         if (towns) {
             int wanted = NpcSettings.rules().towns(level);
-            int minCity = Math.max(64, io.github.sekerator.kingdomworld.common.road.RoadSettings.rules().minCityDistance());
+            int minCity = NpcPlanning.townSpacing();
             List<int[]> candidates = new ArrayList<>();
             for (int[] town : io.github.sekerator.kingdomworld.core.npc.SitePlanner.townCandidates(x, z, seed,
                     NpcCity.townDistance(level, NpcSite.LAYOUT_STYLED))) {
@@ -288,7 +288,7 @@ public final class NpcWork {
             }
             chosen = io.github.sekerator.kingdomworld.core.npc.SitePlanner.chooseTowns(candidates,
                     point -> !NpcPlanning.nearKingdom(server, point[0], point[1], 64)
-                            && NpcPlanning.suitable(server.overworld(), point[0], point[1], 28, false), wanted, Math.max(minCity, 112));
+                            && NpcPlanning.suitable(server.overworld(), point[0], point[1], 28, false), wanted, minCity);
         }
         return plantAt(server, x, z, level, chosen);
     }

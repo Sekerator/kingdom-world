@@ -22,8 +22,21 @@ public final class GuideNumbersFormat {
      * @param comma whether the language writes decimals with a comma
      */
     public static String format(String raw, GuideInline.Number number, boolean comma) {
+        return format(raw, number, comma, null);
+    }
+
+    /**
+     * The number a token of the text shows, a limit of 0 written as words.
+     *
+     * @param noLimit what a limit of 0 shows ("no limit" in the language of the guide), or null to show the number
+     */
+    public static String format(String raw, GuideInline.Number number, boolean comma, String noLimit) {
         if (raw == null) {
             return UNKNOWN;
+        }
+        if (noLimit != null && number.index() == 0 && number.operator() == 0 && io.github.sekerator.kingdomworld.core.Limits.isLimit(number.path())
+                && raw.strip().equals("0")) {
+            return noLimit;
         }
         String value = raw.strip();
         if (number.index() > 0) {
