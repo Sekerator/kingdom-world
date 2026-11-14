@@ -190,9 +190,20 @@ public final class RemoteBuildingGameTests {
      */
     static void claim(MinecraftServer server, Kingdom kingdom, int minX, int minZ, int maxX, int maxZ) {
         KingdomWorldState state = KingdomWorldApi.state(server);
+        String dimension = Dimensions.id(server.overworld());
         for (int cx = (minX - 1) >> 4; cx <= (maxX + 1) >> 4; cx++) {
             for (int cz = (minZ - 1) >> 4; cz <= (maxZ + 1) >> 4; cz++) {
-                state.territory().assign(kingdom.id(), io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(cx, cz));
+                long key = io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(cx, cz);
+                UUID owner = state.territory().claimOwner(dimension, key);
+                if (kingdom.id().equals(owner)) {
+                    // Claimed already for another place of the same test.
+                    continue;
+                }
+                if (owner != null) {
+                    // A kingdom a test that failed left on the far land, which the far places of these tests share.
+                    KingdomWorldApi.dissolveKingdom(server, owner);
+                }
+                state.territory().assign(kingdom.id(), key);
             }
         }
     }
@@ -389,6 +400,14 @@ public final class RemoteBuildingGameTests {
     }
 
     /**
+     * The city whose square holds a place, for messages: its id, or "none".
+     */
+    static String cityAt(MinecraftServer server, Kingdom kingdom, @org.jetbrains.annotations.Nullable WorldPos pos) {
+        return pos == null ? "none" : io.github.sekerator.kingdomworld.common.road.CityAreas.nearestAt(server, kingdom.id(), pos.dimension(), pos.x(),
+                pos.z()).map(area -> String.valueOf(area.cityId())).orElse("none");
+    }
+
+    /**
      * A city founded far away over a meadow, its town hall on the grass.
      */
     static long farCity(GameTestHelper helper, Kingdom kingdom, BlockPos hall, String name) {
@@ -503,10 +522,18 @@ public final class RemoteBuildingGameTests {
                 : io.github.sekerator.kingdomworld.core.kingdom.Outcome.fail(io.github.sekerator.kingdomworld.core.kingdom.KingdomError.UNCHANGED)).ok(),
                 "The citizen got no home in the capital");
         BlockPos hall = new BlockPos(helper.absolutePos(BlockPos.ZERO).getX() + FAR, HIGH + 1, helper.absolutePos(BlockPos.ZERO).getZ());
+        // A bed that stands on the meadow: a place of a bed without its block is forgotten when its chunk is looked at.
+        BlockPos bedHead = hall.offset(6, 0, 6);
         meadow(helper, kingdom, hall, 20, at -> {
+            net.minecraft.world.level.block.state.BlockState bed = Blocks.RED_BED.defaultBlockState()
+                    .setValue(net.minecraft.world.level.block.BedBlock.FACING, net.minecraft.core.Direction.NORTH);
+            at.setBlock(bedHead.south(), bed.setValue(net.minecraft.world.level.block.BedBlock.PART,
+                    net.minecraft.world.level.block.state.properties.BedPart.FOOT), 3);
+            at.setBlock(bedHead, bed.setValue(net.minecraft.world.level.block.BedBlock.PART,
+                    net.minecraft.world.level.block.state.properties.BedPart.HEAD), 3);
         });
         long city = farCity(helper, kingdom, hall, "Postville");
-        WorldPos farBed = new WorldPos(Dimensions.id(level), hall.getX() + 6, hall.getY(), hall.getZ() + 6);
+        WorldPos farBed = new WorldPos(Dimensions.id(level), bedHead.getX(), bedHead.getY(), bedHead.getZ());
         KingdomWorldApi.state(server).citizens().addSite(farBed, io.github.sekerator.kingdomworld.core.citizen.SiteKinds.BED, kingdom.id());
         helper.assertTrue(RemoteWorks.orderPost(server, null, kingdom.id(), city, Commission.Origin.KING).ok(), "The post was refused");
         UUID id = idle.id();
@@ -519,7 +546,12 @@ public final class RemoteBuildingGameTests {
                     .orElseThrow(() -> new GameTestAssertException("No post of builders by the far town hall"));
             helper.assertTrue(post.workers().contains(id), "The citizen without work was not hired for the far post");
             Citizen hired = state.citizens().get(id).orElseThrow();
-            helper.assertTrue(farBed.equals(hired.home()), "The citizen did not move to the bed of the city of its post: " + hired.home());
+            helper.assertTrue(farBed.equals(hired.home()), "The citizen did not move to the bed of the city of its post: " + hired.home()
+                    + ", post " + post.pos().coordinates() + " in city " + cityAt(server, kingdom, post.pos()) + ", home in city "
+                    + cityAt(server, kingdom, hired.home()) + ", far bed in city " + cityAt(server, kingdom, farBed) + " (city " + city
+                    + "), free " + state.citizens().sites().get(farBed).map(site -> site.isFree()).orElse(null) + ", usable "
+                    + BuildingEffects.bedUsable(server, kingdom.id(), farBed) + ", apart "
+                    + io.github.sekerator.kingdomworld.common.citizen.HomeFollowsPost.apart(server, hired));
             helper.assertTrue(state.citizens().sites().get(capitalBed).map(site -> site.isFree()).orElse(false),
                     "The bed in the capital was not left");
             helper.assertTrue(CitizenGameTests.count(store, ModRegistries.WORK_POST_ITEM.get()) == 0, "The work post was not taken from the storehouse");
