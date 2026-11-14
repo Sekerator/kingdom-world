@@ -62,6 +62,7 @@
 - **Исправлено: флаги стен и тронов.** Флаг стены или трона в чанке, подгруженном позже других, больше не пропадает на несколько секунд (а во время войны надолго): места флагов считаются заново, прежде чем флаг сочтут лишним. Снятый флаг не трогает соседние блоки и не подгружает соседний чанк у края загруженного мира.
 - **Исправлено: флаги распущенного королевства.** Флаги зданий распущенного королевства снимаются и там, где земля под ними чужая (здание, взятое в осаде на земле, которая осталась у проигравшего), а не показывают флаг хозяина земли.
 - **Исправлено: трон на старом месте.** Если старый трон убрали командой или другим модом, а король ставит перенесённый трон ровно на его место, этот трон больше не убирается вместе со «старым».
+- **Исправлено: работник без инструмента относит ношу.** Работник, у которого есть ноша, но нет нужного инструмента, сначала относит ношу на склад, а не держит её, пока не найдётся инструмент.
 
 ### 1.5.1
 
@@ -296,6 +297,7 @@ A kingdom of players no longer runs into the limits of the server: its beds, its
 - **Fixed: the flags of walls and thrones.** The flag of a wall or a throne in a chunk loaded after the others no longer goes for a few seconds (for long during a war): the places of the flags are worked out again before a flag is taken for one too many. A flag taken away no longer touches the blocks beside it nor loads the next chunk at the edge of the loaded world.
 - **Fixed: the flags of a dissolved kingdom.** The flags of the buildings of a dissolved kingdom are taken down also where the land under them is another's (a building taken in a siege on land the loser kept), instead of showing the flag of the owner of the land.
 - **Fixed: a throne on its old place.** When the old throne was taken away by a command or another mod and the king sets the moved throne up on that very place, this throne is no longer taken away as the old one.
+- **Fixed: a worker without a tool brings in what it carries.** A worker that carries something but has no tool for its work brings it to the storehouses first instead of keeping it until a tool turns up.
 
 ### 1.5.1
 

@@ -178,6 +178,10 @@ public abstract class PostWorkGoal extends Goal {
             case PREPARE -> {
                 if (prepare()) {
                     phase = Phase.WORK;
+                } else if (hasCarried()) {
+                    // No work without a tool, but what the worker carries goes in all the same rather than stay in its bag.
+                    phase = Phase.DELIVER;
+                    deliverTo = null;
                 } else {
                     finish(200);
                 }
