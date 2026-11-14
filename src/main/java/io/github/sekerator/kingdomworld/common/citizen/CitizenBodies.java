@@ -397,7 +397,9 @@ public final class CitizenBodies {
         // A removed body no longer counts as alive, so its health tells whether it died.
         if (body.getHealth() > 0.0f) {
             BlockPos pos = body.blockPosition();
-            citizen.get().setLastPos(new WorldPos(Dimensions.id(level), pos.getX(), pos.getY(), pos.getZ()));
+            // A body taken away to send its citizen back leaves the citizen where it was sent.
+            WorldPos relocation = body.relocation();
+            citizen.get().setLastPos(relocation != null ? relocation : new WorldPos(Dimensions.id(level), pos.getX(), pos.getY(), pos.getZ()));
             citizen.get().setHealth(body.getHealth(), CitizenSettings.rules().woundedFraction());
             body.storeGear(io.github.sekerator.kingdomworld.common.data.KingdomSavedData.get(server).gear());
         }

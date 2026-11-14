@@ -245,7 +245,9 @@ public final class Workforce {
         /** A soldier in the army. */
         SERVING,
         /** The work stands still; the window says why. */
-        STANDING;
+        STANDING,
+        /** Goes back home or to its post. */
+        RETURNING;
 
         public String id() {
             return name().toLowerCase(Locale.ROOT);

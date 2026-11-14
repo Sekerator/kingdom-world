@@ -4,7 +4,9 @@ import io.github.sekerator.kingdomworld.core.citizen.CitizenState;
 import io.github.sekerator.kingdomworld.core.citizen.Profession;
 import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
 import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
+import io.github.sekerator.kingdomworld.core.citizen.Whereabouts;
 import io.github.sekerator.kingdomworld.core.citizen.Workforce;
+import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.netty.handler.codec.DecoderException;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -67,6 +69,64 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
     }
 
     /**
+     * Which citizens the list shows and in what order: all of them as usual, the nearest to the player first, or only those gone
+     * far from their home or post, the nearest first.
+     */
+    public enum Where {
+        ALL,
+        NEAREST,
+        AWAY;
+
+        public String id() {
+            return name().toLowerCase(Locale.ROOT);
+        }
+    }
+
+    /**
+     * Where a citizen is now.
+     *
+     * @param dimension the world it is in
+     * @param pos       the place of its body, or the last place the data knows when it has none
+     * @param live      whether it has a body there now; otherwise it lives far from players and that is the last place known
+     * @param place     the key of the settlement or city it is in, empty outside them
+     * @param away      whether it went far from its home or post
+     * @param hold      what keeps it from being sent back, {@link Whereabouts.Hold#NONE} if nothing does
+     * @param distance  from the player when the page was made, in blocks, {@link #FAR} in another world
+     */
+    public record Spot(String dimension, BlockPos pos, boolean live, String place, Whereabouts.Away away, Whereabouts.Hold hold,
+                       int distance) {
+        /** A citizen of a page made without places. */
+        public static final Spot UNKNOWN = new Spot("", BlockPos.ZERO, false, "", Whereabouts.Away.NONE, Whereabouts.Hold.NOWHERE, FAR);
+
+        public Spot {
+            Objects.requireNonNull(dimension, "dimension");
+            pos = pos.immutable();
+            place = place == null ? "" : place;
+            Objects.requireNonNull(away, "away");
+            Objects.requireNonNull(hold, "hold");
+        }
+
+        void encode(FriendlyByteBuf buf) {
+            buf.writeUtf(dimension, MAX_DIMENSION);
+            buf.writeBlockPos(pos);
+            buf.writeBoolean(live);
+            buf.writeUtf(place, MAX_KEY);
+            buf.writeEnum(away);
+            buf.writeEnum(hold);
+            buf.writeVarInt(distance + 1);
+        }
+
+        static Spot decode(FriendlyByteBuf buf) {
+            return new Spot(buf.readUtf(MAX_DIMENSION), buf.readBlockPos(), buf.readBoolean(), buf.readUtf(MAX_KEY),
+                    KingdomView.readEnum(buf, Whereabouts.Away.class), KingdomView.readEnum(buf, Whereabouts.Hold.class), buf.readVarInt() - 1);
+        }
+
+        public WorldPos worldPos() {
+            return new WorldPos(dimension, pos.getX(), pos.getY(), pos.getZ());
+        }
+    }
+
+    /**
      * A work post by its place in the world.
      */
     public record PostRef(String dimension, BlockPos pos) {
@@ -99,13 +159,26 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
      * @param post       the post of {@link Mode#CHOOSE_CITIZEN}
      */
     public record Query(Mode mode, String place, String profession, boolean problems, int page, int pageSize, @Nullable UUID citizen,
-                        @Nullable PostRef post) {
+                        @Nullable PostRef post, Where where) {
         public Query {
             Objects.requireNonNull(mode, "mode");
             place = place == null ? "" : place;
             profession = profession == null ? "" : profession;
             page = Math.max(0, page);
             pageSize = Math.max(1, Math.min(MAX_PAGE, pageSize));
+            where = where == null ? Where.ALL : where;
+        }
+
+        public Query(Mode mode, String place, String profession, boolean problems, int page, int pageSize, @Nullable UUID citizen,
+                     @Nullable PostRef post) {
+            this(mode, place, profession, problems, page, pageSize, citizen, post, Where.ALL);
+        }
+
+        /**
+         * The same list in another order, or of those gone far only, from its first page.
+         */
+        public Query withWhere(Where value) {
+            return new Query(mode, place, profession, problems, 0, pageSize, citizen, post, value);
         }
 
         public static Query of(Mode mode, int pageSize) {
@@ -113,22 +186,22 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
         }
 
         public Query withPage(int value) {
-            return new Query(mode, place, profession, problems, value, pageSize, citizen, post);
+            return new Query(mode, place, profession, problems, value, pageSize, citizen, post, where);
         }
 
         public Query withPageSize(int value) {
-            return new Query(mode, place, profession, problems, page, value, citizen, post);
+            return new Query(mode, place, profession, problems, page, value, citizen, post, where);
         }
 
         public Query withFilters(String newPlace, String newProfession, boolean newProblems) {
-            return new Query(mode, newPlace, newProfession, newProblems, 0, pageSize, citizen, post);
+            return new Query(mode, newPlace, newProfession, newProblems, 0, pageSize, citizen, post, where);
         }
 
         /**
          * The same list without the citizen it was opened at, once the window has chosen it.
          */
         public Query withoutFocus() {
-            return mode == Mode.CITIZENS && citizen != null ? new Query(mode, place, profession, problems, page, pageSize, null, post) : this;
+            return mode == Mode.CITIZENS && citizen != null ? new Query(mode, place, profession, problems, page, pageSize, null, post, where) : this;
         }
 
         public static Query choosePost(UUID citizen, int pageSize) {
@@ -154,6 +227,7 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
             if (post != null) {
                 post.encode(buf);
             }
+            buf.writeEnum(where);
         }
 
         public static Query decode(FriendlyByteBuf buf) {
@@ -168,7 +242,7 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
             int pageSize = buf.readVarInt();
             UUID citizen = buf.readBoolean() ? buf.readUUID() : null;
             PostRef post = buf.readBoolean() ? PostRef.decode(buf) : null;
-            return new Query(mode, place, profession, problems, page, pageSize, citizen, post);
+            return new Query(mode, place, profession, problems, page, pageSize, citizen, post, KingdomView.readEnum(buf, Where.class));
         }
     }
 
@@ -299,8 +373,16 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
      */
     public record CitizenRow(UUID id, int seed, boolean female, String profession, CitizenState state, int health, int maxHealth, int mood,
                              String place, @Nullable Workplace workplace, Workforce.Doing doing, WorkStatus status, List<Lack> lacks,
-                             Workforce.Candidate candidate, int distance) {
+                             Workforce.Candidate candidate, int distance, Spot spot) {
+        public CitizenRow(UUID id, int seed, boolean female, String profession, CitizenState state, int health, int maxHealth, int mood,
+                          String place, @Nullable Workplace workplace, Workforce.Doing doing, WorkStatus status, List<Lack> lacks,
+                          Workforce.Candidate candidate, int distance) {
+            this(id, seed, female, profession, state, health, maxHealth, mood, place, workplace, doing, status, lacks, candidate, distance,
+                    Spot.UNKNOWN);
+        }
+
         public CitizenRow {
+            Objects.requireNonNull(spot, "spot");
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(profession, "profession");
             Objects.requireNonNull(state, "state");
@@ -343,6 +425,7 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
             }
             buf.writeEnum(candidate);
             buf.writeVarInt(distance + 1);
+            spot.encode(buf);
         }
 
         static CitizenRow decode(FriendlyByteBuf buf) {
@@ -373,7 +456,7 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
             }
             Workforce.Candidate candidate = KingdomView.readEnum(buf, Workforce.Candidate.class);
             return new CitizenRow(id, seed, female, profession, state, health, maxHealth, mood, place, workplace, doing, status, lacks, candidate,
-                    buf.readVarInt() - 1);
+                    buf.readVarInt() - 1, Spot.decode(buf));
         }
     }
 

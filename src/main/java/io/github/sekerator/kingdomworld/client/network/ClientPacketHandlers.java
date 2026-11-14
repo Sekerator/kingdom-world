@@ -164,12 +164,30 @@ public final class ClientPacketHandlers {
     /**
      * A page of the window of the workers: for the open window, or the window opened by the key, the throne or the command.
      */
+    /**
+     * The citizens of the player's kingdom for the atlas.
+     */
+    public static void handleCitizenMap(io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.View packet) {
+        io.github.sekerator.kingdomworld.client.map.ClientCitizenMap.set(packet);
+    }
+
+    /**
+     * Where a citizen looked for is: its body outlined and the pointer to it.
+     */
+    public static void handleCitizenFound(io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Found packet) {
+        io.github.sekerator.kingdomworld.client.CitizenFinder.found(packet);
+        if (Minecraft.getInstance().screen instanceof io.github.sekerator.kingdomworld.client.screen.WorkforceScreen screen) {
+            screen.findChanged();
+        }
+    }
+
     public static void handleWorkforceView(io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.View packet) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.WorkforceScreen screen) {
             screen.update(packet.view());
         } else if (packet.open()) {
-            net.minecraft.client.gui.screens.Screen parent = minecraft.screen instanceof ThroneScreen ? minecraft.screen : null;
+            net.minecraft.client.gui.screens.Screen parent = minecraft.screen instanceof ThroneScreen
+                    || minecraft.screen instanceof io.github.sekerator.kingdomworld.client.screen.KingdomMapScreen ? minecraft.screen : null;
             minecraft.setScreen(new io.github.sekerator.kingdomworld.client.screen.WorkforceScreen(parent, packet.view()));
         }
     }

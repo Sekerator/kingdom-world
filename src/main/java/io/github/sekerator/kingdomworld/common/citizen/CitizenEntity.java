@@ -48,7 +48,7 @@ public class CitizenEntity extends PathfinderMob {
     /** Slots for what a worker carries to the storehouse. */
     public static final int CARRY_SLOTS = 9;
     /** How far from its home a calm body goes, in blocks. */
-    public static final int HOME_RANGE = 32;
+    public static final int HOME_RANGE = io.github.sekerator.kingdomworld.core.citizen.Whereabouts.HOME_RANGE;
 
     /** The record this body shows; {@code null} on the client and for bodies nobody admitted. */
     private UUID citizenId;
@@ -74,6 +74,14 @@ public class CitizenEntity extends PathfinderMob {
     /** A guard the body runs to rather than home: a witness that tells the guards. */
     @Nullable
     private UUID guardId;
+    /** Where the body was sent back to from the window of the workers, {@code null} while it was not. Never saved: bodies are not. */
+    @Nullable
+    private BlockPos returnTo;
+    /** Game time until which the body sent back walks; then it is put there. */
+    private long returnUntil;
+    /** Where the citizen is in the data once this body is taken away, {@code null} for where the body stands. */
+    @Nullable
+    private WorldPos relocation;
 
     public CitizenEntity(EntityType<? extends CitizenEntity> type, Level level) {
         super(type, level);
@@ -106,10 +114,12 @@ public class CitizenEntity extends PathfinderMob {
         goalSelector.addGoal(0, new FloatGoal(this));
         goalSelector.addGoal(1, new io.github.sekerator.kingdomworld.common.citizen.goal.FearGoal(this));
         goalSelector.addGoal(1, CitizenGoals.fleeMonsters(this));
+        goalSelector.addGoal(1, new io.github.sekerator.kingdomworld.common.citizen.goal.ReturnGoals.SentBack(this));
         goalSelector.addGoal(2, new CitizenGoals.SeekCareGoal(this));
         goalSelector.addGoal(3, new OpenDoorGoal(this, true));
         goalSelector.addGoal(4, new io.github.sekerator.kingdomworld.common.life.DayGoal(this));
         goalSelector.addGoal(5, new WorkGoal(this));
+        goalSelector.addGoal(6, new io.github.sekerator.kingdomworld.common.citizen.goal.ReturnGoals.Idle(this));
         goalSelector.addGoal(7, new CitizenGoals.StrollNearHomeGoal(this));
         goalSelector.addGoal(8, new LookAtPlayerGoal(this, Player.class, 6.0f));
         goalSelector.addGoal(9, new RandomLookAroundGoal(this));
@@ -173,11 +183,14 @@ public class CitizenEntity extends PathfinderMob {
     }
 
     /**
-     * Keeps the body near its home, except while it is frightened: a body that runs for its life runs as far as it must.
+     * Keeps the body near its home, or near its work if it has no home, except while it is frightened: a body that runs for its life
+     * runs as far as it must. The walks of a body keep to this only while it is close; one that got far walks back by itself
+     * ({@link io.github.sekerator.kingdomworld.common.citizen.goal.ReturnGoals.Idle}).
      */
     private void restrictToHome() {
-        if (home != null && !isFrightened()) {
-            restrictTo(home, HOME_RANGE);
+        BlockPos anchor = home != null ? home : workplace;
+        if (anchor != null && !isFrightened()) {
+            restrictTo(anchor, HOME_RANGE);
         } else {
             clearRestriction();
         }
@@ -208,6 +221,79 @@ public class CitizenEntity extends PathfinderMob {
         if (isSleeping()) {
             stopSleeping();
         }
+    }
+
+    // ---------------------------------------------------------------- sent back
+
+    /**
+     * Sends the body back: it drops what it does and walks to the place until the game time {@code until}, then it is put there.
+     */
+    public void sendBack(BlockPos target, long until) {
+        returnTo = target.immutable();
+        returnUntil = until;
+        getNavigation().stop();
+        if (isSleeping()) {
+            stopSleeping();
+        }
+    }
+
+    @Nullable
+    public BlockPos returnTarget() {
+        return returnTo;
+    }
+
+    public long returnUntil() {
+        return returnUntil;
+    }
+
+    /**
+     * The body got where it was sent.
+     */
+    public void arrivedBack() {
+        returnTo = null;
+    }
+
+    /**
+     * The body did not get where it was sent in time or got stuck: it is put by the place if that is loaded, else taken away with the
+     * citizen there in the data, its body coming back there with players.
+     */
+    public void putBack() {
+        BlockPos target = returnTo;
+        returnTo = null;
+        if (target == null || !(level() instanceof net.minecraft.server.level.ServerLevel server)) {
+            return;
+        }
+        BlockPos spot = CitizenBodies.standingSpot(server, target);
+        if (spot != null) {
+            getNavigation().stop();
+            teleportTo(spot.getX() + 0.5, spot.getY(), spot.getZ() + 0.5);
+            return;
+        }
+        relocate(new WorldPos(io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(server), target.getX(), target.getY(), target.getZ()));
+        discard();
+    }
+
+    /**
+     * Where the citizen is in the data once this body is taken away.
+     */
+    void relocate(WorldPos pos) {
+        relocation = pos;
+    }
+
+    @Nullable
+    WorldPos relocation() {
+        return relocation;
+    }
+
+    /**
+     * A body a player looks for is outlined through walls for that player alone.
+     */
+    @Override
+    public boolean isCurrentlyGlowing() {
+        if (level().isClientSide && CitizenHighlights.glows(getId(), net.minecraft.Util.getMillis())) {
+            return true;
+        }
+        return super.isCurrentlyGlowing();
     }
 
     public boolean isFrightened() {
@@ -325,6 +411,9 @@ public class CitizenEntity extends PathfinderMob {
                 doing = work.doing();
             } else if (goal instanceof CitizenGoals.SeekCareGoal) {
                 doing = io.github.sekerator.kingdomworld.core.citizen.Workforce.Doing.HEALING;
+            } else if (goal instanceof io.github.sekerator.kingdomworld.common.citizen.goal.ReturnGoals.SentBack
+                    || goal instanceof io.github.sekerator.kingdomworld.common.citizen.goal.ReturnGoals.Idle) {
+                doing = io.github.sekerator.kingdomworld.core.citizen.Workforce.Doing.RETURNING;
             }
             if (doing != null) {
                 return doing;

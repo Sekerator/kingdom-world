@@ -89,6 +89,7 @@ public final class ClientSelfTest {
     private static ClientSettlementShowcase settlementShowcase;
     private static ClientEarthworkShowcase earthworkShowcase;
     private static ClientScaffoldingShowcase scaffoldingShowcase;
+    private static ClientWhereaboutsShowcase whereaboutsShowcase;
     private static ClientBackgroundCheck backgroundCheck;
     private static ClientLifeShowcase lifeShowcase;
     private static ClientPostShowcase postShowcase;
@@ -291,6 +292,25 @@ public final class ClientSelfTest {
             if (earthworkShowcase.finished()) {
                 if (earthworkShowcase.failed()) {
                     LOGGER.error(PREFIX + "earthwork showcase failed, exiting with code 1");
+                    System.exit(1);
+                }
+                LOGGER.info(PREFIX + "finished");
+                quit = true;
+            }
+            return;
+        }
+        if ("whereabouts".equals(MODE) && minecraft.player != null && minecraft.getSingleplayerServer() != null) {
+            if (whereaboutsShowcase == null) {
+                String folder = System.getProperty("kingdomworld.clientSelfTest.screenshots");
+                Path screenshots = folder != null && !folder.isEmpty() ? Path.of(folder)
+                        : minecraft.gameDirectory.toPath().resolve("kingdomworld-layout");
+                LOGGER.info(PREFIX + "whereabouts showcase started, screenshots go to {}", screenshots.resolve("citizen-whereabouts"));
+                whereaboutsShowcase = new ClientWhereaboutsShowcase(screenshots);
+            }
+            whereaboutsShowcase.tick();
+            if (whereaboutsShowcase.finished()) {
+                if (whereaboutsShowcase.failed()) {
+                    LOGGER.error(PREFIX + "whereabouts showcase failed, exiting with code 1");
                     System.exit(1);
                 }
                 LOGGER.info(PREFIX + "finished");

@@ -189,10 +189,25 @@ public final class WorkforceActions {
                     }
                 }
                 rows.sort(Workforce.problemsFirst());
+                Map<UUID, WorkforceView.Spot> spots = new HashMap<>();
+                if (query.where() != WorkforceView.Where.ALL) {
+                    // Where they are now: those gone far only, or everybody; the nearest to the player first, other worlds last.
+                    for (Citizen citizen : rows) {
+                        spots.put(citizen.id(), spot(server, citizen, places, viewer));
+                    }
+                    if (query.where() == WorkforceView.Where.AWAY) {
+                        rows.removeIf(citizen -> spots.get(citizen.id()).away() == io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Away.NONE);
+                    }
+                    rows.sort(Comparator.comparingInt(citizen -> {
+                        int distance = spots.get(citizen.id()).distance();
+                        return distance == WorkforceView.FAR ? Integer.MAX_VALUE : distance;
+                    }));
+                }
                 WorkforceView.Query page = clamp(onPageOf(query, rows), rows.size());
                 List<WorkforceView.CitizenRow> shown = new ArrayList<>();
                 for (Citizen citizen : slice(rows, page)) {
-                    shown.add(citizenRow(server, citizen, ownStanding(citizen), places, numbers, viewer.distance(citizen.workplace()), viewer));
+                    shown.add(citizenRow(server, citizen, ownStanding(citizen), places, numbers, viewer.distance(citizen.workplace()), viewer,
+                            spots.get(citizen.id())));
                 }
                 yield new WorkforceView(page, kingdomId, kingdomName, header, rows.size(), shown, List.of(), List.of(), null, null);
             }
@@ -241,7 +256,7 @@ public final class WorkforceActions {
                     }
                 }
                 yield new WorkforceView(page, kingdomId, kingdomName, header, rows.size(), List.of(), shown, professions,
-                        citizenRow(server, who, ownStanding(who), places, numbers, viewer.distance(who.workplace()), viewer), null);
+                        citizenRow(server, who, ownStanding(who), places, numbers, viewer.distance(who.workplace()), viewer, null), null);
             }
             case CHOOSE_CITIZEN -> {
                 Optional<WorkPost> post = query.post() == null ? Optional.empty()
@@ -541,8 +556,25 @@ public final class WorkforceActions {
         };
     }
 
+    /**
+     * Where a citizen is now, for the window.
+     */
+    private static WorkforceView.Spot spot(MinecraftServer server, Citizen citizen, Places places, Viewer viewer) {
+        io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Seen seen = CitizenWhereabouts.seen(citizen);
+        WorldPos at = seen.pos();
+        return new WorkforceView.Spot(at.dimension(), new BlockPos(at.x(), at.y(), at.z()), seen.live(), places.of(at),
+                CitizenWhereabouts.away(server, citizen, at), CitizenWhereabouts.hold(server, citizen, at), viewer.distance(at));
+    }
+
     private static WorkforceView.CitizenRow citizenRow(MinecraftServer server, Citizen citizen, Workforce.Candidate candidate, Places places,
                                                        Map<WorldPos, Integer> numbers, int distance, Viewer viewer) {
+        return citizenRow(server, citizen, candidate, places, numbers, distance, viewer, null);
+    }
+
+    private static WorkforceView.CitizenRow citizenRow(MinecraftServer server, Citizen citizen, Workforce.Candidate candidate, Places places,
+                                                       Map<WorldPos, Integer> numbers, int distance, Viewer viewer,
+                                                       @Nullable WorkforceView.Spot known) {
+        WorkforceView.Spot spot = known != null ? known : spot(server, citizen, places, viewer);
         KingdomWorldState state = KingdomWorldApi.state(server);
         WorkforceView.Workplace workplace = null;
         WorldPos at = citizen.workplace();
@@ -557,7 +589,7 @@ public final class WorkforceActions {
         }
         return new WorkforceView.CitizenRow(citizen.id(), citizen.nameSeed(), citizen.gender() == Gender.FEMALE, citizen.professionId(),
                 citizen.state(), Math.round(citizen.health()), Math.round(citizen.maxHealth()), citizen.mood(), places.of(citizen), workplace,
-                doing(server, citizen), citizen.workStatus(), lacks(citizen), candidate, distance);
+                doing(server, citizen), citizen.workStatus(), lacks(citizen), candidate, distance, spot);
     }
 
     /**
@@ -638,9 +670,77 @@ public final class WorkforceActions {
                     : rename(player, kingdomId, worldPos(action.post()), action.text());
             case CLEAR -> action.post() == null ? KingdomActions.Feedback.error(KingdomError.UNKNOWN_POST)
                     : clear(player, kingdomId, worldPos(action.post()));
+            case FIND -> action.citizen() == null ? KingdomActions.Feedback.error(KingdomError.UNKNOWN_CITIZEN)
+                    : find(player, kingdomId, action.citizen());
+            case RETURN -> action.citizen() == null ? KingdomActions.Feedback.error(KingdomError.UNKNOWN_CITIZEN)
+                    : sendBack(player, kingdomId, action.citizen());
         };
         KingdomActions.reply(player, feedback);
         send(player, kingdomId, action.query(), false);
+    }
+
+    /**
+     * The citizens of the player's kingdom in the world of the player, for the atlas: only to one who manages them.
+     */
+    public static void sendMap(ServerPlayer player) {
+        Optional<UUID> kingdom = ownKingdom(player);
+        if (kingdom.isEmpty() || !mayManage(player, kingdom.get())) {
+            KingdomWorldNetwork.sendToPlayer(player, io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.View.NONE);
+            return;
+        }
+        String dimension = Dimensions.id(player.level());
+        List<io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.Dot> dots = new ArrayList<>();
+        for (Citizen citizen : KingdomWorldApi.state(player.server).citizens().registry().citizensOf(kingdom.get())) {
+            if (dots.size() >= io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.MAX_DOTS) {
+                break;
+            }
+            io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Seen seen = CitizenWhereabouts.seen(citizen);
+            if (!seen.pos().dimension().equals(dimension)) {
+                continue;
+            }
+            dots.add(new io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.Dot(citizen.id(), citizen.nameSeed(),
+                    citizen.gender() == Gender.FEMALE, citizen.professionId(), doing(player.server, citizen), seen.pos().x(), seen.pos().z(),
+                    seen.live(), CitizenWhereabouts.away(player.server, citizen, seen.pos())
+                    != io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Away.NONE));
+        }
+        KingdomWorldNetwork.sendToPlayer(player, new io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.View(true,
+                kingdom.get(), dimension, dots));
+    }
+
+    /**
+     * Looks for a citizen: the player gets where it is, with its body if the body is in the world of the player, to outline it and
+     * point at it.
+     */
+    public static KingdomActions.Feedback find(ServerPlayer player, UUID kingdomId, UUID citizenId) {
+        Optional<Citizen> citizen = citizenOf(player.server, kingdomId, citizenId);
+        if (citizen.isEmpty()) {
+            return KingdomActions.Feedback.error(KingdomError.UNKNOWN_CITIZEN);
+        }
+        io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Seen seen = CitizenWhereabouts.seen(citizen.get());
+        CitizenEntity body = CitizenBodies.body(citizenId);
+        int entity = body != null && seen.live() && body.level() == player.level() ? body.getId() : -1;
+        WorldPos at = seen.pos();
+        KingdomWorldNetwork.sendToPlayer(player, new WorkforcePackets.Found(citizenId, citizen.get().nameSeed(),
+                citizen.get().gender() == Gender.FEMALE, entity, at.dimension(), new BlockPos(at.x(), at.y(), at.z()), seen.live()));
+        return KingdomActions.Feedback.ok(KEY + (seen.live() ? "found" : "found_last"), CitizenTexts.name(citizen.get()));
+    }
+
+    /**
+     * Sends a citizen back home or to its post; a soldier, a member of an expedition and one on the land of another kingdom stay.
+     */
+    public static KingdomActions.Feedback sendBack(ServerPlayer player, UUID kingdomId, UUID citizenId) {
+        Optional<Citizen> citizen = citizenOf(player.server, kingdomId, citizenId);
+        if (citizen.isEmpty()) {
+            return KingdomActions.Feedback.error(KingdomError.UNKNOWN_CITIZEN);
+        }
+        boolean live = CitizenWhereabouts.seen(citizen.get()).live();
+        io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Hold hold = CitizenWhereabouts.sendBack(player.server, citizen.get());
+        if (hold != io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Hold.NONE) {
+            return KingdomActions.Feedback.fail(KEY + "hold." + hold.id());
+        }
+        String where = citizen.get().home() != null ? "home" : "post";
+        return KingdomActions.Feedback.ok(CitizenTexts.gendered(KEY + (live ? "returning." : "returned.") + where, citizen.get().gender()),
+                CitizenTexts.name(citizen.get()));
     }
 
     private static Optional<Citizen> citizenOf(MinecraftServer server, UUID kingdomId, UUID citizenId) {

@@ -274,6 +274,13 @@ public record CitizenView(UUID kingdomId, boolean canManage, int population, int
                 citizens, chronicle, production, decrees, settlements);
     }
 
+    /**
+     * A profession id read from a packet, refused when it is not one.
+     */
+    public static String readProfessionId(FriendlyByteBuf buf) {
+        return readProfession(buf);
+    }
+
     static String readProfession(FriendlyByteBuf buf) {
         String profession = buf.readUtf(Profession.MAX_ID_LENGTH);
         if (!Profession.isValidId(profession)) {

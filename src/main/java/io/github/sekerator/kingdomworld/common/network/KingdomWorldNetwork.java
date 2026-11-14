@@ -57,7 +57,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "55";
+    public static final String PROTOCOL_VERSION = "57";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -328,6 +328,18 @@ public final class KingdomWorldNetwork {
                 io.github.sekerator.kingdomworld.common.network.packet.GuidePackets.Numbers::encode,
                 io.github.sekerator.kingdomworld.common.network.packet.GuidePackets.Numbers::decode,
                 io.github.sekerator.kingdomworld.common.network.packet.GuidePackets.Numbers::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Found.class, NetworkDirection.PLAY_TO_CLIENT,
+                io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Found::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Found::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Found::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.Request.class, NetworkDirection.PLAY_TO_SERVER,
+                io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.Request::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.Request::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.Request::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.View.class, NetworkDirection.PLAY_TO_CLIENT,
+                io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.View::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.View::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.View::handle);
         add(id++, io.github.sekerator.kingdomworld.common.network.packet.StorehousePackets.Accepts.class, NetworkDirection.PLAY_TO_SERVER,
                 io.github.sekerator.kingdomworld.common.network.packet.StorehousePackets.Accepts::encode,
                 io.github.sekerator.kingdomworld.common.network.packet.StorehousePackets.Accepts::decode,

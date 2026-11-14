@@ -7,6 +7,7 @@ import io.github.sekerator.kingdomworld.common.network.data.KingdomView;
 import io.github.sekerator.kingdomworld.common.network.data.WorkforceView;
 import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
 import io.github.sekerator.kingdomworld.core.request.RequestPolicy;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.api.distmarker.Dist;
@@ -82,6 +83,33 @@ public final class WorkforcePackets {
     }
 
     /**
+     * Server to client: where a citizen looked for is, to outline its body and point at it.
+     *
+     * @param entity the id of its body in the world of the player, -1 if it has none there
+     * @param live   whether it has a body there now; otherwise the place is the last one known
+     */
+    public record Found(UUID citizen, int seed, boolean female, int entity, String dimension, BlockPos pos, boolean live) {
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUUID(citizen);
+            buf.writeInt(seed);
+            buf.writeBoolean(female);
+            buf.writeVarInt(entity + 1);
+            buf.writeUtf(dimension, 128);
+            buf.writeBlockPos(pos);
+            buf.writeBoolean(live);
+        }
+
+        public static Found decode(FriendlyByteBuf buf) {
+            return new Found(buf.readUUID(), buf.readInt(), buf.readBoolean(), buf.readVarInt() - 1, buf.readUtf(128), buf.readBlockPos(),
+                    buf.readBoolean());
+        }
+
+        public static void handle(Found message, Supplier<NetworkEvent.Context> context) {
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientPacketHandlers.handleCitizenFound(message));
+        }
+    }
+
+    /**
      * Client to server: what the king does in the window.
      *
      * @param citizen the citizen dismissed, put on a post or given a profession
@@ -104,7 +132,11 @@ public final class WorkforcePackets {
             /** The post gets the name in the text, its default name if the text is empty. */
             RENAME,
             /** Everybody at the post is without work again. */
-            CLEAR
+            CLEAR,
+            /** Where the citizen is: its body outlined for the player and a pointer to it. */
+            FIND,
+            /** The citizen goes back home or to its post. */
+            RETURN
         }
 
         public Action {

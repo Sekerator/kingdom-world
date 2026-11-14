@@ -173,6 +173,77 @@ public class WorkforceScreen extends KingdomScreen implements ResultListener {
         }
     }
 
+    /**
+     * The player looks for another citizen, or stopped looking: the button says so.
+     */
+    public void findChanged() {
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
+    }
+
+    // ---------------------------------------------------------------- where a citizen is
+
+    private static int spotColor(WorkforceView.Spot spot) {
+        if (spot.away() != io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Away.NONE) {
+            return 0xFFFFB070;
+        }
+        return spot.live() ? 0xFFB8D8F0 : 0xFF9A9A9A;
+    }
+
+    /**
+     * The place of a citizen from the player, or null in another world or without a player.
+     */
+    @Nullable
+    private static int[] fromPlayer(WorkforceView.Spot spot) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null || client.level == null || !client.level.dimension().location().toString().equals(spot.dimension())) {
+            return null;
+        }
+        int dx = spot.pos().getX() - client.player.getBlockX();
+        int dz = spot.pos().getZ() - client.player.getBlockZ();
+        return new int[]{dx, dz, (int) Math.round(Math.sqrt((double) dx * dx + (double) dz * dz))};
+    }
+
+    /**
+     * Where a citizen is in a few words: "312 bl. NE", "here", "another world".
+     */
+    static Component spotShort(WorkforceView.Spot spot) {
+        int[] way = fromPlayer(spot);
+        if (way == null) {
+            return Component.translatable(KEY + "spot.short_other");
+        }
+        if (way[2] <= io.github.sekerator.kingdomworld.client.CitizenFinder.ARRIVED) {
+            return Component.translatable(KEY + "spot.here");
+        }
+        return Component.translatable(KEY + "spot.short", way[2], Component.translatable("kingdomworld.compass.short."
+                + io.github.sekerator.kingdomworld.core.citizen.Whereabouts.compass(way[0], way[1]).id()));
+    }
+
+    /**
+     * Where a citizen is in full: the place, how far and which way from the player, the settlement or city, whether it went far,
+     * and whether it is the last place known of a citizen far from players.
+     */
+    static Component spotFull(WorkforceView.Spot spot) {
+        MutableComponent parts = Component.translatable(KEY + "spot.coordinates", spot.pos().getX(), spot.pos().getY(), spot.pos().getZ());
+        int[] way = fromPlayer(spot);
+        parts.append(Component.translatable(KEY + "list_separator"));
+        if (way == null) {
+            parts.append(Component.translatable(KEY + "spot.other_world"));
+        } else {
+            parts.append(Component.translatable("kingdomworld.finder.way", way[2], Component.translatable("kingdomworld.compass."
+                    + io.github.sekerator.kingdomworld.core.citizen.Whereabouts.compass(way[0], way[1]).id())));
+        }
+        parts.append(Component.translatable(KEY + "list_separator"));
+        WorkforceScreen open = Minecraft.getInstance().screen instanceof WorkforceScreen screen ? screen : null;
+        parts.append(spot.place().isEmpty() || open == null ? Component.translatable(KEY + "spot.outside") : open.placeName(spot.place()));
+        if (spot.away() != io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Away.NONE) {
+            parts.append(Component.translatable(KEY + "list_separator"));
+            parts.append(Component.translatable(KEY + "spot.away." + spot.away().id()));
+        }
+        return Component.translatable(spot.live() ? KEY + "spot.now" : KEY + "spot.last", parts);
+    }
+
     private void show(WorkforceView.Query next) {
         query = next;
         selected = null;
@@ -445,7 +516,9 @@ public class WorkforceScreen extends KingdomScreen implements ResultListener {
 
     private List<Component> actionLabels() {
         return switch (query.mode()) {
-            case CITIZENS -> List.of(Component.translatable(KEY + "dismiss"), Component.translatable(KEY + "assign"));
+            case CITIZENS -> List.of(Component.translatable(KEY + "dismiss"), Component.translatable(KEY + "assign"),
+                    Component.translatable(io.github.sekerator.kingdomworld.client.CitizenFinder.tracking(selected instanceof UUID id ? id : null)
+                            ? KEY + "find_stop" : KEY + "find"), Component.translatable(KEY + "return"));
             case POSTS -> List.of(Component.translatable(KEY + "settings"), Component.translatable(KEY + "put"),
                     Component.translatable(KEY + "clear"), Component.translatable(KEY + "rename"));
             case CHOOSE_POST -> List.of(Component.translatable(KEY + "choose_post.choose"));
@@ -558,6 +631,19 @@ public class WorkforceScreen extends KingdomScreen implements ResultListener {
         Component problems = Component.translatable(query.problems() ? KEY + "filter.problems_on" : KEY + "filter.problems_off");
         int problemsWidth = Math.max(buttonWidth(Component.translatable(KEY + "filter.problems_on")),
                 buttonWidth(Component.translatable(KEY + "filter.problems_off")));
+        int whereWidth = 0;
+        if (query.mode() == WorkforceView.Mode.CITIZENS) {
+            // Where they are: all as usual, the nearest first, or only those gone far.
+            for (WorkforceView.Where where : WorkforceView.Where.values()) {
+                whereWidth = Math.max(whereWidth, buttonWidth(Component.translatable(KEY + "where." + where.id())));
+            }
+            WorkforceView.Where[] wheres = WorkforceView.Where.values();
+            CycleButton where = addRenderableWidget(new CycleButton(pagesLeft - whereWidth, y, whereWidth, SMALL + 2,
+                    Component.translatable(KEY + "where." + query.where().id()), direction -> show(query.withWhere(
+                    wheres[Math.floorMod(query.where().ordinal() + direction, wheres.length)]))));
+            where.setTooltip(CycleButton.hinted(Component.translatable(KEY + "where_hint")));
+            pagesLeft -= whereWidth + GAP;
+        }
         int room = pagesLeft - x - problemsWidth - 2 * GAP;
         List<String> places = placeKeys();
         List<String> professions = professionKeys();
@@ -710,11 +796,23 @@ public class WorkforceScreen extends KingdomScreen implements ResultListener {
             switch (query.mode()) {
                 case CITIZENS -> {
                     boolean soldier = citizen != null && citizen.soldier();
-                    button.active = citizen != null && !soldier && (i != 0 || !citizen.profession().equals(Professions.UNEMPLOYED.id()));
-                    if (soldier) {
-                        button.setTooltip(Tooltip.create(Component.translatable(KEY + "soldier_hint")));
+                    if (i == 2) {
+                        // Anybody may be looked for, soldiers too.
+                        button.active = citizen != null;
+                        button.setTooltip(Tooltip.create(Component.translatable(KEY + "find_hint")));
+                    } else if (i == 3) {
+                        io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Hold hold = citizen == null
+                                ? io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Hold.NONE : citizen.spot().hold();
+                        button.active = citizen != null && hold == io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Hold.NONE;
+                        button.setTooltip(Tooltip.create(Component.translatable(hold == io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Hold.NONE
+                                ? KEY + "return_hint" : "kingdomworld.workforce.hold." + hold.id())));
                     } else {
-                        button.setTooltip(Tooltip.create(Component.translatable(i == 0 ? KEY + "dismiss_hint" : KEY + "assign_hint")));
+                        button.active = citizen != null && !soldier && (i != 0 || !citizen.profession().equals(Professions.UNEMPLOYED.id()));
+                        if (soldier) {
+                            button.setTooltip(Tooltip.create(Component.translatable(KEY + "soldier_hint")));
+                        } else {
+                            button.setTooltip(Tooltip.create(Component.translatable(i == 0 ? KEY + "dismiss_hint" : KEY + "assign_hint")));
+                        }
                     }
                 }
                 case POSTS -> {
@@ -746,6 +844,15 @@ public class WorkforceScreen extends KingdomScreen implements ResultListener {
                 }
                 if (index == 0) {
                     act(WorkforcePackets.Action.Kind.DISMISS, citizen.id(), null, "");
+                } else if (index == 2) {
+                    if (io.github.sekerator.kingdomworld.client.CitizenFinder.tracking(citizen.id())) {
+                        io.github.sekerator.kingdomworld.client.CitizenFinder.cancel();
+                        rebuildWidgets();
+                    } else {
+                        act(WorkforcePackets.Action.Kind.FIND, citizen.id(), null, "");
+                    }
+                } else if (index == 3) {
+                    act(WorkforcePackets.Action.Kind.RETURN, citizen.id(), null, "");
                 } else {
                     back = query;
                     show(WorkforceView.Query.choosePost(citizen.id(), visibleRows()));
@@ -959,7 +1066,12 @@ public class WorkforceScreen extends KingdomScreen implements ResultListener {
 
         Component bottom = status;
         int color = statusIsError ? 0xFFFF8080 : 0xFFA0E0A0;
-        if (bottom.getString().isEmpty()) {
+        WorkforceView.CitizenRow chosen = selectedCitizen();
+        if (bottom.getString().isEmpty() && chosen != null && !chosen.spot().dimension().isEmpty()) {
+            // Where the citizen chosen is, in full.
+            bottom = spotFull(chosen.spot());
+            color = spotColor(chosen.spot());
+        } else if (bottom.getString().isEmpty()) {
             bottom = Component.translatable(usesCitizens() ? KEY + "select_citizen" : KEY + "select_post");
             color = 0xFFB8B8B8;
         }
@@ -1021,7 +1133,15 @@ public class WorkforceScreen extends KingdomScreen implements ResultListener {
         int healthColor = row.state() == CitizenState.WOUNDED ? 0xFFFF8080 : row.mood() < 30 ? 0xFFFFC080 : 0xFFA0E0A0;
         label(graphics, vitals, vitalsX, second, healthColor, right);
         hoverText(vitalsX, second, font.width(vitals), Component.translatable(KEY + "vitals_hint", row.health(), row.maxHealth(), row.mood()));
-        int doingWidth = Math.min(DOING_COLUMN, (vitalsX - 6 - x) / 2 + 30);
+        Component spot = spotShort(row.spot());
+        int spotX = vitalsX - 6 - font.width(spot);
+        if (!row.spot().dimension().isEmpty()) {
+            label(graphics, spot, spotX, second, spotColor(row.spot()), vitalsX - 6);
+            hoverText(spotX, second, font.width(spot), spotFull(row.spot()));
+        } else {
+            spotX = vitalsX;
+        }
+        int doingWidth = Math.min(DOING_COLUMN, (spotX - 6 - x) / 2 + 30);
         name(graphics, doingText(row).getString(), x, second, doingColor(row), doingWidth - 4);
         int lacksX = x + doingWidth;
         if (!row.lacks().isEmpty()) {
@@ -1032,7 +1152,7 @@ public class WorkforceScreen extends KingdomScreen implements ResultListener {
                 }
                 list.append(lackText(row.lacks().get(i).need(), row.lacks().get(i).detail()));
             }
-            name(graphics, Component.translatable(KEY + "lacks", list).getString(), lacksX, second, 0xFFFFB070, vitalsX - 6 - lacksX);
+            name(graphics, Component.translatable(KEY + "lacks", list).getString(), lacksX, second, 0xFFFFB070, spotX - 6 - lacksX);
         }
     }
 

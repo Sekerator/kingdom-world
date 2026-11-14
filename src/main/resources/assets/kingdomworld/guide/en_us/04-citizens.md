@@ -247,14 +247,21 @@ Filters: **Where** (all, the capital, a city, outside the towns), **Work** (all,
 - the post and how far it is ("Lumberjack 3, 25 m"), "composter", "without a post" or "needs no post";
 - what the citizen is doing: works (fells trees, digs the mine, fishes...), carries to the storehouse, gets ready for work, goes to work, sleeps, at the tavern, at the festival, rests, being healed, ill, idle, serves in the army; for work that stands still its reason, for example "No tool in the storehouses";
 - "Lacks: ...": a tool (axe, pickaxe, fishing rod, shears, weapon) or a stronger one, saplings, feed, fuel, materials, a workstation, a storehouse, room in the storehouses, a post, care, food, a home;
+- where the citizen is now: the distance and side of the world from you ("312 bl. NE"), orange when it went far from its home or post; on hover and at the bottom of the window for the chosen citizen in full: the coordinates, "312 blocks north-east", the settlement or city ("outside the cities"), "far from home" or "far from its post". The place is that of the body, and for a citizen far from players the last place known, which the window says;
 - health ♥ and mood ☺.
+
+A citizen is gone far when it is more than 64 blocks from its home and more than twice the zone of its post (at least 32 blocks) from its post. The switch **All as usual** / **Nearest first** / **Gone far** sorts the list by the distance from you or keeps only those gone far.
 
 Near players what a citizen does comes from what its body is doing now, far from them from its day and its abstract work.
 
 The buttons under the list act on the chosen citizen (a double click does what the first button does):
 
 - **Dismiss**: the citizen is without work, its seat at the post is free, its experience stays;
-- **Assign…**: the window "Where to assign" with the posts that have a free seat (profession, place, distance, free seats) and a row "No post:" with the professions that need no post (an adventurer, a farmer at a composter of its own). The **Assign here** button moves the citizen at once, from another post in one step.
+- **Assign…**: the window "Where to assign" with the posts that have a free seat (profession, place, distance, free seats) and a row "No post:" with the professions that need no post (an adventurer, a farmer at a composter of its own). The **Assign here** button moves the citizen at once, from another post in one step;
+- **Find**: the body of the citizen is outlined through walls for half a minute, for you alone, and an arrow with the name, the distance and the side of the world shows above the hotbar. It leads until you come within 5 blocks, look for another, press "Stop looking", or five minutes pass. For a citizen far from players the arrow leads to the last place known;
+- **Send back**: the citizen drops what it does and goes home, or to its post without a home; one that does not get there in a minute or gets stuck is put by its home. A citizen far from players is home at once. A soldier in the army, a citizen on an expedition of the guild and one on the land of another kingdom (in captivity or at a siege) cannot be sent back, and the hint of the button says why.
+
+A citizen with nothing to do that went far from its home or post walks back by itself: work, festivals, the tavern, sleep and care come first.
 
 Soldiers are listed, but they are assigned in the Army tab.
 

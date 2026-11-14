@@ -228,6 +228,8 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
 
     /** Whether the list of kingdoms is open, and its first row shown. */
     private boolean listing;
+    /** Whether the citizens of the player's kingdom are shown; off when the atlas opens, so that the map stays clear. */
+    private boolean citizens;
     private int listOffset;
     @Nullable
     private List<KingdomEntry> listForCheck;
@@ -670,6 +672,20 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
                 int listWidth = buttonWidth(listLabel);
                 int listX = armyX - 2 - listWidth;
                 buttonsLeft = listX;
+                Component citizensLabel = Component.translatable("kingdomworld.screen.map.citizens." + (citizens ? "on" : "off"));
+                int citizensWidth = buttonWidth(Component.translatable("kingdomworld.screen.map.citizens.on"),
+                        Component.translatable("kingdomworld.screen.map.citizens.off"));
+                int citizensX = listX - 2 - citizensWidth;
+                buttonsLeft = citizensX;
+                Button citizensButton = addRenderableWidget(Button.builder(citizensLabel, button -> {
+                    citizens = !citizens;
+                    if (citizens && minecraft != null && minecraft.getConnection() != null) {
+                        KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.Request());
+                    }
+                    rebuildWidgets();
+                }).bounds(citizensX, 3, citizensWidth, 16).build());
+                citizensButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(
+                        Component.translatable("kingdomworld.screen.map.citizens.hint")));
                 Button list = addRenderableWidget(Button.builder(listLabel, button -> {
                     listing = !listing;
                     listOffset = 0;
@@ -1065,6 +1081,71 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
+     * Shows or hides the citizens of the player's kingdom, asking the server for them when they are shown.
+     */
+    public void showCitizens(boolean on) {
+        citizens = on;
+        if (on && minecraft != null && minecraft.getConnection() != null) {
+            KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.Request());
+        }
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
+    }
+
+    /**
+     * The citizens of the player's kingdom: a dot each where its body is, or where the data knows it last, orange for one gone far
+     * from its home or post; the name, the profession and what it does on hover.
+     */
+    private void drawCitizens(GuiGraphics graphics) {
+        io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.View view = io.github.sekerator.kingdomworld.client.map.ClientCitizenMap.view();
+        String dimension = dimension();
+        if (!view.allowed() || (dimension != null && !view.dimension().equals(dimension))) {
+            return;
+        }
+        for (io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.Dot dot : view.dots()) {
+            int x = blockScreenX(dot.x());
+            int y = blockScreenZ(dot.z());
+            if (x - 2 < mapLeft() || x + 3 > mapRight() || y - 2 < mapTop() || y + 3 > mapBottom()) {
+                continue;
+            }
+            int color = dot.away() ? 0xFFFF9030 : dot.live() ? 0xFF60E060 : 0xFFA0A0A0;
+            graphics.fill(x - 2, y - 2, x + 3, y + 3, 0xFF101010);
+            graphics.fill(x - 1, y - 1, x + 2, y + 2, color);
+            hoverText(x - 2, y - 2, 5, citizenHover(dot));
+        }
+    }
+
+    /**
+     * What hovering over a citizen on the atlas tells.
+     */
+    static Component citizenHover(io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.Dot dot) {
+        io.github.sekerator.kingdomworld.core.citizen.Gender gender = dot.female() ? io.github.sekerator.kingdomworld.core.citizen.Gender.FEMALE
+                : io.github.sekerator.kingdomworld.core.citizen.Gender.MALE;
+        return Component.translatable(dot.live() ? "kingdomworld.screen.map.citizens.dot" : "kingdomworld.screen.map.citizens.dot_last",
+                io.github.sekerator.kingdomworld.common.citizen.CitizenTexts.name(dot.seed(), gender),
+                io.github.sekerator.kingdomworld.common.citizen.CitizenTexts.profession(dot.profession(), gender),
+                Component.translatable("kingdomworld.workforce.doing." + dot.doing().id()));
+    }
+
+    /**
+     * The citizen under the mouse on the atlas, if any.
+     */
+    @org.jetbrains.annotations.Nullable
+    private io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.Dot citizenAt(double mouseX, double mouseY) {
+        io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.View view = io.github.sekerator.kingdomworld.client.map.ClientCitizenMap.view();
+        if (!citizens || army || !view.allowed()) {
+            return null;
+        }
+        for (io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.Dot dot : view.dots()) {
+            if (Math.abs(blockScreenX(dot.x()) - mouseX) <= 3 && Math.abs(blockScreenZ(dot.z()) - mouseY) <= 3) {
+                return dot;
+            }
+        }
+        return null;
+    }
+
+    /**
      * The squads of the kingdom, the squads of others in sight, the pale marks of those seen last, the battles, and the
      * order being given.
      */
@@ -1234,6 +1315,17 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         if (insideMap(mouseX, mouseY) && !dragging && getChildAt(mouseX, mouseY).isEmpty()) {
+            io.github.sekerator.kingdomworld.common.network.packet.CitizenMapPackets.Dot dot = button == 0 ? citizenAt(mouseX, mouseY) : null;
+            if (dot != null) {
+                // The citizen opens in the window of the workers, chosen in its list.
+                dragging = false;
+                dragDistance = 0;
+                KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Request(
+                        io.github.sekerator.kingdomworld.client.map.ClientCitizenMap.view().kingdomId(), true,
+                        io.github.sekerator.kingdomworld.common.citizen.WorkforceActions.focus(dot.id(),
+                                io.github.sekerator.kingdomworld.common.citizen.WorkforceActions.DEFAULT_PAGE)));
+                return true;
+            }
             if (army) {
                 armyClick(mouseX, mouseY, button);
             } else {
@@ -1459,6 +1551,9 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         drawProvinceNames(graphics, minX, maxX, minZ, maxZ);
         drawLifeEvents(graphics);
         drawCaravans(graphics);
+        if (citizens && !army) {
+            drawCitizens(graphics);
+        }
         if (army) {
             drawArmy(graphics);
         }

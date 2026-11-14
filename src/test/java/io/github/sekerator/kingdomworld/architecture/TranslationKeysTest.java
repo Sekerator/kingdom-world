@@ -472,6 +472,30 @@ class TranslationKeysTest {
         for (String word : io.github.sekerator.kingdomworld.core.citizen.DeathCause.words()) {
             gendered.add("kingdomworld.death.damage." + word);
         }
+        // Where citizens are: the sides of the world, going far, what keeps them, the lists by place, sending them back.
+        for (io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Compass side : io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Compass.values()) {
+            used.add("kingdomworld.compass." + side.id());
+            used.add("kingdomworld.compass.short." + side.id());
+        }
+        for (io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Away away : io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Away.values()) {
+            if (away != io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Away.NONE) {
+                used.add("kingdomworld.screen.workforce.spot.away." + away.id());
+            }
+        }
+        for (io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Hold hold : io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Hold.values()) {
+            if (hold != io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Hold.NONE) {
+                used.add("kingdomworld.workforce.hold." + hold.id());
+            }
+        }
+        for (io.github.sekerator.kingdomworld.common.network.data.WorkforceView.Where where
+                : io.github.sekerator.kingdomworld.common.network.data.WorkforceView.Where.values()) {
+            used.add("kingdomworld.screen.workforce.where." + where.id());
+        }
+        for (String state : List.of("returning.", "returned.")) {
+            for (String place : List.of("home", "post")) {
+                gendered.add("kingdomworld.workforce." + state + place);
+            }
+        }
         for (CitizenNeeds.GrowthCheck check : CitizenNeeds.GrowthCheck.values()) {
             used.add("kingdomworld.screen.citizens.growth." + check.name().toLowerCase(Locale.ROOT));
         }

@@ -158,7 +158,10 @@ final class WorkforceLayoutCases {
             rows.add(new WorkforceView.CitizenRow(UUID.nameUUIDFromBytes(("workforce" + i).getBytes(StandardCharsets.UTF_8)),
                     i < 2 ? longestSeed(gender) : i * 7919, gender == Gender.FEMALE, profession,
                     i % 3 == 1 ? CitizenState.WOUNDED : CitizenState.HEALTHY, 1024 - i, 1024, i * 7 % 101, i % 2 == 0 ? "c12" : "s7", workplace,
-                    doings[i % doings.length], statuses[i % statuses.length], lacks, candidate, i % 7 == 6 ? WorkforceView.FAR : 99_999));
+                    doings[i % doings.length], statuses[i % statuses.length], lacks, candidate, i % 7 == 6 ? WorkforceView.FAR : 99_999,
+                    new WorkforceView.Spot(i % 5 == 4 ? "minecraft:the_nether" : "minecraft:overworld", new BlockPos(-29_999_999 + i, 319, 29_999_999),
+                            i % 3 != 0, i % 2 == 0 ? "c12" : "", io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Away.values()[i % 3],
+                            io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Hold.values()[i % 5], 99_999)));
         }
         return rows;
     }

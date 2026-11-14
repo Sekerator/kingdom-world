@@ -227,6 +227,13 @@ final class ClientLayoutCheck {
                 ProtectionService.shortName(LONG_KINGDOM)), NARROWEST_SCREEN);
         LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.storehouse.read_only"), NARROWEST_SCREEN);
         LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.storehouse.outside"), NARROWEST_SCREEN);
+        // The pointer to a citizen looked for, with the longest name, distance and side.
+        for (Gender gender : Gender.values()) {
+            for (boolean live : new boolean[]{true, false}) {
+                LayoutCheck.actionbar(minecraft.font, CitizenFinder.line("↖", longestNameSeed(gender), gender == Gender.FEMALE, 29_999_999,
+                        io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Compass.NORTH_WEST, live), NARROWEST_SCREEN);
+            }
+        }
         LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.storehouse.foreign",
                 ProtectionService.shortName(LONG_KINGDOM)), NARROWEST_SCREEN);
         LayoutCheck.actionbar(minecraft.font, Component.translatable("kingdomworld.post.outside"), NARROWEST_SCREEN);

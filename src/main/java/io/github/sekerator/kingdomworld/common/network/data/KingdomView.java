@@ -231,7 +231,7 @@ public record KingdomView(UUID id, String name, int color, String rulerName, int
                 permissions, members, applications, rights, npc, rulerInfo, style, styleFee, throneMoving, throneMoveDays);
     }
 
-    static int readSize(FriendlyByteBuf buf, int max) {
+    public static int readSize(FriendlyByteBuf buf, int max) {
         int size = buf.readVarInt();
         if (size < 0 || size > max) {
             throw new DecoderException("List size " + size + " out of range (max " + max + ")");

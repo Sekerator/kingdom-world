@@ -72,6 +72,7 @@ The map looks like old parchment. Close up the grid of chunks shows, and darker 
 
 - A flag over a capital on a festival day and an awning over a city on a fair day (see [Festivals and fairs](festivals)).
 - In the "Army" mode you see your squads, the squads of others in sight, pale marks of those seen lately, and battles going on (see [Orders on the map](map_orders), [The fog of war](fog_of_war)).
+- The **Citizens** button (off by default) shows your citizens as dots, if you have the Citizens right: green where the body is, grey at the last place known of a citizen far from players, orange gone far from home or post. Hovering shows the name, the profession and what the citizen does; a click opens it in the [Workers window](workers_window).
 
 ## map_mods | Map mods
 @icon minecraft:compass

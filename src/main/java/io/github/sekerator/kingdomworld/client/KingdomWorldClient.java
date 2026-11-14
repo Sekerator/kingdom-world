@@ -114,6 +114,7 @@ public final class KingdomWorldClient {
                 io.github.sekerator.kingdomworld.client.construction.BlueprintRenderer.drawHud(graphics, Minecraft.getInstance().font, width));
         event.registerAboveAll("party", (gui, graphics, partialTick, width, height) -> PartyHud.draw(graphics, width, height));
         event.registerAboveAll("wanted", (gui, graphics, partialTick, width, height) -> WantedHud.draw(graphics, width, height));
+        event.registerAboveAll("finder", (gui, graphics, partialTick, width, height) -> CitizenFinder.draw(graphics, width, height));
     }
 
     /**
@@ -196,6 +197,7 @@ public final class KingdomWorldClient {
         io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.clear();
         PartyHud.clear();
         WantedHud.clear();
+        CitizenFinder.reset();
         io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.clear();
         ClientKingdomCache.clear();
         ClientTerritoryCache.clear();
