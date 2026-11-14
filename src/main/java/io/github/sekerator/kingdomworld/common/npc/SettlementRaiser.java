@@ -94,6 +94,12 @@ public final class SettlementRaiser {
         final int[] cursor = {0};
         /** Steps spent on finishing a building begun before. */
         int begunTicks;
+        /** Steps the work outside waited for its chunks. */
+        int workWait;
+        /** Whether the ground just levelled for a building is looked at once more before it goes up. */
+        boolean recheck;
+        /** The places the roads of the kingdom take on and around the land of the settlement, {x, 0, z} packed; once. */
+        Set<Long> roads;
         double scale = 0.25;
         long ticks;
         long maxNanos;
@@ -600,7 +606,7 @@ public final class SettlementRaiser {
         int total = side * side;
         int budget = blocks(job);
         long deadline = deadline(job);
-        NpcGround.Soil soil = NpcGround.soilAt(level, settlement.x() + reach + NpcSpawner.RAMP + 3, settlement.z());
+        NpcGround.Soil soil = soilOf(level, settlement, reach);
         BlockState path = soil == NpcGround.Soil.GRASS ? Blocks.DIRT_PATH.defaultBlockState() : Blocks.GRAVEL.defaultBlockState();
         int step = settlement.step();
         UUID id = settlement.kingdomId();
@@ -624,6 +630,27 @@ public final class SettlementRaiser {
             advance(settlement, SettlementStage.BUILD);
         }
     }
+
+    /**
+     * The soil of the land of a settlement, looked at just beyond its levelled ground, or in its middle when that place is not
+     * loaded: no chunk is loaded on the spot for it.
+     */
+    private static NpcGround.Soil soilOf(ServerLevel level, Settlement settlement, int reach) {
+        int x = settlement.x() + reach + NpcSpawner.RAMP + 3;
+        return level.hasChunk(x >> 4, settlement.z() >> 4) ? NpcGround.soilAt(level, x, settlement.z())
+                : NpcGround.soilAt(level, settlement.x(), settlement.z());
+    }
+
+    /**
+     * Whether the chunks under a square around a place are loaded.
+     */
+    private static boolean loadedAround(ServerLevel level, int x, int z, int half) {
+        return level.hasChunk((x - half) >> 4, (z - half) >> 4) && level.hasChunk((x + half) >> 4, (z - half) >> 4)
+                && level.hasChunk((x - half) >> 4, (z + half) >> 4) && level.hasChunk((x + half) >> 4, (z + half) >> 4);
+    }
+
+    /** Steps the work outside a settlement waits for a chunk of its fields or posts at most. */
+    private static final int WORK_WAIT = 200;
 
     /**
      * The top of the ground of a town, a village or a hamlet: a cobbled square around the town hall, a path along the street
@@ -701,7 +728,7 @@ public final class SettlementRaiser {
         // a minute of steps is given up.
         int reach = SettlementLayouts.land(settlement.tier()) * 8;
         List<NpcComposition.Plot> plots = job.layout.plots();
-        NpcGround.Soil soil = NpcGround.soilAt(level, settlement.x() + job.layout.reach() + NpcSpawner.RAMP + 3, settlement.z());
+        NpcGround.Soil soil = soilOf(level, settlement, job.layout.reach());
         BlockState path = soil == NpcGround.Soil.GRASS ? Blocks.DIRT_PATH.defaultBlockState() : Blocks.GRAVEL.defaultBlockState();
         SettlementRenewal.Ground laid = (dx, dz) -> job.layout.city() != null ? NpcCity.surface(job.site, job.layout.city(), dx, dz, soil)
                 : surface(job.layout, dx, dz, soil, path);
@@ -741,11 +768,12 @@ public final class SettlementRaiser {
                     continue;
                 }
                 budget -= 64;
-                if (SettlementRenewal.free(level, settlement, plot, x, z, laid)) {
+                if (SettlementRenewal.free(level, settlement, plot, x, z, laid, roads(server, settlement, job))) {
                     job.renewAt = new int[]{x, z, plot.facing()};
                     job.levelFrom = 0;
                 } else if (movable && !SettlementRenewal.kindStands(server, settlement, kind)) {
-                    Optional<int[]> spot = SettlementRenewal.elsewhere(level, settlement, plot, job.cursor, 4, laid);
+                    Optional<int[]> spot = SettlementRenewal.elsewhere(level, settlement, plot, job.cursor, deadline, laid,
+                            roads(server, settlement, job));
                     if (spot.isPresent()) {
                         job.renewAt = spot.get();
                         job.levelFrom = 0;
@@ -770,7 +798,19 @@ public final class SettlementRaiser {
                 if (job.levelFrom >= 0) {
                     break;
                 }
+                // Levelled over some ticks: the ground is looked at once more before the first block goes up.
+                job.recheck = true;
                 continue;
+            }
+            if (job.recheck) {
+                job.recheck = false;
+                if (!SettlementRenewal.free(level, settlement, placed, job.renewAt[0], job.renewAt[1], laid, roads(server, settlement, job))) {
+                    LOGGER.info("{} leaves its {}: somebody took its ground while it was levelled", settlement, plot.template());
+                    job.renewAt = null;
+                    job.cursor[0] = 0;
+                    index++;
+                    continue;
+                }
             }
             Materials materials = job.layout.city() != null ? NpcCity.materials(server, job.site, placed)
                     : NpcCity.townMaterials(server, job.site, 0, placed);
@@ -793,6 +833,35 @@ public final class SettlementRaiser {
     }
 
     /**
+     * The places the roads of the kingdom of a settlement take on and around its land, with two blocks on either side of their
+     * line: no building of its plan is completed over a road.
+     */
+    private static Set<Long> roads(MinecraftServer server, Settlement settlement, Job job) {
+        if (job.roads != null) {
+            return job.roads;
+        }
+        Set<Long> taken = new java.util.HashSet<>();
+        int reach = SettlementLayouts.land(settlement.tier()) * 8 + 16;
+        for (io.github.sekerator.kingdomworld.core.road.Road road : RoadWork.state(server).roads()) {
+            if (!road.kingdomId().equals(settlement.kingdomId())) {
+                continue;
+            }
+            for (io.github.sekerator.kingdomworld.core.road.RouteCell cell : road.cells()) {
+                if (Math.abs(cell.x() - settlement.x()) > reach || Math.abs(cell.z() - settlement.z()) > reach) {
+                    continue;
+                }
+                for (int dx = -2; dx <= 2; dx++) {
+                    for (int dz = -2; dz <= 2; dz++) {
+                        taken.add(BlockPos.asLong(cell.x() + dx, 0, cell.z() + dz));
+                    }
+                }
+            }
+        }
+        job.roads = taken;
+        return taken;
+    }
+
+    /**
      * The fields of a settlement, one a tick, then the posts of its woodcutters, miners and fishers outside it by its land.
      * A settlement being completed sows only fields whose ground is free and adds only the work it has no post of.
      */
@@ -803,19 +872,30 @@ public final class SettlementRaiser {
             int[] field = fields.get(step);
             int x = settlement.x() + field[0];
             int z = settlement.z() + field[1];
-            if (!renewing || SettlementRenewal.fieldFree(level, settlement, x, z)) {
+            if (!loadedAround(level, x, z, 7) && ++job.workWait < WORK_WAIT) {
+                // Its chunks come with the tickets of the settlement; none is loaded on the spot.
+                return;
+            }
+            if (loadedAround(level, x, z, 7) && (!renewing || SettlementRenewal.fieldFree(level, settlement, x, z))) {
                 NpcSpawner.field(level, settlement.kingdomId(), x, z, step % 2 == 0 ? Blocks.WHEAT : Blocks.CARROTS);
             }
+            job.workWait = 0;
             settlement.setStage(SettlementStage.WORK.id(), step + 1);
             return;
         }
-        java.util.Map<String, Integer> have = renewing ? SettlementWorks.workers(level.getServer(), settlement, 0) : java.util.Map.of();
+        java.util.Map<String, Integer> have = SettlementWorks.workers(level.getServer(), settlement, 0);
+        boolean all = true;
         for (SettlementWorks.Work work : SettlementWorks.outside(level, settlement, job.layout)) {
             if (have.getOrDefault(work.profession(), 0) > 0) {
+                // A post of that work stands already: set up before a restart, or by an older version.
                 continue;
             }
-            SettlementWorks.place(level, settlement, job.site, work);
+            all &= SettlementWorks.place(level, settlement, job.site, work);
         }
+        if (!all && ++job.workWait < WORK_WAIT) {
+            return;
+        }
+        job.workWait = 0;
         advance(settlement, SettlementStage.PLACES);
     }
 

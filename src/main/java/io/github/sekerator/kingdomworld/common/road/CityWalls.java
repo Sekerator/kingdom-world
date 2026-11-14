@@ -598,6 +598,45 @@ public final class CityWalls {
     }
 
     /**
+     * Opens, once a minute, the gates of the walls of the settlements of the kingdoms of the world that still hold blocks the
+     * wall placed (a gate cut while its chunk was not loaded, before a restart): only where the place is loaded.
+     */
+    private static void openShut(MinecraftServer server) {
+        for (Wall wall : RoadWork.state(server).walls()) {
+            if (wall.cityId() == 0 || wall.gates().isEmpty() || !io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, wall.kingdomId())) {
+                continue;
+            }
+            ServerLevel level = ConstructionWork.level(server, wall.dimension());
+            if (level == null) {
+                continue;
+            }
+            for (int gate : wall.gates()) {
+                if (shut(level, wall, gate)) {
+                    openGate(level, wall, gate);
+                }
+            }
+        }
+    }
+
+    /**
+     * Whether a gate holds a block the wall placed, where its place is loaded.
+     */
+    private static boolean shut(ServerLevel level, Wall wall, int cell) {
+        for (int i = cell - Wall.GATE_HALF; i <= cell + Wall.GATE_HALF; i++) {
+            RouteCell at = wall.cells().get(Math.floorMod(i, wall.cells().size()));
+            if (!level.isLoaded(new BlockPos(at.x(), at.y(), at.z()))) {
+                return false;
+            }
+            for (int up = 1; up <= wall.wallClass().height() + 1; up++) {
+                if (wall.placedHere(BlockPos.asLong(at.x(), at.y() + up, at.z()))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * Opens the gates that waited for their place to be loaded.
      */
     private static void openPending(MinecraftServer server) {
@@ -791,6 +830,9 @@ public final class CityWalls {
     static void tick(MinecraftServer server) {
         boolean minute = ++seconds % 60 == 0;
         openPending(server);
+        if (minute) {
+            openShut(server);
+        }
         RoadState roads = RoadWork.state(server);
         for (Wall wall : roads.walls()) {
             ServerLevel level = ConstructionWork.level(server, wall.dimension());

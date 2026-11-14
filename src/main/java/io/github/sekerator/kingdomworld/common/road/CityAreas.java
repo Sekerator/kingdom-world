@@ -54,6 +54,10 @@ public final class CityAreas {
     private static KingdomRegistry signedKingdoms;
     private static long signedKingdomVersion;
     private static long signedSettlements = Long.MIN_VALUE;
+    /** The settlements and their version the squares of the villages were last summed from, and the sum. */
+    private static io.github.sekerator.kingdomworld.core.npc.NpcState villagesOf;
+    private static long villagesVersion = Long.MIN_VALUE;
+    private static long villages;
     private static long signed;
 
     private CityAreas() {
@@ -64,6 +68,7 @@ public final class CityAreas {
         builtFor = null;
         signedRoads = null;
         signedKingdoms = null;
+        villagesOf = null;
     }
 
     /**
@@ -83,7 +88,7 @@ public final class CityAreas {
     private static long signature(MinecraftServer server) {
         RoadState roads = RoadWork.state(server);
         KingdomRegistry kingdoms = KingdomWorldApi.state(server).kingdoms();
-        long settlements = io.github.sekerator.kingdomworld.common.npc.NpcWork.state(server).settlementsVersion();
+        long settlements = villages(server);
         if (roads == signedRoads && roads.version() == signedRoadVersion && kingdoms == signedKingdoms
                 && kingdoms.version() == signedKingdomVersion && settlements == signedSettlements) {
             return signed;
@@ -156,9 +161,7 @@ public final class CityAreas {
         String overworld = io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(server.overworld());
         for (io.github.sekerator.kingdomworld.core.npc.Settlement settlement
                 : io.github.sekerator.kingdomworld.common.npc.NpcWork.state(server).settlements()) {
-            if (settlement.status() != io.github.sekerator.kingdomworld.core.npc.Settlement.Status.STANDING || settlement.cityId() != 0
-                    || settlement.tier() == io.github.sekerator.kingdomworld.core.land.Tier.CAPITAL
-                    || KingdomWorldApi.state(server).kingdoms().get(settlement.kingdomId()).isEmpty()) {
+            if (!village(settlement) || KingdomWorldApi.state(server).kingdoms().get(settlement.kingdomId()).isEmpty()) {
                 continue;
             }
             int radius = io.github.sekerator.kingdomworld.core.npc.SettlementLayouts.land(settlement.tier()) * 8 + 8;
@@ -172,6 +175,40 @@ public final class CityAreas {
         cells = sorted;
         builtAt = now;
         builtFor = server;
+    }
+
+    /**
+     * A sum of what makes the squares of the villages and hamlets of the states: which stand without a town hall, of which
+     * kingdom, rank and place. The settlements change every tick one of them rises; the sum is worked out again only when
+     * their version moved, and changes only when a square does, so that no question of the law rebuilds the squares for that.
+     */
+    private static long villages(MinecraftServer server) {
+        io.github.sekerator.kingdomworld.core.npc.NpcState npc = io.github.sekerator.kingdomworld.common.npc.NpcWork.state(server);
+        if (npc == villagesOf && npc.settlementsVersion() == villagesVersion) {
+            return villages;
+        }
+        long sum = 29;
+        for (io.github.sekerator.kingdomworld.core.npc.Settlement settlement : npc.settlements()) {
+            if (village(settlement)) {
+                sum = sum * 31 + settlement.id();
+                sum = sum * 31 + settlement.kingdomId().hashCode();
+                sum = sum * 31 + settlement.tier().ordinal();
+                sum = sum * 31 + settlement.x();
+                sum = sum * 31 + settlement.z();
+            }
+        }
+        villagesOf = npc;
+        villagesVersion = npc.settlementsVersion();
+        villages = sum;
+        return sum;
+    }
+
+    /**
+     * Whether a settlement of a state has a square of the law of its own: it stands and has no town hall.
+     */
+    private static boolean village(io.github.sekerator.kingdomworld.core.npc.Settlement settlement) {
+        return settlement.status() == io.github.sekerator.kingdomworld.core.npc.Settlement.Status.STANDING && settlement.cityId() == 0
+                && settlement.tier() != io.github.sekerator.kingdomworld.core.land.Tier.CAPITAL;
     }
 
     /**

@@ -133,7 +133,8 @@ final class SettlementRenewal {
      * @param x the middle of the plot in the world
      * @param z the middle of the plot in the world
      */
-    static boolean free(ServerLevel level, Settlement settlement, NpcComposition.Plot plot, int x, int z, Ground ground) {
+    static boolean free(ServerLevel level, Settlement settlement, NpcComposition.Plot plot, int x, int z, Ground ground,
+                        @org.jetbrains.annotations.Nullable java.util.Set<Long> roads) {
         int[] box = NpcComposition.footprint(new NpcComposition.Plot(plot.template(), 0, 0, plot.facing(), plot.mirror(), plot.quarter()));
         int minX = x + box[0] - MARGIN;
         int minZ = z + box[1] - MARGIN;
@@ -174,34 +175,97 @@ final class SettlementRenewal {
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         for (int bx = minX; bx <= maxX; bx++) {
             for (int bz = minZ; bz <= maxZ; bz++) {
+                if (roads != null && roads.contains(BlockPos.asLong(bx, 0, bz))) {
+                    // A road of the kingdom runs there.
+                    return false;
+                }
                 if (!level.hasChunk(bx >> 4, bz >> 4) || !owner.equals(KingdomWorldApi.ownerAt(level, pos.set(bx, y, bz)))) {
                     return false;
                 }
-                boolean log = false;
-                boolean leaves = false;
-                for (int by = y - BELOW; by <= y + HEIGHT; by++) {
-                    BlockState there = level.getBlockState(pos.set(bx, by, bz));
-                    if (there.isAir() || pos.asLong() == hall || by <= y && there.equals(ground.top(bx - settlement.x(), bz - settlement.z()))) {
-                        continue;
-                    }
-                    if (NpcGround.protectedAt(level, pos, there) || there.hasBlockEntity()) {
-                        return false;
-                    }
-                    if (there.is(BlockTags.LOGS)) {
-                        log = true;
-                    } else if (there.is(BlockTags.LEAVES)) {
-                        leaves |= log;
-                    } else if (!natural(there)) {
-                        return false;
-                    }
+                // A hollow deeper than the blocks looked at would be filled over what lies under it.
+                if (NpcGround.groundAt(level, bx, bz) < y - BELOW) {
+                    return false;
                 }
-                // A trunk is a tree when its crown is over it; logs with nothing over them were laid by somebody.
-                if (log && !leaves) {
+                if (!column(level, pos, bx, bz, y, y - BELOW, y + HEIGHT, ground.top(bx - settlement.x(), bz - settlement.z()), hall)) {
                     return false;
                 }
             }
         }
         return true;
+    }
+
+    /**
+     * Whether a column is as the land grew it or as the kingdom laid it: at its street and under it only the ground (or the
+     * paving the kingdom laid there), over it only air, wild plants, snow and trees with their crowns. A block made by
+     * somebody, a field, a crop, water, a solid block over the street or a container anywhere and the column is taken.
+     *
+     * @param street the height of the street: the ground below it, the open air above it
+     * @param laid   the top the kingdom laid at the street there
+     * @param hall   a place to pass over (the town hall a residence stands round), or {@link Long#MIN_VALUE}
+     */
+    static boolean column(ServerLevel level, BlockPos.MutableBlockPos pos, int x, int z, int street, int from, int to, BlockState laid,
+                          long hall) {
+        boolean log = false;
+        boolean leaves = false;
+        for (int by = from; by <= to; by++) {
+            BlockState there = level.getBlockState(pos.set(x, by, z));
+            if (pos.asLong() == hall) {
+                continue;
+            }
+            if (!there.isAir() && (NpcGround.protectedAt(level, pos, there) || there.hasBlockEntity())) {
+                return false;
+            }
+            if (there.is(BlockTags.LOGS)) {
+                log = true;
+                continue;
+            }
+            if (there.is(BlockTags.LEAVES)) {
+                leaves |= log;
+                continue;
+            }
+            boolean fits = by <= street ? ground(there) || by == street && there.equals(laid) : wild(there);
+            if (!fits) {
+                return false;
+            }
+        }
+        // A trunk is a tree when its crown is over it; logs with nothing over them were laid by somebody.
+        return !log || leaves;
+    }
+
+    /**
+     * Whether a block is the ground as it grew: earth, sand, gravel, stone and ore, sandstone, terracotta, clay, snow and ice,
+     * or a hollow in it. Farmland, paths, water and everything made are not.
+     */
+    static boolean ground(BlockState state) {
+        if (state.isAir()) {
+            return true;
+        }
+        if (!state.getFluidState().isEmpty() || state.hasBlockEntity()) {
+            return false;
+        }
+        return state.is(BlockTags.DIRT) || state.is(BlockTags.SAND) || state.is(Blocks.GRAVEL) || state.is(BlockTags.BASE_STONE_OVERWORLD)
+                || state.is(Blocks.SANDSTONE) || state.is(Blocks.RED_SANDSTONE) || state.is(BlockTags.TERRACOTTA) || state.is(Blocks.CLAY)
+                || state.is(Blocks.SNOW_BLOCK) || state.is(Blocks.POWDER_SNOW) || state.is(BlockTags.ICE) || state.is(BlockTags.COAL_ORES)
+                || state.is(BlockTags.IRON_ORES) || state.is(BlockTags.COPPER_ORES) || state.is(BlockTags.GOLD_ORES)
+                || state.is(BlockTags.REDSTONE_ORES) || state.is(BlockTags.LAPIS_ORES) || state.is(BlockTags.DIAMOND_ORES)
+                || state.is(BlockTags.EMERALD_ORES);
+    }
+
+    /**
+     * Whether a block may stand over the street on ground a building takes: air, a wild plant (grass, a fern, a flower, a
+     * sapling, a mushroom, a bush), a vine or a layer of snow. A crop, sugar cane, a pumpkin, water and every solid block may be
+     * somebody's, and are not.
+     */
+    static boolean wild(BlockState state) {
+        if (state.isAir() || state.is(Blocks.SNOW) || state.is(Blocks.VINE)) {
+            return true;
+        }
+        if (!state.getFluidState().isEmpty() || state.hasBlockEntity()) {
+            return false;
+        }
+        return state.is(BlockTags.FLOWERS) || state.is(BlockTags.SAPLINGS) || state.is(Blocks.GRASS) || state.is(Blocks.TALL_GRASS)
+                || state.is(Blocks.FERN) || state.is(Blocks.LARGE_FERN) || state.is(Blocks.DEAD_BUSH) || state.is(Blocks.BROWN_MUSHROOM)
+                || state.is(Blocks.RED_MUSHROOM);
     }
 
     /**
@@ -221,12 +285,10 @@ final class SettlementRenewal {
                 if (!level.hasChunk(bx >> 4, bz >> 4) || !settlement.kingdomId().equals(KingdomWorldApi.ownerAt(level, pos.set(bx, settlement.groundY(), bz)))) {
                     return false;
                 }
-                int ground = NpcGround.groundAt(level, bx, bz);
-                for (int by = ground - 1; by <= ground + 3; by++) {
-                    BlockState there = level.getBlockState(pos.set(bx, by, bz));
-                    if (there.hasBlockEntity() || !natural(there) && !there.is(BlockTags.LOGS) && !there.is(BlockTags.LEAVES)) {
-                        return false;
-                    }
+                // A field lies on the land as it is: its own ground, and nothing but what grew over it.
+                int top = NpcGround.groundAt(level, bx, bz);
+                if (!column(level, pos, bx, bz, top, top - 1, top + 3, null, Long.MIN_VALUE)) {
+                    return false;
                 }
             }
         }
@@ -234,47 +296,24 @@ final class SettlementRenewal {
     }
 
     /**
-     * Whether a block is of the land as it grew, or of the ground and fields the kingdom laid: earth, sand, stone and ore,
-     * plants, snow, ice, water, farmland and crops. Planks, cobblestone, bricks, glass, paths and everything made are not.
-     */
-    static boolean natural(BlockState state) {
-        if (state.isAir() || !state.getFluidState().isEmpty()) {
-            return true;
-        }
-        if (state.is(Blocks.DIRT_PATH) || state.is(Blocks.COBBLESTONE) || state.is(BlockTags.PLANKS) || state.is(BlockTags.WOOL)) {
-            return false;
-        }
-        return state.is(BlockTags.DIRT) || state.is(BlockTags.SAND) || state.is(BlockTags.BASE_STONE_OVERWORLD) || state.is(Blocks.GRAVEL)
-                || state.is(Blocks.CLAY) || state.is(BlockTags.SNOW) || state.is(BlockTags.ICE) || state.is(Blocks.FARMLAND)
-                || state.is(BlockTags.CROPS) || state.is(BlockTags.FLOWERS) || state.is(BlockTags.SAPLINGS) || state.is(BlockTags.TERRACOTTA)
-                || state.is(Blocks.SANDSTONE) || state.is(Blocks.RED_SANDSTONE) || state.is(BlockTags.COAL_ORES) || state.is(BlockTags.IRON_ORES)
-                || state.is(BlockTags.COPPER_ORES) || state.is(Blocks.SUGAR_CANE) || state.is(Blocks.CACTUS) || state.is(Blocks.BAMBOO)
-                || state.is(Blocks.PUMPKIN) || state.is(Blocks.MELON) || state.is(Blocks.MOSS_BLOCK) || state.is(Blocks.VINE)
-                || state.is(Blocks.BROWN_MUSHROOM) || state.is(Blocks.RED_MUSHROOM) || state.is(Blocks.SWEET_BERRY_BUSH)
-                || state.is(Blocks.BROWN_MUSHROOM_BLOCK) || state.is(Blocks.RED_MUSHROOM_BLOCK) || state.is(Blocks.MUSHROOM_STEM)
-                || state.is(Blocks.BEE_NEST) || state.canBeReplaced() && !state.hasBlockEntity();
-    }
-
-    /**
      * Free ground on the land of a settlement for a building that moves, the nearest to its middle: looked at a few places a
      * call, from where the last call stopped.
      *
      * @param cursor the place to look at next, kept between calls; set to -1 when every place was looked at
-     * @param tries  places to look at in this call at most
+     * @param deadline when the time of the step is over: no more places are looked at then
      * @return the middle of the free ground in the world, {x, z, facing}, if found
      */
-    static Optional<int[]> elsewhere(ServerLevel level, Settlement settlement, NpcComposition.Plot plot, int[] cursor, int tries, Ground ground) {
+    static Optional<int[]> elsewhere(ServerLevel level, Settlement settlement, NpcComposition.Plot plot, int[] cursor, long deadline, Ground ground,
+                                     java.util.Set<Long> roads) {
         List<int[]> spots = spots(settlement);
-        int done = 0;
-        while (cursor[0] >= 0 && cursor[0] < spots.size() && done < tries) {
+        while (cursor[0] >= 0 && cursor[0] < spots.size() && System.nanoTime() - deadline < 0) {
             int[] spot = spots.get(cursor[0]++);
             // Its front looks at the middle of the settlement: north for a place south of it, and so on.
             int facing = Math.abs(spot[1]) >= Math.abs(spot[0]) ? (spot[1] > 0 ? 2 : 0) : (spot[0] > 0 ? 3 : 1);
             NpcComposition.Plot moved = new NpcComposition.Plot(plot.template(), spot[0], spot[1], facing, plot.mirror(), plot.quarter());
             int x = settlement.x() + spot[0];
             int z = settlement.z() + spot[1];
-            done++;
-            if (free(level, settlement, moved, x, z, ground)) {
+            if (free(level, settlement, moved, x, z, ground, roads)) {
                 return Optional.of(new int[]{x, z, facing});
             }
         }

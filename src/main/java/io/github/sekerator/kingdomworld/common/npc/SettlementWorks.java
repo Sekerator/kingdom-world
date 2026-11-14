@@ -93,10 +93,19 @@ final class SettlementWorks {
         for (String kind : order) {
             int[] spot = survey.spot(kind);
             if (spot == null) {
+                // Beyond an end of the street, on whichever side is loaded: the land of a settlement and a ring around it are.
                 int out = layout.reach() + NpcSpawner.RAMP + 6;
-                spot = new int[]{settlement.x() + (works.isEmpty() ? out : -out), settlement.z()};
+                for (int side : works.isEmpty() ? new int[]{1, -1} : new int[]{-1, 1}) {
+                    int x = settlement.x() + side * out;
+                    if (level.hasChunk(x >> 4, settlement.z() >> 4)) {
+                        spot = new int[]{x, settlement.z()};
+                        break;
+                    }
+                }
             }
-            works.add(new Work(kind, spot[0], spot[1], seats));
+            if (spot != null) {
+                works.add(new Work(kind, spot[0], spot[1], seats));
+            }
         }
         return works;
     }
@@ -170,6 +179,9 @@ final class SettlementWorks {
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         for (int dx = -2; dx <= 2; dx += 2) {
             for (int dz = -2; dz <= 2; dz += 2) {
+                if (!level.hasChunk((x + dx) >> 4, (z + dz) >> 4)) {
+                    continue;
+                }
                 for (int up = 1; up <= 3; up++) {
                     if (Trees.isLog(level.getBlockState(pos.set(x + dx, ground + up, z + dz)))) {
                         return true;
@@ -197,14 +209,20 @@ final class SettlementWorks {
 
     /**
      * Sets up a post of work outside a settlement: the post with its profession and seats, and the grove of a woodcutter
-     * whose land has no forest.
+     * whose land has no forest. Nothing is placed while its chunk is not loaded: no chunk is loaded on the spot for it.
+     *
+     * @return whether the post stands, false when its chunk is not loaded yet
      */
-    static void place(ServerLevel level, Settlement settlement, NpcSite site, Work work) {
+    static boolean place(ServerLevel level, Settlement settlement, NpcSite site, Work work) {
+        if (!level.hasChunk(work.x() >> 4, work.z() >> 4)) {
+            return false;
+        }
         BlockPos at = new BlockPos(work.x(), NpcGround.groundAt(level, work.x(), work.z()) + 1, work.z());
         NpcSpawner.post(level, settlement.kingdomId(), at, work.profession(), work.seats());
         if ("lumberjack".equals(work.profession())) {
             NpcSpawner.grove(level, settlement.kingdomId(), at, site);
         }
+        return true;
     }
 
     // ---------------------------------------------------------------- stores and tools

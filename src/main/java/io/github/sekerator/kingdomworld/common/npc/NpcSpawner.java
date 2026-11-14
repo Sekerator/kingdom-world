@@ -1625,6 +1625,10 @@ public final class NpcSpawner {
                 }
                 int x = post.getX() + dx;
                 int z = post.getZ() + dz;
+                if (!level.hasChunk(x >> 4, z >> 4)) {
+                    // No chunk is loaded on the spot for a sapling.
+                    continue;
+                }
                 int ground = NpcGround.groundAt(level, x, z);
                 BlockPos at = new BlockPos(x, ground + 1, z);
                 BlockState below = level.getBlockState(at.below());
