@@ -335,7 +335,7 @@ public final class CityWalls {
         if (level == null) {
             return Outcome.fail(KingdomError.UNKNOWN_CITY);
         }
-        if (landOnly(server, actor, kingdomId) && chunksBeyondLand(server, kingdomId, cityId) > 0) {
+        if (landOnly(server, kingdomId) && chunksBeyondLand(server, kingdomId, cityId) > 0) {
             return Outcome.fail(KingdomError.WALL_OUTSIDE_LAND);
         }
         int radius = radiusOf(server, kingdomId, cityId);
@@ -345,11 +345,12 @@ public final class CityWalls {
     }
 
     /**
-     * Whether a wall must stand whole on the land of its kingdom: one a player orders for a city of a kingdom of players, which lives
-     * within its state. An operator and the rulers of the world lay walls as before, with a gap on the land of another kingdom.
+     * Whether a wall ordered for a city of a kingdom must stand whole on the land of that kingdom: a city of a kingdom of players
+     * lives within its state, whether its king orders the wall in the tab or its governor does. An operator, who lays a wall at
+     * once ({@link #build}), and the rulers of the world lay walls as before, with a gap on the land of another kingdom.
      */
-    static boolean landOnly(MinecraftServer server, @Nullable UUID actor, UUID kingdomId) {
-        return actor != null && !io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, kingdomId);
+    static boolean landOnly(MinecraftServer server, UUID kingdomId) {
+        return !io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, kingdomId);
     }
 
     /**
@@ -403,7 +404,7 @@ public final class CityWalls {
         LAYOUTS.remove(next.getKey());
         Wall[] made = new Wall[1];
         Outcome outcome = level == null || ring == null ? Outcome.fail(KingdomError.NO_GROUND_FOR_WALL)
-                : lay(server, job.actor, job.kingdomId, job.cityId, job.wallClass, job.place, level, ring, made);
+                : lay(server, job.actor, job.kingdomId, job.cityId, job.wallClass, job.place, level, ring, made, landOnly(server, job.kingdomId));
         if (!outcome.ok()) {
             RoadWork.notify(server, job.kingdomId, Component.translatable(KEY + "wall_refused", job.place.name(),
                     KingdomActions.errorMessage(outcome.error())).withStyle(ChatFormatting.RED));
@@ -461,19 +462,21 @@ public final class CityWalls {
         if (ring == null) {
             return Outcome.fail(KingdomError.NO_GROUND_FOR_WALL);
         }
-        return lay(server, actor, kingdomId, cityId, wallClass, place.get(), level, ring, made);
+        return lay(server, actor, kingdomId, cityId, wallClass, place.get(), level, ring, made, false);
     }
 
     /**
      * Turns a ring read whole into the wall of the city, in place of the old one.
+     *
+     * @param wholeOnLand whether the wall must stand whole on the land of its kingdom (one ordered for a city of a kingdom of players)
      */
     private static Outcome lay(MinecraftServer server, @Nullable UUID actor, UUID kingdomId, long cityId, Wall.WallClass wallClass, Place place,
-                               ServerLevel level, List<RouteCell> whole, Wall[] made) {
+                               ServerLevel level, List<RouteCell> whole, Wall[] made, boolean wholeOnLand) {
         if (!RoadWork.mayManage(server, actor, kingdomId)) {
             return Outcome.fail(KingdomError.NO_PERMISSION);
         }
-        if (landOnly(server, actor, kingdomId)) {
-            // The land may have changed while the ring was read: a wall ordered by a player stands whole on its own land.
+        if (wholeOnLand) {
+            // The land may have changed while the ring was read: an ordered wall of a city of players stands whole on its own land.
             java.util.Set<Long> chunks = new java.util.HashSet<>();
             for (RouteCell cell : whole) {
                 chunks.add(ChunkKey.of(cell.x() >> 4, cell.z() >> 4));

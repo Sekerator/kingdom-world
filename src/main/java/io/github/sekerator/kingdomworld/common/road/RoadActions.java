@@ -401,7 +401,7 @@ public final class RoadActions {
             }
             case WALL_PALISADE, WALL_STONE -> {
                 // A wall a player orders stands whole on the land of the kingdom: the player hears how much of the ring is not.
-                int beyond = CityWalls.landOnly(server, actor, kingdom) ? CityWalls.chunksBeyondLand(server, kingdom, change.first()) : 0;
+                int beyond = CityWalls.landOnly(server, kingdom) ? CityWalls.chunksBeyondLand(server, kingdom, change.first()) : 0;
                 if (beyond > 0) {
                     yield KingdomActions.Feedback.fail(KEY + "wall_beyond_land", CityWalls.place(server, kingdom, change.first())
                             .map(CityWalls.Place::name).orElse("?"), beyond);
