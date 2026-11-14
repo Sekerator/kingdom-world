@@ -64,7 +64,8 @@ public final class RoadActions {
 
     private static RoadViews.CityRow cityRow(MinecraftServer server, RoadState roads, UUID kingdomId, long cityId, String name, int x, int y, int z,
                                              int roadCount, java.util.Map<Long, CityPeople.Census> census,
-                                             java.util.Map<Long, io.github.sekerator.kingdomworld.common.construction.CityCrews.Crew> crews) {
+                                             java.util.Map<Long, io.github.sekerator.kingdomworld.common.construction.CityCrews.Crew> crews,
+                                             io.github.sekerator.kingdomworld.core.citizen.CitizenNames.Alphabet alphabet) {
         CityWalls.Place place = new CityWalls.Place(kingdomId, cityId, "", x, y, z, name);
         int[] counts = CityWalls.place(server, kingdomId, cityId).map(found -> CityWalls.counts(server, found)).orElse(new int[2]);
         CityLevel level = CityLevel.of(counts[0], counts[1], RoadSettings.rules());
@@ -84,9 +85,23 @@ public final class RoadActions {
                 io.github.sekerator.kingdomworld.common.citizen.FolkSettings.rules());
         io.github.sekerator.kingdomworld.common.construction.CityCrews.Crew crew = crews.getOrDefault(cityId,
                 io.github.sekerator.kingdomworld.common.construction.CityCrews.Crew.NONE);
-        return new RoadViews.CityRow(cityId, place.name(), x, y, z, cityId == 0, roadCount, level, people == null ? 0 : people.named(), counts[1],
-                wall.map(Wall::id).orElse(0L), wall.map(Wall::wallClass).orElse(null), built, wall.map(w -> w.gates().size()).orElse(0), folk,
-                people == null ? 0 : people.beds(), freeBeds, crew.builders(), crew.helpers(), crew.sites());
+        RoadViews.CityRow row = new RoadViews.CityRow(cityId, place.name(), x, y, z, cityId == 0, roadCount, level,
+                people == null ? 0 : people.named(), counts[1], wall.map(Wall::id).orElse(0L), wall.map(Wall::wallClass).orElse(null), built,
+                wall.map(w -> w.gates().size()).orElse(0), folk, people == null ? 0 : people.beds(), freeBeds, crew.builders(), crew.helpers(),
+                crew.sites());
+        // Who governs the city, a mayor who may govern no more losing the office as it is looked at.
+        CityGovernors.Governor governor = CityGovernors.governor(server, kingdomId, cityId);
+        java.util.Optional<io.github.sekerator.kingdomworld.core.road.CityCharter> charter = roads.charter(kingdomId, cityId);
+        int kind = switch (governor.kind()) {
+            case MAYOR -> RoadViews.CityRow.MAYOR;
+            case HOUSE -> RoadViews.CityRow.HOUSE;
+            case NONE -> RoadViews.CityRow.NO_GOVERNOR;
+        };
+        return row.withGovernor(kind, CityGovernors.governorName(server, governor, alphabet), governor.grant() == null ? ""
+                : governor.grant().title().id(), charter.map(io.github.sekerator.kingdomworld.core.road.CityCharter::paused).orElse(false),
+                governor.present() ? CityGovernors.noteText(server, kingdomId, charter.map(io.github.sekerator.kingdomworld.core.road.CityCharter::note)
+                        .map(io.github.sekerator.kingdomworld.core.road.GovernorNote::parse).orElse(io.github.sekerator.kingdomworld.core.road.GovernorNote.NONE))
+                        : Component.empty());
     }
 
     static String endpointName(MinecraftServer server, Endpoint endpoint) {
@@ -113,6 +128,8 @@ public final class RoadActions {
         // Towns of kingdoms of the world are named in the alphabet of the viewer.
         net.minecraft.server.level.ServerPlayer reader = viewer == null ? null : server.getPlayerList().getPlayer(viewer);
         String language = reader == null ? "en_us" : reader.getLanguage();
+        io.github.sekerator.kingdomworld.core.citizen.CitizenNames.Alphabet alphabet =
+                io.github.sekerator.kingdomworld.core.citizen.CitizenNames.alphabetFor(language);
         // Who lives in each city and its beds, and who builds there, counted once for all of them.
         java.util.Map<Long, CityPeople.Census> census = new java.util.HashMap<>();
         for (CityPeople.Census city : CityPeople.census(server, kingdomId)) {
@@ -122,11 +139,11 @@ public final class RoadActions {
                 io.github.sekerator.kingdomworld.common.construction.CityCrews.of(server, kingdomId);
         capital.ifPresent(c -> cities.add(cityRow(server, roads, kingdomId, 0,
                 io.github.sekerator.kingdomworld.common.npc.NpcWork.localKingdom(kingdomId, kingdom.get().name(), language), c.x(), c.y(), c.z(),
-                countRoads(roads, Endpoint.Kind.CAPITAL, 0, kingdomId), census, crews)));
+                countRoads(roads, Endpoint.Kind.CAPITAL, 0, kingdomId), census, crews, alphabet)));
         for (City city : roads.citiesOf(kingdomId)) {
             cities.add(cityRow(server, roads, kingdomId, city.id(), io.github.sekerator.kingdomworld.common.npc.NpcWork.localCity(city.name(),
                     language), city.x(), city.y(), city.z(),
-                    countRoads(roads, Endpoint.Kind.CITY, city.id(), null), census, crews));
+                    countRoads(roads, Endpoint.Kind.CITY, city.id(), null), census, crews, alphabet));
         }
         List<RoadViews.RoadRow> roadRows = new ArrayList<>();
         for (Road road : roads.roadsOf(kingdomId)) {
@@ -173,7 +190,7 @@ public final class RoadActions {
         }
         return Optional.of(new RoadViews.RoadTabView(kingdomId, canManage, canOrder, RoadBuilding.freeBuilders(server, kingdomId).size(),
                 rules.maxCities(), rules.maxRoads(), cities, roadRows, crossings, camps, risks, squads, rules.minCityDistance(), rules.townPeople(),
-                rules.townBuildings(), rules.cityPeople(), rules.cityBuildings()));
+                rules.townBuildings(), rules.cityPeople(), rules.cityBuildings(), viewer == null || viewer.equals(kingdom.get().rulerId())));
     }
 
     private static int countRoads(RoadState roads, Endpoint.Kind kind, long city, @Nullable UUID kingdom) {
@@ -271,6 +288,28 @@ public final class RoadActions {
         UUID kingdom = change.kingdomId();
         if (change.action() == RoadPackets.TabChange.Action.PATROL) {
             return patrol(server, actor, kingdom, change.first(), change.second());
+        }
+        // The governors of the cities check rights of their own: the citizens, the nobility, the treasury.
+        switch (change.action()) {
+            case MAYOR_APPOINT, MAKE_BARON -> {
+                UUID citizen;
+                try {
+                    citizen = UUID.fromString(change.text());
+                } catch (IllegalArgumentException e) {
+                    return KingdomActions.Feedback.error(KingdomError.UNKNOWN_CITIZEN);
+                }
+                return change.action() == RoadPackets.TabChange.Action.MAYOR_APPOINT
+                        ? CityGovernors.appoint(server, actor, kingdom, citizen, change.first())
+                        : CityGovernors.makeBaron(server, actor, kingdom, citizen, change.first());
+            }
+            case GOVERNOR_DISMISS -> {
+                return CityGovernors.dismiss(server, actor, kingdom, change.first());
+            }
+            case GOVERNOR_PAUSE -> {
+                return CityGovernors.pause(server, actor, kingdom, change.first(), change.second() != 0);
+            }
+            default -> {
+            }
         }
         if (!RoadWork.mayManage(server, actor, kingdom)) {
             return KingdomActions.Feedback.error(KingdomError.NO_PERMISSION);

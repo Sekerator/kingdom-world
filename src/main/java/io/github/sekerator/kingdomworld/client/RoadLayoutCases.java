@@ -37,6 +37,8 @@ import java.util.function.Supplier;
 final class RoadLayoutCases {
     private static final String LONG_KINGDOM = "Великое Северное Королевство Щит";
     private static final String LONG_CITY = "Новый Верхнеполянский Городок";
+    private static final String LONG_GOVERNOR = "Всеволодовна Белозерская-Ярополковна";
+    private static final String LONG_HOUSE = "Стрелостенград";
     private static final long MUCH = 999_999_999_999L;
 
     private RoadLayoutCases() {
@@ -51,12 +53,18 @@ final class RoadLayoutCases {
         List<RoadViews.SquadRow> squads = new ArrayList<>();
         if (!empty) {
             cities.add(new RoadViews.CityRow(0, LONG_KINGDOM, -29_999_999, 319, 29_999_999, true, 256, CityLevel.CITY, 99_999, 99_999, MUCH,
-                    Wall.WallClass.STONE, 1000, 64, 999_999_999, 999_999, 999_999, 99_999, 99_999, 99_999));
+                    Wall.WallClass.STONE, 1000, 64, 999_999_999, 999_999, 999_999, 99_999, 99_999, 99_999)
+                    .withGovernor(RoadViews.CityRow.MAYOR, LONG_GOVERNOR, "", false, note(0)));
             CityLevel[] levels = CityLevel.values();
             for (int i = 0; i < 16; i++) {
+                // Mayors, houses with every title, stopped governors and cities without one, with every note there is.
+                int governor = i % 4 == 3 ? RoadViews.CityRow.NO_GOVERNOR : i % 4 == 1 ? RoadViews.CityRow.HOUSE : RoadViews.CityRow.MAYOR;
+                String title = governor == RoadViews.CityRow.HOUSE ? new String[]{"baron", "count", "duke"}[i % 3] : "";
                 cities.add(new RoadViews.CityRow(i + 1L, LONG_CITY, -29_999_999, -64, 29_999_999 - i, false, 256, levels[i % levels.length], 99_999,
                         99_999, i % 3 == 0 ? 0 : MUCH - i, i % 3 == 0 ? null : Wall.WallClass.values()[i % 2], i * 70, 64, i % 2 == 0 ? 0 : 936 * i,
-                        99_999, i * 3, 99_999, 99_999, 99_999));
+                        99_999, i * 3, 99_999, 99_999, 99_999)
+                        .withGovernor(governor, governor == RoadViews.CityRow.HOUSE ? LONG_HOUSE : LONG_GOVERNOR, title, i % 5 == 2,
+                                governor == RoadViews.CityRow.NO_GOVERNOR ? Component.empty() : note(i)));
             }
             Road.Status[] statuses = Road.Status.values();
             for (int i = 0; i < 20; i++) {
@@ -84,7 +92,32 @@ final class RoadLayoutCases {
         }
         // A full view has no limits of cities and roads, as a server has by default; the empty one shows the longest limits.
         return new RoadViews.RoadTabView(kingdom, canManage, canManage, empty ? 0 : 999, empty ? 100_000 : 0, empty ? 1_000_000 : 0, cities, roads,
-                crossings, camps, risks, squads);
+                crossings, camps, risks, squads, 112, 12, 6, 40, 20, canManage);
+    }
+
+    /**
+     * What a governor decided, the longest of each kind in turn.
+     */
+    private static Component note(int i) {
+        String key = "kingdomworld.governor.note.";
+        Component template = Component.translatable("kingdomworld.building.gothic_guild_ss");
+        return switch (i % 8) {
+            case 0 -> Component.translatable(key + "saves", template, Component.literal("999 999 999 999"));
+            case 1 -> Component.translatable(key + "builds", template);
+            case 2 -> Component.translatable(key + "paused");
+            case 3 -> Component.translatable(key + "waiting", 99_999);
+            case 4 -> Component.translatable(key + "lacks", template);
+            case 5 -> Component.translatable(key + "no_builder");
+            case 6 -> Component.translatable(key + "wall.stone");
+            default -> Component.translatable(key + "done");
+        };
+    }
+
+    /**
+     * The list of cities of a king, governors and all, for a case that hovers over a row.
+     */
+    static ThroneScreen cities(Function<Role, KingdomView> member) {
+        return roadsTab(member, Role.KING, true, false, "cities", 0, 0, Component.empty());
     }
 
     private static ThroneScreen roadsTab(Function<Role, KingdomView> member, Role role, boolean canManage, boolean empty, String mode,

@@ -219,6 +219,45 @@ public final class CityGovernors {
     }
 
     /**
+     * The key of the city of a kingdom whose square holds a place, as the window of the workers names it ({@code c<id>}); empty
+     * for none.
+     */
+    public static String cityKey(MinecraftServer server, UUID kingdomId, @Nullable WorldPos pos) {
+        long city = cityAt(server, kingdomId, pos);
+        return city < 0 ? "" : "c" + city;
+    }
+
+    /**
+     * The office of a citizen, for the window of the workers.
+     *
+     * @param kind  0 none, 1 the mayor, 2 the baron (as {@code WorkforceView.CitizenRow} counts them)
+     * @param place the key of the city it governs ({@code c<id>}), empty if none
+     */
+    public record Office(int kind, String place) {
+        public static final Office NONE = new Office(0, "");
+    }
+
+    /**
+     * What a citizen governs: the city it is the mayor of, or the city of the house it heads.
+     */
+    public static Office office(MinecraftServer server, Citizen citizen) {
+        if (RoadWork.isReadOnly(server) || NobilityWork.isReadOnly(server)) {
+            return Office.NONE;
+        }
+        Optional<CityCharter> mayor = RoadWork.state(server).mayoralty(citizen.id());
+        if (mayor.isPresent()) {
+            return new Office(1, "c" + mayor.get().cityId());
+        }
+        NobilityState nobility = NobilityWork.state(server);
+        Optional<NobleHouse> house = nobility.houseOf(citizen.id());
+        if (house.isEmpty()) {
+            return Office.NONE;
+        }
+        return new Office(2, nobility.grantsOf(house.get()).stream().filter(grant -> grant.fief().kind() == Fief.Kind.CITY)
+                .map(grant -> "c" + grant.fief().city()).findFirst().orElse(""));
+    }
+
+    /**
      * What is known of a citizen for an office in a city of a kingdom.
      */
     public static CityOffice.Candidate candidate(MinecraftServer server, UUID kingdomId, UUID citizenId) {
@@ -932,6 +971,19 @@ public final class CityGovernors {
             return KingdomWorldApi.kingdom(server, kingdomId).<Component>map(KingdomActions::kingdomName).orElse(Component.literal("?"));
         }
         return RoadWork.state(server).city(cityId).<Component>map(city -> Component.literal(city.name())).orElse(Component.literal("?"));
+    }
+
+    /**
+     * What a governor decided last, in words, for the window of the king.
+     */
+    public static Component noteText(MinecraftServer server, UUID kingdomId, GovernorNote note) {
+        return switch (note.kind()) {
+            case NONE, PAUSED, NO_BUILDER, POST, DONE -> Component.translatable(KEY + "note." + note.kind().id());
+            case WAITING -> Component.translatable(KEY + "note.waiting", note.amount());
+            case BUILDS, LACKS -> Component.translatable(KEY + "note." + note.kind().id(), templateName(note.subject()));
+            case SAVES -> Component.translatable(KEY + "note.saves", templateName(note.subject()), money(server, kingdomId, note.amount()));
+            case WALL -> Component.translatable(KEY + "note.wall." + (note.subject().equals("stone") ? "stone" : "palisade"));
+        };
     }
 
     static Component templateName(String templateId) {

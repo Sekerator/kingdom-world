@@ -65,7 +65,11 @@ final class RoadsTab {
         ORDER_BUILDING,
         SEND_BUILDER,
         RENAME,
-        ON_MAP;
+        ON_MAP,
+        APPOINT_MAYOR,
+        MAKE_BARON,
+        DISMISS,
+        PAUSE;
 
         String id() {
             return name().toLowerCase(Locale.ROOT);
@@ -178,6 +182,19 @@ final class RoadsTab {
                 }
                 return;
             }
+            case APPOINT_MAYOR, MAKE_BARON -> {
+                // The workers of the city, or of the whole kingdom while nobody lives there, to choose the governor from.
+                actingCity = -1;
+                if (view != null && Minecraft.getInstance().getConnection() != null) {
+                    String place = row != null && row.people() > 0 ? "c" + cityId : "";
+                    KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Request(view.kingdomId(),
+                            true, new io.github.sekerator.kingdomworld.common.network.data.WorkforceView.Query(
+                            io.github.sekerator.kingdomworld.common.network.data.WorkforceView.Mode.CITIZENS, place, "", false, 0, 8, null, null)));
+                }
+                return;
+            }
+            case DISMISS -> send(RoadPackets.TabChange.Action.GOVERNOR_DISMISS, cityId, 0);
+            case PAUSE -> send(RoadPackets.TabChange.Action.GOVERNOR_PAUSE, cityId, row != null && row.paused() ? 0 : 1);
             default -> send(RoadPackets.TabChange.Action.valueOf(choice.name()), cityId, 0);
         }
         actingCity = -1;
@@ -200,6 +217,27 @@ final class RoadsTab {
 
     private static Component cityChoiceLabel(CityChoice choice) {
         return Component.translatable(KEY + "city_action." + choice.id());
+    }
+
+    private static Component cityChoiceLabel(CityChoice choice, @Nullable RoadViews.CityRow row) {
+        if (choice == CityChoice.PAUSE && row != null && row.paused()) {
+            return Component.translatable(KEY + "city_action.resume");
+        }
+        return cityChoiceLabel(choice);
+    }
+
+    /**
+     * Who governs a city, as its row says: "Governor: Irma, elder", the house with its title, or nobody; stopped by the king.
+     */
+    static Component governor(RoadViews.CityRow row) {
+        Component who = switch (row.governor()) {
+            case RoadViews.CityRow.MAYOR -> Component.translatable(KEY + "governor", Component.translatable(
+                    "kingdomworld.settlement.head." + row.level().id(), row.governorName()));
+            case RoadViews.CityRow.HOUSE -> Component.translatable(KEY + "governor_house", row.governorName(),
+                    Component.translatable("kingdomworld.governor.title." + (row.governorTitle().isEmpty() ? "baron" : row.governorTitle())));
+            default -> Component.translatable(KEY + "no_governor");
+        };
+        return row.paused() && row.governor() != RoadViews.CityRow.NO_GOVERNOR ? Component.translatable(KEY + "governor_paused", who) : who;
     }
 
     @Nullable
@@ -249,6 +287,7 @@ final class RoadsTab {
         for (CityChoice choice : CityChoice.values()) {
             choices = Math.max(choices, screen.buttonWidth(cityChoiceLabel(choice)));
         }
+        choices = Math.max(choices, screen.buttonWidth(Component.translatable(KEY + "city_action.resume")));
         int rows = 150 + Math.max(actionsWidth, Math.max(acceptWidth + GAP + declineWidth, sendWidth));
         int messages = 0;
         for (String key : List.of("loading", "no_cities", "no_roads", "no_requests", "no_camps", "no_risks", "no_squads")) {
@@ -366,13 +405,19 @@ final class RoadsTab {
             CityChoice[] choices = CityChoice.values();
             for (int i = 0; i < rows && scroll + i < choices.length; i++) {
                 CityChoice choice = choices[scroll + i];
-                Button button = screen.add(Button.builder(cityChoiceLabel(choice), b -> cityAction(choice, cityId, row))
+                Button button = screen.add(Button.builder(cityChoiceLabel(choice, row), b -> cityAction(choice, cityId, row))
                         .bounds(x, listTop(top) + i * ROW, right - x, ROW - 2).build());
-                button.setTooltip(Tooltip.create(Component.translatable(KEY + "city_action." + choice.id() + ".hint")));
+                String hint = choice == CityChoice.PAUSE && row != null && row.paused() ? "resume" : choice.id();
+                button.setTooltip(Tooltip.create(Component.translatable(KEY + "city_action." + hint + ".hint")));
+                boolean house = row != null && row.governor() == RoadViews.CityRow.HOUSE;
                 button.active = switch (choice) {
                     case GATE_HERE -> view.canManage() && row != null && row.wallId() != 0;
                     case RENAME -> view.canManage() && row != null && !row.capital();
                     case ON_MAP -> row != null;
+                    // A city a house holds has its governor; the capital is no fief, and only the king raises a house.
+                    case APPOINT_MAYOR -> view.canManage() && row != null && !house;
+                    case MAKE_BARON -> view.king() && row != null && !row.capital() && !house;
+                    case DISMISS -> (view.canManage() || view.king()) && row != null && row.governor() != RoadViews.CityRow.NO_GOVERNOR;
                     default -> view.canManage();
                 };
             }
@@ -486,6 +531,13 @@ final class RoadsTab {
     }
 
     /**
+     * A point over the text of a row of the list, {x, y}, by the layout alone; for the layout check, which hovers over it.
+     */
+    static int[] rowPoint(int left, int top, int row) {
+        return new int[]{left + KingdomScreen.PAD + 6, listTop(top) + row * ROW + 7};
+    }
+
+    /**
      * Where the text of a row of the list was drawn last, {x, y}; for the self-check, which puts the mouse over it.
      */
     int[] rowForCheck(int row) {
@@ -594,14 +646,22 @@ final class RoadsTab {
         Component people = row.folk() > 0 ? Component.translatable(KEY + "city_people_folk", row.people(), row.folk())
                 : Component.literal(Integer.toString(row.people()));
         Component beds = Component.translatable(KEY + "city_beds", row.beds(), row.freeBeds());
+        Component governor = governor(row);
         Component hint = Component.translatable(KEY + "city_hint_builders", Component.translatable(KEY + "city_hint", row.name(),
                 RoadTexts.level(row.level()), people, row.buildings(), beds, wall, RoadTexts.gates(row.gates()), where), row.builders(),
                 row.helpers(), row.sites(), nextLevel(row));
-        int whereWidth = Math.min(screen.font().width(where), Math.max(0, (right - x) / 4));
-        int stateWidth = Math.min(screen.font().width(state), Math.max(0, (right - x - whereWidth) / 2));
+        // Who governs the city and what it decided last.
+        hint = row.governor() == RoadViews.CityRow.NO_GOVERNOR ? Component.translatable(KEY + "city_hint_no_governor", hint, governor)
+                : Component.translatable(KEY + "city_hint_governor", hint, governor, row.note());
+        int whereWidth = Math.min(screen.font().width(where), Math.max(0, (right - x) / 5));
+        int governorWidth = Math.min(screen.font().width(governor), Math.max(0, (right - x - whereWidth) / 3));
+        int stateWidth = Math.min(screen.font().width(state), Math.max(0, (right - x - whereWidth - governorWidth) / 2));
         Component name = row.capital() ? Component.translatable(KEY + "capital", row.name()) : Component.literal(row.name());
-        text(graphics, name, x, y + 4, row.capital() ? 0xFFF0D070 : 0xFFFFFFFF, right - x - whereWidth - stateWidth - 12, hint);
-        text(graphics, state, right - whereWidth - stateWidth - 6, y + 4, row.wallClass() == null ? 0xFFB8B8B8 : 0xFFA0E0A0, stateWidth, hint);
+        text(graphics, name, x, y + 4, row.capital() ? 0xFFF0D070 : 0xFFFFFFFF, right - x - whereWidth - governorWidth - stateWidth - 18, hint);
+        text(graphics, state, right - whereWidth - governorWidth - stateWidth - 12, y + 4, row.wallClass() == null ? 0xFFB8B8B8 : 0xFFA0E0A0,
+                stateWidth, hint);
+        int governorColor = row.governor() == RoadViews.CityRow.NO_GOVERNOR ? 0xFF9A9A9A : row.paused() ? 0xFFFFC080 : 0xFFE0D0A0;
+        text(graphics, governor, right - whereWidth - governorWidth - 6, y + 4, governorColor, governorWidth, hint);
         text(graphics, where, right - whereWidth, y + 4, 0xFFB8B8B8, whereWidth, null);
     }
 

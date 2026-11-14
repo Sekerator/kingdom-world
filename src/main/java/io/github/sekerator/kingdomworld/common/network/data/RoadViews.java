@@ -147,16 +147,48 @@ public final class RoadViews {
      * @param freeBeds  of those, the ones free of named citizens and townsfolk alike
      */
     /**
-     * @param builders citizens at the posts of builders of the city
-     * @param helpers  builders of other cities helping with its constructions now
-     * @param sites    its constructions
+     * @param builders     citizens at the posts of builders of the city
+     * @param helpers      builders of other cities helping with its constructions now
+     * @param sites        its constructions
+     * @param governor     who governs it: {@link #NO_GOVERNOR}, {@link #MAYOR} or {@link #HOUSE}
+     * @param governorName the mayor, or the family of the house, in the alphabet of the viewer
+     * @param governorTitle the title of the house on the city ({@code baron}, {@code count}, {@code duke}), else empty
+     * @param paused       whether the king stopped its governor
+     * @param note         what its governor decided last, in words; empty without a governor
      */
     public record CityRow(long id, String name, int x, int y, int z, boolean capital, int roads, CityLevel level, int people, int buildings,
                           long wallId, @Nullable Wall.WallClass wallClass, int wallBuilt, int gates, int folk, int beds, int freeBeds,
-                          int builders, int helpers, int sites) {
+                          int builders, int helpers, int sites, int governor, String governorName, String governorTitle, boolean paused,
+                          net.minecraft.network.chat.Component note) {
+        public static final int NO_GOVERNOR = 0;
+        public static final int MAYOR = 1;
+        public static final int HOUSE = 2;
+
+        public CityRow {
+            governor = governor < NO_GOVERNOR || governor > HOUSE ? NO_GOVERNOR : governor;
+            governorName = governorName == null ? "" : governorName;
+            governorTitle = governorTitle == null ? "" : governorTitle;
+            note = note == null ? net.minecraft.network.chat.Component.empty() : note;
+        }
+
         public CityRow(long id, String name, int x, int y, int z, boolean capital, int roads, CityLevel level, int people, int buildings,
                        long wallId, @Nullable Wall.WallClass wallClass, int wallBuilt, int gates, int folk, int beds, int freeBeds) {
             this(id, name, x, y, z, capital, roads, level, people, buildings, wallId, wallClass, wallBuilt, gates, folk, beds, freeBeds, 0, 0, 0);
+        }
+
+        public CityRow(long id, String name, int x, int y, int z, boolean capital, int roads, CityLevel level, int people, int buildings,
+                       long wallId, @Nullable Wall.WallClass wallClass, int wallBuilt, int gates, int folk, int beds, int freeBeds,
+                       int builders, int helpers, int sites) {
+            this(id, name, x, y, z, capital, roads, level, people, buildings, wallId, wallClass, wallBuilt, gates, folk, beds, freeBeds, builders,
+                    helpers, sites, NO_GOVERNOR, "", "", false, net.minecraft.network.chat.Component.empty());
+        }
+
+        /**
+         * The same city with its governor.
+         */
+        public CityRow withGovernor(int kind, String who, String title, boolean stopped, net.minecraft.network.chat.Component decided) {
+            return new CityRow(id, name, x, y, z, capital, roads, level, people, buildings, wallId, wallClass, wallBuilt, gates, folk, beds,
+                    freeBeds, builders, helpers, sites, kind, who, title, stopped, decided);
         }
 
         void encode(FriendlyByteBuf buf) {
@@ -180,6 +212,11 @@ public final class RoadViews {
             buf.writeVarInt(builders);
             buf.writeVarInt(helpers);
             buf.writeVarInt(sites);
+            buf.writeVarInt(governor);
+            buf.writeUtf(governorName, NAME);
+            buf.writeUtf(governorTitle, NAME);
+            buf.writeBoolean(paused);
+            buf.writeComponent(note);
         }
 
         static CityRow decode(FriendlyByteBuf buf) {
@@ -198,7 +235,8 @@ public final class RoadViews {
             Wall.WallClass[] classes = Wall.WallClass.values();
             return new CityRow(id, name, x, y, z, capital, roads, level, people, buildings, wallId,
                     wallClass <= 0 || wallClass > classes.length ? null : classes[wallClass - 1], buf.readVarInt(), buf.readVarInt(),
-                    buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt());
+                    buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(),
+                    buf.readUtf(NAME), buf.readUtf(NAME), buf.readBoolean(), buf.readComponent());
         }
     }
 
@@ -339,10 +377,19 @@ public final class RoadViews {
      * @param cityDistance the least distance between cities along x or z the server keeps, in blocks
      * @param townPeople   the citizens and {@code townBuildings} the buildings that make a city a town; {@code cityPeople} and
      *                     {@code cityBuildings} a large city
+     * @param king         whether the viewer is the king, who alone makes a citizen a baron
      */
     public record RoadTabView(UUID kingdomId, boolean canManage, boolean canOrder, int builders, int maxCities, int maxRoads,
                               List<CityRow> cities, List<RoadRow> roads, List<CrossingRow> crossings, List<CampRow> camps, List<RiskRow> risks,
-                              List<SquadRow> squads, int cityDistance, int townPeople, int townBuildings, int cityPeople, int cityBuildings) {
+                              List<SquadRow> squads, int cityDistance, int townPeople, int townBuildings, int cityPeople, int cityBuildings,
+                              boolean king) {
+        public RoadTabView(UUID kingdomId, boolean canManage, boolean canOrder, int builders, int maxCities, int maxRoads, List<CityRow> cities,
+                           List<RoadRow> roads, List<CrossingRow> crossings, List<CampRow> camps, List<RiskRow> risks, List<SquadRow> squads,
+                           int cityDistance, int townPeople, int townBuildings, int cityPeople, int cityBuildings) {
+            this(kingdomId, canManage, canOrder, builders, maxCities, maxRoads, cities, roads, crossings, camps, risks, squads, cityDistance,
+                    townPeople, townBuildings, cityPeople, cityBuildings, false);
+        }
+
         public RoadTabView(UUID kingdomId, boolean canManage, boolean canOrder, int builders, int maxCities, int maxRoads, List<CityRow> cities,
                            List<RoadRow> roads, List<CrossingRow> crossings, List<CampRow> camps, List<RiskRow> risks, List<SquadRow> squads) {
             this(kingdomId, canManage, canOrder, builders, maxCities, maxRoads, cities, roads, crossings, camps, risks, squads, 112, 12, 6, 40, 20);
@@ -375,13 +422,14 @@ public final class RoadViews {
             buf.writeVarInt(townBuildings);
             buf.writeVarInt(cityPeople);
             buf.writeVarInt(cityBuildings);
+            buf.writeBoolean(king);
         }
 
         public static RoadTabView decode(FriendlyByteBuf buf) {
             return new RoadTabView(buf.readUUID(), buf.readBoolean(), buf.readBoolean(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(),
                     readList(buf, MAX_ROWS, CityRow::decode), readList(buf, MAX_ROWS, RoadRow::decode), readList(buf, MAX_ROWS, CrossingRow::decode),
                     readList(buf, MAX_ROWS, CampRow::decode), readList(buf, MAX_ROWS, RiskRow::decode), readList(buf, MAX_ROWS, SquadRow::decode),
-                    buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt());
+                    buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readBoolean());
         }
     }
 

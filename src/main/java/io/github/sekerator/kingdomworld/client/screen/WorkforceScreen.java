@@ -518,7 +518,8 @@ public class WorkforceScreen extends KingdomScreen implements ResultListener {
         return switch (query.mode()) {
             case CITIZENS -> List.of(Component.translatable(KEY + "dismiss"), Component.translatable(KEY + "assign"),
                     Component.translatable(io.github.sekerator.kingdomworld.client.CitizenFinder.tracking(selected instanceof UUID id ? id : null)
-                            ? KEY + "find_stop" : KEY + "find"), Component.translatable(KEY + "return"));
+                            ? KEY + "find_stop" : KEY + "find"), Component.translatable(KEY + "return"),
+                    Component.translatable(KEY + "office"));
             case POSTS -> List.of(Component.translatable(KEY + "settings"), Component.translatable(KEY + "put"),
                     Component.translatable(KEY + "clear"), Component.translatable(KEY + "rename"));
             case CHOOSE_POST -> List.of(Component.translatable(KEY + "choose_post.choose"));
@@ -796,7 +797,12 @@ public class WorkforceScreen extends KingdomScreen implements ResultListener {
             switch (query.mode()) {
                 case CITIZENS -> {
                     boolean soldier = citizen != null && citizen.soldier();
-                    if (i == 2) {
+                    if (i == 4) {
+                        // The office of a citizen: the window of the office says what it may become and why not.
+                        boolean may = view != null && (view.header().mayors() || view.header().barons());
+                        button.active = citizen != null && may;
+                        button.setTooltip(Tooltip.create(Component.translatable(may ? KEY + "office_hint" : KEY + "office.no_right")));
+                    } else if (i == 2) {
                         // Anybody may be looked for, soldiers too.
                         button.active = citizen != null;
                         button.setTooltip(Tooltip.create(Component.translatable(KEY + "find_hint")));
@@ -853,6 +859,8 @@ public class WorkforceScreen extends KingdomScreen implements ResultListener {
                     }
                 } else if (index == 3) {
                     act(WorkforcePackets.Action.Kind.RETURN, citizen.id(), null, "");
+                } else if (index == 4) {
+                    office(citizen);
                 } else {
                     back = query;
                     show(WorkforceView.Query.choosePost(citizen.id(), visibleRows()));
@@ -910,6 +918,51 @@ public class WorkforceScreen extends KingdomScreen implements ResultListener {
                 act(WorkforcePackets.Action.Kind.ASSIGN, citizen.id(), post.ref(), "");
             }
         }
+    }
+
+    /**
+     * Opens the window of the office of a citizen: make it the mayor or the baron of the city of the filter, of its post or of its
+     * home.
+     */
+    private void office(WorkforceView.CitizenRow citizen) {
+        if (minecraft != null && view != null) {
+            minecraft.setScreen(officeScreen(citizen));
+        }
+    }
+
+    private GovernorOfficeScreen officeScreen(WorkforceView.CitizenRow citizen) {
+        String city = GovernorOfficeScreen.cityFor(query, citizen);
+        UUID id = citizen.id();
+        return new GovernorOfficeScreen(this, citizen, CitizenTexts.name(citizen.seed(), gender(citizen.female())), city, placeName(city),
+                view != null && view.header().mayors(), view != null && view.header().barons(),
+                mayor -> act(mayor ? WorkforcePackets.Action.Kind.MAYOR : WorkforcePackets.Action.Kind.BARON, id, null, city));
+    }
+
+    /**
+     * Whether the window shows citizens, for the self-check.
+     */
+    public boolean hasCitizensForCheck() {
+        return view != null && !view.citizens().isEmpty();
+    }
+
+    /**
+     * The first citizen of the list who governs nothing, else the first, for the self-check.
+     */
+    public int firstWithoutOfficeForCheck() {
+        for (int i = 0; view != null && i < view.citizens().size(); i++) {
+            if (view.citizens().get(i).office() == WorkforceView.CitizenRow.OFFICE_NONE) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * The window of the office of a citizen of the list, for the layout check.
+     */
+    public GovernorOfficeScreen officeForCheck(int row) {
+        selected = view.citizens().get(row).id();
+        return officeScreen(view.citizens().get(row));
     }
 
     /**

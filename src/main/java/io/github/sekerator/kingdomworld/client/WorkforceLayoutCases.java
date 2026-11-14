@@ -52,6 +52,11 @@ final class WorkforceLayoutCases {
         add.accept("workforce-posts-error", () -> screen(posts(new WorkforceView.Query(WorkforceView.Mode.POSTS, "c0", "unemployed", true, 0, 6,
                 null, null), false), Component.translatable("kingdomworld.error.no_free_seat"), false));
         add.accept("workforce-choose-post", () -> screen(choosePost(), Component.empty(), true));
+        // The office of a citizen working in the city of the filter, and of one without a post or a home in a city.
+        add.accept("workforce-citizen-mayor", () -> screen(citizens(new WorkforceView.Query(WorkforceView.Mode.CITIZENS, "c12", "", false, 0, 6,
+                null, null)), Component.empty(), true).officeForCheck(0));
+        add.accept("workforce-citizen-office-no-city", () -> screen(citizens(new WorkforceView.Query(WorkforceView.Mode.CITIZENS, "", "", false,
+                0, 6, null, null)), Component.empty(), true).officeForCheck(1));
         add.accept("workforce-choose-citizen", () -> screen(chooseCitizen(), Component.empty(), true));
         add.accept("workforce-choose-citizen-error", () -> screen(chooseCitizen(),
                 Component.translatable("kingdomworld.error.army_profession"), false));
@@ -127,7 +132,7 @@ final class WorkforceLayoutCases {
         }
         List<WorkforceView.Place> places = List.of(new WorkforceView.Place("c0", LONG_LATIN, LONG_CYRILLIC),
                 new WorkforceView.Place("c12", LONG_PLACE, LONG_PLACE), new WorkforceView.Place("s7", LONG_LATIN + " II", LONG_CYRILLIC + " II"));
-        return new WorkforceView.Header(9_999, 9_999, 9_999, 9_999, everything ? 1 : 9_999, shortages, places, 9_999, 9_999, 9_999);
+        return new WorkforceView.Header(9_999, 9_999, 9_999, 9_999, everything ? 1 : 9_999, shortages, places, 9_999, 9_999, 9_999, true, everything);
     }
 
     private static WorkforceView.PostRef far(int i) {
@@ -161,7 +166,9 @@ final class WorkforceLayoutCases {
                     doings[i % doings.length], statuses[i % statuses.length], lacks, candidate, i % 7 == 6 ? WorkforceView.FAR : 99_999,
                     new WorkforceView.Spot(i % 5 == 4 ? "minecraft:the_nether" : "minecraft:overworld", new BlockPos(-29_999_999 + i, 319, 29_999_999),
                             i % 3 != 0, i % 2 == 0 ? "c12" : "", io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Away.values()[i % 3],
-                            io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Hold.values()[i % 5], 99_999)));
+                            io.github.sekerator.kingdomworld.core.citizen.Whereabouts.Hold.values()[i % 5], 99_999),
+                    i == 5 ? WorkforceView.CitizenRow.OFFICE_BARON : i == 3 ? WorkforceView.CitizenRow.OFFICE_MAYOR : WorkforceView.CitizenRow.OFFICE_NONE,
+                    i == 5 || i == 3 ? "c12" : "", i % 2 == 0 ? "c12" : "c0"));
         }
         return rows;
     }

@@ -415,6 +415,13 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
+     * A point over the text of a row of the list of the roads tab, by the layout alone; for the layout check.
+     */
+    public int[] roadsRowPoint(int row) {
+        return RoadsTab.rowPoint(left(), top() + contentOffset, row);
+    }
+
+    /**
      * Whether the guild tab got its view, for the self-check.
      */
     public boolean guildShown() {

@@ -70,8 +70,8 @@ public final class RoadPackets {
      * Client to server: a decision about the kingdom's roads.
      *
      * @param first  the road, the request or the city
-     * @param second the section of a road, or the squad sent to patrol
-     * @param text   the new name of a city
+     * @param second the section of a road, the squad sent to patrol, 1 to stop a governor and 0 to let it go on
+     * @param text   the new name of a city, or the citizen made its mayor or baron
      */
     public record TabChange(UUID kingdomId, Action action, long first, long second, String text) {
         public static final RequestPolicy POLICY = new RequestPolicy("road_change", 0, 20, 10_000L);
@@ -87,7 +87,15 @@ public final class RoadPackets {
             WALL_PALISADE,
             WALL_STONE,
             GATE_HERE,
-            SEND_BUILDER
+            SEND_BUILDER,
+            /** The citizen in the text becomes the mayor of the city. */
+            MAYOR_APPOINT,
+            /** The citizen in the text becomes the baron of the city. */
+            MAKE_BARON,
+            /** The governor of the city is dismissed. */
+            GOVERNOR_DISMISS,
+            /** The governor of the city stops ({@code second} 1) or goes on (0). */
+            GOVERNOR_PAUSE
         }
 
         public TabChange {

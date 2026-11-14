@@ -1839,6 +1839,9 @@ final class ClientLayoutCheck {
         MagicLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         CompanionLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)));
         RoadLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
+        // A city with a governor hovered over: who governs, what it decided, its people as a number.
+        cases.add(new Case("throne-roads-city-governor", () -> RoadLayoutCases.cities(role -> view(KingdomView.Relation.MEMBER, role)), true,
+                screen -> ((ThroneScreen) screen).roadsRowPoint(1)));
         LawLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         DiplomacyLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         NobilityLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));

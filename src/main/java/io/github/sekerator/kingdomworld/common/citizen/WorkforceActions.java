@@ -177,7 +177,7 @@ public final class WorkforceActions {
         List<WorkPost> posts = state.citizens().posts().postsOf(kingdomId);
         Map<WorldPos, Integer> numbers = numbers(posts);
         Places places = Places.of(server, kingdomId);
-        WorkforceView.Header header = header(server, kingdomId, people, posts, places);
+        WorkforceView.Header header = header(server, kingdomId, people, posts, places, player.getUUID());
         Viewer viewer = new Viewer(Dimensions.id(player.level()), player.blockPosition());
         WorkforceView.Query asked = query;
         return switch (query.mode()) {
@@ -490,7 +490,8 @@ public final class WorkforceActions {
 
     // ---------------------------------------------------------------- rows
 
-    private static WorkforceView.Header header(MinecraftServer server, UUID kingdomId, List<Citizen> people, List<WorkPost> posts, Places places) {
+    private static WorkforceView.Header header(MinecraftServer server, UUID kingdomId, List<Citizen> people, List<WorkPost> posts, Places places,
+                                               UUID viewer) {
         Workforce.Counts counts = Workforce.counts(people);
         Map<String, Integer> lacking = new LinkedHashMap<>();
         Map<String, WorkforceView.Shortage> kinds = new HashMap<>();
@@ -517,7 +518,11 @@ public final class WorkforceActions {
         int foodDays = CitizenActions.summary(server, kingdomId).foodDays();
         return new WorkforceView.Header(counts.working(), counts.unemployed(), counts.withoutPost(), counts.soldiers(), foodDays,
                 shortages.size() > WorkforceView.MAX_SHORTAGES ? shortages.subList(0, WorkforceView.MAX_SHORTAGES) : shortages,
-                places.list(), posts.size(), empty, free);
+                places.list(), posts.size(), empty, free,
+                io.github.sekerator.kingdomworld.common.road.CityGovernors.governs(server, kingdomId)
+                        && KingdomWorldApi.state(server).membership().hasPermission(viewer, kingdomId, Permission.MANAGE_CONSTRUCTION),
+                io.github.sekerator.kingdomworld.common.road.CityGovernors.governs(server, kingdomId)
+                        && KingdomWorldApi.kingdom(server, kingdomId).map(kingdom -> viewer.equals(kingdom.rulerId())).orElse(false));
     }
 
     /**
@@ -587,9 +592,11 @@ public final class WorkforceActions {
                 workplace = new WorkforceView.Workplace(ref(at), false, "", 0, citizen.professionId(), viewer.distance(at));
             }
         }
+        io.github.sekerator.kingdomworld.common.road.CityGovernors.Office office = io.github.sekerator.kingdomworld.common.road.CityGovernors.office(server, citizen);
         return new WorkforceView.CitizenRow(citizen.id(), citizen.nameSeed(), citizen.gender() == Gender.FEMALE, citizen.professionId(),
                 citizen.state(), Math.round(citizen.health()), Math.round(citizen.maxHealth()), citizen.mood(), places.of(citizen), workplace,
-                doing(server, citizen), citizen.workStatus(), lacks(citizen), candidate, distance, spot);
+                doing(server, citizen), citizen.workStatus(), lacks(citizen), candidate, distance, spot, office.kind(), office.place(),
+                io.github.sekerator.kingdomworld.common.road.CityGovernors.cityKey(server, citizen.kingdomId(), citizen.workplace()));
     }
 
     /**
@@ -674,9 +681,41 @@ public final class WorkforceActions {
                     : find(player, kingdomId, action.citizen());
             case RETURN -> action.citizen() == null ? KingdomActions.Feedback.error(KingdomError.UNKNOWN_CITIZEN)
                     : sendBack(player, kingdomId, action.citizen());
+            case MAYOR, BARON -> office(player, kingdomId, action);
         };
         KingdomActions.reply(player, feedback);
         send(player, kingdomId, action.query(), false);
+    }
+
+    /**
+     * Makes a citizen the mayor or the baron of the city in the text of the action ({@code c<id>}); the rights are checked there.
+     */
+    private static KingdomActions.Feedback office(ServerPlayer player, UUID kingdomId, WorkforcePackets.Action action) {
+        long city = cityOfKey(action.text());
+        if (action.citizen() == null) {
+            return KingdomActions.Feedback.error(KingdomError.UNKNOWN_CITIZEN);
+        }
+        if (city < 0) {
+            return KingdomActions.Feedback.fail("kingdomworld.governor.unfit.no_city");
+        }
+        return action.kind() == WorkforcePackets.Action.Kind.MAYOR
+                ? io.github.sekerator.kingdomworld.common.road.CityGovernors.appoint(player.server, player.getUUID(), kingdomId, action.citizen(), city)
+                : io.github.sekerator.kingdomworld.common.road.CityGovernors.makeBaron(player.server, player.getUUID(), kingdomId, action.citizen(), city);
+    }
+
+    /**
+     * The city of a key of a place ({@code c<id>}), -1 for none.
+     */
+    static long cityOfKey(String key) {
+        if (key == null || key.length() < 2 || key.charAt(0) != 'c') {
+            return -1;
+        }
+        try {
+            long city = Long.parseLong(key.substring(1));
+            return city >= 0 ? city : -1;
+        } catch (NumberFormatException e) {
+            return -1;
+        }
     }
 
     /**

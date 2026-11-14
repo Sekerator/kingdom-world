@@ -142,7 +142,11 @@ public final class WorkforcePackets {
             /** Where the citizen is: its body outlined for the player and a pointer to it. */
             FIND,
             /** The citizen goes back home or to its post. */
-            RETURN
+            RETURN,
+            /** The citizen becomes the mayor of the city in the text ({@code c<id>}). */
+            MAYOR,
+            /** The citizen becomes the baron of the city in the text ({@code c<id>}), the head of a new house. */
+            BARON
         }
 
         public Action {

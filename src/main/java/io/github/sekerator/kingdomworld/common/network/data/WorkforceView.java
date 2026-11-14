@@ -279,9 +279,18 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
      * @param emptyPosts posts without a profession
      * @param freeSeats  free seats at the posts with a profession
      */
+    /**
+     * @param mayors whether the viewer may make a citizen the mayor of a city: it runs the citizens and the construction
+     * @param barons whether the viewer may make a citizen the baron of a city: the king
+     */
     public record Header(int working, int unemployed, int withoutPost, int soldiers, int foodDays, List<Shortage> shortages, List<Place> places,
-                         int postCount, int emptyPosts, int freeSeats) {
+                         int postCount, int emptyPosts, int freeSeats, boolean mayors, boolean barons) {
         public static final Header EMPTY = new Header(0, 0, 0, 0, CitizenView.UNLIMITED_FOOD, List.of(), List.of(), 0, 0, 0);
+
+        public Header(int working, int unemployed, int withoutPost, int soldiers, int foodDays, List<Shortage> shortages, List<Place> places,
+                      int postCount, int emptyPosts, int freeSeats) {
+            this(working, unemployed, withoutPost, soldiers, foodDays, shortages, places, postCount, emptyPosts, freeSeats, false, false);
+        }
 
         public Header {
             shortages = List.copyOf(shortages);
@@ -312,6 +321,8 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
             buf.writeVarInt(postCount);
             buf.writeVarInt(emptyPosts);
             buf.writeVarInt(freeSeats);
+            buf.writeBoolean(mayors);
+            buf.writeBoolean(barons);
         }
 
         static Header decode(FriendlyByteBuf buf) {
@@ -331,7 +342,7 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
                 places.add(new Place(buf.readUtf(MAX_KEY), buf.readUtf(MAX_PLACE_NAME), buf.readUtf(MAX_PLACE_NAME)));
             }
             return new Header(working, unemployed, withoutPost, soldiers, foodDays, shortages, places, buf.readVarInt(), buf.readVarInt(),
-                    buf.readVarInt());
+                    buf.readVarInt(), buf.readBoolean(), buf.readBoolean());
         }
     }
 
@@ -370,15 +381,29 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
      * @param workplace where it works, {@code null} if nowhere
      * @param candidate how it stands to the post of the choices, otherwise how it stands to its own work
      * @param distance  for the choices of a post: blocks from the post, {@link #FAR} if far away; otherwise from the viewer
+     * @param office    the city it governs: {@link #OFFICE_NONE}, {@link #OFFICE_MAYOR} or {@link #OFFICE_BARON}
+     * @param officePlace the city it governs (a key of {@link Place}), empty if none
+     * @param postPlace the city its post stands in (a key of {@link Place}), empty for none or a post outside every city
      */
     public record CitizenRow(UUID id, int seed, boolean female, String profession, CitizenState state, int health, int maxHealth, int mood,
                              String place, @Nullable Workplace workplace, Workforce.Doing doing, WorkStatus status, List<Lack> lacks,
-                             Workforce.Candidate candidate, int distance, Spot spot) {
+                             Workforce.Candidate candidate, int distance, Spot spot, int office, String officePlace, String postPlace) {
+        public static final int OFFICE_NONE = 0;
+        public static final int OFFICE_MAYOR = 1;
+        public static final int OFFICE_BARON = 2;
+
         public CitizenRow(UUID id, int seed, boolean female, String profession, CitizenState state, int health, int maxHealth, int mood,
                           String place, @Nullable Workplace workplace, Workforce.Doing doing, WorkStatus status, List<Lack> lacks,
                           Workforce.Candidate candidate, int distance) {
             this(id, seed, female, profession, state, health, maxHealth, mood, place, workplace, doing, status, lacks, candidate, distance,
                     Spot.UNKNOWN);
+        }
+
+        public CitizenRow(UUID id, int seed, boolean female, String profession, CitizenState state, int health, int maxHealth, int mood,
+                          String place, @Nullable Workplace workplace, Workforce.Doing doing, WorkStatus status, List<Lack> lacks,
+                          Workforce.Candidate candidate, int distance, Spot spot) {
+            this(id, seed, female, profession, state, health, maxHealth, mood, place, workplace, doing, status, lacks, candidate, distance, spot,
+                    OFFICE_NONE, "", "");
         }
 
         public CitizenRow {
@@ -391,6 +416,9 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
             Objects.requireNonNull(status, "status");
             lacks = List.copyOf(lacks.size() > MAX_LACKS ? lacks.subList(0, MAX_LACKS) : lacks);
             Objects.requireNonNull(candidate, "candidate");
+            office = office < OFFICE_NONE || office > OFFICE_BARON ? OFFICE_NONE : office;
+            officePlace = officePlace == null ? "" : officePlace;
+            postPlace = postPlace == null ? "" : postPlace;
         }
 
         public boolean soldier() {
@@ -426,6 +454,9 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
             buf.writeEnum(candidate);
             buf.writeVarInt(distance + 1);
             spot.encode(buf);
+            buf.writeVarInt(office);
+            buf.writeUtf(officePlace, MAX_KEY);
+            buf.writeUtf(postPlace, MAX_KEY);
         }
 
         static CitizenRow decode(FriendlyByteBuf buf) {
@@ -456,7 +487,7 @@ public record WorkforceView(Query query, UUID kingdomId, String kingdomName, Hea
             }
             Workforce.Candidate candidate = KingdomView.readEnum(buf, Workforce.Candidate.class);
             return new CitizenRow(id, seed, female, profession, state, health, maxHealth, mood, place, workplace, doing, status, lacks, candidate,
-                    buf.readVarInt() - 1, Spot.decode(buf));
+                    buf.readVarInt() - 1, Spot.decode(buf), buf.readVarInt(), buf.readUtf(MAX_KEY), buf.readUtf(MAX_KEY));
         }
     }
 
