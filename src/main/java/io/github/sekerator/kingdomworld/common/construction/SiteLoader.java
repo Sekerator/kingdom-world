@@ -79,6 +79,8 @@ public final class SiteLoader {
         final Set<Long> scan;
         int ticks;
         int idle;
+        /** Steps of the place wait for something no loading gives (a container in the way, cobblestone for lava). */
+        boolean stuck;
         boolean releasing;
 
         Target(SitePick.Ref ref, ChunkHold hold, String dimension, Set<Long> scan) {
@@ -163,8 +165,9 @@ public final class SiteLoader {
         current.hold.hold();
         current.ticks++;
         if (current.hold.visited()) {
-            // A player is near: the place is loaded anyway and its work goes on as near any player.
-            letGo(server, current, false);
+            // A player is near: the place is loaded anyway and its work goes on as near any player. It waits its turn again, so
+            // that a place only partly near a player is not loaded and let go over and over.
+            letGo(server, current, true);
             return;
         }
         if (!current.hold.ready()) {
@@ -186,7 +189,9 @@ public final class SiteLoader {
             case DROPS -> drops(server, current);
         };
         if (done) {
-            letGo(server, current, false);
+            // A place whose steps wait for something waits its turn again, so that it is not loaded over and over before every
+            // other place of its kingdom.
+            letGo(server, current, current.stuck);
         }
     }
 
@@ -235,7 +240,8 @@ public final class SiteLoader {
                 return false;
             }
             // Blocked by a container, or waiting for cobblestone: what is left waits for something else.
-            return ++current.idle > IDLE_TICKS;
+            current.stuck = ++current.idle > IDLE_TICKS;
+            return current.stuck;
         }
         if (ConstructionWork.finished(construction, plan.get())) {
             // The second tick takes the scaffolds down and enters the building into the register while the place is held.
@@ -356,7 +362,9 @@ public final class SiteLoader {
                 continue;
             }
             Set<Long> chunks = nextColumns(wall);
-            if (chunks.isEmpty() || loadedAll(level, chunks)) {
+            // A wall whose next columns stand on land that is no longer the kingdom's is not loaded: it is not finished on the land
+            // of others far from players.
+            if (chunks.isEmpty() || !nextColumnsOnOwnLand(server, wall) || loadedAll(level, chunks)) {
                 continue;
             }
             int remaining = 0;
@@ -437,6 +445,23 @@ public final class SiteLoader {
     /**
      * The chunks of the next columns of a wall paid for, {@value #WALL_COLUMNS} at most, each widened by a block.
      */
+    /**
+     * Whether every next column of a wall paid for stands on the land of its kingdom within its borders.
+     */
+    static boolean nextColumnsOnOwnLand(MinecraftServer server, Wall wall) {
+        int columns = 0;
+        for (Road.Section section : wall.sections()) {
+            List<Wall.Block> blocks = wall.blocksOf(section);
+            for (int i = section.placed(); i < section.paid() && i < blocks.size() && columns < WALL_COLUMNS; i++, columns++) {
+                Wall.Block block = blocks.get(i);
+                if (!CityPlots.ownLand(server, wall.kingdomId(), wall.dimension(), ChunkKey.of(block.x() >> 4, block.z() >> 4))) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     static Set<Long> nextColumns(Wall wall) {
         Set<Long> chunks = new LinkedHashSet<>();
         int columns = 0;
