@@ -747,7 +747,7 @@ public final class FlagWork {
             if (data.isOff(building.id(), pos.asLong())) {
                 continue;
             }
-            if (plainBanner(level, pos, there, wanted)) {
+            if (plainBanner(server, level, pos, there, wanted, kingdom)) {
                 // A plain banner where the template has a flag: the cloth of the kingdom becomes its flag, turned as it was.
                 BlockState flag = FlagBlocks.onWall(wanted) ? FlagBlocks.wall(there.getValue(WallBannerBlock.FACING))
                         : FlagBlocks.standing(there.getValue(BannerBlock.ROTATION));
@@ -828,11 +828,20 @@ public final class FlagWork {
     }
 
     /**
-     * Whether a block is a plain banner of the form a flag of the template has there: no patterns, no name.
+     * Whether a block is the cloth of the kingdom where the template has a flag: a plain banner of the form of the flag (no
+     * patterns, no name), red as the banners of the templates are, or of the cloth of a kingdom of the world, which its great
+     * buildings wear. A plain banner of another colour is somebody's ornament and stays.
      */
-    private static boolean plainBanner(ServerLevel level, BlockPos pos, BlockState there, BlockState wanted) {
+    private static boolean plainBanner(MinecraftServer server, ServerLevel level, BlockPos pos, BlockState there, BlockState wanted,
+                                       UUID kingdom) {
         boolean wall = FlagBlocks.onWall(wanted);
         if (wall ? !(there.getBlock() instanceof WallBannerBlock) : !(there.getBlock() instanceof BannerBlock)) {
+            return false;
+        }
+        String color = ((net.minecraft.world.level.block.AbstractBannerBlock) there.getBlock()).getColor().getName();
+        if (!color.equals("red") && !(io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, kingdom)
+                && KingdomWorldApi.kingdom(server, kingdom).map(found -> io.github.sekerator.kingdomworld.core.kingdom.KingdomColors
+                .dye(found.color()).equals(color)).orElse(false))) {
             return false;
         }
         return level.getBlockEntity(pos) instanceof BannerBlockEntity banner && banner.getCustomName() == null
