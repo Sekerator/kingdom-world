@@ -211,7 +211,7 @@ public final class Earthworks {
      * The item of the ground a block gives the fill when it is dug, or {@code null} for anything else.
      */
     @Nullable
-    static String fillItem(BlockState state) {
+    public static String fillItem(BlockState state) {
         if (state.is(BlockTags.DIRT) && !state.is(Blocks.MUD) && !state.is(Blocks.MOSS_BLOCK) && !state.is(Blocks.MUDDY_MANGROVE_ROOTS)
                 || state.is(Blocks.DIRT_PATH) || state.is(Blocks.FARMLAND)) {
             return EarthworkPlan.DIRT;

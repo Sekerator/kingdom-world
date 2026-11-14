@@ -14,8 +14,11 @@ import io.github.sekerator.kingdomworld.core.citizen.Professions;
 import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.production.Reservations;
+import io.github.sekerator.kingdomworld.core.road.ColumnWork;
 import io.github.sekerator.kingdomworld.core.road.Crossing;
+import io.github.sekerator.kingdomworld.core.road.EarthRules;
 import io.github.sekerator.kingdomworld.core.road.Road;
+import io.github.sekerator.kingdomworld.core.road.RoadPayment;
 import io.github.sekerator.kingdomworld.core.road.RoadClass;
 import io.github.sekerator.kingdomworld.core.road.RoadLayout;
 import io.github.sekerator.kingdomworld.core.road.RoadRules;
@@ -54,6 +57,10 @@ public final class RoadBuilding {
     private static final Map<UUID, Double> CARRY = new HashMap<>();
     /** Builders of each kingdom seen working on roads in the last second. */
     private static final Map<UUID, Integer> CREWS = new HashMap<>();
+    /** Seconds of builders a second each kingdom had for its roads in the last second. */
+    private static final Map<UUID, Double> RATES = new HashMap<>();
+    /** Sections of levelled roads whose next column waits for materials, by road and section. */
+    private static final Set<Long> WAITING = new HashSet<>();
 
     private RoadBuilding() {
     }
@@ -61,6 +68,27 @@ public final class RoadBuilding {
     static void reset() {
         CARRY.clear();
         CREWS.clear();
+        RATES.clear();
+        WAITING.clear();
+        RoadCrews.reset();
+    }
+
+    /**
+     * Seconds of builders a second a kingdom had for its roads in the last second, before the share of far constructions.
+     */
+    public static double builderRate(UUID kingdomId) {
+        return RATES.getOrDefault(kingdomId, 0.0);
+    }
+
+    /**
+     * Whether the next column of a section of a levelled road waits for materials.
+     */
+    public static boolean waitingForMaterials(Road road, Road.Section section) {
+        return WAITING.contains(waitKey(road, section));
+    }
+
+    private static long waitKey(Road road, Road.Section section) {
+        return road.id() * 65_536L + section.index();
     }
 
     /**
@@ -157,6 +185,7 @@ public final class RoadBuilding {
         kingdoms.addAll(building);
         io.github.sekerator.kingdomworld.common.construction.RemoteCrews.startSecond();
         long now = KingdomWorldApi.gameTime(server);
+        Set<UUID> paying = new HashSet<>();
         for (UUID kingdom : kingdoms) {
             // Counted once a second for the helpers of far constructions and for the roads alike.
             List<Citizen> builders = freeBuilders(server, kingdom);
@@ -172,28 +201,54 @@ public final class RoadBuilding {
             }
             CREWS.put(kingdom, builders.size());
             double seconds = CARRY.getOrDefault(kingdom, 0.0);
+            double rate = 0;
             for (Citizen builder : builders) {
-                seconds += EconomySettings.workSpeed(builder.mood()) * left;
+                rate += EconomySettings.workSpeed(builder.mood()) * left;
             }
+            RATES.put(kingdom, rate);
+            seconds += rate;
+            EarthRules earth = RoadSettings.earth();
+            paying.add(kingdom);
+            // The miners are counted only while a levelled road of the kingdom has rock to pay for.
+            double offered = rockWaiting(roads, jobs) ? RoadCrews.offer(server, kingdom, earth) : 0.0;
+            RoadPayment.Budget budget = new RoadPayment.Budget(seconds, offered);
             int blocks = 0;
+            int levelled = 0;
             for (Object[] job : jobs) {
                 Road road = (Road) job[0];
                 Road.Section section = (Road.Section) job[1];
+                if (road.levelled() && !(section.repairing() && section.done())) {
+                    int paid = payLevelled(server, road, section, budget, rules, earth);
+                    levelled += paid;
+                    blocks += paid;
+                    if (budget.builders <= 1e-6 && budget.miners <= 1e-6) {
+                        break;
+                    }
+                    continue;
+                }
                 double per = rules.secondsPerBlock(road.roadClass());
-                while (seconds >= per) {
+                while (budget.builders >= per) {
                     boolean paid = section.repairing() && section.done() ? payRepair(server, road, section, rules) : payBlock(server, road, section);
                     if (!paid) {
                         break;
                     }
-                    seconds -= per;
+                    budget.builders -= per;
+                    budget.buildersSpent += per;
                     blocks++;
                     if (section.done() && !section.repairing()) {
                         break;
                     }
                 }
-                if (seconds < per) {
+                if (budget.builders < per) {
                     break;
                 }
+            }
+            seconds = budget.builders;
+            if (offered > 0) {
+                RoadCrews.settle(kingdom, offered, budget.minersSpent);
+                RoadCrews.wear(server, kingdom, budget.minersSpent, earth);
+            } else {
+                RoadCrews.idle(kingdom);
             }
             double beforeWalls = seconds;
             seconds = CityWalls.work(server, kingdom, seconds);
@@ -201,13 +256,21 @@ public final class RoadBuilding {
             // A crew without materials does not save up work for later.
             CARRY.put(kingdom, Math.min(seconds, rules.secondsPerBlock(RoadClass.PAVED) * builders.size()));
             if (blocks > 0) {
-                int share = Math.max(1, blocks / builders.size());
+                // The experience is shared between builders and miners by the seconds each gave.
+                double all = budget.buildersSpent + budget.minersSpent;
+                double minerPart = levelled > 0 && all > 0 ? budget.minersSpent / all : 0.0;
+                int builderShare = Math.max(1, (int) Math.round(blocks * (1.0 - minerPart) / builders.size()));
                 for (Citizen builder : builders) {
-                    builder.addExperience(share);
+                    builder.addExperience(builderShare);
+                }
+                int helpers = RoadCrews.helpers(kingdom);
+                if (minerPart > 0 && helpers > 0) {
+                    RoadCrews.experience(kingdom, server, Math.max(1, (int) Math.round(blocks * minerPart / helpers)));
                 }
                 roads.changed();
             }
         }
+        RoadCrews.idleExcept(paying);
         for (Road road : roads.roads()) {
             boolean wasBuilt = road.status() == Road.Status.DONE;
             if (road.status() == Road.Status.BUILDING && road.built()) {
@@ -227,10 +290,172 @@ public final class RoadBuilding {
     }
 
     /**
-     * Pays for the next block of a section: every item it takes, all or none.
+     * Pays for the next block of a section: every item it takes, all or none; for a levelled road its work too, at once.
      */
     public static boolean payNow(MinecraftServer server, Road road, Road.Section section) {
+        if (road.levelled() && !section.done()) {
+            RoadLayout.Block block = road.blocksOf(section).get(section.paid());
+            Choice items = chooseLevelled(server, road, section, block.needs(road.roadClass()));
+            return items != null && completeLevelled(server, road, section, block, items, RoadSettings.rules(), RoadSettings.earth());
+        }
         return payBlock(server, road, section);
+    }
+
+    // ---------------------------------------------------------------- levelled roads
+
+    /**
+     * Whether a section of a levelled road among the work of a kingdom has rock left to pay for.
+     */
+    static boolean rockWaiting(io.github.sekerator.kingdomworld.core.road.RoadState roads, List<Object[]> jobs) {
+        for (Object[] job : jobs) {
+            Road road = (Road) job[0];
+            Road.Section section = (Road.Section) job[1];
+            if (!road.levelled() || section.done()) {
+                continue;
+            }
+            List<RoadLayout.Block> blocks = road.blocksOf(section);
+            for (int i = section.paid(); i < blocks.size(); i++) {
+                RoadLayout.ColumnSurvey survey = blocks.get(i).survey();
+                if (survey != null && !survey.onRoad() && survey.rock() > 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The items for a column of a levelled road: embankments and lining from what the road digs where it can, the rest from the
+     * storehouses.
+     *
+     * @param credit  items of the credit of the road, by item id
+     * @param storage items of the storehouses, by item id
+     */
+    record Choice(Map<String, Integer> credit, Map<String, Integer> storage) {
+    }
+
+    /**
+     * Picks the items for the next column of a levelled road; {@code null} if one is missing.
+     */
+    static Choice chooseLevelled(MinecraftServer server, Road road, Road.Section section, List<RoadLayout.Material> needs) {
+        Map<String, Integer> fromCredit = new LinkedHashMap<>();
+        List<RoadLayout.Material> rest = new ArrayList<>();
+        // Only the road's own kingdom digs into its credit: a kingdom building its part of a joint road pays its own way.
+        Map<String, Integer> left = section.builder().equals(road.kingdomId()) ? new LinkedHashMap<>(road.credit()) : Map.of();
+        for (RoadLayout.Material material : needs) {
+            String found = null;
+            if (material == RoadLayout.Material.FILL || material == RoadLayout.Material.LINING) {
+                for (Map.Entry<String, Integer> entry : left.entrySet()) {
+                    Item item = PostWork.item(entry.getKey());
+                    if (entry.getValue() > 0 && item != null && RoadBlocks.fits(item, material, road.roadClass())) {
+                        found = entry.getKey();
+                        break;
+                    }
+                }
+            }
+            if (found != null) {
+                left.merge(found, -1, Integer::sum);
+                fromCredit.merge(found, 1, Integer::sum);
+            } else {
+                rest.add(material);
+            }
+        }
+        Map<String, Integer> fromStorage = choose(server, road, section.builder(), rest);
+        return fromStorage == null ? null : new Choice(fromCredit, fromStorage);
+    }
+
+    /**
+     * Pays what the seconds of the kingdom allow for the next columns of a section of a levelled road.
+     *
+     * @return columns paid for
+     */
+    static int payLevelled(MinecraftServer server, Road road, Road.Section section, RoadPayment.Budget budget, RoadRules rules,
+                           EarthRules earth) {
+        int paid = 0;
+        while (!section.done() && (budget.builders > 1e-6 || budget.miners > 1e-6)) {
+            RoadLayout.Block block = road.blocksOf(section).get(section.paid());
+            ColumnWork work = ColumnWork.of(block, road.roadClass(), rules, earth);
+            Choice items = chooseLevelled(server, road, section, block.needs(road.roadClass()));
+            if (items == null) {
+                // Its items cannot all be had now: the workers go on to the next section.
+                WAITING.add(waitKey(road, section));
+                return paid;
+            }
+            WAITING.remove(waitKey(road, section));
+            if (!RoadPayment.pay(section, work, budget, earth.rockByBuilders())) {
+                return paid;
+            }
+            if (!completeLevelled(server, road, section, block, items, rules, earth)) {
+                WAITING.add(waitKey(road, section));
+                return paid;
+            }
+            paid++;
+        }
+        return paid;
+    }
+
+    /**
+     * Takes the items of a column whose work is given, all or none, and marks it paid: what it will dig out is counted for the
+     * embankments of the road, its earthworks done.
+     */
+    static boolean completeLevelled(MinecraftServer server, Road road, Road.Section section, RoadLayout.Block block, Choice items,
+                                    RoadRules rules, EarthRules earth) {
+        if (!items.storage().isEmpty() && !take(server, road, section.builder(), items.storage(), block)) {
+            return false;
+        }
+        Map<String, Integer> all = new LinkedHashMap<>(items.storage());
+        items.credit().forEach((item, count) -> {
+            int used = road.useCredit(item, count);
+            if (used > 0) {
+                all.merge(item, used, Integer::sum);
+            }
+        });
+        section.markPaid(all);
+        RoadLayout.ColumnSurvey survey = block.survey();
+        if (survey != null && !survey.onRoad() && section.builder().equals(road.kingdomId())) {
+            road.addCredit(SOIL_ITEM, survey.soil());
+            road.addCredit(ROCK_ITEM, survey.rock());
+        }
+        road.addEarthDone(ColumnWork.earthwork(block, road.roadClass(), rules, earth));
+        return true;
+    }
+
+    /** What a block of soil and of rock dug out of a road gives for its embankments. */
+    static final String SOIL_ITEM = io.github.sekerator.kingdomworld.common.construction.Earthworks.fillItem(
+            net.minecraft.world.level.block.Blocks.DIRT.defaultBlockState());
+    static final String ROCK_ITEM = io.github.sekerator.kingdomworld.common.construction.Earthworks.fillItem(
+            net.minecraft.world.level.block.Blocks.STONE.defaultBlockState());
+
+    /**
+     * Settles the credit of a levelled road laid in full or given up: what was dug and not used goes to the storehouses, what was
+     * used and never dug is taken from them as far as they have it; the rest is written in the log.
+     */
+    static void settleCredit(MinecraftServer server, Road road) {
+        if (!road.levelled() || road.credit().isEmpty() && road.owed().isEmpty()) {
+            return;
+        }
+        RoadPayment.Settlement settlement = RoadPayment.settle(road.takeCredit(), road.takeOwed());
+        ServerLevel level = ConstructionWork.level(server, road.dimension());
+        RouteCell first = road.cells().get(0);
+        BlockPos at = new BlockPos(first.x(), first.y(), first.z());
+        if (level != null && KingdomWorldApi.kingdom(server, road.kingdomId()).isPresent()) {
+            RoadBlocks.giveBack(level, road.kingdomId(), at, settlement.toStorage());
+        }
+        boolean alive = KingdomWorldApi.kingdom(server, road.kingdomId()).isPresent();
+        settlement.shortfall().forEach((item, count) -> {
+            int left = count;
+            int have = alive ? (int) Math.min(count, KingdomStorage.countsById(server, road.kingdomId()).getOrDefault(item, 0L)) : 0;
+            if (have > 0) {
+                List<KingdomStorage.Take> takes = KingdomStorage.plan(server, road.kingdomId(), Map.of(item, have), id -> 0, null);
+                if (takes != null && KingdomStorage.takePlanned(server, takes) != null) {
+                    left -= have;
+                }
+            }
+            if (left > 0) {
+                LOGGER.info("Road {} of {} used {} {} counted from what it would dig and never dug it; the storehouses had none left",
+                        road.id(), RoadWork.kingdomName(server, road.kingdomId()).getString(), left, item);
+            }
+        });
     }
 
     static boolean payBlock(MinecraftServer server, Road road, Road.Section section) {
@@ -325,7 +550,8 @@ public final class RoadBuilding {
                 break;
             }
             ServerLevel level = ConstructionWork.level(server, road.dimension());
-            if (level == null) {
+            if (level == null || road.levelled()) {
+                // A levelled road is put into the world by its earthworks, which come with the next change.
                 continue;
             }
             Set<UUID> consented = consented(roads, road);
@@ -378,6 +604,7 @@ public final class RoadBuilding {
      * Gives the paid items of a road that is given up back to the storehouses of their builders.
      */
     static void giveBackPools(MinecraftServer server, Road road) {
+        settleCredit(server, road);
         ServerLevel level = ConstructionWork.level(server, road.dimension());
         if (level == null) {
             return;

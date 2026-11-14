@@ -252,7 +252,9 @@ public final class PostWork {
             return;
         }
         double factor = (post.hasContainer() ? 1.0 : GatheringRules.SELF_CARRY_FACTOR)
-                * io.github.sekerator.kingdomworld.common.economy.EconomySettings.workSpeed(citizen.mood());
+                * io.github.sekerator.kingdomworld.common.economy.EconomySettings.workSpeed(citizen.mood())
+                // A miner who helps with the rock of the roads gives them a share of its time.
+                * io.github.sekerator.kingdomworld.common.road.RoadCrews.mineFactor(citizen);
         Map<String, Integer> needed = GatheringRules.abstractInputs(rates, 1, interval, factor);
         double inputShare = 1.0;
         if (!needed.isEmpty()) {

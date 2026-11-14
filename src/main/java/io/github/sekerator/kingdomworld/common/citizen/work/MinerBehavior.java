@@ -693,7 +693,9 @@ public final class MinerBehavior implements ProfessionBehavior {
             level.destroyBlock(pos, false, body);
             useTool(1);
             float speed = Math.max(1.0f, pickaxe.getDestroySpeed(state));
-            timer = Math.max(3, (int) Math.ceil(30.0f * Math.max(0.3f, hardness) / speed));
+            // A miner who helps with the rock of the roads gives them a share of its time: it digs here the slower.
+            double share = Math.max(0.1, io.github.sekerator.kingdomworld.common.road.RoadCrews.mineFactor(body.citizenId()));
+            timer = Math.max(3, (int) Math.ceil(30.0f * Math.max(0.3f, hardness) / speed / share));
             if (state.is(Tags.Blocks.ORES)) {
                 plan.progress().ore();
             } else if (cell != null && cell.kind() != MinePlan.Kind.STAIR) {
