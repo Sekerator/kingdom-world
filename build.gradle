@@ -73,6 +73,11 @@ minecraft {
             if (project.hasProperty('gameTestOnly')) {
                 property 'kingdomworld.gameTestOnly', project.property('gameTestOnly').toString()
             }
+            // "-PgameTestHeap=4G" caps the heap of the server of the tests, which otherwise takes a quarter of the memory of the
+            // machine: several servers on one machine then fit in its memory.
+            if (project.hasProperty('gameTestHeap')) {
+                jvmArg "-Xmx${project.property('gameTestHeap')}"
+            }
         }
 
         data {
