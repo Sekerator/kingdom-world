@@ -235,6 +235,9 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         buildOk = ok;
         status = message;
         statusIsError = ok != null && !ok;
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
     }
 
     /**
@@ -444,6 +447,9 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         foundChunk = new int[]{chunkX, chunkZ};
         foundName = name;
         foundPost = post;
+        if (minecraft != null) {
+            rebuildWidgets();
+        }
     }
 
     @Override

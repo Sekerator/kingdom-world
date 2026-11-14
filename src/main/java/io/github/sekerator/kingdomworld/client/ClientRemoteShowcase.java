@@ -476,7 +476,10 @@ final class ClientRemoteShowcase {
             Component problem = RemoteWorks.checkPoint(server, null, id, HOUSE, Dimensions.id(level), buildPoint[0], buildPoint[1], 0);
             buildOk = problem == null;
             buildMessage = problem == null ? Component.translatable("kingdomworld.commission.check_ok") : problem;
-            foundChunk = new int[]{(origin.getX() >> 4), (origin.getZ() >> 4) + 7};
+            // Land of the kingdom far enough from every city for a new one, south of the capital.
+            BlockPos south = new BlockPos(origin.getX(), 0, origin.getZ() + distance + 32);
+            claim(state, dimension, id, south, 24);
+            foundChunk = new int[]{south.getX() >> 4, south.getZ() >> 4};
             // Far from the player: a house and a castle, everything paid for, which the loader of places finishes.
             house = far(server, level, id, HOUSE, origin.offset(900, 0, 0), 10);
             castle = far(server, level, id, CASTLE, origin.offset(900, 0, 300), 30);
