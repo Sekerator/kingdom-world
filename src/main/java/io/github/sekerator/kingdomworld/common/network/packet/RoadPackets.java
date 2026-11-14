@@ -95,7 +95,9 @@ public final class RoadPackets {
             /** The governor of the city is dismissed. */
             GOVERNOR_DISMISS,
             /** The governor of the city stops ({@code second} 1) or goes on (0). */
-            GOVERNOR_PAUSE
+            GOVERNOR_PAUSE,
+            /** What the king gives the governors of all cities a day ({@code second}). */
+            GOVERNOR_ALLOWANCE
         }
 
         public TabChange {

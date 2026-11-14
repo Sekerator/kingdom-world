@@ -166,6 +166,13 @@ final class NobilityNbt {
         entry.put("modifiers", modifiers);
         entry.put("chronicle", writeNotes(court.chronicle()));
         entry.put("reports", writeNotes(court.reports()));
+        if (court.governorAllowance() != 0) {
+            entry.putLong("governorAllowance", court.governorAllowance());
+        }
+        if (court.governorSpentDay() != Long.MIN_VALUE) {
+            entry.putLong("governorSpentDay", court.governorSpentDay());
+            entry.putLong("governorSpent", court.governorSpentOnDay());
+        }
         return entry;
     }
 
@@ -299,6 +306,9 @@ final class NobilityNbt {
         state.court(kingdom).restore(content, e.getLong("played"), e.getLong("lastPlayed"), e.getInt("low"), e.getBoolean("warned"),
                 e.getLong("lastDemand"), e.getLong("lastGrant"), e.getInt("rebelDays"), e.getLong("rebelHouse"), modifiers,
                 readNotes(e.getList("chronicle", Tag.TAG_COMPOUND)), readNotes(e.getList("reports", Tag.TAG_COMPOUND)), e.getInt("stability"));
+        state.court(kingdom).restoreGovernors(e.contains("governorAllowance", Tag.TAG_LONG) ? e.getLong("governorAllowance") : 0,
+                e.contains("governorSpentDay", Tag.TAG_LONG) ? e.getLong("governorSpentDay") : Long.MIN_VALUE,
+                e.contains("governorSpent", Tag.TAG_LONG) ? e.getLong("governorSpent") : 0);
     }
 
     private static List<Note> readNotes(ListTag list) {

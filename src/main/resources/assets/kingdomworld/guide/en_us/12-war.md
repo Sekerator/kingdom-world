@@ -270,6 +270,10 @@ Titles are granted by the king and those with the right "Nobility" (the chancell
 
 A **noble player** does not answer to the law of their kingdom, enters its large cities for free and gets the share of the fief, but has no rights over the treasury. A ruler of the world makes a player a baron by itself when they dealt well with it and have a high reputation in its land, at most once in 7 days.
 
+### Barons of the common people
+
+The king of a kingdom of players may make a citizen the baron of a city (the Roads tab, the actions of a city, Make a baron, or the Workers window, Office): a new house of the nobility is raised, headed by that citizen under its own name, with the title of baron on the city. Such a house starts without wealth, does not count against the most houses ({cfg:nobility.maxHouses}) and governs the city: the city builds by itself (see [Governors of cities](governors)). Its head lives as long as the citizen: it never dies by chance, and an execution for a plot found out kills the citizen too. Once the citizen died, left or stayed in another kingdom, the house gets an heir: the tie to the citizen ends, the city stays with the house. A disloyal house with a city may take the city out of the kingdom, as any house. A city taken in a war loses its mayor, and its townsfolk go to the winner with it.
+
 ### Stability
 
 The stability of a kingdom goes from 0 to 100: a base of 50 plus the causes shown in the Nobility tab, view "Factions":

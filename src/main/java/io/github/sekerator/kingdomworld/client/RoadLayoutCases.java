@@ -92,7 +92,9 @@ final class RoadLayoutCases {
         }
         // A full view has no limits of cities and roads, as a server has by default; the empty one shows the longest limits.
         return new RoadViews.RoadTabView(kingdom, canManage, canManage, empty ? 0 : 999, empty ? 100_000 : 0, empty ? 1_000_000 : 0, cities, roads,
-                crossings, camps, risks, squads, 112, 12, 6, 40, 20, canManage);
+                crossings, camps, risks, squads, 112, 12, 6, 40, 20, canManage, empty ? 0 : MUCH, empty ? 0 : MUCH - 1, empty ? 0 : 99_999,
+                new io.github.sekerator.kingdomworld.common.network.data.TradeViews.Currency(kingdom, LONG_KINGDOM, LONG_KINGDOM, 0x6C3483, 10, 100, 1),
+                canManage);
     }
 
     /**
@@ -193,6 +195,8 @@ final class RoadLayoutCases {
         add.accept("throne-roads-overview", () -> roadsTab(member, Role.KING, true, false, "overview", 0, 0, Component.empty()));
         add.accept("throne-roads-overview-subject", () -> roadsTab(member, Role.SUBJECT, false, false, "overview", 0, 0, Component.empty()));
         add.accept("throne-roads-overview-empty", () -> roadsTab(member, Role.KING, true, true, "overview", 0, 0, longError));
+        // The money of the governors set by a treasurer and only seen by a subject.
+        add.accept("throne-roads-overview-allowance", () -> roadsTab(member, Role.TREASURER, true, false, "overview", 0, 0, Component.empty()));
         add.accept("throne-roads-cities", () -> roadsTab(member, Role.KING, true, false, "cities", 0, 0, Component.empty()));
         add.accept("throne-roads-cities-actions", () -> roadsTab(member, Role.KING, true, false, "cities", 2, 0, Component.empty()));
         add.accept("throne-roads-cities-actions-capital", () -> roadsTab(member, Role.KING, true, false, "cities", 1, 0, Component.empty()));

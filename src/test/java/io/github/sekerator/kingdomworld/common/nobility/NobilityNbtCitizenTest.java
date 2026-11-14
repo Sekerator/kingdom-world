@@ -51,4 +51,22 @@ class NobilityNbtCitizenTest {
         assertTrue(NobilityNbt.read(tag, read).isEmpty());
         assertNull(read.house(house.id()).orElseThrow().citizen());
     }
+
+    @Test
+    void theMoneyOfTheGovernorsReadsBackAndACourtSavedBeforeHasNone() {
+        NobilityState state = new NobilityState();
+        state.court(KINGDOM).setGovernorAllowance(300);
+        state.court(KINGDOM).governorSpend(12, 40);
+        state.court(KINGDOM).governorSpend(12, 35);
+        UUID other = new UUID(5, 5);
+        state.court(other);
+        CompoundTag tag = NobilityNbt.write(state);
+        NobilityState read = new NobilityState();
+        assertTrue(NobilityNbt.read(tag, read).isEmpty());
+        assertEquals(300, read.court(KINGDOM).governorAllowance());
+        assertEquals(75, read.court(KINGDOM).governorSpent(12));
+        assertEquals(0, read.court(KINGDOM).governorSpent(13), "another day starts from nothing");
+        assertEquals(0, read.court(other).governorAllowance(), "a court without the keys gives nothing");
+        assertEquals(Long.MIN_VALUE, read.court(other).governorSpentDay());
+    }
 }

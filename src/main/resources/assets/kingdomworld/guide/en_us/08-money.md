@@ -149,6 +149,8 @@ You get a message about the tax and the debt, and a reminder when you join. Your
 
 ### Dues of the townsfolk
 
+The governors of the cities (mayors and houses of the nobility, see [Governors of cities](governors)) build from the storehouses and with the money the king gives them: Governors a day in the overview of the Roads tab, 0 by default. It is shared evenly by the cities with a governor; each city spends its share a day at most, the treasury never falls below its reserve (a few days of its expenses), and what is bought abroad goes into the journal of the treasury as any import. One with the right Treasury sets it. The wealth of houses of the nobility is never spent on buildings.
+
 The townsfolk of the cities (people who live in a city as a number, see [Arrival and growth](growth)) pay dues into the treasury once a game day: {cfg:citizens.folkDues} a head a day, in copper coins. They go into the journal of the treasury as taxes. A full treasury takes no more, as with the poll tax.
 
 ### Tax on sales

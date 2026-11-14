@@ -33,6 +33,11 @@ public final class Court {
     private final List<Note> chronicle = new ArrayList<>();
     private final List<Note> reports = new ArrayList<>();
     private Stability.Result stability = Stability.Result.NEUTRAL;
+    /** What the king gives the governors of all cities of a kingdom of players a day, 0 for nothing. */
+    private long governorAllowance;
+    /** The game day of {@link #governorSpent}. */
+    private long governorSpentDay = Long.MIN_VALUE;
+    private long governorSpent;
 
     public Court(UUID kingdomId) {
         this.kingdomId = Objects.requireNonNull(kingdomId, "kingdomId");
@@ -156,6 +161,57 @@ public final class Court {
 
     void setStability(Stability.Result value) {
         stability = Objects.requireNonNull(value, "value");
+    }
+
+    // ---------------------------------------------------------------- the governors of the cities
+
+    /**
+     * What the king gives the governors of all cities of the kingdom a day to buy what their buildings lack; 0 for nothing.
+     */
+    public long governorAllowance() {
+        return governorAllowance;
+    }
+
+    public void setGovernorAllowance(long value) {
+        governorAllowance = Math.max(0, Math.min(Long.MAX_VALUE / 4, value));
+    }
+
+    /**
+     * What the governors spent on a game day: what they spent on the day they spent last, 0 on any other.
+     */
+    public long governorSpent(long day) {
+        return day == governorSpentDay ? governorSpent : 0;
+    }
+
+    /**
+     * The game day the governors spent on last, {@link Long#MIN_VALUE} before the first.
+     */
+    public long governorSpentDay() {
+        return governorSpentDay;
+    }
+
+    /**
+     * What the governors spent on {@link #governorSpentDay()}.
+     */
+    public long governorSpentOnDay() {
+        return governorSpent;
+    }
+
+    /**
+     * Counts money the governors spent on a game day.
+     */
+    public void governorSpend(long day, long amount) {
+        if (day != governorSpentDay) {
+            governorSpentDay = day;
+            governorSpent = 0;
+        }
+        governorSpent = Math.max(0, Math.min(Long.MAX_VALUE / 4, governorSpent + Math.max(0, amount)));
+    }
+
+    public void restoreGovernors(long allowance, long spentDay, long spent) {
+        setGovernorAllowance(allowance);
+        governorSpentDay = spentDay;
+        governorSpent = Math.max(0, spent);
     }
 
     /**

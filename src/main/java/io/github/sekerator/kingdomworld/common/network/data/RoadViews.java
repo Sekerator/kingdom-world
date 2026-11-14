@@ -378,16 +378,29 @@ public final class RoadViews {
      * @param townPeople   the citizens and {@code townBuildings} the buildings that make a city a town; {@code cityPeople} and
      *                     {@code cityBuildings} a large city
      * @param king         whether the viewer is the king, who alone makes a citizen a baron
+     * @param allowance    what the king gives the governors of all cities a day
+     * @param spentToday   what they spent of it today
+     * @param governed     the cities with a governor, who share the allowance
+     * @param currency     the currency of the treasury, to read and show amounts; {@code null} without a treasury
+     * @param treasurer    whether the viewer runs the treasury and may set the allowance
      */
     public record RoadTabView(UUID kingdomId, boolean canManage, boolean canOrder, int builders, int maxCities, int maxRoads,
                               List<CityRow> cities, List<RoadRow> roads, List<CrossingRow> crossings, List<CampRow> camps, List<RiskRow> risks,
                               List<SquadRow> squads, int cityDistance, int townPeople, int townBuildings, int cityPeople, int cityBuildings,
-                              boolean king) {
+                              boolean king, long allowance, long spentToday, int governed, @Nullable TradeViews.Currency currency,
+                              boolean treasurer) {
         public RoadTabView(UUID kingdomId, boolean canManage, boolean canOrder, int builders, int maxCities, int maxRoads, List<CityRow> cities,
                            List<RoadRow> roads, List<CrossingRow> crossings, List<CampRow> camps, List<RiskRow> risks, List<SquadRow> squads,
                            int cityDistance, int townPeople, int townBuildings, int cityPeople, int cityBuildings) {
             this(kingdomId, canManage, canOrder, builders, maxCities, maxRoads, cities, roads, crossings, camps, risks, squads, cityDistance,
                     townPeople, townBuildings, cityPeople, cityBuildings, false);
+        }
+
+        public RoadTabView(UUID kingdomId, boolean canManage, boolean canOrder, int builders, int maxCities, int maxRoads, List<CityRow> cities,
+                           List<RoadRow> roads, List<CrossingRow> crossings, List<CampRow> camps, List<RiskRow> risks, List<SquadRow> squads,
+                           int cityDistance, int townPeople, int townBuildings, int cityPeople, int cityBuildings, boolean king) {
+            this(kingdomId, canManage, canOrder, builders, maxCities, maxRoads, cities, roads, crossings, camps, risks, squads, cityDistance,
+                    townPeople, townBuildings, cityPeople, cityBuildings, king, 0, 0, 0, null, false);
         }
 
         public RoadTabView(UUID kingdomId, boolean canManage, boolean canOrder, int builders, int maxCities, int maxRoads, List<CityRow> cities,
@@ -423,13 +436,22 @@ public final class RoadViews {
             buf.writeVarInt(cityPeople);
             buf.writeVarInt(cityBuildings);
             buf.writeBoolean(king);
+            buf.writeVarLong(Math.max(0, allowance));
+            buf.writeVarLong(Math.max(0, spentToday));
+            buf.writeVarInt(Math.max(0, governed));
+            buf.writeBoolean(currency != null);
+            if (currency != null) {
+                currency.encode(buf);
+            }
+            buf.writeBoolean(treasurer);
         }
 
         public static RoadTabView decode(FriendlyByteBuf buf) {
             return new RoadTabView(buf.readUUID(), buf.readBoolean(), buf.readBoolean(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(),
                     readList(buf, MAX_ROWS, CityRow::decode), readList(buf, MAX_ROWS, RoadRow::decode), readList(buf, MAX_ROWS, CrossingRow::decode),
                     readList(buf, MAX_ROWS, CampRow::decode), readList(buf, MAX_ROWS, RiskRow::decode), readList(buf, MAX_ROWS, SquadRow::decode),
-                    buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readBoolean());
+                    buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readBoolean(), buf.readVarLong(),
+                    buf.readVarLong(), buf.readVarInt(), buf.readBoolean() ? TradeViews.Currency.decode(buf) : null, buf.readBoolean());
         }
     }
 

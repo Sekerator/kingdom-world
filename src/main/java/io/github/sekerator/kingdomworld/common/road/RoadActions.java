@@ -99,7 +99,7 @@ public final class RoadActions {
         };
         return row.withGovernor(kind, CityGovernors.governorName(server, governor, alphabet), governor.grant() == null ? ""
                 : governor.grant().title().id(), charter.map(io.github.sekerator.kingdomworld.core.road.CityCharter::paused).orElse(false),
-                governor.present() ? CityGovernors.noteText(server, kingdomId, charter.map(io.github.sekerator.kingdomworld.core.road.CityCharter::note)
+                governor.present() ? CityGovernors.noteWithSpending(server, kingdomId, cityId, charter.map(io.github.sekerator.kingdomworld.core.road.CityCharter::note)
                         .map(io.github.sekerator.kingdomworld.core.road.GovernorNote::parse).orElse(io.github.sekerator.kingdomworld.core.road.GovernorNote.NONE))
                         : Component.empty());
     }
@@ -190,7 +190,10 @@ public final class RoadActions {
         }
         return Optional.of(new RoadViews.RoadTabView(kingdomId, canManage, canOrder, RoadBuilding.freeBuilders(server, kingdomId).size(),
                 rules.maxCities(), rules.maxRoads(), cities, roadRows, crossings, camps, risks, squads, rules.minCityDistance(), rules.townPeople(),
-                rules.townBuildings(), rules.cityPeople(), rules.cityBuildings(), viewer == null || viewer.equals(kingdom.get().rulerId())));
+                rules.townBuildings(), rules.cityPeople(), rules.cityBuildings(), viewer == null || viewer.equals(kingdom.get().rulerId()),
+                GovernorFunds.allowance(server, kingdomId), GovernorFunds.spentToday(server, kingdomId), CityGovernors.governed(server, kingdomId),
+                io.github.sekerator.kingdomworld.common.trade.Purses.currency(server, kingdomId).orElse(null),
+                viewer == null || world.membership().hasPermission(viewer, kingdomId, Permission.MANAGE_TREASURY)));
     }
 
     private static int countRoads(RoadState roads, Endpoint.Kind kind, long city, @Nullable UUID kingdom) {
@@ -307,6 +310,9 @@ public final class RoadActions {
             }
             case GOVERNOR_PAUSE -> {
                 return CityGovernors.pause(server, actor, kingdom, change.first(), change.second() != 0);
+            }
+            case GOVERNOR_ALLOWANCE -> {
+                return CityGovernors.setAllowance(server, actor, kingdom, change.second());
             }
             default -> {
             }

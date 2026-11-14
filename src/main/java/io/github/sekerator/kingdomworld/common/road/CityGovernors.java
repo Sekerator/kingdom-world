@@ -456,6 +456,24 @@ public final class CityGovernors {
         return KingdomActions.Feedback.ok(KEY + (paused ? "paused" : "resumed"), cityName(server, kingdomId, cityId));
     }
 
+    /**
+     * Sets what the king gives the governors of all cities a day: one who runs the treasury decides.
+     */
+    public static KingdomActions.Feedback setAllowance(MinecraftServer server, @Nullable UUID actor, UUID kingdomId, long amount) {
+        Outcome right = rights(server, actor, kingdomId, Permission.MANAGE_TREASURY);
+        if (!right.ok()) {
+            return KingdomActions.Feedback.error(right.error());
+        }
+        if (amount < 0 || amount > io.github.sekerator.kingdomworld.core.economy.Money.MAX) {
+            return KingdomActions.Feedback.error(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        NobilityState nobility = NobilityWork.state(server);
+        nobility.court(kingdomId).setGovernorAllowance(amount);
+        nobility.changed();
+        LOGGER.info("Kingdom {} gives its governors {} a day", kingdomId, amount);
+        return KingdomActions.Feedback.ok(KEY + "allowance_set", money(server, kingdomId, amount));
+    }
+
     // ---------------------------------------------------------------- the end of an office
 
     /**
@@ -740,6 +758,12 @@ public final class CityGovernors {
             default -> {
             }
         }
+        // What the constructions of the city lack is bought abroad with what is left of the money of the day.
+        long spent = GovernorFunds.pay(server, kingdomId, cityId, charter, day, GovernorFunds.budget(server, kingdomId, charter, day, governed, view,
+                rules));
+        if (spent > 0) {
+            summary(kingdomId, Component.translatable(KEY + "summary.bought", city, money(server, kingdomId, spent)));
+        }
         GovernorNote note = decision.note();
         charter.setNote(note.encode());
         if (first) {
@@ -931,7 +955,9 @@ public final class CityGovernors {
         }
         boolean wall = laying || RoadWork.state(server).wallOf(cityId, kingdomId).isPresent();
         // Without money from the king a governor builds from the storehouses and the workshops alone.
-        return new CityGrowth.Situation(builders, others, unemployed, sites, postOrdered, wall, 0, 0, character);
+        long allowance = GovernorFunds.allowance(server, kingdomId);
+        long budget = GovernorFunds.budget(server, kingdomId, charter, day, governed, view, rules);
+        return new CityGrowth.Situation(builders, others, unemployed, sites, postOrdered, wall, allowance, budget, character);
     }
 
     /**
@@ -984,6 +1010,21 @@ public final class CityGovernors {
             case SAVES -> Component.translatable(KEY + "note.saves", templateName(note.subject()), money(server, kingdomId, note.amount()));
             case WALL -> Component.translatable(KEY + "note.wall." + (note.subject().equals("stone") ? "stone" : "palisade"));
         };
+    }
+
+    /**
+     * What a governor decided last and, while the king gives the governors money, what it spent of its share today.
+     */
+    public static Component noteWithSpending(MinecraftServer server, UUID kingdomId, long cityId, GovernorNote note) {
+        Component text = noteText(server, kingdomId, note);
+        long allowance = GovernorFunds.allowance(server, kingdomId);
+        if (allowance <= 0) {
+            return text;
+        }
+        long day = NobilityWork.day(server);
+        long spent = RoadWork.state(server).charter(kingdomId, cityId).map(charter -> charter.spent(day)).orElse(0L);
+        long share = CityGrowth.share(allowance, Math.max(1, governed(server, kingdomId)));
+        return Component.translatable(KEY + "note_spent", text, money(server, kingdomId, spent), money(server, kingdomId, share));
     }
 
     static Component templateName(String templateId) {

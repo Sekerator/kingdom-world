@@ -13,6 +13,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
@@ -98,6 +99,11 @@ final class RoadsTab {
     private int sendWidth;
     private int planWidth;
     private int foundWidth;
+    private int allowanceLabelWidth;
+    private int setWidth;
+    /** What the player typed for the allowance of the governors. */
+    private String allowanceText = "";
+    private static final int BOX = 64;
 
     RoadsTab(ThroneScreen screen) {
         this.screen = screen;
@@ -140,6 +146,13 @@ final class RoadsTab {
             acting = actingRoad;
         }
         patrolling = patrollingRoad;
+    }
+
+    /**
+     * Scrolls the list shown by some rows, for the self-check.
+     */
+    void scrollForCheck(int rows) {
+        scroll = Math.max(0, rows);
     }
 
     String checkName() {
@@ -279,6 +292,8 @@ final class RoadsTab {
         sendWidth = screen.buttonWidth(Component.translatable(KEY + "send"));
         planWidth = screen.buttonWidth(Component.translatable(KEY + "plan"));
         foundWidth = screen.buttonWidth(Component.translatable(KEY + "found"));
+        allowanceLabelWidth = font.width(Component.translatable(KEY + "allowance_label")) + 6;
+        setWidth = screen.buttonWidth(Component.translatable(KEY + "allowance_set"));
         int choices = 0;
         for (Choice choice : Choice.values()) {
             choices = Math.max(choices, screen.buttonWidth(choiceLabel(choice, null)));
@@ -436,6 +451,20 @@ final class RoadsTab {
                         .bounds(right - planWidth - GAP - foundWidth, buttonsY(top), foundWidth, ROW - 2).build());
                 found.active = view.canManage();
                 found.setTooltip(Tooltip.create(Component.translatable(KEY + "found_hint")));
+                // What the king gives the governors of the cities a day, set by one who runs the treasury.
+                int y = allowanceY(top);
+                int boxX = x + allowanceLabelWidth;
+                EditBox box = new EditBox(screen.font(), boxX + 1, y + 1, BOX - 2, ROW - 4, Component.translatable(KEY + "allowance_label"));
+                box.setMaxLength(io.github.sekerator.kingdomworld.core.economy.Money.MAX_TEXT);
+                box.setValue(allowanceText);
+                box.setResponder(value -> allowanceText = value);
+                box.setEditable(view.treasurer());
+                box.setTooltip(Tooltip.create(Component.translatable(KEY + "allowance_hint")));
+                screen.add(box);
+                Button set = screen.add(Button.builder(Component.translatable(KEY + "allowance_set"), b -> setAllowance())
+                        .bounds(boxX + BOX + GAP, y, setWidth, ROW - 2).build());
+                set.active = view.treasurer() && view.currency() != null;
+                set.setTooltip(Tooltip.create(Component.translatable(view.treasurer() ? KEY + "allowance_hint" : KEY + "allowance_no_right")));
             }
             case ROADS -> {
                 for (int i = 0; i < rows && scroll + i < view.roads().size(); i++) {
@@ -493,6 +522,33 @@ final class RoadsTab {
             }
         }
         acting = 0;
+    }
+
+    /**
+     * Sends the allowance typed: a number of the smallest coin or coins with their letters, 0 for nothing.
+     */
+    private void setAllowance() {
+        if (view == null || view.currency() == null) {
+            return;
+        }
+        java.util.Optional<Long> amount = io.github.sekerator.kingdomworld.core.economy.Money.parse(allowanceText, view.currency().units());
+        if (amount.isEmpty() && allowanceText.strip().equals("0")) {
+            amount = java.util.Optional.of(0L);
+        }
+        amount.ifPresentOrElse(value -> send(RoadPackets.TabChange.Action.GOVERNOR_ALLOWANCE, 0, value),
+                () -> screen.onResult(false, Component.translatable(KEY + "allowance_bad")));
+    }
+
+    /**
+     * The row of the allowance of the governors in the overview, under the numbers of the roads.
+     */
+    private static int allowanceY(int top) {
+        return listTop(top) + 2 + 4 * 12;
+    }
+
+    private Component money(long amount) {
+        return view == null || view.currency() == null ? Component.literal(Long.toString(amount))
+                : io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(amount, view.currency().units());
     }
 
     private void send(RoadPackets.TabChange.Action action, long first, long second) {
@@ -613,7 +669,7 @@ final class RoadsTab {
     private void renderOverview(GuiGraphics graphics, int x, int right, int top) {
         int stateX = x + modeWidth + 6;
         text(graphics, view.canManage() ? Component.translatable(KEY + "can_manage") : Component.translatable(KEY + "read_only"), stateX,
-                buttonsY(top) + 4, view.canManage() ? 0xFFA0E0A0 : 0xFFB8B8B8, right - planWidth - 4 - stateX, null);
+                buttonsY(top) + 4, view.canManage() ? 0xFFA0E0A0 : 0xFFB8B8B8, right - planWidth - GAP - foundWidth - 4 - stateX, null);
         long ours = view.roads().stream().filter(RoadViews.RoadRow::ours).count();
         long built = view.roads().stream().filter(row -> row.status() == Road.Status.DONE).count();
         long asked = view.crossings().stream().filter(row -> row.incoming() && row.status() == Crossing.Status.PROPOSED).count();
@@ -627,13 +683,23 @@ final class RoadsTab {
                 Component.translatable(KEY + "built", built, view.roads().size()),
                 Component.translatable(KEY + "builders", view.builders()),
                 Component.translatable(KEY + "requests", asked, sent),
-                Component.translatable(KEY + "camps", view.camps().size()),
-                Component.translatable(KEY + "plan_hint"));
+                Component.translatable(KEY + "camps", view.camps().size()));
+        // Two columns, so that the governors of the cities find room below.
         int y = listTop(top) + 2;
-        for (Component line : lines) {
-            text(graphics, line, x, y, 0xFFE8E8E8, right - x, null);
-            y += 12;
+        int column = (right - x - 6) / 2;
+        for (int i = 0; i < lines.size(); i++) {
+            int lineX = i % 2 == 0 ? x : x + column + 6;
+            text(graphics, lines.get(i), lineX, y + i / 2 * 12, 0xFFE8E8E8, column, null);
         }
+        text(graphics, Component.translatable(KEY + "plan_hint"), x, y + 3 * 12, 0xFFE8E8E8, right - x, null);
+        int row = allowanceY(top);
+        text(graphics, Component.translatable(KEY + "allowance_label"), x, row + 5, 0xFFE8E8E8, allowanceLabelWidth - 4, null);
+        int afterX = x + allowanceLabelWidth + BOX + GAP + setWidth + 6;
+        Component now = Component.translatable(KEY + "allowance_now", money(view.allowance()), view.governed());
+        text(graphics, now, afterX, row + 5, view.allowance() > 0 ? 0xFFA0E0A0 : 0xFFB8B8B8, right - afterX,
+                Component.translatable(KEY + "allowance_now_hint", money(view.allowance()), view.governed()));
+        Component spent = Component.translatable(KEY + "allowance_spent", money(view.spentToday()), money(view.allowance()));
+        text(graphics, spent, x, row + ROW + 2, 0xFFE8E8E8, right - x, null);
     }
 
     private void renderCity(GuiGraphics graphics, int x, int right, int y, RoadViews.CityRow row) {

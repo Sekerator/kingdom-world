@@ -117,6 +117,46 @@ atlas the sign of a city or the crown of a capital has one to three golden marks
 > kingdom is a village, a medium one a town, a large one a large city
 > ([Capitals of the kingdoms of the world](world_capitals)).
 
+## governors | Governors of cities
+@icon minecraft:bell
+**The governor of a city** builds the city by itself, without the king and without walking there. The governor is the **house of the nobility** granted a title on the city (a baron, a count or a duke), else a **mayor**: a citizen the king appointed. The capital only has a mayor: it is no fief. A title of a player on a city makes no governor (the player builds by hand), and a mayor may still be appointed there.
+
+### How to appoint one
+
+In the Roads tab, the cities view, the Actions button of a city:
+
+- **Appoint a mayor** opens the Workers window on the citizens of the city (on all of them while nobody lives there). Choose a citizen, press Office and Make mayor. It takes the rights Citizens and Construction.
+- **Make a baron** (the king only, not for the capital): the same with Make baron. The king raises a new house of the nobility headed by that citizen, with the title of baron on the city (see [Nobility and factions](nobility)).
+- **Dismiss the governor**: a mayor loses the office, a house its title on the city.
+- **Stop the governor** and **Let the governor go on**: a stopped governor orders nothing new.
+
+The Office button of the Workers window also works without the actions of a city: the city is that of the filter of the window, else that of the post of the citizen, else that of its home.
+
+**Who may govern.** A living citizen of the kingdom who is no soldier, no mayor of another city and no head of a house. A citizen with a post must work in that city: it lives where it works. Otherwise the button is inactive and its hint says why (take it off the post or move it first). Once a game day a mayor moves into a free bed of its city (while there is none it lives where it did), and its name tells its office by the level of the city: elder in a village, mayor in a town, governor in a large city; a baron is a baron.
+
+**When the office ends.** The mayor died, left or became a citizen of another kingdom, joined the army, works at a post in another city, or the city went to a house or was taken: the office ends, the court writes it into its chronicle and the members with the right Construction hear it. The city stops building by itself, the orders of the governor not laid out yet are given up, its constructions stay as ordinary ones.
+
+### What a governor builds
+
+On every played day (somebody of the kingdom was online), a governor looks at its city, one city a second:
+
+1. The city has no post of builders of its own and somebody of the kingdom is without work: the governor orders a post by the town hall and hires a builder (never one of another city). Nobody is without work: helpers of other cities build there; none either: no builder, it waits.
+2. The city has as many constructions and waiting orders as builders (one at least): it waits.
+3. Otherwise as the rulers of the world: a house when the beds are nearly taken, a storehouse when the storehouses of the city are full, then the first building the level of the city lacks (storehouse, market, wells, workshops, barracks, towers, tavern, mage tower). A house of the nobility leans to its character: a warrior to barracks and towers, a merchant to the market, a mage to the mage tower. A mayor has no leanings.
+4. Nothing is lacking and there is no wall: a palisade, a stone wall for a large city.
+
+It takes the cheapest fitting template in the style of the kingdom, on free natural ground by the town hall, as an order from the capital (see [How a kingdom builds](construction)). A governor **never** repairs, upgrades or takes down, never lays a road and never touches what players built: a block a player placed on the place of its construction stays, and a construction that cannot be finished for it is given up, its materials going back to the storehouses. An order or a construction of the governor the king gives up is not ordered again in that city for 3 game days. The server limits neither cities nor governors nor houses of citizens.
+
+### The money of a governor
+
+A governor builds from the storehouses (it counts no more than {cfg:roads.governorStockPercent}% of every item, the rest is for the buildings of the king) and with the money the king gives the governors: the field **Governors a day** in the overview of the Roads tab (set by one with the right Treasury; 0 by default). It is shared evenly by the cities with a governor. Each city spends its share a day at most and never lets the treasury fall below its reserve (a few days of its expenses): with that money it buys abroad what its constructions lack (see [Export and import](export_import)). While the sum is 0 a governor builds only what the storehouses pay for and waits for the rest; when what is lacking costs more than its share, it saves.
+
+### What you see
+
+The row of a city in the Roads tab: "Governor: Irma, elder", "House Velomir, baron" or "No governor"; on hover what the governor decided last (builds, saves and how much is short, waits), what it spent today of its share and the people ("People: 64 (+936 as a number)"). Once a played day the members with the right Construction get one summary when something happened, for example "Governors of the cities: Olkhovka builds: Small house; Kamenka saves for Well, 1s 2c short".
+
+> A city granted to a house of the nobility before this version starts building by itself after the update; the first summary says so.
+
 ## walls | Walls and gates
 @icon minecraft:stone_bricks
 A city can be ringed with a **wall**. It is ordered in the Roads tab of the throne window: view "cities", choose

@@ -189,6 +189,11 @@ public final class WorkforceActions {
                     }
                 }
                 rows.sort(Workforce.problemsFirst());
+                if (query.place().startsWith("c")) {
+                    // The citizens of a city, its mayor chosen among them: the head of a settlement taken with it comes first.
+                    rows.sort(Comparator.comparing((Citizen citizen) -> !io.github.sekerator.kingdomworld.common.npc.SettlementHeads.isHead(server,
+                            citizen)));
+                }
                 Map<UUID, WorkforceView.Spot> spots = new HashMap<>();
                 if (query.where() != WorkforceView.Where.ALL) {
                     // Where they are now: those gone far only, or everybody; the nearest to the player first, other worlds last.

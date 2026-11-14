@@ -272,6 +272,8 @@ The buttons under the list act on the chosen citizen (a double click does what t
 - **Find**: the body of the citizen is outlined through walls for half a minute, for you alone, and an arrow with the name, the distance and the side of the world shows above the hotbar. It leads until you come within 5 blocks, look for another, press "Stop looking", or five minutes pass. For a citizen far from players the arrow leads to the last place known;
 - **Send back**: the citizen drops what it does and goes home, or to its post without a home; one that does not get there in a minute or gets stuck is put by its home. A citizen far from players is home at once. A soldier in the army, a citizen on an expedition of the guild and one on the land of another kingdom (in captivity or at a siege) cannot be sent back, and the hint of the button says why.
 
+- **Office**: a window that makes the citizen the mayor or the baron of a city (see [Governors of cities](governors)). The city is that of the filter of the window, else that of the post of the citizen, else that of its home; an inactive button says on hover why the citizen does not fit.
+
 A citizen with nothing to do that went far from its home or post walks back by itself: work, festivals, the tavern, sleep and care come first.
 
 Soldiers are listed, but they are assigned in the Army tab.

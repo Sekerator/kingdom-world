@@ -99,6 +99,7 @@ public final class ClientSelfTest {
     private static ClientBackgroundCheck backgroundCheck;
     private static ClientLifeShowcase lifeShowcase;
     private static ClientPostShowcase postShowcase;
+    private static ClientGovernorShowcase governorShowcase;
     private static volatile BlockPos throne;
     private static volatile UUID kingdomId;
     private static volatile BlockPos post;
@@ -248,6 +249,25 @@ public final class ClientSelfTest {
             if (roadShowcase.finished()) {
                 if (roadShowcase.failed()) {
                     LOGGER.error(PREFIX + "road showcase failed, exiting with code 1");
+                    System.exit(1);
+                }
+                LOGGER.info(PREFIX + "finished");
+                quit = true;
+            }
+            return;
+        }
+        if ("governors".equals(MODE) && minecraft.player != null && minecraft.getSingleplayerServer() != null) {
+            if (governorShowcase == null) {
+                String folder = System.getProperty("kingdomworld.clientSelfTest.screenshots");
+                Path screenshots = folder != null && !folder.isEmpty() ? Path.of(folder)
+                        : minecraft.gameDirectory.toPath().resolve("kingdomworld-layout");
+                LOGGER.info(PREFIX + "governor showcase started, screenshots go to {}", screenshots.resolve("city-self-development"));
+                governorShowcase = new ClientGovernorShowcase(screenshots);
+            }
+            governorShowcase.tick();
+            if (governorShowcase.finished()) {
+                if (governorShowcase.failed()) {
+                    LOGGER.error(PREFIX + "governor showcase failed, exiting with code 1");
                     System.exit(1);
                 }
                 LOGGER.info(PREFIX + "finished");
