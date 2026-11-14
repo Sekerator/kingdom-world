@@ -35,10 +35,16 @@ public final class CityAreas {
      * @param walled whether a wall stands around it
      * @param base   half the side of the square by its level, plan and wall alone; beyond it, up to {@code radius}, the city
      *               grew by its people and holds the land of its kingdom only
+     * @param landOnly whether the whole square holds the land of its kingdom only: a city of a kingdom of players lives within its
+     *                 state, and the part of its square beyond the border is no city for the law, the work, the beds or the guard
      */
-    public record Area(UUID kingdomId, long cityId, String dimension, int x, int z, int radius, boolean walled, int base) {
+    public record Area(UUID kingdomId, long cityId, String dimension, int x, int z, int radius, boolean walled, int base, boolean landOnly) {
         public Area(UUID kingdomId, long cityId, String dimension, int x, int z, int radius, boolean walled) {
-            this(kingdomId, cityId, dimension, x, z, radius, walled, radius);
+            this(kingdomId, cityId, dimension, x, z, radius, walled, radius, false);
+        }
+
+        public Area(UUID kingdomId, long cityId, String dimension, int x, int z, int radius, boolean walled, int base) {
+            this(kingdomId, cityId, dimension, x, z, radius, walled, base, false);
         }
 
         public boolean contains(String dimension, int px, int pz) {
@@ -149,18 +155,22 @@ public final class CityAreas {
         int[][] counts = CityWalls.counts(server, places);
         Map<UUID, List<Area>> built = new HashMap<>();
         Map<UUID, CellIndex<Area>> sorted = new HashMap<>();
+        Map<UUID, Boolean> ofPlayers = new HashMap<>();
         for (int i = 0; i < places.size(); i++) {
             CityWalls.Place place = places.get(i);
             Optional<Wall> wall = roads.wallOf(place.cityId(), place.kingdomId());
             int people = CityWalls.peopleRadius(counts[i][0]);
+            boolean landOnly = ofPlayers.computeIfAbsent(place.kingdomId(),
+                    id -> !io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, id));
             Area area;
             if (wall.isPresent()) {
                 Wall found = wall.get();
                 area = new Area(place.kingdomId(), place.cityId(), found.dimension(), found.centerX(), found.centerZ(),
-                        Math.max(found.radius(), people), true, found.radius());
+                        Math.max(found.radius(), people), true, found.radius(), landOnly);
             } else {
                 int base = CityWalls.baseRadius(server, place.kingdomId(), place.cityId(), CityWalls.level(counts[i]));
-                area = new Area(place.kingdomId(), place.cityId(), place.dimension(), place.x(), place.z(), Math.max(base, people), false, base);
+                area = new Area(place.kingdomId(), place.cityId(), place.dimension(), place.x(), place.z(), Math.max(base, people), false, base,
+                        landOnly);
             }
             built.computeIfAbsent(place.kingdomId(), k -> new ArrayList<>()).add(area);
             sorted.computeIfAbsent(place.kingdomId(), k -> new CellIndex<>(CELL_SHIFT)).add(area.dimension(),
@@ -283,14 +293,14 @@ public final class CityAreas {
     }
 
     /**
-     * Whether a city holds a place: its square contains it, and where the city grew by its people the place lies on the land
-     * of its kingdom.
+     * Whether a city holds a place: its square contains it, and where the city grew by its people, and anywhere in a city of a
+     * kingdom of players, the place lies on the land of its kingdom.
      */
     private static boolean holds(MinecraftServer server, Area area, String dimension, int x, int z) {
         if (!area.contains(dimension, x, z)) {
             return false;
         }
-        return !area.grown(x, z) || area.kingdomId().equals(KingdomWorldApi.state(server).territory().ownerOf(dimension,
+        return !area.landOnly() && !area.grown(x, z) || area.kingdomId().equals(KingdomWorldApi.state(server).territory().ownerOf(dimension,
                 io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(x >> 4, z >> 4)));
     }
 

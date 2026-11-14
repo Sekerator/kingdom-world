@@ -29,6 +29,7 @@ import io.github.sekerator.kingdomworld.core.road.RouteCell;
 import io.github.sekerator.kingdomworld.core.road.Wall;
 import io.github.sekerator.kingdomworld.core.road.WallContour;
 import io.github.sekerator.kingdomworld.core.territory.Capital;
+import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -239,7 +240,8 @@ public final class CityWalls {
 
     /**
      * The radius of the square of a city by its level, the plan of a capital of a kingdom of the world and its wall, the room of
-     * its people left out: within it the city lies on any land; beyond it, where it grew by its people, on its own land only.
+     * its people left out: within it the city of a kingdom of the world lies on any land, a city of a kingdom of players on its own
+     * land only ({@link CityAreas.Area#landOnly}); beyond it, where it grew by its people, every city on its own land only.
      */
     static int baseRadius(MinecraftServer server, UUID kingdomId, long cityId, CityLevel level) {
         int byLevel = level.wallRadius(RoadSettings.rules());
@@ -326,10 +328,54 @@ public final class CityWalls {
         if (level == null) {
             return Outcome.fail(KingdomError.UNKNOWN_CITY);
         }
+        if (landOnly(server, actor, kingdomId) && chunksBeyondLand(server, kingdomId, cityId) > 0) {
+            return Outcome.fail(KingdomError.WALL_OUTSIDE_LAND);
+        }
         int radius = radiusOf(server, kingdomId, cityId);
         // A later order for the same city takes the place of one still being read.
         LAYOUTS.put(place.get().key(), new Layout(actor, kingdomId, cityId, wallClass, place.get(), radius, new RoadTerrain(level)));
         return Outcome.DONE;
+    }
+
+    /**
+     * Whether a wall must stand whole on the land of its kingdom: one a player orders for a city of a kingdom of players, which lives
+     * within its state. An operator and the rulers of the world lay walls as before, with a gap on the land of another kingdom.
+     */
+    static boolean landOnly(MinecraftServer server, @Nullable UUID actor, UUID kingdomId) {
+        return actor != null && !io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, kingdomId);
+    }
+
+    /**
+     * The chunks the ring of the wall of a city would cross that are not the land of its kingdom, at the radius the wall would have
+     * now; 0 for a city that is gone.
+     */
+    public static int chunksBeyondLand(MinecraftServer server, UUID kingdomId, long cityId) {
+        Optional<Place> place = place(server, kingdomId, cityId);
+        if (place.isEmpty()) {
+            return 0;
+        }
+        int x = place.get().x();
+        int z = place.get().z();
+        int radius = radiusOf(server, kingdomId, cityId);
+        java.util.Set<Long> chunks = new java.util.HashSet<>();
+        for (int t = -radius; t <= radius; t++) {
+            chunks.add(ChunkKey.of((x + t) >> 4, (z - radius) >> 4));
+            chunks.add(ChunkKey.of((x + t) >> 4, (z + radius) >> 4));
+            chunks.add(ChunkKey.of((x - radius) >> 4, (z + t) >> 4));
+            chunks.add(ChunkKey.of((x + radius) >> 4, (z + t) >> 4));
+        }
+        return beyond(server, kingdomId, place.get().dimension(), chunks);
+    }
+
+    private static int beyond(MinecraftServer server, UUID kingdomId, String dimension, java.util.Collection<Long> chunks) {
+        io.github.sekerator.kingdomworld.core.territory.TerritoryIndex territory = KingdomWorldApi.state(server).territory();
+        int count = 0;
+        for (long chunk : chunks) {
+            if (!kingdomId.equals(territory.ownerOf(dimension, chunk))) {
+                count++;
+            }
+        }
+        return count;
     }
 
     /**
@@ -418,6 +464,16 @@ public final class CityWalls {
                                ServerLevel level, List<RouteCell> whole, Wall[] made) {
         if (!RoadWork.mayManage(server, actor, kingdomId)) {
             return Outcome.fail(KingdomError.NO_PERMISSION);
+        }
+        if (landOnly(server, actor, kingdomId)) {
+            // The land may have changed while the ring was read: a wall ordered by a player stands whole on its own land.
+            java.util.Set<Long> chunks = new java.util.HashSet<>();
+            for (RouteCell cell : whole) {
+                chunks.add(ChunkKey.of(cell.x() >> 4, cell.z() >> 4));
+            }
+            if (beyond(server, kingdomId, place.dimension(), chunks) > 0) {
+                return Outcome.fail(KingdomError.WALL_OUTSIDE_LAND);
+            }
         }
         // No wall on the land of another kingdom: the ring has a gap there.
         List<RouteCell> ring = new ArrayList<>(whole);

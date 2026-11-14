@@ -411,7 +411,9 @@ public enum KingdomError {
     /** Land of a province of the kingdom that it has not claimed: the wilds of the province. */
     THRONE_MOVE_WILD,
     /** The thrones of the kingdoms of the world are not moved. */
-    THRONE_MOVE_WORLD;
+    THRONE_MOVE_WORLD,
+    /** A wall a player orders for a city of a kingdom of players stands whole on the land of its kingdom: part of its ring is not. */
+    WALL_OUTSIDE_LAND;
 
     /**
      * Lower case identifier, used for translation keys.

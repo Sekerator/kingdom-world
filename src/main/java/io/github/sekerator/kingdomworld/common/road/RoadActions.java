@@ -342,6 +342,12 @@ public final class RoadActions {
                 yield result(outcome, "renamed", name);
             }
             case WALL_PALISADE, WALL_STONE -> {
+                // A wall a player orders stands whole on the land of the kingdom: the player hears how much of the ring is not.
+                int beyond = CityWalls.landOnly(server, actor, kingdom) ? CityWalls.chunksBeyondLand(server, kingdom, change.first()) : 0;
+                if (beyond > 0) {
+                    yield KingdomActions.Feedback.fail(KEY + "wall_beyond_land", CityWalls.place(server, kingdom, change.first())
+                            .map(CityWalls.Place::name).orElse("?"), beyond);
+                }
                 // The ring is read over the next ticks; the kingdom hears when the wall is laid out.
                 Outcome outcome = CityWalls.order(server, actor, kingdom, change.first(),
                         change.action() == RoadPackets.TabChange.Action.WALL_STONE ? Wall.WallClass.STONE : Wall.WallClass.PALISADE);

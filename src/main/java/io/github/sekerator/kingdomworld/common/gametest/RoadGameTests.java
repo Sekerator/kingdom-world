@@ -601,6 +601,64 @@ public final class RoadGameTests {
         helper.succeed();
     }
 
+    // ---------------------------------------------------------------- a city within its state
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_roads_city_land")
+    public static void aCityOfPlayersLivesOnTheLandOfItsKingdomOnly(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        String dimension = dimension(helper);
+        UUID king = UUID.randomUUID();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Bounded City", king);
+        try {
+            io.github.sekerator.kingdomworld.common.road.CityAreas.invalidate();
+            io.github.sekerator.kingdomworld.common.road.CityAreas.Area capital = io.github.sekerator.kingdomworld.common.road.CityAreas
+                    .of(server, kingdom.id()).stream().filter(area -> area.cityId() == 0).findFirst().orElse(null);
+            helper.assertTrue(capital != null && capital.landOnly(), "The capital of a kingdom of players is not a square on its land only: "
+                    + capital);
+            // The farthest place east of the throne inside the square that is still on the land of the kingdom, on a chunk the kingdom
+            // then gives up: the square of a new capital reaches beyond its first land.
+            io.github.sekerator.kingdomworld.common.road.CityWalls.Place place = io.github.sekerator.kingdomworld.common.road.CityWalls
+                    .place(server, kingdom.id(), 0).orElseThrow();
+            int throneChunk = place.x() >> 4;
+            BlockPos edge = null;
+            for (int dx = capital.radius(); dx > 0 && edge == null; dx--) {
+                BlockPos at = new BlockPos(place.x() + dx, place.y(), place.z());
+                if ((at.getX() >> 4) != throneChunk && kingdom.id().equals(KingdomWorldApi.ownerAt(level, at))) {
+                    edge = at;
+                }
+            }
+            helper.assertTrue(edge != null, "No land of the kingdom east of its throne chunk inside the square of the capital");
+            net.minecraft.world.level.ChunkPos chunk = new net.minecraft.world.level.ChunkPos(edge);
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.road.CityAreas.inCity(server, kingdom.id(), dimension, edge.getX(), edge.getZ()),
+                    "The edge of the capital on its land is not in the city");
+            Outcome given = KingdomWorldApi.unclaimChunk(level, chunk, kingdom.id(), null);
+            helper.assertTrue(given.ok(), "The chunk at the edge of the capital was not given up: " + given);
+            helper.assertTrue(!io.github.sekerator.kingdomworld.common.road.CityAreas.inCity(server, kingdom.id(), dimension, edge.getX(), edge.getZ()),
+                    "A part of the square of the capital beyond its land is still the city");
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.road.CityAreas.at(server, dimension, edge.getX(), edge.getZ()).isEmpty(),
+                    "A place beyond the land of every kingdom is in a city");
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.road.CityAreas.inCity(server, kingdom.id(), dimension, capital.x(), capital.z()),
+                    "The middle of the capital is no longer the city");
+            // A town hall beyond the land of the kingdom founds no city, though its king places it.
+            Outcome outside = RoadWork.foundCity(level, king, kingdom.id(), edge, "Beyond");
+            helper.assertTrue(outside.error() == KingdomError.CONSTRUCTION_OUTSIDE_LAND, "A city was founded beyond the land: " + outside);
+            // A wall the king orders would leave the land: refused, saying how many chunks of the ring are not the kingdom's.
+            int beyond = io.github.sekerator.kingdomworld.common.road.CityWalls.chunksBeyondLand(server, kingdom.id(), 0);
+            helper.assertTrue(beyond >= 1, "The ring of the wall leaves no chunk of the land: " + beyond);
+            KingdomActions.Feedback wall = RoadActions.applyTab(server, king, new RoadPackets.TabChange(kingdom.id(),
+                    RoadPackets.TabChange.Action.WALL_PALISADE, 0, 0, ""));
+            helper.assertTrue(!wall.success() && wall.message().getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents text
+                    && text.getKey().endsWith("wall_beyond_land") && text.getArgs().length == 2 && Integer.valueOf(beyond).equals(text.getArgs()[1]),
+                    "A wall leaving the land was ordered, or the refusal does not tell the chunks: " + wall.message().getString());
+            helper.assertTrue(!io.github.sekerator.kingdomworld.common.road.CityWalls.layingOut(kingdom.id(), 0), "The refused wall is being laid out");
+        } finally {
+            CitizenGameTests.finish(helper, kingdom);
+            io.github.sekerator.kingdomworld.common.road.CityAreas.invalidate();
+        }
+        helper.succeed();
+    }
+
     // ---------------------------------------------------------------- walls
 
     @GameTest(template = EMPTY, batch = "kingdomworld_roads_wall")

@@ -95,6 +95,8 @@ a village.
 - **The radius of the wall and the square of the city**: {cfg:roads.wallRadius} blocks for a village, half as much
   again for a town ({cfg:roads.wallRadius*1.5}), twice as much for a large city ({cfg:roads.wallRadius*2}). The
   square of a city without a wall is the one a wall of its level would take: the law of damaged property holds in it.
+  A city of a kingdom of players lives within its state: the part of the square beyond the border of its land is no
+  city for the law, work, beds, newcomers or the guard.
 - **A city short of room.** When the people of a city (named and townsfolk) need more room than the square of its
   level and wall gives, the square is wider by as much as they need built densely: {cfg:citizens.folkDensity} people
   a block of area, without an upper limit. A large city outgrows its {cfg:roads.wallRadius*2} blocks at about 74
@@ -140,6 +142,8 @@ the city and press **Actions**. The Construction right is needed.
   radius of their plan.
 - The ring goes around water, dangerous places and the land of others. If there is no ground for a wall around
   the city, the chat says so.
+- The king orders a wall only when its ring lies wholly on the land of the kingdom. Otherwise the order is refused,
+  saying how many chunks of the ring are not yours: claim the land around the city first.
 - It is built like a road: the free builders of the kingdom pay column after column from the storehouses, and a
   column goes up in the world once its place is loaded. The wall breaks nothing and leaves trees as they are.
 - A finished wall and its gates are entered into the register of buildings as fortifications ("City wall" and
