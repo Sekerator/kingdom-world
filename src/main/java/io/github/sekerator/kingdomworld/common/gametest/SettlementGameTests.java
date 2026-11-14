@@ -578,7 +578,9 @@ public final class SettlementGameTests {
             java.util.List<UUID> before = new java.util.ArrayList<>();
             java.util.Map<UUID, String> names = new java.util.HashMap<>();
             for (Citizen citizen : world.citizens().registry().citizensOf(village.kingdomId())) {
-                if (citizen.settlement() == village.id()) {
+                // The watchmen of the village are soldiers, and a soldier is never folded.
+                if (citizen.settlement() == village.id()
+                        && io.github.sekerator.kingdomworld.common.army.ArmyWork.state(server).soldier(citizen.id()).isEmpty()) {
                     before.add(citizen.id());
                     names.put(citizen.id(), citizen.nameSeed() + "/" + citizen.gender() + "/" + citizen.skin() + "/" + citizen.professionId());
                 }
