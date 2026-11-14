@@ -471,10 +471,7 @@ public final class CityWalls {
             return Outcome.DONE;
         });
         if (outcome.ok()) {
-            ServerLevel level = ConstructionWork.level(server, wall.get().dimension());
-            if (level != null) {
-                openGate(level, wall.get(), cell);
-            }
+            open(server, wall.get(), cell);
             if (wall.get().buildingId() != 0) {
                 registerGate(server, wall.get(), cell);
             }
@@ -589,12 +586,25 @@ public final class CityWalls {
      */
     private static void open(MinecraftServer server, Wall wall, int cell) {
         ServerLevel level = ConstructionWork.level(server, wall.dimension());
-        RouteCell at = wall.cells().get(cell);
-        if (level != null && level.isLoaded(new BlockPos(at.x(), at.y(), at.z()))) {
+        if (level != null && gateLoaded(level, wall, cell)) {
             openGate(level, wall, cell);
         } else {
             PENDING.add(wall.id() + "/" + cell);
         }
+    }
+
+    /**
+     * Whether every column of a gate is loaded: a gate on the edge of two chunks waits for both, so that none is loaded on
+     * the spot for it.
+     */
+    private static boolean gateLoaded(ServerLevel level, Wall wall, int cell) {
+        for (int i = cell - Wall.GATE_HALF; i <= cell + Wall.GATE_HALF; i++) {
+            RouteCell at = wall.cells().get(Math.floorMod(i, wall.cells().size()));
+            if (!level.isLoaded(new BlockPos(at.x(), at.y(), at.z()))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -653,8 +663,7 @@ public final class CityWalls {
                 continue;
             }
             ServerLevel level = ConstructionWork.level(server, wall.get().dimension());
-            RouteCell at = wall.get().cells().get(cell);
-            if (level != null && level.isLoaded(new BlockPos(at.x(), at.y(), at.z()))) {
+            if (level != null && gateLoaded(level, wall.get(), cell)) {
                 openGate(level, wall.get(), cell);
                 it.remove();
             }
@@ -671,10 +680,11 @@ public final class CityWalls {
             RouteCell at = wall.cells().get(index);
             for (int up = 1; up <= wall.wallClass().height() + 1; up++) {
                 BlockPos pos = new BlockPos(at.x(), at.y() + up, at.z());
-                BlockState state = level.getBlockState(pos);
+                // Its place is looked at only once it is loaded: reading a block of a chunk not loaded would load it now.
                 if (!wall.placedHere(pos.asLong()) || !level.isLoaded(pos)) {
                     continue;
                 }
+                BlockState state = level.getBlockState(pos);
                 if (!state.is(io.github.sekerator.kingdomworld.common.construction.TemplateBlocks.UNCLEARABLE)
                         && (state.is(net.minecraft.tags.BlockTags.LOGS) || isWallStone(state))) {
                     for (ItemStack drop : net.minecraft.world.level.block.Block.getDrops(state, level, pos, null)) {

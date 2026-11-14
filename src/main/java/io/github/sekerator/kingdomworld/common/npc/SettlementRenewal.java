@@ -21,6 +21,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
@@ -220,6 +221,10 @@ final class SettlementRenewal {
                 continue;
             }
             if (there.is(BlockTags.LEAVES)) {
+                if (placedLeaves(there)) {
+                    // A hedge or a roof of leaves: no trunk of a tree holds them.
+                    return false;
+                }
                 leaves |= log;
                 continue;
             }
@@ -230,6 +235,15 @@ final class SettlementRenewal {
         }
         // A trunk is a tree when its crown is over it; logs with nothing over them were laid by somebody.
         return !log || leaves;
+    }
+
+    /**
+     * Whether leaves were placed by somebody rather than grown on a tree: placed leaves never fall, and leaves more than six
+     * blocks from a trunk would have fallen unless placed.
+     */
+    static boolean placedLeaves(BlockState state) {
+        return state.hasProperty(LeavesBlock.PERSISTENT) && state.getValue(LeavesBlock.PERSISTENT)
+                || state.hasProperty(LeavesBlock.DISTANCE) && state.getValue(LeavesBlock.DISTANCE) >= LeavesBlock.DECAY_DISTANCE;
     }
 
     /**
