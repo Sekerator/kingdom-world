@@ -17,3 +17,6 @@ src/generated/**/*.json text eol=lf
 src/main/resources/data/kingdomworld/kingdomworld_buildings/*.json text eol=lf
 scripts/smoke-datapack/**/*.json text eol=lf
 scripts/smoke-datapack/pack.mcmeta text eol=lf
+
+# The pages of the guide are read the same on every system.
+src/main/resources/assets/kingdomworld/guide/**/*.md text eol=lf

@@ -111,6 +111,20 @@ sourceSets {
     }
 }
 
+// The page of the guide for browsers reads the guide with the classes of the mod.
+sourceSets.generator.compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+
+// "gradlew guideSite" writes the guide of the game as one HTML page with its search: build/guide/guide.html. The Russian names
+// of the items of the game come from the assets the build downloaded; "-PgameAssets=<folder>" names another folder of them.
+tasks.register('guideSite', JavaExec) {
+    group = 'kingdomworld'
+    description = 'Writes the guide as one HTML page with its search (build/guide/guide.html)'
+    classpath = sourceSets.generator.runtimeClasspath + sourceSets.main.runtimeClasspath
+    mainClass = 'io.github.sekerator.kingdomworld.generator.GuideSite'
+    def gameAssets = project.findProperty('gameAssets') ?: new File(gradle.gradleUserHomeDir, 'caches/forge_gradle/assets').absolutePath
+    args file('src/main/resources').absolutePath, layout.buildDirectory.file('guide/guide.html').get().asFile.absolutePath, gameAssets
+}
+
 // "gradlew generateBuildings" draws the built-in building templates again, and the data pack of the smoke check.
 tasks.register('generateBuildings', JavaExec) {
     group = 'kingdomworld'

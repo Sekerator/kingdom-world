@@ -57,7 +57,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "49";
+    public static final String PROTOCOL_VERSION = "50";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -316,6 +316,18 @@ public final class KingdomWorldNetwork {
                 io.github.sekerator.kingdomworld.common.network.packet.EarthworkPackets.Result::encode,
                 io.github.sekerator.kingdomworld.common.network.packet.EarthworkPackets.Result::decode,
                 io.github.sekerator.kingdomworld.common.network.packet.EarthworkPackets.Result::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.GuidePackets.Open.class, NetworkDirection.PLAY_TO_CLIENT,
+                io.github.sekerator.kingdomworld.common.network.packet.GuidePackets.Open::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.GuidePackets.Open::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.GuidePackets.Open::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.GuidePackets.NumbersRequest.class, NetworkDirection.PLAY_TO_SERVER,
+                io.github.sekerator.kingdomworld.common.network.packet.GuidePackets.NumbersRequest::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.GuidePackets.NumbersRequest::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.GuidePackets.NumbersRequest::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.GuidePackets.Numbers.class, NetworkDirection.PLAY_TO_CLIENT,
+                io.github.sekerator.kingdomworld.common.network.packet.GuidePackets.Numbers::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.GuidePackets.Numbers::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.GuidePackets.Numbers::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

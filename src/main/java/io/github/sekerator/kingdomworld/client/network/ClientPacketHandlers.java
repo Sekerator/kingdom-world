@@ -174,6 +174,23 @@ public final class ClientPacketHandlers {
         }
     }
 
+    /**
+     * The server opens the guide ({@code /kingdom guide}).
+     */
+    public static void handleOpenGuide() {
+        ClientHooks.openGuide();
+    }
+
+    /**
+     * The numbers of the configuration of the server the guide shows: the pages are laid out again with them.
+     */
+    public static void handleGuideNumbers(io.github.sekerator.kingdomworld.common.network.packet.GuidePackets.Numbers packet) {
+        io.github.sekerator.kingdomworld.client.guide.ClientGuideNumbers.received(packet.values());
+        if (Minecraft.getInstance().screen instanceof io.github.sekerator.kingdomworld.client.screen.GuideScreen screen) {
+            screen.numbersChanged();
+        }
+    }
+
     public static void handleActionResult(ActionResultPacket packet) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.screen instanceof ResultListener listener) {

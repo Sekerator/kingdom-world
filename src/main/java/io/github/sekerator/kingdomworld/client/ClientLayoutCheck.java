@@ -146,7 +146,13 @@ final class ClientLayoutCheck {
                     io.github.sekerator.kingdomworld.core.npc.NpcLevel.LARGE, 3, true, WIDE_COUNT, WIDE_COUNT, 64, WIDE_COUNT,
                     io.github.sekerator.kingdomworld.core.guild.Rank.SS, io.github.sekerator.kingdomworld.core.guild.Rank.S);
 
-    private record Case(String name, Supplier<Screen> screen) {
+    /**
+     * A screen to check; {@code screenshots} false checks it without saving pictures of it (the many pages of the guide).
+     */
+    private record Case(String name, Supplier<Screen> screen, boolean screenshots) {
+        Case(String name, Supplier<Screen> screen) {
+            this(name, screen, true);
+        }
     }
 
     private final Minecraft minecraft = Minecraft.getInstance();
@@ -252,7 +258,7 @@ final class ClientLayoutCheck {
                     LayoutCheck.begin(language + " " + size + " " + check.name());
                     Screen screen = check.screen().get();
                     screen.init(minecraft, guiWidth, guiHeight);
-                    Path file = SCREENSHOT_SCALES.contains(requested)
+                    Path file = SCREENSHOT_SCALES.contains(requested) && check.screenshots()
                             ? screenshots.resolve(language).resolve(window[0] + "x" + window[1] + "-scale" + requested + "-" + check.name() + ".png")
                             : null;
                     draw(screen, window[0], window[1], scale, file);
@@ -1516,14 +1522,7 @@ final class ClientLayoutCheck {
             screen.showArmyForCheck("attack", List.of(3L, 4L), List.of(new int[]{40, -60}, new int[]{90, -40}));
             return screen;
         }));
-        cases.add(new Case("guide-contents", () -> new io.github.sekerator.kingdomworld.client.screen.GuideScreen(-1, 0)));
-        cases.add(new Case("guide-contents-last", () -> new io.github.sekerator.kingdomworld.client.screen.GuideScreen(-1, Integer.MAX_VALUE)));
-        for (int chapter = 0; chapter < io.github.sekerator.kingdomworld.client.screen.GuideScreen.CHAPTERS; chapter++) {
-            int shown = chapter;
-            cases.add(new Case("guide-chapter-" + (chapter + 1), () -> new io.github.sekerator.kingdomworld.client.screen.GuideScreen(shown, 0)));
-            cases.add(new Case("guide-chapter-" + (chapter + 1) + "-last", () ->
-                    new io.github.sekerator.kingdomworld.client.screen.GuideScreen(shown, Integer.MAX_VALUE)));
-        }
+        guideCases(cases);
         cases.add(new Case("map-find-nearest", () -> {
             fillMapData();
             KingdomMapScreen screen = new KingdomMapScreen(null);
@@ -1639,5 +1638,26 @@ final class ClientLayoutCheck {
         WorkforceLayoutCases.posts((name, screen) -> cases.add(new Case(name, screen)),
                 (profession, manage) -> postView(profession, WorkStatus.WORKING, manage, 3, true, true));
         return cases;
+    }
+
+    /**
+     * The guide: the first page with the tree, a page with crafting grids, a table, the results of a search and a page opened
+     * from them with the words highlighted, each with pictures; then every page of the guide without pictures.
+     */
+    private static void guideCases(List<Case> cases) {
+        cases.add(new Case("guide-tree", () -> io.github.sekerator.kingdomworld.client.screen.GuideScreen.forCheck("welcome", "", false)));
+        cases.add(new Case("guide-craft", () -> io.github.sekerator.kingdomworld.client.screen.GuideScreen.forCheck("founding", "", false)));
+        cases.add(new Case("guide-table", () -> io.github.sekerator.kingdomworld.client.screen.GuideScreen.forCheck("chunk_limit", "", false)));
+        cases.add(new Case("guide-search", () -> io.github.sekerator.kingdomworld.client.screen.GuideScreen.forCheck(null,
+                cyrillic() ? "трон" : "throne", true)));
+        cases.add(new Case("guide-search-none", () -> io.github.sekerator.kingdomworld.client.screen.GuideScreen.forCheck(null,
+                "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW", true)));
+        cases.add(new Case("guide-found", () -> io.github.sekerator.kingdomworld.client.screen.GuideScreen.forCheck("founding",
+                cyrillic() ? "корона трон" : "crown throne", false)));
+        for (io.github.sekerator.kingdomworld.core.guide.GuidePage page
+                : io.github.sekerator.kingdomworld.client.guide.GuideLibrary.current().book().pages()) {
+            cases.add(new Case("guide-page-" + page.id(), () -> io.github.sekerator.kingdomworld.client.screen.GuideScreen.forCheck(page.id(),
+                    "", false), false));
+        }
     }
 }

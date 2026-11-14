@@ -2441,6 +2441,7 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.BooleanValue requestKingdomListOnJoin;
         public final ForgeConfigSpec.BooleanValue showBorderMessages;
         public final ForgeConfigSpec.BooleanValue showPartyList;
+        public final ForgeConfigSpec.ConfigValue<String> guidePage;
         public final ForgeConfigSpec.BooleanValue journeyMap;
         public final ForgeConfigSpec.BooleanValue xaeroMaps;
         public final ForgeConfigSpec.BooleanValue mapCaravans;
@@ -2458,6 +2459,9 @@ public final class KingdomWorldConfig {
             showPartyList = builder
                     .comment("Show the members of your party and your companions with their health in the corner of the screen.")
                     .define("showPartyList", true);
+            guidePage = builder
+                    .comment("The page of the guide read last; the guide opens on it again. Written by the guide itself.")
+                    .define("guidePage", "", value -> value instanceof String text && text.length() <= 64);
             builder.pop();
 
             builder.comment("Kingdoms on the maps of other mods, when they are installed.").push("maps");

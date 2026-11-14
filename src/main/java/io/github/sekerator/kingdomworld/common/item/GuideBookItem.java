@@ -21,9 +21,10 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 /**
- * The guide book "Kingdoms: a Guide": opens the chapters on the client. Every player gets one the first time they join (once,
- * remembered in the data of the player that survives death) and may take one again with {@code /kingdom guide} while they
- * have none; the book is worth nothing to markets, so giving it away again makes nothing from nothing.
+ * The guide book "Kingdoms: a Guide": opens the guide with its tree of pages and its search on the client. Every player gets one
+ * the first time they join (once, remembered in the data of the player that survives death), and {@code /kingdom guide} opens the
+ * guide and gives the book again to a player who has none; the book is worth nothing to markets, so giving it away again makes
+ * nothing from nothing.
  */
 public class GuideBookItem extends Item {
     /** The mark in the persistent data of a player that the book was given on the first join. */

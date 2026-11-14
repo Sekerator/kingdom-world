@@ -148,15 +148,15 @@ public final class KingdomCommand {
     }
 
     /**
-     * The guide book again, for a player who carries none.
+     * Opens the guide, and gives the guide book again to a player who carries none.
      */
     private static int guide(CommandSourceStack source) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
-        if (!io.github.sekerator.kingdomworld.common.item.GuideBookItem.giveAgain(player)) {
-            source.sendFailure(Component.translatable("kingdomworld.guide.already"));
-            return 0;
+        if (io.github.sekerator.kingdomworld.common.item.GuideBookItem.giveAgain(player)) {
+            source.sendSuccess(() -> Component.translatable("kingdomworld.guide.taken"), false);
         }
-        source.sendSuccess(() -> Component.translatable("kingdomworld.guide.taken"), false);
+        io.github.sekerator.kingdomworld.common.network.KingdomWorldNetwork.sendToPlayer(player,
+                new io.github.sekerator.kingdomworld.common.network.packet.GuidePackets.Open());
         return 1;
     }
 

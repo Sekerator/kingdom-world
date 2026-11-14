@@ -41,6 +41,9 @@ public final class KingdomWorldClient {
     /** Opens the window of the workers; no key by default, the pack has few free ones. */
     public static final KeyMapping WORKERS_KEY = new KeyMapping("key.kingdomworld.workers", KeyConflictContext.IN_GAME,
             InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, "key.categories.kingdomworld");
+    /** Opens the guide; no key by default either. */
+    public static final KeyMapping GUIDE_KEY = new KeyMapping("key.kingdomworld.guide", KeyConflictContext.IN_GAME,
+            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, "key.categories.kingdomworld");
     private static boolean titleScreenSeen;
 
     private KingdomWorldClient() {
@@ -52,6 +55,7 @@ public final class KingdomWorldClient {
         modBus.addListener(KingdomWorldClient::onRegisterRenderers);
         modBus.addListener(KingdomWorldClient::onItemColors);
         modBus.addListener(KingdomWorldClient::onRegisterOverlays);
+        modBus.addListener(KingdomWorldClient::onRegisterReloadListeners);
         MinecraftForge.EVENT_BUS.addListener(io.github.sekerator.kingdomworld.client.construction.ClientBlueprint::onInteraction);
         MinecraftForge.EVENT_BUS.addListener(io.github.sekerator.kingdomworld.client.construction.BlueprintRenderer::onRenderLevel);
         MinecraftForge.EVENT_BUS.addListener(KingdomWorldClient::onLoggingIn);
@@ -97,6 +101,7 @@ public final class KingdomWorldClient {
         event.register(PARTY_KEY);
         event.register(LAW_KEY);
         event.register(WORKERS_KEY);
+        event.register(GUIDE_KEY);
         event.register(io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.ROTATE_KEY);
         event.register(io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.MIRROR_KEY);
     }
@@ -109,6 +114,14 @@ public final class KingdomWorldClient {
                 io.github.sekerator.kingdomworld.client.construction.BlueprintRenderer.drawHud(graphics, Minecraft.getInstance().font, width));
         event.registerAboveAll("party", (gui, graphics, partialTick, width, height) -> PartyHud.draw(graphics, width, height));
         event.registerAboveAll("wanted", (gui, graphics, partialTick, width, height) -> WantedHud.draw(graphics, width, height));
+    }
+
+    /**
+     * The guide is read again from the resources when they are loaded again (a resource pack, another language).
+     */
+    private static void onRegisterReloadListeners(net.minecraftforge.client.event.RegisterClientReloadListenersEvent event) {
+        event.registerReloadListener((net.minecraft.server.packs.resources.ResourceManagerReloadListener) manager ->
+                io.github.sekerator.kingdomworld.client.guide.GuideLibrary.clear());
     }
 
     private static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
@@ -151,6 +164,11 @@ public final class KingdomWorldClient {
                                 io.github.sekerator.kingdomworld.common.citizen.WorkforceActions.DEFAULT_PAGE)));
             }
         }
+        while (GUIDE_KEY.consumeClick()) {
+            if (minecraft.player != null && minecraft.screen == null) {
+                ClientHooks.openGuide();
+            }
+        }
         while (LAW_KEY.consumeClick()) {
             if (minecraft.player != null && minecraft.screen == null && minecraft.getConnection() != null) {
                 KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.LawPackets.PlayerAction(
@@ -160,6 +178,7 @@ public final class KingdomWorldClient {
     }
 
     private static void onLoggingIn(ClientPlayerNetworkEvent.LoggingIn event) {
+        io.github.sekerator.kingdomworld.client.guide.ClientGuideNumbers.clear();
         io.github.sekerator.kingdomworld.common.economy.CurrencyDirectory.clear();
         ClientKingdomCache.clear();
         ClientTerritoryCache.clear();
@@ -172,6 +191,8 @@ public final class KingdomWorldClient {
     }
 
     private static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+        io.github.sekerator.kingdomworld.client.guide.ClientGuideNumbers.clear();
+        io.github.sekerator.kingdomworld.client.guide.GuideRecipes.clear();
         io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.clear();
         PartyHud.clear();
         WantedHud.clear();

@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KingdomWorld</title>
+<style>
+:root {
+  --edge: #0c0805; --leather: #1e160f; --leather-dark: #150f0a; --header: #2a1f15;
+  --gold: #b08a4a; --gold-dark: #6b5030; --title: #f0d070; --section: #e6cc8a; --text: #e8e0d0; --muted: #a89a84;
+  --link: #9fd8ff; --link-hover: #d8f0ff; --bold: #ffdc7a; --mark: rgba(200, 154, 48, 0.55); --slot: #140e09;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--edge); color: var(--text); font: 16px/1.6 Georgia, "Times New Roman", serif; }
+header {
+  position: sticky; top: 0; z-index: 3; display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center;
+  padding: 10px 16px; background: var(--header); border-bottom: 2px solid var(--gold); box-shadow: 0 2px 0 var(--gold-dark);
+}
+header h1 { margin: 0; font-size: 21px; color: var(--title); flex: 1 1 200px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.langs { display: flex; gap: 4px; }
+.langs button {
+  font: inherit; font-size: 14px; padding: 4px 10px; color: var(--text); background: var(--leather-dark);
+  border: 1px solid var(--gold-dark); border-radius: 3px; cursor: pointer;
+}
+.langs button[aria-pressed="true"] { color: var(--title); border-color: var(--gold); }
+#search {
+  flex: 1 1 220px; max-width: 360px; padding: 6px 10px; font: inherit; font-size: 15px; color: var(--text);
+  background: var(--edge); border: 1px solid var(--gold-dark); border-radius: 3px;
+}
+#search:focus { outline: none; border-color: var(--gold); }
+.book { display: grid; grid-template-columns: minmax(200px, 290px) minmax(0, 1fr); align-items: start; }
+.tree {
+  position: sticky; top: 58px; max-height: calc(100vh - 58px); overflow: auto; padding: 10px 6px 30px;
+  background: var(--leather-dark); border-right: 1px solid var(--gold-dark);
+}
+.tree details { margin: 2px 0; }
+.tree summary { cursor: pointer; padding: 3px 6px; color: var(--section); font-weight: bold; list-style-position: inside; }
+.tree a {
+  display: block; padding: 2px 8px 2px 28px; color: var(--text); text-decoration: none; font-size: 15px;
+  border-left: 2px solid transparent;
+}
+.tree a:hover { background: rgba(240, 208, 112, 0.14); }
+.tree a.current { background: rgba(240, 208, 112, 0.27); border-left-color: var(--gold); color: var(--title); }
+main { min-height: calc(100vh - 58px); padding: 18px clamp(16px, 4vw, 40px) 80px; background: var(--leather); }
+article, .results { max-width: 860px; }
+.crumb { margin: 0; color: var(--muted); font-size: 14px; }
+h1 { color: var(--title); font-size: 26px; margin: 2px 0 14px; padding-bottom: 6px; border-bottom: 1px solid var(--gold); }
+article h1 .icon { margin-right: 8px; vertical-align: -6px; }
+h2 { color: var(--title); font-size: 19px; margin: 22px 0 8px; padding-bottom: 2px; border-bottom: 1px solid var(--gold-dark); display: inline-block; }
+strong { color: var(--bold); }
+a { color: var(--link); }
+a:hover { color: var(--link-hover); }
+.cfg { color: var(--title); border-bottom: 1px dotted var(--gold-dark); }
+ul, ol { padding-left: 24px; }
+li { margin: 3px 0; }
+ul li::marker { color: var(--gold); }
+ol li::marker { color: var(--bold); font-weight: bold; }
+aside { margin: 12px 0; padding: 8px 12px; background: rgba(240, 208, 112, 0.1); border-left: 3px solid var(--gold); }
+.table { overflow-x: auto; margin: 12px 0; }
+table { border-collapse: collapse; }
+th, td { padding: 4px 10px; border: 1px solid rgba(139, 107, 58, 0.5); vertical-align: top; text-align: left; }
+th { color: var(--bold); background: rgba(176, 138, 74, 0.25); }
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.04); }
+td.num { text-align: right; white-space: nowrap; }
+.icon {
+  display: inline-block; width: 16px; height: 16px; vertical-align: -2px; margin: 0 1px;
+  background-size: 100% auto; background-repeat: no-repeat; image-rendering: pixelated;
+}
+.icon.big { width: 32px; height: 32px; }
+.grids { display: flex; flex-wrap: wrap; gap: 18px 28px; margin: 12px 0; }
+.grid { margin: 0; display: grid; grid-template-columns: auto auto auto; grid-template-rows: auto auto; align-items: center; column-gap: 10px; }
+.grid figcaption { grid-column: 1 / -1; color: var(--title); font-size: 15px; margin-bottom: 4px; }
+.cells { display: grid; grid-template-columns: repeat(3, 40px); grid-auto-rows: 40px; }
+.slot { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; background: var(--slot); border: 1px solid var(--gold-dark); position: relative; }
+.slot.result { width: 44px; height: 44px; border-color: var(--gold); }
+.slot b { position: absolute; right: 2px; bottom: 0; font: bold 13px sans-serif; color: #fff; text-shadow: 1px 1px 0 #000; }
+.arrow { color: var(--gold); font-size: 26px; }
+.missing { color: var(--muted); }
+mark { background: var(--mark); color: inherit; border-radius: 2px; }
+.results .count { color: var(--muted); margin: 0 0 10px; }
+.hit { display: block; padding: 8px 10px; color: var(--text); text-decoration: none; border-bottom: 1px solid rgba(139, 107, 58, 0.5); }
+.hit:hover { background: rgba(240, 208, 112, 0.14); }
+.hit .title { color: var(--title); font-weight: bold; }
+.hit .section { color: var(--muted); float: right; font-size: 14px; margin-left: 12px; }
+.hit .snippet { display: block; font-size: 15px; color: var(--text); }
+@media (max-width: 760px) {
+  .book { grid-template-columns: 1fr; }
+  .tree { position: static; max-height: 45vh; border-right: 0; border-bottom: 1px solid var(--gold-dark); }
+  main { min-height: 0; }
+}
+/*ICONS*/
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title"></h1>
+  <input id="search" type="search" autocomplete="off">
+  <div class="langs"><button type="button" data-lang="ru">RU</button><button type="button" data-lang="en">EN</button></div>
+</header>
+<!--BOOKS-->
+<script>
+const INDEX = /*INDEX*/{};
+const TEXTS = {
+  ru: {title: "Королевства: руководство", search: "Поиск по справочнику", found: "Найдено страниц: ", none: "Ничего не нашлось"},
+  en: {title: "Kingdoms: a Guide", search: "Search the guide", found: "Pages found: ", none: "Nothing was found"}
+};
+const BEFORE = 40, SNIPPET = 160, TITLE_WEIGHT = 20;
+let lang = "ru";
+try { lang = localStorage.getItem("kingdomworld-guide-lang") || "ru"; } catch (e) { }
+if (!TEXTS[lang]) { lang = "ru"; }
+const originals = new Map();
+const search = document.getElementById("search");
+
+function fold(text) {
+  let result = "";
+  for (const c of text) {
+    const lower = c.toLowerCase();
+    result += lower.length === 1 ? (lower === "ё" ? "е" : lower) : c;
+  }
+  return result;
+}
+
+function words(query) {
+  const found = [];
+  for (const part of fold(query).split(/\s+/)) {
+    const word = part.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+    if (word && !found.includes(word)) { found.push(word); }
+  }
+  return found;
+}
+
+function count(text, word) {
+  let n = 0, at = text.indexOf(word);
+  while (at >= 0) { n++; at = text.indexOf(word, at + word.length); }
+  return n;
+}
+
+function ranges(folded, list) {
+  const all = [];
+  for (const word of list) {
+    let at = folded.indexOf(word);
+    while (at >= 0) { all.push([at, at + word.length]); at = folded.indexOf(word, at + word.length); }
+  }
+  all.sort((a, b) => a[0] - b[0]);
+  const joined = [];
+  for (const range of all) {
+    const last = joined[joined.length - 1];
+    if (last && range[0] <= last[1]) { last[1] = Math.max(last[1], range[1]); } else { joined.push(range.slice()); }
+  }
+  return joined;
+}
+
+function escapeHtml(text) {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function marked(text, list) {
+  let html = "", from = 0;
+  for (const [start, end] of ranges(fold(text), list)) {
+    html += escapeHtml(text.slice(from, start)) + "<mark>" + escapeHtml(text.slice(start, end)) + "</mark>";
+    from = end;
+  }
+  return html + escapeHtml(text.slice(from));
+}
+
+function find(query) {
+  const list = words(query);
+  if (!list.length) { return []; }
+  const hits = [];
+  INDEX[lang].forEach(([id, title, section, text], order) => {
+    const foldedTitle = fold(title), foldedText = fold(text);
+    let score = 0;
+    for (const word of list) {
+      const inTitle = count(foldedTitle, word), inText = count(foldedText, word);
+      if (inTitle + inText === 0) { return; }
+      score += inTitle * TITLE_WEIGHT + Math.min(inText, 10);
+    }
+    let first = -1;
+    for (const word of list) {
+      const at = foldedText.indexOf(word);
+      if (at >= 0 && (first < 0 || at < first)) { first = at; }
+    }
+    let start = 0;
+    if (first > BEFORE) { const space = text.indexOf(" ", first - BEFORE); start = space < 0 ? first - BEFORE : space + 1; }
+    let end = Math.min(text.length, start + SNIPPET);
+    if (end < text.length) { const space = text.lastIndexOf(" ", end); if (space > start + SNIPPET / 2) { end = space; } }
+    const snippet = (start > 0 ? "… " : "") + text.slice(start, end).trim() + (end < text.length ? " …" : "");
+    hits.push({id, title, section, snippet, score, order});
+  });
+  hits.sort((a, b) => b.score - a.score || a.order - b.order);
+  return hits;
+}
+
+function book() {
+  return document.querySelector('.book[data-lang="' + lang + '"]');
+}
+
+function highlight(article, list) {
+  if (!originals.has(article)) { originals.set(article, article.innerHTML); }
+  article.innerHTML = originals.get(article);
+  if (!list.length) { return; }
+  const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) { nodes.push(walker.currentNode); }
+  for (const node of nodes) {
+    const found = ranges(fold(node.nodeValue), list);
+    if (!found.length) { continue; }
+    const holder = document.createElement("span");
+    holder.innerHTML = marked(node.nodeValue, list);
+    node.replaceWith(...holder.childNodes);
+  }
+}
+
+function render() {
+  const t = TEXTS[lang];
+  document.documentElement.lang = lang;
+  document.getElementById("title").textContent = t.title;
+  document.title = t.title;
+  search.placeholder = t.search;
+  document.querySelectorAll(".langs button").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.lang === lang)));
+  document.querySelectorAll(".book").forEach(element => { element.hidden = element.dataset.lang !== lang; });
+  const current = book();
+  const results = current.querySelector(".results");
+  const hash = decodeURIComponent(location.hash.slice(1));
+  const query = search.value;
+  const list = words(query);
+  const showResults = list.length > 0 && !hash.startsWith("page:");
+  const pageId = hash.startsWith("page:") ? hash.slice(5) : hash;
+  let article = current.querySelector('article[data-page="' + CSS.escape(pageId) + '"]') || current.querySelector("article");
+  current.querySelectorAll("article").forEach(element => { element.hidden = true; });
+  if (showResults) {
+    const hits = find(query);
+    results.innerHTML = '<p class="count">' + (hits.length ? t.found + hits.length : t.none) + "</p>" + hits.map(hit =>
+      '<a class="hit" href="#page:' + hit.id + '"><span class="section">' + escapeHtml(hit.section) + '</span><span class="title">'
+      + marked(hit.title, list) + '</span><span class="snippet">' + marked(hit.snippet, list) + "</span></a>").join("");
+    results.hidden = false;
+  } else {
+    results.hidden = true;
+    article.hidden = false;
+    highlight(article, list);
+  }
+  current.querySelectorAll(".tree a").forEach(link => {
+    const here = !showResults && link.dataset.page === article.dataset.page;
+    link.classList.toggle("current", here);
+    if (here) { link.closest("details").open = true; }
+  });
+  if (!showResults) { window.scrollTo(0, 0); }
+}
+
+document.querySelectorAll(".langs button").forEach(button => button.addEventListener("click", () => {
+  lang = button.dataset.lang;
+  try { localStorage.setItem("kingdomworld-guide-lang", lang); } catch (e) { }
+  render();
+}));
+search.addEventListener("input", () => {
+  if (location.hash.startsWith("#page:")) { history.replaceState(null, "", location.hash.replace("#page:", "#")); }
+  render();
+});
+document.addEventListener("click", event => {
+  const link = event.target.closest("a[href^='#']");
+  if (link && !link.classList.contains("hit") && link.closest(".tree, article")) {
+    search.value = "";
+  }
+});
+window.addEventListener("hashchange", render);
+render();
+</script>
+</body>
+</html>
