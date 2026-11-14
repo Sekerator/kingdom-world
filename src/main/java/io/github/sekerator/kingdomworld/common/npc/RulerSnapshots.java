@@ -352,22 +352,14 @@ final class RulerSnapshots {
      * What the materials a kingdom lacks for a cost are worth.
      */
     static long missingWorth(MinecraftServer server, UUID id, Map<String, Integer> cost) {
-        return missingWorth(server, KingdomStorage.countsById(server, id), cost);
+        return io.github.sekerator.kingdomworld.common.economy.MaterialWorth.missing(server, id, cost);
     }
 
     /**
      * What the materials a kingdom lacks for a cost are worth, from the counts of its storehouses.
      */
     static long missingWorth(MinecraftServer server, Map<String, Long> stock, Map<String, Integer> cost) {
-        var prices = ItemPrices.table(server);
-        long worth = 0;
-        for (Map.Entry<String, Integer> entry : cost.entrySet()) {
-            long lack = entry.getValue() - stock.getOrDefault(entry.getKey(), 0L);
-            if (lack > 0) {
-                worth += lack * Math.max(1, prices.value(entry.getKey()).units());
-            }
-        }
-        return worth;
+        return io.github.sekerator.kingdomworld.common.economy.MaterialWorth.missing(server, stock, cost);
     }
 
     private static void land(MinecraftServer server, KingdomWorldState state, NpcKingdom npc, RulerView view, RulerRules rules) {

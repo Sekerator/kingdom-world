@@ -42,7 +42,8 @@ import java.util.UUID;
  * walls: [ { id, city, kingdom, class, dim, cx, cz, cells: [x, y, z, ...], gates: [cell], created, building, placed: [pos],
  *           sections: [ { paid, placed, pool } ] } ]
  * consents: ["owner>requester"]
- * charters: [ { kingdom, city, folk?, carry?, day?, arrival? } ] (a missing key is nothing yet; data written before has none)
+ * charters: [ { kingdom, city, folk?, carry?, day?, arrival?, mayor?, mayorSince?, paused?, note?, decided?, spentDay?, spent?,
+ *              refused?: [ { template, until } ] } ] (a missing key is nothing yet; data written before has none)
  * nextCity, nextRoad, nextCrossing, nextCamp, nextWall
  * </pre>
  */
@@ -468,6 +469,33 @@ final class RoadNbt {
         if (charter.lastArrival() != CityCharter.NEVER) {
             entry.putLong("arrival", charter.lastArrival());
         }
+        if (charter.mayor() != null) {
+            entry.putUUID("mayor", charter.mayor());
+            entry.putLong("mayorSince", charter.mayorSince());
+        }
+        if (charter.paused()) {
+            entry.putBoolean("paused", true);
+        }
+        if (!charter.note().isEmpty()) {
+            entry.putString("note", charter.note());
+        }
+        if (charter.decidedDay() != CityCharter.NEVER) {
+            entry.putLong("decided", charter.decidedDay());
+        }
+        if (charter.spentDay() != CityCharter.NEVER) {
+            entry.putLong("spentDay", charter.spentDay());
+            entry.putLong("spent", charter.spentOnDay());
+        }
+        if (!charter.refused().isEmpty()) {
+            ListTag refused = new ListTag();
+            charter.refused().forEach((template, until) -> {
+                CompoundTag one = new CompoundTag();
+                one.putString("template", template);
+                one.putLong("until", until);
+                refused.add(one);
+            });
+            entry.put("refused", refused);
+        }
         return entry;
     }
 
@@ -480,6 +508,20 @@ final class RoadNbt {
         charter.setFolkCarry(entry.getDouble("carry"));
         charter.setLastDay(entry.contains("day", Tag.TAG_LONG) ? entry.getLong("day") : CityCharter.NEVER);
         charter.setLastArrival(entry.contains("arrival", Tag.TAG_LONG) ? entry.getLong("arrival") : CityCharter.NEVER);
+        if (entry.hasUUID("mayor")) {
+            charter.setMayor(entry.getUUID("mayor"), entry.contains("mayorSince", Tag.TAG_LONG) ? entry.getLong("mayorSince") : 0);
+        }
+        charter.setPaused(entry.getBoolean("paused"));
+        charter.setNote(entry.getString("note"));
+        charter.setDecidedDay(entry.contains("decided", Tag.TAG_LONG) ? entry.getLong("decided") : CityCharter.NEVER);
+        if (entry.contains("spentDay", Tag.TAG_LONG)) {
+            charter.restoreSpent(entry.getLong("spentDay"), entry.getLong("spent"));
+        }
+        ListTag refused = entry.getList("refused", Tag.TAG_COMPOUND);
+        for (int i = 0; i < refused.size(); i++) {
+            CompoundTag one = refused.getCompound(i);
+            charter.refuse(one.getString("template"), one.getLong("until"));
+        }
         return charter;
     }
 

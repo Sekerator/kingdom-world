@@ -17,6 +17,7 @@ public final class RoadSettings {
     private static RoadRules roads;
     private static BanditRules bandits;
     private static Boolean physicalOverride;
+    private static Integer stockOverride;
 
     private RoadSettings() {
     }
@@ -77,6 +78,27 @@ public final class RoadSettings {
         }
     }
 
+    /**
+     * The share of every good of the storehouses, in percent, a governor of a city plans its buildings with.
+     */
+    public static int governorStockPercent() {
+        if (stockOverride != null) {
+            return stockOverride;
+        }
+        try {
+            return KingdomWorldConfig.SERVER.roads.governorStockPercent.get();
+        } catch (IllegalStateException e) {
+            return 50;
+        }
+    }
+
+    /**
+     * Replaces the configured share of the goods a governor plans with, for game tests; {@code null} restores the config.
+     */
+    public static void overrideGovernorStock(Integer percent) {
+        stockOverride = percent;
+    }
+
     public static List<? extends String> weapons() {
         try {
             return KingdomWorldConfig.SERVER.roads.banditWeapons.get();
@@ -104,6 +126,7 @@ public final class RoadSettings {
         roadOverride = null;
         banditOverride = null;
         physicalOverride = null;
+        stockOverride = null;
     }
 
     /**

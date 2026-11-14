@@ -815,6 +815,9 @@ public final class ConstructionWork {
             return earth;
         }
         if (step.kind() == BuildPlan.Kind.CLEAR) {
+            if (playersBlock(construction, level.getBlockState(at))) {
+                return StepResult.BLOCKED;
+            }
             StepResult result = clear(level, at, builder, tool, drops);
             if (result == StepResult.DONE) {
                 done(construction, index);
@@ -845,6 +848,9 @@ public final class ConstructionWork {
                 return before;
             }
         } else if (!there.isAir() && !there.canBeReplaced() && !Scaffolds.is(there)) {
+            if (playersBlock(construction, there)) {
+                return StepResult.BLOCKED;
+            }
             StepResult cleared = clear(level, at, builder, tool, drops);
             if (cleared != StepResult.DONE) {
                 return cleared;
@@ -861,6 +867,15 @@ public final class ConstructionWork {
         placeParts(level, construction, template, step.block());
         done(construction, index);
         return StepResult.DONE;
+    }
+
+    /**
+     * Whether a block in the way of a step of a construction the governor of a city laid out was placed by somebody: the governor
+     * builds only on the land as it grew, so its builders leave such a block standing and the step waits; the governor gives the
+     * construction up when it cannot be finished. Constructions of the king clear their place as always.
+     */
+    static boolean playersBlock(Construction construction, BlockState state) {
+        return construction.governor() && !state.isAir() && !Scaffolds.is(state) && !NaturalGround.grown(state);
     }
 
     /**
@@ -1442,6 +1457,9 @@ public final class ConstructionWork {
         BuildingEffects.changed();
         if (building != null) {
             io.github.sekerator.kingdomworld.common.flag.FlagWork.completed(server, building, construction.kind());
+            if (construction.governor()) {
+                io.github.sekerator.kingdomworld.common.road.CityGovernors.built(server, construction, building);
+            }
         }
         LOGGER.info("Construction {} ({}) of {} finished at {}{}", construction.id(), construction.kind().id(), construction.templateId(),
                 construction.anchor().coordinates(), admin ? " by an operator" : "");
@@ -1470,6 +1488,11 @@ public final class ConstructionWork {
             giveBack(server, construction, back);
             LOGGER.info("Construction {} of {} cancelled; {} kind(s) of materials went back", construction.id(), construction.templateId(),
                     back.size());
+            if (construction.governor() && actor != null) {
+                // The king gave up what the governor laid out: the governor does not lay it out again for a while.
+                io.github.sekerator.kingdomworld.common.road.CityGovernors.refused(server, construction.kingdomId(),
+                        cityOf(server, construction), construction.templateId());
+            }
         });
         return change;
     }

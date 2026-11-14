@@ -298,6 +298,7 @@ public final class NobilityWork {
             foundCourt(server, kingdomId, day);
         }
         boolean played = played(server, kingdomId);
+        citizenHeads(server, kingdomId, day);
         Stability.Inputs inputs = inputs(server, kingdomId, day);
         int counter = state.counter(kingdomId, spymaster(server, kingdomId), rules);
         NobilityState.Context context = context(server, kingdomId, day);
@@ -316,6 +317,29 @@ public final class NobilityWork {
         }
         if (npc) {
             NobilityNpc.day(server, kingdomId, day);
+        }
+    }
+
+    /**
+     * A house headed by a citizen who died, left or became a citizen of another kingdom (the house went with a city that left,
+     * the citizen did not) gets an heir: the tie to the citizen ends, the house keeps its titles.
+     */
+    static void citizenHeads(MinecraftServer server, UUID kingdomId, long day) {
+        NobilityState state = state(server);
+        for (NobleHouse house : state.houses(kingdomId)) {
+            UUID citizen = house.citizen();
+            if (citizen == null) {
+                continue;
+            }
+            boolean here = KingdomWorldApi.state(server).citizens().get(citizen)
+                    .filter(head -> head.isAlive() && head.kingdomId().equals(kingdomId)).isPresent();
+            if (here) {
+                continue;
+            }
+            String old = Note.head(house);
+            state.succeed(house, RANDOM.nextLong());
+            state.write(kingdomId, new Note(day, "citizen_gone", List.of(Note.house(house), old, Note.head(house))));
+            LOGGER.info("The citizen {} who headed the house {} of {} is gone: an heir took the house", citizen, house.id(), kingdomId);
         }
     }
 

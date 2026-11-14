@@ -487,4 +487,43 @@ class NobilityStateTest {
         assertEquals(Plurals.Form.N5, Plurals.form(11));
         assertEquals(Plurals.Form.N5, Plurals.form(0));
     }
+
+    @Test
+    void aCitizenMadeBaronHeadsAHouseWithoutWealthOutsideTheLimit() {
+        UUID citizen = UUID.randomUUID();
+        state.found(kingdom, 3, 1);
+        NobleHouse house = state.foundFor(kingdom, citizen, 1234, Gender.FEMALE, 77, 2);
+        assertEquals(citizen, house.citizen());
+        assertEquals(0, house.wealth(), "a citizen comes from the common people");
+        assertEquals(1234, house.headSeed(), "the head has the name of the citizen");
+        assertEquals(Gender.FEMALE, house.headGender());
+        assertTrue(house.raised(), "the house goes with its last title");
+        assertEquals(2, state.houses(kingdom).size());
+        assertEquals(1, state.countedHouses(kingdom), "a house of a citizen does not count against the limit");
+        assertEquals(Optional.of(house), state.houseOf(citizen));
+        assertTrue(state.houseOf(UUID.randomUUID()).isEmpty());
+        assertTrue(state.grant(kingdom, Title.BARON, Fief.city(4), house.id(), null, 2).ok());
+        assertTrue(state.revoke(state.holderOf(kingdom, Fief.city(4)).orElseThrow().id(), 3).isPresent());
+        assertTrue(state.house(house.id()).isEmpty(), "taking the title back takes the house away");
+    }
+
+    @Test
+    void aHeadWhoIsACitizenNeverDiesByChance() {
+        NobleHouse plain = state.found(kingdom, 5, 1);
+        NobleHouse citizen = state.foundFor(kingdom, UUID.randomUUID(), 99, Gender.MALE, 6, 1);
+        int plainHead = plain.headSeed();
+        List<Happening> today = state.day(day(1, false, true, Stability.Inputs.NEUTRAL, 0), RULES, always(0.0));
+        assertNotEquals(plainHead, plain.headSeed(), "the other head dies");
+        assertEquals(99, citizen.headSeed(), "the citizen lives on");
+        assertEquals(1, today.stream().filter(h -> h.kind() == Happening.Kind.HEAD_DIED).count());
+    }
+
+    @Test
+    void anHeirEndsTheTieToTheCitizen() {
+        NobleHouse house = state.foundFor(kingdom, UUID.randomUUID(), 99, Gender.MALE, 6, 1);
+        state.succeed(house, 42);
+        assertEquals(null, house.citizen());
+        assertEquals(2, house.generation());
+        assertEquals(1, state.countedHouses(kingdom), "the heir counts as any head");
+    }
 }

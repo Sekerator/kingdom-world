@@ -108,6 +108,43 @@ public final class RemoteWorks {
     }
 
     /**
+     * Orders a building for a city on behalf of its governor, in the style of the kingdom: the same work as an order of the king,
+     * the place found near the town hall on the land as it grew, nothing taken down.
+     */
+    public static Outcome orderForGovernor(MinecraftServer server, UUID kingdomId, String templateId, long cityId) {
+        Outcome check = checkTemplate(server, null, kingdomId, templateId);
+        if (!check.ok()) {
+            return check;
+        }
+        Optional<String> dimension = CityPlots.dimension(server, kingdomId, cityId);
+        if (dimension.isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_CITY);
+        }
+        return add(server, new Commission(0, kingdomId, Commission.Kind.BUILD, templateId, new Materials(Materials.KINGDOM, ""), cityId,
+                dimension.get(), 0, 0, 0, Construction.Priority.NORMAL, null, Commission.Origin.GOVERNOR, KingdomWorldApi.gameTime(server),
+                Commission.State.WAITING, 0, "", "", false, 0, 0));
+    }
+
+    /**
+     * Gives up the orders the governor of a city gave that are not laid out yet, when it governs no more.
+     *
+     * @return how many went
+     */
+    public static int dropGovernorOrders(MinecraftServer server, UUID kingdomId, long cityId) {
+        int dropped = 0;
+        for (Commission commission : List.copyOf(KingdomWorldApi.state(server).construction().commissionsOf(kingdomId))) {
+            if (commission.origin() == Commission.Origin.GOVERNOR && commission.cityId() == cityId) {
+                drop(server, commission.id());
+                dropped++;
+            }
+        }
+        if (dropped > 0) {
+            LOGGER.info("Kingdom {} gave up {} order(s) of the governor of city {}", kingdomId, dropped, cityId);
+        }
+        return dropped;
+    }
+
+    /**
      * Orders a building at a point of the land of the kingdom, turned as asked: the point itself or a place within a few blocks.
      */
     public static Outcome orderAt(MinecraftServer server, @Nullable UUID actor, UUID kingdomId, String templateId, Materials materials,
@@ -158,6 +195,11 @@ public final class RemoteWorks {
         }
         drop(server, id);
         LOGGER.info("Kingdom {} gave up the order {}", kingdomId, id);
+        if (commission.get().origin() == Commission.Origin.GOVERNOR && actor != null && !commission.get().templateId().isEmpty()) {
+            // The governor does not order what the king gave up again for a while.
+            io.github.sekerator.kingdomworld.common.road.CityGovernors.refused(server, kingdomId, commission.get().cityId(),
+                    commission.get().templateId());
+        }
         return Outcome.DONE;
     }
 
@@ -662,6 +704,8 @@ public final class RemoteWorks {
             Construction construction = done.get().construction().get();
             construction.setOrderMissing(true);
             construction.setPriority(commission.priority());
+            // What a governor laid out leaves the blocks of players standing.
+            construction.setGovernor(commission.origin() == Commission.Origin.GOVERNOR);
             BlockPos at = ConstructionWork.blockPos(construction.anchor());
             UNFIT.remove(commission.id());
             KingdomWorldApi.state(server).construction().removeCommission(commission.id());
@@ -692,6 +736,10 @@ public final class RemoteWorks {
      * Tells the members who manage construction, and the player who ordered it if online.
      */
     static void tell(MinecraftServer server, Commission commission, Component message, boolean success) {
+        if (commission.origin() == Commission.Origin.GOVERNOR && commission.actor() == null) {
+            // A governor tells the king once a day what its city did.
+            return;
+        }
         KingdomWorldApi.kingdom(server, commission.kingdomId()).ifPresent(kingdom -> KingdomActions.notifyMembers(server, kingdom,
                 Permission.MANAGE_CONSTRUCTION, message));
         if (commission.actor() != null) {

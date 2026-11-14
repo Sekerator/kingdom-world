@@ -118,6 +118,8 @@ public final class NobilityTexts {
                 case 't' -> Title.byId(rest).<Object>map(NobilityTexts::title).orElse(rest);
                 case 'f' -> Fief.parse(rest).<Object>map(fief -> fief(server, fief)).orElse("?");
                 case 'n' -> Long.parseLong(rest);
+                case 'b' -> io.github.sekerator.kingdomworld.common.construction.BuildingTemplates.get(rest)
+                        .<Object>map(io.github.sekerator.kingdomworld.common.construction.BuildingTemplate::name).orElse(rest);
                 case 'x' -> rest.matches("[a-z_]+") ? Component.translatable(KEY + "word." + rest) : rest;
                 default -> token;
             };

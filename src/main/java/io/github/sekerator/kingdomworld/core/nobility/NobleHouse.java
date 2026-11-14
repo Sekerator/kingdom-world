@@ -9,7 +9,8 @@ import java.util.UUID;
 
 /**
  * A noble family of a kingdom: its name, its head, character and party, its wealth and how loyal it is to the crown. Houses
- * have no bodies; they live in the books of the court.
+ * have no bodies; they live in the books of the court. A house the king raised from a citizen of a kingdom of players is
+ * headed by that citizen while it lives: the head has its name and dies with it, never by chance.
  */
 public final class NobleHouse {
     public static final int MAX_LOYALTY = 100;
@@ -28,6 +29,8 @@ public final class NobleHouse {
     private final long founded;
     /** Whether the crown raised the house for a title; such a house goes away with its last title. */
     private boolean raised;
+    /** The citizen who heads the house, or {@code null} for a head without a body. */
+    private UUID citizen;
 
     public NobleHouse(long id, UUID kingdomId, int familySeed, int headSeed, Gender headGender, RulerCharacter character,
                       RulerCharacter.Trait trait, Faction faction, long wealth, int loyalty, int generation, long founded) {
@@ -130,6 +133,17 @@ public final class NobleHouse {
     }
 
     /**
+     * The citizen who heads the house, or {@code null} for a head who lives in the books of the court alone.
+     */
+    public UUID citizen() {
+        return citizen;
+    }
+
+    public void setCitizen(UUID value) {
+        citizen = value;
+    }
+
+    /**
      * The head died or was killed: the heir takes the house, with a character of their own.
      */
     void succeed(int seed, Gender gender, RulerCharacter newCharacter, RulerCharacter.Trait newTrait) {
@@ -139,5 +153,7 @@ public final class NobleHouse {
         trait = Objects.requireNonNull(newTrait, "newTrait");
         faction = Faction.of(character, trait);
         generation++;
+        // The heir is not the citizen who headed the house.
+        citizen = null;
     }
 }

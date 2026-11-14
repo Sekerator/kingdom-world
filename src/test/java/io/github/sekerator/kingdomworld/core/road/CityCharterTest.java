@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -99,5 +100,78 @@ class CityCharterTest {
         assertEquals(THEM, moved.kingdomId());
         assertEquals(4, moved.cityId());
         assertEquals(5, moved.lastArrival());
+    }
+
+    @Test
+    void aCityTakenInAWarLosesItsMayorAndItsPause() {
+        RoadState state = new RoadState();
+        City city = state.addCity(THEM, "Kamenka", WORLD, 500, 64, 0, 0);
+        CityCharter theirs = state.charterOf(THEM, city.id(), CityCharter.NEVER);
+        UUID mayor = new UUID(9, 9);
+        theirs.setFolk(40);
+        theirs.setMayor(mayor, 100);
+        theirs.setPaused(true);
+        theirs.setNote(new GovernorNote(GovernorNote.Kind.BUILDS, "kingdomworld:well", 0).encode());
+        theirs.spend(3, 50);
+        theirs.refuse("kingdomworld:well", 5);
+        assertTrue(state.mayoralty(mayor).isPresent());
+        state.handOverCharter(city.id(), THEM, US, city.id());
+        CityCharter ours = state.charter(US, city.id()).orElseThrow();
+        assertEquals(40, ours.folk(), "the townsfolk stay");
+        assertNull(ours.mayor(), "the mayor does not come along");
+        assertFalse(ours.paused());
+        assertTrue(ours.note().isEmpty());
+        assertEquals(0, ours.spent(3));
+        assertTrue(ours.refused().isEmpty());
+        assertTrue(state.mayoralty(mayor).isEmpty());
+    }
+
+    @Test
+    void theRecordOfAGovernorGoesWithItsCityAndItsKingdom() {
+        RoadState state = new RoadState();
+        City city = state.addCity(US, "Olkhovka", WORLD, 500, 64, 0, 0);
+        UUID mayor = new UUID(7, 7);
+        state.charterOf(US, city.id(), CityCharter.NEVER).setMayor(mayor, 10);
+        state.charterOf(US, 0, CityCharter.NEVER).setMayor(new UUID(8, 8), 10);
+        state.removeCity(city.id());
+        assertTrue(state.mayoralty(mayor).isEmpty(), "a city given up takes its mayor along");
+        assertTrue(state.mayoralty(new UUID(8, 8)).isPresent(), "a capital keeps its mayor");
+        state.forgetKingdom(US);
+        assertTrue(state.charters().isEmpty(), "a kingdom gone takes the mayor of its capital along");
+    }
+
+    @Test
+    void aGovernorRemembersWhatItSpentAndWhatTheKingGaveUp() {
+        CityCharter charter = new CityCharter(US, 3);
+        charter.spend(4, 30);
+        charter.spend(4, 20);
+        assertEquals(50, charter.spent(4));
+        assertEquals(0, charter.spent(5), "another day starts from nothing");
+        charter.spend(5, 7);
+        assertEquals(7, charter.spent(5));
+        assertEquals(0, charter.spent(4));
+        charter.refuse("kingdomworld:well", 8);
+        charter.refuse("kingdomworld:well", 6);
+        assertTrue(charter.refuses("kingdomworld:well", 8), "the later day holds");
+        assertFalse(charter.refuses("kingdomworld:well", 9));
+        assertFalse(charter.refuses("kingdomworld:market", 1));
+        assertFalse(charter.forgetRefused(8));
+        assertTrue(charter.forgetRefused(9));
+        assertTrue(charter.refused().isEmpty());
+    }
+
+    @Test
+    void aRecordWithAGovernorIsWorthKeeping() {
+        CityCharter charter = new CityCharter(US, 3);
+        charter.setPaused(true);
+        assertFalse(charter.empty(), "a city stopped by the king remembers it");
+        charter.setPaused(false);
+        charter.setMayor(new UUID(1, 2), 5);
+        assertFalse(charter.empty());
+        assertEquals(5, charter.mayorSince());
+        charter.clearGovernor();
+        assertNull(charter.mayor());
+        assertEquals(CityCharter.NEVER, charter.mayorSince());
+        assertTrue(charter.empty());
     }
 }

@@ -149,6 +149,8 @@ public final class Construction {
     private Priority priority = Priority.NORMAL;
     private boolean paused;
     private boolean orderMissing;
+    /** Whether the governor of a city laid it out: a block a player placed on it is left standing. */
+    private boolean governor;
     private final BitSet done = new BitSet();
     private final Set<Integer> pending = new LinkedHashSet<>();
     private final Map<String, Integer> delivered = new LinkedHashMap<>();
@@ -363,6 +365,21 @@ public final class Construction {
     public void setOrderMissing(boolean value) {
         if (value != orderMissing) {
             orderMissing = value;
+            changed();
+        }
+    }
+
+    /**
+     * Whether the governor of a city laid it out: its builders leave a block a player placed on it standing, and the governor
+     * gives it up when that keeps it from being finished.
+     */
+    public boolean governor() {
+        return governor;
+    }
+
+    public void setGovernor(boolean value) {
+        if (value != governor) {
+            governor = value;
             changed();
         }
     }

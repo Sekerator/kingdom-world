@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -46,6 +48,53 @@ class CityCharterNbtTest {
         assertEquals(CityCharter.NEVER, theirs.lastDay(), "a key not written reads as nothing yet");
         assertEquals(CityCharter.NEVER, theirs.lastArrival());
         assertTrue(read.charter(THEM, 8).isEmpty());
+    }
+
+    @Test
+    void theGovernorOfACityReadsBackAsItWas() {
+        RoadState state = new RoadState();
+        UUID mayor = new UUID(5, 6);
+        CityCharter city = state.charterOf(US, 4, CityCharter.NEVER);
+        city.setMayor(mayor, 12_000);
+        city.setPaused(true);
+        city.setNote("saves|kingdomworld:well|120");
+        city.setDecidedDay(9);
+        city.spend(9, 75);
+        city.refuse("kingdomworld:market", 11);
+        CompoundTag tag = new CompoundTag();
+        RoadNbt.write(state, tag);
+        RoadState read = new RoadState();
+        assertTrue(RoadNbt.read(tag, read).isEmpty());
+        CityCharter back = read.charter(US, 4).orElseThrow();
+        assertEquals(mayor, back.mayor());
+        assertEquals(12_000, back.mayorSince());
+        assertTrue(back.paused());
+        assertEquals("saves|kingdomworld:well|120", back.note());
+        assertEquals(9, back.decidedDay());
+        assertEquals(75, back.spent(9));
+        assertTrue(back.refuses("kingdomworld:market", 11));
+        assertTrue(read.mayoralty(mayor).isPresent());
+    }
+
+    @Test
+    void aCityWrittenBeforeTheGovernorsHasNone() {
+        CompoundTag old = new CompoundTag();
+        ListTag charters = new ListTag();
+        CompoundTag entry = new CompoundTag();
+        entry.putUUID("kingdom", US);
+        entry.putLong("city", 2);
+        entry.putInt("folk", 30);
+        charters.add(entry);
+        old.put("charters", charters);
+        RoadState read = new RoadState();
+        assertTrue(RoadNbt.read(old, read).isEmpty());
+        CityCharter back = read.charter(US, 2).orElseThrow();
+        assertEquals(30, back.folk());
+        assertNull(back.mayor());
+        assertFalse(back.paused());
+        assertTrue(back.note().isEmpty());
+        assertEquals(CityCharter.NEVER, back.decidedDay());
+        assertTrue(back.refused().isEmpty());
     }
 
     @Test

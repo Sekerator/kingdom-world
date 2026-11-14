@@ -442,7 +442,7 @@ public final class RulerMind {
      * towns.
      */
     private static void growth(RulerView view, RulerMemory memory, RulerRules rules, List<Scored> out, List<Need> needs, long spare) {
-        int builder = view.character == RulerCharacter.BUILDER ? 10 : 0;
+        int builder = builderBonus(view.character);
         boolean landWanted = false;
         int slots = Math.min(view.maxConstructions, MAX_BUILDING);
         boolean room = view.constructions < slots;
@@ -458,12 +458,7 @@ public final class RulerMind {
                 continue;
             }
             if (view.built(want.role()) + view.planned(want.role()) < want.count(view.cityLevel)) {
-                int bonus = builder + switch (want.role()) {
-                    case "barracks", "tower" -> view.character == RulerCharacter.WARRIOR ? 15 : 0;
-                    case "market", WAREHOUSE -> view.character == RulerCharacter.MERCHANT ? 10 : 0;
-                    case MAGE_TOWER -> view.character == RulerCharacter.MAGE ? 20 : 0;
-                    default -> 0;
-                };
+                int bonus = builder + roleBonus(view.character, want.role());
                 landWanted |= build(view, want.role(), 60 + bonus, spare, room, out, needs);
                 break;
             }
@@ -499,6 +494,27 @@ public final class RulerMind {
             int bonus = builder + (view.has(RulerCharacter.Trait.AMBITIOUS) ? 10 : 0);
             out.add(new Scored(45 + bonus, RulerDecision.of(Kind.TOWN, "", 1)));
         }
+    }
+
+    /**
+     * How much a ruler of a character leans to a building of a role of the table beyond the others: a warrior to barracks and
+     * towers, a merchant to markets and storehouses, a mage to the tower of mages. A builder leans to every building alike, by
+     * {@link #builderBonus}.
+     */
+    public static int roleBonus(RulerCharacter character, String role) {
+        return switch (role) {
+            case "barracks", "tower" -> character == RulerCharacter.WARRIOR ? 15 : 0;
+            case "market", WAREHOUSE -> character == RulerCharacter.MERCHANT ? 10 : 0;
+            case MAGE_TOWER -> character == RulerCharacter.MAGE ? 20 : 0;
+            default -> 0;
+        };
+    }
+
+    /**
+     * How much a ruler of a character leans to building at all: a builder more than the others.
+     */
+    public static int builderBonus(RulerCharacter character) {
+        return character == RulerCharacter.BUILDER ? 10 : 0;
     }
 
     /**

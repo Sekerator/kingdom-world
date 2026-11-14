@@ -197,6 +197,15 @@ public final class CityPeople {
         return dx * dx + dz * dz;
     }
 
+    /**
+     * What a city of a kingdom keeps of its own; a city that kept nothing yet starts now, waiting for its next newcomer from the
+     * last newcomer of the kingdom as its day of the townsfolk does.
+     */
+    public static CityCharter charterOf(MinecraftServer server, UUID kingdomId, long cityId) {
+        long kingdomArrival = KingdomWorldApi.state(server).citizens().registry().lastArrival(kingdomId);
+        return RoadWork.state(server).charterOf(kingdomId, cityId, arrival(kingdomArrival));
+    }
+
     // ---------------------------------------------------------------- the step
 
     /**

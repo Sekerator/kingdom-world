@@ -13,7 +13,9 @@ import java.util.Optional;
 
 /**
  * The head of a settlement of a state: the first of its settlers is the governor of a large city, who sits in its residence,
- * the mayor of a small town, the elder of a village or a hamlet. The name over the head of his body says so.
+ * the mayor of a small town, the elder of a village or a hamlet. The name over the head of his body says so. The governors of
+ * the cities of kingdoms of players have the same names by the level of their city, and a citizen who heads a house of the
+ * nobility is a baron.
  */
 public final class SettlementHeads {
     /** The key of the name of a head, followed by the rank of the settlement. */
@@ -33,10 +35,17 @@ public final class SettlementHeads {
      * The name a body shows: that of the citizen, with the office of the head of a settlement.
      */
     public static Component title(Level level, Citizen citizen, Component name) {
-        if (citizen.settlement() == 0 || !(level instanceof ServerLevel serverLevel)) {
+        if (!(level instanceof ServerLevel serverLevel)) {
             return name;
         }
         MinecraftServer server = serverLevel.getServer();
+        Optional<Component> office = io.github.sekerator.kingdomworld.common.road.CityGovernors.title(server, citizen, name);
+        if (office.isPresent()) {
+            return office.get();
+        }
+        if (citizen.settlement() == 0) {
+            return name;
+        }
         if (!isHead(server, citizen)) {
             return name;
         }

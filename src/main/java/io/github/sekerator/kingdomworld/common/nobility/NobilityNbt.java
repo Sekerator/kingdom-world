@@ -55,6 +55,9 @@ final class NobilityNbt {
             entry.putInt("generation", house.generation());
             entry.putLong("founded", house.founded());
             entry.putBoolean("raised", house.raised());
+            if (house.citizen() != null) {
+                entry.putUUID("citizen", house.citizen());
+            }
             houses.add(entry);
         }
         tag.put("houses", houses);
@@ -206,6 +209,10 @@ final class NobilityNbt {
                         Gender.valueOf(e.getString("gender")), character, trait, faction, e.getLong("wealth"), e.getInt("loyalty"),
                         e.getInt("generation"), e.getLong("founded"));
                 house.setRaised(e.getBoolean("raised"));
+                // A head who is a citizen came with the governors of the cities; a house saved before has none.
+                if (e.hasUUID("citizen")) {
+                    house.setCitizen(e.getUUID("citizen"));
+                }
                 state.restoreHouse(house);
             } catch (RuntimeException ex) {
                 problems.add("house " + i + ": " + ex.getMessage());

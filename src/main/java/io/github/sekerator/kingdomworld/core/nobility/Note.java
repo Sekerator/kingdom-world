@@ -53,6 +53,13 @@ public record Note(long day, String key, List<String> args) {
         return "n" + value;
     }
 
+    /**
+     * A building template, named by its name in the language of the reader.
+     */
+    public static String template(String templateId) {
+        return "b" + templateId;
+    }
+
     public static String text(String value) {
         return "x" + (value == null ? "" : value);
     }

@@ -127,6 +127,24 @@ public final class NaturalGround {
     }
 
     /**
+     * Whether a block is as it grew: the ground, a wild plant, a log or leaves of a tree, air. What a player placed is not.
+     */
+    public static boolean grown(BlockState state) {
+        if (ground(state) || wild(state)) {
+            return true;
+        }
+        if (state.hasBlockEntity()) {
+            return false;
+        }
+        if (state.is(BlockTags.LEAVES)) {
+            return !placedLeaves(state);
+        }
+        return io.github.sekerator.kingdomworld.common.citizen.work.Trees.isLog(state) || state.is(Blocks.BROWN_MUSHROOM_BLOCK)
+                || state.is(Blocks.RED_MUSHROOM_BLOCK) || state.is(Blocks.MUSHROOM_STEM) || state.is(Blocks.BAMBOO) || state.is(Blocks.CACTUS)
+                || state.is(Blocks.SUGAR_CANE) || state.is(Blocks.WATER) || state.is(Blocks.LAVA);
+    }
+
+    /**
      * The height of the solid ground of a column: below trees, plants, snow and water.
      */
     public static int groundAt(ServerLevel level, int x, int z) {

@@ -311,6 +311,57 @@ public final class NobilityState {
     }
 
     /**
+     * A new house of a kingdom of players headed by one of its citizens, who keeps its name and gender: from the common people,
+     * it has no wealth of its own, so that granting and taking back titles makes no money.
+     *
+     * @param headSeed the seed of the name of the citizen
+     * @param seed     a seed for the name of the family and the character of the head
+     */
+    public NobleHouse foundFor(UUID kingdomId, UUID citizen, int headSeed, Gender gender, long seed, long day) {
+        Objects.requireNonNull(citizen, "citizen");
+        SplittableRandom random = new SplittableRandom(seed ^ 0x4E4F424C45L);
+        RulerCharacter character = RulerCharacter.values()[random.nextInt(RulerCharacter.values().length)];
+        RulerCharacter.Trait trait = RulerCharacter.Trait.values()[random.nextInt(RulerCharacter.Trait.values().length)];
+        NobleHouse house = new NobleHouse(nextId(), kingdomId, random.nextInt(), headSeed, gender, character, trait, Faction.of(character, trait),
+                0, 55 + random.nextInt(21), 1, day);
+        house.setCitizen(citizen);
+        house.setRaised(true);
+        houses.put(house.id(), house);
+        court(kingdomId);
+        changed();
+        return house;
+    }
+
+    /**
+     * The house a citizen heads, if it heads one.
+     */
+    public Optional<NobleHouse> houseOf(UUID citizen) {
+        if (citizen == null) {
+            return Optional.empty();
+        }
+        for (NobleHouse house : houses.values()) {
+            if (citizen.equals(house.citizen())) {
+                return Optional.of(house);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * The houses of a kingdom that count against the most houses the rules allow: those whose head lives in the books alone, not
+     * those headed by citizens.
+     */
+    public int countedHouses(UUID kingdomId) {
+        int count = 0;
+        for (NobleHouse house : houses.values()) {
+            if (house.kingdomId().equals(kingdomId) && house.citizen() == null) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
      * The houses a kingdom of the world has from the start, with titles on its fiefs: cities make counts, marches barons, and
      * the first house of a large kingdom is a duke.
      */
@@ -513,7 +564,8 @@ public final class NobilityState {
             }
         }
         for (NobleHouse house : own) {
-            if (houses.containsKey(house.id()) && rolls.getAsDouble() < rules.deathChance()) {
+            // A head who is a citizen dies with the citizen, never by chance.
+            if (houses.containsKey(house.id()) && rolls.getAsDouble() < rules.deathChance() && house.citizen() == null) {
                 String old = Note.head(house);
                 succeed(house, (long) (rolls.getAsDouble() * Long.MAX_VALUE));
                 court.write(new Note(in.day(), "died", List.of(Note.house(house), old, Note.head(house))));

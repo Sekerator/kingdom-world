@@ -1945,6 +1945,7 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue cityBuildings;
         public final ForgeConfigSpec.IntValue wallRadius;
         public final ForgeConfigSpec.BooleanValue physicalCaravans;
+        public final ForgeConfigSpec.IntValue governorStockPercent;
         public final ForgeConfigSpec.BooleanValue bandits;
         public final ForgeConfigSpec.IntValue maxCamps;
         public final ForgeConfigSpec.IntValue campMinDistance;
@@ -2032,6 +2033,9 @@ public final class KingdomWorldConfig {
                     .defineInRange("wallRadius", r.wallRadius, 4, 128);
             physicalCaravans = builder.comment("Whether caravans near players walk the roads as a merchant with pack llamas.")
                     .define("physicalCaravans", true);
+            governorStockPercent = builder.comment("The share of every good of the storehouses, in percent, a governor of a city (a mayor or a",
+                            "baron) plans its buildings with, so that the buildings of the king find the rest.")
+                    .defineInRange("governorStockPercent", 50, 0, 100);
             bandits = builder.comment("Whether camps of robbers appear in the wild and fall upon caravans.").define("bandits", b.enabled);
             maxCamps = builder.comment("Camps of robbers in a world at most.").defineInRange("maxCamps", b.maxCamps, 0, 256);
             campMinDistance = builder.comment("Blocks between a camp and the land of any kingdom at least.")

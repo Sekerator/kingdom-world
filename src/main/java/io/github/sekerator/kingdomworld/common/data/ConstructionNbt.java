@@ -30,7 +30,7 @@ import java.util.Map;
  * construction: {
  *   nextConstruction, nextBuilding, nextBlueprint,
  *   constructions: [ { id, kingdom, template, fingerprint, dimension, x, y, z, rotation, mirror, box: [6 ints], created,
- *                      clear: [x, y, z, ...], steps, priority, paused, orderMissing, done: [longs], pending: [ints],
+ *                      clear: [x, y, z, ...], steps, priority, paused, orderMissing, governor?, done: [longs], pending: [ints],
  *                      delivered: [ { item, count } ], orders: [ { item, order } ], status, statusPos?: [x, y, z], carry,
  *                      kind, building, wood, stone, skip: [longs], removed: [ { item, count } ], earthwork?, scaffolds?: [longs] } ],
  *   buildings: [ { id, kingdom, template, type, category, role, level, wood, stone, dimension, x, y, z, rotation, mirror,
@@ -263,6 +263,9 @@ public final class ConstructionNbt {
         tag.putString("priority", construction.priority().id());
         tag.putBoolean("paused", construction.paused());
         tag.putBoolean("orderMissing", construction.orderMissing());
+        if (construction.governor()) {
+            tag.putBoolean("governor", true);
+        }
         tag.putLongArray("done", construction.doneSet().toLongArray());
         tag.putIntArray("pending", construction.pending().stream().mapToInt(Integer::intValue).toArray());
         ListTag delivered = new ListTag();
@@ -503,6 +506,7 @@ public final class ConstructionNbt {
                 BitSet.valueOf(tag.getLongArray("done")), pending, delivered, orders, Construction.Status.byId(tag.getString("status")), at,
                 tag.getDouble("carry"), readItems(tag, "removed"));
         construction.restoreScaffolds(tag.getLongArray("scaffolds"));
+        construction.setGovernor(tag.getBoolean("governor"));
         return construction;
     }
 

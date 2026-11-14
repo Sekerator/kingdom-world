@@ -70,14 +70,33 @@ public final class NobilityActions {
      * of a kingdom of the world is made noble by its ruler or an operator only.
      */
     public static Outcome grant(MinecraftServer server, @Nullable UUID actor, UUID kingdomId, Title title, Fief fief, long house, @Nullable UUID player) {
+        return grant(server, actor, kingdomId, title, fief, house, player, null);
+    }
+
+    /**
+     * Grants a title as {@link #grant(MinecraftServer, UUID, UUID, Title, Fief, long, UUID)} does, or raises a new house headed by
+     * a citizen of a kingdom of players for a city ({@code citizen}): only the king does, the citizen may govern that city
+     * ({@link io.github.sekerator.kingdomworld.common.road.CityGovernors#baronUnfit}), and the house starts without wealth and
+     * does not count against the most houses the rules allow.
+     */
+    public static Outcome grant(MinecraftServer server, @Nullable UUID actor, UUID kingdomId, Title title, Fief fief, long house, @Nullable UUID player,
+                                @Nullable UUID citizen) {
         Outcome right = allowed(server, actor, kingdomId, Permission.MANAGE_NOBILITY);
         if (!right.ok()) {
             return right;
         }
-        if ((player != null || house < 0) && !king(server, actor, kingdomId)) {
+        if ((player != null || house < 0 || citizen != null) && !king(server, actor, kingdomId)) {
             return Outcome.fail(KingdomError.NO_PERMISSION);
         }
-        if (house < 0 && NobilityWork.state(server).houses(kingdomId).size() >= NobilitySettings.rules().maxHouses()) {
+        if (citizen != null && (player != null || fief.kind() != Fief.Kind.CITY || WarWork.isNpc(server, kingdomId))) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (citizen != null && io.github.sekerator.kingdomworld.common.road.CityGovernors.baronUnfit(server, kingdomId, citizen, fief.city())
+                != io.github.sekerator.kingdomworld.core.road.CityOffice.Unfit.FIT) {
+            return Outcome.fail(KingdomError.UNKNOWN_CITIZEN);
+        }
+        // Houses headed by citizens are not counted: each has a real citizen and a city of its own.
+        if (house < 0 && citizen == null && NobilityWork.state(server).countedHouses(kingdomId) >= NobilitySettings.rules().maxHouses()) {
             return Outcome.fail(KingdomError.LIMIT_REACHED);
         }
         if (!NobilityWork.fiefs(server, kingdomId).contains(fief)) {
@@ -104,13 +123,20 @@ public final class NobilityActions {
             return outcome;
         }
         long holder = house;
-        if (house < 0) {
-            NobleHouse raised = state.found(kingdomId, (long) (NobilityWork.rolls().getAsDouble() * Long.MAX_VALUE) ^ day ^ fief.code().hashCode(), day);
+        long seed = (long) (NobilityWork.rolls().getAsDouble() * Long.MAX_VALUE) ^ day ^ fief.code().hashCode();
+        if (citizen != null) {
+            Optional<io.github.sekerator.kingdomworld.core.citizen.Citizen> head = KingdomWorldApi.state(server).citizens().get(citizen);
+            if (head.isEmpty()) {
+                return Outcome.fail(KingdomError.UNKNOWN_CITIZEN);
+            }
+            holder = state.foundFor(kingdomId, citizen, head.get().nameSeed(), head.get().gender(), seed, day).id();
+        } else if (house < 0) {
+            NobleHouse raised = state.found(kingdomId, seed, day);
             raised.setRaised(true);
             holder = raised.id();
         }
         Outcome outcome = state.grant(kingdomId, title, fief, holder, null, day);
-        if (!outcome.ok() && house < 0) {
+        if (!outcome.ok() && (house < 0 || citizen != null)) {
             state.removeHouse(holder);
         }
         return outcome;
@@ -247,7 +273,15 @@ public final class NobilityActions {
         if (state.plot(plotId).filter(p -> p.kingdomId().equals(kingdomId)).isEmpty()) {
             return Outcome.fail(KingdomError.NOT_PENDING);
         }
-        return state.verdict(plotId, verdict, NobilityWork.day(server), (long) (Math.random() * Long.MAX_VALUE));
+        // A head who is a citizen dies with the verdict.
+        UUID citizen = verdict == Plot.Verdict.EXECUTE ? state.plot(plotId).flatMap(plot -> state.house(plot.house())).map(NobleHouse::citizen)
+                .orElse(null) : null;
+        Outcome outcome = state.verdict(plotId, verdict, NobilityWork.day(server), (long) (Math.random() * Long.MAX_VALUE));
+        if (outcome.ok() && citizen != null) {
+            KingdomWorldApi.state(server).citizens().get(citizen).ifPresent(head -> io.github.sekerator.kingdomworld.common.citizen.CitizenLife
+                    .die(server, citizen, io.github.sekerator.kingdomworld.core.citizen.CauseOfDeath.OTHER, "", head.lastPos()));
+        }
+        return outcome;
     }
 
     // ---------------------------------------------------------------- spies

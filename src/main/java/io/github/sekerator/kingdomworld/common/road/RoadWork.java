@@ -81,6 +81,7 @@ public final class RoadWork {
         RoadSync.reset();
         RoadSpeed.reset();
         CityWalls.reset();
+        CityGovernors.reset();
     }
 
     public static long day(MinecraftServer server) {

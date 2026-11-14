@@ -103,6 +103,12 @@ public final class RoadEvents {
         } catch (RuntimeException e) {
             LOGGER.error("KingdomWorld roads tick failed", e);
         }
+        try {
+            // The governors of the cities, one city a second.
+            CityGovernors.tick(server);
+        } catch (RuntimeException e) {
+            LOGGER.error("KingdomWorld governors of cities failed", e);
+        }
     }
 
     private static void onAttack(LivingAttackEvent event) {

@@ -290,6 +290,21 @@ public final class RoadState {
     }
 
     /**
+     * The city a citizen is the mayor of, if any.
+     */
+    public Optional<CityCharter> mayoralty(UUID citizen) {
+        if (citizen == null) {
+            return Optional.empty();
+        }
+        for (CityCharter charter : charters.values()) {
+            if (citizen.equals(charter.mayor())) {
+                return Optional.of(charter);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
      * What a city keeps changed: it is saved, while what is built from the cities and roads stays as it is.
      */
     public void charterChanged() {
