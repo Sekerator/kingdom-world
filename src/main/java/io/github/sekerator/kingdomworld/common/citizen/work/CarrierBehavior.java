@@ -335,7 +335,8 @@ public final class CarrierBehavior implements ProfessionBehavior {
                     continue;
                 }
                 int kinds = 0;
-                for (Map.Entry<String, Integer> entry : plan.get().needed(construction).entrySet()) {
+                for (Map.Entry<String, Integer> entry : io.github.sekerator.kingdomworld.common.construction.ConstructionWork.needed(construction, plan.get())
+                        .entrySet()) {
                     WorldPos holder = storehouseWith(level, entry.getKey(), storehouses);
                     if (holder != null) {
                         requests.add(new CarrierPlanner.Request(construction.anchor(), entry.getKey(), Math.min(64, entry.getValue()), holder));

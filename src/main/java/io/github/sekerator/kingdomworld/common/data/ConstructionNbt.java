@@ -370,7 +370,10 @@ public final class ConstructionNbt {
                 Construction.Kind.byId(tag.getString("kind")), building, new Materials(tag.getString("wood"), tag.getString("stone"), tag.getString("look")),
                 BitSet.valueOf(tag.getLongArray("skip")));
         if (tag.contains("earthwork", Tag.TAG_COMPOUND)) {
+            // Heights that do not fit the rectangle throw, and the construction is left out with the problem told.
             construction.setEarthwork(readEarthwork(tag.getCompound("earthwork")));
+        } else if (construction.kind() == Construction.Kind.EARTHWORK) {
+            throw new IllegalArgumentException("earthworks without their land");
         }
         Map<String, Integer> delivered = readItems(tag, "delivered");
         Map<String, Long> orders = new LinkedHashMap<>();

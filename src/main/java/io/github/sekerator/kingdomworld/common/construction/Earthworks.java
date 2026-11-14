@@ -7,8 +7,9 @@ import io.github.sekerator.kingdomworld.common.citizen.work.PostWork;
 import io.github.sekerator.kingdomworld.common.citizen.work.Trees;
 import io.github.sekerator.kingdomworld.common.road.RoadWork;
 import io.github.sekerator.kingdomworld.common.storage.KingdomStorage;
-import io.github.sekerator.kingdomworld.core.construction.Box;
+import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.construction.BlockCost;
+import io.github.sekerator.kingdomworld.core.construction.Box;
 import io.github.sekerator.kingdomworld.core.construction.BuildPlan;
 import io.github.sekerator.kingdomworld.core.construction.Building;
 import io.github.sekerator.kingdomworld.core.construction.Construction;
@@ -24,6 +25,8 @@ import io.github.sekerator.kingdomworld.core.road.Road;
 import io.github.sekerator.kingdomworld.core.road.RouteCell;
 import io.github.sekerator.kingdomworld.core.road.Wall;
 import io.github.sekerator.kingdomworld.core.state.KingdomWorldState;
+import io.github.sekerator.kingdomworld.core.territory.ChunkKey;
+import net.minecraft.Util;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
@@ -55,15 +58,17 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Earthworks done by the builders as a construction of their own kind: a rectangle of land levelled to a height, cut down to it
  * or filled up to it. When they are laid out the land is looked at once: what of it the work digs (only what grew there: earth,
  * sand, gravel, stone and ore, plants and trees), what it fills, and what it leaves as it is (a block holding items or of the
  * mod, a building of the register, a road, a wall, a block somebody made, the land of others). The plan of the work is made
- * from what was seen then and kept with the construction, so that a restart neither loses nor repeats any of it. The ground the
- * work digs stays at the site for its fill as long as the fill wants it; the rest goes to the storehouses while they have room
- * and then to the spoil heap; ore and everything else of worth always goes to the storehouses.
+ * from what was seen then and kept with the construction, so that a restart neither loses nor repeats any of it; it is put
+ * together off the server thread. Every block is looked at again when its turn comes: what somebody placed since stays. The
+ * ground the work digs stays at the site for its fill as long as the fill wants it; the rest goes to the storehouses while
+ * they have room and then to the spoil heap; ore and everything else of worth always goes to the storehouses.
  */
 public final class Earthworks {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -73,10 +78,59 @@ public final class Earthworks {
     public static final Placement PLACEMENT = new Placement(0, false);
     /** Places left as they are a survey tells the player of at most. */
     public static final int KEPT_SHOWN = 64;
+    /** Blocks a survey looks at at most: what a plot of 64 by 64 dug or filled 32 deep and a few trees on it come to. */
+    public static final int MAX_VOLUME = 160_000;
     /** The tool the ground is broken with, so that stone gives cobblestone and ore its ore. */
     private static final ItemStack PICK = new ItemStack(Items.IRON_PICKAXE);
-    /** The templates of earthworks worked out already, by construction. */
-    private static final Map<Long, BuildingTemplate> TEMPLATES = new HashMap<>();
+    private static final String COBBLESTONE = "minecraft:cobblestone";
+
+    /**
+     * What the plan of earthworks is made into: the template of their fill, the plan of their steps, the chunks the steps touch
+     * and how many blocks of the fill are placed of each item, kept up as the work goes on.
+     */
+    static final class Built {
+        final BuildingTemplate template;
+        final BuildPlan plan;
+        final long[] chunks;
+        final Map<String, Integer> total = new HashMap<>();
+        final Map<String, Integer> placed = new HashMap<>();
+        final BitSet counted = new BitSet();
+
+        Built(BuildingTemplate template, BuildPlan plan, BitSet done) {
+            this.template = template;
+            this.plan = plan;
+            Set<Long> touched = new HashSet<>();
+            for (BuildPlan.Step step : plan.steps()) {
+                touched.add(ChunkKey.of(step.x() >> 4, step.z() >> 4));
+                if (step.kind() == BuildPlan.Kind.PLACE) {
+                    step.cost().forEach((item, count) -> total.merge(item, count, Integer::sum));
+                    if (done.get(step.index())) {
+                        count(step);
+                    }
+                }
+            }
+            this.chunks = touched.stream().mapToLong(Long::longValue).toArray();
+        }
+
+        void count(BuildPlan.Step step) {
+            counted.set(step.index());
+            step.cost().forEach((item, count) -> placed.merge(item, count, Integer::sum));
+        }
+    }
+
+    /** Plans made, by construction. */
+    private static final Map<Long, Built> BUILT = new HashMap<>();
+    /** Plans being made off the server thread, by construction. */
+    private static final Map<Long, CompletableFuture<Built>> BUILDING = new HashMap<>();
+    /** The last survey of every player, laid out without looking at the land a second time. */
+    private static final Map<UUID, Remembered> SURVEYS = new HashMap<>();
+    /** Ticks a survey is laid out from without looking again. */
+    private static final int SURVEY_KEPT_TICKS = 1200;
+    /** Steps of a plan made at once on the server thread; a larger one is made off it. */
+    private static final int MADE_AT_ONCE = 4096;
+
+    private record Remembered(Request request, UUID kingdomId, Survey survey, long tick) {
+    }
 
     /**
      * What a player asks for: the two corners of the rectangle, what the work does, its height and whether its edges slope.
@@ -112,11 +166,17 @@ public final class Earthworks {
     }
 
     public static void reset() {
-        TEMPLATES.clear();
+        BUILT.clear();
+        BUILDING.clear();
+        SURVEYS.clear();
     }
 
     static void forget(long construction) {
-        TEMPLATES.remove(construction);
+        BUILT.remove(construction);
+        CompletableFuture<Built> building = BUILDING.remove(construction);
+        if (building != null) {
+            building.cancel(false);
+        }
     }
 
     // ---------------------------------------------------------------- the land
@@ -151,7 +211,7 @@ public final class Earthworks {
             return EarthworkPlan.DIRT;
         }
         if (state.is(Blocks.STONE) || state.is(Blocks.COBBLESTONE)) {
-            return "minecraft:cobblestone";
+            return COBBLESTONE;
         }
         if (state.is(Blocks.DEEPSLATE) || state.is(Blocks.COBBLED_DEEPSLATE)) {
             return "minecraft:cobbled_deepslate";
@@ -192,11 +252,26 @@ public final class Earthworks {
         return y;
     }
 
+    /**
+     * Whether a fill may go where a block stands now: air, what any block replaces, a liquid, or the land as it grew (dug first).
+     * Something somebody made, a block holding items and a block of the mod may not be filled over.
+     */
+    static boolean fillable(ServerLevel level, BlockPos pos, BlockState state) {
+        if (state.isAir() || state.getBlock() instanceof LiquidBlock) {
+            return true;
+        }
+        if (ConstructionWork.isProtected(level, pos, state) || ConstructionWork.holdsItems(level, pos) || state.hasBlockEntity()) {
+            return false;
+        }
+        return state.canBeReplaced() || diggable(state);
+    }
+
     // ---------------------------------------------------------------- looking at the land
 
     /**
      * Looks at the land of a request for a kingdom: its heights, what the work digs, fills and leaves as it is, what the
-     * fill is made of and what is left over. The land and a ring of a block around it must be loaded.
+     * fill is made of and what is left over. The land and a ring of a block around it must be loaded; the work may look at
+     * {@link #MAX_VOLUME} blocks at most and stay within the height of the world.
      */
     public static Survey survey(ServerLevel level, UUID kingdomId, Request request) {
         MinecraftServer server = level.getServer();
@@ -209,6 +284,9 @@ public final class Earthworks {
         int most = ConstructionSettings.earthworkSize();
         if (sizeX > most || sizeZ > most) {
             return Survey.failed(KingdomError.EARTHWORK_TOO_LARGE);
+        }
+        if (request.target() <= level.getMinBuildHeight() + 1 || request.target() >= level.getMaxBuildHeight() - 2) {
+            return Survey.failed(KingdomError.EARTHWORK_OUTSIDE_WORLD);
         }
         for (int cx = (minX - 1) >> 4; cx <= (maxX + 1) >> 4; cx++) {
             for (int cz = (minZ - 1) >> 4; cz <= (maxZ + 1) >> 4; cz++) {
@@ -233,6 +311,18 @@ public final class Earthworks {
         if (shape.span() > ConstructionSettings.earthworkDepth()) {
             return Survey.failed(KingdomError.EARTHWORK_TOO_DEEP);
         }
+        if (shape.bottom() <= level.getMinBuildHeight() || shape.ceiling() >= level.getMaxBuildHeight() - 1) {
+            return Survey.failed(KingdomError.EARTHWORK_OUTSIDE_WORLD);
+        }
+        long volume = 0;
+        for (int dz = 0; dz < sizeZ; dz++) {
+            for (int dx = 0; dx < sizeX; dx++) {
+                volume += Math.max(0, shape.digTo(dx, dz) - shape.digFrom(dx, dz) + 1) + Math.max(0, shape.fillTo(dx, dz) - shape.fillFrom(dx, dz) + 1);
+            }
+        }
+        if (volume > MAX_VOLUME) {
+            return Survey.failed(KingdomError.EARTHWORK_TOO_MUCH);
+        }
         Box area = new Box(minX, level.getMinBuildHeight(), minZ, maxX, level.getMaxBuildHeight(), maxZ);
         Set<Long> ways = ways(server, area);
         List<Box> buildings = new ArrayList<>();
@@ -252,7 +342,7 @@ public final class Earthworks {
             for (int dx = 0; dx < sizeX; dx++) {
                 int x = minX + dx;
                 int z = minZ + dz;
-                boolean column = own.computeIfAbsent(io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(x >> 4, z >> 4),
+                boolean column = own.computeIfAbsent(ChunkKey.of(x >> 4, z >> 4),
                         key -> kingdomId.equals(KingdomWorldApi.ownerAt(level, new BlockPos(x, 0, z)))) && !ways.contains(BlockPos.asLong(x, 0, z));
                 for (int y = shape.digFrom(dx, dz); y <= shape.digTo(dx, dz); y++) {
                     BlockState state = level.getBlockState(pos.set(x, y, z));
@@ -272,9 +362,7 @@ public final class Earthworks {
                 }
                 for (int y = shape.fillFrom(dx, dz); y <= shape.fillTo(dx, dz); y++) {
                     BlockState state = level.getBlockState(pos.set(x, y, z));
-                    boolean open = state.isAir() || state.canBeReplaced() || state.getBlock() instanceof LiquidBlock || diggable(state);
-                    if (!column || inside(buildings, x, y, z) || !open || ConstructionWork.isProtected(level, pos, state)
-                            || ConstructionWork.holdsItems(level, pos)) {
+                    if (!column || inside(buildings, x, y, z) || !fillable(level, pos, state)) {
                         keptFill.add(pos.asLong());
                         keep(kept, keptAll, pos);
                     }
@@ -300,6 +388,34 @@ public final class Earthworks {
         int fills = plan.fills().size() - skip.cardinality();
         KingdomError error = clear.isEmpty() && fills == 0 ? KingdomError.EARTHWORK_NOTHING : null;
         return new Survey(error, work, List.copyOf(clear), skip, List.copyOf(kept), keptAll[0], fills, plan.missing(), plan.spoil());
+    }
+
+    /**
+     * Looks at the land of a request and keeps what was seen for a player, so that laying the same work out soon after does not
+     * look at it again (every block is looked at again when its turn comes anyway).
+     */
+    public static Survey check(ServerLevel level, UUID player, UUID kingdomId, Request request) {
+        Survey survey = survey(level, kingdomId, request);
+        long now = level.getGameTime();
+        SURVEYS.values().removeIf(old -> now - old.tick() > SURVEY_KEPT_TICKS);
+        if (survey.error() == null) {
+            SURVEYS.put(player, new Remembered(request, kingdomId, survey, now));
+        } else {
+            SURVEYS.remove(player);
+        }
+        return survey;
+    }
+
+    /**
+     * The survey a player made of the same request a moment ago, or the land looked at now.
+     */
+    public static Survey known(ServerLevel level, UUID player, UUID kingdomId, Request request) {
+        Remembered remembered = SURVEYS.remove(player);
+        if (remembered != null && remembered.request().equals(request) && remembered.kingdomId().equals(kingdomId)
+                && level.getGameTime() - remembered.tick() <= SURVEY_KEPT_TICKS) {
+            return remembered.survey();
+        }
+        return survey(level, kingdomId, request);
     }
 
     private static void keep(List<BlockPos> kept, int[] all, BlockPos pos) {
@@ -354,20 +470,70 @@ public final class Earthworks {
     }
 
     /**
-     * The template of a construction of earthworks, made from its land once.
+     * The plan of a construction of earthworks, once it is made: a small one is made at once, a large one (laid out just now or
+     * kept over a restart) off the server thread from the land kept with the construction, which waits for it meanwhile. A plan
+     * that could not be made is not tried again: the construction tells that its plan changed.
      */
-    static Optional<BuildingTemplate> template(Construction construction) {
+    static Optional<Built> built(Construction construction) {
         Earthwork work = construction.earthwork();
         if (work == null) {
             return Optional.empty();
         }
-        BuildingTemplate known = TEMPLATES.get(construction.id());
-        if (known != null && known.fingerprint() == work.fingerprint()) {
+        Built known = BUILT.get(construction.id());
+        if (known != null && known.template.fingerprint() == work.fingerprint()) {
             return Optional.of(known);
         }
-        BuildingTemplate made = template(work);
-        TEMPLATES.put(construction.id(), made);
+        CompletableFuture<Built> building = BUILDING.get(construction.id());
+        if (building == null) {
+            List<int[]> clear = construction.clear();
+            BitSet skip = (BitSet) construction.skip().clone();
+            BitSet done = construction.doneSet();
+            long id = construction.id();
+            building = construction.steps() <= MADE_AT_ONCE ? made(() -> make(work, clear, skip, done))
+                    : CompletableFuture.supplyAsync(() -> make(work, clear, skip, done), Util.backgroundExecutor());
+            building.whenComplete((made, error) -> {
+                if (error != null) {
+                    LOGGER.error("The plan of earthworks {} could not be made", id, error);
+                }
+            });
+            BUILDING.put(id, building);
+        }
+        if (!building.isDone()) {
+            return Optional.empty();
+        }
+        if (building.isCompletedExceptionally()) {
+            construction.setStatus(Construction.Status.TEMPLATE_CHANGED);
+            return Optional.empty();
+        }
+        BUILDING.remove(construction.id());
+        Built made = building.join();
+        BUILT.put(construction.id(), made);
         return Optional.of(made);
+    }
+
+    private static CompletableFuture<Built> made(java.util.function.Supplier<Built> make) {
+        try {
+            return CompletableFuture.completedFuture(make.get());
+        } catch (RuntimeException e) {
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+
+    /**
+     * Makes the template, the plan and the tally of earthworks; touches nothing but its arguments.
+     */
+    private static Built make(Earthwork work, List<int[]> clear, BitSet skip, BitSet done) {
+        BuildingTemplate template = template(work);
+        BuildPlan plan = ConstructionWork.plan(template, anchor(work), PLACEMENT, clear, skip, Construction.Kind.EARTHWORK);
+        return new Built(template, plan, done);
+    }
+
+    static Optional<BuildingTemplate> template(Construction construction) {
+        return built(construction).map(built -> built.template);
+    }
+
+    static Optional<BuildPlan> plan(Construction construction) {
+        return built(construction).map(built -> built.plan);
     }
 
     /**
@@ -395,37 +561,143 @@ public final class Earthworks {
         return found instanceof BlockItem block ? block.getBlock().defaultBlockState() : Blocks.DIRT.defaultBlockState();
     }
 
+    // ---------------------------------------------------------------- what is left
+
+    /**
+     * Whether every chunk the steps of earthworks touch is the kingdom's land; the columns the work leaves as they are do not
+     * count. Earthworks whose plan is not made yet count by their box.
+     */
+    static boolean onOwnLand(MinecraftServer server, Construction construction) {
+        Built built = BUILT.get(construction.id());
+        if (built == null) {
+            return true;
+        }
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        for (long chunk : built.chunks) {
+            if (!construction.kingdomId().equals(state.territory().ownerOf(construction.dimension(), chunk))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Whether every chunk the steps of earthworks touch is loaded.
+     */
+    static boolean loaded(ServerLevel level, Construction construction) {
+        Built built = BUILT.get(construction.id());
+        if (built == null) {
+            return false;
+        }
+        for (long chunk : built.chunks) {
+            if (!level.hasChunk(ChunkKey.x(chunk), ChunkKey.z(chunk))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * A block of the fill is placed (or left as it was): the tally of the fill counts it once.
+     */
+    static void placed(Construction construction, int index) {
+        Built built = BUILT.get(construction.id());
+        if (built == null || index < 0 || index >= built.plan.size() || built.counted.get(index)) {
+            return;
+        }
+        BuildPlan.Step step = built.plan.step(index);
+        if (step.kind() == BuildPlan.Kind.PLACE) {
+            built.count(step);
+        }
+    }
+
+    /**
+     * What the fill still costs: its blocks neither placed nor paid for, by item, from the tally rather than from every step.
+     */
+    static Map<String, Integer> remaining(Construction construction, BuildPlan plan) {
+        Built built = BUILT.get(construction.id());
+        if (built == null || built.plan != plan) {
+            return plan.remaining(construction);
+        }
+        Map<String, Integer> left = new LinkedHashMap<>();
+        built.total.forEach((item, count) -> {
+            int rest = count - built.placed.getOrDefault(item, 0);
+            if (rest > 0) {
+                left.put(item, rest);
+            }
+        });
+        for (int index : construction.pending()) {
+            if (index < plan.size() && !built.counted.get(index)) {
+                BuildPlan.Step step = plan.step(index);
+                if (step.kind() == BuildPlan.Kind.PLACE) {
+                    step.cost().forEach((item, count) -> left.computeIfPresent(item, (key, rest) -> rest > count ? rest - count : null));
+                }
+            }
+        }
+        return left;
+    }
+
+    /**
+     * What the fill still needs brought: what it costs less what lies at the site already.
+     */
+    static Map<String, Integer> needed(Construction construction, BuildPlan plan) {
+        Map<String, Integer> result = new LinkedHashMap<>();
+        remaining(construction, plan).forEach((item, count) -> {
+            int left = count - construction.delivered().getOrDefault(item, 0);
+            if (left > 0) {
+                result.put(item, left);
+            }
+        });
+        return result;
+    }
+
+    /**
+     * Whether every step of earthworks is done, by the count of the steps done.
+     */
+    static boolean finished(Construction construction, BuildPlan plan) {
+        return construction.doneCount() >= plan.size();
+    }
+
     // ---------------------------------------------------------------- laying out
 
     /**
      * Lays out earthworks for a kingdom: the right of construction and the room for another construction as for any, the land
-     * looked at now, the plan kept with the construction.
+     * looked at now (or the survey of the player of a moment ago for the same request), the plan made off the server thread.
      *
      * @param actor the player, who needs the right to manage construction; {@code null} for an operator
      */
     public static KingdomWorldState.ConstructionChange lay(ServerLevel level, @Nullable UUID actor, UUID kingdomId, Request request) {
+        Survey survey = actor == null ? survey(level, kingdomId, request) : known(level, actor, kingdomId, request);
+        return lay(level, actor, kingdomId, survey);
+    }
+
+    /**
+     * Lays out earthworks for a kingdom from a survey of their land.
+     *
+     * @param actor the player, who needs the right to manage construction; {@code null} for an operator
+     */
+    public static KingdomWorldState.ConstructionChange lay(ServerLevel level, @Nullable UUID actor, UUID kingdomId, Survey survey) {
         MinecraftServer server = level.getServer();
         if (KingdomWorldApi.isReadOnly(server)) {
             return new KingdomWorldState.ConstructionChange(Outcome.fail(KingdomError.READ_ONLY), Optional.empty());
         }
-        Survey survey = survey(level, kingdomId, request);
         if (survey.error() != null || survey.work() == null) {
             return new KingdomWorldState.ConstructionChange(Outcome.fail(survey.error()), Optional.empty());
         }
         Earthwork work = survey.work();
-        BuildingTemplate template = template(work);
         BlockPos anchor = anchor(work);
-        BuildPlan plan = ConstructionWork.plan(template, anchor, PLACEMENT, survey.clear(), survey.skip(), Construction.Kind.EARTHWORK);
+        Box box = PLACEMENT.box(work.sizeX(), Math.max(1, work.ceiling() - work.bottom() + 1), work.sizeZ(), 0, 0, 0, anchor.getX(), anchor.getY(),
+                anchor.getZ());
+        // The steps: every block dug, and every block of the fill not left as it is.
+        int steps = survey.digs() + survey.fills();
         ConstructionRules rules = ConstructionSettings.rules();
         KingdomWorldState.ConstructionChange change = KingdomWorldApi.state(server).layConstruction(actor, kingdomId, TEMPLATE_ID,
-                template.fingerprint(), ConstructionWork.worldPos(level, anchor), PLACEMENT, template.box(anchor, PLACEMENT), survey.clear(),
-                plan.size(), KingdomWorldApi.gameTime(server), rules, Construction.Kind.EARTHWORK, 0,
-                io.github.sekerator.kingdomworld.core.construction.Materials.NONE, survey.skip());
+                work.fingerprint(), ConstructionWork.worldPos(level, anchor), PLACEMENT, box, survey.clear(), steps, KingdomWorldApi.gameTime(server),
+                rules, Construction.Kind.EARTHWORK, 0, io.github.sekerator.kingdomworld.core.construction.Materials.NONE, survey.skip());
         change.construction().ifPresent(construction -> {
             construction.setEarthwork(work);
-            TEMPLATES.put(construction.id(), template);
-            ConstructionWork.remember(construction, plan);
-            ConstructionWork.refreshReservations(server);
+            // The plan is made off the server thread; the work begins once it is there.
+            built(construction);
             LOGGER.info("Earthworks {} of {} laid at {} {} ({}x{}, {} to {}): {} to dig, {} to fill, {} left as they are", construction.id(),
                     kingdomId, work.minX(), work.minZ(), work.sizeX(), work.sizeZ(), work.mode().id(), work.target(), survey.digs(), survey.fills(),
                     survey.keptAll());
@@ -436,36 +708,66 @@ public final class Earthworks {
     // ---------------------------------------------------------------- the work
 
     /**
-     * Digs a block of earthworks: only what grew there; water goes, lava is closed off with cobblestone and its neighbours of
-     * lava too, so that none runs into the work.
+     * Digs a block of earthworks, looked at anew: only what grew there; water goes; lava next to it is closed off with
+     * cobblestone first (a stone of the site or the storehouses for each, waiting while there is none). What somebody placed
+     * since the work was laid out stays where it is; a block holding items or of the mod blocks the step.
      */
     static ConstructionWork.StepResult dig(ServerLevel level, Construction construction, BlockPos at, @Nullable LivingEntity breaker,
-                                           List<ItemStack> drops) {
+                                           List<ItemStack> drops, boolean free) {
         BlockState state = level.getBlockState(at);
+        if (!state.isAir() && !(state.getBlock() instanceof LiquidBlock)) {
+            if (ConstructionWork.isProtected(level, at, state) || ConstructionWork.holdsItems(level, at)) {
+                return ConstructionWork.StepResult.BLOCKED;
+            }
+            if (!diggable(state)) {
+                // Somebody built or placed something there since the work was laid out: it stays.
+                return ConstructionWork.StepResult.DONE;
+            }
+        }
+        if (!sealLava(level, construction, at, free)) {
+            construction.setStatus(Construction.Status.NO_MATERIALS, new WorldPos(construction.dimension(), at.getX(), at.getY(), at.getZ()));
+            return ConstructionWork.StepResult.NO_MATERIALS;
+        }
         if (state.getBlock() instanceof LiquidBlock) {
             level.setBlock(at, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
-            sealLava(level, construction, at);
-            return ConstructionWork.StepResult.DONE;
+        } else if (!state.isAir()) {
+            drops.addAll(Block.getDrops(state, level, at, null, breaker, PICK));
+            level.destroyBlock(at, false, breaker);
         }
-        if (state.isAir()) {
-            sealLava(level, construction, at);
-            return ConstructionWork.StepResult.DONE;
+        return ConstructionWork.StepResult.DONE;
+    }
+
+    /**
+     * Looks at the place of a block of the fill before it goes there: the land as it grew is dug first; what somebody placed
+     * since the work was laid out stays and the block is left out; a block holding items or of the mod blocks the step.
+     *
+     * @return {@code null} to place the block, {@link ConstructionWork.StepResult#DONE} to leave it out, or why not now
+     */
+    @Nullable
+    static ConstructionWork.StepResult beforeFill(ServerLevel level, Construction construction, BlockPos at, @Nullable LivingEntity breaker,
+                                                  List<ItemStack> drops, boolean free) {
+        BlockState there = level.getBlockState(at);
+        if (there.isAir() || there.getBlock() instanceof LiquidBlock || there.canBeReplaced() && !there.hasBlockEntity()) {
+            return null;
         }
-        if (ConstructionWork.isProtected(level, at, state) || ConstructionWork.holdsItems(level, at) || !diggable(state)) {
-            // Somebody built or placed something there since the work was laid out: it stays.
+        if (ConstructionWork.isProtected(level, at, there) || ConstructionWork.holdsItems(level, at)) {
             return ConstructionWork.StepResult.BLOCKED;
         }
-        drops.addAll(Block.getDrops(state, level, at, null, breaker, PICK));
-        level.destroyBlock(at, false, breaker);
-        sealLava(level, construction, at);
-        return ConstructionWork.StepResult.DONE;
+        if (there.hasBlockEntity() || !diggable(there)) {
+            return ConstructionWork.StepResult.DONE;
+        }
+        ConstructionWork.StepResult dug = dig(level, construction, at, breaker, drops, free);
+        return dug == ConstructionWork.StepResult.DONE ? null : dug;
     }
 
     /**
      * Closes off the lava next to a place dug with cobblestone of the site or the storehouses, as a miner does; on the land of
      * the kingdom only.
+     *
+     * @param free whether the cobblestone costs nothing (an operator finishing the work at once)
+     * @return whether no lava is left next to the place, false when there was no cobblestone for it
      */
-    private static void sealLava(ServerLevel level, Construction construction, BlockPos at) {
+    private static boolean sealLava(ServerLevel level, Construction construction, BlockPos at, boolean free) {
         for (Direction side : Direction.values()) {
             if (side == Direction.UP) {
                 continue;
@@ -475,15 +777,31 @@ public final class Earthworks {
                     || !construction.kingdomId().equals(KingdomWorldApi.ownerAt(level, next))) {
                 continue;
             }
-            String cobble = "minecraft:cobblestone";
-            if (construction.delivered().getOrDefault(cobble, 0) > 0) {
-                construction.takeDelivered(cobble, 1);
-            } else {
-                Item item = PostWork.item(cobble);
-                KingdomStorage.take(level.getServer(), construction.kingdomId(), stack -> stack.is(item), 1, construction.anchor());
+            // An operator finishing the work at once needs no cobblestone.
+            if (!free && !takeCobblestone(level, construction)) {
+                return false;
             }
             level.setBlock(next, Blocks.COBBLESTONE.defaultBlockState(), Block.UPDATE_ALL);
         }
+        return true;
+    }
+
+    /**
+     * Takes a cobblestone for closing off lava: from the site first, then from the storehouses.
+     *
+     * @return whether there was one
+     */
+    private static boolean takeCobblestone(ServerLevel level, Construction construction) {
+        if (construction.delivered().getOrDefault(COBBLESTONE, 0) > 0) {
+            construction.takeDelivered(COBBLESTONE, 1);
+            return true;
+        }
+        Item item = PostWork.item(COBBLESTONE);
+        if (item == null) {
+            return false;
+        }
+        List<ItemStack> taken = KingdomStorage.take(level.getServer(), construction.kingdomId(), stack -> stack.is(item), 1, construction.anchor());
+        return taken.stream().mapToInt(ItemStack::getCount).sum() >= 1;
     }
 
     /**
@@ -496,7 +814,7 @@ public final class Earthworks {
      */
     static List<ItemStack> route(MinecraftServer server, Construction construction, BuildPlan plan, ServerLevel level, List<ItemStack> drops,
                                  boolean near) {
-        Map<String, Integer> lacking = new HashMap<>(plan.needed(construction));
+        Map<String, Integer> lacking = new HashMap<>(needed(construction, plan));
         List<ItemStack> carried = new ArrayList<>();
         BlockPos at = ConstructionWork.blockPos(construction.anchor());
         for (ItemStack drop : drops) {

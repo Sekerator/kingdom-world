@@ -201,6 +201,10 @@ final class BuilderGoal extends PostWorkGoal {
                 report(WorkStatus.BLOCKED);
             }
             case NO_MATERIALS -> {
+                if (construction.kind() == Construction.Kind.EARTHWORK && current.kind() == BuildPlan.Kind.CLEAR) {
+                    // Lava beside the dig waits for cobblestone in the storehouses: the builder goes on with the rest meanwhile.
+                    ConstructionWork.defer(construction, step, now + BLOCKED_TICKS);
+                }
             }
             case OUTSIDE_LAND -> {
                 // The kingdom lost the place: the construction waits with what was paid for, the builder looks elsewhere.
@@ -301,7 +305,7 @@ final class BuilderGoal extends PostWorkGoal {
             if (storehouse == null) {
                 return false;
             }
-            int needed = steps.needed(construction).getOrDefault(entry.getKey(), missing);
+            int needed = ConstructionWork.needed(construction, steps).getOrDefault(entry.getKey(), missing);
             fetchFrom = storehouse;
             fetchItem = entry.getKey();
             fetchAmount = Math.max(missing, Math.min(64, needed));

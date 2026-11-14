@@ -129,13 +129,6 @@ public final class ConstructionWork {
     }
 
     /**
-     * Keeps the plan of a construction laid out elsewhere (earthworks), as {@link #lay} keeps its own.
-     */
-    static void remember(Construction construction, BuildPlan plan) {
-        PLANS.put(construction.id(), plan);
-    }
-
-    /**
      * The template of a building of the register, built of the building's materials.
      */
     public static Optional<BuildingTemplate> template(Building building) {
@@ -166,6 +159,9 @@ public final class ConstructionWork {
      * The plan of a construction, or empty if its template is gone or changed (the status says so).
      */
     public static Optional<BuildPlan> plan(Construction construction) {
+        if (construction.kind() == Construction.Kind.EARTHWORK) {
+            return earthworkPlan(construction);
+        }
         BuildPlan cached = PLANS.get(construction.id());
         Optional<BuildingTemplate> template = template(construction);
         if (template.isEmpty()) {
@@ -196,6 +192,46 @@ public final class ConstructionWork {
         }
         PLANS.put(construction.id(), plan);
         return Optional.of(plan);
+    }
+
+    /**
+     * The plan of earthworks, made from the land kept with them; empty while it is being made after a restart.
+     */
+    private static Optional<BuildPlan> earthworkPlan(Construction construction) {
+        if (construction.earthwork() == null) {
+            construction.setStatus(Construction.Status.TEMPLATE_MISSING);
+            return Optional.empty();
+        }
+        Optional<BuildPlan> plan = Earthworks.plan(construction);
+        if (plan.isPresent() && plan.get().size() != construction.steps()) {
+            construction.setStatus(Construction.Status.TEMPLATE_CHANGED);
+            return Optional.empty();
+        }
+        return plan;
+    }
+
+    /**
+     * What a construction still needs brought; earthworks count it from their tally rather than from every step.
+     */
+    public static Map<String, Integer> needed(Construction construction, BuildPlan plan) {
+        return construction.kind() == Construction.Kind.EARTHWORK ? Earthworks.needed(construction, plan) : plan.needed(construction);
+    }
+
+    /**
+     * Whether every step of a construction is done in the world.
+     */
+    public static boolean finished(Construction construction, BuildPlan plan) {
+        return construction.kind() == Construction.Kind.EARTHWORK ? Earthworks.finished(construction, plan) : plan.finished(construction);
+    }
+
+    /**
+     * A step is done: earthworks count a block of their fill in their tally.
+     */
+    private static void done(Construction construction, int index) {
+        construction.markDone(index);
+        if (construction.kind() == Construction.Kind.EARTHWORK) {
+            Earthworks.placed(construction, index);
+        }
     }
 
     /**
@@ -723,22 +759,23 @@ public final class ConstructionWork {
         if (construction.kind() == Construction.Kind.DEMOLISH) {
             StepResult result = BuildingWork.takeDown(level, construction, template, at);
             if (result == StepResult.DONE) {
-                construction.markDone(index);
+                done(construction, index);
             }
             return result;
         }
-        if (step.kind() == BuildPlan.Kind.CLEAR && construction.kind() == Construction.Kind.EARTHWORK) {
+        boolean earthwork = construction.kind() == Construction.Kind.EARTHWORK;
+        if (step.kind() == BuildPlan.Kind.CLEAR && earthwork) {
             // Earthworks dig only the land as it grew; lava is closed off with cobblestone first.
-            StepResult earth = Earthworks.dig(level, construction, at, builder, drops);
+            StepResult earth = Earthworks.dig(level, construction, at, builder, drops, false);
             if (earth == StepResult.DONE) {
-                construction.markDone(index);
+                done(construction, index);
             }
             return earth;
         }
         if (step.kind() == BuildPlan.Kind.CLEAR) {
             StepResult result = clear(level, at, builder, tool, drops);
             if (result == StepResult.DONE) {
-                construction.markDone(index);
+                done(construction, index);
             }
             return result;
         }
@@ -749,10 +786,23 @@ public final class ConstructionWork {
             if (construction.isPending(index)) {
                 giveBack(level.getServer(), construction, step.cost());
             }
-            construction.markDone(index);
+            done(construction, index);
             return StepResult.DONE;
         }
-        if (!there.isAir() && !there.canBeReplaced()) {
+        if (earthwork) {
+            // The place of a block of the fill is looked at anew: what somebody placed there since stays, and the block is left out.
+            StepResult before = Earthworks.beforeFill(level, construction, at, builder, drops, false);
+            if (before == StepResult.DONE) {
+                if (construction.isPending(index)) {
+                    giveBack(level.getServer(), construction, step.cost());
+                }
+                done(construction, index);
+                return StepResult.DONE;
+            }
+            if (before != null) {
+                return before;
+            }
+        } else if (!there.isAir() && !there.canBeReplaced()) {
             StepResult cleared = clear(level, at, builder, tool, drops);
             if (cleared != StepResult.DONE) {
                 return cleared;
@@ -767,7 +817,7 @@ public final class ConstructionWork {
         Item item = template.blocks().get(step.block()).state().getBlock().asItem();
         place(level, at, wanted, item);
         placeParts(level, construction, template, step.block());
-        construction.markDone(index);
+        done(construction, index);
         return StepResult.DONE;
     }
 
@@ -923,6 +973,10 @@ public final class ConstructionWork {
      * the work: nothing is broken or placed there, and what was paid for stays the construction's.
      */
     public static boolean onOwnLand(MinecraftServer server, Construction construction) {
+        if (construction.kind() == Construction.Kind.EARTHWORK) {
+            // Earthworks leave the columns of others as they are: only the chunks their steps touch count.
+            return Earthworks.onOwnLand(server, construction);
+        }
         KingdomWorldState state = KingdomWorldApi.state(server);
         for (long chunk : construction.box().chunks()) {
             if (!construction.kingdomId().equals(state.territory().ownerOf(construction.dimension(), chunk))) {
@@ -933,7 +987,14 @@ public final class ConstructionWork {
     }
 
     /**
-     * Whether every chunk of a construction is loaded.
+     * Whether every chunk of a construction is loaded; for earthworks, every chunk their steps touch.
+     */
+    public static boolean loaded(ServerLevel level, Construction construction) {
+        return construction.kind() == Construction.Kind.EARTHWORK ? Earthworks.loaded(level, construction) : loaded(level, construction.box());
+    }
+
+    /**
+     * Whether every chunk of a box is loaded.
      */
     public static boolean loaded(ServerLevel level, Box box) {
         for (int cx = box.minX() >> 4; cx <= box.maxX() >> 4; cx++) {
@@ -972,7 +1033,7 @@ public final class ConstructionWork {
             if (!construction.pending().isEmpty() && budget > 0) {
                 budget -= applyPending(level, construction, plan.get(), budget);
             }
-            if (plan.get().finished(construction)) {
+            if (finished(construction, plan.get())) {
                 complete(server, construction, false);
                 continue;
             }
@@ -1002,7 +1063,7 @@ public final class ConstructionWork {
             construction.setStatus(Construction.Status.OUTSIDE_LAND);
             return 0;
         }
-        if (!loaded(level, construction.box())) {
+        if (!loaded(level, construction)) {
             if (!construction.paused()) {
                 construction.setStatus(Construction.Status.WAITING_FOR_LOAD);
             }
@@ -1025,6 +1086,10 @@ public final class ConstructionWork {
             StepResult result = doStep(level, construction, plan, template.get(), step, null, ItemStack.EMPTY, drops, false);
             if (result == StepResult.OUTSIDE_LAND) {
                 break;
+            }
+            if (result == StepResult.NO_MATERIALS) {
+                // Earthworks wait for cobblestone to close off lava: the step stays paid for and waiting.
+                continue;
             }
             if (result == StepResult.BLOCKED) {
                 BuildPlan.Step at = plan.step(step);
@@ -1101,7 +1166,7 @@ public final class ConstructionWork {
             }
             Map<String, Integer> hold = new LinkedHashMap<>();
             UUID key = holdKey(construction);
-            plan.get().needed(construction).forEach((item, count) -> {
+            needed(construction, plan.get()).forEach((item, count) -> {
                 long free = stock.getOrDefault(item, 0L) - reservations.reserved(kingdomId, item, key);
                 int take = (int) Math.max(0, Math.min(count, free));
                 if (take > 0) {
@@ -1148,7 +1213,7 @@ public final class ConstructionWork {
                 }
                 Map<String, Integer> hold = new LinkedHashMap<>();
                 UUID key = holdKey(construction);
-                plan.get().needed(construction).forEach((item, count) -> {
+                needed(construction, plan.get()).forEach((item, count) -> {
                     long free = stock.getOrDefault(item, 0L) - reservations.reserved(kingdom, item, key);
                     int take = (int) Math.max(0, Math.min(count, free));
                     if (take > 0) {
@@ -1222,7 +1287,7 @@ public final class ConstructionWork {
      */
     public static Map<String, Integer> missing(MinecraftServer server, Construction construction, BuildPlan plan) {
         Map<String, Integer> result = new LinkedHashMap<>();
-        plan.needed(construction).forEach((item, count) -> {
+        needed(construction, plan).forEach((item, count) -> {
             long there = available(server, construction, item);
             if (there < count) {
                 result.put(item, (int) (count - there));
@@ -1332,7 +1397,16 @@ public final class ConstructionWork {
                 }
                 BlockPos at = new BlockPos(step.x(), step.y(), step.z());
                 level.getChunk(at);
-                if (step.kind() == BuildPlan.Kind.PLACE) {
+                boolean earthwork = construction.kind() == Construction.Kind.EARTHWORK;
+                if (earthwork && step.kind() == BuildPlan.Kind.CLEAR) {
+                    // Only the land as it grew is dug, lava next to it closed off; what somebody placed since stays.
+                    Earthworks.dig(level, construction, at, null, drops, true);
+                } else if (earthwork && !construction.isPending(step.index())) {
+                    BlockState wanted = target(template.get(), construction, step.block());
+                    if (!level.getBlockState(at).equals(wanted) && Earthworks.beforeFill(level, construction, at, null, drops, true) == null) {
+                        place(level, at, wanted, template.get().blocks().get(step.block()).state().getBlock().asItem());
+                    }
+                } else if (step.kind() == BuildPlan.Kind.PLACE) {
                     if (construction.isPending(step.index())) {
                         StepResult result = doStep(level, construction, plan.get(), template.get(), step.index(), null, ItemStack.EMPTY,
                                 drops, false);
@@ -1356,7 +1430,7 @@ public final class ConstructionWork {
                 } else {
                     clear(level, at, null, ItemStack.EMPTY, drops);
                 }
-                construction.markDone(step.index());
+                done(construction, step.index());
             }
             storeOrRoute(server, construction, level, drops);
         }

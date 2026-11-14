@@ -45,17 +45,26 @@ public final class EarthworkActions {
         if (kingdom.isEmpty()) {
             return refused(message, KingdomError.NOT_IN_KINGDOM);
         }
+        if (!state.membership().hasPermission(player.getUUID(), kingdom.get(), io.github.sekerator.kingdomworld.core.membership.Permission.MANAGE_CONSTRUCTION)) {
+            // The land is looked at only for those who may lay the work out.
+            return refused(message, KingdomError.NO_PERMISSION);
+        }
         if (message.first().distToCenterSqr(player.position()) > REACH * REACH || message.second().distToCenterSqr(player.position()) > REACH * REACH) {
             return refused(message, KingdomError.AREA_NOT_LOADED);
         }
+        if (message.mode() < 0 || message.mode() >= Earthwork.Mode.values().length) {
+            return refused(message, KingdomError.EARTHWORK_NOTHING);
+        }
         Earthworks.Request request = new Earthworks.Request(message.first(), message.second(), Earthwork.Mode.values()[message.mode()],
                 message.target(), message.smooth());
-        Earthworks.Survey survey = Earthworks.survey(player.serverLevel(), kingdom.get(), request);
+        // Laying out takes the survey the window asked for a moment ago, so the land is not looked at twice.
+        Earthworks.Survey survey = message.lay() ? Earthworks.known(player.serverLevel(), player.getUUID(), kingdom.get(), request)
+                : Earthworks.check(player.serverLevel(), player.getUUID(), kingdom.get(), request);
         if (survey.error() != null) {
             return refused(message, survey.error());
         }
         if (message.lay()) {
-            KingdomWorldState.ConstructionChange change = Earthworks.lay(player.serverLevel(), player.getUUID(), kingdom.get(), request);
+            KingdomWorldState.ConstructionChange change = Earthworks.lay(player.serverLevel(), player.getUUID(), kingdom.get(), survey);
             if (!change.outcome().ok()) {
                 return refused(message, change.outcome().error());
             }
@@ -69,10 +78,7 @@ public final class EarthworkActions {
             Construction laid = change.construction().orElseThrow();
             return result(message, survey, true, true, Component.translatable(KEY + "laid", laid.anchor().coordinates()));
         }
-        boolean allowed = state.membership().hasPermission(player.getUUID(), kingdom.get(),
-                io.github.sekerator.kingdomworld.core.membership.Permission.MANAGE_CONSTRUCTION);
-        Component text = allowed ? Component.translatable(KEY + "ready") : Component.translatable("kingdomworld.error." + KingdomError.NO_PERMISSION.id());
-        return result(message, survey, allowed, false, text);
+        return result(message, survey, true, false, Component.translatable(KEY + "ready"));
     }
 
     private static EarthworkPackets.Result refused(EarthworkPackets.Survey message, KingdomError error) {

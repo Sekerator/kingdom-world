@@ -34,7 +34,8 @@ public final class EarthworkPackets {
      * without smooth edges; with {@code lay} the work is laid out if it may be.
      */
     public record Survey(BlockPos first, BlockPos second, int mode, int target, boolean smooth, boolean lay) {
-        public static final RequestPolicy CHECK = new RequestPolicy("earthwork_check", 0, 20, 10_000L);
+        /** A survey looks at up to a plot of blocks: the window asks once its choice rests, a few times in ten seconds at most. */
+        public static final RequestPolicy CHECK = new RequestPolicy("earthwork_check", 0, 8, 10_000L);
         public static final RequestPolicy LAY = new RequestPolicy("earthwork_lay", 0, 5, 10_000L);
 
         public void encode(FriendlyByteBuf buf) {

@@ -27,8 +27,8 @@ public class EarthworkScreen extends KingdomScreen {
     private static final String KEY = "kingdomworld.screen.earthwork.";
     private static final int MIN_PANEL_WIDTH = 240;
     private static final int PANEL_HEIGHT = 222;
-    /** Ticks after a change before the server is asked again. */
-    private static final int ASK_DELAY = 8;
+    /** Ticks after a change before the server is asked again, so that a height typed or nudged several times asks once. */
+    private static final int ASK_DELAY = 12;
 
     private final BlockPos first;
     private final BlockPos second;
@@ -43,6 +43,11 @@ public class EarthworkScreen extends KingdomScreen {
     private boolean waiting;
     @Nullable
     private EarthworkPackets.Result result;
+    /** The choice asked of the server last, and the last answer with its choice. */
+    private String asked = "";
+    private String answeredChoice = "";
+    @Nullable
+    private EarthworkPackets.Result answered;
 
     public EarthworkScreen(ArchitectRulerItem.Corners corners) {
         super(Component.translatable(KEY + "title"));
@@ -153,11 +158,22 @@ public class EarthworkScreen extends KingdomScreen {
             heightBox.tick();
         }
         if (askIn > 0 && --askIn == 0) {
-            ask(false);
+            // Only a choice that differs from the one asked last goes to the server.
+            if (choice().equals(answeredChoice) && answered != null) {
+                result = answered;
+                updateButtons();
+            } else if (!choice().equals(asked)) {
+                ask(false);
+            }
         }
     }
 
+    private String choice() {
+        return mode.ordinal() + ":" + target + ":" + smooth;
+    }
+
     private void ask(boolean lay) {
+        asked = choice();
         waiting = lay;
         updateButtons();
         if (Minecraft.getInstance().getConnection() != null) {
@@ -184,8 +200,10 @@ public class EarthworkScreen extends KingdomScreen {
             }
             return;
         }
-        if (answer.target() == target) {
+        if (answer.target() == target && choice().equals(asked)) {
             result = answer;
+            answered = answer;
+            answeredChoice = asked;
         }
         updateButtons();
     }

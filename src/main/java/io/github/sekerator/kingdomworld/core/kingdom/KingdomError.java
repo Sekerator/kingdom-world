@@ -391,7 +391,11 @@ public enum KingdomError {
     /** Earthworks that would dig or fill deeper than the config allows. */
     EARTHWORK_TOO_DEEP,
     /** Earthworks with nothing to dig or fill: the land lies at the height already, or nothing of it may be touched. */
-    EARTHWORK_NOTHING;
+    EARTHWORK_NOTHING,
+    /** Earthworks whose height or slopes would reach above or below the world. */
+    EARTHWORK_OUTSIDE_WORLD,
+    /** Earthworks with more blocks to look at than one survey takes. */
+    EARTHWORK_TOO_MUCH;
 
     /**
      * Lower case identifier, used for translation keys.
