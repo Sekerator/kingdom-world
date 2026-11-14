@@ -83,8 +83,9 @@ public class StorehouseBlockEntity extends BlockEntity {
     }
 
     /**
-     * What hoppers and pipes see: this storehouse, or both halves of a double one with the left one's slots first. Which it
-     * is is looked up once a tick, so a hopper that holds the handler sees the storehouses join and part.
+     * What hoppers and pipes see: this storehouse, or both halves of a double one in the order of
+     * {@link StorehouseBlock#halves}, the slots of the half of type RIGHT first. Which it is is looked up once a tick, so a
+     * hopper that holds the handler sees the storehouses join and part.
      */
     private static final class Joined implements IItemHandlerModifiable {
         private static final IItemHandlerModifiable[] NONE = new IItemHandlerModifiable[0];

@@ -169,7 +169,9 @@ public final class TreasuryActions {
         MintRates rates = EconomySettings.mintRates();
         for (MintRates.Rate rate : rates.rates()) {
             net.minecraft.world.item.Item item = rates.metal(rate);
-            if (item == null || metals.size() >= TreasuryView.MAX_METALS || metals.stream().anyMatch(metal -> metal.metal().equals(rate.target()))) {
+            // A rule whose id is too long or not one id cannot travel in the view and has no settings: it is struck by default.
+            if (item == null || !MintMetals.isValidMetal(rate.target()) || metals.size() >= TreasuryView.MAX_METALS
+                    || metals.stream().anyMatch(metal -> metal.metal().equals(rate.target()))) {
                 continue;
             }
             MintMetals.Setting setting = MinterBehavior.setting(server, kingdomId, rate.target());

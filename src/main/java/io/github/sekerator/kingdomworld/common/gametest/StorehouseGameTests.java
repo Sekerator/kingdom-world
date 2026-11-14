@@ -115,9 +115,9 @@ public final class StorehouseGameTests {
         try {
             place(level, a, null);
             helper.assertTrue(type(level, a) == ChestType.SINGLE, "A storehouse alone must be single");
-            StorehouseInventory left = inventory(level, a);
-            left.insertItem(0, new ItemStack(Items.IRON_INGOT, 10), false);
-            left.insertItem(53, new ItemStack(Items.BREAD, 5), false);
+            StorehouseInventory first = inventory(level, a);
+            first.insertItem(0, new ItemStack(Items.IRON_INGOT, 10), false);
+            first.insertItem(53, new ItemStack(Items.BREAD, 5), false);
             helper.assertTrue(stored(server, kingdom, Items.IRON_INGOT) == 10, "The kingdom does not count the storehouse");
 
             // Sneaking, a storehouse beside it stays alone, though it faces the same way.
@@ -131,43 +131,43 @@ public final class StorehouseGameTests {
                     "Storehouses joined while sneaking");
             level.setBlockAndUpdate(c, Blocks.AIR.defaultBlockState());
 
-            // Without sneaking the next one joins: the first becomes the left half seen from the front.
-            BlockState second = place(level, b, null);
-            helper.assertTrue(second.getValue(StorehouseBlock.TYPE) == ChestType.LEFT && type(level, a) == ChestType.RIGHT,
-                    "The storehouses did not join: " + type(level, a) + " and " + second.getValue(StorehouseBlock.TYPE));
+            // Without sneaking the next one joins: the first becomes the half of type RIGHT, first in the window.
+            BlockState joined = place(level, b, null);
+            helper.assertTrue(joined.getValue(StorehouseBlock.TYPE) == ChestType.LEFT && type(level, a) == ChestType.RIGHT,
+                    "The storehouses did not join: " + type(level, a) + " and " + joined.getValue(StorehouseBlock.TYPE));
             helper.assertTrue(StorehouseBlock.halves(level, a).equals(List.of(a, b)) && StorehouseBlock.halves(level, b).equals(List.of(a, b)),
                     "The halves are not one storehouse: " + StorehouseBlock.halves(level, a));
-            StorehouseInventory right = inventory(level, b);
-            right.insertItem(0, new ItemStack(Items.GOLD_INGOT, 7), false);
+            StorehouseInventory second = inventory(level, b);
+            second.insertItem(0, new ItemStack(Items.GOLD_INGOT, 7), false);
 
             // Joining moved nothing, and the kingdom counts each half once.
-            helper.assertTrue(CitizenGameTests.count(left, Items.IRON_INGOT) == 10 && CitizenGameTests.count(left, Items.BREAD) == 5,
+            helper.assertTrue(CitizenGameTests.count(first, Items.IRON_INGOT) == 10 && CitizenGameTests.count(first, Items.BREAD) == 5,
                     "Joining changed the first half");
             helper.assertTrue(stored(server, kingdom, Items.IRON_INGOT) == 10 && stored(server, kingdom, Items.GOLD_INGOT) == 7
                     && stored(server, kingdom, Items.BREAD) == 5, "The kingdom counts the double storehouse wrong: iron "
                     + stored(server, kingdom, Items.IRON_INGOT) + ", gold " + stored(server, kingdom, Items.GOLD_INGOT));
             long halvesOfTheKingdom = KingdomStorage.storehouses(server, kingdom.id(), null).stream()
-                    .filter(inventory -> inventory == left || inventory == right).count();
+                    .filter(inventory -> inventory == first || inventory == second).count();
             helper.assertTrue(halvesOfTheKingdom == 2, "The kingdom has " + halvesOfTheKingdom + " of the two halves");
 
-            // Hoppers and pipes see both halves through either, the left half's slots first.
+            // Hoppers and pipes see both halves through either, the slots of the half of type RIGHT first.
             for (BlockPos pos : List.of(a, b)) {
                 IItemHandler handler = handler(level, pos);
                 helper.assertTrue(handler.getSlots() == 2 * StorehouseInventory.SLOTS, "A half shows " + handler.getSlots() + " slots");
                 helper.assertTrue(items(handler) == 22, "A half shows " + items(handler) + " items of 22");
-                helper.assertTrue(handler.getStackInSlot(StorehouseInventory.SLOTS).is(Items.GOLD_INGOT), "The right half is not second");
+                helper.assertTrue(handler.getStackInSlot(StorehouseInventory.SLOTS).is(Items.GOLD_INGOT), "The half of type LEFT is not second");
             }
             ItemStack rest = ItemHandlerHelper.insertItem(handler(level, b), new ItemStack(Items.COAL, 3), false);
-            helper.assertTrue(rest.isEmpty() && CitizenGameTests.count(left, Items.COAL) == 3 && CitizenGameTests.count(right, Items.COAL) == 0,
-                    "Coal put into the right half did not go to the first free slot of the left half");
+            helper.assertTrue(rest.isEmpty() && CitizenGameTests.count(first, Items.COAL) == 3 && CitizenGameTests.count(second, Items.COAL) == 0,
+                    "Coal put into the second half did not go to the first free slot of the first half");
 
             // A broken half drops its own contents; the other is a storehouse of its own with all of its.
             level.destroyBlock(b, true);
             helper.assertTrue(type(level, a) == ChestType.SINGLE, "The half left is still joined: " + type(level, a));
             helper.assertTrue(KingdomSavedData.get(server).storehouses().get(new WorldPos(Dimensions.id(level), b.getX(), b.getY(), b.getZ())).isEmpty(),
                     "The broken half kept its inventory");
-            helper.assertTrue(CitizenGameTests.count(left, Items.IRON_INGOT) == 10 && CitizenGameTests.count(left, Items.BREAD) == 5
-                    && CitizenGameTests.count(left, Items.COAL) == 3, "The half left lost items");
+            helper.assertTrue(CitizenGameTests.count(first, Items.IRON_INGOT) == 10 && CitizenGameTests.count(first, Items.BREAD) == 5
+                    && CitizenGameTests.count(first, Items.COAL) == 3, "The half left lost items");
             int dropped = level.getEntitiesOfClass(ItemEntity.class, new AABB(b).inflate(2), item -> item.getItem().is(Items.GOLD_INGOT)).stream()
                     .mapToInt(item -> item.getItem().getCount()).sum();
             helper.assertTrue(dropped == 7, "The broken half dropped " + dropped + " gold ingots of 7");
@@ -190,15 +190,15 @@ public final class StorehouseGameTests {
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Double Hopper", UUID.randomUUID());
         place(level, a, null);
         place(level, b, null);
-        StorehouseInventory left = inventory(level, a);
-        StorehouseInventory right = inventory(level, b);
+        StorehouseInventory first = inventory(level, a);
+        StorehouseInventory second = inventory(level, b);
         level.setBlockAndUpdate(b.above(), Blocks.HOPPER.defaultBlockState());
         if (level.getBlockEntity(b.above()) instanceof HopperBlockEntity hopper) {
             hopper.setItem(0, new ItemStack(Items.BREAD, 3));
         }
         helper.succeedWhen(() -> {
-            helper.assertTrue(CitizenGameTests.count(left, Items.BREAD) == 3, "The bread has not reached the left half yet");
-            helper.assertTrue(CitizenGameTests.count(right, Items.BREAD) == 0, "The bread stayed in the half under the hopper");
+            helper.assertTrue(CitizenGameTests.count(first, Items.BREAD) == 3, "The bread has not reached the first half yet");
+            helper.assertTrue(CitizenGameTests.count(second, Items.BREAD) == 0, "The bread stayed in the second half, under the hopper");
             clear(level, a.offset(-1, 0, -1), b.offset(1, 2, 1));
             CitizenGameTests.finish(helper, kingdom);
         });

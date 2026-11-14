@@ -184,9 +184,9 @@ public class StorehouseBlock extends BaseEntityBlock {
     }
 
     /**
-     * The places of the storehouse at a position: itself, or both halves of a double storehouse, the one on the left (seen
-     * from the front) first. A half whose other half is gone, unloaded, turned another way or on the land of another
-     * kingdom stands alone.
+     * The places of the storehouse at a position: itself, or both halves of a double storehouse, the half of type
+     * {@link ChestType#RIGHT} first as in a large chest (it stands on the left as one looks at the front, and its slots come
+     * first). A half whose other half is gone, unloaded, turned another way or on the land of another kingdom stands alone.
      */
     public static List<BlockPos> halves(Level level, BlockPos pos) {
         BlockState state = level.getBlockState(pos);
@@ -209,8 +209,8 @@ public class StorehouseBlock extends BaseEntityBlock {
     }
 
     /**
-     * The inventory of the storehouse at a position as a container: one storehouse, or both halves of a double one with
-     * the left one's slots first; {@code null} on the client.
+     * The inventory of the storehouse at a position as a container: one storehouse, or both halves of a double one in the
+     * order of {@link #halves}, the half of type {@link ChestType#RIGHT} first; {@code null} on the client.
      */
     @Nullable
     static IItemHandlerModifiable handler(ServerLevel level, List<BlockPos> halves) {

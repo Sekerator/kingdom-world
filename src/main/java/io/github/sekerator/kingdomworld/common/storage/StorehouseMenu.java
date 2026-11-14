@@ -10,8 +10,10 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * The window of a double storehouse: both halves side by side, six rows of eighteen slots (the left half's nine columns
- * first, as the slots of its container come first), and the player's inventory under them. Shift clicks move between the
+ * The window of a double storehouse: both halves side by side, six rows of eighteen slots, and the player's inventory
+ * under them. The first nine columns are the half of type RIGHT, whose slots come first in the container
+ * ({@link StorehouseBlock#halves}): it stands on the left as one looks at the front, as the first half of a large chest
+ * does. Shift clicks move between the
  * whole storehouse and the inventory, as in a large chest; mods that sort a container see all its slots as one.
  */
 public class StorehouseMenu extends AbstractContainerMenu {
