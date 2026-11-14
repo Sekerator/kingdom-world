@@ -84,8 +84,8 @@ public class StorehouseBlockEntity extends BlockEntity {
 
     /**
      * What hoppers and pipes see: this storehouse, or both halves of a double one in the order of
-     * {@link StorehouseBlock#halves}, the slots of the half of type RIGHT first. Which it is is looked up once a tick, so a
-     * hopper that holds the handler sees the storehouses join and part.
+     * {@link StorehouseBlock#halves}, the slots of the half of type RIGHT first. Which it is is looked up once a tick and again
+     * whenever a storehouse comes or goes, so a hopper that holds the handler sees the storehouses join and part at once.
      */
     private static final class Joined implements IItemHandlerModifiable {
         private static final IItemHandlerModifiable[] NONE = new IItemHandlerModifiable[0];
@@ -93,6 +93,9 @@ public class StorehouseBlockEntity extends BlockEntity {
         private final ServerLevel level;
         private final BlockPos pos;
         private long tick = Long.MIN_VALUE;
+        @Nullable
+        private StorehouseRegistry registry;
+        private long version;
         private IItemHandlerModifiable[] parts = NONE;
 
         private Joined(ServerLevel level, BlockPos pos) {
@@ -102,8 +105,11 @@ public class StorehouseBlockEntity extends BlockEntity {
 
         private IItemHandlerModifiable[] parts() {
             long now = level.getGameTime();
-            if (now != tick) {
+            StorehouseRegistry storehouses = KingdomSavedData.get(level.getServer()).storehouses();
+            if (now != tick || storehouses != registry || storehouses.version() != version) {
                 tick = now;
+                registry = storehouses;
+                version = storehouses.version();
                 List<BlockPos> halves = StorehouseBlock.halves(level, pos);
                 IItemHandlerModifiable[] found = new IItemHandlerModifiable[halves.size()];
                 for (int i = 0; i < found.length; i++) {
