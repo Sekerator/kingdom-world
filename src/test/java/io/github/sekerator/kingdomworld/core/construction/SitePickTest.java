@@ -88,4 +88,21 @@ class SitePickTest {
         assertEquals(WORLD_B, pick.pick(world, NOW).orElseThrow().kingdomId());
         assertEquals(WORLD_A, pick.pick(world, NOW).orElseThrow().kingdomId());
     }
+
+    @Test
+    void aRoadIsPickedLikeAWallAndAPlaceOfTheSameNumberIsAnother() {
+        SitePick pick = new SitePick();
+        SitePick.Candidate road = new SitePick.Candidate(SitePick.Kind.ROAD, 5, PLAYERS_A, true, 120, 120, NOW, false);
+        SitePick.Candidate house = site(5, PLAYERS_A, true, 10, 400, NOW);
+        assertTrue(road.worth(NOW), "every column left of the road is paid for");
+        assertEquals(SitePick.Kind.ROAD, pick.pick(List.of(house, road), NOW).orElseThrow().kind(),
+                "a place paid for in full comes first");
+        pick.defer(road.ref(), NOW);
+        assertTrue(pick.deferred(road.ref(), NOW));
+        assertFalse(pick.deferred(house.ref(), NOW), "a construction of the same number is another place");
+        assertTrue(pick.pick(List.of(road), NOW + 1).isEmpty(), "a road held up by a column in the way waits");
+        assertEquals(SitePick.Kind.ROAD, pick.pick(List.of(road), NOW + SitePick.DEFER).orElseThrow().kind());
+        assertFalse(new SitePick.Candidate(SitePick.Kind.ROAD, 6, PLAYERS_A, true, 3, 900, NOW, false).worth(NOW),
+                "a few columns of a long road paid for just now are not worth loading yet");
+    }
 }

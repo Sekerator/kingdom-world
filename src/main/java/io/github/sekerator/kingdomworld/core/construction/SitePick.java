@@ -30,12 +30,13 @@ public final class SitePick {
     public static final long DEFER = 6_000L;
 
     /**
-     * What is loaded: a construction, a wall or the items that wait to be dropped in a chunk.
+     * What is loaded: a construction, a wall, the items that wait to be dropped in a chunk or a road.
      */
     public enum Kind {
         CONSTRUCTION,
         WALL,
-        DROPS
+        DROPS,
+        ROAD
     }
 
     /**

@@ -374,6 +374,18 @@ public final class RoadState {
      */
     public Road addRoad(UUID kingdomId, RoadClass roadClass, String dimension, Endpoint from, Endpoint to, List<RouteCell> cells,
                         List<UUID> owners, Map<UUID, Integer> crossed, Road.Mode mode, long now, long expires, List<Crossing> sent) {
+        return addRoad(kingdomId, roadClass, dimension, from, to, cells, owners, crossed, mode, now, expires, sent, RoadLayout.LAID, null);
+    }
+
+    /**
+     * Adds a planned road of a layout, see {@link #addRoad(UUID, RoadClass, String, Endpoint, Endpoint, List, List, Map, Road.Mode,
+     * long, long, List)}.
+     *
+     * @param surveys the earthworks of the blocks of a levelled road
+     */
+    public Road addRoad(UUID kingdomId, RoadClass roadClass, String dimension, Endpoint from, Endpoint to, List<RouteCell> cells,
+                        List<UUID> owners, Map<UUID, Integer> crossed, Road.Mode mode, long now, long expires, List<Crossing> sent, int layout,
+                        List<RoadLayout.ColumnSurvey> surveys) {
         Map<UUID, Integer> foreign = new LinkedHashMap<>(crossed);
         foreign.remove(kingdomId);
         Road.Mode actual = foreign.isEmpty() ? Road.Mode.OWN : mode == Road.Mode.OWN ? Road.Mode.PAYER : mode;
@@ -387,7 +399,7 @@ public final class RoadState {
             waiting |= !consented(owner, kingdomId, actual);
         }
         Road road = new Road(nextRoad++, kingdomId, roadClass, dimension, from, to, cells, actual, now,
-                waiting ? Road.Status.WAITING_CONSENT : Road.Status.BUILDING, builders);
+                waiting ? Road.Status.WAITING_CONSENT : Road.Status.BUILDING, builders, layout, surveys);
         roads.put(road.id(), road);
         for (Map.Entry<UUID, Integer> entry : foreign.entrySet()) {
             // A kingdom that let roads of this one, built at its cost, cross its land before is not asked again for such a road.

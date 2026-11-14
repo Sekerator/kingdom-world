@@ -106,22 +106,29 @@ public final class RoadCrews {
         return sum;
     }
 
+    /**
+     * Forgets the shares of the miners of a kingdom.
+     */
     private static void forget(UUID kingdomId) {
-        for (Helper helper : HELPERS.getOrDefault(kingdomId, List.of())) {
-            SHARES.remove(helper.citizenId());
-            KINGDOMS.remove(helper.citizenId());
-        }
+        KINGDOMS.entrySet().removeIf(entry -> {
+            if (entry.getValue().equals(kingdomId)) {
+                SHARES.remove(entry.getKey());
+                return true;
+            }
+            return false;
+        });
     }
 
     /**
      * Nothing of the rock of the roads of a kingdom was paid for this second: its miners gave nothing.
      */
     static void idle(UUID kingdomId) {
+        HELPERS.remove(kingdomId);
+        settle(kingdomId, 0, 0);
+        // While the share the roads took fades, the mines still go slower by it.
         if (used(kingdomId) <= 0) {
             forget(kingdomId);
-            HELPERS.remove(kingdomId);
         }
-        settle(kingdomId, 0, 0);
     }
 
     /**

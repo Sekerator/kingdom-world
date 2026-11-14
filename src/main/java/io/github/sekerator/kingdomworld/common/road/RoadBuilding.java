@@ -51,8 +51,10 @@ import java.util.UUID;
  */
 public final class RoadBuilding {
     private static final Logger LOGGER = LogUtils.getLogger();
-    /** Blocks of road placed in the world a second at most, in all. */
-    private static final int PLACE_BUDGET = 256;
+    /** Blocks of the world roads change a second at most, in all. */
+    private static final int PLACE_BUDGET = 512;
+    /** Time the roads take to change the world in a second at most. */
+    private static final long PLACE_NANOS = 3_000_000L;
     /** Work carried over between seconds, by kingdom, in seconds of a builder. */
     private static final Map<UUID, Double> CARRY = new HashMap<>();
     /** Builders of each kingdom seen working on roads in the last second. */
@@ -71,6 +73,7 @@ public final class RoadBuilding {
         RATES.clear();
         WAITING.clear();
         RoadCrews.reset();
+        RoadEarthworks.reset();
     }
 
     /**
@@ -105,7 +108,7 @@ public final class RoadBuilding {
     /**
      * Kingdoms that agreed to the road crossing their land.
      */
-    static Set<UUID> consented(io.github.sekerator.kingdomworld.core.road.RoadState roads, Road road) {
+    public static Set<UUID> consented(io.github.sekerator.kingdomworld.core.road.RoadState roads, Road road) {
         Set<UUID> result = new HashSet<>();
         for (Crossing crossing : roads.crossingsOfRoad(road.id())) {
             if (crossing.status() == Crossing.Status.ACCEPTED) {
@@ -545,22 +548,24 @@ public final class RoadBuilding {
     static void placeLoaded(MinecraftServer server) {
         io.github.sekerator.kingdomworld.core.road.RoadState roads = RoadWork.state(server);
         int budget = PLACE_BUDGET;
+        long deadline = System.nanoTime() + PLACE_NANOS;
         for (Road road : roads.roads()) {
-            if (budget <= 0) {
+            if (budget <= 0 || System.nanoTime() > deadline) {
                 break;
             }
             ServerLevel level = ConstructionWork.level(server, road.dimension());
-            if (level == null || road.levelled()) {
-                // A levelled road is put into the world by its earthworks, which come with the next change.
+            if (level == null || io.github.sekerator.kingdomworld.common.construction.SiteLoader.servingRoad(road.id())) {
+                // A road being laid far from players is the loader's while it is held.
                 continue;
             }
+            RoadEarthworks.tell(server, road);
             Set<UUID> consented = consented(roads, road);
             for (Road.Section section : road.sections()) {
                 if (section.placed() >= section.paid()) {
                     continue;
                 }
-                budget -= placeSection(level, road, section, consented, budget);
-                if (budget <= 0) {
+                budget -= placeSection(level, road, section, consented, budget, deadline);
+                if (budget <= 0 || System.nanoTime() > deadline) {
                     break;
                 }
             }
@@ -573,12 +578,27 @@ public final class RoadBuilding {
      * @return blocks placed
      */
     static int placeSection(ServerLevel level, Road road, Road.Section section, Set<UUID> consented, int budget) {
+        return placeSection(level, road, section, consented, budget, Long.MAX_VALUE);
+    }
+
+    /**
+     * Places paid blocks of a section in order until the budget of changes or the time runs out.
+     *
+     * @param deadline the time from {@link System#nanoTime()} after which no further column is started
+     * @return blocks of the world changed
+     */
+    public static int placeSection(ServerLevel level, Road road, Road.Section section, Set<UUID> consented, int budget, long deadline) {
+        if (road.levelled()) {
+            return placeLevelled(level, road, section, consented, budget, deadline);
+        }
         List<RoadLayout.Block> blocks = road.blocksOf(section);
         int done = 0;
         while (section.placed() < section.paid() && done < budget) {
             RoadLayout.Block block = blocks.get(section.placed());
             BlockPos pos = new BlockPos(block.x(), block.y(), block.z());
-            if (!level.isLoaded(pos) || !level.isLoaded(pos.offset(2, 0, 2)) || !level.isLoaded(pos.offset(-2, 0, -2))) {
+            if (!io.github.sekerator.kingdomworld.common.construction.ChunkHold.loaded(level, pos)
+                    || !io.github.sekerator.kingdomworld.common.construction.ChunkHold.loaded(level, pos.offset(2, 0, 2))
+                    || !io.github.sekerator.kingdomworld.common.construction.ChunkHold.loaded(level, pos.offset(-2, 0, -2))) {
                 break;
             }
             if (!RoadBlocks.allowedAt(level, road, pos, consented)) {
@@ -601,10 +621,59 @@ public final class RoadBuilding {
     }
 
     /**
+     * Lays paid columns of a section of a levelled road in order, each with its earthworks, while its place is loaded, its owner
+     * lets the road be there and nothing holds it up.
+     *
+     * @return blocks of the world changed
+     */
+    static int placeLevelled(ServerLevel level, Road road, Road.Section section, Set<UUID> consented, int budget, long deadline) {
+        List<RoadLayout.Block> blocks = road.blocksOf(section);
+        int changes = 0;
+        int done = 0;
+        while (section.placed() < section.paid() && changes < budget && System.nanoTime() <= deadline) {
+            RoadLayout.Block block = blocks.get(section.placed());
+            RoadEarthworks.Result result = RoadEarthworks.place(level, road, section, block, consented);
+            if (result.hold() != RoadEarthworks.Hold.NONE) {
+                // It waits: for its place to load, for consent, or for what holds it up to be seen to.
+                break;
+            }
+            section.markPlaced();
+            done++;
+            changes += Math.max(1, result.changes());
+        }
+        if (section.placedAll() && !section.pool().isEmpty()) {
+            RouteCell first = road.cells().get(section.firstCell());
+            RoadBlocks.giveBack(level, section.builder(), new BlockPos(first.x(), first.y(), first.z()), section.takePool());
+        }
+        if (done > 0) {
+            RoadWork.state(level.getServer()).changed();
+            RoadSpeed.invalidate();
+            if (placedAll(road)) {
+                settleCredit(level.getServer(), road);
+                RoadEarthworks.forget(road.id());
+            }
+        }
+        return changes;
+    }
+
+    /**
+     * Whether every block of a road is in the world.
+     */
+    static boolean placedAll(Road road) {
+        for (Road.Section section : road.sections()) {
+            if (!section.done() || !section.placedAll()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Gives the paid items of a road that is given up back to the storehouses of their builders.
      */
     static void giveBackPools(MinecraftServer server, Road road) {
         settleCredit(server, road);
+        RoadEarthworks.forget(road.id());
         ServerLevel level = ConstructionWork.level(server, road.dimension());
         if (level == null) {
             return;
@@ -695,7 +764,11 @@ public final class RoadBuilding {
         int placed = 0;
         for (Road.Section section : road.sections()) {
             for (RoadLayout.Block block : road.blocksOf(section)) {
-                level.getChunk(new BlockPos(block.x(), block.y(), block.z()));
+                for (int dx = -2; dx <= 2; dx += 2) {
+                    for (int dz = -2; dz <= 2; dz += 2) {
+                        level.getChunk(new BlockPos(block.x() + dx, block.y(), block.z() + dz));
+                    }
+                }
             }
             placed += placeSection(level, road, section, consented, Integer.MAX_VALUE);
         }

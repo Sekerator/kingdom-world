@@ -718,6 +718,12 @@ class TranslationKeysTest {
                 : io.github.sekerator.kingdomworld.core.road.RoadLayout.Material.values()) {
             used.add("kingdomworld.road.material." + material.id());
         }
+        for (io.github.sekerator.kingdomworld.common.road.RoadEarthworks.Hold hold
+                : io.github.sekerator.kingdomworld.common.road.RoadEarthworks.Hold.values()) {
+            if (hold != io.github.sekerator.kingdomworld.common.road.RoadEarthworks.Hold.NONE) {
+                used.add("kingdomworld.road.hold." + hold.id());
+            }
+        }
         for (String action : List.of("wall_palisade", "wall_stone", "gate_here")) {
             used.add("kingdomworld.screen.roads.city_action." + action);
             used.add("kingdomworld.screen.roads.city_action." + action + ".hint");

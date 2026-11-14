@@ -241,14 +241,14 @@ public final class RoadBlocks {
         return placed;
     }
 
-    private static BlockState stateOf(Item item) {
+    static BlockState stateOf(Item item) {
         return item instanceof BlockItem blockItem ? blockItem.getBlock().defaultBlockState() : Blocks.AIR.defaultBlockState();
     }
 
     /**
      * Turns grass or earth into a path, as a shovel does; anything else stays.
      */
-    private static boolean makePath(ServerLevel level, BlockPos pos) {
+    static boolean makePath(ServerLevel level, BlockPos pos) {
         BlockState state = level.getBlockState(pos);
         if (state.is(Blocks.DIRT_PATH)) {
             return true;
@@ -268,7 +268,7 @@ public final class RoadBlocks {
     /**
      * Replaces the ground at a place with a block of road: the ground's drops go to the storehouses.
      */
-    private static boolean replace(ServerLevel level, UUID builder, BlockPos pos, Item item) {
+    static boolean replace(ServerLevel level, UUID builder, BlockPos pos, Item item) {
         BlockState state = level.getBlockState(pos);
         BlockState target = stateOf(item);
         if (state.is(target.getBlock())) {
@@ -294,7 +294,7 @@ public final class RoadBlocks {
     /**
      * Grass, flowers and snow on top of a block of road go; their drops go to the storehouses.
      */
-    private static void clearAbove(ServerLevel level, UUID builder, BlockPos pos) {
+    static void clearAbove(ServerLevel level, UUID builder, BlockPos pos) {
         for (int up = 1; up <= 2; up++) {
             BlockPos above = pos.above(up);
             BlockState state = level.getBlockState(above);
@@ -315,7 +315,7 @@ public final class RoadBlocks {
     /**
      * Whether the owner of the land at a block of road let the road be built there.
      */
-    static boolean allowedAt(ServerLevel level, io.github.sekerator.kingdomworld.core.road.Road road, BlockPos pos,
+    public static boolean allowedAt(ServerLevel level, io.github.sekerator.kingdomworld.core.road.Road road, BlockPos pos,
                              java.util.Set<UUID> consented) {
         UUID owner = KingdomWorldApi.ownerAt(level, pos);
         return owner == null || owner.equals(road.kingdomId()) || consented.contains(owner)

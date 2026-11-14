@@ -59,6 +59,8 @@ public final class SiteLoader {
     private static final long STEP_NANOS = 2_000_000L;
     /** Columns of a wall held at once. */
     static final int WALL_COLUMNS = 24;
+    /** Blocks of the middle of a road whose width is held at once. */
+    static final int ROAD_CELLS = 24;
     /** Ticks without progress after which a loaded place counts as done: what is left waits for something else. */
     private static final int IDLE_TICKS = 100;
 
@@ -67,6 +69,8 @@ public final class SiteLoader {
     private static final Map<Long, Long> PENDING_SINCE = new HashMap<>();
     /** The same for the paid columns of walls, by wall. */
     private static final Map<Long, Long> WALL_SINCE = new HashMap<>();
+    /** The same for the paid blocks of roads, by road. */
+    private static final Map<Long, Long> ROAD_SINCE = new HashMap<>();
     private static Target target;
     /** Steps put in a tick, worked out from the time they take. */
     private static double steps = 32;
@@ -108,6 +112,14 @@ public final class SiteLoader {
     public static boolean servingWall(long wallId) {
         Target current = target;
         return current != null && !current.releasing && current.ref.kind() == SitePick.Kind.WALL && current.ref.id() == wallId;
+    }
+
+    /**
+     * Whether the road is the place served now: the roads leave the laying of its blocks to this loader while it is held.
+     */
+    public static boolean servingRoad(long roadId) {
+        Target current = target;
+        return current != null && !current.releasing && current.ref.kind() == SitePick.Kind.ROAD && current.ref.id() == roadId;
     }
 
     /**
@@ -187,6 +199,7 @@ public final class SiteLoader {
             case CONSTRUCTION -> construction(server, current);
             case WALL -> wall(server, current);
             case DROPS -> drops(server, current);
+            case ROAD -> road(server, current);
         };
         if (done) {
             // A place whose steps wait for something waits its turn again, so that it is not loaded over and over before every
@@ -275,6 +288,38 @@ public final class SiteLoader {
             WALL_SINCE.remove(wall.id());
         }
         // The next columns paid for lie beyond the chunks held, or none are left: another place is picked.
+        return true;
+    }
+
+    private static boolean road(MinecraftServer server, Target current) {
+        Optional<Road> found = RoadWork.state(server).road(current.ref.id());
+        if (found.isEmpty()) {
+            return true;
+        }
+        Road road = found.get();
+        Set<UUID> consented = io.github.sekerator.kingdomworld.common.road.RoadBuilding.consented(RoadWork.state(server), road);
+        long start = System.nanoTime();
+        int budget = Math.max(16, (int) steps * 4);
+        int done = 0;
+        for (Road.Section section : road.sections()) {
+            if (done >= budget) {
+                break;
+            }
+            if (section.placed() < section.paid()) {
+                done += io.github.sekerator.kingdomworld.common.road.RoadBuilding.placeSection(current.hold.level(), road, section, consented,
+                        budget - done, start + STEP_NANOS);
+            }
+        }
+        adapt((System.nanoTime() - start) / 4);
+        if (done > 0) {
+            current.idle = 0;
+            return false;
+        }
+        if (unplaced(road) == 0) {
+            ROAD_SINCE.remove(road.id());
+        }
+        // A column in the way does not keep the place: the road waits its turn again rather than being loaded over and over.
+        current.stuck = !io.github.sekerator.kingdomworld.common.road.RoadEarthworks.blocked(road.id()).isEmpty();
         return true;
     }
 
@@ -378,6 +423,31 @@ public final class SiteLoader {
             places.put(candidate.ref(), new Place(wall.dimension(), chunks, Set.of()));
         }
         WALL_SINCE.keySet().retainAll(walls);
+        Set<Long> roadIds = new java.util.HashSet<>();
+        for (Road road : RoadWork.state(server).roads()) {
+            roadIds.add(road.id());
+            ServerLevel level = ConstructionWork.level(server, road.dimension());
+            int unplaced = unplaced(road);
+            // The roads of the kingdoms of the world are laid as before, near players only.
+            if (level == null || unplaced == 0 || NpcWork.isNpc(server, road.kingdomId()) || road.paused()) {
+                ROAD_SINCE.remove(road.id());
+                continue;
+            }
+            Set<Long> chunks = nextColumns(road);
+            if (chunks.isEmpty() || loadedAll(level, chunks) || !nextColumnsAllowed(server, level, road)) {
+                continue;
+            }
+            int remaining = 0;
+            for (Road.Section section : road.sections()) {
+                remaining += section.units() - section.placed();
+            }
+            long since = ROAD_SINCE.computeIfAbsent(road.id(), id -> 0L);
+            SitePick.Candidate candidate = new SitePick.Candidate(SitePick.Kind.ROAD, road.id(), road.kingdomId(), true, unplaced, remaining,
+                    since, false);
+            list.add(candidate);
+            places.put(candidate.ref(), new Place(road.dimension(), chunks, Set.of()));
+        }
+        ROAD_SINCE.keySet().retainAll(roadIds);
         Map<String, Map<Long, ConstructionBook.Drop>> oldest = new HashMap<>();
         for (ConstructionBook.Drop drop : book.drops()) {
             oldest.computeIfAbsent(drop.dimension(), key -> new HashMap<>()).merge(drop.chunk(), drop,
@@ -476,6 +546,62 @@ public final class SiteLoader {
     }
 
     /**
+     * Blocks of a road paid for and not yet laid.
+     */
+    static int unplaced(Road road) {
+        int sum = 0;
+        for (Road.Section section : road.sections()) {
+            sum += Math.max(0, section.paid() - section.placed());
+        }
+        return sum;
+    }
+
+    /**
+     * The chunks of the width of the next blocks of the middle of a road paid for, {@value #ROAD_CELLS} at most, each widened by
+     * two blocks: laying a block of a levelled road looks at its neighbours.
+     */
+    static Set<Long> nextColumns(Road road) {
+        Set<Long> chunks = new LinkedHashSet<>();
+        Set<Integer> cells = new java.util.HashSet<>();
+        for (Road.Section section : road.sections()) {
+            List<io.github.sekerator.kingdomworld.core.road.RoadLayout.Block> blocks = road.blocksOf(section);
+            for (int i = section.placed(); i < section.paid() && i < blocks.size(); i++) {
+                io.github.sekerator.kingdomworld.core.road.RoadLayout.Block block = blocks.get(i);
+                if (!cells.contains(block.cell()) && cells.size() >= ROAD_CELLS) {
+                    return chunks;
+                }
+                cells.add(block.cell());
+                chunks.addAll(ChunkHold.ringed(block.x() - 1, block.z() - 1, block.x() + 1, block.z() + 1));
+            }
+        }
+        return chunks;
+    }
+
+    /**
+     * Whether the next blocks of a road paid for lie where it may be laid: on the land of its builders, of nobody, or of a kingdom
+     * that agreed.
+     */
+    static boolean nextColumnsAllowed(MinecraftServer server, ServerLevel level, Road road) {
+        Set<UUID> consented = io.github.sekerator.kingdomworld.common.road.RoadBuilding.consented(RoadWork.state(server), road);
+        Set<Integer> cells = new java.util.HashSet<>();
+        for (Road.Section section : road.sections()) {
+            List<io.github.sekerator.kingdomworld.core.road.RoadLayout.Block> blocks = road.blocksOf(section);
+            for (int i = section.placed(); i < section.paid() && i < blocks.size(); i++) {
+                io.github.sekerator.kingdomworld.core.road.RoadLayout.Block block = blocks.get(i);
+                if (!cells.contains(block.cell()) && cells.size() >= ROAD_CELLS) {
+                    return true;
+                }
+                cells.add(block.cell());
+                if (!io.github.sekerator.kingdomworld.common.road.RoadBlocks.allowedAt(level, road, new BlockPos(block.x(), block.y(), block.z()),
+                        consented)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
      * Lets every held chunk go and forgets everything, when the server stops.
      */
     static void reset() {
@@ -487,6 +613,7 @@ public final class SiteLoader {
         PICK.clear();
         PENDING_SINCE.clear();
         WALL_SINCE.clear();
+        ROAD_SINCE.clear();
     }
 
     /**
