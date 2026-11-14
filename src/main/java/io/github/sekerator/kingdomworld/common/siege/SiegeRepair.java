@@ -292,7 +292,8 @@ public final class SiegeRepair {
                     done++;
                 }
             }
-            if (wanted == null || there.equals(wanted)) {
+            // A work post showing its profession is the post of the template: its look is no damage.
+            if (wanted == null || io.github.sekerator.kingdomworld.common.construction.TemplateBlocks.sameBuilt(there, wanted)) {
                 changed |= damage.mended(kingdom, entry.dimension(), entry.pos());
                 continue;
             }

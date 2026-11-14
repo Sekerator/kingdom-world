@@ -64,6 +64,7 @@
 - **Исправлено: трон на старом месте.** Если старый трон убрали командой или другим модом, а король ставит перенесённый трон ровно на его место, этот трон больше не убирается вместе со «старым».
 - **Исправлено: работник без инструмента относит ношу.** Работник, у которого есть ноша, но нет нужного инструмента, сначала относит ношу на склад, а не держит её, пока не найдётся инструмент.
 - **Исправлено: знамёна игроков.** Флагом королевства на месте флага шаблона становится только простое красное знамя (и знамя цвета ткани королевства мира), как и задумано; простое знамя другого цвета остаётся знаменем игрока и не пропадает.
+- **Исправлено: пост после осады.** Починка города после осады не ставит заново целый пост только потому, что он показывает другую профессию, и пост не показывает на миг старую.
 
 ### 1.5.1
 
@@ -300,6 +301,7 @@ A kingdom of players no longer runs into the limits of the server: its beds, its
 - **Fixed: a throne on its old place.** When the old throne was taken away by a command or another mod and the king sets the moved throne up on that very place, this throne is no longer taken away as the old one.
 - **Fixed: a worker without a tool brings in what it carries.** A worker that carries something but has no tool for its work brings it to the storehouses first instead of keeping it until a tool turns up.
 - **Fixed: the banners of players.** Only a plain red banner (and a banner of the cloth of a kingdom of the world) on the place of a flag of a template becomes the flag of the kingdom, as meant; a plain banner of another colour stays the banner of its player and is no longer lost.
+- **Fixed: a post after a siege.** The repair of a city after a siege no longer puts a whole post back only because it shows another profession, so the post no longer shows the old one for a moment.
 
 ### 1.5.1
 
