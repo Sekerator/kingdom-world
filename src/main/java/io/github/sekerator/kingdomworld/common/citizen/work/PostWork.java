@@ -27,8 +27,10 @@ import net.minecraft.world.item.Items;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -247,14 +249,10 @@ public final class PostWork {
             setStatus(server, citizen, ZoneSurveys.zoneStatus(post.pos()));
             return;
         }
-        if (!hasPlaceFor(server, post)) {
-            // Every storehouse is given to other work and the post has no container: nothing is gathered or used up.
-            setStatus(server, citizen, WorkStatus.NO_STOREHOUSE);
-            return;
-        }
         double factor = (post.hasContainer() ? 1.0 : GatheringRules.SELF_CARRY_FACTOR)
                 * io.github.sekerator.kingdomworld.common.economy.EconomySettings.workSpeed(citizen.mood());
         Map<String, Integer> needed = GatheringRules.abstractInputs(rates, 1, interval, factor);
+        double inputShare = 1.0;
         if (!needed.isEmpty()) {
             Map<String, Integer> available = new LinkedHashMap<>();
             for (String id : needed.keySet()) {
@@ -268,14 +266,22 @@ public final class PostWork {
                 return;
             }
             factor *= share;
-            for (Map.Entry<String, Integer> entry : needed.entrySet()) {
-                Item item = item(entry.getKey());
-                if (item != null) {
-                    KingdomStorage.take(server, kingdom, stack -> stack.is(item), (int) Math.ceil(entry.getValue() * share), near);
-                }
-            }
+            inputShare = share;
         }
         GatheringRules.Output output = GatheringRules.abstractOutput(rates, 1, interval, factor, post.progress());
+        List<ItemStack> gathered = stacks(output.items());
+        if (!fits(server, post, gathered)) {
+            // Nowhere to put it all: nothing is gathered, no feed is used up, the post says why.
+            setStatus(server, citizen, KingdomStorage.hasStorehouseFor(server, kingdom, post.professionId()) || loadedContainer(server, post) != null
+                    ? WorkStatus.STORAGE_FULL : WorkStatus.NO_STOREHOUSE);
+            return;
+        }
+        for (Map.Entry<String, Integer> entry : needed.entrySet()) {
+            Item item = item(entry.getKey());
+            if (item != null) {
+                KingdomStorage.take(server, kingdom, stack -> stack.is(item), (int) Math.ceil(entry.getValue() * inputShare), near);
+            }
+        }
         post.setProgress(output.progress());
         boolean lost = false;
         int total = 0;
@@ -303,19 +309,91 @@ public final class PostWork {
     }
 
     /**
+     * Whether what the work of a post gathers has somewhere to go now: the container of the post, if its place is loaded and it has
+     * room for some of the stacks, or a storehouse of its work or a common one with room for some of them.
+     */
+    public static boolean hasPlaceFor(MinecraftServer server, WorkPost post, List<ItemStack> stacks) {
+        PostContainers.Container container = loadedContainer(server, post);
+        if (container != null) {
+            for (ItemStack stack : stacks) {
+                if (!stack.isEmpty() && PostContainers.insertSimulated(container.handler(), stack.copyWithCount(1)).isEmpty()) {
+                    return true;
+                }
+            }
+            if (stacks.isEmpty() && PostContainers.freeSlots(container.handler()) > 0) {
+                return true;
+            }
+        }
+        return KingdomStorage.hasRoomFor(server, post.kingdomId(), post.professionId(), stacks);
+    }
+
+    /**
+     * Whether all the stacks would go where the post's workers bring their harvest, together: the container of the post if its
+     * place is loaded, then the storehouses of its work and the common ones.
+     */
+    public static boolean fits(MinecraftServer server, WorkPost post, List<ItemStack> stacks) {
+        List<ItemStack> rest = new ArrayList<>();
+        PostContainers.Container container = loadedContainer(server, post);
+        if (container == null) {
+            rest.addAll(stacks);
+        } else {
+            net.minecraftforge.items.ItemStackHandler copy = new net.minecraftforge.items.ItemStackHandler(container.handler().getSlots());
+            for (int slot = 0; slot < container.handler().getSlots(); slot++) {
+                copy.setStackInSlot(slot, container.handler().getStackInSlot(slot).copy());
+            }
+            for (ItemStack stack : stacks) {
+                ItemStack left = net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(copy, stack.copy(), false);
+                if (!left.isEmpty()) {
+                    rest.add(left);
+                }
+            }
+        }
+        return rest.isEmpty() || KingdomStorage.fitsFor(server, post.kingdomId(), post.professionId(), rest);
+    }
+
+    /**
+     * The container of a post, only while the place of the post is loaded; {@code null} otherwise. The flag the post keeps of its
+     * container is what was seen last and says nothing of now.
+     */
+    @Nullable
+    static PostContainers.Container loadedContainer(MinecraftServer server, WorkPost post) {
+        ServerLevel level = level(server, post.pos());
+        BlockPos at = new BlockPos(post.pos().x(), post.pos().y(), post.pos().z());
+        if (level == null || !level.isLoaded(at)) {
+            return null;
+        }
+        PostContainers.Container container = PostContainers.find(level, post.pos());
+        post.setHasContainer(container != null);
+        return container;
+    }
+
+    /**
+     * Items by id as stacks no larger than an item stacks.
+     */
+    public static List<ItemStack> stacks(Map<String, Integer> items) {
+        List<ItemStack> result = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : items.entrySet()) {
+            Item item = item(entry.getKey());
+            if (item == null) {
+                continue;
+            }
+            int left = entry.getValue();
+            int max = new ItemStack(item).getMaxStackSize();
+            while (left > 0) {
+                int count = Math.min(left, max);
+                result.add(new ItemStack(item, count));
+                left -= count;
+            }
+        }
+        return result;
+    }
+
+    /**
      * Puts a stack gathered far from players where the post's workers bring their harvest: the post's container
      * if it is loaded, otherwise the storehouses.
      *
      * @return what fit nowhere
      */
-    /**
-     * Whether what the work of a post gathers has somewhere to go: the container of the post, a storehouse of its work or a common
-     * one.
-     */
-    public static boolean hasPlaceFor(MinecraftServer server, WorkPost post) {
-        return post.hasContainer() || KingdomStorage.hasStorehouseFor(server, post.kingdomId(), post.professionId());
-    }
-
     public static ItemStack deliver(MinecraftServer server, WorkPost post, ItemStack stack) {
         ItemStack rest = stack;
         ServerLevel level = level(server, post.pos());

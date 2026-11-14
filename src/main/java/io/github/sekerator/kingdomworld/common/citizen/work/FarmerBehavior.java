@@ -62,21 +62,24 @@ public final class FarmerBehavior implements ProfessionBehavior {
             return;
         }
         var farm = PostWork.postOf(server, citizen);
-        if (farm.isPresent() ? !PostWork.hasPlaceFor(server, farm.get())
-                : !KingdomStorage.hasStorehouseFor(server, citizen.kingdomId(), citizen.professionId())) {
-            // Every storehouse is given to other work: the harvest waits in the fields rather than rot there.
-            PostWork.setStatus(server, citizen, io.github.sekerator.kingdomworld.core.citizen.WorkStatus.NO_STOREHOUSE);
-            return;
-        }
         double progress = citizen.workProgress() + CitizenNeeds.farmOutput(citizen.workCapacity(), intervalTicks)
                 * io.github.sekerator.kingdomworld.common.economy.EconomySettings.workSpeed(citizen.mood());
         int whole = (int) Math.min(Math.floor(progress), 64.0 * 9);
+        List<ItemStack> harvest = PostWork.stacks(Map.of(citizen.workProduct(), whole));
+        if (farm.isPresent() ? !PostWork.fits(server, farm.get(), harvest)
+                : !KingdomStorage.fitsFor(server, citizen.kingdomId(), citizen.professionId(), harvest)) {
+            // Nowhere to bring all of the harvest: it waits in the fields rather than rot there, and the farmer says why.
+            PostWork.setStatus(server, citizen, KingdomStorage.hasStorehouseFor(server, citizen.kingdomId(), citizen.professionId())
+                    ? io.github.sekerator.kingdomworld.core.citizen.WorkStatus.STORAGE_FULL
+                    : io.github.sekerator.kingdomworld.core.citizen.WorkStatus.NO_STOREHOUSE);
+            return;
+        }
         citizen.setWorkProgress(progress - whole);
         int left = whole;
-        var post = PostWork.postOf(server, citizen);
+        var post = farm;
         while (left > 0) {
             int count = Math.min(left, item.getMaxStackSize(new ItemStack(item)));
-            // What the storehouses cannot take rots in the fields.
+            // The room was checked above: everything goes in.
             if (post.isPresent()) {
                 PostWork.deliver(server, post.get(), new ItemStack(item, count));
             } else {

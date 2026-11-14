@@ -29,6 +29,7 @@ import java.util.function.ToIntFunction;
  * not be saved.
  */
 public final class KingdomStorage {
+    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
 
     /** The storehouses of every kingdom, as sorted out in {@link #byKingdom}. */
     private static Map<UUID, List<StorehouseInventory>> sorted = Map.of();
@@ -232,6 +233,20 @@ public final class KingdomStorage {
             }
         }
         return known.size() == accepts.professions().size() ? accepts : StorehouseRules.Accepts.of(known);
+    }
+
+    /**
+     * Whether a storehouse of the profession or a common one has room for some of the stacks (any empty slot when no stacks are
+     * given).
+     */
+    public static boolean hasRoomFor(MinecraftServer server, UUID kingdomId, String profession, List<ItemStack> stacks) {
+        for (StorehouseInventory inventory : storehouses(server, kingdomId, null)) {
+            if (inventory.takesIn() && acceptsOf(inventory).kindFor(profession) != StorehouseRules.Kind.OTHERS
+                    && hasRoomFor(inventory, stacks)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -495,7 +510,19 @@ public final class KingdomStorage {
             WorldPos at = inventory.pos();
             UUID owner = KingdomSavedData.get(server).state().territory().ownerOf(at.dimension(), at.chunk());
             if (owner != null) {
-                insert(server, owner, rest, at);
+                rest = insert(server, owner, rest, at);
+            }
+        }
+        if (!rest.isEmpty()) {
+            // No storehouse has room for it: it lies at the storehouse it came from rather than be lost.
+            WorldPos at = inventory.pos();
+            net.minecraft.server.level.ServerLevel level = io.github.sekerator.kingdomworld.common.citizen.work.PostWork.level(server, at);
+            net.minecraft.core.BlockPos place = new net.minecraft.core.BlockPos(at.x(), at.y(), at.z());
+            if (level != null && level.isLoaded(place)) {
+                net.minecraft.world.Containers.dropItemStack(level, at.x() + 0.5, at.y() + 1.0, at.z() + 0.5, rest);
+            } else {
+                LOGGER.warn("{} taken by a plan that could not be carried out found no room to go back to at {}; it is lost", rest,
+                        at.coordinates());
             }
         }
     }

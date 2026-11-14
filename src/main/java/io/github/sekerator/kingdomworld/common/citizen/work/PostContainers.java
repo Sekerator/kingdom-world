@@ -72,6 +72,13 @@ public final class PostContainers {
         return ItemHandlerHelper.insertItemStacked(handler, stack, false);
     }
 
+    /**
+     * What of a stack a container would not take, without putting anything in.
+     */
+    public static ItemStack insertSimulated(IItemHandler handler, ItemStack stack) {
+        return ItemHandlerHelper.insertItemStacked(handler, stack, true);
+    }
+
     public static int items(IItemHandler handler) {
         int count = 0;
         for (int slot = 0; slot < handler.getSlots(); slot++) {
