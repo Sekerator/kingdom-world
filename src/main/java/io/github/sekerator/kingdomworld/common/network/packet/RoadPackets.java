@@ -149,6 +149,39 @@ public final class RoadPackets {
     }
 
     /**
+     * Client to server: found a city in a chunk of the sender's dimension, from the map: a town hall of the storehouses (or one
+     * ordered from the workshops) is set up there, and with {@code withPost} a post of builders as well.
+     *
+     * @param name the name of the city, empty for one after the kingdom
+     */
+    public record Found(UUID kingdomId, int chunkX, int chunkZ, String name, boolean withPost) {
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeUUID(kingdomId);
+            buf.writeVarInt(chunkX);
+            buf.writeVarInt(chunkZ);
+            buf.writeUtf(name, io.github.sekerator.kingdomworld.core.road.City.MAX_NAME);
+            buf.writeBoolean(withPost);
+        }
+
+        public static Found decode(FriendlyByteBuf buf) {
+            return new Found(buf.readUUID(), buf.readVarInt(), buf.readVarInt(), buf.readUtf(io.github.sekerator.kingdomworld.core.road.City.MAX_NAME),
+                    buf.readBoolean());
+        }
+
+        public static void handle(Found message, Supplier<NetworkEvent.Context> context) {
+            ServerPlayer sender = context.get().getSender();
+            if (!ServerRequestGuard.admit(sender, PlanRequest.POLICY)
+                    || !ServerRequestGuard.requireRange(sender, PlanRequest.POLICY, "chunkX", message.chunkX(), -1_875_000, 1_875_000)
+                    || !ServerRequestGuard.requireRange(sender, PlanRequest.POLICY, "chunkZ", message.chunkZ(), -1_875_000, 1_875_000)
+                    || !ServerRequestGuard.requireLength(sender, PlanRequest.POLICY, "name", message.name(),
+                    io.github.sekerator.kingdomworld.core.road.City.MAX_NAME)) {
+                return;
+            }
+            RoadActions.handleFound(sender, message);
+        }
+    }
+
+    /**
      * Server to client: the plan of a road, or why there is none.
      */
     public record PlanResponse(RoadViews.PlanView view) {

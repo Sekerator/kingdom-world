@@ -167,7 +167,8 @@ public final class RoadActions {
             }
         }
         return Optional.of(new RoadViews.RoadTabView(kingdomId, canManage, canOrder, RoadBuilding.freeBuilders(server, kingdomId).size(),
-                rules.maxCities(), rules.maxRoads(), cities, roadRows, crossings, camps, risks, squads));
+                rules.maxCities(), rules.maxRoads(), cities, roadRows, crossings, camps, risks, squads, rules.minCityDistance(), rules.townPeople(),
+                rules.townBuildings(), rules.cityPeople(), rules.cityBuildings()));
     }
 
     private static int countRoads(RoadState roads, Endpoint.Kind kind, long city, @Nullable UUID kingdom) {
@@ -429,6 +430,20 @@ public final class RoadActions {
                 confirm.mode(), made);
         KingdomActions.reply(player, outcome.ok() ? KingdomActions.Feedback.ok(made[0].status() == Road.Status.WAITING_CONSENT
                 ? KEY + "planned_waiting" : KEY + "planned", made[0].id()) : KingdomActions.Feedback.error(outcome.error()));
+    }
+
+    /**
+     * A city founded from the map: the order is taken at once, the town hall set up when its turn comes.
+     */
+    public static void handleFound(ServerPlayer player, RoadPackets.Found found) {
+        Outcome outcome = io.github.sekerator.kingdomworld.common.construction.RemoteHalls.order(player.server, player.getUUID(), found.kingdomId(),
+                io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(player.level()), found.chunkX(), found.chunkZ(), found.name(),
+                found.withPost());
+        KingdomActions.reply(player, outcome.ok() ? KingdomActions.Feedback.ok("kingdomworld.commission.founding")
+                : KingdomActions.Feedback.error(outcome.error()));
+        if (outcome.ok()) {
+            sendTab(player, found.kingdomId());
+        }
     }
 
     /**

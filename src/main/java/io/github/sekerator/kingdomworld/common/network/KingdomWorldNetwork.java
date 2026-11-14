@@ -356,6 +356,8 @@ public final class KingdomWorldNetwork {
                 ConstructionPackets.Commission::decode, ConstructionPackets.Commission::handle);
         add(id++, ConstructionPackets.CommissionCancel.class, NetworkDirection.PLAY_TO_SERVER, ConstructionPackets.CommissionCancel::encode,
                 ConstructionPackets.CommissionCancel::decode, ConstructionPackets.CommissionCancel::handle);
+        add(id++, RoadPackets.Found.class, NetworkDirection.PLAY_TO_SERVER, RoadPackets.Found::encode, RoadPackets.Found::decode,
+                RoadPackets.Found::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

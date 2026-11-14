@@ -21,6 +21,20 @@ bricks at the bottom. Wool of any color will do.
 4. The kingdom hears "City ... founded at ...". If no city can be founded there, the town hall goes straight
   back into your inventory with the same name, and the chat tells why.
 
+### Founding from the map
+
+There is no need to go there: the "Found a city" button in the overview of the Roads tab opens the atlas. The land of
+others is shaded on it, and frames of the least distance between cities are drawn around cities and capitals: no city
+is founded inside a frame. Click a chunk of your land, type a name (empty: after the kingdom) and leave "With a builders'
+post" on to have a post set up by the town hall and a builder hired at once. "Found" sends the order and takes you back to
+the throne.
+
+When the turn of the order comes, the server takes a town hall from the storehouses (none: it orders one from the
+workshops and waits; if the workshops do not make it, the list of orders says "put a town hall into a storehouse"), loads
+the chunk for a while, sets the town hall on a free place nearest the middle of the chunk (natural ground, three blocks of
+air over it, no road and no construction) and founds the city. A captured village without a town hall or city is founded
+the same way: by a click on it.
+
 ### Limits
 
 - The limit of cities of a kingdom of players, besides its capital: {cfg:roads.maxCities}. There is none by default:

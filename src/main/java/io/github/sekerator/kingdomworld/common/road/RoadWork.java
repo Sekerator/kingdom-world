@@ -124,6 +124,24 @@ public final class RoadWork {
     // ---------------------------------------------------------------- cities
 
     /**
+     * Whether a city of a kingdom may be founded at a place by the data: the right of construction, the land of the kingdom and
+     * the distance to the other cities and capitals, as when a town hall is placed there.
+     */
+    public static Outcome checkFounding(MinecraftServer server, @Nullable UUID actor, UUID kingdomId, String dimension, int x, int z) {
+        if (KingdomWorldApi.kingdom(server, kingdomId).isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (!mayManage(server, actor, kingdomId)) {
+            return Outcome.fail(KingdomError.NO_PERMISSION);
+        }
+        if (!kingdomId.equals(KingdomWorldApi.state(server).territory().ownerOf(dimension,
+                io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(x >> 4, z >> 4)))) {
+            return Outcome.fail(KingdomError.CONSTRUCTION_OUTSIDE_LAND);
+        }
+        return state(server).checkCity(kingdomId, dimension, x, z, capitals(server, dimension), RoadSettings.rulesFor(server, kingdomId));
+    }
+
+    /**
      * Founds a city.
      *
      * @param actor the player founding it, who needs the right to run construction; {@code null} for an operator

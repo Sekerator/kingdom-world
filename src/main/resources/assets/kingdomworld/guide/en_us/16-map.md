@@ -31,6 +31,8 @@ On hover the bottom shows which chunk it is (and its blocks), whose land it is a
 - **Looking**: the key K or the atlas.
 - **Editing land**: the "Territory" button of the throne screen, titled "Land of ..." (see [Claiming and releasing land](claiming)).
 - **Planning a road**: the "Plan a road" button in the Roads tab (see [Roads](roads)).
+- **Founding a city**: the "Found a city" button in the Roads tab. The land of others is shaded, frames of the distance
+  are drawn around cities, a click on your chunk chooses the place of the town hall, a right click resets (see [Cities](cities)).
 - **Army**: the "Army" button on the map.
 
 ### How the map knows the land

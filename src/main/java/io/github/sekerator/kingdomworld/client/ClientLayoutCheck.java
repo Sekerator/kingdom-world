@@ -1714,6 +1714,15 @@ final class ClientLayoutCheck {
             screen.showForCheck(1.0, -0.5, 9.0, null, claimError, true);
             return screen;
         }));
+        // Founding a city from the map: the land of others shaded, the distance kept around cities, a chunk chosen, a long name.
+        cases.add(new Case("map-found", () -> {
+            fillMapData();
+            KingdomView founding = view(KingdomView.Relation.MEMBER, Role.KING);
+            KingdomMapScreen screen = KingdomMapScreen.forFounding(null, founding, 112);
+            screen.showForCheck(1.0, -0.5, 9.0, null, Component.translatable("kingdomworld.screen.map.found.too_close", 112), true);
+            screen.showFoundingForCheck(0, 0, "Новый Верхнеполянский Городок", true);
+            return screen;
+        }));
         cases.add(new Case("confirm-dissolve", () -> new ConfirmScreen(yes -> {
         }, Component.translatable("kingdomworld.screen.throne.confirm_title"),
                 Component.translatable("kingdomworld.screen.throne.dissolve.confirm", LONG_KINGDOM))));

@@ -123,28 +123,85 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     /** Rows of the buttons of the army: two on a narrow screen, so that the words fit. */
     private int armyRows = 1;
 
+    /** The screen the atlas goes back to when it is closed (the throne it was opened from), or {@code null} for the game. */
+    @Nullable
+    private final net.minecraft.client.gui.screens.Screen parent;
+    /** The kingdom a city is founded for from the map, or {@code null}. */
+    @Nullable
+    private final KingdomView founding;
+    /** The least distance between cities along x or z, in blocks, drawn around every city while founding. */
+    private int cityDistance = 112;
+    /** The chunk the town hall of the city founded stands in, or {@code null}. */
+    private int[] foundChunk;
+    private String foundName = "";
+    private boolean foundPost = true;
+    private int foundRows = 1;
+
     /**
      * @param editing the kingdom whose land is edited, or {@code null} to only look
      */
     public KingdomMapScreen(@Nullable KingdomView editing) {
-        this(editing, null);
+        this(editing, null, null, null);
     }
 
-    private KingdomMapScreen(@Nullable KingdomView editing, @Nullable KingdomView planning) {
+    private KingdomMapScreen(@Nullable KingdomView editing, @Nullable KingdomView planning, @Nullable KingdomView founding,
+                             @Nullable net.minecraft.client.gui.screens.Screen parent) {
         super(Component.translatable("kingdomworld.screen.map.title"));
         this.editing = editing != null && editing.can(Permission.TERRITORY) ? editing : null;
         this.planning = planning;
+        this.founding = founding;
+        this.parent = parent;
     }
 
     /**
      * The atlas for planning a road of a kingdom: two points, the way the server finds, its cost, and building it.
      */
     public static KingdomMapScreen forRoads(KingdomView view) {
-        return new KingdomMapScreen(null, view);
+        return forRoads(null, view);
+    }
+
+    /**
+     * The atlas for planning a road, going back to the screen it was opened from.
+     */
+    public static KingdomMapScreen forRoads(@Nullable net.minecraft.client.gui.screens.Screen parent, KingdomView view) {
+        return new KingdomMapScreen(null, view, null, parent);
+    }
+
+    /**
+     * The atlas for founding a city: a chunk of the land of the kingdom chosen, a name and whether a post of builders comes with
+     * it; the land of others is shaded and the distance the server keeps between cities drawn around every city.
+     *
+     * @param cityDistance the least distance between cities along x or z, in blocks
+     */
+    public static KingdomMapScreen forFounding(@Nullable net.minecraft.client.gui.screens.Screen parent, KingdomView view, int cityDistance) {
+        KingdomMapScreen screen = new KingdomMapScreen(null, null, view, parent);
+        screen.cityDistance = Math.max(0, cityDistance);
+        return screen;
+    }
+
+    @Override
+    public void onClose() {
+        if (parent != null && minecraft != null) {
+            minecraft.setScreen(parent);
+            return;
+        }
+        super.onClose();
+    }
+
+    /**
+     * Shows a chunk chosen for a city, its name and its post, used by the client self-check.
+     */
+    public void showFoundingForCheck(int chunkX, int chunkZ, String name, boolean post) {
+        foundChunk = new int[]{chunkX, chunkZ};
+        foundName = name;
+        foundPost = post;
     }
 
     @Override
     public String checkName() {
+        if (founding != null) {
+            return "map/found";
+        }
         if (army) {
             return armyOrder != null ? "map/army-order" : "map/army";
         }
@@ -656,7 +713,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         int doneX = width - PAD - doneWidth;
         int centerButtonX = doneX - 2 - centerWidth;
         buttonsLeft = centerButtonX;
-        if (editing == null && planning == null) {
+        if (editing == null && planning == null && founding == null) {
             Component armyLabel = Component.translatable("kingdomworld.screen.map.army." + (army ? "lands" : "button"));
             int armyWidth = buttonWidth(Component.translatable("kingdomworld.screen.map.army.button"),
                     Component.translatable("kingdomworld.screen.map.army.lands"));
@@ -712,7 +769,10 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         if (planning != null) {
             initPlanning();
         }
-        if (editing == null && planning == null && !army) {
+        if (founding != null) {
+            initFounding();
+        }
+        if (editing == null && planning == null && founding == null && !army) {
             if (!offersAsked && minecraft != null && minecraft.getConnection() != null) {
                 offersAsked = true;
                 KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.ProvinceSalePackets.Request());
@@ -777,6 +837,138 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
         plan = null;
         if (minecraft != null) {
             rebuildWidgets();
+        }
+    }
+
+    private Component foundPostLabel() {
+        return Component.translatable("kingdomworld.screen.map.found.post." + (foundPost ? "on" : "off"));
+    }
+
+    /**
+     * The name of the city, whether a post of builders comes with it, and founding it, along the bottom of the map: in two rows
+     * when one does not hold them.
+     */
+    private void initFounding() {
+        Component go = Component.translatable("kingdomworld.screen.map.found.go");
+        Component reset = Component.translatable("kingdomworld.screen.map.road.reset");
+        int postWidth = buttonWidth(Component.translatable("kingdomworld.screen.map.found.post.on"),
+                Component.translatable("kingdomworld.screen.map.found.post.off"));
+        int goWidth = buttonWidth(go);
+        int resetWidth = buttonWidth(reset);
+        int buttons = postWidth + 2 + goWidth + 2 + resetWidth;
+        int available = mapRight() - mapLeft() - 8;
+        int nameWidth = Math.min(160, Math.max(80, available - buttons - 2));
+        foundRows = nameWidth + 2 + buttons <= available ? 1 : 2;
+        int y = mapBottom() - 20;
+        int x = mapLeft() + 4;
+        int nameY = foundRows == 2 ? y - 18 : y;
+        net.minecraft.client.gui.components.EditBox name = new net.minecraft.client.gui.components.EditBox(font, x, nameY, foundRows == 2
+                ? Math.min(available, 200) : nameWidth, 16, Component.translatable("kingdomworld.screen.map.found.name"));
+        name.setMaxLength(io.github.sekerator.kingdomworld.core.road.City.MAX_NAME);
+        name.setHint(Component.translatable("kingdomworld.screen.map.found.name").withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
+        name.setValue(foundName);
+        name.setResponder(value -> foundName = value);
+        name.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomworld.screen.map.found.name.hint")));
+        addRenderableWidget(name);
+        if (foundRows == 1) {
+            x += nameWidth + 2;
+        }
+        Button post = addRenderableWidget(Button.builder(foundPostLabel(), button -> {
+            foundPost = !foundPost;
+            button.setMessage(foundPostLabel());
+        }).bounds(x, y, postWidth, 16).build());
+        post.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomworld.screen.map.found.post.hint")));
+        x += postWidth + 2;
+        Button found = addRenderableWidget(Button.builder(go, button -> {
+            if (foundChunk != null && minecraft != null && minecraft.getConnection() != null) {
+                KingdomWorldNetwork.sendToServer(new io.github.sekerator.kingdomworld.common.network.packet.RoadPackets.Found(founding.id(),
+                        foundChunk[0], foundChunk[1], foundName.strip(), foundPost));
+                onClose();
+            }
+        }).bounds(x, y, goWidth, 16).build());
+        found.active = foundChunk != null && founding.can(Permission.MANAGE_CONSTRUCTION);
+        found.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomworld.screen.map.found.go.hint")));
+        x += goWidth + 2;
+        addRenderableWidget(Button.builder(reset, button -> {
+            foundChunk = null;
+            status = Component.empty();
+            rebuildWidgets();
+        }).bounds(x, y, resetWidth, 16).build());
+    }
+
+    /**
+     * Whether a city may stand in a chunk by what the atlas knows: no city or capital of any kingdom closer than the distance
+     * the server keeps, along x or z. The server checks again.
+     */
+    private boolean farFromCities(int chunkX, int chunkZ) {
+        String dimension = dimension();
+        int x = chunkX * 16 + 8;
+        int z = chunkZ * 16 + 8;
+        for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city
+                : io.github.sekerator.kingdomworld.client.map.ClientRoadCache.data().cities()) {
+            if (city.dimension().equals(dimension) && !capturedVillage(city)
+                    && Math.max(Math.abs(city.x() - x), Math.abs(city.z() - z)) < cityDistance) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * A village of the kingdom founding without a city of its own, taken from a kingdom of the world: it gets its city by a
+     * click on it, and keeps no distance from itself.
+     */
+    private boolean capturedVillage(io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city) {
+        return city.settlement() != null && founding != null && founding.id().equals(city.kingdomId());
+    }
+
+    /**
+     * The land of other kingdoms and the wild shaded, the distance kept around every city drawn as a square, and the chunk
+     * chosen for the town hall.
+     */
+    private void drawFounding(GuiGraphics graphics, int minX, int maxX, int minZ, int maxZ) {
+        UUID own = founding.id();
+        for (int z = minZ; z <= maxZ; z++) {
+            int y0 = screenZ(z);
+            int y1 = screenZ(z + 1);
+            int runStart = minX;
+            boolean runOwn = own.equals(ClientTerritoryCache.ownerOf(minX, z));
+            for (int x = minX + 1; x <= maxX + 1; x++) {
+                boolean ours = x <= maxX && own.equals(ClientTerritoryCache.ownerOf(x, z));
+                if (x > maxX || ours != runOwn) {
+                    if (!runOwn) {
+                        mapFill(graphics, screenX(runStart), y0, screenX(x), y1, 0x66000000);
+                    }
+                    runStart = x;
+                    runOwn = ours;
+                }
+            }
+        }
+        String dimension = dimension();
+        for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.MapCity city
+                : io.github.sekerator.kingdomworld.client.map.ClientRoadCache.data().cities()) {
+            if (!city.dimension().equals(dimension) || capturedVillage(city)) {
+                continue;
+            }
+            int x0 = blockScreenX(city.x() - cityDistance + 1);
+            int z0 = blockScreenZ(city.z() - cityDistance + 1);
+            int x1 = blockScreenX(city.x() + cityDistance);
+            int z1 = blockScreenZ(city.z() + cityDistance);
+            int color = 0xC0B03020;
+            mapFill(graphics, x0, z0, x1, z0 + 1, color);
+            mapFill(graphics, x0, z1 - 1, x1, z1, color);
+            mapFill(graphics, x0, z0, x0 + 1, z1, color);
+            mapFill(graphics, x1 - 1, z0, x1, z1, color);
+        }
+        if (foundChunk != null) {
+            int x = screenX(foundChunk[0]);
+            int z = screenZ(foundChunk[1]);
+            int size = Math.max(3, (int) Math.ceil(cell));
+            mapFill(graphics, x - 1, z - 1, x + size + 1, z + size + 1, 0xFF2B1D0E);
+            mapFill(graphics, x, z, x + size, z + size, 0xFFF0C030);
+            int mx = x + size / 2;
+            int mz = z + size / 2;
+            mapFill(graphics, mx - 2, mz - 2, mx + 3, mz + 3, 0xFF2B1D0E);
         }
     }
 
@@ -1377,6 +1569,29 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
 
     private void onMapClick(int chunkX, int chunkZ, int button) {
         UUID owner = ClientTerritoryCache.ownerOf(chunkX, chunkZ);
+        if (founding != null) {
+            if (button == 1) {
+                foundChunk = null;
+                status = Component.empty();
+                rebuildWidgets();
+                return;
+            }
+            if (!founding.id().equals(owner)) {
+                status = Component.translatable("kingdomworld.screen.map.found.not_own");
+                statusIsError = true;
+                return;
+            }
+            if (!farFromCities(chunkX, chunkZ)) {
+                status = Component.translatable("kingdomworld.screen.map.found.too_close", cityDistance);
+                statusIsError = true;
+                return;
+            }
+            foundChunk = new int[]{chunkX, chunkZ};
+            status = Component.translatable("kingdomworld.screen.map.found.chosen", chunkX * 16 + 8, chunkZ * 16 + 8);
+            statusIsError = false;
+            rebuildWidgets();
+            return;
+        }
         if (planning != null) {
             if (button == 1) {
                 resetPlan();
@@ -1482,7 +1697,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     }
 
     private void drawProvinceCard(GuiGraphics graphics) {
-        if (planning != null || army) {
+        if (planning != null || founding != null || army) {
             return;
         }
         ProvinceCard card = provinceCard();
@@ -1501,6 +1716,11 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (getFocused() instanceof net.minecraft.client.gui.components.EditBox box && box.isFocused()
+                && keyCode != org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
+            // The name being typed takes every key, the key of the map as well.
+            return super.keyPressed(keyCode, scanCode, modifiers);
+        }
         if (KingdomWorldClient.MAP_KEY.matches(keyCode, scanCode)) {
             onClose();
             return true;
@@ -1574,6 +1794,9 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             drawBorders(graphics, minX, maxX, minZ, maxZ);
         }
         drawProvinces(graphics, minX, maxX, minZ, maxZ, step);
+        if (founding != null) {
+            drawFounding(graphics, minX, maxX, minZ, maxZ);
+        }
         labels.clear();
         if (listing) {
             // Names of the map give way to the list of kingdoms drawn over it.
@@ -1599,7 +1822,7 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             drawPlan(graphics);
         }
         drawPlayer(graphics, partialTick);
-        if (editing != null && insideMap(mouseX, mouseY)) {
+        if ((editing != null || founding != null) && insideMap(mouseX, mouseY)) {
             int x = screenX(chunkAtX(mouseX));
             int z = screenZ(chunkAtZ(mouseY));
             int size = Math.max(1, (int) Math.ceil(cell));
@@ -1628,6 +1851,13 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             heading = Component.translatable("kingdomworld.screen.map.title_roads", shown);
             if (!shown.equals(planning.name())) {
                 hoverFull(PAD, 7, font.width(heading), Component.translatable("kingdomworld.screen.map.title_roads", planning.name()));
+            }
+        } else if (founding != null) {
+            int prefix = font.width(Component.translatable("kingdomworld.screen.map.title_found", ""));
+            String shown = fit(founding.name(), available - prefix);
+            heading = Component.translatable("kingdomworld.screen.map.title_found", shown);
+            if (!shown.equals(founding.name())) {
+                hoverFull(PAD, 7, font.width(heading), Component.translatable("kingdomworld.screen.map.title_found", founding.name()));
             }
         } else if (editing != null) {
             int prefix = font.width(Component.translatable("kingdomworld.screen.map.title_edit", ""));
@@ -1827,7 +2057,9 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
             }
             label(graphics, where, PAD, y, 0xFFE8E8E8, width - PAD);
         }
-        Component hint = planning != null
+        Component hint = founding != null
+                ? Component.translatable("kingdomworld.screen.map.hint_found", cityDistance)
+                : planning != null
                 ? Component.translatable("kingdomworld.screen.map.hint_roads")
                 : editing != null
                 ? Component.translatable("kingdomworld.screen.map.hint_edit")

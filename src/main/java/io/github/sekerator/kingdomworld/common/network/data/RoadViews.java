@@ -321,9 +321,19 @@ public final class RoadViews {
      * @param canOrder  whether the viewer may send squads to patrol
      * @param builders  builders free for roads in the last second
      */
+    /**
+     * @param cityDistance the least distance between cities along x or z the server keeps, in blocks
+     * @param townPeople   the citizens and {@code townBuildings} the buildings that make a city a town; {@code cityPeople} and
+     *                     {@code cityBuildings} a large city
+     */
     public record RoadTabView(UUID kingdomId, boolean canManage, boolean canOrder, int builders, int maxCities, int maxRoads,
                               List<CityRow> cities, List<RoadRow> roads, List<CrossingRow> crossings, List<CampRow> camps, List<RiskRow> risks,
-                              List<SquadRow> squads) {
+                              List<SquadRow> squads, int cityDistance, int townPeople, int townBuildings, int cityPeople, int cityBuildings) {
+        public RoadTabView(UUID kingdomId, boolean canManage, boolean canOrder, int builders, int maxCities, int maxRoads, List<CityRow> cities,
+                           List<RoadRow> roads, List<CrossingRow> crossings, List<CampRow> camps, List<RiskRow> risks, List<SquadRow> squads) {
+            this(kingdomId, canManage, canOrder, builders, maxCities, maxRoads, cities, roads, crossings, camps, risks, squads, 112, 12, 6, 40, 20);
+        }
+
         public RoadTabView {
             cities = List.copyOf(cities);
             roads = List.copyOf(roads);
@@ -346,12 +356,18 @@ public final class RoadViews {
             writeList(buf, camps, (b, row) -> row.encode(b));
             writeList(buf, risks, (b, row) -> row.encode(b));
             writeList(buf, squads, (b, row) -> row.encode(b));
+            buf.writeVarInt(cityDistance);
+            buf.writeVarInt(townPeople);
+            buf.writeVarInt(townBuildings);
+            buf.writeVarInt(cityPeople);
+            buf.writeVarInt(cityBuildings);
         }
 
         public static RoadTabView decode(FriendlyByteBuf buf) {
             return new RoadTabView(buf.readUUID(), buf.readBoolean(), buf.readBoolean(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(),
                     readList(buf, MAX_ROWS, CityRow::decode), readList(buf, MAX_ROWS, RoadRow::decode), readList(buf, MAX_ROWS, CrossingRow::decode),
-                    readList(buf, MAX_ROWS, CampRow::decode), readList(buf, MAX_ROWS, RiskRow::decode), readList(buf, MAX_ROWS, SquadRow::decode));
+                    readList(buf, MAX_ROWS, CampRow::decode), readList(buf, MAX_ROWS, RiskRow::decode), readList(buf, MAX_ROWS, SquadRow::decode),
+                    buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt());
         }
     }
 

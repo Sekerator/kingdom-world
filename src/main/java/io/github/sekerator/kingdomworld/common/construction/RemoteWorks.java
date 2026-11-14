@@ -380,7 +380,7 @@ public final class RemoteWorks {
         Job started = switch (commission.kind()) {
             case BUILD, AT -> new BuildJob(commission.withState(Commission.State.LOOKING, commission.reason(), now), level);
             case POST -> RemotePosts.job(commission.withState(Commission.State.LOOKING, "", now), level);
-            case HALL -> null;
+            case HALL -> RemoteHalls.job(commission.withState(Commission.State.LOOKING, "", now), level);
         };
         if (started == null) {
             return false;
@@ -686,7 +686,8 @@ public final class RemoteWorks {
             case BUILD, AT -> BuildingTemplates.get(commission.templateId()).map(BuildingTemplate::name)
                     .orElse(Component.literal(commission.templateId()));
             case POST -> Component.translatable(KEY + "post");
-            case HALL -> Component.translatable(KEY + "hall", commission.name());
+            case HALL -> commission.name().isEmpty() ? Component.translatable(KEY + "hall_unnamed")
+                    : Component.translatable(KEY + "hall", commission.name());
         };
     }
 

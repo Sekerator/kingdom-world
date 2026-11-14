@@ -467,6 +467,44 @@ public final class RemoteBuildingGameTests {
         });
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_remote_found", timeoutTicks = 6_000)
+    public static void aCityFoundedFromTheMapTakesItsTownHallFromTheStorehouse(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Founding", UUID.randomUUID());
+        StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 4);
+        store.insertItem(0, new ItemStack(io.github.sekerator.kingdomworld.common.road.RoadRegistries.TOWN_HALL_ITEM.get()), false);
+        BlockPos middle = new BlockPos(helper.absolutePos(BlockPos.ZERO).getX() + FAR, HIGH + 1, helper.absolutePos(BlockPos.ZERO).getZ());
+        meadow(helper, kingdom, middle, 20, at -> {
+        });
+        String dimension = Dimensions.id(level);
+        // Off the land of the kingdom nothing is ordered.
+        helper.assertTrue(!io.github.sekerator.kingdomworld.common.construction.RemoteHalls.order(server, null, kingdom.id(), dimension,
+                (middle.getX() >> 4) + 40, middle.getZ() >> 4, "Nowhere", false).ok(), "A city was ordered off the land");
+        helper.assertTrue(io.github.sekerator.kingdomworld.common.construction.RemoteHalls.order(server, null, kingdom.id(), dimension,
+                middle.getX() >> 4, middle.getZ() >> 4, "Hallville", false).ok(), "The city was refused");
+        helper.succeedWhen(() -> {
+            KingdomWorldState state = KingdomWorldApi.state(server);
+            helper.assertTrue(state.construction().commissionsOf(kingdom.id()).isEmpty(), "The city is not founded yet: "
+                    + state.construction().commissionsOf(kingdom.id()));
+            io.github.sekerator.kingdomworld.core.road.City city = RoadWork.state(server).citiesOf(kingdom.id()).stream()
+                    .filter(found -> found.name().equals("Hallville")).findFirst()
+                    .orElseThrow(() -> new GameTestAssertException("No city Hallville"));
+            helper.assertTrue(city.x() >> 4 == middle.getX() >> 4 && city.z() >> 4 == middle.getZ() >> 4, "The city stands in another chunk");
+            helper.assertTrue(city.y() == HIGH + 1, "The town hall does not stand on the meadow: " + city.y());
+            helper.assertTrue(CitizenGameTests.count(store, io.github.sekerator.kingdomworld.common.road.RoadRegistries.TOWN_HALL_ITEM.get()) == 0,
+                    "The town hall was not taken from the storehouse");
+            BlockPos hall = new BlockPos(city.x(), city.y(), city.z());
+            helper.assertTrue(stands(level, hall, io.github.sekerator.kingdomworld.common.road.RoadRegistries.TOWN_HALL.get()),
+                    "No town hall stands in the chunk");
+            RoadWork.state(server).removeCity(city.id());
+            TestChunks.hold(level, hall, hall);
+            level.setBlock(hall, Blocks.AIR.defaultBlockState(), 3);
+            TestChunks.release(level, hall);
+            CitizenGameTests.finish(helper, kingdom);
+        });
+    }
+
     @GameTest(template = EMPTY, batch = "kingdomworld_remote_order_limit", timeoutTicks = 200)
     public static void tenConstructionsOrderWhatTheyLackAndTheKingStillOrders(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();

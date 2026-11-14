@@ -89,6 +89,7 @@ final class RoadsTab {
     private int backWidth;
     private int sendWidth;
     private int planWidth;
+    private int foundWidth;
 
     RoadsTab(ThroneScreen screen) {
         this.screen = screen;
@@ -192,6 +193,7 @@ final class RoadsTab {
         backWidth = screen.buttonWidth(Component.translatable(KEY + "back"));
         sendWidth = screen.buttonWidth(Component.translatable(KEY + "send"));
         planWidth = screen.buttonWidth(Component.translatable(KEY + "plan"));
+        foundWidth = screen.buttonWidth(Component.translatable(KEY + "found"));
         int choices = 0;
         for (Choice choice : Choice.values()) {
             choices = Math.max(choices, screen.buttonWidth(choiceLabel(choice, null)));
@@ -205,7 +207,7 @@ final class RoadsTab {
         for (String key : List.of("loading", "no_cities", "no_roads", "no_requests", "no_camps", "no_risks", "no_squads")) {
             messages = Math.max(messages, Math.min(320, font.width(Component.translatable(KEY + key))));
         }
-        return Math.max(Math.max(modeWidth + GAP + Math.max(backWidth, planWidth), choices), Math.max(rows, messages));
+        return Math.max(Math.max(modeWidth + GAP + Math.max(backWidth, foundWidth + GAP + planWidth), choices), Math.max(rows, messages));
     }
 
     private static int buttonsY(int top) {
@@ -330,10 +332,16 @@ final class RoadsTab {
         switch (mode) {
             case OVERVIEW -> {
                 Button plan = screen.add(Button.builder(Component.translatable(KEY + "plan"),
-                        b -> Minecraft.getInstance().setScreen(KingdomMapScreen.forRoads(screen.view())))
+                        b -> Minecraft.getInstance().setScreen(KingdomMapScreen.forRoads(screen, screen.view())))
                         .bounds(right - planWidth, buttonsY(top), planWidth, ROW - 2).build());
                 plan.active = view.canManage();
                 plan.setTooltip(Tooltip.create(Component.translatable(KEY + "plan_hint")));
+                int distance = view.cityDistance();
+                Button found = screen.add(Button.builder(Component.translatable(KEY + "found"),
+                        b -> Minecraft.getInstance().setScreen(KingdomMapScreen.forFounding(screen, screen.view(), distance)))
+                        .bounds(right - planWidth - GAP - foundWidth, buttonsY(top), foundWidth, ROW - 2).build());
+                found.active = view.canManage();
+                found.setTooltip(Tooltip.create(Component.translatable(KEY + "found_hint")));
             }
             case ROADS -> {
                 for (int i = 0; i < rows && scroll + i < view.roads().size(); i++) {
