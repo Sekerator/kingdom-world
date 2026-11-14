@@ -132,6 +132,9 @@ public final class ModRegistries {
     /** The architect's ruler: marks a building in the world and saves it as a blueprint of the kingdom. */
     public static final RegistryObject<Item> ARCHITECT_RULER = ITEMS.register("architect_ruler",
             () -> new io.github.sekerator.kingdomworld.common.construction.ArchitectRulerItem(new Item.Properties().stacksTo(1)));
+    /** The survey stakes: mark a rectangle of land for earthworks by the builders. */
+    public static final RegistryObject<Item> SURVEY_STAKES = ITEMS.register("survey_stakes",
+            () -> new io.github.sekerator.kingdomworld.common.construction.SurveyStakesItem(new Item.Properties().stacksTo(1)));
 
     /**
      * The body of a citizen. Never saved with chunks: the citizen records in the kingdom data are what persists.
@@ -180,6 +183,7 @@ public final class ModRegistries {
             event.accept(FOUNDER_CROWN);
             event.accept(KINGDOM_ATLAS);
             event.accept(ARCHITECT_RULER);
+            event.accept(SURVEY_STAKES);
         }
     }
 }

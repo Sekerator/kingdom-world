@@ -385,7 +385,13 @@ public enum KingdomError {
     /** The guild of mages teaches no one wanted here or of a kingdom at war with this one. */
     NOT_WELCOME,
     /** The province is at stake in a war or in a peace being carried out: held by an enemy or about to change hands. */
-    LAND_AT_STAKE;
+    LAND_AT_STAKE,
+    /** Earthworks wider or longer than the config allows. */
+    EARTHWORK_TOO_LARGE,
+    /** Earthworks that would dig or fill deeper than the config allows. */
+    EARTHWORK_TOO_DEEP,
+    /** Earthworks with nothing to dig or fill: the land lies at the height already, or nothing of it may be touched. */
+    EARTHWORK_NOTHING;
 
     /**
      * Lower case identifier, used for translation keys.

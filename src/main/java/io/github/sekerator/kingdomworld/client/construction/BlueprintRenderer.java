@@ -50,6 +50,7 @@ public final class BlueprintRenderer {
         }
         Minecraft minecraft = Minecraft.getInstance();
         renderRuler(event, minecraft);
+        renderStakes(event, minecraft);
         String held = ClientBlueprint.heldTemplate();
         BlockPos anchor = ClientBlueprint.anchor();
         ClientBlueprint.Template template = held.isEmpty() ? null : ClientBlueprint.template(held);
@@ -135,6 +136,52 @@ public final class BlueprintRenderer {
         float green = corners.complete() ? 1.0f : 0.85f;
         LevelRenderer.renderLineBox(event.getPoseStack(), lines, box.move(-camera.x, -camera.y, -camera.z), corners.complete() ? 0.3f : 1.0f,
                 green, 0.3f, 1.0f);
+        buffers.endBatch(RenderType.lines());
+    }
+
+    /**
+     * The rectangle between the survey stakes in hand, yellow while only one corner is marked, and once the server looked at it
+     * the height of the work as a plane over it and the places it leaves as they are in red.
+     */
+    private static void renderStakes(RenderLevelStageEvent event, Minecraft minecraft) {
+        if (minecraft.player == null) {
+            return;
+        }
+        net.minecraft.world.item.ItemStack held = minecraft.player.getMainHandItem();
+        if (!held.is(io.github.sekerator.kingdomworld.common.registry.ModRegistries.SURVEY_STAKES.get())) {
+            return;
+        }
+        var corners = io.github.sekerator.kingdomworld.common.construction.ArchitectRulerItem.corners(held);
+        if (corners.first() == null) {
+            return;
+        }
+        BlockPos first = corners.first();
+        BlockPos second = corners.second() != null ? corners.second() : first;
+        var answer = corners.complete() ? ClientEarthwork.last(first, second) : null;
+        Vec3 camera = event.getCamera().getPosition();
+        PoseStack pose = event.getPoseStack();
+        MultiBufferSource.BufferSource buffers = minecraft.renderBuffers().bufferSource();
+        VertexConsumer lines = buffers.getBuffer(RenderType.lines());
+        int minX = Math.min(first.getX(), second.getX());
+        int minZ = Math.min(first.getZ(), second.getZ());
+        int maxX = Math.max(first.getX(), second.getX()) + 1;
+        int maxZ = Math.max(first.getZ(), second.getZ()) + 1;
+        int low = Math.min(first.getY(), second.getY());
+        int high = Math.max(first.getY(), second.getY()) + 1;
+        if (answer != null) {
+            low = Math.min(low, answer.target());
+            high = Math.max(high, answer.target() + 1);
+        }
+        LevelRenderer.renderLineBox(pose, lines, new AABB(minX, low, minZ, maxX, high, maxZ).move(-camera.x, -camera.y, -camera.z),
+                corners.complete() ? 0.9f : 1.0f, corners.complete() ? 0.7f : 0.85f, 0.2f, 1.0f);
+        if (answer != null) {
+            double plane = answer.target() + 1.02;
+            LevelRenderer.renderLineBox(pose, lines, new AABB(minX, plane, minZ, maxX, plane, maxZ).move(-camera.x, -camera.y, -camera.z),
+                    0.3f, 0.8f, 1.0f, 1.0f);
+            for (BlockPos kept : answer.places()) {
+                LevelRenderer.renderLineBox(pose, lines, new AABB(kept).inflate(0.03).move(-camera.x, -camera.y, -camera.z), 1.0f, 0.1f, 0.1f, 1.0f);
+            }
+        }
         buffers.endBatch(RenderType.lines());
     }
 

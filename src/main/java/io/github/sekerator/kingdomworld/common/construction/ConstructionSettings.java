@@ -74,6 +74,28 @@ public final class ConstructionSettings {
     }
 
     /**
+     * The widest and longest earthworks may be, in blocks.
+     */
+    public static int earthworkSize() {
+        try {
+            return KingdomWorldConfig.SERVER.earthworkMaxSize.get();
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return 64;
+        }
+    }
+
+    /**
+     * How far earthworks may dig down or fill up from the ground of a column, in blocks.
+     */
+    public static int earthworkDepth() {
+        try {
+            return KingdomWorldConfig.SERVER.earthworkMaxHeight.get();
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return 32;
+        }
+    }
+
+    /**
      * Replaces the configured rules, for game tests; {@code null} restores the config.
      */
     public static void override(ConstructionRules rules) {

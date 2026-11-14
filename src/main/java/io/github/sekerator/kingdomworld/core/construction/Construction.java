@@ -34,7 +34,9 @@ public final class Construction {
         BUILD,
         UPGRADE,
         REPAIR,
-        DEMOLISH;
+        DEMOLISH,
+        /** Earthworks: the land of a rectangle levelled, cut down or filled up ({@link Earthwork}). */
+        EARTHWORK;
 
         public String id() {
             return name().toLowerCase(Locale.ROOT);
@@ -253,6 +255,19 @@ public final class Construction {
     /**
      * The building of the register the construction works on, 0 for a new building.
      */
+    /** The land and height of earthworks, {@code null} for every other kind. */
+    @org.jetbrains.annotations.Nullable
+    private Earthwork earthwork;
+
+    @org.jetbrains.annotations.Nullable
+    public Earthwork earthwork() {
+        return earthwork;
+    }
+
+    public void setEarthwork(@org.jetbrains.annotations.Nullable Earthwork value) {
+        earthwork = value;
+    }
+
     public long building() {
         return building;
     }

@@ -174,6 +174,11 @@ final class BuilderGoal extends PostWorkGoal {
         }
         List<ItemStack> drops = new ArrayList<>();
         ConstructionWork.StepResult result = ConstructionWork.doStep(level, construction, steps, template.get(), step, body, tool(), drops, true);
+        if (construction.kind() == Construction.Kind.EARTHWORK && !drops.isEmpty()) {
+            // The ground of earthworks stays at the site for the fill or goes to the storehouses or the spoil heap at once:
+            // only what is of worth is carried.
+            drops = Earthworks.route(level.getServer(), construction, steps, level, drops, true);
+        }
         for (ItemStack stack : drops) {
             carry(stack);
         }

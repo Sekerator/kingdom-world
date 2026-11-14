@@ -158,6 +158,8 @@ public final class KingdomWorldConfig {
         public final Guild guild;
         public final ForgeConfigSpec.IntValue caravanMaxWaitMinutes;
         public final ForgeConfigSpec.IntValue maxConstructionsPerKingdom;
+        public final ForgeConfigSpec.IntValue earthworkMaxSize;
+        public final ForgeConfigSpec.IntValue earthworkMaxHeight;
         public final ForgeConfigSpec.IntValue builderRadius;
         public final ForgeConfigSpec.DoubleValue builderReach;
         public final ForgeConfigSpec.DoubleValue builderFarReach;
@@ -491,6 +493,12 @@ public final class KingdomWorldConfig {
             maxConstructionsPerKingdom = builder
                     .comment("Constructions one kingdom may have at the same time.")
                     .defineInRange("maxConstructionsPerKingdom", 4, 1, 64);
+            earthworkMaxSize = builder
+                    .comment("The widest and longest earthworks may be, in blocks.")
+                    .defineInRange("earthworkMaxSize", 64, 8, 128);
+            earthworkMaxHeight = builder
+                    .comment("How far earthworks may dig down or fill up from the ground of a column, in blocks.")
+                    .defineInRange("earthworkMaxHeight", 32, 4, 64);
             builderRadius = builder
                     .comment("How far from its work post a builder takes constructions, in blocks.")
                     .defineInRange("builderRadius", 64, 8, 512);

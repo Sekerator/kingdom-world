@@ -1365,6 +1365,31 @@ public final class KingdomWorldState {
     }
 
     /**
+     * Whether earthworks may be laid out over a box: as a construction, but buildings, walls and the land of others inside it
+     * are left as they are (the plan of the work keeps off them), so only another construction stands in their way; at least
+     * the middle of the box is the kingdom's land.
+     */
+    public Outcome checkEarthwork(UUID actor, UUID kingdomId, String dimension, Box box, ConstructionRules rules) {
+        if (kingdoms.get(kingdomId).isEmpty()) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (actor != null && !membership.hasPermission(actor, kingdomId, Permission.MANAGE_CONSTRUCTION)) {
+            return Outcome.fail(KingdomError.NO_PERMISSION);
+        }
+        long middle = io.github.sekerator.kingdomworld.core.territory.ChunkKey.of((box.minX() + box.maxX()) >> 5, (box.minZ() + box.maxZ()) >> 5);
+        if (!kingdomId.equals(territory.ownerOf(dimension, middle))) {
+            return Outcome.fail(KingdomError.CONSTRUCTION_OUTSIDE_LAND);
+        }
+        if (construction.overlappingConstruction(dimension, box, -1).isPresent()) {
+            return Outcome.fail(KingdomError.CONSTRUCTION_OVERLAPS);
+        }
+        if (construction.count(kingdomId) >= rules.maxConstructions()) {
+            return Outcome.fail(KingdomError.TOO_MANY_CONSTRUCTIONS);
+        }
+        return Outcome.DONE;
+    }
+
+    /**
      * Lays out a construction of any kind: a new building of other materials, or an upgrade, repair or demolition of a
      * building of the register, which must belong to the kingdom and have no construction at work on it yet.
      *
@@ -1380,7 +1405,8 @@ public final class KingdomWorldState {
                 return ConstructionChange.failed(check.error());
             }
         }
-        Outcome allowed = checkLay(actor, kingdomId, anchor.dimension(), box, rules, building);
+        Outcome allowed = kind == Construction.Kind.EARTHWORK ? checkEarthwork(actor, kingdomId, anchor.dimension(), box, rules)
+                : checkLay(actor, kingdomId, anchor.dimension(), box, rules, building);
         if (!allowed.ok()) {
             return ConstructionChange.failed(allowed.error());
         }

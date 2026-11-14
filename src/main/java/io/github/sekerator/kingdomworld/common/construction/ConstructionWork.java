@@ -102,6 +102,7 @@ public final class ConstructionWork {
 
     public static void reset() {
         PLANS.clear();
+        Earthworks.reset();
         CLAIMS.clear();
         DEFERRED.clear();
         WORKERS.clear();
@@ -120,7 +121,18 @@ public final class ConstructionWork {
      * The template of a construction, built of the construction's materials.
      */
     public static Optional<BuildingTemplate> template(Construction construction) {
+        if (construction.kind() == Construction.Kind.EARTHWORK) {
+            // The blocks of earthworks come from the land they were laid out on, kept with the construction.
+            return Earthworks.template(construction);
+        }
         return BuildingTemplates.get(construction.templateId()).map(template -> TemplateMaterials.apply(template, construction.materials()));
+    }
+
+    /**
+     * Keeps the plan of a construction laid out elsewhere (earthworks), as {@link #lay} keeps its own.
+     */
+    static void remember(Construction construction, BuildPlan plan) {
+        PLANS.put(construction.id(), plan);
     }
 
     /**
@@ -538,6 +550,18 @@ public final class ConstructionWork {
     }
 
     /**
+     * Drops of cleared blocks of a construction: earthworks keep the ground their fill wants and send the rest of it to the
+     * spoil heap when the storehouses are full; other constructions put all of it into the storehouses.
+     */
+    private static void storeOrRoute(MinecraftServer server, Construction construction, ServerLevel level, List<ItemStack> drops) {
+        if (construction.kind() == Construction.Kind.EARTHWORK) {
+            plan(construction).ifPresent(plan -> Earthworks.route(server, construction, plan, level, drops, false));
+        } else {
+            store(server, construction.kingdomId(), level, blockPos(construction.anchor()), drops);
+        }
+    }
+
+    /**
      * Drops of cleared blocks into the storehouses; what does not fit falls at the place.
      */
     static void store(MinecraftServer server, UUID kingdomId, ServerLevel level, BlockPos at, List<ItemStack> drops) {
@@ -702,6 +726,14 @@ public final class ConstructionWork {
                 construction.markDone(index);
             }
             return result;
+        }
+        if (step.kind() == BuildPlan.Kind.CLEAR && construction.kind() == Construction.Kind.EARTHWORK) {
+            // Earthworks dig only the land as it grew; lava is closed off with cobblestone first.
+            StepResult earth = Earthworks.dig(level, construction, at, builder, drops);
+            if (earth == StepResult.DONE) {
+                construction.markDone(index);
+            }
+            return earth;
         }
         if (step.kind() == BuildPlan.Kind.CLEAR) {
             StepResult result = clear(level, at, builder, tool, drops);
@@ -1003,7 +1035,11 @@ public final class ConstructionWork {
             done++;
         }
         if (!drops.isEmpty()) {
-            store(level.getServer(), construction.kingdomId(), level, blockPos(construction.anchor()), drops);
+            if (construction.kind() == Construction.Kind.EARTHWORK) {
+                Earthworks.route(level.getServer(), construction, plan, level, drops, false);
+            } else {
+                store(level.getServer(), construction.kingdomId(), level, blockPos(construction.anchor()), drops);
+            }
         }
         if (!blocked && done > 0 && (construction.status() == Construction.Status.WAITING_FOR_LOAD
                 || construction.status() == Construction.Status.BLOCKED || construction.status() == Construction.Status.OUTSIDE_LAND)) {
@@ -1220,6 +1256,8 @@ public final class ConstructionWork {
                         template == null ? 1 : template.level(), now, admin);
             }
             case UPGRADE, REPAIR, DEMOLISH -> BuildingWork.finish(server, construction, template, now);
+            // Earthworks leave the land changed and no building to enter into the register.
+            case EARTHWORK -> null;
         };
         forget(server, construction);
         state.construction().remove(construction.id());
@@ -1289,7 +1327,7 @@ public final class ConstructionWork {
                     continue;
                 }
                 if (done++ >= budget) {
-                    store(server, construction.kingdomId(), level, blockPos(construction.anchor()), drops);
+                    storeOrRoute(server, construction, level, drops);
                     return Optional.empty();
                 }
                 BlockPos at = new BlockPos(step.x(), step.y(), step.z());
@@ -1320,7 +1358,7 @@ public final class ConstructionWork {
                 }
                 construction.markDone(step.index());
             }
-            store(server, construction.kingdomId(), level, blockPos(construction.anchor()), drops);
+            storeOrRoute(server, construction, level, drops);
         }
         return Optional.ofNullable(complete(server, construction, true));
     }
@@ -1328,6 +1366,7 @@ public final class ConstructionWork {
     private static void forget(MinecraftServer server, Construction construction) {
         Production.reservations().release(holdKey(construction));
         PLANS.remove(construction.id());
+        Earthworks.forget(construction.id());
         CLAIMS.remove(construction.id());
         DEFERRED.remove(construction.id());
         WORKERS.remove(construction.id());

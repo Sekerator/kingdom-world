@@ -57,7 +57,7 @@ import java.util.function.Supplier;
  * them through {@link ServerRequestGuard} before acting.
  */
 public final class KingdomWorldNetwork {
-    public static final String PROTOCOL_VERSION = "48";
+    public static final String PROTOCOL_VERSION = "49";
     public static final ResourceLocation CHANNEL_NAME = KingdomWorld.id("main");
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -308,6 +308,14 @@ public final class KingdomWorldNetwork {
                 io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.View::decode, io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.View::handle);
         add(id++, io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Action.class, NetworkDirection.PLAY_TO_SERVER, io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Action::encode,
                 io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Action::decode, io.github.sekerator.kingdomworld.common.network.packet.WorkforcePackets.Action::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.EarthworkPackets.Survey.class, NetworkDirection.PLAY_TO_SERVER,
+                io.github.sekerator.kingdomworld.common.network.packet.EarthworkPackets.Survey::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.EarthworkPackets.Survey::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.EarthworkPackets.Survey::handle);
+        add(id++, io.github.sekerator.kingdomworld.common.network.packet.EarthworkPackets.Result.class, NetworkDirection.PLAY_TO_CLIENT,
+                io.github.sekerator.kingdomworld.common.network.packet.EarthworkPackets.Result::encode,
+                io.github.sekerator.kingdomworld.common.network.packet.EarthworkPackets.Result::decode,
+                io.github.sekerator.kingdomworld.common.network.packet.EarthworkPackets.Result::handle);
     }
 
     private static <T> void add(int id, Class<T> type, NetworkDirection direction, BiConsumer<T, FriendlyByteBuf> encoder,

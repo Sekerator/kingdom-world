@@ -245,6 +245,18 @@ public final class ConstructionBook {
     }
 
     /**
+     * A construction of any kingdom whose box meets the given one, other than {@code except}; buildings do not count.
+     */
+    public Optional<Construction> overlappingConstruction(String dimension, Box box, long except) {
+        for (Construction construction : constructions.values()) {
+            if (construction.id() != except && construction.dimension().equals(dimension) && construction.box().intersects(box)) {
+                return Optional.of(construction);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
      * The construction whose box holds a position, if any.
      */
     public Optional<Construction> at(String dimension, int x, int y, int z) {

@@ -59,6 +59,10 @@ public final class ClientHooks {
     /**
      * The screen that saves the building between the corners of the ruler as a blueprint of the kingdom.
      */
+    public static void openEarthwork(io.github.sekerator.kingdomworld.common.construction.ArchitectRulerItem.Corners corners) {
+        Minecraft.getInstance().setScreen(new io.github.sekerator.kingdomworld.client.screen.EarthworkScreen(corners));
+    }
+
     public static void openCapture(io.github.sekerator.kingdomworld.common.construction.ArchitectRulerItem.Corners corners) {
         Minecraft.getInstance().setScreen(new io.github.sekerator.kingdomworld.client.screen.CaptureScreen(corners));
     }

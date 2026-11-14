@@ -31,7 +31,7 @@ import java.util.Map;
  *   constructions: [ { id, kingdom, template, fingerprint, dimension, x, y, z, rotation, mirror, box: [6 ints], created,
  *                      clear: [x, y, z, ...], steps, priority, paused, orderMissing, done: [longs], pending: [ints],
  *                      delivered: [ { item, count } ], orders: [ { item, order } ], status, statusPos?: [x, y, z], carry,
- *                      kind, building, wood, stone, skip: [longs], removed: [ { item, count } ] } ],
+ *                      kind, building, wood, stone, skip: [longs], removed: [ { item, count } ], earthwork? } ],
  *   buildings: [ { id, kingdom, template, type, category, role, level, wood, stone, dimension, x, y, z, rotation, mirror,
  *                  box, fingerprint, built, admin, integrity, checked, autoRepair, damaged: [longs] } ],
  *   blueprints: [ { id, kingdom, name, category, role, size: [3 ints], palette: [state strings], blocks: [ints],
@@ -208,7 +208,36 @@ public final class ConstructionNbt {
         }
         tag.putLongArray("skip", construction.skip().toLongArray());
         writeItems(tag, "removed", construction.removed());
+        if (construction.earthwork() != null) {
+            tag.put("earthwork", writeEarthwork(construction.earthwork()));
+        }
         return tag;
+    }
+
+    /**
+     * The land of earthworks: { minX, minZ, sizeX, sizeZ, mode, target, smooth, ground: [ints], top: [ints], dug: [ { item, count } ],
+     * stock: [ { item, count } ] }.
+     */
+    private static CompoundTag writeEarthwork(io.github.sekerator.kingdomworld.core.construction.Earthwork work) {
+        CompoundTag tag = new CompoundTag();
+        tag.putInt("minX", work.minX());
+        tag.putInt("minZ", work.minZ());
+        tag.putInt("sizeX", work.sizeX());
+        tag.putInt("sizeZ", work.sizeZ());
+        tag.putString("mode", work.mode().id());
+        tag.putInt("target", work.target());
+        tag.putBoolean("smooth", work.smooth());
+        tag.putIntArray("ground", work.ground());
+        tag.putIntArray("top", work.top());
+        writeItems(tag, "dug", work.dug());
+        writeItems(tag, "stock", work.stock());
+        return tag;
+    }
+
+    private static io.github.sekerator.kingdomworld.core.construction.Earthwork readEarthwork(CompoundTag tag) {
+        return new io.github.sekerator.kingdomworld.core.construction.Earthwork(tag.getInt("minX"), tag.getInt("minZ"), tag.getInt("sizeX"),
+                tag.getInt("sizeZ"), io.github.sekerator.kingdomworld.core.construction.Earthwork.Mode.byId(tag.getString("mode")), tag.getInt("target"),
+                tag.getBoolean("smooth"), tag.getIntArray("ground"), tag.getIntArray("top"), readItems(tag, "dug"), readItems(tag, "stock"));
     }
 
     static CompoundTag write(Building building) {
@@ -340,6 +369,9 @@ public final class ConstructionNbt {
                 anchor(tag), new Placement(tag.getInt("rotation"), tag.getBoolean("mirror")), box(tag), tag.getLong("created"), clear, steps,
                 Construction.Kind.byId(tag.getString("kind")), building, new Materials(tag.getString("wood"), tag.getString("stone"), tag.getString("look")),
                 BitSet.valueOf(tag.getLongArray("skip")));
+        if (tag.contains("earthwork", Tag.TAG_COMPOUND)) {
+            construction.setEarthwork(readEarthwork(tag.getCompound("earthwork")));
+        }
         Map<String, Integer> delivered = readItems(tag, "delivered");
         Map<String, Long> orders = new LinkedHashMap<>();
         ListTag ordersTag = tag.getList("orders", Tag.TAG_COMPOUND);

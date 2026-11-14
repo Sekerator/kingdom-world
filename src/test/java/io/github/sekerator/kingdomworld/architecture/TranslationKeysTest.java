@@ -442,6 +442,11 @@ class TranslationKeysTest {
             used.add("kingdomworld.permission." + permission.id());
             used.add("kingdomworld.permission." + permission.id() + ".short");
         }
+        // Every work of earthworks, in the window and in the tab of construction.
+        for (io.github.sekerator.kingdomworld.core.construction.Earthwork.Mode mode : io.github.sekerator.kingdomworld.core.construction.Earthwork.Mode.values()) {
+            used.add("kingdomworld.screen.earthwork.mode." + mode.id());
+            used.add("kingdomworld.earthwork.name." + mode.id());
+        }
         // The office of the head of every rank of settlement but the capital.
         for (io.github.sekerator.kingdomworld.core.land.Tier tier : io.github.sekerator.kingdomworld.core.land.Tier.values()) {
             if (tier != io.github.sekerator.kingdomworld.core.land.Tier.CAPITAL) {

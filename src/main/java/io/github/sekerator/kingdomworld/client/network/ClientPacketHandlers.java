@@ -133,6 +133,10 @@ public final class ClientPacketHandlers {
         io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.accept(data);
     }
 
+    public static void handleEarthwork(io.github.sekerator.kingdomworld.common.network.packet.EarthworkPackets.Result result) {
+        io.github.sekerator.kingdomworld.client.construction.ClientEarthwork.accept(result);
+    }
+
     public static void handleConstructionCheck(io.github.sekerator.kingdomworld.common.network.packet.ConstructionPackets.CheckResult result) {
         io.github.sekerator.kingdomworld.client.construction.ClientBlueprint.accept(result);
     }
