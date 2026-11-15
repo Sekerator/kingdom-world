@@ -114,6 +114,22 @@ public final class RulerView {
     /** Money in and out on an average day of the last week, the founding left out. */
     public long income;
     public long expenses;
+    /**
+     * What goes out every day whatever the ruler decides (the wages of its people, at least today's payroll), against the
+     * expenses that include what it chose to spend; 0 when unknown, then the expenses count.
+     */
+    public long upkeep;
+    /** The part of the upkeep that pays soldiers. */
+    public long armyPayroll;
+    /** Money promised already: what the constructions under way still lack, at the price of buying it abroad. */
+    public long committed;
+    /** Whether the ruler counted itself poor at its last turn: it counts itself well again only with some room. */
+    public boolean wasPoor;
+    /** Wars the kingdom fights now. */
+    public int wars;
+    /** What the market abroad pays and asks of the worth of goods, in thousandths. */
+    public int exportPermille = 600;
+    public int importPermille = 1500;
     public int subjects;
     public long pollTax;
     public long defaultPollTax = 10;
@@ -211,6 +227,13 @@ public final class RulerView {
         view.balance = balance;
         view.income = income;
         view.expenses = expenses;
+        view.upkeep = upkeep;
+        view.armyPayroll = armyPayroll;
+        view.committed = committed;
+        view.wasPoor = wasPoor;
+        view.wars = wars;
+        view.exportPermille = exportPermille;
+        view.importPermille = importPermille;
         view.subjects = subjects;
         view.pollTax = pollTax;
         view.defaultPollTax = defaultPollTax;

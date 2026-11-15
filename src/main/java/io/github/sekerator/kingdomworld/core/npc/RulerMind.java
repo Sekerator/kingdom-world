@@ -95,7 +95,21 @@ public final class RulerMind {
         }
     }
 
-    private record Scored(int score, RulerDecision decision) {
+    /**
+     * A candidate decision with its score and what it costs the treasury now, so that the decisions of one turn never spend
+     * together more than the ruler may spare.
+     */
+    private record Scored(int score, RulerDecision decision, long cost) {
+        Scored(int score, RulerDecision decision) {
+            this(score, decision, 0);
+        }
+    }
+
+    /**
+     * What goods of a worth cost when bought abroad.
+     */
+    public static long importCost(RulerView view, long worth) {
+        return (long) Math.min(Long.MAX_VALUE / 4, Math.max(0, worth) * (double) Math.max(1000, view.importPermille) / 1000.0);
     }
 
     private RulerMind() {
@@ -119,32 +133,91 @@ public final class RulerMind {
         return greed;
     }
 
+    /** Days of upkeep below which a ruler counts itself poor. */
+    public static final int POOR_DAYS = 3;
+    /** Days of upkeep a poor ruler waits for before it counts itself well again, so that hard times do not flicker. */
+    public static final int WELL_DAYS = 6;
+    /** Days of the soldiers' pay a ruler keeps aside for every war it fights, so that sieges do not melt its reserve. */
+    public static final int WAR_CHEST_DAYS = 10;
+    /** Days of upkeep from which a ruler counts itself rich: it builds and keeps more than the others. */
+    public static final int RICH_DAYS = 365;
+
     /**
-     * The money a ruler keeps for hard times: some days of expenses, more for a thrifty ruler and less for a bold one.
+     * What a day costs the kingdom whatever its ruler decides: its upkeep, or its expenses when the upkeep is not known.
+     */
+    public static long dayCost(RulerView view) {
+        return Math.max(1, view.upkeep > 0 ? view.upkeep : view.expenses);
+    }
+
+    /**
+     * For how many days of its upkeep the treasury pays.
+     */
+    public static long keepDays(RulerView view) {
+        return Math.max(0, view.balance) / dayCost(view);
+    }
+
+    /**
+     * For how many days the treasury lasts at the pace of the last week, or {@link Long#MAX_VALUE} while it earns more than it
+     * spends.
+     */
+    public static long runway(RulerView view) {
+        long burn = view.expenses - view.income;
+        return burn <= 0 ? Long.MAX_VALUE : Math.max(0, view.balance) / burn;
+    }
+
+    /**
+     * Whether the treasury pays a year of upkeep: such a ruler builds, keeps soldiers and invests beyond the needs of the day.
+     */
+    public static boolean rich(RulerView view) {
+        return keepDays(view) >= RICH_DAYS;
+    }
+
+    /**
+     * The money a ruler keeps for hard times: some days of upkeep, more for a thrifty ruler and less for a bold one, and the
+     * pay of its soldiers for some days for every war it fights.
      */
     public static long reserve(RulerView view, RulerRules rules) {
-        double reserve = Math.max(100, view.expenses * (double) rules.reserveDays());
+        double reserve = Math.max(100, dayCost(view) * (double) rules.reserveDays());
         if (view.has(RulerCharacter.Trait.THRIFTY) || view.has(RulerCharacter.Trait.CAUTIOUS)) {
             reserve *= 1.5;
         }
         if (view.has(RulerCharacter.Trait.BOLD) || view.has(RulerCharacter.Trait.GENEROUS)) {
             reserve *= 0.75;
         }
-        return (long) reserve;
+        reserve += (double) Math.max(0, view.wars) * Math.max(0, view.armyPayroll) * WAR_CHEST_DAYS;
+        return (long) Math.min(Long.MAX_VALUE / 4, reserve);
     }
 
     /**
-     * Whether the treasury is too poor: it cannot pay two days of expenses, or it is below the reserve and loses money.
+     * Whether the treasury is too poor: it pays no more than a few days of upkeep, or it is below the reserve and loses money.
+     * A ruler that was poor counts itself well again only with twice the days and a quarter above the reserve, so that its hard
+     * times do not start and end every other day.
      */
     public static boolean poor(RulerView view, RulerRules rules) {
-        return view.balance < view.expenses * 2 || (view.balance < reserve(view, rules) && view.income < view.expenses);
+        long days = keepDays(view);
+        boolean losing = view.income < view.expenses;
+        long reserve = reserve(view, rules);
+        if (view.wasPoor) {
+            return days < WELL_DAYS || (losing && view.balance < reserve + reserve / 4);
+        }
+        return days < POOR_DAYS || (losing && view.balance < reserve);
     }
 
     /**
-     * The money a ruler may spend beyond its reserve.
+     * The money a ruler may spend beyond its reserve and what it promised already.
      */
     public static long spare(RulerView view, RulerRules rules) {
-        return Math.max(0, view.balance - reserve(view, rules));
+        return Math.max(0, view.balance - reserve(view, rules) - Math.max(0, view.committed));
+    }
+
+    /**
+     * What a ruler spends on goods from abroad in a day at most: half what it may spare, and of that no more than three days
+     * of upkeep or a sixtieth of what it may spare, whichever is more. A rich ruler buys what its builders lack without
+     * pouring its treasury abroad in a few days.
+     */
+    public static long importBudget(RulerView view, RulerRules rules) {
+        long spare = spare(view, rules);
+        return Math.min(spare / 2, Math.max(dayCost(view) * 3, spare / 60));
     }
 
     /**
@@ -433,7 +506,7 @@ public final class RulerMind {
         }
         goods(view, needs);
         tithe(view, rules, candidates);
-        List<RulerDecision> decisions = pick(candidates, rules.decisionsPerTurn());
+        List<RulerDecision> decisions = pick(candidates, rules.decisionsPerTurn(), poor ? 0 : spare);
         return new Plan(decisions, answers, trimNeeds(needs));
     }
 
@@ -499,8 +572,10 @@ public final class RulerMind {
         // An upgrade leaves a place for a new building the kingdom wants.
         if (view.constructions + (wantedRoles(view, rules).isEmpty() ? 1 : 2) <= slots) {
             for (RulerView.Option upgrade : view.upgrades) {
-                if (upgrade.missing() <= spare / 2) {
-                    out.add(new Scored(40 + builder, new RulerDecision(Kind.UPGRADE, upgrade.role(), 1, 0, upgrade.target(), upgrade.template())));
+                long cost = importCost(view, upgrade.missing());
+                if (cost <= spare / 2) {
+                    out.add(new Scored(40 + builder, new RulerDecision(Kind.UPGRADE, upgrade.role(), 1, 0, upgrade.target(), upgrade.template()),
+                            cost));
                     break;
                 }
             }
@@ -562,11 +637,12 @@ public final class RulerMind {
             needs.add(new Need(NeedKind.BUILDING, role, chosen.missing()));
             return true;
         }
-        if (chosen.missing() > spare || !room) {
+        long cost = importCost(view, chosen.missing());
+        if (cost > spare || !room) {
             needs.add(new Need(NeedKind.BUILDING, role, chosen.missing()));
             return false;
         }
-        out.add(new Scored(score, new RulerDecision(Kind.BUILD, role, 1, 0, chosen.template(), "")));
+        out.add(new Scored(score, new RulerDecision(Kind.BUILD, role, 1, 0, chosen.template(), ""), cost));
         return false;
     }
 
@@ -578,7 +654,7 @@ public final class RulerMind {
         if (view.soldiers < wanted) {
             if (view.unemployed > 0 && spare >= view.soldierWage * 3) {
                 int hire = Math.min(Math.min(wanted - view.soldiers, view.unemployed), 2);
-                out.add(new Scored(65 + warrior + (threat ? 20 : 0), RulerDecision.of(Kind.HIRE, "", hire)));
+                out.add(new Scored(65 + warrior + (threat ? 20 : 0), RulerDecision.of(Kind.HIRE, "", hire), view.soldierWage * 3 * hire));
             }
             if (threat) {
                 needs.add(new Need(NeedKind.SOLDIERS, "", wanted - view.soldiers));
@@ -597,7 +673,8 @@ public final class RulerMind {
                 .min(Comparator.comparingInt(RulerView.Camp::distance))
                 .ifPresent(camp -> {
                     int bonus = warrior + (view.has(RulerCharacter.Trait.BOLD) || view.has(RulerCharacter.Trait.CAUTIOUS) ? 10 : 0);
-                    out.add(new Scored(60 + bonus, new RulerDecision(Kind.CONTRACT, "", camp.strength(), camp.reward(), camp.id(), "")));
+                    out.add(new Scored(60 + bonus, new RulerDecision(Kind.CONTRACT, "", camp.strength(), camp.reward(), camp.id(), ""),
+                            camp.reward()));
                 });
     }
 
@@ -610,7 +687,7 @@ public final class RulerMind {
         view.goods.values().stream()
                 .filter(good -> good.shortage() > 0 && !view.buying.contains(good.item()) && good.shortage() * good.worth() <= spare)
                 .max(Comparator.comparingLong(good -> good.shortage() * good.worth()))
-                .ifPresent(good -> out.add(new Scored(50, RulerDecision.of(Kind.BUY, good.item(), good.shortage()))));
+                .ifPresent(good -> out.add(new Scored(50, RulerDecision.of(Kind.BUY, good.item(), good.shortage()), good.shortage() * good.worth())));
         if (view.openDeals < view.maxDeals) {
             for (RulerView.Neighbour neighbour : view.neighbours) {
                 if (neighbour.deals() > 0 || memory.relation(neighbour.id()) < 0) {
@@ -682,7 +759,7 @@ public final class RulerMind {
             out.add(new Scored(20 + (view.murderers > 0 ? 25 : 0), RulerDecision.of(Kind.BOUNTY, "", bounty)));
         }
         if (view.festivals && view.mood < rules.festivalMood() && spare >= view.festivalCost) {
-            out.add(new Scored(50, RulerDecision.of(Kind.FESTIVAL, "", view.festivalCost)));
+            out.add(new Scored(50, RulerDecision.of(Kind.FESTIVAL, "", view.festivalCost), view.festivalCost));
         }
         // Every ruler with a guild of mages has it research further; a mage cares for it more than the others.
         if (view.tower && !view.researching && !view.research.isEmpty()) {
@@ -776,11 +853,12 @@ public final class RulerMind {
     /**
      * The most pressing decisions, one of a kind, no more than the limit; hiring and letting soldiers go never come together.
      */
-    static List<RulerDecision> pick(List<Scored> candidates, int limit) {
+    static List<RulerDecision> pick(List<Scored> candidates, int limit, long budget) {
         List<Scored> sorted = new ArrayList<>(candidates);
         sorted.sort(Comparator.comparingInt(Scored::score).reversed());
         Set<Kind> kinds = EnumSet.noneOf(Kind.class);
         List<RulerDecision> result = new ArrayList<>();
+        long left = budget;
         for (Scored scored : sorted) {
             if (result.size() >= limit) {
                 break;
@@ -789,6 +867,11 @@ public final class RulerMind {
             if (kinds.contains(kind) || (kind == Kind.HIRE && kinds.contains(Kind.DISMISS)) || (kind == Kind.DISMISS && kinds.contains(Kind.HIRE))) {
                 continue;
             }
+            // What the decisions taken before in this turn spend is not there for this one.
+            if (scored.cost() > 0 && scored.cost() > left) {
+                continue;
+            }
+            left -= Math.max(0, scored.cost());
             kinds.add(kind);
             result.add(scored.decision());
         }

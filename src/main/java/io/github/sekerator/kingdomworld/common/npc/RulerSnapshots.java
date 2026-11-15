@@ -131,6 +131,7 @@ final class RulerSnapshots {
         view.character = npc.character();
         view.traits = npc.traits();
         view.size = npc.level();
+        view.wasPoor = memory.poorSince() >= 0;
         view.cityLevel = CityWalls.level(server, id, 0).ordinal();
         people(server, state, id, view);
         LOOKS.put(id, npc);
@@ -291,13 +292,28 @@ final class RulerSnapshots {
         view.expenses = expense / age;
         // Wages are due every day whether or not a week has gone by: the expenses are at least today's payroll.
         long payroll = 0;
+        long army = 0;
+        ArmyState soldiers = ArmyWork.isReadOnly(server) ? null : ArmyWork.state(server);
         for (Citizen citizen : state.citizens().registry().citizensOf(id)) {
             // Officers are paid a multiple of the wage of a soldier, the garrison of a kingdom of the world a part of it.
-            payroll += new io.github.sekerator.kingdomworld.core.economy.Economy.WageClaim(citizen.id(), citizen.professionId(),
+            long wage = new io.github.sekerator.kingdomworld.core.economy.Economy.WageClaim(citizen.id(), citizen.professionId(),
                     io.github.sekerator.kingdomworld.common.army.ArmyStaff.wagePermille(server, citizen.id()))
                     .scaled(treasury.wage(citizen.professionId(), economy));
+            payroll += wage;
+            if (soldiers != null && soldiers.soldier(citizen.id()).isPresent()) {
+                army += wage;
+            }
         }
         view.expenses = Math.max(view.expenses, payroll);
+        // The upkeep: what goes out every day whatever the ruler decides, against what it chose to spend.
+        long upkeep = RulerPurse.upkeep(treasury.journal().totals(view.day, TreasuryJournal.Period.WEEK)) / age;
+        view.upkeep = Math.max(1, Math.max(upkeep, payroll));
+        view.armyPayroll = army;
+        view.wars = io.github.sekerator.kingdomworld.common.diplomacy.WarWork.isReadOnly(server) ? 0
+                : io.github.sekerator.kingdomworld.common.diplomacy.WarWork.state(server).warsOf(id).size();
+        var trade = TradeSettings.rules();
+        view.exportPermille = (int) Math.round(trade.exportFactor() * 1000);
+        view.importPermille = (int) Math.round(trade.importFactor() * 1000);
         view.soldierWage = treasury.wage(Professions.WARRIOR.id(), economy);
         long usual = 0;
         long paid = 0;
@@ -341,7 +357,13 @@ final class RulerSnapshots {
             }
         }
         view.upgrades.sort(java.util.Comparator.comparingLong(RulerView.Option::missing));
+        Map<String, Integer> promised = new LinkedHashMap<>();
         for (Construction construction : state.construction().of(id)) {
+            if (!construction.paused()) {
+                io.github.sekerator.kingdomworld.common.construction.ConstructionWork.plan(construction).ifPresent(plan ->
+                        io.github.sekerator.kingdomworld.common.construction.ConstructionWork.needed(construction, plan)
+                                .forEach((item, count) -> promised.merge(item, count, Integer::sum)));
+            }
             view.constructions++;
             if (construction.status() == Construction.Status.NO_MATERIALS) {
                 view.stalled++;
@@ -353,6 +375,8 @@ final class RulerSnapshots {
                 BuildingTemplates.get(construction.templateId()).ifPresent(template -> view.planned.merge(template.role(), 1, Integer::sum));
             }
         }
+        // What the constructions under way still lack is promised: the ruler counts it at the price of buying it abroad.
+        view.committed = RulerMind.importCost(view, missingWorth(server, counts, promised));
         // Without a limit of the server the ruler keeps to its own most at a time.
         int most = ConstructionSettings.rules().maxConstructions();
         view.maxConstructions = most > 0 ? most : Integer.MAX_VALUE;

@@ -92,6 +92,7 @@ public final class NpcRulers {
 
     static void reset() {
         RulerActions.resetTools();
+        RulerActions.resetSupply();
         DUE.clear();
         LAST_VIEWS.clear();
         job = null;
@@ -540,7 +541,7 @@ public final class NpcRulers {
             carryOut(server, kingdom, answer, day);
         }
         if (!poor) {
-            for (RulerDecision bought : RulerActions.supply(server, id, RulerMind.spare(view, rules))) {
+            for (RulerDecision bought : RulerActions.supply(server, id, RulerMind.importBudget(view, rules))) {
                 finish(server, id, bought, Outcome.DONE, day);
             }
         }

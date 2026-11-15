@@ -552,16 +552,38 @@ public final class RulerActions {
         return resumed;
     }
 
+    /** Days an item its own workers gather may be lacking before the ruler buys it abroad rather than wait for them. */
+    static final int LOCAL_DAYS = 3;
+    /** Days in a row a ruler buys the same item abroad before it stops and waits, so that no import goes on forever. */
+    static final int IMPORT_STREAK = 5;
+    /** Days a ruler waits before it buys again an item it bought abroad for so many days in a row. */
+    static final int IMPORT_PAUSE = 5;
+    /** Since which day each kingdom lacks each item, for the items its own workers gather. */
+    private static final java.util.Map<UUID, java.util.Map<String, Long>> LACKING_SINCE = new java.util.concurrent.ConcurrentHashMap<>();
+    /** For each kingdom and item bought abroad: the last day it was bought, how many days in a row, and the day it may be again. */
+    private static final java.util.Map<UUID, java.util.Map<String, long[]>> STREAKS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    static void resetSupply() {
+        LACKING_SINCE.clear();
+        STREAKS.clear();
+    }
+
     /**
-     * What the constructions of a kingdom and the orders of its workshops lack, ordered from abroad as far as the goods can be
-     * bought there, the money it may spare reaches and the day's limit of imports allows. Goods on their way count as there.
+     * What the constructions of a kingdom and the orders of its workshops lack, the oldest construction first: bought of the
+     * shops of its citizens first, then ordered from abroad as far as the goods can be bought there, the budget of the day
+     * reaches and the limit of imports of the day allows. Goods on their way count as there. What its own miners, woodcutters
+     * or farmers gather waits some days for them before it is bought abroad, and an item bought abroad day after day is left
+     * alone for some days: a ruler who never stops importing a stone has its builders wait for the miners instead.
      *
+     * @param budget what the ruler spends on it today at most
      * @return the goods ordered, as decrees
      */
-    static List<RulerDecision> supply(MinecraftServer server, UUID id, long spare) {
+    static List<RulerDecision> supply(MinecraftServer server, UUID id, long budget) {
         KingdomWorldState state = KingdomWorldApi.state(server);
         java.util.Map<String, Integer> lacking = new java.util.LinkedHashMap<>();
-        for (Construction construction : state.construction().of(id)) {
+        List<Construction> constructions = new ArrayList<>(state.construction().of(id));
+        constructions.sort(java.util.Comparator.comparingLong(Construction::created));
+        for (Construction construction : constructions) {
             if (construction.paused()) {
                 continue;
             }
@@ -573,6 +595,9 @@ public final class RulerActions {
                 lacking.merge(missing.item(), missing.count(), Integer::sum);
             }
         }
+        long day = TreasuryActions.day(server);
+        java.util.Map<String, Long> since = LACKING_SINCE.computeIfAbsent(id, k -> new java.util.HashMap<>());
+        since.keySet().retainAll(lacking.keySet());
         if (lacking.isEmpty()) {
             return List.of();
         }
@@ -581,20 +606,42 @@ public final class RulerActions {
         for (Market.ImportOrder order : market.imports()) {
             lacking.computeIfPresent(order.item(), (item, count) -> count - order.count() > 0 ? count - order.count() : null);
         }
-        long day = TreasuryActions.day(server);
+        // Who works in the kingdom: an item a profession of its own gathers waits for them some days.
+        java.util.Set<String> professions = new java.util.HashSet<>();
+        for (Citizen citizen : state.citizens().registry().citizensOf(id)) {
+            professions.add(citizen.professionId());
+        }
+        java.util.Map<String, long[]> streaks = STREAKS.computeIfAbsent(id, k -> new java.util.HashMap<>());
         int left = rules.importMaxPerDay() - market.stats(day).imported();
-        long budget = spare / 2;
         List<RulerDecision> ordered = new ArrayList<>();
         for (java.util.Map.Entry<String, Integer> entry : lacking.entrySet()) {
             if (left <= 0 || budget <= 0) {
                 break;
             }
-            net.minecraft.world.item.Item item = io.github.sekerator.kingdomworld.common.trade.GoodsStacks.item(entry.getKey());
-            if (item == net.minecraft.world.item.Items.AIR || !io.github.sekerator.kingdomworld.common.trade.MarketActions.isImportable(server, item)) {
+            String wanted = entry.getKey();
+            String gatherer = ConstructionWork.gatherer(server, id, wanted);
+            if (!gatherer.isEmpty() && professions.contains(gatherer) && day - since.computeIfAbsent(wanted, k -> day) < LOCAL_DAYS) {
+                continue;
+            }
+            long[] streak = streaks.get(wanted);
+            if (streak != null && day < streak[2]) {
+                continue;
+            }
+            int count = entry.getValue();
+            // The shops of its citizens first: what they made is bought at home.
+            long funds = RulerPurse.funds(server, id);
+            long got = io.github.sekerator.kingdomworld.common.commerce.WorldShops.rulerBuys(server, id, wanted, count, budget, day);
+            if (got > 0) {
+                budget -= Math.max(0, funds - RulerPurse.funds(server, id));
+                count -= (int) Math.min(count, got);
+            }
+            net.minecraft.world.item.Item item = io.github.sekerator.kingdomworld.common.trade.GoodsStacks.item(wanted);
+            if (count <= 0 || budget <= 0 || item == net.minecraft.world.item.Items.AIR
+                    || !io.github.sekerator.kingdomworld.common.trade.MarketActions.isImportable(server, item)) {
                 continue;
             }
             double worth = io.github.sekerator.kingdomworld.common.trade.MarketStock.worth(server, item).amount();
-            int count = Math.min(entry.getValue(), left);
+            count = Math.min(count, left);
             while (count > 0 && io.github.sekerator.kingdomworld.core.trade.Prices.importCost(worth, count, rules) > budget) {
                 count /= 2;
             }
@@ -605,7 +652,14 @@ public final class RulerActions {
             if (io.github.sekerator.kingdomworld.common.trade.MarketActions.orderImport(server, null, id, item, count).success()) {
                 budget -= cost;
                 left -= count;
-                ordered.add(RulerDecision.of(RulerDecision.Kind.IMPORT, entry.getKey(), count).withExtra(cost));
+                ordered.add(RulerDecision.of(RulerDecision.Kind.IMPORT, wanted, count).withExtra(cost));
+                long[] now = streak != null && streak[0] == day - 1 ? new long[]{day, streak[1] + 1, 0} : new long[]{day, 1, 0};
+                if (now[1] >= IMPORT_STREAK) {
+                    now = new long[]{day, 0, day + IMPORT_PAUSE};
+                    LOGGER.info("The ruler of {} bought {} abroad {} days in a row and waits {} days before it buys it again",
+                            NpcRulers.kingdomName(server, id), wanted, IMPORT_STREAK, IMPORT_PAUSE);
+                }
+                streaks.put(wanted, now);
             }
         }
         return ordered;
