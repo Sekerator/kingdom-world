@@ -38,8 +38,8 @@ trade, hire and go to war.
 - The starting wealth is given once, when a kingdom appears: money in the treasury marked "Founding", food for
   {cfg:npcKingdoms.startingFoodDays} days for all its citizens, logs, planks, cobblestone, iron, seed and the gear of
   its soldiers in the storehouses. From then on the kingdom lives by the usual rules.
-- Kings of the world are rich: the treasury holds 5,000 gold when a small kingdom appears, 20,000 for a medium one and
-  100,000 for a large one (the key `npcKingdoms.startingMoney`, in copper). Kingdoms that appeared in earlier versions
+- Kings of the world are rich: the treasury holds 1,000 gold when a small kingdom appears, 5,000 for a medium one and
+  10,000 for a large one (the key `npcKingdoms.startingMoney`, in copper). Kingdoms that appeared in earlier versions
   with 60, 150 and 400 gold get the difference once. A rich treasury does not drag its currency down: the money of
   the treasury of a kingdom of the world counts as its wealth.
 

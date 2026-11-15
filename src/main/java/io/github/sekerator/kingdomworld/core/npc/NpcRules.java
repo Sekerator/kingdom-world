@@ -68,7 +68,7 @@ public record NpcRules(boolean generate, int count, int radius, int minDistance,
     public static final long[] LEGACY_MONEY = {6000, 15000, 40000};
 
     public static final NpcRules DEFAULT = new NpcRules(true, 8, 6000, 1200, 1000, 12, new int[]{5, 0, 3}, new int[]{5, 3, 2},
-            new int[]{4, 6, 7}, new int[]{2, 3, 4}, 260, new long[]{500_000, 2_000_000, 10_000_000}, 10, new int[]{4, 10, 16}, new int[]{2, 4, 8},
+            new int[]{4, 6, 7}, new int[]{2, 3, 4}, 260, new long[]{100_000, 500_000, 1_000_000}, 10, new int[]{4, 10, 16}, new int[]{2, 4, 8},
             2000, 4, 20, 60);
 
     /**

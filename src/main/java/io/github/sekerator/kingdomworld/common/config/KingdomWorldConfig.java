@@ -2006,7 +2006,7 @@ public final class KingdomWorldConfig {
             townDistance = builder.comment("How far towns lie from the capital, in blocks.")
                     .defineInRange("townDistance", d.townDistance(), 64, 1_000);
             startingMoney = builder.comment("The money of the treasury when a kingdom appears, by size, in copper (100 copper make 1 gold):"
-                            + " 5000, 20000 and 100000 gold by default; journaled as its founding. The old defaults 6000, 15000, 40000"
+                            + " 1000, 5000 and 10000 gold by default; journaled as its founding. The old defaults 6000, 15000, 40000"
                             + " are read as the new ones.")
                     .defineList("startingMoney", List.of((int) d.money(io.github.sekerator.kingdomworld.core.npc.NpcLevel.SMALL),
                                     (int) d.money(io.github.sekerator.kingdomworld.core.npc.NpcLevel.MEDIUM),
