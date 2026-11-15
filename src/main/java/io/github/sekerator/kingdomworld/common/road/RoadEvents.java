@@ -91,6 +91,12 @@ public final class RoadEvents {
         } catch (RuntimeException e) {
             LOGGER.error("KingdomWorld laying out of walls failed", e);
         }
+        try {
+            // The paid columns of walls go up every tick under a budget.
+            CityWalls.placeTick(server);
+        } catch (RuntimeException e) {
+            LOGGER.error("KingdomWorld placing of walls failed", e);
+        }
         if (server.getTickCount() % SPEED_TICKS == 0) {
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 RoadSpeed.update(player);

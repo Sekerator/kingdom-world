@@ -101,6 +101,7 @@ public final class CityWalls {
     }
 
     static void reset() {
+        placeFrom = Long.MIN_VALUE;
         INSIDE.clear();
         SEEN.clear();
         LAST.clear();
@@ -939,17 +940,65 @@ public final class CityWalls {
             if (level == null) {
                 continue;
             }
-            // The wall the loader of places serves gets its columns there, a few a tick.
-            if (!io.github.sekerator.kingdomworld.common.construction.SiteLoader.servingWall(wall.id())) {
-                for (Road.Section section : wall.sections()) {
-                    placeSection(level, wall, section, Integer.MAX_VALUE);
-                }
-            }
+            // The paid columns go up every tick under a budget, see placeTick.
             if (wall.built() && wall.buildingId() == 0) {
                 register(server, wall);
             }
             if (minute && wall.buildingId() != 0) {
                 integrity(server, level, wall);
+            }
+        }
+    }
+
+    /** Columns of walls placed in a tick at most, in all. */
+    private static final int PLACE_COLUMNS = 64;
+    /** Time the walls take to change the world in a tick at most. */
+    private static final long PLACE_NANOS = 2_000_000L;
+    /** The wall the placing of the last tick stopped at, so that every wall gets its turn. */
+    private static long placeFrom = Long.MIN_VALUE;
+
+    /**
+     * Places paid columns of walls whose place is loaded, every tick under a budget of columns and time: a wall paid at once (a
+     * kingdom of the world pays dozens of columns a tick) goes up over the following ticks rather than in one long tick. The
+     * wall the loader of places serves gets its columns there.
+     */
+    public static void placeTick(MinecraftServer server) {
+        if (RoadWork.isReadOnly(server)) {
+            return;
+        }
+        RoadState roads = RoadWork.state(server);
+        List<Wall> walls = new ArrayList<>();
+        for (Wall wall : roads.walls()) {
+            if (!wall.built() && !io.github.sekerator.kingdomworld.common.construction.SiteLoader.servingWall(wall.id())) {
+                walls.add(wall);
+            }
+        }
+        if (walls.isEmpty()) {
+            return;
+        }
+        // The wall after the one the last tick ended at goes first.
+        walls.sort(java.util.Comparator.comparingLong(Wall::id));
+        int start = 0;
+        for (int i = 0; i < walls.size(); i++) {
+            if (walls.get(i).id() > placeFrom) {
+                start = i;
+                break;
+            }
+        }
+        long deadline = System.nanoTime() + PLACE_NANOS;
+        int budget = PLACE_COLUMNS;
+        for (int n = 0; n < walls.size() && budget > 0 && System.nanoTime() <= deadline; n++) {
+            Wall wall = walls.get((start + n) % walls.size());
+            ServerLevel level = ConstructionWork.level(server, wall.dimension());
+            if (level == null) {
+                continue;
+            }
+            placeFrom = wall.id();
+            for (Road.Section section : wall.sections()) {
+                budget -= placeSection(level, wall, section, budget, deadline);
+                if (budget <= 0 || System.nanoTime() > deadline) {
+                    break;
+                }
             }
         }
     }
@@ -960,9 +1009,19 @@ public final class CityWalls {
      * @return columns placed
      */
     public static int placeSection(ServerLevel level, Wall wall, Road.Section section, int budget) {
+        return placeSection(level, wall, section, budget, Long.MAX_VALUE);
+    }
+
+    /**
+     * Places the paid columns of a section in order while their place is loaded, until the budget of columns or the time runs out.
+     *
+     * @param deadline the time from {@link System#nanoTime()} after which no further column is started
+     * @return columns placed
+     */
+    public static int placeSection(ServerLevel level, Wall wall, Road.Section section, int budget, long deadline) {
         List<Wall.Block> blocks = wall.blocksOf(section);
         int done = 0;
-        while (section.placed() < section.paid() && done < budget) {
+        while (section.placed() < section.paid() && done < budget && (done == 0 || System.nanoTime() <= deadline)) {
             Wall.Block block = blocks.get(section.placed());
             BlockPos base = new BlockPos(block.x(), block.y(), block.z());
             if (!io.github.sekerator.kingdomworld.common.construction.ChunkHold.loaded(level, base)) {
