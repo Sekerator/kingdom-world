@@ -1553,10 +1553,10 @@ public final class NpcSpawner {
     }
 
     /**
-     * A building of the plan of a place: its template, the point it is centred on, its placement and, for a building of the
-     * capital, its number in the plan ({@code -1} for one of a town).
+     * A building of the plan of a place: its template, the point it is centred on, its placement, for a building of the capital its
+     * number in the plan ({@code -1} for one of a town), and where it stands: 0 for the capital, the number of its town from 1.
      */
-    public record Planned(String template, int x, int z, Placement placement, int plot) {
+    public record Planned(String template, int x, int z, Placement placement, int plot, int area) {
     }
 
     /**
@@ -1567,7 +1567,7 @@ public final class NpcSpawner {
         List<NpcComposition.Plot> plots = composition.buildings();
         for (int i = 0; i < plots.size(); i++) {
             NpcComposition.Plot plot = plots.get(i);
-            result.add(new Planned(plot.template(), site.x() + plot.x(), site.z() + plot.z(), new Placement(plot.facing(), plot.mirror()), i));
+            result.add(new Planned(plot.template(), site.x() + plot.x(), site.z() + plot.z(), new Placement(plot.facing(), plot.mirror()), i, 0));
         }
         if (composition.towns() == 0 || site.kingdomId().isEmpty()) {
             return result;
@@ -1579,9 +1579,10 @@ public final class NpcSpawner {
             if (cities.stream().noneMatch(c -> Math.abs(c.x() - town.x()) <= 2 && Math.abs(c.z() - town.z()) <= 2)) {
                 continue;
             }
+            int area = index + 1;
             if (composition.districts()) {
                 for (NpcComposition.Plot at : composition.town(index)) {
-                    result.add(new Planned(at.template(), town.x() + at.x(), town.z() + at.z(), new Placement(at.facing(), at.mirror()), -1));
+                    result.add(new Planned(at.template(), town.x() + at.x(), town.z() + at.z(), new Placement(at.facing(), at.mirror()), -1, area));
                 }
                 continue;
             }
@@ -1589,7 +1590,7 @@ public final class NpcSpawner {
             for (int plot = 0; plot < buildings.size() && plot < TOWN_PLOTS.length; plot++) {
                 String template = buildings.get(plot);
                 int[] where = template.equals(NpcComposition.WELL) ? new int[]{-9, -9, 0} : TOWN_PLOTS[plot];
-                result.add(new Planned(template, town.x() + where[0], town.z() + where[1], new Placement(where[2], false), -1));
+                result.add(new Planned(template, town.x() + where[0], town.z() + where[1], new Placement(where[2], false), -1, area));
             }
         }
         return result;
@@ -1612,7 +1613,11 @@ public final class NpcSpawner {
     }
 
     /**
-     * Every building of the plan of a place, capital and towns, that neither stands nor is being built.
+     * Every building of the plan of a place, capital and towns, that neither stands nor is being built. A plot stands while a
+     * building or a construction of the kingdom has its anchor there, of the template of the plan or of another one (a ruler
+     * upgraded it), or covers its middle. A building of a kind the ruler put up elsewhere on the land of the capital or of the town
+     * (it tore one down and built it anew, or moved it) stands for one plot of that kind that is empty: a plot is missing only
+     * while the empty plots of its kind outnumber the buildings of the kind standing off the plan.
      */
     public static List<Planned> missing(MinecraftServer server, NpcSite site, NpcComposition composition) {
         List<Planned> result = new ArrayList<>();
@@ -1621,39 +1626,85 @@ public final class NpcSpawner {
             return result;
         }
         KingdomWorldState state = KingdomWorldApi.state(server);
-        // A plot stands while a building or a construction of the kingdom has its anchor there, of the template of the plan or
-        // of another one (a ruler upgraded it), or covers its middle.
-        Set<Long> anchors = new java.util.HashSet<>();
+        List<String> templates = new ArrayList<>();
+        List<int[]> anchors = new ArrayList<>();
         List<Box> boxes = new ArrayList<>();
         for (Building building : state.construction().buildingsOf(id.get())) {
-            anchors.add(ChunkPos.asLong(building.anchor().x(), building.anchor().z()));
+            templates.add(building.templateId());
+            anchors.add(new int[]{building.anchor().x(), building.anchor().z()});
             boxes.add(building.box());
         }
         for (Construction construction : state.construction().of(id.get())) {
-            anchors.add(ChunkPos.asLong(construction.anchor().x(), construction.anchor().z()));
+            templates.add(construction.templateId());
+            anchors.add(new int[]{construction.anchor().x(), construction.anchor().z()});
             boxes.add(construction.box());
         }
+        boolean[] used = new boolean[templates.size()];
+        // The empty plots by where they stand and their kind.
+        Map<String, List<Planned>> empty = new java.util.LinkedHashMap<>();
         for (Planned planned : planned(server, site, composition)) {
             Optional<BuildingTemplate> template = BuildingTemplates.get(planned.template());
             if (template.isEmpty() || !template.get().available()) {
                 continue;
             }
             BlockPos anchor = anchor(template.get(), planned.x(), site.groundY() + 1, planned.z(), planned.placement());
-            if (anchors.contains(ChunkPos.asLong(anchor.getX(), anchor.getZ()))) {
-                continue;
-            }
-            boolean covered = false;
-            for (Box box : boxes) {
-                if (box.minX() <= planned.x() && planned.x() <= box.maxX() && box.minZ() <= planned.z() && planned.z() <= box.maxZ()) {
-                    covered = true;
-                    break;
+            int standing = -1;
+            for (int i = 0; i < templates.size() && standing < 0; i++) {
+                if (anchors.get(i)[0] == anchor.getX() && anchors.get(i)[1] == anchor.getZ()) {
+                    standing = i;
                 }
             }
-            if (!covered) {
-                result.add(planned);
+            for (int i = 0; i < boxes.size() && standing < 0; i++) {
+                Box box = boxes.get(i);
+                if (box.minX() <= planned.x() && planned.x() <= box.maxX() && box.minZ() <= planned.z() && planned.z() <= box.maxZ()) {
+                    standing = i;
+                }
+            }
+            if (standing >= 0) {
+                used[standing] = true;
+                continue;
+            }
+            empty.computeIfAbsent(planned.area() + "/" + kindOf(planned.template()), key -> new ArrayList<>()).add(planned);
+        }
+        // The buildings off the plan by where they stand and their kind.
+        Map<String, Integer> spare = new java.util.HashMap<>();
+        int capitalReach = (NpcCity.landRadius(site) + 1) * 16;
+        int townReach = (NpcCity.townRadius(site) + 1) * 16;
+        for (int i = 0; i < templates.size(); i++) {
+            if (used[i]) {
+                continue;
+            }
+            int[] at = anchors.get(i);
+            int area = -1;
+            if (Math.abs(at[0] - site.x()) <= capitalReach && Math.abs(at[1] - site.z()) <= capitalReach) {
+                area = 0;
+            } else {
+                for (int t = 0; t < site.towns().size() && area < 0; t++) {
+                    NpcSite.Town town = site.towns().get(t);
+                    if (Math.abs(at[0] - town.x()) <= townReach && Math.abs(at[1] - town.z()) <= townReach) {
+                        area = t + 1;
+                    }
+                }
+            }
+            if (area >= 0) {
+                spare.merge(area + "/" + kindOf(templates.get(i)), 1, Integer::sum);
             }
         }
+        for (Map.Entry<String, List<Planned>> entry : empty.entrySet()) {
+            List<Planned> plots = entry.getValue();
+            int stands = Math.min(plots.size(), spare.getOrDefault(entry.getKey(), 0));
+            result.addAll(plots.subList(0, plots.size() - stands));
+        }
+        result.sort(java.util.Comparator.comparingInt((Planned planned) -> planned.plot() < 0 ? Integer.MAX_VALUE : planned.plot()));
         return result;
+    }
+
+    /**
+     * The kind of building a template is, by the catalog of the kingdoms of the world; a template the catalog does not know is a
+     * kind of its own.
+     */
+    static String kindOf(String template) {
+        return io.github.sekerator.kingdomworld.core.npc.TemplateCatalog.get(template).map(entry -> entry.kind().name()).orElse(template);
     }
 
     private static Set<Integer> plotsOf(List<Planned> buildings) {

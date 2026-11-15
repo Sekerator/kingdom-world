@@ -150,7 +150,7 @@ public final class CapitalRepair {
     public static Optional<Look> look(MinecraftServer server, NpcSite site) {
         Optional<UUID> id = site.kingdomId();
         Optional<Kingdom> kingdom = id.flatMap(found -> KingdomWorldApi.kingdom(server, found));
-        if (kingdom.isEmpty()) {
+        if (kingdom.isEmpty() || !ofPlan(site)) {
             return Optional.empty();
         }
         NpcComposition composition = NpcSpawner.composition(site);
@@ -218,8 +218,17 @@ public final class CapitalRepair {
     }
 
     /**
-     * Whether the capital of the kingdom of a place still stands on the place: a kingdom whose throne moved away has its capital
-     * elsewhere, and the plan of the place is no longer its town.
+     * Whether the plan of the capital of a place was raised, or its raising stopped half way: a raising that came to its end gave
+     * the founding money or the stores of the plan. A place made for a city that left a kingdom ends at once without either, and
+     * its town is no capital of the plan.
+     */
+    static boolean ofPlan(NpcSite site) {
+        return site.stage() != SpawnStage.DONE || site.given(NpcSite.MONEY) || site.given(NpcSite.STORES);
+    }
+
+    /**
+     * Whether the capital of the kingdom of a place still stands on the place and on the land of the kingdom: a kingdom whose throne
+     * moved away has its capital elsewhere, and one that lost the land of the place no longer builds there.
      */
     static boolean capitalHere(MinecraftServer server, NpcSite site) {
         Optional<UUID> id = site.kingdomId();
@@ -231,6 +240,8 @@ public final class CapitalRepair {
             return false;
         }
         int reach = (NpcCity.landRadius(site) + 1) * 16;
-        return Math.abs(capital.x() - site.x()) <= reach && Math.abs(capital.z() - site.z()) <= reach;
+        return Math.abs(capital.x() - site.x()) <= reach && Math.abs(capital.z() - site.z()) <= reach
+                && id.get().equals(KingdomWorldApi.state(server).territory().ownerOf(capital.dimension(),
+                io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(site.x() >> 4, site.z() >> 4)));
     }
 }

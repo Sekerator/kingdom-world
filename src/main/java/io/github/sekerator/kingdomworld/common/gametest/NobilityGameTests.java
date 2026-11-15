@@ -306,6 +306,18 @@ public final class NobilityGameTests {
                 helper.assertTrue(land.isPresent() && land.get().chunks().contains(io.github.sekerator.kingdomworld.core.territory.ChunkKey.of(
                         hall.getX() >> 4, hall.getZ() >> 4)), "The new kingdom has no land at the city");
                 helper.assertTrue(state.court(home.id()).chronicle().stream().anyMatch(note -> note.key().equals("seceded")), "No chronicle of the secession");
+                // The place of the new kingdom was never raised by the plan of a capital: its repair leaves the city as it stands.
+                io.github.sekerator.kingdomworld.core.npc.NpcSite seceded = NpcWork.state(server).kingdom(free)
+                        .flatMap(npc -> NpcWork.state(server).site(npc.siteId())).orElseThrow();
+                helper.assertTrue(io.github.sekerator.kingdomworld.common.npc.CapitalRepair.look(server, seceded).isEmpty(),
+                        "The city that left is looked at as a capital of a plan");
+                io.github.sekerator.kingdomworld.common.npc.CapitalRepair.Look repaired = io.github.sekerator.kingdomworld.common.npc.CapitalRepair
+                        .repair(server, seceded);
+                helper.assertTrue(repaired.outcome() == io.github.sekerator.kingdomworld.common.npc.CapitalRepair.Outcome.NOT_STANDING
+                                && seceded.status() == io.github.sekerator.kingdomworld.core.npc.NpcSite.Status.SPAWNED
+                                && seceded.stage() == io.github.sekerator.kingdomworld.core.npc.SpawnStage.DONE
+                                && !seceded.given(io.github.sekerator.kingdomworld.core.npc.NpcSite.REBUILDING),
+                        "The repair would raise a capital in the city that left: " + repaired.outcome() + " " + seceded.status());
                 NpcWork.state(server).kingdom(free).ifPresent(npc -> NpcWork.state(server).site(npc.siteId())
                         .ifPresent(site -> site.setStatus(io.github.sekerator.kingdomworld.core.npc.NpcSite.Status.REMOVED)));
                 Kingdom freeKingdom = KingdomWorldApi.kingdom(server, free).orElseThrow();

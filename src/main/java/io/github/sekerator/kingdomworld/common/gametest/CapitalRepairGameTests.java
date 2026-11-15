@@ -281,4 +281,57 @@ public final class CapitalRepairGameTests {
         }
         helper.succeed();
     }
+
+    /**
+     * A small capital whose ruler tore down a building of its plan and put up one of its kind elsewhere on the land of the capital
+     * is whole for the repair: no second building of the kind goes up.
+     */
+    @GameTest(template = NpcGameTests.EMPTY, batch = "kingdomworld_capital_moved", timeoutTicks = 400)
+    public static void aCapitalWhoseBuildingMovedIsNotRaisedAgain(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos center = NpcGameTests.platform(helper);
+        NpcSettings.override(NpcRules.DEFAULT);
+        NpcSite site = null;
+        try {
+            site = NpcGameTests.plant(helper, center);
+            Kingdom kingdom = NpcGameTests.raise(helper, site, NpcGameTests.STEPS);
+            UUID id = kingdom.id();
+            var book = KingdomWorldApi.state(server).construction();
+            List<NpcSpawner.Planned> planned = NpcSpawner.planned(server, site, NpcSpawner.composition(site));
+            Building moved = null;
+            for (Building building : book.buildingsOf(id)) {
+                if (planned.stream().anyMatch(p -> p.template().equals(building.templateId())) && !building.templateId().contains("castle")) {
+                    moved = building;
+                    break;
+                }
+            }
+            helper.assertTrue(moved != null, "No building of the plan stands");
+            Box box = moved.box();
+            book.removeBuilding(moved.id());
+            GatheringGameTests.clear(level, new BlockPos(box.minX(), box.minY(), box.minZ()), new BlockPos(box.maxX(), box.maxY(), box.maxZ()));
+            // Put up anew in a corner of the land of the capital.
+            int shift = NpcGameTests.landRadius(site) * 16 - (box.maxX() - box.minX()) - 4;
+            int dx = site.x() + shift - box.minX();
+            long newId = book.nextBuildingId();
+            book.restoreCounters(0, newId + 1);
+            long now = KingdomWorldApi.gameTime(server);
+            book.putBuilding(new Building(newId, id, moved.templateId(), moved.type(), moved.category(), moved.role(), moved.level(),
+                    moved.materials(), new io.github.sekerator.kingdomworld.core.citizen.WorldPos(moved.anchor().dimension(), moved.anchor().x() + dx,
+                    moved.anchor().y(), moved.anchor().z()), moved.placement(), new Box(box.minX() + dx, box.minY(), box.minZ(), box.maxX() + dx,
+                    box.maxY(), box.maxZ()), 0, now, true, 100, now, false, new java.util.BitSet()));
+            io.github.sekerator.kingdomworld.common.construction.BuildingEffects.changed();
+            int buildings = book.buildingsOf(id).size();
+            helper.assertTrue(CapitalRepair.look(server, site).map(look -> look.missing().isEmpty()).orElse(false),
+                    "The building put up elsewhere counts as missing: " + CapitalRepair.look(server, site).map(CapitalRepair.Look::missing));
+            CapitalRepair.Look look = CapitalRepair.repair(server, site);
+            helper.assertTrue(look.outcome() == CapitalRepair.Outcome.WHOLE && site.status() == NpcSite.Status.SPAWNED
+                    && !site.given(NpcSite.REBUILDING), "The repair raises the capital again: " + look.outcome());
+            helper.assertTrue(book.buildingsOf(id).size() == buildings, "A building came twice");
+        } finally {
+            NpcGameTests.cleanUp(helper, site, center);
+            NpcSettings.override(null);
+        }
+        helper.succeed();
+    }
 }
