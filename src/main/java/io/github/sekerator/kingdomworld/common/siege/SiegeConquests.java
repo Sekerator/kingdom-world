@@ -27,6 +27,7 @@ import io.github.sekerator.kingdomworld.core.npc.NpcState;
 import io.github.sekerator.kingdomworld.core.npc.Settlement;
 import io.github.sekerator.kingdomworld.core.npc.SettlementGrid;
 import io.github.sekerator.kingdomworld.core.road.City;
+import io.github.sekerator.kingdomworld.core.road.Road;
 import io.github.sekerator.kingdomworld.core.road.RoadState;
 import io.github.sekerator.kingdomworld.core.siege.Conquest;
 import io.github.sekerator.kingdomworld.core.siege.ConquestPace;
@@ -194,6 +195,7 @@ final class SiegeConquests {
             case BUILDINGS -> buildings(server, conquest, area(server, conquest), pace);
             case CITIZENS -> citizens(server, conquest, area(server, conquest), pace);
             case CITIES -> cities(server, conquest, area(server, conquest), now);
+            case ROADS -> roads(server, conquest, area(server, conquest));
             case SETTLEMENTS -> settlements(server, conquest);
             case DAMAGE -> {
                 Predicate<WorldPos> area = area(server, conquest);
@@ -657,6 +659,53 @@ final class SiegeConquests {
             SiegeWork.LOGGER.info("Conquest #{}: {} city(ies) went to {}", conquest.id(), total, WarWork.name(server, conquest.winner()).getString());
         }
         return done;
+    }
+
+    /**
+     * The roads of the loser, one a second: all of them in an annexation, else those whose both ends lie on the land of the
+     * conquest (a city going over takes the roads between its places, not the road to the capital of the loser).
+     *
+     * @return whether none of them is left
+     */
+    private static boolean roads(MinecraftServer server, Conquest conquest, Predicate<WorldPos> area) {
+        RoadState roads = RoadWork.state(server);
+        boolean all = conquest.kind() == Conquest.Kind.ANNEX || conquest.kind() == Conquest.Kind.LAND;
+        Road next = null;
+        boolean more = false;
+        for (Road road : roads.roads()) {
+            if (!road.kingdomId().equals(conquest.loser())
+                    || !all && !(inArea(road, road.from(), area, conquest.loser()) && inArea(road, road.to(), area, conquest.loser()))) {
+                continue;
+            }
+            if (next != null) {
+                more = true;
+                break;
+            }
+            next = road;
+        }
+        int moved = 0;
+        if (next != null) {
+            long city = 0;
+            if (all) {
+                Optional<io.github.sekerator.kingdomworld.core.territory.Capital> capital = RoadWork.capital(server, conquest.loser());
+                city = capital.flatMap(c -> roads.cityAt(c.dimension(), c.x(), c.y(), c.z())).map(City::id).orElse(0L);
+            }
+            roads.handOverRoad(next.id(), conquest.loser(), conquest.winner(), city);
+            moved++;
+        }
+        int total = tally(conquest, moved, !more);
+        if (total >= 0) {
+            SiegeWork.LOGGER.info("Conquest #{}: {} road(s) went to {}", conquest.id(), total, WarWork.name(server, conquest.winner()).getString());
+        }
+        return !more;
+    }
+
+    private static boolean inArea(Road road, io.github.sekerator.kingdomworld.core.road.Endpoint end, Predicate<WorldPos> area, UUID loser) {
+        if (end.kind() == io.github.sekerator.kingdomworld.core.road.Endpoint.Kind.CAPITAL) {
+            return false;
+        }
+        int y = road.cells().isEmpty() ? 64 : road.cells().get(0).y();
+        return area.test(new WorldPos(road.dimension(), end.x(), y, end.z()));
     }
 
     private static void handOver(MinecraftServer server, RoadState roads, City city, UUID from, UUID to) {

@@ -66,6 +66,8 @@ public record Conquest(long id, Kind kind, long war, UUID winner, UUID loser, St
         BUILDINGS,
         CITIZENS,
         CITIES,
+        /** The roads of the loser on the land of the conquest go to the winner, one at a time. */
+        ROADS,
         /** The settlements of the provinces (all of the loser in an annexation) go to the winner, one at a time. */
         SETTLEMENTS,
         DAMAGE,
@@ -128,8 +130,9 @@ public record Conquest(long id, Kind kind, long war, UUID winner, UUID loser, St
     public static boolean has(Kind kind, Step step) {
         return switch (kind) {
             case LAND -> step == Step.LAND || step == Step.DAMAGE;
-            case CITY -> step == Step.LAND || step == Step.BUILDINGS || step == Step.CITIZENS || step == Step.CITIES || step == Step.DAMAGE;
-            case PROVINCE -> step == Step.LAND || step == Step.BUILDINGS || step == Step.CITIZENS || step == Step.CITIES
+            case CITY -> step == Step.LAND || step == Step.BUILDINGS || step == Step.CITIZENS || step == Step.CITIES || step == Step.ROADS
+                    || step == Step.DAMAGE;
+            case PROVINCE -> step == Step.LAND || step == Step.BUILDINGS || step == Step.CITIZENS || step == Step.CITIES || step == Step.ROADS
                     || step == Step.SETTLEMENTS || step == Step.DAMAGE;
             case ANNEX -> step != Step.DONE;
         };

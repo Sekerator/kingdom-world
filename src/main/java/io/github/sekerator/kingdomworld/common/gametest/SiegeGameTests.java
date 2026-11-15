@@ -428,12 +428,24 @@ public final class SiegeGameTests {
         KingdomWorldState world = KingdomWorldApi.state(server);
         Economy economy = world.economy();
         long day = WarWork.day(server);
+        long[] road = {0};
         try {
             economy.adminTreasury(loser.id(), 640, day);
             long supply = economy.supply(loser.id());
             int citizens = world.citizens().registry().size();
             long fundsBefore = economy.treasury(winner.id()).orElseThrow().funds();
             long worth = economy.exchangeQuote(winner.id(), loser.id(), 640, 0);
+            // A road of the loser goes to the winner with the kingdom, rather than vanish from the books when the loser is dissolved.
+            List<io.github.sekerator.kingdomworld.core.road.RouteCell> cells = new java.util.ArrayList<>();
+            for (int i = 0; i < 16; i++) {
+                cells.add(new io.github.sekerator.kingdomworld.core.road.RouteCell(i, 64, 0, io.github.sekerator.kingdomworld.core.road.RouteCell.Kind.GROUND,
+                        0, null));
+            }
+            road[0] = RoadWork.state(server).addRoad(loser.id(), io.github.sekerator.kingdomworld.core.road.RoadClass.PATH,
+                    Dimensions.id(helper.getLevel()), io.github.sekerator.kingdomworld.core.road.Endpoint.point(0, 0),
+                    io.github.sekerator.kingdomworld.core.road.Endpoint.point(15, 0), cells, List.of(), java.util.Map.of(),
+                    io.github.sekerator.kingdomworld.core.road.Road.Mode.OWN, KingdomWorldApi.gameTime(server), KingdomWorldApi.gameTime(server) + 1_000,
+                    new java.util.ArrayList<>()).id();
             SiegeWork.state(server).addConquest(Conquest.Kind.ANNEX, 0, winner.id(), loser.id(), Dimensions.id(helper.getLevel()), List.of(), 0,
                     KingdomWorldApi.gameTime(server));
             long moved = economy.treasury(loser.id()).orElseThrow().funds();
@@ -448,7 +460,12 @@ public final class SiegeGameTests {
                     && world.citizens().get(second.id()).map(c -> c.kingdomId().equals(winner.id())).orElse(false),
                     "The citizens did not become citizens of the winner");
             helper.assertTrue(supply >= 640, "The money of the loser was not counted");
+            helper.assertTrue(RoadWork.state(server).road(road[0]).map(r -> r.kingdomId().equals(winner.id())).orElse(false),
+                    "The road of the loser did not go to the winner");
         } finally {
+            if (road[0] != 0) {
+                RoadWork.state(server).removeRoad(road[0]);
+            }
             for (Citizen citizen : List.of(first, second)) {
                 CitizenBodies.force(citizen.id(), false);
                 world.citizens().registry().remove(citizen.id());

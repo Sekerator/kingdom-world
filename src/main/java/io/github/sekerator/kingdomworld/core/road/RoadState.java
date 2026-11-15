@@ -334,6 +334,35 @@ public final class RoadState {
 
     // ---------------------------------------------------------------- roads
 
+    /**
+     * A road goes to the winner of a conquest: the road itself, the sections the loser built, and an end at the capital of the
+     * loser becomes an end at the city its capital became; open crossings of the loser for it become the winner's.
+     *
+     * @param capitalCity the city the capital of the loser became, 0 when it did not
+     */
+    public void handOverRoad(long roadId, UUID from, UUID to, long capitalCity) {
+        Road road = roads.get(roadId);
+        if (road == null) {
+            return;
+        }
+        road.handOver(from, to, moved(road.from(), from, capitalCity), moved(road.to(), from, capitalCity));
+        for (Crossing crossing : new ArrayList<>(crossings.values())) {
+            if (crossing.roadId() == roadId && (crossing.requester().equals(from) || crossing.owner().equals(from))) {
+                crossings.put(crossing.id(), new Crossing(crossing.id(), roadId, crossing.requester().equals(from) ? to : crossing.requester(),
+                        crossing.owner().equals(from) ? to : crossing.owner(), crossing.mode(), crossing.status(), crossing.sections(), crossing.created(),
+                        crossing.expires()));
+            }
+        }
+        changed();
+    }
+
+    private static Endpoint moved(Endpoint end, UUID from, long capitalCity) {
+        if (end.kind() == Endpoint.Kind.CAPITAL && from.equals(end.kingdom()) && capitalCity > 0) {
+            return new Endpoint(Endpoint.Kind.CITY, capitalCity, null, end.x(), end.z());
+        }
+        return end;
+    }
+
     public Collection<Road> roads() {
         return Collections.unmodifiableCollection(roads.values());
     }

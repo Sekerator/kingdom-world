@@ -283,11 +283,11 @@ public final class Road {
     }
 
     private final long id;
-    private final UUID kingdomId;
+    private UUID kingdomId;
     private final RoadClass roadClass;
     private final String dimension;
-    private final Endpoint from;
-    private final Endpoint to;
+    private Endpoint from;
+    private Endpoint to;
     private final List<RouteCell> cells;
     private final Mode mode;
     private final long created;
@@ -364,6 +364,23 @@ public final class Road {
 
     public UUID kingdomId() {
         return kingdomId;
+    }
+
+    /**
+     * The road goes to another kingdom with the land it lies on: its sections the old one built become the new one's, and its
+     * ends are those given.
+     */
+    void handOver(UUID from, UUID to, Endpoint start, Endpoint end) {
+        if (kingdomId.equals(from)) {
+            kingdomId = Objects.requireNonNull(to, "to");
+        }
+        for (Section section : sections) {
+            if (section.builder().equals(from)) {
+                section.setBuilder(to);
+            }
+        }
+        this.from = Objects.requireNonNull(start, "start");
+        this.to = Objects.requireNonNull(end, "end");
     }
 
     public RoadClass roadClass() {
