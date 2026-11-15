@@ -1004,20 +1004,30 @@ public final class GuardArmyGameTests {
         UUID kingdomId = id;
         io.github.sekerator.kingdomworld.core.npc.NpcSite placed = site;
         int[] ticks = {0};
+        long[] stepSum = {0};
+        long[] stepWorst = {0};
         boolean[] over = {false};
         helper.onEachTick(() -> {
             if (over[0]) {
                 return;
             }
             ticks[0]++;
-            // A step a tick, as the server goes: its chunks load meanwhile.
+            // A step a tick, as the server goes: its chunks load meanwhile. The worst step goes into the log for the table of
+            // the load.
+            long began = System.nanoTime();
             io.github.sekerator.kingdomworld.common.npc.NpcRulers.runJobs(server, 1);
+            long took = System.nanoTime() - began;
+            stepSum[0] += took;
+            stepWorst[0] = Math.max(stepWorst[0], took);
             List<io.github.sekerator.kingdomworld.core.npc.ArmyCamp> built = io.github.sekerator.kingdomworld.common.npc.NpcCamps.built(server,
                     kingdomId);
             if (built.isEmpty() && ticks[0] < 2800) {
                 return;
             }
             over[0] = true;
+            com.mojang.logging.LogUtils.getLogger().info("Camp load: {} steps of the jobs of the rulers, average {} ms, worst {} ms", ticks[0],
+                    String.format(java.util.Locale.ROOT, "%.2f", stepSum[0] / 1e6 / Math.max(1, ticks[0])),
+                    String.format(java.util.Locale.ROOT, "%.2f", stepWorst[0] / 1e6));
             try {
                 helper.assertTrue(!built.isEmpty(), "No camp was raised: " + io.github.sekerator.kingdomworld.common.npc.NpcWork.state(server)
                         .camps(kingdomId));

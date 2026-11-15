@@ -82,6 +82,10 @@ minecraft {
             if (project.hasProperty('gameTestHeap')) {
                 jvmArg "-Xmx${project.property('gameTestHeap')}"
             }
+            // "-PgameTestJfr=file.jfr" records the run in a flight recording of the JVM, to find where the time of the ticks goes.
+            if (project.hasProperty('gameTestJfr')) {
+                jvmArg "-XX:StartFlightRecording=filename=${project.property('gameTestJfr')},settings=profile,dumponexit=true"
+            }
         }
 
         data {
