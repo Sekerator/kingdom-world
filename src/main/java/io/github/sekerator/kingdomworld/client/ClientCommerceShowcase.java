@@ -311,7 +311,7 @@ final class ClientCommerceShowcase {
                 mouseAway(minecraft);
                 if (minecraft.screen instanceof ThroneScreen screen) {
                     // The lines of the townsfolk, under the means of the people of the capital.
-                    for (int i = 0; i < 3; i++) {
+                    for (int i = 0; i < 6; i++) {
                         screen.mouseScrolled(minecraft.getWindow().getGuiScaledWidth() / 2.0, minecraft.getWindow().getGuiScaledHeight() / 2.0, -1);
                     }
                 }
@@ -472,14 +472,57 @@ final class ClientCommerceShowcase {
                 CommerceSavedData.get(server).setDirty();
                 worldShopId = shop.id();
                 if (player != null) {
-                    BlockPos front = surface(level, shop.place().x(), shop.place().z() + 3);
-                    player.teleportTo(level, front.getX() + 0.5, front.getY(), front.getZ() + 0.5, 180.0f, 10.0f);
+                    // Above the place of the shop, looking down at the capital around it.
+                    BlockPos front = surface(level, shop.place().x(), shop.place().z() + 10);
+                    player.teleportTo(level, front.getX() + 0.5, front.getY() + 12, front.getZ() + 0.5, 180.0f, 35.0f);
+                    player.getAbilities().flying = true;
+                    player.onUpdateAbilities();
                 }
                 LOGGER.info(PREFIX + "commerce showcase: a shop of citizens of {} at {} {} {}", npc.name(), shop.place().x(), shop.place().y(),
                         shop.place().z());
                 return;
             }
-            failure = "no kingdom of the world with a capital";
+            // A world without kingdoms of the world: one is founded south of the capital of the player and made one.
+            if (throne == null || player == null) {
+                failure = "no kingdom of the world with a capital";
+                return;
+            }
+            BlockPos seat = surface(level, throne.getX(), throne.getZ() + 128);
+            level.setBlockAndUpdate(seat, ModRegistries.THRONE.get().defaultBlockState());
+            CreateKingdomResult result = KingdomWorldApi.foundKingdom(level, seat, "Белозерское княжество", 0x8E3B2E, UUID.randomUUID());
+            if (!(result instanceof CreateKingdomResult.Created created)) {
+                failure = "the kingdom of the world was not founded: " + result;
+                return;
+            }
+            UUID id = created.kingdom().id();
+            long day = TreasuryActions.day(server);
+            io.github.sekerator.kingdomworld.common.npc.NpcWork.state(server).putKingdom(new io.github.sekerator.kingdomworld.core.npc.NpcKingdom(
+                    id, -1, io.github.sekerator.kingdomworld.core.npc.NpcLevel.SMALL,
+                    new io.github.sekerator.kingdomworld.core.npc.NpcNames.Name("Belozersk", "Белозерское княжество"),
+                    io.github.sekerator.kingdomworld.core.npc.RulerCharacter.MERCHANT,
+                    List.of(io.github.sekerator.kingdomworld.core.npc.RulerCharacter.Trait.PATIENT), 4321,
+                    io.github.sekerator.kingdomworld.core.citizen.Gender.FEMALE, List.of(), KingdomWorldApi.gameTime(server), day));
+            Citizen keeper = CitizenLife.arrive(server, id, new WorldPos("minecraft:overworld", seat.getX(), seat.getY(), seat.getZ()), false)
+                    .orElse(null);
+            Business.Place place = new Business.Place(Business.PlaceKind.MERCHANT_HOUSE, 0, 0, "minecraft:overworld", seat.getX() + 3, seat.getY(),
+                    seat.getZ() + 3);
+            Business shop = CommerceSavedData.get(server).open(id, 0, place, day, 200);
+            shop.changeTrade(Business.GENERAL_STORE, day);
+            if (keeper != null) {
+                shop.setKeepers(List.of(keeper.id()), false);
+                keeper.setBusiness(shop.id());
+                shop.setStatus(Business.Status.TRADING);
+            } else {
+                shop.setKeepers(List.of(), true);
+                shop.setStatus(Business.Status.FAMILY);
+            }
+            shop.addGoods("minecraft:bread", io.github.sekerator.kingdomworld.core.commerce.GoodsCategory.FOOD.ordinal(), 24, 3_000);
+            shop.addGoods("minecraft:torch", io.github.sekerator.kingdomworld.core.commerce.GoodsCategory.HOUSEHOLD.ordinal(), 32, 1_000);
+            CommerceSavedData.get(server).setDirty();
+            worldShopId = shop.id();
+            BlockPos front = surface(level, seat.getX() + 3, seat.getZ() + 6);
+            player.teleportTo(level, front.getX() + 0.5, front.getY(), front.getZ() + 0.5, 180.0f, 10.0f);
+            LOGGER.info(PREFIX + "commerce showcase: a kingdom of the world founded at {} with a shop of citizens", seat.toShortString());
         } catch (RuntimeException e) {
             failure = e.toString();
             LOGGER.error(PREFIX + "commerce showcase could not open a shop of the world", e);

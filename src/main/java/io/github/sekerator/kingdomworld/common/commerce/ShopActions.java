@@ -261,7 +261,9 @@ public final class ShopActions {
             rows.add(new ShopView.Row(new ItemStack(item), entry.getValue().count(), total + taxOf, taxOf, entry.getKey(), entry.getValue().made()));
         }
         Optional<Kingdom> kingdom = KingdomWorldApi.kingdom(server, shop.kingdomId());
-        String kingdomName = kingdom.map(Kingdom::name).orElse("?");
+        // A kingdom of the world is named in the alphabet of the player.
+        String kingdomName = kingdom.map(found -> io.github.sekerator.kingdomworld.common.npc.NpcWork.localKingdom(found.id(), found.name(),
+                player.getLanguage())).orElse("?");
         var treasury = economy.treasury(shop.kingdomId());
         String currency = MoneyTexts.currencyShort(treasury.map(t -> t.currencyName()).orElse(""), kingdomName).getString();
         long silver = treasury.map(t -> t.units().silver()).orElse(io.github.sekerator.kingdomworld.core.economy.CurrencyUnits.DEFAULT.silver());
