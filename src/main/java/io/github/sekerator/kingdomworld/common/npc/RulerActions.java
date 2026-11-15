@@ -667,11 +667,13 @@ public final class RulerActions {
             return List.of();
         }
         TOOLS_DAY.put(id, day);
-        // The shops of its citizens first: what they made; only the rest comes from abroad.
+        // The shops of its citizens first: what they made; only the rest comes from abroad. Tools are paid from ten days of upkeep
+        // at most, whatever the treasury holds.
+        long upkeep = RulerPurse.upkeep(server, id);
         for (java.util.Map.Entry<String, Integer> entry : new ArrayList<>(lacking.entrySet())) {
             long funds = state.economy().treasury(id).map(io.github.sekerator.kingdomworld.core.economy.Treasury::funds).orElse(0L);
             long got = io.github.sekerator.kingdomworld.common.commerce.WorldShops.rulerBuys(server, id, entry.getKey(), entry.getValue(),
-                    funds / 3, day);
+                    Math.min(funds / 3, Math.max(upkeep * 10, 1_000)), day);
             if (got >= entry.getValue()) {
                 lacking.remove(entry.getKey());
             } else if (got > 0) {
@@ -692,7 +694,8 @@ public final class RulerActions {
             int count = 0;
             List<io.github.sekerator.kingdomworld.core.citizen.WorldPos> places = where.getOrDefault(entry.getKey(), List.of());
             for (int i = 0; i < entry.getValue() && left > 0; i++) {
-                if (state.economy().treasury(id).map(treasury -> treasury.funds() < each * 3).orElse(true)) {
+                // A tool is bought while the treasury keeps three days of upkeep besides.
+                if (state.economy().treasury(id).map(treasury -> treasury.funds() < Math.max(each * 3, each + upkeep * 3)).orElse(true)) {
                     break;
                 }
                 net.minecraft.world.item.ItemStack tool = new net.minecraft.world.item.ItemStack(item);

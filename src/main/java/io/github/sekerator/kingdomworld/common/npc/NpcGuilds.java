@@ -461,9 +461,8 @@ public final class NpcGuilds {
             return;
         }
         UUID id = kingdom.kingdomId();
-        long funds = KingdomWorldApi.state(server).economy().treasury(id).map(io.github.sekerator.kingdomworld.core.economy.Treasury::funds)
-                .orElse(0L);
-        if (funds < NpcSettings.rules().money(kingdom.level())) {
+        // The guilds rise in a kingdom whose treasury pays two months of its upkeep, however rich it was when it appeared.
+        if (RulerPurse.keepDays(server, id) < RulerPurse.GUILD_DAYS) {
             return;
         }
         GuildRanks.Ranks now = ranks(server, id);

@@ -165,13 +165,11 @@ public final class ArmyStaff {
                 }
             }
         }
-        // A ruler of the world buys kits only while its treasury keeps a third of the money it appeared with: a poor kingdom
-        // lets its new soldiers wait for their kits rather than its treasury run dry.
+        // A ruler of the world buys kits only while its treasury pays a month of its upkeep: a poor kingdom lets its new soldiers
+        // wait for their kits rather than its treasury run dry.
         boolean afford = free || !io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, kingdomId)
-                || world.economy().treasury(kingdomId).map(treasury -> treasury.funds()
-                        >= io.github.sekerator.kingdomworld.common.npc.NpcWork.kingdom(server, kingdomId)
-                        .map(npc -> io.github.sekerator.kingdomworld.common.npc.NpcSettings.rules().money(npc.level()) / 3).orElse(0L))
-                .orElse(false);
+                || io.github.sekerator.kingdomworld.common.npc.RulerPurse.keepDays(server, kingdomId)
+                >= io.github.sekerator.kingdomworld.common.npc.RulerPurse.KIT_DAYS;
         for (Soldier soldier : afford ? army.soldiersOf(kingdomId) : java.util.List.<Soldier>of()) {
             Optional<Citizen> citizen = world.citizens().get(soldier.citizenId());
             if (citizen.isEmpty() || ArmyWork.isAwayFromHome(server, soldier.citizenId())) {
