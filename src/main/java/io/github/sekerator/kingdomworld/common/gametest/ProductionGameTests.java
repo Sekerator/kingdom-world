@@ -463,7 +463,7 @@ public final class ProductionGameTests {
     public static void smithUpgradesToNetheriteAtTheSmithingTable(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
-        level.setDayTime(1_000L);
+        GatheringGameTests.morning(level);
         BlockPos from = helper.absolutePos(ZONE_FROM);
         BlockPos to = helper.absolutePos(new BlockPos(7, 3, 6));
         GatheringGameTests.clear(level, from, to);
@@ -478,11 +478,12 @@ public final class ProductionGameTests {
         WorldPos postPos = GatheringGameTests.post(helper, new BlockPos(0, 0, 0), "smith");
         surveyed(server, postPos);
         Citizen worker = GatheringGameTests.worker(helper, kingdom, "smith", postPos, helper.absolutePos(new BlockPos(2, 0, 2)));
-        order(server, kingdom, Items.NETHERITE_SWORD, Order.Kind.MAKE, 1);
+        Order wanted = order(server, kingdom, Items.NETHERITE_SWORD, Order.Kind.MAKE, 1);
 
         helper.succeedWhen(() -> {
             List<KingdomStorage.Found> found = KingdomStorage.find(server, kingdom.id(), stack -> stack.is(Items.NETHERITE_SWORD), null);
-            helper.assertTrue(found.size() == 1, "No netherite sword reached the storehouse");
+            helper.assertTrue(found.size() == 1, "No netherite sword reached the storehouse: worker " + worker.workStatus() + ", post "
+                    + PostWork.post(server, postPos).map(WorkPost::toString).orElse("none") + ", order " + wanted.status());
             helper.assertTrue(EnchantmentHelper.getItemEnchantmentLevel(Enchantments.SHARPNESS, found.get(0).stack()) == 3,
                     "The upgrade lost the enchantment of the sword");
             helper.assertTrue(stored(server, kingdom, Items.DIAMOND_SWORD) == 0 && stored(server, kingdom, Items.NETHERITE_INGOT) == 0
