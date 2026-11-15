@@ -322,6 +322,21 @@ public final class WarWork {
         return KingdomWorldApi.state(server).economy().treasury(kingdomId).map(Treasury::funds).orElse(0L);
     }
 
+    /** Days of its income a crown of the world pays at most for a lost war: a month of its earnings, not its hoard. */
+    public static final int INDEMNITY_DAYS = 30;
+
+    /**
+     * What a kingdom could be asked to pay for peace: its treasury, for a crown of the world no more than a month of its income.
+     * Only taking the whole kingdom takes its whole treasury.
+     */
+    public static long payable(MinecraftServer server, UUID kingdomId) {
+        long funds = funds(server, kingdomId);
+        if (!isNpc(server, kingdomId)) {
+            return funds;
+        }
+        return Math.min(funds, Math.max(0, io.github.sekerator.kingdomworld.common.npc.RulerPurse.income(server, kingdomId)) * INDEMNITY_DAYS);
+    }
+
     /**
      * Whether the treasury of a kingdom is empty or could not pay one more day like the last.
      */
@@ -889,7 +904,7 @@ public final class WarWork {
 
     private static void daily(MinecraftServer server, DiplomacyState state, DiplomacyRules rules, long now, long day, boolean first) {
         List<DiplomacyState.Ending> endings = state.daily(now, day, rules, id -> shielded(server, id), id -> poor(server, id),
-                id -> funds(server, id));
+                id -> payable(server, id));
         for (DiplomacyState.Ending ending : endings) {
             end(server, ending.war(), ending.how(), ending.terms());
         }

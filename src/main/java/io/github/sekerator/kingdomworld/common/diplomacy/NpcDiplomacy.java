@@ -70,7 +70,7 @@ final class NpcDiplomacy {
                     continue;
                 }
                 War.Side side = war.get().sideOf(proposal.to()).orElse(War.Side.DEFENDER);
-                PeaceTerms enemyMay = DiplomacyState.terms(war.get(), side.enemy(), false, WarWork.funds(server, proposal.to()), rules);
+                PeaceTerms enemyMay = DiplomacyState.terms(war.get(), side.enemy(), false, WarWork.payable(server, proposal.to()), rules);
                 verdict = DiplomacyMind.peace(war.get(), side, proposal.terms(), enemyMay, rules);
             } else if (proposal.kind() == Proposal.Kind.CEDE) {
                 // A province is weighed by its land and price, as the ruler would sell it.
@@ -297,8 +297,8 @@ final class NpcDiplomacy {
             if (waiting) {
                 continue;
             }
-            PeaceTerms mine = state.feasible(war, DiplomacyState.terms(war, side, false, WarWork.funds(server, enemy), rules), rules);
-            PeaceTerms theirs = state.feasible(war, DiplomacyState.terms(war, side.enemy(), false, WarWork.funds(server, kingdomId), rules), rules);
+            PeaceTerms mine = state.feasible(war, DiplomacyState.terms(war, side, false, WarWork.payable(server, enemy), rules), rules);
+            PeaceTerms theirs = state.feasible(war, DiplomacyState.terms(war, side.enemy(), false, WarWork.payable(server, kingdomId), rules), rules);
             Optional<PeaceTerms> offer = DiplomacyMind.offerPeace(war, side, mine, theirs, rules);
             offer.ifPresent(terms -> DiplomacyActions.propose(server, null, kingdomId, enemy, Proposal.Kind.PEACE, null, war.id(), terms));
         }

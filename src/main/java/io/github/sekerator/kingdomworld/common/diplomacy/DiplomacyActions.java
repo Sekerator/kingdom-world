@@ -170,7 +170,7 @@ public final class DiplomacyActions {
             Optional<War> war = WarWork.state(server).war(warId);
             if (war.isPresent() && !terms.isWhite()) {
                 UUID loser = DiplomacyState.loser(war.get(), terms);
-                funds = loser == null ? 0 : WarWork.funds(server, loser);
+                funds = loser == null ? 0 : WarWork.payable(server, loser);
             }
         }
         long loserFunds = funds;

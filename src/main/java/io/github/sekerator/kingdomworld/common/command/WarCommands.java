@@ -275,7 +275,7 @@ public final class WarCommands {
                 throw NO_KINGDOM.create(winner.name());
             }
             UUID loser = war.leader(side.get().enemy());
-            terms = DiplomacyState.terms(war, side.get(), true, WarWork.funds(server, loser), rules);
+            terms = DiplomacyState.terms(war, side.get(), true, WarWork.payable(server, loser), rules);
             if (indemnity >= 0) {
                 terms = new PeaceTerms(winner.id(), indemnity, 0, 0, false, false, 0, "", false);
             }

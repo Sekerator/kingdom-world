@@ -157,8 +157,8 @@ public final class DiplomacySync {
             allies.append(Component.translatable(KEY + "tab.no_allies"));
         }
         DiplomacyState state = WarWork.state(server);
-        PeaceTerms demand = state.feasible(war, DiplomacyState.terms(war, side, false, WarWork.funds(server, enemy), rules), rules);
-        PeaceTerms concede = state.feasible(war, DiplomacyState.terms(war, side.enemy(), false, WarWork.funds(server, war.leader(side)), rules), rules);
+        PeaceTerms demand = state.feasible(war, DiplomacyState.terms(war, side, false, WarWork.payable(server, enemy), rules), rules);
+        PeaceTerms concede = state.feasible(war, DiplomacyState.terms(war, side.enemy(), false, WarWork.payable(server, war.leader(side)), rules), rules);
         return new DiplomacyViews.WarRow(war.id(), WarWork.name(server, enemy), leads, side == War.Side.ATTACKER, war.goal(), war.phase(), minutes,
                 (int) Math.round(war.score(side)), (int) Math.round(war.score(side.enemy())), (int) Math.round(war.exhaustion(side)),
                 (int) Math.round(war.exhaustion(side.enemy())), WarWork.shielded(server, enemy), WarWork.shielded(server, war.leader(side)), allies,
@@ -249,8 +249,8 @@ public final class DiplomacySync {
         UUID enemy = war.leader(side.get().enemy());
         DiplomacyState state = WarWork.state(server);
         PeaceTerms terms = switch (action) {
-            case PEACE_DEMAND -> state.feasible(war, DiplomacyState.terms(war, side.get(), false, WarWork.funds(server, enemy), rules), rules);
-            case PEACE_CONCEDE -> state.feasible(war, DiplomacyState.terms(war, side.get().enemy(), false, WarWork.funds(server, kingdomId), rules), rules);
+            case PEACE_DEMAND -> state.feasible(war, DiplomacyState.terms(war, side.get(), false, WarWork.payable(server, enemy), rules), rules);
+            case PEACE_CONCEDE -> state.feasible(war, DiplomacyState.terms(war, side.get().enemy(), false, WarWork.payable(server, kingdomId), rules), rules);
             default -> PeaceTerms.WHITE;
         };
         return DiplomacyActions.propose(server, actor, kingdomId, enemy, Proposal.Kind.PEACE, null, warId, terms);
