@@ -261,6 +261,11 @@ public final class NpcSite {
     public static final int WEALTH = 8;
     /** The buildings of the capital were looked for once after an appearance that left some out, and raised again if missing. */
     public static final int REPAIRED = 16;
+    /**
+     * The buildings of the capital and its towns missing from the plan are raised again, and the raising then ends without the
+     * stages between, whose work stands already.
+     */
+    public static final int REBUILDING = 32;
 
     /**
      * Whether something of the founding was given already ({@link #MONEY}, {@link #LAWS}, {@link #STORES}), so that raising the
@@ -272,6 +277,11 @@ public final class NpcSite {
 
     public void markGiven(int what) {
         given |= what;
+        changeListener.run();
+    }
+
+    public void unmarkGiven(int what) {
+        given &= ~what;
         changeListener.run();
     }
 

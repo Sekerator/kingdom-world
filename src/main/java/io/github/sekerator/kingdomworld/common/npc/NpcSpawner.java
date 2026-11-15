@@ -209,6 +209,8 @@ public final class NpcSpawner {
         boolean waysHeld = true;
         /** Ticks the background waited in a row without players. */
         int alone;
+        /** Whether the buildings of the plan were looked for in the register once the last of them was raised. */
+        boolean rechecked;
         /** Chunks with a ticket that are not loaded yet. */
         final List<ChunkPos> pending = new ArrayList<>();
         int next;
@@ -1476,8 +1478,125 @@ public final class NpcSpawner {
             }
         }
         if (site.step() >= plots.size()) {
+            if (!job.rechecked) {
+                // Every building of the plan is looked for in the register once: one that is missing for a reason that passed
+                // (its land was let go under it) is raised again before the work of the capital begins.
+                job.rechecked = true;
+                List<Planned> missing = missing(server, site, job.composition, true);
+                if (!missing.isEmpty()) {
+                    LOGGER.warn("{} of {} buildings of the capital of {} are missing after its buildings were raised ({}): they are raised "
+                            + "again", missing.size(), plots.size(), site, templates(missing));
+                    site.setStep(missing.get(0).plot());
+                    return;
+                }
+            }
+            if (site.given(NpcSite.REBUILDING)) {
+                // A capital raised again: its towns get what they miss, and the rest of its raising stands already.
+                site.advance(missing(server, site, job.composition, false).isEmpty() ? SpawnStage.DONE : SpawnStage.TOWNS);
+                return;
+            }
             site.advance(SpawnStage.WORK);
         }
+    }
+
+    /**
+     * A building of the plan of a place: its template, the point it is centred on, its placement and, for a building of the
+     * capital, its number in the plan ({@code -1} for one of a town).
+     */
+    public record Planned(String template, int x, int z, Placement placement, int plot) {
+    }
+
+    /**
+     * The buildings of the plan of a place: those of the capital and, for the towns standing, those of the towns.
+     */
+    public static List<Planned> planned(MinecraftServer server, NpcSite site, NpcComposition composition) {
+        List<Planned> result = new ArrayList<>();
+        List<NpcComposition.Plot> plots = composition.buildings();
+        for (int i = 0; i < plots.size(); i++) {
+            NpcComposition.Plot plot = plots.get(i);
+            result.add(new Planned(plot.template(), site.x() + plot.x(), site.z() + plot.z(), new Placement(plot.facing(), plot.mirror()), i));
+        }
+        if (composition.towns() == 0 || site.kingdomId().isEmpty()) {
+            return result;
+        }
+        List<City> cities = RoadWork.state(server).citiesOf(site.kingdomId().get());
+        for (int index = 0; index < site.towns().size(); index++) {
+            NpcSite.Town town = site.towns().get(index);
+            // A town that was never founded has no buildings to miss.
+            if (cities.stream().noneMatch(c -> Math.abs(c.x() - town.x()) <= 2 && Math.abs(c.z() - town.z()) <= 2)) {
+                continue;
+            }
+            if (composition.districts()) {
+                for (NpcComposition.Plot at : composition.town(index)) {
+                    result.add(new Planned(at.template(), town.x() + at.x(), town.z() + at.z(), new Placement(at.facing(), at.mirror()), -1));
+                }
+                continue;
+            }
+            List<String> buildings = NpcComposition.townBuildings(composition.townHouses());
+            for (int plot = 0; plot < buildings.size() && plot < TOWN_PLOTS.length; plot++) {
+                String template = buildings.get(plot);
+                int[] where = template.equals(NpcComposition.WELL) ? new int[]{-9, -9, 0} : TOWN_PLOTS[plot];
+                result.add(new Planned(template, town.x() + where[0], town.z() + where[1], new Placement(where[2], false), -1));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * The buildings of the plan of a place that neither stand nor are being built, as the raising looks for them: a building of the
+     * template whose anchor stands at the same x and z. A template the game does not have is not missing: it can never stand.
+     *
+     * @param capital whether only those of the capital are wanted, else only those of the towns
+     */
+    public static List<Planned> missing(MinecraftServer server, NpcSite site, NpcComposition composition, boolean capital) {
+        List<Planned> result = new ArrayList<>();
+        for (Planned planned : missing(server, site, composition)) {
+            if ((planned.plot() >= 0) == capital) {
+                result.add(planned);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Every building of the plan of a place, capital and towns, that neither stands nor is being built.
+     */
+    public static List<Planned> missing(MinecraftServer server, NpcSite site, NpcComposition composition) {
+        List<Planned> result = new ArrayList<>();
+        Optional<UUID> id = site.kingdomId();
+        if (id.isEmpty()) {
+            return result;
+        }
+        KingdomWorldState state = KingdomWorldApi.state(server);
+        Set<String> standing = new java.util.HashSet<>();
+        for (Building building : state.construction().buildingsOf(id.get())) {
+            standing.add(building.templateId() + "@" + building.anchor().x() + "," + building.anchor().z());
+        }
+        for (Construction construction : state.construction().of(id.get())) {
+            standing.add(construction.templateId() + "@" + construction.anchor().x() + "," + construction.anchor().z());
+        }
+        for (Planned planned : planned(server, site, composition)) {
+            Optional<BuildingTemplate> template = BuildingTemplates.get(planned.template());
+            if (template.isEmpty() || !template.get().available()) {
+                continue;
+            }
+            BlockPos anchor = anchor(template.get(), planned.x(), site.groundY() + 1, planned.z(), planned.placement());
+            if (!standing.contains(planned.template() + "@" + anchor.getX() + "," + anchor.getZ())) {
+                result.add(planned);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * The templates of some buildings with their counts, for the log.
+     */
+    static String templates(List<Planned> buildings) {
+        Map<String, Integer> counts = new java.util.TreeMap<>();
+        for (Planned planned : buildings) {
+            counts.merge(planned.template(), 1, Integer::sum);
+        }
+        return counts.toString();
     }
 
     /**
@@ -2068,7 +2187,7 @@ public final class NpcSpawner {
      */
     private static void towns(MinecraftServer server, ServerLevel level, NpcSite site, Job job) {
         if (site.towns().isEmpty() || job.composition.towns() == 0) {
-            site.advance(SpawnStage.PLACES);
+            site.advance(afterTowns(site));
             return;
         }
         UUID id = site.kingdomId().orElseThrow();
@@ -2077,7 +2196,7 @@ public final class NpcSpawner {
         int index = site.step() / unit;
         int sub = site.step() % unit;
         if (index >= site.towns().size()) {
-            site.advance(SpawnStage.PLACES);
+            site.advance(afterTowns(site));
             return;
         }
         NpcSite.Town town = site.towns().get(index);
@@ -2087,6 +2206,11 @@ public final class NpcSpawner {
         }
         int rows = 2 * (TOWN_REACH + RAMP) + 1;
         int y = townHeight(level, town);
+        if (sub < rows && site.given(NpcSite.REBUILDING)) {
+            // A town raised again was levelled the first time: its standing buildings are not cut.
+            site.setStep(index * 1000 + rows);
+            return;
+        }
         if (sub < rows) {
             int budget = blockBudget();
             NpcGround.Soil soil = NpcGround.soilAt(level, town.x(), town.z());
@@ -2151,6 +2275,11 @@ public final class NpcSpawner {
         int side = 2 * (reach + RAMP) + 1;
         int cells = side * side;
         int y = townHeight(level, site, town);
+        if (sub < cells && site.given(NpcSite.REBUILDING)) {
+            // A town raised again was levelled the first time: its standing buildings are not cut.
+            site.setStep(index * TOWN_STEPS + cells);
+            return;
+        }
         if (sub < cells) {
             int budget = blockBudget();
             NpcGround.Soil soil = NpcGround.soilAt(level, town.x() + reach + RAMP + 3, town.z());
@@ -2201,7 +2330,7 @@ public final class NpcSpawner {
         }
         List<int[]> fields = composition.townFields();
         int field = plot - plots.size();
-        if (field < fields.size()) {
+        if (field < fields.size() && !site.given(NpcSite.REBUILDING)) {
             field(level, id, town.x() + fields.get(field)[0], town.z() + fields.get(field)[1], Blocks.CARROTS);
             site.setStep(index * TOWN_STEPS + sub + 1);
             return;
@@ -2217,6 +2346,13 @@ public final class NpcSpawner {
      * The height of the ground of a town of a place: of its whole ground where the kingdom is laid out in districts, since its
      * towns are wider than their square.
      */
+    /**
+     * The stage after the towns: the places of the capital, or its end for a capital raised again.
+     */
+    private static SpawnStage afterTowns(NpcSite site) {
+        return site.given(NpcSite.REBUILDING) ? SpawnStage.DONE : SpawnStage.PLACES;
+    }
+
     private static int townHeight(ServerLevel level, NpcSite site, NpcSite.Town town) {
         if (!site.districts()) {
             return townHeight(level, town);
@@ -2948,6 +3084,15 @@ public final class NpcSpawner {
         }
         if (!job.surveys.isEmpty()) {
             return;
+        }
+        List<Planned> missing = missing(server, site, job.composition);
+        if (!missing.isEmpty()) {
+            LOGGER.warn("{} of {} buildings of the plan of {} are missing at its end: {}", missing.size(),
+                    planned(server, site, job.composition).size(), site, templates(missing));
+        }
+        if (site.given(NpcSite.REBUILDING)) {
+            site.unmarkGiven(NpcSite.REBUILDING);
+            LOGGER.info("The capital of {} was raised again: {} building(s) of its plan missing now", site, missing.size());
         }
         releaseTickets(level);
         site.setStatus(NpcSite.Status.SPAWNED);
