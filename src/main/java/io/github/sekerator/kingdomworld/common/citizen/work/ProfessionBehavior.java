@@ -48,6 +48,13 @@ public interface ProfessionBehavior {
      */
     void survey(ServerLevel level, Citizen citizen);
 
+    /**
+     * Looks at the workplace of a citizen who just got it: at once, or over the next ticks for a look too large for one tick.
+     */
+    default void surveySoon(ServerLevel level, Citizen citizen) {
+        survey(level, citizen);
+    }
+
     // ---------------------------------------------------------------- work at posts
 
     /**

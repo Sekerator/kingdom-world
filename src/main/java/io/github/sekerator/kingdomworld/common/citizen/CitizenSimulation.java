@@ -365,7 +365,7 @@ public final class CitizenSimulation {
             WorldPos near = citizen.home() != null ? citizen.home() : citizen.lastPos();
             citizens.nearestFreeWorkplace(citizen, near).ifPresent(workplace -> {
                 if (citizens.assignWorkplace(citizen, workplace)) {
-                    survey(server, citizen);
+                    surveySoon(server, citizen);
                 }
             });
             if (citizen.workplace() == null) {
@@ -422,6 +422,21 @@ public final class CitizenSimulation {
             }
         }
         return -1;
+    }
+
+    /**
+     * Lets the profession look at a loaded workplace of a citizen who just got it, over the next ticks if the look is large.
+     */
+    static void surveySoon(MinecraftServer server, Citizen citizen) {
+        WorldPos workplace = citizen.workplace();
+        Optional<ProfessionBehavior> behavior = ProfessionBehaviors.get(citizen.professionId());
+        if (workplace == null || behavior.isEmpty()) {
+            return;
+        }
+        Optional<ServerLevel> level = Dimensions.key(workplace.dimension()).map(server::getLevel);
+        if (level.isPresent() && level.get().isLoaded(new BlockPos(workplace.x(), workplace.y(), workplace.z()))) {
+            behavior.get().surveySoon(level.get(), citizen);
+        }
     }
 
     /**

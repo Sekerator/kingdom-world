@@ -105,9 +105,7 @@ public final class FarmerBehavior implements ProfessionBehavior {
         if (workplace == null || !workplace.dimension().equals(Dimensions.id(level))) {
             return;
         }
-        int radius = PostWork.post(level.getServer(), workplace).map(post -> post.radius())
-                .orElse(CitizenSettings.rules().farmRadius());
-        Survey survey = survey(level, citizen.kingdomId(), new BlockPos(workplace.x(), workplace.y(), workplace.z()), radius);
+        Survey survey = survey(level, citizen.kingdomId(), new BlockPos(workplace.x(), workplace.y(), workplace.z()), radiusAt(level, workplace));
         if (survey.plots() > 0) {
             citizen.rememberWork(survey.plots(), survey.product());
             // The townsfolk of the post farm by what its named farmer saw.
@@ -116,9 +114,38 @@ public final class FarmerBehavior implements ProfessionBehavior {
     }
 
     /**
-     * Looks at the fields of a farm for its townsfolk, while its place is loaded; nothing happens while it is not.
+     * The farmer looks at its new farm over the next ticks, a few columns a tick, rather than all of it in the tick it got the post.
+     */
+    @Override
+    public void surveySoon(ServerLevel level, Citizen citizen) {
+        WorldPos workplace = citizen.workplace();
+        if (workplace == null || !workplace.dimension().equals(Dimensions.id(level))) {
+            return;
+        }
+        Looks.request(level, citizen.kingdomId(), workplace, radiusAt(level, workplace), false).citizens.add(citizen.id());
+    }
+
+    private static int radiusAt(ServerLevel level, WorldPos workplace) {
+        return PostWork.post(level.getServer(), workplace).map(post -> post.radius()).orElse(CitizenSettings.rules().farmRadius());
+    }
+
+    /**
+     * Looks at the fields of a farm for its townsfolk over the next ticks, a few columns a tick, while its place is loaded; nothing
+     * happens while it is not.
      */
     public static void surveyPost(net.minecraft.server.MinecraftServer server, io.github.sekerator.kingdomworld.core.citizen.WorkPost post) {
+        WorldPos at = post.pos();
+        ServerLevel level = PostWork.level(server, at);
+        if (level == null || !level.isLoaded(new BlockPos(at.x(), at.y(), at.z()))) {
+            return;
+        }
+        Looks.request(level, post.kingdomId(), at, post.radius(), true);
+    }
+
+    /**
+     * Looks at the fields of a farm for its townsfolk at once, while its place is loaded; nothing happens while it is not.
+     */
+    public static void surveyPostNow(net.minecraft.server.MinecraftServer server, io.github.sekerator.kingdomworld.core.citizen.WorkPost post) {
         WorldPos at = post.pos();
         ServerLevel level = PostWork.level(server, at);
         BlockPos center = new BlockPos(at.x(), at.y(), at.z());
@@ -138,28 +165,88 @@ public final class FarmerBehavior implements ProfessionBehavior {
     }
 
     /**
-     * Counts the crops around a composter on the kingdom's land and finds out what they give.
+     * Counts the crops around a composter on the kingdom's land and finds out what they give, at once.
      */
     static Survey survey(ServerLevel level, UUID kingdomId, BlockPos center, int radius) {
-        String dimension = Dimensions.id(level);
-        Map<Item, Integer> products = new HashMap<>();
-        int plots = 0;
-        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-        for (int dx = -radius; dx <= radius; dx++) {
-            for (int dz = -radius; dz <= radius; dz++) {
+        Look look = new Look(level, kingdomId, center, radius);
+        look.step(Integer.MAX_VALUE);
+        return look.result();
+    }
+
+    /**
+     * A look over the crops around a composter on the kingdom's land, column after column in the same order whether it is made
+     * at once or a few columns at a time.
+     */
+    static final class Look {
+        private final ServerLevel level;
+        private final UUID kingdomId;
+        private final BlockPos center;
+        private final int radius;
+        private final int side;
+        private final String dimension;
+        private long column;
+        private int plots;
+        private final Map<Item, Integer> products = new HashMap<>();
+
+        Look(ServerLevel level, UUID kingdomId, BlockPos center, int radius) {
+            this.level = level;
+            this.kingdomId = kingdomId;
+            this.center = center.immutable();
+            this.radius = Math.max(0, radius);
+            this.side = 2 * this.radius + 1;
+            this.dimension = Dimensions.id(level);
+        }
+
+        boolean done() {
+            return column >= (long) side * side;
+        }
+
+        /**
+         * Looks at up to {@code columns} more columns; the land and the chunks are looked up anew in every call.
+         *
+         * @return the columns looked at
+         */
+        int step(int columns) {
+            var territory = KingdomWorldApi.state(level.getServer()).territory();
+            // The owner, the chunk and whether the sections of the rows of the farm may hold crops at all are looked up once a
+            // chunk, not once a column or a block.
+            Map<Long, Boolean> owned = new HashMap<>();
+            Map<Long, net.minecraft.world.level.chunk.LevelChunk> chunks = new HashMap<>();
+            Map<Long, boolean[]> rows = new HashMap<>();
+            BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+            long end = Math.min((long) side * side, column + Math.max(0, columns));
+            int looked = 0;
+            while (column < end) {
+                int dx = (int) (column / side) - radius;
+                int dz = (int) (column % side) - radius;
+                column++;
+                looked++;
                 int x = center.getX() + dx;
                 int z = center.getZ() + dz;
-                if (!kingdomId.equals(KingdomWorldApi.state(level.getServer()).territory()
-                        .ownerOf(dimension, ChunkKey.of(x >> 4, z >> 4)))) {
+                long key = ChunkKey.of(x >> 4, z >> 4);
+                if (!owned.computeIfAbsent(key, chunk -> kingdomId.equals(territory.ownerOf(dimension, chunk)))) {
                     continue;
                 }
+                net.minecraft.world.level.chunk.LevelChunk chunk = chunks.computeIfAbsent(key,
+                        k -> level.getChunkSource().getChunkNow(x >> 4, z >> 4));
+                boolean[] mayHold = chunk == null ? null : rows.computeIfAbsent(key, k -> cropRows(chunk));
                 for (int dy = -FARM_DEPTH; dy <= FARM_DEPTH; dy++) {
                     pos.set(x, center.getY() + dy, z);
-                    if (!level.isLoaded(pos)) {
-                        continue;
+                    BlockState state;
+                    if (chunk != null && !level.isOutsideBuildHeight(pos)) {
+                        if (!mayHold[dy + FARM_DEPTH]) {
+                            continue;
+                        }
+                        state = chunk.getBlockState(pos);
+                    } else {
+                        // A chunk the game holds a ticket for but does not have whole yet, or a block beyond the height of the
+                        // world: as the level answers it.
+                        if (!level.isLoaded(pos)) {
+                            continue;
+                        }
+                        state = level.getBlockState(pos);
                     }
-                    BlockState state = level.getBlockState(pos);
-                    if (!FarmCrops.isCrop(state)) {
+                    if (state.isAir() || !FarmCrops.isCrop(state)) {
                         continue;
                     }
                     if (state.getBlock() instanceof net.minecraft.world.level.block.SugarCaneBlock
@@ -180,16 +267,129 @@ public final class FarmerBehavior implements ProfessionBehavior {
                     }
                 }
             }
+            return looked;
         }
-        Item best = null;
-        int bestCount = 0;
-        for (Map.Entry<Item, Integer> entry : products.entrySet()) {
-            if (entry.getValue() > bestCount) {
-                best = entry.getKey();
-                bestCount = entry.getValue();
+
+        /**
+         * Whether each row of the farm may hold crops in a chunk: a section whose palette holds no crop has none anywhere, and
+         * its blocks are not read one by one.
+         */
+        private boolean[] cropRows(net.minecraft.world.level.chunk.LevelChunk chunk) {
+            boolean[] result = new boolean[2 * FARM_DEPTH + 1];
+            for (int dy = -FARM_DEPTH; dy <= FARM_DEPTH; dy++) {
+                int y = center.getY() + dy;
+                if (level.isOutsideBuildHeight(y)) {
+                    continue;
+                }
+                net.minecraft.world.level.chunk.LevelChunkSection section = chunk.getSection(chunk.getSectionIndex(y));
+                result[dy + FARM_DEPTH] = !section.hasOnlyAir() && section.maybeHas(FarmCrops::isCrop);
+            }
+            return result;
+        }
+
+        Survey result() {
+            Item best = null;
+            int bestCount = 0;
+            for (Map.Entry<Item, Integer> entry : products.entrySet()) {
+                if (entry.getValue() > bestCount) {
+                    best = entry.getKey();
+                    bestCount = entry.getValue();
+                }
+            }
+            ResourceLocation id = best == null ? null : ForgeRegistries.ITEMS.getKey(best);
+            return new Survey(plots, id == null ? "" : id.toString());
+        }
+    }
+
+    /**
+     * The looks over farms under way, a few columns a tick for all of them: the first one asked for goes first.
+     */
+    public static final class Looks {
+        /** Columns of farms looked at in a tick at most, in all: five blocks each. */
+        static final int COLUMNS_PER_TICK = 512;
+        private static final Map<WorldPos, Pending> PENDING = new java.util.LinkedHashMap<>();
+
+        private Looks() {
+        }
+
+        private static final class Pending {
+            final Look look;
+            /** Whether the post remembers what was seen, crops or none, as for its townsfolk. */
+            boolean forPost;
+            /** The farmers who remember what was seen, if they saw crops. */
+            final java.util.Set<UUID> citizens = new java.util.LinkedHashSet<>();
+
+            Pending(Look look) {
+                this.look = look;
             }
         }
-        ResourceLocation id = best == null ? null : ForgeRegistries.ITEMS.getKey(best);
-        return new Survey(plots, id == null ? "" : id.toString());
+
+        static Pending request(ServerLevel level, UUID kingdomId, WorldPos at, int radius, boolean forPost) {
+            Pending pending = PENDING.computeIfAbsent(at, pos -> new Pending(new Look(level, kingdomId, new BlockPos(pos.x(), pos.y(), pos.z()),
+                    radius)));
+            pending.forPost |= forPost;
+            return pending;
+        }
+
+        /**
+         * Whether a look over the farm of a post is under way.
+         */
+        public static boolean pending(WorldPos at) {
+            return PENDING.containsKey(at);
+        }
+
+        /**
+         * Takes the looks under way further, {@value #COLUMNS_PER_TICK} columns a tick for all of them.
+         */
+        public static void tick(net.minecraft.server.MinecraftServer server) {
+            int budget = COLUMNS_PER_TICK;
+            var iterator = PENDING.entrySet().iterator();
+            while (budget > 0 && iterator.hasNext()) {
+                Map.Entry<WorldPos, Pending> entry = iterator.next();
+                Pending pending = entry.getValue();
+                budget -= pending.look.step(budget);
+                if (!pending.look.done()) {
+                    break;
+                }
+                iterator.remove();
+                finish(server, entry.getKey(), pending);
+            }
+        }
+
+        /**
+         * Runs every look under way to its end at once; for game tests.
+         */
+        public static void finishNow(net.minecraft.server.MinecraftServer server) {
+            while (!PENDING.isEmpty()) {
+                tick(server);
+            }
+        }
+
+        private static void finish(net.minecraft.server.MinecraftServer server, WorldPos at, Pending pending) {
+            Survey survey = pending.look.result();
+            var post = PostWork.post(server, at);
+            if (pending.forPost) {
+                post.ifPresent(found -> found.rememberFarm(survey.plots(), survey.product()));
+            }
+            if (survey.plots() <= 0 || pending.citizens.isEmpty()) {
+                return;
+            }
+            boolean remembered = false;
+            for (UUID id : pending.citizens) {
+                Citizen citizen = KingdomWorldApi.state(server).citizens().get(id).orElse(null);
+                if (citizen != null && at.equals(citizen.workplace())) {
+                    citizen.rememberWork(survey.plots(), survey.product());
+                    remembered = true;
+                }
+            }
+            if (remembered && !pending.forPost) {
+                // The townsfolk of the post farm by what its named farmer saw.
+                post.ifPresent(found -> found.rememberFarm(survey.plots(), survey.product()));
+            }
+        }
+
+        public static void reset() {
+            PENDING.clear();
+        }
     }
 }

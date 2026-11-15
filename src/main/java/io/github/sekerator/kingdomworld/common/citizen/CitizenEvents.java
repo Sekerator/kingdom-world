@@ -83,6 +83,7 @@ public final class CitizenEvents {
         CitizenSites.tick(server);
         WorkPostLooks.tick(server);
         ZoneSurveys.tick(server);
+        io.github.sekerator.kingdomworld.common.citizen.work.FarmerBehavior.Looks.tick(server);
         CitizenSimulation.tick(server, tick);
     }
 
@@ -145,6 +146,7 @@ public final class CitizenEvents {
         io.github.sekerator.kingdomworld.common.citizen.work.MinerBehavior.reset();
         io.github.sekerator.kingdomworld.common.citizen.work.LumberjackBehavior.reset();
         ZoneSurveys.reset();
+        io.github.sekerator.kingdomworld.common.citizen.work.FarmerBehavior.Looks.reset();
         io.github.sekerator.kingdomworld.common.production.ProductionSettings.reset();
         io.github.sekerator.kingdomworld.common.production.Production.reset();
         io.github.sekerator.kingdomworld.common.production.WorkshopBehavior.reset();

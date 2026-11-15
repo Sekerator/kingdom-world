@@ -119,10 +119,29 @@ public final class LoadBenchGameTests {
 
             // The look over a farm of the largest zone.
             WorkPost farm = new WorkPost(near, id, 32, 0);
-            time("the look over a farm of radius 32", 20, () -> {
-                FarmerBehavior.surveyPost(server, farm);
+            time("the look over a farm of radius 32 at once (before)", 20, () -> {
+                FarmerBehavior.surveyPostNow(server, farm);
                 return farm.farmPlots();
             });
+            // Now: a few columns a tick; a place without a post, so that nothing remembers the look.
+            WorldPos away = new WorldPos(dimension, near.x() + 1, near.y(), near.z() + 1);
+            WorkPost lone = new WorkPost(away, id, 32, 0);
+            long worstSlice = 0;
+            long allSlices = 0;
+            int slices = 0;
+            for (int round = 0; round < 20; round++) {
+                FarmerBehavior.surveyPost(server, lone);
+                while (FarmerBehavior.Looks.pending(away)) {
+                    long began = System.nanoTime();
+                    FarmerBehavior.Looks.tick(server);
+                    long took = System.nanoTime() - began;
+                    worstSlice = Math.max(worstSlice, took);
+                    allSlices += took;
+                    slices++;
+                }
+            }
+            LOGGER.info(String.format(Locale.ROOT, "Load bench: the look over a farm of radius 32 tick by tick (now): %d ticks a look, %.3f ms a "
+                    + "tick on average, %.3f ms at worst", slices / 20, allSlices / 1e6 / Math.max(1, slices), worstSlice / 1e6));
 
             // The search for a job at the workshops.
             List<WorkPost> workshops = new ArrayList<>();
