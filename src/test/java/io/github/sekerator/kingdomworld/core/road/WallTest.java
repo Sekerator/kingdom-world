@@ -236,4 +236,126 @@ class WallTest {
         assertTrue(Wall.forGate(walls, US, 0, "minecraft:the_end", 17, 0, 6).isEmpty());
         assertEquals(foreign, Wall.forGate(walls, THEM, 0, WORLD, 0, 0, 6).orElseThrow());
     }
+
+    private static List<RouteCell> flatRing(int radius, int y) {
+        return WallContour.ring((x, z) -> Terrain.Column.land(y), 0, 0, radius);
+    }
+
+    @Test
+    void aWallKnowsTheGroundOfItsColumns() {
+        Wall wall = wall(Wall.WallClass.PALISADE, flatRing(8, 64), List.of(0));
+        RouteCell first = wall.cells().get(5);
+        assertEquals(5, wall.cellAt(first.x(), first.z()));
+        assertEquals(64, wall.groundAt(first.x(), first.z()).orElseThrow());
+        assertEquals(-1, wall.cellAt(0, 0), "the middle is off the ring");
+        assertTrue(wall.groundAt(0, 0).isEmpty());
+        // A column of a palisade: from one over its foot to four over it, never in a gate.
+        assertFalse(wall.inColumn(Wall.pack(first.x(), 64, first.z())), "the foot is the ground");
+        assertTrue(wall.inColumn(Wall.pack(first.x(), 65, first.z())));
+        assertTrue(wall.inColumn(Wall.pack(first.x(), 68, first.z())));
+        assertFalse(wall.inColumn(Wall.pack(first.x(), 69, first.z())), "above a palisade");
+        RouteCell gate = wall.cells().get(1);
+        assertFalse(wall.inColumn(Wall.pack(gate.x(), 65, gate.z())), "in a gate");
+        // Packed as the game packs block positions.
+        long packed = Wall.pack(-1234, -40, 98765);
+        assertEquals(net.minecraft.core.BlockPos.asLong(-1234, -40, 98765), packed);
+        assertEquals(-1234, Wall.packedX(packed));
+        assertEquals(-40, Wall.packedY(packed));
+        assertEquals(98765, Wall.packedZ(packed));
+    }
+
+    @Test
+    void aNewWallTakesOverTheBlocksOfTheOld() {
+        List<RouteCell> ring = flatRing(8, 64);
+        Wall stone = wall(Wall.WallClass.STONE, ring, List.of());
+        RouteCell a = ring.get(10);
+        RouteCell b = ring.get(30);
+        for (int up = 1; up <= 6; up++) {
+            stone.markPlaced(Wall.pack(a.x(), 64 + up, a.z()));
+        }
+        stone.markPlaced(Wall.pack(b.x(), 65, b.z()));
+        Wall palisade = new Wall(2, 0, US, Wall.WallClass.PALISADE, WORLD, 0, 0, ring, List.of(30), 0);
+        palisade.inherit(stone, List.of(Wall.pack(0, 70, 0)));
+        assertTrue(palisade.hasReplaced());
+        assertEquals(8, palisade.replacedBlocks().length);
+        assertTrue(palisade.replaces(Wall.pack(a.x(), 66, a.z())));
+        assertTrue(palisade.inColumn(Wall.pack(a.x(), 68, a.z())), "swapped when the column goes up");
+        assertFalse(palisade.inColumn(Wall.pack(a.x(), 69, a.z())), "the battlement over a palisade is taken down");
+        assertFalse(palisade.inColumn(Wall.pack(b.x(), 65, b.z())), "the old block in a gate is taken down");
+        assertFalse(palisade.inColumn(Wall.pack(0, 70, 0)), "off the ring");
+        palisade.forgetReplaced(Wall.pack(0, 70, 0));
+        assertFalse(palisade.replaces(Wall.pack(0, 70, 0)));
+        Wall read = new Wall(2, 0, US, Wall.WallClass.PALISADE, WORLD, 0, 0, ring, List.of(30), 0);
+        read.restoreReplaced(palisade.replacedBlocks());
+        assertEquals(java.util.Arrays.toString(palisade.replacedBlocks()), java.util.Arrays.toString(read.replacedBlocks()));
+        // What the new wall placed itself is never the old wall's.
+        Wall again = wall(Wall.WallClass.STONE, ring, List.of());
+        again.markPlaced(Wall.pack(a.x(), 65, a.z()));
+        again.inherit(stone, List.of());
+        assertFalse(again.replaces(Wall.pack(a.x(), 65, a.z())));
+    }
+
+    @Test
+    void theGatesOfTheOldWallStayOnTheNewRing() {
+        List<RouteCell> small = flatRing(8, 64);
+        List<RouteCell> wide = flatRing(12, 64);
+        List<RouteCell> gates = List.of(small.get(4), small.get(40));
+        assertEquals(List.of(4, 40), WallContour.keptGates(small, gates, 2), "the same ring keeps the same places");
+        List<Integer> moved = WallContour.keptGates(wide, gates, 4 + Wall.GATE_HALF + 1);
+        assertEquals(2, moved.size());
+        for (int i = 0; i < 2; i++) {
+            RouteCell old = gates.get(i);
+            RouteCell now = wide.get(moved.get(i));
+            assertTrue(Math.abs(now.x() - old.x()) <= 6 && Math.abs(now.z() - old.z()) <= 6, "the gate went far: " + now);
+        }
+        assertTrue(WallContour.keptGates(wide, gates, 1).isEmpty(), "out of reach");
+    }
+
+    @Test
+    void aWallAtABaseHeightStandsThere() {
+        List<RouteCell> laid = WallContour.ring((x, z) -> Terrain.Column.land(height(x, z)), 0, 0, 12);
+        int[] ground = new int[laid.size()];
+        List<RouteCell> cells = new ArrayList<>();
+        for (int i = 0; i < laid.size(); i++) {
+            RouteCell cell = laid.get(i);
+            ground[i] = cell.y();
+            cells.add(new RouteCell(cell.x(), 69, cell.z(), cell.kind(), cell.depth(), cell.owner()));
+        }
+        Wall wall = new Wall(1, 0, US, Wall.WallClass.PALISADE, WORLD, 0, 0, cells, List.of(), 0, 70, ground);
+        assertTrue(wall.hasBase());
+        assertEquals(70, wall.baseY());
+        int fill = 0;
+        int cut = 0;
+        for (Wall.Block block : wall.blocks()) {
+            assertEquals(69, block.y());
+            assertEquals(Math.max(0, 69 - ground[block.cell()]), wall.fill(block));
+            assertEquals(Math.max(0, ground[block.cell()] - 69), wall.cut(block));
+            fill += wall.fill(block);
+            cut += wall.cut(block);
+        }
+        assertEquals(fill, wall.earth());
+        assertEquals(cut, wall.cutTotal());
+        assertTrue(fill > 0 && cut > 0, "the hills are both above and below 69");
+        assertEquals(wall.blocks().size() * 4, wall.items(), "the earth is no item of the wall");
+        // A gate keeps the base and the ground of the other columns.
+        wall.addGate(20);
+        assertEquals(70, wall.baseY());
+        assertEquals(ground[5], wall.ground(5));
+    }
+
+    @Test
+    void aWallOnTheGroundMovesNoEarth() {
+        Wall wall = wall(Wall.WallClass.STONE, WallContour.ring((x, z) -> Terrain.Column.land(height(x, z)), 0, 0, 12), List.of());
+        assertFalse(wall.hasBase());
+        assertEquals(Wall.FOLLOW_GROUND, wall.baseY());
+        assertEquals(0, wall.earth());
+        assertEquals(0, wall.cutTotal());
+        // The spoil of a wall: what it dug, taken one by one.
+        wall.addSpoil("minecraft:dirt", 2);
+        assertTrue(wall.useSpoil("minecraft:dirt"));
+        assertEquals(1, wall.spoil().get("minecraft:dirt"));
+        assertEquals(java.util.Map.of("minecraft:dirt", 1), wall.takeSpoil());
+        assertTrue(wall.spoil().isEmpty());
+        assertFalse(wall.useSpoil("minecraft:dirt"));
+    }
 }
