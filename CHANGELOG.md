@@ -62,6 +62,7 @@
 - **Отчёт города** показывает вывоз жителей, лоты игроков, сделанное мастерами и купленное короной и городом у его лавок; окно города у лавок показывает ремесло, закрепление, сделанное и вывезенное. Справочник (главы «Работа», «Склады», «Строительство», «Деньги», «Города и дороги»), README, `CityBudget` с профилем этапа 2.
 - **Старые миры.** Лавки этапа 1 читаются как «Лавка» с неосмотренным местом и берут ремесло после осмотра. Королевства мира живут как раньше.
 - **Исправлено: залог короны у мастерской, сменившей ремесло.** Если мастерская, которой корона заплатила вперёд за работу, бралась за другое ремесло (сама или по закреплению игрока) до того, как сдала работу, залог навсегда оставался у неё, а заказ короны больше ничего не покупал. Теперь при смене ремесла несданная работа отменяется и залог возвращается в казну.
+- **Исправлено: заминка при появлении королевства мира.** Здания появляющегося королевства мира ставились частями по числу блоков, и на занятом сервере одна такая часть могла занять тик на сотни миллисекунд. Теперь часть ограничена и временем, как раскладка здания, а запись о долгом тике появления говорит, сколько из него заняло само появление и его части.
 
 **Дороги: путь находится всегда, промежуточные точки, выравнивание силами строителей и шахтёров.** Сетевой протокол 68.
 
@@ -362,6 +363,7 @@ The cities of a kingdom of players grow each by itself and build by themselves u
 - **The statement of a city** shows the exports of citizens, lots of players, what masters made and what the crown and the city bought of its shops; the window of a city shows of its shops the trade, whether it is fixed, what they made and exported. The guide (chapters Work, Storage, Construction, Money, Cities and roads), README, `CityBudget` with the profile of stage 2.
 - **Older worlds.** Shops of stage 1 read as a Shop whose place was not looked at and take up a trade once it is. Kingdoms of the world live as before.
 - **Fixed: the deposit of the crown with a workshop that took up another trade.** If a workshop the crown had paid in advance took up another trade (by itself or pinned by a player) before it delivered the work, the deposit stayed with it forever and the order of the crown bought nothing more. Now the work not delivered is cancelled when the trade changes and the deposit goes back to the treasury.
+- **Fixed: a hitch while a kingdom of the world appears.** The buildings of a kingdom of the world that appears were put up in parts by a count of blocks, and on a busy server one such part could take a tick of hundreds of milliseconds. A part is now bounded by time as well, as the laying out of a building is, and the log of a long tick of an appearance tells how much of it the appearance and its parts took.
 
 **Roads: a way is always found, points between, levelling by builders and miners.** Network protocol 68.
 

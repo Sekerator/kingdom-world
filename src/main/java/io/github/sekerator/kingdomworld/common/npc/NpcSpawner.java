@@ -152,6 +152,15 @@ public final class NpcSpawner {
     private static final int[][] TOWN_PLOTS = {{0, -12, 0}, {12, 0, 1}, {0, 12, 2}, {-12, 0, 3}, {12, -12, 0}, {-12, 12, 2}};
 
     private static Job job;
+    /** The time the parts of the step being made took, for the log of a slow tick. */
+    private static final Map<String, Long> PARTS = new java.util.LinkedHashMap<>();
+
+    /**
+     * Counts the time a part of the step being made took.
+     */
+    private static void part(String name, long startedNanos) {
+        PARTS.merge(name, System.nanoTime() - startedNanos, Long::sum);
+    }
     /** Whether the next job starts in the background. */
     private static boolean startBackground;
     /** Whether the next job in the background goes on without players (an operator asked for it). */
@@ -174,6 +183,9 @@ public final class NpcSpawner {
         long maxNanos;
         SpawnStage worstStage = SpawnStage.LOAD;
         SpawnStage lastStage = SpawnStage.LOAD;
+        /** The time the last step of this work took itself, and of its parts, for the log of a slow tick. */
+        long lastOwnNanos;
+        String lastParts = "";
         /** Whether the last tick only waited: for chunks to load, or for the roads and the wall to be placed. */
         boolean lastWaited;
         /** Whether this tick only waits for what others place. */
@@ -496,8 +508,9 @@ public final class NpcSpawner {
                     job.worstStage = job.lastStage;
                 }
                 if (work > SLOW_TICK_NANOS) {
-                    LOGGER.info("A tick of the appearance of {} took {} ms ({} ms of it the garbage collector) at {} step {}", site,
-                            String.format(java.util.Locale.ROOT, "%.1f", nanos / 1e6), gc / 1_000_000L, job.lastStage.id(), site.step());
+                    LOGGER.info("A tick of the appearance of {} took {} ms ({} ms of it the garbage collector, {} ms the appearance itself{}) at {} "
+                            + "step {}", site, String.format(java.util.Locale.ROOT, "%.1f", nanos / 1e6), gc / 1_000_000L,
+                            String.format(java.util.Locale.ROOT, "%.1f", job.lastOwnNanos / 1e6), job.lastParts, job.lastStage.id(), site.step());
                 }
             }
         }
@@ -514,10 +527,16 @@ public final class NpcSpawner {
                 // The fewest blocks, and the parts that go by time get little of it.
                 running.scale = 0;
             }
+            PARTS.clear();
             try {
                 step(server, level, site, running);
             } finally {
                 smallStep = false;
+                running.lastOwnNanos = System.nanoTime() - started;
+                StringBuilder parts = new StringBuilder();
+                PARTS.forEach((name, spent) -> parts.append(", ").append(name).append(' ')
+                        .append(String.format(java.util.Locale.ROOT, "%.1f", spent / 1e6)));
+                running.lastParts = parts.toString();
             }
             if (small) {
                 running.scale = scale;
@@ -1296,9 +1315,13 @@ public final class NpcSpawner {
         if (construction == null) {
             // A large building (a castle of thousands of blocks) is laid out over several ticks, a small one in this one.
             String key = id + "/" + templateId + "/" + anchor.asLong();
+            long preparing = System.nanoTime();
             ConstructionWork.Laying laying = LAYING.computeIfAbsent(key, k -> new ConstructionWork.Laying(level, id, template.get(), anchor, placement,
                     materials));
+            part("preparing", preparing);
+            long layingOut = System.nanoTime();
             Optional<KingdomWorldState.ConstructionChange> laid = laying.step(budget(LAY_NANOS));
+            part("laying out", layingOut);
             if (laid.isEmpty()) {
                 // The time of the step is spent: the rest of the budget goes too.
                 used[0] = Math.max(1, budget);
@@ -1313,7 +1336,20 @@ public final class NpcSpawner {
             construction = change.construction().get();
         }
         int part = Math.max(BLOCKS_PER_PART, budget);
-        Optional<Building> built = ConstructionWork.finishSome(server, construction, part);
+        // The chunks of the building and those next to it, which the updates of its blocks reach: one not loaded is loaded in
+        // the tick, and the log of a slow tick tells of it.
+        int unloaded = 0;
+        Box box = construction.box();
+        for (int x = (box.minX() - 1) >> 4; x <= (box.maxX() + 1) >> 4; x++) {
+            for (int z = (box.minZ() - 1) >> 4; z <= (box.maxZ() + 1) >> 4; z++) {
+                unloaded += level.getChunkSource().getChunkNow(x, z) == null ? 1 : 0;
+            }
+        }
+        long placing = System.nanoTime();
+        // The blocks go by time as well as by count: placing some costs far more than others in a busy world.
+        Optional<Building> built = ConstructionWork.finishSome(server, construction, part, budget(LAY_NANOS));
+        part((built.isPresent() ? "placing and finishing " + templateId : "placing") + (unloaded > 0 ? " with " + unloaded + " chunks not loaded" : ""),
+                placing);
         used[0] = part;
         if (built.isPresent()) {
             return true;
@@ -2084,14 +2120,20 @@ public final class NpcSpawner {
                     NpcSite.Town town = site.towns().get(Math.min(site.towns().size() - 1, (have - capital) / perTown));
                     place = new WorldPos(dimension, town.x(), townHeight(level, town) + 1, town.z());
                 }
-                if (CitizenLife.arrive(server, id, place, false).isEmpty()) {
+                long arriving = System.nanoTime();
+                boolean arrived = CitizenLife.arrive(server, id, place, false).isPresent();
+                part("arrivals", arriving);
+                if (!arrived) {
                     break;
                 }
             }
             return;
         }
         // Work: the posts take the citizens without work nearest to them, the farmers find their composters.
-        if (!hireSome(state, id, job)) {
+        long hiring = System.nanoTime();
+        boolean hired = hireSome(state, id, job);
+        part("hiring", hiring);
+        if (!hired) {
             return;
         }
         int farmers = job.composition.jobs().getOrDefault("farmer", 0);
@@ -2159,15 +2201,22 @@ public final class NpcSpawner {
             for (int i = 0; i < CITIZENS_PER_TICK && have < arrivals.size(); i++, have++) {
                 int[] at = arrivals.get(have);
                 int y = at[2] < 0 ? site.groundY() + 1 : townHeight(level, site, site.towns().get(at[2])) + 1;
-                if (CitizenLife.arrive(server, id, new WorldPos(dimension, at[0], y, at[1]), false).isEmpty()) {
+                long arriving = System.nanoTime();
+                boolean arrived = CitizenLife.arrive(server, id, new WorldPos(dimension, at[0], y, at[1]), false).isPresent();
+                part("arrivals", arriving);
+                if (!arrived) {
                     break;
                 }
             }
             return;
         }
-        if (!hireSome(state, id, job)) {
+        long hiring = System.nanoTime();
+        boolean hired = hireSome(state, id, job);
+        part("hiring", hiring);
+        if (!hired) {
             return;
         }
+        long choosing = System.nanoTime();
         int soldiers = composition.soldiers();
         int townFarmers = 2 * composition.townFields().size();
         for (NpcSite.Town town : site.towns()) {
@@ -2192,6 +2241,7 @@ public final class NpcSpawner {
             return -Math.max(Math.abs(at.x() - site.x()), Math.abs(at.z() - site.z()));
         }).thenComparing(citizen -> citizen.id().toString()));
         farmers(server, state, id, capital, 2 * composition.fields(), soldiers);
+        part("farmers", choosing);
         site.advance(SpawnStage.ARMY);
     }
 

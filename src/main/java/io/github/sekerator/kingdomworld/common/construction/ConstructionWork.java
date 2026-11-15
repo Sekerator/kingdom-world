@@ -1518,6 +1518,17 @@ public final class ConstructionWork {
      *         all the kingdom's land
      */
     public static Optional<Building> finishSome(MinecraftServer server, Construction construction, int budget) {
+        return finishSome(server, construction, budget, Long.MAX_VALUE);
+    }
+
+    /**
+     * Does up to {@code budget} steps of a construction at once while the time lasts, as {@link #finishSome(MinecraftServer,
+     * Construction, int)} does: the steps left go on in the next call.
+     *
+     * @param nanos the time of this call; at least one step is done
+     */
+    public static Optional<Building> finishSome(MinecraftServer server, Construction construction, int budget, long nanos) {
+        long started = System.nanoTime();
         if (!onOwnLand(server, construction)) {
             construction.setStatus(Construction.Status.OUTSIDE_LAND);
             return Optional.empty();
@@ -1534,7 +1545,7 @@ public final class ConstructionWork {
                 if (construction.isDone(step.index())) {
                     continue;
                 }
-                if (done++ >= budget) {
+                if (done++ >= budget || done > 1 && System.nanoTime() - started > nanos) {
                     storeOrRoute(server, construction, level, drops);
                     return Optional.empty();
                 }
