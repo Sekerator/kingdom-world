@@ -57,6 +57,8 @@ final class FarmerWorkGoal extends Goal {
     }
 
     private final CitizenEntity body;
+    /** The way to the post and the storehouses, shared with the other workers. */
+    private final WorkApproach way;
     private Phase phase = Phase.DONE;
     private int cooldown;
     private BlockPos center;
@@ -80,6 +82,7 @@ final class FarmerWorkGoal extends Goal {
 
     FarmerWorkGoal(CitizenEntity body) {
         this.body = body;
+        this.way = new WorkApproach(body);
         setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
     }
 
@@ -126,6 +129,7 @@ final class FarmerWorkGoal extends Goal {
         targets.clear();
         target = null;
         storehouse = null;
+        way.reset();
         phase = isCarryingFull() ? Phase.DELIVER : Phase.SCAN;
     }
 
@@ -374,8 +378,7 @@ final class FarmerWorkGoal extends Goal {
             finish(100);
             return;
         }
-        if (body.distanceToSqr(storehouse.getX() + 0.5, storehouse.getY(), storehouse.getZ() + 0.5) > STOREHOUSE_REACH_SQR) {
-            moveTo(storehouse);
+        if (!comeTo(level, storehouse, STOREHOUSE_REACH_SQR)) {
             return;
         }
         WorldPos at = new WorldPos(Dimensions.id(level), storehouse.getX(), storehouse.getY(), storehouse.getZ());
@@ -415,8 +418,7 @@ final class FarmerWorkGoal extends Goal {
         if (container == null) {
             return false;
         }
-        if (body.distanceToSqr(center.getX() + 0.5, center.getY(), center.getZ() + 0.5) > STOREHOUSE_REACH_SQR) {
-            moveTo(center);
+        if (!comeTo(level, center, STOREHOUSE_REACH_SQR)) {
             if (++ticksOnTarget > GIVE_UP_TICKS * 2) {
                 ticksOnTarget = 0;
                 finish(100);
@@ -471,6 +473,27 @@ final class FarmerWorkGoal extends Goal {
     }
 
     // ---------------------------------------------------------------- helpers
+
+    /**
+     * Comes to a solid block (the post, a storehouse) as the other workers do (see {@link WorkApproach}): to a place on the
+     * ground beside it, never up onto the blocks over it; as near as a walk goes when no place beside it is reached.
+     *
+     * @return whether the farmer stands within reach of the block
+     */
+    private boolean comeTo(ServerLevel level, BlockPos block, double reachSqr) {
+        WorkApproach.Result result = way.toward(level, block, reachSqr);
+        if (result == WorkApproach.Result.ARRIVED) {
+            return true;
+        }
+        if (result == WorkApproach.Result.UNREACHABLE) {
+            if (body.distanceToSqr(block.getX() + 0.5, block.getY() + 0.5, block.getZ() + 0.5) <= reachSqr) {
+                // Within reach from where it stands, though not on the ground (on a slab, in a doorway).
+                return true;
+            }
+            moveTo(block);
+        }
+        return false;
+    }
 
     private void moveTo(BlockPos pos) {
         if (pathCooldown > 0 || (!body.getNavigation().isDone() && body.getNavigation().getTargetPos() != null

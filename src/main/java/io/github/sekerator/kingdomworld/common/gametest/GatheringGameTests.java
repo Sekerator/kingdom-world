@@ -968,6 +968,54 @@ public final class GatheringGameTests {
         });
     }
 
+    /**
+     * The storehouse of a farm stands under a column of four blocks that stairs lead up to: the farmer brings its wheat to a
+     * place on the ground beside the storehouse, as the other workers do, and never walks up onto the column over it.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_work_farmer_column", timeoutTicks = 1600)
+    public static void farmerBringsTheHarvestBesideAStorehouseUnderAColumn(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos to = helper.absolutePos(new BlockPos(10, 7, 9));
+        enclose(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Column Fields", UUID.randomUUID());
+        BlockState ripe = ((net.minecraft.world.level.block.CropBlock) Blocks.WHEAT).getStateForAge(7);
+        List<BlockPos> crops = List.of(helper.absolutePos(new BlockPos(4, 1, 2)), helper.absolutePos(new BlockPos(5, 1, 2)));
+        for (BlockPos crop : crops) {
+            level.setBlock(crop.below(), Blocks.FARMLAND.defaultBlockState(), 2 | 16);
+            level.setBlock(crop, ripe, 2 | 16);
+            level.setBlock(crop.above(2), Blocks.GLOWSTONE.defaultBlockState(), 2 | 16);
+        }
+        // The storehouse at (7, 0, 6) under a column up to 4, and stairs from the west up to the top of the column.
+        StorehouseInventory store = storehouse(level, helper.absolutePos(new BlockPos(7, 0, 6)));
+        for (int y = 1; y <= 4; y++) {
+            level.setBlock(helper.absolutePos(new BlockPos(7, y, 6)), Blocks.STONE.defaultBlockState(), 2 | 16);
+        }
+        for (int x = 3; x <= 6; x++) {
+            for (int y = 0; y <= x - 3; y++) {
+                level.setBlock(helper.absolutePos(new BlockPos(x, y, 6)), Blocks.STONE.defaultBlockState(), 2 | 16);
+            }
+        }
+        WorldPos postPos = post(helper, new BlockPos(2, 0, 2), "farmer");
+        Citizen worker = worker(helper, kingdom, "farmer", postPos, helper.absolutePos(new BlockPos(1, 0, 3)));
+        int floor = from.getY();
+        double[] highest = {Double.NEGATIVE_INFINITY};
+        helper.onEachTick(() -> {
+            CitizenEntity body = CitizenBodies.body(worker.id());
+            if (body != null) {
+                highest[0] = Math.max(highest[0], body.getY() - floor);
+            }
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(highest[0] < 1.5, "The farmer went up onto the column over the storehouse: feet " + highest[0]
+                    + " over the floor, body " + bodyAt(worker));
+            helper.assertTrue(CitizenGameTests.count(store, Items.WHEAT) >= 2, "The wheat is not in the storehouse: worker " + worker.workStatus()
+                    + ", body " + bodyAt(worker) + ", highest " + highest[0]);
+            end(helper, kingdom, worker, from.offset(-1, -1, -1), to.offset(1, 1, 1));
+        });
+    }
+
     private static List<BlockPos> concat(List<BlockPos> first, List<BlockPos> second) {
         List<BlockPos> all = new java.util.ArrayList<>(first);
         all.addAll(second);
