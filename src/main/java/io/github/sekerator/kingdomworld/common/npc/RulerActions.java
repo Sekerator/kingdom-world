@@ -552,7 +552,10 @@ public final class RulerActions {
         }
         for (Citizen citizen : state.citizens().registry().citizensOf(id)) {
             String old = citizen.professionId();
+            // Those who bring in food stay at it: a kingdom eats before it smelts.
             if (counts.getOrDefault(old, 0) >= 2 && !old.equals(Professions.UNEMPLOYED.id()) && !old.equals(profession)
+                    && !old.equals(Professions.FARMER.id()) && !old.equals(Professions.FISHER.id()) && !old.equals(Professions.HERDER.id())
+                    && !old.equals(Professions.COOK.id())
                     && !io.github.sekerator.kingdomworld.common.army.ArmyWork.state(server).soldiersOf(id).stream()
                     .anyMatch(soldier -> soldier.citizenId().equals(citizen.id()))) {
                 Outcome moved = KingdomWorldApi.change(server, "move a citizen of a kingdom of the world to new work",
@@ -690,6 +693,18 @@ public final class RulerActions {
     static List<RulerDecision> supply(MinecraftServer server, UUID id, long budget) {
         KingdomWorldState state = KingdomWorldApi.state(server);
         java.util.Map<String, Integer> lacking = new java.util.LinkedHashMap<>();
+        // What the orders of food lack comes first and is never left to wait: a kingdom eats before it builds.
+        java.util.Set<String> forFood = new java.util.HashSet<>();
+        for (io.github.sekerator.kingdomworld.core.production.Order order : state.orders().ordersOf(id)) {
+            net.minecraft.world.item.Item made = io.github.sekerator.kingdomworld.common.trade.GoodsStacks.item(order.item());
+            if (made != net.minecraft.world.item.Items.AIR && io.github.sekerator.kingdomworld.common.production.Recipes.isFood(
+                    new net.minecraft.world.item.ItemStack(made))) {
+                for (io.github.sekerator.kingdomworld.core.production.Order.Missing missing : order.missing()) {
+                    lacking.merge(missing.item(), missing.count(), Integer::sum);
+                    forFood.add(missing.item());
+                }
+            }
+        }
         List<Construction> constructions = new ArrayList<>(state.construction().of(id));
         constructions.sort(java.util.Comparator.comparingLong(Construction::created));
         for (Construction construction : constructions) {
@@ -700,6 +715,11 @@ public final class RulerActions {
                     .forEach((item, count) -> lacking.merge(item, count, Integer::sum)));
         }
         for (io.github.sekerator.kingdomworld.core.production.Order order : state.orders().ordersOf(id)) {
+            net.minecraft.world.item.Item made = io.github.sekerator.kingdomworld.common.trade.GoodsStacks.item(order.item());
+            if (made != net.minecraft.world.item.Items.AIR && io.github.sekerator.kingdomworld.common.production.Recipes.isFood(
+                    new net.minecraft.world.item.ItemStack(made))) {
+                continue;
+            }
             for (io.github.sekerator.kingdomworld.core.production.Order.Missing missing : order.missing()) {
                 lacking.merge(missing.item(), missing.count(), Integer::sum);
             }
@@ -728,12 +748,13 @@ public final class RulerActions {
                 break;
             }
             String wanted = entry.getKey();
+            boolean food = forFood.contains(wanted);
             String gatherer = ConstructionWork.gatherer(server, id, wanted);
-            if (!gatherer.isEmpty() && professions.contains(gatherer) && day - since.computeIfAbsent(wanted, k -> day) < LOCAL_DAYS) {
+            if (!food && !gatherer.isEmpty() && professions.contains(gatherer) && day - since.computeIfAbsent(wanted, k -> day) < LOCAL_DAYS) {
                 continue;
             }
             long[] streak = streaks.get(wanted);
-            if (streak != null && day < streak[2]) {
+            if (!food && streak != null && day < streak[2]) {
                 continue;
             }
             int count = entry.getValue();
@@ -763,7 +784,7 @@ public final class RulerActions {
                 left -= count;
                 ordered.add(RulerDecision.of(RulerDecision.Kind.IMPORT, wanted, count).withExtra(cost));
                 long[] now = streak != null && streak[0] == day - 1 ? new long[]{day, streak[1] + 1, 0} : new long[]{day, 1, 0};
-                if (now[1] >= IMPORT_STREAK) {
+                if (now[1] >= IMPORT_STREAK && !food) {
                     now = new long[]{day, 0, day + IMPORT_PAUSE};
                     LOGGER.info("The ruler of {} bought {} abroad {} days in a row and waits {} days before it buys it again",
                             NpcRulers.kingdomName(server, id), wanted, IMPORT_STREAK, IMPORT_PAUSE);
@@ -1275,7 +1296,8 @@ public final class RulerActions {
         Outcome export = KingdomWorldApi.change(server, "export surplus of a kingdom of the world",
                 state -> state.putExport(null, id, new Market.ExportRule(decision.subject(), keep), TradeSettings.rules()));
         NpcRulers.lastView(id).ifPresent(view -> view.goods.values().forEach(other -> {
-            if (other.surplus() > 0 && !other.item().equals(decision.subject()) && !view.exporting.contains(other.item())) {
+            if (other.surplus() > 0 && !other.item().equals(decision.subject()) && !view.exporting.contains(other.item())
+                    && !view.food.contains(other.item())) {
                 KingdomWorldApi.change(server, "export surplus of a kingdom of the world",
                         state -> state.putExport(null, id, new Market.ExportRule(other.item(), keep(other)), TradeSettings.rules()));
             }

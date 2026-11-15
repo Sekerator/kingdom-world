@@ -199,6 +199,8 @@ public final class RulerView {
     public List<String> buying = new ArrayList<>();
     /** Goods its merchants sell abroad already. */
     public List<String> exporting = new ArrayList<>();
+    /** Goods its people eat: the ruler keeps them at home whatever heaps up. */
+    public List<String> food = new ArrayList<>();
     /** Goods the workshops are told to keep already. */
     public List<String> ordered = new ArrayList<>();
     /** Goods the workshops of the kingdom can make. */
@@ -292,6 +294,7 @@ public final class RulerView {
         view.selling = new ArrayList<>(selling);
         view.buying = new ArrayList<>(buying);
         view.exporting = new ArrayList<>(exporting);
+        view.food = new ArrayList<>(food);
         view.ordered = new ArrayList<>(ordered);
         view.makeable = new ArrayList<>(makeable);
         view.entryFee = entryFee;

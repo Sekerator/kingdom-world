@@ -115,9 +115,10 @@ public final class NpcGarrison {
             }
         }
         int base = rules.guards(level) + towns * rules.townGuards(level);
-        // A rich ruler and an endangered one keep more of a guard, up to twice the usual.
-        int guards = io.github.sekerator.kingdomworld.core.npc.MilitaryMind.keep(base, RulerPurse.keepDays(server, kingdomId),
-                NpcThreats.level(server, kingdomId), base * 2);
+        // A rich ruler and an endangered one keep more of a guard, up to twice the usual, while there is food for more: the guard
+        // is taken from its working people.
+        int guards = !fedForMore(kingdomId) ? base : io.github.sekerator.kingdomworld.core.npc.MilitaryMind.keep(base,
+                RulerPurse.keepDays(server, kingdomId), NpcThreats.level(server, kingdomId), base * 2);
         ArmyState army = ArmyWork.state(server);
         int people = 0;
         for (Citizen citizen : KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdomId)) {
@@ -148,6 +149,15 @@ public final class NpcGarrison {
     static boolean recruits(MinecraftServer server, UUID kingdomId) {
         long runway = NpcRulers.lastView(kingdomId).map(io.github.sekerator.kingdomworld.core.npc.RulerMind::runway).orElse(Long.MAX_VALUE);
         return io.github.sekerator.kingdomworld.core.npc.MilitaryMind.recruits(RulerPurse.keepDays(server, kingdomId), runway);
+    }
+
+    /**
+     * Whether a kingdom has food for more soldiers than its plan: every recruit beyond it is a mouth more, so the ruler takes
+     * them only while its storehouses hold three times the days of food it wants.
+     */
+    static boolean fedForMore(UUID kingdomId) {
+        return NpcRulers.lastView(kingdomId).map(view -> view.foodDays >= 3 * io.github.sekerator.kingdomworld.core.npc.RulerMind.FOOD_DAYS)
+                .orElse(false);
     }
 
     /**
@@ -354,7 +364,10 @@ public final class NpcGarrison {
         // The army fills up from abroad a few a day (a kingdom that appeared before the large armies, or lost soldiers in a
         // war); the staff sees to the guard, the officers and the kits of all.
         if (army.staffDay(kingdomId) < ArmyWork.day(server) && recruits(server, kingdomId)) {
-            int lacking = wanted[1] - army.branchOf(kingdomId, Branch.ARMY).size();
+            // Up to the army of its plan as before; beyond it, for a rich or endangered ruler, only with food for them.
+            int size = army.branchOf(kingdomId, Branch.ARMY).size();
+            int planned = Math.min(wanted[1], royalArmy(server, kingdomId));
+            int lacking = (size < planned || !fedForMore(kingdomId) ? planned : wanted[1]) - size;
             int joined = enlist(server, kingdomId, Math.min(NpcSettings.rules().armyPerDay(), lacking));
             if (joined > 0) {
                 LOGGER.info("{} recruit(s) from abroad joined the army of {}: {} of {}", joined, kingdomId,

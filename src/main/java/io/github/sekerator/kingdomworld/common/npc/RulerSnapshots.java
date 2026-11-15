@@ -512,9 +512,14 @@ final class RulerSnapshots {
             }
             covered += entry.getValue() * (double) food.getNutrition();
             kept.put(entry.getKey(), Math.min(entry.getValue(), (long) Math.ceil(need / food.getNutrition())));
+            view.food.add(entry.getKey());
         }
-        wants.put(RulerMind.BREAD, (long) Math.ceil(Math.max(0.0, need - covered) / 5.0));
-        wants.put("minecraft:wheat", 16L);
+        view.food.add(RulerMind.BREAD);
+        long bread = (long) Math.ceil(Math.max(0.0, need - covered) / 5.0);
+        wants.put(RulerMind.BREAD, bread);
+        // Wheat for the bread of the days of food the ruler wants for all its people, three to a loaf, before any of it goes
+        // abroad: the fields feed the kingdom first.
+        wants.put("minecraft:wheat", Math.max(16L, (long) Math.ceil(need / 5.0) * 3));
         wants.put(wood + "_log", 64L);
         wants.put(wood + "_planks", 64L);
         wants.put("minecraft:cobblestone", 64L);

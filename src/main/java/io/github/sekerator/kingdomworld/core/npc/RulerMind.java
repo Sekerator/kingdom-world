@@ -940,7 +940,7 @@ public final class RulerMind {
      * founding is still a heap in the storehouses until its merchants take it abroad.
      */
     private static Optional<RulerView.Good> surplus(RulerView view) {
-        return view.goods.values().stream().filter(good -> good.surplus() > 0 && !view.exporting.contains(good.item()))
+        return view.goods.values().stream().filter(good -> good.surplus() > 0 && !view.exporting.contains(good.item()) && !view.food.contains(good.item()))
                 .max(Comparator.comparingLong(good -> good.surplus() * Math.max(1, good.worth())));
     }
 
