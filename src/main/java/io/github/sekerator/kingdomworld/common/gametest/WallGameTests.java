@@ -28,6 +28,19 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
+import io.github.sekerator.kingdomworld.common.road.CityWalls;
+import io.github.sekerator.kingdomworld.common.road.RoadSettings;
+import io.github.sekerator.kingdomworld.common.storage.KingdomStorage;
+import io.github.sekerator.kingdomworld.common.storage.StorehouseInventory;
+import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
+import io.github.sekerator.kingdomworld.core.road.Road;
+import io.github.sekerator.kingdomworld.core.road.RoadRules;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
@@ -202,6 +215,350 @@ public final class WallGameTests {
         } finally {
             RoadWork.state(server).forgetKingdom(kingdom.id());
             CitizenGameTests.finish(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
+    // ---------------------------------------------------------------- walls in place of walls, through trees, over holes, at a height
+
+    /** The middle of the city of the tests of building walls, relative. */
+    private static final BlockPos MIDDLE = new BlockPos(6, 0, 6);
+
+    /**
+     * Clears the land of a test of building walls and lays grass from 0 to 12 both ways at relative height 0, with stone under it;
+     * walls of radius 4 around the middle.
+     */
+    private static void land(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        GatheringGameTests.clear(level, helper.absolutePos(new BlockPos(-1, -3, -1)), helper.absolutePos(new BlockPos(13, 8, 13)));
+        GatheringGameTests.clear(level, helper.absolutePos(new BlockPos(1, 9, 1)), new BlockPos(helper.absolutePos(new BlockPos(11, 0, 11)).getX(),
+                level.getMaxBuildHeight() - 1, helper.absolutePos(new BlockPos(11, 0, 11)).getZ()));
+        for (int x = 0; x <= 12; x++) {
+            for (int z = 0; z <= 12; z++) {
+                for (int y = -3; y < 0; y++) {
+                    helper.setBlock(new BlockPos(x, y, z), Blocks.STONE);
+                }
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.GRASS_BLOCK);
+            }
+        }
+        RoadRules.Builder rules = RoadSettings.configuredRoads();
+        rules.wallRadius = 4;
+        rules.townPeople = 50;
+        rules.cityPeople = 100;
+        RoadSettings.override(rules.build(), null);
+    }
+
+    private static City city(GameTestHelper helper, Kingdom kingdom) {
+        BlockPos middle = helper.absolutePos(MIDDLE);
+        return RoadWork.state(helper.getLevel().getServer()).addCity(kingdom.id(), "GameTest Wall Town", Dimensions.id(helper.getLevel()),
+                middle.getX(), middle.getY(), middle.getZ(), 1);
+    }
+
+    private static Wall build(GameTestHelper helper, Kingdom kingdom, City city, Wall.WallClass wallClass, int baseY) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Wall[] made = new Wall[1];
+        Outcome laid = CityWalls.build(server, null, kingdom.id(), city.id(), wallClass, made, 0, baseY);
+        helper.assertTrue(laid.ok(), "The wall was not laid out: " + laid.error());
+        return made[0];
+    }
+
+    /**
+     * Pays every column of a wall from the storehouses and puts it into the world.
+     */
+    private static void payAndPlace(GameTestHelper helper, Wall wall) {
+        MinecraftServer server = helper.getLevel().getServer();
+        for (Road.Section section : wall.sections()) {
+            boolean paid = true;
+            while (!section.done() && paid) {
+                paid = CityWalls.payColumn(server, wall, section);
+            }
+        }
+        helper.assertTrue(wall.allPaid(), "The wall was not paid for: " + wall.paid() + " of " + wall.blocks().size());
+        CityWalls.placeNow(server, wall);
+    }
+
+    private static boolean logAt(ServerLevel level, int x, int y, int z) {
+        return level.getBlockState(new BlockPos(x, y, z)).is(BlockTags.LOGS);
+    }
+
+    private static long stored(MinecraftServer server, Kingdom kingdom, Item item) {
+        return KingdomStorage.count(server, kingdom.id(), stack -> stack.is(item));
+    }
+
+    private static int count(GameTestHelper helper, Block block) {
+        int count = 0;
+        for (BlockPos pos : BlockPos.betweenClosed(helper.absolutePos(new BlockPos(1, 1, 1)), helper.absolutePos(new BlockPos(11, 8, 11)))) {
+            if (helper.getLevel().getBlockState(pos).is(block)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private static void finish(GameTestHelper helper, Kingdom kingdom) {
+        RoadSettings.override(null, null);
+        RoadWork.state(helper.getLevel().getServer()).forgetKingdom(kingdom.id());
+        CitizenGameTests.finish(helper, kingdom);
+        GatheringGameTests.clear(helper.getLevel(), helper.absolutePos(new BlockPos(-1, -3, -1)), helper.absolutePos(new BlockPos(13, 8, 13)));
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_walls_swap", timeoutTicks = 200)
+    public static void aPalisadeTakesThePlaceOfAStoneWall(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        land(helper);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Wall Swappers", UUID.randomUUID());
+        try {
+            StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 12);
+            for (int slot = 0; slot < 4; slot++) {
+                store.insertItem(slot, new ItemStack(Items.COBBLESTONE, 64), false);
+            }
+            store.insertItem(4, new ItemStack(Items.OAK_LOG, 64), false);
+            store.insertItem(5, new ItemStack(Items.OAK_LOG, 64), false);
+            City city = city(helper, kingdom);
+            Wall stone = build(helper, kingdom, city, Wall.WallClass.STONE, Wall.FOLLOW_GROUND);
+            payAndPlace(helper, stone);
+            helper.assertTrue(stone.built() && count(helper, Blocks.COBBLESTONE) == stone.items(), "The stone wall was not placed");
+            BlockPos south = helper.absolutePos(new BlockPos(6, 0, 10));
+            helper.assertTrue(CityWalls.gateAt(server, null, stone.id(), south.getX(), south.getZ()).ok(), "No gate in the stone wall");
+            int y = helper.absolutePos(MIDDLE).getY();
+            Wall palisade = build(helper, kingdom, city, Wall.WallClass.PALISADE, Wall.FOLLOW_GROUND);
+            helper.assertTrue(RoadWork.state(server).wall(stone.id()).isEmpty(), "The old wall is still kept");
+            for (RouteCell cell : palisade.cells()) {
+                helper.assertTrue(cell.y() == y, "The palisade stands on the stone at " + cell.x() + " " + cell.z() + ": " + cell.y());
+            }
+            helper.assertTrue(palisade.gateCells().stream().anyMatch(g -> g.x() == south.getX() && g.z() == south.getZ()),
+                    "The gate of the stone wall did not pass to the palisade: " + palisade.gateCells());
+            payAndPlace(helper, palisade);
+            for (int i = 0; i < 5 && palisade.hasReplaced(); i++) {
+                CityWalls.takeDownOld(server);
+            }
+            helper.assertTrue(!palisade.hasReplaced(), "Blocks of the stone wall wait to come down: " + palisade.replacedBlocks().length);
+            helper.assertTrue(count(helper, Blocks.COBBLESTONE) == 0, "Stone of the old wall is left: " + count(helper, Blocks.COBBLESTONE));
+            for (int index = 0; index < palisade.cells().size(); index++) {
+                RouteCell cell = palisade.cells().get(index);
+                for (int up = 1; up <= Wall.TALLEST; up++) {
+                    BlockPos pos = new BlockPos(cell.x(), y + up, cell.z());
+                    if (palisade.inGate(index) || up > 4) {
+                        helper.assertTrue(level.getBlockState(pos).isAir(), "Not open at " + pos + ": " + level.getBlockState(pos));
+                    } else {
+                        helper.assertTrue(logAt(level, cell.x(), y + up, cell.z()), "No log of the palisade at " + pos);
+                    }
+                }
+            }
+            long back = stored(server, kingdom, Items.COBBLESTONE);
+            helper.assertTrue(back == 256, "The stone of the old wall did not go back to the storehouse: " + back);
+            long walls = KingdomWorldApi.state(server).construction().buildingsOf(kingdom.id()).stream()
+                    .filter(b -> b.templateId().equals(CityWalls.WALL_TEMPLATE)).count();
+            long gates = KingdomWorldApi.state(server).construction().buildingsOf(kingdom.id()).stream()
+                    .filter(b -> b.templateId().equals(CityWalls.GATE_TEMPLATE)).count();
+            helper.assertTrue(walls == 1 && gates == palisade.gates().size(), "The register holds " + walls + " walls and " + gates + " gates");
+            Wall read = CityWalls.throughSave(palisade);
+            helper.assertTrue(read.baseY() == palisade.baseY() && java.util.Arrays.equals(read.grounds(), palisade.grounds())
+                    && read.placedBlocks().length == palisade.placedBlocks().length, "The wall did not survive saving");
+        } finally {
+            finish(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_walls_again", timeoutTicks = 200)
+    public static void aStoneWallOrderedAgainAddsOnlyWhatIsMissing(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        land(helper);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Wall Menders", UUID.randomUUID());
+        try {
+            StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 12);
+            for (int slot = 0; slot < 6; slot++) {
+                store.insertItem(slot, new ItemStack(Items.COBBLESTONE, 64), false);
+            }
+            City city = city(helper, kingdom);
+            Wall first = build(helper, kingdom, city, Wall.WallClass.STONE, Wall.FOLLOW_GROUND);
+            payAndPlace(helper, first);
+            int y = helper.absolutePos(MIDDLE).getY();
+            RouteCell broken = first.cells().get(9);
+            for (int up = 1; up <= 3; up++) {
+                level.removeBlock(new BlockPos(broken.x(), y + up, broken.z()), false);
+            }
+            Wall again = build(helper, kingdom, city, Wall.WallClass.STONE, Wall.FOLLOW_GROUND);
+            for (RouteCell cell : again.cells()) {
+                helper.assertTrue(cell.y() == y, "The wall ordered again stands on the old one at " + cell.x() + " " + cell.z() + ": " + cell.y());
+            }
+            payAndPlace(helper, again);
+            CityWalls.takeDownOld(server);
+            for (BlockPos pos : BlockPos.betweenClosed(helper.absolutePos(new BlockPos(1, 1, 1)), helper.absolutePos(new BlockPos(11, 8, 11)))) {
+                if (level.getBlockState(pos).is(Blocks.COBBLESTONE)) {
+                    helper.assertTrue(pos.getY() <= y + Wall.TALLEST, "Stone stacked on the wall at " + pos);
+                }
+            }
+            helper.assertTrue(count(helper, Blocks.COBBLESTONE) == again.items(), "Stone in the world " + count(helper, Blocks.COBBLESTONE)
+                    + " is not the wall's " + again.items());
+            for (int up = 1; up <= 3; up++) {
+                BlockPos pos = new BlockPos(broken.x(), y + up, broken.z());
+                helper.assertTrue(level.getBlockState(pos).is(Blocks.COBBLESTONE), "The hole was not mended at " + pos);
+            }
+            long left = stored(server, kingdom, Items.COBBLESTONE);
+            helper.assertTrue(left == 384 - again.items() - 3, "The stone paid for the blocks kept did not go back: " + left);
+            RouteCell kept = again.cells().get(20);
+            helper.assertTrue(again.placedHere(BlockPos.asLong(kept.x(), y + 2, kept.z())), "The blocks kept are not the new wall's own");
+            // A gate cut now opens the whole column of the blocks kept.
+            BlockPos north = helper.absolutePos(new BlockPos(6, 0, 2));
+            helper.assertTrue(CityWalls.gateAt(server, null, again.id(), north.getX(), north.getZ()).ok(), "No gate cut");
+            for (int up = 1; up <= Wall.TALLEST; up++) {
+                helper.assertTrue(level.getBlockState(north.above(up)).isAir(), "The gate did not open the old blocks at " + north.above(up));
+            }
+        } finally {
+            finish(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_walls_trees", timeoutTicks = 200)
+    public static void aWallThroughTreesAndPlantsHasNoGaps(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        land(helper);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Wall Clearers", UUID.randomUUID());
+        try {
+            StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 12);
+            store.insertItem(0, new ItemStack(Items.SPRUCE_LOG, 64), false);
+            store.insertItem(1, new ItemStack(Items.SPRUCE_LOG, 64), false);
+            // A birch with its trunk on the west side of the ring, its crown over it.
+            for (int up = 1; up <= 5; up++) {
+                helper.setBlock(new BlockPos(2, up, 4), Blocks.BIRCH_LOG);
+            }
+            for (int x = 1; x <= 3; x++) {
+                for (int z = 3; z <= 5; z++) {
+                    for (int up = 4; up <= 6; up++) {
+                        if (x != 2 || z != 4 || up == 6) {
+                            helper.setBlock(new BlockPos(x, up, z), Blocks.BIRCH_LEAVES);
+                        }
+                    }
+                }
+            }
+            // Leaves hanging over the north side, plants on the ground.
+            helper.setBlock(new BlockPos(6, 3, 2), Blocks.OAK_LEAVES);
+            helper.setBlock(new BlockPos(6, 4, 2), Blocks.OAK_LEAVES);
+            helper.setBlock(new BlockPos(4, 1, 2), Blocks.POPPY);
+            helper.setBlock(new BlockPos(8, 1, 2), Blocks.OAK_SAPLING);
+            helper.setBlock(new BlockPos(10, 1, 4), Blocks.SNOW);
+            helper.setBlock(new BlockPos(10, 1, 5), Blocks.GRASS);
+            // A fence a player put up on the east side: the wall leaves it and has a gap there.
+            helper.setBlock(new BlockPos(10, 1, 8), Blocks.OAK_FENCE);
+            City city = city(helper, kingdom);
+            Wall wall = build(helper, kingdom, city, Wall.WallClass.PALISADE, Wall.FOLLOW_GROUND);
+            int y = helper.absolutePos(MIDDLE).getY();
+            for (RouteCell cell : wall.cells()) {
+                helper.assertTrue(cell.y() == y, "The ring left the ground at " + cell.x() + " " + cell.z() + ": " + cell.y());
+            }
+            payAndPlace(helper, wall);
+            BlockPos planks = helper.absolutePos(new BlockPos(10, 1, 8));
+            for (RouteCell cell : wall.cells()) {
+                for (int up = 1; up <= 4; up++) {
+                    BlockPos pos = new BlockPos(cell.x(), y + up, cell.z());
+                    if (!pos.equals(planks)) {
+                        helper.assertTrue(level.getBlockState(pos).is(Blocks.SPRUCE_LOG), "A gap in the wall at " + pos + ": " + level.getBlockState(pos));
+                    }
+                }
+            }
+            helper.assertTrue(level.getBlockState(planks).is(Blocks.OAK_FENCE), "The fence of a player was broken");
+            helper.assertTrue(CityWalls.blockedInWay(wall.id()), "The fence in the way was not noted");
+            helper.assertTrue(count(helper, Blocks.BIRCH_LOG) == 0, "The birch still stands");
+            long birch = stored(server, kingdom, Items.BIRCH_LOG);
+            long poppy = stored(server, kingdom, Items.POPPY);
+            long sapling = stored(server, kingdom, Items.OAK_SAPLING);
+            helper.assertTrue(birch == 5 && poppy == 1 && sapling >= 1, "What was cleared did not reach the storehouse: " + birch + " birch, "
+                    + poppy + " poppy, " + sapling + " sapling");
+        } finally {
+            finish(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_walls_hole", timeoutTicks = 200)
+    public static void aWallOverAHoleIsFilledUnder(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        land(helper);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Wall Fillers", UUID.randomUUID());
+        try {
+            StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 12);
+            store.insertItem(0, new ItemStack(Items.OAK_LOG, 64), false);
+            store.insertItem(1, new ItemStack(Items.OAK_LOG, 64), false);
+            City city = city(helper, kingdom);
+            Wall wall = build(helper, kingdom, city, Wall.WallClass.PALISADE, Wall.FOLLOW_GROUND);
+            int y = helper.absolutePos(MIDDLE).getY();
+            // After the layout, holes three blocks deep are dug under two columns.
+            BlockPos[] holes = {helper.absolutePos(new BlockPos(2, 0, 6)), helper.absolutePos(new BlockPos(6, 0, 2))};
+            for (BlockPos hole : holes) {
+                for (int down = 0; down < 3; down++) {
+                    level.setBlockAndUpdate(hole.below(down), Blocks.AIR.defaultBlockState());
+                }
+            }
+            payAndPlace(helper, wall);
+            helper.assertTrue(!wall.built(), "The wall went up over the holes without earth");
+            store.insertItem(2, new ItemStack(Items.DIRT, 16), false);
+            CityWalls.placeNow(server, wall);
+            helper.assertTrue(wall.built(), "The wall did not go up once there was earth");
+            for (BlockPos hole : holes) {
+                for (int down = 0; down < 3; down++) {
+                    helper.assertTrue(level.getBlockState(hole.below(down)).is(Blocks.DIRT), "The hole is open at " + hole.below(down));
+                }
+                helper.assertTrue(logAt(level, hole.getX(), y + 1, hole.getZ()), "No wall over the hole at " + hole);
+            }
+            long dirt = stored(server, kingdom, Items.DIRT);
+            helper.assertTrue(dirt == 16 - 6, "The fill took other than six blocks of earth: " + (16 - dirt));
+        } finally {
+            finish(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_walls_height", timeoutTicks = 200)
+    public static void aWallAtAChosenHeightStandsOnIt(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        land(helper);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Wall Levellers", UUID.randomUUID());
+        try {
+            StorehouseInventory store = CitizenGameTests.storehouse(helper, 0, 0, 12);
+            store.insertItem(0, new ItemStack(Items.OAK_LOG, 64), false);
+            store.insertItem(1, new ItemStack(Items.OAK_LOG, 64), false);
+            store.insertItem(2, new ItemStack(Items.DIRT, 64), false);
+            // A hill three blocks high along the east side, a dip two blocks deep along the west side.
+            for (int z = 1; z <= 11; z++) {
+                for (int up = 1; up <= 3; up++) {
+                    helper.setBlock(new BlockPos(10, up, z), Blocks.DIRT);
+                }
+                helper.setBlock(new BlockPos(2, 0, z), Blocks.AIR);
+                helper.setBlock(new BlockPos(2, -1, z), Blocks.AIR);
+            }
+            City city = city(helper, kingdom);
+            int y = helper.absolutePos(MIDDLE).getY();
+            int base = y + 2;
+            Wall wall = build(helper, kingdom, city, Wall.WallClass.PALISADE, base);
+            helper.assertTrue(wall.baseY() == base && wall.earth() > 0 && wall.cutTotal() > 0, "The earth of the wall is not counted: "
+                    + wall.earth() + " to fill, " + wall.cutTotal() + " to cut");
+            payAndPlace(helper, wall);
+            helper.assertTrue(wall.built(), "The wall at a height did not go up");
+            for (Wall.Block block : wall.blocks()) {
+                helper.assertTrue(block.y() == base - 1, "A column stands off the height: " + block);
+                for (int up = 0; up < 4; up++) {
+                    helper.assertTrue(logAt(level, block.x(), base + up, block.z()), "No log at " + block.x() + " " + (base + up) + " " + block.z());
+                }
+                for (int under = base - 1; under > y - 2; under--) {
+                    helper.assertTrue(!level.getBlockState(new BlockPos(block.x(), under, block.z())).isAir(), "A hole under the wall at "
+                            + block.x() + " " + under + " " + block.z());
+                }
+            }
+            // A gate is cut at the height: its floor is the foot of the wall.
+            BlockPos south = helper.absolutePos(new BlockPos(6, 0, 10));
+            helper.assertTrue(CityWalls.gateAt(server, null, wall.id(), south.getX(), south.getZ()).ok(), "No gate cut");
+            helper.assertTrue(!level.getBlockState(new BlockPos(south.getX(), base - 1, south.getZ())).isAir()
+                    && level.getBlockState(new BlockPos(south.getX(), base, south.getZ())).isAir(), "The floor of the gate is not at the foot");
+        } finally {
+            finish(helper, kingdom);
         }
         helper.succeed();
     }

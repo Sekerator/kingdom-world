@@ -951,12 +951,26 @@ public class ThroneScreen extends KingdomScreen implements ResultListener {
 
     // ---------------------------------------------------------------- moving the throne
 
+    /** For the layout check: the viewer stands far from the throne. */
+    private boolean farForCheck;
+
+    /**
+     * Shows the window as it is far from the throne; for the layout check.
+     */
+    public ThroneScreen farFromThroneForCheck() {
+        farForCheck = true;
+        return this;
+    }
+
     /**
      * Whether the viewer stands at the throne of the kingdom, where coins are taken from the vault and the move of the
      * throne starts. Without a throne or a player it counts as true; the server decides anyway, and it also checks the
      * dimension, which the client does not know.
      */
     boolean atThrone() {
+        if (farForCheck) {
+            return false;
+        }
         Minecraft minecraft = Minecraft.getInstance();
         if (view == null || view.capital() == null || minecraft.player == null) {
             return true;

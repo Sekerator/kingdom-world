@@ -116,6 +116,26 @@ final class WallEarthworks {
         return pos.getY();
     }
 
+    /**
+     * The ground a wall is laid out on at a place: under what {@link #groundUnder} goes through, and under what somebody made that is
+     * less than a whole block (a fence, a torch, a sign), which stays in the line of the wall as a gap. A whole block somebody made
+     * on the ground is the ground of the wall.
+     */
+    static int layoutGround(ServerLevel level, int x, int from, int z) {
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, from, z);
+        int lowest = Math.max(level.getMinBuildHeight(), from - 64);
+        while (pos.getY() > lowest) {
+            BlockState state = level.getBlockState(pos);
+            boolean small = io.github.sekerator.kingdomworld.common.construction.Earthworks.made(level, pos, state)
+                    && !state.isCollisionShapeFullBlock(level, pos);
+            if (!loose(state) && !small) {
+                break;
+            }
+            pos.setY(pos.getY() - 1);
+        }
+        return pos.getY();
+    }
+
     // ---------------------------------------------------------------- a column
 
     /**

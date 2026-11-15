@@ -235,4 +235,146 @@ public final class EarthworkGameTests {
         }
         helper.succeed();
     }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_earthwork_wall", timeoutTicks = 400)
+    public static void aFloorLevelledAlongAPalisadeIsFlat(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        ConstructionSettings.override(FAST);
+        open(helper);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Flat Floors", UUID.randomUUID());
+        floor(helper, 1);
+        // The plot to cut: two blocks of earth over the floor.
+        for (int x = 2; x <= 7; x++) {
+            for (int z = 3; z <= 7; z++) {
+                helper.setBlock(new BlockPos(x, 1, z), Blocks.DIRT);
+                helper.setBlock(new BlockPos(x, 2, z), Blocks.DIRT);
+            }
+        }
+        // A palisade of the kingdom along the north edge with fences on top, and a walkway of fences and planks along the east edge.
+        java.util.List<io.github.sekerator.kingdomworld.core.road.RouteCell> cells = new java.util.ArrayList<>();
+        for (int x = 1; x <= 8; x++) {
+            BlockPos foot = helper.absolutePos(new BlockPos(x, 0, 2));
+            cells.add(new io.github.sekerator.kingdomworld.core.road.RouteCell(foot.getX(), foot.getY(), foot.getZ(),
+                    io.github.sekerator.kingdomworld.core.road.RouteCell.Kind.GROUND, 0, null));
+            for (int y = 1; y <= 4; y++) {
+                helper.setBlock(new BlockPos(x, y, 2), Blocks.OAK_LOG);
+            }
+            helper.setBlock(new BlockPos(x, 5, 2), Blocks.OAK_FENCE);
+        }
+        for (int z = 3; z <= 7; z++) {
+            helper.setBlock(new BlockPos(8, 1, z), Blocks.OAK_FENCE);
+            helper.setBlock(new BlockPos(8, 2, z), Blocks.OAK_FENCE);
+            helper.setBlock(new BlockPos(8, 3, z), Blocks.OAK_PLANKS);
+        }
+        io.github.sekerator.kingdomworld.core.road.Wall[] wall = new io.github.sekerator.kingdomworld.core.road.Wall[1];
+        io.github.sekerator.kingdomworld.common.road.RoadWork.change(server, "test wall", state -> {
+            BlockPos middle = helper.absolutePos(new BlockPos(5, 0, 6));
+            wall[0] = new io.github.sekerator.kingdomworld.core.road.Wall(state.nextWallId(), 0, kingdom.id(),
+                    io.github.sekerator.kingdomworld.core.road.Wall.WallClass.PALISADE,
+                    io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level), middle.getX(), middle.getZ(), cells, java.util.List.of(), 0);
+            for (io.github.sekerator.kingdomworld.core.road.RouteCell cell : cells) {
+                for (int up = 1; up <= 4; up++) {
+                    wall[0].markPlaced(BlockPos.asLong(cell.x(), cell.y() + up, cell.z()));
+                }
+            }
+            state.putWall(wall[0]);
+            return io.github.sekerator.kingdomworld.core.kingdom.Outcome.DONE;
+        });
+        Citizen builder = builder(helper, kingdom);
+        try {
+            int target = helper.absolutePos(new BlockPos(0, 0, 0)).getY();
+            Earthworks.Request request = new Earthworks.Request(helper.absolutePos(new BlockPos(2, 0, 3)), helper.absolutePos(new BlockPos(7, 0, 7)),
+                    Earthwork.Mode.LEVEL, target, true);
+            Earthworks.Survey survey = Earthworks.survey(level, kingdom.id(), request);
+            helper.assertTrue(survey.error() == null && survey.work() != null, "The plot was refused: " + survey.error());
+            for (int dx = 0; dx < 6; dx++) {
+                for (int dz = 0; dz < 5; dz++) {
+                    helper.assertTrue(survey.work().surface(dx, dz) == target, "A step by the wall at " + dx + " " + dz + ": "
+                            + survey.work().surface(dx, dz));
+                }
+            }
+            helper.assertTrue(survey.fills() == 0, "A smoothed floor by a palisade fills " + survey.fills());
+            KingdomWorldState.ConstructionChange change = Earthworks.lay(level, null, kingdom.id(), request);
+            helper.assertTrue(change.construction().isPresent(), "The earthworks were refused: " + change.outcome());
+            Construction work = change.construction().get();
+            workFar(server, builder, work, 200);
+            for (int x = 2; x <= 7; x++) {
+                for (int z = 3; z <= 7; z++) {
+                    helper.assertTrue(level.getBlockState(helper.absolutePos(new BlockPos(x, 0, z))).is(Blocks.DIRT), "The floor was dug at "
+                            + x + " " + z);
+                    for (int y = 1; y <= 5; y++) {
+                        helper.assertTrue(level.getBlockState(helper.absolutePos(new BlockPos(x, y, z))).isAir(), "The floor is not flat at "
+                                + x + " " + y + " " + z);
+                    }
+                }
+            }
+            for (int x = 1; x <= 8; x++) {
+                for (int y = 1; y <= 4; y++) {
+                    helper.assertTrue(level.getBlockState(helper.absolutePos(new BlockPos(x, y, 2))).is(Blocks.OAK_LOG), "The palisade was touched at "
+                            + x + " " + y);
+                }
+            }
+            for (int z = 3; z <= 7; z++) {
+                helper.assertTrue(level.getBlockState(helper.absolutePos(new BlockPos(8, 3, z))).is(Blocks.OAK_PLANKS), "The walkway was touched");
+            }
+            helper.assertTrue(KingdomWorldApi.state(server).construction().get(work.id()).isEmpty(), "The earthworks are not finished");
+        } finally {
+            io.github.sekerator.kingdomworld.common.road.RoadWork.state(server).forgetKingdom(kingdom.id());
+            end(helper, kingdom, builder);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_earthwork_wall_after", timeoutTicks = 400)
+    public static void aWallLaidOutAfterTheEarthworksKeepsItsColumn(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        ConstructionSettings.override(FAST);
+        open(helper);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Kept Columns", UUID.randomUUID());
+        floor(helper, 1);
+        for (int x = 2; x <= 7; x++) {
+            for (int z = 3; z <= 7; z++) {
+                helper.setBlock(new BlockPos(x, 1, z), Blocks.DIRT);
+                helper.setBlock(new BlockPos(x, 2, z), Blocks.DIRT);
+            }
+        }
+        Citizen builder = builder(helper, kingdom);
+        try {
+            Construction work = lay(helper, kingdom, new BlockPos(2, 0, 3), new BlockPos(7, 0, 7), Earthwork.Mode.LEVEL, 0);
+            // A wall is laid out through the plot after the work: its logs stand in place of the earth.
+            BlockPos foot = helper.absolutePos(new BlockPos(5, 0, 5));
+            java.util.List<io.github.sekerator.kingdomworld.core.road.RouteCell> cells = new java.util.ArrayList<>();
+            for (int i = 0; i < 4; i++) {
+                cells.add(new io.github.sekerator.kingdomworld.core.road.RouteCell(foot.getX() + 3 * i, foot.getY(), foot.getZ() + 20,
+                        io.github.sekerator.kingdomworld.core.road.RouteCell.Kind.GROUND, 0, null));
+            }
+            cells.set(0, new io.github.sekerator.kingdomworld.core.road.RouteCell(foot.getX(), foot.getY(), foot.getZ(),
+                    io.github.sekerator.kingdomworld.core.road.RouteCell.Kind.GROUND, 0, null));
+            io.github.sekerator.kingdomworld.common.road.RoadWork.change(server, "test wall", state -> {
+                io.github.sekerator.kingdomworld.core.road.Wall wall = new io.github.sekerator.kingdomworld.core.road.Wall(state.nextWallId(), 0,
+                        kingdom.id(), io.github.sekerator.kingdomworld.core.road.Wall.WallClass.PALISADE,
+                        io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level), foot.getX(), foot.getZ() + 10, cells, java.util.List.of(), 0);
+                for (int up = 1; up <= 4; up++) {
+                    wall.markPlaced(foot.above(up).asLong());
+                }
+                state.putWall(wall);
+                return io.github.sekerator.kingdomworld.core.kingdom.Outcome.DONE;
+            });
+            for (int up = 1; up <= 4; up++) {
+                level.setBlockAndUpdate(foot.above(up), Blocks.OAK_LOG.defaultBlockState());
+            }
+            workFar(server, builder, work, 200);
+            for (int up = 1; up <= 4; up++) {
+                helper.assertTrue(level.getBlockState(foot.above(up)).is(Blocks.OAK_LOG), "The earthworks dug the log of the wall at " + foot.above(up));
+            }
+            helper.assertTrue(level.getBlockState(foot).is(Blocks.DIRT), "The ground under the wall was dug");
+            helper.assertTrue(level.getBlockState(helper.absolutePos(new BlockPos(3, 1, 4))).isAir(), "The rest of the plot was not cut");
+        } finally {
+            io.github.sekerator.kingdomworld.common.road.RoadWork.state(server).forgetKingdom(kingdom.id());
+            end(helper, kingdom, builder);
+        }
+        helper.succeed();
+    }
 }

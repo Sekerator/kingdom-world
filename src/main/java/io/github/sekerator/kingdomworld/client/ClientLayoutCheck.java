@@ -1482,6 +1482,9 @@ final class ClientLayoutCheck {
         cases.add(new Case("founding-narrow-error", () -> narrow(founding("mountain", "mountain", LONG_KINGDOM,
                 Component.translatable("kingdomworld.kingdom.error.read_only"), true))));
         cases.add(new Case("throne-king-overview", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "overview", longError)));
+        // The window opened far from the throne: the move of the throne starts only at it.
+        cases.add(new Case("throne-king-overview-far", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "overview",
+                Component.translatable("kingdomworld.throne.at_throne_only", KingdomActions.THRONE_REACH)).farFromThroneForCheck()));
         cases.add(new Case("throne-king-overview-style", () -> styleChoice("mountain", Component.empty())));
         cases.add(new Case("throne-king-overview-style-error", () -> styleChoice(LONG_STYLE, longError)));
         // The answer of the server to a change of the style, a success.
@@ -1662,6 +1665,9 @@ final class ClientLayoutCheck {
         cases.add(new Case("throne-treasury-payments", () -> payments(view(KingdomView.Relation.MEMBER, Role.KING), true, true, true,
                 Component.translatable("kingdomworld.treasury.coins_taken_partly", io.github.sekerator.kingdomworld.common.economy.MoneyTexts.coins(
                         io.github.sekerator.kingdomworld.core.economy.Denomination.SILVER, 9_999_999_999L), 9_999_999_999L))));
+        // Far from the throne: no coins are taken into the hands, the button says to come to the throne.
+        cases.add(new Case("throne-treasury-payments-far", () -> payments(view(KingdomView.Relation.MEMBER, Role.KING), true, true, true,
+                Component.translatable("kingdomworld.throne.at_throne_only", KingdomActions.THRONE_REACH)).farFromThroneForCheck()));
         cases.add(new Case("throne-treasury-payments-empty", () -> payments(view(KingdomView.Relation.MEMBER, Role.STEWARD), true, false, false,
                 Component.translatable("kingdomworld.treasury.unknown_player", LONG_PLAYER))));
         cases.add(new Case("throne-subject-payments", () -> payments(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, false, false,
@@ -1888,6 +1894,13 @@ final class ClientLayoutCheck {
             fillMapData();
             KingdomMapScreen screen = new KingdomMapScreen(null);
             screen.showForCheck(1.0, -0.5, 14.0, UUID.nameUUIDFromBytes("first".getBytes(StandardCharsets.UTF_8)), Component.empty(), false);
+            return screen;
+        }));
+        // The atlas opened by its key: the button of the window of the own kingdom on its top bar.
+        cases.add(new Case("map-kingdom-button", () -> {
+            fillMapData();
+            KingdomMapScreen screen = new KingdomMapScreen(null);
+            screen.showForCheck(1.0, -0.5, 14.0, null, Component.empty(), false);
             return screen;
         }));
         cases.add(new Case("map-army", () -> {

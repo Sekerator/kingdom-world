@@ -650,7 +650,7 @@ public final class CityWalls {
             }
         }
         if (known == null) {
-            return WallEarthworks.groundUnder(level, cell.x(), cell.y(), cell.z());
+            return WallEarthworks.layoutGround(level, cell.x(), cell.y(), cell.z());
         }
         int y = known;
         if (old != null && old.cellAt(cell.x(), cell.z()) >= 0) {
@@ -977,7 +977,7 @@ public final class CityWalls {
      * grew out of), where their place is loaded; nothing is loaded for it and no builder spends time on it. A block in a column of
      * another wall of the kingdom goes to that wall.
      */
-    private static void takeDownOld(MinecraftServer server) {
+    public static void takeDownOld(MinecraftServer server) {
         int budget = TAKE_DOWN;
         RoadState roads = RoadWork.state(server);
         for (Wall wall : List.copyOf(roads.walls())) {
@@ -1024,6 +1024,20 @@ public final class CityWalls {
                 roads.changed();
             }
         }
+    }
+
+    /**
+     * A wall as it is read back after saving; for the game tests.
+     */
+    public static Wall throughSave(Wall wall) {
+        return RoadNbt.readWall(RoadNbt.writeWall(wall));
+    }
+
+    /**
+     * Whether a block a player made stands in the way of a wall, noted since the server started; for the game tests.
+     */
+    public static boolean blockedInWay(long wallId) {
+        return WallEarthworks.blockedNoted(wallId);
     }
 
     private static boolean isWallStone(BlockState state) {

@@ -301,7 +301,7 @@ public final class Earthworks {
      * stairs, fences, walls, doors, glass, bricks, signs, beds and the like, wall stone that is no natural rock, and anything less
      * than a whole block that is neither rock nor earth (a torch, a lantern, a chain, a rail).
      */
-    static boolean made(net.minecraft.world.level.BlockGetter level, BlockPos pos, BlockState state) {
+    public static boolean made(net.minecraft.world.level.BlockGetter level, BlockPos pos, BlockState state) {
         if (state.isAir() || !state.getFluidState().isEmpty()) {
             return false;
         }
