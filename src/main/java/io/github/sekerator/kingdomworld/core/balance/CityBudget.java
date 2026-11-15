@@ -214,9 +214,22 @@ public final class CityBudget {
 
     /**
      * The three cities of the example as the first stage of the shops had them: a village without a head, a town and a large city
-     * with one, everybody with a shop reselling.
+     * with one, everybody with a shop reselling, the crown needing nothing it cannot make.
      */
     public static List<Profile> example() {
+        List<Profile> first = new ArrayList<>();
+        for (Profile profile : resellers()) {
+            first.add(new Profile(profile.name(), profile.level(), profile.crown(), profile.keepers(), profile.idle(), profile.head(),
+                    profile.tavern(), profile.players(), profile.houses()));
+        }
+        return first;
+    }
+
+    /**
+     * The people of the cities of the example with workshops, everybody with a shop reselling as in the first stage, the crown
+     * importing what it needs and cannot make.
+     */
+    public static List<Profile> resellers() {
         List<Profile> first = new ArrayList<>();
         for (Profile profile : withCrafts()) {
             first.add(profile.resellersOnly());

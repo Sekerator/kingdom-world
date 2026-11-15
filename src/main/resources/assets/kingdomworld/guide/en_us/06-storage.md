@@ -280,3 +280,7 @@ recipe at all.
 > bread for the citizens, torches for [miners](miner), planks and glass for [construction](builders).
 
 A construction can order what it lacks from the workshops too: the Ordering switch on its card (see [Builders and materials](builders)).
+
+### Bought of citizens
+
+What the crown bought of the [workshops of citizens](crown_purchases) for an order goes into the storehouse nearest the shop of the seller and counts for a Make order. If the storehouses have no room for it, the crown does not buy.

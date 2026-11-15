@@ -80,6 +80,18 @@ A **counter** {item:kingdomworld:shop_counter} is a place for a shop of citizens
 
 Shops stand in the houses of merchants and craftsmen, at the stalls of markets and at the counters of players (see [Townspeople and shops](shops)). A place works while it stands in the square of a city of its kingdom and its building works. The window of a city in the Treasury tab lists its shops and says why new ones do not open: "Shops have nowhere to open", "No free townspeople for shops" or "The crown gives the shops no goods". A click on a counter or on a keeper opens the window of the shop: a player buys from the account or with coins of the currency of the kingdom, the price with the sales tax. Shops serve strangers while the market is open to them.
 
+### Trading houses
+
+A trading house buys of the masters of its city what they have beyond their local stock, only what citizens made, wholesale and without the sales tax, when the master sells for no more than {cfg:cityEconomy.traderBuyPercent}% of what the house gets abroad, and exports it at once: a village gets {cfg:cityEconomy.craftExportVillage}%, a town {cfg:cityEconomy.craftExportTown}%, a large city {cfg:cityEconomy.craftExportCity}% of the worth. Exports come of a surplus: while raw materials cost the crown their worth, a master does not sell cheaper. A city exports no more than its demand from abroad (see [Buying of citizens](crown_purchases)): roads to other cities and a working market raise it. What the houses did not take is asked of the masters as an order for the next day; a house opens when such an order would feed it. The window of a city shows of its shops the trade, whether it is fixed, what they made and exported a day.
+
+### The regional market
+
+Townspeople buy in their own shops first, and what they did not find in the shops of the nearest larger city of their kingdom reached by road (the key `regionalMarket`). The sales tax goes to the treasury of the city where the shop stands. So a village without the shop it needs buys in the town, and the town grows by its countryside. Townspeople of every city also take lots of players on the market of the kingdom when a lot is no dearer than the cheapest of the item in the shops of their city; the sales tax of the city goes into its treasury.
+
+### A house for a shop
+
+When the townspeople of a city did not find more than {cfg:cityEconomy.houseWhenUnmetPercent}% of their basket, no place for a shop is free and a townsperson would keep one, the head of the city wants a house of a merchant or a craftsman in the style of the kingdom, after the house for tenants and the storehouse. The head first buys the materials of its constructions in the shops and workshops of its city without the tax, then takes them from the storehouses and imports.
+
 ## cities_levels | City levels
 @icon minecraft:bell
 Every city and every capital has a **level**: village, town or large city. The level is worked out by itself from

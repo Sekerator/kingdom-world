@@ -1211,7 +1211,7 @@ public final class Shops {
         if (progress.workshops == null) {
             List<Long> ids = new ArrayList<>();
             for (Business shop : data.shopsOf(kingdom, city)) {
-                if (shop.crafts() && PLANS.containsKey(shop.id())) {
+                if (shop.crafts() && (PLANS.containsKey(shop.id()) || !shop.commissions().isEmpty())) {
                     ids.add(shop.id());
                 }
             }
@@ -1225,7 +1225,11 @@ public final class Shops {
             long id = progress.workshops.get(progress.makeCursor++);
             List<ShopMaking.Plan> plans = PLANS.remove(id);
             Optional<Business> found = data.shop(id);
-            if (plans == null || found.isEmpty() || !found.get().kept()) {
+            if (found.isEmpty()) {
+                continue;
+            }
+            if (plans == null || !found.get().kept()) {
+                CrownPurchases.deliverCommissions(server, found.get(), day);
                 continue;
             }
             Business shop = found.get();
@@ -1245,6 +1249,8 @@ public final class Shops {
                     KingdomWorldApi.state(server).citizens().ledger().record(kingdom, day, profession, made.item(), made.count());
                 }
             }
+            // The work the crown paid for in advance is delivered as soon as it is made, before the townspeople buy.
+            CrownPurchases.deliverCommissions(server, shop, day);
             if (madeWorth > 0) {
                 shop.record(day, new Business.Day(0, 0, 0, 0, null, (long) Math.floor(madeWorth), 0, 0));
                 if (shop.status() == Business.Status.EMPTY) {
@@ -1424,8 +1430,6 @@ public final class Shops {
                 continue;
             }
             Business shop = found.get();
-            // The work the crown paid for in advance is delivered before the day of the shop is counted.
-            CrownPurchases.deliverCommissions(server, shop, day);
             CityPurses.PurseKey till = CityPurses.PurseKey.till(kingdom, shop.id());
             long[] sold = SOLD.remove(shop.id());
             if (sold == null) {

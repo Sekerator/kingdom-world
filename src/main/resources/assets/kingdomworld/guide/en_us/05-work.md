@@ -207,6 +207,41 @@ Near players the dangers are real: monsters, falls, lava, water. Far from player
 
 Every risk is multiplied by {cfg:work.taskRiskMultiplier} (0 turns them off). Armor lowers the risk by up to 75%, experience by up to 50% (fully at 1000 experience), and the two multiply. A wounded worker does not work until healed, a dead one goes to the chronicle with its cause ("died in the mine", "was killed felling trees", "drowned while fishing", "was killed tending the herd") and the king is told (see [Health, the infirmary and death](health)).
 
+## citizen_workshops | Workshops of citizens
+@icon minecraft:crafting_table
+Townspeople without a post of the crown keep not only shops but also workshops: they make goods themselves, by real recipes, of raw materials they buy of the crown (see [Townspeople and shops](shops)).
+
+### Trades
+
+| Trade | Goods | Workstations of the place |
+|---|---|---|
+| Bakery | food | a crafting table and a furnace |
+| Cookshop | food | a smoker or a campfire |
+| Carpenter | household goods, building materials, wooden tools | a crafting table |
+| Toolmaker | tools | a crafting table and a smithing table |
+| Tailor | clothing | a crafting table, a loom at the place |
+| Mason | building materials | a stonecutter |
+| Glazier | household goods, building materials | a furnace |
+| Trading house | exports what citizens made | a working market or a house of a merchant |
+
+The trades come from data (the folder `kingdomworld_trades`); data packs add and change them. Building materials (planks, slabs, stairs, doors, fences, ladders, bricks, glass) are not bought by townspeople: they are goods for the crown, the heads of cities and players.
+
+### Workstations of a place
+
+The workstations of a place are looked for inside a house, inside a market for its stalls and within four blocks of a counter, when all of the place is loaded, at most once a day. A place nobody looked at yet trades as a Shop. The window of a shop, tab About the shop, shows "Workstations: ...".
+
+### Which trade
+
+Once a day of its city a free place takes up what its city lacked most yesterday among the trades whose workstations it has, else a trading house, else a Shop. A workshop keeps its trade while its workstations stand and no other trade is needed more, changes it at most once a week and only after it sold off its goods. A member with the Citizens right fixes the trade of a place with the button "Fix the trade" in the tab About the shop; a fixed trade never changes on its own.
+
+### The work of a master
+
+A master works in the day of its city; no body has to stand there. Every day it makes what its goods lack of their target ({cfg:cityEconomy.stockDays} days of sales to townspeople, players and the crown, plus what a trading house asked of it), of the item it makes most cheaply for its worth: raw materials it holds, buys of the crown or makes by another recipe of the place, two steps at most. A recipe takes its raw materials whole or is not made, and a furnace burns fuel bought for it. What an item costs is its raw materials at what they cost, its fuel and the work at the usual wage of the profession the trade compares with. To townspeople and players a master sells no cheaper than the worth of the goods and no cheaper than what they cost and five in a hundred, to a trading house wholesale for what they cost and five in a hundred. What masters make goes into the ledger of production of the kingdom.
+
+### Players sell to shops
+
+The tab Sell of the window of a shop shows what of your inventory the shop takes and for how much. A workshop takes the raw materials of its recipes and the goods of its trade, a Shop only goods of kinds it lacks. A shop pays {cfg:cityEconomy.playerSellPercent}% of the lower of the price of the crown and the worth, and for what the crown does not sell {cfg:cityEconomy.playerSellOwnPercent}% of its own price without the tax, never above the worth. It takes no more than its target and its till ("The till is short of money"), plain items only, whole; the money goes onto your account.
+
 ## lumberjack | Lumberjack
 @icon minecraft:iron_axe
 The **lumberjack** fells trees in the zone of its post and plants new ones, so its forest never runs out. It needs an {item:minecraft:iron_axe} axe (any) and puts on armor from the storehouses.

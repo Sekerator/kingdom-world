@@ -57,11 +57,14 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * The money of the cities and the shops of citizens, in the client self-check ({@code -PclientSelfTest=commerce}): in a copy of a
- * test world the player founds a kingdom with a counter beside the throne, a town east of it and goods in a storehouse, lets a few
- * days of the cities pass, then shows the views of the cities of the Treasury tab, the window of the capital, the overview, the
- * switch of the market, the window of the shop and its keeper behind the counter. The screenshots go into the folder
- * {@code citizen-economy-1} of the screenshot folder.
+ * The money of the cities, the shops and the workshops of citizens, in the client self-check ({@code -PclientSelfTest=commerce}):
+ * in a copy of a test world the player founds a kingdom with a counter beside the throne, a town east of it and goods in a
+ * storehouse, lets a few days of the cities pass, then shows the views of the cities of the Treasury tab, the window of the
+ * capital, the overview, the switch of the market, the window of the shop and its keeper behind the counter. Then a crafting
+ * table and a furnace are put beside the counter, its shop becomes a bakery that bakes of wheat of the crown, the crown orders
+ * bread no workshop of its own makes and buys it of the bakery, and the Orders tab, the view of imports, the window of the capital
+ * with its trades and the window of the bakery are shown. The screenshots go into the folder {@code citizen-economy-2} of the
+ * screenshot folder.
  */
 final class ClientCommerceShowcase {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -71,6 +74,7 @@ final class ClientCommerceShowcase {
     private int ticks;
     private volatile BlockPos throne;
     private volatile BlockPos counter;
+    private volatile BlockPos storehouse;
     private volatile UUID kingdomId;
     private volatile UUID keeperId;
     private volatile String failure;
@@ -78,7 +82,7 @@ final class ClientCommerceShowcase {
     private boolean failed;
 
     ClientCommerceShowcase(Path folder) {
-        this.folder = folder.resolve("citizen-economy-1");
+        this.folder = folder.resolve("citizen-economy-2");
     }
 
     boolean finished() {
@@ -182,6 +186,93 @@ final class ClientCommerceShowcase {
             case 720 -> shoot(minecraft, "keeper-at-counter");
             case 730 -> {
                 minecraft.options.hideGui = false;
+                server.execute(() -> {
+                    bakery(server, playerId);
+                    orderBread(server);
+                });
+            }
+            case 760 -> server.execute(() -> {
+                days(server, 2);
+                io.github.sekerator.kingdomworld.common.commerce.CrownPurchases.step(server, kingdomId);
+            });
+            case 820 -> server.execute(() -> {
+                ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+                if (player != null) {
+                    KingdomActions.useThrone(player, player.serverLevel(), throne);
+                }
+            });
+            case 870 -> {
+                if (minecraft.screen instanceof ThroneScreen screen) {
+                    screen.selectTab("orders");
+                } else {
+                    failure = "the throne screen did not open again";
+                }
+            }
+            case 900 -> mouseAway(minecraft);
+            case 920 -> shoot(minecraft, "orders-buy-citizens");
+            case 930 -> show(minecraft, screen -> screen.selectTab("market"));
+            case 960 -> {
+                mouseAway(minecraft);
+                show(minecraft, screen -> screen.showMarket("import", false, ItemStack.EMPTY, "", "", "", null));
+            }
+            case 990 -> shoot(minecraft, "market-import-citizens");
+            case 1000 -> show(minecraft, screen -> screen.selectTab("treasury"));
+            case 1030 -> {
+                show(minecraft, screen -> {
+                    screen.showTreasury("cities", "today");
+                    screen.showCities(false, false, "");
+                });
+                if (kingdomId != null && minecraft.getConnection() != null) {
+                    KingdomWorldNetwork.sendToServer(new EconomyPackets.CityDetailRequest(kingdomId, 0));
+                }
+            }
+            case 1070 -> {
+                mouseAway(minecraft);
+                if (minecraft.screen instanceof ThroneScreen screen) {
+                    // The lines of the shops of the capital, under the taxes and the means of its people.
+                    for (int i = 0; i < 8; i++) {
+                        screen.mouseScrolled(minecraft.getWindow().getGuiScaledWidth() / 2.0, minecraft.getWindow().getGuiScaledHeight() / 2.0, -1);
+                    }
+                }
+            }
+            case 1090 -> shoot(minecraft, "treasury-city-panel-trades");
+            case 1100 -> {
+                minecraft.setScreen(null);
+                server.execute(() -> {
+                    ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+                    if (player != null && counter != null) {
+                        player.teleportTo(server.overworld(), counter.getX() + 0.5, counter.getY() + 0.5, counter.getZ() + 3.5, 180.0f, 8.0f);
+                        player.getInventory().add(new ItemStack(Items.WHEAT, 40));
+                        player.getInventory().add(new ItemStack(Items.BREAD, 12));
+                        ShopActions.openAtCounter(player, counter);
+                    }
+                });
+            }
+            case 1160 -> {
+                mouseAway(minecraft);
+                if (minecraft.screen instanceof ShopScreen shop) {
+                    shop.showForCheck("sell", true, "10");
+                    shop.resize(minecraft, minecraft.getWindow().getGuiScaledWidth(), minecraft.getWindow().getGuiScaledHeight());
+                } else {
+                    failure = "the window of the bakery did not open";
+                }
+            }
+            case 1180 -> shoot(minecraft, "workshop-sell");
+            case 1190 -> {
+                if (minecraft.screen instanceof ShopScreen shop) {
+                    shop.showForCheck("about", true, "1");
+                    shop.resize(minecraft, minecraft.getWindow().getGuiScaledWidth(), minecraft.getWindow().getGuiScaledHeight());
+                }
+            }
+            case 1210 -> shoot(minecraft, "workshop-about");
+            case 1220 -> {
+                if (minecraft.screen instanceof ShopScreen shop) {
+                    shop.showForCheck("buy", true, "1");
+                    shop.resize(minecraft, minecraft.getWindow().getGuiScaledWidth(), minecraft.getWindow().getGuiScaledHeight());
+                }
+            }
+            case 1240 -> shoot(minecraft, "workshop-buy");
+            case 1250 -> {
                 LOGGER.info(PREFIX + "commerce showcase finished");
                 finished = true;
             }
@@ -261,6 +352,7 @@ final class ClientCommerceShowcase {
             // A storehouse full of goods of every kind.
             BlockPos store = surface(level, seat.getX() - 4, seat.getZ() - 3);
             level.setBlockAndUpdate(store, ModRegistries.STOREHOUSE.get().defaultBlockState());
+            storehouse = store;
             StorehouseInventory inventory = KingdomSavedData.get(server).storehouses()
                     .get(new WorldPos("minecraft:overworld", store.getX(), store.getY(), store.getZ()))
                     .orElseThrow(() -> new IllegalStateException("The storehouse has no inventory"));
@@ -343,6 +435,70 @@ final class ClientCommerceShowcase {
         } catch (RuntimeException e) {
             failure = e.toString();
             LOGGER.error(PREFIX + "commerce showcase could not let the days pass", e);
+        }
+    }
+
+    /**
+     * A crafting table and a furnace beside the counter, looked at; the shop of the counter takes up baking, fixed, and the
+     * storehouse gets wheat for it.
+     */
+    private void bakery(IntegratedServer server, UUID playerId) {
+        try {
+            if (counter == null || kingdomId == null) {
+                failure = "no counter for the bakery";
+                return;
+            }
+            ServerLevel level = server.overworld();
+            BlockPos table = surface(level, counter.getX() + 2, counter.getZ());
+            level.setBlockAndUpdate(table, Blocks.CRAFTING_TABLE.defaultBlockState());
+            BlockPos oven = surface(level, counter.getX() + 3, counter.getZ());
+            level.setBlockAndUpdate(oven, Blocks.FURNACE.defaultBlockState());
+            long day = TreasuryActions.day(server);
+            // The place was looked at today before the workstations stood: it is looked at again now, as on the next day.
+            String place = "counter/minecraft:overworld/" + counter.getX() + "/" + counter.getY() + "/" + counter.getZ();
+            CommerceSavedData.get(server).putSurvey(place, new CommerceSavedData.Survey(java.util.Set.of(), day - 1));
+            io.github.sekerator.kingdomworld.common.citizen.CitizenSites.scanChunk(level, level.getChunkAt(counter));
+            for (Business shop : CommerceSavedData.get(server).shopsOf(kingdomId, 0)) {
+                if (shop.place().kind() == Business.PlaceKind.COUNTER) {
+                    shop.setPinned("bakery");
+                    shop.changeTrade("bakery", day);
+                }
+            }
+            CommerceSavedData.get(server).setDirty();
+            KingdomSavedData.get(server).storehouses().get(new WorldPos("minecraft:overworld", storehouse.getX(), storehouse.getY(), storehouse.getZ()))
+                    .ifPresent(inventory -> {
+                        int added = 0;
+                        for (int slot = 0; slot < inventory.getSlots(); slot++) {
+                            if (inventory.getStackInSlot(slot).isEmpty() && added++ < 4) {
+                                inventory.insertItem(slot, new ItemStack(Items.WHEAT, 64), false);
+                            }
+                        }
+                    });
+            LOGGER.info(PREFIX + "commerce showcase: the counter is a bakery, its place has {}", io.github.sekerator.kingdomworld.common.commerce
+                    .PlaceSurvey.stations(server, "counter/minecraft:overworld/" + counter.getX() + "/" + counter.getY() + "/" + counter.getZ()));
+        } catch (RuntimeException e) {
+            failure = e.toString();
+            LOGGER.error(PREFIX + "commerce showcase could not set up the bakery", e);
+        }
+    }
+
+    /**
+     * The crown orders bread, which no workshop of its own bakes: with none ready, it pays the bakery in advance for it.
+     */
+    private void orderBread(IntegratedServer server) {
+        try {
+            if (kingdomId == null) {
+                return;
+            }
+            var state = KingdomWorldApi.state(server);
+            state.order(null, kingdomId, "minecraft:bread", io.github.sekerator.kingdomworld.core.production.Order.Kind.MAKE, 40,
+                    io.github.sekerator.kingdomworld.core.production.Order.Priority.NORMAL, KingdomWorldApi.gameTime(server), Integer.MAX_VALUE,
+                    id -> true);
+            io.github.sekerator.kingdomworld.common.production.Production.plan(server, kingdomId);
+            io.github.sekerator.kingdomworld.common.commerce.CrownPurchases.step(server, kingdomId);
+        } catch (RuntimeException e) {
+            failure = e.toString();
+            LOGGER.error(PREFIX + "commerce showcase could not order bread", e);
         }
     }
 

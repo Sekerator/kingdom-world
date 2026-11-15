@@ -234,6 +234,30 @@ The Treasury tab, the view "cities": at the top the taxes of the kingdom ("Sales
 
 The money of the crown from a city: goods sold to its shops and its treasury, evenings in its taverns, the exports of its merchants, the coins of its mints, the share and the surplus of its treasury, less the wages of the workers of the crown who live there, grants and the shares of the nobles of its fief. Goods: what its posts made at the price of export, less the raw materials of its workshops, what its people ate, what was sold to the shops and exported. A surplus beyond the target of the storehouses counts for less. A village is of use mostly by goods, a town and a large city by money too. The overview of the tab shows "Cities: to the crown +N a day, in their treasuries M", and **/kingdom treasury** prints the same.
 
+## crown_purchases | Buying of citizens
+@icon minecraft:bread
+When the workshops of the crown cannot make what it needs, the crown buys of the [workshops of citizens](citizen_workshops) instead of waiting or importing at a high price.
+
+### When the crown buys
+
+Once a step of the kingdom, after the orders are planned: an order or a sub-order without a workshop or without raw materials, and a Make order that did not move for a whole day. The orders of constructions and of works far away come here too. The crown takes the cheapest goods citizens made in the shops of any city of the kingdom, at the price of the shop without the sales tax: the treasury does not tax itself, and the master pays the tithe of what it earns. What it buys goes into the storehouse nearest the shop and counts for the order. If the storehouses have no room, nothing is bought.
+
+### The settings
+
+In the Orders tab a holder of the Production right sets: "Buy of citizens" (yes by default), "no dearer than" {cfg:cityEconomy.crownBuyCapPercent}% of the worth (50 to 150) and "no more than ... a day" {cfg:cityEconomy.crownBuyPerDay}. The purchases never take the treasury below {cfg:cityEconomy.crownBuyKeepWageDays} days of wages. The row of an order shows "bought of citizens: N", and the counters of the day of the market "bought of citizens".
+
+### Work paid in advance
+
+When no goods are ready, a master whose place can make the item and who can buy its raw materials of the crown takes the work. The money goes ahead into escrow, the master makes it first in the next day of its city and delivers at its end, getting the escrow for what it delivers. What it did not deliver in three days goes back to the crown. Money in escrow counts in the money of the currency.
+
+### The buy list and imports
+
+Shops holding more goods made by citizens than three days of their sales sell them to the buy list of the [market](market) when the price of the king is no lower than what they cost and five in a hundred. Goods bought of the crown never go back to it. In the import view of the Market tab the line "Citizens sell it cheaper: N at P" shows goods of citizens cheaper than importing, and the button "Buy of citizens" (the Market right) buys them at once.
+
+### Exports of citizens and the demand from abroad
+
+Trading houses (see [Treasury and shops of a city](city_shops)) export what citizens made: the money comes from abroad into the till of the house, new money of the currency, as the exports of the merchants of the crown are. Every city exports no more than its demand from abroad: a village {cfg:cityEconomy.outsideDemandVillage}, a town {cfg:cityEconomy.outsideDemandTown}, a large city {cfg:cityEconomy.outsideDemandCity} worth a day and {cfg:cityEconomy.outsideDemandPerRootPerson} more for each square root of its people. Each road to another city adds {cfg:cityEconomy.roadLinkPercent}% (twice at most), a working market adds half. At war the demand is 0. The market abroad is one for the whole kingdom: the first {cfg:cityEconomy.outsideDemandFullCities} cities by their demand count in full, and the city numbered i after them with a weight of the same number divided by i. So a hundred cities give not a hundred shares of the demand but about twenty.
+
 ## bank | The bank
 @icon kingdomworld:bank
 A **bank** {item:kingdomworld:bank} keeps the accounts of players. It works in the currency of the kingdom whose land it stands on; outside the land of kingdoms it does nothing. A bank needs no worker.

@@ -5262,7 +5262,7 @@
   "kingdomworld.screen.shop.title": "%s, королевство %s",
   "kingdomworld.screen.shop.empty": "Лавке пока нечего продать",
   "kingdomworld.screen.shop.hint": "Цены с пошлиной %s; «Купить» берёт столько, сколько в поле",
-  "kingdomworld.screen.shop.about.trade": "Торговля: %s",
+  "kingdomworld.screen.shop.about.trade": "Ремесло: %s",
   "kingdomworld.screen.shop.about.pinned": "Закреплено ремесло: %s",
   "kingdomworld.screen.shop.about.next": "Распродаётся, потом станет: %s",
   "kingdomworld.screen.shop.about.family": "Держит семья дома, по вечерам",

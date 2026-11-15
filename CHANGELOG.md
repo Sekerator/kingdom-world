@@ -47,6 +47,17 @@
 - **Народ больше не платит подать из ничего:** `folkDues` по умолчанию 0, прежнее значение 1 в конфиге читается как 0. Свой заработок народ получит на следующем этапе.
 - **Что видит король:** вид «города» вкладки «Казна» (казна городов и польза короне, окно города), строка городов в обзоре и в **/kingdom treasury**, казна города в подсказке вкладки «Дороги». Новый раздел конфига `[cityEconomy]`, глава справочника «Казна городов» и раздел README.
 
+**Экономика жителей, этап 2: мастерские жителей и казённые закупки.** Сетевой протокол 66.
+
+- **Ремёсла жителей.** Места лавок берут ремесло по своим станкам и по тому, чего не хватает городу: пекарня, харчевня, столярная, инструментальная, портняжная (ткацкий станок на месте), каменотёсная, стекольная, торговый дом или «Лавка». Ремёсла из данных `kingdomworld_trades`, станки места ищутся при загрузке его чанков; член с правом «Жители» закрепляет ремесло в окне лавки. Новый разряд товара «стройматериалы» (тег `goods/materials`).
+- **Мастерские.** Мастер делает товар в дне своего города по настоящим рецептам места (до двух шагов), из сырья, купленного у короны в общей с лавками доле запаса, жжёт купленное топливо, считает себестоимость с трудом по жалованью сравнимой профессии и метит сделанное «сделано жителями» отдельно от купленного. Сделанное идёт в журнал производства.
+- **Игроки продают лавкам.** Вкладка «Продать»: сырьё мастерским и недостающий товар лавкам, не выше ценности, на счёт игрока из кассы (`playerSellPercent` 90, `playerSellOwnPercent` 70).
+- **Торговые дома и спрос со стороны.** Торговые дома скупают у мастеров излишек сделанного жителями оптом и вывозят его: новые деньги в пределах спроса со стороны города, который растёт с людьми, дорогами и рынком и убывает по королевству после пяти городов. Горожане берут лоты игроков и ходят на областной рынок.
+- **Закупки короны.** Что казённые мастерские не делают, корона покупает у жителей (не дороже 150% ценности, не больше 500 в день, казна не ниже 7 дней жалованья), при нужде платит мастеру вперёд с залогом. Настройки во вкладке «Заказы», «У жителей дешевле» и «Купить у жителей» в виде ввоза, «куплено у жителей» в счётчиках рынка.
+- **Главы городов** сначала покупают у лавок и мастерских своего города и хотят дом купца или ремесленника, когда горожанам не хватает лавок.
+- **Отчёт города** показывает вывоз жителей, лоты игроков, сделанное мастерами и купленное короной и городом у его лавок; окно города у лавок показывает ремесло, закрепление, сделанное и вывезенное. Справочник (главы «Работа», «Склады», «Строительство», «Деньги», «Города и дороги»), README, `CityBudget` с профилем этапа 2.
+- **Старые миры.** Лавки этапа 1 читаются как «Лавка» с неосмотренным местом и берут ремесло после осмотра. Королевства мира живут как раньше.
+
 ### 1.5.2
 
 Королевство игроков больше не упирается в пределы сервера: сколько у него жителей, городов, дорог и строек, решают кровати, еда, строители, материалы и деньги. Города могут стоять ближе друг к другу. Окно «Работники» и атлас показывают, где жители, ушедших можно найти и вернуть, а праздные возвращаются сами. Сетевой протокол 57: клиент и сервер должны быть версии 1.5.2. Сохранения читаются как есть.
@@ -302,6 +313,17 @@ The cities of a kingdom of players grow each by itself and build by themselves u
 - **Taxes and stability.** Evasion of heavy taxes, the means of a city in the mood of its people, the taxes of the cities in stability, in the demands of the nobles and in the income for tributes and the shares of the nobles.
 - **The townsfolk no longer pay dues out of nothing:** `folkDues` is 0 by default, and the old value 1 of a config is read as 0. Their own earnings come in the next stage.
 - **What the king sees:** the view "cities" of the Treasury tab (treasuries of cities and use to the crown, the window of a city), the line of the cities in the overview and in **/kingdom treasury**, the treasury of a city in the hover of the Roads tab. A new section `[cityEconomy]` of the config, a chapter "Treasuries of cities" of the guide and a part of README.
+
+**The economy of citizens, stage 2: workshops of citizens and the buying of the crown.** Network protocol 66.
+
+- **Trades of citizens.** Places of shops take up a trade by their workstations and by what their city lacks: bakery, cookshop, carpenter, toolmaker, tailor (a loom at the place), mason, glazier, trading house or Shop. Trades come from the data `kingdomworld_trades`, the workstations of a place are looked at when its chunks load; a member with the Citizens right fixes a trade in the window of the shop. A new kind of goods, building materials (the tag `goods/materials`).
+- **Workshops.** A master makes goods in the day of its city by the real recipes of its place (two steps at most), of raw materials bought of the crown in the share of the stock it shares with the shops, burns fuel it bought, counts what they cost with the work at the wage of the profession it compares with, and marks them made by citizens apart from goods bought. What it made goes into the ledger of production.
+- **Players sell to shops.** The tab Sell: raw materials to workshops and goods a shop lacks, never above the worth, onto the account of the player out of the till (`playerSellPercent` 90, `playerSellOwnPercent` 70).
+- **Trading houses and the demand from abroad.** Trading houses buy of masters what citizens made beyond their stock, wholesale, and export it: new money within the demand from abroad of the city, which grows with its people, roads and market and falls over the kingdom after five cities. Townspeople take lots of players and go to their regional market.
+- **The buying of the crown.** What the workshops of the crown do not make the crown buys of citizens (no dearer than 150% of the worth, no more than 500 a day, the treasury never below 7 days of wages), paying a master in advance in escrow when nothing is ready. Settings in the Orders tab, "Citizens sell it cheaper" and "Buy of citizens" in the import view, "bought of citizens" in the counters of the market.
+- **Heads of cities** buy of the shops and workshops of their city first and want a house of a merchant or a craftsman when their townspeople lack shops.
+- **The statement of a city** shows the exports of citizens, lots of players, what masters made and what the crown and the city bought of its shops; the window of a city shows of its shops the trade, whether it is fixed, what they made and exported. The guide (chapters Work, Storage, Construction, Money, Cities and roads), README, `CityBudget` with the profile of stage 2.
+- **Older worlds.** Shops of stage 1 read as a Shop whose place was not looked at and take up a trade once it is. Kingdoms of the world live as before.
 
 ### 1.5.2
 

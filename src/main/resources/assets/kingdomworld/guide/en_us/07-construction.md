@@ -266,6 +266,10 @@ the way".
 > Builders also build [roads](roads) and the [walls](walls) of cities. Keep a storehouse and a builder's post near the
 > site and planks, cobblestone and glass in stock: then large buildings rise without pauses.
 
+### Buying of citizens
+
+An order a construction gives the workshops for what it lacks is bought of the [workshops of citizens](crown_purchases) when the workshops of the crown do not make it or it did not move for a whole day: planks of a carpenter, slabs of a mason, glass of a glazier. What is bought goes into the storehouse nearest the shop, and the construction takes it from there as it takes what the workshops made.
+
 ## building_roles | The roles of buildings
 @icon minecraft:bell
 A finished construction enters the **register of buildings** of the kingdom: template, place, turn, kind, category and

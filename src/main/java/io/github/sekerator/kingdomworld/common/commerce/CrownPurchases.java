@@ -395,8 +395,8 @@ public final class CrownPurchases {
     }
 
     /**
-     * At the end of the day of its city a master delivers what it made of the work paid in advance, paid out of the escrow by what
-     * it delivers; what is not delivered after a few days goes back to the crown.
+     * In the day of its city after it worked a master delivers what it made of the work paid in advance, before the townspeople
+     * buy, paid out of the escrow by what it delivers; what is not delivered after a few days goes back to the crown.
      */
     static void deliverCommissions(MinecraftServer server, Business shop, long day) {
         if (shop.commissions().isEmpty()) {

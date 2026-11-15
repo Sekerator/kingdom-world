@@ -734,6 +734,24 @@ final class ClientLayoutCheck {
         return new OrdersView(kingdom, canManage, 256, entries);
     }
 
+    /**
+     * Orders with the buying of citizens on, the largest sums and what was bought of citizens for every order.
+     */
+    private static OrdersView buyingOrdersView(UUID kingdom, boolean canManage) {
+        List<OrdersView.Entry> entries = new ArrayList<>();
+        for (OrdersView.Entry entry : ordersView(kingdom, canManage, false).orders()) {
+            entries.add(new OrdersView.Entry(entry.id(), entry.depth(), entry.sample(), entry.kind(), entry.amount(), entry.progress(),
+                    entry.priority(), entry.paused(), entry.status(), entry.missing(), entry.workshop(), entry.workshopStation(), 99_999));
+        }
+        return new OrdersView(kingdom, canManage, 256, entries, 200, new OrdersView.Buying(true, true, 150, 50_000, MUCH));
+    }
+
+    private static ThroneScreen buyingOrders(KingdomView view, boolean canManage) {
+        ThroneScreen screen = throne(view, "orders", Component.empty());
+        screen.updateOrders(buyingOrdersView(view.id(), canManage));
+        return screen;
+    }
+
     private static CatalogView catalogView(UUID kingdom, boolean empty) {
         List<CatalogView.Entry> entries = new ArrayList<>();
         if (!empty) {
@@ -1053,6 +1071,27 @@ final class ClientLayoutCheck {
         return new TradeViews.MarketView(kingdom, canManage, ownCurrency(kingdom), sells, buys, lots, exports, imports, false, true, 250, 250,
                 100, 900, day, List.of("minecraft:iron_ingot", "minecraft:oak_log", "minecraft:cobblestone", "minecraft:wheat"), 256, true, false,
                 MUCH);
+    }
+
+    /**
+     * A market whose citizens sell many goods cheaper than imports, with the largest numbers.
+     */
+    private static TradeViews.MarketView citizensMarketView(UUID kingdom, boolean canManage) {
+        TradeViews.MarketView base = marketView(kingdom, canManage, false);
+        List<TradeViews.CitizenRow> citizens = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            citizens.add(new TradeViews.CitizenRow(tradeItem(i + 1), 999_999_999L, MUCH, MUCH));
+        }
+        return new TradeViews.MarketView(kingdom, canManage, base.own(), base.sells(), base.buys(), base.lots(), base.exports(),
+                base.imports().subList(0, 3), false, true, 250, 250, 100, 900, base.day(), base.importable(), 256, true, true, MUCH, citizens, MUCH,
+                999_999_999L);
+    }
+
+    private static ThroneScreen citizensMarket(KingdomView view, boolean canManage) {
+        ThroneScreen screen = throne(view, "market", Component.empty());
+        screen.updateMarket(citizensMarketView(view.id(), canManage));
+        screen.showMarket("import", false, ItemStack.EMPTY, "999999g99s9c", "999999", "999999g", null);
+        return screen;
     }
 
     private static ThroneScreen market(KingdomView view, boolean canManage, boolean empty, String mode, boolean form, String search,
@@ -1567,6 +1606,9 @@ final class ClientLayoutCheck {
         cases.add(new Case("shop-buy-refused", () -> shop(false, "buy")));
         cases.add(new Case("shop-about", () -> shop(true, "about")));
         cases.add(new Case("shop-sell", () -> shop(true, "sell", true)));
+        cases.add(new Case("orders-buy-citizens", () -> buyingOrders(view(KingdomView.Relation.MEMBER, Role.KING), true)));
+        cases.add(new Case("orders-buy-citizens-subject", () -> buyingOrders(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false)));
+        cases.add(new Case("market-import-citizens", () -> citizensMarket(view(KingdomView.Relation.MEMBER, Role.KING), true)));
         cases.add(new Case("shop-buy-made", () -> shop(true, "buy", true)));
         cases.add(new Case("shop-about-trade", () -> shop(true, "about", true)));
         cases.add(new Case("treasury-city-panel-trades", () -> cities(view(KingdomView.Relation.MEMBER, Role.KING), true, false, false, true,

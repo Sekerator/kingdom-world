@@ -62,7 +62,7 @@ class CityBudgetTest {
     @Test
     void workshopsAndTradingHousesBringTheCrownAtLeastAsMuch() {
         CityBudget.Rules rules = surplus();
-        CityBudget.Result resellers = run(CityBudget.example(), rules);
+        CityBudget.Result resellers = run(CityBudget.resellers(), rules);
         CityBudget.Result crafts = run(CityBudget.withCrafts(), rules);
         printCrafts("first stage: resellers only, the crown imports what it needs", resellers);
         printCrafts("second stage: workshops and trading houses", crafts);
