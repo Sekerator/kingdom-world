@@ -524,6 +524,9 @@ public final class NpcRulers {
         memory.setPoorSince(poor ? (memory.poorSince() < 0 ? day : memory.poorSince()) : -1);
         RulerMind.Plan plan = RulerMind.decide(view, memory, rules);
         LAST_VIEWS.put(id, view);
+        // The citizens without work the army still wants: the shops of citizens take only the rest.
+        int soldiers = view.garrison ? view.soldiers : RulerMind.soldiersWanted(view, rules);
+        io.github.sekerator.kingdomworld.common.commerce.WorldShops.armyNeed(id, Math.max(0, soldiers - view.soldiers));
         memory.setNeeds(plan.needs());
         List<String> spares = new ArrayList<>();
         view.goods.values().forEach(good -> {

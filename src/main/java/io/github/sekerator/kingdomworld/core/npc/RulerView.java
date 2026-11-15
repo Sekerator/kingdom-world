@@ -120,6 +120,12 @@ public final class RulerView {
     public long maxPollTax = 1000;
     public int salesTaxPermille;
     public int maxSalesTaxPermille = 200;
+    /** The shops of citizens of the kingdom that trade. */
+    public int shops;
+    /** The tithe of the kingdom on what its shopkeepers earn, in thousandths. */
+    public int tithePermille;
+    /** The tithe a ruler of no particular leaning wants, in percent. */
+    public int baseTithePercent = 10;
     /** Wages against the usual ones, in percent. */
     public int wagePercent = 100;
 
@@ -211,6 +217,9 @@ public final class RulerView {
         view.maxPollTax = maxPollTax;
         view.salesTaxPermille = salesTaxPermille;
         view.maxSalesTaxPermille = maxSalesTaxPermille;
+        view.shops = shops;
+        view.tithePermille = tithePermille;
+        view.baseTithePercent = baseTithePercent;
         view.wagePercent = wagePercent;
         view.roles = new LinkedHashMap<>(roles);
         view.planned = new LinkedHashMap<>(planned);

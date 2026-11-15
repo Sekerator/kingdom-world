@@ -267,6 +267,16 @@ final class RulerSnapshots {
         view.balance = treasury.funds();
         view.pollTax = treasury.pollTax();
         view.salesTaxPermille = treasury.salesTaxPermille();
+        // The shops of its citizens and their tithe.
+        if (io.github.sekerator.kingdomworld.common.commerce.WorldShops.active(server, id)) {
+            view.shops = io.github.sekerator.kingdomworld.common.commerce.WorldShops.trading(server, id);
+            view.tithePermille = io.github.sekerator.kingdomworld.common.commerce.CommerceWork.tithe(server, id, 0);
+        }
+        try {
+            view.baseTithePercent = io.github.sekerator.kingdomworld.common.config.KingdomWorldConfig.SERVER.npcKingdoms.rulerTithePercent.get();
+        } catch (RuntimeException e) {
+            view.baseTithePercent = 10;
+        }
         long age = Math.max(1, Math.min(7, view.day - npc.founded() / io.github.sekerator.kingdomworld.core.citizen.CitizenNeeds.TICKS_PER_DAY));
         long income = 0;
         long expense = 0;

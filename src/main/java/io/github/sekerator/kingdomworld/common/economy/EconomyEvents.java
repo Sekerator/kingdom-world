@@ -94,6 +94,7 @@ public final class EconomyEvents {
         io.github.sekerator.kingdomworld.common.commerce.CraftSettings.reset();
         io.github.sekerator.kingdomworld.common.commerce.CommerceWork.reset();
         io.github.sekerator.kingdomworld.common.commerce.FolkWork.reset();
+        io.github.sekerator.kingdomworld.common.commerce.WorldShops.reset();
     }
 
     /**
@@ -168,15 +169,23 @@ public final class EconomyEvents {
         }
         percent = Math.max(0, Math.min(100 - Households.rules().sharePercent(), percent));
         long paid = 0;
+        Map<Long, Long> byCity = new java.util.HashMap<>();
         for (java.util.Map.Entry<java.util.UUID, Long> entry : payday.pay().entrySet()) {
             boolean soldier = state.citizens().get(entry.getKey())
                     .map(citizen -> io.github.sekerator.kingdomworld.core.citizen.Professions.isMilitary(citizen.professionId())).orElse(true);
             if (!soldier) {
                 paid += entry.getValue();
+                long city = payday.cityOf(entry.getKey());
+                if (city >= 0) {
+                    byCity.merge(city, entry.getValue(), Long::sum);
+                }
             }
         }
         long tax = paid * percent / 100;
-        if (tax > 0) {
+        if (!byCity.isEmpty()) {
+            // The wages lie in the purses of the cities: the same tax comes out of them, and the rest leaves the world as before.
+            io.github.sekerator.kingdomworld.common.commerce.WorldShops.citizenTax(server, kingdom.id(), tax, byCity, percent, day);
+        } else if (tax > 0) {
             state.economy().citizenTax(kingdom.id(), tax, day);
         }
     }
@@ -193,6 +202,14 @@ public final class EconomyEvents {
                 && state.economy().treasury(kingdom.id()).map(t -> t.lastPayday() != Treasury.NO_PAYDAY && t.lastPayday() < day).orElse(false)) {
             Map<UUID, Long> cities = io.github.sekerator.kingdomworld.common.commerce.CityOf.refresh(server, kingdom.id());
             cityOf = citizen -> cities.getOrDefault(citizen, 0L);
+        } else if (io.github.sekerator.kingdomworld.common.commerce.WorldShops.active(server, kingdom.id())
+                && state.economy().treasury(kingdom.id()).map(t -> t.lastPayday() != Treasury.NO_PAYDAY && t.lastPayday() < day).orElse(false)) {
+            // A kingdom of the world with shops: the wages of its peaceful citizens lie in the purses of their cities for the payday;
+            // those of its soldiers leave the world as before.
+            Map<UUID, Long> cities = io.github.sekerator.kingdomworld.common.commerce.CityOf.refresh(server, kingdom.id());
+            cityOf = citizen -> state.citizens().get(citizen)
+                    .filter(found -> !io.github.sekerator.kingdomworld.core.citizen.Professions.isMilitary(found.professionId()))
+                    .map(found -> cities.getOrDefault(citizen, 0L)).orElse(-1L);
         }
         // Officers of the guard and the army are paid more than fighters.
         Economy.Payday payday = state.payday(kingdom.id(), day, EconomySettings.rules(),

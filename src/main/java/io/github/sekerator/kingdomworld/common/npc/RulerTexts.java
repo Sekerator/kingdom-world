@@ -45,6 +45,7 @@ public final class RulerTexts {
             case ORDER, SELL, BUY -> Component.translatable(key, item(decision.subject()));
             case IMPORT -> Component.translatable(key, item(decision.subject()), decision.amount());
             case TAX -> Component.translatable(key, money(decision.amount()), decision.extra() / 10);
+            case TITHE -> Component.translatable(key, decision.amount() / 10);
             case WAGE -> Component.translatable(key, decision.amount());
             case ENTRY_FEE, BOUNTY, FESTIVAL -> Component.translatable(key, money(decision.amount()));
             case CONTRACT -> Component.translatable(key, money(decision.extra()));

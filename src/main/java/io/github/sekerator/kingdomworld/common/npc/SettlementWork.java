@@ -40,6 +40,8 @@ public final class SettlementWork {
             Settlement settlement = state.settlement(queue[at++]).orElse(null);
             if (settlement != null && live(settlement, day)) {
                 done++;
+                // A settlement whose city keeps a shop that trades grows more prosperous.
+                io.github.sekerator.kingdomworld.common.commerce.WorldShops.prosper(server, settlement);
             }
         }
     }

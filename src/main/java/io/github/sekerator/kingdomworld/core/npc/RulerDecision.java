@@ -73,7 +73,9 @@ public record RulerDecision(Kind kind, String subject, long amount, long extra, 
         /** Stops a building that costs too much for now. */
         PAUSE(false),
         /** Raises a camp of the royal army; the place is in {@link #target()} as "x,z". */
-        CAMP(true);
+        CAMP(true),
+        /** Sets the tithe of the kingdom on what its shopkeepers earn. */
+        TITHE(true);
 
         private final boolean important;
 

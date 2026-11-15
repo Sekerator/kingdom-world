@@ -68,6 +68,9 @@ public final class CommerceNbt {
             city.putString("missing", trade.missing);
             city.putBoolean("places", trade.noPlaces);
             city.putBoolean("keepers", trade.noKeepers);
+            if (trade.shortDays != 0) {
+                city.putInt("shortDays", trade.shortDays);
+            }
             ListTag closed = new ListTag();
             trade.closed.forEach((place, day) -> {
                 CompoundTag entry = new CompoundTag();
@@ -295,6 +298,7 @@ public final class CommerceNbt {
             trade.missing = entry.getString("missing");
             trade.noPlaces = entry.getBoolean("places");
             trade.noKeepers = entry.getBoolean("keepers");
+            trade.shortDays = entry.getInt("shortDays") & 0x7F;
             for (CompoundTag closed : compounds(entry, "closed")) {
                 trade.closed.put(closed.getString("place"), closed.getLong("day"));
             }

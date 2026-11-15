@@ -3798,6 +3798,8 @@
   "kingdomworld.ruler.decree.order.female": "told the workshops to keep %s in store",
   "kingdomworld.ruler.decree.tax": "set the poll tax at %s and the sales tax at %s%%",
   "kingdomworld.ruler.decree.tax.female": "set the poll tax at %s and the sales tax at %s%%",
+  "kingdomworld.ruler.decree.tithe": "set the tithe at %s%%",
+  "kingdomworld.ruler.decree.tithe.female": "set the tithe at %s%%",
   "kingdomworld.ruler.decree.wage": "set wages at %s%% of the usual",
   "kingdomworld.ruler.decree.wage.female": "set wages at %s%% of the usual",
   "kingdomworld.ruler.decree.sell": "put %s up for sale",

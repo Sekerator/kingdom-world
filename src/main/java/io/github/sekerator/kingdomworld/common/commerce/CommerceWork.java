@@ -87,7 +87,7 @@ public final class CommerceWork {
      * cities are put into the queue. Nothing for a kingdom of the world or with the money of the cities off.
      */
     public static void payday(MinecraftServer server, UUID kingdom, long day) {
-        if (!CityOf.active(server, kingdom) || KingdomWorldApi.isReadOnly(server)) {
+        if (!WorldShops.shops(server, kingdom) || KingdomWorldApi.isReadOnly(server)) {
             return;
         }
         Economy economy = KingdomWorldApi.state(server).economy();
@@ -102,7 +102,7 @@ public final class CommerceWork {
             economy.openCityTreasury(kingdom, place.cityId());
             QUEUE.add(new Job(kingdom, place.cityId(), day));
         }
-        if (first && !places.isEmpty()) {
+        if (first && !places.isEmpty() && CityOf.active(server, kingdom)) {
             KingdomWorldApi.kingdom(server, kingdom).ifPresent(found -> KingdomActions.notifyMembers(server, found, Permission.MANAGE_TREASURY,
                     Component.translatable(KEY + "introduced", KingdomActions.kingdomName(found)).withStyle(ChatFormatting.GOLD)));
         }
@@ -177,6 +177,10 @@ public final class CommerceWork {
      */
     public static int salesTax(MinecraftServer server, UUID kingdom, long city) {
         Economy economy = KingdomWorldApi.state(server).economy();
+        if (WorldShops.active(server, kingdom)) {
+            // The cities of a ruler of the world take the sales tax of its market.
+            return economy.treasury(kingdom).map(Treasury::salesTaxPermille).orElse(0);
+        }
         int own = economy.treasury(kingdom).map(CityEconomySettings::salesTax).orElse(CityEconomySettings.rules().salesTaxPercent() * 10);
         return economy.cityTreasury(kingdom, city).map(found -> found.salesTax(own)).orElse(own);
     }
@@ -189,6 +193,10 @@ public final class CommerceWork {
 
     public static int crownShare(MinecraftServer server, UUID kingdom, long city) {
         Economy economy = KingdomWorldApi.state(server).economy();
+        if (WorldShops.active(server, kingdom)) {
+            // The treasuries of the cities of the world pass all they take on to the ruler.
+            return 1000;
+        }
         int own = economy.treasury(kingdom).map(CityEconomySettings::crownShare).orElse(CityEconomySettings.rules().crownSharePercent() * 10);
         return economy.cityTreasury(kingdom, city).map(found -> found.crownShare(own)).orElse(own);
     }
@@ -204,6 +212,9 @@ public final class CommerceWork {
      * The share of its taxes the people of a city evade, in thousandths.
      */
     public static int evasion(MinecraftServer server, UUID kingdom, long city) {
+        if (WorldShops.active(server, kingdom)) {
+            return 0;
+        }
         CityEconomyRules rules = CityEconomySettings.rules();
         return Evasion.permille(burden(server, kingdom, city), rules.evasionStartPercent(), rules.evasionMaxPercent());
     }
@@ -366,7 +377,7 @@ public final class CommerceWork {
      */
     private static boolean step(MinecraftServer server, Job job, long start) {
         Economy economy = KingdomWorldApi.state(server).economy();
-        if (economy.treasury(job.kingdom()).isEmpty() || !CityOf.active(server, job.kingdom())) {
+        if (economy.treasury(job.kingdom()).isEmpty() || !WorldShops.shops(server, job.kingdom())) {
             return true;
         }
         if (job.city() < 0) {
@@ -426,7 +437,9 @@ public final class CommerceWork {
         Economy economy = KingdomWorldApi.state(server).economy();
         CityTreasury treasury = economy.openCityTreasury(kingdom, city);
         CityPurses.PurseKey purse = CityPurses.PurseKey.cityPurse(kingdom, city);
-        long keep = Money.multiplyCapped(CityEconomySettings.rules().purseKeepDays(), treasury.averageWithToday(CityStatement.Line.PURSE_IN));
+        // The purses of the cities of the world keep nothing: what is left of them leaves the world, as their wages did before.
+        long keep = WorldShops.active(server, kingdom) ? 0
+                : Money.multiplyCapped(CityEconomySettings.rules().purseKeepDays(), treasury.averageWithToday(CityStatement.Line.PURSE_IN));
         long over = economy.purse(purse) - keep;
         if (over > 0) {
             economy.purseLeaves(purse, city, over, CityPurses.Outflow.PURSE_FULL, day);

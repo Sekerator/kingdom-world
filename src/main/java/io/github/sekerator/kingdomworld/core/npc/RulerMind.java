@@ -172,6 +172,35 @@ public final class RulerMind {
         return (int) Math.max(0, Math.min(view.maxSalesTaxPermille, Math.round(BASE_SALES_TAX * factor)));
     }
 
+    /** The most tithe a ruler takes, in thousandths. */
+    public static final int MAX_TITHE = 500;
+
+    /**
+     * The tithe a ruler wants on what the shopkeepers of its kingdom earn, in thousandths: as with the sales tax, the greedier
+     * the more, a quarter more when its treasury is poor, from nothing up to a half.
+     */
+    public static int tithe(RulerView view, RulerRules rules) {
+        double factor = Math.max(0.25, 1 + 0.35 * greed(view.traits));
+        if (poor(view, rules)) {
+            factor += 0.25;
+        }
+        return (int) Math.max(0, Math.min(MAX_TITHE, Math.round(view.baseTithePercent * 10 * factor)));
+    }
+
+    /**
+     * A ruler of a kingdom with shops of citizens sets the tithe it wants once it is two points off the one it has; a modest
+     * decision. Without shops it never comes up.
+     */
+    private static void tithe(RulerView view, RulerRules rules, List<Scored> out) {
+        if (view.shops <= 0) {
+            return;
+        }
+        int wanted = tithe(view, rules);
+        if (Math.abs(wanted - view.tithePermille) >= 20) {
+            out.add(new Scored(30, RulerDecision.of(Kind.TITHE, "", wanted)));
+        }
+    }
+
     /**
      * Whether robbers or murderers threaten the kingdom.
      */
@@ -403,6 +432,7 @@ public final class RulerMind {
             household(view, memory, rules, candidates, spare, threat);
         }
         goods(view, needs);
+        tithe(view, rules, candidates);
         List<RulerDecision> decisions = pick(candidates, rules.decisionsPerTurn());
         return new Plan(decisions, answers, trimNeeds(needs));
     }

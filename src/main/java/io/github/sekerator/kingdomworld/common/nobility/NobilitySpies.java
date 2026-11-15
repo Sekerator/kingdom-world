@@ -109,7 +109,7 @@ final class NobilitySpies {
         return switch (kind) {
             case BUILD, UPGRADE, REPAIR, TOWN, CLAIM -> "plan_build";
             case HIRE, DISMISS, PATROL, GUARD -> "plan_army";
-            case TAX, WAGE -> "plan_taxes";
+            case TAX, WAGE, TITHE -> "plan_taxes";
             case SELL, BUY, IMPORT, OFFER, ACCEPT, DECLINE, MINT, ORDER -> "plan_trade";
             default -> "plan_other";
         };

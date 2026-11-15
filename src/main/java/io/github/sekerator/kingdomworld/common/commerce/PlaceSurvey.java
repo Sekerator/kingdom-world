@@ -60,7 +60,7 @@ public final class PlaceSurvey {
      */
     public static void chunkScanned(ServerLevel level, long chunk, UUID owner) {
         MinecraftServer server = level.getServer();
-        if (owner == null || KingdomWorldApi.isReadOnly(server) || !CityOf.active(server, owner)) {
+        if (owner == null || KingdomWorldApi.isReadOnly(server) || !WorldShops.shops(server, owner)) {
             return;
         }
         String dimension = Dimensions.id(level);

@@ -117,6 +117,8 @@ public final class Shops {
         int cursor;
         List<Long> workshops;
         int makeCursor;
+        /** Whether every shop of the city ran short of goods today: none held a day of what it sold. */
+        boolean short_;
 
         Progress(long day) {
             this.day = day;
@@ -577,7 +579,7 @@ public final class Shops {
         for (Business shop : shops) {
             restock.trades.computeIfAbsent(shop.cityId(), city -> data.city(kingdom, city));
         }
-        if (!market.sellToCitizens()) {
+        if (!market.sellToCitizens() && !WorldShops.active(server, kingdom)) {
             LOGGER.debug("The market of {} sells nothing to the shops of citizens", kingdom);
             return false;
         }
@@ -628,11 +630,13 @@ public final class Shops {
             restock.idle++;
             return;
         }
-        boolean onCredit = shop.startingOut();
+        // A shop of the world sells little: it takes goods on credit of its ruler while it owes less than the credit of a new shop.
+        boolean world = WorldShops.active(server, kingdom);
+        boolean onCredit = shop.startingOut() || world && shop.debt() < rules.shopCredit();
         if (onCredit) {
             restock.credit.add(shop.id());
         }
-        long budget = onCredit ? rules.shopCredit()
+        long budget = onCredit ? (world ? Math.max(0, rules.shopCredit() - shop.debt()) : rules.shopCredit())
                 : Math.max(0, economy.purse(CityPurses.PurseKey.till(kingdom, shop.id())) - shop.profitDue());
         double strength = strength(server, shop, restock.marketLevels.getOrDefault(shop.id(), 0), rules);
         if (shop.crafts()) {
@@ -643,6 +647,10 @@ public final class Shops {
         for (GoodsCategory category : GoodsCategory.values()) {
             long average = shop.averageCategory(restock.day, category.ordinal());
             long target = CityDay.stockTarget(average, strength, rules.basketShare(category.ordinal()), rules.stockDays());
+            if (world) {
+                // A shop of the world keeps at least the goods of its credit, whatever it sold.
+                target = Math.max(target, Money.share(rules.shopCredit(), rules.basketShare(category.ordinal()), 100));
+            }
             long lacking = target - shop.goodsValue(category.ordinal());
             if (lacking <= 0 || left <= 0) {
                 continue;
@@ -1034,6 +1042,20 @@ public final class Shops {
                 taken.add(citizen.id());
             }
         }
+        boolean world = WorldShops.active(server, kingdom);
+        if (world) {
+            // In a kingdom of the world the army takes its citizens without work first: the shops get only those it leaves.
+            int spare = WorldShops.spareKeepers(server, kingdom);
+            for (Citizen citizen : people) {
+                if (!taken.contains(citizen.id()) && townsperson(citizen, 0)) {
+                    if (spare > 0) {
+                        spare--;
+                    } else {
+                        taken.add(citizen.id());
+                    }
+                }
+            }
+        }
         CommerceSavedData.CityTrade trade = data.city(kingdom, city);
         for (Business shop : data.shopsOf(kingdom, city)) {
             if (!byKey.containsKey(shop.place().key())) {
@@ -1063,7 +1085,7 @@ public final class Shops {
                     taken.add(keeper);
                     KingdomWorldApi.state(server).citizens().get(keeper).ifPresent(citizen -> citizen.setBusiness(shop.id()));
                 }
-                family = keepers.isEmpty() && more.family();
+                family = keepers.isEmpty() && (more.family() || world && shop.place().kind() == Business.PlaceKind.MERCHANT_HOUSE);
             }
             shop.setKeepers(keepers, family);
             if (!shop.kept()) {
@@ -1085,7 +1107,13 @@ public final class Shops {
             }
         }
         List<Business> standing = data.shopsOf(kingdom, city);
-        int openings = CityDay.openings(!standing.isEmpty(), trade.unspent, rules.fairIncome(), rules.turnoverPerWorker(), false);
+        // A city of the world always keeps one shop, and opens one more when those open ran short of goods three of the last
+        // seven days; its townspeople have nothing left to spend.
+        int openings = world ? io.github.sekerator.kingdomworld.core.commerce.WorldShopRules.openings(standing.isEmpty(), trade.shortDays)
+                : CityDay.openings(!standing.isEmpty(), trade.unspent, rules.fairIncome(), rules.turnoverPerWorker(), false);
+        if (world && openings > 0) {
+            trade.shortDays = 0;
+        }
         trade.noPlaces = false;
         trade.noKeepers = false;
         if (openings <= 0) {
@@ -1114,6 +1142,10 @@ public final class Shops {
             }
             freePlace = true;
             KeeperChoice.Choice choice = choose(server, spot.place(), people, 0, spot.place().kind().room(), taken);
+            if (!choice.any() && world && spot.place().kind() == Business.PlaceKind.MERCHANT_HOUSE) {
+                // No citizen left for it: the family of the house of a merchant keeps it in the evening.
+                choice = new KeeperChoice.Choice(List.of(), true);
+            }
             if (!choice.any()) {
                 continue;
             }
@@ -1154,9 +1186,14 @@ public final class Shops {
         }
         TradeChoice.Place known = new TradeChoice.Place(survey.map(CommerceSavedData.Survey::stations).orElse(Set.of()), survey.isPresent(),
                 market || place.kind() == Business.PlaceKind.MERCHANT_HOUSE);
-        TradeChoice.City needs = new TradeChoice.City(trade.unmet, masters, outsideUnchosen(server, kingdom, city));
-        return current.isEmpty() ? TradeChoice.choose(TradeRegistry.current().all(), known, needs)
-                : TradeChoice.chooseFor(TradeRegistry.current().all(), known, needs, current);
+        // The kingdoms of the world keep no trading house: the merchants of the ruler export.
+        boolean world = WorldShops.active(server, kingdom);
+        TradeChoice.City needs = new TradeChoice.City(trade.unmet, masters, world ? 0 : outsideUnchosen(server, kingdom, city));
+        var trades = TradeRegistry.current().all();
+        if (world) {
+            trades = io.github.sekerator.kingdomworld.core.commerce.WorldShopRules.trades(trades);
+        }
+        return current.isEmpty() ? TradeChoice.choose(trades, known, needs) : TradeChoice.chooseFor(trades, known, needs, current);
     }
 
     /**
@@ -1439,12 +1476,14 @@ public final class Shops {
         CommerceSavedData data = CommerceSavedData.get(server);
         Economy economy = KingdomWorldApi.state(server).economy();
         CityEconomyRules rules = CityEconomySettings.rules();
+        boolean world = WorldShops.active(server, kingdom);
         if (progress.cursor == 0) {
             List<Long> ids = new ArrayList<>();
             for (Business shop : data.shopsOf(kingdom, city)) {
                 ids.add(shop.id());
             }
             progress.shops = ids;
+            progress.short_ = !ids.isEmpty();
         }
         while (progress.cursor < progress.shops.size()) {
             if (System.nanoTime() - start >= CommerceWork.BUDGET_NANOS) {
@@ -1486,7 +1525,15 @@ public final class Shops {
                     rules.maxMarginPercent(), rules.marginStepPercent(), rules.businessUpkeepPercent()));
             boolean young = day - shop.opened() < 2;
             boolean poor = !young && CityDay.poor(earned, usual);
+            // The first shop of a city of the world stays open whatever it earns.
+            if (world && progress.shops.indexOf(shop.id()) == 0 && shop.status() != Business.Status.CLOSING) {
+                poor = false;
+            }
             shop.setPoorDays(poor ? shop.poorDays() + 1 : 0);
+            if (shop.goodsValue() >= sold[1]) {
+                // It held a day of what it sold.
+                progress.short_ = false;
+            }
             if (shop.status() == Business.Status.CLOSING || shop.poorDays() >= rules.closeAfterDays()) {
                 if (close(server, shop, Closing.POOR, null)) {
                     data.city(kingdom, city).closed.put(shop.place().key(), day);
@@ -1498,6 +1545,10 @@ public final class Shops {
             } else {
                 shop.setStatus(shop.family() ? Business.Status.FAMILY : Business.Status.TRADING);
             }
+        }
+        if (world) {
+            CommerceSavedData.CityTrade trade = data.city(kingdom, city);
+            trade.shortDays = io.github.sekerator.kingdomworld.core.commerce.WorldShopRules.nextShortDays(trade.shortDays, progress.short_);
         }
         data.setDirty();
         return true;

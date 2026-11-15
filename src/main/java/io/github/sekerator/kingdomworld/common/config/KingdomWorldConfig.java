@@ -1956,6 +1956,7 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue rulerRoadDistance;
         public final ForgeConfigSpec.IntValue rulerFestivalMood;
         public final ForgeConfigSpec.IntValue rulerGrowthChunks;
+        public final ForgeConfigSpec.IntValue rulerTithePercent;
         public final ForgeConfigSpec.ConfigValue<String> buildMode;
         public final ForgeConfigSpec.IntValue backgroundBlocksPerTick;
         public final ForgeConfigSpec.IntValue backgroundChunksPerTick;
@@ -2130,6 +2131,9 @@ public final class KingdomWorldConfig {
             rulerGrowthChunks = builder.comment("Chunks a ruler adds to its land in a turn when nothing else needs them, up to maxChunks, so that",
                             "the borders grow slowly; claims look at the region files and never load or generate chunks. 0 turns it off.")
                     .defineInRange("growthChunks", r.growthChunks(), 0, 64);
+            rulerTithePercent = builder.comment("The tithe a ruler of no particular leaning takes of what the shopkeepers of its kingdom earn, in",
+                            "percent; a greedy one more, a poor treasury a quarter more, at most a half.")
+                    .defineInRange("tithePercent", 10, 0, 50);
             builder.pop();
             io.github.sekerator.kingdomworld.core.land.StateRules s = io.github.sekerator.kingdomworld.core.land.StateRules.defaults(0, 0);
             plan = builder.comment("How a new world plans its kingdoms of the world: \"states\" lays out large states with provinces",

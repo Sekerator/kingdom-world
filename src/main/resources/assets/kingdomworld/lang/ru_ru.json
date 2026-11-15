@@ -3798,6 +3798,8 @@
   "kingdomworld.ruler.decree.order.female": "велела мастерским держать в запасе: %s",
   "kingdomworld.ruler.decree.tax": "назначил подушную подать %s и торговый сбор %s%%",
   "kingdomworld.ruler.decree.tax.female": "назначила подушную подать %s и торговый сбор %s%%",
+  "kingdomworld.ruler.decree.tithe": "назначил десятину %s%%",
+  "kingdomworld.ruler.decree.tithe.female": "назначила десятину %s%%",
   "kingdomworld.ruler.decree.wage": "назначил жалованье в %s%% от обычного",
   "kingdomworld.ruler.decree.wage.female": "назначила жалованье в %s%% от обычного",
   "kingdomworld.ruler.decree.sell": "выставил на продажу: %s",

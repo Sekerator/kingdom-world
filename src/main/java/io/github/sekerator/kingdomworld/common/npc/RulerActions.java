@@ -240,6 +240,7 @@ public final class RulerActions {
                 case RESEARCH -> research(server, id, decision);
                 case APPOINT -> name(server, id, decision);
                 case PAUSE -> pause(server, id, decision);
+                case TITHE -> tithe(server, id, decision);
             };
         } catch (IllegalArgumentException e) {
             LOGGER.debug("A decision of a ruler of the world could not be read: {}", decision, e);
@@ -666,6 +667,17 @@ public final class RulerActions {
             return List.of();
         }
         TOOLS_DAY.put(id, day);
+        // The shops of its citizens first: what they made; only the rest comes from abroad.
+        for (java.util.Map.Entry<String, Integer> entry : new ArrayList<>(lacking.entrySet())) {
+            long funds = state.economy().treasury(id).map(io.github.sekerator.kingdomworld.core.economy.Treasury::funds).orElse(0L);
+            long got = io.github.sekerator.kingdomworld.common.commerce.WorldShops.rulerBuys(server, id, entry.getKey(), entry.getValue(),
+                    funds / 3, day);
+            if (got >= entry.getValue()) {
+                lacking.remove(entry.getKey());
+            } else if (got > 0) {
+                lacking.put(entry.getKey(), (int) (entry.getValue() - got));
+            }
+        }
         io.github.sekerator.kingdomworld.core.trade.TradeRules rules = TradeSettings.rules();
         io.github.sekerator.kingdomworld.core.citizen.WorldPos capital = io.github.sekerator.kingdomworld.common.army.ArmyWork.capitalOf(server, id);
         List<RulerDecision> bought = new ArrayList<>();
@@ -1049,6 +1061,22 @@ public final class RulerActions {
         return Result.of(poll.ok() || sales.ok() ? Outcome.DONE : poll, decision);
     }
 
+    /**
+     * Sets the tithe of the kingdom on what its shopkeepers earn; its cities take the sales tax of its market.
+     */
+    private static Result tithe(MinecraftServer server, UUID id, RulerDecision decision) {
+        var economy = KingdomWorldApi.state(server).economy();
+        Optional<io.github.sekerator.kingdomworld.core.economy.Treasury> treasury = economy.treasury(id);
+        if (treasury.isEmpty()) {
+            return Result.failed(KingdomError.UNKNOWN_KINGDOM, decision);
+        }
+        int tithe = (int) Math.max(0, Math.min(io.github.sekerator.kingdomworld.core.economy.CityEconomyRules.MAX_TITHE_PERCENT * 10,
+                decision.amount()));
+        Outcome outcome = economy.setKingdomCityTaxes(id, io.github.sekerator.kingdomworld.common.commerce.CityEconomySettings.salesTax(treasury.get()),
+                tithe, 1000);
+        return Result.of(outcome, RulerDecision.of(RulerDecision.Kind.TITHE, "", tithe));
+    }
+
     private static Result wage(MinecraftServer server, UUID id, RulerDecision decision) {
         EconomyRules rules = EconomySettings.rules();
         Set<String> professions = new LinkedHashSet<>();
@@ -1191,7 +1219,10 @@ public final class RulerActions {
             }
         }
         int hired = 0;
-        for (Citizen citizen : List.copyOf(state.citizens().registry().citizensOf(id))) {
+        // The army takes citizens without work, those who keep no shop first: a shop gets only whom the army leaves.
+        List<Citizen> people = new ArrayList<>(state.citizens().registry().citizensOf(id));
+        people.sort(java.util.Comparator.comparing((Citizen citizen) -> citizen.business() != 0));
+        for (Citizen citizen : people) {
             if (hired >= decision.amount()) {
                 break;
             }

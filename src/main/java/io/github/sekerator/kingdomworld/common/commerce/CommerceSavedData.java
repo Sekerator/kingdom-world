@@ -52,6 +52,8 @@ public final class CommerceSavedData extends SavedData {
         boolean short_;
         String missing = "";
         boolean noPlaces;
+        /** For a city of the world: the last seven days, a bit each, the newest lowest, on which its open shops ran short of goods. */
+        int shortDays;
         boolean noKeepers;
         final Map<String, Long> closed = new LinkedHashMap<>();
 
