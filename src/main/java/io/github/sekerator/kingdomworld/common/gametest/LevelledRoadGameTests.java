@@ -526,4 +526,88 @@ public final class LevelledRoadGameTests {
         }
         helper.succeed();
     }
+
+    /**
+     * 6. A point between on free land is kept: the road passes within two blocks of it.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_roads_levelled_point", timeoutTicks = 2_400)
+    public static void aPointBetweenIsKept(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Waymarkers", UUID.randomUUID());
+        int x0 = helper.absolutePos(BlockPos.ZERO).getX() + RemoteBuildingGameTests.FAR + 600;
+        int z0 = helper.absolutePos(BlockPos.ZERO).getZ() + 64;
+        RemoteBuildingGameTests.meadow(helper, kingdom, new BlockPos(x0 + 40, RemoteBuildingGameTests.HIGH, z0), 48, l -> {
+        });
+        try {
+            io.github.sekerator.kingdomworld.core.road.RoutePlan.Result result = io.github.sekerator.kingdomworld.common.road.RoadPlanSessions.planNow(
+                    level, kingdom.id(), List.of(new int[]{x0, z0}, new int[]{x0 + 40, z0 + 30}, new int[]{x0 + 80, z0}), RoadClass.GRAVEL,
+                    io.github.sekerator.kingdomworld.core.road.RouteStyle.TERRAIN);
+            helper.assertTrue(result.found(), "No way through the point: " + result.failure() + " at " + java.util.Arrays.toString(result.stuck()));
+            int[] point = result.snapped().get(1);
+            helper.assertTrue(Math.abs(point[0] - (x0 + 40)) <= 2 && Math.abs(point[1] - (z0 + 30)) <= 2, "The point moved off: "
+                    + point[0] + " " + point[1]);
+            helper.assertTrue(result.cells().stream().anyMatch(cell -> Math.abs(cell.x() - point[0]) <= 2 && Math.abs(cell.z() - point[1]) <= 2),
+                    "The road does not pass the point");
+        } finally {
+            CitizenGameTests.finish(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * 10. A road to its own city behind a wall without a gate goes through the wall, and a gate is cut there when it is laid.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_roads_levelled_gate", timeoutTicks = 2_400)
+    public static void aRoadIntoAWalledCityCutsAGate(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Gatecutters", UUID.randomUUID());
+        int cx = helper.absolutePos(BlockPos.ZERO).getX() + RemoteBuildingGameTests.FAR + 900;
+        int cz = helper.absolutePos(BlockPos.ZERO).getZ() + 64;
+        int high = RemoteBuildingGameTests.HIGH;
+        RemoteBuildingGameTests.meadow(helper, kingdom, new BlockPos(cx - 20, high, cz), 48, l -> {
+        });
+        RoadState roads = RoadWork.state(server);
+        io.github.sekerator.kingdomworld.core.road.City city = roads.addCity(kingdom.id(), "GameTest Walled", Dimensions.id(level), cx, high + 1, cz,
+                KingdomWorldApi.gameTime(server));
+        List<RouteCell> ring = new ArrayList<>();
+        int r = 8;
+        for (int x = -r; x <= r; x++) {
+            ring.add(new RouteCell(cx + x, high, cz - r, RouteCell.Kind.GROUND, 0, null));
+        }
+        for (int z = -r + 1; z <= r; z++) {
+            ring.add(new RouteCell(cx + r, high, cz + z, RouteCell.Kind.GROUND, 0, null));
+        }
+        for (int x = r - 1; x >= -r; x--) {
+            ring.add(new RouteCell(cx + x, high, cz + r, RouteCell.Kind.GROUND, 0, null));
+        }
+        for (int z = r - 1; z > -r; z--) {
+            ring.add(new RouteCell(cx - r, high, cz + z, RouteCell.Kind.GROUND, 0, null));
+        }
+        io.github.sekerator.kingdomworld.core.road.Wall wall = new io.github.sekerator.kingdomworld.core.road.Wall(roads.nextWallId(), city.id(),
+                kingdom.id(), io.github.sekerator.kingdomworld.core.road.Wall.WallClass.PALISADE, Dimensions.id(level), cx, cz, ring, List.of(),
+                KingdomWorldApi.gameTime(server));
+        roads.putWall(wall);
+        try {
+            io.github.sekerator.kingdomworld.core.road.RoutePlan.Result result = io.github.sekerator.kingdomworld.common.road.RoadPlanSessions.planNow(
+                    level, kingdom.id(), List.of(new int[]{cx - 50, cz}, new int[]{cx, cz}), RoadClass.GRAVEL,
+                    io.github.sekerator.kingdomworld.core.road.RouteStyle.TERRAIN);
+            helper.assertTrue(result.found(), "No way into the city: " + result.failure());
+            io.github.sekerator.kingdomworld.common.road.RoadPlanning.Plan plan = io.github.sekerator.kingdomworld.common.road.RoadPlanSessions.lastTestPlan;
+            helper.assertTrue(plan != null && !plan.gates().isEmpty(), "The plan cuts no gate into the wall");
+            int before = wall.gates().size();
+            Road[] made = new Road[1];
+            io.github.sekerator.kingdomworld.core.kingdom.Outcome built = io.github.sekerator.kingdomworld.common.road.RoadPlanning.build(server, null,
+                    kingdom.id(), plan.id(), RoadClass.GRAVEL, Road.Mode.OWN, made);
+            helper.assertTrue(built.ok(), "The road was not laid: " + built.error());
+            helper.assertTrue(made[0].levelled(), "The road is not levelled");
+            helper.assertTrue(wall.gates().size() > before, "No gate was ordered in the wall");
+            roads.removeRoad(made[0].id());
+        } finally {
+            roads.removeWall(wall.id());
+            roads.removeCity(city.id());
+            CitizenGameTests.finish(helper, kingdom);
+        }
+        helper.succeed();
+    }
 }

@@ -579,6 +579,18 @@ public final class LegPlanner {
     /**
      * The heights and kinds of a way by the profile, crossings of roads and gates pinned.
      */
+    /**
+     * The heights of a road of several legs joined, by the profile over all of it: the heights of the legs as its reference.
+     */
+    List<RouteCell> reprofile(List<RouteCell> cells) {
+        engineeredFrom = Integer.MAX_VALUE;
+        List<int[]> way = new ArrayList<>(cells.size());
+        for (RouteCell cell : cells) {
+            way.add(new int[]{cell.x(), cell.y(), cell.z(), cell.kind().ordinal()});
+        }
+        return profile(way);
+    }
+
     private List<RouteCell> profile(List<int[]> way) {
         List<int[]> cells = new ArrayList<>(way.size());
         int[] heights = new int[way.size()];

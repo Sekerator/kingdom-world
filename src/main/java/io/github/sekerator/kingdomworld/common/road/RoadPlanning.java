@@ -56,16 +56,98 @@ public final class RoadPlanning {
     private static final int SEARCH_SLICE = 100;
 
     /**
-     * A way found for a road.
+     * A way found for a road: of the old search in the first layout, any class; of the planner of levelled roads in its class and
+     * way, with the survey of its earthworks, the owner of every block of its width and the gates it cuts into walls of its own.
+     *
+     * @param guessed whether some of its land was only guessed: it is read and planned again before the road is laid
+     * @param gates   the walls of its own cities it crosses outside a gate: the wall, x and z
      */
     public record Plan(long id, UUID kingdomId, @Nullable UUID player, String dimension, Endpoint from, Endpoint to, List<RouteCell> cells,
-                       long made) {
+                       long made, int layout, @Nullable RoadClass roadClass, io.github.sekerator.kingdomworld.core.road.RouteStyle style,
+                       List<RoadLayout.ColumnSurvey> surveys, double earthTotal, boolean guessed, List<UUID> blockOwners, List<long[]> gates,
+                       @Nullable io.github.sekerator.kingdomworld.core.road.RoadEstimate estimate) {
         public Plan {
             cells = List.copyOf(cells);
+            surveys = List.copyOf(surveys);
+            blockOwners = java.util.Collections.unmodifiableList(new ArrayList<>(blockOwners));
+            gates = List.copyOf(gates);
         }
 
+        public Plan(long id, UUID kingdomId, @Nullable UUID player, String dimension, Endpoint from, Endpoint to, List<RouteCell> cells,
+                    long made) {
+            this(id, kingdomId, player, dimension, from, to, cells, made, RoadLayout.LAID, null,
+                    io.github.sekerator.kingdomworld.core.road.RouteStyle.TERRAIN, List.of(), 0, false, List.of(), List.of(), null);
+        }
+
+        public boolean levelled() {
+            return layout == RoadLayout.LEVELLED;
+        }
+
+        /**
+         * Every kingdom other than the planner whose land the road touches, with the sections that touch it: for a levelled road
+         * over the whole width of its blocks with their verges.
+         */
         public Map<UUID, Integer> crossed() {
-            return RoadState.crossedSections(cells, kingdomId);
+            if (!levelled() || roadClass == null) {
+                return RoadState.crossedSections(cells, kingdomId);
+            }
+            Map<UUID, Integer> result = new LinkedHashMap<>();
+            List<java.util.Set<UUID>> bySection = new ArrayList<>();
+            List<RoadLayout.Block> blocks = RoadLayout.blocks(cells, roadClass, RoadLayout.LEVELLED, null);
+            for (int b = 0; b < blocks.size() && b < blockOwners.size(); b++) {
+                int section = blocks.get(b).cell() / Road.SECTION_CELLS;
+                while (bySection.size() <= section) {
+                    bySection.add(new java.util.HashSet<>());
+                }
+                UUID owner = blockOwners.get(b);
+                if (owner != null && !owner.equals(kingdomId)) {
+                    bySection.get(section).add(owner);
+                }
+            }
+            for (java.util.Set<UUID> owners : bySection) {
+                for (UUID owner : owners) {
+                    result.merge(owner, 1, Integer::sum);
+                }
+            }
+            return result;
+        }
+
+        /**
+         * The kingdom whose land most of each section is on, over the whole width of a levelled road.
+         */
+        public List<UUID> sectionOwners() {
+            if (!levelled() || roadClass == null) {
+                return RoadState.sectionOwners(cells);
+            }
+            List<RoadLayout.Block> blocks = RoadLayout.blocks(cells, roadClass, RoadLayout.LEVELLED, null);
+            List<Map<UUID, Integer>> counts = new ArrayList<>();
+            List<Integer> wild = new ArrayList<>();
+            for (int b = 0; b < blocks.size() && b < blockOwners.size(); b++) {
+                int section = blocks.get(b).cell() / Road.SECTION_CELLS;
+                while (counts.size() <= section) {
+                    counts.add(new LinkedHashMap<>());
+                    wild.add(0);
+                }
+                UUID owner = blockOwners.get(b);
+                if (owner == null) {
+                    wild.set(section, wild.get(section) + 1);
+                } else {
+                    counts.get(section).merge(owner, 1, Integer::sum);
+                }
+            }
+            List<UUID> owners = new ArrayList<>();
+            for (int s = 0; s < counts.size(); s++) {
+                UUID best = null;
+                int bestCount = wild.get(s);
+                for (Map.Entry<UUID, Integer> entry : counts.get(s).entrySet()) {
+                    if (entry.getValue() > bestCount) {
+                        best = entry.getKey();
+                        bestCount = entry.getValue();
+                    }
+                }
+                owners.add(best);
+            }
+            return owners;
         }
     }
 
@@ -78,6 +160,8 @@ public final class RoadPlanning {
         final Endpoint to;
         final RoadTerrain terrain;
         final RouteSearch search;
+        /** The class the plan is shown in. */
+        RoadClass viewClass = RoadClass.GRAVEL;
         /** For an operator: build the road in this class at once when the way is found. */
         RoadClass buildClass;
         Road.Mode buildMode;
@@ -158,6 +242,21 @@ public final class RoadPlanning {
      */
     public static Outcome start(ServerLevel level, @Nullable UUID player, UUID kingdomId, int fromX, int fromZ, int toX, int toZ) {
         return start(level, player, kingdomId, fromX, fromZ, toX, toZ, null, null);
+    }
+
+    /**
+     * Starts the old search for a player who plans in a dimension with a ceiling, the plan shown in a class.
+     */
+    public static Outcome start(ServerLevel level, UUID player, UUID kingdomId, int fromX, int fromZ, int toX, int toZ, RoadClass viewClass) {
+        Outcome outcome = start(level, player, kingdomId, fromX, fromZ, toX, toZ, null, null);
+        if (outcome.ok()) {
+            for (Job job : JOBS.values()) {
+                if (job.kingdomId.equals(kingdomId)) {
+                    job.viewClass = viewClass;
+                }
+            }
+        }
+        return outcome;
     }
 
     /**
@@ -281,7 +380,7 @@ public final class RoadPlanning {
                 PLANS.put(plan.id(), plan);
                 LOGGER.info("A way for a road of {} found: {} blocks after {} steps", RoadWork.kingdomName(server, job.kingdomId).getString(),
                         plan.cells().size(), job.search.expanded());
-                reply(server, job, view(server, plan));
+                reply(server, job, view(server, plan, job.viewClass));
                 if (job.buildClass != null) {
                     Outcome built = build(server, null, job.kingdomId, plan.id(), job.buildClass, job.buildMode, new Road[1]);
                     if (!built.ok()) {
@@ -355,47 +454,288 @@ public final class RoadPlanning {
     }
 
     /**
-     * What the atlas shows of a plan.
+     * What the atlas shows of a plan of the old search, in a class: its length, bridges and embankments, its materials and the
+     * seconds of its builders; no earthworks.
      */
-    public static RoadViews.PlanView view(MinecraftServer server, Plan plan) {
+    public static RoadViews.PlanView view(MinecraftServer server, Plan plan, RoadClass roadClass) {
         RoadRules rules = RoadSettings.rules();
-        int[] materials = new int[9];
-        int[] seconds = new int[3];
-        for (RoadClass roadClass : RoadClass.values()) {
-            List<RoadLayout.Block> blocks = RoadLayout.blocks(plan.cells(), roadClass);
-            int[] counts = RoadLayout.materials(blocks, roadClass);
-            for (int m = 0; m < 3; m++) {
-                materials[roadClass.ordinal() * 3 + m] = counts[m];
-            }
-            seconds[roadClass.ordinal()] = (int) Math.min(Integer.MAX_VALUE, Math.round(RoadLayout.seconds(blocks, roadClass, rules)));
-        }
-        int bridges = 0;
-        int fills = 0;
+        List<RoadLayout.Block> blocks = RoadLayout.blocks(plan.cells(), roadClass);
+        int[] materials = RoadLayout.materials(blocks, roadClass);
+        int seconds = (int) Math.min(Integer.MAX_VALUE, Math.round(RoadLayout.seconds(blocks, roadClass, rules)));
+        int[] works = new int[RoadViews.PlanView.WORKS];
         for (RouteCell cell : plan.cells()) {
             if (cell.kind() == RouteCell.Kind.BRIDGE) {
-                bridges++;
+                works[7]++;
             } else if (cell.kind() == RouteCell.Kind.FILL) {
-                fills++;
+                works[6]++;
             }
         }
         List<String> crossed = new ArrayList<>();
         for (UUID kingdom : plan.crossed().keySet()) {
             crossed.add(RoadWork.kingdomName(server, kingdom).getString());
         }
-        List<RouteCell> cells = plan.cells();
-        int step = Math.max(1, cells.size() / 1_000);
-        List<Integer> xs = new ArrayList<>();
-        List<Integer> zs = new ArrayList<>();
+        int[][] way = way(plan.cells());
+        RouteCell first = plan.cells().get(0);
+        RouteCell last = plan.cells().get(plan.cells().size() - 1);
+        int length = plan.cells().size();
+        int straight = (int) Math.round(Math.hypot(last.x() - first.x(), last.z() - first.z()));
+        double pace = RoadActions.pace();
+        int builders = RoadBuilding.freeBuilders(server, plan.kingdomId()).size();
+        double rate = RoadBuilding.builderRate(plan.kingdomId());
+        int term = rate <= 0 && builders == 0 ? -1 : (int) Math.round(seconds / Math.max(0.1, rate > 0 ? rate : builders)
+                / io.github.sekerator.kingdomworld.core.road.EarthRules.DAY * 10);
+        return new RoadViews.PlanView(plan.id(), plan.kingdomId(), 0, "", RoadViews.PlanView.Stage.DONE, 100, 0, roadClass, plan.style(),
+                new int[]{first.x(), first.z(), last.x(), last.z()}, new int[]{first.x(), first.z(), last.x(), last.z()}, List.of(),
+                name(server, plan.from()).getString(), name(server, plan.to()).getString(), length, straight,
+                (int) Math.round(io.github.sekerator.kingdomworld.core.road.RoadNetwork.ticks(length, pace * rules.caravanSpeed(roadClass)) / 20),
+                (int) Math.round(io.github.sekerator.kingdomworld.core.road.RoadNetwork.ticks(straight, pace) / 20), works, materials,
+                missing(server, plan.kingdomId(), materials, roadClass), seconds, 0, builders, 0, term, 0, "", crossed, 0, false, false,
+                way[0], way[1], kinds(way[2]), new int[0]);
+    }
+
+    /**
+     * Points of a way to draw, {@value RoadViews#MAX_POINTS} at most, with the kind of block at each.
+     */
+    static int[][] way(List<RouteCell> cells) {
+        int step = Math.max(1, (cells.size() + RoadViews.MAX_POINTS - 2) / (RoadViews.MAX_POINTS - 1));
+        List<int[]> points = new ArrayList<>();
         for (int i = 0; i < cells.size(); i += step) {
-            xs.add(cells.get(i).x());
-            zs.add(cells.get(i).z());
+            RouteCell cell = cells.get(i);
+            points.add(new int[]{cell.x(), cell.z(), cell.kind().ordinal()});
         }
-        xs.add(cells.get(cells.size() - 1).x());
-        zs.add(cells.get(cells.size() - 1).z());
-        return new RoadViews.PlanView(plan.id(), plan.kingdomId(), "", false, name(server, plan.from()).getString(),
-                name(server, plan.to()).getString(), cells.size(), bridges, fills, materials, seconds,
-                RoadBuilding.freeBuilders(server, plan.kingdomId()).size(), crossed, xs.stream().mapToInt(Integer::intValue).toArray(),
-                zs.stream().mapToInt(Integer::intValue).toArray());
+        RouteCell last = cells.get(cells.size() - 1);
+        points.add(new int[]{last.x(), last.z(), last.kind().ordinal()});
+        int[] xs = new int[points.size()];
+        int[] zs = new int[points.size()];
+        int[] kinds = new int[points.size()];
+        for (int i = 0; i < points.size(); i++) {
+            xs[i] = points.get(i)[0];
+            zs[i] = points.get(i)[1];
+            kinds[i] = points.get(i)[2];
+        }
+        return new int[][]{xs, zs, kinds};
+    }
+
+    private static byte[] kinds(int[] kinds) {
+        byte[] bytes = new byte[kinds.length];
+        for (int i = 0; i < kinds.length; i++) {
+            bytes[i] = (byte) kinds[i];
+        }
+        return bytes;
+    }
+
+    /**
+     * Items of each material the storehouses of a kingdom lack for a road, by the tags of the materials.
+     */
+    static int[] missing(MinecraftServer server, UUID kingdomId, int[] materials, RoadClass roadClass) {
+        int[] missing = new int[materials.length];
+        Map<String, Long> stock = io.github.sekerator.kingdomworld.common.storage.KingdomStorage.countsById(server, kingdomId);
+        for (RoadLayout.Material material : RoadLayout.Material.values()) {
+            int need = materials[material.ordinal()];
+            if (need <= 0) {
+                continue;
+            }
+            long have = 0;
+            for (Map.Entry<String, Long> entry : stock.entrySet()) {
+                net.minecraft.world.item.Item item = io.github.sekerator.kingdomworld.common.citizen.work.PostWork.item(entry.getKey());
+                if (item != null && RoadBlocks.fits(item, material, roadClass)) {
+                    have += entry.getValue();
+                }
+            }
+            missing[material.ordinal()] = (int) Math.max(0, need - have);
+        }
+        return missing;
+    }
+
+    /**
+     * What the work and the items of a road are worth in the currency of a kingdom, only for comparison: the wages of its builders
+     * and miners for the seconds of their work, and every item at the market value of the item of its tag the storehouses hold most
+     * of, else the first of the tag.
+     */
+    static long coins(MinecraftServer server, UUID kingdomId, double builderSeconds, double minerSeconds, int[] materials, RoadClass roadClass) {
+        java.util.Optional<io.github.sekerator.kingdomworld.core.economy.Treasury> treasury = KingdomWorldApi.state(server).economy().treasury(kingdomId);
+        io.github.sekerator.kingdomworld.core.economy.EconomyRules rules = io.github.sekerator.kingdomworld.common.economy.EconomySettings.rules();
+        double sum = 0;
+        if (treasury.isPresent()) {
+            sum += builderSeconds * treasury.get().wage(io.github.sekerator.kingdomworld.core.citizen.Professions.BUILDER.id(), rules)
+                    / io.github.sekerator.kingdomworld.core.road.EarthRules.DAY;
+            sum += minerSeconds * treasury.get().wage(io.github.sekerator.kingdomworld.core.citizen.Professions.MINER.id(), rules)
+                    / io.github.sekerator.kingdomworld.core.road.EarthRules.DAY;
+        }
+        Map<String, Long> stock = io.github.sekerator.kingdomworld.common.storage.KingdomStorage.countsById(server, kingdomId);
+        for (RoadLayout.Material material : RoadLayout.Material.values()) {
+            int count = materials[material.ordinal()];
+            if (count <= 0) {
+                continue;
+            }
+            net.minecraft.world.item.Item best = null;
+            long most = -1;
+            for (Map.Entry<String, Long> entry : stock.entrySet()) {
+                net.minecraft.world.item.Item item = io.github.sekerator.kingdomworld.common.citizen.work.PostWork.item(entry.getKey());
+                if (item != null && RoadBlocks.fits(item, material, roadClass) && entry.getValue() > most) {
+                    best = item;
+                    most = entry.getValue();
+                }
+            }
+            if (best == null) {
+                for (net.minecraft.core.Holder<net.minecraft.world.item.Item> holder : net.minecraft.core.registries.BuiltInRegistries.ITEM
+                        .getTagOrEmpty(RoadBlocks.tagOf(material, roadClass))) {
+                    best = holder.value();
+                    break;
+                }
+            }
+            if (best != null) {
+                sum += count * io.github.sekerator.kingdomworld.common.trade.MarketStock.worth(server, best).amount();
+            }
+        }
+        return Math.round(sum);
+    }
+
+    /**
+     * Keeps a levelled plan found by the planner for its player to confirm.
+     */
+    static Plan keep(MinecraftServer server, UUID kingdomId, @Nullable UUID player, String dimension, RoadClass roadClass,
+                     io.github.sekerator.kingdomworld.core.road.RouteStyle style, List<int[]> points,
+                     io.github.sekerator.kingdomworld.core.road.RoutePlan.Result result,
+                     @Nullable io.github.sekerator.kingdomworld.core.road.LandSnapshot snapshot) {
+        List<RouteCell> cells = result.cells();
+        RouteCell first = cells.get(0);
+        RouteCell last = cells.get(cells.size() - 1);
+        int[] start = points.get(0);
+        int[] end = points.get(points.size() - 1);
+        Endpoint from = endpoint(server, dimension, start[0], start[1]);
+        Endpoint to = endpoint(server, dimension, end[0], end[1]);
+        if (from.kind() == Endpoint.Kind.POINT) {
+            from = Endpoint.point(first.x(), first.z());
+        }
+        if (to.kind() == Endpoint.Kind.POINT) {
+            to = Endpoint.point(last.x(), last.z());
+        }
+        List<RoadLayout.Block> blocks = RoadLayout.blocks(cells, roadClass, RoadLayout.LEVELLED, null);
+        List<UUID> owners = new ArrayList<>(blocks.size());
+        for (RoadLayout.Block block : blocks) {
+            owners.add(snapshot == null ? KingdomWorldApi.ownerOfChunk(server.overworld(), block.x() >> 4, block.z() >> 4)
+                    : snapshot.owner(block.x() >> 4, block.z() >> 4));
+        }
+        // The walls of its own cities the road crosses outside a gate: a gate is cut there when it is confirmed.
+        List<long[]> gates = new ArrayList<>();
+        for (io.github.sekerator.kingdomworld.core.road.Wall wall : RoadWork.state(server).walls()) {
+            if (!wall.dimension().equals(dimension) || !wall.kingdomId().equals(kingdomId)) {
+                continue;
+            }
+            java.util.Set<Long> ring = new java.util.HashSet<>();
+            for (RouteCell cell : wall.cells()) {
+                ring.add(io.github.sekerator.kingdomworld.core.road.LandSnapshot.column(cell.x(), cell.z()));
+            }
+            boolean inside = false;
+            for (RouteCell cell : cells) {
+                boolean on = ring.contains(io.github.sekerator.kingdomworld.core.road.LandSnapshot.column(cell.x(), cell.z()));
+                if (on && !inside && !wall.inGate(wall.nearestCell(cell.x(), cell.z()))) {
+                    gates.add(new long[]{wall.id(), cell.x(), cell.z()});
+                }
+                inside = on;
+            }
+        }
+        long now = KingdomWorldApi.gameTime(server);
+        Plan plan = new Plan(nextId++, kingdomId, player, dimension, from, to, cells, now, RoadLayout.LEVELLED, roadClass, style, result.surveys(),
+                result.earthTotal(), result.guessedColumns() > 0, owners, gates, result.estimate());
+        PLANS.put(plan.id(), plan);
+        return plan;
+    }
+
+    /**
+     * What the atlas shows of a levelled plan, or of why it failed.
+     */
+    static RoadViews.PlanView levelledView(MinecraftServer server, UUID kingdomId, int seq, RoadClass roadClass,
+                                            io.github.sekerator.kingdomworld.core.road.RouteStyle style, List<int[]> points,
+                                            io.github.sekerator.kingdomworld.core.road.RoutePlan.Result result, @Nullable Plan plan, int queue) {
+        int[] given = new int[points.size() * 2];
+        for (int i = 0; i < points.size(); i++) {
+            given[i * 2] = points.get(i)[0];
+            given[i * 2 + 1] = points.get(i)[1];
+        }
+        int[] snapped = new int[result.snapped().size() * 2];
+        for (int i = 0; i < result.snapped().size(); i++) {
+            snapped[i * 2] = result.snapped().get(i)[0];
+            snapped[i * 2 + 1] = result.snapped().get(i)[1];
+        }
+        List<RoadViews.PlanView.LegView> legs = new ArrayList<>();
+        for (int i = 0; i < points.size() - 1; i++) {
+            io.github.sekerator.kingdomworld.core.road.LegPlanner.Leg leg = i < result.legs().size() ? result.legs().get(i) : null;
+            io.github.sekerator.kingdomworld.core.road.RoadEstimate estimate = i < result.estimates().size() ? result.estimates().get(i) : null;
+            boolean failed = i == result.failedLeg();
+            String reason = failed ? result.failure().id() : "";
+            int[] stuck = failed && result.stuck() != null ? result.stuck() : new int[2];
+            RoadViews.PlanView.Stage stage = failed ? RoadViews.PlanView.Stage.FAILED : leg != null && leg.found()
+                    ? RoadViews.PlanView.Stage.DONE : RoadViews.PlanView.Stage.IDLE;
+            legs.add(new RoadViews.PlanView.LegView(stage, reason, stuck[0], stuck[1], estimate == null ? 0 : (int) Math.round(estimate.length()),
+                    estimate == null ? 0 : (int) Math.round(estimate.builders()), estimate == null ? 0 : (int) Math.round(estimate.miners()),
+                    estimate == null ? new int[RoadViews.PlanView.WORKS] : works(estimate)));
+        }
+        if (!result.found() || plan == null) {
+            RoadViews.PlanView base = RoadViews.PlanView.of(kingdomId, seq, "", RoadViews.PlanView.Stage.FAILED, 100, queue, roadClass, style);
+            return new RoadViews.PlanView(0, kingdomId, seq, "", RoadViews.PlanView.Stage.FAILED, 100, queue, roadClass, style, given, snapped, legs,
+                    "", "", 0, 0, 0, 0, base.works(), base.materials(), base.missing(), 0, 0, 0, 0, -1, 0, "", List.of(), 0, false, true, new int[0],
+                    new int[0], new byte[0], new int[0]);
+        }
+        io.github.sekerator.kingdomworld.core.road.RoadEstimate estimate = result.estimate();
+        int[] materials = estimate.materials();
+        double rate = RoadBuilding.builderRate(kingdomId);
+        int builders = RoadBuilding.freeBuilders(server, kingdomId).size();
+        if (rate <= 0) {
+            rate = builders;
+        }
+        double minerRate = RoadWork.state(server).minersHelp(kingdomId) ? RoadCrews.speed(kingdomId) : 0;
+        double seconds = estimate.time(rate, minerRate, RoadSettings.earth());
+        int term = Double.isFinite(seconds) ? (int) Math.round(seconds / io.github.sekerator.kingdomworld.core.road.EarthRules.DAY * 10) : -1;
+        List<String> foreign = new ArrayList<>();
+        for (Map.Entry<UUID, double[]> entry : estimate.foreign().entrySet()) {
+            foreign.add(RoadWork.kingdomName(server, entry.getKey()).getString());
+        }
+        for (UUID kingdom : plan.crossed().keySet()) {
+            String name = RoadWork.kingdomName(server, kingdom).getString();
+            if (!foreign.contains(name)) {
+                foreign.add(name);
+            }
+        }
+        String currency = KingdomWorldApi.state(server).economy().treasury(kingdomId)
+                .map(io.github.sekerator.kingdomworld.core.economy.Treasury::currencyName).orElse("");
+        int[][] way = way(plan.cells());
+        return new RoadViews.PlanView(plan.id(), kingdomId, seq, "", RoadViews.PlanView.Stage.DONE, 100, 0, roadClass, style, given, snapped, legs,
+                name(server, plan.from()).getString(), name(server, plan.to()).getString(), (int) Math.round(estimate.length()),
+                (int) Math.round(estimate.straight()), (int) Math.round(estimate.caravanTicks() / 20), (int) Math.round(estimate.straightTicks() / 20),
+                works(estimate), materials, missing(server, kingdomId, materials, roadClass), (int) Math.round(estimate.builders()),
+                (int) Math.round(estimate.miners()), builders, (int) Math.round(minerRate * 100), term,
+                coins(server, kingdomId, estimate.builders(), estimate.miners(), materials, roadClass), currency, foreign, plan.gates().size(),
+                plan.guessed(), true, way[0], way[1], kinds(way[2]), profile(plan, RoadSettings.earth()));
+    }
+
+    static int[] works(io.github.sekerator.kingdomworld.core.road.RoadEstimate estimate) {
+        return new int[]{estimate.logs(), estimate.soil(), estimate.rock(), estimate.fill(), estimate.cutCells(), estimate.tunnelCells(),
+                estimate.fillCells(), estimate.bridgeCells(), estimate.pierBlocks(), estimate.lining(), estimate.torches()};
+    }
+
+    /**
+     * Probes of the profile of a plan, {@value RoadViews.PlanView#MAX_PROBES} at most: the ground, the deck and the kind.
+     */
+    static int[] profile(Plan plan, io.github.sekerator.kingdomworld.core.road.EarthRules earth) {
+        List<RouteCell> cells = plan.cells();
+        int count = Math.min(RoadViews.PlanView.MAX_PROBES, cells.size());
+        int[] probes = new int[count * 3];
+        for (int i = 0; i < count; i++) {
+            RouteCell cell = cells.get((int) ((long) i * (cells.size() - 1) / Math.max(1, count - 1)));
+            int ground = switch (cell.kind()) {
+                case CUT -> cell.y() + cell.depth();
+                case TUNNEL -> cell.y() + earth.tunnelHeight() + cell.depth();
+                case FILL -> cell.y() - cell.depth() - 1;
+                case BRIDGE -> cell.depth() > 0 ? cell.y() - cell.depth() - 1 : cell.y() - 2;
+                default -> cell.y();
+            };
+            probes[i * 3] = ground;
+            probes[i * 3 + 1] = cell.y();
+            probes[i * 3 + 2] = cell.kind().ordinal();
+        }
+        return probes;
     }
 
     /**
@@ -414,6 +754,13 @@ public final class RoadPlanning {
         if (!RoadWork.mayManage(server, actor, kingdomId)) {
             return Outcome.fail(KingdomError.NO_PERMISSION);
         }
+        if (plan.levelled() && plan.roadClass() != roadClass) {
+            return Outcome.fail(KingdomError.ROAD_CLASS_CHANGED);
+        }
+        if (plan.cells().size() > Road.MAX_CELLS) {
+            // A road keeps no more blocks than this: refused here rather than failing inside the change.
+            return Outcome.fail(KingdomError.ROUTE_TOO_LONG);
+        }
         RoadRules rules = RoadSettings.rulesFor(server, kingdomId);
         List<Crossing> sent = new ArrayList<>();
         long now = KingdomWorldApi.gameTime(server);
@@ -421,9 +768,12 @@ public final class RoadPlanning {
             if (rules.roadsFull(roads.ownedRoads(kingdomId))) {
                 return Outcome.fail(KingdomError.TOO_MANY_ROADS);
             }
-            made[0] = roads.addRoad(kingdomId, roadClass, plan.dimension(), plan.from(), plan.to(), plan.cells(),
-                    RoadState.sectionOwners(plan.cells()), plan.crossed(), mode, now, now + (long) rules.crossingDays() * CitizenNeeds.TICKS_PER_DAY,
-                    sent);
+            made[0] = roads.addRoad(kingdomId, roadClass, plan.dimension(), plan.from(), plan.to(), plan.cells(), plan.sectionOwners(),
+                    plan.crossed(), mode, now, now + (long) rules.crossingDays() * CitizenNeeds.TICKS_PER_DAY, sent, plan.layout(),
+                    plan.levelled() ? plan.surveys() : null);
+            if (plan.levelled()) {
+                made[0].setEarthTotal(plan.earthTotal());
+            }
             return Outcome.DONE;
         });
         if (!outcome.ok()) {
@@ -432,10 +782,23 @@ public final class RoadPlanning {
         PLANS.remove(planId);
         Road road = made[0];
         CityWalls.gatesFor(server, road);
+        for (long[] gate : plan.gates()) {
+            Outcome cut = CityWalls.gateAt(server, actor, gate[0], (int) gate[1], (int) gate[2]);
+            if (!cut.ok()) {
+                LOGGER.info("The gate of road {} in wall {} at {} {} was not ordered: {}", road.id(), gate[0], gate[1], gate[2], cut.error());
+            }
+        }
         LOGGER.info("Road {} of {} planned: {} blocks, {}, {} request(s) to cross land", road.id(),
                 RoadWork.kingdomName(server, kingdomId).getString(), road.length(), road.roadClass().id(), sent.size());
-        RoadWork.notify(server, kingdomId, Component.translatable(RoadWork.KEY + "road_planned", road.id(), RoadTexts.className(road.roadClass()),
-                RoadTexts.blocks(road.length())).withStyle(ChatFormatting.GREEN));
+        if (plan.levelled() && plan.estimate() != null) {
+            io.github.sekerator.kingdomworld.core.road.RoadEstimate estimate = plan.estimate();
+            RoadWork.notify(server, kingdomId, Component.translatable(RoadWork.KEY + "road_planned_levelled", road.id(),
+                    RoadTexts.className(road.roadClass()), RoadTexts.blocks(road.length()), estimate.soil() + estimate.rock(), estimate.fill(),
+                    estimate.tunnelCells(), estimate.bridgeCells()).withStyle(ChatFormatting.GREEN));
+        } else {
+            RoadWork.notify(server, kingdomId, Component.translatable(RoadWork.KEY + "road_planned", road.id(),
+                    RoadTexts.className(road.roadClass()), RoadTexts.blocks(road.length())).withStyle(ChatFormatting.GREEN));
+        }
         for (Crossing crossing : sent) {
             RoadWork.notify(server, crossing.owner(), Component.translatable(RoadWork.KEY + "crossing_asked",
                     RoadWork.kingdomName(server, kingdomId), RoadTexts.sections(crossing.sections()),

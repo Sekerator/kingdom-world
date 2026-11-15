@@ -74,62 +74,209 @@ public final class RoadViews {
     // ---------------------------------------------------------------- the plan of a road
 
     /**
-     * The plan of a road the server found, or why it found none.
+     * The plan of a road on the atlas: where the planner of the server is with it, or what it found, or why it found nothing.
      *
-     * @param error     the id of the error, empty for a plan
-     * @param searching whether the search still runs
-     * @param materials items of each material (surface, bridge, fill) for each class (path, gravel, paved)
-     * @param seconds   seconds of a builder's work for each class
-     * @param builders  builders of the kingdom free for roads now
-     * @param crossed   names of the kingdoms whose land it crosses
-     * @param xs        points of the way to draw
+     * @param seq       the number of the request it answers
+     * @param error     the id of the error of the whole plan, empty for none
+     * @param stage     where the planner is
+     * @param progress  how far it is, in hundredths
+     * @param queue     plans of others before it, 0 when it is being planned
+     * @param points    the points as the server took them, x and z side by side
+     * @param snapped   the columns the points were held to, x and z side by side
+     * @param legs      the legs between the points
+     * @param length    blocks along the way; {@code straight} straight across country
+     * @param caravan   seconds a caravan takes along the road; {@code across} across country
+     * @param works     the earthworks: logs, soil, rock, embankment, blocks of cutting, of tunnel, of embankment and of bridge, piers,
+     *                  lining, torches
+     * @param materials items of each material of the road; {@code missing} those the storehouses lack
+     * @param builderSeconds seconds of work of builders; {@code minerSeconds} of miners
+     * @param builders  builders free for roads now; {@code minerRate} seconds of miners a second they give now, in hundredths
+     * @param term      the time the road takes with the workers there are, in tenths of a game day, -1 without builders
+     * @param coins     what the work and the materials are worth, in the currency named, only for comparison
+     * @param foreign   the kingdoms with works on their land, and on what
+     * @param gates     gates to cut into walls of cities of the kingdom
+     * @param guessed   whether some of the land was only guessed: it is read before the road is laid
+     * @param levelled  whether it is a levelled road; a plan of the old search has no earthworks
+     * @param xs        points of the way to draw, with the kind of block at each
+     * @param profile   probes along the way: the ground, the deck and the kind, side by side
      */
-    public record PlanView(long planId, UUID kingdomId, String error, boolean searching, String from, String to, int length, int bridges,
-                           int fills, int[] materials, int[] seconds, int builders, List<String> crossed, int[] xs, int[] zs) {
+    public record PlanView(long planId, UUID kingdomId, int seq, String error, Stage stage, int progress, int queue, RoadClass roadClass,
+                           io.github.sekerator.kingdomworld.core.road.RouteStyle style, int[] points, int[] snapped, List<LegView> legs,
+                           String from, String to, int length, int straight, int caravan, int across, int[] works, int[] materials,
+                           int[] missing, int builderSeconds, int minerSeconds, int builders, int minerRate, int term, long coins,
+                           String currency, List<String> foreign, int gates, boolean guessed, boolean levelled, int[] xs, int[] zs,
+                           byte[] kinds, int[] profile) {
+        /** The most points of a plan. */
+        public static final int MAX_POINTS = 32;
+        /** The most probes of the profile. */
+        public static final int MAX_PROBES = 512;
+        /** The earthworks a plan counts. */
+        public static final int WORKS = 11;
+
         public PlanView {
-            crossed = List.copyOf(crossed);
+            legs = List.copyOf(legs);
+            foreign = List.copyOf(foreign);
+        }
+
+        /**
+         * Where the planner is with a plan.
+         */
+        public enum Stage {
+            IDLE,
+            QUEUED,
+            COARSE,
+            READING,
+            SEARCHING,
+            DONE,
+            FAILED,
+            /** The plan is confirmed and the land it only guessed is being read before the road is laid. */
+            SURVEYING;
+
+            public String id() {
+                return name().toLowerCase(java.util.Locale.ROOT);
+            }
+        }
+
+        /**
+         * A leg between two points.
+         *
+         * @param reason the key of why it found no way, empty when it did
+         * @param stuckX where it got stuck
+         */
+        public record LegView(Stage stage, String reason, int stuckX, int stuckZ, int length, int builderSeconds, int minerSeconds, int[] works) {
+            void encode(FriendlyByteBuf buf) {
+                buf.writeEnum(stage);
+                buf.writeUtf(reason, 64);
+                buf.writeInt(stuckX);
+                buf.writeInt(stuckZ);
+                buf.writeVarInt(length);
+                buf.writeVarInt(builderSeconds);
+                buf.writeVarInt(minerSeconds);
+                writeInts(buf, works);
+            }
+
+            static LegView decode(FriendlyByteBuf buf) {
+                return new LegView(readEnum(buf, Stage.class), buf.readUtf(64), buf.readInt(), buf.readInt(), buf.readVarInt(), buf.readVarInt(),
+                        buf.readVarInt(), readInts(buf, WORKS));
+            }
         }
 
         public static PlanView failed(UUID kingdomId, String error) {
-            return new PlanView(0, kingdomId, error, false, "", "", 0, 0, 0, new int[9], new int[3], 0, List.of(), new int[0], new int[0]);
+            return of(kingdomId, 0, error, Stage.FAILED, 0, 0, RoadClass.GRAVEL, io.github.sekerator.kingdomworld.core.road.RouteStyle.TERRAIN);
         }
 
         public static PlanView searching(UUID kingdomId) {
-            return new PlanView(0, kingdomId, "", true, "", "", 0, 0, 0, new int[9], new int[3], 0, List.of(), new int[0], new int[0]);
+            return of(kingdomId, 0, "", Stage.SEARCHING, 0, 0, RoadClass.GRAVEL, io.github.sekerator.kingdomworld.core.road.RouteStyle.TERRAIN);
         }
 
-        public int material(RoadClass roadClass, int material) {
-            return materials[roadClass.ordinal() * 3 + material];
+        /**
+         * A plan without a way yet: its stage only.
+         */
+        public static PlanView of(UUID kingdomId, int seq, String error, Stage stage, int progress, int queue, RoadClass roadClass,
+                                  io.github.sekerator.kingdomworld.core.road.RouteStyle style) {
+            return new PlanView(0, kingdomId, seq, error, stage, progress, queue, roadClass, style, new int[0], new int[0], List.of(), "", "", 0, 0,
+                    0, 0, new int[WORKS], new int[MATERIALS], new int[MATERIALS], 0, 0, 0, 0, -1, 0, "", List.of(), 0, false, false, new int[0],
+                    new int[0], new byte[0], new int[0]);
         }
 
-        public int seconds(RoadClass roadClass) {
-            return seconds[roadClass.ordinal()];
+        public boolean searching() {
+            return stage == Stage.QUEUED || stage == Stage.COARSE || stage == Stage.READING || stage == Stage.SEARCHING
+                    || stage == Stage.SURVEYING;
+        }
+
+        /**
+         * The names of the kingdoms with works on their land, for a plan of the old search that names only those it crosses.
+         */
+        public List<String> crossed() {
+            return foreign;
         }
 
         public void encode(FriendlyByteBuf buf) {
             buf.writeVarLong(planId);
             buf.writeUUID(kingdomId);
+            buf.writeVarInt(seq);
             buf.writeUtf(error, 64);
-            buf.writeBoolean(searching);
+            buf.writeEnum(stage);
+            buf.writeVarInt(progress);
+            buf.writeVarInt(queue);
+            buf.writeEnum(roadClass);
+            buf.writeEnum(style);
+            writeInts(buf, points);
+            writeInts(buf, snapped);
+            writeList(buf, legs, (b, leg) -> leg.encode(b));
             buf.writeUtf(from, NAME);
             buf.writeUtf(to, NAME);
             buf.writeVarInt(length);
-            buf.writeVarInt(bridges);
-            buf.writeVarInt(fills);
+            buf.writeVarInt(straight);
+            buf.writeVarInt(caravan);
+            buf.writeVarInt(across);
+            writeInts(buf, works);
             writeInts(buf, materials);
-            writeInts(buf, seconds);
+            writeInts(buf, missing);
+            buf.writeVarInt(builderSeconds);
+            buf.writeVarInt(minerSeconds);
             buf.writeVarInt(builders);
-            writeList(buf, crossed, (b, name) -> b.writeUtf(name, NAME));
+            buf.writeVarInt(minerRate);
+            buf.writeInt(term);
+            buf.writeVarLong(coins);
+            buf.writeUtf(currency, NAME);
+            writeList(buf, foreign, (b, name) -> b.writeUtf(name, NAME));
+            buf.writeVarInt(gates);
+            buf.writeBoolean(guessed);
+            buf.writeBoolean(levelled);
             writeInts(buf, xs);
             writeInts(buf, zs);
+            buf.writeByteArray(kinds);
+            writeInts(buf, profile);
         }
 
         public static PlanView decode(FriendlyByteBuf buf) {
-            return new PlanView(buf.readVarLong(), buf.readUUID(), buf.readUtf(64), buf.readBoolean(), buf.readUtf(NAME), buf.readUtf(NAME),
-                    buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), readInts(buf, 9), readInts(buf, 3), buf.readVarInt(),
-                    readList(buf, 64, b -> b.readUtf(NAME)), readInts(buf, MAX_POINTS), readInts(buf, MAX_POINTS));
+            long planId = buf.readVarLong();
+            UUID kingdomId = buf.readUUID();
+            int seq = buf.readVarInt();
+            String error = buf.readUtf(64);
+            Stage stage = readEnum(buf, Stage.class);
+            int progress = buf.readVarInt();
+            int queue = buf.readVarInt();
+            RoadClass roadClass = readEnum(buf, RoadClass.class);
+            io.github.sekerator.kingdomworld.core.road.RouteStyle style = readEnum(buf, io.github.sekerator.kingdomworld.core.road.RouteStyle.class);
+            int[] points = readInts(buf, MAX_POINTS * 2);
+            int[] snapped = readInts(buf, MAX_POINTS * 2);
+            List<LegView> legs = readList(buf, MAX_POINTS, LegView::decode);
+            String from = buf.readUtf(NAME);
+            String to = buf.readUtf(NAME);
+            int length = buf.readVarInt();
+            int straight = buf.readVarInt();
+            int caravan = buf.readVarInt();
+            int across = buf.readVarInt();
+            int[] works = readInts(buf, WORKS);
+            int[] materials = readInts(buf, MATERIALS);
+            int[] missing = readInts(buf, MATERIALS);
+            int builderSeconds = buf.readVarInt();
+            int minerSeconds = buf.readVarInt();
+            int builders = buf.readVarInt();
+            int minerRate = buf.readVarInt();
+            int term = buf.readInt();
+            long coins = buf.readVarLong();
+            String currency = buf.readUtf(NAME);
+            List<String> foreign = readList(buf, 64, b -> b.readUtf(NAME));
+            int gates = buf.readVarInt();
+            boolean guessed = buf.readBoolean();
+            boolean levelled = buf.readBoolean();
+            int[] xs = readInts(buf, MAX_POINTS_OF_WAY);
+            int[] zs = readInts(buf, MAX_POINTS_OF_WAY);
+            byte[] kinds = buf.readByteArray(MAX_POINTS_OF_WAY);
+            int[] profile = readInts(buf, MAX_PROBES * 3);
+            return new PlanView(planId, kingdomId, seq, error, stage, progress, queue, roadClass, style, points, snapped, legs, from, to, length,
+                    straight, caravan, across, works, materials, missing, builderSeconds, minerSeconds, builders, minerRate, term, coins, currency,
+                    foreign, gates, guessed, levelled, xs, zs, kinds, profile);
         }
     }
+
+    /** The materials of a road. */
+    static final int MATERIALS = io.github.sekerator.kingdomworld.core.road.RoadLayout.Material.values().length;
+    /** The most points of a way drawn. */
+    static final int MAX_POINTS_OF_WAY = MAX_POINTS;
 
     // ---------------------------------------------------------------- the tab
 

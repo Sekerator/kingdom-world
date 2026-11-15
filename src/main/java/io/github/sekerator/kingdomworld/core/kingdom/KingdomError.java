@@ -413,7 +413,9 @@ public enum KingdomError {
     /** The thrones of the kingdoms of the world are not moved. */
     THRONE_MOVE_WORLD,
     /** A wall a player orders for a city of a kingdom of players stands whole on the land of its kingdom: part of its ring is not. */
-    WALL_OUTSIDE_LAND;
+    WALL_OUTSIDE_LAND,
+    /** The plan of a levelled road was made for another class: it is planned again for the class chosen. */
+    ROAD_CLASS_CHANGED;
 
     /**
      * Lower case identifier, used for translation keys.

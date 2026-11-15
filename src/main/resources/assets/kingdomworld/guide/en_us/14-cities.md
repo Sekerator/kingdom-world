@@ -284,25 +284,56 @@ and robbers lie in wait on roads less often.
 ### How to lay a road
 
 1. In the Roads tab of the throne window press **Plan a road**: the atlas opens in road mode.
-2. Left click the two ends. An end within 48 blocks of a city or a capital sticks to it. A right click starts
-  again.
-3. The Class button chooses a path, a gravel road or a paved road (a right click goes back).
-4. The server looks for a way over the land and shows its length, the blocks of bridges and embankments, the
-  materials, about how long the work takes and whose land the way crosses.
-5. **Build** turns the plan into a road, Reset drops the plan.
+2. Left click the start and the end. An end within 48 blocks of a city or a capital leads to it: the road joins
+  your roads there, enters through a gate of its wall or ends on free land by the town hall or the throne.
+3. The next click puts a point between into the nearest leg: this makes the road wind more or run straighter. A
+  point can be dragged, a right click on it removes it, Undo or Ctrl+Z bring the points back as they were.
+4. The Class button chooses a path, a gravel road or a paved road, the Way button how it goes: **along the land**
+  (cheapest, around steep places), **moderate** or **straight** (shorter, with cuttings, tunnels and bridges).
+5. The server plans the way and the card shows its length and the time of a caravan, the earthworks (cutting,
+  embankment, tunnel, bridge, piers), the materials (those missing in red), the days of work of builders and miners
+  and how long it takes with your workers, about what it is worth in coins, foreign land and the gates to cut, and
+  after every change the difference from the last plan. The Profile button shows the road in section.
+6. **Build** lays the road, Reset drops the plan.
 
 ### How the server finds the way
 
-- A road climbs or falls one block a step at most, so it goes around cliffs and climbs a mountain in serpentines.
-- The way goes around lava, fire, cacti, magma and anything that may not be broken: unbreakable blocks, blocks of
-  the mod, containers and any block holding data.
-- Over water a bridge runs at the level of the water. A shallow ravine gets an embankment up to
-  {cfg:roads.maxFill} blocks high, a deep one a bridge. A bridge or an embankment is {cfg:roads.maxBridge} blocks
-  long at most.
-- The land of other kingdoms costs the search more, and the way goes around it when that is cheap.
-- The longest road is {cfg:roads.maxRouteLength} blocks. The search goes a little at a time so that the server
-  does not lag: {cfg:roads.searchStepsPerTick} steps and up to {cfg:roads.searchChunksPerTick} new chunks a tick,
-  {cfg:roads.maxSearchSteps} steps in all at most.
+- A way is always found, unless buildings of players across the whole land, a foreign wall without a gate, the
+  void or the border of the world stand in it. Then the leg is red and a cross shows where it got stuck; a point
+  between helps to go around buildings.
+- The road is **levelled**: it climbs a block at most once in 1, 2 and 3 blocks for a path, a gravel and a paved
+  road unless the server changed it (key `maxGrade`). Hills are cut down, hollows filled with embankments up to
+  {cfg:roads.maxFill} blocks, deeper ones bridged, mountains pierced by tunnels {cfg:roads.tunnelHeight} blocks
+  high, water crossed on bridges.
+- A cutting or a tunnel never goes below water beside the road; under lava only a tunnel with a thick roof.
+- The search weighs earthworks against length itself: along the land it finds the cheapest road, moderate and
+  straight make every block of length dearer (2 and 20 times a plain block of road by default, key
+  `routeModeWeights`), and the road runs straighter.
+- Foreign land is gone around when that is cheap and crossed when there is no other way.
+- A thread of its own on the server searches; it does not slow the game. While points are moved, land nobody has
+  loaded yet is taken from the estimate of the generator: no new chunk is made. When such a road is laid, its land
+  is loaded a little at a time (missing chunks are generated then and stay in the world), the way is planned on it
+  again and the road laid by itself.
+- Kingdoms of the world and dimensions with a ceiling search the old way: no longer than {cfg:roads.maxRouteLength}
+  blocks, {cfg:roads.searchStepsPerTick} steps a tick and {cfg:roads.maxSearchSteps} at most, a bridge or an
+  embankment no longer than {cfg:roads.maxBridge} blocks.
+
+### The price of earthworks
+
+Every block dug, filled and bored costs work and materials besides the surface:
+
+| Work | Who | Seconds a block |
+|---|---|---|
+| Soil (earth, sand, gravel, clay, snow) | builders | {cfg:roads.digSoilSeconds} |
+| Rock and ore | miners (without them builders take {cfg:roads.rockByBuilders} times as long) | {cfg:roads.digRockSeconds} |
+| In a tunnel | the same | half as long again |
+| Embankment, lining | builders | {cfg:roads.fillSeconds} |
+| Deck of a bridge, pier | builders | {cfg:roads.bridgeSeconds} |
+
+An example: a gravel road meets a ridge of rock 30 high and 150 blocks across, and going round its end is 120 blocks
+longer. Going round costs about 1,440 seconds of work, a tunnel about 17,600 (rock for the miners, torches,
+lining), an open cutting about 96,000. Along the land and moderate the road goes round the ridge, straight it bores
+the tunnel: longer to build, but faster for caravans. The card shows that choice in numbers.
 
 ### How many roads
 
@@ -330,6 +361,33 @@ overview of the Roads tab.
 - A finished road brings the message "Road #... is built".
 - A road can be paused and resumed, or given up: it is forgotten, built blocks stay in the world and unused
   materials go back to the storehouses.
+
+### A levelled road
+
+- Cuttings, embankments, tunnels and bridges are paid for column by column: miners give their seconds to the rock
+  first, builders dig the rock left, then builders do all the rest. The items of a column are taken all at once
+  when its work is paid; embankments and lining first come from what the road digs out (the dug material counted
+  in advance), then from the storehouses.
+- In the world a column is laid in order: trees whose trunk stands on the road are felled whole (logs to the
+  storehouses), water and lava beside it closed off with cobblestone, the roof of a tunnel in earth or sand propped,
+  then the cutting from the top down, the embankment from the bottom up, the piers of a bridge, the surface or the
+  deck, the rails of a bridge and the torches of a tunnel.
+- Only what is natural is dug: earth, stone, ore, plants, trees, paths, the rock of mountains, caves, the Nether
+  and the End. Soil and ore go to the storehouses, earth they have no room for to the spoil.
+- **When a column is in the way.** A chest, blocks of players, another road, the frame of a building or foreign
+  land without consent are left alone: the column waits, a message with the place and the reason comes once a
+  game day, and the tab shows how many such columns there are and the first places. Clear the way or bring the
+  missing stone and materials, and the laying goes on.
+- Far from players the server loads the places of paid columns in turn and lays them.
+
+### Miners on roads
+
+- The miners of the kingdom at their posts with a pickaxe dig the rock of the roads with the builders. A miner
+  whose post has met its goal gives all its time to the roads, the others {cfg:roads.roadMinerShare*100}%.
+- A miner does not leave its post: only time goes to the roads, so the mine brings in less by the share the roads
+  really took. Every block of rock wears the pickaxe of one of the helpers.
+- The button "Miners help on roads" in the overview of the Roads tab turns the help off: then builders dig the
+  rock, {cfg:roads.rockByBuilders} times as long.
 
 ### Wear and repair
 

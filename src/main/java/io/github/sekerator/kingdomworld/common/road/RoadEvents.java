@@ -78,6 +78,8 @@ public final class RoadEvents {
             // The searches belong to the work of the appearance of kingdoms of the world, whose roads they find.
             long started = System.nanoTime();
             RoadPlanning.tickSearch(server);
+            // The planner of the levelled roads of players: its copies of the land and its answers.
+            RoadPlanSessions.tick(server);
             // The roads of the plan of the states, one at a time along their lines.
             PlannedRoads.tick(server);
             io.github.sekerator.kingdomworld.common.command.PerfCommands.countWork(System.nanoTime() - started);
@@ -239,6 +241,7 @@ public final class RoadEvents {
     }
 
     private static void onServerStopped(ServerStoppedEvent event) {
+        RoadPlanSessions.reset(event.getServer());
         RoadSettings.reset();
         RoadWork.reset();
     }

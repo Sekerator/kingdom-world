@@ -489,20 +489,49 @@ public final class RoadActions {
     // ---------------------------------------------------------------- planning on the atlas
 
     public static void handlePlan(ServerPlayer player, RoadPackets.PlanRequest request) {
-        if (!KingdomWorldApi.state(player.server).membership().isMember(player.getUUID(), request.kingdomId())) {
-            KingdomWorldNetwork.sendToPlayer(player, new RoadPackets.PlanResponse(RoadViews.PlanView.failed(request.kingdomId(),
-                    KingdomError.NOT_A_MEMBER.id())));
+        MinecraftServer server = player.server;
+        if (request.xs().length == 0) {
+            RoadPlanSessions.request(player, request.kingdomId(), request.seq(), request.roadClass(), request.route(), request.xs(), request.zs());
             return;
         }
-        Outcome outcome = RoadPlanning.start(player.serverLevel(), player.getUUID(), request.kingdomId(), request.fromX(), request.fromZ(),
-                request.toX(), request.toZ());
-        KingdomWorldNetwork.sendToPlayer(player, new RoadPackets.PlanResponse(outcome.ok() ? RoadViews.PlanView.searching(request.kingdomId())
-                : RoadViews.PlanView.failed(request.kingdomId(), outcome.error().id())));
+        KingdomError refused = null;
+        if (!KingdomWorldApi.state(server).membership().isMember(player.getUUID(), request.kingdomId())) {
+            refused = KingdomError.NOT_A_MEMBER;
+        } else if (!RoadWork.mayManage(server, player.getUUID(), request.kingdomId())) {
+            refused = KingdomError.NO_PERMISSION;
+        } else if (RoadWork.isReadOnly(server)) {
+            refused = KingdomError.READ_ONLY;
+        }
+        if (refused != null) {
+            KingdomWorldNetwork.sendToPlayer(player, new RoadPackets.PlanResponse(RoadViews.PlanView.of(request.kingdomId(), request.seq(),
+                    refused.id(), RoadViews.PlanView.Stage.FAILED, 0, 0, request.roadClass(), request.route())));
+            return;
+        }
+        int last = request.xs().length - 1;
+        if (io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, request.kingdomId()) || player.serverLevel().dimensionType().hasCeiling()) {
+            // The kingdoms of the world and the dimensions with a ceiling keep the old search, between the first and the last point.
+            Outcome outcome = RoadPlanning.start(player.serverLevel(), player.getUUID(), request.kingdomId(), request.xs()[0], request.zs()[0],
+                    request.xs()[last], request.zs()[last], request.roadClass());
+            KingdomWorldNetwork.sendToPlayer(player, new RoadPackets.PlanResponse(outcome.ok() ? RoadViews.PlanView.of(request.kingdomId(),
+                    request.seq(), "", RoadViews.PlanView.Stage.SEARCHING, 0, 0, request.roadClass(), request.route())
+                    : RoadViews.PlanView.of(request.kingdomId(), request.seq(), outcome.error().id(), RoadViews.PlanView.Stage.FAILED, 0, 0,
+                    request.roadClass(), request.route())));
+            return;
+        }
+        RoadPlanSessions.request(player, request.kingdomId(), request.seq(), request.roadClass(), request.route(), request.xs(), request.zs());
     }
 
     public static void handleConfirm(ServerPlayer player, RoadPackets.PlanConfirm confirm) {
         if (!KingdomWorldApi.state(player.server).membership().isMember(player.getUUID(), confirm.kingdomId())) {
             KingdomActions.reply(player, KingdomActions.Feedback.error(KingdomError.NOT_A_MEMBER));
+            return;
+        }
+        java.util.Optional<RoadPlanning.Plan> plan = RoadPlanning.plan(confirm.planId());
+        if (plan.isPresent() && plan.get().levelled() && plan.get().guessed() && plan.get().roadClass() == confirm.roadClass()
+                && RoadWork.mayManage(player.server, player.getUUID(), confirm.kingdomId())
+                && RoadPlanSessions.survey(player.server, player.getUUID(), confirm.planId(), confirm.mode())) {
+            // Some of its land was only guessed: it is read now, the road planned on it again and laid.
+            KingdomActions.reply(player, KingdomActions.Feedback.ok(KEY + "planned_surveying"));
             return;
         }
         Road[] made = new Road[1];

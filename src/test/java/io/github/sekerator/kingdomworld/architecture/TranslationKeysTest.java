@@ -718,6 +718,19 @@ class TranslationKeysTest {
                 : io.github.sekerator.kingdomworld.core.road.RoadLayout.Material.values()) {
             used.add("kingdomworld.road.material." + material.id());
         }
+        for (io.github.sekerator.kingdomworld.core.road.RouteStyle route : io.github.sekerator.kingdomworld.core.road.RouteStyle.values()) {
+            used.add("kingdomworld.screen.map.road.route." + route.id());
+        }
+        for (io.github.sekerator.kingdomworld.common.network.data.RoadViews.PlanView.Stage stage
+                : io.github.sekerator.kingdomworld.common.network.data.RoadViews.PlanView.Stage.values()) {
+            used.add("kingdomworld.screen.map.road.card.stage." + stage.id());
+        }
+        for (io.github.sekerator.kingdomworld.core.road.LegPlanner.Reason reason : io.github.sekerator.kingdomworld.core.road.LegPlanner.Reason.values()) {
+            used.add("kingdomworld.screen.map.road.card.reason." + reason.id());
+        }
+        for (io.github.sekerator.kingdomworld.core.road.RouteCell.Kind kind : io.github.sekerator.kingdomworld.core.road.RouteCell.Kind.values()) {
+            used.add("kingdomworld.screen.map.road.card.kind." + kind.id());
+        }
         for (io.github.sekerator.kingdomworld.common.road.RoadEarthworks.Hold hold
                 : io.github.sekerator.kingdomworld.common.road.RoadEarthworks.Hold.values()) {
             if (hold != io.github.sekerator.kingdomworld.common.road.RoadEarthworks.Hold.NONE) {

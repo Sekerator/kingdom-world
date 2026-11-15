@@ -166,9 +166,18 @@ final class RoadLayoutCases {
             xs[i] = -40 + i;
             zs[i] = (int) Math.round(-30 + 20 * Math.sin(i / 15.0));
         }
-        return new RoadViews.PlanView(MUCH, kingdom, "", false, LONG_CITY, Component.translatable("kingdomworld.road.capital_of", LONG_KINGDOM)
-                .getString(), 8_192, 999, 999, new int[]{0, 999_999, 999_999, 999_999, 999_999, 999_999, 999_999, 999_999, 999_999},
-                new int[]{999_999, 999_999, 999_999}, 999, List.of(LONG_KINGDOM, LONG_KINGDOM), xs, zs);
+        byte[] kinds = new byte[xs.length];
+        for (int i = 0; i < kinds.length; i++) {
+            kinds[i] = (byte) (i / 40 % 5);
+        }
+        int[] works = {999, 99_999, 99_999, 99_999, 999, 999, 999, 999, 9_999, 999, 99};
+        int[] materials = {99_999, 9_999, 99_999, 9_999, 999, 999, 99};
+        int[] missing = {0, 999, 99_999, 0, 999, 0, 99};
+        return new RoadViews.PlanView(MUCH, kingdom, 1, "", RoadViews.PlanView.Stage.DONE, 100, 0, RoadClass.GRAVEL,
+                io.github.sekerator.kingdomworld.core.road.RouteStyle.DIRECT, new int[]{-40, -30, 60, -10, 160, -30},
+                new int[]{-40, -30, 60, -10, 160, -30}, List.of(), LONG_CITY, Component.translatable("kingdomworld.road.capital_of", LONG_KINGDOM)
+                .getString(), 32_768, 30_000, 99_999, 99_999, works, materials, missing, 999_999, 999_999, 99, 999, 9_999, 9_999_999, LONG_KINGDOM,
+                List.of(LONG_KINGDOM, LONG_KINGDOM), 9, true, true, xs, zs, kinds, new int[0]);
     }
 
     private static KingdomMapScreen planning(Function<Role, KingdomView> member, boolean withPlan, Component status) {

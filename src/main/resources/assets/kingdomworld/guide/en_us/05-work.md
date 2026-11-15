@@ -318,6 +318,14 @@ This is the list minerOreDepths of the server config. The height of emeralds is 
 
 The line "In the storehouses: 23 of 64" shows the stock. Once it is there the window says "Goal met: Iron Ore 64/64": the miner keeps digging the same mine and takes ore as it comes. As soon as the stock falls below the amount, it takes its own ore first again. Another ore or depth starts a new mine, and the old tunnels stay as they are.
 
+### Help on roads
+
+The miners of the kingdom with a pickaxe help builders dig the rock of levelled roads without leaving their posts:
+a miner whose post has met its goal gives all its time to the roads, the others {cfg:roads.roadMinerShare*100}%.
+The mine brings in less by the share the roads really took, near players the miner digs slower, and the pickaxe
+wears for every block of rock of a road. The help is turned off with a button in the overview of the Roads tab
+([Building and wear of roads](roads_building)).
+
 ### States
 
 - "No tool in the storehouses": no pickaxe.

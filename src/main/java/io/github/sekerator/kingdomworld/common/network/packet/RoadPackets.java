@@ -129,31 +129,50 @@ public final class RoadPackets {
     }
 
     /**
-     * Client to server: find the way of a road between two points of the sender's dimension.
+     * Client to server: plan a road through points of the sender's dimension, in a class and a way; no points gives the plan up.
+     * Every request replaces the one before: the client sends the last points it has once a second at most.
+     *
+     * @param seq the number of the request, growing
+     * @param xs  the points, from the start to the end, at most {@value RoadViews.PlanView#MAX_POINTS}
      */
-    public record PlanRequest(UUID kingdomId, int fromX, int fromZ, int toX, int toZ) {
-        public static final RequestPolicy POLICY = new RequestPolicy("road_plan", 0, 4, 10_000L);
+    public record PlanRequest(UUID kingdomId, int seq, RoadClass roadClass, io.github.sekerator.kingdomworld.core.road.RouteStyle route, int[] xs,
+                              int[] zs) {
+        public static final RequestPolicy POLICY = new RequestPolicy("road_plan", 0, 20, 10_000L);
+
+        public PlanRequest {
+            xs = xs.clone();
+            zs = zs.clone();
+        }
 
         public void encode(FriendlyByteBuf buf) {
             buf.writeUUID(kingdomId);
-            buf.writeInt(fromX);
-            buf.writeInt(fromZ);
-            buf.writeInt(toX);
-            buf.writeInt(toZ);
+            buf.writeVarInt(seq);
+            buf.writeEnum(roadClass);
+            buf.writeEnum(route);
+            buf.writeVarIntArray(xs);
+            buf.writeVarIntArray(zs);
         }
 
         public static PlanRequest decode(FriendlyByteBuf buf) {
-            return new PlanRequest(buf.readUUID(), buf.readInt(), buf.readInt(), buf.readInt(), buf.readInt());
+            return new PlanRequest(buf.readUUID(), buf.readVarInt(), KingdomView.readEnum(buf, RoadClass.class),
+                    KingdomView.readEnum(buf, io.github.sekerator.kingdomworld.core.road.RouteStyle.class),
+                    buf.readVarIntArray(RoadViews.PlanView.MAX_POINTS), buf.readVarIntArray(RoadViews.PlanView.MAX_POINTS));
         }
 
         public static void handle(PlanRequest message, Supplier<NetworkEvent.Context> context) {
             ServerPlayer sender = context.get().getSender();
-            if (!ServerRequestGuard.admit(sender, POLICY)
-                    || !ServerRequestGuard.requireRange(sender, POLICY, "fromX", message.fromX(), -30_000_000, 30_000_000)
-                    || !ServerRequestGuard.requireRange(sender, POLICY, "fromZ", message.fromZ(), -30_000_000, 30_000_000)
-                    || !ServerRequestGuard.requireRange(sender, POLICY, "toX", message.toX(), -30_000_000, 30_000_000)
-                    || !ServerRequestGuard.requireRange(sender, POLICY, "toZ", message.toZ(), -30_000_000, 30_000_000)) {
+            if (!ServerRequestGuard.admit(sender, POLICY)) {
                 return;
+            }
+            if (message.xs().length != message.zs().length || message.xs().length == 1) {
+                ServerRequestGuard.requireRange(sender, POLICY, "points", message.xs().length, 2, RoadViews.PlanView.MAX_POINTS);
+                return;
+            }
+            for (int i = 0; i < message.xs().length; i++) {
+                if (!ServerRequestGuard.requireRange(sender, POLICY, "x", message.xs()[i], -30_000_000, 30_000_000)
+                        || !ServerRequestGuard.requireRange(sender, POLICY, "z", message.zs()[i], -30_000_000, 30_000_000)) {
+                    return;
+                }
             }
             RoadActions.handlePlan(sender, message);
         }
@@ -179,12 +198,14 @@ public final class RoadPackets {
                     buf.readBoolean());
         }
 
+        public static final RequestPolicy POLICY = new RequestPolicy("road_found", 0, 4, 10_000L);
+
         public static void handle(Found message, Supplier<NetworkEvent.Context> context) {
             ServerPlayer sender = context.get().getSender();
-            if (!ServerRequestGuard.admit(sender, PlanRequest.POLICY)
-                    || !ServerRequestGuard.requireRange(sender, PlanRequest.POLICY, "chunkX", message.chunkX(), -1_875_000, 1_875_000)
-                    || !ServerRequestGuard.requireRange(sender, PlanRequest.POLICY, "chunkZ", message.chunkZ(), -1_875_000, 1_875_000)
-                    || !ServerRequestGuard.requireLength(sender, PlanRequest.POLICY, "name", message.name(),
+            if (!ServerRequestGuard.admit(sender, POLICY)
+                    || !ServerRequestGuard.requireRange(sender, POLICY, "chunkX", message.chunkX(), -1_875_000, 1_875_000)
+                    || !ServerRequestGuard.requireRange(sender, POLICY, "chunkZ", message.chunkZ(), -1_875_000, 1_875_000)
+                    || !ServerRequestGuard.requireLength(sender, POLICY, "name", message.name(),
                     io.github.sekerator.kingdomworld.core.road.City.MAX_NAME)) {
                 return;
             }
