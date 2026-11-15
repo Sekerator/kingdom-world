@@ -250,6 +250,8 @@ public final class NpcSpawner {
         job = null;
         LAYING.clear();
         RELEASING.clear();
+        WAITING_SINCE.clear();
+        waitedForLand = false;
         TownRoads.reset();
     }
 
@@ -260,6 +262,8 @@ public final class NpcSpawner {
         job = null;
         LAYING.clear();
         RELEASING.clear();
+        WAITING_SINCE.clear();
+        waitedForLand = false;
     }
 
     public static Timing lastTiming() {
@@ -643,6 +647,20 @@ public final class NpcSpawner {
     }
 
     private static void step(MinecraftServer server, ServerLevel level, NpcSite site, Job job) {
+        takeWaitedForLand();
+        try {
+            stepStage(server, level, site, job);
+        } finally {
+            if (takeWaitedForLand()) {
+                // A building found its land gone: the chunks are looked at again from the first and asked for where they went.
+                job.loaded = false;
+                job.next = 0;
+                job.idle = true;
+            }
+        }
+    }
+
+    private static void stepStage(MinecraftServer server, ServerLevel level, NpcSite site, Job job) {
         fitWays(site, job);
         if (site.stage() != SpawnStage.LOAD && site.stage() != SpawnStage.DONE && !loaded(level, site, job)) {
             // After a restart the chunks come back with the tickets first, so that nothing loads on the main thread.
@@ -846,12 +864,14 @@ public final class NpcSpawner {
         int waiting = Math.max(1, chunkBudget());
         while (job.next < job.chunks.size() && job.pending.size() < waiting) {
             ChunkPos chunk = job.chunks.get(job.next++);
-            if (job.ticketed.add(chunk.toLong())) {
-                // A chunk asked for again while its ticket waits to go keeps it.
+            boolean absent = level.getChunkSource().getChunkNow(chunk.x, chunk.z) == null;
+            // A chunk asked for again while its ticket waits to go keeps it, and one that went away though the job held it (its
+            // ticket was let go by another raising of the same place) is asked for again: a ticket given twice is one ticket.
+            if (job.ticketed.add(chunk.toLong()) || absent) {
                 RELEASING.remove(chunk.toLong());
                 level.getChunkSource().addRegionTicket(TICKET, chunk, 0, chunk);
             }
-            if (level.getChunkSource().getChunkNow(chunk.x, chunk.z) == null) {
+            if (absent) {
                 job.pending.add(chunk);
             }
         }
@@ -1406,10 +1426,14 @@ public final class NpcSpawner {
             NpcComposition.Plot plot = plots.get(site.step());
             Materials materials = NpcCity.materials(server, site, plot);
             int[] used = new int[1];
-            boolean standing = buildAt(server, level, id, plot.template(), site.x() + plot.x(), site.groundY() + 1, site.z() + plot.z(),
+            Raised raised = raise(server, level, id, plot.template(), site.x() + plot.x(), site.groundY() + 1, site.z() + plot.z(),
                     new Placement(plot.facing(), plot.mirror()), materials, budget, used);
             budget -= Math.max(1, used[0]);
-            if (standing) {
+            if (raised == Raised.WAITING) {
+                // The land of the building is not loaded: the step waits for it, the chunks are asked for again.
+                return;
+            }
+            if (raised == Raised.STANDING || raised == Raised.SKIPPED) {
                 site.setStep(site.step() + 1);
             }
         }
@@ -1419,24 +1443,67 @@ public final class NpcSpawner {
     }
 
     /**
+     * What became of a building of a kingdom of the world after a part of its work.
+     */
+    public enum Raised {
+        /** It stands (or stood there already). */
+        STANDING,
+        /** Its work goes on in the next steps. */
+        GOING,
+        /** Its land is not loaded: the step waits for the chunks. */
+        WAITING,
+        /** It cannot be put up at all and is left out, with a warning. */
+        SKIPPED
+    }
+
+    /** Ticks a building waits for its land before it is left out. */
+    static final long LAND_WAIT_TICKS = 2_400;
+    /** When each building waiting for its land began to wait, by kingdom, template and anchor. */
+    private static final Map<String, Long> WAITING_SINCE = new java.util.HashMap<>();
+    /** Whether a building waited for its land in the step being made: the job asks for its chunks again. */
+    private static boolean waitedForLand;
+
+    /**
+     * Whether a building waited for its land since the last question, which the question clears: a raising that asks it asks for
+     * its chunks again.
+     */
+    static boolean takeWaitedForLand() {
+        boolean waited = waitedForLand;
+        waitedForLand = false;
+        return waited;
+    }
+
+    /**
      * Puts up a building a part at a time without materials (the founding), unless one of the template already stands there; a
      * construction left half done by a restart goes on.
      *
      * @param used gets the blocks done, for the budget
-     * @return whether the building stands (or cannot be put up at all)
+     * @return whether the building stands or cannot be put up at all; {@code false} while it goes on or waits for its land
      */
     static boolean buildAt(MinecraftServer server, ServerLevel level, UUID id, String templateId, int centerX, int y, int centerZ,
-                                   Placement placement, Materials materials, int budget, int[] used) {
+                           Placement placement, Materials materials, int budget, int[] used) {
+        Raised raised = raise(server, level, id, templateId, centerX, y, centerZ, placement, materials, budget, used);
+        return raised == Raised.STANDING || raised == Raised.SKIPPED;
+    }
+
+    /**
+     * Puts up a building a part at a time, as {@link #buildAt}, and tells what became of it. A building whose land is not loaded
+     * waits for it rather than count as standing, and is left out with a warning only after {@value #LAND_WAIT_TICKS} ticks.
+     */
+    static Raised raise(MinecraftServer server, ServerLevel level, UUID id, String templateId, int centerX, int y, int centerZ,
+                        Placement placement, Materials materials, int budget, int[] used) {
         Optional<BuildingTemplate> template = BuildingTemplates.get(templateId);
         if (template.isEmpty() || !template.get().available()) {
             LOGGER.warn("The template {} for a kingdom of the world is missing or unavailable", templateId);
-            return true;
+            return Raised.SKIPPED;
         }
         BlockPos anchor = anchor(template.get(), centerX, y, centerZ, placement);
+        String waitKey = id + "/" + templateId + "/" + anchor.asLong();
         KingdomWorldState state = KingdomWorldApi.state(server);
         for (Building building : state.construction().buildingsOf(id)) {
             if (building.templateId().equals(templateId) && building.anchor().x() == anchor.getX() && building.anchor().z() == anchor.getZ()) {
-                return true;
+                WAITING_SINCE.remove(waitKey);
+                return Raised.STANDING;
             }
         }
         Construction construction = null;
@@ -1458,14 +1525,29 @@ public final class NpcSpawner {
             if (laid.isEmpty()) {
                 // The time of the step is spent: the rest of the budget goes too.
                 used[0] = Math.max(1, budget);
-                return false;
+                return Raised.GOING;
             }
             LAYING.remove(key);
             KingdomWorldState.ConstructionChange change = laid.get();
             if (change.construction().isEmpty()) {
+                if (change.outcome().error() == io.github.sekerator.kingdomworld.core.kingdom.KingdomError.AREA_NOT_LOADED) {
+                    // The land went away under the raising (its chunks were let go): it waits for them, a while.
+                    long now = level.getGameTime();
+                    long since = WAITING_SINCE.computeIfAbsent(waitKey, k -> now);
+                    if (now - since < LAND_WAIT_TICKS) {
+                        waitedForLand = true;
+                        return Raised.WAITING;
+                    }
+                    WAITING_SINCE.remove(waitKey);
+                    LOGGER.warn("{} of a kingdom of the world was left out at {}: its land was not loaded for {} ticks", templateId,
+                            anchor.toShortString(), now - since);
+                    return Raised.SKIPPED;
+                }
+                WAITING_SINCE.remove(waitKey);
                 LOGGER.warn("{} of a kingdom of the world was not laid out at {}: {}", templateId, anchor.toShortString(), change.outcome().error());
-                return true;
+                return Raised.SKIPPED;
             }
+            WAITING_SINCE.remove(waitKey);
             construction = change.construction().get();
         }
         int part = Math.max(BLOCKS_PER_PART, budget);
@@ -1485,14 +1567,14 @@ public final class NpcSpawner {
                 placing);
         used[0] = part;
         if (built.isPresent()) {
-            return true;
+            return Raised.STANDING;
         }
         if (construction.status() == Construction.Status.OUTSIDE_LAND) {
             LOGGER.warn("{} of a kingdom of the world could not be finished at {}", templateId, anchor.toShortString());
             ConstructionWork.cancel(server, null, id, construction.id());
-            return true;
+            return Raised.SKIPPED;
         }
-        return false;
+        return Raised.GOING;
     }
 
     // ---------------------------------------------------------------- work: the square, fields, posts

@@ -264,7 +264,13 @@ public final class SettlementRaiser {
         }
         long started = System.nanoTime();
         try {
+            NpcSpawner.takeWaitedForLand();
             step(server, level, settlement, job);
+            if (NpcSpawner.takeWaitedForLand() && job != null) {
+                // A building found its land gone: the chunks are looked at again from the first and asked for where they went.
+                job.loaded = false;
+                job.next = 0;
+            }
         } catch (RuntimeException e) {
             LOGGER.error("The raising of {} failed at {} step {}", settlement, settlement.stage(), settlement.step(), e);
             block(server, settlement, "failed: " + e);
@@ -425,10 +431,16 @@ public final class SettlementRaiser {
         int waiting = Math.max(1, chunkBudget(job));
         while (job.next < job.chunks.size() && job.pending.size() < waiting) {
             ChunkPos chunk = job.chunks.get(job.next++);
-            if (job.ticketed.add(chunk.toLong())) {
+            boolean absent = level.getChunkSource().getChunkNow(chunk.x, chunk.z) == null;
+            // A ticket of the same settlement and chunk is one ticket: a chunk asked for again while its ticket waits to go keeps
+            // it, and one that went away though the job held it is asked for again.
+            if (job.ticketed.add(chunk.toLong()) || absent) {
+                long key = chunk.toLong();
+                int id = settlement.id();
+                RELEASING.removeIf(queued -> queued[0] == key && queued[1] == id);
                 level.getChunkSource().addRegionTicket(TICKET, chunk, 0, settlement.id());
             }
-            if (level.getChunkSource().getChunkNow(chunk.x, chunk.z) == null) {
+            if (absent) {
                 job.pending.add(chunk);
             }
         }
