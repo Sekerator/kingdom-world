@@ -42,6 +42,12 @@ public final class CommerceSavedData extends SavedData {
         long[] unmet = new long[io.github.sekerator.kingdomworld.core.commerce.GoodsCategory.values().length];
         /** Building materials wanted of the citizens since the last day of the city; not saved. */
         long wantedMaterials;
+        /** The demand from abroad of the city its trading houses did not take at its last day, worth. */
+        long outside;
+        /** Whether a master of the city could sell to a trading house at its last day. */
+        boolean mastersPass;
+        /** What the trading houses of the city ask of each of its masters, worth by shop. */
+        final Map<Long, Long> orders = new LinkedHashMap<>();
         long unspent;
         boolean short_;
         String missing = "";
@@ -63,6 +69,14 @@ public final class CommerceSavedData extends SavedData {
 
         public long[] unmet() {
             return unmet.clone();
+        }
+
+        public long outside() {
+            return outside;
+        }
+
+        public Map<Long, Long> orders() {
+            return java.util.Collections.unmodifiableMap(orders);
         }
 
         /**

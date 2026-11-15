@@ -84,6 +84,14 @@ public final class Shops {
     private static final Map<Long, List<ShopMaking.Plan>> PLANS = new HashMap<>();
     /** The fuel the crown sold the workshops of each kingdom today. */
     private static final Map<UUID, ShopMaking.Fuel> FUEL = new HashMap<>();
+    /**
+     * What each shop sold since the end of its last day: what came into its till, what the goods sold cost it, the work in them,
+     * then the worth sold of each kind; townspeople of other cities and trading houses buy of it outside the day of its own city.
+     */
+    private static final Map<Long, long[]> SOLD = new HashMap<>();
+    /** The worth each shop can still sell today, and the day it is for. */
+    private static final Map<Long, Double> ROOM = new HashMap<>();
+    private static long roomDay = Long.MIN_VALUE;
     /** The starting margin of a new shop, in thousandths. */
     private static final int START_MARGIN = 200;
 
@@ -105,9 +113,6 @@ public final class Shops {
         long spent;
         int tax;
         int evasion;
-        final Map<Long, Double> capacity = new HashMap<>();
-        /** By shop: what came into the till, what the goods sold cost, the work in them, then the worth sold of each kind. */
-        final Map<Long, long[]> sold = new HashMap<>();
         List<Long> shops = List.of();
         int cursor;
         List<Long> workshops;
@@ -157,6 +162,10 @@ public final class Shops {
         RESTOCK.clear();
         PLANS.clear();
         FUEL.clear();
+        SOLD.clear();
+        ROOM.clear();
+        roomDay = Long.MIN_VALUE;
+        CityTies.reset();
         BusinessPlaces.reset();
         Workshops.invalidate();
     }
@@ -763,7 +772,7 @@ public final class Shops {
      * there.
      */
     static long traderOrder(MinecraftServer server, Business shop, GoodsCategory category) {
-        return 0;
+        return Traders.order(server, shop, category);
     }
 
     private static void take(Map<String, Long> have, Map<String, Long> taken) {
@@ -937,6 +946,8 @@ public final class Shops {
                 progress.stage = STAGE_MAKE;
             } else if (progress.stage == STAGE_MAKE) {
                 if (make(server, kingdom, city, day, progress, start)) {
+                    // The trading houses buy of the masters and export before the townspeople spend.
+                    Traders.day(server, kingdom, city, day);
                     beginSpending(server, kingdom, city, day, progress);
                     progress.stage = STAGE_SPEND;
                 }
@@ -1117,10 +1128,10 @@ public final class Shops {
     }
 
     /**
-     * The demand from abroad of a city no trading house took yesterday; none while trading houses are not known.
+     * The demand from abroad of a city no trading house took yesterday, as far as it would feed a new one.
      */
     static double outsideUnchosen(MinecraftServer server, UUID kingdom, long city) {
-        return 0;
+        return Traders.unchosen(server, kingdom, city);
     }
 
     /**
@@ -1256,26 +1267,40 @@ public final class Shops {
         progress.wanted = budgets.total();
         progress.tax = CommerceWork.salesTax(server, kingdom, city);
         progress.evasion = CommerceWork.evasion(server, kingdom, city);
-        Map<Long, Integer> levels = marketLevels(server, kingdom);
-        for (Business shop : data.shopsOf(kingdom, city)) {
-            progress.capacity.put(shop.id(), strength(server, shop, levels.getOrDefault(shop.id(), 0), rules));
-        }
+        room(server, kingdom, day);
     }
 
-    private static long[] sold(Progress progress, long shop) {
-        return progress.sold.computeIfAbsent(shop, k -> new long[3 + GoodsCategory.values().length]);
+    /**
+     * What a shop sold since the end of its last day, to be filled.
+     */
+    static long[] sold(long shop) {
+        return SOLD.computeIfAbsent(shop, k -> new long[3 + GoodsCategory.values().length]);
     }
 
-    private static void spendKind(MinecraftServer server, UUID kingdom, long city, long day, Progress progress, int kind) {
-        CommerceSavedData data = CommerceSavedData.get(server);
-        Economy economy = KingdomWorldApi.state(server).economy();
-        CityPurses.PurseKey purse = CityPurses.PurseKey.cityPurse(kingdom, city);
-        long budget = Math.min(progress.budgets[kind], economy.purse(purse));
-        if (budget <= 0) {
-            return;
+    /**
+     * The worth the shops of a kingdom can still sell today: their strength, less what they sold today to townspeople of any city.
+     */
+    private static Map<Long, Double> room(MinecraftServer server, UUID kingdom, long day) {
+        if (day != roomDay) {
+            ROOM.clear();
+            roomDay = day;
         }
+        CityEconomyRules rules = CityEconomySettings.rules();
+        Map<Long, Integer> levels = null;
+        for (Business shop : CommerceSavedData.get(server).shopsOf(kingdom)) {
+            if (!ROOM.containsKey(shop.id())) {
+                if (levels == null) {
+                    levels = marketLevels(server, kingdom);
+                }
+                ROOM.put(shop.id(), strength(server, shop, levels.getOrDefault(shop.id(), 0), rules));
+            }
+        }
+        return ROOM;
+    }
+
+    private static List<CityDay.Offer> offers(MinecraftServer server, List<Business> shops, int kind) {
         List<CityDay.Offer> offers = new ArrayList<>();
-        for (Business shop : data.shopsOf(kingdom, city)) {
+        for (Business shop : shops) {
             for (Map.Entry<String, Business.Lot> entry : shop.goods().entrySet()) {
                 Business.Lot lot = entry.getValue();
                 Item item = GoodsStacks.item(Business.itemOf(entry.getKey()));
@@ -1286,35 +1311,82 @@ public final class Shops {
                 offers.add(new CityDay.Offer(shop.id(), entry.getKey(), kind, worth(server, item), price, lot.costMilli(), lot.count()));
             }
         }
-        if (offers.isEmpty()) {
+        return offers;
+    }
+
+    /**
+     * The townspeople of a city spend the budget of a kind of goods: the lots of players cheaper than the shops of the city first,
+     * then the shops of their own city, then, what is left, the shops of their regional market, the nearest larger city of their
+     * kingdom on a road. The sales tax goes to the treasury of the city where the shop stands.
+     */
+    private static void spendKind(MinecraftServer server, UUID kingdom, long city, long day, Progress progress, int kind) {
+        CommerceSavedData data = CommerceSavedData.get(server);
+        Economy economy = KingdomWorldApi.state(server).economy();
+        CityPurses.PurseKey purse = CityPurses.PurseKey.cityPurse(kingdom, city);
+        long budget = Math.min(progress.budgets[kind], economy.purse(purse));
+        if (budget <= 0) {
             return;
         }
-        for (CityDay.Sale sale : CityDay.spendKind(budget, offers, progress.capacity, progress.tax)) {
+        List<Business> own = data.shopsOf(kingdom, city);
+        long left = budget - PlayerLots.buy(server, kingdom, city, day, kind, budget, own, progress.tax, progress.evasion);
+        long spentLots = budget - left;
+        progress.spent += spentLots;
+        progress.spentKind[kind] += spentLots;
+        left -= spendIn(server, kingdom, city, city, day, progress, kind, left, own, progress.tax, progress.evasion);
+        if (left > 0 && CraftSettings.rules().regionalMarket()) {
+            Long regional = CityTies.of(server, kingdom).regional().get(city);
+            if (regional != null) {
+                spendIn(server, kingdom, city, regional, day, progress, kind, left, data.shopsOf(kingdom, regional),
+                        CommerceWork.salesTax(server, kingdom, regional), CommerceWork.evasion(server, kingdom, regional));
+            }
+        }
+        data.setDirty();
+    }
+
+    /**
+     * The townspeople of a city buy in the shops of a city, theirs or their regional market.
+     *
+     * @return what they spent, the tax included
+     */
+    private static long spendIn(MinecraftServer server, UUID kingdom, long city, long shopCity, long day, Progress progress, int kind, long budget,
+                                List<Business> shops, int tax, int evasion) {
+        if (budget <= 0) {
+            return 0;
+        }
+        List<CityDay.Offer> offers = offers(server, shops, kind);
+        if (offers.isEmpty()) {
+            return 0;
+        }
+        CommerceSavedData data = CommerceSavedData.get(server);
+        Economy economy = KingdomWorldApi.state(server).economy();
+        CityPurses.PurseKey purse = CityPurses.PurseKey.cityPurse(kingdom, city);
+        long spent = 0;
+        for (CityDay.Sale sale : CityDay.spendKind(budget, offers, room(server, kingdom, day), tax)) {
             Optional<Business> shop = data.shop(sale.shop());
             if (shop.isEmpty()) {
                 continue;
             }
             Business.Lot lot = shop.get().goods().get(sale.item());
-            long collected = Evasion.collected(sale.tax(), progress.evasion);
+            long collected = Evasion.collected(sale.tax(), evasion);
             long toTill = sale.total() + sale.tax() - collected;
             CityPurses.PurseKey till = CityPurses.PurseKey.till(kingdom, sale.shop());
             if (lot == null || !economy.purseMove(purse, till, toTill, CityLedger.OTHER, day).ok()) {
                 continue;
             }
-            economy.purseMove(purse, CityPurses.PurseKey.cityTreasury(kingdom, city), collected, CityLedger.SALES_TAX, day);
+            economy.purseMove(purse, CityPurses.PurseKey.cityTreasury(kingdom, shopCity), collected, CityLedger.SALES_TAX, day);
             shop.get().removeGoods(sale.item(), sale.count());
-            long[] sold = sold(progress, sale.shop());
+            long[] sold = sold(sale.shop());
             sold[0] += toTill;
             sold[1] += sale.cost();
             sold[2] += ShopPricing.total(lot.laborMilli(), sale.count());
             sold[3 + kind] += (long) Math.floor(sale.count() * sale.worth());
             progress.spent += sale.total() + sale.tax();
             progress.spentKind[kind] += sale.total() + sale.tax();
-            CityStatement.Tally tally = economy.cityTally(kingdom, city);
-            tally.add(CityStatement.Line.SALES, sale.total());
-            tally.add(CityStatement.Line.BASKET_SPENT, sale.total() + sale.tax());
+            spent += sale.total() + sale.tax();
+            economy.cityTally(kingdom, shopCity).add(CityStatement.Line.SALES, sale.total());
+            economy.cityTally(kingdom, city).add(CityStatement.Line.BASKET_SPENT, sale.total() + sale.tax());
         }
-        data.setDirty();
+        return spent;
     }
 
     /**
@@ -1346,7 +1418,10 @@ public final class Shops {
             }
             Business shop = found.get();
             CityPurses.PurseKey till = CityPurses.PurseKey.till(kingdom, shop.id());
-            long[] sold = progress.sold.getOrDefault(shop.id(), new long[3 + GoodsCategory.values().length]);
+            long[] sold = SOLD.remove(shop.id());
+            if (sold == null) {
+                sold = new long[3 + GoodsCategory.values().length];
+            }
             long workingCapital = Money.multiplyCapped(2, Math.max(shop.averageBought(day), shop.day(day).map(Business.Day::bought).orElse(0L)));
             CityDay.Result result = CityDay.result(economy.purse(till), sold[0], shop.debt(), workingCapital, shop.profitDue(),
                     rules.businessUpkeepPercent());

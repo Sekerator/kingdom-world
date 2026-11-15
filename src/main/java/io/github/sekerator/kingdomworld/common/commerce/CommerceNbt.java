@@ -22,7 +22,8 @@ import java.util.UUID;
  *              goods: [ { item, category, count, cost, labor, made } ], inputs: [ { item, count, cost, labor } ], fuel, fuelCost,
  *              commissions: [ { id, order, item, count, paid, day } ],
  *              debt, margin, status, poorDays, opened, profitDue, days: [ { day, values: long[] } ] } ],
- *   cities: [ { key, carry: long[], unmet: long[], unspent, short, missing, places, keepers, closed: [ { place, day } ] } ],
+ *   cities: [ { key, carry: long[], unmet: long[], outside, mastersPass, orders: [ { shop, worth } ], unspent, short, missing, places,
+ *               keepers, closed: [ { place, day } ] } ],
  *   surveys: [ { place, day, stations: [ string ] } ],
  *   counters: [ { kingdom, dimension, x, y, z } ] }
  * </pre>
@@ -52,6 +53,16 @@ public final class CommerceNbt {
             city.putString("key", key);
             city.put("carry", new LongArrayTag(trade.carry.clone()));
             city.put("unmet", new LongArrayTag(trade.unmet.clone()));
+            city.putLong("outside", trade.outside);
+            city.putBoolean("mastersPass", trade.mastersPass);
+            ListTag orders = new ListTag();
+            trade.orders.forEach((shop, worth) -> {
+                CompoundTag order = new CompoundTag();
+                order.putLong("shop", shop);
+                order.putLong("worth", worth);
+                orders.add(order);
+            });
+            city.put("orders", orders);
             city.putLong("unspent", trade.unspent);
             city.putBoolean("short", trade.short_);
             city.putString("missing", trade.missing);
@@ -247,6 +258,11 @@ public final class CommerceNbt {
             System.arraycopy(carry, 0, trade.carry, 0, Math.min(carry.length, trade.carry.length));
             long[] unmet = entry.getLongArray("unmet");
             System.arraycopy(unmet, 0, trade.unmet, 0, Math.min(unmet.length, trade.unmet.length));
+            trade.outside = Math.max(0, entry.getLong("outside"));
+            trade.mastersPass = entry.getBoolean("mastersPass");
+            for (CompoundTag order : compounds(entry, "orders")) {
+                trade.orders.put(order.getLong("shop"), Math.max(0, order.getLong("worth")));
+            }
             trade.unspent = Math.max(0, entry.getLong("unspent"));
             trade.short_ = entry.getBoolean("short");
             trade.missing = entry.getString("missing");

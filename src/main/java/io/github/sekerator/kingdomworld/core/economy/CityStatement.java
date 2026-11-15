@@ -34,7 +34,17 @@ public record CityStatement(long day, long[] values) {
         /** What the purse did not spend: the demand that found no goods. */
         UNSPENT,
         /** What players paid in the shops. */
-        PLAYERS;
+        PLAYERS,
+        /** New money: what the trading houses of the city got abroad for what citizens made. */
+        CITIZEN_EXPORTS,
+        /** What the townspeople paid for lots of players on the market. */
+        PLAYER_LOTS,
+        /** The worth of what the masters of the city made. */
+        CITIZENS_MADE,
+        /** What the crown paid the shops of the city for goods citizens made. */
+        CROWN_BOUGHT,
+        /** What the treasury of the city paid its own shops for materials. */
+        HEAD_BOUGHT;
 
         public String id() {
             return name().toLowerCase(Locale.ROOT);
@@ -92,7 +102,7 @@ public record CityStatement(long day, long[] values) {
      */
     public long crownMoney() {
         return get(Line.CROWN_GOODS_SOLD) + get(Line.CROWN_TAVERNS) + get(Line.CROWN_EXPORTS) + get(Line.CROWN_MINTING)
-                + get(Line.CROWN_SHARE) - get(Line.CROWN_WAGES) - get(Line.CROWN_GRANTS) - get(Line.CROWN_NOBLES);
+                + get(Line.CROWN_SHARE) - get(Line.CROWN_WAGES) - get(Line.CROWN_GRANTS) - get(Line.CROWN_NOBLES) - get(Line.CROWN_BOUGHT);
     }
 
     /**

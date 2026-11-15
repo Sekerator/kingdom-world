@@ -1882,6 +1882,39 @@ public final class Economy {
     }
 
     /**
+     * The townspeople of a city buy the lot of a player: the price leaves their purse, the sales tax of their city in it goes into
+     * the treasury of the city (what they evade of it to the seller), the rest onto the account of the seller in the currency of
+     * the kingdom, paying back what the seller owes the treasury first.
+     *
+     * @param tax the tax collected out of the price
+     */
+    public Outcome purseBuysLot(CityPurses.PurseKey purse, CityPurses.PurseKey cityTreasury, UUID seller, long price, long tax, long day) {
+        if (!treasuries.containsKey(purse.kingdom()) || !purse.kingdom().equals(cityTreasury.kingdom())) {
+            return Outcome.fail(KingdomError.UNKNOWN_KINGDOM);
+        }
+        if (!Money.isPayment(price) || !Money.isAmount(tax) || tax > price) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        if (purses.balance(purse) < price) {
+            return Outcome.fail(KingdomError.NOT_ENOUGH_MONEY);
+        }
+        long toSeller = price - tax;
+        if (!purses.canReceive(cityTreasury, tax) || !accounts.canCredit(seller, purse.kingdom(), toSeller)) {
+            return Outcome.fail(KingdomError.TOO_MUCH_MONEY);
+        }
+        debit(purse, price, CityLedger.OTHER, day);
+        if (tax > 0) {
+            credit(cityTreasury, tax, CityLedger.SALES_TAX, day);
+        }
+        if (toSeller > 0) {
+            accounts.credit(seller, purse.kingdom(), toSeller);
+            repayFromIncome(seller, purse.kingdom(), toSeller, day);
+        }
+        changed();
+        return Outcome.DONE;
+    }
+
+    /**
      * Money comes from abroad into a purse: what a trading house of citizens got for the goods citizens made that it exported. It
      * is new money of the currency, as the income of the merchants of the crown is.
      */

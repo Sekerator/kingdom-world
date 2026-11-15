@@ -4,7 +4,10 @@ import com.mojang.authlib.GameProfile;
 import io.github.sekerator.kingdomworld.KingdomWorld;
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.citizen.CitizenLife;
+import io.github.sekerator.kingdomworld.common.commerce.CityTies;
 import io.github.sekerator.kingdomworld.common.commerce.CommerceSavedData;
+import io.github.sekerator.kingdomworld.common.commerce.CraftSettings;
+import io.github.sekerator.kingdomworld.common.commerce.Traders;
 import io.github.sekerator.kingdomworld.common.commerce.ShopActions;
 import io.github.sekerator.kingdomworld.common.construction.BuildingEffects;
 import io.github.sekerator.kingdomworld.common.economy.TreasuryActions;
@@ -14,6 +17,9 @@ import io.github.sekerator.kingdomworld.core.citizen.Citizen;
 import io.github.sekerator.kingdomworld.core.citizen.SiteKinds;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.commerce.Business;
+import io.github.sekerator.kingdomworld.core.commerce.CraftRules;
+import io.github.sekerator.kingdomworld.core.commerce.GoodsCategory;
+import io.github.sekerator.kingdomworld.core.commerce.Trade;
 import io.github.sekerator.kingdomworld.core.construction.Box;
 import io.github.sekerator.kingdomworld.core.construction.Building;
 import io.github.sekerator.kingdomworld.core.construction.BuildingRoles;
@@ -21,6 +27,7 @@ import io.github.sekerator.kingdomworld.core.construction.ConstructionBook;
 import io.github.sekerator.kingdomworld.core.construction.Materials;
 import io.github.sekerator.kingdomworld.core.construction.Placement;
 import io.github.sekerator.kingdomworld.core.economy.CityPurses;
+import io.github.sekerator.kingdomworld.core.economy.CityStatement;
 import io.github.sekerator.kingdomworld.core.economy.Economy;
 import io.github.sekerator.kingdomworld.core.economy.LedgerCategory;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
@@ -151,6 +158,52 @@ public final class CraftGameTests {
             // It pays no more than the share of the worth of wheat, whatever the crown would ask.
             helper.assertTrue(paid <= sold * 3, "The bakery paid more than the worth: " + paid + " for " + sold);
         } finally {
+            CitizenGameTests.finish(helper, kingdom);
+        }
+        helper.succeed();
+    }
+
+    // ---------------------------------------------------------------- trading houses
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_craft_trader", timeoutTicks = 200)
+    public static void aTradingHouseExportsOnlyWhatCitizensMade(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Trader", UUID.randomUUID());
+        CraftRules before = CraftSettings.rules();
+        try {
+            // A demand from abroad larger than the strength of the house, so that only what citizens made limits the export.
+            CraftRules big = CraftRules.DEFAULT;
+            CraftSettings.override(new CraftRules(big.crownBuysFromCitizens(), big.crownBuyCapPercent(), big.crownBuyPerDay(),
+                    big.crownBuyKeepWageDays(), big.playerSellPercent(), big.playerSellOwnPercent(), new long[]{5_000, 5_000, 5_000},
+                    big.outsideDemandPerRootPerson(), big.outsideDemandFullCities(), big.traderBuyPercent(), big.marketDemandFactor(),
+                    big.roadLinkPercent(), big.craftExport(), big.regionalMarket(), big.houseWhenUnmetPercent()));
+            CityTies.reset();
+            Economy economy = KingdomWorldApi.state(server).economy();
+            long day = TreasuryActions.day(server);
+            economy.adminTreasury(kingdom.id(), 5_000, day);
+            Business bakery = workshop(helper, kingdom, "bakery", Set.of("crafting_table", "furnace"));
+            bakery.addMade("minecraft:bread", GoodsCategory.FOOD.ordinal(), 6, 2_000, 100);
+            bakery.addGoods("minecraft:bread", GoodsCategory.FOOD.ordinal(), 20, 2_000);
+            Citizen merchant = CitizenLife.arriveInto(server, kingdom.id(), bed(helper, kingdom, 10, 10), bed(helper, kingdom, 10, 10), false)
+                    .orElseThrow(() -> new IllegalStateException("No citizen came"));
+            BlockPos counter = helper.absolutePos(new BlockPos(12, 1, 12));
+            Business house = CommerceSavedData.get(server).open(kingdom.id(), 0, new Business.Place(Business.PlaceKind.COUNTER, 0, 0,
+                    Dimensions.id(helper.getLevel()), counter.getX(), counter.getY(), counter.getZ()), day, 200);
+            house.changeTrade(Trade.TRADER, day);
+            house.setKeepers(List.of(merchant.id()), false);
+            merchant.setBusiness(house.id());
+            CityPurses.PurseKey till = CityPurses.PurseKey.till(kingdom.id(), house.id());
+            long supplyBefore = economy.supply(kingdom.id());
+            Traders.day(server, kingdom.id(), 0, day);
+            helper.assertTrue(bakery.count("minecraft:bread") == 20, "The trading house took bread the bakery bought of the crown");
+            helper.assertTrue(bakery.count(Business.key("minecraft:bread", true)) == 0, "The bread the bakery made was not exported");
+            long income = economy.purse(till) + economy.purse(CityPurses.PurseKey.till(kingdom.id(), bakery.id()));
+            helper.assertTrue(income > 0, "No money came from abroad");
+            helper.assertTrue(economy.supply(kingdom.id()) - supplyBefore == income, "The money from abroad is not all new money of the currency");
+            helper.assertTrue(economy.cityTally(kingdom.id(), 0).get(CityStatement.Line.CITIZEN_EXPORTS) > 0, "The city counts no export");
+        } finally {
+            CraftSettings.override(null);
+            CityTies.reset();
             CitizenGameTests.finish(helper, kingdom);
         }
         helper.succeed();

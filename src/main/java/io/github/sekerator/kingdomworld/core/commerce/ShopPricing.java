@@ -129,6 +129,48 @@ public final class ShopPricing {
     }
 
     /**
+     * What a shop pays a player for one item, before the reputation of the player: a share of the lower of the price of the crown
+     * and the worth for an item the crown sells, else a share of the price of the shop itself without the tax (its worth where it
+     * has none), never above the worth. So a king who sets a high price of selling does not let his players drain the tills of the
+     * citizens, and the shop never pays more than an item is worth.
+     *
+     * @param crownSells whether the crown sells the item: it has it in stock or the king set a price
+     * @param crownPrice what the crown asks for one, in whole coins
+     * @param ownMilli   what the shop asks for one without the tax, in thousandths, 0 when it has none
+     */
+    public static long playerSellUnit(boolean crownSells, long crownPrice, long ownMilli, double worth, int sellPercent, int ownPercent) {
+        double value = Math.max(0.0, worth);
+        double base;
+        int percent;
+        if (crownSells) {
+            base = Math.min(Math.max(0, crownPrice), value);
+            percent = sellPercent;
+        } else {
+            base = ownMilli > 0 ? Math.min(ownMilli / (double) MILLI, value) : value;
+            percent = ownPercent;
+        }
+        return capToWorth((long) Math.floor(base * Math.max(0, Math.min(100, percent)) / 100.0), worth);
+    }
+
+    /**
+     * What a shop pays a player, never above the worth of the item: the reputation of the player raises it at most to that.
+     */
+    public static long capToWorth(long unit, double worth) {
+        return Math.max(0, Math.min(unit, (long) Math.floor(Math.max(0.0, worth))));
+    }
+
+    /**
+     * Whether townspeople buy the lot of a player: one of it costs no more than the reference price of their city with the tax and
+     * no more than the worth and a half.
+     *
+     * @param unitMilli      what one of the lot costs, in thousandths
+     * @param referenceMilli the reference price of the city with the tax, in thousandths, below 0 for none
+     */
+    public static boolean lotWanted(long unitMilli, long referenceMilli, double worth) {
+        return referenceMilli >= 0 && unitMilli <= referenceMilli && unitMilli <= (long) Math.floor(Math.max(0.0, worth) * 1.5 * MILLI);
+    }
+
+    /**
      * The price a player pays for one item without the tax, after the reputation of the player changed the price: the discount
      * comes out of the margin and never takes the price below what the shop paid.
      *

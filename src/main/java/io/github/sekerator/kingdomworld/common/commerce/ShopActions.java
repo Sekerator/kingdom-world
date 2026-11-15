@@ -438,21 +438,14 @@ public final class ShopActions {
         CityEconomyRules rules = CityEconomySettings.rules();
         String id = GoodsStacks.itemId(item);
         double worth = Shops.worth(server, item);
-        long worthCoins = (long) Math.floor(worth);
         long stock = counts.getOrDefault(id, 0L);
         Market market = KingdomWorldApi.state(server).trade().market(kingdom, TradeSettings.rules());
         Optional<Market.SellEntry> entry = market.sell(id);
         boolean crownSells = entry.isPresent() && entry.get().price() > 0 || stock > 0;
-        long unit;
-        if (crownSells) {
-            long crown = Shops.crownPrice(server, kingdom, id, item, stock);
-            unit = (long) Math.floor(Math.min(crown, worth) * craft.playerSellPercent() / 100.0);
-        } else {
-            long own = ownPriceMilli(server, shop, id);
-            double base = own > 0 ? Math.min(own / (double) ShopPricing.MILLI, worth) : worth;
-            unit = (long) Math.floor(base * craft.playerSellOwnPercent() / 100.0);
-        }
-        unit = Math.min(LawWork.payoutFor(server, kingdom, player, unit), worthCoins);
+        long crown = crownSells ? Shops.crownPrice(server, kingdom, id, item, stock) : 0;
+        long unit = ShopPricing.playerSellUnit(crownSells, crown, crownSells ? 0 : ownPriceMilli(server, shop, id), worth, craft.playerSellPercent(),
+                craft.playerSellOwnPercent());
+        unit = ShopPricing.capToWorth(LawWork.payoutFor(server, kingdom, player, unit), worth);
         if (unit < 1) {
             return Optional.empty();
         }
