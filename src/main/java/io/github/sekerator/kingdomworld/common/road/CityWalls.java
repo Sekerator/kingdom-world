@@ -969,7 +969,9 @@ public final class CityWalls {
         RoadState roads = RoadWork.state(server);
         List<Wall> walls = new ArrayList<>();
         for (Wall wall : roads.walls()) {
-            if (!wall.built() && !io.github.sekerator.kingdomworld.common.construction.SiteLoader.servingWall(wall.id())) {
+            // A wall of a kingdom that is gone waits for the roads to forget it, as it did when walls went up with the roads.
+            if (!wall.built() && !io.github.sekerator.kingdomworld.common.construction.SiteLoader.servingWall(wall.id())
+                    && KingdomWorldApi.kingdom(server, wall.kingdomId()).isPresent()) {
                 walls.add(wall);
             }
         }
@@ -999,6 +1001,10 @@ public final class CityWalls {
                 if (budget <= 0 || System.nanoTime() > deadline) {
                     break;
                 }
+            }
+            // A wall that stands whole enters the register in the same tick, as when it went up all at once.
+            if (wall.built() && wall.buildingId() == 0) {
+                register(server, wall);
             }
         }
     }
