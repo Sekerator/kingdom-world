@@ -117,6 +117,7 @@ public final class Wall {
      * The blocks and the sections, again after the gates changed: no wall stands in a gate.
      */
     private void layout() {
+        List<Block> before = new ArrayList<>(blocks);
         blocks.clear();
         for (int i = 0; i < cells.size(); i++) {
             if (inGate(i)) {
@@ -140,12 +141,29 @@ public final class Wall {
             Road.Section section = new Road.Section(s, first, end, firstBlock, block, kingdomId);
             if (s < old.size()) {
                 Road.Section was = old.get(s);
-                // A gate cut into a built section keeps what was paid, up to the blocks left.
-                section.restore(Math.min(was.paid(), section.units()), Math.min(was.placed(), section.units()), was.condition(), false, 0,
+                // A gate cut into a section under way: the columns placed and paid for stay so, those the gate takes are no longer
+                // counted, so that the columns after them are still built. What was paid for the columns of the gate stays in the
+                // pool of the section and goes back to the storehouses once the section stands.
+                int placed = kept(before, was.firstBlock(), was.placed());
+                int paid = Math.max(placed, kept(before, was.firstBlock(), was.paid()));
+                section.restore(Math.min(paid, section.units()), Math.min(placed, section.units()), was.condition(), false, 0,
                         was.pool());
             }
             sections.add(section);
         }
+    }
+
+    /**
+     * Of the first {@code count} columns of a section as they were laid out before, those no gate stands in now.
+     */
+    private int kept(List<Block> before, int firstBlock, int count) {
+        int kept = 0;
+        for (int i = firstBlock; i < Math.min(before.size(), firstBlock + count); i++) {
+            if (!inGate(before.get(i).cell())) {
+                kept++;
+            }
+        }
+        return kept;
     }
 
     public boolean inGate(int cell) {

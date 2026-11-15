@@ -135,6 +135,44 @@ class WallTest {
     }
 
     @Test
+    void aGateCutAmongTheColumnsBuiltLeavesNoHoleInTheWall() {
+        List<RouteCell> ring = WallContour.ring((x, z) -> Terrain.Column.land(64), 0, 0, 8);
+        assertNotNull(ring);
+        Wall wall = wall(Wall.WallClass.PALISADE, ring, List.of());
+        // The columns standing in the world, by their block of the ring.
+        Set<Integer> standing = new java.util.HashSet<>();
+        Road.Section first = wall.sections().get(0);
+        for (int i = 0; i < 10; i++) {
+            first.markPaid(Map.of("minecraft:oak_log", 4));
+        }
+        for (int i = 0; i < 8; i++) {
+            standing.add(wall.blocksOf(first).get(first.placed()).cell());
+            first.markPlaced();
+        }
+        // A gate among the columns that stand, in the first section: its three columns are taken away.
+        assertTrue(wall.addGate(3));
+        standing.removeIf(wall::inGate);
+        Road.Section cut = wall.sections().get(0);
+        assertEquals(5, cut.placed(), "the five columns that stand outside the gate are placed");
+        assertEquals(7, cut.paid(), "the columns of the gate are no longer paid for");
+        assertEquals(40, cut.pool().get("minecraft:oak_log"), "what was paid for them stays in the pool");
+        for (Road.Section section : wall.sections()) {
+            while (!section.placedAll()) {
+                if (section.paid() == section.placed()) {
+                    section.markPaid(Map.of("minecraft:oak_log", 4));
+                }
+                standing.add(wall.blocksOf(section).get(section.placed()).cell());
+                section.markPlaced();
+            }
+        }
+        assertTrue(wall.built());
+        for (Wall.Block block : wall.blocks()) {
+            assertTrue(standing.contains(block.cell()), "the column at block " + block.cell() + " of the ring was never built");
+        }
+        assertEquals(wall.blocks().size(), standing.size(), "no column stands in the gate");
+    }
+
+    @Test
     void theStateKeepsOneWallPerCity() {
         RoadState state = new RoadState();
         List<RouteCell> ring = WallContour.ring((x, z) -> Terrain.Column.land(64), 0, 0, 8);
