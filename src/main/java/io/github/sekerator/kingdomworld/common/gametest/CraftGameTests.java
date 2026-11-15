@@ -187,7 +187,8 @@ public final class CraftGameTests {
             long day = TreasuryActions.day(server);
             economy.adminTreasury(kingdom.id(), 5_000, day);
             Business bakery = workshop(helper, kingdom, "bakery", Set.of("crafting_table", "furnace"));
-            bakery.addMade("minecraft:bread", GoodsCategory.FOOD.ordinal(), 6, 2_000, 100);
+            // A master that sold nothing yet keeps a day of its strength of every kind for its city: it made more than that.
+            bakery.addMade("minecraft:bread", GoodsCategory.FOOD.ordinal(), 120, 2_000, 100);
             bakery.addGoods("minecraft:bread", GoodsCategory.FOOD.ordinal(), 20, 2_000);
             Citizen merchant = CitizenLife.arriveInto(server, kingdom.id(), bed(helper, kingdom, 10, 10), bed(helper, kingdom, 10, 10), false)
                     .orElseThrow(() -> new IllegalStateException("No citizen came"));
@@ -201,7 +202,8 @@ public final class CraftGameTests {
             long supplyBefore = economy.supply(kingdom.id());
             Traders.day(server, kingdom.id(), 0, day);
             helper.assertTrue(bakery.count("minecraft:bread") == 20, "The trading house took bread the bakery bought of the crown");
-            helper.assertTrue(bakery.count(Business.key("minecraft:bread", true)) == 0, "The bread the bakery made was not exported");
+            long kept = bakery.count(Business.key("minecraft:bread", true));
+            helper.assertTrue(kept < 120, "The bread the bakery made was not exported beyond what it keeps: " + kept + " of 120 left");
             long income = economy.purse(till) + economy.purse(CityPurses.PurseKey.till(kingdom.id(), bakery.id()));
             helper.assertTrue(income > 0, "No money came from abroad");
             helper.assertTrue(economy.supply(kingdom.id()) - supplyBefore == income, "The money from abroad is not all new money of the currency");
@@ -298,7 +300,9 @@ public final class CraftGameTests {
             for (int i = 0; i < 10; i++) {
                 claims.add(new Economy.WageClaim(UUID.randomUUID(), "farmer"));
             }
+            // The first payday of a treasury only marks its day: the wages are paid from the next one on.
             economy.payday(kingdom.id(), day, List.of(), claims, io.github.sekerator.kingdomworld.common.economy.EconomySettings.rules());
+            economy.payday(kingdom.id(), day + 1, List.of(), claims, io.github.sekerator.kingdomworld.common.economy.EconomySettings.rules());
             long keep = CraftSettings.rules().crownBuyKeepWageDays() * economy.treasury(kingdom.id()).orElseThrow().lastPayroll().due();
             helper.assertTrue(keep > 0, "No wages to keep");
             carpenterWithPlanks(helper, kingdom, 500);
