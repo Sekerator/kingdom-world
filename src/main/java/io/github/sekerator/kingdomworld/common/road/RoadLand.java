@@ -11,7 +11,6 @@ import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraftforge.common.Tags;
 import net.minecraftforge.registries.ForgeRegistries;
 
@@ -213,7 +212,7 @@ public final class RoadLand {
             return new LandColumn(level.getMinBuildHeight(), LandColumn.NONE, 0, 0, LandColumn.BORDER, LandColumn.NONE,
                     level.getMinBuildHeight(), LandColumn.NONE, LandColumn.NONE, false);
         }
-        int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z) - 1;
+        int top = io.github.sekerator.kingdomworld.common.construction.Earthworks.surface(level, x, z) - 1;
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, 0, z);
         return scan(y -> level.getBlockState(pos.setY(y)), top, level.getMinBuildHeight());
     }

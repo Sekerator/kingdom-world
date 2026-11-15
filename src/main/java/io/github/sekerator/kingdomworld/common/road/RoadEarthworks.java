@@ -30,7 +30,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.FallingBlock;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraftforge.common.Tags;
 import net.minecraftforge.registries.ForgeRegistries;
 
@@ -328,7 +327,7 @@ public final class RoadEarthworks {
                 return check;
             }
             // 1. Trees whose trunk stands in the width fall whole.
-            Hold trees = fell(x, z, level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z) - 1);
+            Hold trees = fell(x, z, io.github.sekerator.kingdomworld.common.construction.Earthworks.surface(level, x, z) - 1);
             if (trees != Hold.NONE) {
                 return trees;
             }
@@ -431,7 +430,7 @@ public final class RoadEarthworks {
         private Hold room(int x, int z, List<Integer> dig) {
             boolean tunnel = block.kind() == RouteCell.Kind.TUNNEL;
             boolean cut = block.kind() == RouteCell.Kind.CUT;
-            int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z) - 1;
+            int top = io.github.sekerator.kingdomworld.common.construction.Earthworks.surface(level, x, z) - 1;
             int limit = tunnel ? deck + height : Math.max(deck + 3, top);
             BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, deck, z);
             for (int y = deck + 1; y <= limit; y++) {

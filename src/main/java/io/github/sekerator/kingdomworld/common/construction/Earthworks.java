@@ -247,14 +247,16 @@ public final class Earthworks {
     }
 
     /**
-     * The height just over the highest block of a column, below {@link #lookFrom}.
+     * The height just over the highest block of a column, below {@link #lookFrom}: the land the earthworks and the levelled
+     * roads look at.
      */
-    private static int surface(ServerLevel level, int x, int z) {
+    public static int surface(ServerLevel level, int x, int z) {
         return Math.min(level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z), lookFrom);
     }
 
     /**
-     * For the game tests: the land of plots is looked at from below this height, {@code null} for the top of the world again.
+     * For the game tests: the land of plots and of levelled roads is looked at from below this height, {@code null} for the top
+     * of the world again.
      */
     public static void lookFromForTests(@Nullable Integer y) {
         lookFrom = y == null ? Integer.MAX_VALUE : y;

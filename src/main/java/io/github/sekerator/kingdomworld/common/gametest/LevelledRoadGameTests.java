@@ -1,6 +1,7 @@
 package io.github.sekerator.kingdomworld.common.gametest;
 
 import io.github.sekerator.kingdomworld.KingdomWorld;
+import io.github.sekerator.kingdomworld.common.construction.Earthworks;
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.citizen.work.Equipment;
 import io.github.sekerator.kingdomworld.common.construction.SiteLoader;
@@ -101,8 +102,11 @@ public final class LevelledRoadGameTests {
         MinecraftServer server = helper.getLevel().getServer();
         for (Road.Section section : road.sections()) {
             while (!section.done()) {
-                helper.assertTrue(RoadBuilding.payNow(server, road, section), "A block of the road could not be paid for: section "
-                        + section.index() + ", block " + section.paid() + ", " + road.blocksOf(section).get(section.paid()));
+                // The message is made only when the payment failed: after the last block the index of the next is past the end.
+                if (!RoadBuilding.payNow(server, road, section)) {
+                    helper.fail("A block of the road could not be paid for: section " + section.index() + ", block " + section.paid() + ", "
+                            + road.blocksOf(section).get(section.paid()));
+                }
             }
         }
     }
@@ -134,6 +138,7 @@ public final class LevelledRoadGameTests {
     }
 
     private static void end(GameTestHelper helper, Kingdom kingdom, BlockPos from, BlockPos to, Citizen[] citizens, Road... roads) {
+        Earthworks.lookFromForTests(null);
         RoadSettings.override(null, null);
         RoadSettings.overrideEarth(null);
         MinecraftServer server = helper.getLevel().getServer();
@@ -159,6 +164,8 @@ public final class LevelledRoadGameTests {
         BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
         BlockPos to = helper.absolutePos(new BlockPos(13, 8, 10));
         GatheringGameTests.clear(level, from, to);
+        // The test lies under the rock of the world of tests: its land is looked at from the top of its cleared place.
+        Earthworks.lookFromForTests(to.getY() + 1);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Hillcutters", UUID.randomUUID());
         Road road = null;
         try {
@@ -205,6 +212,8 @@ public final class LevelledRoadGameTests {
         BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
         BlockPos to = helper.absolutePos(new BlockPos(15, 10, 10));
         GatheringGameTests.clear(level, from, to);
+        // The test lies under the rock of the world of tests: its land is looked at from the top of its cleared place.
+        Earthworks.lookFromForTests(to.getY() + 1);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Tunnellers", UUID.randomUUID());
         Road road = null;
         try {
@@ -255,38 +264,40 @@ public final class LevelledRoadGameTests {
     public static void aBridgeOverWideWaterHasPiersAndRails(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
-        BlockPos from = helper.absolutePos(new BlockPos(-1, -6, -1));
-        BlockPos to = helper.absolutePos(new BlockPos(45, 4, 10));
+        BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
+        BlockPos to = helper.absolutePos(new BlockPos(45, 10, 10));
         GatheringGameTests.clear(level, from, to);
+        // The test lies under the rock of the world of tests: its land is looked at from the top of its cleared place.
+        Earthworks.lookFromForTests(to.getY() + 1);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Bridgewrights", UUID.randomUUID());
         Road road = null;
         try {
-            fill(helper, 0, -6, 1, 43, -6, 9, Blocks.STONE);
-            fill(helper, 0, -5, 1, 1, 0, 9, Blocks.DIRT);
-            fill(helper, 42, -5, 1, 43, 0, 9, Blocks.DIRT);
-            fill(helper, 2, -5, 1, 41, 0, 9, Blocks.WATER);
-            stock(CitizenGameTests.storehouse(helper, 0, 2, 0), new ItemStack(Items.OAK_PLANKS, 64), new ItemStack(Items.OAK_PLANKS, 64),
+            fill(helper, 0, 0, 1, 43, 0, 9, Blocks.STONE);
+            fill(helper, 0, 1, 1, 1, 6, 9, Blocks.DIRT);
+            fill(helper, 42, 1, 1, 43, 6, 9, Blocks.DIRT);
+            fill(helper, 2, 1, 1, 41, 6, 9, Blocks.WATER);
+            stock(CitizenGameTests.storehouse(helper, 0, 8, 0), new ItemStack(Items.OAK_PLANKS, 64), new ItemStack(Items.OAK_PLANKS, 64),
                     new ItemStack(Items.OAK_PLANKS, 64), new ItemStack(Items.OAK_PLANKS, 64), new ItemStack(Items.OAK_FENCE, 64),
                     new ItemStack(Items.OAK_FENCE, 64), new ItemStack(Items.COBBLESTONE, 64), new ItemStack(Items.GRAVEL, 64),
                     new ItemStack(Items.DIRT, 64));
-            road = levelled(level, kingdom.id(), RoadClass.GRAVEL, way(helper, 0, 43, 1, 5, x -> x >= 2 && x <= 41 ? RouteCell.Kind.BRIDGE
+            road = levelled(level, kingdom.id(), RoadClass.GRAVEL, way(helper, 0, 43, 7, 5, x -> x >= 2 && x <= 41 ? RouteCell.Kind.BRIDGE
                     : RouteCell.Kind.FILL), Road.Mode.OWN, new ArrayList<>());
             payAll(helper, road);
             RoadBuilding.placeNow(server, road);
             helper.assertTrue(RoadEarthworks.blocked(road.id()).isEmpty(), "Columns were held up: " + RoadEarthworks.blocked(road.id()));
             for (int x = 2; x <= 41; x++) {
                 for (int z = 3; z <= 7; z++) {
-                    helper.assertTrue(level.getBlockState(helper.absolutePos(new BlockPos(x, 1, z))).is(Blocks.OAK_PLANKS),
+                    helper.assertTrue(level.getBlockState(helper.absolutePos(new BlockPos(x, 7, z))).is(Blocks.OAK_PLANKS),
                             "No deck at " + x + " " + z);
                 }
-                helper.assertTrue(level.getBlockState(helper.absolutePos(new BlockPos(x, 2, 3))).is(Blocks.OAK_FENCE)
-                        && level.getBlockState(helper.absolutePos(new BlockPos(x, 2, 7))).is(Blocks.OAK_FENCE), "No rails at " + x);
+                helper.assertTrue(level.getBlockState(helper.absolutePos(new BlockPos(x, 8, 3))).is(Blocks.OAK_FENCE)
+                        && level.getBlockState(helper.absolutePos(new BlockPos(x, 8, 7))).is(Blocks.OAK_FENCE), "No rails at " + x);
             }
             int piers = 0;
             for (int x = 2; x <= 41; x++) {
-                if (level.getBlockState(helper.absolutePos(new BlockPos(x, -5, 5))).is(Blocks.COBBLESTONE)) {
+                if (level.getBlockState(helper.absolutePos(new BlockPos(x, 1, 5))).is(Blocks.COBBLESTONE)) {
                     piers++;
-                    for (int y = -5; y <= 0; y++) {
+                    for (int y = 1; y <= 6; y++) {
                         helper.assertTrue(level.getBlockState(helper.absolutePos(new BlockPos(x, y, 5))).is(Blocks.COBBLESTONE),
                                 "The pier at " + x + " does not reach the deck");
                     }
@@ -296,6 +307,7 @@ public final class LevelledRoadGameTests {
         } finally {
             end(helper, kingdom, from, to, road);
         }
+
         helper.succeed();
     }
 
@@ -309,6 +321,8 @@ public final class LevelledRoadGameTests {
         BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
         BlockPos to = helper.absolutePos(new BlockPos(13, 8, 10));
         GatheringGameTests.clear(level, from, to);
+        // The test lies under the rock of the world of tests: its land is looked at from the top of its cleared place.
+        Earthworks.lookFromForTests(to.getY() + 1);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Keepers", UUID.randomUUID());
         Road road = null;
         try {
@@ -349,6 +363,8 @@ public final class LevelledRoadGameTests {
         BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
         BlockPos to = helper.absolutePos(new BlockPos(9, 3, 9));
         GatheringGameTests.clear(level, from, to);
+        // The test lies under the rock of the world of tests: its land is looked at from the top of its cleared place.
+        Earthworks.lookFromForTests(to.getY() + 1);
         TradeGameTests.clearSecond(helper);
         Kingdom ours = CitizenGameTests.found(helper, "GameTest Levellers", UUID.randomUUID());
         Kingdom theirs = TradeGameTests.second(helper, "GameTest Hillkeepers", UUID.randomUUID());
@@ -390,6 +406,8 @@ public final class LevelledRoadGameTests {
         BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
         BlockPos to = helper.absolutePos(new BlockPos(13, 8, 10));
         GatheringGameTests.clear(level, from, to);
+        // The test lies under the rock of the world of tests: its land is looked at from the top of its cleared place.
+        Earthworks.lookFromForTests(to.getY() + 1);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Quarrymen", UUID.randomUUID());
         Road road = null;
         List<Citizen> citizens = new ArrayList<>();
@@ -496,6 +514,8 @@ public final class LevelledRoadGameTests {
         BlockPos from = helper.absolutePos(new BlockPos(-1, 0, -1));
         BlockPos to = helper.absolutePos(new BlockPos(9, 3, 9));
         GatheringGameTests.clear(level, from, to);
+        // The test lies under the rock of the world of tests: its land is looked at from the top of its cleared place.
+        Earthworks.lookFromForTests(to.getY() + 1);
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Old Roads", UUID.randomUUID());
         Road road = null;
         try {
