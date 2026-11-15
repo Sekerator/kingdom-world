@@ -301,6 +301,8 @@ public final class CitizenSimulation {
             io.github.sekerator.kingdomworld.common.trade.TradeWork.exportStep(server, kingdomId, interval);
             for (WorkPost post : citizens.posts().postsOf(kingdomId)) {
                 PostWork.refreshStatus(server, post);
+                // The townsfolk on the post work without a body, near players too.
+                io.github.sekerator.kingdomworld.common.commerce.FolkWork.work(server, post, interval);
                 boolean workshop = Professions.usesStations(post.professionId());
                 // Workshops are looked at every step: workstations come and go.
                 if (post.hasProfession() && (post.yield().isEmpty() || workshop) && !ZoneSurveys.pending(post.pos())) {

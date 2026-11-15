@@ -194,11 +194,61 @@ public final class Workshops {
         return new ShopMaking.Fuel(best, bestBurn, Math.max(1, price.applyAsLong(best)) * 1_000L);
     }
 
+    // ---------------------------------------------------------------- the hands of the townsfolk
+
+    /**
+     * The shops and workshops of a city that may have hands of the townsfolk: those kept by keepers or masters, and any that still
+     * has some.
+     */
+    public static List<Business> handPlaces(MinecraftServer server, UUID kingdom, long city) {
+        List<Business> places = new java.util.ArrayList<>();
+        for (Business shop : CommerceSavedData.get(server).shopsOf(kingdom)) {
+            if (shop.cityId() == city && (shop.folkHands() > 0 || !shop.keepers().isEmpty())) {
+                places.add(shop);
+            }
+        }
+        return places;
+    }
+
+    /**
+     * Each shop and workshop takes one more hand of the idle townsfolk or lets one go, once a day: it takes one when it sold out
+     * the day before and both a hand and its keepers would earn enough, it lets one go when either does not (see
+     * {@link io.github.sekerator.kingdomworld.core.road.FolkJobs#handChange}). A family shop or a trading house takes none.
+     *
+     * @param idle the idle townsfolk of the city
+     * @return how many hands more the city has, fewer when negative
+     */
+    public static int changeHands(MinecraftServer server, List<Business> shops, int idle,
+                                  io.github.sekerator.kingdomworld.core.road.FolkWorkRules rules) {
+        long today = io.github.sekerator.kingdomworld.common.economy.TreasuryActions.day(server);
+        int change = 0;
+        int left = Math.max(0, idle);
+        for (Business shop : shops) {
+            int keepers = shop.family() || shop.trader() || !shop.kept() ? 0 : shop.keepers().size();
+            boolean soldOut = shop.day(today - 1).map(day -> day.soldCost() > 0 && shop.goodsValue() < day.soldCost()).orElse(false);
+            var decision = io.github.sekerator.kingdomworld.core.road.FolkJobs.handChange(soldOut, shop.lastShared(), keepers, shop.folkHands(),
+                    usualIncome(trade(shop)), Business.KEEPER_SHARE, rules);
+            if (decision == io.github.sekerator.kingdomworld.core.road.FolkJobs.HandChange.HIRE && left > 0) {
+                shop.setFolkHands(shop.folkHands() + 1);
+                left--;
+                change++;
+            } else if (decision == io.github.sekerator.kingdomworld.core.road.FolkJobs.HandChange.RELEASE) {
+                shop.setFolkHands(shop.folkHands() - 1);
+                change--;
+            }
+        }
+        if (!shops.isEmpty()) {
+            CommerceSavedData.get(server).setDirty();
+        }
+        return change;
+    }
+
     /**
      * The pace of the masters of a shop together, 1 a master at the usual mood.
      */
     static double pace(MinecraftServer server, Business shop) {
-        double pace = 0;
+        // Each hand of the townsfolk adds a part of the work of a master.
+        double pace = shop.folkHands() * io.github.sekerator.kingdomworld.common.citizen.FolkSettings.work().handPercent() / 100.0;
         for (UUID keeper : shop.keepers()) {
             pace += io.github.sekerator.kingdomworld.common.api.KingdomWorldApi.state(server).citizens().get(keeper)
                     .map(citizen -> EconomySettings.workSpeed(citizen.mood())).orElse(1.0);

@@ -968,6 +968,13 @@ public final class CityGovernors {
                     io.github.sekerator.kingdomworld.common.army.ArmyStaff.wagePermille(server, citizen.id()))
                     .scaled(treasury.wage(citizen.professionId(), economy));
         }
+        // The townsfolk on the posts are paid too.
+        for (io.github.sekerator.kingdomworld.core.citizen.WorkPost post : state.citizens().posts().postsOf(kingdomId)) {
+            if (post.folkWorkers() > 0) {
+                payroll += io.github.sekerator.kingdomworld.core.economy.Economy.WageClaim.folk(post.folkId(), post.professionId(),
+                        post.folkWorkers()).scaled(treasury.wage(post.professionId(), economy));
+            }
+        }
         view.expenses = Math.max(view.expenses, payroll);
     }
 

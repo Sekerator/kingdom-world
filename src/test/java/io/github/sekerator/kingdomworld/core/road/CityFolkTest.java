@@ -9,19 +9,17 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The townsfolk of a city: who the next newcomer is, room, food, growth only once the city is full of named citizens, dues
- * into a treasury that may be full, and the square a city of many people needs.
+ * The townsfolk of a city: who the next newcomer is, room, food, growth only once the city is full of named citizens, no dues
+ * out of nothing, and the square a city of many people needs.
  */
 class CityFolkTest {
     private static final FolkRules RULES = FolkRules.DEFAULT;
-    /** The rules with the old dues of a coin a head, which a server may still set. */
-    private static final FolkRules PAYING = new FolkRules(64, 4, 8, 1);
     private static final int DAILY = 6;
     /** Plenty of food, no other eaters, the quota of named citizens reached, a good mood, a treasury with room. */
     private static final long PLENTY = 1_000_000_000L;
 
     private static CityFolk.Day day(int folk, int freeBeds, long eaten) {
-        return new CityFolk.Day(folk, 0.0, freeBeds, DAILY, eaten, PLENTY, 64, 3, 64, CitizenNeeds.NEUTRAL_MOOD, PLENTY);
+        return new CityFolk.Day(folk, 0.0, freeBeds, DAILY, eaten, PLENTY, 64, 3, 64, CitizenNeeds.NEUTRAL_MOOD);
     }
 
     @Test
@@ -33,7 +31,7 @@ class CityFolkTest {
         assertEquals(CityFolk.Newcomer.FOLK, CityFolk.newcomer(64, 0, 1, RULES));
         assertEquals(CityFolk.Newcomer.FOLK, CityFolk.newcomer(64, 3, 1, RULES), "a bed holds a family of four");
         assertEquals(CityFolk.Newcomer.NONE, CityFolk.newcomer(64, 4, 1, RULES), "no room for more townsfolk");
-        FolkRules never = new FolkRules(0, 4, 8, 1);
+        FolkRules never = new FolkRules(0, 4, 8);
         assertEquals(CityFolk.Newcomer.NAMED, CityFolk.newcomer(5_000, 0, 1, never), "a quota of 0 never makes townsfolk");
         assertFalse(CityFolk.quotaReached(5_000, never));
     }
@@ -64,10 +62,8 @@ class CityFolkTest {
         CityFolk.Result result = CityFolk.day(day(100, 100, 30L * DAILY), RULES);
         assertEquals(70, result.leftHungry());
         assertEquals(30, result.folk(), "those who ate stay, and nobody comes while some went hungry");
-        assertEquals(0, result.dues(), "by default the townsfolk pay nothing");
-        assertEquals(30, CityFolk.day(day(100, 100, 30L * DAILY), PAYING).dues(), "only those who stay pay");
         assertEquals(600, CityFolk.ration(100, DAILY));
-        CityFolk.Result free = CityFolk.day(new CityFolk.Day(100, 0.0, 100, 0, 0, 0, 64, 3, 64, 50, PLENTY), RULES);
+        CityFolk.Result free = CityFolk.day(new CityFolk.Day(100, 0.0, 100, 0, 0, 0, 64, 3, 64, 50), RULES);
         assertEquals(0, free.leftHungry(), "townsfolk who need no food never go hungry");
     }
 
@@ -76,14 +72,14 @@ class CityFolkTest {
         CityFolk.Result full = CityFolk.day(day(100, 100, 100L * DAILY), RULES);
         assertEquals(3, full.grown(), "three in a hundred a day");
         assertEquals(103, full.folk());
-        CityFolk.Day short1 = new CityFolk.Day(100, 0.0, 100, DAILY, 100L * DAILY, PLENTY, 63, 3, 63, 60, PLENTY);
+        CityFolk.Day short1 = new CityFolk.Day(100, 0.0, 100, DAILY, 100L * DAILY, PLENTY, 63, 3, 63, 60);
         assertEquals(0, CityFolk.day(short1, RULES).grown(), "below the quota the city grows by named newcomers");
-        CityFolk.Day sad = new CityFolk.Day(100, 0.0, 100, DAILY, 100L * DAILY, PLENTY, 64, 3, 64, CitizenNeeds.NEUTRAL_MOOD - 1, PLENTY);
+        CityFolk.Day sad = new CityFolk.Day(100, 0.0, 100, DAILY, 100L * DAILY, PLENTY, 64, 3, 64, CitizenNeeds.NEUTRAL_MOOD - 1);
         assertEquals(0, CityFolk.day(sad, RULES).grown(), "unhappy named citizens keep newcomers away");
         // Food for 2 days only: 164 eaters of 6 points for 2 days.
-        CityFolk.Day hungry = new CityFolk.Day(100, 0.0, 100, DAILY, 100L * DAILY, 164L * DAILY * 2, 64, 3, 64, 60, PLENTY);
+        CityFolk.Day hungry = new CityFolk.Day(100, 0.0, 100, DAILY, 100L * DAILY, 164L * DAILY * 2, 64, 3, 64, 60);
         assertEquals(0, CityFolk.day(hungry, RULES).grown(), "the storehouses must feed everybody for three days");
-        CityFolk.Day fed = new CityFolk.Day(100, 0.0, 100, DAILY, 100L * DAILY, 164L * DAILY * 3, 64, 3, 64, 60, PLENTY);
+        CityFolk.Day fed = new CityFolk.Day(100, 0.0, 100, DAILY, 100L * DAILY, 164L * DAILY * 3, 64, 3, 64, 60);
         assertEquals(3, CityFolk.day(fed, RULES).grown());
     }
 
@@ -91,37 +87,23 @@ class CityFolkTest {
     void growthIsAtLeastOneAndKeepsItsParts() {
         CityFolk.Result first = CityFolk.day(day(0, 10, 0), RULES);
         assertEquals(1, first.grown(), "an empty city full of named citizens takes one a day");
-        CityFolk.Result some = CityFolk.day(new CityFolk.Day(50, 0.0, 100, DAILY, 50L * DAILY, PLENTY, 64, 3, 64, 60, PLENTY), RULES);
+        CityFolk.Result some = CityFolk.day(new CityFolk.Day(50, 0.0, 100, DAILY, 50L * DAILY, PLENTY, 64, 3, 64, 60), RULES);
         assertEquals(1, some.grown(), "1.5 makes one");
         assertEquals(0.5, some.carry(), 1e-9, "and half of one is kept for the next day");
-        CityFolk.Result next = CityFolk.day(new CityFolk.Day(51, some.carry(), 100, DAILY, 51L * DAILY, PLENTY, 64, 3, 64, 60, PLENTY), RULES);
+        CityFolk.Result next = CityFolk.day(new CityFolk.Day(51, some.carry(), 100, DAILY, 51L * DAILY, PLENTY, 64, 3, 64, 60), RULES);
         assertEquals(2, next.grown(), "1.53 and the half kept make two");
-        CityFolk.Result room = CityFolk.day(new CityFolk.Day(395, 0.0, 100, DAILY, 395L * DAILY, PLENTY, 64, 3, 64, 60, PLENTY), RULES);
+        CityFolk.Result room = CityFolk.day(new CityFolk.Day(395, 0.0, 100, DAILY, 395L * DAILY, PLENTY, 64, 3, 64, 60), RULES);
         assertEquals(5, room.grown(), "never beyond the room of the beds");
         assertEquals(400, room.folk());
         assertEquals(0.0, room.carry());
     }
 
     @Test
-    void aFullTreasuryTakesNoMoreThanItHasRoomFor() {
-        CityFolk.Result paid = CityFolk.day(day(200, 100, 200L * DAILY), PAYING);
-        assertEquals(200, paid.dues(), "a coin a head a day");
-        CityFolk.Day full = new CityFolk.Day(200, 0.0, 100, DAILY, 200L * DAILY, PLENTY, 64, 3, 64, 60, 37);
-        assertEquals(37, CityFolk.day(full, PAYING).dues());
-        CityFolk.Day none = new CityFolk.Day(200, 0.0, 100, DAILY, 200L * DAILY, PLENTY, 64, 3, 64, 60, 0);
-        assertEquals(0, CityFolk.day(none, PAYING).dues());
-        assertEquals(400, CityFolk.dues(200, new FolkRules(64, 4, 8, 2)));
-    }
-
-    @Test
-    void theTownsfolkPayNoDuesOutOfNothingByDefault() {
-        assertEquals(0, FolkRules.DEFAULT.folkDues(), "dues out of nothing would make money; the townsfolk earn nothing yet");
-        assertEquals(0, CityFolk.day(day(200, 100, 200L * DAILY), RULES).dues());
-        assertEquals(0, io.github.sekerator.kingdomworld.core.Limits.effective(io.github.sekerator.kingdomworld.core.Limits.FOLK_DUES, 1),
-                "the old default 1 of a written config is read as 0");
-        assertEquals(2, io.github.sekerator.kingdomworld.core.Limits.effective(io.github.sekerator.kingdomworld.core.Limits.FOLK_DUES, 2),
-                "any other value stays as it is written");
-        assertEquals("0", io.github.sekerator.kingdomworld.core.Limits.effectiveText(io.github.sekerator.kingdomworld.core.Limits.FOLK_DUES, "1"));
+    void theTownsfolkPayNoDuesOutOfNothing() {
+        assertEquals(3, FolkRules.DEFAULT.getClass().getRecordComponents().length, "the rules of the townsfolk keep no dues");
+        CityFolk.Result result = CityFolk.day(day(200, 100, 200L * DAILY), RULES);
+        assertEquals(0, result.leftPoor(), "townsfolk who do not work only eat and grow");
+        assertEquals(CityFolk.Why.NONE, result.why());
     }
 
     @Test

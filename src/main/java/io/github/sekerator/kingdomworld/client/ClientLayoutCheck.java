@@ -1549,6 +1549,11 @@ final class ClientLayoutCheck {
         cases.add(new Case("throne-storage-loading", () -> throne(view(KingdomView.Relation.MEMBER, Role.KING), "storage",
                 Component.empty())));
         cases.add(new Case("post-farmer-working", () -> post(postView("farmer", WorkStatus.WORKING, true, 2, true, true), Component.empty())));
+        // The townsfolk on the free seats of a post, on a line of their own.
+        cases.add(new Case("post-folk", () -> post(postView("farmer", WorkStatus.WORKING, true, 2, true, true).withFolk(999_999, 100),
+                Component.empty())));
+        cases.add(new Case("post-folk-workshop", () -> post(postView("smelter", WorkStatus.WORKING, true, 1, true, true).withFolk(999_999, 75),
+                Component.empty())));
         cases.add(new Case("post-lumberjack-no-trees", () -> post(postView("lumberjack", WorkStatus.NO_TREES, true, 3, false, false),
                 Component.empty())));
         cases.add(new Case("post-miner-no-tool", () -> post(postView("miner", WorkStatus.NO_TOOL, true, 4, true, false), longError)));
@@ -1602,6 +1607,17 @@ final class ClientLayoutCheck {
         cases.add(new Case("treasury-cities-crown", () -> cities(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, true, false, false)));
         cases.add(new Case("treasury-city-panel", () -> cities(view(KingdomView.Relation.MEMBER, Role.KING), true, false, false, true)));
         cases.add(new Case("treasury-city-panel-subject", () -> cities(view(KingdomView.Relation.MEMBER, Role.SUBJECT), false, false, false, true)));
+        // A city of many townsfolk: what one of them earns and why they leave.
+        cases.add(new Case("treasury-city-panel-folk", () -> {
+            KingdomView king = view(KingdomView.Relation.MEMBER, Role.KING);
+            ThroneScreen screen = cities(king, true, false, false, true);
+            io.github.sekerator.kingdomworld.common.network.data.CityViews.CityDetail d = cityDetail(king.id(), true, true);
+            screen.updateCityDetail(new io.github.sekerator.kingdomworld.common.network.data.CityViews.CityDetail(d.kingdomId(), d.cityId(),
+                    d.name(), d.canManage(), d.balance(), d.granted(), d.committed(), d.own(), d.effective(), d.average(), d.latest(), d.days(),
+                    d.evasion(), d.means(), d.head(), d.crownFunds(), d.shops(), d.shopCount(), d.blocked(), d.shortfall(), d.missing(),
+                    new io.github.sekerator.kingdomworld.common.network.data.CityViews.CityDetail.Folk(999_999_999, 999_999_999_999L, 4)));
+            return screen;
+        }));
         cases.add(new Case("shop-buy", () -> shop(true, "buy")));
         cases.add(new Case("shop-buy-refused", () -> shop(false, "buy")));
         cases.add(new Case("shop-about", () -> shop(true, "about")));
@@ -2009,6 +2025,9 @@ final class ClientLayoutCheck {
         RoadLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         // A city with a governor hovered over: who governs, what it decided, its people as a number.
         cases.add(new Case("throne-roads-city-governor", () -> RoadLayoutCases.cities(role -> view(KingdomView.Relation.MEMBER, role)), true,
+                screen -> ((ThroneScreen) screen).roadsRowPoint(1)));
+        // The same city with its townsfolk at work: on the posts, in the workshops and idle.
+        cases.add(new Case("roads-city-folk-work", () -> RoadLayoutCases.cities(role -> view(KingdomView.Relation.MEMBER, role)), true,
                 screen -> ((ThroneScreen) screen).roadsRowPoint(1)));
         LawLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));
         DiplomacyLayoutCases.cases((name, screen) -> cases.add(new Case(name, screen)), role -> view(KingdomView.Relation.MEMBER, role));

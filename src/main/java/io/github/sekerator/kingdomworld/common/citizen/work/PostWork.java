@@ -226,18 +226,50 @@ public final class PostWork {
             setStatus(server, citizen, WorkStatus.WOUNDED);
             return;
         }
-        if (!onOwnLand(server, post)) {
-            setStatus(server, citizen, WorkStatus.OUTSIDE_TERRITORY);
-            return;
+        // A miner who helps with the rock of the roads gives them a share of its time.
+        Gathered gathered = gather(server, post, behavior, citizen.id(),
+                io.github.sekerator.kingdomworld.common.economy.EconomySettings.workSpeed(citizen.mood())
+                        * io.github.sekerator.kingdomworld.common.road.RoadCrews.mineFactor(citizen), interval);
+        if (gathered.total() > 0) {
+            citizen.addExperience(gathered.total());
         }
-        UUID kingdom = citizen.kingdomId();
-        Equipment.Hands hands = Equipment.of(server, citizen.id());
+        setStatus(server, citizen, gathered.status());
+        if (gathered.worked()) {
+            accident(server, citizen, post, behavior, gathered.hands(), interval, server.overworld().getRandom());
+        }
+    }
+
+    /**
+     * What a step of gathering at a post came to.
+     *
+     * @param status what the post says of the work
+     * @param total  the items gathered
+     * @param hands  the tools and armor of those who worked
+     * @param worked whether they worked: an accident may happen
+     */
+    public record Gathered(WorkStatus status, int total, Equipment.Hands hands, boolean worked) {
+    }
+
+    /**
+     * One step of gathering at a post far from players, for a worker with a body or without one: the tools kept under an id are
+     * taken from the storehouses if there are none, what the rates of the post (or the estimate of its zone) give at a pace is put
+     * into its container or a storehouse, the feed is used up and the tool worn. Sets no status and has no accident: the caller
+     * does.
+     *
+     * @param toolsOf the id the tools are kept under: a citizen, or the townsfolk of the post
+     * @param speed   the pace of the work: 1 for a worker of neutral mood, more for more workers
+     */
+    public static Gathered gather(MinecraftServer server, WorkPost post, ProfessionBehavior behavior, UUID toolsOf, double speed, int interval) {
+        if (!onOwnLand(server, post)) {
+            return new Gathered(WorkStatus.OUTSIDE_TERRITORY, 0, null, false);
+        }
+        UUID kingdom = post.kingdomId();
+        Equipment.Hands hands = Equipment.of(server, toolsOf);
         WorldPos near = post.pos();
         if (behavior.tool() != Equipment.ToolNeed.NONE
                 && !Equipment.equipTool(server, kingdom, hands, EquipmentSlot.MAINHAND, behavior.tool(), 0, near)
                 && behavior.tool().required()) {
-            setStatus(server, citizen, WorkStatus.NO_TOOL);
-            return;
+            return new Gathered(WorkStatus.NO_TOOL, 0, hands, false);
         }
         if (behavior.secondTool() != Equipment.ToolNeed.NONE) {
             Equipment.equipTool(server, kingdom, hands, EquipmentSlot.OFFHAND, behavior.secondTool(), 0, near);
@@ -248,13 +280,9 @@ public final class PostWork {
         PostYield rates = post.yield();
         if (rates.isEmpty()) {
             ZoneSurveys.request(post.pos());
-            setStatus(server, citizen, ZoneSurveys.zoneStatus(post.pos()));
-            return;
+            return new Gathered(ZoneSurveys.zoneStatus(post.pos()), 0, hands, false);
         }
-        double factor = (post.hasContainer() ? 1.0 : GatheringRules.SELF_CARRY_FACTOR)
-                * io.github.sekerator.kingdomworld.common.economy.EconomySettings.workSpeed(citizen.mood())
-                // A miner who helps with the rock of the roads gives them a share of its time.
-                * io.github.sekerator.kingdomworld.common.road.RoadCrews.mineFactor(citizen);
+        double factor = (post.hasContainer() ? 1.0 : GatheringRules.SELF_CARRY_FACTOR) * speed;
         Map<String, Integer> needed = GatheringRules.abstractInputs(rates, 1, interval, factor);
         double inputShare = 1.0;
         if (!needed.isEmpty()) {
@@ -266,8 +294,7 @@ public final class PostWork {
             }
             double share = GatheringRules.inputShare(needed, available);
             if (share <= 0.0) {
-                setStatus(server, citizen, WorkStatus.NO_FEED);
-                return;
+                return new Gathered(WorkStatus.NO_FEED, 0, hands, false);
             }
             factor *= share;
             inputShare = share;
@@ -276,9 +303,8 @@ public final class PostWork {
         List<ItemStack> gathered = stacks(output.items());
         if (!fits(server, post, gathered)) {
             // Nowhere to put it all: nothing is gathered, no feed is used up, the post says why.
-            setStatus(server, citizen, KingdomStorage.hasStorehouseFor(server, kingdom, post.professionId()) || loadedContainer(server, post) != null
-                    ? WorkStatus.STORAGE_FULL : WorkStatus.NO_STOREHOUSE);
-            return;
+            return new Gathered(KingdomStorage.hasStorehouseFor(server, kingdom, post.professionId()) || loadedContainer(server, post) != null
+                    ? WorkStatus.STORAGE_FULL : WorkStatus.NO_STOREHOUSE, 0, hands, false);
         }
         for (Map.Entry<String, Integer> entry : needed.entrySet()) {
             Item item = item(entry.getKey());
@@ -307,9 +333,7 @@ public final class PostWork {
         if (behavior.tool() != Equipment.ToolNeed.NONE) {
             Equipment.wear(hands, EquipmentSlot.MAINHAND, output.actions(), random);
         }
-        citizen.addExperience(total);
-        setStatus(server, citizen, lost ? WorkStatus.STORAGE_FULL : WorkStatus.WORKING);
-        accident(server, citizen, post, behavior, hands, interval, random);
+        return new Gathered(lost ? WorkStatus.STORAGE_FULL : WorkStatus.WORKING, total, hands, true);
     }
 
     /**

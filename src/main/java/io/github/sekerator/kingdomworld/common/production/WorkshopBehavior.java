@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * A workshop: the smelter, the cook, the crafter and the smith. They work at the workstations in the zone of their
@@ -120,33 +121,65 @@ public final class WorkshopBehavior implements ProfessionBehavior {
             PostWork.setStatus(server, citizen, WorkStatus.WOUNDED);
             return;
         }
+        double speed = io.github.sekerator.kingdomworld.common.economy.EconomySettings.workSpeed(citizen.mood());
+        Worked worked = makeAt(server, post, citizen.id(), Production.WORK_BANK, speed, citizen.experience(), 1, intervalTicks);
+        if (worked.made() > 0) {
+            citizen.addExperience(worked.made());
+        }
+        PostWork.setStatus(server, citizen, worked.status());
+        if (worked.made() > 0) {
+            PostWork.accident(server, citizen, post, this, Equipment.of(server, citizen.id()), intervalTicks, server.overworld().getRandom());
+        }
+    }
+
+    /**
+     * What a step of work at a workshop came to.
+     *
+     * @param status what the post says of the work
+     * @param made   the makings done
+     */
+    public record Worked(WorkStatus status, int made) {
+    }
+
+    /**
+     * One step of making at a workshop far from players, for a worker with a body or without one: the time of the step at a pace
+     * goes into makings the king's orders or the post's own work ask for, one after another, and what is left is kept under a key
+     * of the post for the next step. Sets no status and has no accident: the caller does.
+     *
+     * @param worker     the id the materials set aside are kept under: a citizen, or the townsfolk of the post
+     * @param bank       the key of the progress of the post the time left is kept under
+     * @param speed      the pace of the work: 1 for one worker of neutral mood, more for more workers
+     * @param experience the experience of the work: the more, the faster a making goes
+     * @param workers    how many work together: they do as many makings more in a step at most
+     */
+    public static Worked makeAt(MinecraftServer server, WorkPost post, UUID worker, String bank, double speed, int experience, int workers,
+                                int intervalTicks) {
         if (!PostWork.onOwnLand(server, post)) {
-            PostWork.setStatus(server, citizen, WorkStatus.OUTSIDE_TERRITORY);
-            return;
+            return new Worked(WorkStatus.OUTSIDE_TERRITORY, 0);
         }
         Set<String> stations = new LinkedHashSet<>(post.stations().keySet());
         ProductionRules rules = ProductionSettings.rules();
-        double factor = (Production.suppliedByCarriers(server, post) ? 1.0 : GatheringRules.SELF_CARRY_FACTOR)
-                * io.github.sekerator.kingdomworld.common.economy.EconomySettings.workSpeed(citizen.mood())
+        double factor = (Production.suppliedByCarriers(server, post) ? 1.0 : GatheringRules.SELF_CARRY_FACTOR) * speed
                 * io.github.sekerator.kingdomworld.common.construction.BuildingEffects.workshopSpeed(server, post.pos());
         double slowdown = rules.slowdown(post.yield().measured() ? post.yield().actions() : 0.0);
-        double budget = post.progress().getOrDefault(Production.WORK_BANK, 0.0) + ProductionRules.workTicks(intervalTicks, factor);
+        double budget = post.progress().getOrDefault(bank, 0.0) + ProductionRules.workTicks(intervalTicks, factor);
         double keep = 0.0;
         int made = 0;
         WorkStatus status = WorkStatus.WORKING;
-        for (int i = 0; i < MAX_PER_STEP; i++) {
-            Production.Search search = Production.findJob(server, post, citizen, stations);
+        int most = (int) Math.min(Integer.MAX_VALUE, (long) MAX_PER_STEP * Math.max(1, workers));
+        for (int i = 0; i < most; i++) {
+            Production.Search search = Production.findJob(server, post, worker, stations);
             if (search.job() == null) {
                 status = made > 0 ? WorkStatus.WORKING : search.reason();
                 break;
             }
-            double cost = rules.ticks(search.job().recipe(), citizen.experience()) * slowdown;
+            double cost = rules.ticks(search.job().recipe(), experience) * slowdown;
             if (budget < cost) {
                 // Not enough time left this step: it is kept for the next one.
                 keep = budget;
                 break;
             }
-            Production.Made result = Production.makeAbstractly(server, post, citizen, search.job(), search.fuel());
+            Production.Made result = Production.makeAbstractly(server, post, worker, search.job(), search.fuel());
             if (result != Production.Made.DONE) {
                 status = made > 0 ? WorkStatus.WORKING : switch (result) {
                     case NO_FUEL -> WorkStatus.NO_FUEL;
@@ -165,15 +198,9 @@ public final class WorkshopBehavior implements ProfessionBehavior {
             }
         }
         Map<String, Double> progress = new LinkedHashMap<>(post.progress());
-        progress.put(Production.WORK_BANK, Math.max(0.0, keep));
+        progress.put(bank, Math.max(0.0, keep));
         post.setProgress(progress);
-        if (made > 0) {
-            citizen.addExperience(made);
-        }
-        PostWork.setStatus(server, citizen, status);
-        if (made > 0) {
-            PostWork.accident(server, citizen, post, this, Equipment.of(server, citizen.id()), intervalTicks, server.overworld().getRandom());
-        }
+        return new Worked(status, made);
     }
 
     // ---------------------------------------------------------------- the zone

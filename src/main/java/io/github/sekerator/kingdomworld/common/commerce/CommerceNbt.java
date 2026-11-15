@@ -13,12 +13,12 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * NBT form of the shops of citizens (format 2):
+ * NBT form of the shops of citizens (format 3; format 2 reads with no hands of the townsfolk):
  *
  * <pre>
- * { formatVersion: 2, nextId, nextCommission,
+ * { formatVersion: 3, nextId, nextCommission,
  *   shops: [ { id, kingdom, city, place: { kind, building, index, dimension, x, y, z }, trade, pinned, nextTrade, tradeSince,
- *              keepers: [ { id, share } ], family,
+ *              keepers: [ { id, share } ], family, folkHands, shared,
  *              goods: [ { item, category, count, cost, labor, made } ], inputs: [ { item, count, cost, labor } ], fuel, fuelCost,
  *              commissions: [ { id, order, item, count, paid, day } ],
  *              debt, margin, status, poorDays, opened, profitDue, days: [ { day, values: long[] } ] } ],
@@ -33,7 +33,7 @@ import java.util.UUID;
  * the shops rather than half of them.
  */
 public final class CommerceNbt {
-    public static final int FORMAT_VERSION = 2;
+    public static final int FORMAT_VERSION = 3;
 
     private CommerceNbt() {
     }
@@ -152,6 +152,12 @@ public final class CommerceNbt {
         }
         tag.put("keepers", keepers);
         tag.putBoolean("family", shop.family());
+        if (shop.folkHands() > 0) {
+            tag.putInt("folkHands", shop.folkHands());
+        }
+        if (shop.lastShared() > 0) {
+            tag.putLong("shared", shop.lastShared());
+        }
         ListTag goods = new ListTag();
         shop.goods().forEach((key, lot) -> {
             CompoundTag entry = new CompoundTag();
@@ -227,6 +233,9 @@ public final class CommerceNbt {
                 .orElseThrow(() -> new IllegalArgumentException("A shop of an unknown state " + tag.getString("status")));
         shop.restore(tag.getString("trade"), keepers, tag.getBoolean("family"), tag.getLong("debt"), tag.getInt("margin"), status,
                 tag.getInt("poorDays"), tag.getLong("profitDue"));
+        // Shops of format 2 have no hands of the townsfolk: they take them on the next day of the townsfolk.
+        shop.setFolkHands(tag.getInt("folkHands"));
+        shop.setLastShared(tag.getLong("shared"));
         shop.restoreTrade(tag.getString("pinned"), tag.getString("nextTrade"), tag.contains("tradeSince") ? tag.getLong("tradeSince")
                 : tag.getLong("opened"));
         for (CompoundTag entry : compounds(tag, "goods")) {

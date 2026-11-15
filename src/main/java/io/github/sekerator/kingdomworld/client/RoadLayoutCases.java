@@ -64,7 +64,10 @@ final class RoadLayoutCases {
                         99_999, i % 3 == 0 ? 0 : MUCH - i, i % 3 == 0 ? null : Wall.WallClass.values()[i % 2], i * 70, 64, i % 2 == 0 ? 0 : 936 * i,
                         99_999, i * 3, 99_999, 99_999, 99_999)
                         .withGovernor(governor, governor == RoadViews.CityRow.HOUSE ? LONG_HOUSE : LONG_GOVERNOR, title, i % 5 == 2,
-                                governor == RoadViews.CityRow.NO_GOVERNOR ? Component.empty() : note(i), i % 6 == 4));
+                                governor == RoadViews.CityRow.NO_GOVERNOR ? Component.empty() : note(i), i % 6 == 4)
+                        // The townsfolk of every other city at work: on the posts, in the workshops and idle.
+                        .withFolkJobs(i % 2 == 0 ? new RoadViews.CityRow.FolkJobs(999_999_999, 999_999_999, 999_999_999, 9_999_999)
+                                : RoadViews.CityRow.FolkJobs.NONE));
             }
             Road.Status[] statuses = Road.Status.values();
             for (int i = 0; i < 20; i++) {

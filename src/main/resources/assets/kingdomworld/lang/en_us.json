@@ -592,6 +592,7 @@
   "kingdomworld.screen.post.yield_estimated": "Yield: about %s a day per worker (estimate)",
   "kingdomworld.screen.post.yield_unknown": "Yield: not known yet",
   "kingdomworld.screen.post.today": "Gathered today: %s",
+  "kingdomworld.screen.post.folk": "Townsfolk on the post: %s (working at %s%%)",
   "kingdomworld.screen.post.workers": "Workers: %s of %s",
   "kingdomworld.screen.post.hire": "Hire… (%s)",
   "kingdomworld.screen.post.dismiss": "Dismiss",
@@ -5226,6 +5227,11 @@
   "kingdomworld.screen.cities.panel.day": "A day: income %s · kept %s · to the crown %s · spent %s",
   "kingdomworld.screen.cities.panel.crown": "To the crown a day: money %s · goods %s · in all %s",
   "kingdomworld.screen.cities.panel.means": "Means of the people: %s to mood",
+  "kingdomworld.screen.cities.folk.earns": "The townsfolk earn %s a day a head",
+  "kingdomworld.screen.cities.folk.idle": "The townsfolk do not grow: too many are idle",
+  "kingdomworld.screen.cities.folk.poor": "The townsfolk do not grow: they earn too little",
+  "kingdomworld.screen.cities.folk.leave_poor": "The townsfolk leave: nothing to earn",
+  "kingdomworld.screen.cities.folk.leave_taxes": "The townsfolk leave: the taxes press them",
   "kingdomworld.screen.cities.evasion": "Past the treasury: about %s%%",
   "kingdomworld.screen.cities.no_head": "No head: beyond a week of its share goes to the crown",
   "kingdomworld.screen.cities.shops": "Shops (%s)",
@@ -5374,5 +5380,6 @@
   "kingdomworld.goods.category.household": "Household goods",
   "kingdomworld.goods.category.luxury": "Luxury",
   "kingdomworld.goods.category.materials": "Building materials",
-  "kingdomworld.screen.roads.city_treasury": "Treasury: %s · a day +%s (to the city %s, to the crown %s)"
+  "kingdomworld.screen.roads.city_treasury": "Treasury: %s · a day +%s (to the city %s, to the crown %s)",
+  "kingdomworld.screen.roads.city.folk_work": "Townsfolk: %s on posts, %s in workshops, %s idle"
 }

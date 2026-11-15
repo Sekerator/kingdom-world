@@ -135,7 +135,8 @@ public final class CarrierBehavior implements ProfessionBehavior {
 
     /**
      * One step of the carriers of a kingdom without a body: they empty loaded post containers into the
-     * storehouses, the fullest first, up to what their number can move in the time of a step.
+     * storehouses, the fullest first, up to what their number can move in the time of a step. The townsfolk on the posts of
+     * carriers carry with them, each at the pace the townsfolk work at.
      */
     public static void stepAbstractly(MinecraftServer server, UUID kingdomId, int intervalTicks) {
         List<Citizen> carriers = new ArrayList<>();
@@ -150,10 +151,13 @@ public final class CarrierBehavior implements ProfessionBehavior {
                 }
             }
         }
-        if (carriers.isEmpty()) {
+        long folk = io.github.sekerator.kingdomworld.common.commerce.FolkWork.carriers(server, kingdomId);
+        if (carriers.isEmpty() && folk <= 0) {
             return;
         }
-        int capacity = GatheringSettings.rules().carried(carriers.size(), intervalTicks);
+        int capacity = (int) Math.min(Integer.MAX_VALUE, GatheringSettings.rules().carried(carriers.size(), intervalTicks)
+                + (long) Math.floor(GatheringSettings.rules().carried(1, intervalTicks) * (double) folk
+                * io.github.sekerator.kingdomworld.common.citizen.FolkSettings.work().postRatePercent() / 100.0));
         int moved = 0;
         for (ServerLevel level : server.getAllLevels()) {
             List<Source> sources = sources(level, kingdomId);

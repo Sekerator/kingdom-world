@@ -100,11 +100,11 @@ public final class FolkGameTests {
     }
 
     @GameTest(template = EMPTY, batch = "kingdomworld_folk_numbers")
-    public static void aFullCityGrowsByTownsfolkWhoEatAndPay(GameTestHelper helper) {
+    public static void aFullCityGrowsByTownsfolkWhoEatAndPayNothingOutOfNothing(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Folk", UUID.randomUUID());
-        // One named citizen a city, two coins a head a day.
-        FolkSettings.override(new FolkRules(1, 4, 8, 2));
+        // One named citizen a city.
+        FolkSettings.override(new FolkRules(1, 4, 8));
         try {
             StorehouseInventory storehouse = CitizenGameTests.storehouse(helper, 0, 0, 2);
             storehouse.insertItem(0, new ItemStack(Items.BREAD, 64), false);
@@ -119,7 +119,7 @@ public final class FolkGameTests {
             CitizenSimulation.step(server, kingdom.id());
             helper.assertTrue(citizens(server, kingdom).size() == 1, "A named citizen came beyond the quota");
             helper.assertTrue(capital.folk() == 1, "The newcomer beyond the quota did not stay townsfolk: " + capital.folk());
-            // A new day of the townsfolk: they eat bread and pay.
+            // A new day of the townsfolk: they eat bread and pay nothing out of nothing.
             Treasury treasury = KingdomWorldApi.treasury(server, kingdom.id()).orElseThrow();
             long balance = treasury.balance();
             int bread = CitizenGameTests.count(storehouse, Items.BREAD);
@@ -127,7 +127,7 @@ public final class FolkGameTests {
             capital.setLastDay(Math.floorDiv(KingdomWorldApi.gameTime(server), CitizenNeeds.TICKS_PER_DAY) - 1);
             CitizenSimulation.step(server, kingdom.id());
             helper.assertTrue(CitizenGameTests.count(storehouse, Items.BREAD) < bread, "The townsfolk ate nothing");
-            helper.assertTrue(treasury.balance() >= balance + 6, "The townsfolk did not pay their dues: " + (treasury.balance() - balance));
+            helper.assertTrue(treasury.balance() <= balance, "The townsfolk paid dues out of nothing: " + (treasury.balance() - balance));
             helper.assertTrue(capital.folk() >= 3 && capital.folk() <= 4, "The townsfolk of one free bed are a family at most: " + capital.folk());
             helper.assertTrue(citizens(server, kingdom).size() == 1, "Townsfolk became named citizens");
         } finally {
@@ -141,7 +141,7 @@ public final class FolkGameTests {
     public static void aCityShortOfNamedCitizensTakesThemOutOfItsTownsfolk(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
         Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Folk Back", UUID.randomUUID());
-        FolkSettings.override(new FolkRules(2, 4, 8, 1));
+        FolkSettings.override(new FolkRules(2, 4, 8));
         try {
             CitizenGameTests.storehouse(helper, 0, 0, 2).insertItem(0, new ItemStack(Items.BREAD, 64), false);
             WorldPos home = bed(helper, kingdom, 4, 5);

@@ -204,6 +204,13 @@ public final class Production {
      * the post's own work in auto mode (smelting ore, cooking while food runs short).
      */
     public static Search findJob(MinecraftServer server, WorkPost post, Citizen citizen, Set<String> stations) {
+        return findJob(server, post, citizen.id(), stations);
+    }
+
+    /**
+     * Finds the next making for a worker known by an id: a citizen, or the townsfolk of a post.
+     */
+    public static Search findJob(MinecraftServer server, WorkPost post, UUID worker, Set<String> stations) {
         UUID kingdom = post.kingdomId();
         String profession = post.professionId();
         boolean anyStation = false;
@@ -216,9 +223,9 @@ public final class Production {
         planIfStale(server, kingdom);
         ProductionPlanner.World world = world(server, kingdom);
         OrderBook orders = orders(server);
-        ProductionPlanner.Job job = ProductionPlanner.nextJob(orders, world, profession, stations, citizen.id());
+        ProductionPlanner.Job job = ProductionPlanner.nextJob(orders, world, profession, stations, worker);
         if (job == null && post.auto() && Professions.hasAutoMode(profession) && autoWanted(server, kingdom, profession)) {
-            job = ProductionPlanner.autoJob(orders, world, Recipes.autoRecipes(server, profession), stations, citizen.id());
+            job = ProductionPlanner.autoJob(orders, world, Recipes.autoRecipes(server, profession), stations, worker);
         }
         if (job == null) {
             // The post says what the window of orders says: ingredients missing, a workstation lacking, or nothing to do.
@@ -230,7 +237,7 @@ public final class Production {
             return new Search(null, null, reason);
         }
         if (job.recipe().kind().needsFuel()) {
-            Fuel fuel = chooseFuel(server, kingdom, job.recipe().kind(), job.picks().keySet(), citizen.id());
+            Fuel fuel = chooseFuel(server, kingdom, job.recipe().kind(), job.picks().keySet(), worker);
             if (fuel == null) {
                 return new Search(null, null, WorkStatus.NO_FUEL);
             }
@@ -412,6 +419,13 @@ public final class Production {
      * the storehouses and the result is put there in the same tick, or nothing changes.
      */
     public static Made makeAbstractly(MinecraftServer server, WorkPost post, Citizen citizen, ProductionPlanner.Job job, @Nullable Fuel fuel) {
+        return makeAbstractly(server, post, citizen.id(), job, fuel);
+    }
+
+    /**
+     * One making far from players for a worker known by an id: a citizen, or the townsfolk of a post.
+     */
+    public static Made makeAbstractly(MinecraftServer server, WorkPost post, UUID worker, ProductionPlanner.Job job, @Nullable Fuel fuel) {
         UUID kingdom = post.kingdomId();
         WorldPos near = post.pos();
         if (!KingdomStorage.hasStorehouseFor(server, kingdom, post.professionId())) {
@@ -430,9 +444,9 @@ public final class Production {
                 wanted.merge(fuel.item(), fuelCount, Integer::sum);
             }
         }
-        List<KingdomStorage.Take> plan = KingdomStorage.plan(server, kingdom, wanted, item -> RESERVATIONS.reserved(kingdom, item, citizen.id()), near);
+        List<KingdomStorage.Take> plan = KingdomStorage.plan(server, kingdom, wanted, item -> RESERVATIONS.reserved(kingdom, item, worker), near);
         if (plan == null) {
-            boolean ingredients = KingdomStorage.plan(server, kingdom, job.picks(), item -> RESERVATIONS.reserved(kingdom, item, citizen.id()),
+            boolean ingredients = KingdomStorage.plan(server, kingdom, job.picks(), item -> RESERVATIONS.reserved(kingdom, item, worker),
                     near) != null;
             return ingredients ? Made.NO_FUEL : Made.NO_INGREDIENTS;
         }

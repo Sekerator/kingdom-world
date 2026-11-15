@@ -592,6 +592,7 @@
   "kingdomworld.screen.post.yield_estimated": "Выработка: около %s в день на работника (оценка)",
   "kingdomworld.screen.post.yield_unknown": "Выработка: пока неизвестна",
   "kingdomworld.screen.post.today": "Добыто сегодня: %s",
+  "kingdomworld.screen.post.folk": "Народ на посту: %s (работает на %s%%)",
   "kingdomworld.screen.post.workers": "Работники: %s из %s",
   "kingdomworld.screen.post.hire": "Нанять… (%s)",
   "kingdomworld.screen.post.dismiss": "Уволить",
@@ -5226,6 +5227,11 @@
   "kingdomworld.screen.cities.panel.day": "В день: доход %s · городу %s · короне %s · траты %s",
   "kingdomworld.screen.cities.panel.crown": "Короне в день: деньги %s · товары %s · итого %s",
   "kingdomworld.screen.cities.panel.means": "Достаток жителей: %s к настроению",
+  "kingdomworld.screen.cities.folk.earns": "Народ зарабатывает %s в день на человека",
+  "kingdomworld.screen.cities.folk.idle": "Народ не растёт: слишком многие без дела",
+  "kingdomworld.screen.cities.folk.poor": "Народ не растёт: мало зарабатывает",
+  "kingdomworld.screen.cities.folk.leave_poor": "Народ уходит: нечем заработать",
+  "kingdomworld.screen.cities.folk.leave_taxes": "Народ уходит: налоги душат",
   "kingdomworld.screen.cities.evasion": "Мимо казны: около %s%%",
   "kingdomworld.screen.cities.no_head": "Главы нет: сверх недели уходит короне",
   "kingdomworld.screen.cities.shops": "Лавки (%s)",
@@ -5374,5 +5380,6 @@
   "kingdomworld.goods.category.household": "Утварь",
   "kingdomworld.goods.category.luxury": "Роскошь",
   "kingdomworld.goods.category.materials": "Стройматериалы",
-  "kingdomworld.screen.roads.city_treasury": "Казна: %s · за день +%s (городу %s, короне %s)"
+  "kingdomworld.screen.roads.city_treasury": "Казна: %s · за день +%s (городу %s, короне %s)",
+  "kingdomworld.screen.roads.city.folk_work": "Народ: %s на постах, %s в мастерских, %s без дела"
 }

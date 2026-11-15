@@ -11,9 +11,11 @@ import io.github.sekerator.kingdomworld.core.citizen.CitizenRules;
  *
  * <p>The townsfolk have no beds of their own: they live in the free beds of their city that no named citizen took, a family
  * ({@link FolkRules#folkPerBed()}) to a bed, and named citizens always come first. Once a day they eat from the storehouses
- * as citizens far from players do, pay their dues and, while the city is full of named citizens, has room, food and a good
- * mood, grow by {@value #GROWTH_PERMILLE} thousandths. What they pay is reckoned in {@link #dues} alone, so that a later
- * economy of citizens replaces one rule. Pure functions, so that the server and the tests share them.
+ * as citizens far from players do and, while the city is full of named citizens, has room, food and a good mood, grow by
+ * {@value #GROWTH_PERMILLE} thousandths. In a kingdom whose money stays in its cities they work on the posts of the crown and as
+ * hands in the workshops of citizens ({@link FolkJobs}): they grow only while few of them are idle and they earn enough, and some
+ * leave while many are idle, they earn too little or the taxes press them. They pay nothing out of nothing: the tithe of what
+ * they earn is all they pay. Pure functions, so that the server and the tests share them.
  */
 public final class CityFolk {
     /** How much the townsfolk of a city grow in a day, in thousandths: three in a hundred. */
@@ -94,14 +96,6 @@ public final class CityFolk {
     }
 
     /**
-     * What the townsfolk of a city pay into the treasury in a day. The one rule of what they pay: an economy of citizens
-     * replaces it here.
-     */
-    public static long dues(int folk, FolkRules rules) {
-        return (long) Math.max(0, folk) * rules.folkDues();
-    }
-
-    /**
      * Who the next newcomer of a city is: a named citizen while the city has fewer than the quota and a free bed, out of the
      * townsfolk if it has any; once it has as many, one more of the townsfolk while they have room.
      *
@@ -138,6 +132,17 @@ public final class CityFolk {
     }
 
     /**
+     * How the townsfolk of a city worked and earned the day before, for a day of theirs in a kingdom whose money stays in its cities.
+     *
+     * @param idle   those of them without work
+     * @param earned what they earned the day before, wages and shares together, after the tithe
+     * @param means  the means of the people of the city
+     * @param rules  the rules of their work
+     */
+    public record Work(int idle, long earned, int means, FolkWorkRules rules) {
+    }
+
+    /**
      * What a day of the townsfolk of a city starts from.
      *
      * @param folk           the townsfolk
@@ -150,10 +155,29 @@ public final class CityFolk {
      * @param foodDays       the days of food the storehouses must hold for everybody before the townsfolk grow
      * @param named          the named citizens whose home is in the city
      * @param mood           their average mood
-     * @param treasuryRoom   how much the treasury can still take
+     * @param work           how they worked and earned, {@code null} where they do not work: they only eat and grow
      */
     public record Day(int folk, double carry, int freeBeds, int dailyNutrition, long eaten, long food, long others, int foodDays, int named,
-                      int mood, long treasuryRoom) {
+                      int mood, Work work) {
+        public Day(int folk, double carry, int freeBeds, int dailyNutrition, long eaten, long food, long others, int foodDays, int named, int mood) {
+            this(folk, carry, freeBeds, dailyNutrition, eaten, food, others, foodDays, named, mood, null);
+        }
+    }
+
+    /**
+     * Why the townsfolk of a city do not grow or leave, by their work.
+     */
+    public enum Why {
+        /** Nothing of their work holds them back. */
+        NONE,
+        /** They do not grow: too many of them are idle. */
+        IDLE,
+        /** They do not grow: they earn too little. */
+        POOR,
+        /** Some leave: too many of them are idle or they earn too little to live on. */
+        LEAVE_POOR,
+        /** Some leave: the taxes press the people of the city. */
+        LEAVE_TAXES
     }
 
     /**
@@ -164,16 +188,60 @@ public final class CityFolk {
      * @param leftForRoom those who left because the free beds no longer held them
      * @param leftHungry  those who left because they got nothing to eat
      * @param grown       those who came
-     * @param dues        what they paid into the treasury
+     * @param leftPoor    those who left for want of work or pay, or for the taxes
+     * @param why         why they do not grow or leave, by their work
      */
-    public record Result(int folk, double carry, int leftForRoom, int leftHungry, int grown, long dues) {
+    public record Result(int folk, double carry, int leftForRoom, int leftHungry, int grown, int leftPoor, Why why) {
+    }
+
+    /** The means of a city at which some of its townsfolk leave for the taxes. */
+    public static final int LEAVE_MEANS = -10;
+
+    /**
+     * Why the townsfolk of a city do not grow or leave by how they worked and earned: some leave while the means of the city fell
+     * to {@value #LEAVE_MEANS}, more than {@link FolkWorkRules#leaveIdlePercent()} of them are idle or one of them earns less than a
+     * quarter of its usual income; they grow only while no more than {@link FolkWorkRules#idleMaxPercent()} of them are idle and
+     * one of them earns at least half its usual income.
+     *
+     * @param folk the townsfolk
+     */
+    public static Why why(int folk, Work work) {
+        if (work == null || folk <= 0) {
+            return Why.NONE;
+        }
+        FolkWorkRules rules = work.rules();
+        long idle = Math.max(0, Math.min(folk, work.idle()));
+        // What one of them earned, in thousandths, against its usual income.
+        long earnedMilli = Math.max(0, work.earned()) * 1_000L / folk;
+        long usualMilli = rules.usualIncome() * 1_000L;
+        if (work.means() <= LEAVE_MEANS) {
+            return Why.LEAVE_TAXES;
+        }
+        if (idle * 100 > (long) folk * rules.leaveIdlePercent() || earnedMilli * 4 < usualMilli) {
+            return Why.LEAVE_POOR;
+        }
+        if (idle * 100 > (long) folk * rules.idleMaxPercent()) {
+            return Why.IDLE;
+        }
+        if (earnedMilli * 2 < usualMilli) {
+            return Why.POOR;
+        }
+        return Why.NONE;
     }
 
     /**
-     * A day of the townsfolk of a city: those the free beds no longer hold leave, then those who got nothing to eat, the rest
-     * pay their dues (as much as the treasury can still take) and, while the city has as many named citizens as it takes,
-     * room for more, food for everybody for the days the rules ask and named citizens at least of neutral mood, they grow by
-     * {@value #GROWTH_PERMILLE} thousandths, at least one a day, never beyond the room.
+     * Whether the townsfolk of a city may grow by their work: nothing holds them back.
+     */
+    public static boolean mayGrow(int folk, Work work) {
+        return why(folk, work) == Why.NONE;
+    }
+
+    /**
+     * A day of the townsfolk of a city: those the free beds no longer hold leave, then those who got nothing to eat, then, where
+     * they work, some for want of work or pay or for the taxes ({@link FolkWorkRules#leavePercent()}, at least one); the rest,
+     * while the city has as many named citizens as it takes, room for more, food for everybody for the days the rules ask, named
+     * citizens at least of neutral mood and, where they work, few idle and enough pay, grow by {@value #GROWTH_PERMILLE}
+     * thousandths, at least one a day, never beyond the room.
      */
     public static Result day(Day day, FolkRules rules) {
         int start = Math.max(0, day.folk());
@@ -182,11 +250,17 @@ public final class CityFolk {
         int fed = day.dailyNutrition() <= 0 ? housed : (int) Math.min(housed, Math.max(0L, day.eaten()) / day.dailyNutrition());
         int leftHungry = housed - fed;
         int folk = fed;
-        long dues = Math.min(dues(folk, rules), Math.max(0L, day.treasuryRoom()));
+        Why why = why(folk, day.work());
+        int leftPoor = 0;
+        if (why == Why.LEAVE_POOR || why == Why.LEAVE_TAXES) {
+            leftPoor = (int) Math.min(folk, Math.max(1L, (long) folk * day.work().rules().leavePercent() / 100));
+            folk -= leftPoor;
+        }
         double carry = Double.isFinite(day.carry()) ? Math.max(0.0, day.carry()) : 0.0;
         long space = Math.min(room(day.freeBeds(), rules), CityCharter.MAX_FOLK) - folk;
         int eaters = (int) Math.min(Integer.MAX_VALUE - 1L, Math.max(0L, day.others()) + folk);
-        boolean grows = quotaReached(day.named(), rules) && leftHungry == 0 && space > 0 && day.mood() >= CitizenNeeds.NEUTRAL_MOOD
+        boolean grows = quotaReached(day.named(), rules) && leftHungry == 0 && why == Why.NONE && space > 0
+                && day.mood() >= CitizenNeeds.NEUTRAL_MOOD
                 && CitizenNeeds.foodDays(day.food(), eaters, day.dailyNutrition()) >= day.foodDays();
         int grown = 0;
         if (grows) {
@@ -205,6 +279,6 @@ public final class CityFolk {
             grown = (int) whole;
             folk += grown;
         }
-        return new Result(folk, Math.min(carry, 0.999_999), leftForRoom, leftHungry, grown, dues);
+        return new Result(folk, Math.min(carry, 0.999_999), leftForRoom, leftHungry, grown, leftPoor, why);
     }
 }

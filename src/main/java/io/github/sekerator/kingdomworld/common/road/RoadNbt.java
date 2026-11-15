@@ -542,6 +542,15 @@ final class RoadNbt {
         if (charter.folkCarry() != 0.0) {
             entry.putDouble("carry", charter.folkCarry());
         }
+        if (charter.folkHands() != 0) {
+            entry.putInt("folkHands", charter.folkHands());
+        }
+        if (charter.folkIdle() != 0) {
+            entry.putInt("folkIdle", charter.folkIdle());
+        }
+        if (charter.folkEarned() >= 0) {
+            entry.putLong("folkEarned", charter.folkEarned());
+        }
         if (charter.lastDay() != CityCharter.NEVER) {
             entry.putLong("day", charter.lastDay());
         }
@@ -588,6 +597,8 @@ final class RoadNbt {
         CityCharter charter = new CityCharter(entry.getUUID("kingdom"), entry.getLong("city"));
         charter.setFolk(entry.getInt("folk"));
         charter.setFolkCarry(entry.getDouble("carry"));
+        charter.setFolkWork(entry.getInt("folkHands"), entry.getInt("folkIdle"));
+        charter.setFolkEarned(entry.contains("folkEarned", Tag.TAG_LONG) ? entry.getLong("folkEarned") : -1);
         charter.setLastDay(entry.contains("day", Tag.TAG_LONG) ? entry.getLong("day") : CityCharter.NEVER);
         charter.setLastArrival(entry.contains("arrival", Tag.TAG_LONG) ? entry.getLong("arrival") : CityCharter.NEVER);
         if (entry.hasUUID("mayor")) {

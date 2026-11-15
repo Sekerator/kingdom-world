@@ -418,20 +418,37 @@ public final class Shops {
             shop.setProfitDue(0);
             List<Citizen> earners = earners(server, shop);
             long usual = Workshops.usualIncome(Workshops.trade(shop));
-            if (profit <= 0 || earners.isEmpty()) {
+            int hands = shop.family() ? 0 : shop.folkHands();
+            if (profit <= 0 || earners.isEmpty() && hands == 0) {
                 markKeepers(shop, earners, 0, usual);
+                shop.setLastShared(0);
                 continue;
             }
             long tithe = Money.share(profit, CommerceWork.tithe(server, kingdom, shop.cityId()), 1000);
             long collected = Evasion.collected(tithe, CommerceWork.evasion(server, kingdom, shop.cityId()));
             economy.purseMove(till, CityPurses.PurseKey.cityTreasury(kingdom, shop.cityId()), collected, CityLedger.TITHE, day);
             long rest = profit - collected;
-            int[] shares = new int[earners.size()];
+            shop.setLastShared(rest);
+            // The hands of the townsfolk share by the work they give, all of them in one part paid into the purse of the city.
+            int handShare = io.github.sekerator.kingdomworld.common.citizen.FolkSettings.work().handShare(Business.KEEPER_SHARE);
+            int[] shares = new int[earners.size() + (hands > 0 ? 1 : 0)];
             int[] own = shop.shares();
-            for (int i = 0; i < shares.length; i++) {
+            for (int i = 0; i < earners.size(); i++) {
                 shares[i] = shop.family() || i >= own.length ? Business.KEEPER_SHARE : own[i];
             }
+            if (hands > 0) {
+                shares[earners.size()] = (int) Math.min(Integer.MAX_VALUE, (long) hands * handShare);
+            }
             long[] parts = Business.split(rest, shares);
+            if (hands > 0) {
+                long theirs = parts[earners.size()];
+                economy.purseMove(till, CityPurses.PurseKey.cityPurse(kingdom, shop.cityId()), theirs, CityLedger.OTHER, day);
+                FolkWork.earnedShare(server, kingdom, shop.cityId(), theirs);
+            }
+            long total = 0;
+            for (int share : shares) {
+                total += share;
+            }
             for (int i = 0; i < earners.size(); i++) {
                 Citizen earner = earners.get(i);
                 long pay = parts[i];
@@ -439,7 +456,8 @@ public final class Shops {
                 long kept = home > 0 ? toHouse(server, economy, till, earner, home) : 0;
                 economy.purseMove(till, CityPurses.PurseKey.cityPurse(kingdom, CityOf.of(server, earner)), pay - kept, CityLedger.OTHER, day);
             }
-            markKeepers(shop, earners, profit / Math.max(1, earners.size()), usual);
+            markKeepers(shop, earners, hands > 0 && !earners.isEmpty() ? Money.share(profit, Business.KEEPER_SHARE, total)
+                    : profit / Math.max(1, earners.size()), usual);
         }
         data.setDirty();
     }

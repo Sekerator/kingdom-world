@@ -262,6 +262,10 @@ public final class CityPeople {
         long day = Math.floorDiv(now, CitizenNeeds.TICKS_PER_DAY);
         int hungry = 0;
         int hungryCities = 0;
+        // The townsfolk work where the money of the kingdom stays in its cities.
+        boolean works = io.github.sekerator.kingdomworld.common.commerce.CityOf.active(server, kingdomId);
+        io.github.sekerator.kingdomworld.common.commerce.FolkWork.Plan plan = null;
+        java.util.Map<Long, CityFolk.Work> workOf = new HashMap<>();
         for (Census city : census) {
             CityCharter charter = roads.charterOf(kingdomId, city.cityId(), arrival(kingdomArrival));
             if (charter.lastDay() == CityCharter.NEVER || charter.lastDay() > day) {
@@ -282,14 +286,18 @@ public final class CityPeople {
             long ration = CityFolk.ration(housed, rules.dailyNutrition());
             long eaten = ration <= 0 ? 0 : KingdomStorage.eat(server, kingdomId, (int) Math.min(Integer.MAX_VALUE, ration), city.hall());
             nutrition = Math.max(0, nutrition - eaten);
+            CityFolk.Work work = works ? work(server, kingdomId, charter) : null;
             CityFolk.Result result = CityFolk.day(new CityFolk.Day(charter.folk(), charter.folkCarry(), city.freeBeds(), rules.dailyNutrition(),
-                    eaten, nutrition, named + folk - charter.folk(), rules.growthFoodDays(), city.named(), city.mood(),
-                    state.economy().treasuryRoom(kingdomId)), folkRules);
+                    eaten, nutrition, named + folk - charter.folk(), rules.growthFoodDays(), city.named(), city.mood(), work), folkRules);
             folk += result.folk() - charter.folk();
             charter.setFolk(result.folk());
             charter.setFolkCarry(result.carry());
-            if (result.dues() > 0) {
-                state.economy().folkDues(kingdomId, result.dues(), day);
+            if (works) {
+                if (plan == null) {
+                    plan = io.github.sekerator.kingdomworld.common.commerce.FolkWork.plan(server, kingdomId);
+                }
+                io.github.sekerator.kingdomworld.common.commerce.FolkWork.day(server, kingdomId, charter, result.folk(), city.mood(), plan);
+                workOf.put(city.cityId(), work(server, kingdomId, charter));
             }
             if (result.leftHungry() > 0) {
                 hungry += result.leftHungry();
@@ -306,6 +314,11 @@ public final class CityPeople {
             CityCharter charter = roads.charterOf(kingdomId, city.cityId(), arrival(kingdomArrival));
             CityFolk.Newcomer newcomer = CityFolk.newcomer(city.named(), charter.folk(), city.freeBeds(), folkRules);
             if (newcomer == CityFolk.Newcomer.NONE) {
+                continue;
+            }
+            if (newcomer == CityFolk.Newcomer.FOLK && works && !CityFolk.mayGrow(charter.folk(),
+                    workOf.computeIfAbsent(city.cityId(), id -> work(server, kingdomId, charter)))) {
+                // The townsfolk come only where those already there find work and pay.
                 continue;
             }
             int houseBeds = newcomer == CityFolk.Newcomer.FOLK ? CityFolk.bedsLeft(city.freeHouseBeds(), charter.folk(), folkRules)
@@ -330,6 +343,17 @@ public final class CityPeople {
             charter.setLastArrival(now);
             roads.charterChanged();
         }
+    }
+
+    /**
+     * How the townsfolk of a city worked and earned, for their day: the idle and what they earned as of the last day and payday,
+     * the means of the city.
+     */
+    public static CityFolk.Work work(MinecraftServer server, UUID kingdomId, CityCharter charter) {
+        int means = io.github.sekerator.kingdomworld.common.commerce.CommerceWork.meansOf(server, kingdomId, charter.cityId()).value();
+        // Before their first payday nothing is known of what they earn.
+        long earned = charter.folkEarned() < 0 ? Long.MAX_VALUE / 4 : charter.folkEarned();
+        return new CityFolk.Work(charter.folkIdle(), earned, means, FolkSettings.work());
     }
 
     private static long arrival(long kingdomArrival) {

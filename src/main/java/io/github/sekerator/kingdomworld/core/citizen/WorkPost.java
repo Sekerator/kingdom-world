@@ -33,6 +33,11 @@ public final class WorkPost {
     private int herdSize;
     private MineGoal mineGoal = MineGoal.ANYTHING;
     private final Set<UUID> workers = new LinkedHashSet<>();
+    /** The townsfolk on its free seats: people of its city without a body or a record, see {@link #folkWorkers()}. */
+    private int folkWorkers;
+    /** For a farm: the crops last seen around it and what they mostly give, so that its townsfolk farm far from players. */
+    private int farmPlots;
+    private String farmProduct = "";
     private WorkStatus status = WorkStatus.NO_PROFESSION;
     private PostYield yield = PostYield.NONE;
     private final Map<String, Double> progress = new LinkedHashMap<>();
@@ -130,6 +135,7 @@ public final class WorkPost {
             progress.clear();
             current = "";
             currentProgress = 0.0;
+            folkWorkers = 0;
             changed();
         }
     }
@@ -157,6 +163,7 @@ public final class WorkPost {
         int clamped = Math.max(1, value);
         if (clamped != seats) {
             seats = clamped;
+            folkWorkers = Math.min(folkWorkers, Math.max(0, seats - workers.size()));
             changed();
         }
     }
@@ -226,8 +233,52 @@ public final class WorkPost {
         return Collections.unmodifiableSet(workers);
     }
 
+    /**
+     * The seats no named worker took; the townsfolk on the post sit on some of them and make way for a named worker.
+     */
     public int freeSeats() {
         return Math.max(0, seats - workers.size());
+    }
+
+    /**
+     * The townsfolk working on the post: people of its city without a body or a record, on the seats no named worker took. Named
+     * workers always come first: one hired on the post takes the seat of one of them.
+     */
+    public int folkWorkers() {
+        return folkWorkers;
+    }
+
+    /**
+     * Sets the townsfolk on the post, never beyond the seats the named workers left.
+     */
+    public void setFolkWorkers(int value) {
+        int clamped = Math.max(0, Math.min(value, freeSeats()));
+        if (clamped != folkWorkers) {
+            folkWorkers = clamped;
+            changed();
+        }
+    }
+
+    /**
+     * The seats neither a named worker nor one of the townsfolk took.
+     */
+    public int openSeats() {
+        return Math.max(0, seats - workers.size() - folkWorkers);
+    }
+
+    /**
+     * The id under which the townsfolk of the post are paid, as one claim for all of them, and keep their tools.
+     */
+    public UUID folkId() {
+        return folkId(pos);
+    }
+
+    /**
+     * The id of the townsfolk of a post at a place.
+     */
+    public static UUID folkId(WorldPos pos) {
+        return UUID.nameUUIDFromBytes(("kingdomworld:folk:" + pos.dimension() + ":" + pos.x() + "," + pos.y() + "," + pos.z())
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     boolean addWorker(UUID citizen) {
@@ -235,6 +286,10 @@ public final class WorkPost {
             return false;
         }
         workers.add(citizen);
+        if (workers.size() + folkWorkers > seats) {
+            // The named worker takes the seat of one of the townsfolk, who is idle again.
+            folkWorkers = Math.max(0, seats - workers.size());
+        }
         changed();
         return true;
     }
@@ -425,6 +480,48 @@ public final class WorkPost {
     }
 
     /**
+     * For a farm: the crops last seen around it, 0 while nobody looked.
+     */
+    public int farmPlots() {
+        return farmPlots;
+    }
+
+    /**
+     * For a farm: the item its crops mostly give, empty while nobody looked.
+     */
+    public String farmProduct() {
+        return farmProduct;
+    }
+
+    /**
+     * Remembers what the fields of a farm look like.
+     */
+    public void rememberFarm(int plots, String product) {
+        int clamped = Math.max(0, plots);
+        String value = product == null ? "" : product;
+        if (clamped != farmPlots || !value.equals(farmProduct)) {
+            farmPlots = clamped;
+            farmProduct = value;
+            changed();
+        }
+    }
+
+    /**
+     * Restores what was seen of the fields of a farm; does not notify.
+     */
+    public void restoreFarm(int plots, String product) {
+        farmPlots = Math.max(0, plots);
+        farmProduct = product == null ? "" : product;
+    }
+
+    /**
+     * Restores the townsfolk on the post from saved data, once its workers are back; does not notify.
+     */
+    public void restoreFolk(int value) {
+        folkWorkers = Math.max(0, Math.min(value, freeSeats()));
+    }
+
+    /**
      * The day the production counter belongs to, for saved data.
      */
     public long counterDay() {
@@ -440,6 +537,6 @@ public final class WorkPost {
 
     @Override
     public String toString() {
-        return "WorkPost[" + pos.coordinates() + " " + professionId + ", " + workers.size() + "/" + seats + "]";
+        return "WorkPost[" + pos.coordinates() + " " + professionId + ", " + workers.size() + "+" + folkWorkers + "/" + seats + "]";
     }
 }

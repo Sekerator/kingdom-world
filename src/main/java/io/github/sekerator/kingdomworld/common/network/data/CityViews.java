@@ -203,8 +203,27 @@ public final class CityViews {
      */
     public record CityDetail(UUID kingdomId, long cityId, String name, boolean canManage, long balance, long granted, long committed, Taxes own,
                              Taxes effective, long[] average, long[] latest, int days, int evasion, int[] means, boolean head, long crownFunds,
-                             List<ShopRow> shops, int shopCount, Blocked blocked, long shortfall, String missing) {
+                             List<ShopRow> shops, int shopCount, Blocked blocked, long shortfall, String missing, Folk folk) {
+        /**
+         * The townsfolk of a city: how many, what one of them earned on the last payday and why they do not grow or leave.
+         *
+         * @param count       the townsfolk
+         * @param earnedMilli what one of them earned, in thousandths
+         * @param why         the id of {@link io.github.sekerator.kingdomworld.core.road.CityFolk.Why}
+         */
+        public record Folk(int count, long earnedMilli, int why) {
+            public static final Folk NONE = new Folk(0, 0, 0);
+        }
+
+        public CityDetail(UUID kingdomId, long cityId, String name, boolean canManage, long balance, long granted, long committed, Taxes own,
+                          Taxes effective, long[] average, long[] latest, int days, int evasion, int[] means, boolean head, long crownFunds,
+                          List<ShopRow> shops, int shopCount, Blocked blocked, long shortfall, String missing) {
+            this(kingdomId, cityId, name, canManage, balance, granted, committed, own, effective, average, latest, days, evasion, means, head,
+                    crownFunds, shops, shopCount, blocked, shortfall, missing, Folk.NONE);
+        }
+
         public CityDetail {
+            folk = folk == null ? Folk.NONE : folk;
             Objects.requireNonNull(kingdomId, "kingdomId");
             Objects.requireNonNull(name, "name");
             name = name.length() > MAX_NAME ? name.substring(0, MAX_NAME) : name;
@@ -265,6 +284,9 @@ public final class CityViews {
             buf.writeEnum(blocked);
             buf.writeVarLong(shortfall);
             buf.writeUtf(missing, MAX_NAME * 4);
+            buf.writeVarInt(Math.max(0, folk.count()));
+            buf.writeVarLong(Math.max(0, folk.earnedMilli()));
+            buf.writeVarInt(Math.max(0, folk.why()));
         }
 
         public static CityDetail decode(FriendlyByteBuf buf) {
@@ -299,7 +321,8 @@ public final class CityViews {
                 shops.add(ShopRow.decode(buf));
             }
             return new CityDetail(kingdom, city, name, canManage, balance, granted, committed, own, effective, average, latest, days, evasion, means,
-                    head, crownFunds, shops, buf.readVarInt(), KingdomView.readEnum(buf, Blocked.class), amount(buf), buf.readUtf(MAX_NAME * 4));
+                    head, crownFunds, shops, buf.readVarInt(), KingdomView.readEnum(buf, Blocked.class), amount(buf), buf.readUtf(MAX_NAME * 4),
+                    new Folk(buf.readVarInt(), buf.readVarLong(), buf.readVarInt()));
         }
     }
 

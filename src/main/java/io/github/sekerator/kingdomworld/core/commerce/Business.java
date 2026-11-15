@@ -234,6 +234,10 @@ public final class Business {
     private long tradeSince;
     private final List<UUID> keepers = new ArrayList<>();
     private boolean family;
+    /** Hands of the townsfolk working with its keepers or masters. */
+    private int folkHands;
+    /** What those who earn of it shared on the last payday, after the tithe. */
+    private long lastShared;
     private final Map<String, Lot> goods = new LinkedHashMap<>();
     private final Map<String, Lot> inputs = new LinkedHashMap<>();
     private final List<Commission> commissions = new ArrayList<>();
@@ -364,6 +368,29 @@ public final class Business {
 
     public boolean kept() {
         return family || !keepers.isEmpty();
+    }
+
+    /**
+     * The hands of the townsfolk working with its keepers or masters: each adds a part of the work of a master and shares what it
+     * earns by that part.
+     */
+    public int folkHands() {
+        return folkHands;
+    }
+
+    public void setFolkHands(int value) {
+        folkHands = Math.max(0, value);
+    }
+
+    /**
+     * What those who earn of it shared on the last payday, after the tithe: its keepers and its hands.
+     */
+    public long lastShared() {
+        return lastShared;
+    }
+
+    public void setLastShared(long value) {
+        lastShared = Math.max(0, value);
     }
 
     /**

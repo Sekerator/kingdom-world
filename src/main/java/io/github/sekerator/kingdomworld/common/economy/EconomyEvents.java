@@ -93,6 +93,7 @@ public final class EconomyEvents {
         io.github.sekerator.kingdomworld.common.commerce.CityEconomySettings.reset();
         io.github.sekerator.kingdomworld.common.commerce.CraftSettings.reset();
         io.github.sekerator.kingdomworld.common.commerce.CommerceWork.reset();
+        io.github.sekerator.kingdomworld.common.commerce.FolkWork.reset();
     }
 
     /**
@@ -199,6 +200,8 @@ public final class EconomyEvents {
         if (payday == Economy.Payday.NONE) {
             return payday;
         }
+        // The townsfolk the treasury could not pay leave their posts; what they were paid is what they earned.
+        io.github.sekerator.kingdomworld.common.commerce.FolkWork.afterPayday(server, kingdom.id(), payday);
         // Of every wage a share goes home with the citizen; the rest stays in its city, or leaves the world.
         Households.onPayday(server, kingdom.id(), payday);
         citizenTax(server, state, kingdom, payday, day);

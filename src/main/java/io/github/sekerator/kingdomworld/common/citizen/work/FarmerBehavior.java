@@ -110,7 +110,23 @@ public final class FarmerBehavior implements ProfessionBehavior {
         Survey survey = survey(level, citizen.kingdomId(), new BlockPos(workplace.x(), workplace.y(), workplace.z()), radius);
         if (survey.plots() > 0) {
             citizen.rememberWork(survey.plots(), survey.product());
+            // The townsfolk of the post farm by what its named farmer saw.
+            PostWork.post(level.getServer(), workplace).ifPresent(post -> post.rememberFarm(survey.plots(), survey.product()));
         }
+    }
+
+    /**
+     * Looks at the fields of a farm for its townsfolk, while its place is loaded; nothing happens while it is not.
+     */
+    public static void surveyPost(net.minecraft.server.MinecraftServer server, io.github.sekerator.kingdomworld.core.citizen.WorkPost post) {
+        WorldPos at = post.pos();
+        ServerLevel level = PostWork.level(server, at);
+        BlockPos center = new BlockPos(at.x(), at.y(), at.z());
+        if (level == null || !level.isLoaded(center)) {
+            return;
+        }
+        Survey survey = survey(level, post.kingdomId(), center, post.radius());
+        post.rememberFarm(survey.plots(), survey.product());
     }
 
     /**

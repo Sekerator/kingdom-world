@@ -394,6 +394,10 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
             // Workers who live in another city: there is no bed in the city of the post.
             lines.add(view.home());
         }
+        if (view.folk() > 0) {
+            // The townsfolk on the free seats work without a body, on a line of their own.
+            lines.add(Component.translatable(KEY + "folk", view.folk(), view.folkRate()));
+        }
         return lines;
     }
 

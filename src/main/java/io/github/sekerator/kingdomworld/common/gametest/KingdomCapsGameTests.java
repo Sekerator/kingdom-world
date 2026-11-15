@@ -133,7 +133,7 @@ public final class KingdomCapsGameTests {
             helper.assertTrue(citizens.registry().count(kingdom.id()) == 201, "The kingdom has " + citizens.registry().count(kingdom.id())
                     + " citizens");
             // Without townsfolk every newcomer is a named citizen: the 202nd comes.
-            io.github.sekerator.kingdomworld.common.citizen.FolkSettings.override(new io.github.sekerator.kingdomworld.core.road.FolkRules(0, 4, 8, 1));
+            io.github.sekerator.kingdomworld.common.citizen.FolkSettings.override(new io.github.sekerator.kingdomworld.core.road.FolkRules(0, 4, 8));
             CitizenSimulation.step(server, kingdom.id());
             int now = citizens.registry().count(kingdom.id());
             helper.assertTrue(now == 202, "No newcomer came to the kingdom of 201 citizens with free beds and food: " + now);

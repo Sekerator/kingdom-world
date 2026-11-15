@@ -75,15 +75,28 @@ public final class Economy {
      * A citizen on the payroll.
      *
      * @param permille the wage of the citizen in thousandths of the wage of its profession: 1000 for everybody but the
-     *                 officers of the guard and the army
+     *                 officers of the guard and the army; for the townsfolk of a post a thousand for each of them
+     * @param folk     whether the claim is that of the townsfolk of a post, all of them in one: they are paid after the named
+     *                 citizens, out of what is left
      */
-    public record WageClaim(UUID citizenId, String profession, int permille) {
+    public record WageClaim(UUID citizenId, String profession, int permille, boolean folk) {
         public WageClaim {
-            permille = Math.max(0, Math.min(1_000_000, permille));
+            permille = Math.max(0, Math.min(folk ? Integer.MAX_VALUE : 1_000_000, permille));
+        }
+
+        public WageClaim(UUID citizenId, String profession, int permille) {
+            this(citizenId, profession, permille, false);
         }
 
         public WageClaim(UUID citizenId, String profession) {
             this(citizenId, profession, 1_000);
+        }
+
+        /**
+         * The one claim of the townsfolk of a post: the wage of its profession for each of them.
+         */
+        public static WageClaim folk(UUID postId, String profession, int workers) {
+            return new WageClaim(postId, profession, (int) Math.min(Integer.MAX_VALUE, Math.max(0L, workers) * 1_000L), true);
         }
 
         /**
@@ -702,25 +715,6 @@ public final class Economy {
             return 0;
         }
         return Math.max(0, Money.MAX - Math.max(Math.max(0, treasury.balance()), Math.max(0, treasury.funds())));
-    }
-
-    /**
-     * The townsfolk of the cities of a kingdom pay their dues into its treasury, as taxes; what a full treasury cannot take
-     * is not taken.
-     *
-     * @return what was paid
-     */
-    public long folkDues(UUID kingdomId, long amount, long day) {
-        Treasury treasury = treasuries.get(kingdomId);
-        if (treasury == null || amount <= 0) {
-            return 0;
-        }
-        long paid = Math.min(amount, treasuryRoom(kingdomId));
-        if (paid <= 0 || !treasury.receive(paid, LedgerCategory.TAXES, day)) {
-            return 0;
-        }
-        changed();
-        return paid;
     }
 
     /**
@@ -1562,7 +1556,7 @@ public final class Economy {
         for (int i = 0; i < claims.size(); i++) {
             wages[i] = claims.get(i).scaled(treasury.wage(claims.get(i).profession(), rules));
         }
-        long[] paid = Payroll.distribute(wages, treasury.funds());
+        long[] paid = distribute(claims, wages, treasury.funds());
         long due = 0;
         long total = 0;
         int underpaid = 0;
@@ -1604,6 +1598,43 @@ public final class Economy {
         treasury.setLastPayday(day);
         changed();
         return new Payday(List.copyOf(taxes), pay, percents, summary, cities);
+    }
+
+    /**
+     * Shares out the money of a treasury for wages: the named citizens first, the same share of each when it has too little, then
+     * the townsfolk of the posts out of what is left. The townsfolk took their seats by themselves and never take the wage of a
+     * named worker.
+     */
+    static long[] distribute(List<WageClaim> claims, long[] wages, long funds) {
+        int folk = 0;
+        for (WageClaim claim : claims) {
+            if (claim.folk()) {
+                folk++;
+            }
+        }
+        if (folk == 0) {
+            return Payroll.distribute(wages, funds);
+        }
+        long[] named = new long[claims.size() - folk];
+        long[] theirs = new long[folk];
+        for (int i = 0, n = 0, f = 0; i < claims.size(); i++) {
+            if (claims.get(i).folk()) {
+                theirs[f++] = wages[i];
+            } else {
+                named[n++] = wages[i];
+            }
+        }
+        long[] namedPaid = Payroll.distribute(named, funds);
+        long left = Math.max(0, funds);
+        for (long pay : namedPaid) {
+            left -= pay;
+        }
+        long[] folkPaid = Payroll.distribute(theirs, left);
+        long[] paid = new long[claims.size()];
+        for (int i = 0, n = 0, f = 0; i < claims.size(); i++) {
+            paid[i] = claims.get(i).folk() ? folkPaid[f++] : namedPaid[n++];
+        }
+        return paid;
     }
 
     // ---------------------------------------------------------------- the money of the cities

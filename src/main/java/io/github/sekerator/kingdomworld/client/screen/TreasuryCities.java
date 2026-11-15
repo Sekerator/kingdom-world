@@ -543,6 +543,14 @@ final class TreasuryCities {
         lines.add(Component.translatable(KEY + "evasion", percent((d.evasion() + 5) / 10 * 10)));
         int[] means = d.means();
         lines.add(Component.translatable(KEY + "panel.means", (means[4] > 0 ? "+" : "") + means[4]));
+        if (d.folk().count() > 0) {
+            // What one of the townsfolk earns, and why they do not grow or leave.
+            lines.add(Component.translatable(KEY + "folk.earns", money(view, (d.folk().earnedMilli() + 500) / 1_000)));
+            String[] whys = {"", "idle", "poor", "leave_poor", "leave_taxes"};
+            if (d.folk().why() > 0 && d.folk().why() < whys.length) {
+                lines.add(Component.translatable(KEY + "folk." + whys[d.folk().why()]));
+            }
+        }
         if (!d.head()) {
             lines.add(Component.translatable(KEY + "no_head"));
         }

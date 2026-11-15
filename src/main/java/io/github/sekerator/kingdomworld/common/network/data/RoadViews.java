@@ -313,12 +313,39 @@ public final class RoadViews {
                           long wallId, @Nullable Wall.WallClass wallClass, int wallBuilt, int gates, int folk, int beds, int freeBeds,
                           int builders, int helpers, int sites, int governor, String governorName, String governorTitle, boolean paused,
                           net.minecraft.network.chat.Component note, boolean needsLand, boolean money, long treasury, long perDay, long kept,
-                          long toCrown) {
+                          long toCrown, FolkJobs folkJobs) {
         public static final int NO_GOVERNOR = 0;
+
+        /**
+         * Where the townsfolk of a city work, as of its last day of the townsfolk.
+         *
+         * @param posts      on the posts of the crown
+         * @param hands      as hands in the workshops and shops of citizens
+         * @param idle       without work
+         * @param earnedMilli what one of them earned on the last payday, in thousandths
+         */
+        public record FolkJobs(int posts, int hands, int idle, long earnedMilli) {
+            public static final FolkJobs NONE = new FolkJobs(0, 0, 0, 0);
+
+            public boolean any() {
+                return posts > 0 || hands > 0 || idle > 0;
+            }
+        }
+
+        public CityRow(long id, String name, int x, int y, int z, boolean capital, int roads, CityLevel level, int people, int buildings,
+                       long wallId, @Nullable Wall.WallClass wallClass, int wallBuilt, int gates, int folk, int beds, int freeBeds,
+                       int builders, int helpers, int sites, int governor, String governorName, String governorTitle, boolean paused,
+                       net.minecraft.network.chat.Component note, boolean needsLand, boolean money, long treasury, long perDay, long kept,
+                       long toCrown) {
+            this(id, name, x, y, z, capital, roads, level, people, buildings, wallId, wallClass, wallBuilt, gates, folk, beds, freeBeds,
+                    builders, helpers, sites, governor, governorName, governorTitle, paused, note, needsLand, money, treasury, perDay, kept,
+                    toCrown, FolkJobs.NONE);
+        }
         public static final int MAYOR = 1;
         public static final int HOUSE = 2;
 
         public CityRow {
+            folkJobs = folkJobs == null ? FolkJobs.NONE : folkJobs;
             governor = governor < NO_GOVERNOR || governor > HOUSE ? NO_GOVERNOR : governor;
             governorName = governorName == null ? "" : governorName;
             governorTitle = governorTitle == null ? "" : governorTitle;
@@ -347,7 +374,17 @@ public final class RoadViews {
         public CityRow withGovernor(int kind, String who, String title, boolean stopped, net.minecraft.network.chat.Component decided,
                                     boolean landWanted) {
             return new CityRow(id, name, x, y, z, capital, roads, level, people, buildings, wallId, wallClass, wallBuilt, gates, folk, beds,
-                    freeBeds, builders, helpers, sites, kind, who, title, stopped, decided, landWanted, money, treasury, perDay, kept, toCrown);
+                    freeBeds, builders, helpers, sites, kind, who, title, stopped, decided, landWanted, money, treasury, perDay, kept, toCrown,
+                    folkJobs);
+        }
+
+        /**
+         * The same city with where its townsfolk work.
+         */
+        public CityRow withFolkJobs(FolkJobs value) {
+            return new CityRow(id, name, x, y, z, capital, roads, level, people, buildings, wallId, wallClass, wallBuilt, gates, folk, beds,
+                    freeBeds, builders, helpers, sites, governor, governorName, governorTitle, paused, note, needsLand, money, treasury, perDay, kept,
+                    toCrown, value);
         }
 
         /**
@@ -357,7 +394,7 @@ public final class RoadViews {
         public CityRow withMoney(boolean keeps, long held, long day, long keptDay, long crownDay) {
             return new CityRow(id, name, x, y, z, capital, roads, level, people, buildings, wallId, wallClass, wallBuilt, gates, folk, beds,
                     freeBeds, builders, helpers, sites, governor, governorName, governorTitle, paused, note, needsLand, keeps, held, day, keptDay,
-                    crownDay);
+                    crownDay, folkJobs);
         }
 
         void encode(FriendlyByteBuf buf) {
@@ -392,6 +429,10 @@ public final class RoadViews {
             buf.writeVarLong(Math.max(0, perDay));
             buf.writeVarLong(Math.max(0, kept));
             buf.writeVarLong(Math.max(0, toCrown));
+            buf.writeVarInt(Math.max(0, folkJobs.posts()));
+            buf.writeVarInt(Math.max(0, folkJobs.hands()));
+            buf.writeVarInt(Math.max(0, folkJobs.idle()));
+            buf.writeVarLong(Math.max(0, folkJobs.earnedMilli()));
         }
 
         static CityRow decode(FriendlyByteBuf buf) {
@@ -412,7 +453,8 @@ public final class RoadViews {
                     wallClass <= 0 || wallClass > classes.length ? null : classes[wallClass - 1], buf.readVarInt(), buf.readVarInt(),
                     buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(),
                     buf.readUtf(NAME), buf.readUtf(NAME), buf.readBoolean(), buf.readComponent(), buf.readBoolean(), buf.readBoolean(), buf.readVarLong(),
-                    buf.readVarLong(), buf.readVarLong(), buf.readVarLong());
+                    buf.readVarLong(), buf.readVarLong(), buf.readVarLong(),
+                    new FolkJobs(buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarLong()));
         }
     }
 

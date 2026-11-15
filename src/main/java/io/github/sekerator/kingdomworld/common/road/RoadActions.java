@@ -109,6 +109,15 @@ public final class RoadActions {
             case HOUSE -> RoadViews.CityRow.HOUSE;
             case NONE -> RoadViews.CityRow.NO_GOVERNOR;
         };
+        if (money && folk > 0) {
+            // Where the townsfolk work and what one of them earned on the last payday.
+            io.github.sekerator.kingdomworld.core.road.CityCharter folkCharter = charter.orElse(null);
+            if (folkCharter != null) {
+                long earned = Math.max(0, folkCharter.folkEarned());
+                row = row.withFolkJobs(new RoadViews.CityRow.FolkJobs(folkCharter.folkOnPosts(), folkCharter.folkHands(), folkCharter.folkIdle(),
+                        earned * 1_000L / Math.max(1, folk)));
+            }
+        }
         return row.withMoney(money, balance, perDay, kept, toCrown).withGovernor(kind, CityGovernors.governorName(server, governor, alphabet), governor.grant() == null ? ""
                 : governor.grant().title().id(), charter.map(io.github.sekerator.kingdomworld.core.road.CityCharter::paused).orElse(false),
                 governor.present() ? CityGovernors.noteWithSpending(server, kingdomId, cityId, charter.map(io.github.sekerator.kingdomworld.core.road.CityCharter::note)

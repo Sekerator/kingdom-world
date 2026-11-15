@@ -743,6 +743,11 @@ final class RoadsTab {
                     io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(row.kept(), units),
                     io.github.sekerator.kingdomworld.common.economy.MoneyTexts.amount(row.toCrown(), units)));
         }
+        if (row.folkJobs().any()) {
+            // Where the townsfolk work.
+            hint = Component.empty().append(hint).append("\n").append(Component.translatable(KEY + "city.folk_work", row.folkJobs().posts(),
+                    row.folkJobs().hands(), row.folkJobs().idle()));
+        }
         int whereWidth = Math.min(screen.font().width(where), Math.max(0, (right - x) / 5));
         int governorWidth = Math.min(screen.font().width(governor), Math.max(0, (right - x - whereWidth) / 3));
         int stateWidth = Math.min(screen.font().width(state), Math.max(0, (right - x - whereWidth - governorWidth) / 2));

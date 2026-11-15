@@ -51,6 +51,11 @@ public final class CityOf {
         for (Citizen citizen : KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdomId)) {
             cities.put(citizen.id(), compute(server, kingdomId, places, index, citizen));
         }
+        // The townsfolk of a post are paid into the purse of the city of the post.
+        FolkWork.cities(server, kingdomId, cities, pos -> {
+            long city = CityPeople.cityIdOf(server, kingdomId, places, index, pos);
+            return city >= 0 ? city : 0L;
+        });
         CACHE.put(kingdomId, cities);
         return Collections.unmodifiableMap(cities);
     }

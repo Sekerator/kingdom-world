@@ -144,7 +144,22 @@ public final class CityTreasuryActions {
                 found.committed(), own, effective, average, found.latest().values(), statements.size(), CommerceWork.evasion(server, kingdom, city),
                 new int[]{means.burden(), means.shops(), means.recall(), means.share(), means.value()},
                 CommerceWork.hasHead(server, kingdom, city), treasury.get().funds(), shops.rows(), shops.count(), shops.blocked(),
-                shops.shortfall(), shops.missing()));
+                shops.shortfall(), shops.missing(), folk(server, kingdom, city)));
+    }
+
+    /**
+     * The townsfolk of a city for its window: what one of them earned on the last payday and why they do not grow or leave.
+     */
+    private static CityViews.CityDetail.Folk folk(MinecraftServer server, UUID kingdom, long city) {
+        var charter = io.github.sekerator.kingdomworld.common.road.RoadWork.state(server).charter(kingdom, city);
+        int count = charter.map(io.github.sekerator.kingdomworld.core.road.CityCharter::folk).orElse(0);
+        if (count <= 0 || !FolkWork.active(server, kingdom)) {
+            return CityViews.CityDetail.Folk.NONE;
+        }
+        var work = io.github.sekerator.kingdomworld.common.road.CityPeople.work(server, kingdom, charter.get());
+        long earned = Math.max(0, charter.get().folkEarned());
+        return new CityViews.CityDetail.Folk(count, earned * 1_000L / count,
+                io.github.sekerator.kingdomworld.core.road.CityFolk.why(count, work).ordinal());
     }
 
     // ---------------------------------------------------------------- changes

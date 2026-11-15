@@ -184,7 +184,7 @@ final class ClientFolkShowcase {
             player.setGameMode(GameType.CREATIVE);
             KingdomWorldApi.kingdomOf(server, playerId).ifPresent(old -> KingdomWorldApi.dissolveKingdom(server, old.id()));
             // The quota of the showcase: the capital is full of named citizens, so that its numbers stay as they are.
-            FolkSettings.override(new FolkRules(NAMED, 4, 8, 1));
+            FolkSettings.override(new FolkRules(NAMED, 4, 8));
             BlockPos at = player.blockPosition();
             BlockPos seat = surface(level, at.getX() + 3, at.getZ());
             level.setBlockAndUpdate(seat, ModRegistries.THRONE.get().defaultBlockState());

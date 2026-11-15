@@ -25,6 +25,12 @@ public final class CityCharter {
     private final long cityId;
     private int folk;
     private double folkCarry;
+    /** The townsfolk working as hands in the workshops and shops of the city, as of its last day of the townsfolk. */
+    private int folkHands;
+    /** The townsfolk without work, as of its last day of the townsfolk. */
+    private int folkIdle;
+    /** What the townsfolk earned on the last payday, wages and shares after the tithe; -1 before the first. */
+    private long folkEarned = -1;
     private long lastDay = NEVER;
     private long lastArrival = NEVER;
     private UUID mayor;
@@ -81,6 +87,46 @@ public final class CityCharter {
 
     public void setFolkCarry(double value) {
         folkCarry = Double.isFinite(value) ? Math.max(0.0, Math.min(0.999_999, value)) : 0.0;
+    }
+
+    /**
+     * The townsfolk working as hands in the workshops and shops of the city, as of its last day of the townsfolk.
+     */
+    public int folkHands() {
+        return folkHands;
+    }
+
+    /**
+     * The townsfolk without work, as of its last day of the townsfolk.
+     */
+    public int folkIdle() {
+        return folkIdle;
+    }
+
+    /**
+     * The townsfolk on the posts of the crown, as of its last day of the townsfolk: those neither hands nor idle.
+     */
+    public int folkOnPosts() {
+        return Math.max(0, folk - folkHands - folkIdle);
+    }
+
+    /**
+     * Keeps how the townsfolk work: the hands of the workshops and the idle, the rest on the posts.
+     */
+    public void setFolkWork(int hands, int idle) {
+        folkHands = Math.max(0, Math.min(folk, hands));
+        folkIdle = Math.max(0, Math.min(folk - folkHands, idle));
+    }
+
+    /**
+     * What the townsfolk earned on the last payday, wages and shares after the tithe; -1 before the first.
+     */
+    public long folkEarned() {
+        return folkEarned;
+    }
+
+    public void setFolkEarned(long value) {
+        folkEarned = Math.max(-1, Math.min(Long.MAX_VALUE / 4, value));
     }
 
     /**
@@ -266,6 +312,9 @@ public final class CityCharter {
         moved.extent = extent;
         moved.folk = folk;
         moved.folkCarry = folkCarry;
+        moved.folkHands = folkHands;
+        moved.folkIdle = folkIdle;
+        moved.folkEarned = folkEarned;
         moved.lastDay = lastDay;
         moved.lastArrival = lastArrival;
         return moved;
@@ -275,7 +324,7 @@ public final class CityCharter {
      * Whether it holds nothing worth keeping: no townsfolk, no day or newcomer counted yet and nothing of a governor.
      */
     public boolean empty() {
-        return folk == 0 && folkCarry == 0.0 && lastDay == NEVER && lastArrival == NEVER && mayor == null && !paused && note.isEmpty()
+        return folk == 0 && folkCarry == 0.0 && folkHands == 0 && folkIdle == 0 && folkEarned < 0 && lastDay == NEVER && lastArrival == NEVER && mayor == null && !paused && note.isEmpty()
                 && decidedDay == NEVER && spentDay == NEVER && refused.isEmpty() && extent == 0;
     }
 }

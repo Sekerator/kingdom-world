@@ -1056,6 +1056,12 @@ public final class KingdomWorldState {
         for (Citizen citizen : people) {
             claims.add(new Economy.WageClaim(citizen.id(), citizen.professionId(), permille.applyAsInt(citizen.id())));
         }
+        // The townsfolk on the posts, one claim a post, paid after the named citizens.
+        for (io.github.sekerator.kingdomworld.core.citizen.WorkPost post : citizens.posts().postsOf(kingdomId)) {
+            if (post.folkWorkers() > 0) {
+                claims.add(Economy.WageClaim.folk(post.folkId(), post.professionId(), post.folkWorkers()));
+            }
+        }
         Economy.Payday payday = economy.payday(kingdomId, day, taxpayers, claims, rules, cityOf);
         for (Citizen citizen : people) {
             Integer percent = payday.percents().get(citizen.id());

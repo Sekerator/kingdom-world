@@ -261,8 +261,8 @@ public final class KingdomWorldConfig {
                             "level gives grows its square (for the law, the guards and construction) by them, without an upper limit.")
                     .defineInRange("folkDensity", 8, 1, 1_000);
             folkDues = builder
-                    .comment("Coins one of the townsfolk pays into the treasury a day. 0 by default: the townsfolk earn nothing of their own yet,",
-                            "and their dues would be money out of nothing. The old default 1 is read as 0.")
+                    .comment("No longer used: the townsfolk pay the tithe of what they earn on the posts and in the workshops, and nothing",
+                            "out of nothing. The key is read and does nothing.")
                     .defineInRange("folkDues", 0, 0, 1_000_000);
             farmRadius = builder
                     .comment("How far, in blocks, a farmer works around its composter.")
@@ -1702,6 +1702,16 @@ public final class KingdomWorldConfig {
         public final ForgeConfigSpec.IntValue craftExportCity;
         public final ForgeConfigSpec.BooleanValue regionalMarket;
         public final ForgeConfigSpec.IntValue houseWhenUnmetPercent;
+        public final ForgeConfigSpec.BooleanValue folkAtPosts;
+        public final ForgeConfigSpec.IntValue folkPostRatePercent;
+        public final ForgeConfigSpec.IntValue folkHandPercent;
+        public final ForgeConfigSpec.IntValue folkUsualIncome;
+        public final ForgeConfigSpec.IntValue folkIdleMaxPercent;
+        public final ForgeConfigSpec.IntValue folkLeaveIdlePercent;
+        public final ForgeConfigSpec.IntValue folkLeavePercent;
+        public final ForgeConfigSpec.IntValue folkWageReserveDays;
+        public final ForgeConfigSpec.IntValue folkReleaseMasterPercent;
+        public final ForgeConfigSpec.BooleanValue worldShops;
 
         CityEconomy(ForgeConfigSpec.Builder builder) {
             io.github.sekerator.kingdomworld.core.economy.CityEconomyRules d = io.github.sekerator.kingdomworld.core.economy.CityEconomyRules.DEFAULT;
@@ -1855,6 +1865,43 @@ public final class KingdomWorldConfig {
                     .comment("When the townspeople of a city do not find more than this share of their basket and have no free place for",
                             "a shop, its head wants a house of a merchant or a craftsman.")
                     .defineInRange("houseWhenUnmetPercent", c.houseWhenUnmetPercent(), 0, 100);
+            io.github.sekerator.kingdomworld.core.road.FolkWorkRules f = io.github.sekerator.kingdomworld.core.road.FolkWorkRules.DEFAULT;
+            folkAtPosts = builder
+                    .comment("Whether the townsfolk of a city take the free seats of the posts of the crown in its square: gatherers,",
+                            "workshops and carriers. Named workers always come first.")
+                    .define("folkAtPosts", f.atPosts());
+            folkPostRatePercent = builder
+                    .comment("How much of the work of a named worker one of the townsfolk does on a post, in percent.")
+                    .defineInRange("folkPostRatePercent", f.postRatePercent(), 0, 100);
+            folkHandPercent = builder
+                    .comment("How much of the work of a master (or the strength of a keeper) a hand of the townsfolk adds to a workshop or a",
+                            "shop, in percent; its share of what the place earns is the same part of the share of a master.")
+                    .defineInRange("folkHandPercent", f.handPercent(), 0, 100);
+            folkUsualIncome = builder
+                    .comment("What one of the townsfolk usually earns a day.")
+                    .defineInRange("folkUsualIncome", (int) f.usualIncome(), 0, 1_000_000);
+            folkIdleMaxPercent = builder
+                    .comment("The townsfolk of a city grow only while no more than this share of them is idle, in percent.")
+                    .defineInRange("folkIdleMaxPercent", f.idleMaxPercent(), 0, 100);
+            folkLeaveIdlePercent = builder
+                    .comment("Beyond this share of idle townsfolk some of them leave the city, in percent.")
+                    .defineInRange("folkLeaveIdlePercent", f.leaveIdlePercent(), 0, 100);
+            folkLeavePercent = builder
+                    .comment("The share of the townsfolk that leaves on a day when too many are idle, they earn too little or the taxes press",
+                            "them, in percent; at least one.")
+                    .defineInRange("folkLeavePercent", f.leavePercent(), 0, 100);
+            folkWageReserveDays = builder
+                    .comment("The townsfolk take new seats of the posts only while the treasury holds this many days of all the wages of the",
+                            "kingdom with those seats.")
+                    .defineInRange("folkWageReserveDays", f.wageReserveDays(), 0, 365);
+            folkReleaseMasterPercent = builder
+                    .comment("A workshop or a shop lets a hand of the townsfolk go once its masters or keepers earn less than this share of",
+                            "their usual income, in percent.")
+                    .defineInRange("folkReleaseMasterPercent", f.releaseMasterPercent(), 0, 100);
+            worldShops = builder
+                    .comment("Whether the capitals of the kingdoms of the world keep shops of citizens in the houses of their merchants and",
+                            "craftsmen, where players buy and their rulers take a tithe.")
+                    .define("worldShops", f.worldShops());
             builder.pop();
         }
     }

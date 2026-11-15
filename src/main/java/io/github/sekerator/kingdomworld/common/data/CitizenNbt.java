@@ -87,6 +87,9 @@ public final class CitizenNbt {
     static final String PRODUCTION = "production";
     private static final String RADIUS = "radius";
     private static final String SEATS = "seats";
+    private static final String FOLK_WORKERS = "folkWorkers";
+    private static final String FARM_PLOTS = "farmPlots";
+    private static final String FARM_PRODUCT = "farmProduct";
     private static final String ANIMAL = "animal";
     private static final String HERD = "herd";
     private static final String STATUS = "status";
@@ -176,6 +179,13 @@ public final class CitizenNbt {
         tag.putString(PROFESSION, post.professionId());
         tag.putInt(RADIUS, post.radius());
         tag.putInt(SEATS, post.seats());
+        if (post.folkWorkers() > 0) {
+            tag.putInt(FOLK_WORKERS, post.folkWorkers());
+        }
+        if (post.farmPlots() > 0) {
+            tag.putInt(FARM_PLOTS, post.farmPlots());
+            tag.putString(FARM_PRODUCT, post.farmProduct());
+        }
         tag.putString(ANIMAL, post.animal());
         tag.putInt(HERD, post.herdSize());
         tag.putString(STATUS, post.status().id());
@@ -353,6 +363,10 @@ public final class CitizenNbt {
             }
         }
         post.restoreProduction(!tag.contains(AUTO) || tag.getBoolean(AUTO), stations);
+        // Posts saved before the townsfolk worked have none: they take the seats on the first day of the townsfolk.
+        post.restoreFolk(tag.contains(FOLK_WORKERS, Tag.TAG_INT) ? tag.getInt(FOLK_WORKERS) : 0);
+        String product = tag.getString(FARM_PRODUCT);
+        post.restoreFarm(tag.getInt(FARM_PLOTS), product.length() <= WorkPost.MAX_ANIMAL_LENGTH ? product : "");
         // Posts saved before mines had goals dig anything at their own level.
         String ore = tag.getString(GOAL_ORE);
         int amount = tag.getInt(GOAL_AMOUNT);
