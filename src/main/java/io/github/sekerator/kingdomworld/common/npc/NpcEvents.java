@@ -73,6 +73,11 @@ public final class NpcEvents {
         } catch (RuntimeException e) {
             LOGGER.error("KingdomWorld could not work out the templates of the buildings at the start", e);
         }
+        // Capitals whose raising left buildings out are raised again, once.
+        int repaired = CapitalRepair.onStart(server);
+        if (repaired > 0) {
+            LOGGER.info("KingdomWorld kingdoms of the world: {} capital(s) are raised again", repaired);
+        }
         long planned = state.sites().stream().filter(site -> site.status() == NpcSite.Status.PLANNED).count();
         long spawned = state.sites().stream().filter(site -> site.status() == NpcSite.Status.SPAWNED).count();
         long founded = state.sites().stream().filter(site -> site.status() == NpcSite.Status.FOUNDED).count();

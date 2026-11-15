@@ -319,6 +319,14 @@ public final class NpcSite {
         changeListener.run();
     }
 
+    /**
+     * Forgets why the place was left alone or put aside, once it stands.
+     */
+    public void clearReason() {
+        reason = "";
+        changeListener.run();
+    }
+
     public void setKingdomId(UUID value) {
         kingdomId = value;
         changeListener.run();

@@ -43,6 +43,10 @@ public final class NpcCommands {
                 .then(Commands.literal("unlock").executes(context -> unlock(context.getSource())))
                 .then(Commands.literal("plan").executes(context -> plan(context.getSource())))
                 .then(Commands.literal("list").executes(context -> list(context.getSource())))
+                .then(Commands.literal("repair")
+                        .executes(context -> repair(context.getSource(), Optional.empty()))
+                        .then(Commands.argument("id", IntegerArgumentType.integer(1))
+                                .executes(context -> repair(context.getSource(), Optional.of(IntegerArgumentType.getInteger(context, "id"))))))
                 .then(Commands.literal("timing").executes(context -> timing(context.getSource())))
                 .then(Commands.literal("turn")
                         .then(Commands.literal("all").executes(context -> turnAll(context.getSource())))
@@ -200,8 +204,34 @@ public final class NpcCommands {
                         world.construction().buildingsOf(id).size(), io.github.sekerator.kingdomworld.common.road.RoadWork.state(server)
                                 .citiesOf(id).size()), false);
             });
+            CapitalRepair.look(server, site).ifPresent(look -> source.sendSuccess(() -> Component.translatable(ADMIN + "site_plan", site.id(),
+                    look.planned() - look.missing().size(), look.planned(), look.missing().isEmpty() ? "-" : NpcSpawner.templates(look.missing())),
+                    false));
         }
         return state.sites().size();
+    }
+
+    private static int repair(CommandSourceStack source, Optional<Integer> siteId) {
+        MinecraftServer server = source.getServer();
+        if (NpcWork.isReadOnly(server)) {
+            source.sendFailure(KingdomActions.errorMessage(io.github.sekerator.kingdomworld.core.kingdom.KingdomError.READ_ONLY));
+            return 0;
+        }
+        java.util.List<CapitalRepair.Look> looks = CapitalRepair.repairAll(server, siteId);
+        if (looks.isEmpty()) {
+            source.sendFailure(Component.translatable(ADMIN + "repair.none"));
+            return 0;
+        }
+        int raised = 0;
+        for (CapitalRepair.Look look : looks) {
+            raised += look.outcome() == CapitalRepair.Outcome.REBUILT || look.outcome() == CapitalRepair.Outcome.RESUMED ? 1 : 0;
+            source.sendSuccess(() -> Component.translatable(ADMIN + "repair.site", look.site().id(), look.kingdom().isEmpty() ? "-" : look.kingdom(),
+                    look.missing().size(), look.planned(), look.site().stage().id(),
+                    Component.translatable(ADMIN + "repair." + look.outcome().name().toLowerCase(java.util.Locale.ROOT))), false);
+        }
+        int count = raised;
+        source.sendSuccess(() -> Component.translatable(ADMIN + "repair.done", count), true);
+        return count;
     }
 
     private static int timing(CommandSourceStack source) {

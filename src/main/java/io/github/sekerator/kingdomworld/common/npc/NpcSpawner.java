@@ -3092,6 +3092,7 @@ public final class NpcSpawner {
         }
         if (site.given(NpcSite.REBUILDING)) {
             site.unmarkGiven(NpcSite.REBUILDING);
+            site.clearReason();
             LOGGER.info("The capital of {} was raised again: {} building(s) of its plan missing now", site, missing.size());
         }
         releaseTickets(level);
