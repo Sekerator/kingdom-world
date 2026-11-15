@@ -73,6 +73,18 @@ public final class Reservations {
         holds.put(worker, new Hold(hold.kingdomId(), hold.order(), left, hold.output(), hold.outputCount()));
     }
 
+    /**
+     * The worker made part of what it set aside: the results it counted are no longer on the way, so that an order counts them
+     * once, as made.
+     */
+    public void made(UUID worker, int count) {
+        Hold hold = holds.get(worker);
+        if (hold == null || count <= 0) {
+            return;
+        }
+        holds.put(worker, new Hold(hold.kingdomId(), hold.order(), hold.items(), hold.output(), hold.outputCount() - count));
+    }
+
     public Hold hold(UUID worker) {
         return holds.get(worker);
     }

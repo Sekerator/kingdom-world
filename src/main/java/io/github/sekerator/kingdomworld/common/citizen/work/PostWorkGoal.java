@@ -232,6 +232,19 @@ public abstract class PostWorkGoal extends Goal {
     }
 
     /**
+     * The body leaves this work for good (its profession changed): whatever the work kept for later is given up.
+     */
+    public void leaveWork() {
+        onLeaveWork();
+    }
+
+    /**
+     * Called when the body leaves this work for good; work that keeps something between its rounds gives it up here.
+     */
+    protected void onLeaveWork() {
+    }
+
+    /**
      * One tick of work in the zone.
      *
      * @return {@code null} to go on, otherwise how the round of work ended: {@link WorkStatus#WORKING} when the
@@ -305,6 +318,16 @@ public abstract class PostWorkGoal extends Goal {
      */
     protected WorkApproach.Result approach(ServerLevel level, BlockPos block, double reachSqr) {
         return way.toward(level, block, reachSqr);
+    }
+
+    /**
+     * Comes to a block to work at it from a place on the ground beside it (see {@link #approach}), or walks as near as the walk
+     * goes when no place beside it is reached.
+     */
+    protected void comeTo(ServerLevel level, BlockPos block, double reachSqr) {
+        if (approach(level, block, reachSqr) == WorkApproach.Result.UNREACHABLE) {
+            moveTo(block);
+        }
     }
 
     /**

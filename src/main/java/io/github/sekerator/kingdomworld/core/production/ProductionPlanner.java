@@ -423,16 +423,27 @@ public final class ProductionPlanner {
      * @param worker whose own reservation counts as available, may be {@code null}
      */
     static Map<String, Integer> picks(World world, Map<String, Integer> protectedStock, RecipeOption recipe, UUID worker) {
+        return picks(world, protectedStock, recipe, worker, Map.of());
+    }
+
+    /**
+     * The items to take for one more making of a recipe after makings that take {@code already}, or {@code null} if they are not
+     * all there.
+     */
+    static Map<String, Integer> picks(World world, Map<String, Integer> protectedStock, RecipeOption recipe, UUID worker,
+                                      Map<String, Integer> already) {
         Map<String, Integer> picks = new LinkedHashMap<>();
+        Map<String, Integer> used = new HashMap<>(already);
         for (RecipeOption.Part part : recipe.parts()) {
             // The item there is most of; when no one item is enough, several items of the ingredient together, as at a crafting
             // table.
             int left = part.count();
-            for (String choice : byStock(world, protectedStock, part, null, picks, worker)) {
-                long count = available(world, protectedStock, choice, worker) - picks.getOrDefault(choice, 0);
+            for (String choice : byStock(world, protectedStock, part, null, used, worker)) {
+                long count = available(world, protectedStock, choice, worker) - used.getOrDefault(choice, 0);
                 int taken = (int) Math.min(left, Math.max(0, count));
                 if (taken > 0) {
                     picks.merge(choice, taken, Integer::sum);
+                    used.merge(choice, taken, Integer::sum);
                     left -= taken;
                 }
                 if (left == 0) {
@@ -444,6 +455,44 @@ public final class ProductionPlanner {
             }
         }
         return picks;
+    }
+
+    /**
+     * The items to take for a batch of makings of a recipe, one after another: as many makings as the stock gives, {@code most}
+     * at most. A batch for a furnace takes the items of the first making for every making, because a furnace holds one
+     * ingredient: it ends where the stock of those items does.
+     *
+     * @param worker whose own reservation counts as available, may be {@code null}
+     * @param same   whether every making must take the same items
+     * @return the items of every making, in order; empty if not even one making is there
+     */
+    public static List<Map<String, Integer>> batch(OrderBook orders, World world, RecipeOption recipe, UUID worker, int most, boolean same) {
+        Map<String, Integer> protectedStock = protectedStock(orders, world.kingdomId());
+        List<Map<String, Integer>> makings = new ArrayList<>();
+        if (same) {
+            Map<String, Integer> first = most > 0 ? picks(world, protectedStock, recipe, worker) : null;
+            if (first == null) {
+                return makings;
+            }
+            long times = most;
+            for (Map.Entry<String, Integer> entry : first.entrySet()) {
+                times = Math.min(times, available(world, protectedStock, entry.getKey(), worker) / Math.max(1, entry.getValue()));
+            }
+            for (long i = 0; i < times; i++) {
+                makings.add(first);
+            }
+            return makings;
+        }
+        Map<String, Integer> used = new HashMap<>();
+        while (makings.size() < most) {
+            Map<String, Integer> picks = picks(world, protectedStock, recipe, worker, used);
+            if (picks == null) {
+                break;
+            }
+            makings.add(picks);
+            picks.forEach((item, count) -> used.merge(item, count, Integer::sum));
+        }
+        return makings;
     }
 
     /**

@@ -407,4 +407,59 @@ class ProductionPlannerTest {
         assertEquals(Order.MAX_AMOUNT, order.amount());
         assertFalse(order.isSubOrder());
     }
+
+    @Test
+    void aBatchTakesAsManyMakingsAsTheStockGivesUpToTheMost() {
+        stock.put("raw_iron", 64L);
+        RecipeOption smelting = BOOK.recipe("iron_ingot_from_smelting").orElseThrow();
+        UUID worker = UUID.randomUUID();
+        List<Map<String, Integer>> batch = ProductionPlanner.batch(orders, world(), smelting, worker, 100, true);
+        assertEquals(64, batch.size());
+        assertTrue(batch.stream().allMatch(making -> making.equals(Map.of("raw_iron", 1))));
+        assertEquals(10, ProductionPlanner.batch(orders, world(), smelting, worker, 10, true).size());
+        // Raw iron another worker set aside is not in the batch; the worker's own is.
+        reservations.reserve(UUID.randomUUID(), new Reservations.Hold(KINGDOM, 0, Map.of("raw_iron", 60), "iron_ingot", 60));
+        assertEquals(4, ProductionPlanner.batch(orders, world(), smelting, worker, 100, true).size());
+        reservations.reserve(worker, new Reservations.Hold(KINGDOM, 0, Map.of("raw_iron", 4), "iron_ingot", 4));
+        assertEquals(4, ProductionPlanner.batch(orders, world(), smelting, worker, 100, true).size());
+        stock.put("raw_iron", 0L);
+        assertTrue(ProductionPlanner.batch(orders, world(), smelting, worker, 100, true).isEmpty());
+    }
+
+    @Test
+    void aBatchAtAFurnaceTakesOneItemAndAtATableAnyMix() {
+        stock.put("oak_planks", 5L);
+        stock.put("spruce_planks", 3L);
+        RecipeOption sticks = BOOK.recipe("stick").orElseThrow();
+        UUID worker = UUID.randomUUID();
+        // At a table the planks of both woods go together: eight planks are four makings.
+        List<Map<String, Integer>> mixed = ProductionPlanner.batch(orders, world(), sticks, worker, 100, false);
+        assertEquals(4, mixed.size());
+        Map<String, Integer> total = new HashMap<>();
+        mixed.forEach(making -> making.forEach((item, count) -> total.merge(item, count, Integer::sum)));
+        assertEquals(Map.of("oak_planks", 5, "spruce_planks", 3), total);
+        assertEquals(2, ProductionPlanner.batch(orders, world(), sticks, worker, 2, false).size());
+        // Where every making takes the same items, the batch takes only those of the first making.
+        List<Map<String, Integer>> same = ProductionPlanner.batch(orders, world(), sticks, worker, 100, true);
+        assertEquals(2, same.size());
+        assertEquals(Map.of("oak_planks", 2), same.get(0));
+    }
+
+    @Test
+    void aReservationOfABatchCountsItsResultsUntilTheyAreMade() {
+        Order ingots = order("iron_ingot", Order.Kind.MAKE, 64);
+        UUID worker = UUID.randomUUID();
+        reservations.reserve(worker, new Reservations.Hold(KINGDOM, ingots.id(), Map.of(), "iron_ingot", 64));
+        assertEquals(0, ProductionPlanner.need(orders, world(), ingots));
+        // Twenty ingots come out of the furnaces: the order counts them as made, no longer on the way.
+        orders.addMade(ingots, 20);
+        reservations.made(worker, 20);
+        assertEquals(44, reservations.pending(KINGDOM, ingots.id()));
+        assertEquals(0, ProductionPlanner.need(orders, world(), ingots));
+        reservations.release(worker);
+        assertEquals(44, ProductionPlanner.need(orders, world(), ingots));
+        reservations.reserve(worker, new Reservations.Hold(KINGDOM, ingots.id(), Map.of(), "iron_ingot", 3));
+        reservations.made(worker, 10);
+        assertEquals(0, reservations.pending(KINGDOM, ingots.id()), "more made than set aside leaves nothing on the way");
+    }
 }

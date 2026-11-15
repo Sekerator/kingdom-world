@@ -193,14 +193,25 @@ a plank of oak in one storehouse and a plank of spruce in another make sticks to
 ingredients in all its storehouses at once, near players and far from them: in any storehouse and either half of a
 double one, and in the containers of buildings with the Warehouse role while their place is loaded.
 
-Near players a worker sets the ingredients aside in the storehouses, takes them from the container of the post or
-fetches them itself from the storehouse where they lie, the nearest first, then from the next; what lies in storehouses
-farther than 64 blocks or in places not loaded it takes through the nearest storehouse. It works by hand at tables, and really fills a furnace from above and the side and empties it from
-below. A furnace whose output holds some other item is left alone. Any fuel that burns is used (coal first), except
-tools, food and the ingredients themselves; a campfire needs none. The worker carries the result to a storehouse.
+Near players a worker works in batches: it takes the ingredients of as many things of one recipe as the order still
+asks for (for its own work in the mode "Own work and orders" as many as there are), the storehouses hold and its bag
+carries. It sets them aside in the
+storehouses, takes them from the container of the post or fetches them itself from the storehouse where they lie, the
+nearest first, then from the next; what lies in storehouses farther than 64 blocks or in places not loaded it takes
+through the nearest storehouse. At tables and on a campfire it makes the things one after another.
+
+The smelter and the cook spread a batch over all the free furnaces of the zone at once (furnaces, blast furnaces or
+smokers, as the recipe asks), up to a stack of the ingredient in each. A worker really fills a furnace from above, puts
+in from the side as much fuel as its share burns (less what lies there already) and goes round its furnaces, taking the
+results out from below as they come. **The more furnaces, the faster:** a stack of ore in three furnaces takes a third of
+the time. A furnace another worker tends, or whose output holds some other item, is left alone, and a furnace that went
+out gives back what is left of the ingredient. Any fuel that burns is used (coal first), except tools, food and the
+ingredients themselves; a campfire needs none. Every thing counts for the order as soon as it is made; the worker
+carries the results to a storehouse when the batch is done or its bag is full.
 
 Far from players each thing is made in one go: the ingredients and fuel leave the storehouses and the result goes there
-in the same tick, or nothing happens at all. The containers of a warehouse count and give only while their place is
+in the same tick, or nothing happens at all. At furnaces the things are made at all the furnaces of the kind in the zone
+at once, shared among the workers of the post, so that more furnaces make more there too. The containers of a warehouse count and give only while their place is
 loaded: far from players neither orders nor work count on them. Without room in the storehouses the work stands still, and
 without a storehouse of the work or a common one the post says "Nowhere to deliver: no storehouse for this work" and uses
 nothing up. A post without a
@@ -209,7 +220,7 @@ container next to it, or a kingdom without a single carrier at work, works a qua
 ### Time
 
 - Hand work of a beginner: {cfg:production.craftSeconds} s per thing; furnaces, smokers and campfires take as long as the
-  recipe says.
+  recipe says, and a worker keeps all the furnaces of its zone burning at once.
 - Experience makes a worker up to twice as fast, and mood changes the pace by up to {cfg:economy.moodWorkEffect*100}%
   either way.
 - Posts inside a building with the role Workshop work 25% faster (see [The roles of buildings](building_roles)).

@@ -15,6 +15,7 @@ import io.github.sekerator.kingdomworld.core.citizen.WorkStatus;
 import io.github.sekerator.kingdomworld.core.citizen.WorkZone;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.production.ProductionRules;
+import io.github.sekerator.kingdomworld.core.production.Stations;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -36,10 +37,11 @@ import java.util.UUID;
  * A workshop: the smelter, the cook, the crafter and the smith. They work at the workstations in the zone of their
  * post, make what the king ordered (and in auto mode what the post makes of its own), take the ingredients from
  * the storehouses (or from the post's container, where carriers bring them) and bring the results to the
- * storehouses. Far from players they make things by the time a making takes, in one go each.
+ * storehouses. Near players they work in batches, at furnaces on every free furnace of the zone at once. Far from
+ * players they make things by the time a making takes, in one go each, at furnaces on every furnace of the zone at once.
  */
 public final class WorkshopBehavior implements ProfessionBehavior {
-    /** Makings one worker does in one simulation step at most. */
+    /** Makings one worker does in one simulation step at most; at furnaces as many times more as it keeps furnaces burning. */
     private static final int MAX_PER_STEP = 64;
     /** Where the workstations of each workshop were seen last, by kind. */
     private static final Map<WorldPos, Map<String, List<BlockPos>>> KNOWN = new HashMap<>();
@@ -105,6 +107,22 @@ public final class WorkshopBehavior implements ProfessionBehavior {
 
     public static void reset() {
         KNOWN.clear();
+        WorkshopGoal.reset();
+    }
+
+    /**
+     * How many times a worker near players took ingredients at a storehouse since the server started, for tests.
+     */
+    public static int fetches(UUID worker) {
+        return WorkshopGoal.fetches(worker);
+    }
+
+    /**
+     * Furnaces of a kind a worker of the post keeps burning at once far from players: all those of the kind in its zone, shared
+     * by the workers of the post, named and townsfolk; at least one.
+     */
+    static double furnacesEach(WorkPost post, String station) {
+        return ProductionRules.furnacesEach(post.stations().getOrDefault(station, 0), post.workers().size() + post.folkWorkers());
     }
 
     // ---------------------------------------------------------------- far from players
@@ -144,7 +162,9 @@ public final class WorkshopBehavior implements ProfessionBehavior {
     /**
      * One step of making at a workshop far from players, for a worker with a body or without one: the time of the step at a pace
      * goes into makings the king's orders or the post's own work ask for, one after another, and what is left is kept under a key
-     * of the post for the next step. Sets no status and has no accident: the caller does.
+     * of the post for the next step. At furnaces the makings go on at every furnace of the kind in the zone at once, as near
+     * players: one worker with three furnaces smelts three things in the time of one. Sets no status and has no accident: the
+     * caller does.
      *
      * @param worker     the id the materials set aside are kept under: a citizen, or the townsfolk of the post
      * @param bank       the key of the progress of the post the time left is kept under
@@ -166,15 +186,22 @@ public final class WorkshopBehavior implements ProfessionBehavior {
         double keep = 0.0;
         int made = 0;
         WorkStatus status = WorkStatus.WORKING;
-        int most = (int) Math.min(Integer.MAX_VALUE, (long) MAX_PER_STEP * Math.max(1, workers));
+        double furnaces = 1.0;
+        for (String station : stations) {
+            if (Stations.burnsFuel(station)) {
+                furnaces = Math.max(furnaces, furnacesEach(post, station));
+            }
+        }
+        int most = (int) Math.min(Integer.MAX_VALUE, (long) MAX_PER_STEP * Math.max(1, workers) * (long) Math.ceil(furnaces));
         for (int i = 0; i < most; i++) {
             Production.Search search = Production.findJob(server, post, worker, stations);
             if (search.job() == null) {
                 status = made > 0 ? WorkStatus.WORKING : search.reason();
                 break;
             }
-            double cost = rules.ticks(search.job().recipe(), experience) * slowdown;
-            if (budget < cost) {
+            double cost = rules.cost(search.job().recipe(), experience, slowdown,
+                    furnacesEach(post, search.job().recipe().kind().station()));
+            if (budget + ProductionRules.TICK_SLACK < cost) {
                 // Not enough time left this step: it is kept for the next one.
                 keep = budget;
                 break;
@@ -237,7 +264,14 @@ public final class WorkshopBehavior implements ProfessionBehavior {
 
         @Override
         public PostYield result() {
-            double perDay = GatheringRules.WORK_TICKS_PER_DAY / (double) ProductionSettings.rules().craftTicks();
+            // The furnaces of a kind burn at once: more furnaces, more things a day.
+            int furnaces = 1;
+            for (String kind : Production.stationsOf(profession)) {
+                if (Stations.burnsFuel(kind)) {
+                    furnaces = Math.max(furnaces, stations.getOrDefault(kind, List.of()).size());
+                }
+            }
+            double perDay = GatheringRules.WORK_TICKS_PER_DAY / (double) ProductionSettings.rules().craftTicks() * furnaces;
             return new PostYield(Map.of("*", perDay), Map.of(), perDay, false);
         }
 

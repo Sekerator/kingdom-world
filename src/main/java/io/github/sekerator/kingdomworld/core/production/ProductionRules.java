@@ -19,6 +19,8 @@ public record ProductionRules(int craftTicks, int cookFoodDays, int chainDepth, 
     public static final double MAX_SLOWDOWN = 8.0;
     /** Shortest time one making takes, in ticks. */
     public static final int MIN_TICKS = 20;
+    /** Room left of a step's time below which a making is taken as fitting: sums of fractions of ticks are not exact. */
+    public static final double TICK_SLACK = 1e-6;
 
     public static final ProductionRules DEFAULT = new ProductionRules(200, 5, 3, 32);
 
@@ -44,6 +46,28 @@ public record ProductionRules(int craftTicks, int cookFoodDays, int chainDepth, 
             return Math.max(MIN_TICKS, recipe.ticks());
         }
         return Math.max(MIN_TICKS, (int) Math.round(craftTicks / speed(experience)));
+    }
+
+    /**
+     * Furnaces one worker keeps burning at once: a worker tends every furnace of the kind in the zone of its post, and the workers
+     * of a post share them; at least one.
+     *
+     * @param furnaces the furnaces of the kind in the zone
+     * @param crew     the workers of the post
+     */
+    public static double furnacesEach(int furnaces, int crew) {
+        return Math.max(1.0, furnaces / (double) Math.max(1, crew));
+    }
+
+    /**
+     * Ticks of work one making costs a worker far from players: what it takes ({@link #ticks}), as much slower as the post was
+     * measured, and for work at furnaces shared by the furnaces the worker keeps burning at once, as near players.
+     *
+     * @param furnaces the furnaces the worker keeps burning at once, see {@link #furnacesEach}
+     */
+    public double cost(RecipeOption recipe, int experience, double slowdown, double furnaces) {
+        double cost = ticks(recipe, experience) * Math.max(1.0, slowdown);
+        return recipe.kind().needsFuel() ? cost / Math.max(1.0, furnaces) : cost;
     }
 
     /**

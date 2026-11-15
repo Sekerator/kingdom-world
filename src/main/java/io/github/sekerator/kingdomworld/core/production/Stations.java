@@ -35,4 +35,11 @@ public final class Stations {
     public static boolean isKnown(String id) {
         return ALL.contains(id);
     }
+
+    /**
+     * Whether a kind of workstation is a furnace that burns fuel: a furnace, a blast furnace or a smoker.
+     */
+    public static boolean burnsFuel(String id) {
+        return FURNACE.equals(id) || BLAST_FURNACE.equals(id) || SMOKER.equals(id);
+    }
 }

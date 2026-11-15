@@ -264,9 +264,58 @@ public final class Production {
      * Sets aside the ingredients (and fuel) of a making for a worker.
      */
     public static void reserve(UUID worker, UUID kingdomId, ProductionPlanner.Job job, Map<String, Integer> fuel) {
-        Map<String, Integer> items = new LinkedHashMap<>(job.picks());
+        reserve(worker, kingdomId, job, 1, job.picks(), fuel);
+    }
+
+    /**
+     * Sets aside a batch of makings of a job for a worker: the ingredients of all of them and the fuel, and the results on the way
+     * for the order.
+     *
+     * @param makings     how many makings the batch holds
+     * @param ingredients the ingredients of the whole batch
+     */
+    public static void reserve(UUID worker, UUID kingdomId, ProductionPlanner.Job job, int makings, Map<String, Integer> ingredients,
+                               Map<String, Integer> fuel) {
+        Map<String, Integer> items = new LinkedHashMap<>(ingredients);
         fuel.forEach((item, count) -> items.merge(item, count, Integer::sum));
-        RESERVATIONS.reserve(worker, new Reservations.Hold(kingdomId, job.order(), items, job.recipe().output(), job.recipe().outputCount()));
+        RESERVATIONS.reserve(worker, new Reservations.Hold(kingdomId, job.order(), items, job.recipe().output(),
+                (int) Math.min(Integer.MAX_VALUE, (long) job.recipe().outputCount() * Math.max(1, makings))));
+    }
+
+    /**
+     * Makings of a job the order behind it still asks for; as many as can be had for work of a post's own.
+     */
+    static int makingsWanted(MinecraftServer server, UUID kingdomId, ProductionPlanner.Job job) {
+        if (job.order() == 0) {
+            return Integer.MAX_VALUE;
+        }
+        OrderBook orders = orders(server);
+        Optional<Order> order = orders.get(kingdomId, job.order());
+        if (order.isEmpty()) {
+            return 1;
+        }
+        return Math.max(1, io.github.sekerator.kingdomworld.core.production.Batches.makings(
+                ProductionPlanner.need(orders, world(server, kingdomId), order.get()), job.recipe().outputCount()));
+    }
+
+    /**
+     * The items of a batch of up to {@code most} makings of a job, one after another (see
+     * {@link ProductionPlanner#batch}); at least the making of the job itself.
+     *
+     * @param same whether every making takes the same items, as in a furnace
+     */
+    static List<Map<String, Integer>> batch(MinecraftServer server, UUID kingdomId, ProductionPlanner.Job job, UUID worker, int most,
+                                            boolean same) {
+        List<Map<String, Integer>> makings = ProductionPlanner.batch(orders(server), world(server, kingdomId), job.recipe(), worker,
+                Math.max(1, most), same);
+        return makings.isEmpty() ? List.of(job.picks()) : makings;
+    }
+
+    /**
+     * Items of the kind in the storehouses of a kingdom that nobody but the worker set aside.
+     */
+    static long free(MinecraftServer server, UUID kingdomId, String item, UUID worker) {
+        return Math.max(0L, KingdomStorage.countsById(server, kingdomId).getOrDefault(item, 0L) - RESERVATIONS.reserved(kingdomId, item, worker));
     }
 
     /**

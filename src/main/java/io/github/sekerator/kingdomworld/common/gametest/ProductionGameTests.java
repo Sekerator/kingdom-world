@@ -213,6 +213,161 @@ public final class ProductionGameTests {
         return found.toString();
     }
 
+    /**
+     * The start of the work of the day it is: a test of a batch runs for a good part of a day of work, which must not end in the
+     * evening before the batch does.
+     */
+    private static void workMorning(ServerLevel level) {
+        level.setDayTime(Math.floorDiv(level.getDayTime(), 24_000L) * 24_000L + 1_000L);
+    }
+
+    /**
+     * Items of a kind lying in the furnaces at the places and in the bags of the workers.
+     */
+    private static long held(ServerLevel level, GameTestHelper helper, List<BlockPos> furnaces, List<Citizen> workers, Item item) {
+        long total = 0;
+        for (BlockPos pos : furnaces) {
+            if (level.getBlockEntity(helper.absolutePos(pos)) instanceof AbstractFurnaceBlockEntity furnace) {
+                for (int slot = 0; slot < furnace.getContainerSize(); slot++) {
+                    if (furnace.getItem(slot).is(item)) {
+                        total += furnace.getItem(slot).getCount();
+                    }
+                }
+            }
+        }
+        for (Citizen worker : workers) {
+            io.github.sekerator.kingdomworld.common.citizen.CitizenEntity body = io.github.sekerator.kingdomworld.common.citizen.CitizenBodies.body(worker.id());
+            for (int slot = 0; body != null && slot < body.carried().getContainerSize(); slot++) {
+                if (body.carried().getItem(slot).is(item)) {
+                    total += body.carried().getItem(slot).getCount();
+                }
+            }
+        }
+        return total;
+    }
+
+    /**
+     * A stack of raw iron and three furnaces in the zone: the smelter takes the whole stack at once, burns the three furnaces together
+     * and smelts it in about a third of the time one furnace takes, burning as much coal as the smelting takes.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_workshop_smelter_stack", timeoutTicks = 7000)
+    public static void smelterSmeltsAStackOnAllFurnaces(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        workMorning(level);
+        BlockPos from = helper.absolutePos(ZONE_FROM);
+        BlockPos to = helper.absolutePos(new BlockPos(7, 3, 6));
+        GatheringGameTests.clear(level, from, to);
+        // The worker walks beyond the chunks the game holds for the structure of the test: the box is held too.
+        TestChunks.hold(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Ironworks", UUID.randomUUID());
+        List<BlockPos> furnaces = List.of(new BlockPos(4, 0, 2), new BlockPos(5, 0, 2), new BlockPos(6, 0, 2));
+        furnaces.forEach(pos -> helper.setBlock(pos, Blocks.FURNACE));
+        StorehouseInventory store = GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(0, 0, 4)));
+        fill(store, new ItemStack(Items.RAW_IRON, 64), new ItemStack(Items.COAL, 32));
+        WorldPos postPos = GatheringGameTests.post(helper, new BlockPos(0, 0, 0), "smelter");
+        WorkPost post = surveyed(server, postPos);
+        helper.assertTrue(post.stations().getOrDefault(Stations.FURNACE, 0) == 3, "Expected three furnaces in the zone, got " + post.stations());
+        // The smelter works for the order only.
+        post.setAuto(false);
+        Order ingots = order(server, kingdom, Items.IRON_INGOT, Order.Kind.MAKE, 64);
+        Citizen worker = GatheringGameTests.worker(helper, kingdom, "smelter", postPos, helper.absolutePos(new BlockPos(2, 0, 2)));
+        workMorning(level);
+        boolean[] allLit = new boolean[1];
+
+        helper.succeedWhen(() -> {
+            boolean lit = true;
+            for (BlockPos pos : furnaces) {
+                lit &= io.github.sekerator.kingdomworld.common.production.Workstations.isLit(helper.getBlockState(pos));
+            }
+            allLit[0] |= lit;
+            helper.assertTrue(stored(server, kingdom, Items.IRON_INGOT) == 64, "Expected 64 ingots in the storehouse, got "
+                    + stored(server, kingdom, Items.IRON_INGOT) + ": worker " + worker.workStatus() + ", raw iron " + stored(server, kingdom,
+                    Items.RAW_IRON) + ", coal " + stored(server, kingdom, Items.COAL) + ", hold " + Production.reservations().hold(worker.id())
+                    + ", furnaces " + furnacesAround(level, postPos, 8));
+            helper.assertTrue(allLit[0], "The three furnaces never burned together");
+            helper.assertTrue(stored(server, kingdom, Items.RAW_IRON) == 0 && held(level, helper, furnaces, List.of(worker), Items.RAW_IRON) == 0
+                    && held(level, helper, furnaces, List.of(worker), Items.IRON_INGOT) == 0, "Raw iron or ingots were left behind: "
+                    + furnacesAround(level, postPos, 8));
+            long burned = 32 - stored(server, kingdom, Items.COAL);
+            helper.assertTrue(burned <= 64 / 8 + 3, "Too much coal was taken for 64 smeltings: " + burned);
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.production.WorkshopBehavior.fetches(worker.id()) <= 4,
+                    "The smelter went for the ore too often: " + io.github.sekerator.kingdomworld.common.production.WorkshopBehavior.fetches(worker.id()));
+            helper.assertTrue(GatheringGameTests.produced(server, kingdom, "smelter", "minecraft:iron_ingot") >= 64, "The ingots were not counted");
+            helper.assertTrue(!Production.reservations().has(worker.id()), "The reservation was not released");
+            Production.plan(server, kingdom.id());
+            helper.assertTrue(KingdomWorldApi.state(server).orders().get(kingdom.id(), ingots.id()).isEmpty(), "The finished order stayed");
+            GatheringGameTests.end(helper, kingdom, worker, from, to);
+        });
+    }
+
+    /**
+     * Two smelters of one post share its three furnaces: what one of them tends the other leaves alone, ore that comes later
+     * goes into the furnaces that come free, and in the end every raw iron is an ingot in the storehouse, none lost, none made
+     * twice.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_workshop_smelters_share", timeoutTicks = 7000)
+    public static void twoSmeltersShareFurnacesWithoutLosingOre(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        workMorning(level);
+        BlockPos from = helper.absolutePos(ZONE_FROM);
+        BlockPos to = helper.absolutePos(new BlockPos(7, 3, 6));
+        GatheringGameTests.clear(level, from, to);
+        // The workers walk beyond the chunks the game holds for the structure of the test: the box is held too.
+        TestChunks.hold(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Twin Foundry", UUID.randomUUID());
+        List<BlockPos> furnaces = List.of(new BlockPos(4, 0, 2), new BlockPos(5, 0, 2), new BlockPos(6, 0, 2));
+        furnaces.forEach(pos -> helper.setBlock(pos, Blocks.FURNACE));
+        StorehouseInventory store = GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(0, 0, 4)));
+        fill(store, new ItemStack(Items.RAW_IRON, 16), new ItemStack(Items.COAL, 16));
+        WorldPos postPos = GatheringGameTests.post(helper, new BlockPos(0, 0, 0), "smelter");
+        KingdomWorldApi.change(server, "test", state -> state.setPostSeats(null, postPos, 2, 2));
+        WorkPost post = surveyed(server, postPos);
+        post.setAuto(true);
+        Citizen first = GatheringGameTests.worker(helper, kingdom, "smelter", postPos, helper.absolutePos(new BlockPos(2, 0, 2)));
+        Citizen second = GatheringGameTests.worker(helper, kingdom, "smelter", postPos, helper.absolutePos(new BlockPos(2, 0, 1)));
+        workMorning(level);
+        List<Citizen> workers = List.of(first, second);
+        boolean[] more = new boolean[1];
+        String[] twice = new String[1];
+        Set<UUID> busy = new java.util.HashSet<>();
+
+        helper.succeedWhen(() -> {
+            for (Citizen worker : workers) {
+                if (Production.reservations().has(worker.id())) {
+                    busy.add(worker.id());
+                }
+            }
+            boolean lit = false;
+            for (BlockPos pos : furnaces) {
+                lit |= io.github.sekerator.kingdomworld.common.production.Workstations.isLit(helper.getBlockState(pos));
+            }
+            if (lit && !more[0]) {
+                // More ore comes while the first batch smelts: it waits for furnaces to come free.
+                more[0] = true;
+                fill(store, new ItemStack(Items.RAW_IRON, 16));
+            }
+            long ore = stored(server, kingdom, Items.RAW_IRON) + held(level, helper, furnaces, workers, Items.RAW_IRON);
+            long ingots = stored(server, kingdom, Items.IRON_INGOT) + held(level, helper, furnaces, workers, Items.IRON_INGOT);
+            long total = more[0] ? 32 : 16;
+            if (ore + ingots > total && twice[0] == null) {
+                twice[0] = "Iron was made twice: " + ore + " raw iron and " + ingots + " ingots of " + total + ", furnaces "
+                        + furnacesAround(level, postPos, 8);
+            }
+            helper.assertTrue(twice[0] == null, twice[0]);
+            helper.assertTrue(stored(server, kingdom, Items.IRON_INGOT) == 32, "Expected 32 ingots in the storehouse, got "
+                    + stored(server, kingdom, Items.IRON_INGOT) + ": raw iron " + ore + ", ingots " + ingots + ", workers " + first.workStatus()
+                    + " and " + second.workStatus() + " (" + busy.size() + " worked), furnaces " + furnacesAround(level, postPos, 8));
+            helper.assertTrue(ore == 0 && ingots == 32, "Iron was lost or left behind: " + ore + " raw iron, " + ingots + " ingots");
+            helper.assertTrue(!Production.reservations().has(first.id()) && !Production.reservations().has(second.id()),
+                    "A reservation was not released");
+            CitizenGameTests.finish(helper, kingdom, first, second);
+            GatheringGameTests.clear(level, from, to);
+            TestChunks.release(level, from);
+        });
+    }
+
     @GameTest(template = EMPTY, batch = "kingdomworld_workshop_cook", timeoutTicks = 1800)
     public static void cookCooksFoodWhileTheStoresRunShort(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();

@@ -24,6 +24,10 @@ public final class WorkGoal extends Goal {
 
     private Goal current() {
         if (!profession.equals(body.professionId())) {
+            if (work instanceof io.github.sekerator.kingdomworld.common.citizen.work.PostWorkGoal old) {
+                // A batch of a workshop put aside for the morning is given up with the old work.
+                old.leaveWork();
+            }
             profession = body.professionId();
             work = ProfessionBehaviors.get(profession).map(behavior -> behavior.createWork(body)).orElse(null);
         }
