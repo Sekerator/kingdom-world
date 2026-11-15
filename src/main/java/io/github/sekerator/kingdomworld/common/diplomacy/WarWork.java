@@ -322,6 +322,13 @@ public final class WarWork {
         return KingdomWorldApi.state(server).economy().treasury(kingdomId).map(Treasury::funds).orElse(0L);
     }
 
+    /**
+     * The strength of the army of a kingdom as counted today for the decisions of rulers, or -1 when it was not counted yet.
+     */
+    public static double countedPower(UUID kingdomId) {
+        return NpcDiplomacy.counted(kingdomId);
+    }
+
     /** Days of its income a crown of the world pays at most for a lost war: a month of its earnings, not its hoard. */
     public static final int INDEMNITY_DAYS = 30;
 

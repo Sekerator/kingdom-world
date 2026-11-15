@@ -278,7 +278,7 @@ final class ProvinceNpc {
     private static List<ArmySquad> send(MinecraftServer server, UUID kingdomId) {
         List<ArmySquad> field = NpcGarrison.fieldArmy(server, kingdomId);
         if (!field.isEmpty()) {
-            return List.copyOf(field.subList(0, NpcGarrison.sendable(field.size())));
+            return List.copyOf(field.subList(0, Math.min(field.size(), NpcGarrison.available(server, kingdomId))));
         }
         List<ArmySquad> home = new ArrayList<>();
         List<ArmySquad> watching = new ArrayList<>();

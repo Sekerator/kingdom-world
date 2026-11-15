@@ -92,15 +92,24 @@ final class SiegeNpc {
         if (target.isEmpty()) {
             return;
         }
+        // The squads away already holding a place of the war go first; of those at home no more than leave the reserve home.
         List<ArmySquad> squads = new ArrayList<>();
+        List<ArmySquad> home = new ArrayList<>();
         for (ArmySquad squad : ArmyWork.state(server).squadsOf(attacker)) {
             Order.Kind kind = squad.order().kind();
             // The guard and the reserve at the capital stay home.
-            if (!squad.members().isEmpty() && !io.github.sekerator.kingdomworld.common.npc.NpcGarrison.keepsHome(server, squad)
-                    && (kind == Order.Kind.NONE || kind == Order.Kind.HOLD || kind == Order.Kind.PATROL || kind == Order.Kind.GUARD)) {
+            if (squad.members().isEmpty() || io.github.sekerator.kingdomworld.common.npc.NpcGarrison.keepsHome(server, squad)) {
+                continue;
+            }
+            if (kind == Order.Kind.HOLD) {
                 squads.add(squad);
+            } else if (kind == Order.Kind.NONE || kind == Order.Kind.PATROL || kind == Order.Kind.GUARD) {
+                home.add(squad);
             }
         }
+        int fromHome = io.github.sekerator.kingdomworld.common.npc.NpcGarrison.fieldArmy(server, attacker).isEmpty() ? (home.size() + 1) / 2
+                : io.github.sekerator.kingdomworld.common.npc.NpcGarrison.available(server, attacker);
+        squads.addAll(home.subList(0, Math.min(home.size(), fromHome)));
         if (squads.isEmpty()) {
             return;
         }
@@ -110,7 +119,7 @@ final class SiegeNpc {
             return;
         }
         WorldPos city = new WorldPos(target.get().dimension(), target.get().x(), target.get().y(), target.get().z());
-        int send = Math.max(1, (squads.size() + 1) / 2);
+        int send = squads.size();
         for (int i = 0; i < send; i++) {
             ArmyWork.order(server, null, squads.get(i).id(), Order.siege(city));
         }
@@ -191,7 +200,7 @@ final class SiegeNpc {
         boolean relieving = ArmyWork.state(server).squadsOf(siege.defender()).stream()
                 .anyMatch(squad -> squad.order().kind() == Order.Kind.DEFEND && squad.order().points().get(0).equals(city));
         if (!field.isEmpty() && !relieving) {
-            int send = io.github.sekerator.kingdomworld.common.npc.NpcGarrison.sendable(field.size());
+            int send = Math.min(field.size(), io.github.sekerator.kingdomworld.common.npc.NpcGarrison.available(server, siege.defender()));
             int soldiers = 0;
             for (int i = 0; i < send; i++) {
                 if (ArmyWork.order(server, null, field.get(i).id(), Order.defend(city)).ok()) {

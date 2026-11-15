@@ -144,6 +144,7 @@ public final class NpcWork {
         NpcFounding.reset();
         NpcSpawner.reset();
         NpcRulers.reset();
+        NpcThreats.reset();
         NpcCamps.reset();
         SettlementIndex.reset();
         SettlementWork.reset();

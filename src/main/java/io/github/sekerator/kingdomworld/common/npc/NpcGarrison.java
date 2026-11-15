@@ -114,7 +114,10 @@ public final class NpcGarrison {
                 towns++;
             }
         }
-        int guards = rules.guards(level) + towns * rules.townGuards(level);
+        int base = rules.guards(level) + towns * rules.townGuards(level);
+        // A rich ruler and an endangered one keep more of a guard, up to twice the usual.
+        int guards = io.github.sekerator.kingdomworld.core.npc.MilitaryMind.keep(base, RulerPurse.keepDays(server, kingdomId),
+                NpcThreats.level(server, kingdomId), base * 2);
         ArmyState army = ArmyWork.state(server);
         int people = 0;
         for (Citizen citizen : KingdomWorldApi.state(server).citizens().registry().citizensOf(kingdomId)) {
@@ -123,7 +126,28 @@ public final class NpcGarrison {
             }
         }
         return new int[]{Math.min(guards, people * MOST_PERCENT / 100) + SettlementGarrison.standingGuards(server, kingdomId),
-                royalArmy(server, kingdomId)};
+                standingArmy(server, kingdomId)};
+    }
+
+    /**
+     * The royal army a ruler keeps now: the army of its size, its seed and its leaning, more for its wealth and the dangers
+     * around it, up to half again the most of its size.
+     */
+    public static int standingArmy(MinecraftServer server, UUID kingdomId) {
+        int base = royalArmy(server, kingdomId);
+        Optional<NpcSite> site = site(server, kingdomId);
+        int most = site.map(s -> NpcSettings.rules().armyMost(s.level()) * 3 / 2).orElse(base);
+        return io.github.sekerator.kingdomworld.core.npc.MilitaryMind.keep(base, RulerPurse.keepDays(server, kingdomId),
+                NpcThreats.level(server, kingdomId), most);
+    }
+
+    /**
+     * Whether a ruler takes new soldiers from abroad today: its treasury pays some weeks of upkeep and, if it loses money,
+     * lasts a month.
+     */
+    static boolean recruits(MinecraftServer server, UUID kingdomId) {
+        long runway = NpcRulers.lastView(kingdomId).map(io.github.sekerator.kingdomworld.core.npc.RulerMind::runway).orElse(Long.MAX_VALUE);
+        return io.github.sekerator.kingdomworld.core.npc.MilitaryMind.recruits(RulerPurse.keepDays(server, kingdomId), runway);
     }
 
     /**
@@ -329,7 +353,7 @@ public final class NpcGarrison {
         ArmyState army = ArmyWork.state(server);
         // The army fills up from abroad a few a day (a kingdom that appeared before the large armies, or lost soldiers in a
         // war); the staff sees to the guard, the officers and the kits of all.
-        if (army.staffDay(kingdomId) < ArmyWork.day(server)) {
+        if (army.staffDay(kingdomId) < ArmyWork.day(server) && recruits(server, kingdomId)) {
             int lacking = wanted[1] - army.branchOf(kingdomId, Branch.ARMY).size();
             int joined = enlist(server, kingdomId, Math.min(NpcSettings.rules().armyPerDay(), lacking));
             if (joined > 0) {
@@ -408,6 +432,11 @@ public final class NpcGarrison {
         NpcRules rules = NpcSettings.rules();
         NpcComposition composition = NpcSpawner.composition(site);
         List<Duty> duties = new ArrayList<>();
+        // A rich or endangered capital has more of its guard at its gates, its square and its palace.
+        int threat = NpcThreats.level(server, kingdomId);
+        double more = io.github.sekerator.kingdomworld.core.npc.MilitaryMind.wealthFactor(RulerPurse.keepDays(server, kingdomId))
+                * io.github.sekerator.kingdomworld.core.npc.MilitaryMind.threatFactor(threat);
+        int extra = threat >= 2 ? 1 : 0;
         // The posts of a castle come last of the guard, after those of the capital and of its towns, which keep their guards: a
         // small capital has none left for them.
         List<Duty> castle = new ArrayList<>();
@@ -416,7 +445,8 @@ public final class NpcGarrison {
             // A capital of districts names its posts.
             for (NpcComposition.Post post : composition.posts()) {
                 if (post.name().startsWith("gate_") && !post.points().isEmpty()) {
-                    duties.add(new Duty(post.name(), Order.guard(at(dimension, site, post.points().get(0)), 0), 2, 3, Branch.GUARD, null));
+                    duties.add(new Duty(post.name(), Order.guard(at(dimension, site, post.points().get(0)), 0), 2 + extra, scaled(3, more),
+                            Branch.GUARD, null));
                 }
             }
             Optional<NpcComposition.Post> stores = composition.post("stores").filter(post -> !post.points().isEmpty());
@@ -426,13 +456,14 @@ public final class NpcGarrison {
             Optional<NpcComposition.Post> square = composition.post("square").filter(post -> !post.points().isEmpty());
             Optional<NpcComposition.Post> wall = composition.post("wall_round").filter(post -> post.points().size() >= 2);
             stores.ifPresent(post -> duties.add(new Duty("stores", Order.hold(at(dimension, site, post.points().get(0))), 2, 2, Branch.GUARD, null)));
-            hall.ifPresent(post -> duties.add(new Duty("palace_hall", Order.hold(at(dimension, site, post.points().get(0))), 2, 3, Branch.GUARD,
-                    Post.CAPTAIN)));
+            hall.ifPresent(post -> duties.add(new Duty("palace_hall", Order.hold(at(dimension, site, post.points().get(0))), 2, scaled(3, more),
+                    Branch.GUARD, Post.CAPTAIN)));
             round.ifPresent(post -> duties.add(new Duty("stores_round", Order.patrol(route(dimension, site, post.points())), 2, 3, Branch.GUARD,
                     Post.VICE_CAPTAIN)));
             door.ifPresent(post -> duties.add(new Duty("palace_door", Order.hold(at(dimension, site, post.points().get(0))), 2, 2, Branch.GUARD,
                     null)));
-            square.ifPresent(post -> duties.add(new Duty("square", Order.hold(at(dimension, site, post.points().get(0))), 2, 4, Branch.GUARD, null)));
+            square.ifPresent(post -> duties.add(new Duty("square", Order.hold(at(dimension, site, post.points().get(0))), 2 + extra, scaled(4, more),
+                    Branch.GUARD, null)));
             wall.ifPresent(post -> duties.add(new Duty("wall_round", Order.patrol(route(dimension, site, post.points())), 3,
                     ArmySquad.MAX_MEMBERS, Branch.GUARD, null)));
             // The castle of a styled capital names its gate, its treasury and the walk of its wall.
@@ -452,11 +483,11 @@ public final class NpcGarrison {
             // A capital of the first layout: the gates of its wall, a storehouse of the register and the throne.
             List<WorldPos> gates = CityWalls.gates(server, kingdomId, 0L);
             for (int i = 0; i < gates.size(); i++) {
-                duties.add(new Duty("gate_" + i, Order.guard(gates.get(i), 0), 2, 3, Branch.GUARD, null));
+                duties.add(new Duty("gate_" + i, Order.guard(gates.get(i), 0), 2 + extra, scaled(3, more), Branch.GUARD, null));
             }
             Optional<Building> stores = building(server, kingdomId, BuildingRoles.WAREHOUSE, throne);
             stores.ifPresent(building -> duties.add(new Duty("stores", Order.hold(building.anchor()), 2, 2, Branch.GUARD, null)));
-            duties.add(new Duty("palace_hall", Order.hold(throne), 2, 3, Branch.GUARD, Post.CAPTAIN));
+            duties.add(new Duty("palace_hall", Order.hold(throne), 2, scaled(3, more), Branch.GUARD, Post.CAPTAIN));
             stores.ifPresent(building -> {
                 Box box = building.box();
                 int y = building.anchor().y();
@@ -482,11 +513,18 @@ public final class NpcGarrison {
         WorldPos barracks = building(server, kingdomId, BuildingRoles.BARRACKS, throne).map(Building::anchor).orElse(throne);
         int capital = Math.max(1, rules.army(site.level()));
         int atPalace = Math.min(6, 1 + capital / 3);
-        duties.add(new Duty("reserve", Order.guard(barracks, 0), 0, Math.max(1, capital - atPalace), Branch.ARMY, Post.VICE_CAPTAIN));
+        // The reserve at the barracks in squads of no more than a squad of the army each, so that none of it is left without one.
+        int atBarracks = Math.max(1, capital - atPalace);
+        for (int n = 0; atBarracks > 0; n++) {
+            int part = Math.min(ARMY_SQUAD, atBarracks);
+            duties.add(new Duty(n == 0 ? "reserve" : "reserve_" + n, Order.guard(barracks, 0), 0, part, Branch.ARMY,
+                    n == 0 ? Post.VICE_CAPTAIN : null));
+            atBarracks -= part;
+        }
         duties.add(new Duty("reserve_palace", Order.guard(palace, 0), 0, atPalace, Branch.ARMY, Post.CAPTAIN));
-        // The rest of the army in squads in the camps, as many squads as the army needs; those the camps cannot hold wait at
-        // the barracks of the capital.
-        int beyond = Math.max(0, royalArmy(server, kingdomId) - capital);
+        // The rest of the army in squads in the camps, as many squads as the army needs (or has: soldiers taken in beyond the
+        // plan get squads too); those the camps cannot hold wait at the barracks of the capital.
+        int beyond = Math.max(0, Math.max(standingArmy(server, kingdomId), ArmyWork.state(server).branchOf(kingdomId, Branch.ARMY).size()) - capital);
         int squads = (beyond + ARMY_SQUAD - 1) / ARMY_SQUAD;
         int perCamp = (NpcSettings.rules().campSoldiers() + ARMY_SQUAD - 1) / ARMY_SQUAD;
         List<List<WorldPos>> camps = NpcCamps.squadPlaces(server, kingdomId, dimension, perCamp);
@@ -600,6 +638,8 @@ public final class NpcGarrison {
             return 0;
         }
         int moved = 0;
+        // No squad holds more than the rules allow, whatever a post may take.
+        int cap = Math.max(1, rules.maxSquadSize());
         // Officers first.
         for (Duty duty : duties) {
             if (duty.officer() == null) {
@@ -621,7 +661,7 @@ public final class NpcGarrison {
         // What the posts ask for, in their order: a post takes the soldiers of its own place, and from the least important post
         // of that place.
         for (Duty duty : duties) {
-            int wanted = branch == Branch.ARMY ? 0 : duty.wanted();
+            int wanted = branch == Branch.ARMY ? 0 : Math.min(cap, duty.wanted());
             List<UUID> own = idleOf.computeIfAbsent(duty.settlement(), k -> new ArrayList<>());
             List<Duty> same = duties.stream().filter(other -> other.settlement() == duty.settlement()).toList();
             while (members(army, kingdomId, duty) < wanted) {
@@ -642,10 +682,9 @@ public final class NpcGarrison {
                     if (duty.officer() == Post.CAPTAIN && army.officer(kingdomId, branch, Post.CAPTAIN).isEmpty()) {
                         continue;
                     }
-                    if (members(army, kingdomId, duty) < duty.most()) {
-                        if (assign(server, kingdomId, duty, soldier, rules)) {
-                            moved++;
-                        }
+                    // A full post (or one that would not take the soldier) leaves it to the next one.
+                    if (members(army, kingdomId, duty) < Math.min(cap, duty.most()) && assign(server, kingdomId, duty, soldier, rules)) {
+                        moved++;
                         break;
                     }
                 }
@@ -659,7 +698,8 @@ public final class NpcGarrison {
                 if (idle.isEmpty()) {
                     break;
                 }
-                if (duty.settlement() == 0 && members(army, kingdomId, duty) < duty.most() && assign(server, kingdomId, duty, idle.get(0), rules)) {
+                if (duty.settlement() == 0 && members(army, kingdomId, duty) < Math.min(cap, duty.most())
+                        && assign(server, kingdomId, duty, idle.get(0), rules)) {
                     idle.remove(0);
                     moved++;
                     placed = true;
@@ -747,6 +787,26 @@ public final class NpcGarrison {
      */
     public static int sendable(int squads) {
         return squads - squads / 3;
+    }
+
+    /**
+     * How many squads of its field army a ruler may send away now: the reserve of a third (more when it is in danger) stays
+     * home, and the squads away already at a siege, holding a place or relieving a city count against the rest, so that every
+     * order of war takes from one count.
+     */
+    public static int available(MinecraftServer server, UUID kingdomId) {
+        int free = fieldArmy(server, kingdomId).size();
+        int away = 0;
+        for (ArmySquad squad : ArmyWork.state(server).squadsOf(kingdomId)) {
+            if (awayAtWar(server, squad)) {
+                away++;
+            }
+        }
+        return io.github.sekerator.kingdomworld.core.npc.MilitaryMind.available(free, away, NpcThreats.level(server, kingdomId));
+    }
+
+    private static int scaled(int count, double factor) {
+        return Math.max(count, (int) Math.round(count * factor));
     }
 
     /**

@@ -232,6 +232,14 @@ final class NpcDiplomacy {
         return POWER.computeIfAbsent(kingdomId, id -> ArmyWork.power(server, id));
     }
 
+    /**
+     * The strength of the army of a kingdom as counted today, or -1 when it was not counted yet; nothing is counted here.
+     */
+    public static double counted(UUID kingdomId) {
+        Double power = POWER.get(kingdomId);
+        return power == null ? -1 : power;
+    }
+
     private static final java.util.ArrayDeque<UUID> QUEUE = new java.util.ArrayDeque<>();
     private static final Map<UUID, Double> POWER = new java.util.HashMap<>();
     private static long queueDay;
@@ -337,7 +345,7 @@ final class NpcDiplomacy {
         // reserve at the capital stay.
         List<ArmySquad> field = io.github.sekerator.kingdomworld.common.npc.NpcGarrison.fieldArmy(server, kingdomId);
         if (!field.isEmpty()) {
-            int send = io.github.sekerator.kingdomworld.common.npc.NpcGarrison.sendable(field.size());
+            int send = Math.min(field.size(), io.github.sekerator.kingdomworld.common.npc.NpcGarrison.available(server, kingdomId));
             int soldiers = 0;
             for (int i = 0; i < send; i++) {
                 if (ArmyWork.order(server, null, field.get(i).id(), Order.hold(target)).ok()) {
