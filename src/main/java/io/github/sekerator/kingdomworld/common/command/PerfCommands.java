@@ -52,6 +52,15 @@ public final class PerfCommands {
     private static long gcStart;
     /** The work counted in the current tick. */
     private static long work;
+    /** The ticks between two lines of the log of slow ticks. */
+    private static final int LOG_EVERY = 1_200;
+    /** The server tick of the last line of slow ticks, or {@link Integer#MIN_VALUE} before the first one. */
+    private static int lastSlowLog = Integer.MIN_VALUE;
+    /** The slow ticks of the handlers since the last line of them: how many, their sum and the worst with its tick. */
+    private static int slowSince;
+    private static long slowSinceSum;
+    private static long slowSinceWorst;
+    private static int slowSinceWorstTick;
 
     private PerfCommands() {
     }
@@ -168,11 +177,33 @@ public final class PerfCommands {
         tickSlow += tick > SLOW ? 1 : 0;
         handlerSum += handlers;
         handlerWorst = Math.max(handlerWorst, handlers);
+        int tickCount = event.getServer().getTickCount();
         if (handlers > SLOW) {
             handlerSlow++;
-            com.mojang.logging.LogUtils.getLogger().info("A slow tick of the tick handlers: {} ms at tick {} ({} into its minute)", ms(handlers),
-                    event.getServer().getTickCount(), event.getServer().getTickCount() % 1_200);
+            slowSince++;
+            slowSinceSum += handlers;
+            if (handlers > slowSinceWorst) {
+                slowSinceWorst = handlers;
+                slowSinceWorstTick = tickCount;
+            }
         }
+        if (slowSince > 0 && (lastSlowLog == Integer.MIN_VALUE || tickCount - lastSlowLog >= LOG_EVERY || tickCount < lastSlowLog)) {
+            logSlow(tickCount);
+        }
+    }
+
+    /**
+     * Writes one line of the slow ticks of the handlers since the last such line, at most once a minute: a lagging server has
+     * one line a minute with the count, the worst and the average of them rather than a line of every slow tick.
+     */
+    private static void logSlow(int tickCount) {
+        com.mojang.logging.LogUtils.getLogger().info("Slow ticks of the tick handlers: {} since {}, the worst {} ms at tick {} ({} into its minute), {} ms on average",
+                slowSince, lastSlowLog == Integer.MIN_VALUE ? "the start" : "tick " + lastSlowLog, ms(slowSinceWorst), slowSinceWorstTick,
+                slowSinceWorstTick % 1_200, ms(slowSinceSum / slowSince));
+        lastSlowLog = tickCount;
+        slowSince = 0;
+        slowSinceSum = 0;
+        slowSinceWorst = 0;
     }
 
     /**
