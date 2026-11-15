@@ -334,7 +334,7 @@ public final class NpcSpawner {
     /**
      * Puts the raising of a place aside for another one: the place keeps its stage and step and goes on later from there.
      */
-    static void putAside(MinecraftServer server, NpcSite site) {
+    public static void putAside(MinecraftServer server, NpcSite site) {
         if (job != null && job.siteId == site.id()) {
             releaseTickets(server.overworld());
             job = null;
@@ -352,7 +352,7 @@ public final class NpcSpawner {
     /**
      * Lets the running raising use the full budget (a player came to watch) or go back to the small one.
      */
-    static void setBackground(boolean value) {
+    public static void setBackground(boolean value) {
         if (job != null) {
             job.background = value;
         }
@@ -688,7 +688,50 @@ public final class NpcSpawner {
         }
     }
 
+    /** Whether the next step of an appearance fails, as a fault of a stage would; for game tests. */
+    private static boolean failNext;
+
+    /**
+     * Makes the next step of the running appearance fail; for game tests.
+     */
+    public static void failNextStepForTests() {
+        failNext = true;
+    }
+
+    /**
+     * Lets go of the tickets of the chunks of the running appearance at once while it still counts them as its own, as when another
+     * raising of the same place let them go; for game tests.
+     */
+    public static int dropTicketsForTests(ServerLevel level) {
+        if (job == null) {
+            return 0;
+        }
+        for (long key : job.ticketed) {
+            ChunkPos chunk = new ChunkPos(key);
+            level.getChunkSource().removeRegionTicket(TICKET, chunk, 0, chunk);
+        }
+        return job.ticketed.size();
+    }
+
+    /**
+     * How many chunks the running appearance counts as its own are not loaded now; for game tests.
+     */
+    public static int unloadedForTests(ServerLevel level) {
+        if (job == null) {
+            return 0;
+        }
+        int unloaded = 0;
+        for (long key : job.ticketed) {
+            unloaded += level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key)) == null ? 1 : 0;
+        }
+        return unloaded;
+    }
+
     private static void stepStage(MinecraftServer server, ServerLevel level, NpcSite site, Job job) {
+        if (failNext) {
+            failNext = false;
+            throw new IllegalStateException("a fault made for a game test at " + site.stage().id());
+        }
         fitWays(site, job);
         if (site.stage() != SpawnStage.LOAD && site.stage() != SpawnStage.DONE && !loaded(level, site, job)) {
             // After a restart the chunks come back with the tickets first, so that nothing loads on the main thread.
