@@ -2972,7 +2972,7 @@
   "kingdomworld.screen.roads.condition": "condition %s",
   "kingdomworld.screen.roads.road_head": "#%s %s → %s",
   "kingdomworld.screen.roads.road_hint": "Road #%s: %s → %s. %s, %s, %s. Built with: %s. Worn sections: %s, being repaired: %s. Your part still needs: %s for the road, %s for bridges, %s for embankments",
-  "kingdomworld.screen.roads.building_levelled": "built %s, levelled %s",
+  "kingdomworld.screen.roads.building_levelled": "%s, levelled %s",
   "kingdomworld.screen.roads.levelled_hint": "Levelled: %s. Work left: builders %s days, miners %s days. Miners helping now: %s. Gates ordered: %s.",
   "kingdomworld.screen.roads.levelled_needs": "Still needs %s: %s.",
   "kingdomworld.screen.roads.blocked": "Columns in the way: %s.",

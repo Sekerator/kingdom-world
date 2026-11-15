@@ -122,6 +122,11 @@ public final class RoutePlan {
             int[] to = snapped.get(i + 1);
             String key = key(from, to, a, b, roadClass, style);
             LegPlanner.Leg leg = cache.get(key);
+            if (leg != null && !land.read(chunksOf(leg.cells()))) {
+                // The land of a leg planned before is read for this request too: the profile where the legs join, the survey and
+                // the estimate look at it.
+                return failed(points, snapped, cancelled.getAsBoolean() ? LegPlanner.Reason.CANCELLED : LegPlanner.Reason.NOT_LOADED, i, from);
+            }
             if (leg == null) {
                 List<int[]> starts = new ArrayList<>();
                 if (a.city()) {
@@ -168,6 +173,11 @@ public final class RoutePlan {
             return new Result(List.of(), snapped, legs, estimates, RoadEstimate.EMPTY, List.of(), 0, LegPlanner.Reason.TOO_LONG,
                     legs.size() - 1, new int[]{at.x(), at.z()}, guessed);
         }
+        // The land of the whole way, read again where a long road pushed it out of the tiles kept.
+        if (!land.read(chunksOf(way))) {
+            return failed(points, snapped, cancelled.getAsBoolean() ? LegPlanner.Reason.CANCELLED : LegPlanner.Reason.NOT_LOADED,
+                    legs.size() - 1, snapped.get(0));
+        }
         // The heights where the legs meet, joined by the profile of the whole road.
         List<RouteCell> cells = legs.size() > 1 ? planner.reprofile(way) : way;
         List<RoadLayout.ColumnSurvey> surveys = RoadSurvey.survey(cells, roadClass, land, earth);
@@ -179,6 +189,24 @@ public final class RoutePlan {
                 kingdomId);
         progress.accept(100);
         return new Result(cells, snapped, legs, estimates, estimate, surveys, earthTotal, LegPlanner.Reason.NONE, -1, null, guessed);
+    }
+
+    /** Blocks round a cell of the way whose chunks are read with it: its width, verges and the slopes beside. */
+    static final int AROUND_CELL = 8;
+
+    /**
+     * The chunks under a way and round it.
+     */
+    static java.util.Set<Long> chunksOf(List<RouteCell> cells) {
+        java.util.Set<Long> chunks = new java.util.HashSet<>();
+        for (RouteCell cell : cells) {
+            for (int dx = -AROUND_CELL; dx <= AROUND_CELL; dx += AROUND_CELL) {
+                for (int dz = -AROUND_CELL; dz <= AROUND_CELL; dz += AROUND_CELL) {
+                    chunks.add(LandSnapshot.chunk((cell.x() + dx) >> 4, (cell.z() + dz) >> 4));
+                }
+            }
+        }
+        return chunks;
     }
 
     private static Result failed(List<Point> points, List<int[]> snapped, LegPlanner.Reason reason, int leg, int[] at) {

@@ -49,7 +49,9 @@ import java.util.UUID;
  *   <li>{@code life}: in a copy of a test world, builds the tavern with an innkeeper, guests and beds beside it and saves
  *       screenshots of the evening in the tavern, its window and the citizens asleep at night (see {@link ClientLifeShowcase}).</li>
  *   <li>{@code roads}: in a copy of a test world, lays a road with a bridge, puts a caravan on it and a camp of robbers
- *       beside it and saves screenshots of them (see {@link ClientRoadShowcase}).</li>
+ *       beside it and saves screenshots of them (see {@link ClientRoadShowcase}); then plans a levelled road on the atlas over a
+ *       hill, through a ridge and over a river, builds it and saves screenshots of the atlas, the Roads tab and the road in the
+ *       world (see {@link ClientLevelledRoadShowcase}).</li>
  *   <li>{@code npc}: in a copy of a test world, a large kingdom of the world appears near the player and the camera flies over
  *       it (see {@link ClientNpcShowcase}).</li>
  *   <li>{@code tactics}: in a copy of a test world, fifty monsters come at the garrison of a large capital of the world near the
@@ -85,6 +87,7 @@ public final class ClientSelfTest {
     private static ClientBuildingShowcase showcase;
     private static ClientCapitalShowcase capitalShowcase;
     private static ClientRoadShowcase roadShowcase;
+    private static ClientLevelledRoadShowcase levelledShowcase;
     private static ClientRemoteShowcase remoteShowcase;
     private static ClientSiegeShowcase siegeShowcase;
     private static ClientNpcShowcase npcShowcase;
@@ -246,10 +249,25 @@ public final class ClientSelfTest {
                 LOGGER.info(PREFIX + "road showcase started, screenshots go to {}", screenshots.resolve("world"));
                 roadShowcase = new ClientRoadShowcase(screenshots);
             }
-            roadShowcase.tick();
-            if (roadShowcase.finished()) {
-                if (roadShowcase.failed()) {
-                    LOGGER.error(PREFIX + "road showcase failed, exiting with code 1");
+            if (!roadShowcase.finished()) {
+                roadShowcase.tick();
+                return;
+            }
+            if (roadShowcase.failed()) {
+                LOGGER.error(PREFIX + "road showcase failed, exiting with code 1");
+                System.exit(1);
+            }
+            if (levelledShowcase == null) {
+                String folder = System.getProperty("kingdomworld.clientSelfTest.screenshots");
+                Path screenshots = folder != null && !folder.isEmpty() ? Path.of(folder)
+                        : minecraft.gameDirectory.toPath().resolve("kingdomworld-layout");
+                LOGGER.info(PREFIX + "levelled road showcase started, screenshots go to {}", screenshots.resolve("levelled"));
+                levelledShowcase = new ClientLevelledRoadShowcase(screenshots);
+            }
+            levelledShowcase.tick();
+            if (levelledShowcase.finished()) {
+                if (levelledShowcase.failed()) {
+                    LOGGER.error(PREFIX + "levelled road showcase failed, exiting with code 1");
                     System.exit(1);
                 }
                 LOGGER.info(PREFIX + "finished");

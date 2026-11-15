@@ -101,6 +101,7 @@ final class RoadsTab {
     private int foundWidth;
     private int allowanceLabelWidth;
     private int setWidth;
+    private int minersWidth;
     /** What the player typed for the allowance of the governors. */
     private String allowanceText = "";
     private static final int BOX = 64;
@@ -297,6 +298,8 @@ final class RoadsTab {
         foundWidth = screen.buttonWidth(Component.translatable(KEY + "found"));
         allowanceLabelWidth = font.width(Component.translatable(KEY + "allowance_label")) + 6;
         setWidth = screen.buttonWidth(Component.translatable(KEY + "allowance_set"));
+        minersWidth = Math.max(screen.buttonWidth(Component.translatable(KEY + "miners", Component.translatable(KEY + "yes"))),
+                screen.buttonWidth(Component.translatable(KEY + "miners", Component.translatable(KEY + "no"))));
         int choices = 0;
         for (Choice choice : Choice.values()) {
             choices = Math.max(choices, screen.buttonWidth(choiceLabel(choice, null)));
@@ -468,9 +471,9 @@ final class RoadsTab {
                         .bounds(boxX + BOX + GAP, y, setWidth, ROW - 2).build());
                 // Whether the miners help with the rock of the levelled roads.
                 Component miners = Component.translatable(KEY + "miners", Component.translatable(view.minersHelp() ? KEY + "yes" : KEY + "no"));
-                int minersWidth = Math.min(right - x, screen.buttonWidth(miners));
+                int helpWidth = Math.min((right - x) / 2, minersWidth);
                 Button help = screen.add(Button.builder(miners, b -> send(RoadPackets.TabChange.Action.MINERS_HELP, 0, view.minersHelp() ? 0 : 1))
-                        .bounds(x, y + 2 * ROW + GAP, minersWidth, ROW - 2).build());
+                        .bounds(right - helpWidth, y + ROW, helpWidth, ROW - 2).build());
                 help.active = view.canManage();
                 help.setTooltip(Tooltip.create(Component.translatable(KEY + "miners_hint")));
                 set.active = view.treasurer() && view.currency() != null;
@@ -709,7 +712,7 @@ final class RoadsTab {
         text(graphics, now, afterX, row + 5, view.allowance() > 0 ? 0xFFA0E0A0 : 0xFFB8B8B8, right - afterX,
                 Component.translatable(KEY + "allowance_now_hint", money(view.allowance()), view.governed()));
         Component spent = Component.translatable(KEY + "allowance_spent", money(view.spentToday()), money(view.allowance()));
-        text(graphics, spent, x, row + ROW + 2, 0xFFE8E8E8, right - x, null);
+        text(graphics, spent, x, row + ROW + 5, 0xFFE8E8E8, right - x - Math.min((right - x) / 2, minersWidth) - GAP, null);
     }
 
     private void renderCity(GuiGraphics graphics, int x, int right, int y, RoadViews.CityRow row) {

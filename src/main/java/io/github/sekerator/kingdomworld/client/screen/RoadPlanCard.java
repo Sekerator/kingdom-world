@@ -138,7 +138,9 @@ public final class RoadPlanCard {
     }
 
     private static Component signed(double value) {
-        String text = value == Math.rint(value) ? String.format(java.util.Locale.ROOT, "%+d", (long) value)
+        // Shown to a tenth: what rounds to nothing is nothing, without a sign.
+        value = Math.round(value * 10) / 10.0;
+        String text = value == 0 ? "0" : value == Math.rint(value) ? String.format(java.util.Locale.ROOT, "%+d", (long) value)
                 : String.format(java.util.Locale.ROOT, "%+.1f", value);
         return Component.literal(text).withStyle(value > 0 ? ChatFormatting.RED : value < 0 ? ChatFormatting.GREEN : ChatFormatting.GRAY);
     }

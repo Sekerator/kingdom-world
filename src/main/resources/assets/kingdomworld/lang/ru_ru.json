@@ -2972,7 +2972,7 @@
   "kingdomworld.screen.roads.condition": "состояние %s",
   "kingdomworld.screen.roads.road_head": "№%s %s → %s",
   "kingdomworld.screen.roads.road_hint": "Дорога №%s: %s → %s. %s, %s, %s. Строят вместе с: %s. Изношено: %s, в ремонте: %s. Вашей части ещё нужно: %s на дорогу, %s на мосты, %s на насыпи",
-  "kingdomworld.screen.roads.building_levelled": "готово %s, выровнено %s",
+  "kingdomworld.screen.roads.building_levelled": "%s, выровнено %s",
   "kingdomworld.screen.roads.levelled_hint": "Выровнено: %s. Осталось труда: строители %s дн., шахтёры %s дн. Шахтёров помогает сейчас: %s. Ворот заказано: %s.",
   "kingdomworld.screen.roads.levelled_needs": "Ещё нужно на %s: %s.",
   "kingdomworld.screen.roads.blocked": "Мешает столбцов: %s.",

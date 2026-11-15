@@ -52,6 +52,8 @@ final class RoadPlanOverlay {
     private Road.Mode mode = Road.Mode.JOINT;
     private RoadViews.PlanView plan;
     private RoadViews.PlanView previous;
+    /** The last plan found, kept while the next one is searched for. */
+    private RoadViews.PlanView found;
     private boolean profile;
     private int seq;
     private int dragged = -1;
@@ -101,14 +103,39 @@ final class RoadPlanOverlay {
     }
 
     /**
+     * Sets points and the way and asks the server for their plan as clicks would, for the self-check of the client.
+     */
+    void planForCheck(List<int[]> shown, RouteStyle way, boolean withProfile) {
+        keep();
+        points.clear();
+        for (int[] point : shown) {
+            points.add(point.clone());
+        }
+        route = way;
+        profile = withProfile;
+        send();
+        screen.rebuild();
+    }
+
+    /**
+     * Whether the server has answered the last request with a plan found or failed.
+     */
+    boolean answered() {
+        return plan != null && plan.seq() == seq && !plan.searching() && plan.stage() != RoadViews.PlanView.Stage.IDLE;
+    }
+
+    /**
      * The server answered a request: a plan, its progress, or why there is none.
      */
     void planUpdated(RoadViews.PlanView view) {
         if (!view.kingdomId().equals(kingdom.id()) || view.seq() != 0 && view.seq() < seq) {
             return;
         }
-        if (plan != null && plan.planId() != 0 && view.planId() != 0 && plan.planId() != view.planId()) {
-            previous = plan;
+        if (view.planId() != 0) {
+            if (found != null && found.planId() != view.planId()) {
+                previous = found;
+            }
+            found = view;
         }
         plan = view;
         remember();
@@ -155,6 +182,7 @@ final class RoadPlanOverlay {
         points.clear();
         plan = null;
         previous = null;
+        found = null;
         dirty = -1;
         send();
         ClientRoadCache.setSession(null);
@@ -375,7 +403,16 @@ final class RoadPlanOverlay {
         Component strip = Component.translatable("kingdomworld.screen.map.road.profile");
         int words = screen.buttonWidth(undo) + screen.buttonWidth(reset) + screen.buttonWidth(strip) + 6;
         int fixed = classWidth + routeWidth + modeWidth + screen.buttonWidth(build) + 8;
-        boolean icons = fixed + words > screen.mapRight() - screen.mapLeft() - 8;
+        int room = screen.mapRight() - screen.mapLeft() - 8;
+        boolean icons = fixed + words > room;
+        int over = fixed + (icons ? 3 * (ICON + 2) : words) - room;
+        if (over > 0) {
+            // Even with icons the row is too wide: the class, the way and the payment give up width, their labels scrolling.
+            int shared = classWidth + routeWidth + modeWidth;
+            classWidth -= (int) Math.ceil((double) over * classWidth / shared);
+            routeWidth -= (int) Math.ceil((double) over * routeWidth / shared);
+            modeWidth -= (int) Math.ceil((double) over * modeWidth / shared);
+        }
         int y = screen.mapBottom() - 20;
         int x = screen.mapLeft() + 4;
         screen.widget(new CycleButton(x, y, classWidth, 16, KingdomMapScreen.classLabel(roadClass), direction -> {
@@ -406,6 +443,7 @@ final class RoadPlanOverlay {
                     points.clear();
                     plan = null;
                     previous = null;
+                    found = null;
                     ClientRoadCache.setSession(null);
                     ClientRoadCache.setPlan(null);
                     screen.rebuild();

@@ -474,6 +474,23 @@ public class KingdomMapScreen extends KingdomScreen implements ResultListener {
     }
 
     /**
+     * Sets points of a road and asks the server for their plan, used by the client self-check.
+     */
+    public void planForCheck(List<int[]> points, io.github.sekerator.kingdomworld.core.road.RouteStyle route, boolean profile) {
+        if (roadPlan != null) {
+            roadPlan.planForCheck(points, route, profile);
+        }
+    }
+
+    /**
+     * The plan the server answered the last points with, or {@code null} while it is searching; used by the client self-check.
+     */
+    @Nullable
+    public io.github.sekerator.kingdomworld.common.network.data.RoadViews.PlanView answeredPlanForCheck() {
+        return roadPlan != null && roadPlan.answered() ? roadPlan.plan() : null;
+    }
+
+    /**
      * Shows a plan of a road between two points, used by the client self-check.
      */
     public void showPlanForCheck(int fromX, int fromZ, int toX, int toZ,
