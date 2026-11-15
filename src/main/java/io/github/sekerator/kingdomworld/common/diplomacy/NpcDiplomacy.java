@@ -195,6 +195,7 @@ final class NpcDiplomacy {
     static void reset() {
         QUEUE.clear();
         POWER.clear();
+        LOSING.clear();
         countingKingdom = null;
         countingSoldiers = List.of();
         BORDERING.clear();
@@ -308,7 +309,49 @@ final class NpcDiplomacy {
             PeaceTerms mine = state.feasible(war, DiplomacyState.terms(war, side, false, WarWork.payable(server, enemy), rules), rules);
             PeaceTerms theirs = state.feasible(war, DiplomacyState.terms(war, side.enemy(), false, WarWork.payable(server, kingdomId), rules), rules);
             Optional<PeaceTerms> offer = DiplomacyMind.offerPeace(war, side, mine, theirs, rules);
+            if (offer.isEmpty() && losing(server, war, kingdomId, enemy)) {
+                // Its forces are below the enemy's day after day, or its treasury runs dry: it calls its squads home and asks for
+                // peace, a white one while it still leads, else what the enemy may ask.
+                recall(server, kingdomId);
+                offer = Optional.of(war.lead(side) >= 0 ? PeaceTerms.WHITE : theirs);
+                LOGGER.info("Ruler of {} is losing its war with {} and asks for peace", WarWork.name(server, kingdomId).getString(),
+                        WarWork.name(server, enemy).getString());
+            }
             offer.ifPresent(terms -> DiplomacyActions.propose(server, null, kingdomId, enemy, Proposal.Kind.PEACE, null, war.id(), terms));
+        }
+    }
+
+    /** Days in a row each kingdom found its war going badly, by war and kingdom. */
+    private static final Map<String, Integer> LOSING = new java.util.HashMap<>();
+
+    /**
+     * Whether a ruler is losing its war: its strength below the enemy's at checks in a row, or a treasury that lasts no more
+     * than a few days.
+     */
+    static boolean losing(MinecraftServer server, War war, UUID kingdomId, UUID enemy) {
+        String key = war.id() + "|" + kingdomId;
+        double ours = power(server, kingdomId);
+        double theirs = power(server, enemy);
+        boolean behind = io.github.sekerator.kingdomworld.core.npc.MilitaryMind.assess(ours, theirs)
+                == io.github.sekerator.kingdomworld.core.npc.MilitaryMind.Field.RETREAT;
+        int checks = behind ? LOSING.merge(key, 1, Integer::sum) : 0;
+        if (!behind) {
+            LOGGER.debug("Ruler of {} holds its own in its war: {} against {}", kingdomId, ours, theirs);
+            LOSING.remove(key);
+        }
+        long runway = io.github.sekerator.kingdomworld.common.npc.NpcRulers.lastView(kingdomId)
+                .map(io.github.sekerator.kingdomworld.core.npc.RulerMind::runway).orElse(Long.MAX_VALUE);
+        return io.github.sekerator.kingdomworld.core.npc.MilitaryMind.suesForPeace(checks, runway);
+    }
+
+    /**
+     * A losing ruler calls the squads of its field army home from the war: the garrison puts them back at their posts.
+     */
+    static void recall(MinecraftServer server, UUID kingdomId) {
+        for (ArmySquad squad : List.copyOf(ArmyWork.state(server).squadsOf(kingdomId))) {
+            if (io.github.sekerator.kingdomworld.common.npc.NpcGarrison.awayAtWar(server, squad)) {
+                ArmyWork.order(server, null, squad.id(), Order.NONE);
+            }
         }
     }
 

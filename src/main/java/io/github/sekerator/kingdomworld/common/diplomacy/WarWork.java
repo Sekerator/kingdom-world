@@ -1071,8 +1071,52 @@ public final class WarWork {
             return Optional.empty();
         }
         Long last = state(server).lastDeclared().get(kingdomId);
-        return Optional.of(new DiplomacyMind.Self(kingdomId, npc.get().character(), npc.get().traits(), NpcDiplomacy.power(server, kingdomId),
-                poor(server, kingdomId), last));
+        double power = NpcDiplomacy.power(server, kingdomId);
+        return Optional.of(new DiplomacyMind.Self(kingdomId, npc.get().character(), npc.get().traits(), power, poor(server, kingdomId), last,
+                purse(server, kingdomId, power)));
+    }
+
+    /**
+     * What a ruler of the world weighs of its own before a war: the share of its strength in the squads it may send away, and
+     * its money.
+     */
+    static DiplomacyMind.Purse purse(MinecraftServer server, UUID kingdomId, double power) {
+        List<io.github.sekerator.kingdomworld.core.army.ArmySquad> field = io.github.sekerator.kingdomworld.common.npc.NpcGarrison.fieldArmy(server,
+                kingdomId);
+        int send = Math.min(field.size(), io.github.sekerator.kingdomworld.common.npc.NpcGarrison.available(server, kingdomId));
+        int away = 0;
+        for (int i = 0; i < send; i++) {
+            away += field.get(i).members().size();
+        }
+        int all = Math.max(1, soldiers(server, kingdomId));
+        long payroll = io.github.sekerator.kingdomworld.common.npc.NpcRulers.lastView(kingdomId).map(view -> view.armyPayroll).orElse(0L);
+        return new DiplomacyMind.Purse(power * Math.min(1.0, away / (double) all),
+                io.github.sekerator.kingdomworld.common.npc.RulerPurse.keepDays(server, kingdomId), payroll,
+                io.github.sekerator.kingdomworld.common.npc.RulerPurse.upkeep(server, kingdomId), funds(server, kingdomId));
+    }
+
+    /** What its walls add to the defence of a kingdom. */
+    static final double WALLS = 0.25;
+    /** The least defence of a kingdom of players for each of its members: the players fight too. */
+    static final double PLAYER_DEFENCE = 30.0;
+
+    /**
+     * What would meet an army that attacks a kingdom: its own army, a part more behind its walls, the armies of its allies, and
+     * for a kingdom of players its members.
+     */
+    static double defence(MinecraftServer server, UUID kingdomId, double power, long now) {
+        double defence = power;
+        if (!io.github.sekerator.kingdomworld.common.road.CityWalls.gates(server, kingdomId, 0L).isEmpty()) {
+            defence *= 1 + WALLS;
+        }
+        for (UUID ally : state(server).alliesOf(kingdomId, now)) {
+            defence += Math.max(0, NpcDiplomacy.power(server, ally));
+        }
+        if (!isNpc(server, kingdomId)) {
+            int members = KingdomWorldApi.state(server).membership().kingdom(kingdomId).map(m -> m.members().size()).orElse(0);
+            defence = Math.max(defence, members * PLAYER_DEFENCE);
+        }
+        return defence;
     }
 
     /**
@@ -1090,9 +1134,10 @@ public final class WarWork {
         DiplomacyState state = state(server);
         boolean recent = state.lastWarEnded(other).map(end -> now - end < (long) rules.npcRecentWarDays() * CitizenNeeds.TICKS_PER_DAY)
                 .orElse(false) || state.fightsAnyWar(other);
-        return new DiplomacyMind.Neighbor(other, isNpc(server, other), NpcDiplomacy.power(server, other), distance, relation(server, self, other),
+        double power = NpcDiplomacy.power(server, other);
+        return new DiplomacyMind.Neighbor(other, isNpc(server, other), power, distance, relation(server, self, other),
                 state.bond(self, other, now), playable(server, other) && !shielded(server, other), recent, state.lastNpcWar().get(other),
-                bordering);
+                bordering, defence(server, other, power, now), payable(server, other));
     }
 
     /**

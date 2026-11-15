@@ -151,7 +151,7 @@ public final class NpcRulers {
                 + view.bedsTotal + ", spare " + RulerMind.spare(view, NpcSettings.rulers())).orElse("-");
     }
 
-    static Optional<RulerView> lastView(UUID kingdomId) {
+    public static Optional<RulerView> lastView(UUID kingdomId) {
         return Optional.ofNullable(LAST_VIEWS.get(kingdomId));
     }
 

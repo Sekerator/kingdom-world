@@ -40,16 +40,37 @@ public final class DiplomacyMind {
      * @param poor         whether its treasury is low
      * @param lastDeclared the game day it last declared a war, {@code null} for never
      */
-    public record Self(UUID id, RulerCharacter character, List<RulerCharacter.Trait> traits, double power, boolean poor, Long lastDeclared) {
+    public record Self(UUID id, RulerCharacter character, List<RulerCharacter.Trait> traits, double power, boolean poor, Long lastDeclared,
+                       Purse purse) {
         public Self {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(character, "character");
             traits = List.copyOf(traits);
         }
 
+        /**
+         * A ruler whose purse and field army are not weighed: it compares the strength of its whole army only.
+         */
+        public Self(UUID id, RulerCharacter character, List<RulerCharacter.Trait> traits, double power, boolean poor, Long lastDeclared) {
+            this(id, character, traits, power, poor, lastDeclared, null);
+        }
+
         boolean has(RulerCharacter.Trait trait) {
             return traits.contains(trait);
         }
+    }
+
+    /**
+     * What a ruler weighs of its own before a war: the strength of the army it can send (its field army without the reserve)
+     * and its money.
+     *
+     * @param field    the strength of the squads it may send away
+     * @param keepDays days of upkeep its treasury pays
+     * @param payroll  what its soldiers cost a day
+     * @param upkeep   what a day costs its kingdom
+     * @param balance  what its treasury holds
+     */
+    public record Purse(double field, long keepDays, long payroll, long upkeep, long balance) {
     }
 
     /**
@@ -64,10 +85,18 @@ public final class DiplomacyMind {
      * @param bordering    whether a province of it borders a province of the ruler's state
      */
     public record Neighbor(UUID id, boolean npc, double power, double distance, int relation, Bond bond, boolean playable, boolean recentWar,
-                           Long lastNpcWar, boolean bordering) {
+                           Long lastNpcWar, boolean bordering, double defence, long gain) {
         public Neighbor {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(bond, "bond");
+        }
+
+        /**
+         * A neighbour whose defence is its army and whose spoils are not weighed.
+         */
+        public Neighbor(UUID id, boolean npc, double power, double distance, int relation, Bond bond, boolean playable, boolean recentWar,
+                        Long lastNpcWar, boolean bordering) {
+            this(id, npc, power, distance, relation, bond, playable, recentWar, lastNpcWar, bordering, power, Long.MAX_VALUE / 4);
         }
 
         /**
@@ -149,6 +178,12 @@ public final class DiplomacyMind {
         return neighbors.stream()
                 .filter(n -> n.bond() == Bond.PEACE && n.playable() && !n.recentWar() && n.relation() <= hostility)
                 .filter(n -> self.power() > 0 && self.power() >= n.power() * strength)
+                // The war must be one it can win with the army it may send, against the walls and the allies of the enemy, and
+                // one it can pay for and that pays.
+                .filter(n -> self.purse() == null || io.github.sekerator.kingdomworld.core.npc.MilitaryMind.refuseWar(
+                        new io.github.sekerator.kingdomworld.core.npc.MilitaryMind.WarCase(self.purse().field(), n.defence(), strength,
+                                self.purse().keepDays(), self.purse().payroll(), self.purse().upkeep(), self.purse().balance(), n.gain(), 0))
+                        .isEmpty())
                 .filter(n -> n.npc() || (rules.npcWarsOnPlayers() && (n.lastNpcWar() == null || day - n.lastNpcWar() >= rules.npcPlayerWarDays())))
                 .max(Comparator.comparingDouble((Neighbor n) -> self.power() / Math.max(1.0, n.power())).thenComparingInt(n -> -n.relation()));
     }
