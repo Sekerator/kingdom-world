@@ -166,9 +166,10 @@ class SiegeCoreTest {
         assertEquals(Conquest.Step.DAMAGE, land.advance().step());
         assertEquals(Conquest.Step.DONE, land.advance().advance().step());
         Conquest city = state.addConquest(Conquest.Kind.CITY, 3, a, b, "d", List.of(), 4, 0);
-        assertEquals(List.of(Conquest.Step.LAND, Conquest.Step.BUILDINGS, Conquest.Step.CITIZENS, Conquest.Step.CITIES, Conquest.Step.DAMAGE),
+        assertEquals(List.of(Conquest.Step.LAND, Conquest.Step.BUILDINGS, Conquest.Step.CITIZENS, Conquest.Step.CITIES, Conquest.Step.ROADS,
+                        Conquest.Step.DAMAGE),
                 List.of(city.step(), city.advance().step(), city.advance().advance().step(), city.advance().advance().advance().step(),
-                        city.advance().advance().advance().advance().step()));
+                        city.advance().advance().advance().advance().step(), city.advance().advance().advance().advance().advance().step()));
         assertThrows(IllegalArgumentException.class, () -> new Conquest(1, Conquest.Kind.ANNEX, 1, a, a, "d", List.of(), 0,
                 Conquest.Step.TREASURY, 0));
         assertTrue(state.nextConquestId() > city.id());

@@ -37,6 +37,7 @@ class SiegeFormatTest {
         state.advance(provinces.id());
         state.advance(provinces.id());
         state.advance(provinces.id());
+        state.advance(provinces.id());
 
         SiegeState read = new SiegeState();
         assertEquals(List.of(), SiegeNbt.read(SiegeNbt.write(state), read));
@@ -86,13 +87,13 @@ class SiegeFormatTest {
         Conquest read = data.state().conquests().get(0);
         assertEquals(annex.id(), read.id());
         assertEquals(Conquest.Step.CITIES, read.step());
-        assertEquals(Conquest.Step.SETTLEMENTS, read.advance().step(), "the annexation goes on through the new step");
+        assertEquals(Conquest.Step.ROADS, read.advance().step(), "the annexation goes on through the new steps");
 
         List<Conquest.Step> rest = new ArrayList<>();
         for (Conquest at = read.advance(); !at.done(); at = at.advance()) {
             rest.add(at.step());
         }
-        assertEquals(List.of(Conquest.Step.SETTLEMENTS, Conquest.Step.DAMAGE, Conquest.Step.MEMBERS, Conquest.Step.DISSOLVE), rest);
+        assertEquals(List.of(Conquest.Step.ROADS, Conquest.Step.SETTLEMENTS, Conquest.Step.DAMAGE, Conquest.Step.MEMBERS, Conquest.Step.DISSOLVE), rest);
 
         CompoundTag newer = tag.copy();
         newer.putInt(SiegeSavedData.TAG_FORMAT_VERSION, SiegeSavedData.FORMAT_VERSION + 1);

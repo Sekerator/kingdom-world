@@ -141,8 +141,8 @@ class ProvinceWarTest {
             steps.add(at.step());
             at = state.advance(at.id()).orElseThrow();
         }
-        assertEquals(List.of(Conquest.Step.LAND, Conquest.Step.BUILDINGS, Conquest.Step.CITIZENS, Conquest.Step.CITIES, Conquest.Step.SETTLEMENTS,
-                Conquest.Step.DAMAGE), steps);
+        assertEquals(List.of(Conquest.Step.LAND, Conquest.Step.BUILDINGS, Conquest.Step.CITIZENS, Conquest.Step.CITIES, Conquest.Step.ROADS,
+                Conquest.Step.SETTLEMENTS, Conquest.Step.DAMAGE), steps);
         assertTrue(state.conquests().isEmpty());
 
         List<Conquest.Step> annex = new ArrayList<>();
@@ -150,9 +150,10 @@ class ProvinceWarTest {
             annex.add(step);
         }
         assertEquals(List.of(Conquest.Step.TREASURY, Conquest.Step.LAND, Conquest.Step.BUILDINGS, Conquest.Step.CITIZENS, Conquest.Step.CITIES,
-                Conquest.Step.SETTLEMENTS, Conquest.Step.DAMAGE, Conquest.Step.MEMBERS, Conquest.Step.DISSOLVE), annex,
+                Conquest.Step.ROADS, Conquest.Step.SETTLEMENTS, Conquest.Step.DAMAGE, Conquest.Step.MEMBERS, Conquest.Step.DISSOLVE), annex,
                 "an annexation moves the settlements before the kingdom is dissolved");
-        assertEquals(Conquest.Step.DAMAGE, Conquest.next(Conquest.Kind.CITY, Conquest.Step.CITIES), "a city has no step of settlements");
+        assertEquals(Conquest.Step.ROADS, Conquest.next(Conquest.Kind.CITY, Conquest.Step.CITIES), "a city takes its roads");
+        assertEquals(Conquest.Step.DAMAGE, Conquest.next(Conquest.Kind.CITY, Conquest.Step.ROADS), "a city has no step of settlements");
         assertFalse(Conquest.has(Conquest.Kind.LAND, Conquest.Step.SETTLEMENTS));
         assertFalse(Conquest.has(Conquest.Kind.PROVINCE, Conquest.Step.TREASURY));
         assertFalse(Conquest.has(Conquest.Kind.PROVINCE, Conquest.Step.DISSOLVE));
