@@ -455,6 +455,57 @@ public final class GuardArmyGameTests {
         });
     }
 
+    @GameTest(template = EMPTY, batch = "kingdomworld_guardarmy_massacre", timeoutTicks = 400)
+    public static void aMassacreInTheCityCallsTheArmyAtOnce(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos[] area = area(helper, 58, 8);
+        noon(level);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Massacre", UUID.randomUUID());
+        LawRules.Builder law = LawSettings.configured();
+        law.reportMinTicks = 1_000_000;
+        law.reportMaxTicks = 1_000_000;
+        LawSettings.override(law.build());
+        List<Citizen> all = new ArrayList<>();
+        // Two townspeople by the offender, a fighter of the guard and one of the army at their posts.
+        List<CitizenEntity> people = new ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            Citizen townsman = CitizenGameTests.newcomer(helper, kingdom, 6 + i, 3);
+            all.add(townsman);
+            people.add(body(helper, townsman, 6 + i, 3, false));
+        }
+        Citizen guard = soldier(helper, kingdom, 30, 3);
+        Citizen fighter = soldier(helper, kingdom, 54, 3);
+        all.add(guard);
+        all.add(fighter);
+        helper.assertTrue(ArmyStaff.setBranch(server, null, fighter.id(), Branch.ARMY).ok(), "The soldier did not join the army");
+        post(helper, kingdom, guard, 30, 3);
+        post(helper, kingdom, fighter, 54, 3);
+        body(helper, guard, 30, 3, true);
+        body(helper, fighter, 54, 3, true);
+        ServerPlayer offender = player(helper, UUID.randomUUID(), "kw-butcher", 4, 3);
+        Citizen[] citizens = all.toArray(new Citizen[0]);
+        helper.runAtTickTime(5, () -> {
+            for (CitizenEntity body : people) {
+                body.hurt(level.damageSources().playerAttack(offender), 1_000.0f);
+                helper.assertTrue(!body.isAlive(), "The townsman lives");
+            }
+            Alarm alarm = LawAlarms.of(server, kingdom.id(), offender.getUUID()).orElseThrow(() -> new IllegalStateException("No alarm"));
+            helper.assertTrue(alarm.civiliansKilled() == 2, "The alarm does not count the dead: " + alarm.civiliansKilled());
+        });
+        helper.runAtTickTime(60, () -> {
+            // No soldier fell, and yet the army is out: two of its people killed are no matter for the guard alone.
+            helper.assertTrue(ArmyRelief.step(kingdom.id(), offender.getUUID()).reached(Relief.Step.ARMY), "The massacre did not call the army: "
+                    + ArmyRelief.step(kingdom.id(), offender.getUUID()));
+            helper.assertTrue(ArmyRelief.isCalled(guard.id()) && ArmyRelief.isCalled(fighter.id()), "Called: guard " + ArmyRelief.isCalled(guard.id())
+                    + ", army " + ArmyRelief.isCalled(fighter.id()));
+            helper.assertTrue(io.github.sekerator.kingdomworld.common.npc.NpcThreats.killedLately(server, kingdom.id()) >= 2,
+                    "The kingdom does not count its dead");
+            end(helper, kingdom, area, List.of(offender), citizens);
+            helper.succeed();
+        });
+    }
+
     // ---------------------------------------------------------------- back to the posts
 
     @GameTest(template = EMPTY, batch = "kingdomworld_guardarmy_return", timeoutTicks = 1200)
@@ -1191,8 +1242,10 @@ public final class GuardArmyGameTests {
             // people, and the royal army by five recruits a day from abroad.
             int[] wanted = io.github.sekerator.kingdomworld.common.npc.NpcGarrison.wanted(server, id);
             int people = KingdomWorldApi.state(server).citizens().registry().citizensOf(id).size();
-            helper.assertTrue(wanted[0] > before && wanted[0] <= people / 2 && wanted[1] >= 50 && wanted[1] <= 100, "The garrison wanted is "
-                    + wanted[0] + " and " + wanted[1] + " for " + people + " people");
+            // A rich ruler keeps more of an army than its size gives, never more than half again the most of its size.
+            int standing = io.github.sekerator.kingdomworld.common.npc.NpcGarrison.standingArmy(server, id);
+            helper.assertTrue(wanted[0] > before && wanted[0] <= people / 2 && wanted[1] == standing && wanted[1] >= 50 && wanted[1] <= 150,
+                    "The garrison wanted is " + wanted[0] + " and " + wanted[1] + " for " + people + " people");
             int perDay = ArmySettings.force().replacePerDay + d.armyPerDay();
             BlockPos throne = io.github.sekerator.kingdomworld.common.npc.NpcSpawner.thronePos(site);
             WorldPos place = new WorldPos(Dimensions.id(level), throne.getX(), throne.getY(), throne.getZ() + 3);

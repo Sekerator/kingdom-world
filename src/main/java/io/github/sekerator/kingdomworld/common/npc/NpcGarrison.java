@@ -524,7 +524,7 @@ public final class NpcGarrison {
         duties.add(new Duty("reserve_palace", Order.guard(palace, 0), 0, atPalace, Branch.ARMY, Post.CAPTAIN));
         // The rest of the army in squads in the camps, as many squads as the army needs (or has: soldiers taken in beyond the
         // plan get squads too); those the camps cannot hold wait at the barracks of the capital.
-        int beyond = Math.max(0, Math.max(standingArmy(server, kingdomId), ArmyWork.state(server).branchOf(kingdomId, Branch.ARMY).size()) - capital);
+        int beyond = Math.max(0, Math.max(royalArmy(server, kingdomId), ArmyWork.state(server).branchOf(kingdomId, Branch.ARMY).size()) - capital);
         int squads = (beyond + ARMY_SQUAD - 1) / ARMY_SQUAD;
         int perCamp = (NpcSettings.rules().campSoldiers() + ARMY_SQUAD - 1) / ARMY_SQUAD;
         List<List<WorldPos>> camps = NpcCamps.squadPlaces(server, kingdomId, dimension, perCamp);

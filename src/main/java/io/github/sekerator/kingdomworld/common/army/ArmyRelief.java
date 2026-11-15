@@ -146,6 +146,9 @@ public final class ArmyRelief {
 
     // ---------------------------------------------------------------- once a second
 
+    /** Blocks from an alarm the soldiers of the army come from once it is called out, from their camps around the city. */
+    public static final int ARMY_REACH = 384;
+
     static void tick(MinecraftServer server) {
         CALLED.clear();
         List<Alarm> alarms = LawAlarms.all(server);
@@ -166,7 +169,7 @@ public final class ArmyRelief {
                     officer(army, kingdom, Branch.GUARD, Post.CAPTAIN), officer(army, kingdom, Branch.ARMY, Post.VICE_CAPTAIN)));
             Relief.Facts facts = new Relief.Facts(army.branchOf(kingdom, Branch.GUARD).size(), alarm.guardsKilled() + alarm.guardsWounded(),
                     alarm.fightTicks(now), out(army, world, call.vice, rules), out(army, world, call.captain, rules),
-                    out(army, world, call.armyVice, rules));
+                    out(army, world, call.armyVice, rules), alarm.civiliansKilled());
             Relief.Step step = call.step.max(Relief.step(facts, rules));
             if (step != call.step) {
                 LOGGER.info("Alarm of {} for {}: {} ({} out, {} ticks of fight)", kingdom, alarm.name(), step, facts.losses(), facts.fightTicks());
@@ -186,7 +189,11 @@ public final class ArmyRelief {
                     continue;
                 }
                 WorldPos at = place(world, soldier.citizenId());
-                if (at != null && LawAlarms.reaches(server, alarm, at.dimension(), at.x(), at.z())) {
+                // The army comes from its camps around the city too, not only from within the reach of the alarm.
+                boolean near = at != null && (LawAlarms.reaches(server, alarm, at.dimension(), at.x(), at.z())
+                        || soldier.branch() == Branch.ARMY && step.reached(Relief.Step.ARMY) && at.dimension().equals(alarm.dimension())
+                        && Math.hypot(at.x() - alarm.x(), at.z() - alarm.z()) <= ARMY_REACH);
+                if (near) {
                     CALLED.add(soldier.citizenId());
                 }
             }

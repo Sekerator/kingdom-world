@@ -240,6 +240,13 @@ public final class LawAlarms {
         BOOK.guardHurt(kingdomId, offender, soldier, killed);
     }
 
+    /**
+     * The offender of an alarm killed somebody of the kingdom who was no soldier.
+     */
+    static void civilianKilled(UUID kingdomId, UUID offender, UUID citizen) {
+        BOOK.civilianKilled(kingdomId, offender, citizen);
+    }
+
     static void end(UUID kingdomId, UUID offender) {
         BOOK.end(kingdomId, offender);
     }

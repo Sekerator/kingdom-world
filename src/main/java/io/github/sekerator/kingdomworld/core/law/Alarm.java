@@ -44,6 +44,7 @@ public final class Alarm {
     private boolean seen;
     private final Set<UUID> guardsKilled = new LinkedHashSet<>();
     private final Set<UUID> guardsWounded = new LinkedHashSet<>();
+    private final Set<UUID> civiliansKilled = new LinkedHashSet<>();
 
     Alarm(UUID kingdomId, UUID offender, String name, String dimension, int x, int y, int z, long now) {
         this.kingdomId = Objects.requireNonNull(kingdomId, "kingdomId");
@@ -131,6 +132,11 @@ public final class Alarm {
         return seen;
     }
 
+    /** People of the kingdom who were no soldiers the offender killed since the alarm was raised. */
+    public int civiliansKilled() {
+        return civiliansKilled.size();
+    }
+
     /** Soldiers of the kingdom the offender killed since the alarm was raised. */
     public int guardsKilled() {
         return guardsKilled.size();
@@ -199,6 +205,10 @@ public final class Alarm {
         if (!guardsKilled.contains(soldier)) {
             guardsWounded.add(soldier);
         }
+    }
+
+    void civilianKilled(UUID citizen) {
+        civiliansKilled.add(citizen);
     }
 
     void guardKilled(UUID soldier) {

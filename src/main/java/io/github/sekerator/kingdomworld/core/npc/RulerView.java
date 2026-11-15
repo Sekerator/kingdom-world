@@ -185,6 +185,10 @@ public final class RulerView {
     public List<Camp> camps = new ArrayList<>();
     public int wanted;
     public int murderers;
+    /** Its people killed in its land in the last days. */
+    public int killed;
+    /** How endangered the kingdom is, from 0 to {@link MilitaryMind#MAX_THREAT}. */
+    public int threat;
 
     public List<Offer> offers = new ArrayList<>();
     public int openDeals;
@@ -279,6 +283,8 @@ public final class RulerView {
         view.camps = new ArrayList<>(camps);
         view.wanted = wanted;
         view.murderers = murderers;
+        view.killed = killed;
+        view.threat = threat;
         view.offers = new ArrayList<>(offers);
         view.openDeals = openDeals;
         view.maxDeals = maxDeals;

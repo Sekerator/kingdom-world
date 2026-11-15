@@ -320,7 +320,7 @@ public final class RulerMind {
      * Whether robbers or murderers threaten the kingdom.
      */
     public static boolean threatened(RulerView view) {
-        if (view.murderers > 0) {
+        if (view.murderers > 0 || view.threat > 0) {
             return true;
         }
         for (RulerView.Camp camp : view.camps) {
@@ -380,7 +380,8 @@ public final class RulerMind {
      */
     public static long bounty(RulerView view, RulerRules rules) {
         long base = NpcLaws.of(view.character, view.traits, view.maxEntryFee, view.maxBounty).bounty();
-        long wanted = view.murderers > 0 ? base * 2 : base;
+        // Murderers double the reward; its people killed in its land lately treble it.
+        long wanted = view.killed >= 2 ? base * 3 : view.murderers > 0 ? base * 2 : base;
         long spare = spare(view, rules);
         if (wanted > base && wanted > spare) {
             wanted = Math.max(base, spare);

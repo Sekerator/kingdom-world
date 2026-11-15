@@ -458,6 +458,18 @@ public final class LawEvents {
                 LawWork.deed(murderer, citizen.blockPosition(), kingdom, CrimeKind.MURDER, 0, victim(citizen), null, false, citizen);
                 if (LawWork.isSoldier(citizen) && citizen.citizenId() != null) {
                     LawAlarms.guardHurt(kingdom, murderer.getUUID(), citizen.citizenId(), true);
+                } else if (citizen.citizenId() != null) {
+                    // The killing of its people calls more of the garrison than a fight with its guards does.
+                    LawAlarms.civilianKilled(kingdom, murderer.getUUID(), citizen.citizenId());
+                }
+                io.github.sekerator.kingdomworld.common.npc.NpcThreats.killed(server, kingdom);
+                io.github.sekerator.kingdomworld.common.npc.NpcThreats.blamed(server, kingdom, murderer.getUUID());
+            } else if (victim instanceof CitizenEntity citizen && citizen.kingdomId() != null && killer instanceof LivingEntity
+                    && !(killer instanceof CitizenEntity body && citizen.kingdomId().equals(body.kingdomId()))) {
+                // Killed by a beast or a soldier of an enemy: the kingdom counts its dead all the same.
+                UUID land = KingdomWorldApi.ownerAt(citizen.level(), citizen.blockPosition());
+                if (citizen.kingdomId().equals(land)) {
+                    io.github.sekerator.kingdomworld.common.npc.NpcThreats.killed(server, land);
                 }
             }
         } catch (RuntimeException e) {

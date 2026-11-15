@@ -91,6 +91,13 @@ public final class AlarmBook {
     }
 
     /**
+     * The offender killed somebody of the kingdom who was no soldier while the alarm lasts.
+     */
+    public void civilianKilled(UUID kingdomId, UUID offender, UUID citizen) {
+        of(kingdomId, offender).ifPresent(alarm -> alarm.civilianKilled(citizen));
+    }
+
+    /**
      * The alarm is over: the offender paid, died, was pardoned or left the land.
      */
     public Optional<Alarm> end(UUID kingdomId, UUID offender) {

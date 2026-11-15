@@ -464,6 +464,8 @@ final class RulerSnapshots {
                 }
             }
         }
+        view.killed = NpcThreats.killedLately(server, id);
+        view.threat = NpcThreats.level(server, id);
     }
 
     /**

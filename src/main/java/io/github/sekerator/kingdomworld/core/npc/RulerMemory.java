@@ -94,7 +94,9 @@ public final class RulerMemory {
         /** It let a road pass over its land. */
         PASSAGE(5),
         /** It refused a road over its land. */
-        BLOCKED(-5);
+        BLOCKED(-5),
+        /** One of its people killed people of the ruler. */
+        BLOOD(-20);
 
         private final int weight;
 

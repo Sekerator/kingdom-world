@@ -56,6 +56,20 @@ public final class NpcThreats {
     }
 
     /**
+     * A player killed people of a kingdom of the world: its ruler holds it against the kingdom of the player, which may lead to
+     * war.
+     */
+    public static void blamed(MinecraftServer server, UUID kingdomId, UUID player) {
+        if (NpcWork.isReadOnly(server) || !NpcWork.isNpc(server, kingdomId)) {
+            return;
+        }
+        KingdomWorldApi.state(server).membership().kingdomOf(player).filter(of -> !of.equals(kingdomId)).ifPresent(of -> {
+            NpcWork.state(server).ruler(kingdomId).relate(of, io.github.sekerator.kingdomworld.core.npc.RulerMemory.Reason.BLOOD);
+            NpcWork.state(server).rulerChanged();
+        });
+    }
+
+    /**
      * Its people killed in the last days.
      */
     public static int killedLately(MinecraftServer server, UUID kingdomId) {

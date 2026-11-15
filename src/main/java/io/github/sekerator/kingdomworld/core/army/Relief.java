@@ -41,9 +41,18 @@ public final class Relief {
      * @param viceOut     whether the vice-captain of the guard who came is killed or badly wounded
      * @param captainOut  the same for the captain of the guard
      * @param armyViceOut the same for the vice-captain of the army
+     * @param civilians   people of the kingdom who were no soldiers the offender killed since the alarm was raised
      */
-    public record Facts(int guards, int losses, long fightTicks, boolean viceOut, boolean captainOut, boolean armyViceOut) {
+    public record Facts(int guards, int losses, long fightTicks, boolean viceOut, boolean captainOut, boolean armyViceOut, int civilians) {
+        public Facts(int guards, int losses, long fightTicks, boolean viceOut, boolean captainOut, boolean armyViceOut) {
+            this(guards, losses, fightTicks, viceOut, captainOut, armyViceOut, 0);
+        }
     }
+
+    /** People killed by an offender that bring out the royal army at once: a massacre is no matter for the guard alone. */
+    public static final int ARMY_CIVILIANS = 2;
+    /** People killed that bring out the captain of the army with everybody left. */
+    public static final int ALL_CIVILIANS = 5;
 
     private Relief() {
     }
@@ -63,7 +72,10 @@ public final class Relief {
         if (facts.losses() >= rules.armyLosses || facts.captainOut() || facts.fightTicks() >= rules.armyTicks || facts.guards() <= 0) {
             step = Step.ARMY;
         }
-        if (facts.armyViceOut() || facts.losses() >= rules.allLosses) {
+        if (facts.civilians() >= ARMY_CIVILIANS) {
+            step = step.max(Step.ARMY);
+        }
+        if (facts.armyViceOut() || facts.losses() >= rules.allLosses || facts.civilians() >= ALL_CIVILIANS) {
             step = Step.ARMY_CAPTAIN;
         }
         return step;
