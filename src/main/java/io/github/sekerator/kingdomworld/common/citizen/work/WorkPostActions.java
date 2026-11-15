@@ -17,7 +17,6 @@ import io.github.sekerator.kingdomworld.core.citizen.MineGoal;
 import io.github.sekerator.kingdomworld.core.citizen.MinePlan;
 import io.github.sekerator.kingdomworld.core.citizen.Professions;
 import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
-import io.github.sekerator.kingdomworld.core.citizen.WorkZone;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.kingdom.KingdomError;
 import io.github.sekerator.kingdomworld.core.kingdom.Outcome;
@@ -54,8 +53,8 @@ public final class WorkPostActions {
     // ---------------------------------------------------------------- a post appears
 
     /**
-     * A new post was found on kingdom land: its zone gets the default radius of its profession, or less where the land
-     * is smaller and the profession needs its zone on the land, and a survey estimates what it yields.
+     * A new post was found on kingdom land: its zone gets the default radius of its profession, even where it reaches
+     * beyond the land, whose chunks the workers leave alone, and a survey estimates what it yields.
      */
     public static void onPostFound(ServerLevel level, WorldPos pos) {
         MinecraftServer server = level.getServer();
@@ -64,11 +63,7 @@ public final class WorkPostActions {
         if (post.isEmpty()) {
             return;
         }
-        GatheringRules rules = GatheringSettings.rules();
-        String profession = post.get().professionId();
-        int inside = WorkZone.largestRadiusWithin(pos, rules.defaultRadius(profession),
-                chunk -> post.get().kingdomId().equals(state.territory().ownerOf(pos.dimension(), chunk)));
-        state.citizens().setPostRadius(post.get(), rules.radiusForNewPost(profession, inside));
+        state.citizens().setPostRadius(post.get(), Math.max(1, GatheringSettings.rules().defaultRadius(post.get().professionId())));
         PostContainers.Container container = PostContainers.find(level, pos);
         post.get().setHasContainer(container != null);
         PostWork.refreshStatus(server, post.get());
@@ -269,10 +264,16 @@ public final class WorkPostActions {
         Outcome outcome = KingdomWorldApi.change(player.server, "set the radius of a work post",
                 state -> state.setPostRadius(player.getUUID(), pos, radius, GatheringSettings.rules().maxRadius(
                         state.citizens().posts().get(pos).map(WorkPost::professionId).orElse(""))));
-        if (outcome.ok()) {
-            ZoneSurveys.request(pos);
+        if (!outcome.ok()) {
+            return result(outcome, KEY + "radius_set", radius);
         }
-        return result(outcome, KEY + "radius_set", radius);
+        ZoneSurveys.request(pos);
+        // A zone may reach beyond the border; the player hears that its workers keep to the kingdom's land.
+        KingdomWorldState state = KingdomWorldApi.state(player.server);
+        boolean beyond = PostWork.post(player.server, pos).filter(post -> !io.github.sekerator.kingdomworld.core.citizen.WorkZone
+                .around(pos, radius, 0, 0).liesWithin(chunk -> post.kingdomId().equals(state.territory().ownerOf(pos.dimension(), chunk))))
+                .isPresent();
+        return KingdomActions.Feedback.ok(KEY + (beyond ? "radius_set_beyond" : "radius_set"), radius);
     }
 
     public static KingdomActions.Feedback setSeats(ServerPlayer player, WorldPos pos, int seats) {

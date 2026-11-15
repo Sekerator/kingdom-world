@@ -105,9 +105,6 @@ class GatheringTest {
         assertFalse(WorkZone.around(post, 24, 0, 0).liesWithin(land::contains));
         assertTrue(WorkZone.around(post, 24, 0, 0).touches(land::contains));
         assertEquals(0, WorkZone.largestRadiusWithin(new WorldPos(OVERWORLD, 0, 64, 0), 8, land::contains));
-        assertEquals(8, GatheringRules.DEFAULT.radiusForNewPost(23));
-        assertEquals(3, GatheringRules.DEFAULT.radiusForNewPost(3));
-        assertEquals(1, GatheringRules.DEFAULT.radiusForNewPost(0));
     }
 
     // ---------------------------------------------------------------- tools

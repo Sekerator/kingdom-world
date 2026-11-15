@@ -338,6 +338,12 @@ public final class HerderBehavior implements ProfessionBehavior {
                 walking = 0;
                 report(WorkStatus.WORKING);
             }
+            if (!land.owns(target.blockPosition())) {
+                // The animal strayed onto land that is not the kingdom's: it is not the herder's while it stays there.
+                target = null;
+                partner = null;
+                return null;
+            }
             lookAt(target.blockPosition());
             if (body.distanceToSqr(target) > 2.6 * 2.6) {
                 if (body.getNavigation().isDone() || walking % 20 == 0) {

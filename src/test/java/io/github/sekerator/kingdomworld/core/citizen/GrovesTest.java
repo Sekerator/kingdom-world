@@ -126,13 +126,6 @@ class GrovesTest {
         assertEquals(32, rules.maxRadius("lumberjack"));
         assertEquals(8, rules.defaultRadius("miner"));
         assertEquals(16, rules.maxRadius("fisher"));
-        assertFalse(GatheringRules.boundToLand("lumberjack"));
-        assertTrue(GatheringRules.boundToLand("miner"));
-        assertTrue(GatheringRules.boundToLand("unemployed"));
-        // A lumberjack's zone is not cut to the land; the zones of the others are.
-        assertEquals(16, rules.radiusForNewPost("lumberjack", 3));
-        assertEquals(3, rules.radiusForNewPost("miner", 3));
-        assertEquals(1, rules.radiusForNewPost("miner", 0));
         // Taking up a profession: a lumberjack's post grows to its default, the others stay within their largest radius.
         assertEquals(16, rules.radiusOnProfession("lumberjack", 8));
         assertEquals(24, rules.radiusOnProfession("lumberjack", 24));

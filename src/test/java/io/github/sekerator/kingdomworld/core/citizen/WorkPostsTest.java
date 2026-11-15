@@ -111,9 +111,11 @@ class WorkPostsTest {
         assertTrue(state.setPostHerdSize(king, pos(8, 8), 7, 12).ok());
         assertTrue(state.setPostAnimal(king, pos(8, 8), "minecraft:cow").ok());
         assertEquals("minecraft:cow", citizens.posts().get(pos(8, 8)).orElseThrow().animal());
-        // The land is 3x3 chunks around chunk 0: x and z from -16 to 31; the post at 8 reaches 24 blocks west at most.
+        // The land is 3x3 chunks around chunk 0: x and z from -16 to 31; the post at 8 reaches 24 blocks west at most, but its
+        // zone may reach beyond the land: the radius goes up to the largest one the server allows.
         assertTrue(state.setPostRadius(king, pos(8, 8), 16, 32).ok());
-        assertEquals(KingdomError.ZONE_OUTSIDE_LAND, state.setPostRadius(king, pos(8, 8), 25, 32).error());
+        assertTrue(state.setPostRadius(king, pos(8, 8), 25, 32).ok());
+        assertEquals(KingdomError.VALUE_OUT_OF_RANGE, state.setPostRadius(king, pos(8, 8), 33, 32).error());
         assertTrue(state.setPostRadius(king, pos(8, 8), 2, 32).ok(), "shrinking is always allowed");
         assertEquals(KingdomError.UNKNOWN_POST, state.setPostSeats(king, pos(100, 100), 2, 4).error());
     }
@@ -159,16 +161,32 @@ class WorkPostsTest {
         // anyway: its zone grows up to the lumberjack's largest radius.
         assertTrue(state.setPostRadius(king, pos(8, 8), 32, rules.maxRadius("lumberjack")).ok());
         assertEquals(KingdomError.VALUE_OUT_OF_RANGE, state.setPostRadius(king, pos(8, 8), 33, rules.maxRadius("lumberjack")).error());
-        // Another profession takes the zone back to its own largest radius and onto the land.
+        // Another profession takes the zone back to its own largest radius, which may reach beyond the land too.
         assertTrue(state.setPostProfession(king, pos(8, 8), "miner").ok());
         assertEquals(16, post.radius());
-        assertEquals(KingdomError.ZONE_OUTSIDE_LAND, state.setPostRadius(king, pos(8, 8), 25, 32).error());
         // Back to a lumberjack, the zone keeps a radius larger than the default.
         assertTrue(state.setPostProfession(king, pos(8, 8), "lumberjack").ok());
         assertTrue(state.setPostRadius(king, pos(8, 8), 28, rules.maxRadius("lumberjack")).ok());
         assertTrue(state.setPostProfession(king, pos(8, 8), "unemployed").ok());
         assertTrue(state.setPostProfession(king, pos(8, 8), "lumberjack").ok());
-        assertEquals(16, post.radius(), "the zone of a post without a profession lay on the land");
+        assertEquals(16, post.radius(), "a post without a profession kept at most the largest radius of the others");
+    }
+
+    @Test
+    void aPostAtTheBorderTakesTheLargestRadiusAndAnotherProfessionKeepsIt() {
+        // The land is 3x3 chunks around chunk 0: x and z from -16 to 31. The post stands 3 blocks from its eastern edge.
+        citizens.addSite(pos(28, 8), SiteKinds.WORK_POST, realm);
+        WorkPost post = citizens.posts().get(pos(28, 8)).orElseThrow();
+        GatheringRules rules = GatheringRules.DEFAULT;
+        assertTrue(state.setPostProfession(king, pos(28, 8), "farmer").ok());
+        assertTrue(state.setPostRadius(king, pos(28, 8), rules.maxRadius("farmer"), rules.maxRadius("farmer")).ok(),
+                "the zone may reach beyond the border");
+        assertEquals(rules.maxRadius("farmer"), post.radius());
+        assertTrue(state.setPostProfession(king, pos(28, 8), "fisher").ok());
+        assertEquals(rules.maxRadius("fisher"), post.radius(), "another profession does not cut the zone to the land");
+        assertTrue(state.setPostProfession(king, pos(28, 8), "lumberjack").ok());
+        assertTrue(state.setPostProfession(king, pos(28, 8), "herder").ok());
+        assertEquals(rules.maxRadius("herder"), post.radius(), "coming back from a lumberjack takes the largest radius, not the land");
     }
 
     @Test

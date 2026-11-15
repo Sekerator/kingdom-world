@@ -11,12 +11,12 @@ Crafting: planks at the sides and along the bottom, a sign in the middle of the 
 
 ### Where to place it
 
-A post works only on the kingdom's land. Placed outside it, it does nothing, and a right click says "A work post works only on the land of a kingdom". The kingdom finds a new post by itself and gives it a zone with a radius of {cfg:work.workPostDefaultRadius} blocks (less if the land around it is smaller), and as soon as a profession is chosen it looks at what the zone holds.
+A post works only on the kingdom's land. Placed outside it, it does nothing, and a right click says "A work post works only on the land of a kingdom". The kingdom finds a new post by itself and gives it a zone with a radius of {cfg:work.workPostDefaultRadius} blocks, and as soon as a profession is chosen it looks at what the zone holds.
 
 ### Settings
 
 - **Profession.** A new post has none ("None chosen").
-- **Zone radius.** The zone is a square around the post: at a radius of 10 it is 21 by 21 blocks. The radius goes up to {cfg:work.workPostMaxRadius}, and such a zone never reaches beyond the kingdom's land. A lumberjack has a zone of its own: {cfg:work.lumberjackDefaultRadius} by default, up to {cfg:work.lumberjackMaxRadius}, and it may reach beyond the land (see [Lumberjack](lumberjack)). A miner needs no radius; it has a depth instead (see [Miner](miner)).
+- **Zone radius.** The zone is a square around the post: at a radius of 10 it is 21 by 21 blocks. The radius goes up to {cfg:work.workPostMaxRadius}, for a post at the edge of the kingdom too. The zone may reach beyond the border; work goes on only on the kingdom's own land. A lumberjack has a zone of its own: {cfg:work.lumberjackDefaultRadius} by default, up to {cfg:work.lumberjackMaxRadius} (see [Lumberjack](lumberjack)). A miner needs no radius; it has a depth instead (see [Miner](miner)).
 - **Seats.** From 1 to {cfg:work.workPostMaxSeats} workers. A post inside a working market gets more seats, and in a city during its fair {cfg:life.fairSeats} more (see [The market](market), [Festivals and fairs](festivals)).
 
 All of this is changed in the [window of the post](post_window).
@@ -98,7 +98,7 @@ city changes nothing.
 
 ### What changes do
 
-- A new profession of the post: workers of another profession leave the post but keep their profession and look for a free post of it by themselves. The radius follows the new profession: a lumberjack's is at least its default, the others' never beyond their land.
+- A new profession of the post: workers of another profession leave the post but keep their profession and look for a free post of it by themselves. The radius follows the new profession: a lumberjack's is at least its default, the others' at most their largest.
 - Fewer seats: those who came last leave.
 - The server checks every change (rights, distance, limits) and answers with a line at the bottom of the window.
 

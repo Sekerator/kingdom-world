@@ -909,6 +909,76 @@ public final class GatheringGameTests {
         });
     }
 
+    // ---------------------------------------------------------------- a zone over the border
+
+    /**
+     * A farm post 3 blocks from the edge of the land: its zone takes the largest radius, which reaches over the edge, and the
+     * farmer harvests the ripe wheat on the kingdom's own chunk, while the ripe wheat just over the edge, in the zone too, stays.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_work_farmer_border", timeoutTicks = 1600)
+    public static void farmerAtTheBorderWorksTheLargestZoneOnlyOnItsOwnLand(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Border Fields", UUID.randomUUID());
+        BlockPos throne = helper.absolutePos(new BlockPos(2, 0, 2));
+        ChunkPos capital = new ChunkPos(throne);
+        int y = throne.getY();
+        int edge = capital.getMaxBlockX();
+        // The fields lie on the side of the chunk away from the throne, which keeps its place.
+        int z0 = throne.getZ() <= capital.getMiddleBlockZ() ? capital.getMaxBlockZ() - 3 : capital.getMinBlockZ() + 3;
+        KingdomWorldApi.change(server, "test", state -> state.unclaim(null, kingdom.id(), Dimensions.id(level),
+                ChunkKey.of(capital.x + 1, capital.z)));
+        helper.assertTrue(KingdomWorldApi.state(server).territory().ownerOf(Dimensions.id(level), ChunkKey.of(capital.x + 1, capital.z)) == null,
+                "The chunk over the edge is still the kingdom's");
+        BlockPos from = new BlockPos(edge - 7, y, z0 - 2);
+        BlockPos to = new BlockPos(edge + 4, y + 2, z0 + 2);
+        enclose(level, from, to);
+        BlockState ripe = ((net.minecraft.world.level.block.CropBlock) Blocks.WHEAT).getStateForAge(7);
+        List<BlockPos> own = List.of(new BlockPos(edge - 6, y + 1, z0 - 2), new BlockPos(edge - 5, y + 1, z0 - 2));
+        List<BlockPos> foreign = List.of(new BlockPos(edge + 2, y + 1, z0 - 2), new BlockPos(edge + 3, y + 1, z0 - 2));
+        for (BlockPos crop : concat(own, foreign)) {
+            level.setBlock(crop.below(), Blocks.FARMLAND.defaultBlockState(), 2 | 16);
+            level.setBlock(crop, ripe, 2 | 16);
+            // Wheat needs light where the sky is far: a lamp in the roof over it.
+            level.setBlock(crop.above(2), Blocks.GLOWSTONE.defaultBlockState(), 2 | 16);
+        }
+        storehouse(level, new BlockPos(edge - 1, y, z0 + 2));
+        WorldPos postPos = post(level, new BlockPos(edge - 3, y, z0), "farmer");
+        WorkPost post = PostWork.post(server, postPos).orElseThrow();
+        GatheringRules rules = GatheringSettings.rules();
+        helper.assertTrue(post.radius() == rules.defaultRadius("farmer"), "A new post at the border did not get the default radius: "
+                + post.radius());
+        int largest = rules.maxRadius("farmer");
+        helper.assertTrue(KingdomWorldApi.change(server, "test", state -> state.setPostRadius(null, postPos, largest, largest)).ok(),
+                "The radius of a post at the border did not grow to the largest one");
+        helper.assertTrue(post.radius() == largest, "The radius is " + post.radius() + ", not " + largest);
+        Citizen worker = worker(helper, kingdom, "farmer", postPos, new BlockPos(edge - 2, y, z0));
+
+        helper.succeedWhen(() -> {
+            for (BlockPos crop : foreign) {
+                helper.assertTrue(level.getBlockState(crop).equals(ripe), "The farmer harvested the wheat over the border at "
+                        + local(helper, crop) + ": " + level.getBlockState(crop));
+            }
+            for (BlockPos crop : own) {
+                helper.assertTrue(!level.getBlockState(crop).equals(ripe), "The wheat of the kingdom at " + local(helper, crop)
+                        + " is not harvested: worker " + worker.workStatus() + ", body " + bodyAt(worker));
+            }
+            helper.assertTrue(produced(server, kingdom, "farmer", "minecraft:wheat") >= 2, "The wheat was not counted");
+            end(helper, kingdom, worker, from.offset(-1, -1, -1), to.offset(1, 1, 1));
+        });
+    }
+
+    private static List<BlockPos> concat(List<BlockPos> first, List<BlockPos> second) {
+        List<BlockPos> all = new java.util.ArrayList<>(first);
+        all.addAll(second);
+        return all;
+    }
+
+    private static String bodyAt(Citizen citizen) {
+        CitizenEntity body = CitizenBodies.body(citizen.id());
+        return body == null ? "none" : body.blockPosition().toShortString();
+    }
+
     // ---------------------------------------------------------------- herder
 
     private static void pen(GameTestHelper helper) {

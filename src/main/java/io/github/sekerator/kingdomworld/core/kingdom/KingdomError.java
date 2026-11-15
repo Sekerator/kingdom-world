@@ -47,8 +47,6 @@ public enum KingdomError {
     NOT_A_POST_PROFESSION,
     /** A setting of a work post outside the range the server allows. */
     VALUE_OUT_OF_RANGE,
-    /** The zone of a work post would reach beyond the kingdom's land. */
-    ZONE_OUTSIDE_LAND,
     /** The post has no free seat. */
     NO_FREE_SEAT,
     /** Nobody without work is there to hire. */

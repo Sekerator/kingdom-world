@@ -2,11 +2,9 @@ package io.github.sekerator.kingdomworld.core.state;
 
 import io.github.sekerator.kingdomworld.core.citizen.Citizen;
 import io.github.sekerator.kingdomworld.core.citizen.Citizens;
-import io.github.sekerator.kingdomworld.core.citizen.GatheringRules;
 import io.github.sekerator.kingdomworld.core.citizen.MineGoal;
 import io.github.sekerator.kingdomworld.core.citizen.Professions;
 import io.github.sekerator.kingdomworld.core.citizen.WorkPost;
-import io.github.sekerator.kingdomworld.core.citizen.WorkZone;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.construction.Box;
 import io.github.sekerator.kingdomworld.core.construction.Building;
@@ -439,22 +437,16 @@ public final class KingdomWorldState {
         if (post.professionId().equals(professionId)) {
             return Outcome.fail(KingdomError.UNCHANGED);
         }
-        boolean wasBound = GatheringRules.boundToLand(post.professionId());
         citizens.setPostProfession(post, professionId);
-        // The zone takes the radius the new profession allows: a lumberjack's grows to its own default, a zone that was a
-        // lumberjack's shrinks to the land again where the new profession needs that.
-        int radius = citizens.postRules().radiusOnProfession(professionId, post.radius());
-        if (!wasBound && GatheringRules.boundToLand(professionId)) {
-            radius = Math.max(1, Math.min(radius, WorkZone.largestRadiusWithin(pos, radius,
-                    chunk -> post.kingdomId().equals(territory.ownerOf(pos.dimension(), chunk)))));
-        }
-        citizens.setPostRadius(post, radius);
+        // The zone takes the radius the new profession allows: a lumberjack's grows to its own default. The land does not cut
+        // it: every profession works only on the kingdom's own chunks of its zone.
+        citizens.setPostRadius(post, citizens.postRules().radiusOnProfession(professionId, post.radius()));
         return Outcome.DONE;
     }
 
     /**
-     * Sets the radius of a post's zone; the zone must lie on the kingdom's land, unless the profession works only on the
-     * kingdom's own chunks of it anyway (a lumberjack).
+     * Sets the radius of a post's zone, up to the largest one of its profession. The zone may reach beyond the kingdom's
+     * land: the workers work only on its own chunks of it.
      */
     public Outcome setPostRadius(UUID actor, WorldPos pos, int radius, int maxRadius) {
         Outcome check = checkPost(actor, pos);
@@ -467,11 +459,6 @@ public final class KingdomWorldState {
         WorkPost post = citizens.posts().get(pos).orElseThrow();
         if (post.radius() == radius) {
             return Outcome.fail(KingdomError.UNCHANGED);
-        }
-        // Growing a zone must not reach beyond the land; shrinking is always allowed.
-        if (radius > post.radius() && GatheringRules.boundToLand(post.professionId()) && !WorkZone.around(pos, radius, 0, 0)
-                .liesWithin(chunk -> post.kingdomId().equals(territory.ownerOf(pos.dimension(), chunk)))) {
-            return Outcome.fail(KingdomError.ZONE_OUTSIDE_LAND);
         }
         citizens.setPostRadius(post, radius);
         return Outcome.DONE;

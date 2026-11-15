@@ -129,23 +129,6 @@ public record GatheringRules(int defaultRadius, int maxRadius, int lumberjackDef
     }
 
     /**
-     * The radius a new post gets: the default one, or less if the land around the post is smaller.
-     *
-     * @param largestInside largest radius whose zone lies entirely on the kingdom's land
-     */
-    public int radiusForNewPost(int largestInside) {
-        return Math.max(1, Math.min(defaultRadius, largestInside));
-    }
-
-    /**
-     * Whether the zone of a post of the profession must lie entirely on the kingdom's land. A lumberjack's zone need not:
-     * it fells and plants only on the kingdom's own chunks of it, so a larger zone near the border loses nothing.
-     */
-    public static boolean boundToLand(String professionId) {
-        return !Professions.LUMBERJACK.id().equals(professionId);
-    }
-
-    /**
      * The radius a post of the profession starts with.
      */
     public int defaultRadius(String professionId) {
@@ -157,16 +140,6 @@ public record GatheringRules(int defaultRadius, int maxRadius, int lumberjackDef
      */
     public int maxRadius(String professionId) {
         return Professions.LUMBERJACK.id().equals(professionId) ? lumberjackMaxRadius : maxRadius;
-    }
-
-    /**
-     * The radius a new post of the profession gets: its default one, cut to the land where the profession needs that.
-     *
-     * @param largestInside largest radius whose zone lies entirely on the kingdom's land
-     */
-    public int radiusForNewPost(String professionId, int largestInside) {
-        int radius = defaultRadius(professionId);
-        return Math.max(1, boundToLand(professionId) ? Math.min(radius, largestInside) : radius);
     }
 
     /**

@@ -600,7 +600,8 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
             if (isMiner()) {
                 goalWidgets(x, y);
             } else {
-                stepper(x, y + ROW, view.radius(), 1, view.maxRadius(), WorkPostActionPacket.Action.RADIUS);
+                stepper(x, y + ROW, view.radius(), 1, view.maxRadius(), WorkPostActionPacket.Action.RADIUS,
+                        Component.translatable(KEY + "radius_hint"));
             }
             stepper(secondControlsX(), y + ROW, view.seats(), 1, view.maxSeats(), WorkPostActionPacket.Action.SEATS);
             if (isHerder()) {
@@ -767,12 +768,23 @@ public class WorkPostScreen extends KingdomScreen implements ResultListener {
      * A minus button, the value and a plus button.
      */
     private void stepper(int x, int y, int value, int min, int max, WorkPostActionPacket.Action action) {
+        stepper(x, y, value, min, max, action, null);
+    }
+
+    /**
+     * Buttons - and + around a value, with a hint shown over both on hover ({@code null} for none).
+     */
+    private void stepper(int x, int y, int value, int min, int max, WorkPostActionPacket.Action action, Component hint) {
         Button minus = addRenderableWidget(Button.builder(Component.literal("-"), b -> send(action, value - 1, "", null))
                 .bounds(x, y, SMALL, ROW - 2).build());
         minus.active = value > min;
         Button plus = addRenderableWidget(Button.builder(Component.literal("+"), b -> send(action, value + 1, "", null))
                 .bounds(x + SMALL + GAP + VALUE_WIDTH + GAP, y, SMALL, ROW - 2).build());
         plus.active = value < max;
+        if (hint != null) {
+            minus.setTooltip(Tooltip.create(hint));
+            plus.setTooltip(Tooltip.create(hint));
+        }
     }
 
     private void send(WorkPostActionPacket.Action action, int value, String text, UUID target) {

@@ -760,7 +760,7 @@ public final class MinerBehavior implements ProfessionBehavior {
         private void finishCell(ServerLevel level, MinePlan.Cell cell) {
             dug++;
             BlockPos floor = cellPos(cell);
-            if (dug % TORCH_SPACING != 0 || level.getBrightness(LightLayer.BLOCK, floor) >= 8
+            if (dug % TORCH_SPACING != 0 || !land.owns(floor) || level.getBrightness(LightLayer.BLOCK, floor) >= 8
                     || level.getBrightness(LightLayer.SKY, floor) >= 8 || !isOpen(level, floor)
                     || !Blocks.TORCH.defaultBlockState().canSurvive(level, floor)) {
                 return;

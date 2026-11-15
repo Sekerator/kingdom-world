@@ -724,7 +724,7 @@ final class WorkshopGoal extends PostWorkGoal {
 
     @Nullable
     private WorkStatus go(ServerLevel level) {
-        if (station == null || !level.isLoaded(station)
+        if (station == null || !level.isLoaded(station) || !land.owns(station)
                 || !job.recipe().kind().station().equals(Workstations.kindOf(level, station, level.getBlockState(station)))) {
             ZoneSurveys.request(post.pos());
             return endBatch(WorkStatus.NO_WORKSTATION);

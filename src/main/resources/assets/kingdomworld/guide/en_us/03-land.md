@@ -18,7 +18,7 @@ The land of a kingdom is made of **chunks**: squares of 16 by 16 blocks through 
 
 - **Protection**: outsiders use no buckets, fire or tools, break neither the throne nor containers, and explosions and fire spare its blocks (see [Protection of the land](protection)).
 - **Homes for citizens**: a citizen lives only in a bed on the land of its kingdom, and the storehouses of a kingdom count together only on its land (see [Arrival and growth](growth), [The storehouse](storehouses)).
-- **Room for work**: the zone of a work post never reaches beyond the land of the kingdom. A lumberjack's zone may, but it fells and plants only on the chunks of its kingdom (see [The work post](work_posts)).
+- **Room for work**: the zone of a work post may reach beyond the border, but work goes on only on the chunks of its kingdom (see [The work post](work_posts)).
 - **Law**: on its land a kingdom judges thefts, blows and damaged property (see [The law of a kingdom](law)).
 - **Roads**: a road across the land of another kingdom is built only with its consent (see [Roads](roads)).
 

@@ -74,6 +74,9 @@ final class FarmerWorkGoal extends Goal {
     /** The work post the farmer works at, or {@code null} at a composter. */
     @Nullable
     private WorkPost post;
+    /** The kingdom's own land, asked again at every crop: the land may have gone since the farm was looked over. */
+    @Nullable
+    private LandCheck land;
 
     FarmerWorkGoal(CitizenEntity body) {
         this.body = body;
@@ -117,6 +120,7 @@ final class FarmerWorkGoal extends Goal {
                 radius = post.radius();
             }
         }
+        land = body.kingdomId() == null ? null : new LandCheck((ServerLevel) body.level(), body.kingdomId());
         scanIndex = 0;
         plots = 0;
         targets.clear();
@@ -214,7 +218,7 @@ final class FarmerWorkGoal extends Goal {
             }
         }
         BlockState state = level.getBlockState(target);
-        if (!FarmCrops.isMature(level, target, state)) {
+        if (!onOwnLand(target, state) || !FarmCrops.isMature(level, target, state)) {
             target = null;
             return;
         }
@@ -232,6 +236,16 @@ final class FarmerWorkGoal extends Goal {
         if (isCarryingFull()) {
             phase = Phase.DELIVER;
         }
+    }
+
+    /**
+     * Whether a crop, and the fruit a stem bears beside it, lie on the kingdom's own land now.
+     */
+    private boolean onOwnLand(BlockPos pos, BlockState state) {
+        if (land == null || !land.owns(pos)) {
+            return false;
+        }
+        return !(state.getBlock() instanceof AttachedStemBlock) || land.owns(pos.relative(state.getValue(AttachedStemBlock.FACING)));
     }
 
     @Nullable

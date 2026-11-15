@@ -202,7 +202,8 @@ public final class FisherBehavior implements ProfessionBehavior {
 
         @Override
         protected WorkStatus work(ServerLevel level) {
-            if (water == null || stand == null || !isFishingWater(level, water)) {
+            // The land may have gone since the water was found: the fisher fishes only from and into the kingdom's own.
+            if (water == null || stand == null || !land.owns(water) || !land.owns(stand) || !isFishingWater(level, water)) {
                 water = null;
                 if (!scan(level)) {
                     return null;
