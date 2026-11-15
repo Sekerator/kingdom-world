@@ -2,6 +2,19 @@
 
 ## Русский
 
+### 1.6.3
+
+Исправления стройки, работников, стен и дорог.
+
+- **Исправлено: двое строителей простаивали.** Когда последние блоки стройки были заняты другим строителем или отложены на миг (на месте блока кто-то стоит, опору ещё кладут), строитель говорил «нет строек» и уходил на перерыв почти на 400 тиков; если так выходило у обоих, дом стоял недостроенным, а в редком случае не достраивался вовсе. Теперь строитель ждёт у стройки и проверяет её каждые полсекунды, а если сам стоит на месте блока (например, на клетке пола, которую ещё не положили), отходит в сторону и кладёт блок.
+- **Исправлено: фермер на столбе.** Фермер шёл к посту и складу так, что игра поднимала его путь на верх блоков над ними: склад под столбом, к которому ведёт лестница, он не мог найти и стоял наверху. Теперь фермер подходит к месту на земле рядом с постом и складом, как остальные работники.
+- **Расчистка не ломает вещи игроков.** Рамки (вместе с предметом в них), картины и стойки для брони (со всем, что на них надето), стоящие на месте блока или висящие на нём, строитель снимает целиком и несёт на склад, а не роняет на землю. Это так и рядом с игроками, и вдали от них, и для земляных работ.
+- **Запертые контейнеры.** Контейнер с замком (или тот, у которого мод записал хозяина) строитель не ломает, даже пустой: стройка ждёт у него, как у контейнера с вещами, и состояние теперь говорит «мешает контейнер с вещами или запертый». Пустой незапертый контейнер, как и раньше, уходит на склад как предмет.
+- **Удалённый чертёж и здания на нём.** Чертёж, по которому стоят здания, при удалении пропадает из списка, и новое по нему не строится, но сервер хранит его, пока стоит хоть одно такое здание: их по-прежнему можно чинить, улучшать и сносить. Когда последнее здание уходит, чертёж удаляется совсем.
+- **Исправлено: флаги большого здания.** Проход по флагам здания, которому не хватало одного тика на чтение всех мест, начинался заново и не кончался, если у шаблона больше 256 флагов. Теперь он продолжается с места, где остановился.
+- **Исправлено: дыры в стене после ворот.** Если ворота прорезали в стене, которая ещё строилась, столбы после ворот в этом отрезке считались поставленными и оставались дырами. Теперь стена достраивается без дыр, а оплаченное за столбы в воротах возвращается на склады, когда отрезок готов.
+- **Дорога к городу королевства мира.** Если при появлении королевства мира путь от столицы к его городу не нашёлся, дорогу больше не пропускают молча: члены королевства с правом на стройку получают сообщение, а путь ищут снова через игровой день, пока дорога не встанет. После перезапуска сервера пропущенные дороги ищут снова через минуту.
+
 ### 1.6.2
 
 Плавильщик и повар работают партиями и топят сразу все печи своей зоны, а мастерские ходят на склад за ингредиентами на всю партию. Зона поста может заходить за границу королевства, а двое строителей одной стройки больше не делают одно и то же. Сетевой протокол 70: клиент и сервер должны быть одной версии мода.
@@ -333,6 +346,19 @@
 - **Нагрузка и баланс.** Замер нагрузки `admin perf`, тяжёлые места разнесены по тикам, жалование всех профессий по умолчанию.
 
 ## English
+
+### 1.6.3
+
+Fixes of construction, workers, walls and roads.
+
+- **Fixed: two builders standing idle.** When the last blocks of a construction were taken by another builder or put off for a moment (somebody stands where the block goes, its support is still being laid), a builder said "no construction" and took a break of almost 400 ticks; when both did, the house stood unfinished, and in a rare case was never finished. A builder now waits by the construction and looks at it again every half second, and when it stands where its own block goes itself (on a cell of the floor not laid yet, say), it steps aside and lays the block.
+- **Fixed: a farmer on a column.** A farmer walked to its post and storehouse so that the game took its way up to the top of the blocks over them: a storehouse under a column that stairs lead up to it never reached and stood on top. A farmer now comes to a place on the ground beside its post and storehouse, as the other workers do.
+- **The clearing breaks nothing of players.** Item frames (with what they hold), paintings and armor stands (with all they wear) standing in the place of a block or hanging on it are taken down whole by the builder and carried to a storehouse instead of dropping on the ground. So it is near players and far from them, and for earthworks too.
+- **Locked containers.** A container with a lock (or one a mod notes an owner of) is never broken by a builder, not even an empty one: the construction waits at it as at a container with items, and the status now says "a container with items or a locked one is in the way". An empty container that is not locked still goes to a storehouse as an item.
+- **A deleted blueprint and the buildings on it.** A blueprint buildings stand on leaves the list when deleted and nothing new is built from it, but the server keeps it while one of those buildings stands: they can still be repaired, upgraded and taken down. When the last of them goes, the blueprint is deleted for good.
+- **Fixed: the flags of a large building.** A pass over the flags of a building that one tick could not read through began anew and never ended for a template with more than 256 flags. It now goes on from where it stopped.
+- **Fixed: holes in a wall after a gate.** A gate cut into a wall still being built left the columns after the gate in that stretch counted as built, and they stayed holes. The wall is now finished without holes, and what was paid for the columns of the gate goes back to the storehouses once the stretch stands.
+- **The road to a town of a kingdom of the world.** When no way from the capital of a kingdom of the world to one of its towns was found as it appeared, the road is no longer left out without a word: the members of the kingdom who manage its construction are told, and the way is looked for again a day of the game later until the road stands. After a restart of the server the roads left out are looked for again a minute later.
 
 ### 1.6.2
 
