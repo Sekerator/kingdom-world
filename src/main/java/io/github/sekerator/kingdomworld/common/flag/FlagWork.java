@@ -106,6 +106,8 @@ public final class FlagWork {
     private static final Map<Long, AddedPlaces> ADDED = new HashMap<>();
     /** Buildings waiting for a pass, and those that wait for a tick before it. */
     private static final LinkedHashSet<Long> PASSES = new LinkedHashSet<>();
+    /** Passes cut short by the budget of a tick, by building: they go on from there. */
+    private static final Map<Long, Cursor> CURSORS = new HashMap<>();
     private static final Map<Long, Long> LATER = new HashMap<>();
     /** Chunks loaded since the last tick. */
     private static final ConcurrentLinkedQueue<ChunkRef> CHUNKS = new ConcurrentLinkedQueue<>();
@@ -151,6 +153,7 @@ public final class FlagWork {
         QUEUED.clear();
         ADDED.clear();
         PASSES.clear();
+        CURSORS.clear();
         LATER.clear();
         CHUNKS.clear();
         buildings = null;
@@ -348,6 +351,7 @@ public final class FlagWork {
         ServerLevel level = ConstructionWork.level(server, building.anchor().dimension());
         if (level != null && loaded(level, building.box())) {
             int[] budget = {Integer.MAX_VALUE, Integer.MAX_VALUE};
+            CURSORS.remove(building.id());
             if (pass(server, level, building, budget)) {
                 return;
             }
@@ -373,6 +377,7 @@ public final class FlagWork {
             return false;
         }
         int[] budget = {Integer.MAX_VALUE, Integer.MAX_VALUE};
+        CURSORS.remove(buildingId);
         boolean done = pass(server, level, building.get(), budget);
         PASSES.remove(buildingId);
         return done;
@@ -703,7 +708,11 @@ public final class FlagWork {
                 finished.add(id);
             }
         }
-        finished.forEach(PASSES::remove);
+        // A pass put off (the site unloaded, builders at work) begins anew when it comes back.
+        finished.forEach(id -> {
+            PASSES.remove(id);
+            CURSORS.remove(id);
+        });
     }
 
     /**
@@ -728,9 +737,17 @@ public final class FlagWork {
         UUID kingdom = building.kingdomId();
         BlockPos anchor = ConstructionWork.blockPos(building.anchor());
         FlagSpotCache.Entry entry = FlagSpotCache.of(building, template);
+        // A pass cut short by the budget goes on where it stopped, as long as the building is the same.
+        Cursor cursor = CURSORS.remove(building.id());
+        if (cursor == null || cursor.stamp() != stamp) {
+            cursor = new Cursor(stamp);
+        }
         // The flags of the template.
-        for (int index : entry.templateFlags()) {
+        List<Integer> templateFlags = entry.templateFlags();
+        for (; cursor.template < templateFlags.size(); cursor.template++) {
+            int index = templateFlags.get(cursor.template);
             if (budget[0] <= 0 || budget[1] <= 0) {
+                CURSORS.put(building.id(), cursor);
                 return false;
             }
             BuildingTemplate.Block block = template.blocks().get(index);
@@ -759,10 +776,13 @@ public final class FlagWork {
             }
         }
         // The flags it gets besides.
-        Set<Long> added = new HashSet<>();
+        Set<Long> added = cursor.added;
         if (KingdomWorldConfig.SERVER.buildingFlags.get()) {
-            for (FlagSpots.Spot spot : entry.added()) {
+            List<FlagSpots.Spot> spots = entry.added();
+            for (; cursor.spot < spots.size(); cursor.spot++) {
+                FlagSpots.Spot spot = spots.get(cursor.spot);
                 if (budget[0] <= 0 || budget[1] <= 0) {
+                    CURSORS.put(building.id(), cursor);
                     return false;
                 }
                 BlockPos local = new BlockPos(spot.x(), spot.y(), spot.z());
@@ -804,6 +824,25 @@ public final class FlagWork {
         }
         data.stamp(building.id(), stamp);
         return true;
+    }
+
+    /**
+     * Where a pass over the flags of a building cut short by the budget of a tick goes on: the next flag of the template, the next
+     * added flag and the places of the added flags looked at so far, for the building as it was stamped.
+     */
+    private static final class Cursor {
+        private final long stamp;
+        private int template;
+        private int spot;
+        private final Set<Long> added = new HashSet<>();
+
+        private Cursor(long stamp) {
+            this.stamp = stamp;
+        }
+
+        private long stamp() {
+            return stamp;
+        }
     }
 
     /**

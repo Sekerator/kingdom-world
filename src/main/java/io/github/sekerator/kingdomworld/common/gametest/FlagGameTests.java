@@ -496,6 +496,62 @@ public final class FlagGameTests {
         }
     }
 
+    /**
+     * A hall with three hundred flags, more than one pass reads in a tick: knocked down, they all come back, the pass going on
+     * from where the budget of a tick cut it short instead of beginning anew.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_flag_many", timeoutTicks = 1400)
+    public static void aPassOverAHallOfThreeHundredFlagsComesToItsEnd(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos from = helper.absolutePos(SITE.offset(-2, -1, -2));
+        BlockPos to = helper.absolutePos(SITE.offset(12, 6, 17));
+        // Walled off from the caves around: gravel over the site would fall into the places of the flags knocked down.
+        GatheringGameTests.enclose(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Flag Many", UUID.randomUUID());
+        // Two floors of 10 by 15 with a red banner on every block of each: 300 flags of the template.
+        Map<BlockPos, BlockState> blocks = new HashMap<>();
+        for (int x = 0; x < 10; x++) {
+            for (int z = 0; z < 15; z++) {
+                blocks.put(new BlockPos(x, 0, z), Blocks.COBBLESTONE.defaultBlockState());
+                blocks.put(new BlockPos(x, 1, z), Blocks.RED_BANNER.defaultBlockState().setValue(BannerBlock.ROTATION, 0));
+                blocks.put(new BlockPos(x, 2, z), Blocks.COBBLESTONE.defaultBlockState());
+                blocks.put(new BlockPos(x, 3, z), Blocks.RED_BANNER.defaultBlockState().setValue(BannerBlock.ROTATION, 0));
+            }
+        }
+        BuildingTemplate many = BuildingTemplates.addForTest(KingdomWorld.id("test_flag_many"), description("many", "trade"),
+                structure(10, 4, 15, blocks));
+        int[] knocked = {-1};
+        List<BlockPos> flags;
+        try {
+            build(helper, kingdom, many);
+            flags = flagsIn(level, from, to);
+            helper.assertTrue(flags.size() == 300, "The hall was built with " + flags.size() + " flags, not 300");
+            for (BlockPos pos : flags) {
+                level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
+            }
+            knocked[0] = flagsIn(level, from, to).size();
+        } catch (RuntimeException e) {
+            end(helper, kingdom, many);
+            GatheringGameTests.clear(level, from.offset(-1, -1, -1), to.offset(1, 1, 1));
+            throw e;
+        }
+        helper.succeedWhen(() -> {
+            int back = flagsIn(level, from, to).size();
+            if (knocked[0] != 0 || back != 300) {
+                List<String> missing = new ArrayList<>();
+                for (BlockPos pos : flags) {
+                    if (!FlagBlocks.is(level.getBlockState(pos)) && missing.size() < 4) {
+                        missing.add(GatheringGameTests.local(helper, pos).toShortString() + " " + level.getBlockState(pos) + " under "
+                                + level.getBlockState(pos.below()));
+                    }
+                }
+                helper.fail("Of 300 flags knocked down " + back + " came back; missing " + missing);
+            }
+            end(helper, kingdom, many);
+            GatheringGameTests.clear(level, from.offset(-1, -1, -1), to.offset(1, 1, 1));
+        });
+    }
+
     // ---------------------------------------------------------------- 10. blueprints
 
     @GameTest(template = EMPTY, batch = "kingdomworld_flag_blueprint")
