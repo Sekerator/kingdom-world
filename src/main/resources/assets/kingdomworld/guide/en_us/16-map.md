@@ -30,7 +30,14 @@ On hover the bottom shows which chunk it is (and its blocks), whose land it is a
 
 - **Looking**: the key K or the atlas.
 - **Editing land**: the "Territory" button of the throne screen, titled "Land of ..." (see [Claiming and releasing land](claiming)).
-- **Planning a road**: the "Plan a road" button in the Roads tab (see [Roads](roads)).
+- **Planning a road**: the "Plan a road" button in the Roads tab (see [Roads](roads)). Clicks set the start, the end,
+  then points between: each goes into the nearest leg. A point can be dragged with the mouse (it is caught within 4
+  pixels; elsewhere the map moves as usual), a right click on a point between removes it, Undo and Ctrl+Z bring back
+  the points before (32 steps). The request goes once the points rest, and once a second at most. The way is drawn by
+  the kinds of its blocks: ground orange, cutting brown, tunnel dark grey dashed, embankment ochre, bridge blue; a leg
+  being planned dashed, a leg without a way red with a cross where it got stuck. Hovering a leg shows its length,
+  works and work, the Profile button the section of the road in a strip above the buttons. A closed atlas does not
+  stop the search: opened again, it shows the same plan.
 - **Building**: the "On the map..." button of a building ordered for a city in the Construction tab. The outline of the
   building with a mark on its entrance follows the cursor, a click places it, R or the Entrance button turns it, "Lay out"
   sends the order; a right click or Esc resets. A chunk takes up to 64 pixels here, so that a small house is seen too (see

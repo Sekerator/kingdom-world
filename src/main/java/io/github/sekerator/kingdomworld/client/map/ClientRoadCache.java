@@ -9,6 +9,23 @@ import io.github.sekerator.kingdomworld.common.network.data.RoadViews;
 public final class ClientRoadCache {
     private static volatile RoadViews.MapData data = RoadViews.MapData.EMPTY;
     private static volatile RoadViews.PlanView plan;
+    private static volatile Session session;
+
+    /**
+     * The plan of a road the atlas was making when it was closed: its points, class and way, so that it opens again as it was while
+     * the server plans on.
+     */
+    public record Session(java.util.UUID kingdomId, java.util.List<int[]> points, io.github.sekerator.kingdomworld.core.road.RoadClass roadClass,
+                          io.github.sekerator.kingdomworld.core.road.RouteStyle route, int seq) {
+    }
+
+    public static Session session() {
+        return session;
+    }
+
+    public static void setSession(Session value) {
+        session = value;
+    }
     /** The parts of the kingdoms the server sent, in the order they came; changed on the client main thread only. */
     private static final java.util.Map<java.util.UUID, RoadViews.MapPart> PARTS = new java.util.LinkedHashMap<>();
 
@@ -71,5 +88,6 @@ public final class ClientRoadCache {
         PARTS.clear();
         data = RoadViews.MapData.EMPTY;
         plan = null;
+        session = null;
     }
 }

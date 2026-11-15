@@ -181,12 +181,54 @@ final class RoadLayoutCases {
     }
 
     private static KingdomMapScreen planning(Function<Role, KingdomView> member, boolean withPlan, Component status) {
+        KingdomView view = member.apply(Role.KING);
+        return planning(member, withPlan ? plan(view.id()) : null, status, false);
+    }
+
+    private static KingdomMapScreen planning(Function<Role, KingdomView> member, RoadViews.PlanView plan, Component status, boolean profile) {
         fillMapData();
         KingdomView view = member.apply(Role.KING);
+        io.github.sekerator.kingdomworld.client.map.ClientRoadCache.setSession(null);
         KingdomMapScreen screen = KingdomMapScreen.forRoads(view);
         screen.showForCheck(1.0, -0.5, 14.0, null, status, !status.getString().isEmpty());
-        screen.showPlanForCheck(-40, -30, 160, -30, withPlan ? plan(view.id()) : null);
+        screen.showPlanForCheck(List.of(new int[]{-40, -30}, new int[]{60, -10}, new int[]{110, 20}, new int[]{160, -30}), plan, profile);
         return screen;
+    }
+
+    /**
+     * A plan as the server sends it while it plans, and one that failed on its second leg.
+     */
+    private static RoadViews.PlanView stage(UUID kingdom, RoadViews.PlanView.Stage stage, int queue) {
+        return RoadViews.PlanView.of(kingdom, 2, "", stage, 47, queue, RoadClass.PAVED, io.github.sekerator.kingdomworld.core.road.RouteStyle.MODERATE);
+    }
+
+    private static RoadViews.PlanView failed(UUID kingdom) {
+        RoadViews.PlanView base = stage(kingdom, RoadViews.PlanView.Stage.FAILED, 0);
+        int[] works = new int[RoadViews.PlanView.WORKS];
+        List<RoadViews.PlanView.LegView> legs = List.of(
+                new RoadViews.PlanView.LegView(RoadViews.PlanView.Stage.DONE, "", 0, 0, 120, 600, 300, works),
+                new RoadViews.PlanView.LegView(RoadViews.PlanView.Stage.FAILED, "blocked", 85, 4, 0, 0, 0, works),
+                new RoadViews.PlanView.LegView(RoadViews.PlanView.Stage.FAILED, "foreign_wall", 130, -5, 0, 0, 0, works));
+        return new RoadViews.PlanView(0, kingdom, 2, "", RoadViews.PlanView.Stage.FAILED, 100, 0, RoadClass.PAVED,
+                io.github.sekerator.kingdomworld.core.road.RouteStyle.MODERATE, new int[]{-40, -30, 60, -10, 110, 20, 160, -30},
+                new int[]{-40, -30, 60, -10, 110, 20, 160, -30}, legs, "", "", 0, 0, 0, 0, works, base.materials(), base.missing(), 0, 0, 0, 0, -1,
+                0, "", List.of(), 0, false, true, new int[0], new int[0], new byte[0], new int[0]);
+    }
+
+    private static RoadViews.PlanView withProfile(UUID kingdom) {
+        RoadViews.PlanView found = plan(kingdom);
+        int[] probes = new int[512 * 3];
+        for (int i = 0; i < 512; i++) {
+            int ground = 64 + (int) Math.round(30 * Math.sin(i / 60.0));
+            int deck = 64 + (int) Math.round(10 * Math.sin(i / 60.0));
+            probes[i * 3] = ground;
+            probes[i * 3 + 1] = deck;
+            probes[i * 3 + 2] = ground > deck + 4 ? 4 : ground > deck ? 3 : ground < deck - 3 ? 1 : ground < deck ? 2 : 0;
+        }
+        return new RoadViews.PlanView(found.planId(), kingdom, found.seq(), "", found.stage(), 100, 0, found.roadClass(), found.style(), found.points(),
+                found.snapped(), found.legs(), found.from(), found.to(), found.length(), found.straight(), found.caravan(), found.across(), found.works(),
+                found.materials(), found.missing(), found.builderSeconds(), found.minerSeconds(), found.builders(), found.minerRate(), found.term(),
+                found.coins(), found.currency(), found.foreign(), found.gates(), found.guessed(), true, found.xs(), found.zs(), found.kinds(), probes);
     }
 
     /**
@@ -227,6 +269,14 @@ final class RoadLayoutCases {
         add.accept("map-roads", () -> planning(member, false, Component.empty()));
         add.accept("map-roads-plan", () -> planning(member, true, Component.empty()));
         add.accept("map-roads-error", () -> planning(member, false, longError));
+        add.accept("map-roads-searching", () -> planning(member, stage(member.apply(Role.KING).id(), RoadViews.PlanView.Stage.SEARCHING, 0),
+                Component.empty(), false));
+        add.accept("map-roads-queued", () -> planning(member, stage(member.apply(Role.KING).id(), RoadViews.PlanView.Stage.QUEUED, 3),
+                Component.empty(), false));
+        add.accept("map-roads-found", () -> planning(member, plan(member.apply(Role.KING).id()), Component.empty(), false));
+        add.accept("map-roads-failed", () -> planning(member, failed(member.apply(Role.KING).id()), Component.empty(), false));
+        add.accept("map-roads-buttons", () -> planning(member, plan(member.apply(Role.KING).id()), longError, false));
+        add.accept("map-roads-profile", () -> planning(member, withProfile(member.apply(Role.KING).id()), Component.empty(), true));
         add.accept("map-view-roads", () -> {
             fillMapData();
             KingdomMapScreen screen = new KingdomMapScreen(null);
