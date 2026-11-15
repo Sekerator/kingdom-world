@@ -274,8 +274,9 @@ public final class PostWork {
         if (behavior.secondTool() != Equipment.ToolNeed.NONE) {
             Equipment.equipTool(server, kingdom, hands, EquipmentSlot.OFFHAND, behavior.secondTool(), 0, near);
         }
+        Equipment.stowSpoils(server, kingdom, hands, near);
         if (behavior.risky()) {
-            Equipment.equipArmor(server, kingdom, hands, near);
+            Equipment.equipPlainArmor(server, kingdom, hands, near);
         }
         PostYield rates = post.yield();
         if (rates.isEmpty()) {

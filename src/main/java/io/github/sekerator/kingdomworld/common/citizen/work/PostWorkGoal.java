@@ -64,10 +64,12 @@ public abstract class PostWorkGoal extends Goal {
     private boolean deliverToContainer;
     private int deliverTicks;
     private WorkStatus status = WorkStatus.NONE;
+    private final WorkApproach way;
 
     protected PostWorkGoal(CitizenEntity body, ProfessionBehavior behavior) {
         this.body = body;
         this.behavior = behavior;
+        this.way = new WorkApproach(body);
         setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
     }
 
@@ -155,6 +157,7 @@ public abstract class PostWorkGoal extends Goal {
         zone = WorkZone.of(post.pos(), post.professionId(), post.radius(), GatheringSettings.rules().mineLevels());
         land = new LandCheck(level, post.kingdomId());
         deliverTo = null;
+        way.reset();
         phase = isCarryingFull() ? Phase.DELIVER : Phase.PREPARE;
         onStart();
     }
@@ -162,6 +165,7 @@ public abstract class PostWorkGoal extends Goal {
     @Override
     public void stop() {
         body.getNavigation().stop();
+        way.reset();
         if (phase != Phase.DONE) {
             cooldown = 40;
         }
@@ -273,8 +277,9 @@ public abstract class PostWorkGoal extends Goal {
         if (behavior.secondTool() != Equipment.ToolNeed.NONE) {
             Equipment.equipTool(server, kingdom, hands, EquipmentSlot.OFFHAND, behavior.secondTool(), 0, post.pos());
         }
+        Equipment.stowSpoils(server, kingdom, hands, post.pos());
         if (behavior.risky()) {
-            Equipment.equipArmor(server, kingdom, hands, post.pos());
+            Equipment.equipPlainArmor(server, kingdom, hands, post.pos());
         }
         return true;
     }
@@ -293,7 +298,18 @@ public abstract class PostWorkGoal extends Goal {
     }
 
     /**
-     * Walks towards a block; paths come from the {@link PathBudget}.
+     * Comes to a block to work at it: walks to a place on the ground beside it from which the body reaches it, never onto the
+     * blocks over it or onto leaves. Paths come from the {@link PathBudget}.
+     *
+     * @param reachSqr the square of the reach of the work, from the feet to the middle of the block
+     */
+    protected WorkApproach.Result approach(ServerLevel level, BlockPos block, double reachSqr) {
+        return way.toward(level, block, reachSqr);
+    }
+
+    /**
+     * Walks towards a block, as near as the walk goes; paths come from the {@link PathBudget}. The game takes a walk to a solid
+     * block up to the top of the blocks over it: the work comes to a solid block by {@link #approach}.
      */
     protected void moveTo(BlockPos pos) {
         if (pathCooldown > 0 || (!body.getNavigation().isDone() && body.getNavigation().getTargetPos() != null
@@ -390,7 +406,10 @@ public abstract class PostWorkGoal extends Goal {
             return;
         }
         if (!near(deliverTo, DELIVERY_REACH_SQR)) {
-            moveTo(deliverTo);
+            if (approach(level, deliverTo, DELIVERY_REACH_SQR) == WorkApproach.Result.UNREACHABLE) {
+                // No walk leads to a place beside it: as near as the walk goes.
+                moveTo(deliverTo);
+            }
             return;
         }
         IItemHandler target = null;

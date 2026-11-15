@@ -161,6 +161,8 @@ Of the suitable ones a worker takes the weakest that is still strong enough for 
 
 Lumberjacks, miners, fishers and herders put on armor from the storehouses. Far from players armor lowers the risk of accidents by up to 75%: 20 armor points give full protection, a full iron set gives 15 (see [Work far from players](work_far)).
 
+They take plain armor only: no enchantments, no name of its own, no special properties of other mods (such as affixes) and no data beyond its wear. Enchanted armor and other spoils of players stay in the storehouses for the players. A worker that already wears such armor hands it in when it next gets ready for work and puts on plain armor if there is any.
+
 ### Gear belongs to the citizen
 
 Tools and armor belong to the citizen rather than to its body: far from players the tool wears out all the same, and after death the gear goes back to a storehouse. A citizen that changes its work hands in a tool its new work does not need.
@@ -253,7 +255,7 @@ The tab Sell of the window of a shop shows what of your inventory the shop takes
 
 ## lumberjack | Lumberjack
 @icon minecraft:iron_axe
-The **lumberjack** fells trees in the zone of its post and plants new ones, so its forest never runs out. It needs an {item:minecraft:iron_axe} axe (any) and puts on armor from the storehouses.
+The **lumberjack** fells trees in the zone of its post and plants new ones, so its forest never runs out. It needs an {item:minecraft:iron_axe} axe (any) and puts on armor from the storehouses. It fells from the ground beside the trunk and never stands on crowns; a tree it finds no way to it leaves for half a day and goes on to the next one.
 
 ### The zone
 

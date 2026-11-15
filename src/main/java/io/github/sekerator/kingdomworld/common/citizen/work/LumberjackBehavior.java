@@ -46,8 +46,18 @@ public final class LumberjackBehavior implements ProfessionBehavior {
     /** Saplings the lumberjack leaves in the container of its post at most; the rest go to a storehouse with the harvest. */
     static final int SAPLINGS_KEPT = 32;
 
+    /**
+     * The square of the reach of a lumberjack felling a tree, from its feet to the middle of the base of the trunk: four blocks,
+     * so that it fells an oak whose crown hangs low from the ground beside it.
+     */
+    static final double FELL_REACH_SQR = 4.0 * 4.0;
+    /** Game ticks a lumberjack leaves a tree it finds no way to: half a day. */
+    static final long PASS_TICKS = 12_000L;
+
     /** A tree a lumberjack began to fell and has not finished, by citizen: the next round of work finishes it first. */
     private static final Map<UUID, Unfinished> UNFINISHED = new HashMap<>();
+    /** The trees a lumberjack found no way to, by citizen, with the game time until which it leaves each be. */
+    private static final Map<UUID, Map<BlockPos, Long>> PASSED = new HashMap<>();
 
     private record Unfinished(BlockPos base, @Nullable BlockState leafState) {
     }
@@ -119,10 +129,11 @@ public final class LumberjackBehavior implements ProfessionBehavior {
     }
 
     /**
-     * Forgets the trees left half felled, when the server stops.
+     * Forgets the trees left half felled and those left for lack of a way, when the server stops.
      */
     public static void reset() {
         UNFINISHED.clear();
+        PASSED.clear();
     }
 
     /**
@@ -301,10 +312,11 @@ public final class LumberjackBehavior implements ProfessionBehavior {
             }
             BlockPos stand = tree.bases().isEmpty() ? tree.logs().get(tree.logs().size() - 1) : tree.bases().get(0);
             lookAt(stand);
-            if (!near(stand, REACH_SQR)) {
-                moveTo(stand);
-                if (++walking > GIVE_UP_TICKS) {
-                    tree = null;
+            // The lumberjack fells a tree from the ground beside its trunk, never from its crown.
+            WorkApproach.Result way = approach(level, stand, FELL_REACH_SQR);
+            if (way != WorkApproach.Result.ARRIVED) {
+                if (way == WorkApproach.Result.UNREACHABLE || ++walking > GIVE_UP_TICKS) {
+                    passOver(level, stand);
                 }
                 return null;
             }
@@ -344,6 +356,7 @@ public final class LumberjackBehavior implements ProfessionBehavior {
             saplings = scan.saplings().size();
             // The nearest trees first, so that a large zone is not crossed back and forth.
             List<BlockPos> found = new ArrayList<>(scan.bases());
+            found.removeIf(base -> passed(level, base));
             found.sort(Comparator.comparingDouble(pos -> pos.distSqr(postPos)));
             bases.addAll(found);
             plantings.addAll(scan.newSpots(Groves.NEW_PER_ROUND));
@@ -409,9 +422,47 @@ public final class LumberjackBehavior implements ProfessionBehavior {
             }
         }
 
+        /**
+         * Leaves a tree the lumberjack finds no way to for half a day: it goes on to the next one, and neither the next look
+         * over the zone nor a tree left half felled brings it back there before then.
+         */
+        private void passOver(ServerLevel level, BlockPos base) {
+            UUID id = body.citizenId();
+            if (id != null) {
+                Unfinished unfinished = UNFINISHED.get(id);
+                if (unfinished != null && (unfinished.base().equals(base) || tree.bases().contains(unfinished.base()))) {
+                    forget();
+                }
+                PASSED.computeIfAbsent(id, key -> new HashMap<>()).put(base.immutable(), level.getGameTime() + PASS_TICKS);
+            }
+            tree = null;
+        }
+
+        /**
+         * Whether the lumberjack left the tree of this base for now.
+         */
+        private boolean passed(ServerLevel level, BlockPos base) {
+            UUID id = body.citizenId();
+            Map<BlockPos, Long> passed = id == null ? null : PASSED.get(id);
+            if (passed == null) {
+                return false;
+            }
+            long now = level.getGameTime();
+            passed.values().removeIf(until -> until <= now);
+            if (passed.isEmpty()) {
+                PASSED.remove(id);
+                return false;
+            }
+            return passed.containsKey(base);
+        }
+
         private void resumeUnfinished(ServerLevel level) {
             Unfinished unfinished = resume;
             resume = null;
+            if (passed(level, unfinished.base())) {
+                forget();
+                return;
+            }
             tree = Trees.isLog(level.getBlockState(unfinished.base()))
                     ? Trees.find(level, unfinished.base(), zone, land, GatheringSettings.rules().maxTreeBlocks(), true) : null;
             if (tree == null) {

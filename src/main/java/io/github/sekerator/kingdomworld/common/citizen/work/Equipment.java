@@ -4,24 +4,32 @@ import io.github.sekerator.kingdomworld.common.citizen.CitizenEntity;
 import io.github.sekerator.kingdomworld.common.citizen.GearRegistry;
 import io.github.sekerator.kingdomworld.common.data.KingdomSavedData;
 import io.github.sekerator.kingdomworld.common.storage.KingdomStorage;
+import io.github.sekerator.kingdomworld.core.citizen.PlainGear;
 import io.github.sekerator.kingdomworld.core.citizen.ToolChoice;
 import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
+import com.google.common.collect.Multimap;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.ai.attributes.Attribute;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.item.Tier;
 import net.minecraft.world.item.TieredItem;
+import net.minecraftforge.common.ForgeMod;
 import net.minecraftforge.common.TierSortingRegistry;
 import net.minecraftforge.common.ToolAction;
 import net.minecraftforge.common.ToolActions;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -195,12 +203,60 @@ public final class Equipment {
      * Puts on armor from the storehouses for every empty armor slot, the strongest piece there is.
      */
     public static void equipArmor(MinecraftServer server, UUID kingdomId, Hands hands, @Nullable WorldPos near) {
+        equipArmor(server, kingdomId, hands, near, false);
+    }
+
+    /**
+     * Puts on plain armor from the storehouses for every empty armor slot, the strongest plain piece there is: the workers of
+     * dangerous work leave the spoils of players ({@link #isPlainArmor}) in the storehouses.
+     */
+    public static void equipPlainArmor(MinecraftServer server, UUID kingdomId, Hands hands, @Nullable WorldPos near) {
+        equipArmor(server, kingdomId, hands, near, true);
+    }
+
+    /**
+     * Hands in to the storehouses the armor a worker wears that is not plain ({@link #isPlainArmor}): a worker that put on
+     * the spoils of players before they stayed theirs gives them back. A piece the storehouses have no room for stays on.
+     */
+    public static void stowSpoils(MinecraftServer server, UUID kingdomId, Hands hands, @Nullable WorldPos near) {
+        for (EquipmentSlot slot : ARMOR) {
+            ItemStack worn = hands.get(slot);
+            if (worn.isEmpty() || isPlainArmor(worn, slot)) {
+                continue;
+            }
+            ItemStack given = io.github.sekerator.kingdomworld.common.army.ArmyKits.released(worn);
+            hands.set(slot, given.isEmpty() ? ItemStack.EMPTY : KingdomStorage.insert(server, kingdomId, given, near));
+        }
+    }
+
+    /**
+     * Whether a piece of armor is plain, as {@link PlainGear} says: no enchantments, no name, no attributes beyond those of
+     * its kind, no lifted step, no data but its wear.
+     */
+    public static boolean isPlainArmor(ItemStack stack, EquipmentSlot slot) {
+        CompoundTag tag = stack.getTag();
+        Multimap<Attribute, AttributeModifier> modifiers = stack.getAttributeModifiers(slot);
+        // What the kind itself gives; what the data of the piece or other mods add on top is more.
+        Set<String> own = modifierIds(stack.getItem().getAttributeModifiers(slot, stack));
+        boolean more = !own.containsAll(modifierIds(modifiers));
+        boolean step = modifiers.containsKey(ForgeMod.STEP_HEIGHT_ADDITION.get());
+        return PlainGear.isPlain(tag == null ? Set.of() : tag.getAllKeys(), more, step);
+    }
+
+    private static Set<String> modifierIds(Multimap<Attribute, AttributeModifier> modifiers) {
+        Set<String> ids = new HashSet<>();
+        modifiers.forEach((attribute, modifier) -> ids.add(attribute.getDescriptionId() + "/" + modifier.getId()));
+        return ids;
+    }
+
+    private static void equipArmor(MinecraftServer server, UUID kingdomId, Hands hands, @Nullable WorldPos near, boolean plain) {
         for (EquipmentSlot slot : ARMOR) {
             if (!hands.get(slot).isEmpty()) {
                 continue;
             }
             List<KingdomStorage.Found> found = KingdomStorage.find(server, kingdomId,
-                    stack -> stack.getItem() instanceof ArmorItem armor && armor.getEquipmentSlot() == slot, near);
+                    stack -> stack.getItem() instanceof ArmorItem armor && armor.getEquipmentSlot() == slot
+                            && (!plain || isPlainArmor(stack, slot)), near);
             KingdomStorage.Found best = null;
             for (KingdomStorage.Found candidate : found) {
                 if (best == null || defense(candidate.stack()) > defense(best.stack())) {

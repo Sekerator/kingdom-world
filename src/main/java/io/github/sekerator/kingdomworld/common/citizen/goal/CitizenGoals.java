@@ -138,5 +138,25 @@ public final class CitizenGoals {
             }
             return super.canUse();
         }
+
+        /**
+         * A place to stroll to whose floor is not leaves: the game takes a place up to the top of the blocks over it, the crown
+         * of a tree too.
+         */
+        @Override
+        @Nullable
+        protected net.minecraft.world.phys.Vec3 getPosition() {
+            for (int attempt = 0; attempt < 3; attempt++) {
+                net.minecraft.world.phys.Vec3 position = super.getPosition();
+                if (position == null) {
+                    return null;
+                }
+                BlockPos floor = BlockPos.containing(position).below();
+                if (!body.level().getBlockState(floor).is(net.minecraft.tags.BlockTags.LEAVES)) {
+                    return position;
+                }
+            }
+            return null;
+        }
     }
 }

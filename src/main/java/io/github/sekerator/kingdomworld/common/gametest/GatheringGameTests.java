@@ -501,6 +501,131 @@ public final class GatheringGameTests {
         });
     }
 
+    /**
+     * Fails the test whenever the body of the worker stands on leaves: a lumberjack works from the ground, never from a crown.
+     */
+    private static void neverOnLeaves(GameTestHelper helper, Citizen worker) {
+        helper.onEachTick(() -> {
+            CitizenEntity body = CitizenBodies.body(worker.id());
+            if (body != null && helper.getLevel().getBlockState(body.getOnPos()).is(net.minecraft.tags.BlockTags.LEAVES)) {
+                helper.fail("The lumberjack stands on the crown at " + local(helper, body.blockPosition()));
+            }
+        });
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_work_lumberjack_hillside", timeoutTicks = 1600)
+    public static void lumberjackFellsATreeOnAHillsideWithoutClimbingIt(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        morning(level);
+        BlockPos from = helper.absolutePos(new BlockPos(-2, 0, -2));
+        BlockPos to = helper.absolutePos(new BlockPos(12, OPEN_ABOVE, 8));
+        clear(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Hillside Wood", UUID.randomUUID());
+        // The oak stands beyond the floor the game lays under a test, on the rock of the world: earth under its trunk for the
+        // sapling, put back as it was at the end.
+        BlockPos under = new BlockPos(8, -1, 3);
+        BlockState rock = helper.getBlockState(under);
+        helper.setBlock(under, Blocks.DIRT);
+        // An oak of four logs: a flat crown two blocks around over its top and a ring of leaves one block around its top log.
+        for (int y = 0; y < 4; y++) {
+            helper.setBlock(new BlockPos(8, y, 3), Blocks.OAK_LOG);
+        }
+        BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, false);
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                helper.setBlock(new BlockPos(8 + dx, 4, 3 + dz), leaves);
+                if (Math.abs(dx) <= 1 && Math.abs(dz) <= 1 && !(dx == 0 && dz == 0)) {
+                    helper.setBlock(new BlockPos(8 + dx, 3, 3 + dz), leaves);
+                }
+            }
+        }
+        settleLeaves(helper, new BlockPos(6, 3, 1), new BlockPos(10, 4, 5));
+        // Steps of earth a block apart lead from the worker up to the edge of the crown, as a hillside does.
+        for (int step = 0; step < 4; step++) {
+            for (int y = 0; y <= step; y++) {
+                helper.setBlock(new BlockPos(2 + step, y, 3), Blocks.DIRT);
+            }
+        }
+        StorehouseInventory store = storehouse(level, helper.absolutePos(new BlockPos(0, 0, 6)));
+        store.insertItem(0, new ItemStack(Items.IRON_AXE), false);
+        store.insertItem(1, new ItemStack(Items.OAK_SAPLING), false);
+        WorldPos postPos = post(helper, new BlockPos(0, 0, 0), "lumberjack");
+        Citizen worker = worker(helper, kingdom, "lumberjack", postPos, helper.absolutePos(new BlockPos(1, 0, 3)));
+        neverOnLeaves(helper, worker);
+
+        helper.succeedWhen(() -> {
+            for (int y = 0; y < 4; y++) {
+                helper.assertTrue(!helper.getBlockState(new BlockPos(8, y, 3)).is(Blocks.OAK_LOG), "The tree still stands");
+            }
+            helper.assertTrue(helper.getBlockState(new BlockPos(8, 0, 3)).is(Blocks.OAK_SAPLING), "No oak sapling was planted");
+            helper.assertTrue(produced(server, kingdom, "lumberjack", "minecraft:oak_log") >= 4, "The logs were not counted");
+            end(helper, kingdom, worker, from, to);
+            helper.setBlock(under, rock);
+        });
+    }
+
+    @GameTest(template = EMPTY, batch = "kingdomworld_work_lumberjack_step", timeoutTicks = 1600)
+    public static void lumberjackInStepHeightArmorFellsFromTheGround(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        morning(level);
+        BlockPos from = helper.absolutePos(new BlockPos(-2, 0, -2));
+        BlockPos to = helper.absolutePos(new BlockPos(14, OPEN_ABOVE, 9));
+        clear(level, from, to);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Springy Boots", UUID.randomUUID());
+        // An oak as the game grows it: four logs, two rows of leaves two blocks around low on the trunk, two rows one block
+        // around at its top. One corner of the lower rows is a single leaf high, a step of two blocks from the ground.
+        int x = 9;
+        int z = 4;
+        for (int y = 0; y < 4; y++) {
+            helper.setBlock(new BlockPos(x, y, z), Blocks.OAK_LOG);
+        }
+        BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, false);
+        for (int y = 1; y <= 4; y++) {
+            int radius = y <= 2 ? 2 : 1;
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    boolean corner = Math.abs(dx) == radius && Math.abs(dz) == radius;
+                    boolean kept = !corner || y == 1 && dx == 2 && dz == 2 || y == 3 && dx == 1 && dz == 1;
+                    if (kept && !(dx == 0 && dz == 0 && y < 4)) {
+                        helper.setBlock(new BlockPos(x + dx, y, z + dz), leaves);
+                    }
+                }
+            }
+        }
+        settleLeaves(helper, new BlockPos(x - 2, 1, z - 2), new BlockPos(x + 2, 4, z + 2));
+        // Boots that let their wearer step two blocks up, as the elastic boots of some mods do, beside plain armor.
+        ItemStack springy = new ItemStack(Items.DIAMOND_BOOTS);
+        springy.addAttributeModifier(net.minecraftforge.common.ForgeMod.STEP_HEIGHT_ADDITION.get(),
+                new net.minecraft.world.entity.ai.attributes.AttributeModifier(UUID.fromString("6a7f1a52-2d2e-4f55-9a43-21b6b0e1d9c4"),
+                        "elastic", 1.5, net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADDITION), EquipmentSlot.FEET);
+        StorehouseInventory store = storehouse(level, helper.absolutePos(new BlockPos(0, 0, 8)));
+        store.insertItem(0, new ItemStack(Items.IRON_AXE), false);
+        store.insertItem(1, new ItemStack(Items.OAK_SAPLING), false);
+        store.insertItem(2, new ItemStack(Items.DIAMOND_HELMET), false);
+        store.insertItem(3, new ItemStack(Items.DIAMOND_CHESTPLATE), false);
+        store.insertItem(4, new ItemStack(Items.DIAMOND_LEGGINGS), false);
+        store.insertItem(5, springy, false);
+        WorldPos postPos = post(helper, new BlockPos(0, 0, 0), "lumberjack");
+        Citizen worker = worker(helper, kingdom, "lumberjack", postPos, helper.absolutePos(new BlockPos(x - 7, 0, z)));
+        neverOnLeaves(helper, worker);
+
+        helper.succeedWhen(() -> {
+            for (int y = 0; y < 4; y++) {
+                helper.assertTrue(!helper.getBlockState(new BlockPos(x, y, z)).is(Blocks.OAK_LOG), "The tree still stands");
+            }
+            helper.assertTrue(produced(server, kingdom, "lumberjack", "minecraft:oak_log") >= 4, "The logs were not counted");
+            CitizenEntity body = CitizenBodies.body(worker.id());
+            helper.assertTrue(body != null && body.getMainHandItem().is(Items.IRON_AXE) && body.getMainHandItem().getDamageValue() > 0,
+                    "The axe was not taken or did not wear");
+            helper.assertTrue(body.getItemBySlot(EquipmentSlot.CHEST).is(Items.DIAMOND_CHESTPLATE), "The plain chestplate was not put on");
+            helper.assertTrue(!body.getItemBySlot(EquipmentSlot.FEET).is(Items.DIAMOND_BOOTS),
+                    "The lumberjack put on the boots of a higher step");
+            end(helper, kingdom, worker, from, to);
+        });
+    }
+
     // ---------------------------------------------------------------- miner
 
     /**

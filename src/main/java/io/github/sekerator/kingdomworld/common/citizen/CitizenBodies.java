@@ -344,10 +344,12 @@ public final class CitizenBodies {
             return false;
         }
         BlockState below = level.getBlockState(pos.below());
+        // Never on leaves: a body that was last on a crown comes back on the ground.
         return level.getBlockState(pos).getCollisionShape(level, pos).isEmpty()
                 && level.getBlockState(pos.above()).getCollisionShape(level, pos.above()).isEmpty()
                 && level.getFluidState(pos).isEmpty()
-                && !below.getCollisionShape(level, pos.below()).isEmpty();
+                && !below.getCollisionShape(level, pos.below()).isEmpty()
+                && !below.is(net.minecraft.tags.BlockTags.LEAVES);
     }
 
     private static int kingdomColor(MinecraftServer server, UUID kingdomId) {

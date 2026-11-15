@@ -273,7 +273,10 @@ public final class CarrierBehavior implements ProfessionBehavior {
             }
             BlockPos goal = blockPos(loaded ? task.to() : task.from());
             if (!near(goal, REACH_SQR)) {
-                moveTo(goal);
+                // To a place beside the container; as near as the walk goes if no walk leads to one.
+                if (approach(level, goal, REACH_SQR) == WorkApproach.Result.UNREACHABLE) {
+                    moveTo(goal);
+                }
                 if (++walking > GIVE_UP_TICKS) {
                     task = null;
                     return hasCarried() ? WorkStatus.WORKING : null;
