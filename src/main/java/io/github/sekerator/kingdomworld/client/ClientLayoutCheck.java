@@ -1620,6 +1620,16 @@ final class ClientLayoutCheck {
         }));
         cases.add(new Case("shop-buy", () -> shop(true, "buy")));
         cases.add(new Case("shop-buy-refused", () -> shop(false, "buy")));
+        // A family shop of a capital of the world: the longest name of a kingdom of the world, the sales tax of its ruler.
+        cases.add(new Case("shop-buy-world", () -> {
+            io.github.sekerator.kingdomworld.common.network.data.ShopView base = shopView(true);
+            io.github.sekerator.kingdomworld.client.screen.ShopScreen screen = new io.github.sekerator.kingdomworld.client.screen.ShopScreen(
+                    new io.github.sekerator.kingdomworld.common.network.data.ShopView(base.shopId(), base.kingdomId(), "Великое Северное Королевство Щит и Меч", LONG_CURRENCY,
+                            base.silver(), base.gold(), "general_store", "", "family", base.rows(), 0, base.count(), base.margin(), 500,
+                            base.sales(), base.debt(), true, ""));
+            screen.showForCheck("buy", false, "9999");
+            return screen;
+        }));
         cases.add(new Case("shop-about", () -> shop(true, "about")));
         cases.add(new Case("shop-sell", () -> shop(true, "sell", true)));
         cases.add(new Case("orders-buy-citizens", () -> buyingOrders(view(KingdomView.Relation.MEMBER, Role.KING), true)));

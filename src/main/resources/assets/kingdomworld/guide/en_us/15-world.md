@@ -445,6 +445,20 @@ the chat. The Overview tab of the throne window shows:
   a deal";
 - "Attitude to you": hostile, cold, even, warm or friendly, by your reputation and your deals.
 
+### The tax on the citizens of the world
+
+A kingdom of the world has no subjects among players, so its peaceful citizens give their ruler back {cfg:npcKingdoms.citizenTaxPercent}% of their wages (never more than is left after the share of the house). Soldiers pay no tax. For the time of the payday the wages of the peaceful citizens lie in the purse of the townspeople of their city: the share of the house goes home, the tax comes out of the purse, and the rest leaves the world as it always did. The wages of soldiers leave the world at once. The ruler gets exactly what it would get without shops.
+
+### Shops of citizens and the tithe
+
+The houses of merchants and craftsmen of the cities of the world hold shops of citizens (the key `worldShops` of the section `[cityEconomy]`):
+
+- **Keepers** come only of the citizens without work the army of the ruler left: the army takes its soldiers first. When nobody is left, the family of a house of a merchant trades in the evening.
+- **Always one shop** in every city of the world with places: it never closes for poverty and keeps at least the goods of the credit of a new shop, taken of the storehouses of the ruler on credit. A second one opens when those open ran short of goods for a day of sales three days of seven. The world has no trading houses: the merchants of the ruler export.
+- **Buyers.** Players buy as in any shop, with a click on the keeper (strangers too while the market of the ruler is open to them, at a price that follows their reputation). The ruler buys the tools citizens made of the shops first and imports only the rest. The townspeople of the world buy next to nothing themselves: the tax takes their purse.
+- **The tithe.** The ruler sets a tithe on what shopkeepers earn, a decree in the chronicle: usually {cfg:npcKingdoms.rulers.tithePercent}%, more for a greedy ruler, a quarter more with a poor treasury, from 0 to 50%. The cities of the world take the sales tax of the market of their ruler, and their treasuries pass all they take on to the ruler.
+- **Settlements.** A settlement whose city keeps a shop that trades grows a little more prosperous every day.
+
 ## rulers_temper | The temper of a ruler
 @icon minecraft:book
 The character of a ruler is a **leaning** and one or two **traits**. They show in the Overview tab of its throne

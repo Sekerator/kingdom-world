@@ -188,6 +188,15 @@ The harvest goes into the container of the post if it is loaded, otherwise into 
 
 A kingdom remembers what each profession gathered and made today and yesterday. It shows in the Citizens tab of the throne window, the "production" view.
 
+### Townsfolk on posts
+
+In a kingdom whose money stays in its cities the free seats of the posts of gatherers (farmer, fisher, herder, woodcutter, miner), workshops (smelter, cook, crafter, smith) and carriers in the square of a city are taken by the townsfolk of that city (see [Arrival and growth](growth)). The townsfolk take no seat of merchants, builders, the mint, mages, innkeepers, registrars or soldiers.
+
+- **Named citizens first.** A citizen hired on a post takes the seat of one of the townsfolk, who is idle again.
+- **A treasury of a week.** The townsfolk take new seats only while the treasury of the kingdom holds {cfg:cityEconomy.folkWageReserveDays} days of all its wages with them; otherwise the seats wait. Each of them gets the wage of the profession of the post; when money runs short the named citizens are paid first and the townsfolk paid short leave the post.
+- **Work without a body.** The townsfolk always work as far from players, at {cfg:cityEconomy.folkPostRatePercent}% of a named beginner each, at the mood of their city. The townsfolk of a post share a tool that wears out, and an accident sends one of them off the post until the next day.
+- **In the window of a post** the townsfolk have a line of their own: "Townsfolk on the post: 12 (working at 75%)". They do not change the status of the post.
+
 ### Risks
 
 Near players the dangers are real: monsters, falls, lava, water. Far from players a worker has, per minute of work, a chance to be wounded and a smaller chance to die by profession (the defaults, the list professionRisks of the server config):

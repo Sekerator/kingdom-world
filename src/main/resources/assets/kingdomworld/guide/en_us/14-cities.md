@@ -92,6 +92,10 @@ Townspeople buy in their own shops first, and what they did not find in the shop
 
 When the townspeople of a city did not find more than {cfg:cityEconomy.houseWhenUnmetPercent}% of their basket, no place for a shop is free and a townsperson would keep one, the head of the city wants a house of a merchant or a craftsman in the style of the kingdom, after the house for tenants and the storehouse. The head first buys the materials of its constructions in the shops and workshops of its city without the tax, then takes them from the storehouses and imports.
 
+### A large city with townsfolk
+
+A city with townsfolk (see [Arrival and growth](growth)) brings the crown the most, as long as it has work for them. The townsfolk on the posts make goods of the crown, their wages stay in the purse of the townspeople and come back to the shops, the hands of workshops make more goods to sell and export, and of their shares and of what the townsfolk buy the city takes the tithe and the sales tax. In the example of 60 days a large city with 280 townsfolk (140 on posts, 90 in workshops, 50 idle) brings the crown more than without them. Without posts and places in workshops the townsfolk cost only food, do not grow and leave.
+
 ## cities_levels | City levels
 @icon minecraft:bell
 Every city and every capital has a **level**: village, town or large city. The level is worked out by itself from

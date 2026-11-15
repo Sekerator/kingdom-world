@@ -406,7 +406,7 @@ public final class ClientSelfTest {
                 String folder = System.getProperty("kingdomworld.clientSelfTest.screenshots");
                 Path screenshots = folder != null && !folder.isEmpty() ? Path.of(folder)
                         : minecraft.gameDirectory.toPath().resolve("kingdomworld-layout");
-                LOGGER.info(PREFIX + "commerce showcase started, screenshots go to {}", screenshots.resolve("citizen-economy-1"));
+                LOGGER.info(PREFIX + "commerce showcase started, screenshots go to {}", screenshots.resolve("citizen-economy-3"));
                 commerceShowcase = new ClientCommerceShowcase(screenshots);
             }
             commerceShowcase.tick();

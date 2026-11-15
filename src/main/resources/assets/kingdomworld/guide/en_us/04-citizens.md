@@ -53,11 +53,21 @@ The Citizens tab of the throne window names the reason:
 Once a city has {cfg:citizens.namedPerCity} named citizens (those whose home is in it), its next newcomers stay **townsfolk**: people of the city who live there as a number, without a body or a record. A city of thousands so costs the server next to nothing. Named citizens are never folded into the number, and when a city has fewer of them (one died or moved away), its next newcomer comes out of the townsfolk and becomes a named citizen.
 
 - **Where they live.** The townsfolk have no beds of their own: they live in the free beds of the city no named citizen took, {cfg:citizens.folkPerBed} to a bed (a family). Named citizens always come first: a homeless citizen may take such a bed, and the townsfolk beyond the room then leave.
-- **Once a game day** the townsfolk of a city eat their ration from the storehouses as citizens far from players do, and pay dues into the treasury (see [Taxes](taxes)). Those who get no food leave, and the king and the members with the Citizens right are told.
+- **Once a game day** the townsfolk of a city eat their ration from the storehouses as citizens far from players do. They pay no dues out of nothing: only the tithe of what they earn (see below). Those who get no food leave, and the king and the members with the Citizens right are told.
 - **They grow** by 3% a day, at least one, while the city has {cfg:citizens.namedPerCity} named citizens, room in its beds, food in the storehouses for everybody for {cfg:citizens.growthFoodDays} days and named citizens of a mood of at least 50. The newcomers of the city become townsfolk too.
 - **Where to see them.** On the Roads tab, the cities view, when hovering a city: "Citizens: 64 (+936 townsfolk)" and "Beds: 300, 12 free". The townsfolk count for the level of the city and the stock of food on the Citizens tab.
 
 The key `namedPerCity` 0 in the server config turns townsfolk off: every newcomer is named then. Kingdoms of the world live without townsfolk; their distant settlements fold into numbers in their own way.
+
+### Townsfolk at work
+
+In a kingdom whose money stays in its cities the townsfolk work and earn:
+
+- **On the posts of the crown.** Once a day of the townsfolk they take the free seats of the posts of their city by themselves (see [Work far from players](work_far)) and get the wage of the profession of the post into the purse of the townspeople of the city. Named citizens always come first.
+- **In workshops and shops.** A workshop or a shop takes one of the townsfolk as a hand when it sold out the day before and both the hand and its masters would earn enough; it lets one go when they would not. A hand adds {cfg:cityEconomy.folkHandPercent}% of the work of a master and gets the same part of its share, after the tithe, into the purse of the townspeople.
+- **Growth.** Besides the conditions above, the townsfolk grow only while no more than {cfg:cityEconomy.folkIdleMaxPercent}% of them are idle and one of them earned at least half of the usual income ({cfg:cityEconomy.folkUsualIncome}) the day before.
+- **Leaving.** {cfg:cityEconomy.folkLeavePercent}% of the townsfolk a day (at least one) leave while more than {cfg:cityEconomy.folkLeaveIdlePercent}% are idle, one of them earns less than a quarter of the usual income or the means of the city fell to -10: the idle first, then the hands of workshops, then those on posts.
+- **Where to see it.** The hint of a city on the Roads tab: "Townsfolk: 140 on posts, 90 in workshops, 50 idle". The window of a city on the Treasury tab: what one of the townsfolk earns a day and why they do not grow or leave.
 
 > To start, place a storehouse with bread and a couple of beds near the throne. Every citizen eats, so the stock of food needed grows with the population.
 

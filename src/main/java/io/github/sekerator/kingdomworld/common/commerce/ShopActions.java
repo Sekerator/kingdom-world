@@ -134,6 +134,13 @@ public final class ShopActions {
         CommerceSavedData.get(player.server).shop(shopId).ifPresent(shop -> open(player, shop, false));
     }
 
+    /**
+     * Opens the window of a shop for a player, for the self-check of the client.
+     */
+    public static void openShop(ServerPlayer player, long shopId) {
+        CommerceSavedData.get(player.server).shop(shopId).ifPresent(shop -> open(player, shop, true));
+    }
+
     private static void open(ServerPlayer player, Business shop, boolean open) {
         if (open) {
             PAGES.remove(player.getUUID());

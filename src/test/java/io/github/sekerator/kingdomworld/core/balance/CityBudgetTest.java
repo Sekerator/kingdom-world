@@ -1,6 +1,8 @@
 package io.github.sekerator.kingdomworld.core.balance;
 
 import io.github.sekerator.kingdomworld.core.economy.CityEconomyRules;
+import io.github.sekerator.kingdomworld.core.road.CityFolk;
+import io.github.sekerator.kingdomworld.core.road.FolkWorkRules;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -16,7 +18,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the cities spend, and the treasury does not grow without end. With workshops and trading houses every city brings at least as
  * much as with resellers only, the citizens export no more than the demand from abroad of their city, the trading houses feed
  * their keepers and stay open, nothing is exported while raw materials cost their worth, and the purchases of the crown keep
- * within their sum of the day and its days of wages.
+ * within their sum of the day and its days of wages. With townsfolk on the posts and in the workshops a large city brings more
+ * than without them, the money still adds up to the coin, idle townsfolk do not grow and heavy taxes drive them away, and the
+ * ruler of a capital of the world with shops of citizens earns within fifteen percent of what it earns today.
  */
 class CityBudgetTest {
     private static final int DAYS = 60;
@@ -87,6 +91,72 @@ class CityBudgetTest {
         assertTrue(crafts.crownBoughtMost() <= rules.craft().crownBuyPerDay(), "the crown bought beyond its sum of a day");
         assertTrue(crafts.keptWages(), "the purchases of the crown took the treasury below its days of wages");
         assertTrue(crafts.crownLowest() >= 0, "the treasury of the kingdom went below 0");
+    }
+
+    private static void printFolk(String label, CityBudget.Result result) {
+        printCrafts(label, result);
+        System.out.println("   city       | townsfolk wages/day | one of the townsfolk earns | a hand earns | a master earns | left");
+        for (CityBudget.CityResult city : result.cities()) {
+            System.out.printf("   %-10s | %19d | %26.2f | %12.2f | %14.2f | %d%n", city.name(), city.folkWages(), city.folkIncome(), city.handIncome(),
+                    city.masterIncome(), city.folkLeft());
+        }
+    }
+
+    @Test
+    void aLargeCityWithTownsfolkAtWorkBringsTheCrownMore() {
+        CityBudget.Rules rules = surplus();
+        CityBudget.Result crafts = run(CityBudget.withCrafts(), rules);
+        CityBudget.Result folk = run(CityBudget.withFolk(), rules);
+        printFolk("third stage: townsfolk on the posts and in the workshops", folk);
+        assertTrue(folk.balanced(), "the money did not add up on some day");
+        CityBudget.CityResult large = folk.cities().get(2);
+        CityBudget.CityResult before = crafts.cities().get(2);
+        assertTrue(large.total() > before.total(), "the large city brings no more with its townsfolk: " + large.total() + " <= " + before.total());
+        assertEquals(0, large.folkLeft(), "townsfolk left at the default taxes");
+        assertTrue(large.folkIncome() * 2 >= FolkWorkRules.DEFAULT.usualIncome(), "one of the townsfolk earns less than half its usual income: "
+                + large.folkIncome());
+        assertTrue(folk.crownLowest() >= 0, "the treasury of the kingdom went below 0");
+        for (CityBudget.CityResult city : folk.cities()) {
+            assertTrue(city.balance() >= 0, "a treasury of a city below 0");
+        }
+    }
+
+    @Test
+    void idleTownsfolkDoNotGrowAndHeavyTaxesDriveThemAway() {
+        // 50 idle of 280 earning their usual income: more than a tenth idle, so they do not grow, fewer than a quarter, so none leave.
+        assertEquals(CityFolk.Why.IDLE, CityFolk.why(280, new CityFolk.Work(50, 280 * 3, 0, FolkWorkRules.DEFAULT)));
+        CityBudget.Rules rules = surplus();
+        CityBudget.Result taxed = run(CityBudget.withFolk(), rules.withCity(CityEconomyRules.DEFAULT.withTaxes(20, 30, 50)));
+        printFolk("third stage, sales tax 20%, tithe 30%", taxed);
+        assertTrue(taxed.balanced());
+        assertTrue(taxed.cities().get(2).folkLeft() > 0, "heavy taxes drove no townsfolk away");
+        for (int[] pair : new int[][]{{15, 15}, {20, 20}}) {
+            CityBudget.Result result = run(CityBudget.withFolk(), rules.withCity(CityEconomyRules.DEFAULT.withTaxes(pair[0], pair[1], 50)));
+            printFolk("third stage, sales tax " + pair[0] + "%, tithe " + pair[1] + "%", result);
+            assertTrue(result.balanced());
+        }
+        List<CityBudget.Profile> neglected = new ArrayList<>();
+        List<CityBudget.Profile> headless = new ArrayList<>();
+        for (CityBudget.Profile profile : CityBudget.withFolk()) {
+            neglected.add(profile.neglected());
+            headless.add(profile.withoutHead());
+        }
+        printFolk("third stage, neglected: named citizens only", run(neglected, rules));
+        printFolk("third stage, no heads", run(headless, rules));
+        for (int crownShare : new int[]{0, 100}) {
+            printFolk("third stage, crown share " + crownShare + "%", run(CityBudget.withFolk(), rules.withCity(CityEconomyRules.DEFAULT
+                    .withTaxes(10, 10, crownShare))));
+        }
+    }
+
+    @Test
+    void theRulerOfACapitalOfTheWorldEarnsWithinFifteenPercentOfToday() {
+        CityBudget.WorldResult world = CityBudget.runWorld(CityBudget.worldCapital(), CityBudget.Rules.standard(), DAYS);
+        System.out.printf("== capital of the world | ruler income a day today %d, with shops %d (%.1f%%) | shop sales %d, from players %d%n",
+                world.incomeToday(), world.incomeShops(), world.changePercent(), world.shopSales(), world.fromPlayers());
+        assertTrue(world.balanced(), "the money of the world did not add up on some day");
+        assertTrue(Math.abs(world.changePercent()) <= 15.0, "the ruler earns more than fifteen percent off today: " + world.changePercent());
+        assertTrue(world.incomeShops() >= world.incomeToday(), "the ruler earns less with the shops of its citizens");
     }
 
     @Test

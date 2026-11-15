@@ -83,12 +83,41 @@ public final class CityBudget {
      * @param market    whether a market works
      * @param crownBuys the worth of goods the crown needs a day that its workshops cannot make (orders without a workshop,
      *                  constructions): it buys them of the masters of the city, and imports what they do not have
+     * @param folkPosts the townsfolk on the posts of the crown, by profession
+     * @param folkHands the townsfolk working as hands of the masters
+     * @param folkIdle  the townsfolk without work
      */
     public record Profile(String name, CityLevel level, Map<String, Integer> crown, int keepers, int idle, boolean head, boolean tavern,
-                          long players, int houses, int masters, int traders, int roads, boolean market, long crownBuys) {
+                          long players, int houses, int masters, int traders, int roads, boolean market, long crownBuys,
+                          Map<String, Integer> folkPosts, int folkHands, int folkIdle) {
         public Profile {
             Objects.requireNonNull(name, "name");
             crown = Map.copyOf(crown);
+            folkPosts = Map.copyOf(folkPosts);
+        }
+
+        public Profile(String name, CityLevel level, Map<String, Integer> crown, int keepers, int idle, boolean head, boolean tavern,
+                       long players, int houses, int masters, int traders, int roads, boolean market, long crownBuys) {
+            this(name, level, crown, keepers, idle, head, tavern, players, houses, masters, traders, roads, market, crownBuys, Map.of(), 0, 0);
+        }
+
+        /**
+         * The townsfolk of the city.
+         */
+        public int folk() {
+            int sum = folkHands + folkIdle;
+            for (int count : folkPosts.values()) {
+                sum += count;
+            }
+            return sum;
+        }
+
+        /**
+         * The same city with townsfolk: on the posts by profession, as hands and idle.
+         */
+        public Profile withFolk(Map<String, Integer> posts, int hands, int idle) {
+            return new Profile(name, level, crown, keepers, this.idle, head, tavern, players, houses, masters, traders, roads, market, crownBuys,
+                    posts, hands, idle);
         }
 
         public Profile(String name, CityLevel level, Map<String, Integer> crown, int keepers, int idle, boolean head, boolean tavern, long players,
@@ -97,7 +126,7 @@ public final class CityBudget {
         }
 
         public int people() {
-            int sum = keepers + idle + masters + traders;
+            int sum = keepers + idle + masters + traders + folk();
             for (int count : crown.values()) {
                 sum += count;
             }
@@ -116,7 +145,8 @@ public final class CityBudget {
         }
 
         public Profile withoutHead() {
-            return new Profile(name, level, crown, keepers, idle, false, tavern, players, houses, masters, traders, roads, market, crownBuys);
+            return new Profile(name, level, crown, keepers, idle, false, tavern, players, houses, masters, traders, roads, market, crownBuys,
+                    folkPosts, folkHands, folkIdle);
         }
 
         /**
@@ -172,7 +202,8 @@ public final class CityBudget {
      */
     public record CityResult(String name, long income, long kept, long toCrown, long spent, long balance, long crownMoney, long crownGoods,
                              long sales, int closed, int shops, long exports, double demand, double exportedWorth, double traderIncome,
-                             double masterIncome, double keeperIncome, long crownBought, long imported, int tradersClosed, long masterSales) {
+                             double masterIncome, double keeperIncome, long crownBought, long imported, int tradersClosed, long masterSales,
+                             int folkLeft, double folkIncome, double handIncome, long folkWages) {
         public long total() {
             return crownMoney + crownGoods;
         }
@@ -235,6 +266,24 @@ public final class CityBudget {
             first.add(profile.resellersOnly());
         }
         return first;
+    }
+
+    /**
+     * The cities of the example of the third stage: as with workshops, and the large city with 280 townsfolk, 140 on the posts of the
+     * crown (60 with the farmers, 20 with the fishers, 15 with the cooks, 15 with the craftsmen, 10 with the woodcutters and 20 with
+     * the carriers), 90 hands of its masters and 50 idle.
+     */
+    public static List<Profile> withFolk() {
+        List<Profile> cities = new ArrayList<>(withCrafts());
+        Map<String, Integer> posts = new LinkedHashMap<>();
+        posts.put("farmer", 60);
+        posts.put("fisher", 20);
+        posts.put("cook", 15);
+        posts.put("crafter", 15);
+        posts.put("lumberjack", 10);
+        posts.put("carrier", 20);
+        cities.set(2, cities.get(2).withFolk(posts, 90, 50));
+        return cities;
     }
 
     /**
@@ -325,6 +374,33 @@ public final class CityBudget {
         double rawWorthToday;
         long masterSales;
         double demand;
+        /** The townsfolk on the posts now, by profession, and the idle; the hands are those of its masters. */
+        final Map<String, Integer> folkPosts = new LinkedHashMap<>();
+        int folkIdle;
+        int folkLeft;
+        /** What the townsfolk earned today: wages and the shares of hands after the tithe. */
+        long folkToday;
+        long folkWages;
+        double folkEarned;
+        long folkDays;
+        double handEarned;
+        long handDays;
+
+        int hands() {
+            int sum = 0;
+            for (Business shop : shops) {
+                sum += shop.folkHands();
+            }
+            return sum;
+        }
+
+        int folk() {
+            int sum = folkIdle + hands();
+            for (int count : folkPosts.values()) {
+                sum += count;
+            }
+            return sum;
+        }
 
         City(Profile profile, long id) {
             this.profile = profile;
@@ -369,12 +445,16 @@ public final class CityBudget {
                 }
                 for (int n = 0; n < profile.masters(); n++) {
                     Business master = shop(nextShop++, kingdom, model, "bakery", Kind.MASTER);
+                    // The hands of the townsfolk shared among the masters.
+                    master.setFolkHands(profile.folkHands() / profile.masters() + (n < profile.folkHands() % profile.masters() ? 1 : 0));
                     model.shops.add(master);
                 }
                 for (int n = 0; n < profile.traders(); n++) {
                     model.shops.add(shop(nextShop++, kingdom, model, "trader", Kind.TRADER));
                 }
             }
+            model.folkPosts.putAll(profile.folkPosts());
+            model.folkIdle = profile.folkIdle() + (profile.masters() == 0 || rules.old() ? profile.folkHands() : 0);
             cities.add(model);
         }
         // The demand from abroad of every city, one market abroad for the kingdom.
@@ -414,16 +494,33 @@ public final class CityBudget {
             // 1. The payday: wages into the purses of the cities, or out of the world under today's rules.
             List<Economy.WageClaim> claims = new ArrayList<>();
             Map<UUID, Long> cityOf = new HashMap<>();
+            Map<UUID, City> folkOf = new HashMap<>();
             for (City model : cities) {
                 model.citizens.forEach((id, profession) -> {
                     claims.add(new Economy.WageClaim(id, profession));
                     cityOf.put(id, model.id);
+                });
+                // The townsfolk of the posts of each profession, one claim, paid after the named.
+                model.folkPosts.forEach((profession, count) -> {
+                    UUID id = new UUID(1_000 + model.id, profession.hashCode());
+                    claims.add(Economy.WageClaim.folk(id, profession, count));
+                    cityOf.put(id, model.id);
+                    folkOf.put(id, model);
                 });
             }
             Economy.Payday payday = economy.payday(kingdom, day, List.of(), claims, rules.economy(), id -> rules.old() ? -1 : cityOf.getOrDefault(id, 0L));
             if (rules.old()) {
                 left += payday.summary().paid();
             }
+            for (City model : cities) {
+                model.folkToday = 0;
+            }
+            folkOf.forEach((id, model) -> {
+                long paid = payday.pay().getOrDefault(id, 0L);
+                model.crownMoney -= paid;
+                model.folkToday += paid;
+                model.folkWages += paid;
+            });
             for (City model : cities) {
                 long wages = 0;
                 for (UUID id : model.citizens.keySet()) {
@@ -489,6 +586,7 @@ public final class CityBudget {
             for (City model : cities) {
                 if (!rules.old()) {
                     endOfDay(economy, kingdom, model, rules, day, share, rawMilli, laborMilli);
+                    folkDay(model, means.value());
                 }
             }
             // Goods of the crown: made by its workers, eaten by the people, sold to the shops and the masters, exported, bought of the
@@ -498,8 +596,13 @@ public final class CityBudget {
                 for (Map.Entry<String, Integer> entry : model.profile.crown().entrySet()) {
                     makes += (long) MAKES.getOrDefault(entry.getKey(), 0) * entry.getValue();
                 }
-                long madeHere = Math.round(makes * (rules.old() ? 1.0 : speed));
-                long eaten = (long) model.profile.people() * rules.foodPerHead();
+                // The townsfolk on the posts make what named workers make, at their pace.
+                double folkMakes = 0;
+                for (Map.Entry<String, Integer> entry : model.folkPosts.entrySet()) {
+                    folkMakes += (double) MAKES.getOrDefault(entry.getKey(), 0) * entry.getValue() * FOLK.postRatePercent() / 100.0;
+                }
+                long madeHere = Math.round((makes + folkMakes) * (rules.old() ? 1.0 : speed));
+                long eaten = (long) (model.profile.people() - model.profile.folk() + model.folk()) * rules.foodPerHead();
                 // The raw materials of the masters leave the storehouses at their worth.
                 long sold = Math.round(model.rawWorthToday);
                 model.rawWorthToday = 0;
@@ -553,7 +656,8 @@ public final class CityBudget {
                     model.sales / days, model.closed, shops, model.exports / days, model.demand, model.exportedWorth / days,
                     model.traderDays == 0 ? 0 : model.traderEarned / model.traderDays, model.masterDays == 0 ? 0 : model.masterEarned / model.masterDays,
                     model.keeperDays == 0 ? 0 : model.keeperEarned / model.keeperDays, model.crownBought / days, model.imported / days, model.tradersClosed,
-                    model.masterSales / days));
+                    model.masterSales / days, model.folkLeft, model.folkDays == 0 ? 0 : model.folkEarned / model.folkDays,
+                    model.handDays == 0 ? 0 : model.handEarned / model.handDays, model.folkWages / days));
         }
         return new Result(results, rules.crownStart(), economy.treasury(kingdom).orElseThrow().funds(), lowest, left, fromAbroad, fromPlayers,
                 massFirst, economy.moneyMass(kingdom), balanced, crownExpense / days, Evasion.percent(burden, city.evasionStartPercent(),
@@ -598,10 +702,271 @@ public final class CityBudget {
             long collected = Evasion.collected(Money.share(profit, tithe, 1000), evasion);
             economy.purseMove(till, CityPurses.PurseKey.cityTreasury(kingdom, model.id), collected, CityLedger.TITHE, day);
             long rest = profit - collected;
+            if (shop.folkHands() > 0) {
+                // The hands share by the work they give, into the purse of the city.
+                long[] parts = Business.split(rest, new int[]{Business.KEEPER_SHARE, shop.folkHands() * FOLK.handShare(Business.KEEPER_SHARE)});
+                economy.purseMove(till, CityPurses.PurseKey.cityPurse(kingdom, model.id), parts[1], CityLedger.OTHER, day);
+                model.folkToday += parts[1];
+                model.handEarned += parts[1] / (double) shop.folkHands();
+                model.handDays++;
+                rest = parts[0];
+            }
             long home = Math.max(0, Math.min(Money.share(rest, 20, 100), model.housesCap - model.houses));
             model.houses += economy.purseHold(till, home);
             economy.purseMove(till, CityPurses.PurseKey.cityPurse(kingdom, model.id), economy.purse(till) >= rest - home ? rest - home : 0,
                     CityLedger.OTHER, day);
+        }
+    }
+
+    // ---------------------------------------------------------------- a capital of the world
+
+    /**
+     * A capital of a kingdom of the world.
+     *
+     * @param crown     its peaceful workers by profession, merchants among them
+     * @param soldiers  its soldiers
+     * @param idle      its citizens without work the army left
+     * @param houses    its houses that keep a share of the wages
+     * @param players   what players spend in its shops a day
+     * @param salesTax  the sales tax of the market of its ruler, in thousandths
+     * @param taxPercent the share of the wages of its peaceful citizens its ruler takes back
+     */
+    public record WorldProfile(String name, Map<String, Integer> crown, int soldiers, int idle, int houses, long players, int salesTax,
+                               int taxPercent) {
+        public WorldProfile {
+            crown = Map.copyOf(crown);
+        }
+    }
+
+    /**
+     * What a ruler of the world comes to, today and with the shops of its citizens, the averages a day.
+     *
+     * @param incomeToday  what came into its treasury a day under today's rules: taxes and exports
+     * @param incomeShops  with the wages in the purses of its city and a shop of citizens
+     * @param shopSales    what its shop sold a day
+     * @param balanced     whether the money added up on every day of both
+     */
+    public record WorldResult(long incomeToday, long incomeShops, long shopSales, long fromPlayers, boolean balanced) {
+        /**
+         * How far the income with shops is from today's, in percent.
+         */
+        public double changePercent() {
+            return incomeToday == 0 ? 0 : (incomeShops - incomeToday) * 100.0 / incomeToday;
+        }
+    }
+
+    /**
+     * The capital of a medium kingdom of the world: thirty peaceful workers with two merchants, six soldiers, four citizens
+     * without work, a market with the sales tax a ruler of no particular leaning sets, and players spending 20 a day.
+     */
+    public static WorldProfile worldCapital() {
+        Map<String, Integer> crown = new LinkedHashMap<>();
+        crown.put("farmer", 8);
+        crown.put("lumberjack", 3);
+        crown.put("miner", 3);
+        crown.put("fisher", 2);
+        crown.put("smith", 1);
+        crown.put("cook", 2);
+        crown.put("crafter", 2);
+        crown.put("carrier", 2);
+        crown.put("builder", 2);
+        crown.put("innkeeper", 1);
+        crown.put("merchant", 2);
+        return new WorldProfile("Capital of the world", crown, 6, 4, 12, 20, 50, 80);
+    }
+
+    /**
+     * Runs a capital of the world for some days, under today's rules and with the shops of its citizens.
+     */
+    public static WorldResult runWorld(WorldProfile profile, Rules rules, int days) {
+        long[] today = world(profile, rules, days, false);
+        long[] shops = world(profile, rules, days, true);
+        return new WorldResult(today[0] / days, shops[0] / days, shops[1] / days, shops[2] / days, today[3] == 1 && shops[3] == 1);
+    }
+
+    /**
+     * One run of a capital of the world: { the income of its treasury, the sales of its shop, the money of players, balanced }.
+     */
+    private static long[] world(WorldProfile profile, Rules rules, int days, boolean shops) {
+        Economy economy = new Economy();
+        UUID kingdom = new UUID(9, 9);
+        economy.open(kingdom, 0);
+        economy.adminTreasury(kingdom, rules.crownStart(), 0);
+        Map<UUID, String> citizens = new LinkedHashMap<>();
+        profile.crown().forEach((profession, count) -> {
+            for (int n = 0; n < count; n++) {
+                citizens.put(UUID.randomUUID(), profession);
+            }
+        });
+        for (int n = 0; n < profile.soldiers(); n++) {
+            citizens.put(UUID.randomUUID(), "warrior");
+        }
+        for (int n = 0; n < profile.idle(); n++) {
+            citizens.put(UUID.randomUUID(), "unemployed");
+        }
+        CityEconomyRules city = rules.city();
+        // A family shop of a house of a merchant, on the credit of the ruler.
+        Business shop = new Business(1, kingdom, 0, new Business.Place(Business.PlaceKind.MERCHANT_HOUSE, 1, 0, "w", 0, 0, 0), 0, 200);
+        shop.setTrade(Business.GENERAL_STORE);
+        CityPurses.PurseKey till = CityPurses.PurseKey.till(kingdom, shop.id());
+        CityPurses.PurseKey purse = CityPurses.PurseKey.cityPurse(kingdom, 0);
+        CityPurses.PurseKey cityTreasury = CityPurses.PurseKey.cityTreasury(kingdom, 0);
+        long houses = 0;
+        long housesCap = Money.multiplyCapped(profile.houses(), 300);
+        long income = 0;
+        long sales = 0;
+        long fromPlayers = 0;
+        long fromAbroad = 0;
+        long left = 0;
+        long held0 = economy.supply(kingdom);
+        boolean balanced = true;
+        long ceiling = ShopPricing.ceilingMilli(WORTH, Prices.importCost(WORTH, 1, rules.trade()));
+        for (int day = 1; day <= days; day++) {
+            List<Economy.WageClaim> claims = new ArrayList<>();
+            citizens.forEach((id, profession) -> claims.add(new Economy.WageClaim(id, profession)));
+            Economy.Payday payday = economy.payday(kingdom, day, List.of(), claims, rules.economy(),
+                    id -> shops && !"warrior".equals(citizens.get(id)) ? 0 : -1);
+            long peaceful = 0;
+            long soldiers = 0;
+            for (Map.Entry<UUID, String> entry : citizens.entrySet()) {
+                long paid = payday.pay().getOrDefault(entry.getKey(), 0L);
+                if ("warrior".equals(entry.getValue())) {
+                    soldiers += paid;
+                } else {
+                    peaceful += paid;
+                }
+            }
+            // A share of every wage goes home, as far as the houses have room.
+            long home = Math.max(0, Math.min(Money.share(peaceful + soldiers, 20, 100), housesCap - houses));
+            long tax = peaceful * profile.taxPercent() / 100;
+            if (shops) {
+                // The share of the houses of the peaceful citizens comes out of the purse; that of the soldiers leaves with their wage.
+                houses += economy.purseHold(purse, Math.max(0, Math.min(Money.share(peaceful, 20, 100), housesCap - houses)));
+                long[] taken = io.github.sekerator.kingdomworld.core.commerce.WorldShopRules.taxFromPurses(tax, new long[]{peaceful},
+                        new long[]{economy.purse(purse)}, profile.taxPercent());
+                economy.purseToTreasury(purse, taken[0], LedgerCategory.TAXES, CityLedger.OTHER, day);
+                left += soldiers;
+                long rest = economy.purse(purse);
+                economy.purseLeaves(purse, 0, rest, CityPurses.Outflow.PURSE_FULL, day);
+                left += rest;
+            } else {
+                // Today the wages leave the world but for the share of the houses, and the tax of the ruler is the part of them
+                // that comes back instead of leaving.
+                houses += home;
+                left += peaceful + soldiers - home - tax;
+                if (tax > 0) {
+                    economy.citizenTax(kingdom, tax, day);
+                }
+            }
+            long exports = Money.multiplyCapped(profile.crown().getOrDefault("merchant", 0), rules.exportPerMerchant());
+            if (exports > 0) {
+                economy.exportIncome(kingdom, exports, day);
+                fromAbroad += exports;
+            }
+            if (shops) {
+                // Yesterday's profit: the tithe to the city, the rest to the family of the house, whose purse leaves the world.
+                long profit = Math.min(shop.profitDue(), economy.purse(till));
+                shop.setProfitDue(0);
+                if (profit > 0) {
+                    long tithe = Money.share(profit, city.tithePercent() * 10, 1000);
+                    economy.purseMove(till, cityTreasury, tithe, CityLedger.TITHE, day);
+                    economy.purseMove(till, purse, profit - tithe, CityLedger.OTHER, day);
+                    left += economy.purse(purse);
+                    economy.purseLeaves(purse, 0, economy.purse(purse), CityPurses.Outflow.PURSE_FULL, day);
+                }
+                // The shop keeps the goods of its credit, taken on the credit of the ruler while it owes less.
+                long lacking = city.shopCredit() - Math.round(shop.goodsValue());
+                long count = Math.min((long) Math.ceil(Math.max(0, lacking) / WORTH), Math.max(0, city.shopCredit() - shop.debt()) / (long) WORTH);
+                if (count > 0) {
+                    shop.setDebt(shop.debt() + count * (long) WORTH);
+                    shop.addGoods(goods(0), 0, count, (long) WORTH * ShopPricing.MILLI);
+                }
+                // Players buy with money they bring: the price into the till, the sales tax into the city.
+                Business.Lot lot = shop.goods().get(Business.key(goods(0), false));
+                long spent = 0;
+                long sold = 0;
+                if (lot != null && lot.count() > 0 && profile.players() > 0) {
+                    long unit = ShopPricing.total(ShopMaking.askedMilli(lot, shop.marginPermille(), ceiling, WORTH_MILLI), 1);
+                    long each = unit + ShopPricing.tax(unit, profile.salesTax());
+                    long items = Math.min(lot.count(), profile.players() / Math.max(1, each));
+                    if (items > 0) {
+                        long price = unit * items;
+                        long salesTax = ShopPricing.tax(price, profile.salesTax());
+                        economy.adminAccount(new UUID(0, 1), kingdom, price + salesTax);
+                        economy.playerPurchase(new UUID(0, 1), till, cityTreasury, price, salesTax, day);
+                        shop.removeGoods(Business.key(goods(0), false), items);
+                        spent = price + salesTax;
+                        sold = price;
+                        shop.record(day, new Business.Day(price, ShopPricing.total(lot.costMilli(), items), 0, 0, new long[GoodsCategory.values().length]));
+                    }
+                }
+                fromPlayers += spent;
+                sales += sold;
+                CityDay.Result result = CityDay.result(economy.purse(till), sold, shop.debt(), 0, shop.profitDue(), city.businessUpkeepPercent());
+                economy.purseLeaves(till, 0, result.upkeep(), CityPurses.Outflow.UPKEEP, day);
+                left += result.upkeep();
+                if (result.debtPaid() > 0 && economy.purseToTreasury(till, result.debtPaid(), LedgerCategory.COMMERCE, day).ok()) {
+                    shop.setDebt(shop.debt() - result.debtPaid());
+                }
+                shop.setProfitDue(shop.profitDue() + result.profit());
+                // The treasury of the city passes all it took on to the ruler.
+                economy.purseToTreasury(cityTreasury, economy.purse(cityTreasury), LedgerCategory.CITIES, CityLedger.CROWN_SHARE, day);
+                economy.sealCity(kingdom, 0, day);
+            }
+            income += economy.treasury(kingdom).orElseThrow().journal()
+                    .sum(day, io.github.sekerator.kingdomworld.core.economy.TreasuryJournal.Period.TODAY).income();
+            long drift = (economy.supply(kingdom) + houses - held0) - (fromAbroad + fromPlayers - left);
+            if (drift != 0) {
+                balanced = false;
+            }
+        }
+        return new long[]{income, sales, fromPlayers, balanced ? 1 : 0};
+    }
+
+    /** The rules of the work of the townsfolk the model follows. */
+    private static final io.github.sekerator.kingdomworld.core.road.FolkWorkRules FOLK = io.github.sekerator.kingdomworld.core.road.FolkWorkRules.DEFAULT;
+
+    /**
+     * The pace of a workshop with its hands: a master and two fifths of one for every hand.
+     */
+    private static double pace(Business shop) {
+        return 1.0 + shop.folkHands() * FOLK.handPercent() / 100.0;
+    }
+
+    /**
+     * The end of the day of the townsfolk of a city: what one of them earned counts, and some leave while many are idle, they earn
+     * too little or the taxes press them, the idle first, then the hands, then those on the posts. They do not grow here: the
+     * example holds its beds.
+     */
+    private static void folkDay(City model, int means) {
+        int folk = model.folk();
+        if (folk <= 0) {
+            return;
+        }
+        model.folkEarned += model.folkToday / (double) folk;
+        model.folkDays++;
+        io.github.sekerator.kingdomworld.core.road.CityFolk.Why why = io.github.sekerator.kingdomworld.core.road.CityFolk.why(folk,
+                new io.github.sekerator.kingdomworld.core.road.CityFolk.Work(model.folkIdle, model.folkToday, means, FOLK));
+        if (why != io.github.sekerator.kingdomworld.core.road.CityFolk.Why.LEAVE_POOR
+                && why != io.github.sekerator.kingdomworld.core.road.CityFolk.Why.LEAVE_TAXES) {
+            return;
+        }
+        int leave = (int) Math.min(folk, Math.max(1L, (long) folk * FOLK.leavePercent() / 100));
+        model.folkLeft += leave;
+        int idle = Math.min(model.folkIdle, leave);
+        model.folkIdle -= idle;
+        leave -= idle;
+        int[] shrink = io.github.sekerator.kingdomworld.core.road.FolkJobs.shrink(model.folk() - leave, model.hands(),
+                model.folk() - model.folkIdle - model.hands());
+        for (Business shop : model.shops) {
+            int off = Math.min(shrink[0], shop.folkHands());
+            shop.setFolkHands(shop.folkHands() - off);
+            shrink[0] -= off;
+        }
+        for (Map.Entry<String, Integer> entry : model.folkPosts.entrySet()) {
+            int off = Math.min(shrink[1], entry.getValue());
+            entry.setValue(entry.getValue() - off);
+            shrink[1] -= off;
         }
     }
 
@@ -628,11 +993,11 @@ public final class CityBudget {
             boolean fresh = shop.startingOut();
             long budget = fresh ? city.shopCredit() : Math.max(0, economy.purse(CityPurses.PurseKey.till(kingdom, shop.id())) - shop.profitDue());
             GoodsCategory category = GoodsCategory.values()[kind];
-            long target = ShopMaking.target(shop.averageCategory(day, kind), strength(model, city, speed),
+            long target = ShopMaking.target(shop.averageCategory(day, kind), strength(model, city, speed) * pace(shop),
                     ShopMaking.sharePercent(category, city.basket()), city.stockDays(), model.orders.getOrDefault(shop.id(), 0L));
             long held = Math.round(shop.count(Business.key(goods(kind), true)) * WORTH);
             long lacking = (long) Math.ceil(Math.max(0, target - held) / WORTH);
-            long count = Math.min(lacking, (long) Math.floor(MASTER_ITEMS * speed));
+            long count = Math.min(lacking, (long) Math.floor(MASTER_ITEMS * speed * pace(shop)));
             count = Math.min(count, Money.share(budget, ShopPricing.MILLI, Math.max(1, rawMilli)));
             if (count <= 0) {
                 continue;
@@ -808,7 +1173,7 @@ public final class CityBudget {
         Map<Long, Double> capacity = new HashMap<>();
         for (Business shop : model.shops) {
             if (model.kind(shop) != Kind.TRADER) {
-                capacity.put(shop.id(), strength(model, city, speed));
+                capacity.put(shop.id(), strength(model, city, speed) * pace(shop));
             }
         }
         for (GoodsCategory kind : GoodsCategory.values()) {
@@ -964,7 +1329,9 @@ public final class CityBudget {
                 long fair = Money.share(usual, city.fairIncomePercent(), 100);
                 shop.setMarginPermille(ShopPricing.nextMargin(shop.marginPermille(), Math.max(0, fair - labor), 1, today.soldCost() + labor,
                         city.minMarginPercent(), city.maxMarginPercent(), city.marginStepPercent(), city.businessUpkeepPercent()));
-                model.masterEarned += earned;
+                // A master earns its share of what the workshop earned, the hands theirs.
+                model.masterEarned += earned * (double) Business.KEEPER_SHARE
+                        / (Business.KEEPER_SHARE + shop.folkHands() * FOLK.handShare(Business.KEEPER_SHARE));
                 model.masterDays++;
             } else if (kind == Kind.TRADER) {
                 // A trading house is measured once it settled, after its first week.

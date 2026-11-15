@@ -77,12 +77,14 @@ final class ClientCommerceShowcase {
     private volatile BlockPos storehouse;
     private volatile UUID kingdomId;
     private volatile UUID keeperId;
+    private volatile BlockPos folkPost;
+    private volatile long worldShopId;
     private volatile String failure;
     private boolean finished;
     private boolean failed;
 
     ClientCommerceShowcase(Path folder) {
-        this.folder = folder.resolve("citizen-economy-2");
+        this.folder = folder.resolve("citizen-economy-3");
     }
 
     boolean finished() {
@@ -273,6 +275,81 @@ final class ClientCommerceShowcase {
             }
             case 1240 -> shoot(minecraft, "workshop-buy");
             case 1250 -> {
+                minecraft.setScreen(null);
+                server.execute(() -> folk(server, playerId));
+            }
+            case 1280 -> server.execute(() -> {
+                ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+                if (player != null && throne != null) {
+                    KingdomActions.useThrone(player, player.serverLevel(), throne);
+                }
+            });
+            case 1330 -> show(minecraft, screen -> {
+                screen.selectTab("roads");
+                screen.showRoads("cities", 0, 0);
+            });
+            case 1360 -> {
+                if (minecraft.screen instanceof ThroneScreen screen) {
+                    // The capital hovered: where its townsfolk work.
+                    int[] point = screen.roadsRowPoint(0);
+                    mouseAt(minecraft, point[0], point[1]);
+                }
+            }
+            case 1380 -> shoot(minecraft, "roads-city-folk-work");
+            case 1390 -> {
+                mouseAway(minecraft);
+                show(minecraft, screen -> {
+                    screen.selectTab("treasury");
+                    screen.showTreasury("cities", "today");
+                    screen.showCities(false, false, "");
+                });
+                if (kingdomId != null && minecraft.getConnection() != null) {
+                    KingdomWorldNetwork.sendToServer(new EconomyPackets.CityDetailRequest(kingdomId, 0));
+                }
+            }
+            case 1430 -> {
+                mouseAway(minecraft);
+                if (minecraft.screen instanceof ThroneScreen screen) {
+                    // The lines of the townsfolk, under the means of the people of the capital.
+                    for (int i = 0; i < 3; i++) {
+                        screen.mouseScrolled(minecraft.getWindow().getGuiScaledWidth() / 2.0, minecraft.getWindow().getGuiScaledHeight() / 2.0, -1);
+                    }
+                }
+            }
+            case 1450 -> shoot(minecraft, "treasury-city-panel-folk");
+            case 1460 -> {
+                minecraft.setScreen(null);
+                server.execute(() -> {
+                    ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+                    if (player != null && folkPost != null) {
+                        io.github.sekerator.kingdomworld.common.citizen.work.WorkPostActions.open(player, folkPost);
+                    }
+                });
+            }
+            case 1500 -> mouseAway(minecraft);
+            case 1520 -> shoot(minecraft, "post-folk");
+            case 1530 -> {
+                minecraft.setScreen(null);
+                server.execute(() -> worldShop(server, playerId));
+            }
+            case 1700 -> server.execute(() -> {
+                ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+                if (player != null && worldShopId != 0) {
+                    ShopActions.openShop(player, worldShopId);
+                }
+            });
+            case 1740 -> {
+                mouseAway(minecraft);
+                if (!(minecraft.screen instanceof ShopScreen)) {
+                    failure = "the window of the shop of the world did not open";
+                }
+            }
+            case 1760 -> shoot(minecraft, "shop-buy-world");
+            case 1770 -> {
+                minecraft.setScreen(null);
+            }
+            case 1790 -> shoot(minecraft, "world-shop-keeper");
+            case 1800 -> {
                 LOGGER.info(PREFIX + "commerce showcase finished");
                 finished = true;
             }
@@ -308,6 +385,104 @@ final class ClientCommerceShowcase {
             ypos.setDouble(minecraft.mouseHandler, 1);
         } catch (ReflectiveOperationException e) {
             LOGGER.warn(PREFIX + "commerce showcase: the mouse could not be moved: {}", e.toString());
+        }
+    }
+
+    /**
+     * Puts the mouse on a point of the screen, in the scaled coordinates of the interface.
+     */
+    private static void mouseAt(Minecraft minecraft, int x, int y) {
+        double scale = minecraft.getWindow().getGuiScale();
+        org.lwjgl.glfw.GLFW.glfwSetCursorPos(minecraft.getWindow().getWindow(), x * scale, y * scale);
+        try {
+            var xpos = net.minecraft.client.MouseHandler.class.getDeclaredField("xpos");
+            var ypos = net.minecraft.client.MouseHandler.class.getDeclaredField("ypos");
+            xpos.setAccessible(true);
+            ypos.setAccessible(true);
+            xpos.setDouble(minecraft.mouseHandler, x * scale);
+            ypos.setDouble(minecraft.mouseHandler, y * scale);
+        } catch (ReflectiveOperationException e) {
+            LOGGER.warn(PREFIX + "commerce showcase: the mouse could not be moved: {}", e.toString());
+        }
+    }
+
+    /**
+     * The capital full of townsfolk: 280 of them, 90 hands of its workshops and 50 idle, what they earned a head, and a farm with
+     * townsfolk on its seats beside the throne.
+     */
+    private void folk(IntegratedServer server, UUID playerId) {
+        try {
+            if (kingdomId == null || throne == null) {
+                failure = "no kingdom for the townsfolk";
+                return;
+            }
+            ServerLevel level = server.overworld();
+            var charter = RoadWork.state(server).charterOf(kingdomId, 0, io.github.sekerator.kingdomworld.core.road.CityCharter.NEVER);
+            charter.setFolk(280);
+            charter.setFolkWork(90, 50);
+            charter.setFolkEarned(280L * 4);
+            RoadWork.state(server).charterChanged();
+            BlockPos at = surface(level, throne.getX() + 3, throne.getZ() - 4);
+            level.setBlockAndUpdate(at, ModRegistries.WORK_POST.get().defaultBlockState());
+            WorldPos pos = new WorldPos("minecraft:overworld", at.getX(), at.getY(), at.getZ());
+            KingdomWorldApi.change(server, "showcase", state -> state.setPostProfession(null, pos, "farmer"));
+            KingdomWorldApi.change(server, "showcase", state -> state.setPostSeats(null, pos, 16, 16));
+            KingdomWorldApi.state(server).citizens().posts().get(pos).ifPresent(post -> {
+                post.rememberFarm(48, "minecraft:wheat");
+                post.setFolkWorkers(12);
+            });
+            folkPost = at;
+            LOGGER.info(PREFIX + "commerce showcase: 280 townsfolk in the capital, a farm with townsfolk at {}", at.toShortString());
+        } catch (RuntimeException e) {
+            failure = e.toString();
+            LOGGER.error(PREFIX + "commerce showcase could not settle the townsfolk", e);
+        }
+    }
+
+    /**
+     * A shop of citizens in a capital of the world: of the first kingdom of the world with a capital, in a house of a merchant
+     * where it has one, with bread of its ruler; the player stands in front of it.
+     */
+    private void worldShop(IntegratedServer server, UUID playerId) {
+        try {
+            ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+            ServerLevel level = server.overworld();
+            for (io.github.sekerator.kingdomworld.core.npc.NpcKingdom npc : io.github.sekerator.kingdomworld.common.npc.NpcWork.state(server).kingdoms()) {
+                UUID id = npc.kingdomId();
+                var capital = io.github.sekerator.kingdomworld.common.road.CityWalls.place(server, id, 0);
+                if (capital.isEmpty() || !capital.get().dimension().equals("minecraft:overworld")) {
+                    continue;
+                }
+                List<io.github.sekerator.kingdomworld.common.commerce.BusinessPlaces.Spot> spots = io.github.sekerator.kingdomworld.common.commerce
+                        .BusinessPlaces.of(server, id, 0);
+                Business.Place place = spots.stream().map(io.github.sekerator.kingdomworld.common.commerce.BusinessPlaces.Spot::place)
+                        .filter(found -> found.kind() == Business.PlaceKind.MERCHANT_HOUSE).findFirst()
+                        .orElse(new Business.Place(Business.PlaceKind.MERCHANT_HOUSE, 0, 0, "minecraft:overworld", capital.get().x() + 4,
+                                capital.get().y(), capital.get().z() + 4));
+                long day = TreasuryActions.day(server);
+                Business shop = CommerceSavedData.get(server).shopsOf(id, 0).stream().findFirst()
+                        .orElseGet(() -> CommerceSavedData.get(server).open(id, 0, place, day, 200));
+                shop.changeTrade(Business.GENERAL_STORE, day);
+                if (!shop.kept()) {
+                    shop.setKeepers(List.of(), true);
+                    shop.setStatus(Business.Status.FAMILY);
+                }
+                shop.addGoods("minecraft:bread", io.github.sekerator.kingdomworld.core.commerce.GoodsCategory.FOOD.ordinal(), 24, 3_000);
+                shop.addGoods("minecraft:torch", io.github.sekerator.kingdomworld.core.commerce.GoodsCategory.HOUSEHOLD.ordinal(), 32, 1_000);
+                CommerceSavedData.get(server).setDirty();
+                worldShopId = shop.id();
+                if (player != null) {
+                    BlockPos front = surface(level, shop.place().x(), shop.place().z() + 3);
+                    player.teleportTo(level, front.getX() + 0.5, front.getY(), front.getZ() + 0.5, 180.0f, 10.0f);
+                }
+                LOGGER.info(PREFIX + "commerce showcase: a shop of citizens of {} at {} {} {}", npc.name(), shop.place().x(), shop.place().y(),
+                        shop.place().z());
+                return;
+            }
+            failure = "no kingdom of the world with a capital";
+        } catch (RuntimeException e) {
+            failure = e.toString();
+            LOGGER.error(PREFIX + "commerce showcase could not open a shop of the world", e);
         }
     }
 
