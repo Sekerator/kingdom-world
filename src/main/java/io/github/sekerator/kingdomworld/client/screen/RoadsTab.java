@@ -676,14 +676,8 @@ final class RoadsTab {
         } else if (actingCity >= 0) {
             RoadViews.CityRow row = city(actingCity);
             Component head = Component.translatable(KEY + "city_actions", row == null ? "" : row.name());
-            Component earth = null;
-            if (row != null && row.wallEarth().any()) {
-                // The wall laid out at a height of its own: the earth it fills under itself and the ground it cuts.
-                earth = Component.translatable(KEY + "wall_earth", row.wallEarth().baseY(), row.wallEarth().fill(), row.wallEarth().cut());
-                head = Component.translatable(KEY + "city_actions_earth", head, earth);
-            }
             int headX = x + modeWidth + 6;
-            text(graphics, head, headX, buttonsY(top) + 4, 0xFFF0D070, right - backWidth - 4 - headX, earth);
+            text(graphics, head, headX, buttonsY(top) + 4, 0xFFF0D070, right - backWidth - 4 - headX, null);
         }
         if (mode == Mode.OVERVIEW && acting == 0 && patrolling == 0) {
             renderOverview(graphics, x, right, top);
@@ -931,6 +925,12 @@ final class RoadsTab {
             return Component.translatable(KEY + "hint.actions");
         }
         if (actingCity >= 0) {
+            RoadViews.CityRow row = city(actingCity);
+            if (row != null && row.wallEarth().any()) {
+                // The wall laid out at a height of its own: the earth it fills under itself and the ground it cuts.
+                return Component.translatable(KEY + "hint.city_actions_earth", row.wallEarth().baseY(), row.wallEarth().fill(),
+                        row.wallEarth().cut());
+            }
             return Component.translatable(KEY + "hint.city_actions");
         }
         if (!view.canManage()) {
