@@ -491,11 +491,25 @@ public final class TradeWork {
             if (treasury.isEmpty()) {
                 continue;
             }
-            ExchangeRates.Wealth wealth = wealth(server, kingdom.id(), day);
-            targets.put(kingdom.id(), ExchangeRates.target(wealth.total(rules.productionDays()), economy.moneyMass(kingdom.id()), rules));
+            targets.put(kingdom.id(), target(server, kingdom.id(), day));
         }
         economy.updateRates(day, targets, rules);
         io.github.sekerator.kingdomworld.common.economy.EconomyEvents.currenciesChanged();
+    }
+
+    /**
+     * The rate the currency of a kingdom tends to today: what it owns over its money.
+     */
+    public static long target(MinecraftServer server, UUID kingdomId, long day) {
+        Economy economy = KingdomWorldApi.state(server).economy();
+        TradeRules rules = TradeSettings.rules();
+        long owned = wealth(server, kingdomId, day).total(rules.productionDays());
+        if (io.github.sekerator.kingdomworld.common.npc.NpcWork.isNpc(server, kingdomId)) {
+            // The money of a crown of the world lies in its books rather than in coins, and it is its own wealth all the same:
+            // a rich crown of the world is no reason for its currency to lose its worth.
+            owned = Money.addCapped(owned, economy.treasury(kingdomId).map(Treasury::balance).orElse(0L));
+        }
+        return ExchangeRates.target(owned, economy.moneyMass(kingdomId), rules);
     }
 
     /**
