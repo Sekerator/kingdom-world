@@ -233,6 +233,143 @@ public final class ConstructionGameTests {
         });
     }
 
+    // ---------------------------------------------------------------- a crew of builders
+
+    /** Rules for the crew: a beginner lays a block in ten ticks, no falls. */
+    private static final ConstructionRules CREW = new ConstructionRules(4, 64, 4.5, 12.0, 400, 10, 0.0, 48, 32, 48);
+
+    /**
+     * A house of 6 by 6 blocks: a floor of cobblestone and three courses of plank walls, with a door two blocks wide and two high
+     * in the south wall.
+     */
+    static BuildingTemplate house(String name) {
+        List<String> palette = List.of("minecraft:cobblestone", "minecraft:oak_planks", "minecraft:air");
+        List<int[]> blocks = new ArrayList<>();
+        for (int y = 0; y < 4; y++) {
+            for (int x = 0; x < 6; x++) {
+                for (int z = 0; z < 6; z++) {
+                    boolean wall = x == 0 || x == 5 || z == 0 || z == 5;
+                    boolean door = z == 5 && (x == 2 || x == 3) && y < 3;
+                    blocks.add(new int[]{x, y, z, y == 0 ? 0 : wall && !door ? 1 : 2});
+                }
+            }
+        }
+        JsonObject description = JsonParser.parseString("{\"name\": \"kingdomworld.building.small_house\", \"fallback_name\": \"" + name
+                + "\", \"category\": \"housing\", \"type\": \"test\", \"icon\": \"minecraft:cobblestone\", \"anchor\": [0, 0, 0], "
+                + "\"entrance\": \"south\"}").getAsJsonObject();
+        return BuildingTemplates.addForTest(KingdomWorld.id("test_" + name), description, structure(6, 4, 6, palette, blocks.toArray(new int[0][])));
+    }
+
+    /**
+     * Where the builders of a test stand and what they report, for the messages of failures.
+     */
+    private static String crew(List<Citizen> builders) {
+        StringBuilder text = new StringBuilder();
+        for (Citizen builder : builders) {
+            net.minecraft.world.entity.Mob body = io.github.sekerator.kingdomworld.common.citizen.CitizenBodies.body(builder.id());
+            text.append(text.length() == 0 ? "" : "; ").append(builder.workStatus()).append(" at ")
+                    .append(body == null ? "no body" : body.blockPosition().toShortString());
+        }
+        return text.toString();
+    }
+
+    private static final org.slf4j.Logger CREW_LOG = com.mojang.logging.LogUtils.getLogger();
+
+    /**
+     * One builder builds a house, then two other builders build the same house at the same place: the two are done at least half
+     * again as fast, never walk both for the same material when one walk brings all of it, and take nothing from the storehouses
+     * beyond what the house costs.
+     */
+    @GameTest(template = EMPTY, batch = "kingdomworld_build_crew", timeoutTicks = 10000)
+    public static void twoBuildersSplitTheWork(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        BlockPos from = helper.absolutePos(new BlockPos(-3, 0, -3));
+        BlockPos to = helper.absolutePos(new BlockPos(14, 5, 14));
+        GatheringGameTests.enclose(level, from, to);
+        ConstructionSettings.override(CREW);
+        Kingdom kingdom = CitizenGameTests.found(helper, "GameTest Crew", UUID.randomUUID());
+        BuildingTemplate template = house("crew");
+        StorehouseInventory store = GatheringGameTests.storehouse(level, helper.absolutePos(new BlockPos(-1, 0, 12)));
+        fill(store, new ItemStack(Items.COBBLESTONE, 64), new ItemStack(Items.COBBLESTONE, 64), new ItemStack(Items.OAK_PLANKS, 64),
+                new ItemStack(Items.OAK_PLANKS, 64));
+        WorldPos post = GatheringGameTests.post(helper, new BlockPos(0, 0, 0), "builder");
+        KingdomWorldApi.change(server, "test", state -> state.setPostSeats(null, post, 2, GatheringSettings.rules().maxSeats()));
+        BlockPos start = helper.absolutePos(new BlockPos(1, 0, 4));
+        BlockPos site = new BlockPos(6, 0, 5);
+        List<Citizen> crew = new ArrayList<>();
+        crew.add(GatheringGameTests.worker(helper, kingdom, "builder", post, start));
+        Construction[] construction = {lay(helper, kingdom, template, site)};
+        long[] began = {level.getGameTime()};
+        long[] alone = {-1};
+        long[] together = {-1};
+        java.util.Map<String, Integer> cost = new java.util.HashMap<>(ConstructionWork.plan(construction[0]).orElseThrow().remaining(construction[0]));
+        java.util.Map<String, Long> stock = new java.util.HashMap<>();
+        cost.keySet().forEach(item -> stock.put(item, stored(server, kingdom, PostWork.item(item))));
+        List<String> problems = new ArrayList<>();
+
+        helper.onEachTick(() -> {
+            if (together[0] >= 0) {
+                return;
+            }
+            long now = level.getGameTime();
+            boolean two = alone[0] >= 0;
+            // Two walks for the same material at once only when one does not bring all the house still needs of it.
+            java.util.Map<String, Integer> walks = new java.util.HashMap<>();
+            java.util.Map<String, Integer> load = new java.util.HashMap<>();
+            for (ConstructionWork.Fetch fetch : ConstructionWork.fetches(construction[0], now).values()) {
+                walks.merge(fetch.item(), 1, Integer::sum);
+                load.merge(fetch.item(), fetch.amount(), Math::max);
+            }
+            java.util.Map<String, Integer> needed = ConstructionWork.needed(construction[0], ConstructionWork.plan(construction[0]).orElseThrow());
+            walks.forEach((item, count) -> {
+                if (count > 1 && load.get(item) >= needed.getOrDefault(item, 0) && problems.size() < 8) {
+                    problems.add((two ? "two" : "one") + ": " + count + " builders walk for " + item + " at t" + (now - began[0])
+                            + " while one walk of " + load.get(item) + " brings the " + needed.getOrDefault(item, 0) + " needed");
+                }
+            });
+            for (java.util.Map.Entry<String, Integer> entry : cost.entrySet()) {
+                long taken = stock.get(entry.getKey()) - stored(server, kingdom, PostWork.item(entry.getKey()));
+                if (taken > entry.getValue() && problems.size() < 8) {
+                    problems.add((two ? "two" : "one") + ": " + taken + " " + entry.getKey() + " taken for " + entry.getValue() + " at t"
+                            + (now - began[0]));
+                }
+            }
+            if (KingdomWorldApi.state(server).construction().buildingsOf(kingdom.id()).isEmpty()) {
+                return;
+            }
+            if (!two) {
+                alone[0] = now - began[0];
+                CREW_LOG.info("crew one done in {} ticks", alone[0]);
+                // The house goes, the first builder takes up other work and two new ones build the house again from the same place.
+                for (Building building : KingdomWorldApi.state(server).construction().buildingsOf(kingdom.id())) {
+                    KingdomWorldApi.state(server).construction().removeBuilding(building.id());
+                }
+                for (BlockPos pos : BlockPos.betweenClosed(helper.absolutePos(site), helper.absolutePos(site.offset(5, 3, 5)))) {
+                    level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2 | 16);
+                }
+                KingdomWorldApi.change(server, "test", state -> state.setProfession(null, crew.get(0).id(), "unemployed"));
+                crew.add(GatheringGameTests.worker(helper, kingdom, "builder", post, start));
+                crew.add(GatheringGameTests.worker(helper, kingdom, "builder", post, start.east()));
+                crew.remove(0);
+                construction[0] = lay(helper, kingdom, template, site);
+                cost.keySet().forEach(item -> stock.put(item, stored(server, kingdom, PostWork.item(item))));
+                began[0] = level.getGameTime();
+                return;
+            }
+            together[0] = now - began[0];
+            CREW_LOG.info("crew two done in {} ticks", together[0]);
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(together[0] >= 0, "Not built yet: " + (alone[0] < 0 ? "one" : "two") + " builders, done "
+                    + construction[0].doneCount() + "/" + construction[0].steps() + ", site " + construction[0].delivered() + ", builders "
+                    + crew(crew));
+            end(helper, kingdom, from.offset(-1, 0, -1), to.offset(1, 1, 1), template.id(), crew.toArray(new Citizen[0]));
+            helper.assertTrue(problems.isEmpty(), "The builders got in each other's way: " + problems);
+            helper.assertTrue(together[0] * 3 <= alone[0] * 2, "Two builders took " + together[0] + " ticks, one took " + alone[0]);
+        });
+    }
+
     // ---------------------------------------------------------------- clearing
 
     @GameTest(template = EMPTY, batch = "kingdomworld_build_clear", timeoutTicks = 400)

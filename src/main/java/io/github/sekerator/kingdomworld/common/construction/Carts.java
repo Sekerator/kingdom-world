@@ -44,6 +44,14 @@ public final class Carts {
     }
 
     /**
+     * Items of a kind a cart on its way brings to the construction.
+     */
+    static int coming(long constructionId, String item) {
+        Cart cart = CARTS.get(constructionId);
+        return cart != null && cart.item().equals(item) ? cart.amount() : 0;
+    }
+
+    /**
      * Unloads the carts that arrived; called once a second.
      */
     static void tick(MinecraftServer server, long now) {

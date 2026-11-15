@@ -91,6 +91,8 @@ public final class ConstructionWork {
     private static final Map<Long, Map<Integer, Long>> DEFERRED = new HashMap<>();
     /** When each builder last worked at a construction. */
     private static final Map<Long, Map<UUID, Long>> WORKERS = new HashMap<>();
+    /** Materials builders walk to the storehouses for, by construction and builder. */
+    private static final Map<Long, Map<UUID, Fetch>> FETCHES = new HashMap<>();
     /** Progress of the integrity check of a building: next block, blocks in place, blocks counted. */
     private static final Map<Long, int[]> INTEGRITY = new HashMap<>();
     /** Blocks found missing or changed so far by the integrity check of a building. */
@@ -109,6 +111,7 @@ public final class ConstructionWork {
         CLAIMS.clear();
         DEFERRED.clear();
         WORKERS.clear();
+        FETCHES.clear();
         INTEGRITY.clear();
         MISSING.clear();
         KEYS.clear();
@@ -979,6 +982,85 @@ public final class ConstructionWork {
         for (Map<Integer, UUID> claims : CLAIMS.values()) {
             claims.values().removeIf(builder::equals);
         }
+        fetched(builder);
+    }
+
+    /**
+     * The places of the steps the other builders of a construction work on.
+     */
+    public static List<int[]> claimedByOthers(Construction construction, BuildPlan plan, UUID builder) {
+        List<int[]> result = new ArrayList<>();
+        Map<Integer, UUID> claims = CLAIMS.get(construction.id());
+        if (claims == null) {
+            return result;
+        }
+        claims.forEach((step, claimer) -> {
+            if (!claimer.equals(builder) && step >= 0 && step < plan.size()) {
+                BuildPlan.Step taken = plan.step(step);
+                result.add(new int[]{taken.x(), taken.z()});
+            }
+        });
+        return result;
+    }
+
+    // ---------------------------------------------------------------- materials on their way
+
+    /**
+     * Materials a builder walks to a storehouse for: they come to the site when it gets there.
+     *
+     * @param since when it set out
+     */
+    public record Fetch(String item, int amount, long since) {
+    }
+
+    /**
+     * A builder sets out for materials of a construction; whatever it walked for before is forgotten.
+     */
+    public static void fetching(Construction construction, UUID builder, String item, int amount, long now) {
+        fetched(builder);
+        FETCHES.computeIfAbsent(construction.id(), id -> new HashMap<>()).put(builder, new Fetch(item, amount, now));
+    }
+
+    /**
+     * A builder brought what it walked for, or gave it up.
+     */
+    public static void fetched(UUID builder) {
+        FETCHES.values().removeIf(fetches -> {
+            fetches.remove(builder);
+            return fetches.isEmpty();
+        });
+    }
+
+    /**
+     * The materials builders walk to the storehouses for, by builder: those that set out lately. A walk ends at the storehouse
+     * or after the builder tried long enough, when the materials come to the site all the same.
+     */
+    public static Map<UUID, Fetch> fetches(Construction construction, long now) {
+        Map<UUID, Fetch> fetches = FETCHES.get(construction.id());
+        if (fetches == null) {
+            return Map.of();
+        }
+        long longest = 2L * ConstructionSettings.rules().giveUpTicks() + 200L;
+        Map<UUID, Fetch> result = new HashMap<>();
+        fetches.forEach((builder, fetch) -> {
+            if (now - fetch.since() <= longest && now >= fetch.since()) {
+                result.put(builder, fetch);
+            }
+        });
+        return result;
+    }
+
+    /**
+     * Items of a kind on their way to a construction: brought by the other builders that walk for them, and by a cart.
+     */
+    public static int coming(Construction construction, String item, UUID builder, long now) {
+        long total = Carts.coming(construction.id(), item);
+        for (Map.Entry<UUID, Fetch> entry : fetches(construction, now).entrySet()) {
+            if (!entry.getKey().equals(builder) && entry.getValue().item().equals(item)) {
+                total += entry.getValue().amount();
+            }
+        }
+        return (int) Math.min(Integer.MAX_VALUE, total);
     }
 
     /**

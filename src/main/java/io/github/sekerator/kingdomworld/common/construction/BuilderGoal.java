@@ -16,6 +16,7 @@ import io.github.sekerator.kingdomworld.core.citizen.WorldPos;
 import io.github.sekerator.kingdomworld.core.construction.BuildPlan;
 import io.github.sekerator.kingdomworld.core.construction.Construction;
 import io.github.sekerator.kingdomworld.core.construction.ConstructionRules;
+import io.github.sekerator.kingdomworld.core.construction.Crew;
 import io.github.sekerator.kingdomworld.core.construction.Scaffolding;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
@@ -42,6 +43,11 @@ import java.util.UUID;
  * from which it reaches the block and does the step: breaks what is in the way (the drops go into its bag and from there to
  * a storehouse) or lays the block.
  *
+ * <p>Builders at one construction work together: each takes a step of the layer at hand away from where the others work (see
+ * {@link Crew}), never a block whose support is not there yet, and none walks for materials another one already brings: it
+ * goes to its block meanwhile and lays it once they are at the site. A walk brings materials for several blocks, never more
+ * than the construction still needs.
+ *
  * <p>A block it cannot reach from the ground (a roof, the top of a high wall) it reaches from scaffolds, as a player jumps and
  * puts a block under its feet: it chooses a column on the site or beside it, climbs it block by block to the height from
  * which the block is within reach, does there every step it reaches and takes the column down from the top as it goes down.
@@ -56,7 +62,7 @@ final class BuilderGoal extends PostWorkGoal {
     private static final int SETTLE_TICKS = 40;
     /** How many steps a builder looks at before it gives up for this round. */
     private static final int TRIES = 24;
-    /** Steps of the same layer a builder on a column looks at for one it reaches from there. */
+    /** Steps more a builder looks at, for the steps of the layer at hand to choose from. */
     private static final int NEAR_STEPS = 12;
     /** Ticks it takes to climb a scaffold, and to take one down on the way down. */
     private static final int CLIMB_TICKS = 6;
@@ -69,6 +75,10 @@ final class BuilderGoal extends PostWorkGoal {
     private static final int SAFE_TICKS = 200;
     /** Ticks a builder on a column may stand on nothing (in water, say) before the column comes down. */
     private static final int AIRBORNE_TICKS = 60;
+    /** Steps of the layer at hand a builder chooses from. */
+    private static final int OPTIONS = 24;
+    /** Items a builder carries from a storehouse in one walk at most. */
+    private static final int LOAD = 64;
     private static final double SPEED = 0.6;
 
     @Nullable
@@ -144,7 +154,7 @@ final class BuilderGoal extends PostWorkGoal {
         site = null;
         plan = null;
         step = -1;
-        fetchFrom = null;
+        stopFetching();
         walking = 0;
         timer = 0;
         forgetSpot();
@@ -155,6 +165,21 @@ final class BuilderGoal extends PostWorkGoal {
         spots = null;
         refused.clear();
         nearest = false;
+        UUID me = body.citizenId();
+        if (me != null) {
+            Scaffolds.unaim(me);
+        }
+    }
+
+    /**
+     * The builder walks no longer for materials: the others count on them no more.
+     */
+    private void stopFetching() {
+        fetchFrom = null;
+        UUID me = body.citizenId();
+        if (me != null) {
+            ConstructionWork.fetched(me);
+        }
     }
 
     @Override
@@ -210,19 +235,25 @@ final class BuilderGoal extends PostWorkGoal {
             }
             return fetch(level, construction);
         }
+        boolean awaited = false;
         if (current.kind() == BuildPlan.Kind.PLACE && !construction.hasDelivered(current.cost())) {
             int fetching = planFetch(level, construction, steps, current, now);
-            if (fetching == NO_FETCH) {
-                construction.setStatus(Construction.Status.NO_MATERIALS);
-                ConstructionWork.defer(construction, step, now + BLOCKED_TICKS);
-                next(construction, me);
-                report(WorkStatus.NO_MATERIALS);
-            } else if (fetching == CART) {
-                // The kingdom has it in storehouses out of reach: a cart brings it, another block meanwhile.
-                ConstructionWork.defer(construction, step, now + Carts.CART_TICKS);
-                next(construction, me);
+            if (fetching == COMING) {
+                // Another builder brings what the block needs: this one goes to the block meanwhile.
+                awaited = true;
+            } else {
+                if (fetching == NO_FETCH) {
+                    construction.setStatus(Construction.Status.NO_MATERIALS);
+                    ConstructionWork.defer(construction, step, now + BLOCKED_TICKS);
+                    next(construction, me);
+                    report(WorkStatus.NO_MATERIALS);
+                } else if (fetching == CART) {
+                    // The kingdom has it in storehouses out of reach: a cart brings it, another block meanwhile.
+                    ConstructionWork.defer(construction, step, now + Carts.CART_TICKS);
+                    next(construction, me);
+                }
+                return null;
             }
-            return null;
         }
         BlockPos target = new BlockPos(current.x(), current.y(), current.z());
         ConstructionRules rules = ConstructionSettings.rules();
@@ -246,6 +277,16 @@ final class BuilderGoal extends PostWorkGoal {
             return null;
         }
         lookAt(target);
+        Scaffolding.Spot place = spot;
+        if (place != null) {
+            // Working from there: no other builder chooses the place meanwhile.
+            Scaffolds.aim(me, construction.dimension(), place.x(), place.z(), now);
+        }
+        if (awaited) {
+            // At the block, the builder waits for the materials on their way.
+            timer = 0;
+            return null;
+        }
         Optional<Citizen> citizen = citizen();
         int experience = citizen.map(Citizen::experience).orElse(0);
         double speed = EconomySettings.workSpeed(citizen.map(Citizen::mood).orElse(50));
@@ -333,8 +374,9 @@ final class BuilderGoal extends PostWorkGoal {
     }
 
     /**
-     * Picks the next step of the constructions within reach, or says why there is none. A builder on a column takes a step of
-     * the same layer it reaches from there first.
+     * Picks the next step of the constructions within reach, or says why there is none. The steps it may take are those of the
+     * tier at hand (see {@link BuildPlan#tier}) whose support is there: a builder on a column takes one it reaches from there
+     * first, otherwise the one {@link Crew} gives it, away from the other builders.
      */
     @Nullable
     private WorkStatus choose(MinecraftServer server, UUID me, long now) {
@@ -346,54 +388,76 @@ final class BuilderGoal extends PostWorkGoal {
                 continue;
             }
             BuildPlan steps = found.get();
-            Set<Integer> passed = new HashSet<>();
-            BuildPlan.Step first = null;
-            for (int i = 0; i < TRIES + NEAR_STEPS; i++) {
-                OptionalInt next = steps.next(construction, index -> passed.contains(index) || ConstructionWork.busy(construction, index, me, now));
-                if (next.isEmpty()) {
-                    if (first == null && !steps.cleared(construction) && construction.status() == Construction.Status.BLOCKED) {
-                        problem = WorkStatus.BLOCKED;
-                    } else if (first == null && construction.status() == Construction.Status.NO_MATERIALS && problem != WorkStatus.BLOCKED) {
-                        problem = WorkStatus.NO_MATERIALS;
-                    }
-                    break;
+            List<BuildPlan.Step> options = new ArrayList<>();
+            // The tier of the steps taken as options, and how many steps were looked at.
+            int[] seen = {-1, 0};
+            boolean[] starved = {false};
+            boolean stopped = steps.forEachNext(construction, index -> ConstructionWork.busy(construction, index, me, now), candidate -> {
+                if (++seen[1] > TRIES + NEAR_STEPS || options.size() >= OPTIONS) {
+                    return false;
                 }
-                BuildPlan.Step candidate = steps.step(next.getAsInt());
+                if (seen[0] >= 0 && steps.tier(candidate.index()) != seen[0]) {
+                    // The rest of the layer at hand is taken: what comes after it waits.
+                    return false;
+                }
+                if (steps.waits(construction, candidate.index())) {
+                    // Its support is still to be built, by another builder or after a wait.
+                    return true;
+                }
                 if (candidate.kind() == BuildPlan.Kind.PLACE && !construction.hasDelivered(candidate.cost()) && !obtainable(server, construction,
-                        candidate.cost())) {
+                        candidate.cost(), me, now)) {
                     // Nothing to build this block from: another block may have its materials.
                     ConstructionWork.defer(construction, candidate.index(), now + BLOCKED_TICKS);
                     construction.setStatus(Construction.Status.NO_MATERIALS);
-                    problem = WorkStatus.NO_MATERIALS;
-                    continue;
+                    starved[0] = true;
+                    return true;
                 }
                 if (Scaffolds.inUse(construction.dimension(), candidate.x(), candidate.y(), candidate.z(), now)) {
                     // A builder stands on a scaffold there: the block waits until the column is taken down.
                     ConstructionWork.defer(construction, candidate.index(), now + COLUMN_TICKS);
-                    continue;
+                    return true;
                 }
-                if (column != null && column.construction() == construction.id()
-                        && !inReach(new BlockPos(candidate.x(), candidate.y(), candidate.z()), reach)) {
-                    // On a column: a block of the same layer reached from here goes first, then the first one.
-                    if (first == null) {
-                        first = candidate;
-                    }
-                    if (candidate.y() == first.y() && passed.size() < NEAR_STEPS) {
-                        passed.add(candidate.index());
-                        continue;
-                    }
-                    candidate = first;
-                }
-                take(construction, steps, candidate, me);
-                return null;
+                seen[0] = steps.tier(candidate.index());
+                options.add(candidate);
+                return true;
+            });
+            if (starved[0]) {
+                problem = WorkStatus.NO_MATERIALS;
             }
-            if (first != null) {
-                take(construction, steps, first, me);
+            if (!stopped && options.isEmpty()) {
+                if (!steps.cleared(construction) && construction.status() == Construction.Status.BLOCKED) {
+                    problem = WorkStatus.BLOCKED;
+                } else if (construction.status() == Construction.Status.NO_MATERIALS && problem != WorkStatus.BLOCKED) {
+                    problem = WorkStatus.NO_MATERIALS;
+                }
+            }
+            if (!options.isEmpty()) {
+                take(construction, steps, options.get(pick(construction, steps, options, me, now, reach)), me);
                 return null;
             }
         }
         report(problem);
         return problem;
+    }
+
+    /**
+     * Of the steps a builder may take, the one it takes: on a column the first it reaches from there, otherwise the one away from
+     * where the other builders of the construction work.
+     */
+    private int pick(Construction construction, BuildPlan steps, List<BuildPlan.Step> options, UUID me, long now, double reach) {
+        if (column != null && column.construction() == construction.id()) {
+            for (int i = 0; i < options.size(); i++) {
+                BuildPlan.Step option = options.get(i);
+                if (inReach(new BlockPos(option.x(), option.y(), option.z()), reach)) {
+                    return i;
+                }
+            }
+        }
+        List<int[]> others = ConstructionWork.claimedByOthers(construction, steps, me);
+        if (!others.isEmpty()) {
+            others.addAll(Scaffolds.others(me, construction.dimension(), now));
+        }
+        return Crew.pick(options, others, body.getX(), body.getZ());
     }
 
     private void take(Construction construction, BuildPlan steps, BuildPlan.Step candidate, UUID me) {
@@ -408,10 +472,11 @@ final class BuilderGoal extends PostWorkGoal {
         ConstructionWork.claim(construction, step, me);
     }
 
-    private boolean obtainable(MinecraftServer server, Construction construction, Map<String, Integer> cost) {
+    private boolean obtainable(MinecraftServer server, Construction construction, Map<String, Integer> cost, UUID me, long now) {
         for (Map.Entry<String, Integer> entry : cost.entrySet()) {
             int missing = entry.getValue() - construction.delivered().getOrDefault(entry.getKey(), 0);
-            if (missing > 0 && ConstructionWork.available(server, construction, entry.getKey()) < missing) {
+            if (missing > 0 && ConstructionWork.available(server, construction, entry.getKey())
+                    + ConstructionWork.coming(construction, entry.getKey(), me, now) < missing) {
                 return false;
             }
         }
@@ -421,7 +486,7 @@ final class BuilderGoal extends PostWorkGoal {
     private void next(Construction construction, UUID me) {
         ConstructionWork.release(construction, step, me);
         step = -1;
-        fetchFrom = null;
+        stopFetching();
         walking = 0;
         timer = 0;
         forgetSpot();
@@ -464,6 +529,11 @@ final class BuilderGoal extends PostWorkGoal {
             return false;
         }
         BlockPos base = new BlockPos(place.x(), place.ground(), place.z());
+        UUID me = body.citizenId();
+        if (me != null) {
+            // Still on the way there: no other builder chooses the place meanwhile.
+            Scaffolds.aim(me, construction.dimension(), place.x(), place.z(), KingdomWorldApi.gameTime(level.getServer()));
+        }
         if (body.blockPosition().equals(base) && body.onGround()) {
             body.getNavigation().stop();
             body.setPos(place.x() + 0.5, body.getY(), place.z() + 0.5);
@@ -503,6 +573,8 @@ final class BuilderGoal extends PostWorkGoal {
                     Scaffolds.world(level, construction, steps, target), Mth.floor(body.getX()), feet(), Mth.floor(body.getZ()), refused::contains));
         }
         int paths = 0;
+        UUID me = body.citizenId();
+        long now = KingdomWorldApi.gameTime(level.getServer());
         while (!spots.isEmpty()) {
             if (paths >= PATHS_PER_TICK || !PathBudget.tryAcquire()) {
                 // The others are looked at in the next tick.
@@ -512,12 +584,19 @@ final class BuilderGoal extends PostWorkGoal {
             if (refused.contains(Scaffolding.pack(candidate.x(), 0, candidate.z()))) {
                 continue;
             }
+            if (me != null && Scaffolds.taken(me, construction.dimension(), candidate.x(), candidate.z(), now)) {
+                // Another builder goes there or stands on a column there.
+                continue;
+            }
             paths++;
             BlockPos base = new BlockPos(candidate.x(), candidate.ground(), candidate.z());
             Path path = body.blockPosition().equals(base) ? null : body.getNavigation().createPath(base, 0);
             if (body.blockPosition().equals(base) || path != null && path.canReach()) {
                 spot = candidate;
                 walking = 0;
+                if (me != null) {
+                    Scaffolds.aim(me, construction.dimension(), candidate.x(), candidate.z(), now);
+                }
                 if (path != null) {
                     body.getNavigation().moveTo(path, SPEED);
                 }
@@ -725,41 +804,58 @@ final class BuilderGoal extends PostWorkGoal {
 
     // ---------------------------------------------------------------- materials
 
-    /**
-     * Picks a storehouse with the first material the site lacks for the block.
-     *
-     * @return whether one was found
-     */
     /** {@link #planFetch}: nothing to fetch anywhere. */
     private static final int NO_FETCH = 0;
     /** {@link #planFetch}: the builder goes to a storehouse, or nothing is missing. */
     private static final int WALK = 1;
     /** {@link #planFetch}: a cart brings it from storehouses out of reach. */
     private static final int CART = 2;
+    /** {@link #planFetch}: other builders or a cart bring what the block lacks. */
+    private static final int COMING = 3;
 
+    /**
+     * Picks a storehouse with the first material the site lacks for the block that nobody brings yet. A walk brings what the
+     * construction still needs of it, up to a load, less what other builders and a cart bring already: two builders walk for
+     * the same material only when one walk does not bring all of it.
+     */
     private int planFetch(ServerLevel level, Construction construction, BuildPlan steps, BuildPlan.Step current, long now) {
+        UUID me = body.citizenId();
+        Map<String, Integer> needed = ConstructionWork.needed(construction, steps);
+        boolean awaited = false;
         for (Map.Entry<String, Integer> entry : current.cost().entrySet()) {
-            int missing = entry.getValue() - construction.delivered().getOrDefault(entry.getKey(), 0);
+            String item = entry.getKey();
+            int missing = entry.getValue() - construction.delivered().getOrDefault(item, 0);
             if (missing <= 0) {
                 continue;
             }
-            if (ConstructionWork.available(level.getServer(), construction, entry.getKey()) < missing) {
+            int coming = me == null ? 0 : ConstructionWork.coming(construction, item, me, now);
+            // What no walk brings yet: the need of the whole construction less the site and what is on its way.
+            int shortfall = needed.getOrDefault(item, missing) - coming;
+            long available = ConstructionWork.available(level.getServer(), construction, item);
+            if (coming >= missing && (shortfall <= 0 || available <= 0)) {
+                awaited = true;
+                continue;
+            }
+            int amount = Math.max(missing - Math.min(missing, coming), Math.min(LOAD, shortfall));
+            if (available < missing - Math.min(missing, coming)) {
                 return NO_FETCH;
             }
-            int needed = ConstructionWork.needed(construction, steps).getOrDefault(entry.getKey(), missing);
-            BlockPos storehouse = storehouseWith(level, entry.getKey());
+            BlockPos storehouse = storehouseWith(level, item);
             if (storehouse == null) {
                 // A village without a storehouse of its own: the materials come from storehouses of the kingdom out of reach.
-                Carts.order(construction, entry.getKey(), Math.max(missing, Math.min(Carts.LOAD, needed)), now);
+                Carts.order(construction, item, Math.max(missing, Math.min(Carts.LOAD, needed.getOrDefault(item, missing))), now);
                 return CART;
             }
             fetchFrom = storehouse;
-            fetchItem = entry.getKey();
-            fetchAmount = Math.max(missing, Math.min(64, needed));
+            fetchItem = item;
+            fetchAmount = amount;
             walking = 0;
+            if (me != null) {
+                ConstructionWork.fetching(construction, me, item, amount, now);
+            }
             return WALK;
         }
-        return WALK;
+        return awaited ? COMING : WALK;
     }
 
     /**
@@ -797,7 +893,7 @@ final class BuilderGoal extends PostWorkGoal {
             return null;
         }
         ConstructionWork.fetch(level.getServer(), construction, fetchItem, fetchAmount);
-        fetchFrom = null;
+        stopFetching();
         walking = 0;
         return null;
     }

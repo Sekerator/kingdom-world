@@ -68,7 +68,17 @@ public final class Scaffolds {
     private record Around(Set<Long> ways, List<Box> others, long when) {
     }
 
+    /**
+     * The place a builder is on its way to, to work from the ground there or to put up a column.
+     */
+    private record Aim(String dimension, int x, int z, long seen) {
+    }
+
+    /** Ticks an aim lasts without the builder walking on towards it. */
+    private static final long AIM_TICKS = 100;
+
     private static final Map<UUID, Hold> HOLDS = new HashMap<>();
+    private static final Map<UUID, Aim> AIMS = new HashMap<>();
     private static final Map<Long, Around> AROUND = new HashMap<>();
 
     private Scaffolds() {
@@ -76,6 +86,7 @@ public final class Scaffolds {
 
     public static void reset() {
         HOLDS.clear();
+        AIMS.clear();
         AROUND.clear();
     }
 
@@ -95,6 +106,56 @@ public final class Scaffolds {
 
     static void release(UUID builder) {
         HOLDS.remove(builder);
+    }
+
+    /**
+     * A builder goes to a place to work from: no other builder chooses it meanwhile.
+     */
+    static void aim(UUID builder, String dimension, int x, int z, long now) {
+        AIMS.put(builder, new Aim(dimension, x, z, now));
+    }
+
+    static void unaim(UUID builder) {
+        AIMS.remove(builder);
+    }
+
+    /**
+     * Whether another builder goes to a place to work from, stands on a column there or climbs it.
+     */
+    static boolean taken(UUID builder, String dimension, int x, int z, long now) {
+        for (Map.Entry<UUID, Aim> entry : AIMS.entrySet()) {
+            Aim aim = entry.getValue();
+            if (!entry.getKey().equals(builder) && now - aim.seen() <= AIM_TICKS && aim.x() == x && aim.z() == z
+                    && aim.dimension().equals(dimension)) {
+                return true;
+            }
+        }
+        for (Map.Entry<UUID, Hold> entry : HOLDS.entrySet()) {
+            Hold hold = entry.getValue();
+            if (!entry.getKey().equals(builder) && now - hold.seen() <= HOLD_TICKS && hold.x() == x && hold.z() == z
+                    && hold.dimension().equals(dimension)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The places {x, z} other builders go to or stand on columns at, in a dimension.
+     */
+    static List<int[]> others(UUID builder, String dimension, long now) {
+        List<int[]> result = new java.util.ArrayList<>();
+        AIMS.forEach((other, aim) -> {
+            if (!other.equals(builder) && now - aim.seen() <= AIM_TICKS && aim.dimension().equals(dimension)) {
+                result.add(new int[]{aim.x(), aim.z()});
+            }
+        });
+        HOLDS.forEach((other, hold) -> {
+            if (!other.equals(builder) && now - hold.seen() <= HOLD_TICKS && hold.dimension().equals(dimension)) {
+                result.add(new int[]{hold.x(), hold.z()});
+            }
+        });
+        return result;
     }
 
     /**
