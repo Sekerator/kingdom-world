@@ -178,6 +178,10 @@ public final class NpcWork {
             keepInStep(server);
             long day = TreasuryActions.day(server);
             if (day != lastDay) {
+                if (lastDay == Long.MIN_VALUE) {
+                    // Once a session, the kingdoms founded with the money of older versions get their wealth.
+                    NpcSpawner.topUpWealth(server);
+                }
                 lastDay = day;
                 NpcRulers.due(server, day);
                 NpcGuilds.day(server, day);

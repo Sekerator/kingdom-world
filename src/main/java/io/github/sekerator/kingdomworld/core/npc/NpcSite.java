@@ -254,6 +254,11 @@ public final class NpcSite {
     public static final int LAWS = 2;
     /** The stores and the market were filled. */
     public static final int STORES = 4;
+    /**
+     * The treasury got the wealth of the crowns of the world of 1.6.3: a kingdom founded before with the money of older versions
+     * got the difference once.
+     */
+    public static final int WEALTH = 8;
 
     /**
      * Whether something of the founding was given already ({@link #MONEY}, {@link #LAWS}, {@link #STORES}), so that raising the

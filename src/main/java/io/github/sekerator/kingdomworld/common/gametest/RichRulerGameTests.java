@@ -3,11 +3,14 @@ package io.github.sekerator.kingdomworld.common.gametest;
 import io.github.sekerator.kingdomworld.KingdomWorld;
 import io.github.sekerator.kingdomworld.common.api.KingdomWorldApi;
 import io.github.sekerator.kingdomworld.common.economy.TreasuryActions;
+import io.github.sekerator.kingdomworld.common.npc.NpcSettings;
+import io.github.sekerator.kingdomworld.common.npc.NpcSpawner;
 import io.github.sekerator.kingdomworld.common.npc.NpcWork;
 import io.github.sekerator.kingdomworld.common.trade.TradeSettings;
 import io.github.sekerator.kingdomworld.common.trade.TradeWork;
 import io.github.sekerator.kingdomworld.core.kingdom.Kingdom;
 import io.github.sekerator.kingdomworld.core.npc.NpcLevel;
+import io.github.sekerator.kingdomworld.core.npc.NpcRules;
 import io.github.sekerator.kingdomworld.core.npc.NpcSite;
 import io.github.sekerator.kingdomworld.core.trade.ExchangeRates;
 import net.minecraft.core.BlockPos;
@@ -57,6 +60,31 @@ public final class RichRulerGameTests {
                 rate = ExchangeRates.smooth(rate, TradeWork.target(server, kingdom.id(), day), TradeSettings.rules());
             }
             helper.assertTrue(rate * 2 > ExchangeRates.ONE, "The rate of a rich crown fell to " + rate + " of " + ExchangeRates.ONE);
+            helper.succeed();
+        } finally {
+            NpcGameTests.cleanUp(helper, site, center, NpcGameTests.HALF3);
+        }
+    }
+
+    @GameTest(template = NpcGameTests.EMPTY, batch = "kingdomworld_rich_topup", timeoutTicks = 200)
+    public static void aKingdomOfAnOlderWorldGetsItsWealthOnce(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        BlockPos center = NpcGameTests.platform(helper, NpcGameTests.HALF3);
+        NpcSite site = null;
+        try {
+            site = founded(helper, center);
+            Kingdom kingdom = NpcGameTests.kingdomOf(helper, site);
+            helper.assertTrue(site.given(NpcSite.MONEY) && site.given(NpcSite.WEALTH), "A new kingdom waits for a wealth it has");
+            // The kingdom as an older version left it: its money given, the wealth of today not.
+            site.restore(site.status(), kingdom.id(), site.stage(), site.step(), site.groundY(), site.reason(),
+                    site.givenFlags() & ~NpcSite.WEALTH);
+            long before = KingdomWorldApi.treasury(server, kingdom.id()).orElseThrow().balance();
+            long delta = NpcSettings.rules().money(NpcLevel.SMALL) - NpcRules.LEGACY_MONEY[NpcLevel.SMALL.ordinal()];
+            NpcSpawner.topUpWealth(server);
+            NpcSpawner.topUpWealth(server);
+            long after = KingdomWorldApi.treasury(server, kingdom.id()).orElseThrow().balance();
+            helper.assertTrue(after - before == delta && site.given(NpcSite.WEALTH), "The treasury grew by " + (after - before) + " instead of "
+                    + delta + " once");
             helper.succeed();
         } finally {
             NpcGameTests.cleanUp(helper, site, center, NpcGameTests.HALF3);

@@ -2197,6 +2197,46 @@ public final class NpcSpawner {
             }
         }
         site.markGiven(NpcSite.MONEY);
+        // Founded with the money of today: there is no difference to give later.
+        site.markGiven(NpcSite.WEALTH);
+    }
+
+    /**
+     * Gives the kingdoms of the world founded with the money of older versions the difference to the founding money of today,
+     * once each, journaled as founding money. Kingdoms that did not get their founding money yet get today's when they do.
+     *
+     * @return how many treasuries got their wealth
+     */
+    public static int topUpWealth(MinecraftServer server) {
+        if (NpcWork.isReadOnly(server) || KingdomWorldApi.isReadOnly(server)) {
+            return 0;
+        }
+        int given = 0;
+        for (NpcSite site : List.copyOf(NpcWork.state(server).sites())) {
+            if (!site.given(NpcSite.MONEY) || site.given(NpcSite.WEALTH) || site.kingdomId().isEmpty()
+                    || (site.status() != NpcSite.Status.FOUNDED && site.status() != NpcSite.Status.SPAWNING
+                    && site.status() != NpcSite.Status.SPAWNED)) {
+                continue;
+            }
+            UUID id = site.kingdomId().get();
+            if (KingdomWorldApi.kingdom(server, id).isEmpty()) {
+                continue;
+            }
+            long delta = Math.max(0, NpcSettings.rules().money(site.level()) - io.github.sekerator.kingdomworld.core.npc.NpcRules.LEGACY_MONEY[site.level().ordinal()]);
+            if (delta > 0) {
+                Outcome granted = KingdomWorldApi.state(server).economy().foundingGrant(id, delta, TreasuryActions.day(server));
+                if (!granted.ok()) {
+                    // Tried again later, when the treasury takes it.
+                    LOGGER.warn("The wealth of the crown of {} was refused: {}", site, granted.error());
+                    continue;
+                }
+                LOGGER.info("The treasury of {} got its wealth of {} copper", KingdomWorldApi.kingdom(server, id).map(Kingdom::name).orElse(id.toString()),
+                        delta);
+                given++;
+            }
+            site.markGiven(NpcSite.WEALTH);
+        }
+        return given;
     }
 
     /**
