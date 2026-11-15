@@ -774,6 +774,13 @@ public final class NpcSpawner {
     }
 
     /**
+     * How many chunks the running appearance holds a ticket for now; for game tests.
+     */
+    public static int heldChunks() {
+        return job == null ? 0 : job.ticketed.size();
+    }
+
+    /**
      * Whether a stage reads the chunks of the ways to the towns: the look at the land, the roads and what comes after them while
      * their columns are placed.
      */

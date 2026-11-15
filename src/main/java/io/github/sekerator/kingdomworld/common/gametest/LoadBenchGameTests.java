@@ -313,4 +313,62 @@ public final class LoadBenchGameTests {
         }
         helper.succeed();
     }
+
+    /**
+     * A kingdom of the world with a town appearing in ticks holds the chunks of the way to its town while it looks at the land, lets
+     * them go for the stages between and asks for them again for its roads.
+     */
+    @GameTest(template = NpcGameTests.EMPTY, batch = "kingdomworld_npc_ways", timeoutTicks = 12_000)
+    public static void aKingdomOfTheWorldLetsTheChunksOfItsWaysGoBetweenTheLookAndTheRoads(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        BlockPos center = NpcGameTests.platform(helper);
+        NpcSettings.override(NpcRules.DEFAULT);
+        helper.assertTrue(io.github.sekerator.kingdomworld.common.npc.NpcWork.state(server).spawning().isEmpty(),
+                "Another kingdom of the world is appearing");
+        NpcSite site = io.github.sekerator.kingdomworld.common.npc.NpcWork.plantAt(server, center.getX(), center.getZ(), NpcLevel.SMALL,
+                List.of(new int[]{center.getX() + 260, center.getZ()}), NpcSite.LAYOUT_DISTRICTS, "").orElse(null);
+        helper.assertTrue(site != null, "The data of the kingdoms of the world is read-only");
+        int[] counts = io.github.sekerator.kingdomworld.common.npc.NpcSpawner.chunkCounts(site);
+        int[] early = {0};
+        int[] middle = {Integer.MAX_VALUE};
+        int[] roads = {0};
+        long started = server.getTickCount();
+        helper.onEachTick(() -> {
+            int held = io.github.sekerator.kingdomworld.common.npc.NpcSpawner.heldChunks();
+            io.github.sekerator.kingdomworld.core.npc.SpawnStage stage = site.stage();
+            boolean spawning = site.status() == NpcSite.Status.SPAWNING;
+            if (spawning && (stage == io.github.sekerator.kingdomworld.core.npc.SpawnStage.LOAD
+                    || stage == io.github.sekerator.kingdomworld.core.npc.SpawnStage.CHECK)) {
+                early[0] = Math.max(early[0], held);
+            } else if (spawning && stage.ordinal() < io.github.sekerator.kingdomworld.core.npc.SpawnStage.ROADS.ordinal()) {
+                // The fewest: the first tick of a stage comes to the test before the appearance lets the ways go.
+                middle[0] = Math.min(middle[0], held);
+            } else if (spawning && stage == io.github.sekerator.kingdomworld.core.npc.SpawnStage.ROADS) {
+                roads[0] = Math.max(roads[0], held);
+            }
+            boolean over = !spawning || roads[0] > middle[0] || server.getTickCount() - started > 11_500;
+            if (!over) {
+                return;
+            }
+            String problem = null;
+            if (site.towns().isEmpty()) {
+                problem = "The town was left out: " + site.reason();
+            } else if (early[0] != counts[0]) {
+                problem = "While it looked at the land it held " + early[0] + " chunks of " + counts[0];
+            } else if (middle[0] == Integer.MAX_VALUE || middle[0] > counts[1]) {
+                problem = "Between the look and the roads it held " + middle[0] + " chunks, the land of the capital and the town are " + counts[1];
+            } else if (roads[0] <= middle[0]) {
+                problem = "It did not ask for the ways again for its roads: " + roads[0] + " at " + stage.id() + " " + site.status();
+            }
+            LOGGER.info("Load bench: a small kingdom of the world with a town held {} chunks while it looked at the land, {} between the "
+                    + "look and the roads and {} for the roads ({} in all)", early[0], middle[0], roads[0], counts[0]);
+            io.github.sekerator.kingdomworld.common.npc.NpcWork.remove(server, site.id(), true);
+            NpcGameTests.cleanUp(helper, null, center);
+            NpcSettings.override(null);
+            if (problem != null) {
+                helper.fail(problem);
+            }
+            helper.succeed();
+        });
+    }
 }
