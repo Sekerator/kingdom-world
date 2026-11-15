@@ -89,16 +89,20 @@ public final class CommonEvents {
                     (java.util.List<net.minecraft.gametest.framework.GameTestBatch>) field.get(server);
             java.util.List<net.minecraft.gametest.framework.GameTestBatch> kept = new java.util.ArrayList<>();
             int tests = 0;
-            for (net.minecraft.gametest.framework.GameTestBatch batch : batches) {
-                String batchName = batch.getName().toLowerCase(java.util.Locale.ROOT);
-                java.util.List<net.minecraft.gametest.framework.TestFunction> chosen = batch.getTestFunctions().stream()
-                        .filter(test -> words.stream().anyMatch(word -> batchName.contains(word)
-                                || test.getTestName().toLowerCase(java.util.Locale.ROOT).contains(word)))
-                        .toList();
-                if (!chosen.isEmpty()) {
-                    kept.add(new net.minecraft.gametest.framework.GameTestBatch(batch.getName(), chosen, batch::runBeforeBatchFunction,
-                            batch::runAfterBatchFunction));
-                    tests += chosen.size();
+            int repeat = Math.max(1, Integer.getInteger("kingdomworld.gameTestRepeat", 1));
+            for (int round = 0; round < repeat; round++) {
+                for (net.minecraft.gametest.framework.GameTestBatch batch : batches) {
+                    String batchName = batch.getName().toLowerCase(java.util.Locale.ROOT);
+                    java.util.List<net.minecraft.gametest.framework.TestFunction> chosen = batch.getTestFunctions().stream()
+                            .filter(test -> words.stream().anyMatch(word -> batchName.contains(word)
+                                    || test.getTestName().toLowerCase(java.util.Locale.ROOT).contains(word)))
+                            .toList();
+                    if (!chosen.isEmpty()) {
+                        kept.add(new net.minecraft.gametest.framework.GameTestBatch(batch.getName() + (round > 0 ? ":round" + round : ""), chosen,
+                                batch::runBeforeBatchFunction,
+                                batch::runAfterBatchFunction));
+                        tests += chosen.size();
+                    }
                 }
             }
             batches.clear();

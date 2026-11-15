@@ -718,8 +718,9 @@ public final class ConstructionWork {
     }
 
     /**
-     * Whether a block keeps items it would lose when broken: a container that is not empty, or one whose loot is not
-     * rolled yet.
+     * Whether a block keeps items it would lose when broken, or belongs to somebody: a container that is not empty, one whose
+     * loot is not rolled yet, or one somebody locked or owns (a lock of the game, an owner a mod notes in it). Such a block is
+     * never broken by the work: it waits for its owner.
      */
     public static boolean holdsItems(ServerLevel level, BlockPos pos) {
         BlockEntity entity = level.getBlockEntity(pos);
@@ -1051,6 +1052,19 @@ public final class ConstructionWork {
         return until != null && until > now;
     }
 
+    /**
+     * Whether a step is put off only for a short while: another builder works on it, or it waits a few ticks at most (a builder
+     * in the way, a scaffold on it), not for materials or a block in the way.
+     */
+    public static boolean soon(Construction construction, int step, UUID builder, long now, long horizon) {
+        UUID claimer = CLAIMS.getOrDefault(construction.id(), Map.of()).get(step);
+        if (claimer != null && !claimer.equals(builder)) {
+            return true;
+        }
+        Long until = DEFERRED.getOrDefault(construction.id(), Map.of()).get(step);
+        return until != null && until > now && until <= now + horizon;
+    }
+
     public static void claim(Construction construction, int step, UUID builder) {
         CLAIMS.computeIfAbsent(construction.id(), id -> new HashMap<>()).put(step, builder);
     }
@@ -1088,6 +1102,49 @@ public final class ConstructionWork {
             }
         });
         return result;
+    }
+
+    /**
+     * Follows what the builders do, for {@link #describe}; only while a test asks for it.
+     */
+    public static void traceBuilders(boolean on) {
+        BuilderGoal.trace(on);
+    }
+
+    /**
+     * What a builder does at a construction, for the messages of tests: the step it took, what it walks for, the steps put off
+     * and what its goal holds.
+     */
+    public static String describe(Construction construction, UUID builder, long now) {
+        StringBuilder text = new StringBuilder();
+        CLAIMS.getOrDefault(construction.id(), Map.of()).forEach((step, claimer) -> {
+            if (claimer.equals(builder)) {
+                text.append("claims ").append(step);
+                plan(construction).filter(plan -> step >= 0 && step < plan.size()).ifPresent(plan -> {
+                    BuildPlan.Step taken = plan.step(step);
+                    text.append(" ").append(taken.kind()).append(" at ").append(taken.x()).append(",").append(taken.y()).append(",").append(taken.z());
+                });
+                text.append("; ");
+            }
+        });
+        long deferred = DEFERRED.getOrDefault(construction.id(), Map.of()).values().stream().filter(until -> until > now).count();
+        text.append("deferred ").append(deferred).append("; ").append(BuilderGoal.describe(builder));
+        plan(construction).ifPresent(plan -> {
+            if (plan.size() - construction.doneCount() <= 3) {
+                for (int i = 0; i < plan.size(); i++) {
+                    if (!construction.isDone(i)) {
+                        BuildPlan.Step left = plan.step(i);
+                        Long until = DEFERRED.getOrDefault(construction.id(), Map.of()).get(i);
+                        UUID claimer = CLAIMS.getOrDefault(construction.id(), Map.of()).get(i);
+                        text.append("; left ").append(i).append(" at ").append(left.x()).append(",").append(left.y()).append(",").append(left.z())
+                                .append(until != null && until > now ? " for " + (until - now) : "").append(claimer != null ? " by "
+                                        + claimer.toString().substring(0, 4) : "").append(construction.isPending(i) ? " pending" : "")
+                                .append(plan.waits(construction, i) ? " waits" : "");
+                    }
+                }
+            }
+        });
+        return text.toString();
     }
 
     // ---------------------------------------------------------------- materials on their way

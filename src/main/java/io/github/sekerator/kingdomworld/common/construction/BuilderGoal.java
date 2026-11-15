@@ -79,6 +79,17 @@ final class BuilderGoal extends PostWorkGoal {
     private static final int OPTIONS = 24;
     /** Items a builder carries from a storehouse in one walk at most. */
     private static final int LOAD = 64;
+    /**
+     * Ticks a builder waits by a construction whose steps left are only put off for a moment (another builder works on them,
+     * their support is on its way, a builder stands where they go) before it looks again.
+     */
+    private static final int WAIT_TICKS = 10;
+    /** Steps put off for no longer than this count as put off for a moment. */
+    private static final long SOON_TICKS = COLUMN_TICKS;
+    /** Rounds of such waiting before the builder leaves the work for a while, as when nothing is left to do. */
+    private static final int WAIT_ROUNDS = 30;
+    /** Ticks a builder that stands where its block goes tries to step aside before it takes another block. */
+    private static final int ASIDE_TICKS = 40;
     private static final double SPEED = 0.6;
 
     @Nullable
@@ -92,6 +103,21 @@ final class BuilderGoal extends PostWorkGoal {
     private int fetchAmount;
     private int walking;
     private int timer;
+    /** Ticks left of waiting by the construction before the builder looks for a step again. */
+    private int idle;
+    /** Rounds the builder waited by the construction in a row. */
+    private int waited;
+    /** Ticks the builder has been stepping aside from the place of its block. */
+    private int aside;
+    /** Why the builder last put a step off, for the messages of tests. */
+    private String deferWhy = "";
+    /** Whether the last look for a step found steps that are only put off for a moment. */
+    private boolean postponed;
+    /** The construction the builder waits by, and its plan: it keeps off the places of their blocks meanwhile. */
+    @Nullable
+    private Construction waitingBy;
+    @Nullable
+    private BuildPlan waitingPlan;
 
     /** The place the builder goes to for the current step, {@code null} until it is chosen. */
     @Nullable
@@ -125,8 +151,35 @@ final class BuilderGoal extends PostWorkGoal {
     @Nullable
     private WorkStatus afterLeaving;
 
+    /** The goals of builders by citizen while a test follows them, for what it tells of a crew. */
+    private static final Map<UUID, java.lang.ref.WeakReference<BuilderGoal>> GOALS = new java.util.HashMap<>();
+    private static boolean tracing;
+
     BuilderGoal(CitizenEntity body, ProfessionBehavior behavior) {
         super(body, behavior);
+    }
+
+    /**
+     * What a builder does now, for the messages of tests: its step, the place it goes to, its column and its walk.
+     */
+    static void trace(boolean on) {
+        tracing = on;
+        GOALS.clear();
+    }
+
+    static String describe(UUID citizen) {
+        java.lang.ref.WeakReference<BuilderGoal> reference = GOALS.get(citizen);
+        BuilderGoal goal = reference == null ? null : reference.get();
+        if (goal == null) {
+            return "no goal";
+        }
+        Scaffolding.Spot place = goal.spot;
+        Column on = goal.column;
+        return "step " + goal.step + (goal.fetchFrom != null ? " fetching " + goal.fetchAmount + " " + goal.fetchItem : "")
+                + (place != null ? " spot " + place.x() + "," + place.ground() + "," + place.z() + "+" + place.height() : "")
+                + (goal.nearest ? " near" : "") + (on != null ? " column " + on.x() + "," + on.z() + " goal " + goal.columnGoal
+                + (goal.leaving ? " leaving" : "") : "") + " walking " + goal.walking + " timer " + goal.timer + " idle " + goal.idle + " waited " + goal.waited + " deferred for " + goal.deferWhy + " refused " + goal.refused.size()
+                + " nav " + (goal.body.getNavigation().isDone() ? "done" : "moving");
     }
 
     @Override
@@ -154,6 +207,11 @@ final class BuilderGoal extends PostWorkGoal {
         site = null;
         plan = null;
         step = -1;
+        idle = 0;
+        waited = 0;
+        aside = 0;
+        waitingBy = null;
+        waitingPlan = null;
         stopFetching();
         walking = 0;
         timer = 0;
@@ -189,6 +247,9 @@ final class BuilderGoal extends PostWorkGoal {
         if (me == null) {
             return WorkStatus.UNKNOWN;
         }
+        if (tracing) {
+            GOALS.put(me, new java.lang.ref.WeakReference<>(this));
+        }
         long now = KingdomWorldApi.gameTime(server);
         if (site != null && (KingdomWorldApi.state(server).construction().get(site.id()).isEmpty() || site.paused())) {
             ConstructionWork.releaseAll(me);
@@ -209,10 +270,27 @@ final class BuilderGoal extends PostWorkGoal {
             }
         }
         if (step < 0) {
+            if (idle > 0) {
+                idle--;
+                keepOffBlocks(level);
+                return null;
+            }
             WorkStatus problem = choose(server, me, now);
             if (problem != null) {
+                if (postponed && !hasCarried() && ++waited <= WAIT_ROUNDS) {
+                    // The steps left are another builder's or wait a moment: the builder waits by the construction, down from its
+                    // column and off the places of the blocks, rather than leave the work for a long while.
+                    if (column != null) {
+                        leaving = true;
+                    }
+                    idle = WAIT_TICKS;
+                    report(WorkStatus.WORKING);
+                    return null;
+                }
+                waited = 0;
                 return leave(hasCarried() ? WorkStatus.WORKING : problem);
             }
+            waited = 0;
             report(WorkStatus.WORKING);
         }
         Construction construction = site;
@@ -244,11 +322,13 @@ final class BuilderGoal extends PostWorkGoal {
             } else {
                 if (fetching == NO_FETCH) {
                     construction.setStatus(Construction.Status.NO_MATERIALS);
+                    deferWhy = "no materials";
                     ConstructionWork.defer(construction, step, now + BLOCKED_TICKS);
                     next(construction, me);
                     report(WorkStatus.NO_MATERIALS);
                 } else if (fetching == CART) {
                     // The kingdom has it in storehouses out of reach: a cart brings it, another block meanwhile.
+                    deferWhy = "cart";
                     ConstructionWork.defer(construction, step, now + Carts.CART_TICKS);
                     next(construction, me);
                 }
@@ -265,16 +345,32 @@ final class BuilderGoal extends PostWorkGoal {
         }
         if (Scaffolds.inUse(construction.dimension(), target.getX(), target.getY(), target.getZ(), now)) {
             // A builder stands on a scaffold there: the block waits until the column is taken down.
+            deferWhy = "scaffold at the block";
             ConstructionWork.defer(construction, step, now + COLUMN_TICKS);
             next(construction, me);
             return null;
         }
-        if (current.kind() == BuildPlan.Kind.PLACE && !level.getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class,
-                new net.minecraft.world.phys.AABB(target)).isEmpty()) {
-            // Somebody stands where the block goes (the builder itself, perhaps): another block first.
-            ConstructionWork.defer(construction, step, now + 60);
-            next(construction, me);
-            return null;
+        if (current.kind() == BuildPlan.Kind.PLACE) {
+            List<net.minecraft.world.entity.LivingEntity> there = level.getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class,
+                    new net.minecraft.world.phys.AABB(target));
+            if (!there.isEmpty()) {
+                if (there.size() == 1 && there.get(0) == body && column == null && ++aside <= ASIDE_TICKS
+                        && stepAside(level, target, construction, steps)) {
+                    // The builder itself stands where the block goes: it steps aside and lays it.
+                    return null;
+                }
+                // Somebody else stands there: another block first. A citizen of the kingdom standing still there is asked to step aside.
+                for (net.minecraft.world.entity.LivingEntity other : there) {
+                    if (other != body && other instanceof CitizenEntity citizen && citizen.getNavigation().isDone()
+                            && construction.kingdomId().equals(citizen.kingdomId())) {
+                        stepAside(level, target, construction, steps, citizen);
+                    }
+                }
+                deferWhy = "somebody there: " + there.get(0).getType().toShortString() + (there.get(0) == body ? " itself" : "");
+                ConstructionWork.defer(construction, step, now + 60);
+                next(construction, me);
+                return null;
+            }
         }
         lookAt(target);
         Scaffolding.Spot place = spot;
@@ -327,12 +423,14 @@ final class BuilderGoal extends PostWorkGoal {
             }
             case BLOCKED -> {
                 construction.setStatus(Construction.Status.BLOCKED, new WorldPos(construction.dimension(), current.x(), current.y(), current.z()));
+                deferWhy = "blocked";
                 ConstructionWork.defer(construction, step, now + BLOCKED_TICKS);
                 report(WorkStatus.BLOCKED);
             }
             case NO_MATERIALS -> {
                 if (construction.kind() == Construction.Kind.EARTHWORK && current.kind() == BuildPlan.Kind.CLEAR) {
                     // Lava beside the dig waits for cobblestone in the storehouses: the builder goes on with the rest meanwhile.
+                    deferWhy = "lava";
                     ConstructionWork.defer(construction, step, now + BLOCKED_TICKS);
                 }
             }
@@ -382,6 +480,9 @@ final class BuilderGoal extends PostWorkGoal {
     private WorkStatus choose(MinecraftServer server, UUID me, long now) {
         WorkStatus problem = WorkStatus.NO_CONSTRUCTIONS;
         double reach = ConstructionSettings.rules().reach();
+        postponed = false;
+        waitingBy = null;
+        waitingPlan = null;
         for (Construction construction : ConstructionWork.candidates(server, post)) {
             Optional<BuildPlan> found = ConstructionWork.plan(construction);
             if (found.isEmpty()) {
@@ -392,7 +493,15 @@ final class BuilderGoal extends PostWorkGoal {
             // The tier of the steps taken as options, and how many steps were looked at.
             int[] seen = {-1, 0};
             boolean[] starved = {false};
-            boolean stopped = steps.forEachNext(construction, index -> ConstructionWork.busy(construction, index, me, now), candidate -> {
+            // Whether some step is put off only for a moment: the builder then waits by the construction.
+            boolean[] soon = {false};
+            boolean stopped = steps.forEachNext(construction, index -> {
+                if (!ConstructionWork.busy(construction, index, me, now)) {
+                    return false;
+                }
+                soon[0] |= ConstructionWork.soon(construction, index, me, now, SOON_TICKS);
+                return true;
+            }, candidate -> {
                 if (++seen[1] > TRIES + NEAR_STEPS || options.size() >= OPTIONS) {
                     return false;
                 }
@@ -402,11 +511,13 @@ final class BuilderGoal extends PostWorkGoal {
                 }
                 if (steps.waits(construction, candidate.index())) {
                     // Its support is still to be built, by another builder or after a wait.
+                    soon[0] = true;
                     return true;
                 }
                 if (candidate.kind() == BuildPlan.Kind.PLACE && !construction.hasDelivered(candidate.cost()) && !obtainable(server, construction,
                         candidate.cost(), me, now)) {
                     // Nothing to build this block from: another block may have its materials.
+                    deferWhy = "not obtainable";
                     ConstructionWork.defer(construction, candidate.index(), now + BLOCKED_TICKS);
                     construction.setStatus(Construction.Status.NO_MATERIALS);
                     starved[0] = true;
@@ -414,7 +525,9 @@ final class BuilderGoal extends PostWorkGoal {
                 }
                 if (Scaffolds.inUse(construction.dimension(), candidate.x(), candidate.y(), candidate.z(), now)) {
                     // A builder stands on a scaffold there: the block waits until the column is taken down.
+                    deferWhy = "scaffold in choose";
                     ConstructionWork.defer(construction, candidate.index(), now + COLUMN_TICKS);
+                    soon[0] = true;
                     return true;
                 }
                 seen[0] = steps.tier(candidate.index());
@@ -434,6 +547,11 @@ final class BuilderGoal extends PostWorkGoal {
             if (!options.isEmpty()) {
                 take(construction, steps, options.get(pick(construction, steps, options, me, now, reach)), me);
                 return null;
+            }
+            if (soon[0] && !postponed) {
+                postponed = true;
+                waitingBy = construction;
+                waitingPlan = steps;
             }
         }
         report(problem);
@@ -468,6 +586,7 @@ final class BuilderGoal extends PostWorkGoal {
         post.setCurrent(candidate.cost().isEmpty() ? "" : candidate.cost().keySet().iterator().next(), 0.0);
         walking = 0;
         timer = 0;
+        aside = 0;
         forgetSpot();
         ConstructionWork.claim(construction, step, me);
     }
@@ -489,7 +608,87 @@ final class BuilderGoal extends PostWorkGoal {
         stopFetching();
         walking = 0;
         timer = 0;
+        aside = 0;
         forgetSpot();
+    }
+
+    /**
+     * Steps off the place of a block onto a place beside it to stand on that no block of the plan still waits for, the nearest
+     * first.
+     *
+     * @return whether the builder is on its way there
+     */
+    private boolean stepAside(ServerLevel level, BlockPos target, Construction construction, BuildPlan steps) {
+        return stepAside(level, target, construction, steps, body);
+    }
+
+    /**
+     * Has a body step off the place of a block, as {@link #stepAside(ServerLevel, BlockPos, Construction, BuildPlan)}: by a walk
+     * where one leads there, otherwise by a step (off the top of a wall begun, say).
+     */
+    private static boolean stepAside(ServerLevel level, BlockPos target, Construction construction, BuildPlan steps,
+                                     net.minecraft.world.entity.Mob mover) {
+        if (!mover.getNavigation().isDone()) {
+            return true;
+        }
+        BlockPos at = mover.blockPosition();
+        BlockPos best = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    BlockPos pos = at.offset(dx, dy, dz);
+                    if (dx == 0 && dz == 0 || pos.getX() == target.getX() && pos.getZ() == target.getZ() || !standable(level, pos)
+                            || unbuilt(construction, steps, pos) || unbuilt(construction, steps, pos.above())) {
+                        continue;
+                    }
+                    double distance = pos.distToCenterSqr(mover.getX(), mover.getY(), mover.getZ());
+                    if (distance < bestDistance) {
+                        best = pos;
+                        bestDistance = distance;
+                    }
+                }
+            }
+        }
+        if (best == null || !PathBudget.tryAcquire()) {
+            return best != null;
+        }
+        Path path = mover.getNavigation().createPath(best, 0);
+        if (path != null && path.canReach()) {
+            mover.getNavigation().moveTo(path, SPEED);
+        } else {
+            mover.teleportTo(best.getX() + 0.5, best.getY(), best.getZ() + 0.5);
+        }
+        return true;
+    }
+
+    /**
+     * A builder waiting by a construction keeps off the places of its blocks still to be laid: it would only be in the way.
+     */
+    private void keepOffBlocks(ServerLevel level) {
+        Construction construction = waitingBy;
+        BuildPlan steps = waitingPlan;
+        if (construction == null || steps == null || column != null) {
+            return;
+        }
+        BlockPos at = body.blockPosition();
+        if (unbuilt(construction, steps, at) || unbuilt(construction, steps, at.above())) {
+            stepAside(level, at, construction, steps);
+        }
+    }
+
+    private static boolean standable(ServerLevel level, BlockPos feet) {
+        BlockPos floor = feet.below();
+        return level.isLoaded(feet) && Scaffolds.open(level, feet) && Scaffolds.open(level, feet.above())
+                && !level.getBlockState(floor).getCollisionShape(level, floor).isEmpty();
+    }
+
+    /**
+     * Whether a block of the plan still goes at a place.
+     */
+    private static boolean unbuilt(Construction construction, BuildPlan steps, BlockPos pos) {
+        int index = steps.placeAt(pos.getX(), pos.getY(), pos.getZ());
+        return index >= 0 && !construction.isDone(index) && !construction.isPending(index);
     }
 
     // ---------------------------------------------------------------- getting within reach

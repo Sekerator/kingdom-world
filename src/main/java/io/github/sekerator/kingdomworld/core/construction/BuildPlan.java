@@ -203,6 +203,14 @@ public final class BuildPlan {
         return other != null && tiers[other] < tiers[index] && !construction.isDone(other) && !construction.isPending(other);
     }
 
+    /**
+     * The step that places a block at a place, or -1 if no block of the plan goes there.
+     */
+    public int placeAt(int x, int y, int z) {
+        Integer index = placeIndex().get(pack(x, y, z));
+        return index == null ? -1 : index;
+    }
+
     private Map<Long, Integer> clearIndex() {
         if (clearAt == null) {
             clearAt = index(0, clears);

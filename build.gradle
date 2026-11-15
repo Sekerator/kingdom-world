@@ -73,6 +73,10 @@ minecraft {
             if (project.hasProperty('gameTestOnly')) {
                 property 'kingdomworld.gameTestOnly', project.property('gameTestOnly').toString()
             }
+            // "-PgameTestRepeat=20" with gameTestOnly runs the chosen batches that many times in a row, to catch a rare failure.
+            if (project.hasProperty('gameTestRepeat')) {
+                property 'kingdomworld.gameTestRepeat', project.property('gameTestRepeat').toString()
+            }
             // "-PgameTestHeap=4G" caps the heap of the server of the tests, which otherwise takes a quarter of the memory of the
             // machine: several servers on one machine then fit in its memory.
             if (project.hasProperty('gameTestHeap')) {

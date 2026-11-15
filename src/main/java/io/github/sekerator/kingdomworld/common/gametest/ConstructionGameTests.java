@@ -307,6 +307,10 @@ public final class ConstructionGameTests {
         java.util.Map<String, Long> stock = new java.util.HashMap<>();
         cost.keySet().forEach(item -> stock.put(item, stored(server, kingdom, PostWork.item(item))));
         List<String> problems = new ArrayList<>();
+        // What each of the two builders does, every 20 ticks: told when they take long.
+        List<String> trace = new ArrayList<>();
+        boolean[] told = {false};
+        ConstructionWork.traceBuilders(true);
 
         helper.onEachTick(() -> {
             if (together[0] >= 0) {
@@ -314,6 +318,23 @@ public final class ConstructionGameTests {
             }
             long now = level.getGameTime();
             boolean two = alone[0] >= 0;
+            if (two && (now - began[0]) % 20 == 0) {
+                for (Citizen builder : crew) {
+                    net.minecraft.world.entity.Mob body = io.github.sekerator.kingdomworld.common.citizen.CitizenBodies.body(builder.id());
+                    Citizen current = KingdomWorldApi.state(server).citizens().get(builder.id()).orElse(builder);
+                    trace.add("t" + (now - began[0]) + " " + builder.id().toString().substring(0, 4) + " " + current.workStatus() + " at "
+                            + (body == null ? "no body" : String.format(java.util.Locale.ROOT, "%.1f,%.1f,%.1f", body.getX(), body.getY(), body.getZ()))
+                            + " done " + construction[0].doneCount() + "/" + construction[0].steps() + " site " + construction[0].delivered()
+                            + " " + ConstructionWork.describe(construction[0], builder.id(), now));
+                }
+                if (trace.size() > 2000) {
+                    trace.subList(0, 200).clear();
+                }
+            }
+            if (two && !told[0] && now - began[0] > alone[0] * 2 / 3) {
+                told[0] = true;
+                CREW_LOG.info("crew two takes long ({} ticks, one took {}):\n{}", now - began[0], alone[0], String.join("\n", trace));
+            }
             // Two walks for the same material at once only when one does not bring all the house still needs of it.
             java.util.Map<String, Integer> walks = new java.util.HashMap<>();
             java.util.Map<String, Integer> load = new java.util.HashMap<>();
@@ -358,6 +379,7 @@ public final class ConstructionGameTests {
                 return;
             }
             together[0] = now - began[0];
+            ConstructionWork.traceBuilders(false);
             CREW_LOG.info("crew two done in {} ticks", together[0]);
         });
         helper.succeedWhen(() -> {
