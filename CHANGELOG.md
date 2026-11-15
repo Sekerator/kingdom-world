@@ -15,6 +15,15 @@
 - **Исправлено: дыры в стене после ворот.** Если ворота прорезали в стене, которая ещё строилась, столбы после ворот в этом отрезке считались поставленными и оставались дырами. Теперь стена достраивается без дыр, а оплаченное за столбы в воротах возвращается на склады, когда отрезок готов.
 - **Дорога к городу королевства мира.** Если при появлении королевства мира путь от столицы к его городу не нашёлся, дорогу больше не пропускают молча: члены королевства с правом на стройку получают сообщение, а путь ищут снова через игровой день, пока дорога не встанет. После перезапуска сервера пропущенные дороги ищут снова через минуту.
 
+Меньше заминок на загруженном сервере: работа, которую мод делал за один тик, идёт кусками. Игра от этого не меняется, только идёт ровнее.
+
+- **Стены по тикам.** Оплаченные столбцы стен ставятся каждый тик понемногу (до 64 столбцов и 2 мс за тик на все стены), а не все разом раз в секунду. Королевство мира платит за свою стену по 48 столбцов за тик, и раньше это давало тики по 55-60 мс; теперь тик стен длится не дольше примерно 2 мс. Стена встаёт та же.
+- **Осмотр поля по частям.** Фермер, получивший новое поле, и горожане фермы без посевов осматривают поле за несколько тиков (512 колонок за тик на все фермы), а не до 65 на 65 колонок за один тик; поле радиуса 32 осматривается за 9 тиков. Первый урожай нового поля вдали от игроков приходит на один шаг жителей позже. Королевство мира при появлении по-прежнему осматривает свои поля сразу, пока его земля загружена.
+- **Кровати и склады.** Бездомный житель ищет кровать только среди свободных, а не перебирает все кровати королевства, и контейнеры складов-зданий находятся раз за тик, а не при каждом взгляде работника на склады королевства.
+- **Закупки короны.** Цена короны на вещь и стоимость изготовления у мастерской одного ремесла считаются раз за шаг, а не для каждой лавки и каждого застрявшего заказа: те же мастера получают те же заказы, а шаг закупок почти вдвое дешевле.
+- **Чанки появляющегося королевства мира.** Чанки дорог к городам королевство держит только пока они нужны: при осмотре земли и с прокладки дорог до конца. В долгих стадиях между ними крупное королевство с тремя городами держит 436 чанков из 696. Стройка в фоне, которая пять минут стоит без игроков, отпускает свои чанки и снова просит их, когда продолжается.
+- **Журнал сервера.** Строка о медленных тиках пишется не чаще раза в минуту: сколько их было с прошлой строки, худший и средний.
+
 ### 1.6.2
 
 Плавильщик и повар работают партиями и топят сразу все печи своей зоны, а мастерские ходят на склад за ингредиентами на всю партию. Зона поста может заходить за границу королевства, а двое строителей одной стройки больше не делают одно и то же. Сетевой протокол 70: клиент и сервер должны быть одной версии мода.
@@ -359,6 +368,15 @@ Fixes of construction, workers, walls and roads.
 - **Fixed: the flags of a large building.** A pass over the flags of a building that one tick could not read through began anew and never ended for a template with more than 256 flags. It now goes on from where it stopped.
 - **Fixed: holes in a wall after a gate.** A gate cut into a wall still being built left the columns after the gate in that stretch counted as built, and they stayed holes. The wall is now finished without holes, and what was paid for the columns of the gate goes back to the storehouses once the stretch stands.
 - **The road to a town of a kingdom of the world.** When no way from the capital of a kingdom of the world to one of its towns was found as it appeared, the road is no longer left out without a word: the members of the kingdom who manage its construction are told, and the way is looked for again a day of the game later until the road stands. After a restart of the server the roads left out are looked for again a minute later.
+
+Fewer stutters on a busy server: work the mod did in one tick goes in parts. The game does not change, it only runs more evenly.
+
+- **Walls tick by tick.** The paid columns of walls go up a few every tick (up to 64 columns and 2 ms a tick for all the walls) instead of all at once every second. A kingdom of the world pays for its wall 48 columns a tick, and this gave ticks of 55-60 ms; now a tick of walls takes about 2 ms at most. The wall that goes up is the same.
+- **A field looked over in parts.** A farmer given a new field and the townsfolk of a farm without crops look over the field in several ticks (512 columns a tick for all the farms) instead of up to 65 by 65 columns in one tick; a field of radius 32 takes 9 ticks. The first harvest of a new field far from players comes one step of the citizens later. A kingdom of the world appearing still looks over its fields at once while its land is loaded.
+- **Beds and storehouses.** A homeless citizen looks for a bed among the free ones only, not through every bed of the kingdom, and the containers of warehouses are found once a tick, not at every look of a worker at the storehouses of the kingdom.
+- **Purchases of the crown.** The price the crown asks for an item and what a workshop of a trade makes it for are worked out once a step, not for every shop and every stuck order: the same masters get the same orders, and a step of the purchases takes about half the time.
+- **Chunks of a kingdom of the world appearing.** A kingdom holds the chunks of the roads to its towns only while it needs them: while it looks at the land and from laying the roads to the end. Through the long stages between, a large kingdom with three towns holds 436 of its 696 chunks. A raising in the background that waits five minutes without players lets its chunks go and asks for them again when it goes on.
+- **Server log.** The line about slow ticks is written at most once a minute: how many there were since the last line, the worst and the average.
 
 ### 1.6.2
 
