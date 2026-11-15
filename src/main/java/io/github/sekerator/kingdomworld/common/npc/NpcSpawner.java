@@ -152,6 +152,30 @@ public final class NpcSpawner {
     private static final int[][] TOWN_PLOTS = {{0, -12, 0}, {12, 0, 1}, {0, 12, 2}, {-12, 0, 3}, {12, -12, 0}, {-12, 12, 2}};
 
     private static Job job;
+    /** Times the raising of each place stopped with a failure since the server started. */
+    private static final Map<Integer, Integer> FAILURES = new java.util.HashMap<>();
+    /** The game time a place whose raising stopped with a failure may go on from. */
+    private static final Map<Integer, Long> RETRY_AT = new java.util.HashMap<>();
+    /** Ticks a raising that stopped with a failure waits before it goes on: a day of the game. */
+    static final long RETRY_TICKS = 24_000;
+    /** Failures of one place after which every further one is told loudly. */
+    private static final int LOUD_FAILURES = 3;
+
+    /**
+     * Whether the raising of a place may start now: one that stopped with a failure waits a day of the game before it goes on.
+     */
+    public static boolean mayRetry(MinecraftServer server, NpcSite site) {
+        Long at = RETRY_AT.get(site.id());
+        return at == null || server.overworld().getGameTime() >= at;
+    }
+
+    /**
+     * Lets a place whose raising stopped with a failure go on at once; for operators and game tests.
+     */
+    public static void forgetFailures(int siteId) {
+        FAILURES.remove(siteId);
+        RETRY_AT.remove(siteId);
+    }
     /** Ticks the background waits without players before its chunks go back to the game: five minutes. */
     private static final int ALONE_TICKS = 6_000;
     /** The time the parts of the step being made took, for the log of a slow tick. */
@@ -994,9 +1018,23 @@ public final class NpcSpawner {
         releaseTickets(level);
         job = null;
         if (site.kingdomId().isPresent() && KingdomWorldApi.kingdom(level.getServer(), site.kingdomId().get()).isPresent()) {
-            // A kingdom founded as data stays with its land and ruler; only its buildings are not raised.
-            LOGGER.warn("The buildings of the kingdom of the world at {} are not raised: {}", site, reason);
-            site.setStatus(NpcSite.Status.SPAWNED);
+            if (site.stage() == SpawnStage.DONE) {
+                LOGGER.warn("The buildings of the kingdom of the world at {} are not raised: {}", site, reason);
+                site.setStatus(NpcSite.Status.SPAWNED);
+                return;
+            }
+            // A kingdom founded as data stays with its land and ruler, and its raising waits a day and goes on from where it
+            // stopped: a capital is never left standing half raised for good.
+            int failures = FAILURES.merge(site.id(), 1, Integer::sum);
+            RETRY_AT.put(site.id(), level.getGameTime() + RETRY_TICKS);
+            site.hold(reason);
+            if (failures >= LOUD_FAILURES) {
+                LOGGER.error("The raising of the kingdom of the world at {} stopped {} times at {} step {}: {}; it goes on again in a day",
+                        site, failures, site.stage().id(), site.step(), reason);
+            } else {
+                LOGGER.warn("The raising of the kingdom of the world at {} stopped at {} step {}: {}; it goes on again in a day", site,
+                        site.stage().id(), site.step(), reason);
+            }
             return;
         }
         LOGGER.warn("The kingdom of the world at {} does not appear: {}", site, reason);
@@ -2913,6 +2951,7 @@ public final class NpcSpawner {
         }
         releaseTickets(level);
         site.setStatus(NpcSite.Status.SPAWNED);
+        forgetFailures(site.id());
         RoadSync.changed();
         double average = job.ticks > 2 ? job.sumNanos / 1e6 / (job.ticks - 2) : 0;
         lastTiming = new Timing(job.ticks, average, job.maxNanos / 1e6);

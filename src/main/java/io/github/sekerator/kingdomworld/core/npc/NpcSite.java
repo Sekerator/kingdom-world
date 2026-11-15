@@ -259,6 +259,8 @@ public final class NpcSite {
      * got the difference once.
      */
     public static final int WEALTH = 8;
+    /** The buildings of the capital were looked for once after an appearance that left some out, and raised again if missing. */
+    public static final int REPAIRED = 16;
 
     /**
      * Whether something of the founding was given already ({@link #MONEY}, {@link #LAWS}, {@link #STORES}), so that raising the
@@ -294,6 +296,15 @@ public final class NpcSite {
 
     public void block(String why) {
         status = Status.BLOCKED;
+        reason = why == null ? "" : why;
+        changeListener.run();
+    }
+
+    /**
+     * Puts the raising of a place whose kingdom stands aside with a reason: it keeps its stage and step and goes on later.
+     */
+    public void hold(String why) {
+        status = Status.FOUNDED;
         reason = why == null ? "" : why;
         changeListener.run();
     }

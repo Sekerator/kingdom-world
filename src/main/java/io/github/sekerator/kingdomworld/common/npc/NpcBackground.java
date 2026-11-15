@@ -217,7 +217,8 @@ final class NpcBackground {
         double bestDistance = Double.MAX_VALUE;
         for (NpcSite site : state.sites()) {
             boolean waiting = site.status() == NpcSite.Status.FOUNDED || close && site.status() == NpcSite.Status.PLANNED;
-            if (!waiting) {
+            // A raising that stopped with a failure waits a day before it goes on, near players too.
+            if (!waiting || !NpcSpawner.mayRetry(server, site)) {
                 continue;
             }
             double distance = Double.MAX_VALUE;

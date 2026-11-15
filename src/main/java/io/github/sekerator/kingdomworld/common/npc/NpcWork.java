@@ -200,8 +200,10 @@ public final class NpcWork {
      */
     public static boolean built(MinecraftServer server, UUID kingdomId) {
         NpcState state = state(server);
+        // A capital stands once its raising came to its end: one put aside half raised gets no recruits nor adventurers.
         return state.kingdom(kingdomId).flatMap(kingdom -> state.site(kingdom.siteId()))
-                .map(site -> site.status() == NpcSite.Status.SPAWNED).orElse(true);
+                .map(site -> site.status() == NpcSite.Status.SPAWNED && site.stage() == io.github.sekerator.kingdomworld.core.npc.SpawnStage.DONE)
+                .orElse(true);
     }
 
     /**
