@@ -266,4 +266,32 @@ public final class LoadBenchGameTests {
         return site.kingdomId().flatMap(id -> io.github.sekerator.kingdomworld.common.road.RoadWork.state(server).wallOf(0, id))
                 .map(io.github.sekerator.kingdomworld.core.road.Wall::allPaid).orElse(false);
     }
+
+    /**
+     * The chunks a large kingdom of the world with three towns asks for while it appears: all of them from the look at the land
+     * to the end before, those of the land of the capital and of the towns alone between the look at the land and the roads now.
+     */
+    @GameTest(template = NpcGameTests.EMPTY, batch = "kingdomworld_load_bench_chunks", timeoutTicks = 200, required = false)
+    public static void aLargeKingdomOfTheWorldHoldsTheChunksOfItsWaysOnlyWhileItNeedsThem(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        BlockPos center = helper.absolutePos(BlockPos.ZERO);
+        NpcSettings.override(NpcRules.DEFAULT);
+        NpcSite site = null;
+        try {
+            int x = center.getX() + 4_000;
+            int z = center.getZ() + 4_000;
+            site = io.github.sekerator.kingdomworld.common.npc.NpcWork.plantAt(server, x, z, NpcLevel.LARGE,
+                    List.of(new int[]{x + 420, z}, new int[]{x - 300, z + 330}, new int[]{x, z - 480}), NpcSite.LAYOUT_DISTRICTS, "").orElse(null);
+            helper.assertTrue(site != null && site.towns().size() == 3, "The place has no three towns: " + site);
+            int[] counts = io.github.sekerator.kingdomworld.common.npc.NpcSpawner.chunkCounts(site);
+            LOGGER.info("Load bench: a large kingdom of the world with {} towns asks for {} chunks; between the look at the land and the "
+                    + "roads it holds {} of them", site.towns().size(), counts[0], counts[1]);
+        } finally {
+            if (site != null) {
+                io.github.sekerator.kingdomworld.common.npc.NpcWork.remove(server, site.id(), true);
+            }
+            NpcSettings.override(null);
+        }
+        helper.succeed();
+    }
 }

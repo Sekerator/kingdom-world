@@ -152,6 +152,8 @@ public final class NpcSpawner {
     private static final int[][] TOWN_PLOTS = {{0, -12, 0}, {12, 0, 1}, {0, 12, 2}, {-12, 0, 3}, {12, -12, 0}, {-12, 12, 2}};
 
     private static Job job;
+    /** Ticks the background waits without players before its chunks go back to the game: five minutes. */
+    private static final int ALONE_TICKS = 6_000;
     /** The time the parts of the step being made took, for the log of a slow tick. */
     private static final Map<String, Long> PARTS = new java.util.LinkedHashMap<>();
 
@@ -174,6 +176,15 @@ public final class NpcSpawner {
         final NpcComposition composition;
         final List<ChunkPos> chunks = new ArrayList<>();
         final Set<Long> ticketed = new LinkedHashSet<>();
+        /**
+         * The chunks of the ways to the towns alone (beyond the land of the capital and the squares of the towns): asked for only
+         * while the stages that read them run, the look at the land and the roads to the end.
+         */
+        final List<ChunkPos> ways = new ArrayList<>();
+        /** Whether the chunks of the ways are among the chunks asked for now. */
+        boolean waysHeld = true;
+        /** Ticks the background waited in a row without players. */
+        int alone;
         /** Chunks with a ticket that are not loaded yet. */
         final List<ChunkPos> pending = new ArrayList<>();
         int next;
@@ -456,11 +467,19 @@ public final class NpcSpawner {
             job.forced = startForced;
         }
         if (job.background && NpcBackground.waiting(server, job.forced)) {
-            // The background waits for players and for short ticks; its chunks stay asked for.
+            // The background waits for players and for short ticks; its chunks stay asked for while players come and go, and go
+            // back to the game once nobody played for a while: they are asked for again, a few at a time, when the work goes on.
             job.paused++;
             job.pausedLast = true;
+            job.alone = NpcBackground.playersOnline(server) ? 0 : job.alone + 1;
+            if (job.alone == ALONE_TICKS && !job.ticketed.isEmpty() && site.stage() != SpawnStage.DONE) {
+                LOGGER.info("Nobody plays: the {} chunks of {} go back to the game until its appearance goes on", job.ticketed.size(), site);
+                releaseTickets(server.overworld());
+                job.loaded = false;
+            }
             return;
         }
+        job.alone = 0;
         boolean small = false;
         if (job.background) {
             // A tick that took long before the work came to it is left to the rest of the server, but never for good: after a
@@ -602,7 +621,19 @@ public final class NpcSpawner {
     private static Job newJob(NpcSite site) {
         try {
             Job made = new Job(site.id(), composition(site));
-            made.chunks.addAll(chunks(site, made.composition));
+            List<ChunkPos> all = chunks(site, made.composition);
+            Set<Long> squares = squares(site);
+            for (ChunkPos chunk : all) {
+                if (squares.contains(chunk.toLong())) {
+                    made.chunks.add(chunk);
+                } else {
+                    made.ways.add(chunk);
+                }
+            }
+            made.waysHeld = needsWays(site, made.composition);
+            if (made.waysHeld) {
+                made.chunks.addAll(made.ways);
+            }
             return made;
         } catch (RuntimeException e) {
             LOGGER.error("The appearance of the kingdom of the world at {} could not be prepared", site, e);
@@ -612,6 +643,7 @@ public final class NpcSpawner {
     }
 
     private static void step(MinecraftServer server, ServerLevel level, NpcSite site, Job job) {
+        fitWays(site, job);
         if (site.stage() != SpawnStage.LOAD && site.stage() != SpawnStage.DONE && !loaded(level, site, job)) {
             // After a restart the chunks come back with the tickets first, so that nothing loads on the main thread.
             return;
@@ -698,6 +730,94 @@ public final class NpcSpawner {
         return list;
     }
 
+    /**
+     * The chunks of the land of the capital and of the squares of the towns, as {@link #chunks} counts them: what the stages of an
+     * appearance build on.
+     */
+    static Set<Long> squares(NpcSite site) {
+        Set<Long> keys = new java.util.HashSet<>();
+        int cx = site.x() >> 4;
+        int cz = site.z() >> 4;
+        int r = NpcCity.landRadius(site) + 1;
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dz = -r; dz <= r; dz++) {
+                keys.add(ChunkPos.asLong(cx + dx, cz + dz));
+            }
+        }
+        int around = NpcCity.townRadius(site) + 1;
+        for (NpcSite.Town town : site.towns()) {
+            int tx = town.x() >> 4;
+            int tz = town.z() >> 4;
+            for (int dx = -around; dx <= around; dx++) {
+                for (int dz = -around; dz <= around; dz++) {
+                    keys.add(ChunkPos.asLong(tx + dx, tz + dz));
+                }
+            }
+        }
+        return keys;
+    }
+
+    /**
+     * How many chunks the appearance of a place asks for: all of them, and those of the land of the capital and of the towns alone,
+     * which the stages between the look at the land and the roads hold; for the stand of the load.
+     */
+    public static int[] chunkCounts(NpcSite site) {
+        List<ChunkPos> all = chunks(site, composition(site));
+        Set<Long> squares = squares(site);
+        int held = 0;
+        for (ChunkPos chunk : all) {
+            if (squares.contains(chunk.toLong())) {
+                held++;
+            }
+        }
+        return new int[]{all.size(), held};
+    }
+
+    /**
+     * Whether a stage reads the chunks of the ways to the towns: the look at the land, the roads and what comes after them while
+     * their columns are placed.
+     */
+    static boolean needsWays(NpcSite site, NpcComposition composition) {
+        return switch (site.stage()) {
+            case LOAD, CHECK, ROADS, LAW, DONE -> true;
+            // A capital of districts has its wall before its roads; another one after them.
+            case WALL -> !composition.districts();
+            default -> false;
+        };
+    }
+
+    /**
+     * Asks for the chunks of the ways to the towns when a stage that reads them comes, and lets them go while the stages between
+     * the look at the land and the roads (the longest of an appearance) build only on the land of the capital and the towns.
+     */
+    private static void fitWays(NpcSite site, Job job) {
+        boolean needed = needsWays(site, job.composition);
+        if (needed == job.waysHeld || job.ways.isEmpty()) {
+            job.waysHeld = needed;
+            return;
+        }
+        job.waysHeld = needed;
+        if (needed) {
+            // They come back with the tickets, a few at a time, before the stage goes on.
+            job.chunks.addAll(job.ways);
+            job.loaded = false;
+            return;
+        }
+        Set<Long> ways = new java.util.HashSet<>();
+        for (ChunkPos chunk : job.ways) {
+            ways.add(chunk.toLong());
+        }
+        job.chunks.removeIf(chunk -> ways.contains(chunk.toLong()));
+        job.pending.removeIf(chunk -> ways.contains(chunk.toLong()));
+        for (long chunk : ways) {
+            if (job.ticketed.remove(chunk)) {
+                RELEASING.add(chunk);
+            }
+        }
+        // The chunks still asked for are looked at again from the first.
+        job.next = 0;
+    }
+
     private static void load(ServerLevel level, NpcSite site, Job job) {
         if (loaded(level, site, job)) {
             LOGGER.info("The chunks of {} are loaded ({} chunks, {} ticks)", site, job.chunks.size(), job.ticks);
@@ -720,6 +840,8 @@ public final class NpcSpawner {
         while (job.next < job.chunks.size() && job.pending.size() < waiting) {
             ChunkPos chunk = job.chunks.get(job.next++);
             if (job.ticketed.add(chunk.toLong())) {
+                // A chunk asked for again while its ticket waits to go keeps it.
+                RELEASING.remove(chunk.toLong());
                 level.getChunkSource().addRegionTicket(TICKET, chunk, 0, chunk);
             }
             if (level.getChunkSource().getChunkNow(chunk.x, chunk.z) == null) {
@@ -867,7 +989,7 @@ public final class NpcSpawner {
     }
 
     /** Chunks of appearances that ended, whose tickets go a few a tick. */
-    private static final java.util.ArrayDeque<Long> RELEASING = new java.util.ArrayDeque<>();
+    private static final Set<Long> RELEASING = new LinkedHashSet<>();
     /** Ticks between two chunks let go of: a chunk the game unloads it saves in the same tick. */
     private static final int RELEASE_EVERY = 2;
 
@@ -876,7 +998,9 @@ public final class NpcSpawner {
      */
     static void releaseSome(ServerLevel level) {
         if (level.getServer().getTickCount() % RELEASE_EVERY == 0 && !RELEASING.isEmpty()) {
-            ChunkPos chunk = new ChunkPos(RELEASING.poll());
+            java.util.Iterator<Long> first = RELEASING.iterator();
+            ChunkPos chunk = new ChunkPos(first.next());
+            first.remove();
             level.getChunkSource().removeRegionTicket(TICKET, chunk, 0, chunk);
         }
     }

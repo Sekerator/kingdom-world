@@ -37,7 +37,7 @@ final class NpcBackground {
         return !forced && !playersOnline(server) || server.getAverageTickTime() > NpcSettings.build().pauseTickMillis();
     }
 
-    private static boolean playersOnline(MinecraftServer server) {
+    static boolean playersOnline(MinecraftServer server) {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (!(player instanceof FakePlayer)) {
                 return true;
