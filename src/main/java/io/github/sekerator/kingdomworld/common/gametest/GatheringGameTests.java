@@ -95,6 +95,12 @@ public final class GatheringGameTests {
      */
     static Citizen worker(GameTestHelper helper, Kingdom kingdom, String profession, WorldPos post, BlockPos spot) {
         MinecraftServer server = helper.getLevel().getServer();
+        // A body works at its post by day only, and the server of the game tests runs through many days: the test starts in the
+        // morning of the day it is in, the day itself unchanged.
+        long time = helper.getLevel().getDayTime();
+        if (!helper.getLevel().isDay() || Math.floorMod(time, 24_000L) > 6_000L) {
+            helper.getLevel().setDayTime(Math.floorDiv(time, 24_000L) * 24_000L + 1_000L);
+        }
         Citizen citizen = CitizenGameTests.newcomer(helper, kingdom, 1, 1);
         KingdomWorldApi.change(server, "test", state -> state.setProfession(null, citizen.id(), profession));
         helper.assertTrue(KingdomWorldApi.state(server).citizens().assignWorkplace(citizen, post), "The worker got no seat at the post");
