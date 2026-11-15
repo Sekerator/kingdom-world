@@ -1194,6 +1194,10 @@ Invoke-Phase 'run1' {
                 if (-not (Wait-ForNewLog $server "Ran $mintSteps simulation step\(s\) of $KingdomName" $CommandTimeout $runs)) {
                     Add-Failure '[run1] the simulation steps of the mint did not run'
                 }
+                # The mint goes now, before the treasury is read: the minter would strike what the smelter makes (more of it with
+                # the mods of the pack) between the readings that compare it. The post keeps its minter.
+                Send-ServerCommand $server 'setblock 26 70 20 minecraft:air'
+                [void](Wait-ForLog $server 'Changed the block at 26, 70, 20' $CommandTimeout $ConsoleFailPattern)
                 $seen = Count-Log $rawPattern
                 Send-ServerCommand $server "kingdomworld admin economy info $KingdomName"
                 $raw = Wait-ForNewLog $server $rawPattern $CommandTimeout $seen
@@ -1216,9 +1220,6 @@ Invoke-Phase 'run1' {
                 } else {
                     Add-Failure "[run1] the payday did not pay the wages: '$(if ($pay) { $pay.Value })'"
                 }
-                # The mint goes now: later simulation steps would strike what the smelter makes and move the money between the
-                # checks that compare it. The post keeps its minter.
-                Send-ServerCommand $server 'setblock 26 70 20 minecraft:air'
                 $seen = Count-Log $rawPattern
                 Send-ServerCommand $server "kingdomworld admin economy info $KingdomName"
                 $raw = Wait-ForNewLog $server $rawPattern $CommandTimeout $seen
@@ -2155,6 +2156,12 @@ Invoke-Phase 'run1' {
         }
         if ($script:ConstructionId) {
             $id = $script:ConstructionId
+            # The miner fills the first storehouse with what it digs, far more of it with the ores of the mods of the pack: a
+            # second one holds the materials of the house and what comes back later.
+            Send-ServerCommand $server 'setblock 2 70 5 kingdomworld:storehouse'
+            if (-not (Wait-ForLog $server 'Changed the block at 2, 70, 5' $CommandTimeout $ConsoleFailPattern)) {
+                Add-Failure '[run1] the second storehouse could not be placed'
+            }
             Send-ServerCommand $server "kingdomworld admin build stock $id"
             if (Wait-ForLog $server "Materials for construction #$id put into the storehouses: (\d+), did not fit: 0" $CommandTimeout $ConsoleFailPattern) {
                 Write-Ok '[run1] the materials of the house are in the storehouse'
@@ -3161,9 +3168,9 @@ Invoke-Phase 'run2' {
                 Add-Failure "[run2] the miner $($script:MinerId) lost the workplace after restart"
             }
             Send-ServerCommand $server "kingdomworld admin storage list $KingdomName"
-            $stored = Wait-ForLog $server "Storehouses of ${KingdomName}: (\d+) kinds of items in 1 storehouses" $CommandTimeout $ConsoleFailPattern
+            $stored = Wait-ForLog $server "Storehouses of ${KingdomName}: (\d+) kinds of items in 2 storehouses" $CommandTimeout $ConsoleFailPattern
             if ($stored -and [int]$stored.Groups[1].Value -ge 2) {
-                Write-Ok '[run2] the contents of the storehouse survived the restart'
+                Write-Ok '[run2] the contents of the storehouses survived the restart'
             } else {
                 Add-Failure '[run2] the storehouse lost its contents after restart'
             }
