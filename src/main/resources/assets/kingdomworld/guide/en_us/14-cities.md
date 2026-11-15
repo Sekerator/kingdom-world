@@ -310,10 +310,11 @@ and robbers lie in wait on roads less often.
   straight make every block of length dearer (2 and 20 times a plain block of road by default, key
   `routeModeWeights`), and the road runs straighter.
 - Foreign land is gone around when that is cheap and crossed when there is no other way.
-- A thread of its own on the server searches; it does not slow the game. While points are moved, land nobody has
-  loaded yet is taken from the estimate of the generator: no new chunk is made. When such a road is laid, its land
-  is loaded a little at a time (missing chunks are generated then and stay in the world), the way is planned on it
-  again and the road laid by itself.
+- A thread of its own on the server searches; it does not slow the game. While points are moved, land that is not
+  loaded is read from the saved world when it was generated before, and otherwise taken from the estimate of the
+  generator: no new chunk is made. When such a road is laid, the land the save could not give is loaded a little at
+  a time (missing chunks are generated then and stay in the world), the way is planned on it again and the road laid
+  by itself.
 - Kingdoms of the world and dimensions with a ceiling search the old way: no longer than {cfg:roads.maxRouteLength}
   blocks, {cfg:roads.searchStepsPerTick} steps a tick and {cfg:roads.maxSearchSteps} at most, a bridge or an
   embankment no longer than {cfg:roads.maxBridge} blocks.

@@ -126,13 +126,17 @@ public final class RoadPlanSessions {
         final Session session;
         final Set<Long> remaining;
         final Map<Long, LandScan.Copy> copies = new HashMap<>();
+        /** The chunks not loaded: read from the disk, else guessed or, for a plan confirmed, loaded by a second ask. */
         final Set<Long> guess = new HashSet<>();
         final Map<Long, Long> loading = new HashMap<>();
         final CompletableFuture<Boolean> done = new CompletableFuture<>();
+        /** Whether the chunks not loaded are left to the disk rather than loaded with tickets. */
+        final boolean disk;
 
-        Ask(Session session, Set<Long> chunks) {
+        Ask(Session session, Set<Long> chunks, boolean disk) {
             this.session = session;
             this.remaining = new LinkedHashSet<>(chunks);
+            this.disk = disk;
         }
     }
 
@@ -515,9 +519,52 @@ public final class RoadPlanSessions {
                 return true;
             }
             session.stage = RoadViews.PlanView.Stage.READING;
-            Ask ask = new Ask(session, missing);
+            // The loaded chunks are copied on the main thread first: a live chunk counts over its copy on the disk.
+            Ask ask = new Ask(session, missing, true);
+            if (!await(ask)) {
+                return false;
+            }
+            for (LandScan.Copy copy : ask.copies.values()) {
+                job.grid.put(LandScan.read(copy, job.snapshot));
+            }
+            Set<Long> load = new LinkedHashSet<>();
+            if (!ask.guess.isEmpty()) {
+                Map<Long, LandTile> fromDisk = LandDecode.read(session.level, ask.guess, job.snapshot, cancel::get);
+                if (cancel.get()) {
+                    return false;
+                }
+                for (long key : ask.guess) {
+                    LandTile tile = fromDisk.get(key);
+                    if (tile != null) {
+                        job.grid.put(tile);
+                    } else if (session.survey) {
+                        load.add(key);
+                    } else {
+                        // A plan being looked at never loads or generates the world: the land is guessed.
+                        job.grid.put(CoarseLand.guessTile(session.level, session.dimension, job.snapshot, (int) (key >> 32), (int) key));
+                    }
+                }
+            }
+            if (!load.isEmpty()) {
+                // Land of a confirmed plan the disk could not give: loaded with tickets, generated if it never was.
+                Ask loads = new Ask(session, load, false);
+                if (!await(loads)) {
+                    return false;
+                }
+                for (LandScan.Copy copy : loads.copies.values()) {
+                    job.grid.put(LandScan.read(copy, job.snapshot));
+                }
+            }
+            session.stage = RoadViews.PlanView.Stage.SEARCHING;
+            return true;
+        }
+
+        /**
+         * Hands an ask to the main thread and waits for it, looking whether the plan was given up; false when it was or the land
+         * could not be had.
+         */
+        private boolean await(Ask ask) {
             ASKS.add(ask);
-            boolean ok;
             try {
                 while (true) {
                     if (cancel.get()) {
@@ -525,10 +572,9 @@ public final class RoadPlanSessions {
                         return false;
                     }
                     try {
-                        ok = ask.done.get(100, TimeUnit.MILLISECONDS);
-                        break;
+                        return ask.done.get(100, TimeUnit.MILLISECONDS);
                     } catch (java.util.concurrent.TimeoutException e) {
-                        // Waits on, looking whether it was given up.
+                        // Waits on.
                     }
                 }
             } catch (InterruptedException e) {
@@ -537,14 +583,6 @@ public final class RoadPlanSessions {
             } catch (java.util.concurrent.ExecutionException e) {
                 return false;
             }
-            for (LandScan.Copy copy : ask.copies.values()) {
-                job.grid.put(LandScan.read(copy, job.snapshot));
-            }
-            for (long key : ask.guess) {
-                job.grid.put(CoarseLand.guessTile(session.level, session.dimension, job.snapshot, (int) (key >> 32), (int) key));
-            }
-            session.stage = RoadViews.PlanView.Stage.SEARCHING;
-            return ok;
         }
 
         @Override
@@ -701,8 +739,8 @@ public final class RoadPlanSessions {
                     chunks.remove();
                     continue;
                 }
-                if (!ask.session.survey) {
-                    // A plan being looked at never loads or generates the world: the land is guessed.
+                if (ask.disk || !ask.session.survey) {
+                    // Read from the disk by the planner, else guessed or, for a plan confirmed, loaded by a second ask.
                     ask.guess.add(key);
                     chunks.remove();
                     continue;
