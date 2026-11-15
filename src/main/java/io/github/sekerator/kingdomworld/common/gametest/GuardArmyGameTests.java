@@ -531,7 +531,7 @@ public final class GuardArmyGameTests {
                     "The side fighting as data holds " + ours.size());
             // A battle as data against a far stronger enemy touches the five, never the one with a body.
             long before = ArmyWork.state(server).soldier(seen.id()).orElseThrow().experience();
-            ArmySquad band = FieldGameTests.band(server, kingdom, 30, 5, new io.github.sekerator.kingdomworld.core.citizen.WorldPos(
+            ArmySquad band = FieldGameTests.band(server, kingdom, 16, 3, new io.github.sekerator.kingdomworld.core.citizen.WorldPos(
                     io.github.sekerator.kingdomworld.common.kingdom.Dimensions.id(level), 0, 64, 0));
             io.github.sekerator.kingdomworld.core.combat.Side enemy = ArmyWork.side(server, band);
             io.github.sekerator.kingdomworld.core.combat.Battle.Result result = io.github.sekerator.kingdomworld.core.combat.Battle.resolve(ours, enemy,

@@ -38,6 +38,10 @@ trade, hire and go to war.
 - The starting wealth is given once, when a kingdom appears: money in the treasury marked "Founding", food for
   {cfg:npcKingdoms.startingFoodDays} days for all its citizens, logs, planks, cobblestone, iron, seed and the gear of
   its soldiers in the storehouses. From then on the kingdom lives by the usual rules.
+- Kings of the world are rich: the treasury holds 5,000 gold when a small kingdom appears, 20,000 for a medium one and
+  100,000 for a large one (the key `npcKingdoms.startingMoney`, in copper). Kingdoms that appeared in earlier versions
+  with 60, 150 and 400 gold get the difference once. A rich treasury does not drag its currency down: the money of
+  the treasury of a kingdom of the world counts as its wealth.
 
 ### How to know them
 
@@ -72,8 +76,12 @@ trade, hire and go to war.
   {cfg:guild.worldRankMax#2}, a large one from {cfg:guild.worldRankMin#3} to {cfg:guild.worldRankMax#3}. Only one
   kingdom of the world, the strongest, has the rank SS.
 - Adventurers and mages come from abroad. The adventurers hunt far away and bring crystals home, and the mages
-  keep a ward over the throne with them and heal. Every {cfg:guild.worldGrowthDays} days a kingdom whose treasury is
-  no smaller than at its start raises every guild by a rank ([The guild and its desk](guild)).
+  keep a ward over the throne with them and heal. Every {cfg:guild.worldGrowthDays} days a kingdom whose treasury pays
+  at least 60 days of its upkeep raises every guild by a rank ([The guild and its desk](guild)).
+- A rich king keeps a larger army: with a treasury of half a year of upkeep or more its army and guard are up to half
+  again as large as usual, more under threat, and more guards stand at the gates, on the square and in the throne
+  hall of its capital. The ruler takes recruits from abroad only while its treasury pays three weeks of upkeep and,
+  when it loses money, lasts a month.
 - The royal army lives in camps on the land of the kingdom, up to {cfg:npcKingdoms.campSoldiers} soldiers a camp and
   three camps at most. The ruler fills a lack of soldiers with recruits from abroad, {cfg:npcKingdoms.armyPerDay} a
   game day ([The army of a kingdom](army)).
@@ -128,7 +136,8 @@ a state has no styled castle and no guild house, and only a large one has a mage
   smoker a bakery.
 - The garrison: the guard at the gates, at the storehouses and in the throne hall, a reserve of the army at the
   barracks. The royal army is far larger than the guard: by default 50-100 soldiers in a small kingdom, 80-150 in a
-  medium one and 100-200 in a large one, more under a warrior and fewer under a merchant.
+  medium one and 100-200 in a large one, more under a warrior and fewer under a merchant, and for a rich and
+  endangered ruler up to half again the most.
 - A currency and a mint of its own. The market is open to strangers, takes foreign currency and sets its prices
   by itself.
 
@@ -413,14 +422,43 @@ land come at once and do not count.
   {cfg:npcKingdoms.rulers.growthChunks} chunks a turn. States grow by provinces ([States](states)).
 - **Towns**: a new town with a town hall and a road for every {cfg:npcKingdoms.rulers.townPopulation} citizens beyond
   the towns that stand, {cfg:npcKingdoms.rulers.maxTowns} at most.
-- **Money**: taxes, wages, orders for the workshops (bread, weapons, tools), a minter at an idle mint, surplus to the
-  market and abroad, shortages bought, deals with neighbours at market prices with a markup.
+- **Money**: the ruler counts its treasury in days of upkeep (the wages of its people and soldiers), never against the
+  money it started with. It keeps a reserve of {cfg:npcKingdoms.rulers.reserveDays} days of upkeep and the pay of its
+  soldiers for 10 days for every war it fights, and counts what its constructions still lack as promised, at the
+  price of buying it abroad. The decisions of one turn never spend together more than it may spare. Taxes, wages, a
+  minter at an idle mint.
+- **Exports**: whatever heaps up in the storehouses (wheat, logs, planks, cobblestone and the rest) gets a rule for
+  export, and the merchants take the dearest goods abroad first.
+- **Imports**: what constructions (the oldest first) and orders lack the ruler buys first of the shops of its
+  citizens, and abroad no more than three days of upkeep or a sixtieth of what it may spare a day. Stone, logs and
+  crops its own workers gather it waits for some days, and a good it imported five days in a row it leaves alone for
+  some days. For constructions standing still for want of materials it buys twice as much.
+- **Production**: the ruler sets up the posts its kingdom lacks by the square of its throne: a smith with a crafting
+  table when its workers lack tools, a smelter with a furnace when there is ore, a cook with a crafting table and a
+  smoker when bread is wanted and there is wheat, one a turn. It keeps a stone tool for every two miners and
+  woodcutters and orders them of its smith before buying them, orders only what somebody can make, and bakes bread up
+  to 5 days of food and of the wheat that heaps up, and for hungry settlements besides.
+- **Deals**: offers are judged one after another, by what the deals taken before left, and against the real
+  alternatives: a sale of a surplus that pays more than exporting it, a purchase of something needed that costs less
+  than importing it. A regular deal is weighed by a week of deliveries, and one that no longer pays at two turns in a
+  row is called off.
+- **Investment**: a rich ruler (a treasury of a year of upkeep) builds three buildings at a time and keeps a workshop,
+  a market, a storehouse and a well more than its level asks.
 - **Army**: about {cfg:npcKingdoms.rulers.soldiersPermille} soldiers for every thousand citizens, more under threat,
-  patrols on the roads, guards for caravans, a guild reward on the robbers of the nearest camp.
+  patrols on the roads, guards for caravans, a guild reward on the robbers of the nearest camp. The threat adds up
+  murderers wanted, robbers nearby, wars, its own people killed and much stronger neighbours. In danger or at war the
+  ruler hires a band of mercenaries, the most strength for its price (two at most), while its treasury pays the
+  advance and a month of their pay, and lets them go once the danger is past. Gear for the soldiers comes from the
+  storehouses first, and with a modest treasury the guard and the officers get it first.
+- **Attacks on its people**: an alarm counts the citizens killed. Two killed bring out the royal army at once, five
+  its captain with everybody, and soldiers of the army come from their camps within 384 blocks. The ruler trebles the
+  reward for the head of the murderer, and the kingdom of the murderer becomes its enemy for long.
 - **Roads** to neighbours closer than {cfg:npcKingdoms.rulers.roadDistance} blocks
   ([Roads across the land of others](roads_crossing)).
-- **Hard times**: a treasury below a reserve of {cfg:npcKingdoms.rulers.reserveDays} days of expenses and losing money
-  is poor. A poor ruler lets part of the army go, stops building, raises taxes and sells its surplus.
+- **Hard times**: a treasury of less than 3 days of upkeep, or below the reserve and losing money, is poor; a poor
+  ruler counts itself well again only with 6 days, so that hard times do not start and end every other day. A poor
+  ruler lets part of the army go, stops building, raises taxes and sells its surplus. It raises taxes and the tithe a
+  little and earlier when it loses money and has two months left, and a rich ruler takes a little less.
 - **A festival** when the mood of the citizens falls below {cfg:npcKingdoms.rulers.festivalMood} and the treasury can
   pay ([Festivals and fairs](festivals)).
 - **Research** of the mage tower, an **honorary councillor** among subjects with a reputation of 50 or more, spies
@@ -430,6 +468,14 @@ land come at once and do not count.
 
 A merchant looks for pacts and alliances, a builder for pacts. A warrior declares war on a weak neighbour no more
 than once in {cfg:war.npcWarDays} days and leaves alone one that fought in the last {cfg:war.npcRecentWarDays} days.
+It starts a war by reckoning: the squads it may send away, a third left home, must be stronger than the enemy's army
+with a quarter more behind walls, with the armies of its allies (and for a kingdom of players its members), its
+treasury must pay a month of upkeep and a week of its soldiers' pay, and the spoils at least half that week. Every
+order of war (a march, a siege, relief of a city or a province) takes squads from one count, so that a second siege
+does not melt the reserve at home. A ruler whose strength stays far below its enemy's at two turns in a row, or whose
+treasury runs dry, calls its squads home and asks for peace, a white one while it still leads. A kingdom of the world
+pays at most a month of its income as an indemnity; an annexation gives the winner the whole treasury, and the roads
+with the cities.
 Rulers of the world declare war on a kingdom of players no more than once in {cfg:war.npcPlayerWarDays} days, and
 only if the server allows it. A just ruler never strikes first but stands by its allies, a mage keeps out of it
 ([Diplomacy](diplomacy)).

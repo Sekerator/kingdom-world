@@ -114,4 +114,21 @@ class DiplomacyMindTest {
         assertEquals(mine, DiplomacyMind.offerPeace(winning, War.Side.ATTACKER, mine, PeaceTerms.WHITE, RULES).orElseThrow(), "ahead: press");
         assertEquals(DiplomacyMind.WINNING, DiplomacyMind.peace(winning, War.Side.ATTACKER, PeaceTerms.WHITE, PeaceTerms.WHITE, RULES).reason());
     }
+
+    @Test
+    void aWarriorStartsNoWarItCannotWinOrPayFor() {
+        // Weak by its whole army, but behind walls with allies, the neighbour is too strong for the squads the warrior may send.
+        DiplomacyMind.Neighbor walled = new DiplomacyMind.Neighbor(weak, true, 20, 100.0, 0, Bond.PEACE, true, false, null, false, 80, 50_000);
+        DiplomacyMind.Self rich = new DiplomacyMind.Self(self, RulerCharacter.WARRIOR, List.of(), 100.0, false, null,
+                new DiplomacyMind.Purse(100, 400, 200, 500, 200_000));
+        assertTrue(DiplomacyMind.victim(rich, List.of(walled), false, 50, RULES).isEmpty(), "a war it cannot win");
+        DiplomacyMind.Neighbor open = new DiplomacyMind.Neighbor(weak, true, 20, 100.0, 0, Bond.PEACE, true, false, null, false, 20, 50_000);
+        assertTrue(DiplomacyMind.victim(rich, List.of(open), false, 50, RULES).isPresent(), "a war it can win and pay for");
+        // The same war with an empty treasury, or for nothing to gain, is not started.
+        DiplomacyMind.Self poor = new DiplomacyMind.Self(self, RulerCharacter.WARRIOR, List.of(), 100.0, false, null,
+                new DiplomacyMind.Purse(100, 5, 200, 500, 2_000));
+        assertTrue(DiplomacyMind.victim(poor, List.of(open), false, 50, RULES).isEmpty(), "a war it cannot pay for");
+        DiplomacyMind.Neighbor bare = new DiplomacyMind.Neighbor(weak, true, 20, 100.0, 0, Bond.PEACE, true, false, null, false, 20, 0);
+        assertTrue(DiplomacyMind.victim(rich, List.of(bare), false, 50, RULES).isEmpty(), "a war that brings nothing");
+    }
 }
