@@ -112,6 +112,7 @@ public final class CityWalls {
         PENDING.clear();
         seconds = 0;
         CityAreas.reset();
+        WallEarthworks.reset();
     }
 
     // ---------------------------------------------------------------- cities
@@ -299,9 +300,12 @@ public final class CityWalls {
         final Place place;
         final int radius;
         final RoadTerrain terrain;
+        final int baseY;
         int ticks;
 
-        Layout(@Nullable UUID actor, UUID kingdomId, long cityId, Wall.WallClass wallClass, Place place, int radius, RoadTerrain terrain) {
+        Layout(@Nullable UUID actor, UUID kingdomId, long cityId, Wall.WallClass wallClass, Place place, int radius, RoadTerrain terrain,
+               int baseY) {
+            this.baseY = baseY;
             this.actor = actor;
             this.kingdomId = kingdomId;
             this.cityId = cityId;
@@ -324,6 +328,17 @@ public final class CityWalls {
      * @param actor the player, who needs the right to run construction
      */
     public static Outcome order(MinecraftServer server, @Nullable UUID actor, UUID kingdomId, long cityId, Wall.WallClass wallClass) {
+        return order(server, actor, kingdomId, cityId, wallClass, Wall.FOLLOW_GROUND);
+    }
+
+    /**
+     * Orders the wall of a city at a height of its own: the lowest block of every column stands at {@code baseY}, the ground under
+     * it is filled and over it cut.
+     *
+     * @param baseY the height, or {@link Wall#FOLLOW_GROUND} for a wall on the ground of each column
+     */
+    public static Outcome order(MinecraftServer server, @Nullable UUID actor, UUID kingdomId, long cityId, Wall.WallClass wallClass,
+                                int baseY) {
         if (RoadWork.isReadOnly(server)) {
             return Outcome.fail(KingdomError.READ_ONLY);
         }
@@ -343,8 +358,18 @@ public final class CityWalls {
         }
         int radius = radiusOf(server, kingdomId, cityId);
         // A later order for the same city takes the place of one still being read.
-        LAYOUTS.put(place.get().key(), new Layout(actor, kingdomId, cityId, wallClass, place.get(), radius, new RoadTerrain(level)));
+        if (baseY != Wall.FOLLOW_GROUND && !baseFits(level, wallClass, baseY)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        LAYOUTS.put(place.get().key(), new Layout(actor, kingdomId, cityId, wallClass, place.get(), radius, new RoadTerrain(level), baseY));
         return Outcome.DONE;
+    }
+
+    /**
+     * Whether a wall of a class may stand at a height in a level: its foot and its top within the world.
+     */
+    public static boolean baseFits(ServerLevel level, Wall.WallClass wallClass, int baseY) {
+        return baseY > level.getMinBuildHeight() && baseY + Wall.TALLEST + 1 < level.getMaxBuildHeight();
     }
 
     /**
@@ -400,14 +425,16 @@ public final class CityWalls {
         Layout job = next.getValue();
         ServerLevel level = ConstructionWork.level(server, job.place.dimension());
         job.terrain.allow(RoadSettings.rules().chunksPerTick());
-        List<RouteCell> ring = level == null ? null : WallContour.ring(job.terrain, job.place.x(), job.place.z(), job.radius);
+        List<RouteCell> ring = level == null ? null : WallContour.ring(job.terrain, job.place.x(), job.place.z(), job.radius,
+                job.baseY != Wall.FOLLOW_GROUND);
         if (ring == null && level != null && ++job.ticks < LAYOUT_TICKS) {
             return;
         }
         LAYOUTS.remove(next.getKey());
         Wall[] made = new Wall[1];
         Outcome outcome = level == null || ring == null ? Outcome.fail(KingdomError.NO_GROUND_FOR_WALL)
-                : lay(server, job.actor, job.kingdomId, job.cityId, job.wallClass, job.place, level, ring, made, landOnly(server, job.kingdomId));
+                : lay(server, job.actor, job.kingdomId, job.cityId, job.wallClass, job.place, level, ring, made, landOnly(server, job.kingdomId),
+                job.baseY);
         if (!outcome.ok()) {
             RoadWork.notify(server, job.kingdomId, Component.translatable(KEY + "wall_refused", job.place.name(),
                     KingdomActions.errorMessage(outcome.error())).withStyle(ChatFormatting.RED));
@@ -439,6 +466,17 @@ public final class CityWalls {
      */
     public static Outcome build(MinecraftServer server, @Nullable UUID actor, UUID kingdomId, long cityId, Wall.WallClass wallClass, Wall[] made,
                                 int ownRadius) {
+        return build(server, actor, kingdomId, cityId, wallClass, made, ownRadius, Wall.FOLLOW_GROUND);
+    }
+
+    /**
+     * Lays out the wall of a city at once with a radius and a height of its own.
+     *
+     * @param ownRadius the radius, or 0 for that of the level of the city
+     * @param baseY     the height of the lowest block of every column, or {@link Wall#FOLLOW_GROUND}
+     */
+    public static Outcome build(MinecraftServer server, @Nullable UUID actor, UUID kingdomId, long cityId, Wall.WallClass wallClass, Wall[] made,
+                                int ownRadius, int baseY) {
         if (!RoadWork.mayManage(server, actor, kingdomId)) {
             return Outcome.fail(KingdomError.NO_PERMISSION);
         }
@@ -458,23 +496,29 @@ public final class CityWalls {
         RoadPlanning.loadNow = true;
         List<RouteCell> ring;
         try {
-            ring = WallContour.ring(terrain, place.get().x(), place.get().z(), radius);
+            ring = WallContour.ring(terrain, place.get().x(), place.get().z(), radius, baseY != Wall.FOLLOW_GROUND);
         } finally {
             RoadPlanning.loadNow = before;
         }
         if (ring == null) {
             return Outcome.fail(KingdomError.NO_GROUND_FOR_WALL);
         }
-        return lay(server, actor, kingdomId, cityId, wallClass, place.get(), level, ring, made, false);
+        if (baseY != Wall.FOLLOW_GROUND && !baseFits(level, wallClass, baseY)) {
+            return Outcome.fail(KingdomError.VALUE_OUT_OF_RANGE);
+        }
+        return lay(server, actor, kingdomId, cityId, wallClass, place.get(), level, ring, made, false, baseY);
     }
 
     /**
-     * Turns a ring read whole into the wall of the city, in place of the old one.
+     * Turns a ring read whole into the wall of the city, in place of the old one. The new wall stands on the natural ground, never
+     * on the blocks of a wall: where a wall of the kingdom stands, its foot is the ground. It takes over the blocks of the old wall
+     * still standing (swapped for its own as its columns go up, the rest taken down) and its gates.
      *
      * @param wholeOnLand whether the wall must stand whole on the land of its kingdom (one ordered for a city of a kingdom of players)
+     * @param baseY       the height of the lowest block of every column, or {@link Wall#FOLLOW_GROUND}
      */
     private static Outcome lay(MinecraftServer server, @Nullable UUID actor, UUID kingdomId, long cityId, Wall.WallClass wallClass, Place place,
-                               ServerLevel level, List<RouteCell> whole, Wall[] made, boolean wholeOnLand) {
+                               ServerLevel level, List<RouteCell> whole, Wall[] made, boolean wholeOnLand, int baseY) {
         if (!RoadWork.mayManage(server, actor, kingdomId)) {
             return Outcome.fail(KingdomError.NO_PERMISSION);
         }
@@ -488,17 +532,41 @@ public final class CityWalls {
                 return Outcome.fail(KingdomError.WALL_OUTSIDE_LAND);
             }
         }
-        // No wall on the land of another kingdom: the ring has a gap there.
+        RoadState roads = RoadWork.state(server);
+        Optional<Wall> old = roads.wallOf(cityId, kingdomId);
+        List<Wall> others = new ArrayList<>();
+        for (Wall wall : roads.walls()) {
+            if (wall.dimension().equals(place.dimension())) {
+                others.add(wall);
+            }
+        }
+        // No wall on the land of another kingdom, nor on the blocks of its walls: the ring has a gap there.
         List<RouteCell> ring = new ArrayList<>(whole);
         ring.removeIf(cell -> cell.owner() != null && !cell.owner().equals(kingdomId));
-        ring.replaceAll(cell -> onGround(level, cell));
+        ring.removeIf(cell -> others.stream().anyMatch(wall -> !wall.kingdomId().equals(kingdomId) && wall.cellAt(cell.x(), cell.z()) >= 0));
+        java.util.Set<Long> columns = new java.util.HashSet<>();
+        for (RouteCell cell : ring) {
+            columns.add(BlockPos.asLong(cell.x(), 0, cell.z()));
+        }
+        List<Long> under = new ArrayList<>();
+        int[] ground = new int[ring.size()];
+        int depth = io.github.sekerator.kingdomworld.common.construction.ConstructionSettings.earthworkDepth();
+        for (int i = 0; i < ring.size(); i++) {
+            RouteCell cell = ring.get(i);
+            int foot = groundOf(level, cell, others, kingdomId, old.orElse(null), columns, under);
+            ground[i] = foot;
+            int y = baseY == Wall.FOLLOW_GROUND ? foot : baseY - 1;
+            if (Math.abs(y - foot) > depth) {
+                LOGGER.info("No wall around {} at {}: the ground at {} {} lies at {}", place.name(), baseY, cell.x(), cell.z(), foot);
+                return Outcome.fail(KingdomError.WALL_BASE_TOO_DEEP);
+            }
+            ring.set(i, new RouteCell(cell.x(), y, cell.z(), cell.kind(), cell.depth(), cell.owner()));
+        }
         if (ring.size() < 4) {
             LOGGER.info("No wall around {}: {} blocks of the ring are on the ground, {} of them on the land of others", place.name(), whole.size(),
                     whole.size() - ring.size());
             return Outcome.fail(KingdomError.NO_GROUND_FOR_WALL);
         }
-        RoadState roads = RoadWork.state(server);
-        Optional<Wall> old = roads.wallOf(cityId, kingdomId);
         List<RouteCell> cells = ring;
         List<List<RouteCell>> ways = new ArrayList<>();
         for (Road road : roads.roads()) {
@@ -506,38 +574,113 @@ public final class CityWalls {
                 ways.add(road.cells());
             }
         }
-        List<Integer> gates = WallContour.gates(cells, ways);
+        java.util.TreeSet<Integer> gates = new java.util.TreeSet<>(WallContour.gates(cells, ways));
+        List<Long> leaves = new ArrayList<>();
+        if (old.isPresent()) {
+            // The gates of the old wall stay, on the nearest place of the new ring.
+            int radius = 0;
+            for (RouteCell cell : cells) {
+                radius = Math.max(radius, Math.max(Math.abs(cell.x() - place.x()), Math.abs(cell.z() - place.z())));
+            }
+            int reach = Math.max(0, radius - old.get().radius()) + Wall.GATE_HALF + 1;
+            for (int gate : WallContour.keptGates(cells, old.get().gateCells(), reach)) {
+                boolean near = false;
+                for (int kept : gates) {
+                    int distance = Math.abs(kept - gate);
+                    near |= Math.min(distance, cells.size() - distance) <= 2 * Wall.GATE_HALF;
+                }
+                if (!near) {
+                    gates.add(gate);
+                }
+            }
+            for (int gate : old.get().gates()) {
+                for (BlockPos leaf : io.github.sekerator.kingdomworld.common.siege.SiegeGates.leafPositions(old.get(), gate)) {
+                    leaves.add(leaf.asLong());
+                }
+            }
+        }
+        leaves.addAll(under);
         Outcome outcome = RoadWork.change(server, "lay out a wall", state -> {
             old.ifPresent(wall -> forget(server, state, wall));
             made[0] = new Wall(state.nextWallId(), cityId, kingdomId, wallClass, place.dimension(), place.x(), place.z(), cells,
-                    gates, KingdomWorldApi.gameTime(server));
+                    gates, KingdomWorldApi.gameTime(server), baseY, ground);
+            if (old.isPresent()) {
+                made[0].inherit(old.get(), leaves);
+            } else if (!under.isEmpty()) {
+                made[0].restoreReplaced(under.stream().mapToLong(Long::longValue).toArray());
+            }
             state.putWall(made[0]);
             return Outcome.DONE;
         });
         if (outcome.ok()) {
-            LOGGER.info("Wall {} of {} laid out around {}: {} columns, {} gate(s)", made[0].id(), RoadWork.kingdomName(server, kingdomId).getString(),
-                    place.name(), made[0].blocks().size(), gates.size());
-            RoadWork.notify(server, kingdomId, Component.translatable(KEY + "wall_laid", place.name(), RoadTexts.gates(made[0].gates().size()))
-                    .withStyle(ChatFormatting.GREEN));
+            LOGGER.info("Wall {} of {} laid out around {}: {} columns, {} gate(s), base {}, {} block(s) of an older wall to swap", made[0].id(),
+                    RoadWork.kingdomName(server, kingdomId).getString(), place.name(), made[0].blocks().size(), gates.size(),
+                    made[0].hasBase() ? made[0].baseY() : "on the ground", made[0].replacedBlocks().length);
+            Component laid = made[0].hasBase()
+                    ? Component.translatable(KEY + "wall_laid_earth", place.name(), RoadTexts.gates(made[0].gates().size()), made[0].baseY(),
+                    made[0].earth(), made[0].cutTotal())
+                    : Component.translatable(KEY + "wall_laid", place.name(), RoadTexts.gates(made[0].gates().size()));
+            RoadWork.notify(server, kingdomId, laid.copy().withStyle(ChatFormatting.GREEN));
+            // The blocks of the old wall in the gates come down, and the floor of a gate meets the foot of a wall at a height.
+            for (int gate : made[0].gates()) {
+                open(server, made[0], gate);
+            }
             RoadSync.changed();
         }
         return outcome;
     }
 
     /**
-     * The block under a trunk or a plant on top of a column: a wall stands on the ground and leaves trees as they are.
+     * The natural ground of a block of the ring: the foot of a wall of the kingdom standing there, or the solid ground under what
+     * grows and lies loose. Under a block of the old wall of the city, a column of wall stone one block thick, as a wall laid on
+     * the top of another one left it, is not ground either: its blocks are taken down.
+     *
+     * @param under the blocks of such a column are added here
      */
-    private static RouteCell onGround(ServerLevel level, RouteCell cell) {
-        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(cell.x(), cell.y(), cell.z());
-        int lowest = Math.max(level.getMinBuildHeight(), cell.y() - 32);
-        while (pos.getY() > lowest) {
-            BlockState state = level.getBlockState(pos);
-            if (!state.is(net.minecraft.tags.BlockTags.LOGS) && !state.is(net.minecraft.tags.BlockTags.LEAVES) && !state.canBeReplaced()) {
-                break;
+    private static int groundOf(ServerLevel level, RouteCell cell, List<Wall> walls, UUID kingdomId, @Nullable Wall old,
+                                java.util.Set<Long> ring, List<Long> under) {
+        Integer known = null;
+        for (Wall wall : walls) {
+            if (!wall.kingdomId().equals(kingdomId)) {
+                continue;
             }
-            pos.move(net.minecraft.core.Direction.DOWN);
+            java.util.OptionalInt foot = wall.groundAt(cell.x(), cell.z());
+            if (foot.isPresent() && foot.getAsInt() <= cell.y() && (known == null || foot.getAsInt() < known)) {
+                known = foot.getAsInt();
+            }
         }
-        return pos.getY() == cell.y() ? cell : new RouteCell(cell.x(), pos.getY(), cell.z(), cell.kind(), cell.depth(), cell.owner());
+        if (known == null) {
+            return WallEarthworks.groundUnder(level, cell.x(), cell.y(), cell.z());
+        }
+        int y = known;
+        if (old != null && old.cellAt(cell.x(), cell.z()) >= 0) {
+            BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(cell.x(), y, cell.z());
+            for (int i = 0; i < Wall.TALLEST && y > level.getMinBuildHeight(); i++) {
+                BlockState state = level.getBlockState(pos.setY(y));
+                if (!isWallStone(state) || !thin(level, pos, old, ring)) {
+                    break;
+                }
+                under.add(pos.asLong());
+                y--;
+            }
+        }
+        return y;
+    }
+
+    /**
+     * Whether a block stands alone across the ring: every block next to it off the rings, old and new, is free.
+     */
+    private static boolean thin(ServerLevel level, BlockPos pos, Wall old, java.util.Set<Long> ring) {
+        for (net.minecraft.core.Direction side : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+            BlockPos next = pos.relative(side);
+            if (old.cellAt(next.getX(), next.getZ()) >= 0 || ring.contains(BlockPos.asLong(next.getX(), 0, next.getZ()))) {
+                continue;
+            }
+            if (!RoadBlocks.free(level.getBlockState(next))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -568,9 +711,24 @@ public final class CityWalls {
             if (wall.get().buildingId() != 0) {
                 registerGate(server, wall.get(), cell);
             }
+            cutShared(server, wall.get(), at.x(), at.z());
             RoadSync.changed();
         }
         return outcome;
+    }
+
+    /**
+     * A gate cut where another wall of the kingdom shares the column is cut into that wall too.
+     */
+    private static void cutShared(MinecraftServer server, Wall wall, int x, int z) {
+        for (Wall other : List.copyOf(RoadWork.state(server).walls())) {
+            if (other != wall && other.kingdomId().equals(wall.kingdomId()) && other.dimension().equals(wall.dimension())) {
+                int cell = other.cellAt(x, z);
+                if (cell >= 0 && !other.inGate(cell)) {
+                    cutGate(server, other, x, z);
+                }
+            }
+        }
     }
 
     /**
@@ -633,6 +791,7 @@ public final class CityWalls {
         if (wall.buildingId() != 0) {
             registerGate(server, wall, cell);
         }
+        cutShared(server, wall, at.x(), at.z());
         RoadSync.changed();
         return true;
     }
@@ -730,8 +889,9 @@ public final class CityWalls {
             if (!level.isLoaded(new BlockPos(at.x(), at.y(), at.z()))) {
                 return false;
             }
-            for (int up = 1; up <= wall.wallClass().height() + 1; up++) {
-                if (wall.placedHere(BlockPos.asLong(at.x(), at.y() + up, at.z()))) {
+            for (int up = 1; up <= Wall.TALLEST; up++) {
+                long pos = BlockPos.asLong(at.x(), at.y() + up, at.z());
+                if (wall.placedHere(pos) || wall.replaces(pos)) {
                     return true;
                 }
             }
@@ -764,28 +924,104 @@ public final class CityWalls {
     }
 
     /**
-     * Takes away the blocks the wall put where a gate is now; they go to the storehouses. Blocks the wall did not place, or
-     * that were changed since, stay.
+     * Takes away the blocks of the wall where a gate is now, those it placed and those of an older wall it took over, from the
+     * ground to the top of the highest wall; they go to the storehouses. Blocks no wall placed, or that were changed since, stay.
+     * The gate of a wall at a height of its own is levelled to its foot.
      */
     private static void openGate(ServerLevel level, Wall wall, int cell) {
         for (int i = cell - Wall.GATE_HALF; i <= cell + Wall.GATE_HALF; i++) {
             int index = Math.floorMod(i, wall.cells().size());
             RouteCell at = wall.cells().get(index);
-            for (int up = 1; up <= wall.wallClass().height() + 1; up++) {
+            for (int up = 1; up <= Wall.TALLEST; up++) {
                 BlockPos pos = new BlockPos(at.x(), at.y() + up, at.z());
                 // Its place is looked at only once it is loaded: reading a block of a chunk not loaded would load it now.
-                if (!wall.placedHere(pos.asLong()) || !level.isLoaded(pos)) {
+                if (!wall.placedHere(pos.asLong()) && !wall.replaces(pos.asLong()) || !level.isLoaded(pos)) {
                     continue;
                 }
-                BlockState state = level.getBlockState(pos);
-                if (!state.is(io.github.sekerator.kingdomworld.common.construction.TemplateBlocks.UNCLEARABLE)
-                        && (state.is(net.minecraft.tags.BlockTags.LOGS) || isWallStone(state))) {
-                    for (ItemStack drop : net.minecraft.world.level.block.Block.getDrops(state, level, pos, null)) {
-                        RoadBlocks.store(level, wall.kingdomId(), pos, drop);
-                    }
-                    level.removeBlock(pos, false);
+                takeAway(level, wall, pos);
+            }
+        }
+        WallEarthworks.levelGate(level, wall, cell);
+    }
+
+    /**
+     * Takes a block of a wall away to the storehouses: logs, wall stone and the leaves of gates; anything else stays. The wall
+     * forgets the block either way.
+     */
+    private static void takeAway(ServerLevel level, Wall wall, BlockPos pos) {
+        BlockState state = level.getBlockState(pos);
+        if (!state.is(io.github.sekerator.kingdomworld.common.construction.TemplateBlocks.UNCLEARABLE)
+                && (state.is(net.minecraft.tags.BlockTags.LOGS) || isWallStone(state)
+                || state.getBlock() instanceof net.minecraft.world.level.block.FenceGateBlock || state.is(net.minecraft.world.level.block.Blocks.IRON_BARS))) {
+            for (ItemStack drop : net.minecraft.world.level.block.Block.getDrops(state, level, pos, null)) {
+                RoadBlocks.store(level, wall.kingdomId(), pos, drop);
+            }
+            level.removeBlock(pos, false);
+        }
+        wall.forgetPlaced(pos.asLong());
+        wall.forgetReplaced(pos.asLong());
+    }
+
+    /**
+     * Whether a block is of the class of a wall: a log for a palisade, wall stone for a stone wall.
+     */
+    private static boolean ofClass(Wall wall, BlockState state) {
+        return wall.wallClass() == Wall.WallClass.PALISADE ? state.is(net.minecraft.tags.BlockTags.LOGS) : isWallStone(state);
+    }
+
+    /** Blocks of older walls taken down in a second at most, in all. */
+    private static final int TAKE_DOWN = 384;
+
+    /**
+     * Takes down the blocks of older walls that stand where no column of the new one does (in a gate, on an inner ring the city
+     * grew out of), where their place is loaded; nothing is loaded for it and no builder spends time on it. A block in a column of
+     * another wall of the kingdom goes to that wall.
+     */
+    private static void takeDownOld(MinecraftServer server) {
+        int budget = TAKE_DOWN;
+        RoadState roads = RoadWork.state(server);
+        for (Wall wall : List.copyOf(roads.walls())) {
+            if (!wall.hasReplaced() || budget <= 0) {
+                continue;
+            }
+            ServerLevel level = ConstructionWork.level(server, wall.dimension());
+            if (level == null) {
+                continue;
+            }
+            boolean changed = false;
+            for (long packed : wall.replacedBlocks()) {
+                if (budget <= 0) {
+                    break;
                 }
-                wall.forgetPlaced(pos.asLong());
+                if (wall.inColumn(packed) && !wall.built()) {
+                    // Swapped when its column goes up.
+                    continue;
+                }
+                BlockPos pos = BlockPos.of(packed);
+                if (!io.github.sekerator.kingdomworld.common.construction.ChunkHold.loaded(level, pos)) {
+                    continue;
+                }
+                budget--;
+                changed = true;
+                Wall keeper = wall.inColumn(packed) ? wall : null;
+                for (Wall other : roads.walls()) {
+                    if (keeper == null && other != wall && other.kingdomId().equals(wall.kingdomId())
+                            && other.dimension().equals(wall.dimension()) && other.inColumn(packed)) {
+                        keeper = other;
+                    }
+                }
+                if (keeper != null && ofClass(keeper, level.getBlockState(pos))) {
+                    keeper.markPlaced(packed);
+                    wall.forgetReplaced(packed);
+                } else if (keeper != null && keeper != wall) {
+                    // The column of another wall: left as it stands, that wall is not swapped.
+                    wall.forgetReplaced(packed);
+                } else {
+                    takeAway(level, wall, pos);
+                }
+            }
+            if (changed) {
+                roads.changed();
             }
         }
     }
@@ -936,6 +1172,10 @@ public final class CityWalls {
         if (minute) {
             openShut(server);
         }
+        if (!RoadWork.isReadOnly(server)) {
+            takeDownOld(server);
+        }
+        WallEarthworks.tell(server);
         RoadState roads = RoadWork.state(server);
         for (Wall wall : roads.walls()) {
             ServerLevel level = ConstructionWork.level(server, wall.dimension());
@@ -1035,6 +1275,10 @@ public final class CityWalls {
             if (!io.github.sekerator.kingdomworld.common.construction.ChunkHold.loaded(level, base)) {
                 break;
             }
+            // Trees and what grows in the column are cleared, a hole under it filled: the column waits for earth if there is none.
+            if (WallEarthworks.column(level, wall, block) != WallEarthworks.Step.READY) {
+                break;
+            }
             String item = section.pool().keySet().stream().findFirst().orElse(null);
             Item found = item == null ? null : PostWork.item(item);
             for (int up = 1; up <= block.height(); up++) {
@@ -1042,7 +1286,19 @@ public final class CityWalls {
                     break;
                 }
                 BlockPos pos = base.above(up);
-                if (RoadBlocks.free(level.getBlockState(pos)) && found instanceof BlockItem blockItem) {
+                BlockState here = level.getBlockState(pos);
+                if (wall.replaces(pos.asLong())) {
+                    // A block of the old wall: one of this class stays as this wall's own, any other is swapped.
+                    if (ofClass(wall, here)) {
+                        wall.markPlaced(pos.asLong());
+                        wall.forgetReplaced(pos.asLong());
+                        RoadBlocks.store(level, wall.kingdomId(), pos, new ItemStack(found));
+                        continue;
+                    }
+                    takeAway(level, wall, pos);
+                    here = level.getBlockState(pos);
+                }
+                if (RoadBlocks.free(here) && found instanceof BlockItem blockItem) {
                     ConstructionWork.place(level, pos, blockItem.getBlock().defaultBlockState(), found);
                     if (level.getBlockState(pos).getBlock() == blockItem.getBlock()) {
                         wall.markPlaced(pos.asLong());
@@ -1050,6 +1306,13 @@ public final class CityWalls {
                 } else {
                     // Something stands there: the item goes back.
                     RoadBlocks.store(level, wall.kingdomId(), pos, new ItemStack(found));
+                }
+            }
+            // Over a lower column the old wall reached higher: that comes down too.
+            for (int up = block.height() + 1; up <= Wall.TALLEST; up++) {
+                BlockPos pos = base.above(up);
+                if (wall.replaces(pos.asLong())) {
+                    takeAway(level, wall, pos);
                 }
             }
             section.markPlaced();
@@ -1077,6 +1340,11 @@ public final class CityWalls {
         wall.setBuildingId(id);
         for (int gate : wall.gates()) {
             registerGate(server, wall, gate);
+        }
+        ServerLevel level = ConstructionWork.level(server, wall.dimension());
+        if (level != null) {
+            // The earth the wall dug and did not need goes to the storehouses.
+            WallEarthworks.keepSpoil(level, wall);
         }
         RoadWork.state(server).changed();
         BuildingEffects.changed();
@@ -1166,7 +1434,8 @@ public final class CityWalls {
             }
             for (int up = 1; up <= block.height(); up++) {
                 counted++;
-                if (!RoadBlocks.free(level.getBlockState(base.above(up)))) {
+                // Leaves or a block of a player in the line of the wall are no wall.
+                if (ofClass(wall, level.getBlockState(base.above(up)))) {
                     standing++;
                 }
             }

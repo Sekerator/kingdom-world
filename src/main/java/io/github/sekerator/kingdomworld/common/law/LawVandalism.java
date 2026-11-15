@@ -233,7 +233,7 @@ public final class LawVandalism {
         Works works = works(server, kingdom);
         long at = pos.asLong();
         for (Wall wall : works.walls()) {
-            if (wall.dimension().equals(dimension) && wall.placedHere(at)) {
+            if (wall.dimension().equals(dimension) && (wall.placedHere(at) || wall.replaces(at))) {
                 return true;
             }
         }

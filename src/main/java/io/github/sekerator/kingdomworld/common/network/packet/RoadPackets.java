@@ -71,7 +71,7 @@ public final class RoadPackets {
      *
      * @param first  the road, the request or the city
      * @param second the section of a road, the squad sent to patrol, 1 to stop a governor and 0 to let it go on
-     * @param text   the new name of a city, or the citizen made its mayor or baron
+     * @param text   the new name of a city, the citizen made its mayor or baron, or the height of the foot of a wall ordered (empty: on the ground)
      */
     public record TabChange(UUID kingdomId, Action action, long first, long second, String text) {
         public static final RequestPolicy POLICY = new RequestPolicy("road_change", 0, 20, 10_000L);

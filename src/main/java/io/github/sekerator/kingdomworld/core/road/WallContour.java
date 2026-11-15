@@ -21,6 +21,17 @@ public final class WallContour {
      * @return the blocks of the ring, or {@code null} if some of the land cannot be looked at yet
      */
     public static List<RouteCell> ring(Terrain terrain, int centerX, int centerZ, int radius) {
+        return ring(terrain, centerX, centerZ, radius, false);
+    }
+
+    /**
+     * The ring around a place, walked round once.
+     *
+     * @param overWater whether blocks of water are in the ring too, at the height of the water: a wall at a height of its own fills
+     *                  under itself
+     * @return the blocks of the ring, or {@code null} if some of the land cannot be looked at yet
+     */
+    public static List<RouteCell> ring(Terrain terrain, int centerX, int centerZ, int radius, boolean overWater) {
         List<int[]> walk = new ArrayList<>();
         for (int x = centerX - radius; x < centerX + radius; x++) {
             walk.add(new int[]{x, centerZ - radius});
@@ -40,7 +51,7 @@ public final class WallContour {
             if (column == null) {
                 return null;
             }
-            if (column.surface() == Terrain.Surface.LAND) {
+            if (column.surface() == Terrain.Surface.LAND || overWater && column.surface() == Terrain.Surface.WATER) {
                 cells.add(new RouteCell(at[0], column.y(), at[1], RouteCell.Kind.GROUND, 0, column.owner()));
             }
         }
@@ -79,5 +90,35 @@ public final class WallContour {
             gates.add((runStart + previous) / 2);
         }
         return gates;
+    }
+
+    /**
+     * Where the gates of an older ring go on a new one: for each, the block of the new ring nearest to it, if one is within reach.
+     * Two old gates that fall on one new block give one gate.
+     *
+     * @param reach how far, along x or z, the new block may lie from the old gate
+     */
+    public static List<Integer> keptGates(List<RouteCell> ring, List<RouteCell> oldGates, int reach) {
+        TreeSet<Integer> kept = new TreeSet<>();
+        for (RouteCell gate : oldGates) {
+            int best = -1;
+            long bestDistance = Long.MAX_VALUE;
+            for (int i = 0; i < ring.size(); i++) {
+                RouteCell cell = ring.get(i);
+                long dx = cell.x() - gate.x();
+                long dz = cell.z() - gate.z();
+                if (Math.abs(dx) > reach || Math.abs(dz) > reach) {
+                    continue;
+                }
+                if (dx * dx + dz * dz < bestDistance) {
+                    best = i;
+                    bestDistance = dx * dx + dz * dz;
+                }
+            }
+            if (best >= 0) {
+                kept.add(best);
+            }
+        }
+        return new ArrayList<>(kept);
     }
 }

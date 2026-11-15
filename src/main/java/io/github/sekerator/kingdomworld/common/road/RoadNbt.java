@@ -336,6 +336,18 @@ final class RoadNbt {
         entry.putLong("created", wall.created());
         entry.putLong("building", wall.buildingId());
         entry.putLongArray("placed", wall.placedBlocks());
+        if (wall.hasReplaced()) {
+            entry.putLongArray("replaced", wall.replacedBlocks());
+        }
+        if (wall.hasBase()) {
+            entry.putInt("base", wall.baseY());
+        }
+        entry.putIntArray("ground", wall.grounds());
+        if (!wall.spoil().isEmpty()) {
+            CompoundTag spoil = new CompoundTag();
+            wall.spoil().forEach(spoil::putInt);
+            entry.put("spoil", spoil);
+        }
         ListTag sections = new ListTag();
         for (Road.Section section : wall.sections()) {
             CompoundTag s = new CompoundTag();
@@ -372,9 +384,16 @@ final class RoadNbt {
                 entry.getLong("city"), entry.getUUID("kingdom"),
                 io.github.sekerator.kingdomworld.core.road.Wall.WallClass.byId(entry.getString("class"))
                         .orElseThrow(() -> new IllegalArgumentException("unknown class of wall")),
-                entry.getString("dim"), entry.getInt("cx"), entry.getInt("cz"), cells, gates, entry.getLong("created"));
+                entry.getString("dim"), entry.getInt("cx"), entry.getInt("cz"), cells, gates, entry.getLong("created"),
+                entry.contains("base", Tag.TAG_INT) ? entry.getInt("base") : io.github.sekerator.kingdomworld.core.road.Wall.FOLLOW_GROUND,
+                entry.contains("ground", Tag.TAG_INT_ARRAY) && entry.getIntArray("ground").length == cells.size() ? entry.getIntArray("ground") : null);
         wall.setBuildingId(entry.getLong("building"));
         wall.restorePlaced(entry.getLongArray("placed"));
+        wall.restoreReplaced(entry.getLongArray("replaced"));
+        CompoundTag spoil = entry.getCompound("spoil");
+        for (String item : spoil.getAllKeys()) {
+            wall.addSpoil(item, spoil.getInt(item));
+        }
         ListTag sections = entry.getList("sections", Tag.TAG_COMPOUND);
         for (int i = 0; i < sections.size() && i < wall.sections().size(); i++) {
             CompoundTag s = sections.getCompound(i);

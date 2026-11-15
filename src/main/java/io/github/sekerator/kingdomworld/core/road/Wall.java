@@ -24,6 +24,10 @@ public final class Wall {
     public static final int MAX_CELLS = 8_192;
     /** Blocks of a gate on each side of its middle. */
     public static final int GATE_HALF = 1;
+    /** The highest column of any wall: a battlement of a stone wall. */
+    public static final int TALLEST = 6;
+    /** The base of a wall that stands on the ground of each of its columns, as laid out, rather than at one height. */
+    public static final int FOLLOW_GROUND = Integer.MIN_VALUE;
 
     /**
      * What the wall is made of and how high it is.
@@ -81,9 +85,28 @@ public final class Wall {
     private final int radius;
     private long buildingId;
     private final java.util.Set<Long> placedBlocks = new java.util.HashSet<>();
+    /** Blocks of an older wall that still stand where this one goes up, by packed position: swapped or taken down. */
+    private final java.util.Set<Long> replaced = new java.util.HashSet<>();
+    /** The height the lowest block of every column stands at, or {@link #FOLLOW_GROUND}. */
+    private final int baseY;
+    /** The natural ground of each block of the ring as it was laid out: the top block under the foot of the wall. */
+    private final int[] ground;
+    /** Blocks of the ring by packed x and z. */
+    private final java.util.Map<Long, Integer> byColumn = new java.util.HashMap<>();
+    /** Soil the wall dug that waits to fill under its columns, by item. */
+    private final java.util.Map<String, Integer> spoil = new java.util.TreeMap<>();
 
     public Wall(long id, long cityId, UUID kingdomId, WallClass wallClass, String dimension, int centerX, int centerZ, List<RouteCell> cells,
                 Collection<Integer> gates, long created) {
+        this(id, cityId, kingdomId, wallClass, dimension, centerX, centerZ, cells, gates, created, FOLLOW_GROUND, null);
+    }
+
+    /**
+     * @param baseY  the height of the lowest block of every column, or {@link #FOLLOW_GROUND}; the blocks of the ring stand one lower
+     * @param ground the natural ground of each block of the ring, or {@code null} for the height of the block itself
+     */
+    public Wall(long id, long cityId, UUID kingdomId, WallClass wallClass, String dimension, int centerX, int centerZ, List<RouteCell> cells,
+                Collection<Integer> gates, long created, int baseY, int[] ground) {
         this.id = id;
         this.cityId = cityId;
         this.kingdomId = Objects.requireNonNull(kingdomId, "kingdomId");
@@ -100,6 +123,12 @@ public final class Wall {
         }
         this.cells = List.copyOf(plain);
         this.created = created;
+        this.baseY = baseY;
+        this.ground = new int[this.cells.size()];
+        for (int i = 0; i < this.cells.size(); i++) {
+            this.ground[i] = ground != null && i < ground.length ? ground[i] : this.cells.get(i).y();
+            byColumn.put(column(this.cells.get(i).x(), this.cells.get(i).z()), i);
+        }
         int reach = 0;
         for (RouteCell cell : this.cells) {
             reach = Math.max(reach, Math.max(Math.abs(cell.x() - centerX), Math.abs(cell.z() - centerZ)));
@@ -125,7 +154,7 @@ public final class Wall {
             }
             RouteCell cell = cells.get(i);
             // A stone wall has battlements: every other block one higher.
-            int height = wallClass.height() + (wallClass == WallClass.STONE && i % 2 == 0 ? 1 : 0);
+            int height = heightAt(i);
             blocks.add(new Block(i, cell.x(), cell.y(), cell.z(), height));
         }
         List<Road.Section> old = new ArrayList<>(sections);
@@ -164,6 +193,66 @@ public final class Wall {
             }
         }
         return kept;
+    }
+
+    private static long column(int x, int z) {
+        return ((long) x << 32) | (z & 0xFFFF_FFFFL);
+    }
+
+    /**
+     * A position packed as the game packs block positions.
+     */
+    public static long pack(int x, int y, int z) {
+        return ((long) x & 0x3FFFFFFL) << 38 | ((long) z & 0x3FFFFFFL) << 12 | (long) y & 0xFFFL;
+    }
+
+    public static int packedX(long packed) {
+        return (int) (packed >> 38);
+    }
+
+    public static int packedY(long packed) {
+        return (int) (packed << 52 >> 52);
+    }
+
+    public static int packedZ(long packed) {
+        return (int) (packed << 26 >> 38);
+    }
+
+    /**
+     * The block of the ring at a place, or -1 if the ring does not pass there.
+     */
+    public int cellAt(int x, int z) {
+        Integer cell = byColumn.get(column(x, z));
+        return cell == null ? -1 : cell;
+    }
+
+    /**
+     * The height of the block of the ring at a place, the foot its column stands on; empty off the ring.
+     */
+    public java.util.OptionalInt groundAt(int x, int z) {
+        int cell = cellAt(x, z);
+        return cell < 0 ? java.util.OptionalInt.empty() : java.util.OptionalInt.of(cells.get(cell).y());
+    }
+
+    /**
+     * The height of the column of a block of the ring: a stone wall has battlements, every other block one higher.
+     */
+    public int heightAt(int cell) {
+        return wallClass.height() + (wallClass == WallClass.STONE && cell % 2 == 0 ? 1 : 0);
+    }
+
+    /**
+     * Whether a position is a block of a column of the wall: on a block of the ring outside the gates, from one above its foot to
+     * the top of the column.
+     */
+    public boolean inColumn(long position) {
+        int cell = cellAt(packedX(position), packedZ(position));
+        if (cell < 0 || inGate(cell)) {
+            return false;
+        }
+        int y = packedY(position);
+        int foot = cells.get(cell).y();
+        return y > foot && y <= foot + heightAt(cell);
     }
 
     public boolean inGate(int cell) {
@@ -346,6 +435,143 @@ public final class Wall {
         for (long position : positions) {
             placedBlocks.add(position);
         }
+    }
+
+    /**
+     * Takes over the blocks of an older wall that still stand: those it placed, those it took over itself and some more (the
+     * leaves of its gates). Each is swapped for a block of this wall when its column goes up, or taken down.
+     */
+    public void inherit(Wall old, Collection<Long> extra) {
+        replaced.addAll(old.placedBlocks);
+        replaced.addAll(old.replaced);
+        replaced.addAll(extra);
+        replaced.removeAll(placedBlocks);
+    }
+
+    /**
+     * Whether the block at a packed position belongs to an older wall and waits to be swapped or taken down.
+     */
+    public boolean replaces(long position) {
+        return replaced.contains(position);
+    }
+
+    public void forgetReplaced(long position) {
+        replaced.remove(position);
+    }
+
+    public boolean hasReplaced() {
+        return !replaced.isEmpty();
+    }
+
+    /**
+     * The packed positions of the blocks of an older wall still to swap or take down.
+     */
+    public long[] replacedBlocks() {
+        return replaced.stream().mapToLong(Long::longValue).sorted().toArray();
+    }
+
+    public void restoreReplaced(long[] positions) {
+        for (long position : positions) {
+            replaced.add(position);
+        }
+    }
+
+    /**
+     * The height the lowest block of every column stands at, or {@link #FOLLOW_GROUND} for a wall on the ground of each column.
+     */
+    public int baseY() {
+        return baseY;
+    }
+
+    public boolean hasBase() {
+        return baseY != FOLLOW_GROUND;
+    }
+
+    /**
+     * The natural ground of a block of the ring as it was laid out.
+     */
+    public int ground(int cell) {
+        return ground[cell];
+    }
+
+    public int[] grounds() {
+        return ground.clone();
+    }
+
+    /**
+     * Blocks of earth to fill under a column, from its natural ground up to its foot, as laid out.
+     */
+    public int fill(Block block) {
+        return Math.max(0, block.y() - ground[block.cell()]);
+    }
+
+    /**
+     * Blocks of natural ground to cut over the foot of a column, as laid out.
+     */
+    public int cut(Block block) {
+        return Math.max(0, ground[block.cell()] - block.y());
+    }
+
+    /**
+     * Blocks of earth to fill under all the columns, as laid out.
+     */
+    public int earth() {
+        int sum = 0;
+        for (Block block : blocks) {
+            sum += fill(block);
+        }
+        return sum;
+    }
+
+    /**
+     * Blocks of natural ground to cut over the feet of all the columns, as laid out.
+     */
+    public int cutTotal() {
+        int sum = 0;
+        for (Block block : blocks) {
+            sum += cut(block);
+        }
+        return sum;
+    }
+
+    /**
+     * Soil the wall dug and keeps to fill under its columns, by item.
+     */
+    public java.util.Map<String, Integer> spoil() {
+        return java.util.Collections.unmodifiableMap(spoil);
+    }
+
+    public void addSpoil(String item, int count) {
+        if (count > 0) {
+            spoil.merge(item, count, Integer::sum);
+        }
+    }
+
+    /**
+     * Takes one of an item from the spoil.
+     *
+     * @return whether there was one
+     */
+    public boolean useSpoil(String item) {
+        Integer count = spoil.get(item);
+        if (count == null || count <= 0) {
+            return false;
+        }
+        if (count == 1) {
+            spoil.remove(item);
+        } else {
+            spoil.put(item, count - 1);
+        }
+        return true;
+    }
+
+    /**
+     * Empties the spoil, for the storehouses.
+     */
+    public java.util.Map<String, Integer> takeSpoil() {
+        java.util.Map<String, Integer> all = new java.util.TreeMap<>(spoil);
+        spoil.clear();
+        return all;
     }
 
     /**

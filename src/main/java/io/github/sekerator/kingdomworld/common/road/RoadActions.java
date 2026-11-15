@@ -89,6 +89,10 @@ public final class RoadActions {
                 people == null ? 0 : people.named(), counts[1], wall.map(Wall::id).orElse(0L), wall.map(Wall::wallClass).orElse(null), built,
                 wall.map(w -> w.gates().size()).orElse(0), folk, people == null ? 0 : people.beds(), freeBeds, crew.builders(), crew.helpers(),
                 crew.sites());
+        if (wall.isPresent() && wall.get().hasBase()) {
+            // A wall at a height of its own: the earth to fill under it and the ground to cut over its foot.
+            row = row.withWallEarth(new RoadViews.CityRow.WallEarth(wall.get().baseY(), wall.get().earth(), wall.get().cutTotal()));
+        }
         // The treasury of the city: what it holds and what it took, kept and sent the crown a day, the last week.
         boolean money = io.github.sekerator.kingdomworld.common.commerce.CityOf.active(server, kingdomId);
         var economy = KingdomWorldApi.state(server).economy();
@@ -517,11 +521,22 @@ public final class RoadActions {
                     yield KingdomActions.Feedback.fail(KEY + "wall_beyond_land", CityWalls.place(server, kingdom, change.first())
                             .map(CityWalls.Place::name).orElse("?"), beyond);
                 }
+                // The height of the foot of the wall: none means on the ground of each column.
+                int base = Wall.FOLLOW_GROUND;
+                if (!change.text().isBlank()) {
+                    try {
+                        base = Integer.parseInt(change.text().strip());
+                    } catch (NumberFormatException e) {
+                        yield KingdomActions.Feedback.error(KingdomError.VALUE_OUT_OF_RANGE);
+                    }
+                }
                 // The ring is read over the next ticks; the kingdom hears when the wall is laid out.
                 Outcome outcome = CityWalls.order(server, actor, kingdom, change.first(),
-                        change.action() == RoadPackets.TabChange.Action.WALL_STONE ? Wall.WallClass.STONE : Wall.WallClass.PALISADE);
-                yield outcome.ok() ? KingdomActions.Feedback.ok(KEY + "wall_ordered", CityWalls.place(server, kingdom, change.first())
-                        .map(CityWalls.Place::name).orElse("?")) : KingdomActions.Feedback.error(outcome.error());
+                        change.action() == RoadPackets.TabChange.Action.WALL_STONE ? Wall.WallClass.STONE : Wall.WallClass.PALISADE, base);
+                String name = CityWalls.place(server, kingdom, change.first()).map(CityWalls.Place::name).orElse("?");
+                yield !outcome.ok() ? KingdomActions.Feedback.error(outcome.error())
+                        : base == Wall.FOLLOW_GROUND ? KingdomActions.Feedback.ok(KEY + "wall_ordered", name)
+                        : KingdomActions.Feedback.ok(KEY + "wall_ordered_at", name, base);
             }
             case SEND_BUILDER -> {
                 io.github.sekerator.kingdomworld.common.construction.RemotePosts.Sending sending =

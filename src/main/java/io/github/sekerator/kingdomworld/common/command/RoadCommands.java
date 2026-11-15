@@ -95,7 +95,9 @@ public final class RoadCommands {
                                 .then(Commands.argument("kingdom", StringArgumentType.string()).suggests(KINGDOMS)
                                         .then(Commands.argument("city", LongArgumentType.longArg(0))
                                                 .then(Commands.argument("class", StringArgumentType.word()).suggests(WALLS)
-                                                        .executes(RoadCommands::buildWall)))))
+                                                        .executes(RoadCommands::buildWall)
+                                                        .then(Commands.argument("base", com.mojang.brigadier.arguments.IntegerArgumentType.integer())
+                                                                .executes(RoadCommands::buildWall))))))
                         .then(Commands.literal("gate")
                                 .then(Commands.argument("id", LongArgumentType.longArg(1))
                                         .then(Commands.argument("pos", BlockPosArgument.blockPos()).executes(RoadCommands::gate))))
@@ -294,7 +296,14 @@ public final class RoadCommands {
             return 0;
         }
         Wall[] made = new Wall[1];
-        Outcome outcome = CityWalls.build(source.getServer(), null, kingdom.id(), LongArgumentType.getLong(context, "city"), wallClass.get(), made);
+        int base = Wall.FOLLOW_GROUND;
+        try {
+            base = com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(context, "base");
+        } catch (IllegalArgumentException none) {
+            // No height given: the wall stands on the ground of each column.
+        }
+        Outcome outcome = CityWalls.build(source.getServer(), null, kingdom.id(), LongArgumentType.getLong(context, "city"), wallClass.get(), made,
+                0, base);
         if (!outcome.ok()) {
             return refused(source, outcome);
         }

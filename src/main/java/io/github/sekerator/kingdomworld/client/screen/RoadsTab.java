@@ -60,6 +60,8 @@ final class RoadsTab {
      * What can be done with the city being looked at.
      */
     private enum CityChoice {
+        /** The height of the foot of the wall ordered next: a box and a button, no action of its own. */
+        WALL_BASE,
         WALL_PALISADE,
         WALL_STONE,
         GATE_HERE,
@@ -90,6 +92,8 @@ final class RoadsTab {
     private long patrolling;
     /** The city whose actions are shown (0 for the capital), -1 for none. */
     private long actingCity = -1;
+    /** The height of the foot of the wall to order, as typed; empty for a wall on the ground. */
+    private String wallBaseText = "";
 
     private int modeWidth;
     private int actionsWidth;
@@ -207,6 +211,10 @@ final class RoadsTab {
                 }
                 return;
             }
+            case WALL_BASE -> {
+                return;
+            }
+            case WALL_PALISADE, WALL_STONE -> send(RoadPackets.TabChange.Action.valueOf(choice.name()), cityId, 0, wallBaseText.strip());
             case DISMISS -> send(RoadPackets.TabChange.Action.GOVERNOR_DISMISS, cityId, 0);
             case PAUSE -> send(RoadPackets.TabChange.Action.GOVERNOR_PAUSE, cityId, row != null && row.paused() ? 0 : 1);
             default -> send(RoadPackets.TabChange.Action.valueOf(choice.name()), cityId, 0);
@@ -426,6 +434,10 @@ final class RoadsTab {
             CityChoice[] choices = CityChoice.values();
             for (int i = 0; i < rows && scroll + i < choices.length; i++) {
                 CityChoice choice = choices[scroll + i];
+                if (choice == CityChoice.WALL_BASE) {
+                    wallBase(x, right, listTop(top) + i * ROW);
+                    continue;
+                }
                 Button button = screen.add(Button.builder(cityChoiceLabel(choice, row), b -> cityAction(choice, cityId, row))
                         .bounds(x, listTop(top) + i * ROW, right - x, ROW - 2).build());
                 String hint = choice == CityChoice.PAUSE && row != null && row.paused() ? "resume" : choice.id();
@@ -496,6 +508,7 @@ final class RoadsTab {
                     RoadViews.CityRow row = view.cities().get(scroll + i);
                     screen.add(Button.builder(Component.translatable(KEY + "actions"), b -> {
                         actingCity = row.id();
+                        wallBaseText = "";
                         scroll = 0;
                         screen.rebuild();
                     }).bounds(right - actionsWidth, listTop(top) + i * ROW, actionsWidth, ROW - 2).build()).active = view.canManage();
@@ -566,9 +579,40 @@ final class RoadsTab {
     }
 
     private void send(RoadPackets.TabChange.Action action, long first, long second) {
+        send(action, first, second, "");
+    }
+
+    private void send(RoadPackets.TabChange.Action action, long first, long second, String text) {
         if (view != null && Minecraft.getInstance().getConnection() != null) {
-            KingdomWorldNetwork.sendToServer(new RoadPackets.TabChange(view.kingdomId(), action, first, second, ""));
+            KingdomWorldNetwork.sendToServer(new RoadPackets.TabChange(view.kingdomId(), action, first, second, text));
         }
+    }
+
+    /**
+     * The row of the height of the foot of the wall: a box for the height, empty for a wall on the ground, and a button that puts in
+     * the height the player stands at.
+     */
+    private void wallBase(int x, int right, int y) {
+        Component here = Component.translatable(KEY + "city_action.wall_base_here");
+        int hereWidth = screen.buttonWidth(here);
+        EditBox box = new EditBox(screen.font(), x + 1, y + 1, right - x - hereWidth - GAP - 2, ROW - 4,
+                Component.translatable(KEY + "city_action.wall_base"));
+        box.setMaxLength(6);
+        box.setFilter(value -> value.matches("-?\\d{0,5}"));
+        box.setValue(wallBaseText);
+        box.setHint(Component.translatable(KEY + "city_action.wall_base").withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
+        box.setResponder(value -> wallBaseText = value);
+        box.setEditable(view.canManage());
+        box.setTooltip(Tooltip.create(Component.translatable(KEY + "city_action.wall_base.hint")));
+        screen.add(box);
+        Button button = screen.add(Button.builder(here, b -> {
+            if (Minecraft.getInstance().player != null) {
+                wallBaseText = Integer.toString(Minecraft.getInstance().player.getBlockY());
+                box.setValue(wallBaseText);
+            }
+        }).bounds(right - hereWidth, y, hereWidth, ROW - 2).build());
+        button.active = view.canManage();
+        button.setTooltip(Tooltip.create(Component.translatable(KEY + "city_action.wall_base_here.hint")));
     }
 
     boolean scroll(int top, int panelHeight, double delta) {
@@ -632,8 +676,14 @@ final class RoadsTab {
         } else if (actingCity >= 0) {
             RoadViews.CityRow row = city(actingCity);
             Component head = Component.translatable(KEY + "city_actions", row == null ? "" : row.name());
+            Component earth = null;
+            if (row != null && row.wallEarth().any()) {
+                // The wall laid out at a height of its own: the earth it fills under itself and the ground it cuts.
+                earth = Component.translatable(KEY + "wall_earth", row.wallEarth().baseY(), row.wallEarth().fill(), row.wallEarth().cut());
+                head = Component.translatable(KEY + "city_actions_earth", head, earth);
+            }
             int headX = x + modeWidth + 6;
-            text(graphics, head, headX, buttonsY(top) + 4, 0xFFF0D070, right - backWidth - 4 - headX, null);
+            text(graphics, head, headX, buttonsY(top) + 4, 0xFFF0D070, right - backWidth - 4 - headX, earth);
         }
         if (mode == Mode.OVERVIEW && acting == 0 && patrolling == 0) {
             renderOverview(graphics, x, right, top);

@@ -413,7 +413,9 @@ public enum KingdomError {
     /** A wall a player orders for a city of a kingdom of players stands whole on the land of its kingdom: part of its ring is not. */
     WALL_OUTSIDE_LAND,
     /** The plan of a levelled road was made for another class: it is planned again for the class chosen. */
-    ROAD_CLASS_CHANGED;
+    ROAD_CLASS_CHANGED,
+    /** A wall at a height of its own would fill or cut the ground under some column deeper than earthworks may go. */
+    WALL_BASE_TOO_DEEP;
 
     /**
      * Lower case identifier, used for translation keys.

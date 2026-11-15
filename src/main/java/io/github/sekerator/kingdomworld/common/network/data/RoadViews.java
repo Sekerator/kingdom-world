@@ -313,8 +313,33 @@ public final class RoadViews {
                           long wallId, @Nullable Wall.WallClass wallClass, int wallBuilt, int gates, int folk, int beds, int freeBeds,
                           int builders, int helpers, int sites, int governor, String governorName, String governorTitle, boolean paused,
                           net.minecraft.network.chat.Component note, boolean needsLand, boolean money, long treasury, long perDay, long kept,
-                          long toCrown, FolkJobs folkJobs) {
+                          long toCrown, FolkJobs folkJobs, WallEarth wallEarth) {
         public static final int NO_GOVERNOR = 0;
+
+        /**
+         * The earthworks of a wall laid out at a height of its own.
+         *
+         * @param baseY the height of the lowest block of its columns
+         * @param fill  blocks of earth to fill under its columns, as laid out
+         * @param cut   blocks of ground to cut over their feet, as laid out
+         */
+        public record WallEarth(int baseY, int fill, int cut) {
+            public static final WallEarth NONE = new WallEarth(0, -1, -1);
+
+            public boolean any() {
+                return fill >= 0;
+            }
+        }
+
+        public CityRow(long id, String name, int x, int y, int z, boolean capital, int roads, CityLevel level, int people, int buildings,
+                       long wallId, @Nullable Wall.WallClass wallClass, int wallBuilt, int gates, int folk, int beds, int freeBeds,
+                       int builders, int helpers, int sites, int governor, String governorName, String governorTitle, boolean paused,
+                       net.minecraft.network.chat.Component note, boolean needsLand, boolean money, long treasury, long perDay, long kept,
+                       long toCrown, FolkJobs folkJobs) {
+            this(id, name, x, y, z, capital, roads, level, people, buildings, wallId, wallClass, wallBuilt, gates, folk, beds, freeBeds,
+                    builders, helpers, sites, governor, governorName, governorTitle, paused, note, needsLand, money, treasury, perDay, kept,
+                    toCrown, folkJobs, WallEarth.NONE);
+        }
 
         /**
          * Where the townsfolk of a city work, as of its last day of the townsfolk.
@@ -346,6 +371,7 @@ public final class RoadViews {
 
         public CityRow {
             folkJobs = folkJobs == null ? FolkJobs.NONE : folkJobs;
+            wallEarth = wallEarth == null ? WallEarth.NONE : wallEarth;
             governor = governor < NO_GOVERNOR || governor > HOUSE ? NO_GOVERNOR : governor;
             governorName = governorName == null ? "" : governorName;
             governorTitle = governorTitle == null ? "" : governorTitle;
@@ -375,7 +401,7 @@ public final class RoadViews {
                                     boolean landWanted) {
             return new CityRow(id, name, x, y, z, capital, roads, level, people, buildings, wallId, wallClass, wallBuilt, gates, folk, beds,
                     freeBeds, builders, helpers, sites, kind, who, title, stopped, decided, landWanted, money, treasury, perDay, kept, toCrown,
-                    folkJobs);
+                    folkJobs, wallEarth);
         }
 
         /**
@@ -384,7 +410,16 @@ public final class RoadViews {
         public CityRow withFolkJobs(FolkJobs value) {
             return new CityRow(id, name, x, y, z, capital, roads, level, people, buildings, wallId, wallClass, wallBuilt, gates, folk, beds,
                     freeBeds, builders, helpers, sites, governor, governorName, governorTitle, paused, note, needsLand, money, treasury, perDay, kept,
-                    toCrown, value);
+                    toCrown, value, wallEarth);
+        }
+
+        /**
+         * The same city with the earthworks of its wall at a height of its own.
+         */
+        public CityRow withWallEarth(WallEarth value) {
+            return new CityRow(id, name, x, y, z, capital, roads, level, people, buildings, wallId, wallClass, wallBuilt, gates, folk, beds,
+                    freeBeds, builders, helpers, sites, governor, governorName, governorTitle, paused, note, needsLand, money, treasury, perDay, kept,
+                    toCrown, folkJobs, value);
         }
 
         /**
@@ -394,7 +429,7 @@ public final class RoadViews {
         public CityRow withMoney(boolean keeps, long held, long day, long keptDay, long crownDay) {
             return new CityRow(id, name, x, y, z, capital, roads, level, people, buildings, wallId, wallClass, wallBuilt, gates, folk, beds,
                     freeBeds, builders, helpers, sites, governor, governorName, governorTitle, paused, note, needsLand, keeps, held, day, keptDay,
-                    crownDay, folkJobs);
+                    crownDay, folkJobs, wallEarth);
         }
 
         void encode(FriendlyByteBuf buf) {
@@ -433,6 +468,12 @@ public final class RoadViews {
             buf.writeVarInt(Math.max(0, folkJobs.hands()));
             buf.writeVarInt(Math.max(0, folkJobs.idle()));
             buf.writeVarLong(Math.max(0, folkJobs.earnedMilli()));
+            buf.writeBoolean(wallEarth.any());
+            if (wallEarth.any()) {
+                buf.writeInt(wallEarth.baseY());
+                buf.writeVarInt(Math.max(0, wallEarth.fill()));
+                buf.writeVarInt(Math.max(0, wallEarth.cut()));
+            }
         }
 
         static CityRow decode(FriendlyByteBuf buf) {
@@ -454,7 +495,8 @@ public final class RoadViews {
                     buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(),
                     buf.readUtf(NAME), buf.readUtf(NAME), buf.readBoolean(), buf.readComponent(), buf.readBoolean(), buf.readBoolean(), buf.readVarLong(),
                     buf.readVarLong(), buf.readVarLong(), buf.readVarLong(),
-                    new FolkJobs(buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarLong()));
+                    new FolkJobs(buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarLong()),
+                    buf.readBoolean() ? new WallEarth(buf.readInt(), buf.readVarInt(), buf.readVarInt()) : WallEarth.NONE);
         }
     }
 

@@ -539,7 +539,8 @@ public final class SiteLoader {
             List<Wall.Block> blocks = wall.blocksOf(section);
             for (int i = section.placed(); i < section.paid() && i < blocks.size() && columns < WALL_COLUMNS; i++, columns++) {
                 Wall.Block block = blocks.get(i);
-                chunks.addAll(ChunkHold.ringed(block.x(), block.z(), block.x(), block.z()));
+                // The earthworks of a column look two blocks round it.
+                chunks.addAll(ChunkHold.ringed(block.x() - 1, block.z() - 1, block.x() + 1, block.z() + 1));
             }
         }
         return chunks;
