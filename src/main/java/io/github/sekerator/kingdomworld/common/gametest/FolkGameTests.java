@@ -128,7 +128,8 @@ public final class FolkGameTests {
             CitizenSimulation.step(server, kingdom.id());
             helper.assertTrue(CitizenGameTests.count(storehouse, Items.BREAD) < bread, "The townsfolk ate nothing");
             helper.assertTrue(treasury.balance() <= balance, "The townsfolk paid dues out of nothing: " + (treasury.balance() - balance));
-            helper.assertTrue(capital.folk() >= 3 && capital.folk() <= 4, "The townsfolk of one free bed are a family at most: " + capital.folk());
+            // The city has no posts nor workshops: townsfolk without work leave, one a day at least, and none come.
+            helper.assertTrue(capital.folk() == 2, "The townsfolk without work did not leave one a day: " + capital.folk());
             helper.assertTrue(citizens(server, kingdom).size() == 1, "Townsfolk became named citizens");
         } finally {
             FolkSettings.override(null);
