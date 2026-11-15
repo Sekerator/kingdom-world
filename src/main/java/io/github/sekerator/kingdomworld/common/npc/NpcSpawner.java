@@ -211,6 +211,8 @@ public final class NpcSpawner {
         int alone;
         /** Whether the buildings of the plan were looked for in the register once the last of them was raised. */
         boolean rechecked;
+        /** The plots of the capital raised again, the others standing already; {@code null} while every plot is raised. */
+        Set<Integer> only;
         /** Chunks with a ticket that are not loaded yet. */
         final List<ChunkPos> pending = new ArrayList<>();
         int next;
@@ -1461,8 +1463,15 @@ public final class NpcSpawner {
     private static void build(MinecraftServer server, ServerLevel level, NpcSite site, Job job) {
         UUID id = site.kingdomId().orElseThrow();
         List<NpcComposition.Plot> plots = job.composition.buildings();
+        if (job.only == null && site.given(NpcSite.REBUILDING)) {
+            job.only = plotsOf(missing(server, site, job.composition, true));
+        }
         int budget = blockBudget();
         while (site.step() < plots.size() && budget > 0) {
+            if (job.only != null && !job.only.contains(site.step())) {
+                site.setStep(site.step() + 1);
+                continue;
+            }
             NpcComposition.Plot plot = plots.get(site.step());
             Materials materials = NpcCity.materials(server, site, plot);
             int[] used = new int[1];
@@ -1486,6 +1495,7 @@ public final class NpcSpawner {
                 if (!missing.isEmpty()) {
                     LOGGER.warn("{} of {} buildings of the capital of {} are missing after its buildings were raised ({}): they are raised "
                             + "again", missing.size(), plots.size(), site, templates(missing));
+                    job.only = plotsOf(missing);
                     site.setStep(missing.get(0).plot());
                     return;
                 }
@@ -1568,12 +1578,17 @@ public final class NpcSpawner {
             return result;
         }
         KingdomWorldState state = KingdomWorldApi.state(server);
-        Set<String> standing = new java.util.HashSet<>();
+        // A plot stands while a building or a construction of the kingdom has its anchor there, of the template of the plan or
+        // of another one (a ruler upgraded it), or covers its middle.
+        Set<Long> anchors = new java.util.HashSet<>();
+        List<Box> boxes = new ArrayList<>();
         for (Building building : state.construction().buildingsOf(id.get())) {
-            standing.add(building.templateId() + "@" + building.anchor().x() + "," + building.anchor().z());
+            anchors.add(ChunkPos.asLong(building.anchor().x(), building.anchor().z()));
+            boxes.add(building.box());
         }
         for (Construction construction : state.construction().of(id.get())) {
-            standing.add(construction.templateId() + "@" + construction.anchor().x() + "," + construction.anchor().z());
+            anchors.add(ChunkPos.asLong(construction.anchor().x(), construction.anchor().z()));
+            boxes.add(construction.box());
         }
         for (Planned planned : planned(server, site, composition)) {
             Optional<BuildingTemplate> template = BuildingTemplates.get(planned.template());
@@ -1581,11 +1596,31 @@ public final class NpcSpawner {
                 continue;
             }
             BlockPos anchor = anchor(template.get(), planned.x(), site.groundY() + 1, planned.z(), planned.placement());
-            if (!standing.contains(planned.template() + "@" + anchor.getX() + "," + anchor.getZ())) {
+            if (anchors.contains(ChunkPos.asLong(anchor.getX(), anchor.getZ()))) {
+                continue;
+            }
+            boolean covered = false;
+            for (Box box : boxes) {
+                if (box.minX() <= planned.x() && planned.x() <= box.maxX() && box.minZ() <= planned.z() && planned.z() <= box.maxZ()) {
+                    covered = true;
+                    break;
+                }
+            }
+            if (!covered) {
                 result.add(planned);
             }
         }
         return result;
+    }
+
+    private static Set<Integer> plotsOf(List<Planned> buildings) {
+        Set<Integer> plots = new java.util.HashSet<>();
+        for (Planned planned : buildings) {
+            if (planned.plot() >= 0) {
+                plots.add(planned.plot());
+            }
+        }
+        return plots;
     }
 
     /**
