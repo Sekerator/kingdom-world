@@ -122,4 +122,32 @@ class RulerBudgetTest {
         decisions = RulerMind.decide(view, new RulerMemory(), RULES.withDecisionsPerTurn(10)).decisions();
         assertTrue(decisions.stream().anyMatch(d -> d.kind() == Kind.CONTRACT), decisions.toString());
     }
+
+    @Test
+    void aRichRulerInvestsInMoreThanItsLevelAsks() {
+        RulerView rich = kingdom(10_000_000, 2_000, 2_000, 2_000);
+        RulerView modest = kingdom(20_000, 300, 300, 300);
+        for (RulerView view : List.of(rich, modest)) {
+            for (String role : view.knownRoles) {
+                view.builds.add(new RulerView.Option(role, "kingdomworld:" + role, "", 10, true));
+            }
+        }
+        assertEquals(RulerMind.MAX_BUILDING + 1, RulerMind.buildingSlots(rich));
+        assertTrue(RulerMind.wantedRoles(rich, RULES).stream().anyMatch(RulerMind.INVESTMENTS::contains), RulerMind.wantedRoles(rich, RULES).toString());
+        assertTrue(RulerMind.wantedRoles(modest, RULES).isEmpty(), RulerMind.wantedRoles(modest, RULES).toString());
+        List<RulerDecision> decisions = RulerMind.decide(rich, new RulerMemory(), RULES).decisions();
+        assertTrue(decisions.stream().anyMatch(d -> d.kind() == Kind.BUILD), decisions.toString());
+    }
+
+    @Test
+    void taxesFollowTheTreasury() {
+        RulerView rich = kingdom(10_000_000, 2_000, 2_000, 2_000);
+        RulerView losing = kingdom(20_000, 300, 100, 600);
+        RulerView steady = kingdom(20_000, 300, 300, 300);
+        for (RulerView view : List.of(rich, losing, steady)) {
+            view.shops = 3;
+        }
+        assertTrue(RulerMind.tithe(rich, RULES) < RulerMind.tithe(steady, RULES));
+        assertTrue(RulerMind.tithe(losing, RULES) > RulerMind.tithe(steady, RULES), "40 days left raise the tithe");
+    }
 }

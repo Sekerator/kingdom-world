@@ -221,7 +221,51 @@ public final class RulerMind {
      */
     public static long importBudget(RulerView view, RulerRules rules) {
         long spare = spare(view, rules);
-        return Math.min(spare / 2, Math.max(dayCost(view) * 3, spare / 60));
+        long budget = Math.max(dayCost(view) * 3, spare / 60);
+        // Builders who stand still for want of materials are the dearest waste: the ruler buys for them twice as much.
+        if (view.stalled > 0) {
+            budget *= 2;
+        }
+        return Math.min(spare / 2, budget);
+    }
+
+    /** Days a treasury that loses money has left before its ruler raises taxes, long before it is poor. */
+    public static final int TAX_RUNWAY_DAYS = 60;
+
+    /**
+     * How a ruler leans its taxes on its treasury: a quarter more when it is poor, some more when it loses money and has two
+     * months left, a tenth less when it is rich and wants trade more than coins.
+     */
+    private static double purse(RulerView view, RulerRules rules) {
+        if (poor(view, rules)) {
+            return 0.25;
+        }
+        if (runway(view) < TAX_RUNWAY_DAYS) {
+            return 0.15;
+        }
+        return rich(view) ? -0.1 : 0;
+    }
+
+    /**
+     * How many buildings of a role of the table a ruler wants: a rich ruler a workshop, a market, a storehouse and a well more
+     * than its level asks, for the trade and the work they bring.
+     */
+    public static int wanted(RulerView view, RulerRules.RoleWant want) {
+        int count = want.count(view.cityLevel);
+        if (rich(view) && INVESTMENTS.contains(want.role())) {
+            count++;
+        }
+        return count;
+    }
+
+    /** Roles a rich ruler builds one more of than its level asks. */
+    public static final List<String> INVESTMENTS = List.of("workshop", "market", WAREHOUSE, "well");
+
+    /**
+     * Buildings a ruler builds or raises at once: one more for a rich ruler.
+     */
+    public static int buildingSlots(RulerView view) {
+        return Math.min(view.maxConstructions, MAX_BUILDING + (rich(view) ? 1 : 0));
     }
 
     /**
@@ -229,9 +273,7 @@ public final class RulerMind {
      */
     public static long pollTax(RulerView view, RulerRules rules) {
         double factor = Math.max(0.25, 1 + 0.35 * greed(view.traits));
-        if (poor(view, rules)) {
-            factor += 0.25;
-        }
+        factor += purse(view, rules);
         return Math.max(0, Math.min(view.maxPollTax, Math.round(view.defaultPollTax * factor)));
     }
 
@@ -243,9 +285,7 @@ public final class RulerMind {
         if (view.character == RulerCharacter.MERCHANT) {
             factor *= 0.8;
         }
-        if (poor(view, rules)) {
-            factor += 0.25;
-        }
+        factor += purse(view, rules);
         return (int) Math.max(0, Math.min(view.maxSalesTaxPermille, Math.round(BASE_SALES_TAX * factor)));
     }
 
@@ -258,9 +298,7 @@ public final class RulerMind {
      */
     public static int tithe(RulerView view, RulerRules rules) {
         double factor = Math.max(0.25, 1 + 0.35 * greed(view.traits));
-        if (poor(view, rules)) {
-            factor += 0.25;
-        }
+        factor += purse(view, rules);
         return (int) Math.max(0, Math.min(MAX_TITHE, Math.round(view.baseTithePercent * 10 * factor)));
     }
 
@@ -540,7 +578,7 @@ public final class RulerMind {
             roles.add(WAREHOUSE);
         }
         for (RulerRules.RoleWant want : rules.roles()) {
-            if (view.knownRoles.contains(want.role()) && view.built(want.role()) + view.planned(want.role()) < want.count(view.cityLevel)) {
+            if (view.knownRoles.contains(want.role()) && view.built(want.role()) + view.planned(want.role()) < wanted(view, want)) {
                 if (!roles.contains(want.role())) {
                     roles.add(want.role());
                 }
@@ -617,7 +655,7 @@ public final class RulerMind {
     private static void growth(RulerView view, RulerMemory memory, RulerRules rules, List<Scored> out, List<Need> needs, long spare) {
         int builder = builderBonus(view.character);
         boolean landWanted = false;
-        int slots = Math.min(view.maxConstructions, MAX_BUILDING);
+        int slots = buildingSlots(view);
         boolean room = view.constructions < slots;
         if (view.bedsTotal - view.bedsUsed <= rules.freeBeds() && view.planned(HOUSE) == 0) {
             landWanted |= build(view, HOUSE, 85 + builder, spare, room, out, needs);
@@ -630,7 +668,7 @@ public final class RulerMind {
             if (!view.knownRoles.contains(want.role())) {
                 continue;
             }
-            if (view.built(want.role()) + view.planned(want.role()) < want.count(view.cityLevel)) {
+            if (view.built(want.role()) + view.planned(want.role()) < wanted(view, want)) {
                 int bonus = builder + roleBonus(view.character, want.role());
                 landWanted |= build(view, want.role(), 60 + bonus, spare, room, out, needs);
                 break;
@@ -665,7 +703,7 @@ public final class RulerMind {
         }
         // A town more for every so many citizens: a kingdom that appeared with its towns founds the next one only once it grew.
         if (view.population >= (long) rules.townPopulation() * (view.towns + 1) && view.towns < rules.maxTowns() && view.townSpot
-                && spare >= 500) {
+                && spare >= Math.max(500, dayCost(view) * 10)) {
             int bonus = builder + (view.has(RulerCharacter.Trait.AMBITIOUS) ? 10 : 0);
             out.add(new Scored(45 + bonus, RulerDecision.of(Kind.TOWN, "", 1)));
         }
@@ -789,11 +827,15 @@ public final class RulerMind {
      * Orders for the workshops, the mint, taxes, wages, the law, feasts, the tower and positions.
      */
     private static void household(RulerView view, RulerMemory memory, RulerRules rules, List<Scored> out, long spare, boolean threat) {
-        // Bread up to the days of food the ruler wants, and from the wheat that heaps up in the storehouses.
+        // Bread up to the days of food the ruler wants, from the wheat that heaps up in the storehouses, and for its settlements
+        // that have nothing left to eat.
         RulerView.Good wheat = view.goods.get("minecraft:wheat");
         boolean heap = wheat != null && wheat.stock() > 4 * Math.max(1, wheat.want());
-        if ((view.foodDays < FOOD_DAYS || heap) && view.makeable.contains(BREAD) && !view.ordered.contains(BREAD)) {
-            out.add(new Scored(view.foodDays < 3 ? 92 : 58, RulerDecision.of(Kind.ORDER, BREAD, want(view, BREAD, view.population * 3L))));
+        boolean hungry = view.hungrySettlements > 0;
+        if ((view.foodDays < FOOD_DAYS || heap || hungry) && view.makeable.contains(BREAD) && !view.ordered.contains(BREAD)) {
+            long amount = want(view, BREAD, view.population * 3L) + (hungry ? (long) view.settlementPeople * 3 / Math.max(1, view.settlements)
+                    * view.hungrySettlements : 0);
+            out.add(new Scored(view.foodDays < 3 || hungry ? 92 : 58, RulerDecision.of(Kind.ORDER, BREAD, Math.max(1, amount))));
         }
         for (String item : STONE_TOOLS) {
             if (view.makeable.contains(item) && !view.ordered.contains(item) && shortage(view, item) > 0) {
